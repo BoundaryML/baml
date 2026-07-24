@@ -21,7 +21,7 @@ use std::{
     },
 };
 
-use ::bex_vm_types::Value;
+use ::bex_vm_types::{Value, errors::StackFrame, types::FutureId};
 use bex_external_types::{Handle, WeakHeapRef};
 use bex_vm_types::{HeapPtr, Object, WriteBarrier};
 
@@ -50,6 +50,16 @@ pub enum Generation {
     Gen1,
     /// Gen2 old generation — long-lived objects.
     Gen2,
+}
+
+/// Error payload preserved from an unreachable, never-observed spawned
+/// future. The engine drains these after the GC pause.
+#[derive(Debug, Clone, PartialEq)]
+pub struct UnhandledSpawnError {
+    pub future_id: FutureId,
+    pub value: Value,
+    pub trace: Vec<StackFrame>,
+    pub cancelled: bool,
 }
 impl Generation {
     /// Check if this generation is young (Gen0 or Gen1).
@@ -184,6 +194,11 @@ pub struct BexHeap {
     /// it still has the class in hand — so the engine drain needs no heap read
     /// to dispatch.
     pending_finalizers: Mutex<Vec<(HeapPtr, String)>>,
+
+    /// Unobserved errors discovered while collecting unreachable futures.
+    /// Entries contain post-copy values and are drained before execution
+    /// resumes or another collection runs.
+    pending_unhandled_spawn_errors: Mutex<Vec<UnhandledSpawnError>>,
 
     /// BEP-042 fast path: `true` iff at least one compile-time `Class` opts into
     /// a `cleanup` finalizer (`has_cleanup`). Classes are fixed at compile time,
@@ -333,6 +348,7 @@ impl BexHeap {
             handles: RwLock::new(HashMap::new()),
             next_handle_key: AtomicUsize::new(0),
             pending_finalizers: Mutex::new(Vec::new()),
+            pending_unhandled_spawn_errors: Mutex::new(Vec::new()),
             has_finalizable_classes,
             tlab_size,
             growth_lock: Mutex::new(()),
@@ -1031,6 +1047,22 @@ impl BexHeap {
                 .pending_finalizers
                 .lock()
                 .expect("pending_finalizers lock poisoned"),
+        )
+    }
+
+    pub(crate) fn push_unhandled_spawn_error(&self, error: UnhandledSpawnError) {
+        self.pending_unhandled_spawn_errors
+            .lock()
+            .expect("pending_unhandled_spawn_errors lock poisoned")
+            .push(error);
+    }
+
+    pub fn take_unhandled_spawn_errors(&self) -> Vec<UnhandledSpawnError> {
+        std::mem::take(
+            &mut *self
+                .pending_unhandled_spawn_errors
+                .lock()
+                .expect("pending_unhandled_spawn_errors lock poisoned"),
         )
     }
 

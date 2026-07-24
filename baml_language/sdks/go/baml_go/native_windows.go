@@ -11,6 +11,7 @@ package baml_go
 #include <stdlib.h>
 
 extern void bamlGoResultCallback(uint32_t call_id, int8_t *content, size_t length);
+extern void bamlGoUnhandledSpawnErrorCallback(int8_t *content, size_t length, int32_t cancelled);
 extern void bamlGoHostDispatch(uint64_t host_value_key, uint32_t call_id, uint8_t *args, size_t length);
 extern void bamlGoHostRelease(uint64_t host_value_key);
 
@@ -21,6 +22,10 @@ static void baml_go_host_dispatch(uint64_t host_value_key, uint32_t call_id, con
 	bamlGoHostDispatch(host_value_key, call_id, (uint8_t *)args, length);
 }
 static void baml_go_host_release(uint64_t host_value_key) { bamlGoHostRelease(host_value_key); }
+
+static void baml_go_unhandled_spawn_error_callback(const int8_t *content, size_t length, int32_t cancelled) {
+	bamlGoUnhandledSpawnErrorCallback((int8_t *)content, length, cancelled);
+}
 
 static HMODULE baml_library_handle = NULL;
 static const BamlApiV1 *baml_api = NULL;
@@ -54,6 +59,12 @@ static const char *baml_open_library(const wchar_t *path) {
 		FreeLibrary(handle);
 		return baml_loader_error;
 	}
+	const size_t required_size = offsetof(BamlApiV1, shutdown_runtime) + sizeof(api->shutdown_runtime);
+	if (api->struct_size < required_size) {
+		snprintf(baml_loader_error, sizeof(baml_loader_error), "truncated BAML ABI v1 table: got %zu bytes, need at least %zu", api->struct_size, required_size);
+		FreeLibrary(handle);
+		return baml_loader_error;
+	}
 	if (api->version == NULL || api->initialize_runtime_from_bytecode == NULL ||
 		api->free_buffer == NULL || api->register_callback == NULL ||
 		api->call_function == NULL || api->new_function_call == NULL ||
@@ -65,7 +76,9 @@ static const char *baml_open_library(const wchar_t *path) {
 		api->media_from_file == NULL || api->media_from_base64 == NULL ||
 		api->media_url == NULL || api->media_file == NULL ||
 		api->media_base64 == NULL || api->media_mime_type == NULL ||
-		api->register_bridge == NULL) {
+		api->register_bridge == NULL ||
+		api->register_unhandled_spawn_error_callback == NULL ||
+		api->shutdown_runtime == NULL) {
 		snprintf(baml_loader_error, sizeof(baml_loader_error), "BAML ABI v1 table contains a NULL required function");
 		FreeLibrary(handle);
 		return baml_loader_error;
@@ -98,6 +111,8 @@ static void baml_register_go_callback(void) {
 	baml_api->register_host_dispatch_callback(baml_go_host_dispatch);
 	baml_api->register_host_release_callback(baml_go_host_release);
 }
+static void baml_register_go_unhandled_spawn_error_callback(void) { baml_api->register_unhandled_spawn_error_callback(baml_go_unhandled_spawn_error_callback); }
+static BamlBuffer baml_shutdown(void) { return baml_api->shutdown_runtime(); }
 static uint64_t baml_new_function_call(void) { return baml_api->new_function_call(); }
 static void baml_call_function(const char *name, const uint8_t *args, size_t length, uint32_t callback_id) { baml_api->call_function(name, args, length, callback_id); }
 static int32_t baml_cancel_function_call(uint64_t call_id) { return baml_api->cancel_function_call(call_id); }
@@ -173,6 +188,19 @@ func nativeInitialize(bytecode []byte) error {
 	}
 	message := C.GoBytes(unsafe.Pointer(buffer.ptr), C.int(buffer.len))
 	return fmt.Errorf("initialize BAML runtime: %s", message)
+}
+
+func nativeRegisterUnhandledSpawnErrorCallback() {
+	C.baml_register_go_unhandled_spawn_error_callback()
+}
+
+func nativeShutdown() error {
+	buffer := C.baml_shutdown()
+	defer C.baml_free_buffer(buffer)
+	if buffer.len == 0 {
+		return nil
+	}
+	return fmt.Errorf("shutdown BAML runtime: %s", C.GoBytes(unsafe.Pointer(buffer.ptr), C.int(buffer.len)))
 }
 
 func nativeRegisterCallback()       { C.baml_register_go_callback() }
@@ -296,6 +324,12 @@ func bamlGoResultCallback(callID C.uint32_t, content *C.int8_t, length C.size_t)
 	call := value.(*pendingCall)
 	payload := C.GoBytes(unsafe.Pointer(content), C.int(length))
 	call.result <- payload
+}
+
+//export bamlGoUnhandledSpawnErrorCallback
+func bamlGoUnhandledSpawnErrorCallback(content *C.int8_t, length C.size_t, cancelled C.int32_t) {
+	payload := C.GoBytes(unsafe.Pointer(content), C.int(length))
+	go reportUnhandledSpawnError(payload, cancelled != 0)
 }
 
 //export bamlGoHostDispatch

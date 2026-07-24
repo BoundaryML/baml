@@ -33,6 +33,7 @@ export declare function initializeRuntimeFromBytecode(bytecode: Buffer | Uint8Ar
 export { BamlAbortError, BamlError, BamlInvalidArgumentError, BamlClientError, BamlCancelledError, BamlPanic, wrapNativeError, } from './errors.js';
 export declare function newFunctionCall(): bigint;
 export declare function cancelFunctionCall(callId: bigint): boolean;
+import './unhandled_spawn.js';
 export declare class FunctionResult {
     private _value;
     constructor(value: unknown);

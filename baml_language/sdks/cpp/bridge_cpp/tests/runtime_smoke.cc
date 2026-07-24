@@ -129,6 +129,17 @@ static void TestOwnedBufferMove() {
   std::printf("owned buffer move ok\n");
 }
 
+static void TestUnhandledSpawnErrorUsesHostDefault() {
+  bool threw = false;
+  try {
+    baml::detail::host_default_unhandled_spawn_error(
+        std::make_exception_ptr(baml::error("boom")), false);
+  } catch (const baml::error& exception) {
+    threw = std::string(exception.what()) == "boom";
+  }
+  Require(threw, "default unhandled-spawn handler did not rethrow");
+}
+
 static void RunTest(const char* name, void (*test)()) {
   std::fprintf(stderr, "running %s\n", name);
   std::fflush(stderr);
@@ -143,6 +154,8 @@ int main() {
   RunTest("call registry", TestCallRegistryRoundTrip);
   RunTest("argument states", TestArgTwoState);
   RunTest("owned buffer move", TestOwnedBufferMove);
+  RunTest("unhandled_spawn_error_uses_host_default",
+          TestUnhandledSpawnErrorUsesHostDefault);
   std::printf("bridge core smoke: all ok\n");
   return 0;
 }

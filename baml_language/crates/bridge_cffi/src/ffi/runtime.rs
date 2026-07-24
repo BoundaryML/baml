@@ -334,11 +334,33 @@ pub extern "C" fn initialize_runtime_from_bytecode(bytecode: *const u8, length: 
     }
 }
 
-/// Destroy the BAML runtime.
-/// This is a no-op since the global engine persists for the process lifetime.
+/// Destroy the process-wide BAML runtime after its spawned work settles.
 #[unsafe(no_mangle)]
 pub extern "C" fn destroy_baml_runtime(_runtime: *const libc::c_void) {
-    // No-op: global engine persists
+    crate::free_buffer(shutdown_runtime());
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn shutdown_runtime() -> Buffer {
+    let result = std::panic::catch_unwind(shutdown_runtime_on_fresh_thread);
+    match result {
+        Ok(Ok(())) => Buffer::from(Vec::new()),
+        Ok(Err(error)) => Buffer::from(error.into_bytes()),
+        Err(_) => Buffer::from(b"panic while shutting down BAML runtime".to_vec()),
+    }
+}
+
+fn shutdown_runtime_on_fresh_thread() -> Result<(), String> {
+    // Process-exit hooks can run after the caller thread's Tokio context has
+    // been destroyed. A fresh thread has valid thread-local state for block_on.
+    std::thread::spawn(|| {
+        crate::get_tokio_runtime()
+            .map_err(|error| error.to_string())?
+            .block_on(crate::shutdown_runtime())
+            .map_err(|error| error.to_string())
+    })
+    .join()
+    .map_err(|_| "panic while shutting down BAML runtime".to_string())?
 }
 
 /// Invoke the BAML CLI.

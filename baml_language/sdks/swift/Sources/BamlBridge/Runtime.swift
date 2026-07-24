@@ -15,6 +15,40 @@ private let bamlGlobalCompletion: BamlResultCallback = { callbackId, content, le
     BamlRuntime.shared.completePending(callbackId: callbackId, payload: data)
 }
 
+func reportUnhandledSpawnError(
+    payload: Data,
+    cancelled: Bool,
+    hostDefault: (any Error) -> Void = { error in
+        fatalError("Unhandled BAML spawn error: \(error)")
+    }
+) {
+    do {
+        _ = try unwrapEnvelope(payload)
+        throw BamlDecodeError.unsupported("spawned work failed without an error result")
+    } catch {
+        if cancelled {
+            FileHandle.standardError.write(Data("BAML spawned work was cancelled: \(error)\n".utf8))
+        } else {
+            hostDefault(error)
+        }
+    }
+}
+
+private let bamlGlobalUnhandledSpawnError: BamlUnhandledSpawnErrorCallback = {
+    content, length, cancelled in
+    let data: Data
+    if let content, length > 0 {
+        data = Data(bytes: content, count: Int(length))
+    } else {
+        data = Data()
+    }
+    reportUnhandledSpawnError(payload: data, cancelled: cancelled != 0)
+}
+
+private func bamlShutdownAtExit() {
+    BamlRuntime.shared.shutdown()
+}
+
 /// Entry points into the native BAML runtime.
 ///
 /// The C ABI is completion-callback based: `call_function` returns
@@ -34,6 +68,7 @@ public final class BamlRuntime: @unchecked Sendable {
     private var pending: [UInt32: @Sendable (Result<Data, Error>) -> Void] = [:]
     private var nextCallbackId: UInt32 = 1
     private var initialized = false
+    private var shutdownHookRegistered = false
 
     private init() {}
 
@@ -76,6 +111,8 @@ public final class BamlRuntime: @unchecked Sendable {
             }
         }
 
+        BamlApi.registerUnhandledSpawnErrorCallback(bamlGlobalUnhandledSpawnError)
+
         let errorBuffer = bytecode.withUnsafeBytes { buf -> BamlBuffer in
             BamlApi.initializeRuntimeFromBytecode(
                 buf.baseAddress?.assumingMemoryBound(to: UInt8.self),
@@ -92,7 +129,23 @@ public final class BamlRuntime: @unchecked Sendable {
         BamlApi.registerCallback(bamlGlobalCompletion)
         BamlApi.registerHostDispatchCallback(bamlHostDispatch)
         BamlApi.registerHostReleaseCallback(bamlHostRelease)
+        if !shutdownHookRegistered {
+            guard atexit(bamlShutdownAtExit) == 0 else {
+                fatalError("BAML runtime shutdown hook registration failed")
+            }
+            shutdownHookRegistered = true
+        }
         initialized = true
+    }
+
+    public func shutdown() {
+        let message = String(decoding: BamlApi.takeBuffer(BamlApi.shutdownRuntime()), as: UTF8.self)
+        if !message.isEmpty {
+            fatalError("BAML runtime shutdown failed: \(message)")
+        }
+        lock.lock()
+        initialized = false
+        lock.unlock()
     }
 
     // MARK: - Public call surface

@@ -1,17 +1,15 @@
-// exit_hook.ts — single-registration helper for flushEvents on process exit.
-// Both index.ts and the CtxManager constructor used to call
-// process.once('exit', …) independently; consolidate to one registration so
-// `process.listenerCount('exit')` increases by exactly one per process.
+// Single-registration helper for runtime shutdown and event flushing.
 
-import { flushEvents } from './native.js';
+import { flushEvents, shutdownRuntime } from './native.js';
 
 let installed = false;
 
 export function installFlushOnExit(): void {
     if (installed) return;
     installed = true;
-    process.once('exit', () => {
+    process.once('beforeExit', async () => {
         try {
+            await shutdownRuntime();
             flushEvents();
         } catch {
             /* ignore */

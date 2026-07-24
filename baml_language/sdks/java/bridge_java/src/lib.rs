@@ -131,6 +131,7 @@ pub extern "system" fn Java_baml_1bridge_BamlFfi_nativeInitFromBytecode(
     REGISTER_HOST_CALLBACKS.call_once(|| {
         bridge_cffi::register_host_dispatch_callback(host_dispatch_trampoline);
         bridge_cffi::register_host_release_callback(host_release_trampoline);
+        bridge_cffi::register_unhandled_spawn_error_callback(unhandled_spawn_error_trampoline);
     });
 
     // Register this bridge with the versioned ABI (idempotent; mirrors
@@ -153,6 +154,18 @@ pub extern "system" fn Java_baml_1bridge_BamlFfi_nativeInitFromBytecode(
 
     if let Err(e) = bridge_cffi::initialize_runtime_from_bytecode(&bytes) {
         throw_runtime_exception(&mut env, &format!("runtime initialization failed: {e}"));
+    }
+}
+
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_baml_1bridge_BamlFfi_nativeShutdownRuntime(
+    mut env: JNIEnv<'_>,
+    _class: JClass<'_>,
+) {
+    let result = bridge_cffi::get_tokio_runtime()
+        .and_then(|runtime| runtime.block_on(bridge_cffi::shutdown_runtime()));
+    if let Err(error) = result {
+        throw_runtime_exception(&mut env, &format!("runtime shutdown failed: {error}"));
     }
 }
 
@@ -233,6 +246,8 @@ const HOST_DISPATCH_SIG: &str = "(JJ[B)V";
 /// The Java host-release route: `static void hostRelease(long)`.
 const HOST_RELEASE_METHOD: &str = "hostRelease";
 const HOST_RELEASE_SIG: &str = "(J)V";
+const UNHANDLED_SPAWN_ERROR_METHOD: &str = "unhandledSpawnError";
+const UNHANDLED_SPAWN_ERROR_SIG: &str = "([BZ)V";
 
 /// Guards the one-time `register_host_{dispatch,release}_callback` install so a
 /// runtime re-init (`nativeInitFromBytecode` replaces the runtime) does not
@@ -382,36 +397,71 @@ fn deliver_completion(call_id: u64, bytes: Vec<u8>) {
     }
 }
 
-fn deliver_completion_inner(call_id: u64, bytes: &[u8]) -> Result<(), String> {
+fn with_java_callback(
+    context: &str,
+    callback: impl FnOnce(&mut JNIEnv<'_>, &GlobalRef) -> Result<(), String>,
+) -> Result<(), String> {
     let vm = JVM
         .get()
-        .ok_or("JavaVM was not captured before completion")?;
+        .ok_or_else(|| format!("JavaVM was not captured before {context}"))?;
     let class = BAML_FFI_CLASS
         .get()
-        .ok_or("BamlFfi class ref was not captured before completion")?;
-
+        .ok_or_else(|| format!("BamlFfi class ref was not captured before {context}"))?;
     let mut env = vm
         .attach_current_thread_as_daemon()
-        .map_err(|e| format!("attach failed: {e}"))?;
-
-    let payload = env
-        .byte_array_from_slice(bytes)
-        .map_err(|e| format!("result array alloc failed: {e}"))?;
-
-    let outcome = env.call_static_method(
-        class,
-        COMPLETE_CALL_METHOD,
-        COMPLETE_CALL_SIG,
-        &[JValue::Long(call_id as jlong), JValue::from(&payload)],
-    );
-
-    if let Err(e) = outcome {
-        // `completeCall` is written never to throw; clear any pending exception
-        // so the (reused) daemon worker thread is left in a clean state.
+        .map_err(|error| format!("attach failed: {error}"))?;
+    let result = callback(&mut env, class);
+    if result.is_err() {
         let _ = env.exception_clear();
-        return Err(format!("completeCall invocation failed: {e}"));
     }
-    Ok(())
+    result
+}
+
+fn deliver_completion_inner(call_id: u64, bytes: &[u8]) -> Result<(), String> {
+    with_java_callback("completion", |env, class| {
+        let payload = env
+            .byte_array_from_slice(bytes)
+            .map_err(|error| format!("result array alloc failed: {error}"))?;
+        env.call_static_method(
+            class,
+            COMPLETE_CALL_METHOD,
+            COMPLETE_CALL_SIG,
+            &[JValue::Long(call_id as jlong), JValue::from(&payload)],
+        )
+        .map(|_| ())
+        .map_err(|error| format!("completeCall invocation failed: {error}"))
+    })
+}
+
+extern "C" fn unhandled_spawn_error_trampoline(content: *const i8, length: usize, cancelled: i32) {
+    let bytes = if content.is_null() || length == 0 {
+        Vec::new()
+    } else {
+        // SAFETY: bridge_cffi keeps the borrowed callback buffer valid until return.
+        unsafe { std::slice::from_raw_parts(content.cast::<u8>(), length) }.to_vec()
+    };
+    if let Err(error) = deliver_unhandled_spawn_error(&bytes, cancelled != 0) {
+        eprintln!("bridge_java: failed to deliver unhandled spawn error: {error}");
+    }
+}
+
+fn deliver_unhandled_spawn_error(bytes: &[u8], cancelled: bool) -> Result<(), String> {
+    with_java_callback("unhandled spawn error", |env, class| {
+        let payload = env
+            .byte_array_from_slice(bytes)
+            .map_err(|error| format!("error array allocation failed: {error}"))?;
+        env.call_static_method(
+            class,
+            UNHANDLED_SPAWN_ERROR_METHOD,
+            UNHANDLED_SPAWN_ERROR_SIG,
+            &[
+                JValue::from(&payload),
+                JValue::Bool(if cancelled { 1 } else { 0 }),
+            ],
+        )
+        .map(|_| ())
+        .map_err(|error| format!("unhandledSpawnError invocation failed: {error}"))
+    })
 }
 
 /// `baml_bridge.BamlFfi.nativeNewCallId() -> long`.
@@ -509,35 +559,23 @@ extern "C" fn host_dispatch_trampoline(
 }
 
 fn dispatch_into_java(host_value_key: u64, call_id: u32, bytes: &[u8]) -> Result<(), String> {
-    let vm = JVM
-        .get()
-        .ok_or("JavaVM was not captured before host dispatch")?;
-    let class = BAML_FFI_CLASS
-        .get()
-        .ok_or("BamlFfi class ref was not captured before host dispatch")?;
-    let mut env = vm
-        .attach_current_thread_as_daemon()
-        .map_err(|e| format!("attach failed: {e}"))?;
-    let payload = env
-        .byte_array_from_slice(bytes)
-        .map_err(|e| format!("args array alloc failed: {e}"))?;
-    let outcome = env.call_static_method(
-        class,
-        HOST_DISPATCH_METHOD,
-        HOST_DISPATCH_SIG,
-        &[
-            JValue::Long(host_value_key as jlong),
-            JValue::Long(u64::from(call_id) as jlong),
-            JValue::from(&payload),
-        ],
-    );
-    if let Err(e) = outcome {
-        // `hostDispatch` is written never to throw; clear any pending exception
-        // so the reused daemon worker is left clean.
-        let _ = env.exception_clear();
-        return Err(format!("hostDispatch invocation failed: {e}"));
-    }
-    Ok(())
+    with_java_callback("host dispatch", |env, class| {
+        let payload = env
+            .byte_array_from_slice(bytes)
+            .map_err(|error| format!("args array alloc failed: {error}"))?;
+        env.call_static_method(
+            class,
+            HOST_DISPATCH_METHOD,
+            HOST_DISPATCH_SIG,
+            &[
+                JValue::Long(host_value_key as jlong),
+                JValue::Long(u64::from(call_id) as jlong),
+                JValue::from(&payload),
+            ],
+        )
+        .map(|_| ())
+        .map_err(|error| format!("hostDispatch invocation failed: {error}"))
+    })
 }
 
 /// Notify Java that a host-value key can be released (the engine dropped the
@@ -551,26 +589,16 @@ extern "C" fn host_release_trampoline(host_value_key: u64) {
 }
 
 fn release_into_java(host_value_key: u64) -> Result<(), String> {
-    let vm = JVM
-        .get()
-        .ok_or("JavaVM was not captured before host release")?;
-    let class = BAML_FFI_CLASS
-        .get()
-        .ok_or("BamlFfi class ref was not captured before host release")?;
-    let mut env = vm
-        .attach_current_thread_as_daemon()
-        .map_err(|e| format!("attach failed: {e}"))?;
-    let outcome = env.call_static_method(
-        class,
-        HOST_RELEASE_METHOD,
-        HOST_RELEASE_SIG,
-        &[JValue::Long(host_value_key as jlong)],
-    );
-    if let Err(e) = outcome {
-        let _ = env.exception_clear();
-        return Err(format!("hostRelease invocation failed: {e}"));
-    }
-    Ok(())
+    with_java_callback("host release", |env, class| {
+        env.call_static_method(
+            class,
+            HOST_RELEASE_METHOD,
+            HOST_RELEASE_SIG,
+            &[JValue::Long(host_value_key as jlong)],
+        )
+        .map(|_| ())
+        .map_err(|error| format!("hostRelease invocation failed: {error}"))
+    })
 }
 
 /// Complete an in-flight host call with an empty error payload, which

@@ -136,7 +136,9 @@ pub mod buffer;
 pub mod error;
 pub mod handle;
 
-pub use baml_to_host::{call_and_encode, error_to_outbound, result_to_outbound};
+pub use baml_to_host::{
+    call_and_encode, error_to_outbound, result_to_outbound, unhandled_spawn_error_to_outbound,
+};
 pub use bridge_ctypes::baml_bridge;
 pub use buffer::{Buffer, free_buffer};
 pub use error::BridgeError;
@@ -158,6 +160,7 @@ pub fn initialize_runtime_from_bytecode_with_sys_ops(
     sys_ops: sys_ops::SysOps,
 ) -> Result<Arc<dyn Bex>, BridgeError> {
     let runtime: Arc<dyn Bex> = bex_project::new_from_bytecode(bytecode, sys_ops)?;
+    install_unhandled_spawn_error_handler(&runtime);
     platform::replace_runtime(runtime.clone())?;
     Ok(runtime)
 }
@@ -216,8 +219,30 @@ pub fn initialize_runtime_from_files_with_sys_ops(
     }
 
     let runtime: Arc<dyn Bex> = bex_project::new(project_root, sys_ops, files)?;
+    install_unhandled_spawn_error_handler(&runtime);
     platform::replace_runtime(runtime.clone())?;
     Ok(runtime)
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn install_unhandled_spawn_error_handler(runtime: &Arc<dyn Bex>) {
+    runtime.set_unhandled_spawn_error_handler(Some(Arc::new(|error| {
+        let cancelled = error.cancelled;
+        platform::dispatch_unhandled_spawn_error(
+            unhandled_spawn_error_to_outbound(error),
+            cancelled,
+        );
+    })));
+}
+
+#[cfg(target_arch = "wasm32")]
+fn install_unhandled_spawn_error_handler(_: &Arc<dyn Bex>) {}
+
+pub async fn shutdown_runtime() -> Result<(), BridgeError> {
+    if let Some(runtime) = platform::take_runtime()? {
+        runtime.shutdown().await;
+    }
+    Ok(())
 }
 
 /// Initialize the native process-global runtime from serialized BAML bytecode.

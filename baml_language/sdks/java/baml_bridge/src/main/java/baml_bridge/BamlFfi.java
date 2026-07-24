@@ -135,6 +135,8 @@ public final class BamlFfi {
         // First-hit-wins ladder: system property → env var → bundled classpath
         // resource. See NativeLibraryLoader for the resolution + extraction logic.
         NativeLibraryLoader.load(LIB_PROPERTY, LIB_ENV_VAR);
+        Runtime.getRuntime()
+                .addShutdownHook(new Thread(BamlFfi::nativeShutdownRuntime, "baml-runtime-shutdown"));
     }
 
     private BamlFfi() {}
@@ -175,6 +177,13 @@ public final class BamlFfi {
 
     /** Initialize the process-global runtime from serialized BAML bytecode. */
     static native void nativeInitFromBytecode(byte[] bytecode);
+
+    static native void nativeShutdownRuntime();
+
+    /** Wait for spawned work, report unreachable errors, and release the runtime. */
+    public static void shutdownRuntime() {
+        nativeShutdownRuntime();
+    }
 
     /**
      * Run a BAML function synchronously. Takes a protobuf-encoded
@@ -564,6 +573,10 @@ public final class BamlFfi {
         if (future != null) {
             future.complete(resultEnvelope);
         }
+    }
+
+    static void unhandledSpawnError(byte[] errorEnvelope, boolean cancelled) {
+        UnhandledSpawnErrors.report(errorEnvelope, cancelled);
     }
 
     // ---- Host-callable registry + dispatch ---------------------------------

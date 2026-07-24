@@ -341,7 +341,6 @@ impl BexHeap {
                     self.debug_assert_valid_value(&value);
                 }
                 FutureRead::Pending(_)
-                | FutureRead::ErrorPending(_)
                 | FutureRead::Cancelled
                 | FutureRead::InternalError(_) => {}
             },

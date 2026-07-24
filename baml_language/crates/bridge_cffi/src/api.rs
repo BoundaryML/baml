@@ -79,6 +79,15 @@ pub type BamlHostDispatchCallback =
 /// throw across the C boundary.
 pub type BamlHostReleaseCallback = extern "C" fn(host_value_key: u64);
 
+/// Receives an error from spawned work whose future became unreachable.
+///
+/// `content` follows the same borrowed `BamlOutboundResult` contract as
+/// `BamlResultCallback`. `cancelled` is nonzero when shutdown cancellation
+/// caused the error. The callback must not unwind or throw across the C
+/// boundary.
+pub type BamlUnhandledSpawnErrorCallback =
+    extern "C" fn(content: *const i8, length: usize, cancelled: i32);
+
 pub type BamlVersionFn = extern "C" fn() -> Buffer;
 pub type BamlInitializeRuntimeFromBytecodeFn =
     extern "C" fn(bytecode: *const u8, length: usize) -> Buffer;
@@ -94,6 +103,9 @@ pub type BamlNewFunctionCallFn = extern "C" fn() -> u64;
 pub type BamlCancelFunctionCallFn = extern "C" fn(id: u64) -> i32;
 pub type BamlRegisterHostDispatchCallbackFn = extern "C" fn(callback: BamlHostDispatchCallback);
 pub type BamlRegisterHostReleaseCallbackFn = extern "C" fn(callback: BamlHostReleaseCallback);
+pub type BamlRegisterUnhandledSpawnErrorCallbackFn =
+    extern "C" fn(callback: BamlUnhandledSpawnErrorCallback);
+pub type BamlShutdownRuntimeFn = extern "C" fn() -> Buffer;
 pub type BamlCompleteHostCallFn =
     extern "C" fn(call_id: u32, is_error: i32, content: *const i8, length: usize);
 pub type BamlHandleCloneFn = unsafe extern "C" fn(key: u64, out_key: *mut u64) -> BamlCffiStatus;
@@ -122,7 +134,8 @@ pub type BamlGetApiV1Fn = extern "C" fn() -> *const BamlApiV1;
 ///
 /// A host must not unload the native library while a returned buffer, owned
 /// handle, registered callback, or asynchronous call can still reach it. The
-/// ABI has no shutdown or callback-unregistration operation in V1.
+/// The ABI has no callback-unregistration operation in V1. Hosts must call
+/// `shutdown_runtime` before unloading the native library.
 ///
 /// No Rust panic may unwind across this ABI. Operations with a diagnostic or
 /// callback result channel catch and translate expected implementation panics.
@@ -231,6 +244,10 @@ pub struct BamlApiV1 {
     /// process-global, thread-safe, first-successful-call-wins, and idempotent
     /// only for an identical language/version pair.
     pub register_bridge: BamlRegisterBridgeFn,
+    /// Install the process-global unhandled-spawn callback; the first call wins.
+    pub register_unhandled_spawn_error_callback: BamlRegisterUnhandledSpawnErrorCallbackFn,
+    /// Wait for spawned work, report unreachable errors, and release the runtime.
+    pub shutdown_runtime: BamlShutdownRuntimeFn,
 }
 
 static BAML_API_V1: BamlApiV1 = BamlApiV1 {
@@ -256,6 +273,8 @@ static BAML_API_V1: BamlApiV1 = BamlApiV1 {
     media_base64: crate::baml_media_base64,
     media_mime_type: crate::baml_media_mime_type,
     register_bridge: crate::register_bridge_ffi,
+    register_unhandled_spawn_error_callback: crate::register_unhandled_spawn_error_callback,
+    shutdown_runtime: crate::shutdown_runtime_ffi,
 };
 
 /// Return the immutable version-1 BAML C API function table.
@@ -317,6 +336,11 @@ mod tests {
         assert_same_function!(api.media_base64, crate::baml_media_base64);
         assert_same_function!(api.media_mime_type, crate::baml_media_mime_type);
         assert_same_function!(api.register_bridge, crate::register_bridge_ffi);
+        assert_same_function!(
+            api.register_unhandled_spawn_error_callback,
+            crate::register_unhandled_spawn_error_callback
+        );
+        assert_same_function!(api.shutdown_runtime, crate::shutdown_runtime_ffi);
     }
 
     #[test]
@@ -342,6 +366,9 @@ mod tests {
         let _: BamlMediaAccessorFn = api.media_base64;
         let _: BamlMediaAccessorFn = api.media_mime_type;
         let _: BamlRegisterBridgeFn = api.register_bridge;
+        let _: BamlRegisterUnhandledSpawnErrorCallbackFn =
+            api.register_unhandled_spawn_error_callback;
+        let _: BamlShutdownRuntimeFn = api.shutdown_runtime;
         let _: BamlGetApiV1Fn = baml_get_api_v1;
     }
 

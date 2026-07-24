@@ -7,6 +7,10 @@
 import atexit
 import asyncio
 import functools
+import os
+import signal
+import sys
+import traceback
 from typing import Any, Callable, Dict, List, Literal, Optional, Sequence
 
 from typing_extensions import Sentinel
@@ -27,6 +31,8 @@ from .baml_py import (
     get_runtime as _rust_get_runtime,
     get_version,
     new_function_call,
+    register_unhandled_spawn_error_callback,
+    shutdown_runtime,
 )
 from .errors import (
     BamlCancelledError,
@@ -50,8 +56,25 @@ from .typemap import (
 )
 
 
-# Flush buffered trace events on process exit so nothing is lost.
+# Complete spawned work before flushing buffered trace events.
 atexit.register(flush_events)
+atexit.register(shutdown_runtime)
+
+
+def _handle_unhandled_spawn_error(error_bytes: bytes, cancelled: bool) -> None:
+    try:
+        decode_call_result(error_bytes)
+    except BaseException as error:
+        traceback.print_exception(error)
+        if not cancelled:
+            sys.stderr.flush()
+            if os.name == "nt":
+                os.kill(os.getpid(), signal.SIGTERM)
+            else:
+                os._exit(1)
+
+
+register_unhandled_spawn_error_callback(_handle_unhandled_spawn_error)
 
 __version__ = "0.15.0"
 
@@ -516,6 +539,7 @@ __all__ = [
     "BamlPanic",
     "make_sdk_panic",
     "flush_events",
+    "shutdown_runtime",
     "get_runtime",
     "get_version",
     "new_function_call",

@@ -80,6 +80,8 @@ export function cancelFunctionCall(callId: bigint): boolean {
     return nativeCancelFunctionCall(callId.toString());
 }
 
+import './unhandled_spawn.js';
+
 export class FunctionResult {
     private _value: unknown;
 

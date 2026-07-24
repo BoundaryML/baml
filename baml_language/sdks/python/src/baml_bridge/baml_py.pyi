@@ -4,9 +4,8 @@
 import builtins
 import typing
 __all__ = [
-    "BamlCallContext",
-    "cancel_function_call",
     "BamlAudio",
+    "BamlCallContext",
     "BamlImage",
     "BamlPdf",
     "BamlPyHandle",
@@ -19,14 +18,43 @@ __all__ = [
     "LLMCall",
     "Timing",
     "Usage",
+    "cancel_function_call",
     "flush_events",
     "get_runtime",
     "get_version",
-    "new_function_call",
     "lookup_host_value",
+    "new_function_call",
     "register_host_callable",
+    "register_unhandled_spawn_error_callback",
     "release_host_callable",
+    "shutdown_runtime",
 ]
+
+@typing.final
+class BamlAudio:
+    @staticmethod
+    def from_url(url: builtins.str, mime_type: typing.Optional[builtins.str] = None) -> BamlAudio: ...
+    @staticmethod
+    def from_file(file: builtins.str, mime_type: typing.Optional[builtins.str] = None) -> BamlAudio: ...
+    @staticmethod
+    def from_base64(base64: builtins.str, mime_type: typing.Optional[builtins.str] = None) -> BamlAudio: ...
+    def url(self) -> typing.Optional[builtins.str]: ...
+    def file(self) -> typing.Optional[builtins.str]: ...
+    def base64(self) -> builtins.str: ...
+    def mime_type(self) -> typing.Optional[builtins.str]: ...
+    @classmethod
+    def _from_pyhandle(cls, pyhandle: BamlPyHandle) -> BamlAudio:
+        r"""
+        Internal: build a `$name` from a `BamlPyHandle`. Used by
+        `_decode_handle`. Validates the handle's `handle_type`
+        tag matches the expected media kind.
+        """
+    def _to_pyhandle(self) -> BamlPyHandle:
+        r"""
+        Internal: expose the inner `BamlPyHandle` for inbound encode.
+        """
+    @classmethod
+    def __get_pydantic_core_schema__(cls, _source_type: typing.Any, _handler: typing.Any) -> typing.Any: ...
 
 @typing.final
 class BamlCallContext:
@@ -56,32 +84,15 @@ class BamlCallContext:
         cancellation check point (before HTTP calls, between retries, etc.).
         Calling `abort()` multiple times is harmless.
         """
-
-@typing.final
-class BamlAudio:
-    @staticmethod
-    def from_url(url: builtins.str, mime_type: typing.Optional[builtins.str] = None) -> BamlAudio: ...
-    @staticmethod
-    def from_file(file: builtins.str, mime_type: typing.Optional[builtins.str] = None) -> BamlAudio: ...
-    @staticmethod
-    def from_base64(base64: builtins.str, mime_type: typing.Optional[builtins.str] = None) -> BamlAudio: ...
-    def url(self) -> typing.Optional[builtins.str]: ...
-    def file(self) -> typing.Optional[builtins.str]: ...
-    def base64(self) -> builtins.str: ...
-    def mime_type(self) -> typing.Optional[builtins.str]: ...
-    @classmethod
-    def _from_pyhandle(cls, pyhandle: BamlPyHandle) -> BamlAudio:
+    def _attach_call_id(self, call_id: builtins.int) -> None:
         r"""
-        Internal: build a `$name` from a `BamlPyHandle`. Used by
-        `_decode_handle`. Validates the handle's `handle_type`
-        tag matches the expected media kind.
+        Bind this controller to an in-flight CFFI call id for the duration of
+        one host call. Private runtime hook used by `baml_bridge`.
         """
-    def _to_pyhandle(self) -> BamlPyHandle:
+    def _detach_call_id(self, call_id: builtins.int) -> None:
         r"""
-        Internal: expose the inner `BamlPyHandle` for inbound encode.
+        Remove a call-id binding installed by `_attach_call_id`.
         """
-    @classmethod
-    def __get_pydantic_core_schema__(cls, _source_type: typing.Any, _handler: typing.Any) -> typing.Any: ...
 
 @typing.final
 class BamlImage:
@@ -137,10 +148,13 @@ class BamlPdf:
 
 @typing.final
 class BamlPyHandle:
-    def __init__(self, handle_key: builtins.int, handle_type: builtins.int) -> None: ...
+    def __new__(cls, handle_key: builtins.int, handle_type: builtins.int) -> BamlPyHandle: ...
     def __copy__(self) -> BamlPyHandle: ...
     def __deepcopy__(self, _memo: typing.Any) -> BamlPyHandle: ...
-    def _clone_key_for_wire(self) -> tuple[builtins.int, builtins.int]: ...
+    def _clone_key_for_wire(self) -> tuple[builtins.int, builtins.int]:
+        r"""
+        Clone this handle for inbound wire ownership.
+        """
 
 @typing.final
 class BamlRuntime:
@@ -416,19 +430,22 @@ class Usage:
 
 def _seed_function_ref_handle(global_index: builtins.int) -> tuple[builtins.int, builtins.int]:
     r"""
-    Test-only: seed a `FunctionRef` entry directly into `HANDLE_TABLE`,
+    Test-only: seed a `FunctionRef` entry through the shared CFFI API,
     returning `(key, handle_type)` so test code can construct a
     `BamlPyHandle` or stage a wire `BamlHandle`.
     """
 
 def _seed_generic_media_handle() -> tuple[builtins.int, builtins.int]:
     r"""
-    Test-only: seed an `Adt(Media(generic))` entry directly into `HANDLE_TABLE`.
+    Test-only: seed an `Adt(Media(generic))` entry through the shared CFFI API.
     """
+
+def cancel_function_call(call_id: builtins.int) -> builtins.bool: ...
 
 def flush_events() -> None:
     r"""
-    Flush all buffered trace events to the JSONL file (if BAML_TRACE_FILE is set).
+    No-op: tracing has been removed. Kept as a live symbol for ABI stability
+    (SDK `atexit` + `__all__` reference it).
     """
 
 def get_runtime() -> BamlRuntime:
@@ -441,11 +458,7 @@ def get_runtime() -> BamlRuntime:
     site.
     """
 
-def cancel_function_call(call_id: builtins.int) -> builtins.bool: ...
-
 def get_version() -> builtins.str: ...
-
-def new_function_call() -> builtins.int: ...
 
 def lookup_host_value(handle: BamlPyHandle) -> typing.Optional[typing.Any]:
     r"""
@@ -463,6 +476,8 @@ def lookup_host_value(handle: BamlPyHandle) -> typing.Optional[typing.Any]:
     callers should fall back to a metadata-built exception in that case.
     """
 
+def new_function_call() -> builtins.int: ...
+
 def register_host_callable(callable: typing.Any) -> builtins.int:
     r"""
     Insert a Python callable into the registry and return its key.
@@ -471,6 +486,8 @@ def register_host_callable(callable: typing.Any) -> builtins.int:
     Called from the inbound encoder in `baml_bridge.proto` whenever a Python
     callable appears as a kwarg.
     """
+
+def register_unhandled_spawn_error_callback(callback: typing.Any) -> None: ...
 
 def release_host_callable(host_value_key: builtins.int) -> None:
     r"""
@@ -485,3 +502,5 @@ def release_host_callable(host_value_key: builtins.int) -> None:
     the life of the process. The encoder calls this for every key it
     registered during a failed encode.
     """
+
+def shutdown_runtime() -> None: ...
