@@ -54,7 +54,7 @@ pub(crate) mod util;
 // pub(crate) mod propelauth;
 // pub(crate) mod tui;
 
-use anyhow::Result;
+use anyhow::{Result, anyhow};
 
 #[derive(Debug, Clone)]
 pub enum ExitCode {
@@ -120,6 +120,13 @@ impl From<ExitCode> for u32 {
 /// `format`, or `language-server`. `baml run` is the top-level entry for
 /// standalone execution.
 pub fn run_cli(argv: Vec<String>) -> Result<ExitCode> {
+    if argv.get(1).map(String::as_str) == Some("update") {
+        return Err(anyhow!(
+            "`baml update` is ambiguous.\n\
+             To use the latest version of BAML, run `baml toolchain update`.\n\
+             To use the latest BAML toolchain selector, run `baml self-update`."
+        ));
+    }
     let cli = commands::RuntimeCli::parse_from_smart(argv);
     cli.run()
 }
