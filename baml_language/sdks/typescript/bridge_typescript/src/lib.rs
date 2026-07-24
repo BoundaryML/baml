@@ -10,6 +10,7 @@ pub mod host_value;
 pub mod media;
 pub mod runtime;
 mod types;
+pub mod unhandled_spawn;
 
 use napi_derive::napi;
 
@@ -38,6 +39,13 @@ pub fn get_version() -> &'static str {
 /// No-op: tracing has been removed. Kept as a live symbol for ABI stability.
 #[napi]
 pub fn flush_events() {}
+
+#[napi(js_name = "shutdownRuntime")]
+pub async fn shutdown_runtime() -> napi::Result<()> {
+    bridge_cffi::shutdown_runtime()
+        .await
+        .map_err(errors::bridge_error_to_napi)
+}
 
 #[napi(js_name = "newFunctionCall")]
 pub fn new_function_call() -> String {

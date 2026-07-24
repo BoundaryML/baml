@@ -50,6 +50,7 @@ export function newFunctionCall() {
 export function cancelFunctionCall(callId) {
     return nativeCancelFunctionCall(callId.toString());
 }
+import './unhandled_spawn.js';
 export class FunctionResult {
     _value;
     constructor(value) {

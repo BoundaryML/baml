@@ -47,6 +47,8 @@ enum BamlApi {
     static let mediaBase64 = v1.media_base64!
     static let mediaMimeType = v1.media_mime_type!
     static let registerBridge = v1.register_bridge!
+    static let registerUnhandledSpawnErrorCallback = v1.register_unhandled_spawn_error_callback!
+    static let shutdownRuntime = v1.shutdown_runtime!
 
     /// Copy a runtime-owned buffer to a `Data` and release it exactly
     /// once via the table's `free_buffer`. A zero-length buffer may have

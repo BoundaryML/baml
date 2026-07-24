@@ -297,6 +297,8 @@ export declare function registerHostCallable(callable: (callId: number, argsByte
  */
 export declare function registerHostValueReleaseCallback(callback: (key: HandleKey) => void): void
 
+export declare function registerUnhandledSpawnErrorCallback(callback: (errorBytes: Buffer, cancelled: boolean) => void): void
+
 /**
  * Release a host callable the inbound encoder registered but never handed to
  * the engine — the encode-error rollback path.
@@ -310,3 +312,5 @@ export declare function registerHostValueReleaseCallback(callback: (key: HandleK
  * key it registered during a failed encode.
  */
 export declare function releaseHostCallable(key: HandleKey): void
+
+export declare function shutdownRuntime(): Promise<void>

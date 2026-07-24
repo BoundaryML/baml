@@ -1,6 +1,15 @@
 #![allow(clippy::print_stdout, clippy::print_stderr)]
 
-use std::{future::Future, io::Write as _, path::PathBuf, sync::Arc, time::Duration};
+use std::{
+    future::Future,
+    io::Write as _,
+    path::PathBuf,
+    sync::{
+        Arc,
+        atomic::{AtomicUsize, Ordering},
+    },
+    time::Duration,
+};
 
 use anyhow::{Context, Result, anyhow};
 use baml_db::{baml_compiler_diagnostics::Severity, baml_compiler2_emit};
@@ -279,6 +288,7 @@ struct RunCtx<'a> {
     engine: &'a Arc<BexEngine>,
     rt: &'a tokio::runtime::Runtime,
     cancel: &'a CancellationToken,
+    unhandled_spawn_failures: &'a AtomicUsize,
     logs: TestLogLevel,
 }
 
@@ -353,6 +363,11 @@ impl RunCtx<'_> {
             }
         })
     }
+}
+
+fn finish_engine(ctx: &RunCtx<'_>) -> usize {
+    ctx.rt.block_on(ctx.engine.shutdown());
+    ctx.unhandled_spawn_failures.load(Ordering::SeqCst)
 }
 
 impl TestArgs {
@@ -497,8 +512,28 @@ impl TestArgs {
             );
             (engine, legacy)
         };
+        let unhandled_spawn_failures = Arc::new(AtomicUsize::new(0));
+        let unhandled_spawn_failures_for_handler = Arc::clone(&unhandled_spawn_failures);
+        engine.set_unhandled_spawn_error_handler(Some(Arc::new(move |report| {
+            let cancelled = report.cancelled;
+            let error = report.into_engine_error();
+            if cancelled {
+                eprintln!("WARN cancelled spawned task failed: {error}");
+            } else {
+                eprintln!("FAIL testing::unhandled_spawn_error");
+                eprintln!("  => {error}");
+                unhandled_spawn_failures_for_handler.fetch_add(1, Ordering::SeqCst);
+            }
+        })));
         let rt = tokio::runtime::Runtime::new().context("failed to create tokio runtime")?;
         let cancel = CancellationToken::new();
+        let run_ctx = RunCtx {
+            engine: &engine,
+            rt: &rt,
+            cancel: &cancel,
+            unhandled_spawn_failures: &unhandled_spawn_failures,
+            logs: invocation.logs,
+        };
 
         // ── 5. Resolve the testset registry handle ─────────────────────────
         // `collect_tests` runs `$init_test`, returning a live `testing.TestRegistry`
@@ -523,7 +558,11 @@ impl TestArgs {
                     // continue as if there were no testset tests.
                     reporter.abandon();
                     crate::reporter::print_error(format_args!("testset discovery failed: {e}"));
-                    return Ok(crate::ExitCode::Other);
+                    return Ok(if finish_engine(&run_ctx) != 0 {
+                        crate::ExitCode::TestFailure
+                    } else {
+                        crate::ExitCode::Other
+                    });
                 }
             };
 
@@ -533,13 +572,6 @@ impl TestArgs {
             .filter(|t| invocation.includes_id(&t.canonical_id))
             .collect();
 
-        let run_ctx = RunCtx {
-            engine: &engine,
-            rt: &rt,
-            cancel: &cancel,
-            logs: invocation.logs,
-        };
-
         // ── 7. List mode ───────────────────────────────────────────────────
         if invocation.list {
             let testset_names = match &registry {
@@ -548,11 +580,19 @@ impl TestArgs {
                     Err(e) => {
                         reporter.abandon();
                         crate::reporter::print_error(format_args!("failed to list tests: {e}"));
-                        return Ok(crate::ExitCode::Other);
+                        return Ok(if finish_engine(&run_ctx) != 0 {
+                            crate::ExitCode::TestFailure
+                        } else {
+                            crate::ExitCode::Other
+                        });
                     }
                 },
                 None => Vec::new(),
             };
+
+            if finish_engine(&run_ctx) != 0 {
+                return Ok(crate::ExitCode::TestFailure);
+            }
 
             // Write-through the discovery cache (+ BAML_CACHE_VERIFY oracle) so a
             // later `--list` skips engine boot entirely. The cached datum is the
@@ -636,6 +676,13 @@ impl TestArgs {
                     command_failed = true;
                 }
             }
+        }
+
+        let unhandled_spawn_failure_count = finish_engine(&run_ctx);
+        if unhandled_spawn_failure_count != 0 {
+            failed += unhandled_spawn_failure_count;
+            total += unhandled_spawn_failure_count;
+            command_failed = true;
         }
 
         if total == 0 {

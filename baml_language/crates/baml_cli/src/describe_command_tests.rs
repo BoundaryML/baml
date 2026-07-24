@@ -1058,6 +1058,12 @@ fn render_keyword_class() {
 }
 
 #[test]
+fn render_keyword_generator() {
+    let output = capture_keyword("generator");
+    insta::assert_snapshot!(output);
+}
+
+#[test]
 fn render_keyword_if() {
     let output = capture_keyword("if");
     insta::assert_snapshot!(output);

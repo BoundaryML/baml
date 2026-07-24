@@ -14,9 +14,16 @@ thread_local! {
 
 pub(crate) fn replace_runtime(runtime: Arc<dyn Bex>) -> Result<(), BridgeError> {
     RUNTIME.with(|slot| {
-        *slot.borrow_mut() = Some(runtime);
+        let previous = slot.borrow_mut().replace(runtime);
+        if let Some(previous) = previous {
+            wasm_bindgen_futures::spawn_local(previous.shutdown());
+        }
     });
     Ok(())
+}
+
+pub(crate) fn take_runtime() -> Result<Option<Arc<dyn Bex>>, BridgeError> {
+    Ok(RUNTIME.with(|slot| slot.borrow_mut().take()))
 }
 
 pub(crate) fn get_runtime() -> Result<Arc<dyn Bex>, BridgeError> {

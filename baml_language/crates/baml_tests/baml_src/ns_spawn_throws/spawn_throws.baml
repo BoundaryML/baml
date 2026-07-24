@@ -94,3 +94,19 @@ function racing_successful_spawn_returns_cleanly_fn() -> int {
 test "racing_successful_spawn_returns_cleanly" {
     assert.is_true(baml.deep_equals(racing_successful_spawn_returns_cleanly_fn(), 7))
 }
+
+function caught_not_preempted_by_unrelated_await_fn() -> int {
+    let failing = spawn { boom_io_x() };
+    let unrelated = spawn {
+        baml.sys.sleep(baml.time.Duration.from_milliseconds(50n));
+        7
+    };
+    let _ = await unrelated;
+    (await failing) catch (e) {
+        baml.errors.Io => 99
+    }
+}
+
+test "caught_not_preempted_by_unrelated_await" {
+    assert.is_true(baml.deep_equals(caught_not_preempted_by_unrelated_await_fn(), 99))
+}

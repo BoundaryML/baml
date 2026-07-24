@@ -275,6 +275,22 @@ typedef struct BamlBridgeInfoV1 {
 typedef struct BamlBuffer (*BamlRegisterBridgeFn)(const struct BamlBridgeInfoV1 *info);
 
 /**
+ * Receives an error from spawned work whose future became unreachable.
+ *
+ * `content` follows the same borrowed `BamlOutboundResult` contract as
+ * `BamlResultCallback`. `cancelled` is nonzero when shutdown cancellation
+ * caused the error. The callback must not unwind or throw across the C
+ * boundary.
+ */
+typedef void (*BamlUnhandledSpawnErrorCallback)(const int8_t *content,
+                                                size_t length,
+                                                int32_t cancelled);
+
+typedef void (*BamlRegisterUnhandledSpawnErrorCallbackFn)(BamlUnhandledSpawnErrorCallback callback);
+
+typedef struct BamlBuffer (*BamlShutdownRuntimeFn)(void);
+
+/**
  * First version of the shared BAML C API.
  *
  * The table is immutable runtime-owned storage and remains valid until the
@@ -285,7 +301,8 @@ typedef struct BamlBuffer (*BamlRegisterBridgeFn)(const struct BamlBridgeInfoV1 
  *
  * A host must not unload the native library while a returned buffer, owned
  * handle, registered callback, or asynchronous call can still reach it. The
- * ABI has no shutdown or callback-unregistration operation in V1.
+ * The ABI has no callback-unregistration operation in V1. Hosts must call
+ * `shutdown_runtime` before unloading the native library.
  *
  * No Rust panic may unwind across this ABI. Operations with a diagnostic or
  * callback result channel catch and translate expected implementation panics.
@@ -438,6 +455,14 @@ typedef struct BamlApiV1 {
    * only for an identical language/version pair.
    */
   BamlRegisterBridgeFn register_bridge;
+  /**
+   * Install the process-global unhandled-spawn callback; the first call wins.
+   */
+  BamlRegisterUnhandledSpawnErrorCallbackFn register_unhandled_spawn_error_callback;
+  /**
+   * Wait for spawned work, report unreachable errors, and release the runtime.
+   */
+  BamlShutdownRuntimeFn shutdown_runtime;
 } BamlApiV1;
 
 typedef const struct BamlApiV1 *(*BamlGetApiV1Fn)(void);

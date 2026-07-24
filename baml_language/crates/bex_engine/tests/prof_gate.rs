@@ -2435,17 +2435,9 @@ async fn spawned_child_cancellation_ends_child_cancelled() {
     );
 }
 
-/// An UNOBSERVED fire-and-forget child error (BEP-034) surfaces at the
-/// spawner's next await and terminates the parent thread *without*
-/// unwinding its VM — the parent is parked at the Await opcode with every
-/// frame open. The §7 decision 2 drain (Errored flavor) closes those
-/// frames, so full balance holds. Found by the post-decision adversarial
-/// review: before the fix this was the one remaining systematic
-/// frame-strander (the awaited-future error path in
-/// `spawned_child_error_ends_child_errored` below unwinds VM-side and
-/// never hit it).
+/// B-405: an unobserved child error does not alter the parent profile.
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
-async fn unobserved_child_error_drains_parent_frames() {
+async fn unobserved_child_error_keeps_parent_completed() {
     let _guard = test_lock().await;
     init_prof_env();
     let source = r#"
@@ -2459,19 +2451,16 @@ async fn unobserved_child_error_drains_parent_frames() {
             await g
         }
     "#;
-    let result = run_main(source).await;
-    assert!(
-        matches!(result, Err(EngineError::UnhandledThrow { .. })),
-        "the dropped child error must surface as UnhandledThrow: {result:?}"
-    );
+    let value = run_main(source).await.expect("parent call succeeds");
+    assert_eq!(value, BexExternalValue::Int(1));
 
     let (header, events) = load_profile_quiesced("user.uce_pin");
     assert_balance(&header, &events);
     let statuses = end_statuses_by_fqn(&header, &events);
     assert_eq!(
         statuses.get("user.main"),
-        Some(&vec![pb::FunctionEndStatus::Errored as i32]),
-        "the drain closes the parent's open root frame Errored: {statuses:?}"
+        Some(&vec![pb::FunctionEndStatus::Ok as i32]),
+        "the parent frame completes normally: {statuses:?}"
     );
     assert_eq!(
         statuses.get("user.uce_bad"),
@@ -2488,8 +2477,8 @@ async fn unobserved_child_error_drains_parent_frames() {
     assert!(
         events.iter().any(|e| matches!(e, Event::EndThread(et)
             if !child_threads.contains(&et.thread_id)
-                && et.status == pb::ThreadEndStatus::Errored as i32)),
-        "the root thread must end Errored"
+                && et.status == pb::ThreadEndStatus::Completed as i32)),
+        "the root thread must end Completed"
     );
 }
 
