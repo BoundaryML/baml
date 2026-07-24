@@ -121,7 +121,6 @@ function user.wrong_arity_partial() -> user.Pair<int> throws never {
   }
   !! 3257..3266: type `Pair` expects 2 type argument(s), got 1
   !! 3273..3310: type `Pair` expects 2 type argument(s), got 1
-  !! 3303..3308: type mismatch: expected B, got "two"
 }
 class user.Plain {
   name: string

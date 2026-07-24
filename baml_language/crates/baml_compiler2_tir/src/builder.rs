@@ -5715,6 +5715,29 @@ impl<'db> TypeInferenceBuilder<'db> {
         ty
     }
 
+    fn recover_missing_object_type_args(&self, ty: &Ty, has_explicit_type_args: bool) -> Ty {
+        let Ty::Class(class_name, type_args, attr) = ty else {
+            return ty.clone();
+        };
+        if !has_explicit_type_args {
+            return ty.clone();
+        }
+        let Some(class_loc) = self.resolve_class_loc(class_name) else {
+            return ty.clone();
+        };
+        let expected = baml_compiler2_ppir::item_data::class_data(self.context.db(), class_loc)
+            .generic_params
+            .len();
+        if type_args.len() >= expected {
+            return ty.clone();
+        }
+        let mut recovered = type_args.clone();
+        recovered.resize_with(expected, || Ty::Error {
+            attr: TyAttr::default(),
+        });
+        Ty::Class(class_name.clone(), recovered, attr.clone())
+    }
+
     /// `map {}` parses as an object literal named by the reserved `map` keyword
     /// (the keyword form lets an *empty* map be written where a bare `{}` would
     /// read as an empty block). Non-empty maps parse as `Expr::Map`, so an
@@ -6015,14 +6038,15 @@ impl<'db> TypeInferenceBuilder<'db> {
             }
             ty => ty,
         };
-        self.validate_type_generic_bounds(expr_id, &ty);
+        let recovered_ty = self.recover_missing_object_type_args(&ty, !obj_type_args.is_empty());
+        self.validate_type_generic_bounds(expr_id, &recovered_ty);
         // Class spread is nominal and invariant: the source must be the same
         // resolved class with compatible generic arguments. Besides preventing
         // runtime field-layout violations, checking here ensures every nested
         // expression is fully typed before MIR lowering.
         for (spread_expr, spread_ty) in &spread_types {
             if !matches!(spread_ty, Ty::Unknown { .. } | Ty::Error { .. })
-                && !self.is_subtype(spread_ty, &ty)
+                && !self.is_subtype(spread_ty, &recovered_ty)
             {
                 self.context.report(
                     TirTypeError::TypeMismatch {
@@ -6034,7 +6058,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 );
             }
         }
-        if let Ty::Class(class_name, type_args, _) = &ty {
+        if let Ty::Class(class_name, type_args, _) = &recovered_ty {
             let field_types: FxHashMap<Name, Ty> = self
                 .class_actual_fields_ordered(class_name, type_args)
                 .into_iter()
@@ -6094,27 +6118,31 @@ impl<'db> TypeInferenceBuilder<'db> {
     }
 
     /// Checking mode: verify an expression against an expected type.
-    fn check_object_literal_declared_class_mismatch(
+    fn resolve_object_check_type(
         &mut self,
         expr_id: ExprId,
         body: &ExprBody,
         expected: &Ty,
         type_name: &baml_base::core_types::TypePath,
         obj_type_args: &[TypeExpr],
-    ) -> Option<Ty> {
+    ) -> Result<Ty, Box<Ty>> {
         // BEP-044 wf3 #G15: when the literal explicitly names a concrete
         // class that differs from the expected class, it must be a subtype.
         // Keep this out of `check_expr` proper so its temporary lowering
         // state doesn't bloat every recursive checking frame in debug builds.
-        let Ty::Class(expected_qtn, _, _) = expected else {
-            return None;
+        let has_explicit_type_args = !obj_type_args.is_empty();
+        let recovered_expected =
+            self.recover_missing_object_type_args(expected, has_explicit_type_args);
+        let Ty::Class(expected_qtn, _, _) = &recovered_expected else {
+            return Ok(expected.clone());
         };
-        let path = type_name;
-
-        let lit_ty = self.lower_object_type_name(expr_id, path, obj_type_args);
-        let declared_mismatch = if let Ty::Class(lit_qtn, _, _) = &lit_ty {
+        let lit_ty = self.lower_object_type_name(expr_id, type_name, obj_type_args);
+        let recovered_lit_ty =
+            self.recover_missing_object_type_args(&lit_ty, has_explicit_type_args);
+        let declared_mismatch = if let Ty::Class(lit_qtn, _, _) = &recovered_lit_ty {
             lit_qtn != expected_qtn
-                || (!obj_type_args.is_empty() && !self.is_subtype(&lit_ty, expected))
+                || (has_explicit_type_args
+                    && !self.is_subtype(&recovered_lit_ty, &recovered_expected))
         } else {
             false
         };
@@ -6132,9 +6160,11 @@ impl<'db> TypeInferenceBuilder<'db> {
                     Vec::new(),
                 );
             }
-            Some(inferred)
+            Err(Box::new(inferred))
+        } else if has_explicit_type_args {
+            Ok(recovered_lit_ty)
         } else {
-            None
+            Ok(expected.clone())
         }
     }
 
@@ -6154,19 +6184,16 @@ impl<'db> TypeInferenceBuilder<'db> {
         // to `check_map_object_expr` by the `is_map_object_literal` guard in the
         // `Expr::Object` arm of `check_expr` before reaching here — including the
         // empty `map {}`, which bidirectionally adopts the expected map type.
-        if let Some(inferred) = self.check_object_literal_declared_class_mismatch(
-            expr_id,
-            body,
-            expected,
-            type_name,
-            obj_type_args,
-        ) {
-            return inferred;
-        }
-        self.validate_type_generic_bounds(expr_id, expected);
-        if let Ty::Class(class_name, type_args, _) = expected {
+        let check_ty =
+            match self.resolve_object_check_type(expr_id, body, expected, type_name, obj_type_args)
+            {
+                Ok(ty) => ty,
+                Err(inferred) => return *inferred,
+            };
+        self.validate_type_generic_bounds(expr_id, &check_ty);
+        if let Ty::Class(class_name, type_args, _) = &check_ty {
             for spread in spreads {
-                self.check_expr(spread.expr, body, expected);
+                self.check_expr(spread.expr, body, &check_ty);
             }
             let field_types: FxHashMap<Name, Ty> = self
                 .class_actual_fields_ordered(class_name, type_args)

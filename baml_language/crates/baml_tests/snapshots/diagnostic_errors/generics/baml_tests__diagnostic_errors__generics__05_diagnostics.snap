@@ -63,15 +63,6 @@ source: crates/baml_tests/src/generated_tests.rs
 
   [type] E0001
 
-  × mismatched types
-     ╭─[classes.baml:134:35]
- 134 │     Pair<int> { first: 1, second: "two" }
-     ·                                   ──┬──
-     ·                                     ╰── expected `B`, found `"two"`
-     ╰────
-
-  [type] E0001
-
   × type `Plain` expects 0 type argument(s), got 1
      ╭─[classes.baml:145:42]
  145 │ function wrong_arity_on_non_generic() -> Plain<int> {
