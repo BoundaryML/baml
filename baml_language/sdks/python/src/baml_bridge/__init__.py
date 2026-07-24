@@ -8,6 +8,7 @@ import atexit
 import asyncio
 import functools
 import os
+import signal
 import sys
 import traceback
 from typing import Any, Callable, Dict, List, Literal, Optional, Sequence
@@ -67,7 +68,10 @@ def _handle_unhandled_spawn_error(error_bytes: bytes, cancelled: bool) -> None:
         traceback.print_exception(error)
         if not cancelled:
             sys.stderr.flush()
-            os._exit(1)
+            if os.name == "nt":
+                os.kill(os.getpid(), signal.SIGTERM)
+            else:
+                os._exit(1)
 
 
 register_unhandled_spawn_error_callback(_handle_unhandled_spawn_error)

@@ -114,7 +114,7 @@ raise AssertionError("fatal unhandled spawn error did not terminate the process"
         check=False,
     )
 
-    assert result.returncode == 1
+    assert result.returncode != 0
     assert "boom" in result.stderr
 
 
