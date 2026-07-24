@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 from __future__ import annotations
 
 import subprocess
@@ -8,7 +6,7 @@ import unittest
 from pathlib import Path
 
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 GENERATOR = ROOT / "scripts" / "baml-package-manager-artifacts"
 VERSION = "1.2.3"
 SOURCE_SHA256 = "a" * 64

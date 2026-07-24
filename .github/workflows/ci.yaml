@@ -428,9 +428,6 @@ jobs:
       - name: "Validate baml_language release metadata"
         run: scripts/baml-language-version check
 
-      - name: "Validate package-manager artifacts"
-        run: python3 scripts/test-baml-package-manager-artifacts
-
       - name: "Test release contracts and workflow graph"
         run: python3 -m unittest discover -s scripts/tests -p 'test_*.py' -v
 
