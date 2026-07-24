@@ -66,10 +66,9 @@ CANONICAL_RE = re.compile(
 )
 SHA_RE = re.compile(r"^[a-z]$")
 
-# Release-plan schema. Version 2 carries per-registry versions in a
-# `registry_versions` map instead of a flat `pypi_version` field, so a new
-# registry adds a map entry rather than a top-level field. The loader fails
-# closed on any other schema.
+# Release-plan schema. Version 3 carries every shipping registry version in
+# `registry_versions` and binds release metadata to a deterministic
+# `released_at` timestamp. The loader fails closed on any other schema.
 PLAN_SCHEMA = 3
 
 # Registries whose package version this plan carries. npm, crates.io, NuGet,

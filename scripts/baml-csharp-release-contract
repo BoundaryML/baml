@@ -418,8 +418,8 @@ def stage_native(args: argparse.Namespace) -> None:
 
 def load_plan(path: Path) -> tuple[str, str]:
     plan = load_json(path, "release plan")
-    if not isinstance(plan, dict) or plan.get("schema") != 2:
-        fail("release plan must be a schema-2 JSON object")
+    if not isinstance(plan, dict) or plan.get("schema") != 3:
+        fail("release plan must be a schema-3 JSON object")
     canonical = require_string(plan.get("canonical_version"), "canonical_version")
     registry_versions = plan.get("registry_versions")
     if not isinstance(registry_versions, dict):
