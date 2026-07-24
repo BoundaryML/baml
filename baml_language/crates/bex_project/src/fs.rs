@@ -1,10 +1,10 @@
 use std::{io::Read, path::Path};
 
 #[cfg(target_arch = "wasm32")]
-use utils_fs::FsPathError;
+use baml_path::FsPathError;
 #[cfg(not(target_arch = "wasm32"))]
-use utils_fs::NativePathBuf;
-use utils_fs::VfsPathBuf;
+use baml_path::NativePathBuf;
+use baml_path::VfsPathBuf;
 
 use crate::LspError;
 

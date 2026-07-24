@@ -33,9 +33,9 @@ use std::{
     sync::{Arc, Mutex, OnceLock},
 };
 
-use baml_workspace::{BAML_SRC_DIR, BAML_TOML, find_baml_project_root_from_ancestors};
 #[cfg(not(target_arch = "wasm32"))]
-use utils_fs::{NativePathBuf, VfsPathBuf};
+use baml_path::{NativePathBuf, VfsPathBuf};
+use baml_workspace::{BAML_SRC_DIR, BAML_TOML, find_baml_project_root_from_ancestors};
 pub use wasm_helpers::BackgroundSpawner;
 
 /// Factory that creates [`sys_ops::SysOps`] for a given project root.

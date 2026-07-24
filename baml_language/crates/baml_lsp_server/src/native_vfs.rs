@@ -6,7 +6,7 @@
 
 use std::io::Read;
 
-use utils_fs::{NativePathBuf, VfsPathBuf};
+use baml_path::{NativePathBuf, VfsPathBuf};
 
 /// Native filesystem adapter for BAML's absolute, slash-oriented VFS paths.
 ///

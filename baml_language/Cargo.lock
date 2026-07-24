@@ -1053,6 +1053,7 @@ dependencies = [
  "anyhow",
  "axum",
  "baml_compiler2_visualization",
+ "baml_path",
  "baml_version",
  "base64",
  "bex_events",
@@ -1084,7 +1085,6 @@ dependencies = [
  "tower-http",
  "tracing",
  "tracing-subscriber",
- "utils_fs",
  "vfs",
  "webbrowser",
 ]
@@ -1100,6 +1100,14 @@ dependencies = [
  "libsui",
  "sys_native",
  "tokio",
+]
+
+[[package]]
+name = "baml_path"
+version = "0.0.0-beta"
+dependencies = [
+ "thiserror 2.0.18",
+ "vfs",
 ]
 
 [[package]]
@@ -1372,6 +1380,7 @@ dependencies = [
  "baml_db",
  "baml_fmt",
  "baml_lsp2_actions",
+ "baml_path",
  "baml_project",
  "baml_type",
  "baml_version",
@@ -1399,7 +1408,6 @@ dependencies = [
  "thiserror 2.0.18",
  "tokio",
  "tracing",
- "utils_fs",
  "vfs",
  "walkdir",
  "wasm-bindgen-futures",
@@ -8359,14 +8367,6 @@ name = "utf8parse"
 version = "0.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "06abde3611657adf66d383f00b093d7faecc7fa57071cce2578660c9f1010821"
-
-[[package]]
-name = "utils_fs"
-version = "0.0.0-beta"
-dependencies = [
- "thiserror 2.0.18",
- "vfs",
-]
 
 [[package]]
 name = "uuid"
