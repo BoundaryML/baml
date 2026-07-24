@@ -37,13 +37,6 @@ impl DiagnosticText {
         Self::default()
     }
 
-    pub fn plain(text: impl Into<String>) -> Self {
-        Self {
-            text: text.into(),
-            highlights: Vec::new(),
-        }
-    }
-
     pub fn from_inline_code(text: impl Into<String>) -> Self {
         let text = text.into();
         let mut highlights = Vec::new();

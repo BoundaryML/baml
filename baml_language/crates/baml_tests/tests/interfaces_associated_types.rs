@@ -3835,7 +3835,7 @@ fn narrower_associated_interface_pattern_is_rejected() {
             }
         }
         "#,
-        "type mismatch: expected Iterator<Item = int | string>, got Iterator<Item = int>",
+        "mismatched types: expected `Iterator<Item = int | string>`, found `Iterator<Item = int>`",
     );
 }
 
