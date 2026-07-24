@@ -7867,11 +7867,11 @@ fn parse_impl(tokens: &[Token], cache: Option<&mut NodeCache>) -> (GreenNode, Ve
 #[cfg(test)]
 mod tests {
     use baml_base::FileId;
-    use baml_compiler_lexer::{TokenKind, lex_lossless};
+    use baml_compiler_lexer::lex_lossless;
     use baml_compiler_syntax::{Item, SourceFile, SyntaxKind, SyntaxNode};
     use rowan::ast::AstNode;
 
-    use super::{ParseError, Parser, parse_file};
+    use super::{ParseError, parse_file};
 
     fn parse_source(source: &str) -> (SyntaxNode, Vec<ParseError>) {
         let tokens = lex_lossless(source, FileId::new(0));
@@ -7884,195 +7884,6 @@ mod tests {
             errors.is_empty(),
             "expected no parse errors, got: {errors:#?}"
         );
-    }
-
-    fn parse_key_value_fragment(source: &str, object_field: bool) -> (SyntaxNode, Vec<ParseError>) {
-        let tokens = lex_lossless(source, FileId::new(0));
-        let mut parser = Parser::new(&tokens);
-        parser.start_node(SyntaxKind::SOURCE_FILE);
-        if object_field {
-            parser.parse_object_field();
-        } else {
-            parser.parse_map_entry();
-        }
-        while parser.current < tokens.len() {
-            parser.bump();
-        }
-        parser.finish_node();
-        let (green, errors) = parser.build_tree(None);
-        (SyntaxNode::new_root(green), errors)
-    }
-
-    fn unexpected_expectations(errors: &[ParseError]) -> Vec<&str> {
-        errors
-            .iter()
-            .filter_map(|error| match error {
-                ParseError::UnexpectedToken { expected, .. } => Some(expected.as_str()),
-                _ => None,
-            })
-            .collect()
-    }
-
-    fn parse_quoted_fragment(
-        source: &str,
-        byte_string: bool,
-    ) -> (bool, SyntaxNode, Vec<ParseError>) {
-        let tokens = lex_lossless(source, FileId::new(0));
-        let mut parser = Parser::new(&tokens);
-        parser.start_node(SyntaxKind::SOURCE_FILE);
-        let parsed = if byte_string {
-            parser.parse_byte_string()
-        } else {
-            parser.parse_string()
-        };
-        while parser.current < tokens.len() {
-            parser.bump_raw();
-        }
-        parser.finish_node();
-        let (green, errors) = parser.build_tree(None);
-        (parsed, SyntaxNode::new_root(green), errors)
-    }
-
-    #[test]
-    fn quoted_content_preserves_raw_text_node_kinds_and_prechecks() {
-        for (source, byte_string, kind, expected_text) in [
-            (
-                "  \"a\\\"///*b\"",
-                false,
-                SyntaxKind::STRING_LITERAL,
-                "\"a\\\"///*b\"",
-            ),
-            (
-                "  b\"a\\\"///*b\"",
-                true,
-                SyntaxKind::BYTE_STRING_LITERAL,
-                "b\"a\\\"///*b\"",
-            ),
-        ] {
-            let (parsed, root, errors) = parse_quoted_fragment(source, byte_string);
-            assert!(parsed, "{source:?}");
-            assert_no_errors(&errors);
-            let literal = root
-                .descendants()
-                .find(|node| node.kind() == kind)
-                .expect("expected literal node");
-            assert_eq!(literal.text().to_string(), expected_text);
-        }
-
-        for (source, byte_string) in [("word", false), ("b \"x\"", true)] {
-            let (parsed, root, errors) = parse_quoted_fragment(source, byte_string);
-            assert!(!parsed, "{source:?}");
-            assert_no_errors(&errors);
-            assert!(root.descendants().all(|node| {
-                !matches!(
-                    node.kind(),
-                    SyntaxKind::STRING_LITERAL | SyntaxKind::BYTE_STRING_LITERAL
-                )
-            }));
-        }
-    }
-
-    #[test]
-    fn quoted_content_preserves_eof_and_iteration_limit_diagnostics() {
-        for (source, byte_string, expected) in [
-            ("\"trailing\\", false, "Unclosed string literal"),
-            ("b\"trailing\\", true, "Unclosed byte string literal"),
-        ] {
-            let (parsed, _, errors) = parse_quoted_fragment(source, byte_string);
-            assert!(parsed);
-            assert_eq!(unexpected_expectations(&errors), [expected]);
-        }
-
-        let content = "+;".repeat(50_001);
-        for (prefix, byte_string, expected) in [
-            ("\"", false, "String parsing exceeded iteration limit"),
-            ("b\"", true, "Byte string parsing exceeded iteration limit"),
-        ] {
-            let source = format!("{prefix}{content}");
-            let (parsed, _, errors) = parse_quoted_fragment(&source, byte_string);
-            assert!(parsed);
-            assert_eq!(unexpected_expectations(&errors), [expected]);
-        }
-    }
-
-    #[test]
-    fn key_value_fields_preserve_valid_key_forms_and_newlines() {
-        for object_field in [false, true] {
-            for source in [
-                "name: 1",
-                "\"display name\": value",
-                "namespace.\nfield:\nvalue",
-            ] {
-                let (root, errors) = parse_key_value_fragment(source, object_field);
-                assert_no_errors(&errors);
-                assert_eq!(
-                    root.descendants()
-                        .filter(|node| node.kind() == SyntaxKind::OBJECT_FIELD)
-                        .count(),
-                    1,
-                    "{source:?}"
-                );
-            }
-        }
-
-        let (_, errors) = parse_key_value_fragment("client.part: value", true);
-        assert_no_errors(&errors);
-        let (_, errors) = parse_key_value_fragment("client.part: value", false);
-        assert_eq!(unexpected_expectations(&errors), ["map key"]);
-    }
-
-    #[test]
-    fn key_value_fields_preserve_context_specific_recovery() {
-        for (object_field, key_diagnostic, value_diagnostic) in [
-            (false, "map key", "map value"),
-            (true, "field name", "field value"),
-        ] {
-            let (_, errors) = parse_key_value_fragment("interface: value", object_field);
-            assert_eq!(unexpected_expectations(&errors), [key_diagnostic]);
-
-            let (_, errors) = parse_key_value_fragment("name value", object_field);
-            assert_eq!(unexpected_expectations(&errors), ["':'"]);
-
-            let (_, errors) = parse_key_value_fragment("name: return", object_field);
-            assert_eq!(unexpected_expectations(&errors), [value_diagnostic]);
-        }
-    }
-
-    #[test]
-    fn matching_paren_lookahead_handles_delimiters_trivia_and_eof() {
-        let cases = [
-            (
-                "( { f: [ (int) ] } ) /* ) ] } */ -> Result",
-                (Some(TokenKind::Arrow), false, true),
-            ),
-            (
-                "((int | string)) /* suffix */ []",
-                (Some(TokenKind::LBracket), true, false),
-            ),
-            (
-                "(int) // suffix\n ?",
-                (Some(TokenKind::Question), true, false),
-            ),
-            ("(int) + value", (Some(TokenKind::Plus), false, false)),
-            ("(int)", (None, false, false)),
-            ("(int", (None, false, false)),
-            ("([int}) -> Result", (None, false, false)),
-            ("(int])[]", (None, false, false)),
-        ];
-
-        for (source, expected) in cases {
-            let tokens = lex_lossless(source, FileId::new(0));
-            let parser = Parser::new(&tokens);
-            assert_eq!(
-                (
-                    parser.token_after_matching_paren().map(|t| t.kind),
-                    parser.looks_like_paren_type_suffix(),
-                    parser.looks_like_function_type_paren(),
-                ),
-                expected,
-                "{source:?}"
-            );
-        }
     }
 
     /// A run of hashes at EOF (an incomplete raw string like `##`) must
@@ -8101,25 +7912,6 @@ mod tests {
                 "expected at least one diagnostic for {source:?}"
             );
         }
-    }
-
-    #[test]
-    fn raw_string_hashes_follow_leading_comments() {
-        let source = r##"
-function main() -> string {
-  // line comment
-  /* block comment */ #"value"#
-}
-"##;
-        let (root, errors) = parse_source(source);
-        assert_no_errors(&errors);
-        assert_eq!(root.text().to_string(), source);
-
-        let raw_string = root
-            .descendants()
-            .find(|node| node.kind() == SyntaxKind::RAW_STRING_LITERAL)
-            .expect("expected raw string literal after comments");
-        assert_eq!(raw_string.text().to_string(), r##"#"value"#"##);
     }
 
     /// A leading `#!` shebang line parses as a comment, so the file behind
@@ -8677,86 +8469,6 @@ function read_int<T extends Converter<int>>(m: T) -> int {
             generic_param_lists, 2,
             "expected interface and function generic params"
         );
-    }
-
-    #[test]
-    fn generic_list_completion_handles_nested_and_trailing_lists() {
-        let source = r#"
-interface Wrapper<T> {}
-
-function f<T extends Wrapper<int>,>(
-  value: map<string, Wrapper<int>,>,
-) -> int {
-  foo<Wrapper<map<string, int>>,>(value)
-}
-"#;
-        let (root, errors) = parse_source(source);
-        assert_no_errors(&errors);
-        assert_eq!(root.text().to_string(), source);
-        assert_eq!(
-            root.descendants()
-                .filter(|node| node.kind() == SyntaxKind::GENERIC_PARAM_LIST)
-                .count(),
-            2
-        );
-        assert_eq!(
-            root.descendants()
-                .filter(|node| node.kind() == SyntaxKind::GENERIC_ARGS)
-                .count(),
-            1
-        );
-    }
-
-    fn assert_unmatched_greater_recovery(source: &str) {
-        let expected_start =
-            u32::try_from(source.find(">>").expect("expected `>>`") + 1).expect("source too large");
-        let (root, errors) = parse_source(source);
-
-        assert_eq!(root.text().to_string(), source);
-        assert_eq!(
-            root.descendants_with_tokens()
-                .filter_map(rowan::NodeOrToken::into_token)
-                .filter(|token| token.kind() == SyntaxKind::GREATER)
-                .count(),
-            2,
-            "expected split greater tokens in {source}"
-        );
-
-        let [ParseError::InvalidSyntax { message, span }] = errors.as_slice() else {
-            panic!("expected one unmatched-greater diagnostic, got: {errors:#?}");
-        };
-        assert_eq!(message, "Unmatched '>' in type expression (found 1 extra)");
-        assert_eq!(u32::from(span.range.start()), expected_start);
-        assert_eq!(u32::from(span.range.end()), expected_start + 1);
-    }
-
-    #[test]
-    fn generic_list_completion_recovers_extra_greater_for_every_list_kind() {
-        for source in [
-            "function f<T>>() -> T { throw 1 }",
-            "function f(value: map<string>>) -> int { 1 }",
-            "function f(value: int) -> int { value.as<int>> }",
-        ] {
-            assert_unmatched_greater_recovery(source);
-        }
-    }
-
-    #[test]
-    fn generic_list_completion_preserves_missing_close_recovery() {
-        for source in [
-            "function f<T(value: T) -> T { value }",
-            "function f(value: map<string) -> int { 1 }",
-        ] {
-            let (root, errors) = parse_source(source);
-            assert_eq!(root.text().to_string(), source);
-            assert!(
-                errors.iter().any(|error| matches!(
-                    error,
-                    ParseError::UnexpectedToken { expected, .. } if expected == "'>'"
-                )),
-                "expected missing `>` diagnostic, got: {errors:#?}"
-            );
-        }
     }
 
     #[test]

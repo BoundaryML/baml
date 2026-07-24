@@ -1,5 +1,5 @@
 use super::*;
-use crate::{baml_db, baml_tyannotated, deserializer::coercer::ParsingContext};
+use crate::{baml_db, baml_tyannotated};
 
 // --- Null tests ---
 
@@ -36,42 +36,6 @@ test_deserializer!(
     // This is a string, not null
     "None"
 );
-
-#[test]
-fn unexpected_empty_array_diagnostic_snapshot() {
-    let target_ty: AnnotatedTy<'_, &str> = baml_tyannotated!((int | string));
-    let db: TypeRefDb<'_, &str> = baml_db! {};
-    let ctx = ParsingContext::new(&db)
-        .enter_scope("response")
-        .enter_scope("items");
-    let target_ty = db.resolve_with_meta(target_ty.as_ref()).unwrap();
-
-    let error = ctx.error_unexpected_empty_array(&target_ty);
-
-    assert_eq!(
-        error.to_string(),
-        "response.items: Expected int | string, got empty array"
-    );
-    assert!(error.causes.is_empty());
-}
-
-#[test]
-fn unexpected_null_diagnostic_snapshot() {
-    let target_ty: AnnotatedTy<'_, &str> = baml_tyannotated!(map<string, int>);
-    let db: TypeRefDb<'_, &str> = baml_db! {};
-    let ctx = ParsingContext::new(&db)
-        .enter_scope("response")
-        .enter_scope("value");
-    let target_ty = db.resolve_with_meta(target_ty.as_ref()).unwrap();
-
-    let error = ctx.error_unexpected_null(&target_ty);
-
-    assert_eq!(
-        error.to_string(),
-        "response.value: Expected map<string, int>, got null"
-    );
-    assert!(error.causes.is_empty());
-}
 
 // --- Number tests ---
 

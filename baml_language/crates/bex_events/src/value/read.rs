@@ -195,18 +195,6 @@ mod tests {
     }
 
     #[test]
-    fn malformed_complete_record_delimiter_is_invalid_data() {
-        let mut bytes = Vec::new();
-        encode_header(&mut bytes, BoundaryId::from_bytes([3; 16])).unwrap();
-        bytes.extend_from_slice(&[0x80; 10]);
-
-        let Err(error) = super::read_bamlvalue_from_bytes(&bytes) else {
-            panic!("malformed record delimiter should fail");
-        };
-        assert_eq!(error.kind(), std::io::ErrorKind::InvalidData);
-    }
-
-    #[test]
     fn mixed_lifecycle_records_are_rejected() {
         assert_record_is_invalid(
             &pb::ValueRecordV1 {

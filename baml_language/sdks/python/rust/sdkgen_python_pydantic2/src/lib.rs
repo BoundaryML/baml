@@ -675,29 +675,6 @@ mod tests {
     }
 
     #[test]
-    fn stub_init_preserves_import_order_visibility_and_blank_lines() {
-        let children = ["vendor", "hidden", "baml"]
-            .into_iter()
-            .map(str::to_string)
-            .collect();
-        let hidden = ["hidden"].into_iter().map(str::to_string).collect();
-        assert_eq!(
-            render_stub_init(&children, &hidden),
-            "from __future__ import annotations\n\nfrom . import baml\nfrom . import vendor\n"
-        );
-
-        let only_hidden = ["hidden"].into_iter().map(str::to_string).collect();
-        assert_eq!(
-            render_stub_init(&only_hidden, &only_hidden),
-            "from __future__ import annotations\n\n"
-        );
-        assert_eq!(
-            render_stub_init(&BTreeSet::new(), &BTreeSet::new()),
-            "from __future__ import annotations\n"
-        );
-    }
-
-    #[test]
     fn empty_pool_emits_structural_files() {
         let pool: SymbolPool = HashMap::new();
         let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);

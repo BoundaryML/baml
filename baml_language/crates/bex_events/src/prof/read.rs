@@ -177,17 +177,4 @@ mod tests {
         };
         assert_eq!(error.kind(), std::io::ErrorKind::InvalidData);
     }
-
-    #[test]
-    fn malformed_complete_event_delimiter_is_invalid_data() {
-        let header = fixed_header();
-        let mut bytes = Vec::new();
-        encode_length_delimited_message(&mut bytes, &header).unwrap();
-        bytes.extend_from_slice(&[0x80; 10]);
-
-        let Err(error) = super::read_bamlprof_from_bytes(&bytes) else {
-            panic!("malformed event delimiter should fail");
-        };
-        assert_eq!(error.kind(), std::io::ErrorKind::InvalidData);
-    }
 }

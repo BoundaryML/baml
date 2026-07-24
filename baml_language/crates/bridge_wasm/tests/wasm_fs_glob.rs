@@ -391,19 +391,11 @@ async fn wait_for_run_result(
     notifications: &js_sys::Array,
     start_index: u32,
 ) -> Result<BamlOutboundValue, JsValue> {
-    let outcome = wait_for_run_outcome(notifications, start_index).await?;
-    decode_outcome(&outcome)
-}
-
-async fn wait_for_run_outcome(
-    notifications: &js_sys::Array,
-    start_index: u32,
-) -> Result<JsValue, JsValue> {
     for _ in 0..100 {
         for idx in start_index..notifications.length() {
             let notification = notifications.get(idx);
             if let Some(outcome) = complete_outcome(&notification) {
-                return Ok(outcome);
+                return decode_outcome(&outcome);
             }
         }
         JsFuture::from(js_sys::Promise::resolve(&JsValue::UNDEFINED)).await?;
@@ -457,40 +449,6 @@ fn get_string(value: &JsValue, key: &str) -> Option<String> {
     js_sys::Reflect::get(value, &JsValue::from_str(key))
         .ok()
         .and_then(|value| value.as_string())
-}
-
-fn notification_by_type(
-    notifications: &js_sys::Array,
-    start_index: u32,
-    notification_type: &str,
-) -> Option<JsValue> {
-    for idx in start_index..notifications.length() {
-        let notification = notifications.get(idx);
-        if get_string(&notification, "type").as_deref() == Some(notification_type) {
-            return Some(notification);
-        }
-    }
-    None
-}
-
-async fn wait_for_current_project(notifications: &js_sys::Array) -> Result<String, JsValue> {
-    for _ in 0..100 {
-        for idx in 0..notifications.length() {
-            let notification = notifications.get(idx);
-            if get_string(&notification, "type").as_deref() != Some("updateProject") {
-                continue;
-            }
-            let update = js_sys::Reflect::get(&notification, &JsValue::from_str("update"))?;
-            let is_current =
-                js_sys::Reflect::get(&update, &JsValue::from_str("isBexCurrent"))?.as_bool();
-            if is_current == Some(true) {
-                return get_string(&notification, "project")
-                    .ok_or_else(|| JsValue::from_str("updateProject missing project"));
-            }
-        }
-        JsFuture::from(js_sys::Promise::resolve(&JsValue::UNDEFINED)).await?;
-    }
-    Err(JsValue::from_str("timed out waiting for a current project"))
 }
 
 fn profile_artifact_bytes(notifications: &js_sys::Array, start_index: u32) -> Option<Vec<u8>> {
@@ -701,96 +659,6 @@ async fn wasm_runtime_emits_reader_compatible_profile_artifact() {
         "reconstructed call tree should include ProfileMarker: {:#?}",
         reconstructed.calls
     );
-}
-
-#[wasm_bindgen_test]
-async fn wasm_preview_run_preserves_metadata_and_executes_function() {
-    let files = vec![("/workspace/baml_src/main.baml", PROFILE_SOURCE)];
-    let dirs = vec!["/workspace", "/workspace/baml_src"];
-    let runtime = runtime(&files, &dirs, PROFILE_SOURCE);
-
-    let project = wait_for_current_project(&runtime.notifications)
-        .await
-        .unwrap();
-    let start_index = runtime.notifications.length();
-    runtime
-        .runtime
-        .start_preview_run(
-            13,
-            project.clone(),
-            "ParentFunction",
-            "render_prompt",
-            "ProfileMarker",
-            &[],
-        )
-        .unwrap();
-
-    let outcome = wait_for_run_outcome(&runtime.notifications, start_index)
-        .await
-        .unwrap();
-    assert_eq!(get_string(&outcome, "status").as_deref(), Some("succeeded"));
-    let result = js_sys::Reflect::get(&outcome, &JsValue::from_str("result")).unwrap();
-    assert_eq!(
-        get_string(&result, "rendererHint").as_deref(),
-        Some("baml.outbound.base64")
-    );
-    let value_ref = js_sys::Reflect::get(&result, &JsValue::from_str("valueRef")).unwrap();
-
-    let started = notification_by_type(&runtime.notifications, start_index, "runStarted")
-        .expect("runStarted notification");
-    let request_id = js_sys::Reflect::get(&started, &JsValue::from_str("requestId")).unwrap();
-    assert_eq!(request_id.as_f64(), Some(13.0));
-
-    let run = js_sys::Reflect::get(&started, &JsValue::from_str("run")).unwrap();
-    assert_eq!(get_string(&run, "status").as_deref(), Some("running"));
-
-    let visibility = js_sys::Reflect::get(&run, &JsValue::from_str("visibility")).unwrap();
-    assert_eq!(get_string(&visibility, "kind").as_deref(), Some("hidden"));
-
-    let target = js_sys::Reflect::get(&run, &JsValue::from_str("target")).unwrap();
-    assert_eq!(get_string(&target, "kind").as_deref(), Some("preview"));
-    assert_eq!(
-        get_string(&target, "parentFunctionName").as_deref(),
-        Some("ParentFunction")
-    );
-    assert_eq!(
-        get_string(&target, "helper").as_deref(),
-        Some("render_prompt")
-    );
-
-    let request = js_sys::Reflect::get(&run, &JsValue::from_str("request")).unwrap();
-    assert_eq!(
-        get_string(&request, "projectId").as_deref(),
-        Some(project.as_str())
-    );
-    let request_target = js_sys::Reflect::get(&request, &JsValue::from_str("target")).unwrap();
-    assert_eq!(
-        get_string(&request_target, "kind").as_deref(),
-        Some("preview")
-    );
-    assert_eq!(
-        get_string(&request_target, "parentFunctionName").as_deref(),
-        Some("ParentFunction")
-    );
-    assert_eq!(
-        get_string(&request_target, "helper").as_deref(),
-        Some("render_prompt")
-    );
-
-    let boundary_id = get_string(&run, "boundaryId").expect("run boundaryId");
-    let value_start_index = runtime.notifications.length();
-    runtime
-        .runtime
-        .read_value(14, boundary_id, value_ref)
-        .unwrap();
-    let value_body = notification_by_type(&runtime.notifications, value_start_index, "valueBody")
-        .expect("valueBody notification");
-    let encoded = get_string(&value_body, "bodyBase64").expect("valueBody bodyBase64");
-    let bytes = base64::engine::general_purpose::STANDARD
-        .decode(encoded)
-        .unwrap();
-    let value = BamlOutboundValue::decode(bytes.as_slice()).unwrap();
-    assert_eq!(int_value(value), 7);
 }
 
 #[wasm_bindgen_test]

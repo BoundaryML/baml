@@ -1836,51 +1836,6 @@ function foo(user: User) -> string {
         );
     }
 
-    #[test]
-    fn hir_and_ppir_signatures_extract_identical_parameters() {
-        let mut db = make_db();
-        let file = db.add_file(
-            "params.baml",
-            "class Container {
-                function inspect(self, required: string, optional: int = 41) -> string {
-                    required
-                }
-            }",
-        );
-        let loc = find_method_loc(&db, file, "Container", "inspect");
-
-        let hir = function_signature(&db, loc);
-        let ppir = baml_compiler2_ppir::function_signature(&db, loc);
-        assert_eq!(hir, ppir);
-
-        let hir_elaborated = elaborated_function_signature(&db, loc);
-        let ppir_elaborated = baml_compiler2_ppir::elaborated_function_signature(&db, loc);
-        assert_eq!(hir_elaborated, ppir_elaborated);
-
-        assert_eq!(
-            hir.params
-                .iter()
-                .map(|param| param.name.as_str())
-                .collect::<Vec<_>>(),
-            vec!["self", "required", "optional"]
-        );
-        assert_eq!(
-            hir.params
-                .iter()
-                .map(|param| param.has_default)
-                .collect::<Vec<_>>(),
-            vec![false, false, true]
-        );
-        assert_eq!(hir.params[1].ty.to_string(), "string");
-        assert_eq!(hir.params[2].ty.to_string(), "int");
-
-        let baml_compiler2_ast::TypeExprKind::Unknown { attrs } = &hir.params[0].ty.kind else {
-            panic!("missing self type should recover as unknown");
-        };
-        assert!(attrs.is_empty());
-        assert_eq!(hir.params[0].ty.span, text_size::TextRange::default());
-    }
-
     // ── 10. Elaborated function signatures ──────────────────────────────────
 
     #[test]

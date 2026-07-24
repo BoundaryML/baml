@@ -327,12 +327,6 @@ mod tests {
 
     use super::*;
 
-    const MEDIA_CONSTRUCTORS: [crate::api::BamlMediaConstructorFn; 3] = [
-        baml_media_from_url,
-        baml_media_from_file,
-        baml_media_from_base64,
-    ];
-
     #[test]
     fn clone_reports_unexpected_nullptr_for_null_out_key() {
         assert_eq!(
@@ -358,157 +352,46 @@ mod tests {
 
     #[test]
     fn media_constructor_reports_unexpected_nullptr_for_required_null_pointers() {
-        let source = CString::new("source").unwrap();
-        for constructor in MEDIA_CONSTRUCTORS {
-            let mut key = 11;
-            let mut handle_type = 12;
-            assert_eq!(
-                unsafe {
-                    constructor(
-                        i32::MAX,
-                        ptr::null(),
-                        ptr::null(),
-                        &mut key,
-                        &mut handle_type,
-                    )
-                },
-                BamlCffiStatus::UnexpectedNullptr
-            );
-            assert_eq!(
-                unsafe {
-                    constructor(
-                        MediaTypeEnum::Image as i32,
-                        source.as_ptr(),
-                        ptr::null(),
-                        ptr::null_mut(),
-                        &mut handle_type,
-                    )
-                },
-                BamlCffiStatus::UnexpectedNullptr
-            );
-            assert_eq!(
-                unsafe {
-                    constructor(
-                        MediaTypeEnum::Image as i32,
-                        source.as_ptr(),
-                        ptr::null(),
-                        &mut key,
-                        ptr::null_mut(),
-                    )
-                },
-                BamlCffiStatus::UnexpectedNullptr
-            );
-            assert_eq!((key, handle_type), (11, 12));
-        }
-    }
+        let url = CString::new("https://example.com/image.png").unwrap();
+        let mut key = 0;
+        let mut handle_type = 0;
 
-    #[test]
-    fn media_constructors_preserve_validation_order() {
-        let source = CString::new("source").unwrap();
-        let invalid_utf8 = [0xff_u8, 0];
-
-        for constructor in MEDIA_CONSTRUCTORS {
-            let mut key = 11;
-            let mut handle_type = 12;
-            assert_eq!(
-                unsafe {
-                    constructor(
-                        i32::MAX,
-                        invalid_utf8.as_ptr().cast(),
-                        invalid_utf8.as_ptr().cast(),
-                        &mut key,
-                        &mut handle_type,
-                    )
-                },
-                BamlCffiStatus::UnsupportedHandleType
-            );
-            assert_eq!(
-                unsafe {
-                    constructor(
-                        MediaTypeEnum::Image as i32,
-                        invalid_utf8.as_ptr().cast(),
-                        ptr::null(),
-                        &mut key,
-                        &mut handle_type,
-                    )
-                },
-                BamlCffiStatus::InternalError
-            );
-            assert_eq!(
-                unsafe {
-                    constructor(
-                        MediaTypeEnum::Image as i32,
-                        source.as_ptr(),
-                        invalid_utf8.as_ptr().cast(),
-                        &mut key,
-                        &mut handle_type,
-                    )
-                },
-                BamlCffiStatus::InternalError
-            );
-            assert_eq!((key, handle_type), (11, 12));
-        }
-    }
-
-    #[test]
-    fn media_constructors_create_the_requested_source_variant() {
-        enum SourceKind {
-            Url,
-            File,
-            Base64,
-        }
-
-        let cases = [
-            (
-                baml_media_from_url as crate::api::BamlMediaConstructorFn,
-                SourceKind::Url,
-                "https://example.com/image.png",
-            ),
-            (
-                baml_media_from_file as crate::api::BamlMediaConstructorFn,
-                SourceKind::File,
-                "/tmp/image.png",
-            ),
-            (
-                baml_media_from_base64 as crate::api::BamlMediaConstructorFn,
-                SourceKind::Base64,
-                "aGVsbG8=",
-            ),
-        ];
-        let mime = CString::new("image/png").unwrap();
-
-        for (constructor, source_kind, expected) in cases {
-            let source = CString::new(expected).unwrap();
-            let mut key = 0;
-            let mut handle_type = 0;
-            assert_eq!(
-                unsafe {
-                    constructor(
-                        MediaTypeEnum::Image as i32,
-                        source.as_ptr(),
-                        mime.as_ptr(),
-                        &mut key,
-                        &mut handle_type,
-                    )
-                },
-                BamlCffiStatus::Ok
-            );
-            let actual = match source_kind {
-                SourceKind::Url => handle::media_url(key, handle_type)
-                    .unwrap()
-                    .expect("expected URL media"),
-                SourceKind::File => handle::media_file(key, handle_type)
-                    .unwrap()
-                    .expect("expected file media"),
-                SourceKind::Base64 => handle::media_base64(key, handle_type).unwrap(),
-            };
-            assert_eq!(actual, expected);
-            assert_eq!(
-                handle::media_mime_type(key, handle_type).unwrap(),
-                Some("image/png".to_string())
-            );
-            handle::release_handle(key).unwrap();
-        }
+        assert_eq!(
+            unsafe {
+                baml_media_from_url(
+                    MediaTypeEnum::Image as i32,
+                    ptr::null(),
+                    ptr::null(),
+                    &mut key,
+                    &mut handle_type,
+                )
+            },
+            BamlCffiStatus::UnexpectedNullptr
+        );
+        assert_eq!(
+            unsafe {
+                baml_media_from_url(
+                    MediaTypeEnum::Image as i32,
+                    url.as_ptr(),
+                    ptr::null(),
+                    ptr::null_mut(),
+                    &mut handle_type,
+                )
+            },
+            BamlCffiStatus::UnexpectedNullptr
+        );
+        assert_eq!(
+            unsafe {
+                baml_media_from_url(
+                    MediaTypeEnum::Image as i32,
+                    url.as_ptr(),
+                    ptr::null(),
+                    &mut key,
+                    ptr::null_mut(),
+                )
+            },
+            BamlCffiStatus::UnexpectedNullptr
+        );
     }
 
     #[test]

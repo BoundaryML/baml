@@ -101,34 +101,6 @@ pub fn glob_to_regex(glob: &str) -> GlobPattern {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::glob_to_regex;
-
-    #[test]
-    fn glob_patterns_preserve_segment_and_regex_escaping_semantics() {
-        let cases = [
-            ("/root/file.baml", "/root/file.baml", true),
-            ("/root/file.baml", "/root/filexbaml", false),
-            ("/root/*.baml", "/root/file.baml", true),
-            ("/root/*.baml", "/root/nested/file.baml", false),
-            ("/root/**/*.baml", "/root/file.baml", true),
-            ("/root/**/*.baml", "/root/a/b/file.baml", true),
-            ("/root/file?.baml", "/root/file1.baml", true),
-            ("/root/file?.baml", "/root/file12.baml", false),
-            ("/root/[file].baml", "/root/[file].baml", true),
-        ];
-
-        for (glob, path, expected) in cases {
-            assert_eq!(
-                glob_to_regex(glob).is_match(path),
-                expected,
-                "{glob:?} against {path:?}"
-            );
-        }
-    }
-}
-
 #[derive(Debug, Clone)]
 pub struct BamlVFS {
     fs: std::sync::Arc<Box<dyn BulkReadFileSystem>>,

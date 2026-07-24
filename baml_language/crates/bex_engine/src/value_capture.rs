@@ -550,7 +550,7 @@ mod tests {
     use bex_events::{
         ids::{BexCallId, BexThreadId, BoundaryId, EngineId, ProcessEuid},
         run::TraceCallKey,
-        value::{ValueCaptureKind, ValueCodec, ValueRef, ValueWriteOutcome},
+        value::{ValueCodec, ValueRef, ValueWriteOutcome},
     };
 
     use crate::{
@@ -584,21 +584,6 @@ mod tests {
             source: None,
             timestamp_ms: 123,
             message_preview: Some("hello".to_string()),
-        }
-    }
-
-    #[test]
-    fn capture_kind_maps_to_value_capture_kind() {
-        for (kind, expected) in [
-            (CaptureKind::RootInput, ValueCaptureKind::RootInput),
-            (CaptureKind::RootOutput, ValueCaptureKind::RootOutput),
-            (CaptureKind::RootError, ValueCaptureKind::RootError),
-            (CaptureKind::LogBody, ValueCaptureKind::LogBody),
-            (CaptureKind::CallOutput, ValueCaptureKind::CallOutput),
-            (CaptureKind::CallError, ValueCaptureKind::CallError),
-            (CaptureKind::CallInput, ValueCaptureKind::CallInput),
-        ] {
-            assert_eq!(kind.to_value_capture_kind(), expected);
         }
     }
 

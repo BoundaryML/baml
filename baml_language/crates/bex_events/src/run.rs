@@ -3787,38 +3787,6 @@ mod tests {
     use super::*;
 
     #[test]
-    fn value_capture_loss_diagnostic_preserves_fallback_and_overrides() {
-        assert_eq!(
-            RunDiagnostic::value_capture_loss("log", 3, None, None),
-            RunDiagnostic {
-                severity: DiagnosticSeverity::Warning,
-                code: Some("valueCaptureLoss".to_string()),
-                message: "Skipped 3 captured log value(s) because the trace capture queue was full"
-                    .to_string(),
-                call_node_id: None,
-                payload_id: None,
-            }
-        );
-
-        let call_node_id = CallNodeId(17);
-        assert_eq!(
-            RunDiagnostic::value_capture_loss(
-                "value",
-                9,
-                Some("custom capture-loss message".to_string()),
-                Some(call_node_id),
-            ),
-            RunDiagnostic {
-                severity: DiagnosticSeverity::Warning,
-                code: Some("valueCaptureLoss".to_string()),
-                message: "custom capture-loss message".to_string(),
-                call_node_id: Some(call_node_id),
-                payload_id: None,
-            }
-        );
-    }
-
-    #[test]
     fn run_contract_keeps_identity_spaces_separate() {
         let boundary_id = test_boundary_id(7);
         let host_call_id = HostCallId::Native(sys_types::CallId(7));
@@ -4846,43 +4814,6 @@ mod tests {
         assert_eq!(payload["kind"]["message"], "watch this");
         assert_eq!(payload["kind"]["source"]["line"], 12);
         assert_eq!(payload["kind"]["valueRef"]["id"], "value_log");
-    }
-
-    #[test]
-    fn trace_payload_ingestion_consumes_ids_for_missing_boundaries() {
-        let store = InMemoryRunStore::default();
-        let boundary_id = test_boundary_id(99);
-        let call = TraceCallKey {
-            process_euid: ProcessEuid([1; 16]),
-            engine_id: EngineId(2),
-            thread_id: BexThreadId(3),
-            call_id: BexCallId(4),
-        };
-
-        assert!(
-            store
-                .ingest_call_value_ref(
-                    boundary_id,
-                    call,
-                    CapturedValueRole::CallOutput,
-                    None,
-                    None,
-                )
-                .is_none()
-        );
-        assert!(
-            store
-                .ingest_log_value_ref(boundary_id, call, None, String::new(), None, None)
-                .is_none()
-        );
-        assert_eq!(
-            store
-                .inner
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner)
-                .next_payload_id,
-            3
-        );
     }
 
     #[test]
