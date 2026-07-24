@@ -159,6 +159,18 @@ jobs:
           targets: ${{ matrix._.target }}
           enable-cache: false
 
+      - name: Exclude optional AWS-LC jitter exports on Windows
+        if: contains(matrix._.target, 'windows-msvc')
+        shell: bash
+        run: |
+          set -euo pipefail
+          # aws-lc-sys 0.41.0's bundled jitter-entropy library marks nine
+          # internal functions __declspec(dllexport) under MSVC. Static
+          # linkage would therefore widen bridge_cffi.dll's public ABI. Use
+          # aws-lc-sys's supported non-FIPS opt-out on Windows only; AWS-LC
+          # remains the selected crypto backend and uses Windows OS entropy.
+          echo 'AWS_LC_SYS_NO_JITTER_ENTROPY=1' >> "$GITHUB_ENV"
+
       - name: Install cross (Linux targets)
         if: matrix._.use_cross
         run: |
@@ -357,6 +369,35 @@ jobs:
           $vcvars = Join-Path $vsInstall "VC\Auxiliary\Build\vcvarsall.bat"
           $expected = jq -r .canonical_version ..\release-plan.json
           $library = "$env:ARTIFACT_DIR/$env:ARTIFACT_ASSET"
+
+          # Rust exports the bridge entry points through linker directives,
+          # while native static dependencies may carry their own dllexport
+          # directives. Inspect the final DLL so an accidental dependency
+          # export fails at the producer boundary before artifact upload.
+          $dump = & cmd.exe /d /s /c "call `"$vcvars`" $env:MSVC_ARCH >nul && dumpbin /nologo /exports `"$library`""
+          if ($LASTEXITCODE -ne 0) {
+            exit $LASTEXITCODE
+          }
+          $actualExports = @(
+            $dump |
+              ForEach-Object {
+                if ($_ -match '^\s+\d+\s+[0-9A-Fa-f]+\s+[0-9A-Fa-f]+\s+(\S+)') {
+                  $Matches[1]
+                }
+              } |
+              Sort-Object -Unique
+          )
+          $expectedExports = @(
+            Get-Content ..\release\bridge-cffi-public-exports.txt |
+              Where-Object { $_ -ne "" } |
+              Sort-Object -Unique
+          )
+          $exportDifference = Compare-Object -ReferenceObject $expectedExports -DifferenceObject $actualExports
+          if ($exportDifference) {
+            $exportDifference | Format-Table | Out-String | Write-Host
+            throw "bridge_cffi.dll public exports differ from the release allowlist"
+          }
+
           & cmd.exe /d /s /c "call `"$vcvars`" $env:MSVC_ARCH && python3 crates/bridge_cffi/tests/run_abi_smoke.py `"$library`" `"$expected`""
           if ($LASTEXITCODE -ne 0) {
             exit $LASTEXITCODE

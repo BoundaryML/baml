@@ -17,6 +17,9 @@ PLATFORMS = ROOT / "release" / "platforms.json"
 RELEASE_WORKFLOW = ROOT / ".github" / "workflows" / "release-baml-language.yml"
 CI_WORKFLOW = ROOT / ".github" / "workflows" / "ci.yaml"
 SIZE_POLICY = ROOT / "release" / "csharp-package-size-policy.json"
+BRIDGE_CFFI_PUBLIC_EXPORTS = (
+    ROOT / "release" / "bridge-cffi-public-exports.txt"
+)
 HYGIENE_TOOL = ROOT / "scripts" / "baml-bridge-cffi-hygiene"
 CROSS_CONFIG = ROOT / "baml_language" / "Cross.toml"
 NUGET_PUBLISHER = ROOT / ".github" / "workflows" / "publish2-csharp-sdk.yaml"
@@ -634,6 +637,21 @@ class WorkflowGraphTests(unittest.TestCase):
         )
         self.assertIn('export "CC_${target_key}=clang-cl"', builder)
         self.assertIn('export "CXX_${target_key}=clang-cl"', builder)
+        self.assertIn("AWS_LC_SYS_NO_JITTER_ENTROPY=1", builder)
+        self.assertIn("dumpbin /nologo /exports", builder)
+        self.assertIn("release\\bridge-cffi-public-exports.txt", builder)
+        public_exports = BRIDGE_CFFI_PUBLIC_EXPORTS.read_text(
+            encoding="utf-8"
+        ).splitlines()
+        self.assertEqual(public_exports, sorted(set(public_exports)))
+        self.assertIn("baml_get_api_v1", public_exports)
+        self.assertFalse(
+            any(export.startswith("aws_lc_") for export in public_exports)
+        )
+        self.assertLess(
+            builder.index("dumpbin /nologo /exports"),
+            builder.index("- name: Upload cdylib artifact"),
+        )
         self.assertIn('export CFLAGS="${CFLAGS:+$CFLAGS }$native_path_maps"', builder)
         self.assertIn(
             'export CXXFLAGS="${CXXFLAGS:+$CXXFLAGS }$native_path_maps"',
@@ -648,6 +666,10 @@ class WorkflowGraphTests(unittest.TestCase):
             4,
         )
         self.assertIn("scripts/baml-bridge-cffi-hygiene", pack)
+        self.assertIn(
+            "release/bridge-cffi-public-exports.txt",
+            pack,
+        )
         self.assertNotIn('strings "$native"', pack)
 
         self.assertIn("bridge_cffi_release:", ci)
