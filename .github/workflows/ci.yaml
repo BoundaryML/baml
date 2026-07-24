@@ -414,7 +414,9 @@ jobs:
       - name: "Install mise"
         uses: ./.github/actions/setup-mise
         with:
-          install_args: "cargo:prek cargo:https://github.com/astral-sh/hawk python uv"
+          # Temporarily omit Hawk while its CI check is disabled.
+          # install_args: "cargo:prek cargo:https://github.com/astral-sh/hawk python uv"
+          install_args: "cargo:prek python uv"
 
       - name: "Cache prek"
         uses: actions/cache@v5
