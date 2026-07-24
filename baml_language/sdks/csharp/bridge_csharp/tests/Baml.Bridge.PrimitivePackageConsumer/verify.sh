@@ -50,11 +50,18 @@ while IFS= read -r source; do
   cp "$source" "$destination"
 done < <(find "$generated_source_root" -type f -name '*.g.cs' | LC_ALL=C sort)
 
+list_generated_sources() {
+  (
+    cd "$1"
+    find . -type f -name '*.g.cs' -print \
+      | sed 's#^\./##' \
+      | LC_ALL=C sort
+  )
+}
+
 diff -u \
-  <(LC_ALL=C find "$generated_source_root" -type f -name '*.g.cs' \
-    -printf '%P\n' | LC_ALL=C sort) \
-  <(LC_ALL=C find "$consumer/baml_client" -type f -name '*.g.cs' \
-    -printf '%P\n' | LC_ALL=C sort)
+  <(list_generated_sources "$generated_source_root") \
+  <(list_generated_sources "$consumer/baml_client")
 if find "$consumer" -type f \
   \( -name '*.proto' -o -name '*.baml' -o -name '*.toml' -o -name '*.bin' \) \
   | grep -q .; then

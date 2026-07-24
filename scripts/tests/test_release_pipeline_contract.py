@@ -613,6 +613,8 @@ class WorkflowGraphTests(unittest.TestCase):
         self.assertNotIn("Baml/Csv/CsvError.g.cs", preparer)
         self.assertNotIn("Baml/Csv/CsvError.g.cs", verifier)
         self.assertNotIn("Baml/Csv/CsvError.g.cs", primitive_consumer)
+        self.assertIn("list_generated_sources", primitive_consumer)
+        self.assertNotIn("-printf", primitive_consumer)
 
         self.assertIn(".registry_versions.nuget", pack)
         self.assertIn('-p:PackageVersion="$nuget_version"', pack)
