@@ -2284,6 +2284,9 @@ jobs:
     if: ${{ always() && inputs.dry_run == false && github.ref_name == 'canary' }}
     runs-on: ubuntu-latest
     environment: boundary-tools-dev
+    permissions:
+      actions: read
+      contents: read
     steps:
       - uses: actions/checkout@v7.0.1
         with:
