@@ -43,15 +43,15 @@ proto_cache_key="$(
 # breaking the Next build. Keep this in sync with the `./generated/...` imports
 # under pkg-proto/src.
 check_proto_exists() {
-  [[ -s "${proto_dir}/baml_core/cffi/v1/baml_handle.ts" ]] &&
-    [[ -s "${proto_dir}/baml_core/cffi/v1/baml_inbound.ts" ]] &&
-    [[ -s "${proto_dir}/baml_core/cffi/v1/baml_outbound.ts" ]]
+  [[ -s "${proto_dir}/baml_bridge/cffi/v1/baml_handle.ts" ]] &&
+    [[ -s "${proto_dir}/baml_bridge/cffi/v1/baml_inbound.ts" ]] &&
+    [[ -s "${proto_dir}/baml_bridge/cffi/v1/baml_outbound.ts" ]]
 }
 
 if ! check_proto_exists &&
   [[ -f "${proto_cache_dir}/.cache-key" ]] &&
   [[ "$(cat "${proto_cache_dir}/.cache-key")" == "$proto_cache_key" ]] &&
-  [[ -s "${proto_cache_dir}/baml_core/cffi/v1/baml_handle.ts" ]]; then
+  [[ -s "${proto_cache_dir}/baml_bridge/cffi/v1/baml_handle.ts" ]]; then
   echo "==> [0/5] Restore pkg-proto generated files from Vercel build cache"
   mkdir -p "$proto_dir"
   cp -R "${proto_cache_dir}/." "$proto_dir/"
