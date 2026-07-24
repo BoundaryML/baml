@@ -846,28 +846,18 @@ pub fn tir2_to_template(
                 member: member.clone(),
                 attr: TyAttr::default(),
             }),
-        // FIXME(typevar-templates): `Self` is the one type variable that may
-        // legitimately survive to a template (it is a real, if unresolved,
-        // reference to the concrete implementor type). It has no frame slot in
-        // the current calling model, so a materialization position demotes it
-        // to the realized top type `unknown` — the same honest reflection an
-        // unspecialized generic slot gets (the out-of-range `TypeArgRef` rule
-        // in `TyTemplate::substitute`), decided and documented here at compile
-        // time. Pattern positions never reach this arm:
-        // `tir2_to_pattern_template` intercepts every `TypeVar` before
-        // delegating here, reporting a slotless `Self` as `None` (the pattern
-        // test fails closed). Give `Self` a real frame slot so it lowers to a
-        // `TypeArgRef` (interface default-method / class-body work) and delete
-        // this arm.
-        Tir2Ty::TypeVar(name, _) if name == "Self" => realized_leaf_template(&RuntimeTy::unknown()),
         Tir2Ty::TypeVar(name, _) => {
             let Some(n) = generic_params.iter().position(|p| p == name) else {
-                // A non-`Self` type variable with no frame position is a defect:
-                // either a lowering gap (it should have been resolved upstream)
-                // or a real user error the checker should have rejected. It
-                // cannot be represented faithfully — a symbolic name is
-                // meaningless to the runtime — and erasing it would violate the
-                // type contract, so fail loudly rather than smuggle it.
+                // A type variable with no frame position is a defect: either a
+                // lowering gap (it should have been resolved upstream) or a
+                // real user error the checker should have rejected. It cannot
+                // be represented faithfully — a symbolic name is meaningless
+                // to the runtime — and erasing it would violate the type
+                // contract, so fail loudly rather than smuggle it. This
+                // includes `Self`: interface-owned bodies carry it at frame
+                // slot 0, implements-block bodies never emit it (TIR
+                // statically substitutes the block's `for` target), and a
+                // plain class body's `Self` is rejected as an unresolved name.
                 unreachable!("type variable not found in type args: {}", name)
             };
             TyTemplate::TypeArgRef(u32::try_from(n).expect("generic param index fits in u32"))
@@ -1066,10 +1056,11 @@ fn tir2_to_pattern_template(
 /// validated here at construction, and emitted as a fail-closed branch by
 /// `emit_pattern_template_test` — rather than being erased to a type. This
 /// conversion has no frame context, so even a frame-resolvable type variable
-/// is unresolvable *here*; only `Self` legitimately survives to this point on
-/// the TIR side. Resolve the residuals (a `Self` frame slot; TIR-side
-/// threading like the destructure headers) or diagnose them at TIR, then
-/// collapse this into the infallible realized conversion.
+/// is unresolvable *here*. No known TIR path still delivers one: every
+/// type-variable-carrying pattern (including `Self`, which interface-owned
+/// bodies carry at frame slot 0) routes through `tir2_to_pattern_template`
+/// instead. Once that is verified across every body kind, collapse this into
+/// the infallible realized conversion.
 pub(crate) fn ty_to_pattern_template_from_resolved_ty(ty: &RuntimeTy) -> Option<TyTemplate> {
     match ty {
         // See the FIXME above: an unresolved type variable or projection is
@@ -3962,7 +3953,7 @@ impl<'db> LoweringContext<'db> {
                 ns_context: &pkg_info.namespace_path,
                 generic_params: &generic_params,
                 bounds: &generic_param_bounds,
-                self_ty: None,
+                self_ty: self.body_self_tir_ty(),
             },
             &mut diags,
         )
@@ -7995,29 +7986,88 @@ impl<'db> LoweringContext<'db> {
                 let Some(&self_local) = self.locals.get(&Name::new("self")) else {
                     return;
                 };
-                // Seed the default method's frame with the interface's type
-                // args, expressed over the enclosing class's generic params
-                // (e.g. `implements Cont<T>` → `[T]`). The default body lowers
-                // the interface's `T` to `TypeArgRef` (see
-                // `enclosing_generic_params`), so without this an explicit
-                // `default.<method>()` that reads `T` would resolve it to
-                // `unknown` at runtime. Mirrors the interface-dispatch switch.
-                let iface_type_arg_tys: Vec<Tir2Ty> = {
+                // Seed the default method's frame exactly as the runtime seeds
+                // an inherited default: `[Self ++ interface generics ++
+                // associated types]` (see `interface_frame` in
+                // `baml_compiler2_emit` and `enclosing_generic_params`),
+                // expressed over the enclosing impl's generic params. `Self`
+                // is the enclosing implements-block's subject, statically
+                // known at this call. An associated type the block leaves to
+                // its default is padded with the top type `unknown`, mirroring
+                // emit's padding (TODO(M1): complete with the assoc's actual
+                // default). The default body lowers `Self`, the interface's
+                // params, and its assoc names to `TypeArgRef` slots, so a
+                // short or shifted frame would resolve them wrongly at
+                // runtime.
+                let frame_tys: Vec<Tir2Ty> = {
                     let generic_params = self.enclosing_generic_params();
                     let generic_param_bounds = self.enclosing_generic_param_bounds();
                     let mut diags = Vec::new();
-                    lower_ref_interface_target_args(
-                        self.db,
-                        &target.type_refs,
-                        target.target,
-                        pkg_items,
-                        &current_pkg.namespace_path,
-                        &generic_params,
-                        &generic_param_bounds,
-                        &mut diags,
-                    )
+                    let ctx = baml_compiler2_tir::lower_type_expr::ScopeCtx {
+                        db: self.db,
+                        package_items: pkg_items,
+                        ns_context: &current_pkg.namespace_path,
+                        generic_params: &generic_params,
+                        bounds: &generic_param_bounds,
+                        self_ty: None,
+                    };
+                    let self_subject = self.implements_subject_tir_ty().unwrap_or_else(|| {
+                        // `implements_block_iface_target` gated entry to this
+                        // branch, and a recorded target pairs with a Class /
+                        // FreeImpl owner by construction (both are written by
+                        // the same HIR builder call).
+                        unreachable!(
+                            "`default.<method>()` bypass outside an implements-block method"
+                        )
+                    });
+                    // The target lowered whole: its generic args plus any
+                    // inline `<Item = int>` bindings. Block-level
+                    // `type Item = …;` bindings are appended after (a name is
+                    // bound at most once, so first-match lookup is exact).
+                    let (iface_args, mut assoc_bindings) =
+                        match baml_compiler2_tir::lower_type_expr::lower_type_ref(
+                            &target.type_refs,
+                            target.target,
+                            &ctx,
+                            &mut diags,
+                        ) {
+                            Tir2Ty::Interface(_, args, assoc, _) => (args, assoc),
+                            // A non-interface resolution was already diagnosed
+                            // upstream; seed the dimensions it cannot supply
+                            // as absent.
+                            _ => (Vec::new(), Vec::new()),
+                        };
+                    for binding in &target.associated_type_bindings {
+                        let Some(id) = binding.type_ref else { continue };
+                        assoc_bindings.push((
+                            binding.name.clone(),
+                            baml_compiler2_tir::lower_type_expr::lower_type_ref(
+                                &target.type_refs,
+                                id,
+                                &ctx,
+                                &mut diags,
+                            ),
+                        ));
+                    }
+                    let iface_data =
+                        baml_compiler2_ppir::item_data::interface_data(self.db, iface_loc);
+                    let mut tys = Vec::with_capacity(
+                        1 + iface_args.len() + iface_data.associated_types.len(),
+                    );
+                    tys.push(self_subject);
+                    tys.extend(iface_args);
+                    tys.extend(iface_data.associated_types.iter().map(|assoc| {
+                        assoc_bindings
+                            .iter()
+                            .find(|(n, _)| *n == assoc.name)
+                            .map(|(_, t)| t.clone())
+                            .unwrap_or_else(|| Tir2Ty::BuiltinUnknown {
+                                attr: TyAttr::default(),
+                            })
+                    }));
+                    tys
                 };
-                let frame_type_arg_ops = self.emit_frame_type_arg_ops(&iface_type_arg_tys);
+                let frame_type_arg_ops = self.emit_frame_type_arg_ops(&frame_tys);
                 let ntypeargs = frame_type_arg_ops.len();
                 let mut all_args = frame_type_arg_ops;
                 all_args.push(Operand::Copy(Place::Local(self_local)));
@@ -9174,7 +9224,7 @@ impl LoweringContext<'_> {
                 ns_context: &pkg_info.namespace_path,
                 generic_params,
                 bounds: &self.enclosing_generic_param_bounds(),
-                self_ty: None,
+                self_ty: self.body_self_tir_ty(),
             },
             &mut diags,
         )
@@ -9249,14 +9299,20 @@ impl LoweringContext<'_> {
             return params;
         }
         // BEP-044: interface default methods are lowered as standalone
-        // functions, but their bodies reference the *interface's* generic
-        // params (e.g. a default `map(self)` building `Map<T, U>`). Mirror the
-        // class-method convention — interface params first, then fn params — so
-        // `TypeVar(T)` lowers to `TypeArgRef(N)` against the frame type args the
-        // interface-dispatch switch seeds (see `emit_method_candidate_switch`).
+        // functions, but their bodies reference `Self` and the *interface's*
+        // generic params (e.g. a default `map(self)` building `Map<T, U>`).
+        // Frame layout: `Self` at slot 0, then the interface's params, then its
+        // associated types, then fn params — matching the frame the runtime
+        // seeds for an inherited default (the impl rule's
+        // `[for_ty_pattern ++ interface args ++ assoc]`, realized by
+        // `realize_frame` against the receiver; see `interface_frame` in
+        // `baml_compiler2_emit`) and the static `default.<method>()` bypass's
+        // seeding, so `TypeVar(Self)` / `TypeVar(T)` lower to the
+        // `TypeArgRef(N)` slots those callers fill.
         if let Some(MethodOwner::Interface(iface_loc)) = owner {
             let iface_data = interface_data(self.db, iface_loc);
-            let mut params = iface_data.generic_params.clone();
+            let mut params = vec![baml_base::Name::new("Self")];
+            params.extend(iface_data.generic_params.iter().cloned());
             params.extend(
                 iface_data
                     .associated_types
@@ -9311,9 +9367,9 @@ impl LoweringContext<'_> {
         bounds
     }
 
-    /// Emit `LoadType` temps for a list of type args resolved at an interface
-    /// dispatch site, returning one `Operand` per arg (in order). Used by
-    /// `emit_method_candidate_switch` to seed the callee frame's `type_args`.
+    /// Emit `LoadType` temps for a list of type args seeding a callee frame,
+    /// returning one `Operand` per arg (in order). Used by the static
+    /// `default.<method>()` bypass and by inferred-type-arg call lowering.
     /// `TypeVar`s are lowered against the *caller's* `enclosing_generic_params`
     /// so they substitute against the caller's `frame.type_args` at runtime
     /// (mirroring the receiver-class-type-args path for direct method calls).
@@ -9387,12 +9443,14 @@ impl LoweringContext<'_> {
         if let Some(max_count) = max_count {
             inferred_type_args.truncate(max_count);
         }
-        if inferred_type_args
-            .iter()
-            .all(|ty| matches!(ty, Tir2Ty::BuiltinUnknown { .. } | Tir2Ty::Unknown { .. }))
-        {
-            return Vec::new();
-        }
+        // Seed every inferred arg — including an all-`unknown` list. It is a
+        // system invariant that a callee frame supplies every slot its
+        // templates reference (`TyTemplate::substitute` reports an
+        // out-of-range ref as a frame-layout error), so a generic callee's
+        // frame is always seeded at full declared width; a `T` inferred to the
+        // top type is an explicit `unknown` slot, which is how
+        // `reflect.type_of<T>()` under an unknown-typed call still reflects
+        // the honest top type.
         self.emit_frame_type_arg_ops(&inferred_type_args)
     }
 
@@ -11335,6 +11393,92 @@ impl<'db> LoweringContext<'db> {
         baml_compiler2_ppir::item_data::method_interface_target(self.db, func_loc).as_ref()
     }
 
+    /// The enclosing implements-block's subject type — what `Self` denotes in
+    /// this impl method's body: the class at its own generic params for an
+    /// in-body block (structural for the builtin containers, matching TIR's
+    /// receiver typing), or the free impl's `for` pattern lowered over the
+    /// impl's generics. `None` when the enclosing function is not an impl
+    /// method.
+    fn implements_subject_tir_ty(&self) -> Option<Tir2Ty> {
+        use baml_compiler2_ppir::item_data::{
+            ImplSubjectData, MethodOwner, class_data, impl_block_data, method_owner,
+        };
+        let fl = self.func_loc?;
+        match method_owner(self.db, fl)? {
+            MethodOwner::Class(class_loc) => {
+                let class = class_data(self.db, class_loc);
+                let qtn = baml_compiler2_tir::lower_type_expr::qualify_def(
+                    self.db,
+                    baml_compiler2_hir::contributions::Definition::Class(class_loc),
+                    &class.name,
+                );
+                let args = class
+                    .generic_params
+                    .iter()
+                    .map(|p| Tir2Ty::TypeVar(p.clone(), TyAttr::default()))
+                    .collect();
+                Some(baml_compiler2_tir::self_type::receiver_type_for_class_at(
+                    qtn, args,
+                ))
+            }
+            MethodOwner::FreeImpl(impl_loc) => {
+                let block = impl_block_data(self.db, impl_loc);
+                let ImplSubjectData::Free { for_target, .. } = &block.subject else {
+                    // A `FreeImpl` owner is recorded only for out-of-body
+                    // blocks, whose subject is always `Free`.
+                    return None;
+                };
+                let pkg_info = file_package(self.db, self.file);
+                let pkg_id = PackageId::new(self.db, pkg_info.package.clone());
+                let pkg_items = package_items(self.db, pkg_id);
+                let generic_params = self.enclosing_generic_params();
+                let bounds = self.enclosing_generic_param_bounds();
+                let mut diags = Vec::new();
+                Some(baml_compiler2_tir::lower_type_expr::lower_type_ref(
+                    &block.type_refs,
+                    *for_target,
+                    &baml_compiler2_tir::lower_type_expr::ScopeCtx {
+                        db: self.db,
+                        package_items: pkg_items,
+                        ns_context: &pkg_info.namespace_path,
+                        generic_params: &generic_params,
+                        bounds: &bounds,
+                        self_ty: None,
+                    },
+                    &mut diags,
+                ))
+            }
+            // Interface default methods have no implements-block target
+            // (`method_interface_target` is `None` for them), so callers
+            // gated on that never reach this arm with an `Interface` owner.
+            MethodOwner::Interface(_) => None,
+        }
+    }
+
+    /// What a *body-position* `Self` denotes in the function being lowered —
+    /// the rigid `Self` type variable for an interface-owned body (carried at
+    /// frame slot 0), or the enclosing implements-block's subject, statically
+    /// substituted. Mirrors TIR's `body_self_ty` (`inference.rs`), so MIR's
+    /// re-lowering of written body type expressions (explicit type args,
+    /// pattern annotations) resolves `Self` to the same type TIR checked.
+    /// `None` for plain class methods and free functions, where a body
+    /// `Self` is an unresolved name TIR already diagnosed.
+    fn body_self_tir_ty(&self) -> Option<Tir2Ty> {
+        use baml_compiler2_ppir::item_data::{MethodOwner, method_interface_target, method_owner};
+        let fl = self.func_loc?;
+        match method_owner(self.db, fl)? {
+            MethodOwner::Interface(_) => Some(Tir2Ty::TypeVar(
+                Name::new("Self"),
+                baml_compiler2_tir::ty::TyAttr::default(),
+            )),
+            MethodOwner::Class(_) => method_interface_target(self.db, fl)
+                .is_some()
+                .then(|| self.implements_subject_tir_ty())
+                .flatten(),
+            MethodOwner::FreeImpl(_) => self.implements_subject_tir_ty(),
+        }
+    }
+
     fn resolve_class_pkg_items_by_name(
         &self,
         pkg_name: &Name,
@@ -12855,14 +12999,13 @@ impl LoweringContext<'_> {
     /// Emit a `match`/`is` pattern test from a pattern-template build.
     ///
     /// A pattern denotes exactly one type per frame; the builders report an
-    /// unresolvable position (an unresolved `Self`, an associated projection,
-    /// a type variable without a frame slot) as `None` at construction, and
-    /// such a pattern has no complete test — it is fail-closed: branch
-    /// straight to `failure`.
+    /// unresolvable position (an associated projection, a type variable
+    /// without a frame slot) as `None` at construction, and such a pattern
+    /// has no complete test — it is fail-closed: branch straight to `failure`.
     ///
     /// FIXME(typevar-templates): the sound fix for the fail-closed cases is
-    /// to resolve them (a `Self` frame slot; projection templates over frame
-    /// refs) or reject them at TIR — never to match-any.
+    /// to resolve them (projection templates over frame refs, the way `Self`
+    /// gained its frame slot) or reject them at TIR — never to match-any.
     fn emit_pattern_template_test(
         &mut self,
         scrutinee: Local,
@@ -12979,11 +13122,12 @@ impl LoweringContext<'_> {
             }
             Tir2Ty::Class(qtn, type_args, _) if !type_args.is_empty() => {
                 // Build the header test TIR-side so the enclosing function's
-                // type variables lower to `TypeArgRef` frame slots (an
-                // arg-precise, invariant instantiation test) instead of being
-                // erased by `convert` into unresolvable names. Residual
-                // symbolic args (`Self`, projections) make the build `None`,
-                // failing the test closed.
+                // type variables (including an interface-owned body's `Self`)
+                // lower to `TypeArgRef` frame slots (an arg-precise, invariant
+                // instantiation test) instead of being erased by `convert`
+                // into unresolvable names. Residual symbolic args (projections,
+                // a slotless type variable) make the build `None`, failing the
+                // test closed.
                 let generic_params = self.enclosing_generic_params();
                 let header = tir2_to_pattern_template(ty, self.resolved_aliases, &generic_params);
                 let class_fields = self.lookup_tir_class_fields(qtn, type_args);
@@ -13650,20 +13794,15 @@ impl LoweringContext<'_> {
                     // `emit_pattern_template_test` fails closed, instead of
                     // panicking or erasing.
                     //
-                    // `Self`-carrying patterns are excluded: `Self` has no
-                    // frame slot yet, so the pattern builder would report it
-                    // unresolvable and the test would fail closed either way;
-                    // the erased path reaches the same fail-closed branch
-                    // through `ty_to_pattern_template_from_resolved_ty`. The
-                    // `Self` frame-slot work replaces this (class bodies
-                    // substitute the enclosing class; interface default
-                    // methods gain a slot).
-                    if baml_compiler2_tir::generics::contains_typevar(&pat_tir_ty)
-                        && !baml_compiler2_tir::generics::contains_typevar_where(
-                            &pat_tir_ty,
-                            &|name| name.as_str() == "Self",
-                        )
-                    {
+                    // `Self` is an ordinary frame type variable here: an
+                    // interface-owned body carries it at frame slot 0 (see
+                    // `enclosing_generic_params`), so a `Self`-carrying
+                    // pattern tests the receiver's realized concrete type.
+                    // Class and impl bodies never surface a `TypeVar(Self)`
+                    // pattern type (TIR lowers their `Self` to the concrete
+                    // receiver), so any residual slotless `Self` is
+                    // unresolvable and fails closed like a projection.
+                    if baml_compiler2_tir::generics::contains_typevar(&pat_tir_ty) {
                         let generic_params = self.enclosing_generic_params();
                         let guard = tir2_to_pattern_template(
                             &pat_tir_ty,

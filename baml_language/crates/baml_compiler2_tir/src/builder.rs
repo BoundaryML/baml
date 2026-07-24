@@ -850,6 +850,16 @@ pub struct TypeInferenceBuilder<'db> {
     /// `Error`, which must lower to `Self.Item` / `Self.Error` in expression
     /// type positions as well as in signatures.
     pub type_bindings: FxHashMap<Name, Ty>,
+    /// What a *body-position* `Self` (annotations, patterns, explicit type
+    /// arguments) lowers to in this body: the rigid `Self` type variable for
+    /// an interface's own method, or — statically substituted — the enclosing
+    /// implements-block's `for` target (the class at its own params for an
+    /// in-body block). `None` for plain class methods and free functions,
+    /// where `Self` stays an unresolved name (a plain class body cannot yet
+    /// name its own instantiation — pinned in the `self_in_body` diagnostics
+    /// project). Signature positions resolve `Self` separately, for every
+    /// body kind (`lower_with_self` in `inference.rs`).
+    body_self_ty: Option<Ty>,
     /// BEP-044 generic bounds: `T → bound_ty`. Populated alongside
     /// `generic_params` when a function is declared with `<T extends I>`.
     /// Used by `resolve_member` to expose `I`'s contract on values of
@@ -1171,6 +1181,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             exhaustive_matches: FxHashSet::default(),
             generic_params: Vec::new(),
             type_bindings: FxHashMap::default(),
+            body_self_ty: None,
             in_optional_chain: 0,
             loop_depth: 0,
             defer_loop_floors: Vec::new(),
@@ -1208,6 +1219,12 @@ impl<'db> TypeInferenceBuilder<'db> {
         self.type_bindings = bindings;
     }
 
+    /// See `Self::body_self_ty`'s field docs. Set by `infer_scope_types`
+    /// during body setup for interface-owned and implements-block methods.
+    pub fn set_body_self_ty(&mut self, self_ty: Option<Ty>) {
+        self.body_self_ty = self_ty;
+    }
+
     /// The scope's installed generic-parameter bounds as interface constraints,
     /// for type-expression lowering (`T.member` projection resolution). The
     /// enforcement table ([`Self::set_generic_param_bounds`]) already holds this
@@ -1231,7 +1248,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                     ns_context: &self.ns_context,
                     generic_params: &self.generic_params,
                     bounds: &bounds,
-                    self_ty: None,
+                    self_ty: self.body_self_ty.clone(),
                 },
                 diags,
             )
@@ -1246,7 +1263,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                         ns_context: &self.ns_context,
                         generic_params: &generic_params,
                         bounds: &bounds,
-                        self_ty: None,
+                        self_ty: self.body_self_ty.clone(),
                     },
                     diags,
                 ),
@@ -2327,6 +2344,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         let ns = self.ns_context.clone();
         let caller_generic_params = self.generic_params.clone();
         let scope_bounds = self.scope_type_var_bounds();
+        let self_ty = self.body_self_ty.clone();
         // `type_bindings` is not mutated by this loop — snapshot its keys once.
         let binding_params: Vec<Name> = self.type_bindings.keys().cloned().collect();
         let mut resolved: Vec<Ty> = Vec::with_capacity(type_args.len());
@@ -2341,7 +2359,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                         ns_context: &ns,
                         generic_params: &caller_generic_params,
                         bounds: &scope_bounds,
-                        self_ty: None,
+                        self_ty: self_ty.clone(),
                     },
                     &mut diags,
                 )
@@ -2355,7 +2373,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                             ns_context: &ns,
                             generic_params: &binding_params,
                             bounds: &scope_bounds,
-                            self_ty: None,
+                            self_ty: self_ty.clone(),
                         },
                         &mut diags,
                     ),
@@ -2437,6 +2455,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         let ns = self.ns_context.clone();
         let caller_generic_params = self.generic_params.clone();
         let scope_bounds = self.scope_type_var_bounds();
+        let self_ty = self.body_self_ty.clone();
         let suppress_diags = self.is_auto_derived_body;
         for (param_name, type_arg_expr) in declared_params.iter().zip(type_args.iter()) {
             let mut diags = Vec::new();
@@ -2448,7 +2467,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                     ns_context: &ns,
                     generic_params: &caller_generic_params,
                     bounds: &scope_bounds,
-                    self_ty: None,
+                    self_ty: self_ty.clone(),
                 },
                 &mut diags,
             );
@@ -9164,7 +9183,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 ns_context: &self.ns_context,
                 generic_params: &self.generic_params,
                 bounds: &self.scope_type_var_bounds(),
-                self_ty: None,
+                self_ty: self.body_self_ty.clone(),
             },
             &mut diags,
         );

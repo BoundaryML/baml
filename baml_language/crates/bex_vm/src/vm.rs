@@ -1780,7 +1780,7 @@ impl BexVm {
         value: Value,
         raw_const: &ConstValue,
         resolved_const: Value,
-    ) -> bool {
+    ) -> Result<bool, VmInternalError> {
         let frame_type_args = match &self.frames[frame_idx] {
             Frame::Bytecode(frame) => frame.type_args.as_slice(),
             Frame::Native(_) => &[],
@@ -1817,21 +1817,26 @@ impl BexVm {
                                 inst.class_type_args.len(),
                                 "Class should have consistent number of generic parameters",
                             );
-                            type_args_templates.len() == inst.class_type_args.len()
-                                && type_args_templates.iter().zip(&inst.class_type_args).all(
-                                    |(template, actual)| {
-                                        crate::type_match::class_type_arg_matches(
-                                            self,
-                                            template,
-                                            frame_type_args,
-                                            actual.as_ty(),
-                                        )
-                                    },
-                                )
+                            if type_args_templates.len() != inst.class_type_args.len() {
+                                return Ok(false);
+                            }
+                            for (template, actual) in
+                                type_args_templates.iter().zip(&inst.class_type_args)
+                            {
+                                if !crate::type_match::class_type_arg_matches(
+                                    self,
+                                    template,
+                                    frame_type_args,
+                                    actual.as_ty(),
+                                )? {
+                                    return Ok(false);
+                                }
+                            }
+                            Ok(true)
                         }
-                        _ => false,
+                        _ => Ok(false),
                     },
-                    None => false,
+                    None => Ok(false),
                 }
             }
             _ => {
@@ -1841,18 +1846,18 @@ impl BexVm {
                     // enum object. Enum-type tests dispatch on enum identity
                     // because the shared `ENUM` type tag cannot tell `Color`
                     // from `Status`.
-                    match value.as_object_ptr() {
+                    Ok(match value.as_object_ptr() {
                         Some(val_ptr) => match self.get_object(val_ptr) {
                             Object::Instance(instance) => instance.class == expected_ptr,
                             Object::Variant(variant) => variant.enm == expected_ptr,
                             _ => false,
                         },
                         None => false,
-                    }
+                    })
                 } else if let Some(tag) = resolved_const.as_int() {
-                    value_type_tag(value) == tag
+                    Ok(value_type_tag(value) == tag)
                 } else {
-                    false
+                    Ok(false)
                 }
             }
         }
@@ -6751,7 +6756,7 @@ impl BexVm {
                         value,
                         raw_const,
                         resolved_const,
-                    );
+                    )?;
                     self.stack.push(Value::bool(result));
                 }
 
@@ -6766,7 +6771,7 @@ impl BexVm {
                         value,
                         raw_const,
                         resolved_const,
-                    );
+                    )?;
                     if matched {
                         let Frame::Bytecode(bf) = &self.frames[*frame_idx] else {
                             unreachable!()

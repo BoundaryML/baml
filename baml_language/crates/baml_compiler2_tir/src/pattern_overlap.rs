@@ -151,6 +151,33 @@ fn pattern_pair_overlap(pat: &Ty, member: &Ty, env: &PatternOverlapEnv<'_>) -> O
     if matches!(pat, Ty::Never { .. }) || matches!(member, Ty::Never { .. }) {
         return Overlap::No;
     }
+    // `unknown` is the top type: at the pair's top level the question is value-set
+    // intersection, and every inhabited type shares values with it — for a rigid
+    // pattern var, every realization does (`σ(T) ∩ unknown ≠ ∅`), so nothing is
+    // pinned and bounds cannot refute. Deciding this by equality-unification
+    // instead would bind `var := unknown` and then wrongly bound-refute a bounded
+    // var (`unknown` implements nothing). Distinct from `unknown` in an invariant
+    // *argument* position, where equality IS the question and `unify_into` keeps
+    // deciding it (binding an opposing var, comparing ground pairs exactly).
+    if matches!(pat, Ty::BuiltinUnknown { .. }) || matches!(member, Ty::BuiltinUnknown { .. }) {
+        return Overlap::Yes;
+    }
+    // A bare in-scope rigid var meeting an interface existential is likewise
+    // membership at the pair's top level: `σ(T)` ranges over concrete types and
+    // `⟦I⟧` spans every implementor, so a common concrete instance is always
+    // possible in the open world (a later-loaded package can introduce one — the
+    // meet's existential reasoning) and never refutable through the var's own
+    // bounds (the same new type can implement both interfaces). Equality
+    // unification would instead pin `var := I` as a ground atom and wrongly
+    // bound-refute it (a bounded var must realize to a *concrete* type — the
+    // rule that stays correct for invariant argument positions, where equality
+    // is the question and `unify_into` keeps deciding).
+    let bare_rigid = |t: &Ty| matches!(t, Ty::TypeVar(n, _) if env.vars.contains(n));
+    if (bare_rigid(pat) && matches!(member, Ty::Interface(..)))
+        || (matches!(pat, Ty::Interface(..)) && bare_rigid(member))
+    {
+        return Overlap::Yes;
+    }
     let mut bindings = TypeBindings::default();
     let mut result = unify_into(pat, member, env.vars, env.aliases, &mut bindings);
     if result == Overlap::No {
@@ -675,6 +702,83 @@ mod tests {
         };
         assert_eq!(
             pattern_overlap_plain(&unknown, &Ty::int(), &vars),
+            Overlap::Yes
+        );
+    }
+
+    #[test]
+    fn pattern_overlap_bounded_var_meets_unknown_member() {
+        // A rigid var pattern over an `unknown`-typed scrutinee member is possible
+        // regardless of the var's bounds: every realization's value set intersects
+        // the top type, so no witness is pinned and bound refutation must not fire
+        // (the `other is Self` shape inside an interface default method). In an
+        // invariant *argument* position the question is equality instead, and a
+        // bounded var genuinely cannot realize to `unknown` — refuted.
+        let vars = names(&["T"]);
+        let unknown = Ty::BuiltinUnknown {
+            attr: TyAttr::default(),
+        };
+        let mut bounds = TypeVarBoundsMap::default();
+        bounds.insert(Name::new("T"), vec![constraint("I")]);
+        let aliases = std::collections::HashMap::default();
+        assert_eq!(
+            pattern_overlap_with(
+                &Ty::type_var("T"),
+                &unknown,
+                &vars,
+                &bounds,
+                &aliases,
+                &|_, _| false,
+            ),
+            Overlap::Yes
+        );
+        assert_eq!(
+            pattern_overlap_with(
+                &class1("Box", Ty::type_var("T")),
+                &class1("Box", unknown),
+                &vars,
+                &bounds,
+                &aliases,
+                &|_, _| false,
+            ),
+            Overlap::No
+        );
+    }
+
+    #[test]
+    fn pattern_overlap_bounded_var_meets_existential_member() {
+        // A rigid var meeting an interface existential at the top level is
+        // membership over concrete implementors — always possible in the open
+        // world (a later package can add a type implementing both the
+        // existential's interface and the var's bound), in either orientation
+        // (the `other is Self` shape with an interface-typed scrutinee). The
+        // equality view — a bounded var cannot *realize to* an existential —
+        // still refutes in invariant argument positions
+        // (`pattern_overlap_bounded_var_cannot_realize_to_union_or_existential`).
+        let vars = names(&["T"]);
+        let mut bounds = TypeVarBoundsMap::default();
+        bounds.insert(Name::new("T"), vec![constraint("I")]);
+        let aliases = std::collections::HashMap::default();
+        assert_eq!(
+            pattern_overlap_with(
+                &Ty::type_var("T"),
+                &interface("J", vec![]),
+                &vars,
+                &bounds,
+                &aliases,
+                &|_, _| false,
+            ),
+            Overlap::Yes
+        );
+        assert_eq!(
+            pattern_overlap_with(
+                &interface("J", vec![]),
+                &Ty::type_var("T"),
+                &vars,
+                &bounds,
+                &aliases,
+                &|_, _| false,
+            ),
             Overlap::Yes
         );
     }

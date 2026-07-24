@@ -361,9 +361,10 @@ fn build_packages(
     > = indexmap::IndexMap::new();
     // Per interface (with defaults), its declared associated-type names *in order*.
     // An inherited default is compiled against the interface's frame, so its
-    // type-arg layout is `[interface generic args ++ associated types]`, the assoc
-    // ordered by this declaration order (matching the closed-world switch's
-    // `interface_assoc_frame_tys`). Used to build each default method's frame.
+    // type-arg layout is `[Self ++ interface generic args ++ associated types]`,
+    // the assoc ordered by this declaration order (matching MIR's
+    // `enclosing_generic_params` for interface-owned bodies). Used to build each
+    // default method's frame.
     let mut iface_assoc_order: indexmap::IndexMap<baml_type::TypeName, Vec<Name>> =
         indexmap::IndexMap::new();
     for file in all_files {
@@ -392,25 +393,31 @@ fn build_packages(
         }
     }
     // The frame an inherited default of `iface_tn` is invoked with, for a rule
-    // implementing it at `interface_args` / `interface_assoc`: the interface's
-    // generic args followed by its associated types in declared order (templates
-    // over the impl's generics). A non-generic interface with no associated types
-    // (`Equals`/`Compare`) yields `[]`.
+    // implementing it at `for_ty_pattern` / `interface_args` / `interface_assoc`:
+    // the implementor type (`Self`) at slot 0, then the interface's generic args,
+    // then its associated types in declared order (all templates over the impl's
+    // generics). `realize_frame` substitutes the rule's bound args — recovered by
+    // matching `for_ty_pattern` against the receiver's concrete type — so slot 0
+    // realizes to exactly that concrete type. A non-generic interface with no
+    // associated types (`Equals`/`Compare`) yields just the `Self` slot.
     let interface_frame = |iface_tn: &baml_type::TypeName,
+                           for_ty_pattern: &baml_type::TyTemplate,
                            interface_args: &[baml_type::TyTemplate],
                            interface_assoc: &[(Name, baml_type::TyTemplate)]|
      -> Vec<baml_type::TyTemplate> {
-        let mut frame: Vec<baml_type::TyTemplate> = interface_args.to_vec();
+        let mut frame: Vec<baml_type::TyTemplate> = Vec::with_capacity(1 + interface_args.len());
+        frame.push(for_ty_pattern.clone());
+        frame.extend(interface_args.iter().cloned());
         if let Some(order) = iface_assoc_order.get(iface_tn) {
             for name in order {
                 // One slot per *declared* associated type, in order — so the frame
-                // width is always `interface_args + assoc_count` and the method-level
-                // type args (appended after this frame at the call site) land at the
-                // De Bruijn indices the callee expects. An associated type the impl
-                // leaves to its default is padded with `BuiltinUnknown`, matching the
-                // closed-world switch's `interface_assoc_frame_tys` still-missing
-                // fallback; a short frame would instead shift every later slot and
-                // miscompile the method's own type args.
+                // width is always `1 (Self) + interface_args + assoc_count` and the
+                // method-level type args (appended after this frame at the call
+                // site) land at the De Bruijn indices the callee expects. An
+                // associated type the impl leaves to its default is padded with
+                // `BuiltinUnknown` (matching the `default.<method>()` bypass's
+                // padding in MIR); a short frame would instead shift every later
+                // slot and miscompile the method's own type args.
                 // TODO(M1): for a defaulted assoc *read as a runtime type* in a default
                 // body, complete with the assoc's actual default rather than this
                 // placeholder (needs TyTemplate-space default completion). Currently
@@ -608,7 +615,12 @@ fn build_packages(
                     },
                 );
             }
-            let iface_frame = interface_frame(&iface_tn, &interface_args, &interface_assoc);
+            let iface_frame = interface_frame(
+                &iface_tn,
+                &for_ty_pattern,
+                &interface_args,
+                &interface_assoc,
+            );
             merge_defaults(&mut methods, &iface_tn, &iface_frame);
             program_packages
                 .entry(pkg_info.package.clone())
@@ -740,7 +752,12 @@ fn build_packages(
                         ))
                     })
                     .collect();
-                let iface_frame = interface_frame(&iface_tn, &interface_args, &interface_assoc);
+                let iface_frame = interface_frame(
+                    &iface_tn,
+                    &for_ty_pattern,
+                    &interface_args,
+                    &interface_assoc,
+                );
                 merge_defaults(&mut methods, &iface_tn, &iface_frame);
                 program_packages
                     .entry(pkg_info.package.clone())

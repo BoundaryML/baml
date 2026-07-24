@@ -181,19 +181,19 @@ function inferred_generic_type_args.Cat.Animal.speak(self: inferred_generic_type
 }
 
 function inferred_generic_type_args.Counter.element_type(self: inferred_generic_type_args.Counter<T>) -> string {
-    load_type #0
+    load_type #1
     call baml.TypeValue.baml.ToString.to_string
     return
 }
 
 function inferred_generic_type_args.Cursor.take_one(self: inferred_generic_type_args.Cursor<T>) -> inferred_generic_type_args.Cursor<T> {
     load_var self
-    load_type inferred_generic_type_args.Cursor<#0>
+    load_type inferred_generic_type_args.Cursor<#1>
     load_const "head"
     virtual_call nargs=1 ntypeargs=0
     store_var _2
     load_var _2
-    load_type #0
+    load_type #1
     init_instance<1> user.inferred_generic_type_args.SingleCursor .value
     return
 }
@@ -221,6 +221,7 @@ function inferred_generic_type_args.EchoB.SelfEcho.tag(self: inferred_generic_ty
 }
 
 function inferred_generic_type_args.IntCounter.Counter<T>.describe(self: inferred_generic_type_args.IntCounter<T>) -> string {
+    load_type inferred_generic_type_args.IntCounter<#0>
     load_type #0
     load_var self
     call user.inferred_generic_type_args.Counter.element_type
@@ -249,13 +250,13 @@ function inferred_generic_type_args.LoneIter.NextIter<T, never>.next2(self: infe
 }
 
 function inferred_generic_type_args.Named.tname(self: inferred_generic_type_args.Named<T>) -> string {
-    load_type #0
+    load_type #1
     call baml.TypeValue.baml.ToString.to_string
     return
 }
 
 function inferred_generic_type_args.NextIter.collect2(self: inferred_generic_type_args.NextIter<T, E>) -> T[] {
-    load_type #0
+    load_type #1
     alloc_array 0
     store_var out
 
@@ -263,7 +264,7 @@ function inferred_generic_type_args.NextIter.collect2(self: inferred_generic_typ
     load_const true
     pop_jump_if_false L2
     load_var self
-    load_type inferred_generic_type_args.NextIter<#0, #1>
+    load_type inferred_generic_type_args.NextIter<#1, #2>
     load_const "next2"
     virtual_call nargs=1 ntypeargs=0
     store_var _3
@@ -312,8 +313,9 @@ function inferred_generic_type_args.ProbeB.TypeProbe.seen(self: inferred_generic
 }
 
 function inferred_generic_type_args.SelfEcho.nested_self_type(self: inferred_generic_type_args.SelfEcho) -> string {
+    load_type #0[]
     load_var self
-    load_type unknown
+    load_type #0
     alloc_array 1
     call user.inferred_generic_type_args.echo_type
     return

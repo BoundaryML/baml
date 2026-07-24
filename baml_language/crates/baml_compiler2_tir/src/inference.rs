@@ -2071,6 +2071,21 @@ pub fn infer_scope_types<'db>(
                     // banned everywhere — the body writes `Self.Item`, which lowers
                     // through the `Self` bound installed below.
                     builder.set_type_bindings(type_bindings.clone());
+                    // Body-position `Self`: an interface's own method sees the rigid
+                    // `Self` type variable (realized through its frame slot), and an
+                    // implements-block method — in-body or free — sees the block's
+                    // `for` target, statically substituted (`Self` there is logically
+                    // a type variable, but its sole realization is the block's
+                    // subject, known at compile time). A plain class method keeps
+                    // `None`: a class body cannot yet name its own instantiation
+                    // (pinned in the `self_in_body` diagnostics project).
+                    let body_self_ty: Option<Ty> = (self_bound.is_some()
+                        || enclosing_impl.is_some()
+                        || baml_compiler2_ppir::item_data::method_interface_target(db, func_loc)
+                            .is_some())
+                    .then(|| self_ty.clone())
+                    .flatten();
+                    builder.set_body_self_ty(body_self_ty);
                     // Lower body type annotations through the shared context: `Self` and
                     // `Self.Assoc` resolve via `self_ty` and the `Self` bound; interface /
                     // method generics and associated types then substitute in. A bare

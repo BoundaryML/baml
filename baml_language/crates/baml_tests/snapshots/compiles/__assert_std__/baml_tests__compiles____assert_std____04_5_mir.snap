@@ -61,9 +61,11 @@ fn assert.format_operand(value: unknown) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: unknown // value // param
+    let _2: type
 
     bb0: {
-        _0 = call const fn baml.String.from(copy _1) -> [bb1];
+        _2 = load_type(unknown);
+        _0 = call const fn baml.String.from<copy _2>(copy _1) -> [bb1];
     }
 
     bb1: {

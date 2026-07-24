@@ -733,67 +733,20 @@ impl ImplResolver<'_> {
 
     /// Realize an impl rule's interface-arg [`TyTemplate`] against a *complete* env
     /// (one binding per impl generic param) for the resolver's own arg *comparison* —
-    /// not value materialization. A debug assert catches an out-of-range `TypeArgRef`
-    /// (a malformed rule); in release, a substitution failure falls back to the top
-    /// type, keeping selection conservative without aborting the query. (Value
-    /// materialization uses [`Self::realize_frame`], which is strict.)
+    /// not value materialization. An out-of-range `TypeArgRef` (a malformed rule) is
+    /// reported by `substitute` itself and asserted here in debug; in release, any
+    /// substitution failure — including a projection a non-matching candidate's
+    /// bindings legitimately cannot reduce — falls back to the top type, keeping
+    /// selection conservative without aborting the query. (Value materialization
+    /// uses [`Self::realize_frame`], which is strict.)
     fn substitute_checked(self, template: &TyTemplate, env: &[RealizedTy]) -> RealizedTy {
-        debug_assert!(
-            max_type_arg_ref(template).is_none_or(|n| (n as usize) < env.len()),
-            "impl rule references a type arg out of range for an env of {}",
-            env.len(),
-        );
-        template
-            .substitute(env, self.vm)
-            .unwrap_or_else(|_| RealizedTy::unknown())
-    }
-}
-
-/// The largest `TypeArgRef` de Bruijn index anywhere in `t`, if any.
-fn max_type_arg_ref(t: &TyTemplate) -> Option<u32> {
-    match t {
-        TyTemplate::TypeArgRef(n) => Some(*n),
-        TyTemplate::List(inner, _) => max_type_arg_ref(inner),
-        TyTemplate::Map { key, value, .. } | TyTemplate::Future(key, value, _) => {
-            max_type_arg_ref(key).max(max_type_arg_ref(value))
-        }
-        TyTemplate::Union(parts, _) => parts.iter().filter_map(max_type_arg_ref).max(),
-        TyTemplate::Class(_, args, _) => args.iter().filter_map(max_type_arg_ref).max(),
-        TyTemplate::Interface(_, args, assoc, _) => args
-            .iter()
-            .filter_map(max_type_arg_ref)
-            .chain(assoc.iter().filter_map(|(_, t)| max_type_arg_ref(t)))
-            .max(),
-        TyTemplate::Function {
-            params,
-            ret,
-            throws,
-            ..
-        } => params
-            .iter()
-            .filter_map(|p| max_type_arg_ref(&p.ty))
-            .chain(max_type_arg_ref(ret))
-            .chain(max_type_arg_ref(throws))
-            .max(),
-        TyTemplate::AssociatedTypeProjection {
-            base, interface, ..
-        } => max_type_arg_ref(base)
-            .into_iter()
-            .chain(
-                interface
-                    .generics
-                    .iter()
-                    .filter_map(max_type_arg_ref)
-                    .chain(
-                        interface
-                            .associated_types
-                            .iter()
-                            .filter_map(|(_, t)| max_type_arg_ref(t)),
-                    ),
-            )
-            .max(),
-        // Realized leaves carry no frame ref.
-        _ => None,
+        template.substitute(env, self.vm).unwrap_or_else(|e| {
+            debug_assert!(
+                !matches!(e, baml_type::SubstituteError::TypeArgRefOutOfRange { .. }),
+                "impl rule template is malformed: {e}",
+            );
+            RealizedTy::unknown()
+        })
     }
 }
 

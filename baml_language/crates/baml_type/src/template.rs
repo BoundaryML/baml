@@ -73,6 +73,20 @@ pub enum SubstituteError {
         /// The associated-type member whose reduction chain did not terminate.
         member: Name,
     },
+    /// A `TypeArgRef(index)` referenced a slot the frame does not supply. It is
+    /// a system invariant that a template's indices only reference its
+    /// surrounding frame — the compiler seeds every generic frame at full
+    /// declared width (an unconstrained parameter is seeded as an explicit
+    /// `unknown`, never omitted) — so an out-of-range reference means the
+    /// emitted De Bruijn indices and the seeded frame no longer agree: a
+    /// frame-layout bug, checked in every build profile. (A later revision may
+    /// drop the check in release and perform the access unchecked.)
+    TypeArgRefOutOfRange {
+        /// The out-of-range De Bruijn index.
+        index: u32,
+        /// The width of the frame the template was substituted against.
+        frame_len: usize,
+    },
 }
 
 impl fmt::Display for SubstituteError {
@@ -91,6 +105,10 @@ impl fmt::Display for SubstituteError {
             Self::ProjectionFuelExhausted { member } => write!(
                 f,
                 "associated-type projection `.{member}` did not terminate within the reduction budget"
+            ),
+            Self::TypeArgRefOutOfRange { index, frame_len } => write!(
+                f,
+                "template references frame type-arg slot {index} but the frame has {frame_len} type args"
             ),
         }
     }
@@ -177,17 +195,20 @@ impl TyTemplate {
     ) -> Result<RealizedTy, SubstituteError> {
         match self {
             // ── Template-only leaf ────────────────────────────────────────────
-            // A frame reference materializes to its bound type argument. An
-            // *unbound* slot (the frame supplied no arg at this index) is a
-            // generic parameter that was never specialized at runtime — e.g. an
-            // `unknown`-typed value flowing into `string.from<T>` →
-            // `reflect.type_of<T>()`. Its honest realized reflection is the top
-            // type `unknown`: a concrete `RealizedTy`, not a leaked type variable,
-            // so this is not the typevar-erasure the migration eliminates.
-            Self::TypeArgRef(n) => Ok(type_args
-                .get(*n as usize)
-                .cloned()
-                .unwrap_or_else(RealizedTy::unknown)),
+            // A frame reference materializes to its bound type argument. The
+            // frame always supplies every slot the template can reference: the
+            // compiler seeds generic frames at full declared width, with an
+            // unconstrained parameter seeded as an explicit `unknown` (so
+            // `reflect.type_of<T>()` under an unknown-typed call still reflects
+            // the honest top type through a real slot). An out-of-range index is
+            // therefore a frame-layout bug — reported, never silently realized.
+            Self::TypeArgRef(n) => match type_args.get(*n as usize) {
+                Some(arg) => Ok(arg.clone()),
+                None => Err(SubstituteError::TypeArgRefOutOfRange {
+                    index: *n,
+                    frame_len: type_args.len(),
+                }),
+            },
 
             // ── Composites: recurse, propagating failures ─────────────────────
             Self::List(inner, attr) => Ok(RealizedTy::List(
@@ -620,12 +641,20 @@ mod tests {
     }
 
     #[test]
-    fn out_of_range_type_arg_ref_is_unknown() {
-        // A frame ref with no matching arg is an unspecialized generic parameter;
-        // its honest realized reflection is the top type `unknown` (a concrete
-        // `RealizedTy`, not a leaked type variable).
+    fn out_of_range_type_arg_ref_is_an_error() {
+        // A template's indices only reference the surrounding frame — the
+        // compiler seeds generic frames at full declared width (an
+        // unconstrained param is an explicit `unknown` slot, never omitted) —
+        // so an out-of-range ref is a frame-layout bug, reported in every
+        // build profile rather than silently realized as `unknown`.
         let tmpl = TyTemplate::TypeArgRef(0);
-        assert_eq!(tmpl.substitute(&[], &NoCtx), Ok(RealizedTy::unknown()));
+        assert_eq!(
+            tmpl.substitute(&[], &NoCtx),
+            Err(SubstituteError::TypeArgRefOutOfRange {
+                index: 0,
+                frame_len: 0
+            })
+        );
     }
 
     /// `(#0 as Cyclic).member` — a projection whose base is a realized frame ref.

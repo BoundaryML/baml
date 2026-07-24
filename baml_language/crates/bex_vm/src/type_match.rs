@@ -16,19 +16,25 @@
 //! generics are invariant.
 
 use baml_type::{RealizedTy, Ty, TyTemplate, normalize};
-use bex_vm_types::Value;
+use bex_vm_types::{Value, errors::VmInternalError};
 
 use crate::BexVm;
 
 /// Whether `value` is a member of the type denoted by `template`, with the
 /// enclosing frame's realized `type_args` resolving the template's frame
 /// references. The `IsType` value matcher for `match` and `is` expressions.
+///
+/// A substitution failure is a broken compiler/VM invariant — a pattern
+/// template carries no projection (the MIR builder reports those as
+/// unresolvable before emission), so the only failure is a frame reference the
+/// seeded frame does not supply, i.e. a frame-layout bug — surfaced as an
+/// internal error rather than silently mis-answering the test.
 pub(crate) fn value_matches_template(
     vm: &BexVm,
     value: Value,
     template: &TyTemplate,
     frame_type_args: &[RealizedTy],
-) -> bool {
+) -> Result<bool, VmInternalError> {
     // A value with no reconstructible concrete BAML type (a bound method, a
     // future, an opaque native handle — see `value_concrete_ty`) is a member
     // of no structural type test. Closures DO reconstruct a function type —
@@ -37,35 +43,39 @@ pub(crate) fn value_matches_template(
     // carries the realized type args that would fill them (see
     // `function_object_ty`).
     let Some(value_ty) = vm.value_concrete_ty(value) else {
-        return false;
+        return Ok(false);
     };
     // The canonical algebra operates over `Ty`; a value's concrete type widens
     // into it (a shallow structural conversion — `ConcreteRealizedTy` is not a
     // deep, transmute-compatible family member with a borrowed upcast).
     let value_ty: Ty = value_ty.into();
-    // Resolve frame references (and reduce any projection) into a realized
-    // type, then let the canonical algebra do the work. A template that does
-    // not realize against the frame's realized args matches nothing.
-    let Ok(expected) = template.substitute(frame_type_args, vm) else {
-        return false;
-    };
-    normalize::is_subtype(&value_ty, expected.as_ty(), vm)
+    // Resolve frame references into a realized type, then let the canonical
+    // algebra do the work.
+    let expected = template.substitute(frame_type_args, vm).map_err(|e| {
+        VmInternalError::TypeSubstitution {
+            message: e.to_string(),
+        }
+    })?;
+    Ok(normalize::is_subtype(&value_ty, expected.as_ty(), vm))
 }
 
 /// Whether `actual` is *invariantly* the type denoted by `template` (resolved
 /// against `frame_type_args`) — one class type-arg position of the
 /// `ClassWithTypeArgs` check. BAML generics are invariant, so the relation is
-/// canonical equivalence, not membership.
+/// canonical equivalence, not membership. A substitution failure is a broken
+/// invariant, exactly as in [`value_matches_template`].
 pub(crate) fn class_type_arg_matches<C: normalize::TypeContext>(
     ctx: &C,
     template: &TyTemplate,
     frame_type_args: &[RealizedTy],
     actual: &Ty,
-) -> bool {
-    let Ok(expected) = template.substitute(frame_type_args, ctx) else {
-        return false;
-    };
-    normalize::equivalent(actual, expected.as_ty(), ctx)
+) -> Result<bool, VmInternalError> {
+    let expected = template.substitute(frame_type_args, ctx).map_err(|e| {
+        VmInternalError::TypeSubstitution {
+            message: e.to_string(),
+        }
+    })?;
+    Ok(normalize::equivalent(actual, expected.as_ty(), ctx))
 }
 
 #[cfg(test)]
@@ -139,6 +149,7 @@ mod tests {
             .map(|t| RealizedTy::try_from(t).expect("test frame arg is realized"))
             .collect();
         class_type_arg_matches(&EmptyCtx, template, &frame, actual.as_ty())
+            .expect("test templates reference only supplied frame slots")
     }
 
     /// A realized-leaf template from a `RealizedTy`.
