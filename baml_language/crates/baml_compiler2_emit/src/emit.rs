@@ -123,6 +123,30 @@ fn analyze_switch(arms: &[(i64, BlockId)]) -> SwitchStrategy {
     }
 }
 
+/// Number of times the emission strategy chosen by [`analyze_switch`] pulls
+/// the discriminant operand. Derived from the same `SwitchStrategy` value the
+/// emitter dispatches on, so the stack-carry simulation (`stack_carry`) and
+/// the emitters cannot disagree about pull counts:
+///
+/// - `JumpTable` / `PerfectHash` / `BinarySearch` pull exactly once
+///   (`BinarySearch` keeps the value on the stack via `Copy` thereafter);
+/// - `IfElseChain` re-loads the discriminant once per emitted comparison —
+///   `arms.len()` minus the exhaustive-final elision — including ZERO pulls
+///   for its no-comparison forms (no arms; a single exhaustive arm).
+///
+/// A stack-carried discriminant is only sound at exactly one pull: the carried
+/// value is consumed by the first pull, so later pulls would pop unrelated
+/// stack slots and a zero-pull form would orphan it (see `stack_carry`'s
+/// `Terminator::Switch` arm, the sole consumer).
+pub(crate) fn switch_discriminant_pulls(arms: &[(i64, BlockId)], exhaustive: bool) -> usize {
+    match analyze_switch(arms) {
+        SwitchStrategy::JumpTable { .. }
+        | SwitchStrategy::PerfectHash(_)
+        | SwitchStrategy::BinarySearch => 1,
+        SwitchStrategy::IfElseChain => arms.len().saturating_sub(usize::from(exhaustive)),
+    }
+}
+
 /// Result of a successful perfect hash search.
 #[derive(Debug)]
 struct PerfectHashResult {
@@ -3703,6 +3727,37 @@ mod tests {
                 )),
             "expected branch bytecode to load the condition before PopJumpIfFalse, got: {:?}",
             function.bytecode.instructions
+        );
+    }
+
+    /// Pin `switch_discriminant_pulls` to each strategy's emitted pull count —
+    /// the contract the stack-carry simulation rejects candidates against. A
+    /// drift here (a strategy pulling more or less than reported) recreates
+    /// the stray-pop miscompile: pulls 2..N of an if-else chain popping
+    /// unrelated stack slots under a stack-carried discriminant.
+    #[test]
+    fn switch_discriminant_pull_counts_per_strategy() {
+        use super::switch_discriminant_pulls;
+        let arms = |values: &[i64]| -> Vec<(i64, BlockId)> {
+            values.iter().map(|&v| (v, BlockId(0))).collect()
+        };
+
+        // If-else chain (< 4 arms): one pull per emitted comparison; the
+        // exhaustive final arm is elided, and its no-comparison forms (no
+        // arms; a single exhaustive arm) pull zero times.
+        assert_eq!(switch_discriminant_pulls(&arms(&[0, 1, 2]), false), 3);
+        assert_eq!(switch_discriminant_pulls(&arms(&[0, 1, 2]), true), 2);
+        assert_eq!(switch_discriminant_pulls(&arms(&[0, 1]), true), 1);
+        assert_eq!(switch_discriminant_pulls(&arms(&[0]), true), 0);
+        assert_eq!(switch_discriminant_pulls(&arms(&[]), false), 0);
+        assert_eq!(switch_discriminant_pulls(&arms(&[]), true), 0);
+
+        // Dense 4+ arms: jump table, single pull.
+        assert_eq!(switch_discriminant_pulls(&arms(&[0, 1, 2, 3]), false), 1);
+        // Sparse 4+ arms: perfect hash (or binary search), single pull either way.
+        assert_eq!(
+            switch_discriminant_pulls(&arms(&[10, 2000, 300_000, 40_000_000]), false),
+            1
         );
     }
 }
