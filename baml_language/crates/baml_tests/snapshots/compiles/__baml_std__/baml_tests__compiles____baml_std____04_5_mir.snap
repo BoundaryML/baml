@@ -4725,7 +4725,7 @@ fn baml.iter.FlatMap.Iterator.next(self: baml.iter.FlatMap) -> baml.iter.Done | 
     bb3: {
         _2 = copy _1.2;
         _3 = copy _2;
-        _3 = narrow_bind copy _3 as Interface(QualifiedTypeName { pkg: Dep("baml"), namespace: ["iter"], name: "Iterator" }, [], [("Item", TypeArgRef(1)), ("Error", TypeArgRef(4))], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb12, bb4];
+        _3 = narrow_bind copy _3 as Interface(QualifiedTypeName { pkg: Dep("baml"), namespace: ["iter"], name: "Iterator" }, [], [("Error", TypeArgRef(4)), ("Item", TypeArgRef(1))], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb12, bb4];
     }
 
     bb4: {
@@ -4770,7 +4770,7 @@ fn baml.iter.FlatMap.Iterator.next(self: baml.iter.FlatMap) -> baml.iter.Done | 
 
     bb12: {
         _4 = copy _3;
-        _5 = virtual_call next as baml.iter.Iterator<Item = #1, Error = #4>(copy _4) -> [bb13];
+        _5 = virtual_call next as baml.iter.Iterator<Error = #4, Item = #1>(copy _4) -> [bb13];
     }
 
     bb13: {
@@ -4842,7 +4842,7 @@ fn baml.iter.Flatten.Iterator.next(self: baml.iter.Flatten) -> baml.iter.Done | 
     bb3: {
         _2 = copy _1.1;
         _3 = copy _2;
-        _3 = narrow_bind copy _3 as Interface(QualifiedTypeName { pkg: Dep("baml"), namespace: ["iter"], name: "Iterator" }, [], [("Item", TypeArgRef(1)), ("Error", TypeArgRef(3))], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb11, bb4];
+        _3 = narrow_bind copy _3 as Interface(QualifiedTypeName { pkg: Dep("baml"), namespace: ["iter"], name: "Iterator" }, [], [("Error", TypeArgRef(3)), ("Item", TypeArgRef(1))], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb11, bb4];
     }
 
     bb4: {
@@ -4881,7 +4881,7 @@ fn baml.iter.Flatten.Iterator.next(self: baml.iter.Flatten) -> baml.iter.Done | 
 
     bb11: {
         _4 = copy _3;
-        _5 = virtual_call next as baml.iter.Iterator<Item = #1, Error = #3>(copy _4) -> [bb12];
+        _5 = virtual_call next as baml.iter.Iterator<Error = #3, Item = #1>(copy _4) -> [bb12];
     }
 
     bb12: {

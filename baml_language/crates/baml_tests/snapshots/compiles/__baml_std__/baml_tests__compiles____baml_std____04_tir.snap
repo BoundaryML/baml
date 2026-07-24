@@ -1783,7 +1783,7 @@ function baml.json.path<T>(j: baml.json.json, selector: string) -> T throws baml
       { : never
         throw JsonPathError { message: "selector must sta..." + selector + "'", selector: selector } : baml.json.JsonPathError
       }
-    let current: baml.json.json = j : baml.json.json -> bool | int | float | string | baml.json.json[] | map<string, baml.json.json> | null
+    let current: baml.json.json = j : baml.json.json -> int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>
     let i = 0 : 0 -> int
     while i < selector.length()
       { : void

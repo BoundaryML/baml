@@ -593,13 +593,10 @@ function NonExhaustiveAliasOfLiterals(code: OkOrCreated) -> string {
 
 type DoubleMaybe = MaybeResult?
 
-// BUG(matrix-union-flattening): `DoubleMaybe` expands through two alias/
-// optional layers, but the match matrix flattens union members only one level
-// deep (`matrix_normalize_scrut`), so these arms never wrap onto their union
-// members: even the exhaustive form below is wrongly reported non-exhaustive,
-// with duplicated member- and class-shaped witnesses. Pre-existing; the
-// possible-vs-covering coverage rework only changed the error shape (the arms
-// are no longer additionally flagged unreachable).
+// `DoubleMaybe` expands through two alias/optional layers; the match matrix
+// flattens the union recursively (`matrix_normalize_scrut`), so its columns
+// are the leaf members `Success | Failure | null` and these arms wrap onto
+// them exactly as they would for the single-layer alias.
 
 // Exhaustive: double optional (Result?? should be Success | Failure | null)
 // Note: T?? typically flattens to T? since (T | null) | null = T | null
@@ -616,6 +613,30 @@ function NonExhaustiveDoubleMaybeMissingNull(dm: DoubleMaybe) -> string {
     match (dm) {
         let s: Success => s.data,
         let f: Failure => f.reason
+    }
+}
+
+// ============================================================================
+// EDGE CASE: OVERLAPPING ALIAS UNIONS
+// Recursive flattening dedups canonically equivalent members
+// ============================================================================
+
+type Inner = int | string
+type Outer = Inner | int
+
+// Exhaustive: `Outer` flattens to `int | string | int`; the equivalent `int`
+// members dedup to one column ctor, so two arms cover everything.
+function ExhaustiveOverlappingAliasUnion(o: Outer) -> string {
+    match (o) {
+        let i: int => "int",
+        let s: string => "str"
+    }
+}
+
+// Non-exhaustive: the missing member is witnessed once, not once per copy.
+function NonExhaustiveOverlappingAliasUnion(o: Outer) -> string {
+    match (o) {
+        let i: int => "int"
     }
 }
 

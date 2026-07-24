@@ -5486,13 +5486,13 @@ function interfaces.uf09_main() -> string {
     alloc_instance user.interfaces.Uf09Cat
     store_var _2
     load_var _2
-    narrow_bind interfaces.Uf09Dog, slot=1
+    narrow_bind interfaces.Uf09Cat, slot=1
     pop_jump_if_false L0
     jump L2
 
   L0:
     load_var _2
-    narrow_bind interfaces.Uf09Cat, slot=1
+    narrow_bind interfaces.Uf09Dog, slot=1
     pop_jump_if_false L1
     jump L2
 
@@ -5503,21 +5503,21 @@ function interfaces.uf09_main() -> string {
   L2:
     load_var _2
     store_var_load_var a
-    is_type interfaces.Uf09Dog
+    is_type interfaces.Uf09Cat
     pop_jump_if_false L3
     jump L4
 
   L3:
     load_var a
-    is_type interfaces.Uf09Cat
+    is_type interfaces.Uf09Dog
     pop_jump_if_false L6
     load_var a
-    call user.interfaces.Uf09Cat.Uf09Animal.speak
+    call user.interfaces.Uf09Dog.Uf09Animal.speak
     jump L5
 
   L4:
     load_var a
-    call user.interfaces.Uf09Dog.Uf09Animal.speak
+    call user.interfaces.Uf09Cat.Uf09Animal.speak
 
   L5:
     return

@@ -2812,7 +2812,7 @@ function baml.iter.FlatMap.Iterator.next(self: baml.iter.FlatMap<T, R, E, E2, E3
     load_var _2
     store_var _3
     load_var _3
-    narrow_bind baml.iter.Iterator<Item = #1, Error = #4>, slot=3
+    narrow_bind baml.iter.Iterator<Error = #4, Item = #1>, slot=3
     pop_jump_if_false L3
     jump L6
 
@@ -2849,7 +2849,7 @@ function baml.iter.FlatMap.Iterator.next(self: baml.iter.FlatMap<T, R, E, E2, E3
 
   L6:
     load_var _3
-    load_type baml.iter.Iterator<Item = #1, Error = #4>
+    load_type baml.iter.Iterator<Error = #4, Item = #1>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
     store_var _5
@@ -2896,7 +2896,7 @@ function baml.iter.Flatten.Iterator.next(self: baml.iter.Flatten<I, R, E, E3>) -
     load_var _2
     store_var _3
     load_var _3
-    narrow_bind baml.iter.Iterator<Item = #1, Error = #3>, slot=3
+    narrow_bind baml.iter.Iterator<Error = #3, Item = #1>, slot=3
     pop_jump_if_false L3
     jump L6
 
@@ -2931,7 +2931,7 @@ function baml.iter.Flatten.Iterator.next(self: baml.iter.Flatten<I, R, E, E3>) -
 
   L6:
     load_var _3
-    load_type baml.iter.Iterator<Item = #1, Error = #3>
+    load_type baml.iter.Iterator<Error = #3, Item = #1>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
     store_var _5

@@ -356,7 +356,7 @@ function json_to_from_string.from_string_json_passthrough_object_len() -> int {
     call baml.json.from_string
     store_var _3
     load_var _3
-    narrow_bind map<string, baml.json.json>, slot=1
+    narrow_bind map<string, int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>>, slot=1
     pop_jump_if_false L0
     jump L1
 

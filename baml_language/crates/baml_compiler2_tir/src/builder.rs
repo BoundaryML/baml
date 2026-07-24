@@ -1560,33 +1560,30 @@ impl<'db> TypeInferenceBuilder<'db> {
         crate::inference::expand_alias_chains(ty, self.aliases)
     }
 
-    /// Pattern-matrix-internal normalization of a scrutinee type.
-    /// Flattens a union so the matrix's `UnionMember` dispatch applies
-    /// uniformly (so `int | null | string` keeps a single `null` member),
-    /// deduplicating `null` members.
+    /// Pattern-matrix-internal normalization of a scrutinee/column type: the
+    /// canonical form from the one type algebra (`baml_type::normalize`).
+    /// Canonicalization recursively flattens alias-nested unions, sorts and
+    /// deduplicates members, absorbs subsumed ones (`1 | int` → `int`, an
+    /// implementor into its interface existential), drops `never`, and
+    /// unwraps singletons — so the matrix's `UnionMember` dispatch sees
+    /// exactly the canonical member *set* the value belongs to, the same set
+    /// the pattern side targets: columns, rows, and witnesses agree by
+    /// construction (`type DoubleMaybe = MaybeResult?` becomes
+    /// `Success | Failure | null`; `type A = B | int` with
+    /// `type B = int | string` contributes one `int` member).
+    ///
+    /// The normalized form flows into binding and narrowing types (members
+    /// are the types arms are analyzed against — `analyze_and_lower_inner`),
+    /// so canonical spellings become program-visible in diagnostics and
+    /// reflection. RULED intended (2026-07-24): types render canonically
+    /// wherever users see them, and SAP attributes — which canonicalization
+    /// does not preserve — carry meaning only directly in an LLM function's
+    /// return type position, never through the type algebra. This requires
+    /// order-insensitive union inference at call sites (a binding's
+    /// canonically sorted spelling must solve generics exactly like the
+    /// declared order — `heads_correspond` in `baml_type_runtime`).
     fn matrix_normalize_scrut(&self, ty: &Ty) -> Ty {
-        let expanded = self.expand_alias_chains(ty.clone());
-        match expanded {
-            Ty::Union(members, attr) => {
-                let mut flat: Vec<Ty> = Vec::with_capacity(members.len());
-                let mut has_null = false;
-                for m in members {
-                    match self.expand_alias_chains(m) {
-                        Ty::Null { .. } => {
-                            has_null = true;
-                        }
-                        other => flat.push(other),
-                    }
-                }
-                if has_null {
-                    flat.push(Ty::Null {
-                        attr: TyAttr::default(),
-                    });
-                }
-                Ty::Union(flat, attr)
-            }
-            other => other,
-        }
+        self.normalize(ty)
     }
 
     fn expected_lambda_function_ty(&self, expected: &Ty) -> Option<Ty> {
