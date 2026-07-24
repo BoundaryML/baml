@@ -361,28 +361,52 @@ jobs:
         with:
           target: ${{ matrix.target }}
       - name: Build wrapper
-        run: cargo build --manifest-path baml_language/Cargo.toml --release --bin baml --target "${{ matrix.target }}"
-      - name: Archive wrapper
         run: |
           set -euo pipefail
-          version="${{ needs.plan.outputs.wrapper_version }}"
           target="${{ matrix.target }}"
-          mkdir -p staging/bin
+          cargo build --manifest-path baml_language/Cargo.toml --release --bin baml --target "$target"
           suffix=""
           if [[ "$target" == *windows-msvc ]]; then suffix=".exe"; fi
+          mkdir -p staging/bin
           cp "baml_language/target/$target/release/baml$suffix" "staging/bin/baml$suffix"
           if test -f "staging/bin/baml-cli$suffix"; then
             exit 1
           fi
-          if [[ "$target" == *windows-msvc ]]; then
-            (cd staging && 7z a "../baml-wrapper-$version-$target.zip" .)
+      - name: Build package-manager wrapper
+        if: ${{ matrix.target == 'aarch64-unknown-linux-gnu' || matrix.target == 'x86_64-unknown-linux-gnu' }}
+        run: |
+          set -euo pipefail
+          target="${{ matrix.target }}"
+          cargo build \
+            --manifest-path baml_language/Cargo.toml \
+            --release \
+            --bin baml \
+            --features no-self-update \
+            --target "$target"
+          mkdir -p staging-no-self-update/bin
+          cp "baml_language/target/$target/release/baml" \
+            "staging-no-self-update/bin/baml"
+      - name: Archive wrapper
+        env:
+          TARGET: ${{ matrix.target }}
+          WRAPPER_VERSION: ${{ needs.plan.outputs.wrapper_version }}
+        run: |
+          set -euo pipefail
+          if [[ "$TARGET" == *windows-msvc ]]; then
+            (cd staging && 7z a "../baml-wrapper-$WRAPPER_VERSION-$TARGET.zip" .)
           else
-            tar -C staging -czf "baml-wrapper-$version-$target.tar.gz" .
+            tar -C staging -czf "baml-wrapper-$WRAPPER_VERSION-$TARGET.tar.gz" .
+          fi
+          if [[ "$TARGET" == "aarch64-unknown-linux-gnu" || "$TARGET" == "x86_64-unknown-linux-gnu" ]]; then
+            tar -C staging-no-self-update -czf \
+              "baml-wrapper-no-self-update-$WRAPPER_VERSION-$TARGET.tar.gz" .
           fi
       - uses: actions/upload-artifact@v4
         with:
           name: wrapper-${{ matrix.target }}
-          path: baml-wrapper-${{ needs.plan.outputs.wrapper_version }}-${{ matrix.target }}.*
+          path: |
+            baml-wrapper-${{ needs.plan.outputs.wrapper_version }}-${{ matrix.target }}.*
+            baml-wrapper-no-self-update-${{ needs.plan.outputs.wrapper_version }}-${{ matrix.target }}.*
 
   build-python-sdk:
     name: Build Python SDK
@@ -750,8 +774,6 @@ jobs:
     with:
       release_plan_json: ${{ needs.plan.outputs.release_plan_json }}
       source_sha: ${{ needs.plan.outputs.source_sha }}
-    secrets:
-      NUGET_USER: ${{ secrets.NUGET_USER }}
 
   publish-maven:
     name: Publish Java Maven Central
@@ -1093,6 +1115,8 @@ jobs:
     runs-on: ubuntu-latest
     env:
       GH_REPO: ${{ github.repository }}
+    outputs:
+      source_sha256: ${{ steps.source-archive.outputs.sha256 }}
     permissions:
       contents: write
     steps:
@@ -1111,6 +1135,7 @@ jobs:
       - name: Publish wrapper release
         env:
           GH_TOKEN: ${{ github.token }}
+          SOURCE_SHA: ${{ needs.plan.outputs.source_sha }}
           WRAPPER_VERSION: ${{ needs.plan.outputs.wrapper_version }}
         run: |
           set -euo pipefail
@@ -1119,9 +1144,23 @@ jobs:
             gh release upload "$tag" dist/wrapper/* --clobber
           else
             gh release create "$tag" dist/wrapper/* \
+              --target "$SOURCE_SHA" \
               --title "BAML Wrapper $WRAPPER_VERSION" \
               --notes "BAML wrapper $WRAPPER_VERSION"
           fi
+      - name: Checksum wrapper source archive
+        id: source-archive
+        env:
+          WRAPPER_VERSION: ${{ needs.plan.outputs.wrapper_version }}
+        run: |
+          set -euo pipefail
+          source_sha="$(
+            curl --retry 5 --retry-all-errors -fsSL \
+              "https://github.com/BoundaryML/baml/archive/refs/tags/baml-wrapper-${WRAPPER_VERSION}.tar.gz" |
+              sha256sum |
+              awk '{print $1}'
+          )"
+          echo "sha256=$source_sha" >> "$GITHUB_OUTPUT"
 
   publish-bridge-cffi-release:
     name: Publish bridge_cffi release assets
@@ -1859,7 +1898,7 @@ jobs:
     name: Publish Homebrew wrapper formula
     needs: [plan, all-builds, publish-wrapper-release]
     if: ${{ needs.plan.outputs.wrapper_changed == 'true' && needs.plan.outputs.dry_run == 'false' && needs.plan.outputs.source_branch == 'canary' }}
-    runs-on: ubuntu-latest
+    runs-on: macos-14
     steps:
       - uses: actions/checkout@v4
         with:
@@ -1871,12 +1910,26 @@ jobs:
           path: dist/wrapper
           merge-multiple: true
       - name: Generate Homebrew formula
+        env:
+          SOURCE_SHA256: ${{ needs.publish-wrapper-release.outputs.source_sha256 }}
+          WRAPPER_VERSION: ${{ needs.plan.outputs.wrapper_version }}
         run: |
           set -euo pipefail
           scripts/baml-package-manager-artifacts \
             --wrapper-dir dist/wrapper \
-            --version "${{ needs.plan.outputs.wrapper_version }}" \
+            --version "$WRAPPER_VERSION" \
+            --source-sha256 "$SOURCE_SHA256" \
             --out package-manager
+      - name: Test Homebrew formula
+        run: |
+          set -euo pipefail
+          brew tap boundaryml/tap
+          tap="$(brew --repo boundaryml/tap)"
+          cp package-manager/homebrew/Formula/baml.rb "$tap/Formula/baml.rb"
+          brew audit --strict boundaryml/tap/baml
+          brew install --build-from-source boundaryml/tap/baml
+          brew test boundaryml/tap/baml
+          brew linkage --test boundaryml/tap/baml
       - name: Push formula to BoundaryML/homebrew-tap
         env:
           TOKEN: ${{ secrets.HOMEBREW_BAML_DISPATCH_TOKEN }}
@@ -1884,11 +1937,11 @@ jobs:
         run: |
           set -euo pipefail
           test -n "$TOKEN"
-          git clone "https://x-access-token:${TOKEN}@github.com/BoundaryML/homebrew-tap.git" tap
-          cp package-manager/homebrew/Formula/baml.rb tap/Formula/baml.rb
-          cd tap
+          tap="$(brew --repo boundaryml/tap)"
+          cd "$tap"
           git config user.name "boundaryml-release-bot"
           git config user.email "boundaryml-release-bot@users.noreply.github.com"
+          git remote set-url origin "https://x-access-token:${TOKEN}@github.com/BoundaryML/homebrew-tap.git"
           git add Formula/baml.rb
           git commit -m "Update baml wrapper to ${WRAPPER_VERSION}" || exit 0
           git push origin HEAD
@@ -1920,13 +1973,15 @@ jobs:
           ssh-keyscan aur.archlinux.org >> ~/.ssh/known_hosts
           printf 'Host aur.archlinux.org\n  IdentityFile ~/.ssh/aur\n  User aur\n' >> ~/.ssh/config
       - name: Generate AUR package files
+        env:
+          SOURCE_SHA256: ${{ needs.publish-wrapper-release.outputs.source_sha256 }}
+          WRAPPER_VERSION: ${{ needs.plan.outputs.wrapper_version }}
         run: |
           set -euo pipefail
-          source_sha="$(curl -fsSL "https://github.com/BoundaryML/baml/archive/refs/tags/baml-wrapper-${{ needs.plan.outputs.wrapper_version }}.tar.gz" | sha256sum | awk '{print $1}')"
           scripts/baml-package-manager-artifacts \
             --wrapper-dir dist/wrapper \
-            --version "${{ needs.plan.outputs.wrapper_version }}" \
-            --source-sha256 "$source_sha" \
+            --version "$WRAPPER_VERSION" \
+            --source-sha256 "$SOURCE_SHA256" \
             --out package-manager
       - name: Push AUR repos
         env:

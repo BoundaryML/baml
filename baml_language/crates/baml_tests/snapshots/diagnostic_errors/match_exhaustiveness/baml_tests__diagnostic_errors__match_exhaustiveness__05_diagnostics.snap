@@ -54,15 +54,6 @@ source: crates/baml_tests/src/generated_tests.rs
  253 │ ╰─▶     }
      ╰────
 
-  [type] E0062
-
-  × non-exhaustive match on type AlwaysTrue; missing: true
-     ╭─[match_exhaustiveness.baml:296:5]
- 296 │ ╭─▶     match (t) {
- 297 │ │           false => "wrong!"
- 298 │ ╰─▶     }
-     ╰────
-
   [type] E0001
 
   × mismatched types
@@ -317,15 +308,6 @@ source: crates/baml_tests/src/generated_tests.rs
      ·                          ─────────────
      ╰────
 
-  [type] E0062
-
-  × non-exhaustive match on type bool; missing: true, false
-     ╭─[match_exhaustiveness.baml:745:5]
- 745 │ ╭─▶     match (b) {
- 746 │ │           42 => "wrong type"
- 747 │ ╰─▶     }
-     ╰────
-
   [type] E0001
 
   × mismatched types
@@ -333,15 +315,6 @@ source: crates/baml_tests/src/generated_tests.rs
  746 │         42 => "wrong type"
      ·         ─┬
      ·          ╰── expected `bool`, found `42`
-     ╰────
-
-  [type] E0062
-
-  × non-exhaustive match on type int; missing: _
-     ╭─[match_exhaustiveness.baml:752:5]
- 752 │ ╭─▶     match (x) {
- 753 │ │           "hello" => "wrong type"
- 754 │ ╰─▶     }
      ╰────
 
   [type] E0001

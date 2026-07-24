@@ -419,14 +419,6 @@ source: crates/baml_tests/src/generated_tests.rs
      ·           ╰── expected `"hello"`, found `"bye"`
      ╰────
 
-  [type] E0063
-
-  × unreachable arm
-     ╭─[match_exprs.baml:162:14]
- 162 │         _ => "other"
-     ·              ───────
-     ╰────
-
   [type] E0004
 
   × operator `*` cannot be applied to `bool` and `bool`

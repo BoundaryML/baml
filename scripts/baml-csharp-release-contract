@@ -24,6 +24,10 @@ VERSION_RE = re.compile(
     r"^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)"
     r"(?:-[0-9A-Za-z](?:[0-9A-Za-z.-]*[0-9A-Za-z])?)?$"
 )
+GENERATED_SOURCE_SENTINELS = (
+    "Baml/Generated/BamlProgram.g.cs",
+    "CsharpSlice/Functions.g.cs",
+)
 
 
 class ContractError(ValueError):
@@ -198,6 +202,100 @@ def sha256(path: Path) -> str:
         for chunk in iter(lambda: stream.read(1024 * 1024), b""):
             digest.update(chunk)
     return digest.hexdigest()
+
+
+def generated_source_digests(root: Path) -> dict[str, str]:
+    if root.is_symlink():
+        fail(f"generated source root must not be a symlink: {root}")
+    if not root.is_dir():
+        fail(f"generated source root is missing: {root}")
+
+    digests: dict[str, str] = {}
+    for path in root.rglob("*"):
+        relative = path.relative_to(root).as_posix()
+        if path.is_symlink():
+            fail(f"generated source tree contains a symlink: {relative}")
+        if path.is_dir():
+            continue
+        if not path.is_file():
+            fail(f"generated source tree contains a non-file: {relative}")
+        if not path.name.endswith(".g.cs"):
+            fail(f"generated source tree contains a non-.g.cs file: {relative}")
+        if "\n" in relative or "\r" in relative:
+            fail(f"generated source tree contains an unsafe path: {relative!r}")
+        digests[relative] = sha256(path)
+
+    missing = [
+        relative
+        for relative in GENERATED_SOURCE_SENTINELS
+        if relative not in digests
+    ]
+    if missing:
+        fail(f"generated source tree is missing required entry points: {missing}")
+    return dict(sorted(digests.items()))
+
+
+def parse_generated_source_manifest(path: Path) -> dict[str, str]:
+    try:
+        text = path.read_text(encoding="utf-8")
+    except FileNotFoundError:
+        fail(f"generated source manifest does not exist: {path}")
+    except UnicodeDecodeError:
+        fail(f"generated source manifest is not UTF-8: {path}")
+
+    entries: dict[str, str] = {}
+    for index, line in enumerate(text.splitlines(), start=1):
+        match = re.fullmatch(r"([0-9a-f]{64})  ([^\r\n]+\.g\.cs)", line)
+        if match is None:
+            fail(f"generated source manifest has an invalid row {index}: {path}")
+        digest, relative = match.groups()
+        parts = Path(relative).parts
+        if (
+            relative.startswith("/")
+            or "\\" in relative
+            or Path(relative).as_posix() != relative
+            or any(part in {"", ".", ".."} for part in parts)
+        ):
+            fail(
+                f"generated source manifest has an unsafe path on row {index}: "
+                f"{relative}"
+            )
+        if relative in entries:
+            fail(f"generated source manifest repeats a path: {relative}")
+        entries[relative] = digest
+
+    if not entries:
+        fail(f"generated source manifest is empty: {path}")
+    return entries
+
+
+def write_generated_manifest(args: argparse.Namespace) -> None:
+    digests = generated_source_digests(args.root)
+    content = "".join(
+        f"{digest}  {relative}\n"
+        for relative, digest in digests.items()
+    )
+    write_new(args.manifest, content)
+
+
+def verify_generated_sources(args: argparse.Namespace) -> None:
+    actual = generated_source_digests(args.root)
+    if args.manifest is None:
+        return
+
+    expected = parse_generated_source_manifest(args.manifest)
+    missing = sorted(set(expected) - set(actual))
+    unexpected = sorted(set(actual) - set(expected))
+    modified = sorted(
+        relative
+        for relative in set(actual) & set(expected)
+        if actual[relative] != expected[relative]
+    )
+    if missing or unexpected or modified:
+        fail(
+            "generated source tree does not match its preparation manifest: "
+            f"missing={missing}, unexpected={unexpected}, modified={modified}"
+        )
 
 
 def artifact_files(root: Path) -> list[Path]:
@@ -471,6 +569,14 @@ def build_parser() -> argparse.ArgumentParser:
     matrix_parser = subparsers.add_parser("matrix")
     matrix_parser.add_argument("--platforms", type=Path, default=DEFAULT_PLATFORMS)
 
+    write_generated = subparsers.add_parser("write-generated-manifest")
+    write_generated.add_argument("--root", type=Path, required=True)
+    write_generated.add_argument("--manifest", type=Path, required=True)
+
+    verify_generated = subparsers.add_parser("verify-generated-sources")
+    verify_generated.add_argument("--root", type=Path, required=True)
+    verify_generated.add_argument("--manifest", type=Path)
+
     stage = subparsers.add_parser("stage-native")
     stage.add_argument("--platforms", type=Path, default=DEFAULT_PLATFORMS)
     stage.add_argument("--downloads", type=Path, required=True)
@@ -500,6 +606,12 @@ def main() -> None:
             print(f"ok: {len(targets)} required C# targets")
         elif args.command == "matrix":
             print(json.dumps(matrix(args.platforms), separators=(",", ":")))
+        elif args.command == "write-generated-manifest":
+            write_generated_manifest(args)
+            print("ok: wrote C# generated source manifest")
+        elif args.command == "verify-generated-sources":
+            verify_generated_sources(args)
+            print("ok: C# generated source integrity")
         elif args.command == "stage-native":
             stage_native(args)
         elif args.command == "verify-product":
