@@ -199,8 +199,9 @@ public final class TypeRegistry {
         }
         // Record-name registration is unconditional: encode must be able to unwrap
         // ANY registered record class, independent of which registration wins a key.
-        for (String recordName : recordNames) {
-            unionRecordsByJavaName.putIfAbsent(recordName, new UnionRecordEntry(recordName));
+        for (int i = 0; i < recordNames.length; i++) {
+            String recordName = recordNames[i];
+            unionRecordsByJavaName.putIfAbsent(recordName, new UnionRecordEntry(recordName, i));
         }
         return new UnionEntry(sealedInterfaceName, armTokens, recordNames);
     }
@@ -299,6 +300,13 @@ public final class TypeRegistry {
         return entry == null ? null : entry.instantiate(valueBytes, inner);
     }
 
+    /** Construct the registered wrapper for the selected canonical arm type. */
+    public static Object constructUnionForArmsSelected(
+            List<BamlType> arms, BamlType selectedType, Object inner) {
+        UnionEntry entry = unionsByArms.get(armKey(arms));
+        return entry == null ? null : entry.instantiateSelected(selectedType, inner);
+    }
+
     /**
      * Construct the generated union record for a union named by {@code fqn} (a
      * recursive alias — the descriptor names it, or the wire {@code self_type}
@@ -307,6 +315,19 @@ public final class TypeRegistry {
     public static Object constructUnionForFqn(String fqn, byte[] valueBytes, Object inner) {
         UnionEntry entry = unionsByFqn.get(fqn);
         return entry == null ? null : entry.instantiate(valueBytes, inner);
+    }
+
+    /** Construct a named registered union wrapper for the selected arm type. */
+    public static Object constructUnionForFqnSelected(
+            String fqn, BamlType selectedType, Object inner) {
+        UnionEntry entry = unionsByFqn.get(fqn);
+        return entry == null ? null : entry.instantiateSelected(selectedType, inner);
+    }
+
+    /** Construct a named alias union by its canonical selected index. */
+    public static Object constructUnionForFqnAtIndex(String fqn, int index, Object inner) {
+        UnionEntry entry = unionsByFqn.get(fqn);
+        return entry == null ? null : entry.instantiateAt(index, inner);
     }
 
     /**
@@ -343,6 +364,12 @@ public final class TypeRegistry {
             throw new IllegalStateException("not a registered union record: " + obj.getClass().getName());
         }
         return entry.inner(obj);
+    }
+
+    /** The record's declaration-order arm index, or {@code -1} when unregistered. */
+    public static int unionRecordArmIndex(Object obj) {
+        UnionRecordEntry entry = unionRecordsByJavaName.get(obj.getClass().getName());
+        return entry == null ? -1 : entry.armIndex;
     }
 
     /**
@@ -488,17 +515,20 @@ public final class TypeRegistry {
 
     /** A class instance decomposed for the inbound {@code class_value} arm. */
     public static final class ClassWire {
-        /** The BAML FQN, emitted on {@code InboundClassValue.class_ty.name}. */
+        /** The BAML FQN, emitted on the enclosing {@code InboundValue.value_type}. */
         public final String fqn;
         /** Field names in declaration order (the {@code fields} entry keys). */
         public final String[] fieldNames;
         /** Field values in declaration order, read via the accessor methods. */
         public final Object[] fieldValues;
+        /** Declared field descriptors, parallel to the names, or {@code null}. */
+        public final BamlType[] fieldDescs;
 
-        ClassWire(String fqn, String[] fieldNames, Object[] fieldValues) {
+        ClassWire(String fqn, String[] fieldNames, Object[] fieldValues, BamlType[] fieldDescs) {
             this.fqn = fqn;
             this.fieldNames = fieldNames;
             this.fieldValues = fieldValues;
+            this.fieldDescs = fieldDescs;
         }
     }
 
@@ -606,7 +636,7 @@ public final class TypeRegistry {
                             "failed to read field " + fieldOrder[i] + "() on " + javaClassName, e);
                 }
             }
-            return new ClassWire(bamlFqn, fieldOrder, values);
+            return new ClassWire(bamlFqn, fieldOrder, values, fieldDescs);
         }
 
         private Method[] accessors() {
@@ -717,6 +747,43 @@ public final class TypeRegistry {
             }
         }
 
+        Object instantiateSelected(BamlType selectedType, Object inner) {
+            int idx = -1;
+            for (int i = 0; i < armTokens.length; i++) {
+                if (armTokens[i].equals(selectedType)) {
+                    idx = i;
+                    break;
+                }
+            }
+            if (idx < 0) {
+                throw new IllegalArgumentException(
+                        "selected type " + selectedType + " is not an arm of "
+                                + sealedInterfaceName);
+            }
+            Constructor<?> c = constructor(idx);
+            try {
+                return c.newInstance(inner);
+            } catch (ReflectiveOperationException e) {
+                throw new IllegalStateException(
+                        "failed to construct union record " + recordNames[idx], e);
+            }
+        }
+
+        Object instantiateAt(int idx, Object inner) {
+            if (idx < 0 || idx >= armTokens.length) {
+                throw new IllegalArgumentException(
+                        "union selected option index " + idx + " is out of range for "
+                                + sealedInterfaceName);
+            }
+            Constructor<?> c = constructor(idx);
+            try {
+                return c.newInstance(inner);
+            } catch (ReflectiveOperationException e) {
+                throw new IllegalStateException(
+                        "failed to construct union record " + recordNames[idx], e);
+            }
+        }
+
         /**
          * The declaration-order index of the first arm whose {@link BamlType}
          * structurally matches the wire value {@code valueBytes} (see
@@ -774,13 +841,15 @@ public final class TypeRegistry {
 
     private static final class UnionRecordEntry {
         final String recordName;
+        final int armIndex;
 
         // Lazily resolved value() accessor (from the object's own Class — encode
         // never forces a Class.forName).
         private volatile Method valueAccessor;
 
-        UnionRecordEntry(String recordName) {
+        UnionRecordEntry(String recordName, int armIndex) {
             this.recordName = recordName;
+            this.armIndex = armIndex;
         }
 
         Object inner(Object obj) {

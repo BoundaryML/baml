@@ -16,7 +16,7 @@
 
 use std::sync::Arc;
 
-use baml_type::{MediaKind, RealizedTy, TypeName};
+use baml_type::{MediaKind, RealizedTy, TyTemplate, TypeName};
 
 /// FQN of the recursive `json` type alias declared in `baml.json`.
 /// Mirrors `baml_base::qualified_name::BAML_JSON_JSON`; inlined here to
@@ -585,16 +585,6 @@ fn raise_serialize(
     }
 }
 
-/// Public helper for native methods outside `json.rs` that need to throw a
-/// `JsonSerializationError` without a path context (e.g. `Uint8Array.to_json`).
-pub fn raise_serialize_no_path(
-    vm: &mut BexVm,
-    message: impl Into<String>,
-    reason: &str,
-) -> VmRustFnError {
-    raise_serialize(vm, message, "", reason)
-}
-
 // ─── serde_json ↔ VM Value conversion (untyped) ──────────────────────────────
 
 /// Convert a `serde_json::Value` into a VM `Value`.
@@ -853,10 +843,29 @@ fn ty_value_to_serde(
             "uint8array",
         )),
 
-        RealizedTy::Union(_, _) => {
-            // Tagged structurally — dispatch on the runtime Value shape rather
-            // than trying each member. Matches json-alias union semantics.
-            Ok(value_to_serde(vm, value))
+        RealizedTy::Union(members, _) => {
+            // Select the first declared member that contains the runtime value,
+            // using the same ordered, decidable membership relation as `is` and
+            // typed match arms. Serialization then remains fully type-directed:
+            // a class/media/uint8array member behaves exactly as it would outside
+            // the union, and values outside every member fail the type contract.
+            let member = members.iter().find(|member| {
+                crate::type_match::value_matches_template(
+                    vm,
+                    value,
+                    &TyTemplate::from((*member).clone()),
+                    &[],
+                )
+            });
+            match member {
+                Some(member) => ty_value_to_serde(vm, value, member, path),
+                None => Err(raise_serialize(
+                    vm,
+                    "value is not a member of the union",
+                    path,
+                    "union",
+                )),
+            }
         }
 
         RealizedTy::Resource { .. } | RealizedTy::PromptAst { .. } => Err(raise_serialize(

@@ -37,6 +37,11 @@ pub struct SdkPackage {
     /// Registry-encoded version (the identity of the canonical version for
     /// crates.io; pypi/npm have their own encodings).
     pub version: String,
+    /// Digest of the exact pre-publication package exercised by release
+    /// consumers. Optional for older SDK entries whose manifest contract has
+    /// not migrated yet.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub verified_package_sha256: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -105,6 +110,7 @@ impl ToolchainManifest {
     }
 }
 
+#[cfg(all(feature = "self-update", not(feature = "no-self-update")))]
 impl WrapperManifest {
     pub fn validate(&self) -> anyhow::Result<()> {
         validate_schema(self.schema)?;
@@ -154,6 +160,26 @@ fn validate_artifact(name: &str, artifact: &Artifact) -> anyhow::Result<()> {
 fn validate_sdk(language: &str, package: &SdkPackage) -> anyhow::Result<()> {
     if package.registry.is_empty() || package.package.is_empty() || package.version.is_empty() {
         anyhow::bail!("sdk {language} has an empty registry, package, or version");
+    }
+    if let Some(digest) = &package.verified_package_sha256 {
+        validate_sha256(digest)
+            .map_err(|error| anyhow::anyhow!("sdk {language} package digest: {error}"))?;
+    }
+    if language == "csharp" {
+        if package.registry != "nuget" || package.package != "baml-bridge" {
+            anyhow::bail!("sdk csharp must identify nuget/baml-bridge");
+        }
+        if package.verified_package_sha256.is_none() {
+            anyhow::bail!("sdk csharp must record the verified NuGet package digest");
+        }
+    }
+    if language == "swift" {
+        if package.registry != "swiftpm" || package.package != "BoundaryML/baml-swift" {
+            anyhow::bail!("sdk swift must identify swiftpm/BoundaryML/baml-swift");
+        }
+        if package.verified_package_sha256.is_none() {
+            anyhow::bail!("sdk swift must record the verified XCFramework package digest");
+        }
     }
     Ok(())
 }
@@ -251,6 +277,7 @@ mod tests {
                 registry: "crates_io".to_string(),
                 package: "baml_bridge".to_string(),
                 version: "0.15.0".to_string(),
+                verified_package_sha256: None,
             },
         )]));
         manifest.validate().unwrap();
@@ -277,9 +304,60 @@ mod tests {
                 registry: String::new(),
                 package: "baml_bridge".to_string(),
                 version: "0.15.0".to_string(),
+                verified_package_sha256: None,
             },
         )]));
         let err = manifest.validate().unwrap_err();
         assert!(format!("{err}").contains("rust"), "{err}");
+    }
+
+    #[test]
+    fn csharp_sdk_requires_a_valid_verified_package_digest() {
+        let mut manifest = manifest_with(None);
+        manifest.sdks = Some(BTreeMap::from([(
+            "csharp".to_string(),
+            SdkPackage {
+                registry: "nuget".to_string(),
+                package: "baml-bridge".to_string(),
+                version: "0.15.0".to_string(),
+                verified_package_sha256: Some("a".repeat(64)),
+            },
+        )]));
+        manifest.validate().unwrap();
+
+        manifest
+            .sdks
+            .as_mut()
+            .unwrap()
+            .get_mut("csharp")
+            .unwrap()
+            .verified_package_sha256 = Some("not-a-digest".to_string());
+        let err = manifest.validate().unwrap_err();
+        assert!(format!("{err}").contains("csharp"), "{err}");
+    }
+
+    #[test]
+    fn swift_sdk_requires_the_mirror_identity_and_verified_digest() {
+        let mut manifest = manifest_with(None);
+        manifest.sdks = Some(BTreeMap::from([(
+            "swift".to_string(),
+            SdkPackage {
+                registry: "swiftpm".to_string(),
+                package: "BoundaryML/baml-swift".to_string(),
+                version: "0.15.0".to_string(),
+                verified_package_sha256: Some("a".repeat(64)),
+            },
+        )]));
+        manifest.validate().unwrap();
+
+        manifest
+            .sdks
+            .as_mut()
+            .unwrap()
+            .get_mut("swift")
+            .unwrap()
+            .package = "wrong/mirror".to_string();
+        let err = manifest.validate().unwrap_err();
+        assert!(format!("{err}").contains("swift"), "{err}");
     }
 }

@@ -16,6 +16,11 @@ doctest = false
 [lints]
 workspace = true
 
+[features]
+default = [  ]
+self-update = [  ]
+no-self-update = [  ]
+
 [dependencies]
 anyhow = { workspace = true }
 flate2 = { workspace = true }

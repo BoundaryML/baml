@@ -84,6 +84,7 @@ macro_rules! visit_bytecode_index_operands {
             | I::Discriminant
             | I::TypeTag
             | I::IsType(..)
+            | I::NarrowBind { .. }
             | I::LoadType(..)
             | I::DenseTag(..) => bakes_type_layout = true,
             // ── no cross-function references ─────────────────────────────

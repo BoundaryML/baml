@@ -281,6 +281,15 @@ fn emit_binding(
     } else {
         TokenStream::new()
     };
+    // BAML callable names are part of the user's schema and cannot be
+    // renamed merely because one matches a conventional Rust trait method
+    // such as `clone`. The generated binding intentionally remains an
+    // inherent method.
+    let schema_method_name_attr = if matches!(receiver, Receiver::RefSelf) {
+        quote! { #[allow(clippy::should_implement_trait)] }
+    } else {
+        TokenStream::new()
+    };
 
     // Each TypeVar becomes a Rust generic bound by `BamlValue` (the only
     // bound the SDK can express — interfaces/traits aren't wired up), and
@@ -326,6 +335,7 @@ fn emit_binding(
     Ok(quote! {
         #(#doc_attrs)*
         #too_many_arguments_attr
+        #schema_method_name_attr
         pub fn #sync_name #generics_decl (#self_param #(#params),*) -> #result_ty {
             crate::_runtime::ensure_init().map_err(::baml_bridge::Error::Sdk)?;
             #(#converts)*
@@ -338,6 +348,7 @@ fn emit_binding(
 
         #(#doc_attrs)*
         #too_many_arguments_attr
+        #schema_method_name_attr
         pub async fn #async_name #generics_decl (#self_param #(#params),*) -> #result_ty {
             crate::_runtime::ensure_init().map_err(::baml_bridge::Error::Sdk)?;
             #(#converts)*

@@ -21,8 +21,7 @@ use baml_compiler2_hir::{
     item_tree::{ItemTree, ItemTreeSourceMap},
     namespace::{NameConflict, NamespaceId, NamespaceItems},
     package::{PackageId, PackageItems, PackageItemsExtra},
-    scope::ScopeId,
-    semantic_index::{FileSemanticIndex, ScopeBindings},
+    semantic_index::FileSemanticIndex,
     signature::signature_params_from_item_tree,
 };
 pub use expand::{ExpandCtx, SapAttrs, expand_partial, stream_expand};
@@ -612,13 +611,22 @@ pub fn file_symbol_contributions(
 }
 
 /// Canonical item tree (original + *$stream types).
-pub fn file_item_tree(db: &dyn Db, file: SourceFile) -> Arc<ItemTree> {
+///
+/// `pub(crate)`: the raw `ItemTree` is the substrate the `item_data` firewall
+/// queries are built on. Consumers use the enumeration
+/// (`file_classes`/`file_functions`/…) and lookup (`class_data`/
+/// `function_data`/…) queries, never the tree itself — that is what gives
+/// per-item invalidation instead of per-file.
+pub(crate) fn file_item_tree(db: &dyn Db, file: SourceFile) -> Arc<ItemTree> {
     let index = file_semantic_index(db, file);
     Arc::clone(&index.item_tree)
 }
 
 /// Canonical item-tree source map (original + *$stream types).
-pub fn file_item_tree_source_map(db: &dyn Db, file: SourceFile) -> Arc<ItemTreeSourceMap> {
+///
+/// `pub(crate)`: spans are served by the per-item `*_source_map` firewall
+/// queries in `item_data`.
+pub(crate) fn file_item_tree_source_map(db: &dyn Db, file: SourceFile) -> Arc<ItemTreeSourceMap> {
     let index = file_semantic_index(db, file);
     Arc::clone(&index.item_tree_source_map)
 }
@@ -759,27 +767,6 @@ pub fn elaborated_function_signature_source_map<'db>(
     function_signature_source_map(db, function)
 }
 
-/// Returns the `ScopeBindings` for a given scope (canonical index).
-pub fn scope_bindings_query<'db>(db: &'db dyn Db, scope_id: ScopeId<'db>) -> ScopeBindings {
-    let file = scope_id.file(db);
-    let index = file_semantic_index(db, file);
-    let local_id = scope_id.file_scope_id(db);
-    index.scope_bindings[local_id.index() as usize].clone()
-}
-
-/// Returns the scope-level `PathResolution` for a multi-segment `Path` expression.
-///
-/// Uses the canonical (PPIR) semantic index, which includes *$stream synthetic items.
-/// Returns `None` if `expr_id` was not recorded as a multi-segment path.
-pub fn path_resolution_query(
-    db: &dyn Db,
-    file: baml_base::SourceFile,
-    expr_id: baml_compiler2_ast::ExprId,
-) -> Option<baml_compiler2_hir::PathResolution> {
-    let index = file_semantic_index(db, file);
-    index.path_resolution(expr_id).cloned()
-}
-
 /// Canonical namespace items (original + *$stream types).
 #[salsa::tracked(returns(ref))]
 pub fn namespace_items<'db>(
@@ -872,13 +859,17 @@ pub fn namespace_items<'db>(
 pub fn package_items<'db>(db: &'db dyn Db, package_id: PackageId<'db>) -> PackageItems<'db> {
     let package_name = package_id.name(db);
 
-    let mut ns_paths: std::collections::HashSet<Vec<Name>> = std::collections::HashSet::new();
+    // Consumers observe the insertion order of `namespaces`, so namespace
+    // discovery must not inherit `HashSet`'s per-process randomized order.
+    let mut ns_paths: Vec<Vec<Name>> = Vec::new();
     for file in baml_compiler2_hir::compiler2_all_files(db) {
         let pkg_info = baml_compiler2_hir::file_package::file_package(db, file);
         if pkg_info.package == *package_name {
-            ns_paths.insert(pkg_info.namespace_path.clone());
+            ns_paths.push(pkg_info.namespace_path.clone());
         }
     }
+    ns_paths.sort();
+    ns_paths.dedup();
 
     let mut namespaces: FxHashMap<Vec<Name>, NamespaceItems<'db>> = FxHashMap::default();
     let mut all_conflicts: Vec<NameConflict<'db>> = Vec::new();

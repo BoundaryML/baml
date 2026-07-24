@@ -31,6 +31,7 @@ use std::{
 
 use bex_engine::{
     BexEngine, BexExternalValue, CancellationToken, EngineError, FunctionCallContextBuilder,
+    RuntimeTy,
 };
 use bex_resource_types::{HostValueArc, HostValueKind};
 use bridge_ctypes::baml_bridge::cffi::{BamlOutboundValue, BamlToHostCall, baml_outbound_value};
@@ -369,6 +370,257 @@ async fn host_callable_returns_int_result() {
     }
     // Hold the Arc until the end of the test so the dispatch table entry
     // is not released early.
+    drop(arc);
+}
+
+/// A callable that crosses a host boundary may itself be host-owned. APIs such
+/// as the HTTP server retain a callable handle and later ask the engine to
+/// invoke it as a fresh VM root, so that entry path must accept the same
+/// `HostClosure` values that `CallIndirect` accepts inside BAML bytecode.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn host_callable_handle_can_be_invoked_as_engine_entry_point() {
+    let source = r#"
+        function retain_callable(f: (int) -> int throws never) -> (int) -> int throws never {
+            return f;
+        }
+    "#;
+    let arc = register_host_callable(|items| {
+        let n = match items.first().and_then(|v| v.value.as_ref()) {
+            Some(baml_outbound_value::Value::IntValue(i)) => *i,
+            other => {
+                return FakeReturn::Err {
+                    class_name: "TypeError".to_string(),
+                    message: format!("expected int arg, got {other:?}"),
+                };
+            }
+        };
+        FakeReturn::Ok(BexExternalValue::Int(n + 1))
+    });
+    let snapshot = compile_for_engine(source);
+    let engine = Arc::new(
+        BexEngine::new(snapshot, Arc::new(sys_native::SysOps::native()), Vec::new())
+            .expect("engine construction"),
+    );
+
+    let retained = engine
+        .call_function(
+            "retain_callable",
+            vec![BexExternalValue::HostValue(Arc::clone(&arc))],
+            FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+            false,
+        )
+        .await
+        .expect("retaining the host callable should succeed");
+    let BexExternalValue::Handle(handle) = retained else {
+        panic!("retained callable should cross the boundary as a handle");
+    };
+
+    let result = engine
+        .call_callable(
+            handle,
+            vec![BexExternalValue::Int(41)],
+            FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+            true,
+        )
+        .await
+        .expect("host callable handle should be invokable");
+    assert_eq!(result, BexExternalValue::Int(42));
+    drop(arc);
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn host_callable_arguments_preserve_closed_union_selected_arm_on_wire() {
+    let source = r#"
+        function round_trip(
+            f: (int | string) -> int | string,
+            value: int | string,
+        ) -> int | string {
+            f(value)
+        }
+    "#;
+    let union_ty = RuntimeTy::union([RuntimeTy::int(), RuntimeTy::string()]);
+    let arc = register_host_callable(|items| {
+        let Some(baml_outbound_value::Value::UnionVariantValue(union)) =
+            items.first().and_then(|value| value.value.as_ref())
+        else {
+            panic!("expected selected union envelope, got {:?}", items.first())
+        };
+        assert_eq!(union.value_option_name, "int");
+        assert_eq!(union.selected_option_index, Some(0));
+        assert!(matches!(
+            union
+                .value
+                .as_deref()
+                .and_then(|value| value.value.as_ref()),
+            Some(baml_outbound_value::Value::IntValue(7))
+        ));
+        FakeReturn::Ok(BexExternalValue::union(
+            BexExternalValue::String("seven".into()),
+            [RuntimeTy::int(), RuntimeTy::string()],
+            RuntimeTy::string(),
+        ))
+    });
+    let snapshot = compile_for_engine(source);
+    let engine = Arc::new(
+        BexEngine::new(snapshot, Arc::new(sys_native::SysOps::native()), Vec::new())
+            .expect("Failed to create engine"),
+    );
+    let result = engine
+        .call_function(
+            "round_trip",
+            vec![
+                BexExternalValue::HostValue(Arc::clone(&arc)),
+                BexExternalValue::union(
+                    BexExternalValue::Int(7),
+                    [RuntimeTy::int(), RuntimeTy::string()],
+                    RuntimeTy::int(),
+                ),
+            ],
+            FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+            true,
+        )
+        .await
+        .expect("closed-union callback should succeed");
+    let BexExternalValue::Union { value, metadata } = result else {
+        panic!("expected selected union result")
+    };
+    assert_eq!(metadata.union_type, union_ty);
+    assert_eq!(metadata.selected_option, RuntimeTy::string());
+    assert!(matches!(*value, BexExternalValue::String(ref text) if text.as_str() == "seven"));
+    drop(arc);
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn host_callable_union_envelope_preserves_empty_container_arm_identity() {
+    let source = r#"
+        function round_trip(
+            f: (int[] | string[]) -> int[] | string[],
+            value: int[] | string[],
+        ) -> int[] | string[] {
+            f(value)
+        }
+    "#;
+    let int_list = RuntimeTy::List(Box::new(RuntimeTy::int()), baml_type::TyAttr::default());
+    let string_list = RuntimeTy::List(Box::new(RuntimeTy::string()), baml_type::TyAttr::default());
+    let arc = register_host_callable({
+        let int_list = int_list.clone();
+        let string_list = string_list.clone();
+        move |items| {
+            let Some(baml_outbound_value::Value::UnionVariantValue(union)) =
+                items.first().and_then(|value| value.value.as_ref())
+            else {
+                panic!(
+                    "expected selected list-union envelope, got {:?}",
+                    items.first()
+                )
+            };
+            assert_eq!(union.value_option_name, "int[]");
+            let Some(baml_outbound_value::Value::ListValue(list)) = union
+                .value
+                .as_deref()
+                .and_then(|value| value.value.as_ref())
+            else {
+                panic!("expected list payload")
+            };
+            assert!(list.items.is_empty());
+            FakeReturn::Ok(BexExternalValue::union(
+                BexExternalValue::Array {
+                    element_type: RuntimeTy::string(),
+                    items: vec![],
+                },
+                [int_list.clone(), string_list.clone()],
+                string_list.clone(),
+            ))
+        }
+    });
+    let snapshot = compile_for_engine(source);
+    let engine = Arc::new(
+        BexEngine::new(snapshot, Arc::new(sys_native::SysOps::native()), Vec::new())
+            .expect("Failed to create engine"),
+    );
+    let result = engine
+        .call_function(
+            "round_trip",
+            vec![
+                BexExternalValue::HostValue(Arc::clone(&arc)),
+                BexExternalValue::union(
+                    BexExternalValue::Array {
+                        element_type: RuntimeTy::int(),
+                        items: vec![],
+                    },
+                    [int_list.clone(), string_list.clone()],
+                    int_list,
+                ),
+            ],
+            FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+            true,
+        )
+        .await
+        .expect("empty selected container callback should succeed");
+    let BexExternalValue::Union { value, metadata } = result else {
+        panic!("expected selected union result")
+    };
+    assert_eq!(metadata.selected_option, string_list);
+    assert!(matches!(*value, BexExternalValue::Array { ref items, .. } if items.is_empty()));
+    drop(arc);
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn host_callable_optional_union_is_omitted_or_sent_with_selected_arm() {
+    let source = r#"
+        function invoke(f: (value?: int | string) -> int) -> int[] {
+            [f(), f(value = "supplied")]
+        }
+    "#;
+    let call_count = Arc::new(AtomicU64::new(0));
+    let arc = register_host_callable({
+        let call_count = Arc::clone(&call_count);
+        move |items| {
+            let call = call_count.fetch_add(1, Ordering::SeqCst);
+            match call {
+                0 => assert!(items.is_empty(), "omitted optional must not be sent"),
+                1 => {
+                    let Some(baml_outbound_value::Value::UnionVariantValue(union)) =
+                        items.first().and_then(|value| value.value.as_ref())
+                    else {
+                        panic!("expected supplied optional union envelope")
+                    };
+                    assert_eq!(union.value_option_name, "string");
+                    assert!(matches!(
+                        union
+                            .value
+                            .as_deref()
+                            .and_then(|value| value.value.as_ref()),
+                        Some(baml_outbound_value::Value::StringValue(value))
+                            if value == "supplied"
+                    ));
+                }
+                _ => panic!("callback invoked more than twice"),
+            }
+            FakeReturn::Ok(BexExternalValue::Int(
+                i64::try_from(call).expect("test callback count fits in i64"),
+            ))
+        }
+    });
+    let snapshot = compile_for_engine(source);
+    let engine = Arc::new(
+        BexEngine::new(snapshot, Arc::new(sys_native::SysOps::native()), Vec::new())
+            .expect("Failed to create engine"),
+    );
+    let result = engine
+        .call_function(
+            "invoke",
+            vec![BexExternalValue::HostValue(Arc::clone(&arc))],
+            FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+            true,
+        )
+        .await
+        .expect("optional union callback should succeed");
+    assert!(matches!(
+        result,
+        BexExternalValue::Array { ref items, .. }
+            if matches!(items.as_slice(), [BexExternalValue::Int(0), BexExternalValue::Int(1)])
+    ));
     drop(arc);
 }
 

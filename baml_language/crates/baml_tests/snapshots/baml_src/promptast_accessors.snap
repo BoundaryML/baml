@@ -3,28 +3,32 @@ source: crates/baml_tests/tests/baml_src.rs
 ---
 function promptast_accessors.$init_test_ns_promptast_accessors_promptast_accessors(registry: testing.TestCollector) -> null {
     load_var registry
+    load_const "root.promptast_accessors"
     load_const "text_renders_role_headed_prompt"
     make_closure .<lambda($init_test_ns_promptast_accessors_promptast_accessors, 0)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.promptast_accessors"
     load_const "to_string_is_readable_not_rust_debug"
     make_closure .<lambda($init_test_ns_promptast_accessors_promptast_accessors, 1)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.promptast_accessors"
     load_const "messages_expose_role_and_content"
     make_closure .<lambda($init_test_ns_promptast_accessors_promptast_accessors, 2)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.promptast_accessors"
     load_const "messages_yields_promptmessage_instances"
     make_closure .<lambda($init_test_ns_promptast_accessors_promptast_accessors, 3)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_const null
     return

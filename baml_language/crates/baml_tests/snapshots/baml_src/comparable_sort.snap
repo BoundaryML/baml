@@ -3,136 +3,158 @@ source: crates/baml_tests/tests/baml_src.rs
 ---
 function comparable_sort.$init_test_ns_comparable_sort_comparable_sort(registry: testing.TestCollector) -> null {
     load_var registry
+    load_const "root.comparable_sort"
     load_const "spike_1a_projection_normalizes_to_never_at_concrete_callsite"
     make_closure .<lambda($init_test_ns_comparable_sort_comparable_sort, 0)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.comparable_sort"
     load_const "spike_1a_concrete_error_is_catchable_at_callsite"
     make_closure .<lambda($init_test_ns_comparable_sort_comparable_sort, 1)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.comparable_sort"
     load_const "spike_1a_symbolic_projection_propagates_through_generic_code"
     make_closure .<lambda($init_test_ns_comparable_sort_comparable_sort, 2)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.comparable_sort"
     load_const "spike_1b_blanket_method_resolves_on_array_receiver"
     make_closure .<lambda($init_test_ns_comparable_sort_comparable_sort, 3)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.comparable_sort"
     load_const "spike_1b_blanket_interface_method_wins_over_array_class_method"
     make_closure .<lambda($init_test_ns_comparable_sort_comparable_sort, 4)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.comparable_sort"
     load_const "spike_1c_two_self_method_through_bounded_typevar_runs"
     make_closure .<lambda($init_test_ns_comparable_sort_comparable_sort, 5)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.comparable_sort"
     load_const "phase2_user_class_compare_direct_call_in_main"
     make_closure .<lambda($init_test_ns_comparable_sort_comparable_sort, 6)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.comparable_sort"
     load_const "phase2_user_class_compare_with_explicit_binding_in_main"
     make_closure .<lambda($init_test_ns_comparable_sort_comparable_sort, 7)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.comparable_sort"
     load_const "phase3_runtime_sort_ints"
     make_closure .<lambda($init_test_ns_comparable_sort_comparable_sort, 8)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.comparable_sort"
     load_const "phase3_runtime_generic_compare_on_primitive"
     make_closure .<lambda($init_test_ns_comparable_sort_comparable_sort, 9)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.comparable_sort"
     load_const "phase3_runtime_generic_compare_on_user_class"
     make_closure .<lambda($init_test_ns_comparable_sort_comparable_sort, 10)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.comparable_sort"
     load_const "phase3_runtime_sort_user_class"
     make_closure .<lambda($init_test_ns_comparable_sort_comparable_sort, 11)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.comparable_sort"
     load_const "phase3_runtime_generic_fn_sort_by_compare_ints"
     make_closure .<lambda($init_test_ns_comparable_sort_comparable_sort, 12)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.comparable_sort"
     load_const "phase3_runtime_user_generic_sort_by_compare_user_class"
     make_closure .<lambda($init_test_ns_comparable_sort_comparable_sort, 13)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.comparable_sort"
     load_const "phase3_runtime_sort_param_receiver_in_function"
     make_closure .<lambda($init_test_ns_comparable_sort_comparable_sort, 14)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.comparable_sort"
     load_const "phase5_class_with_comparable_sort_compiles_and_runs"
     make_closure .<lambda($init_test_ns_comparable_sort_comparable_sort, 15)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.comparable_sort"
     load_const "is_primitive_on_generic_value_folds_to_false"
     make_closure .<lambda($init_test_ns_comparable_sort_comparable_sort, 16)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.comparable_sort"
     load_const "element_is_dispatch_runtime_both_branches"
     make_closure .<lambda($init_test_ns_comparable_sort_comparable_sort, 17)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.comparable_sort"
     load_const "parity_fast_path_matches_comparator_path"
     make_closure .<lambda($init_test_ns_comparable_sort_comparable_sort, 18)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.comparable_sort"
     load_const "float_nan_sorts_via_total_order_no_throw"
     make_closure .<lambda($init_test_ns_comparable_sort_comparable_sort, 19)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.comparable_sort"
     load_const "sort_user_class_with_out_of_body_comparable_impl"
     make_closure .<lambda($init_test_ns_comparable_sort_comparable_sort, 20)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.comparable_sort"
     load_const "user_class_still_sorts_through_comparator_path"
     make_closure .<lambda($init_test_ns_comparable_sort_comparable_sort, 21)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_const null
     return

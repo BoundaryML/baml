@@ -497,4 +497,3 @@ fun <T0, T1, T2, T3, T4, T5, T6, T7, T8, T9> Union10<T0, T1, T2, T3, T4, T5, T6,
 @Suppress("UNCHECKED_CAST")
 fun <T0, T1, T2, T3, T4, T5, T6, T7, T8, T9> Union10<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9>.arm9OrNull(): T9? =
     if (this is Union10.Arm9<*, *, *, *, *, *, *, *, *, *>) value as T9 else null
-

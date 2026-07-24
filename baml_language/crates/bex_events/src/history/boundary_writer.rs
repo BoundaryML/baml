@@ -75,19 +75,6 @@ impl SegmentRotationPolicy {
 }
 
 impl BoundaryWriter {
-    pub fn create(
-        path: BoundaryHistoryPath,
-        boundary_id: BoundaryId,
-        created_at_ms: u64,
-    ) -> io::Result<Self> {
-        Self::create_with_rotation_policy(
-            path,
-            boundary_id,
-            created_at_ms,
-            SegmentRotationPolicy::default(),
-        )
-    }
-
     pub(crate) fn create_with_rotation_policy(
         path: BoundaryHistoryPath,
         boundary_id: BoundaryId,
@@ -106,11 +93,6 @@ impl BoundaryWriter {
             run_started_written: false,
             run_completed_written: false,
         })
-    }
-
-    #[must_use]
-    pub fn boundary_dir(&self) -> &std::path::Path {
-        &self.path.boundary_dir
     }
 
     pub fn write_profile_event(

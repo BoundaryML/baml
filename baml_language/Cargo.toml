@@ -3,6 +3,7 @@ members = [
   "crates/*",
   "forks/*",
   "sdks/cpp/sdkgen_cpp",
+  "sdks/csharp/sdkgen_csharp",
   "sdks/go/sdkgen_go",
   "sdks/java/bridge_java",
   "sdks/java/sdkgen_java",
@@ -10,6 +11,7 @@ members = [
   "sdks/typescript/bridge_typescript_web",
   "sdks/typescript/sdkgen_typescript_shared",
   "sdks/python/rust/*",
+  "sdks/swift/rust/*",
   "sdks/rust/*",
   "sdk_tests/harness_setup",
   "sdk_tests/harness_runner",
@@ -19,7 +21,13 @@ members = [
   # `sdkgen_java` is a stub.
   "sdk_tests/crates/java",
   "sdk_tests/crates/cpp",
+  "sdk_tests/crates/csharp",
   "sdk_tests/crates/python_pydantic2",
+  # Swift sdk-tests: build.rs codegen soft-fails into build_diagnostics
+  # (sdkgen_swift is early); the swift toolchain tests themselves are
+  # macOS-only and setup.sh (xcframework assembly) is bound in
+  # .config/nextest.toml for macOS hosts.
+  "sdk_tests/crates/swift",
   "sdk_tests/crates/go",
   # `sdk_tests/crates/typescript`'s build.rs runs codegen +
   # `pnpm install` but soft-fails into `$OUT_DIR/build_diagnostics.txt`
@@ -73,10 +81,12 @@ baml_type_macros = { path = "crates/baml_type_macros" }
 baml_builtins2 = { path = "crates/baml_builtins2" }
 baml_builtins2_codegen = { path = "crates/baml_builtins2_codegen" }
 sdkgen_cpp = { path = "sdks/cpp/sdkgen_cpp" }
+sdkgen_csharp = { path = "sdks/csharp/sdkgen_csharp" }
 sdkgen_typescript_shared = { path = "sdks/typescript/sdkgen_typescript_shared" }
 sdkgen_python_pydantic2 = { path = "sdks/python/rust/sdkgen_python_pydantic2" }
 sdkgen_java = { path = "sdks/java/sdkgen_java" }
 bridge_java = { path = "sdks/java/bridge_java" }
+sdkgen_swift = { path = "sdks/swift/rust/sdkgen_swift" }
 sdkgen_go = { path = "sdks/go/sdkgen_go" }
 sdkgen_rust = { path = "sdks/rust/sdkgen_rust" }
 baml_codegen_types = { path = "crates/baml_codegen_types" }
@@ -91,7 +101,7 @@ baml_compiler_diagnostics = { path = "crates/baml_compiler_diagnostics" }
 baml_compiler_lexer = { path = "crates/baml_compiler_lexer" }
 baml_compiler_parser = { path = "crates/baml_compiler_parser" }
 baml_compiler_syntax = { path = "crates/baml_compiler_syntax" }
-bex_cache = { path = "crates/bex_cache" }
+bex_cache = { path = "crates/bex_cache", default-features = false }
 bex_project = { path = "crates/bex_project", default-features = false }
 bex_engine = { path = "crates/bex_engine", default-features = false }
 sys_glob = { path = "crates/sys_glob" }
@@ -175,6 +185,7 @@ derive_more = { version = "2.1.1", features = [ "from" ] }
 divan = { package = "codspeed-divan-compat", version = "*" }
 eframe = "0.33.3"
 flate2 = { version = "1" }
+fs2 = "0.4"
 futures = { version = "0.3.30", features = [ "executor" ] }
 graphviz-rust = { version = "0.9" }
 hex = "0.4"
@@ -302,6 +313,10 @@ rand_xoshiro = "0.6"
 num-bigint = { version = "0.4", features = [ "rand", "serde" ] }
 num-traits = { version = "0.2" }
 rsa = { version = "0.9", default-features = false, features = [ "std", "pem" ] }
+# The hardware SHA-2 backend (`asm`: SHA-NI / ARMv8 crypto extensions,
+# runtime-detected) is enabled per-target in `bex_cache` — the `asm` feature
+# does not build under MSVC (sha2-asm ships GAS `.S` sources), so it must not
+# be turned on here unconditionally.
 sha2 = { version = "0.10", features = [ "oid" ] }
 
 [workspace.lints.rust]
@@ -466,6 +481,10 @@ inherits = "release"
 panic = "unwind"
 
 [profile.release-bridge-node]
+inherits = "release"
+panic = "unwind"
+
+[profile.release-bridge-swift]
 inherits = "release"
 panic = "unwind"
 

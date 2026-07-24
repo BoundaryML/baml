@@ -3,94 +3,109 @@ source: crates/baml_tests/tests/baml_src.rs
 ---
 function match_container_types.$init_test_ns_match_container_types_match_container_types(registry: testing.TestCollector) -> null {
     load_var registry
+    load_const "root.match_container_types"
     load_const "match_container_int_list"
     make_closure .<lambda($init_test_ns_match_container_types_match_container_types, 0)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.match_container_types"
     load_const "match_container_string_list"
     make_closure .<lambda($init_test_ns_match_container_types_match_container_types, 1)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.match_container_types"
     load_const "is_int_list_is_int_array"
     make_closure .<lambda($init_test_ns_match_container_types_match_container_types, 2)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.match_container_types"
     load_const "is_string_list_is_not_int_array"
     make_closure .<lambda($init_test_ns_match_container_types_match_container_types, 3)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.match_container_types"
     load_const "match_container_int_map"
     make_closure .<lambda($init_test_ns_match_container_types_match_container_types, 4)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.match_container_types"
     load_const "match_container_string_map"
     make_closure .<lambda($init_test_ns_match_container_types_match_container_types, 5)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.match_container_types"
     load_const "match_switch_int_list"
     make_closure .<lambda($init_test_ns_match_container_types_match_container_types, 6)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.match_container_types"
     load_const "match_switch_string_list"
     make_closure .<lambda($init_test_ns_match_container_types_match_container_types, 7)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.match_container_types"
     load_const "match_switch_prims_still_dispatch"
     make_closure .<lambda($init_test_ns_match_container_types_match_container_types, 8)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.match_container_types"
     load_const "match_invariance_int_list_not_member_of_union_element_arm"
     make_closure .<lambda($init_test_ns_match_container_types_match_container_types, 9)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.match_container_types"
     load_const "match_invariance_union_element_constructed_list_matches"
     make_closure .<lambda($init_test_ns_match_container_types_match_container_types, 10)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.match_container_types"
     load_const "is_int_list_is_not_unknown_list"
     make_closure .<lambda($init_test_ns_match_container_types_match_container_types, 11)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.match_container_types"
     load_const "is_unknown_constructed_list_is_unknown_list"
     make_closure .<lambda($init_test_ns_match_container_types_match_container_types, 12)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.match_container_types"
     load_const "match_unknown_list_arm_rejects_int_list"
     make_closure .<lambda($init_test_ns_match_container_types_match_container_types, 13)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.match_container_types"
     load_const "match_unknown_list_arm_captures_unknown_list"
     make_closure .<lambda($init_test_ns_match_container_types_match_container_types, 14)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_const null
     return
@@ -118,13 +133,17 @@ function match_container_types.classify_int_map_fn() -> string {
 
 function match_container_types.classify_list(x: int[] | string[]) -> string {
     load_var x
-    is_type int[]
+    store_var _2
+    load_var _2
+    narrow_bind int[], slot=2
     pop_jump_if_false L0
     jump L1
 
   L0:
     load_var x
-    is_type string[]
+    store_var _3
+    load_var _3
+    narrow_bind string[], slot=3
     pop_jump_if_false L3
     load_const "strings"
     jump L2
@@ -141,13 +160,17 @@ function match_container_types.classify_list(x: int[] | string[]) -> string {
 
 function match_container_types.classify_map(x: map<string, int> | map<string, string>) -> string {
     load_var x
-    is_type map<string, int>
+    store_var _2
+    load_var _2
+    narrow_bind map<string, int>, slot=2
     pop_jump_if_false L0
     jump L1
 
   L0:
     load_var x
-    is_type map<string, string>
+    store_var _3
+    load_var _3
+    narrow_bind map<string, string>, slot=3
     pop_jump_if_false L3
     load_const "string values"
     jump L2
@@ -183,31 +206,41 @@ function match_container_types.classify_string_map_fn() -> string {
 
 function match_container_types.classify_switch(x: int[] | string[] | int | string | bool) -> string {
     load_var x
-    is_type int[]
+    store_var _2
+    load_var _2
+    narrow_bind int[], slot=2
     pop_jump_if_false L0
     jump L7
 
   L0:
     load_var x
-    is_type string[]
+    store_var _3
+    load_var _3
+    narrow_bind string[], slot=3
     pop_jump_if_false L1
     jump L6
 
   L1:
     load_var x
-    is_type int
+    store_var _4
+    load_var _4
+    narrow_bind int, slot=4
     pop_jump_if_false L2
     jump L5
 
   L2:
     load_var x
-    is_type string
+    store_var _5
+    load_var _5
+    narrow_bind string, slot=5
     pop_jump_if_false L3
     jump L4
 
   L3:
     load_var x
-    is_type bool
+    store_var _6
+    load_var _6
+    narrow_bind bool, slot=6
     pop_jump_if_false L9
     load_const "bool"
     jump L8
@@ -261,7 +294,9 @@ function match_container_types.classify_switch_string_list_fn() -> string {
 
 function match_container_types.classify_union_element(u: (int | string)[] | int[]) -> string {
     load_var u
-    is_type int[]
+    store_var _2
+    load_var _2
+    narrow_bind int[], slot=2
     pop_jump_if_false L0
     load_const true
     pop_jump_if_false L0
@@ -269,7 +304,9 @@ function match_container_types.classify_union_element(u: (int | string)[] | int[
 
   L0:
     load_var u
-    is_type (int | string)[]
+    store_var _3
+    load_var _3
+    narrow_bind (int | string)[], slot=3
     pop_jump_if_false L3
     load_const "mixed"
     jump L2
@@ -286,7 +323,9 @@ function match_container_types.classify_union_element(u: (int | string)[] | int[
 
 function match_container_types.classify_unknown_vs_int(u: unknown[] | int[]) -> string {
     load_var u
-    is_type unknown[]
+    store_var _2
+    load_var _2
+    narrow_bind unknown[], slot=2
     pop_jump_if_false L0
     load_const true
     pop_jump_if_false L0
@@ -294,7 +333,9 @@ function match_container_types.classify_unknown_vs_int(u: unknown[] | int[]) -> 
 
   L0:
     load_var u
-    is_type int[]
+    store_var _3
+    load_var _3
+    narrow_bind int[], slot=3
     pop_jump_if_false L1
     jump L2
 

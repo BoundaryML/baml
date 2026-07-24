@@ -19,10 +19,16 @@ rust-sdk-fixture = { max-threads = 2 }
 # forgiving but not immune under CI load. Funnel the whole package through one
 # in-flight gradle at a time (see the package-wide override below).
 java-gradle-serial = { max-threads = 1 }
+# C# fixtures share the bridge project's MSBuild obj directory.
+csharp-sdk-fixture = { max-threads = 1 }
 
 [[profile.default.overrides]]
 filter = 'package(=sdk_test_rust)'
 test-group = 'rust-sdk-fixture'
+
+[[profile.default.overrides]]
+filter = 'package(=sdk_test_csharp)'
+test-group = 'csharp-sdk-fixture'
 
 # Node TypeScript tests build only the native bridge and Node fixture packages.
 [scripts.setup.typescript_pnpm_unix]
@@ -141,6 +147,17 @@ setup = 'java_gradle_win'
 [[profile.default.overrides]]
 filter = 'package(=sdk_test_java)'
 test-group = 'java-gradle-serial'
+# swift tests need the host-arch bridge_swift staticlib assembled into
+# sdks/swift/Binaries/BamlBridgeFFI.xcframework (the fixtures' path dep
+# links it). macOS only — there is no Swift toolchain on the other CI
+# hosts, and the fixture tests are #[ignore]d off-macOS to match.
+[scripts.setup.swift_xcframework_macos]
+command = './sdk_tests/crates/swift/setup.sh'
+
+[[profile.default.scripts]]
+filter = 'package(=sdk_test_swift)'
+platform = { host = 'cfg(target_os = "macos")' }
+setup = 'swift_xcframework_macos'
 
 # python tests need each fixture's venv synced with freshly-built baml_bridge.
 # fire only when a python sdk-test is selected. Unix uses `uv sync` per
@@ -197,3 +214,19 @@ setup = 'cpp_cdylib_unix'
 filter = 'package(=sdk_test_cpp)'
 platform = { host = 'cfg(windows)' }
 setup = 'cpp_cdylib_win'
+
+[scripts.setup.csharp_cdylib_unix]
+command = './sdk_tests/crates/csharp/setup.sh'
+
+[scripts.setup.csharp_cdylib_win]
+command = ['powershell', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', './sdk_tests/crates/csharp/setup.ps1']
+
+[[profile.default.scripts]]
+filter = 'package(=sdk_test_csharp)'
+platform = { host = 'cfg(unix)' }
+setup = 'csharp_cdylib_unix'
+
+[[profile.default.scripts]]
+filter = 'package(=sdk_test_csharp)'
+platform = { host = 'cfg(windows)' }
+setup = 'csharp_cdylib_win'

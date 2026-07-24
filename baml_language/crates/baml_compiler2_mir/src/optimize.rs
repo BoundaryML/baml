@@ -130,6 +130,11 @@ fn for_each_successor_mut(term: &mut Terminator, mut visit: impl FnMut(&mut Bloc
             then_block,
             else_block,
             ..
+        }
+        | Terminator::NarrowBind {
+            then_block,
+            else_block,
+            ..
         } => {
             visit(then_block);
             visit(else_block);
@@ -435,6 +440,14 @@ fn collect_place_index_locals(body: &MirFunctionBody) -> HashSet<Local> {
                     scan_place(future, &mut set);
                 }
                 Terminator::Branch { condition, .. } => scan_operand(condition, &mut set),
+                Terminator::NarrowBind {
+                    source,
+                    destination,
+                    ..
+                } => {
+                    scan_operand(source, &mut set);
+                    scan_place(&Place::Local(*destination), &mut set);
+                }
                 Terminator::Switch { discriminant, .. } => {
                     scan_operand(discriminant, &mut set);
                 }
@@ -490,24 +503,27 @@ fn count_local_defs(body: &MirFunctionBody) -> Vec<usize> {
     for block in &body.blocks {
         for stmt in &block.statements {
             if let crate::StatementKind::Assign { destination, .. } = &stmt.kind {
-                // Place::Capture has no local base — skip def counting for capture stores.
-                if !matches!(destination, Place::Capture(_)) {
-                    defs[destination.base_local().0] += 1;
+                // Capture-rooted places have no local definition to count.
+                if let Some(local) = destination.base_local() {
+                    defs[local.0] += 1;
                 }
             }
         }
         // Terminator destinations also count as definitions.
         if let Some(dest) = match &block.terminator {
-            Some(Terminator::Call { destination, .. }) => Some(destination),
-            Some(Terminator::VirtualCall { destination, .. }) => Some(destination),
-            Some(Terminator::SysOp { destination, .. }) => Some(destination),
-            Some(Terminator::Spawn { future, .. }) => Some(future),
-            Some(Terminator::Await { destination, .. }) => Some(destination),
-            Some(Terminator::AwaitAny { destination, .. }) => Some(destination),
-            Some(Terminator::ShortCircuit { destination, .. }) => Some(destination),
+            Some(Terminator::NarrowBind { destination, .. }) => Some(*destination),
+            Some(
+                Terminator::Call { destination, .. }
+                | Terminator::VirtualCall { destination, .. }
+                | Terminator::SysOp { destination, .. }
+                | Terminator::Await { destination, .. }
+                | Terminator::AwaitAny { destination, .. }
+                | Terminator::ShortCircuit { destination, .. },
+            ) => destination.base_local(),
+            Some(Terminator::Spawn { future, .. }) => future.base_local(),
             _ => None,
         } {
-            defs[dest.base_local().0] += 1;
+            defs[dest.0] += 1;
         }
     }
 
@@ -661,6 +677,7 @@ fn count_in_terminator(term: &Terminator, uses: &mut [usize]) {
 
     match term {
         Terminator::Branch { condition, .. } => count_in_operand(condition, uses),
+        Terminator::NarrowBind { source, .. } => count_in_operand(source, uses),
         Terminator::Switch { discriminant, .. } => count_in_operand(discriminant, uses),
         Terminator::Call {
             callee,
@@ -991,6 +1008,7 @@ fn apply_subst_to_statement(stmt: &mut crate::Statement, subst: &HashMap<Local, 
 fn apply_subst_to_terminator(term: &mut Terminator, subst: &HashMap<Local, Operand>) {
     match term {
         Terminator::Branch { condition, .. } => apply_subst_to_operand(condition, subst),
+        Terminator::NarrowBind { source, .. } => apply_subst_to_operand(source, subst),
         Terminator::Switch { discriminant, .. } => apply_subst_to_operand(discriminant, subst),
         Terminator::Call {
             callee,
@@ -1083,11 +1101,12 @@ fn eliminate_dead_locals(body: &mut MirFunctionBody, arity: usize) {
     for block in &body.blocks {
         if let Some(term) = &block.terminator {
             let dest_local = match term {
-                Terminator::Call { destination, .. } => Some(destination.base_local()),
-                Terminator::VirtualCall { destination, .. } => Some(destination.base_local()),
-                Terminator::Await { destination, .. } => Some(destination.base_local()),
-                Terminator::AwaitAny { destination, .. } => Some(destination.base_local()),
-                Terminator::SysOp { destination, .. } => Some(destination.base_local()),
+                Terminator::Call { destination, .. } => destination.base_local(),
+                Terminator::VirtualCall { destination, .. } => destination.base_local(),
+                Terminator::Await { destination, .. } => destination.base_local(),
+                Terminator::AwaitAny { destination, .. } => destination.base_local(),
+                Terminator::SysOp { destination, .. } => destination.base_local(),
+                Terminator::NarrowBind { destination, .. } => Some(*destination),
                 // ShortCircuit is side-effect-free (pure control flow), so its
                 // destination can be dead-eliminated like any other local.
                 _ => None,
@@ -1275,6 +1294,14 @@ fn rewrite_locals_in_statement(stmt: &mut crate::Statement, map: &[Option<Local>
 fn rewrite_locals_in_terminator(term: &mut Terminator, map: &[Option<Local>]) {
     match term {
         Terminator::Branch { condition, .. } => remap_operand(condition, map),
+        Terminator::NarrowBind {
+            source,
+            destination,
+            ..
+        } => {
+            remap_operand(source, map);
+            remap_local(destination, map);
+        }
         Terminator::Switch { discriminant, .. } => remap_operand(discriminant, map),
         Terminator::Call {
             callee,
@@ -1521,6 +1548,14 @@ fn verify_mir(body: &MirFunctionBody, name: &crate::ItemRef) {
         if let Some(term) = &block.terminator {
             match term {
                 Terminator::Branch { condition, .. } => check_operand(condition, &blk),
+                Terminator::NarrowBind {
+                    source,
+                    destination,
+                    ..
+                } => {
+                    check_operand(source, &blk);
+                    check_local(*destination, &blk);
+                }
                 Terminator::Switch { discriminant, .. } => check_operand(discriminant, &blk),
                 Terminator::Call {
                     callee,

@@ -3,28 +3,32 @@ source: crates/baml_tests/tests/baml_src.rs
 ---
 function match_self_workaround.$init_test_ns_match_self_workaround_match_self_workaround(registry: testing.TestCollector) -> null {
     load_var registry
+    load_const "root.match_self_workaround"
     load_const "self_workaround_match_captures_enclosing_type"
     make_closure .<lambda($init_test_ns_match_self_workaround_match_self_workaround, 0)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.match_self_workaround"
     load_const "self_workaround_match_rejects_other_type"
     make_closure .<lambda($init_test_ns_match_self_workaround_match_self_workaround, 1)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.match_self_workaround"
     load_const "self_workaround_is_enclosing_type"
     make_closure .<lambda($init_test_ns_match_self_workaround_match_self_workaround, 2)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.match_self_workaround"
     load_const "self_workaround_is_rejects_other_type"
     make_closure .<lambda($init_test_ns_match_self_workaround_match_self_workaround, 3)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_const null
     return
@@ -49,7 +53,9 @@ function match_self_workaround.Shape.is_shape(self: match_self_workaround.Shape,
 
 function match_self_workaround.Shape.same_kind(self: match_self_workaround.Shape, other: match_self_workaround.Shape | int) -> string {
     load_var other
-    is_type match_self_workaround.Shape
+    store_var _3
+    load_var _3
+    narrow_bind match_self_workaround.Shape, slot=3
     pop_jump_if_false L0
     jump L1
 

@@ -191,35 +191,6 @@ impl PpirTy {
 
     // ── Constructors ─────────────────────────────────────────────────────────
 
-    pub fn named(name: impl Into<Name>) -> Self {
-        PpirTy::Named {
-            path: vec![name.into()],
-            generic_args: vec![],
-            attrs: PpirTypeAttrs::default(),
-        }
-    }
-
-    pub fn list(inner: PpirTy) -> Self {
-        PpirTy::List {
-            inner: Box::new(inner),
-            attrs: PpirTypeAttrs::default(),
-        }
-    }
-
-    pub fn optional(inner: PpirTy) -> Self {
-        PpirTy::Optional {
-            inner: Box::new(inner),
-            attrs: PpirTypeAttrs::default(),
-        }
-    }
-
-    pub fn union(types: Vec<PpirTy>) -> Self {
-        PpirTy::Union {
-            variants: types,
-            attrs: PpirTypeAttrs::default(),
-        }
-    }
-
     // ── AST Conversion ───────────────────────────────────────────────────────
 
     /// Construct a `PpirTy` from a compiler2 AST `TypeExpr`.

@@ -1594,6 +1594,17 @@ impl io::IoNamespaceIo for DefaultIoOps {
 }
 
 impl io::IoNamespaceSys for DefaultIoOps {
+    fn collect_garbage(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<()> {
+        // The engine handles this intrinsic before consulting the platform IO
+        // table. Returning success is the safe fallback for other runtimes.
+        SysOpOutput::ok(())
+    }
+
     fn exec(
         &self,
         _h: &Arc<BexHeap>,
@@ -1815,12 +1826,6 @@ impl IoSysOpsBuilder {
         self
     }
 
-    /// Override the `env` namespace with a default-constructible type.
-    #[must_use]
-    pub fn with_env<T: io::IoNamespaceEnv + Default + Send + Sync + 'static>(self) -> Self {
-        self.with_env_instance(Arc::new(T::default()))
-    }
-
     /// Override the `io` namespace with a pre-built instance.
     #[must_use]
     pub fn with_io_instance(
@@ -1858,12 +1863,6 @@ impl IoSysOpsBuilder {
             })
         };
         self
-    }
-
-    /// Override the `io` namespace with a default-constructible type.
-    #[must_use]
-    pub fn with_io<T: io::IoNamespaceIo + Default + Send + Sync + 'static>(self) -> Self {
-        self.with_io_instance(Arc::new(T::default()))
     }
 
     /// Override the `fs` namespace (including `fs.File` methods) with a pre-built instance.
@@ -2025,12 +2024,6 @@ impl IoSysOpsBuilder {
         self
     }
 
-    /// Override the `glob` namespace with a default-constructible type.
-    #[must_use]
-    pub fn with_glob<T: io::IoNamespaceGlob + Default + Send + Sync + 'static>(self) -> Self {
-        self.with_glob_instance(Arc::new(T::default()))
-    }
-
     fn install_http_fetch_slots(
         &mut self,
         instance: Arc<dyn io::IoNamespaceHttp + Send + Sync + 'static>,
@@ -2142,12 +2135,6 @@ impl IoSysOpsBuilder {
     ) -> Self {
         self.install_http_fetch_slots(instance);
         self
-    }
-
-    /// Override the `http` namespace with a default-constructible type.
-    #[must_use]
-    pub fn with_http<T: io::IoNamespaceHttp + Default + Send + Sync + 'static>(self) -> Self {
-        self.with_http_instance(Arc::new(T::default()))
     }
 
     /// Override the `net` namespace (`TcpStream` / `TcpListener` / `UdpSocket`
@@ -2289,12 +2276,6 @@ impl IoSysOpsBuilder {
         self
     }
 
-    /// Override the `host` namespace with a default-constructible type.
-    #[must_use]
-    pub fn with_host<T: io::IoNamespaceHost + Default + Send + Sync + 'static>(self) -> Self {
-        self.with_host_instance(Arc::new(T::default()))
-    }
-
     /// Override the `time` namespace (`Instant.now`) with a pre-built instance.
     #[must_use]
     pub fn with_time_instance(
@@ -2308,12 +2289,6 @@ impl IoSysOpsBuilder {
             })
         };
         self
-    }
-
-    /// Override the `time` namespace with a default-constructible type.
-    #[must_use]
-    pub fn with_time<T: io::IoNamespaceTime + Default + Send + Sync + 'static>(self) -> Self {
-        self.with_time_instance(Arc::new(T::default()))
     }
 
     /// Override the `random` namespace (`SystemRandom.random` / `random_int`)
@@ -2336,12 +2311,6 @@ impl IoSysOpsBuilder {
             })
         };
         self
-    }
-
-    /// Override the `random` namespace with a default-constructible type.
-    #[must_use]
-    pub fn with_random<T: io::IoNamespaceRandom + Default + Send + Sync + 'static>(self) -> Self {
-        self.with_random_instance(Arc::new(T::default()))
     }
 }
 

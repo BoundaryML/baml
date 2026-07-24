@@ -11,46 +11,88 @@ import (
 // Class constructs a non-generic BAML class value. name and every field key
 // are exact BAML wire names, not their generated Go projections.
 func Class(name string, fields map[string]Input) Input {
+	return ClassWithTypeArgs(name, nil, fields)
+}
+
+// ClassWithTypeArgs constructs a parameterized BAML class value. Type
+// arguments are positional in the class declaration's canonical order.
+func ClassWithTypeArgs(name string, typeArgs []BAMLType, fields map[string]Input) Input {
+	typeArgs = append([]BAMLType(nil), typeArgs...)
 	keys := make([]string, 0, len(fields))
 	for key := range fields {
 		keys = append(keys, key)
 	}
 	sort.Strings(keys)
-
-	entries := make([]*cffi.InboundMapEntry, 0, len(keys))
+	inputs := make([]Input, 0, len(keys))
 	for _, key := range keys {
-		field := fields[key]
-		if field.err != nil {
-			return field
-		}
-		if field.value == nil {
-			return Input{}
-		}
-		entries = append(entries, &cffi.InboundMapEntry{
-			Key:   &cffi.InboundMapEntry_StringKey{StringKey: key},
-			Value: field.value,
-		})
+		inputs = append(inputs, fields[key])
 	}
 
-	return Input{value: &cffi.InboundValue{Value: &cffi.InboundValue_ClassValue{
-		ClassValue: &cffi.InboundClassValue{
-			Fields: entries,
-			ClassTy: &cffi.BamlTyClass{
-				Name: name,
+	prepare := func(transaction *inputTransaction) (*cffi.InboundValue, error) {
+		encodedTypeArgs := make([]*cffi.BamlTy, len(typeArgs))
+		for index, typeArg := range typeArgs {
+			if err := validateBAMLType(typeArg.value, 0); err != nil {
+				return nil, fmt.Errorf("class %q type argument %d: %w", name, index, err)
+			}
+			encodedTypeArgs[index] = typeArg.value
+		}
+		entries := make([]*cffi.InboundMapEntry, 0, len(keys))
+		for index, key := range keys {
+			encoded, err := inputs[index].encodeValue(transaction)
+			if err != nil {
+				return nil, fmt.Errorf("class %q field %q: %w", name, key, err)
+			}
+			entries = append(entries, &cffi.InboundMapEntry{
+				Key:   &cffi.InboundMapEntry_StringKey{StringKey: key},
+				Value: encoded,
+			})
+		}
+
+		return &cffi.InboundValue{
+			ValueType: &cffi.BamlTy{
+				Ty: &cffi.BamlTy_ClassTy{
+					ClassTy: &cffi.BamlTyClass{
+						Name:     name,
+						TypeArgs: encodedTypeArgs,
+					},
+				},
 			},
-		},
-	}}}
+			Value: &cffi.InboundValue_ClassValue{
+				ClassValue: &cffi.InboundClassValue{
+					Fields: entries,
+				},
+			},
+		}, nil
+	}
+	if inputsAreStatic(inputs) {
+		value, err := prepare(nil)
+		return Input{value: value, err: err}
+	}
+	return Input{deferred: &inputEncoder{encode: prepare}}
 }
 
-// ClassValue is a validated non-generic class returned by BAML.
+// ClassValue is a validated class returned by BAML, including its concrete
+// generic arguments when parameterized.
 type ClassValue struct {
-	name   string
-	fields map[string]Value
+	name     string
+	typeArgs []BAMLType
+	fields   map[string]Value
 }
 
 // Class validates that value is the named non-generic BAML class and indexes
 // its fields for generated decoders.
 func (value Value) Class(name string) (ClassValue, error) {
+	return value.ClassWithTypeArgs(name, nil)
+}
+
+// ClassWithTypeArgs validates both the nominal class and its complete
+// parameterization before exposing fields to generated decoders.
+func (value Value) ClassWithTypeArgs(name string, typeArgs []BAMLType) (ClassValue, error) {
+	unwrapped, err := value.unwrapUnionVariants()
+	if err != nil {
+		return ClassValue{}, err
+	}
+	value = unwrapped
 	if value.value == nil {
 		return ClassValue{}, fmt.Errorf("BAML value is uninitialized")
 	}
@@ -61,8 +103,19 @@ func (value Value) Class(name string) (ClassValue, error) {
 	if item.ClassValue.Name != name {
 		return ClassValue{}, fmt.Errorf("expected BAML class %q, got %q", name, item.ClassValue.Name)
 	}
-	if len(item.ClassValue.TypeArgs) != 0 {
-		return ClassValue{}, fmt.Errorf("BAML class %q unexpectedly has %d type arguments", name, len(item.ClassValue.TypeArgs))
+	if len(item.ClassValue.TypeArgs) != len(typeArgs) {
+		return ClassValue{}, fmt.Errorf("BAML class %q has %d type arguments, expected %d", name, len(item.ClassValue.TypeArgs), len(typeArgs))
+	}
+	decodedTypeArgs := make([]BAMLType, len(typeArgs))
+	for index, expected := range typeArgs {
+		actual := BAMLType{value: item.ClassValue.TypeArgs[index]}
+		if err := validateBAMLType(actual.value, 0); err != nil {
+			return ClassValue{}, fmt.Errorf("BAML class %q type argument %d: %w", name, index, err)
+		}
+		if !actual.Equal(expected) {
+			return ClassValue{}, fmt.Errorf("BAML class %q type argument %d does not match the generated Go type", name, index)
+		}
+		decodedTypeArgs[index] = actual
 	}
 
 	fields := make(map[string]Value, len(item.ClassValue.Fields))
@@ -76,9 +129,14 @@ func (value Value) Class(name string) (ClassValue, error) {
 		if _, duplicate := fields[entry.Key]; duplicate {
 			return ClassValue{}, fmt.Errorf("BAML class %q returned duplicate field %q", name, entry.Key)
 		}
-		fields[entry.Key] = Value{value: entry.Value}
+		fields[entry.Key] = Value{value: entry.Value, owner: value.owner}
 	}
-	return ClassValue{name: name, fields: fields}, nil
+	return ClassValue{name: name, typeArgs: decodedTypeArgs, fields: fields}, nil
+}
+
+// TypeArgs returns a copy of the validated concrete class arguments.
+func (value ClassValue) TypeArgs() []BAMLType {
+	return append([]BAMLType(nil), value.typeArgs...)
 }
 
 // Field returns one field by its exact BAML wire name.

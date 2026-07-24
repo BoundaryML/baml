@@ -1107,6 +1107,7 @@ mod tests {
     fn structured_user_error_removes_entry() {
         let (call_id, result) = insert_pending_call();
         let payload = InboundValue {
+            value_type: None,
             value: Some(InboundVariant::StringValue("boom".to_string())),
         }
         .encode_to_vec();

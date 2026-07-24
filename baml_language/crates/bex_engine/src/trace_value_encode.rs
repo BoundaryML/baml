@@ -721,6 +721,23 @@ fn bigint_to_hex(value: &str) -> String {
         .unwrap_or_else(|_| value.to_string())
 }
 
+/// Render the trace wire value in the same user-facing shape used by live log
+/// consumers: scalar values are unwrapped, while structured values retain a
+/// complete debug representation.
+pub(crate) fn render_encoded_trace_value(body: &[u8]) -> Result<String, String> {
+    let value = BamlOutboundValue::decode(body)
+        .map_err(|err| format!("failed to decode captured BAML log body: {err}"))?;
+    Ok(match value.value.as_ref() {
+        None | Some(BamlValueVariant::NullValue(_)) => "null".to_string(),
+        Some(BamlValueVariant::StringValue(value)) => value.clone(),
+        Some(BamlValueVariant::IntValue(value)) => value.to_string(),
+        Some(BamlValueVariant::FloatValue(value)) => value.to_string(),
+        Some(BamlValueVariant::BoolValue(value)) => value.to_string(),
+        Some(BamlValueVariant::BigintValue(value)) => value.clone(),
+        Some(_) => format!("{value:?}"),
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use bridge_ctypes::baml_bridge::cffi::{

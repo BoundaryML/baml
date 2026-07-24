@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 5660
 ---
 === MIR2 ===
 fn user.FarIndented() -> string {
@@ -13,6 +12,68 @@ fn user.FarIndented() -> string {
     }
 
     bb1: {
+        return;
+    }
+}
+
+fn user.Ragged() -> string {
+    // Locals:
+    let _0: string // _0 // return
+
+    bb0: {
+        _0 = const "header\n    bullet one\n    bullet two\nfooter";
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.WithBlankLines() -> string {
+    // Locals:
+    let _0: string // _0 // return
+
+    bb0: {
+        _0 = const "para one\n\npara two";
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.WithInterps(name: string, count: int) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: string // name // param
+    let _2: int // count // param
+    let _3: string
+    let _4: string
+    let _5: string
+    let _6: type
+    let _7: string
+    let _8: type
+
+    bb0: {
+        _6 = load_type(string);
+        _5 = call const fn baml.String.from<copy _6>(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        _4 = const "name:  " + copy _5;
+        _3 = copy _4 + const "\ncount: ";
+        _8 = load_type(int);
+        _7 = call const fn baml.String.from<copy _8>(copy _2) -> [bb2];
+    }
+
+    bb2: {
+        _0 = copy _3 + copy _7;
+        goto -> bb3;
+    }
+
+    bb3: {
         return;
     }
 }
@@ -106,68 +167,6 @@ fn user.MultilineInterpVerbatim() -> string {
     }
 
     bb2: {
-        return;
-    }
-}
-
-fn user.Ragged() -> string {
-    // Locals:
-    let _0: string // _0 // return
-
-    bb0: {
-        _0 = const "header\n    bullet one\n    bullet two\nfooter";
-        goto -> bb1;
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn user.WithBlankLines() -> string {
-    // Locals:
-    let _0: string // _0 // return
-
-    bb0: {
-        _0 = const "para one\n\npara two";
-        goto -> bb1;
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn user.WithInterps(name: string, count: int) -> string {
-    // Locals:
-    let _0: string // _0 // return
-    let _1: string // name // param
-    let _2: int // count // param
-    let _3: string
-    let _4: string
-    let _5: string
-    let _6: type
-    let _7: string
-    let _8: type
-
-    bb0: {
-        _6 = load_type(string);
-        _5 = call const fn baml.String.from<copy _6>(copy _1) -> [bb1];
-    }
-
-    bb1: {
-        _4 = const "name:  " + copy _5;
-        _3 = copy _4 + const "\ncount: ";
-        _8 = load_type(int);
-        _7 = call const fn baml.String.from<copy _8>(copy _2) -> [bb2];
-    }
-
-    bb2: {
-        _0 = copy _3 + copy _7;
-        goto -> bb3;
-    }
-
-    bb3: {
         return;
     }
 }

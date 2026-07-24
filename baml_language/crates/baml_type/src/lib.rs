@@ -268,13 +268,6 @@ impl Ty {
         }
     }
 
-    /// `bigint` with default attributes.
-    pub fn bigint() -> Self {
-        Ty::Bigint {
-            attr: TyAttr::default(),
-        }
-    }
-
     /// `float` with default attributes.
     pub fn float() -> Self {
         Ty::Float {
@@ -463,20 +456,6 @@ impl Ty {
         Ty::Class(TypeName::local(name.into()), Vec::new(), TyAttr::default())
     }
 
-    /// `Class(name, args)` — a parametric class instantiation.
-    pub fn class_with_args(name: TypeName, args: Vec<Ty>) -> Self {
-        Ty::Class(name, args, TyAttr::default())
-    }
-
-    /// `Class(name)` under the `"user"` package (matches compiler2 output for user-defined classes).
-    pub fn user_class(name: &str) -> Self {
-        Ty::Class(
-            QualifiedTypeName::local(Name::new(name)),
-            Vec::new(),
-            TyAttr::default(),
-        )
-    }
-
     /// `Class(name, args)` under the `"user"` package (matches compiler2 output for user-defined classes).
     pub fn user_class_with_args(name: &str, args: Vec<Ty>) -> Self {
         Ty::Class(
@@ -537,26 +516,6 @@ impl Ty {
         Ty::Type {
             attr: TyAttr::default(),
         }
-    }
-
-    /// Check if this is the void type.
-    pub fn is_void(&self) -> bool {
-        matches!(self, Ty::Void { .. })
-    }
-
-    /// Check if this is a primitive type (including literals of primitive types).
-    pub fn is_primitive(&self) -> bool {
-        matches!(
-            self,
-            Ty::Int { .. }
-                | Ty::Bigint { .. }
-                | Ty::Float { .. }
-                | Ty::String { .. }
-                | Ty::Bool { .. }
-                | Ty::Null { .. }
-                | Ty::Uint8Array { .. }
-                | Ty::Literal(..)
-        )
     }
 
     /// Recursively walk this type tree and return an error if any compiler-only

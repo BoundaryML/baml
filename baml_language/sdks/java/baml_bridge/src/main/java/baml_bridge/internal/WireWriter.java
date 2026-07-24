@@ -83,6 +83,11 @@ public final class WireWriter {
         writeLengthDelimited(fieldNumber, messageBytes);
     }
 
+    /** Append an already-encoded message body (used to add sparse metadata). */
+    public void writeRawBytes(byte[] bytes) {
+        out.write(bytes, 0, bytes.length);
+    }
+
     private void writeLengthDelimited(int fieldNumber, byte[] payload) {
         writeTag(fieldNumber, WIRE_LEN);
         writeVarint(payload.length);

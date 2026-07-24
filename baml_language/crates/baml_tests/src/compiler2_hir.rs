@@ -34,14 +34,15 @@ mod tests {
         file: baml_base::SourceFile,
         name: &str,
     ) -> FunctionLoc<'db> {
-        let item_tree = baml_compiler2_hir::file_item_tree(db, file);
-        let local_id = item_tree
-            .functions
+        *baml_compiler2_ppir::item_data::file_functions(db, file)
             .iter()
-            .find(|(_, func)| func.name.as_str() == name)
-            .map(|(local_id, _)| *local_id)
-            .unwrap_or_else(|| panic!("missing function {name}"));
-        FunctionLoc::new(db, file, local_id)
+            .find(|&&loc| {
+                baml_compiler2_ppir::item_data::function_data(db, loc)
+                    .name
+                    .as_str()
+                    == name
+            })
+            .unwrap_or_else(|| panic!("missing function {name}"))
     }
 
     fn find_method_loc<'db>(
@@ -50,19 +51,25 @@ mod tests {
         class_name: &str,
         method_name: &str,
     ) -> FunctionLoc<'db> {
-        let item_tree = baml_compiler2_hir::file_item_tree(db, file);
-        let class = item_tree
-            .classes
-            .values()
-            .find(|class| class.name.as_str() == class_name)
+        let class_loc = *baml_compiler2_ppir::item_data::file_classes(db, file)
+            .iter()
+            .find(|&&loc| {
+                baml_compiler2_ppir::item_data::class_data(db, loc)
+                    .name
+                    .as_str()
+                    == class_name
+            })
             .unwrap_or_else(|| panic!("missing class {class_name}"));
-        let method_id = class
+        *baml_compiler2_ppir::item_data::class_data(db, class_loc)
             .methods
             .iter()
-            .find(|method_id| item_tree[**method_id].name.as_str() == method_name)
-            .copied()
-            .unwrap_or_else(|| panic!("missing method {class_name}.{method_name}"));
-        FunctionLoc::new(db, file, method_id)
+            .find(|&&method_loc| {
+                baml_compiler2_ppir::item_data::function_data(db, method_loc)
+                    .name
+                    .as_str()
+                    == method_name
+            })
+            .unwrap_or_else(|| panic!("missing method {class_name}.{method_name}"))
     }
 
     // ── 1. Targeted unit test: multi-file package_items ──────────────────────
@@ -222,7 +229,7 @@ mod tests {
         assert!(ns.types.contains_key(&Name::new("Widget")));
     }
 
-    // ── 3. file_item_tree Index access ────────────────────────────────────────
+    // ── 3. item-data firewall: function data + impl representation ─────────────
 
     /// The enriched ItemTree stores function params and return types.
     #[test]
@@ -233,14 +240,14 @@ mod tests {
             "function greet(name: string) -> string { client C\nprompt #\"hi\"# }",
         );
 
-        let item_tree = baml_compiler2_hir::file_item_tree(&db, file);
-
-        // Find the function in the item tree
-        let func = item_tree
-            .functions
-            .values()
-            .find(|f| f.name == Name::new("greet"));
-        let func = func.expect("function 'greet' should be in item tree");
+        // Find the function via the firewall.
+        let greet = *baml_compiler2_ppir::item_data::file_functions(&db, file)
+            .iter()
+            .find(|&&loc| {
+                baml_compiler2_ppir::item_data::function_data(&db, loc).name == Name::new("greet")
+            })
+            .expect("function 'greet' should be in item tree");
+        let func = baml_compiler2_ppir::item_data::function_data(&db, greet);
 
         assert_eq!(
             func.params.len(),
@@ -269,8 +276,6 @@ mod tests {
     /// `class_to_impls` indexes every `InClass` impl.
     #[test]
     fn impls_map_is_consistent_with_legacy_representation() {
-        use baml_compiler2_hir::item_tree::ImplSubject;
-
         let mut db = make_db();
         let file = db.add_file(
             "impls.baml",
@@ -299,39 +304,52 @@ mod tests {
             "#,
         );
 
-        let item_tree = baml_compiler2_hir::file_item_tree(&db, file);
+        use baml_compiler2_ppir::item_data::{
+            ImplSubjectData, class_data, class_impls, file_classes, file_free_impls, file_impls,
+            impl_block_data,
+        };
 
-        let legacy_in_class: usize = item_tree.classes.values().map(|c| c.implements.len()).sum();
-        let legacy_out_of_body = item_tree.free_impls.len();
+        let legacy_in_class: usize = file_classes(&db, file)
+            .iter()
+            .map(|&c| class_data(&db, c).implements.len())
+            .sum();
+        let legacy_out_of_body = file_free_impls(&db, file).len();
 
         // One ImplBlock per legacy entry.
         assert_eq!(
-            item_tree.impls.len(),
+            file_impls(&db, file).len(),
             legacy_in_class + legacy_out_of_body,
             "expected one ImplBlock per legacy impl entry"
         );
 
         // Subject partition matches the legacy split.
-        let in_class = item_tree
-            .impls
-            .values()
-            .filter(|b| matches!(b.subject, ImplSubject::InClass { .. }))
+        let in_class = file_impls(&db, file)
+            .iter()
+            .filter(|&&b| {
+                matches!(
+                    impl_block_data(&db, b).subject,
+                    ImplSubjectData::InClass { .. }
+                )
+            })
             .count();
         assert_eq!(in_class, legacy_in_class, "InClass count mismatch");
         assert_eq!(
-            item_tree.impls.len() - in_class,
+            file_impls(&db, file).len() - in_class,
             legacy_out_of_body,
             "Free count mismatch"
         );
 
-        // `class_to_impls` indexes exactly the InClass impls.
-        let indexed: usize = item_tree.class_to_impls.values().map(|v| v.len()).sum();
+        // `class_impls` indexes exactly the InClass impls.
+        let indexed: usize = file_classes(&db, file)
+            .iter()
+            .map(|&c| class_impls(&db, c).len())
+            .sum();
         assert_eq!(indexed, legacy_in_class, "class_to_impls coverage mismatch");
 
         // Every impl carries its lowered method ids (here, `show`).
-        for block in item_tree.impls.values() {
+        for &block in file_impls(&db, file) {
             assert!(
-                !block.methods.is_empty(),
+                !impl_block_data(&db, block).methods.is_empty(),
                 "impl block should carry its method ids"
             );
         }
@@ -367,16 +385,17 @@ mod tests {
         );
 
         let pkg_id = PackageId::new(&db, Name::new("user"));
-        let tree = baml_compiler2_hir::file_item_tree(&db, file);
         let aliases = std::collections::HashMap::new();
 
         let class_ty = |class_name: &str| {
-            let (id, data) = tree
-                .classes
+            let loc = *baml_compiler2_ppir::item_data::file_classes(&db, file)
                 .iter()
-                .find(|(_, c)| c.name == Name::new(class_name))
+                .find(|&&loc| {
+                    baml_compiler2_ppir::item_data::class_data(&db, loc).name
+                        == Name::new(class_name)
+                })
                 .expect("class in item tree");
-            let loc = baml_compiler2_hir::loc::ClassLoc::new(&db, file, *id);
+            let data = baml_compiler2_ppir::item_data::class_data(&db, loc);
             let qtn = baml_compiler2_tir::lower_type_expr::qualify_def(
                 &db,
                 Definition::Class(loc),
@@ -385,12 +404,13 @@ mod tests {
             Ty::Class(qtn, vec![], TyAttr::default())
         };
         let iface = |iface_name: &str| {
-            let (id, _) = tree
-                .interfaces
+            let loc = *baml_compiler2_ppir::item_data::file_interfaces(&db, file)
                 .iter()
-                .find(|(_, i)| i.name == Name::new(iface_name))
+                .find(|&&loc| {
+                    baml_compiler2_ppir::item_data::interface_data(&db, loc).name
+                        == Name::new(iface_name)
+                })
                 .expect("interface in item tree");
-            let loc = baml_compiler2_hir::loc::InterfaceLoc::new(&db, file, *id);
             let qtn = baml_compiler2_tir::interfaces::interface_loc_qtn(&db, loc)
                 .expect("interface loc resolves to a qtn");
             baml_type::Interface {

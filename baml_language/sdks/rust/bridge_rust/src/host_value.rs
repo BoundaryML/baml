@@ -166,6 +166,7 @@ pub fn callable_handle<Args, Ret, Marker>(
 ) -> wire::InboundValue {
     let key = insert(cb.erase(params));
     wire::InboundValue {
+        value_type: None,
         value: Some(In::Handle(wire::BamlHandle {
             key,
             handle_type: wire::BamlHandleType::HostValueCallable as i32,
@@ -332,6 +333,7 @@ fn host_callable_instance(class_name: &str, message: &str, key: u64) -> wire::In
         (
             key,
             wire::InboundValue {
+                value_type: None,
                 value: Some(In::StringValue(value.to_string())),
             },
         )
@@ -339,6 +341,7 @@ fn host_callable_instance(class_name: &str, message: &str, key: u64) -> wire::In
     let handle_field = (
         "_handle",
         wire::InboundValue {
+            value_type: None,
             value: Some(In::Handle(wire::BamlHandle {
                 key,
                 handle_type: wire::BamlHandleType::HostValueOpaque as i32,
@@ -352,7 +355,13 @@ fn host_callable_instance(class_name: &str, message: &str, key: u64) -> wire::In
             string_field("message", message),
             string_field("class_name", class_name),
             string_field("language", "rust"),
-            ("traceback", wire::InboundValue { value: None }),
+            (
+                "traceback",
+                wire::InboundValue {
+                    value_type: None,
+                    value: None,
+                },
+            ),
             handle_field,
         ],
     )

@@ -1,19 +1,15 @@
 //! Conversion from the compiler2 HIR/TIR to `SymbolPool`.
 //!
-//! Walks the HIR item trees for user-defined files, resolves types via TIR,
-//! and populates a codegen-ready `SymbolPool` suitable for language-specific
-//! code generators (e.g. `sdkgen_python_pydantic2`).
+//! Walks each user-defined file via the `ppir` item-data firewall (enumeration
+//! queries plus `*_data` lookups), resolves types via TIR, and populates a
+//! codegen-ready `SymbolPool` suitable for language-specific code generators
+//! such as `sdkgen_python_pydantic2`.
 
 use std::collections::HashMap;
 
 use baml_codegen_types::{self as cg, Origin, SymbolPool};
 use baml_compiler2_ast::{self as ast, FunctionOrigin};
-use baml_compiler2_hir::{
-    compiler2_all_files, file_package,
-    ids::{FunctionMarker, LocalItemId},
-    loc::FunctionLoc,
-    package::PackageId,
-};
+use baml_compiler2_hir::{compiler2_all_files, file_package, loc::FunctionLoc, package::PackageId};
 use baml_compiler2_tir::{
     lower_type_expr,
     normalize::find_recursive_aliases,
@@ -126,46 +122,54 @@ pub fn build_symbol_pool(db: &ProjectDatabase) -> SymbolPool {
         let alias_map: &HashMap<QualifiedTypeName, TirTy> = alias_map;
         let recursive_aliases: &std::collections::HashSet<QualifiedTypeName> = recursive_aliases;
 
-        let item_tree = baml_compiler2_ppir::file_item_tree(db, source_file);
         let source_file_path: String = source_file.path(db).to_string_lossy().into_owned();
 
-        // Collect function IDs that are not package-level functions so the
+        // Collect function locs that are not package-level functions so the
         // free-function walk below can skip them. Class methods, interface
-        // default methods, and out-of-body implements methods all live in
-        // `item_tree.functions`, but none of them are directly callable as
-        // `<pkg>.<ns>.<method>` from generated SDKs.
-        let mut non_free_function_ids: std::collections::HashSet<LocalItemId<FunctionMarker>> =
+        // default methods, and out-of-body implements methods are all functions,
+        // but none of them are directly callable as `<pkg>.<ns>.<method>` from
+        // generated SDKs.
+        let mut non_free_function_locs: std::collections::HashSet<FunctionLoc> =
             std::collections::HashSet::new();
-        for class in item_tree.classes.values() {
-            for m in &class.methods {
-                non_free_function_ids.insert(*m);
+        for &class_loc in baml_compiler2_ppir::item_data::file_classes(db, source_file) {
+            for &m in &baml_compiler2_ppir::item_data::class_data(db, class_loc).methods {
+                non_free_function_locs.insert(m);
             }
         }
-        for interface in item_tree.interfaces.values() {
-            for m in &interface.default_methods {
-                non_free_function_ids.insert(*m);
+        for &iface_loc in baml_compiler2_ppir::item_data::file_interfaces(db, source_file) {
+            for &m in &baml_compiler2_ppir::item_data::interface_data(db, iface_loc).default_methods
+            {
+                non_free_function_locs.insert(m);
             }
         }
-        for impl_id in &item_tree.free_impls {
-            let Some(block) = item_tree.impls.get(impl_id) else {
-                continue;
-            };
-            for m in &block.methods {
-                non_free_function_ids.insert(*m);
+        for &impl_loc in baml_compiler2_ppir::item_data::file_free_impls(db, source_file) {
+            for &m in &baml_compiler2_ppir::item_data::impl_block_data(db, impl_loc).methods {
+                non_free_function_locs.insert(m);
             }
         }
 
         // Classes
-        for class in item_tree.classes.values() {
+        for &class_loc in baml_compiler2_ppir::item_data::file_classes(db, source_file) {
+            let class = baml_compiler2_ppir::item_data::class_data(db, class_loc);
             let cg_name = cg::Name::new(pkg.clone(), ns_path.clone(), class.name.clone());
             let class_generic_params: Vec<Name> = class.generic_params.clone();
+            let class_self_ty = TirTy::Class(
+                QualifiedTypeName::new(pkg.clone(), ns_path.clone(), class.name.clone()),
+                class_generic_params
+                    .iter()
+                    .cloned()
+                    .map(|name| TirTy::TypeVar(name, TyAttr::default()))
+                    .collect(),
+                TyAttr::default(),
+            );
             let properties = class
                 .fields
                 .iter()
                 .filter_map(|field| {
-                    let ty = resolve_type_expr(
+                    let ty = resolve_type_ref(
                         db,
-                        field.type_expr.as_ref(),
+                        &class.type_refs,
+                        field.type_ref,
                         pkg_items,
                         &pkg_info.namespace_path,
                         &class_generic_params,
@@ -186,10 +190,8 @@ pub fn build_symbol_pool(db: &ProjectDatabase) -> SymbolPool {
             // `$build_request`) are independent `Function` entries that
             // sit alongside their parent method in the same vec; their
             // shared span keeps them adjacent after sorting.
-            for method_id in &class.methods {
-                let Some(method) = item_tree.functions.get(method_id) else {
-                    continue;
-                };
+            for &method_loc in &class.methods {
+                let method = baml_compiler2_ppir::item_data::function_data(db, method_loc);
 
                 // Auto-derived methods (`to_json` / `from_json` synthesized
                 // by `auto_derive_json`) are language-level plumbing, not
@@ -200,8 +202,8 @@ pub fn build_symbol_pool(db: &ProjectDatabase) -> SymbolPool {
                 }
 
                 if matches!(
-                    method.body.as_ref(),
-                    Some(ast::FunctionBodyDef::Builtin(ast::BuiltinKind::Intrinsic))
+                    baml_compiler2_ppir::function_body(db, method_loc).as_ref(),
+                    baml_compiler2_hir::body::FunctionBody::Builtin(ast::BuiltinKind::Intrinsic)
                 ) {
                     continue;
                 }
@@ -216,7 +218,6 @@ pub fn build_symbol_pool(db: &ProjectDatabase) -> SymbolPool {
                     MethodKind::Static
                 };
 
-                let method_loc = FunctionLoc::new(db, source_file, *method_id);
                 // Same elaboration as free functions (see the free-function
                 // path). The method's own `generic_params` are its user +
                 // synthetic effect params; the enclosing class's params join
@@ -240,7 +241,7 @@ pub fn build_symbol_pool(db: &ProjectDatabase) -> SymbolPool {
                     ns_context: &pkg_info.namespace_path,
                     generic_params: &method_scope_generics,
                     bounds: &method_bounds,
-                    self_ty: None,
+                    self_ty: Some(class_self_ty.clone()),
                 };
                 let type_refs = &sig.type_refs;
                 let lower = |id| {
@@ -285,7 +286,11 @@ pub fn build_symbol_pool(db: &ProjectDatabase) -> SymbolPool {
                     watchers: Vec::new(),
                     origin: Origin {
                         source_file_path: source_file_path.clone(),
-                        span_start: u32::from(method.span.start()),
+                        span_start: u32::from(
+                            baml_compiler2_ppir::item_data::function_source_map(db, method_loc)
+                                .span
+                                .start(),
+                        ),
                     },
                 };
 
@@ -307,14 +312,19 @@ pub fn build_symbol_pool(db: &ProjectDatabase) -> SymbolPool {
                     instance_methods: Vec::new(),
                     origin: Origin {
                         source_file_path: source_file_path.clone(),
-                        span_start: u32::from(class.span.start()),
+                        span_start: u32::from(
+                            baml_compiler2_ppir::item_data::class_source_map(db, class_loc)
+                                .span
+                                .start(),
+                        ),
                     },
                 }),
             );
         }
 
         // Enums
-        for enum_def in item_tree.enums.values() {
+        for &enum_loc in baml_compiler2_ppir::item_data::file_enums(db, source_file) {
+            let enum_def = baml_compiler2_ppir::item_data::enum_data(db, enum_loc);
             let cg_name = cg::Name::new(pkg.clone(), ns_path.clone(), enum_def.name.clone());
             let variants = enum_def
                 .variants
@@ -333,17 +343,23 @@ pub fn build_symbol_pool(db: &ProjectDatabase) -> SymbolPool {
                     variants,
                     origin: Origin {
                         source_file_path: source_file_path.clone(),
-                        span_start: u32::from(enum_def.span.start()),
+                        span_start: u32::from(
+                            baml_compiler2_ppir::item_data::enum_source_map(db, enum_loc)
+                                .span
+                                .start(),
+                        ),
                     },
                 }),
             );
         }
 
         // Type aliases
-        for alias in item_tree.type_aliases.values() {
-            if let Some(resolved) = resolve_type_expr(
+        for &alias_loc in baml_compiler2_ppir::item_data::file_type_aliases(db, source_file) {
+            let alias = baml_compiler2_ppir::item_data::type_alias_data(db, alias_loc);
+            if let Some(resolved) = resolve_type_ref(
                 db,
-                alias.type_expr.as_ref(),
+                &alias.type_refs,
+                alias.value,
                 pkg_items,
                 &pkg_info.namespace_path,
                 &[],
@@ -367,21 +383,28 @@ pub fn build_symbol_pool(db: &ProjectDatabase) -> SymbolPool {
                         recursive: is_recursive,
                         origin: Origin {
                             source_file_path: source_file_path.clone(),
-                            span_start: u32::from(alias.span.start()),
+                            span_start: u32::from(
+                                baml_compiler2_ppir::item_data::type_alias_source_map(
+                                    db, alias_loc,
+                                )
+                                .span
+                                .start(),
+                            ),
                         },
                     }),
                 );
             }
         }
 
-        // Top-level functions — methods are skipped via `method_ids` so they
-        // don't double-emit. Companion functions (names containing `$`) flow
-        // through as their own pool entries; parent and companion alike are
+        // Top-level functions — methods are skipped via `non_free_function_locs`
+        // so they don't double-emit. Companion functions (names containing `$`)
+        // flow through as their own pool entries; parent and companion alike are
         // inserted directly, keyed on the suffixed name.
-        for (id, func) in &item_tree.functions {
-            if non_free_function_ids.contains(id) {
+        for &func_loc in baml_compiler2_ppir::item_data::file_functions(db, source_file) {
+            if non_free_function_locs.contains(&func_loc) {
                 continue;
             }
+            let func = baml_compiler2_ppir::item_data::function_data(db, func_loc);
 
             // Internal-origin functions (e.g. `<Client>$new` synthesized for
             // primitive clients) are runtime plumbing, not user-callable —
@@ -391,8 +414,8 @@ pub fn build_symbol_pool(db: &ProjectDatabase) -> SymbolPool {
             }
 
             if matches!(
-                func.body.as_ref(),
-                Some(ast::FunctionBodyDef::Builtin(ast::BuiltinKind::Intrinsic))
+                baml_compiler2_ppir::function_body(db, func_loc).as_ref(),
+                baml_compiler2_hir::body::FunctionBody::Builtin(ast::BuiltinKind::Intrinsic)
             ) {
                 continue;
             }
@@ -405,7 +428,6 @@ pub fn build_symbol_pool(db: &ProjectDatabase) -> SymbolPool {
             // bodies, etc.) are valid too. `FunctionOrigin::Internal` is
             // already filtered above.
 
-            let func_loc = FunctionLoc::new(db, source_file, *id);
             // Source the signature from the *elaborated* HIR data, not the raw
             // item tree: elaboration mints a synthetic effect param for every
             // callback parameter that omits a `throws` clause and rewrites that
@@ -482,7 +504,11 @@ pub fn build_symbol_pool(db: &ProjectDatabase) -> SymbolPool {
                 watchers: Vec::new(),
                 origin: Origin {
                     source_file_path: source_file_path.clone(),
-                    span_start: u32::from(func.span.start()),
+                    span_start: u32::from(
+                        baml_compiler2_ppir::item_data::function_source_map(db, func_loc)
+                            .span
+                            .start(),
+                    ),
                 },
             };
 
@@ -511,22 +537,26 @@ pub fn build_symbol_pool(db: &ProjectDatabase) -> SymbolPool {
 // Type resolution
 // ---------------------------------------------------------------------------
 
-/// Resolve an optional `TypeExpr` to a codegen `Ty`.
+/// Resolve an optional type reference (from an item's firewall `type_refs`
+/// arena) to a codegen `Ty`.
 ///
-/// Returns `None` if the type expression is missing.
-fn resolve_type_expr(
+/// Returns `None` if `id` is `None` (the annotation was omitted).
+#[expect(clippy::too_many_arguments)]
+fn resolve_type_ref(
     db: &ProjectDatabase,
-    spanned: Option<&baml_compiler2_ast::TypeExpr>,
+    store: &baml_compiler2_hir::type_ref::TypeRefStore,
+    id: Option<baml_compiler2_hir::type_ref::TypeRefId>,
     package_items: &baml_compiler2_hir::package::PackageItems<'_>,
     ns_context: &[Name],
     generic_params: &[Name],
     alias_map: &HashMap<QualifiedTypeName, TirTy>,
     recursive_aliases: &std::collections::HashSet<QualifiedTypeName>,
 ) -> Option<cg::Ty> {
-    let spanned = spanned?;
+    let id = id?;
     let mut diagnostics = Vec::new();
-    let tir_ty = lower_type_expr::lower_type_expr(
-        spanned,
+    let tir_ty = lower_type_expr::lower_type_ref(
+        store,
+        id,
         &lower_type_expr::ScopeCtx {
             db,
             package_items,
@@ -674,6 +704,7 @@ fn convert_tir_leaf(ty: &TirTy) -> cg::Ty {
 mod tests {
     use std::path::Path;
 
+    use baml_compiler2_hir::ids::{FunctionMarker, LocalItemId};
     use baml_type::TyAttrValue;
 
     use super::*;
@@ -1149,6 +1180,136 @@ function Extract(client: string, text: string) -> string {
         let bump = &class.instance_methods[0];
         let bump_args: Vec<&str> = bump.arguments.iter().map(|a| a.name.as_str()).collect();
         assert_eq!(bump_args, vec!["by"], "self should not be in arguments");
+    }
+
+    /// `Self` must be resolved by the compiler-owned type lowering before any
+    /// host generator sees the signature. This pins bare and nested positions
+    /// for both instance and static class methods.
+    #[test]
+    fn test_class_method_self_lowers_to_owning_codegen_class() {
+        let root = Path::new("/tmp/12c_method_self");
+        let mut db = ProjectDatabase::new();
+        db.set_project_root(root);
+        db.add_or_update_file(
+            root.join("main.baml").as_path(),
+            r#"
+class Mirror {
+  value string
+  function clone(self, other: Self?) -> map<string, Self> { {"value": self} }
+  function pick(self, value: Self | int) -> Self | string { self }
+  function wrap(value: Self[]) -> Self { value[0] }
+}
+
+class GenericMirror<T> {
+  value T
+  function nested(self, other: Self?) -> map<string, Self[]> { {"value": [self]} }
+  function identity(value: Self) -> Self { value }
+}
+"#,
+        );
+
+        let pool = build_symbol_pool(&db);
+        let (owner, class) = pool
+            .iter()
+            .find_map(|(name, symbol)| match symbol {
+                cg::Symbol::Class(class) if name.name().as_str() == "Mirror" => Some((name, class)),
+                _ => None,
+            })
+            .expect("Mirror class missing from pool");
+
+        let clone = class
+            .instance_methods
+            .iter()
+            .find(|method| method.name.as_str() == "clone")
+            .expect("clone instance method missing");
+        assert!(matches!(
+            &clone.arguments[0].ty,
+            cg::Ty::Union(members, _)
+                if members.iter().any(|ty| matches!(ty, cg::Ty::Class(name, args, _) if name == owner && args.is_empty()))
+                    && members.iter().any(|ty| matches!(ty, cg::Ty::Null { .. }))
+        ));
+        assert!(matches!(
+            &clone.return_type,
+            cg::Ty::Map { key, value, .. }
+                if matches!(key.as_ref(), cg::Ty::String { .. })
+                    && matches!(value.as_ref(), cg::Ty::Class(name, args, _) if name == owner && args.is_empty())
+        ));
+
+        let pick = class
+            .instance_methods
+            .iter()
+            .find(|method| method.name.as_str() == "pick")
+            .expect("pick instance method missing");
+        assert!(matches!(
+            &pick.arguments[0].ty,
+            cg::Ty::Union(members, _)
+                if members.iter().any(|ty| matches!(ty, cg::Ty::Class(name, args, _) if name == owner && args.is_empty()))
+                    && members.iter().any(|ty| matches!(ty, cg::Ty::Int { .. }))
+        ));
+        assert!(matches!(
+            &pick.return_type,
+            cg::Ty::Union(members, _)
+                if members.iter().any(|ty| matches!(ty, cg::Ty::Class(name, args, _) if name == owner && args.is_empty()))
+                    && members.iter().any(|ty| matches!(ty, cg::Ty::String { .. }))
+        ));
+
+        let wrap = class
+            .static_methods
+            .iter()
+            .find(|method| method.name.as_str() == "wrap")
+            .expect("wrap static method missing");
+        assert!(matches!(
+            &wrap.arguments[0].ty,
+            cg::Ty::List(inner, _)
+                if matches!(inner.as_ref(), cg::Ty::Class(name, args, _) if name == owner && args.is_empty())
+        ));
+        assert!(matches!(
+            &wrap.return_type,
+            cg::Ty::Class(name, args, _) if name == owner && args.is_empty()
+        ));
+
+        let (generic_owner, generic_class) = pool
+            .iter()
+            .find_map(|(name, symbol)| match symbol {
+                cg::Symbol::Class(class) if name.name().as_str() == "GenericMirror" => {
+                    Some((name, class))
+                }
+                _ => None,
+            })
+            .expect("GenericMirror class missing from pool");
+        let nested = generic_class
+            .instance_methods
+            .iter()
+            .find(|method| method.name.as_str() == "nested")
+            .expect("nested generic instance method missing");
+        let is_instantiated_self = |ty: &cg::Ty| {
+            matches!(
+                ty,
+                cg::Ty::Class(name, args, _)
+                    if name == generic_owner
+                        && matches!(args.as_slice(), [cg::Ty::TypeVar(name, _)] if name.as_str() == "T")
+            )
+        };
+        assert!(matches!(
+            &nested.arguments[0].ty,
+            cg::Ty::Union(members, _)
+                if members.iter().any(&is_instantiated_self)
+                    && members.iter().any(|ty| matches!(ty, cg::Ty::Null { .. }))
+        ));
+        assert!(matches!(
+            &nested.return_type,
+            cg::Ty::Map { key, value, .. }
+                if matches!(key.as_ref(), cg::Ty::String { .. })
+                    && matches!(value.as_ref(), cg::Ty::List(inner, _) if is_instantiated_self(inner))
+        ));
+
+        let identity = generic_class
+            .static_methods
+            .iter()
+            .find(|method| method.name.as_str() == "identity")
+            .expect("identity generic static method missing");
+        assert!(is_instantiated_self(&identity.arguments[0].ty));
+        assert!(is_instantiated_self(&identity.return_type));
     }
 
     /// Verifies that a class in a namespaced folder gets `namespace_path` populated.

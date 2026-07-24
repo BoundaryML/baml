@@ -3,8 +3,6 @@
 //! Uses the `env_var_refs` stored in `FileSemanticIndex` — populated during
 //! CST → AST lowering when `env.X` expressions are desugared.
 
-use baml_base::SourceFile;
-
 /// Collect all unique env var names referenced across all project files.
 ///
 /// Returns a sorted, deduplicated list of variable names (e.g., `["ANTHROPIC_API_KEY", "OPENAI_API_KEY"]`).
@@ -17,12 +15,4 @@ pub fn all_env_var_names(db: &dyn crate::Db) -> Vec<String> {
         }
     }
     names.into_iter().collect()
-}
-
-/// Collect env var references for a single file.
-pub fn file_env_var_names(db: &dyn crate::Db, file: SourceFile) -> Vec<String> {
-    baml_compiler2_hir::file_env_var_refs(db, file)
-        .iter()
-        .map(|r| r.name.clone())
-        .collect()
 }

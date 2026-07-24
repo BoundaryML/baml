@@ -202,14 +202,6 @@ impl PackageInterface {
 }
 
 impl ExportedType {
-    pub fn qtn(&self) -> &QualifiedTypeName {
-        match self {
-            ExportedType::Class { qtn, .. } => qtn,
-            ExportedType::Enum { qtn, .. } => qtn,
-            ExportedType::TypeAlias { qtn, .. } => qtn,
-        }
-    }
-
     /// Convert to a Ty (for type resolution results).
     pub fn to_ty(&self) -> Ty {
         match self {
@@ -864,32 +856,6 @@ impl<'db> PackageResolutionContext<'db> {
         None
     }
 
-    /// Look up class fields. Dual dispatch:
-    /// - Own-package: `ItemTree` -> lower fields
-    /// - Dependency: `ExportedType::Class` { fields }
-    pub fn lookup_class_fields(
-        &self,
-        db: &'db dyn crate::Db,
-        class_name: &QualifiedTypeName,
-    ) -> Vec<(Name, Ty)> {
-        let class_pkg = class_name.package();
-        if class_pkg.as_str() == self.own_package_name.as_str() {
-            self.lookup_own_class_fields(db, class_name)
-        } else {
-            for (dep_name, dep_iface) in &self.dep_interfaces {
-                if dep_name != class_pkg {
-                    continue;
-                }
-                if let Some(ExportedType::Class { fields, .. }) =
-                    dep_iface.lookup_type(class_name.namespace(), class_name.name())
-                {
-                    return fields.clone();
-                }
-            }
-            Vec::new()
-        }
-    }
-
     /// Look up a class method. Dual dispatch.
     pub fn lookup_class_method(
         &self,
@@ -930,53 +896,6 @@ impl<'db> PackageResolutionContext<'db> {
             }
             None
         }
-    }
-
-    fn lookup_own_class_fields(
-        &self,
-        db: &'db dyn crate::Db,
-        class_name: &QualifiedTypeName,
-    ) -> Vec<(Name, Ty)> {
-        let Some(def) = self
-            .own_items
-            .lookup_type(class_name.namespace(), class_name.name())
-        else {
-            return Vec::new();
-        };
-        let Definition::Class(class_loc) = def else {
-            return Vec::new();
-        };
-        let class_data = baml_compiler2_ppir::item_data::class_data(db, class_loc);
-        let ns = file_package::file_package(db, class_loc.file(db)).namespace_path;
-        let field_scope = crate::lower_type_expr::ScopeCtx {
-            db,
-            package_items: &self.own_items,
-            ns_context: &ns,
-            generic_params: &class_data.generic_params,
-            bounds: crate::lower_type_expr::class_generic_param_bounds(db, class_loc),
-            self_ty: None,
-        };
-        let mut diags = Vec::new();
-        let mut fields = Vec::new();
-        for field in &class_data.fields {
-            if let Some(type_ref) = field.type_ref {
-                let field_ty = crate::lower_type_expr::lower_type_ref(
-                    &class_data.type_refs,
-                    type_ref,
-                    &field_scope,
-                    &mut diags,
-                );
-                fields.push((field.name.clone(), field_ty));
-            } else {
-                fields.push((
-                    field.name.clone(),
-                    Ty::Unknown {
-                        attr: TyAttr::default(),
-                    },
-                ));
-            }
-        }
-        fields
     }
 
     fn lookup_own_class_method(

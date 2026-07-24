@@ -2,19 +2,32 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === MIR2 ===
-fn user.bare_and_pinned() -> int {
+fn user.web_search(q: string) -> Doc[] {
     // Locals:
-    let _0: int // _0 // return
-    let _1: baml.AnyFunction<Returns = string | Doc[], Throws = ToolError> // g
+    let _0: Doc[] // _0 // return
+    let _1: string // q // param
+    let _2: bool
+    let _3: ToolError
+    let _4: Doc
 
     bb0: {
-        _1 = const fn user.web_search;
-        _0 = const 0_i64;
-        goto -> bb1;
+        _2 = copy _1 == const "boom";
+        branch copy _2 -> [bb3, bb1];
     }
 
     bb1: {
+        _4 = user.Doc { copy _1 };
+        _0 = [copy _4]: Doc[];
+        goto -> bb2;
+    }
+
+    bb2: {
         return;
+    }
+
+    bb3: {
+        _3 = user.ToolError { const "no results" };
+        throw copy _3;
     }
 }
 
@@ -24,6 +37,22 @@ fn user.current_time() -> string {
 
     bb0: {
         _0 = const "now";
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.bare_and_pinned() -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: baml.AnyFunction<Returns = string | Doc[], Throws = ToolError> // g
+
+    bb0: {
+        _1 = const fn user.web_search;
+        _0 = const 0_i64;
         goto -> bb1;
     }
 
@@ -303,34 +332,5 @@ fn user.typed_dispatch(name: string, args: map<string, unknown>) -> string | Doc
 
     bb13: {
         return;
-    }
-}
-
-fn user.web_search(q: string) -> Doc[] {
-    // Locals:
-    let _0: Doc[] // _0 // return
-    let _1: string // q // param
-    let _2: bool
-    let _3: ToolError
-    let _4: Doc
-
-    bb0: {
-        _2 = copy _1 == const "boom";
-        branch copy _2 -> [bb3, bb1];
-    }
-
-    bb1: {
-        _4 = user.Doc { copy _1 };
-        _0 = [copy _4]: Doc[];
-        goto -> bb2;
-    }
-
-    bb2: {
-        return;
-    }
-
-    bb3: {
-        _3 = user.ToolError { const "no results" };
-        throw copy _3;
     }
 }

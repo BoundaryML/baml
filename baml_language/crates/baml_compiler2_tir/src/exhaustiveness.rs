@@ -146,9 +146,6 @@ impl SliceShape {
             SliceShape::Variable { prefix, suffix } => prefix + suffix,
         }
     }
-    pub fn is_variable(&self) -> bool {
-        matches!(self, SliceShape::Variable { .. })
-    }
 }
 
 impl Ctor {

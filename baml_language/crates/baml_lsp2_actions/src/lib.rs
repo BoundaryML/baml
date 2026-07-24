@@ -12,8 +12,8 @@
 //! ## Phase 2
 //!
 //! - `file_outline(db, file) -> &Vec<OutlineItem>` — Salsa tracked query that
-//!   builds a hierarchical symbol tree from `file_symbol_contributions` and
-//!   `file_item_tree`. Cached per file revision.
+//!   builds a hierarchical symbol tree from `file_symbol_contributions` and the
+//!   item-data firewall queries. Cached per file revision.
 //! - `search_symbols(db, files, query) -> Vec<SymbolInfo>` — regular function
 //!   that iterates files calling `file_outline` and filters by query string.
 //!   Used for `workspace/symbol` and as a helper for `textDocument/documentSymbol`.

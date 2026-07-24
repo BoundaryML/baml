@@ -127,11 +127,6 @@ impl RuntimeTy {
         )
     }
 
-    /// `Class(name, args)` under the implicit `user` package.
-    pub fn user_class_with_args(name: &str, args: Vec<RuntimeTy>) -> Self {
-        RuntimeTy::Class(TypeName::local(Name::new(name)), args, TyAttr::default())
-    }
-
     /// `unknown` (the top type) with default attributes.
     pub fn unknown() -> Self {
         RuntimeTy::BuiltinUnknown {
@@ -172,16 +167,6 @@ impl RuntimeTy {
         matches!(self, RuntimeTy::Union(members, _) if members.iter().any(RuntimeTy::is_null))
     }
 
-    /// Check if this is the void type.
-    pub fn is_void(&self) -> bool {
-        matches!(self, RuntimeTy::Void { .. })
-    }
-
-    /// Check if this is a primitive type (including literals of primitive types).
-    pub fn is_primitive(&self) -> bool {
-        self.as_ty().is_primitive()
-    }
-
     // --- Transforms ---
 
     /// Remove `null` from a nullable union, collapsing the result. The inverse
@@ -213,21 +198,6 @@ impl RuntimeTy {
     // form: they need nominal facts, so callers go through
     // [`crate::normalize`]'s `TypeContext` entry points with the richest context
     // the site can reach.)
-
-    /// User-facing rendering — see [`Ty::render_user_facing`].
-    pub fn render_user_facing(&self) -> String {
-        self.as_ty().render_user_facing()
-    }
-
-    /// Canonical structural rendering — see [`Ty::render_canonical`].
-    pub fn render_canonical(&self) -> String {
-        self.as_ty().render_canonical()
-    }
-
-    /// Render with a custom strategy — see [`Ty::render_with`].
-    pub fn render_with(&self, s: &dyn crate::TyRenderStrategy) -> String {
-        self.as_ty().render_with(s)
-    }
 }
 
 impl std::fmt::Display for RuntimeTy {

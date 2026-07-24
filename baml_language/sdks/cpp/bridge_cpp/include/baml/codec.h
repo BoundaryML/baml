@@ -38,10 +38,37 @@ namespace detail {
               ", got " + arm_name(got.value_case()));
 }
 
+inline pb::BamlTy primitive_baml_ty(pb::BamlTyPrimitiveKind kind) {
+  pb::BamlTy ty;
+  ty.mutable_primitive()->set_kind(kind);
+  return ty;
+}
+
+inline void annotate_selected_type(pb::InboundValue& value,
+                                   const pb::BamlTy& selected_type) {
+  if (value.has_value_type()) return;
+  if (selected_type.ty_case() == pb::BamlTy::kUnion ||
+      selected_type.ty_case() == pb::BamlTy::kOptional) {
+    return;
+  }
+  value.mutable_value_type()->CopyFrom(selected_type);
+}
+
+inline bool selected_type_matches(const pb::BamlTy& expected,
+                                  const pb::BamlTy& selected) {
+  if (expected.SerializeAsString() == selected.SerializeAsString()) return true;
+  return selected.ty_case() == pb::BamlTy::kOptional &&
+         selected.optional().has_inner() &&
+         selected_type_matches(expected, selected.optional().inner());
+}
+
 }  // namespace detail
 
 template <>
 struct codec<int64_t> {
+  static detail::pb::BamlTy baml_ty() {
+    return detail::primitive_baml_ty(detail::pb::BAML_TY_PRIMITIVE_INT);
+  }
   static void encode(detail::pb::InboundValue& value_msg, int64_t v) {
     value_msg.set_int_value(v);
   }
@@ -61,6 +88,9 @@ struct codec<int64_t> {
 
 template <>
 struct codec<double> {
+  static detail::pb::BamlTy baml_ty() {
+    return detail::primitive_baml_ty(detail::pb::BAML_TY_PRIMITIVE_FLOAT);
+  }
   static void encode(detail::pb::InboundValue& value_msg, double v) {
     value_msg.set_float_value(v);
   }
@@ -94,6 +124,9 @@ struct codec<double> {
 
 template <>
 struct codec<bool> {
+  static detail::pb::BamlTy baml_ty() {
+    return detail::primitive_baml_ty(detail::pb::BAML_TY_PRIMITIVE_BOOL);
+  }
   static void encode(detail::pb::InboundValue& value_msg, bool v) {
     value_msg.set_bool_value(v);
   }
@@ -113,6 +146,9 @@ struct codec<bool> {
 
 template <>
 struct codec<std::string> {
+  static detail::pb::BamlTy baml_ty() {
+    return detail::primitive_baml_ty(detail::pb::BAML_TY_PRIMITIVE_STRING);
+  }
   static void encode(detail::pb::InboundValue& value_msg,
                      const std::string& v) {
     value_msg.set_string_value(v);
@@ -133,6 +169,9 @@ struct codec<std::string> {
 
 template <>
 struct codec<std::vector<uint8_t>> {
+  static detail::pb::BamlTy baml_ty() {
+    return detail::primitive_baml_ty(detail::pb::BAML_TY_PRIMITIVE_BYTES);
+  }
   static void encode(detail::pb::InboundValue& value_msg,
                      const std::vector<uint8_t>& v) {
     value_msg.set_uint8array_value(
@@ -150,6 +189,9 @@ struct codec<std::vector<uint8_t>> {
 
 template <>
 struct codec<std::monostate> {
+  static detail::pb::BamlTy baml_ty() {
+    return detail::primitive_baml_ty(detail::pb::BAML_TY_PRIMITIVE_NULL);
+  }
   static void encode(detail::pb::InboundValue&, std::monostate) {
     // BAML null = absent InboundValue oneof: set nothing.
   }
@@ -167,6 +209,7 @@ struct codec<std::monostate> {
 // type-recursion cycles.
 template <typename T>
 struct codec<box<T>> {
+  static detail::pb::BamlTy baml_ty() { return codec<T>::baml_ty(); }
   static void encode(detail::pb::InboundValue& value_msg, const box<T>& v) {
     codec<T>::encode(value_msg, *v);
   }
@@ -177,6 +220,11 @@ struct codec<box<T>> {
 
 template <typename T>
 struct codec<optional_box<T>> {
+  static detail::pb::BamlTy baml_ty() {
+    detail::pb::BamlTy ty;
+    ty.mutable_optional()->mutable_inner()->CopyFrom(codec<T>::baml_ty());
+    return ty;
+  }
   static void encode(detail::pb::InboundValue& value_msg,
                      const optional_box<T>& v) {
     if (v.has_value()) {
@@ -190,12 +238,17 @@ struct codec<optional_box<T>> {
         v.value_case() == detail::pb::BamlOutboundValue::VALUE_NOT_SET) {
       return optional_box<T>();
     }
-    return optional_box<T>(codec<T>::decode(v));
+    return optional_box<T>(codec<T>::decode(raw));
   }
 };
 
 template <typename T>
 struct codec<std::optional<T>> {
+  static detail::pb::BamlTy baml_ty() {
+    detail::pb::BamlTy ty;
+    ty.mutable_optional()->mutable_inner()->CopyFrom(codec<T>::baml_ty());
+    return ty;
+  }
   static void encode(detail::pb::InboundValue& value_msg,
                      const std::optional<T>& v) {
     if (v.has_value()) {
@@ -209,18 +262,24 @@ struct codec<std::optional<T>> {
         v.value_case() == detail::pb::BamlOutboundValue::VALUE_NOT_SET) {
       return std::nullopt;
     }
-    return codec<T>::decode(v);
+    return codec<T>::decode(raw);
   }
 };
 
 template <typename T>
 struct codec<std::vector<T>> {
+  static detail::pb::BamlTy baml_ty() {
+    detail::pb::BamlTy ty;
+    ty.mutable_list()->mutable_item()->CopyFrom(codec<T>::baml_ty());
+    return ty;
+  }
   static void encode(detail::pb::InboundValue& value_msg,
                      const std::vector<T>& v) {
     detail::pb::InboundListValue* list = value_msg.mutable_list_value();
     for (const T& item : v) {
       codec<T>::encode(*list->add_values(), item);
     }
+    detail::annotate_selected_type(value_msg, baml_ty());
   }
   static std::vector<T> decode(const detail::pb::BamlOutboundValue& raw) {
     const auto& v = detail::unwrap(raw);
@@ -238,6 +297,13 @@ struct codec<std::vector<T>> {
 
 template <typename T>
 struct codec<std::unordered_map<std::string, T>> {
+  static detail::pb::BamlTy baml_ty() {
+    detail::pb::BamlTy ty;
+    auto* map = ty.mutable_map();
+    map->mutable_key()->CopyFrom(codec<std::string>::baml_ty());
+    map->mutable_value()->CopyFrom(codec<T>::baml_ty());
+    return ty;
+  }
   static void encode(detail::pb::InboundValue& value_msg,
                      const std::unordered_map<std::string, T>& v) {
     detail::pb::InboundMapValue* map = value_msg.mutable_map_value();
@@ -246,6 +312,7 @@ struct codec<std::unordered_map<std::string, T>> {
       e->set_string_key(entry.first);
       codec<T>::encode(*e->mutable_value(), entry.second);
     }
+    detail::annotate_selected_type(value_msg, baml_ty());
   }
   static std::unordered_map<std::string, T> decode(
       const detail::pb::BamlOutboundValue& raw) {
@@ -271,6 +338,21 @@ struct codec<lit<Vs...>> {
   using L = lit<Vs...>;
   static constexpr detail::lit_shape shape =
       detail::lit_shape_of<decltype(Vs)...>();
+
+  static detail::pb::BamlTy baml_ty() {
+    detail::pb::BamlTy ty;
+    auto* literal = ty.mutable_literal();
+    if constexpr (shape == detail::lit_shape::string) {
+      literal->set_string_value(std::string(L::value));
+    } else if constexpr (shape == detail::lit_shape::integer) {
+      literal->set_int_value(L::value);
+    } else if constexpr (shape == detail::lit_shape::boolean) {
+      literal->set_bool_value(L::value);
+    } else {
+      return codec<std::decay_t<decltype(L::value)>>::baml_ty();
+    }
+    return ty;
+  }
 
   static void encode(detail::pb::InboundValue& value_msg, const L&) {
     if constexpr (shape == detail::lit_shape::string) {
@@ -333,16 +415,41 @@ template <class... Ts>
 struct codec<std::variant<Ts...>> {
   using V = std::variant<Ts...>;
 
+  static detail::pb::BamlTy baml_ty() {
+    detail::pb::BamlTy ty;
+    auto* union_ty = ty.mutable_union_();
+    (union_ty->add_options()->CopyFrom(codec<Ts>::baml_ty()), ...);
+    return ty;
+  }
+
   static void encode(detail::pb::InboundValue& value_msg, const V& v) {
     std::visit(
         [&value_msg](const auto& alt) {
           using T = std::decay_t<decltype(alt)>;
           codec<T>::encode(value_msg, alt);
+          detail::annotate_selected_type(value_msg, codec<T>::baml_ty());
         },
         v);
   }
 
   static V decode(const detail::pb::BamlOutboundValue& raw) {
+    if (raw.value_case() == detail::pb::BamlOutboundValue::kUnionVariantValue) {
+      const auto& selected = raw.union_variant_value();
+      if (selected.has_selected_option_index()) {
+        if (!selected.has_self_type() ||
+            selected.self_type().ty_case() != detail::pb::BamlTy::kUnion) {
+          throw error(
+              "BAML decode error: indexed union has no union self_type");
+        }
+        const auto& options = selected.self_type().union_().options();
+        const auto index = selected.selected_option_index();
+        if (index >= static_cast<uint32_t>(options.size())) {
+          throw error(
+              "BAML decode error: union selected option index is out of range");
+        }
+        return decode_selected(selected.value(), options.Get(index));
+      }
+    }
     const auto& v = detail::unwrap(raw);
     std::optional<V> out;
     const bool lit = (try_arm<Ts>(v, out, pass::literal) || ...);
@@ -360,6 +467,21 @@ struct codec<std::variant<Ts...>> {
 
  private:
   enum class pass { literal, strict, lenient };
+
+  template <std::size_t I = 0>
+  static V decode_selected(const detail::pb::BamlOutboundValue& value,
+                           const detail::pb::BamlTy& selected_type) {
+    if constexpr (I < std::variant_size_v<V>) {
+      using T = std::variant_alternative_t<I, V>;
+      if (detail::selected_type_matches(codec<T>::baml_ty(), selected_type)) {
+        return V(std::in_place_index<I>, codec<T>::decode(value));
+      }
+      return decode_selected<I + 1>(value, selected_type);
+    }
+    throw error(
+        "BAML decode error: selected union type is not representable by the "
+        "generated C++ union");
+  }
 
   static bool is_int_arm(const detail::pb::BamlOutboundValue& v) {
     if (v.value_case() == detail::pb::BamlOutboundValue::kIntValue) {

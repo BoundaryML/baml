@@ -6,9 +6,9 @@
 // trailing `null` arm surfacing as `Option<..>` around the enum. Python
 // passes and compares bare arm values; Rust wraps both sides in the enum.
 use baml_sdk::unions::{
-    IntOrString, T, TOrString, UnionContainer, round_trip_dedup, round_trip_null_to_end,
-    round_trip_optional_plus_null, round_trip_singleton_unwrap, round_trip_t,
-    round_trip_union_container,
+    IntOrString, StringListOrIntList, T, TOrString, UnionContainer, round_trip_dedup,
+    round_trip_null_to_end, round_trip_optional_plus_null, round_trip_singleton_unwrap,
+    round_trip_str_or_int_list, round_trip_t, round_trip_union_container,
 };
 
 #[test]
@@ -53,6 +53,18 @@ fn test_round_trip_optional_plus_null() {
         Some(TOrString::String("s".to_string()))
     );
     assert_eq!(round_trip_optional_plus_null(None).unwrap(), None);
+}
+
+#[test]
+fn test_round_trip_str_or_int_list() {
+    for value in [
+        StringListOrIntList::StringList(vec!["hello".to_string()]),
+        StringListOrIntList::IntList(vec![1, 2]),
+        StringListOrIntList::StringList(vec![]),
+        StringListOrIntList::IntList(vec![]),
+    ] {
+        assert_eq!(round_trip_str_or_int_list(value.clone()).unwrap(), value);
+    }
 }
 
 #[test]

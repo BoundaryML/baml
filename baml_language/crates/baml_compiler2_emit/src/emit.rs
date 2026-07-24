@@ -2057,6 +2057,22 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
     // Terminator Emission
     // ========================================================================
 
+    fn emit_narrow_bind(&mut self, ty_template: &TyTemplate, destination: Local) {
+        unwrap_infallible(PullSink::is_type(self, ty_template));
+        let last = self
+            .bytecode
+            .instructions
+            .last_mut()
+            .expect("is_type emits bytecode");
+        if let Instruction::IsType(ty) = *last {
+            debug_assert!(!self.captured_locals.contains(&destination));
+            *last = Instruction::NarrowBind {
+                ty,
+                destination: self.local_slots[&destination],
+            };
+        }
+    }
+
     /// Emit a terminator.
     fn emit_terminator(&mut self, term: &Terminator) {
         match term {
@@ -2077,6 +2093,21 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                 let else_jump = self.emit(Instruction::PopJumpIfFalse(0));
                 self.pending_jumps.push((else_jump, resolved_else));
                 // Jump to then_block (may be elided if it's next).
+                self.emit_jump_unless_fallthrough(*then_block);
+            }
+
+            Terminator::NarrowBind {
+                source,
+                ty_template,
+                destination,
+                then_block,
+                else_block,
+            } => {
+                self.emit_operand_pull(source);
+                self.emit_narrow_bind(ty_template, *destination);
+                let resolved_else = self.resolve_pending_target(*else_block);
+                let else_jump = self.emit(Instruction::PopJumpIfFalse(0));
+                self.pending_jumps.push((else_jump, resolved_else));
                 self.emit_jump_unless_fallthrough(*then_block);
             }
 

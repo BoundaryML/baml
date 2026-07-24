@@ -1684,27 +1684,6 @@ impl BexVm {
         roots
     }
 
-    /// Update heap pointers held by frames according to a GC forwarding map.
-    ///
-    /// Must be called after a GC cycle to keep frame pointers valid.
-    pub fn apply_frame_forwarding(&mut self, forwarding: &HashMap<HeapPtr, HeapPtr>) {
-        for frame in &mut self.frames {
-            match frame {
-                Frame::Bytecode(bf) => {
-                    if let Some(&new_ptr) = forwarding.get(&bf.function) {
-                        bf.function = new_ptr;
-                    }
-                }
-                Frame::Native(nf) => {
-                    if let Some(&new_ptr) = forwarding.get(&nf.function) {
-                        nf.function = new_ptr;
-                    }
-                    nf.continuation.apply_forwarding(forwarding);
-                }
-            }
-        }
-    }
-
     /// Convert an `ObjectIndex` to `HeapPtr` (for compile-time objects).
     ///
     /// Used during the transition from index-based to pointer-based access.
@@ -1783,6 +1762,66 @@ impl BexVm {
     /// Get type of a value.
     pub fn type_of(&self, value: &Value) -> Type {
         Type::of(value, |ptr| ObjectType::of(self.get_object(ptr)))
+    }
+
+    fn value_matches_type_constant(
+        &self,
+        frame_idx: usize,
+        value: Value,
+        raw_const: &ConstValue,
+        resolved_const: Value,
+    ) -> bool {
+        let frame_type_args = match &self.frames[frame_idx] {
+            Frame::Bytecode(frame) => frame.type_args.as_slice(),
+            Frame::Native(_) => &[],
+        };
+        match raw_const {
+            ConstValue::Type(template) => {
+                crate::type_match::value_matches_template(self, value, template, frame_type_args)
+            }
+            ConstValue::ClassWithTypeArgs {
+                class_obj,
+                type_args_templates,
+            } => {
+                let class_ptr = self.idx_to_ptr(*class_obj);
+                match value.as_object_ptr() {
+                    Some(val_ptr) => match self.get_object(val_ptr) {
+                        Object::Instance(inst) if inst.class == class_ptr => {
+                            type_args_templates.len() == inst.class_type_args.len()
+                                && type_args_templates.iter().zip(&inst.class_type_args).all(
+                                    |(template, actual)| {
+                                        crate::type_match::template_relates(
+                                            self,
+                                            template,
+                                            frame_type_args,
+                                            actual.as_ty(),
+                                            crate::type_match::Variance::Invariant,
+                                        )
+                                    },
+                                )
+                        }
+                        _ => false,
+                    },
+                    None => false,
+                }
+            }
+            _ => {
+                if let Some(expected_ptr) = resolved_const.as_object_ptr() {
+                    match value.as_object_ptr() {
+                        Some(val_ptr) => match self.get_object(val_ptr) {
+                            Object::Instance(instance) => instance.class == expected_ptr,
+                            Object::Variant(variant) => variant.enm == expected_ptr,
+                            _ => false,
+                        },
+                        None => false,
+                    }
+                } else if let Some(tag) = resolved_const.as_int() {
+                    value_type_tag(value) == tag
+                } else {
+                    false
+                }
+            }
+        }
     }
 
     /// A callable value's [`CallableSignature`] (BEP-062 `reflect`), or `None`
@@ -2004,19 +2043,6 @@ impl BexVm {
         })
     }
 
-    /// Get mutable string from a Value.
-    ///
-    /// Strings are immutable at the current BAML language surface. Do not use
-    /// this for spawned user-code mutation unless strings gain the same
-    /// object-level synchronization as containers.
-    pub fn as_string_mut(
-        &mut self,
-        value: &Value,
-    ) -> Result<&mut bex_vm_types::BexStr, VmInternalError> {
-        let ptr = self.as_object_ptr(*value, ObjectType::String)?;
-        self.get_object_mut(ptr).as_string_mut()
-    }
-
     /// Get array from a Value. Acquires the container's mutex; the
     /// returned guard derefs to `&[Value]` and releases the lock on drop.
     pub fn as_array(
@@ -2168,8 +2194,9 @@ impl BexVm {
 
     /// Bootstraps the VM preparing the given callable to run.
     ///
-    /// `function` may point to either an [`Object::Function`] or an
-    /// [`Object::Closure`]. Closure entry points are used by BEP-034
+    /// `function` may point to an [`Object::Function`], [`Object::Closure`],
+    /// [`Object::GenericFunction`], or [`Object::HostClosure`]. Closure entry
+    /// points are used by BEP-034
     /// `spawn { ... }`: the compiler lowers the body to a lambda, wraps it
     /// in a closure that carries the captured environment, then hands the
     /// closure pointer to a fresh `BexThread` which calls `set_entry_point`.
@@ -2185,7 +2212,8 @@ impl BexVm {
             Object::Function(_) => vec![],
             Object::Closure(closure) => closure.captured_type_args.to_vec(),
             Object::GenericFunction(gf) => gf.type_args.to_vec(),
-            other => panic!("expect function or closure as entry point, got {other:?}"),
+            Object::HostClosure(_) => vec![],
+            other => panic!("expect callable as entry point, got {other:?}"),
         };
         // The captured/specialized type args are positional (De Bruijn order);
         // pair each with the callee's generic-param name so they round-trip
@@ -2234,9 +2262,12 @@ impl BexVm {
         debug_assert!(
             matches!(
                 self.get_object(function),
-                Object::Function(_) | Object::Closure(_) | Object::GenericFunction(_)
+                Object::Function(_)
+                    | Object::Closure(_)
+                    | Object::GenericFunction(_)
+                    | Object::HostClosure(_)
             ),
-            "expect function or closure as entry point, got {:?}",
+            "expect callable as entry point, got {:?}",
             self.get_object(function)
         );
 
@@ -2244,6 +2275,16 @@ impl BexVm {
         // callee's generic params before seeding the frame.
         let param_names = self.entry_point_generic_param_names(function);
         let type_args = lower_named_type_args(&param_names, type_args);
+
+        // Host closures have no backing `Object::Function`, so enter them
+        // through a tiny `CALL_INDIRECT; RETURN` bytecode wrapper. This is the
+        // same dispatch path an ordinary BAML expression uses for a host
+        // callable and therefore yields `BamlHostCallHostValue` to the engine.
+        if matches!(self.get_object(function), Object::HostClosure(_)) {
+            debug_assert!(type_args.is_empty(), "host closures have no type arguments");
+            self.push_host_closure_trampoline_frame(function, args);
+            return;
+        }
 
         // Normalize a `GenericFunction` entry point to its concrete inner
         // function (`dispatch_ptr`) and the stored specialization
@@ -2443,19 +2484,81 @@ impl BexVm {
         }));
     }
 
-    /// Restores the VM state and prepares it for the next execution.
-    ///
-    /// This is used to clear the stack and frames after execution.
-    pub fn finalize(&mut self) {
-        // If the VM returns correctly with VmExecState::Complete, the eval
-        // stack and call stack should be empty.
-        self.stack.clear();
-        self.frames.clear();
-        self.pending_call_captures.clear();
-        self.seen_throw_values.clear();
-        self.thrown_value_causes.clear();
-        self.pending_sysop_call_id = None;
-        self.pending_sysop_capture_mask = VmCaptureMask::disabled();
+    /// Enter a host-owned callable as a VM root by reproducing the normal
+    /// indirect-call stack shape: arguments first, callable on top. The
+    /// synthetic wrapper gives the yielded host sys-op a bytecode frame to
+    /// resume into and a normal `Return` path after the host result arrives.
+    fn push_host_closure_trampoline_frame(&mut self, closure: HeapPtr, args: &[Value]) {
+        let (arity, return_type, throws_type) = match self.get_object(closure) {
+            Object::HostClosure(hc) => {
+                let throws_type = match &*hc.throws_ty {
+                    baml_type::RealizedTy::Never { .. } | baml_type::RealizedTy::Void { .. } => {
+                        None
+                    }
+                    ty => Some(baml_type::RuntimeTy::from(ty.clone())),
+                };
+                (
+                    hc.arity,
+                    baml_type::RuntimeTy::from((*hc.ret_ty).clone()),
+                    throws_type,
+                )
+            }
+            other => unreachable!("expect host closure as entry point, got {other:?}"),
+        };
+        debug_assert_eq!(
+            args.len(),
+            arity,
+            "host closure entry point received the wrong number of arguments"
+        );
+
+        self.pending_call_type_args.clear();
+        self.stack.extend(args.iter().copied());
+        self.stack.push(Value::object(closure));
+
+        let mut bytecode = bytecode::Bytecode {
+            instructions: vec![Instruction::CallIndirect, Instruction::Return],
+            ..bytecode::Bytecode::default()
+        };
+        bytecode.compact = Some(bytecode.lower_to_compact());
+
+        let display_return_type = return_type.to_string();
+        let entry_function = Function {
+            name: "$entry::<host-callable>".to_string(),
+            source_file: String::new(),
+            docstring: None,
+            declared_name: None,
+            arity: 0,
+            real_local_count: 0,
+            bytecode,
+            kind: FunctionKind::Bytecode,
+            local_names: Vec::new(),
+            debug_locals: Vec::new(),
+            span: baml_type::Span::fake(),
+            return_type,
+            param_names: Vec::new(),
+            param_types: Vec::new(),
+            param_has_default: Vec::new(),
+            display_type_params: Vec::new(),
+            display_param_types: Vec::new(),
+            display_return_type,
+            throws_type,
+            origin: FunctionOrigin::Internal,
+            body_meta: None,
+            capture: bex_vm_types::FunctionCaptureProps::disabled(),
+            function_id: 0,
+        };
+        let entry_ptr = self.tlab.alloc(Object::Function(Box::new(entry_function)));
+        let (call_id, parent_call_id) = self.prof_enter_call(0, None);
+        self.frames.push(Frame::Bytecode(BytecodeFrame {
+            function: entry_ptr,
+            instruction_ptr: 0,
+            locals_offset: StackIndex::from_raw(0),
+            type_args: Vec::new(),
+            faulting_pc: 0,
+            call_id,
+            parent_call_id,
+            capture_mask: VmCaptureMask::disabled(),
+        }));
     }
 
     /// Returns a reference to the unscheduled future at `future_ptr`.
@@ -2798,22 +2901,6 @@ impl BexVm {
             });
         }
         Ok(Value::object(self.tlab.alloc(Object::Bigint(arc))))
-    }
-
-    /// Get collector ref from a Value.
-    pub fn as_collector(
-        &self,
-        value: &Value,
-    ) -> Result<&bex_vm_types::CollectorRef, VmInternalError> {
-        let index = self.as_object_ptr(*value, ObjectType::Collector)?;
-        let obj = self.get_object(index);
-        match obj {
-            Object::Collector(c) => Ok(c),
-            _ => Err(VmInternalError::TypeError {
-                expected: ObjectType::Collector.into(),
-                got: ObjectType::of(obj).into(),
-            }),
-        }
     }
 
     /// Downcast a `Value` carrying a heap pointer to `Object::RustData` to `&T`.
@@ -4987,12 +5074,6 @@ impl BexVm {
         self.try_unwind_exception(&mut frame_idx, &mut function, exception_value, false)
     }
 
-    /// Number of live frames on the VM call stack.
-    #[must_use]
-    pub fn frame_count(&self) -> usize {
-        self.frames.len()
-    }
-
     #[allow(clippy::inline_always)] // Measured: 20-40% speedup from inlining the dispatch loop
     #[inline(always)]
     fn exec_inner(&mut self) -> Result<VmExecState, VmError> {
@@ -5533,7 +5614,7 @@ impl BexVm {
         let op: OpCode = unsafe { std::mem::transmute(op_byte) };
 
         // Tagged-int comparisons skip untagging by comparing bits directly
-        // (see `Value::tagged_int_add` for the encoding rationale; the
+        // (see `Value::tagged_int_add_checked` for the encoding rationale; the
         // shift-left-by-1 preserves signed ordering between operands that
         // share the same tag bit). Float comparisons unwrap two heap-boxed
         // floats and apply the operator; both pops are guaranteed Float by
@@ -6631,102 +6712,38 @@ impl BexVm {
                 OpCode::IsType => {
                     let const_idx = { read_u32_unchecked(code, pc) as usize };
                     let value = self.stack.ensure_pop();
-                    // Inspect the raw constant first to handle ClassWithTypeArgs
-                    // (parametric class identity check). Other kinds fall through
-                    // to the pre-resolved Object/Int path.
                     let raw_const = &function.bytecode.constants[const_idx];
-                    let result = match raw_const {
-                        // Structural type test against a full `TyTemplate` (a
-                        // container element type, a bare frame ref, a `Wildcard`
-                        // hole, …), matched with the canonical type algebra —
-                        // emitted for element-discriminating containers, unions,
-                        // and frame refs (see the emitter's `is_type`).
-                        ConstValue::Type(template) => {
-                            let frame_type_args =
-                                if let Frame::Bytecode(bf) = &self.frames[*frame_idx] {
-                                    bf.type_args.clone()
-                                } else {
-                                    vec![]
-                                };
-                            crate::type_match::value_matches_template(
-                                self,
-                                value,
-                                template,
-                                &frame_type_args,
-                            )
-                        }
-                        ConstValue::ClassWithTypeArgs {
-                            class_obj,
-                            type_args_templates,
-                        } => {
-                            let class_ptr = self.idx_to_ptr(*class_obj);
-                            match value.as_object_ptr() {
-                                Some(val_ptr) => match self.get_object(val_ptr) {
-                                    Object::Instance(inst) if inst.class == class_ptr => {
-                                        let frame_type_args =
-                                            if let Frame::Bytecode(bf) = &self.frames[*frame_idx] {
-                                                bf.type_args.clone()
-                                            } else {
-                                                vec![]
-                                            };
-                                        // Class-pointer identity (above) fixes the
-                                        // class; each type arg is then related
-                                        // *invariantly* through the canonical
-                                        // algebra (BAML generics are invariant; a
-                                        // `Wildcard` arg matches any). No covariance
-                                        // is needed for a reified frame type-param
-                                        // that inference widened to a union (`T =
-                                        // Shape | Sq` vs a value's narrower `Shape`):
-                                        // the algebra knows `Sq <: Shape` and absorbs
-                                        // `Shape | Sq == Shape`, so the invariant
-                                        // relation already holds — the retired guard
-                                        // needed a covariant band-aid only because it
-                                        // could not see that membership.
-                                        type_args_templates.len() == inst.class_type_args.len()
-                                            && type_args_templates
-                                                .iter()
-                                                .zip(&inst.class_type_args)
-                                                .all(|(template, actual)| {
-                                                    crate::type_match::template_relates(
-                                                        self,
-                                                        template,
-                                                        &frame_type_args,
-                                                        actual.as_ty(),
-                                                        crate::type_match::Variance::Invariant,
-                                                    )
-                                                })
-                                    }
-                                    _ => false,
-                                },
-                                None => false,
-                            }
-                        }
-                        _ => {
-                            let expected = &function.bytecode.resolved_constants[const_idx];
-                            if let Some(expected_ptr) = expected.as_object_ptr() {
-                                // Class- or enum-pointer identity: `is Foo` checks
-                                // the instance's class object; `is Color` checks the
-                                // variant's enum object. Enum-type tests dispatch on
-                                // enum identity because the shared `ENUM` type tag
-                                // cannot tell `Color` from `Status`.
-                                match value.as_object_ptr() {
-                                    Some(val_ptr) => match self.get_object(val_ptr) {
-                                        Object::Instance(instance) => {
-                                            instance.class == expected_ptr
-                                        }
-                                        Object::Variant(variant) => variant.enm == expected_ptr,
-                                        _ => false,
-                                    },
-                                    None => false,
-                                }
-                            } else if let Some(tag) = expected.as_int() {
-                                value_type_tag(value) == tag
-                            } else {
-                                false
-                            }
-                        }
-                    };
+                    let resolved_const = function.bytecode.resolved_constants[const_idx];
+                    let result = self.value_matches_type_constant(
+                        *frame_idx,
+                        value,
+                        raw_const,
+                        resolved_const,
+                    );
                     self.stack.push(Value::bool(result));
+                }
+
+                OpCode::NarrowBind => {
+                    let const_idx = { read_u32_unchecked(code, pc) as usize };
+                    let destination = { read_u32_unchecked(code, pc) as usize };
+                    let value = self.stack.ensure_pop();
+                    let raw_const = &function.bytecode.constants[const_idx];
+                    let resolved_const = function.bytecode.resolved_constants[const_idx];
+                    let matched = self.value_matches_type_constant(
+                        *frame_idx,
+                        value,
+                        raw_const,
+                        resolved_const,
+                    );
+                    if matched {
+                        let Frame::Bytecode(bf) = &self.frames[*frame_idx] else {
+                            unreachable!()
+                        };
+                        let destination =
+                            Self::local_slot_stack_index(bf.locals_offset, destination);
+                        self.stack[destination] = value;
+                    }
+                    self.stack.push(Value::bool(matched));
                 }
 
                 // ── DenseTag ──────────────────────────────────────────────────

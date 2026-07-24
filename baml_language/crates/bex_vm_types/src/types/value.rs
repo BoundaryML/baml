@@ -109,46 +109,17 @@ impl Value {
     // doesn't affect the comparison). Bits interpreted as i64 yield the
     // signed ordering of the underlying i63 values.
 
-    /// Sum of two `Int`-tagged Values, computed without untagging.
-    ///
-    /// # Safety contract
-    ///
-    /// Caller must guarantee both inputs are `Int`-tagged (caller has
-    /// already type-checked, e.g. via the `OpCode::AddInt` specialization).
-    /// Mis-tagged inputs produce nonsense results; the type system does
-    /// not enforce this — it's a perf shortcut for the hot path.
-    #[inline(always)]
-    pub const fn tagged_int_add(a: Value, b: Value) -> Value {
-        debug_assert!(
-            a.is_int() && b.is_int(),
-            "tagged_int_add: both inputs must be Int"
-        );
-        Value(a.0.wrapping_add(b.0).wrapping_sub(1))
-    }
-
-    /// Difference of two `Int`-tagged Values, computed without untagging.
-    ///
-    /// See [`Value::tagged_int_add`] for the safety contract.
-    #[inline(always)]
-    pub const fn tagged_int_sub(a: Value, b: Value) -> Value {
-        debug_assert!(
-            a.is_int() && b.is_int(),
-            "tagged_int_sub: both inputs must be Int"
-        );
-        Value(a.0.wrapping_sub(b.0).wrapping_add(1))
-    }
-
     /// Sum of two `Int`-tagged Values, or `None` on i63 overflow — computed
     /// without untagging.
     ///
-    /// The result equals [`Value::tagged_int_add`] whenever it is `Some`. The
-    /// overflow test is exact and nearly free: in the tag encoding a value `x`
+    /// When present, the result is the exact tagged sum. The overflow test is
+    /// exact and nearly free: in the tag encoding a value `x`
     /// is stored as `(x << 1) | 1`, so `a + (b - 1)` (the tagged sum, as a
     /// *signed* i64) overflows i64 precisely when `x + y` leaves the i63 range
     /// `[INT_MIN, INT_MAX]`. So the hardware signed-overflow flag of one add is
     /// the i63 range check — no shift-out/range-compare/re-encode needed.
     ///
-    /// Same `Int`-tagged safety contract as [`Value::tagged_int_add`].
+    /// Both inputs must be `Int`-tagged; debug builds assert this contract.
     #[inline(always)]
     pub const fn tagged_int_add_checked(a: Value, b: Value) -> Option<Value> {
         debug_assert!(
@@ -165,8 +136,8 @@ impl Value {
 
     /// Difference of two `Int`-tagged Values, or `None` on i63 overflow.
     ///
-    /// See [`Value::tagged_int_add_checked`]; the result equals
-    /// [`Value::tagged_int_sub`] whenever it is `Some`.
+    /// See [`Value::tagged_int_add_checked`] for the encoding and overflow
+    /// details. When present, the result is the exact tagged difference.
     #[inline(always)]
     pub const fn tagged_int_sub_checked(a: Value, b: Value) -> Option<Value> {
         debug_assert!(
@@ -262,11 +233,6 @@ impl Value {
     #[inline(always)]
     pub const fn is_int(self) -> bool {
         self.0 & 1 != 0
-    }
-
-    #[inline(always)]
-    pub const fn is_bool(self) -> bool {
-        self.0 == Self::FALSE.0 || self.0 == Self::TRUE.0
     }
 
     /// True iff `self` is a non-null heap object pointer.

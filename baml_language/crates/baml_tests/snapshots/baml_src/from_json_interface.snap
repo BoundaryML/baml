@@ -3,52 +3,60 @@ source: crates/baml_tests/tests/baml_src.rs
 ---
 function from_json_interface.$init_test_ns_from_json_interface_from_json_interface(registry: testing.TestCollector) -> null {
     load_var registry
+    load_const "root.from_json_interface"
     load_const "to_dispatches_fromjson_override"
     make_closure .<lambda($init_test_ns_from_json_interface_from_json_interface, 0)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.from_json_interface"
     load_const "to_decodes_non_implementor_structurally"
     make_closure .<lambda($init_test_ns_from_json_interface_from_json_interface, 1)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.from_json_interface"
     load_const "to_decodes_primitive"
     make_closure .<lambda($init_test_ns_from_json_interface_from_json_interface, 2)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.from_json_interface"
     load_const "from_to_roundtrip_with_override"
     make_closure .<lambda($init_test_ns_from_json_interface_from_json_interface, 3)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.from_json_interface"
     load_const "nested_field_override_is_honored"
     make_closure .<lambda($init_test_ns_from_json_interface_from_json_interface, 4)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.from_json_interface"
     load_const "static_from_json_decodes_non_implementor"
     make_closure .<lambda($init_test_ns_from_json_interface_from_json_interface, 5)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.from_json_interface"
     load_const "static_from_json_dispatches_override"
     make_closure .<lambda($init_test_ns_from_json_interface_from_json_interface, 6)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.from_json_interface"
     load_const "static_from_json_threads_generic_type_arg"
     make_closure .<lambda($init_test_ns_from_json_interface_from_json_interface, 7)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_const null
     return

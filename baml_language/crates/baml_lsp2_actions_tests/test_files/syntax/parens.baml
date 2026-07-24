@@ -569,30 +569,12 @@ function foo() -> int {
 //     │
 //     │ Note: Error code: E0010
 // ────╯
-// error: Expected block after for expression, found for
-//     ╭─[ parens.baml:57:4 ]
+// error: Expected ')', found '{'
+//     ╭─[ parens.baml:57:21 ]
 //     │
 //  57 │    for (let a in as {}
-//     │    ─┬─
-//     │     ╰─── Expected block after for expression, found for
-//     │
-//     │ Note: Error code: E0010
-// ────╯
-// error: Expected ')', found for
-//     ╭─[ parens.baml:59:4 ]
-//     │
-//  59 │    for let a in as) {}
-//     │    ─┬─
-//     │     ╰─── Expected ')', found for
-//     │
-//     │ Note: Error code: E0010
-// ────╯
-// error: Expected block after for expression, found for
-//     ╭─[ parens.baml:59:4 ]
-//     │
-//  59 │    for let a in as) {}
-//     │    ─┬─
-//     │     ╰─── Expected block after for expression, found for
+//     │                     ┬
+//     │                     ╰── Expected ')', found '{'
 //     │
 //     │ Note: Error code: E0010
 // ────╯

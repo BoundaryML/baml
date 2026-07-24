@@ -19,6 +19,9 @@ export namespace baml_bridge {
             /** Properties of an InboundValue. */
             interface IInboundValue {
 
+                /** InboundValue valueType */
+                valueType?: (baml_bridge.cffi.v1.IBamlTy|null);
+
                 /** InboundValue stringValue */
                 stringValue?: (string|null);
 
@@ -64,6 +67,9 @@ export namespace baml_bridge {
                  * @param [properties] Properties to set
                  */
                 constructor(properties?: baml_bridge.cffi.v1.IInboundValue);
+
+                /** InboundValue valueType. */
+                public valueType?: (baml_bridge.cffi.v1.IBamlTy|null);
 
                 /** InboundValue stringValue. */
                 public stringValue?: (string|null);
@@ -505,9 +511,6 @@ export namespace baml_bridge {
 
                 /** InboundClassValue fields */
                 fields?: (baml_bridge.cffi.v1.IInboundMapEntry[]|null);
-
-                /** InboundClassValue classTy */
-                classTy?: (baml_bridge.cffi.v1.IBamlTyClass|null);
             }
 
             /** Represents an InboundClassValue. */
@@ -521,9 +524,6 @@ export namespace baml_bridge {
 
                 /** InboundClassValue fields. */
                 public fields: baml_bridge.cffi.v1.IInboundMapEntry[];
-
-                /** InboundClassValue classTy. */
-                public classTy?: (baml_bridge.cffi.v1.IBamlTyClass|null);
 
                 /**
                  * Creates a new InboundClassValue instance using the specified properties.
@@ -5180,6 +5180,9 @@ export namespace baml_bridge {
 
                 /** BamlValueUnionVariant value */
                 value?: (baml_bridge.cffi.v1.IBamlOutboundValue|null);
+
+                /** BamlValueUnionVariant selectedOptionIndex */
+                selectedOptionIndex?: (number|null);
             }
 
             /** Represents a BamlValueUnionVariant. */
@@ -5208,6 +5211,9 @@ export namespace baml_bridge {
 
                 /** BamlValueUnionVariant value. */
                 public value?: (baml_bridge.cffi.v1.IBamlOutboundValue|null);
+
+                /** BamlValueUnionVariant selectedOptionIndex. */
+                public selectedOptionIndex?: (number|null);
 
                 /**
                  * Creates a new BamlValueUnionVariant instance using the specified properties.

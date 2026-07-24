@@ -295,29 +295,6 @@ impl std::fmt::Display for Function {
     }
 }
 
-impl Function {
-    /// Get the source span associated with a bytecode PC.
-    pub fn source_span_for_pc(&self, pc: usize) -> Option<baml_base::Span> {
-        self.bytecode.line_entry_for_pc(pc).map(|entry| entry.span)
-    }
-
-    /// Get named locals whose lexical scope contains the source span at `pc`.
-    pub fn debug_locals_in_scope(&self, pc: usize) -> Vec<&crate::bytecode::DebugLocalScope> {
-        let Some(span) = self.source_span_for_pc(pc) else {
-            return Vec::new();
-        };
-
-        self.debug_locals
-            .iter()
-            .filter(|local| {
-                local.scope_span.file_id == span.file_id
-                    && local.scope_span.range.start() <= span.range.start()
-                    && local.scope_span.range.end() >= span.range.end()
-            })
-            .collect()
-    }
-}
-
 /// A closure: a function object paired with a list of captured variable cells.
 #[derive(Clone, Debug, BorshSerialize, BorshDeserialize)]
 pub struct Closure {

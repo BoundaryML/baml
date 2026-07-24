@@ -8,7 +8,7 @@ use super::support::{make_db, render_tir};
 
 #[test]
 fn explicit_local_id_is_structural_call_metadata() {
-    use baml_compiler2_hir::scope::ScopeKind;
+    use baml_compiler2_ppir::item_data::{file_functions, function_data, function_scope};
     use baml_compiler2_tir::inference::{ParamBinding, infer_scope_types};
 
     let mut db = make_db();
@@ -31,20 +31,11 @@ function main(id: boundary.LocalId) -> int {
         "a trailing LocalId side channel must compile cleanly:\n{rendered}"
     );
 
-    let index = baml_compiler2_ppir::file_semantic_index(&db, file);
-    let main_scope = index
-        .scopes
+    let main_loc = *file_functions(&db, file)
         .iter()
-        .enumerate()
-        .find(|(_, scope)| {
-            scope.kind == ScopeKind::Function
-                && scope
-                    .name
-                    .as_ref()
-                    .is_some_and(|name| name.as_str() == "main")
-        })
-        .map(|(scope_index, _)| index.scope_ids[scope_index])
-        .expect("main function scope");
+        .find(|&&loc| function_data(&db, loc).name.as_str() == "main")
+        .expect("main function");
+    let main_scope = function_scope(&db, main_loc).expect("main function scope");
     let inference = infer_scope_types(&db, main_scope);
     let plans = inference.iter_call_plans().collect::<Vec<_>>();
     assert_eq!(plans.len(), 1, "main contains exactly one call: {rendered}");
@@ -430,6 +421,104 @@ fn unresolved_variable_in_let() {
       !! 30..43: unresolved name: unknown_thing
     }
     ");
+}
+
+#[test]
+fn property_shorthand_suggests_explicit_mapping_for_nearby_variable() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+function build(option: string) -> map<string, string> {
+  { options }
+}
+"#,
+    );
+    let tir = render_tir(&db, file);
+    assert!(
+        tir.contains(
+            "property shorthand `options` requires an in-scope value named `options`. Did you \
+             mean `options: option`?"
+        ),
+        "expected a shorthand-specific near-match diagnostic, got:\n{tir}"
+    );
+    assert!(
+        !tir.contains("unresolved name: options"),
+        "shorthand should not fall back to the generic unresolved-name diagnostic:\n{tir}"
+    );
+}
+
+#[test]
+fn class_property_shorthand_suggests_field_to_variable_mapping() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+class Config { options string }
+function build(option: string) -> Config {
+  Config { option }
+}
+"#,
+    );
+    let tir = render_tir(&db, file);
+    assert!(
+        tir.contains(
+            "class `Config` has no field `option` for property shorthand. Did you mean \
+             `options: option`?"
+        ),
+        "expected an exact-field-name shorthand diagnostic, got:\n{tir}"
+    );
+    assert!(
+        !tir.contains("unresolved name: option"),
+        "the shorthand value resolves; only the class-field mismatch should be diagnosed:\n{tir}"
+    );
+}
+
+#[test]
+fn explicit_unknown_class_field_is_rejected() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+class Config { goodField int }
+function build() -> Config {
+  Config { badField: 5 }
+}
+"#,
+    );
+    let tir = render_tir(&db, file);
+    assert!(
+        tir.contains("class `Config` has no field `badField`"),
+        "expected an unknown-field diagnostic for an explicit property, got:\n{tir}"
+    );
+    assert!(
+        !tir.contains("property shorthand"),
+        "explicit properties should use the general unknown-field diagnostic:\n{tir}"
+    );
+}
+
+#[test]
+fn inferred_object_rejects_explicit_unknown_class_field() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+class Config { goodField int }
+function build() -> Config {
+  let config = Config { badField: 5 };
+  config
+}
+"#,
+    );
+    let tir = render_tir(&db, file);
+    assert!(
+        tir.contains("class `Config` has no field `badField`"),
+        "expected inference to diagnose an explicit unknown field, got:\n{tir}"
+    );
+    assert!(
+        !tir.contains("property shorthand"),
+        "explicit properties should use the general unknown-field diagnostic:\n{tir}"
+    );
 }
 
 #[test]

@@ -20,6 +20,7 @@ crates/baml_type/tests/simplify_sap_tests.md
 # Architecture
 ARCHITECTURE_MINI.md
 ARCHITECTURE.md
+architecture/test-profiles.md
 
 # Type System Documentation
 TYPE_SYSTEM.md
@@ -48,3 +49,7 @@ sdks/java/examples/quickstart/README.md
 
 # C++ SDK style guide
 sdks/cpp/STYLE.md
+
+# C# SDK documentation
+sdks/csharp/ABI.md
+sdks/csharp/DEVELOPMENT.md

@@ -524,6 +524,10 @@ fn run_filter_from_js(filter: JsValue) -> Result<RunFilter, String> {
 /// Initialize the WASM module with panic hook (auto-called by wasm-bindgen).
 #[wasm_bindgen(start)]
 pub fn start() {
+    bex_project::register_inbound_union_ambiguity_policy(
+        bex_project::InboundUnionAmbiguityPolicy::SelectDefault,
+    )
+    .expect("the browser TypeScript bridge must own the process-wide inbound policy");
     #[cfg(feature = "console_error_panic")]
     console_error_panic_hook::set_once();
     LOGGER_INIT.call_once(|| {
