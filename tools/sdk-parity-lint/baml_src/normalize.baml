@@ -295,7 +295,7 @@ function validate_audit_coverage(scan: SourceScan) -> void {
         let _ = audited.set(key, true);
         if (!accepted.has(key)) {
             throw baml.errors.ParseError {
-                message: `unsupported ${scan.config.language} test declaration form at ${audit.file}:${audit.range.start.line + 1}: ${audit.text}`,
+                message: `unsupported ${scan.config.language} test declaration form at ${audit.file}:${audit.range.start.line + 1}: ${audit.text}\nSDK test names must use the parity lint's canonical form and match the corresponding test name across SDKs. If this behavior is intentionally SDK-specific, give the test a canonical name and add an immediately preceding SDK_PARITY_LINT(skip): <reason> directive.`,
             };
         }
     }

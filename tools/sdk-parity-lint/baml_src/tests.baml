@@ -75,7 +75,11 @@ test "audit coverage rejects unsupported TypeScript declaration forms" {
         validate_audit_coverage(scan);
         baml.sys.panic("expected unsupported TypeScript declaration rejection")
     } catch (e) {
-        baml.errors.ParseError => null
+        baml.errors.ParseError => {
+            assert.contains(e.message, "SDK test names must use the parity lint's canonical form");
+            assert.contains(e.message, "SDK_PARITY_LINT(skip): <reason>");
+            null
+        }
     }
 }
 
@@ -249,6 +253,26 @@ test "unannotated parity absence is a required gap" {
     let report = build_parity_report(sdk_envs, inventories, []);
     assert.equal(report.required_gap_count, 1);
     assert.equal(report.rows[0].has_required_gap, true)
+}
+
+test "Python-baselined parity ignores SDK-only test IDs" {
+    let sdk_envs = ["python_pydantic2", "rust", "go"];
+    let report = fixture_parity_report(
+        sdk_envs,
+        [
+            fixture_parity_row("type_shapes/shared", sdk_envs, [true, true, false], sdk_envs, ""),
+            fixture_parity_row("type_shapes/python_only", sdk_envs, [true, false, false], sdk_envs, ""),
+            fixture_parity_row("type_shapes/rust_only", sdk_envs, [false, true, false], sdk_envs, ""),
+        ],
+    );
+    let rendered = render_python_baseline_parity(report).join("\n");
+    assert.contains(rendered, "the 2 test IDs declared in `python_pydantic2`");
+    assert.contains(rendered, "| python_pydantic2 | 2 / 2 | 100.0% |");
+    assert.contains(rendered, "| rust | 1 / 2 | 50.0% |");
+    assert.contains(rendered, "| go | 0 / 2 | 0.0% |");
+    assert.equal(render_percentage(1, 3), "33.3%");
+    assert.equal(render_percentage(2, 3), "66.7%");
+    assert.equal(render_percentage(0, 0), "n/a")
 }
 
 function fixture_parity_row(

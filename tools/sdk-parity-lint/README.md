@@ -2,7 +2,7 @@
 
 This BAML pipeline inventories test declarations under `baml_language/sdk_tests/crates/*/*/customizable`, normalizes them to exact `<category>/<name>` IDs, applies TypeScript runtime gates and `SDK_PARITY_LINT(skip)` annotations, and compares a generated Markdown coverage matrix with the checked-in baseline.
 
-The tool measures whether a test declaration is checked in for each SDK environment. It does not run tests or report pass/fail status. C# currently exposes its native SDK integration tests through Rust `#[test]` wrappers, which are reported under the `integration` category.
+The tool measures whether a test declaration is checked in for each SDK environment. It does not run tests or report pass/fail status. The report includes parity percentages using the test IDs declared in `python_pydantic2` as the baseline; SDK-only test IDs do not affect those percentages. C# currently exposes its native SDK integration tests through Rust `#[test]` wrappers, which are reported under the `integration` category.
 
 ## Run
 

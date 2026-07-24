@@ -2,9 +2,26 @@
 
 This report inventories checked-in test declarations. It does not report whether tests passed.
 
-Distinct exact test IDs: 679. IDs with complete required parity: 21. Required gaps: 4565.
+Distinct exact test IDs: 680. IDs with complete required parity: 22. Required gaps: 4565.
 
-Baseline ratchet: UNCHANGED. Required gaps: 4565 (baseline: 4565). Present declarations: 1999 (baseline: 1999). Newly missing required pairs: 0. Resolved baseline gaps: 0. Weakened requirements: 0.
+Baseline ratchet: UNCHANGED. Required gaps: 4565 (baseline: 4565). Present declarations: 2003 (baseline: 2003). Newly missing required pairs: 0. Resolved baseline gaps: 0. Weakened requirements: 0.
+
+## Python-baselined parity
+
+Parity is the share of the 292 test IDs declared in `python_pydantic2` that are also declared in each SDK environment. SDK-only test IDs do not affect these percentages.
+
+| SDK environment | Matching Python test IDs | Parity |
+| --- | ---: | ---: |
+| python_pydantic2 | 292 / 292 | 100.0% |
+| typescript_node | 111 / 292 | 38.0% |
+| typescript_web_chromium | 104 / 292 | 35.6% |
+| typescript_web_cloudflare_workers | 104 / 292 | 35.6% |
+| cpp | 123 / 292 | 42.1% |
+| csharp | 0 / 292 | 0.0% |
+| rust | 222 / 292 | 76.0% |
+| go | 1 / 292 | 0.3% |
+| java | 291 / 292 | 99.7% |
+| swift | 183 / 292 | 62.7% |
 
 | Test case | python_pydantic2 | typescript_node | typescript_web_chromium | typescript_web_cloudflare_workers | cpp | csharp | rust | go | java | swift | Required in | Reason |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -335,6 +352,7 @@ Baseline ratchet: UNCHANGED. Required gaps: 4565 (baseline: 4565). Present decla
 | function_calls/stdlib_error_surfaces_as_go_error | - | - | - | - | - | - | - | y | - | - | all |  |
 | function_calls/sync_call_returns_null | - | - | - | - | - | - | - | y | - | - | all |  |
 | function_calls/sync_cancel_via_context | - | - | - | - | - | - | - | y | - | - | all |  |
+| function_calls/unhandled_spawn_error_uses_host_default | - | - | - | - | y | - | - | y | y | y | cpp, go, java, swift | requires subprocess-level SDK harness support |
 | function_calls/union_throws_preserves_concrete_class_identity | - | - | - | - | - | - | - | y | - | - | all |  |
 | function_calls/unset_and_none_differ_in_one_call | - | - | - | - | - | - | - | y | - | - | all |  |
 | function_calls/user_panic_surfaces_as_go_error_without_panicking | - | - | - | - | - | - | - | y | - | - | all |  |

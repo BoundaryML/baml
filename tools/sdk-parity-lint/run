@@ -24,6 +24,10 @@ Inventory checked-in SDK test declarations and compare exact parity with the che
 EOF
 }
 
+parity_guidance() {
+    echo "SDK tests must use conformant canonical test names across SDKs. For intentionally SDK-specific behavior, use a canonical test name and add an immediately preceding SDK_PARITY_LINT(skip): <reason> directive." >&2
+}
+
 while (($# > 0)); do
     case "$1" in
         --repo-root)
@@ -89,6 +93,7 @@ fi
 cd "${tool_repo}"
 if ! "${baml_bin}" "${baml_args[@]}" > "${temporary_dir}/result.json"; then
     echo "sdk-parity-lint: discovery or configuration failed" >&2
+    parity_guidance
     exit 2
 fi
 
@@ -117,6 +122,7 @@ weakened_count="$(jq -er '.comparison.weakened_requirements | length' "${tempora
 echo "Wrote ${total_ids} test cases to ${resolved_output}"
 if [[ "${outcome}" == "worse" ]]; then
     echo "Parity became worse: required gaps ${baseline_missing} → ${current_missing}, present declarations ${baseline_present} → ${current_present}, and ${weakened_count} weakened requirements" >&2
+    parity_guidance
     exit 1
 fi
 if [[ "${outcome}" == "better" ]]; then
