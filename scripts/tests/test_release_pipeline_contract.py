@@ -640,6 +640,8 @@ class WorkflowGraphTests(unittest.TestCase):
         self.assertIn("AWS_LC_SYS_NO_JITTER_ENTROPY=1", builder)
         self.assertIn("dumpbin /nologo /exports", builder)
         self.assertIn("release\\bridge-cffi-public-exports.txt", builder)
+        self.assertEqual(builder.count("Sort-Object -CaseSensitive -Unique"), 2)
+        self.assertIn("Compare-Object -CaseSensitive", builder)
         public_exports = BRIDGE_CFFI_PUBLIC_EXPORTS.read_text(
             encoding="utf-8"
         ).splitlines()

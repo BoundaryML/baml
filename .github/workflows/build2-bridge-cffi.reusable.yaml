@@ -385,14 +385,14 @@ jobs:
                   $Matches[1]
                 }
               } |
-              Sort-Object -Unique
+              Sort-Object -CaseSensitive -Unique
           )
           $expectedExports = @(
             Get-Content ..\release\bridge-cffi-public-exports.txt |
               Where-Object { $_ -ne "" } |
-              Sort-Object -Unique
+              Sort-Object -CaseSensitive -Unique
           )
-          $exportDifference = Compare-Object -ReferenceObject $expectedExports -DifferenceObject $actualExports
+          $exportDifference = Compare-Object -CaseSensitive -ReferenceObject $expectedExports -DifferenceObject $actualExports
           if ($exportDifference) {
             $exportDifference | Format-Table | Out-String | Write-Host
             throw "bridge_cffi.dll public exports differ from the release allowlist"
