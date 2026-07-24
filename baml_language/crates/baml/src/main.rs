@@ -10,7 +10,9 @@ use std::{
 };
 
 use anyhow::{Context, Result, anyhow};
-use baml_release::{Artifact, Product, ReleaseSpec, ToolchainManifest, WrapperManifest};
+#[cfg(all(feature = "self-update", not(feature = "no-self-update")))]
+use baml_release::WrapperManifest;
+use baml_release::{Artifact, Product, ReleaseSpec, ToolchainManifest};
 use serde::{Deserialize, Serialize};
 
 const CONFIG_FILE: &str = "config.toml";
@@ -150,7 +152,7 @@ fn main() {
 
 fn run() -> Result<i32> {
     let mut args: Vec<String> = env::args().skip(1).collect();
-    #[cfg(windows)]
+    #[cfg(all(windows, feature = "self-update", not(feature = "no-self-update")))]
     if args.first().map(String::as_str) == Some("--replace") {
         args.remove(0);
         return replace_running_exe(args).map(|()| 0);
@@ -1016,13 +1018,16 @@ fn uninstall_toolchain(version: &str) -> Result<()> {
     Ok(())
 }
 
+#[cfg(any(not(feature = "self-update"), feature = "no-self-update"))]
+fn self_update() -> Result<()> {
+    Err(anyhow!(
+        "self-update is disabled in this build.\nUpdate BAML with your package manager."
+    ))
+}
+
+#[cfg(all(feature = "self-update", not(feature = "no-self-update")))]
 fn self_update() -> Result<()> {
     let current = env::current_exe()?;
-    if is_managed_install(&current) {
-        return Err(anyhow!(
-            "this BAML wrapper appears to be managed by a package manager.\nRun: brew upgrade baml or your system package-manager upgrade command."
-        ));
-    }
     let manifest = fetch_wrapper_manifest()?;
     let target = baml_release::release_host_target_triple()?;
     let artifact = manifest.artifact_for_target(target)?.clone();
@@ -1061,6 +1066,7 @@ fn self_update() -> Result<()> {
     Ok(())
 }
 
+#[cfg(all(feature = "self-update", not(feature = "no-self-update")))]
 fn fetch_wrapper_manifest() -> Result<WrapperManifest> {
     let base = baml_release::manifest_base_url();
     let url = format!("{base}/wrapper.json");
@@ -1081,6 +1087,7 @@ fn fetch_wrapper_manifest() -> Result<WrapperManifest> {
     Ok(manifest)
 }
 
+#[cfg(all(feature = "self-update", not(feature = "no-self-update")))]
 fn http_client() -> Result<reqwest::blocking::Client> {
     http_client_with_timeout(HTTP_TIMEOUT)
 }
@@ -1093,7 +1100,7 @@ fn http_client_with_timeout(timeout: Duration) -> Result<reqwest::blocking::Clie
         .context("failed to build HTTP client")
 }
 
-#[cfg(windows)]
+#[cfg(all(windows, feature = "self-update", not(feature = "no-self-update")))]
 fn replace_running_exe(args: Vec<String>) -> Result<()> {
     if args.len() != 2 {
         anyhow::bail!("usage: baml --replace <tmp> <current>");
@@ -1135,14 +1142,6 @@ fn write_text_atomic(path: &Path, text: &str) -> Result<()> {
     fs::write(&tmp, text)?;
     fs::rename(tmp, path)?;
     Ok(())
-}
-
-fn is_managed_install(path: &Path) -> bool {
-    let text = path.to_string_lossy();
-    text.contains("/opt/homebrew/")
-        || text.contains("/usr/local/Cellar/")
-        || text.starts_with("/usr/bin/")
-        || text.starts_with("/opt/")
 }
 
 #[cfg(test)]
