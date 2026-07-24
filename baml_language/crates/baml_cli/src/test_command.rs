@@ -527,6 +527,13 @@ impl TestArgs {
         })));
         let rt = tokio::runtime::Runtime::new().context("Failed to create tokio runtime")?;
         let cancel = CancellationToken::new();
+        let run_ctx = RunCtx {
+            engine: &engine,
+            rt: &rt,
+            cancel: &cancel,
+            unhandled_spawn_failures: &unhandled_spawn_failures,
+            logs: invocation.logs,
+        };
 
         // ── 5. Resolve the testset registry handle ─────────────────────────
         // `collect_tests` runs `$init_test`, returning a live `testing.TestRegistry`
@@ -551,7 +558,11 @@ impl TestArgs {
                     // continue as if there were no testset tests.
                     reporter.abandon();
                     crate::reporter::print_error(format_args!("testset discovery failed: {e}"));
-                    return Ok(crate::ExitCode::Other);
+                    return Ok(if finish_engine(&run_ctx) != 0 {
+                        crate::ExitCode::TestFailure
+                    } else {
+                        crate::ExitCode::Other
+                    });
                 }
             };
 
@@ -561,14 +572,6 @@ impl TestArgs {
             .filter(|t| invocation.includes_id(&t.canonical_id))
             .collect();
 
-        let run_ctx = RunCtx {
-            engine: &engine,
-            rt: &rt,
-            cancel: &cancel,
-            unhandled_spawn_failures: &unhandled_spawn_failures,
-            logs: invocation.logs,
-        };
-
         // ── 7. List mode ───────────────────────────────────────────────────
         if invocation.list {
             let testset_names = match &registry {
@@ -577,11 +580,19 @@ impl TestArgs {
                     Err(e) => {
                         reporter.abandon();
                         crate::reporter::print_error(format_args!("failed to list tests: {e}"));
-                        return Ok(crate::ExitCode::Other);
+                        return Ok(if finish_engine(&run_ctx) != 0 {
+                            crate::ExitCode::TestFailure
+                        } else {
+                            crate::ExitCode::Other
+                        });
                     }
                 },
                 None => Vec::new(),
             };
+
+            if finish_engine(&run_ctx) != 0 {
+                return Ok(crate::ExitCode::TestFailure);
+            }
 
             // Write-through the discovery cache (+ BAML_CACHE_VERIFY oracle) so a
             // later `--list` skips engine boot entirely. The cached datum is the
@@ -613,9 +624,6 @@ impl TestArgs {
                 .copied()
                 .map(cached_legacy_test)
                 .collect();
-            if finish_engine(&run_ctx) != 0 {
-                return Ok(crate::ExitCode::TestFailure);
-            }
             return Ok(render_test_list(&reporter, &legacy_lines, &testset_names));
         }
 

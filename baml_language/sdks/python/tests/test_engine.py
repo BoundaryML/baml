@@ -10,6 +10,8 @@ Run with:
     uv run pytest tests/ -v
 """
 
+import os
+import signal
 import subprocess
 import sys
 
@@ -106,7 +108,7 @@ function main() -> int {
 runtime = BamlRuntime.initialize_runtime(".", {"main.baml": source})
 assert call_function_sync(runtime, "main", {}).result() == 1
 shutdown_runtime()
-raise AssertionError("fatal unhandled spawn error did not terminate the process")
+raise SystemExit(42)
 """,
         ],
         capture_output=True,
@@ -114,7 +116,8 @@ raise AssertionError("fatal unhandled spawn error did not terminate the process"
         check=False,
     )
 
-    assert result.returncode != 0
+    expected_returncode = signal.SIGTERM if os.name == "nt" else 1
+    assert result.returncode == expected_returncode
     assert "boom" in result.stderr
 
 
