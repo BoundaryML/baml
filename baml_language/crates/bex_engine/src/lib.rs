@@ -516,9 +516,9 @@ impl Drop for ActiveCallGuard {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         map.remove(&self.call_id);
-        let empty = map.is_empty();
+        let no_active_calls = map.values().all(|call| call.pending);
         drop(map);
-        if empty {
+        if no_active_calls {
             self.engine.lifecycle_changed.notify_waiters();
         }
     }
@@ -2152,7 +2152,8 @@ impl BexEngine {
                 .active_calls
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner)
-                .is_empty()
+                .values()
+                .all(|call| call.pending)
             {
                 return;
             }
