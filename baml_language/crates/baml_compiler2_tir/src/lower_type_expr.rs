@@ -907,10 +907,11 @@ pub(crate) fn self_type_for_class_data(
 /// (`class_data` / `interface_data` / `function_data`), whose bounds are
 /// [`TypeRefId`](baml_compiler2_hir::type_ref::TypeRefId)s into the item's own
 /// store. Delegates the per-bound lowering to
-/// [`crate::builder::lower_generic_param_bound_refs`] (every sibling parameter
-/// in scope, so a bound naming another parameter resolves); bound-lowering
-/// diagnostics are discarded — the declaration's bounds are checked where the
-/// declaration is, not here.
+/// [`crate::builder::lower_generic_param_bound_refs`]. `declared_generic_params`
+/// owns the returned bounds; `in_scope_generic_params` includes those params
+/// plus any inherited owner params visible while lowering their bound
+/// expressions. Bound-lowering diagnostics are discarded; the declaration's
+/// bounds are checked where the declaration is, not here.
 ///
 /// Each bound is kept as a [`baml_type::Interface`] *constraint* (a bare `T extends Iterator`
 /// pins no associated types), never a [`Ty::Interface`] existential; a bound that does not
@@ -919,7 +920,8 @@ pub(crate) fn lower_decl_generic_param_bound_refs(
     db: &dyn crate::Db,
     package_items: &PackageItems<'_>,
     ns_context: &[baml_base::Name],
-    generic_params: &[baml_base::Name],
+    declared_generic_params: &[baml_base::Name],
+    in_scope_generic_params: &[baml_base::Name],
     store: &baml_compiler2_hir::type_ref::TypeRefStore,
     generic_param_bounds: &[Option<baml_compiler2_hir::type_ref::TypeRefId>],
 ) -> TypeVarBoundsMap {
@@ -930,12 +932,12 @@ pub(crate) fn lower_decl_generic_param_bound_refs(
         generic_param_bounds,
         package_items,
         ns_context,
-        generic_params,
+        in_scope_generic_params,
         None,
         &mut diagnostics,
     )
     .into_iter()
-    .zip(generic_params)
+    .zip(declared_generic_params)
     .filter_map(|(bound_ty, name)| {
         bound_ty
             .and_then(|bound_ty| bound_ty.as_interface())
@@ -961,6 +963,7 @@ pub fn class_generic_param_bounds<'db>(
         package_items,
         &pkg_info.namespace_path,
         &class.generic_params,
+        &class.generic_params,
         &class.type_refs,
         &class.generic_param_bounds,
     )
@@ -982,9 +985,54 @@ pub fn interface_generic_param_bounds<'db>(
         package_items,
         &pkg_info.namespace_path,
         &interface.generic_params,
+        &interface.generic_params,
         &interface.type_refs,
         &interface.generic_param_bounds,
     )
+}
+
+/// Every generic parameter declaration in scope for a function, ordered from
+/// owner parameters to the function's own parameters. Interface methods also
+/// inherit the interface's implicit `Self` parameter. Bounds are deliberately
+/// stored separately in [`function_in_scope_generic_param_bounds`].
+#[salsa::tracked(returns(ref))]
+pub fn function_in_scope_generic_params<'db>(
+    db: &'db dyn crate::Db,
+    function_loc: baml_compiler2_hir::loc::FunctionLoc<'db>,
+) -> Vec<baml_base::Name> {
+    let mut params = Vec::new();
+    match baml_compiler2_ppir::item_data::method_owner(db, function_loc) {
+        Some(baml_compiler2_ppir::item_data::MethodOwner::Class(class_loc)) => {
+            params.extend(
+                baml_compiler2_ppir::item_data::class_data(db, class_loc)
+                    .generic_params
+                    .iter()
+                    .cloned(),
+            );
+        }
+        Some(baml_compiler2_ppir::item_data::MethodOwner::Interface(iface_loc)) => {
+            params.extend(
+                baml_compiler2_ppir::item_data::interface_data(db, iface_loc)
+                    .generic_params
+                    .iter()
+                    .cloned(),
+            );
+            params.push(baml_base::Name::new("Self"));
+        }
+        Some(baml_compiler2_ppir::item_data::MethodOwner::FreeImpl(impl_loc)) => {
+            if let Ok(data) = crate::interfaces::impl_data(db, impl_loc).as_ref() {
+                params.extend(data.generic_params.iter().map(|(name, _)| name.clone()));
+            }
+        }
+        None => {}
+    }
+    params.extend(
+        baml_compiler2_ppir::item_data::function_data(db, function_loc)
+            .generic_params
+            .iter()
+            .cloned(),
+    );
+    params
 }
 
 /// Every generic-parameter interface bound in scope for a function's signature or body: the
@@ -1059,6 +1107,7 @@ pub fn function_in_scope_generic_param_bounds<'db>(
         package_items,
         &pkg_info.namespace_path,
         &function.generic_params,
+        function_in_scope_generic_params(db, function_loc),
         &function.type_refs,
         &function.generic_param_bounds,
     ));
