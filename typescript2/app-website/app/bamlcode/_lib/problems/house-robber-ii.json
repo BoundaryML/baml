@@ -1,0 +1,18 @@
+{
+  "slug": "house-robber-ii",
+  "id": 213,
+  "title": "House Robber II",
+  "difficulty": "Medium",
+  "category": "Dynamic Programming",
+  "statement": "Same as House Robber, but the houses are arranged in a **circle**, so the first and last houses are adjacent. Return the maximum amount you can rob without robbing two adjacent houses.\n\n**Example**\n\n```\nnums = [2, 3, 2]     => 3   // can't rob houses 0 and 2 (adjacent)\nnums = [1, 2, 3, 1]  => 4\n```",
+  "signature": "function Rob2(nums: int[]) -> int",
+  "starter": "function Rob2(nums: int[]) -> int {\n  // Houses are in a circle: the first and last are adjacent.\n  return 0;\n}",
+  "solution": "function RobLine(nums: int[], lo: int, hi: int) -> int {\n  let prev = 0;\n  let cur = 0;\n  let i = lo;\n  while (i <= hi) {\n    let take = prev + nums[i];\n    let next = take;\n    if (cur > take) {\n      next = cur;\n    }\n    prev = cur;\n    cur = next;\n    i += 1;\n  }\n  return cur;\n}\n\nfunction Rob2(nums: int[]) -> int {\n  let n = nums.length();\n  if (n == 1) {\n    return nums[0];\n  }\n  let a = RobLine(nums, 0, n - 2);\n  let b = RobLine(nums, 1, n - 1);\n  if (a > b) {\n    return a;\n  }\n  return b;\n}",
+  "tests": [
+    { "call": "Rob2([2, 3, 2])", "expected": "3" },
+    { "call": "Rob2([1, 2, 3, 1])", "expected": "4" },
+    { "call": "Rob2([1, 2, 3])", "expected": "3" },
+    { "call": "Rob2([5])", "expected": "5", "hidden": true },
+    { "call": "Rob2([200, 3, 140, 20, 10])", "expected": "340", "hidden": true }
+  ]
+}

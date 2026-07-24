@@ -1,0 +1,18 @@
+{
+  "slug": "unique-paths",
+  "id": 62,
+  "title": "Unique Paths",
+  "difficulty": "Medium",
+  "category": "Dynamic Programming",
+  "statement": "A robot is on an `m x n` grid at the top-left corner. It can only move **right** or **down**. How many unique paths are there to reach the bottom-right corner?\n\n**Example**\n\n```\nm = 3, n = 7  => 28\nm = 3, n = 2  => 3\n```",
+  "signature": "function UniquePaths(m: int, n: int) -> int",
+  "starter": "function UniquePaths(m: int, n: int) -> int {\n  // Count paths moving only right/down from top-left to bottom-right.\n  return 0;\n}",
+  "solution": "function UniquePaths(m: int, n: int) -> int {\n  let row: int[] = [];\n  let j = 0;\n  while (j < n) {\n    row.push(1);\n    j += 1;\n  }\n  let i = 1;\n  while (i < m) {\n    let c = 1;\n    while (c < n) {\n      row[c] = row[c] + row[c - 1];\n      c += 1;\n    }\n    i += 1;\n  }\n  return row[n - 1];\n}",
+  "tests": [
+    { "call": "UniquePaths(3, 7)", "expected": "28" },
+    { "call": "UniquePaths(3, 2)", "expected": "3" },
+    { "call": "UniquePaths(1, 1)", "expected": "1" },
+    { "call": "UniquePaths(3, 3)", "expected": "6", "hidden": true },
+    { "call": "UniquePaths(10, 10)", "expected": "48620", "hidden": true }
+  ]
+}
