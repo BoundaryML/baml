@@ -15,7 +15,10 @@ CONTRACT_TOOL = ROOT / "scripts" / "baml-csharp-release-contract"
 VERSION_TOOL = ROOT / "scripts" / "baml-language-version"
 PLATFORMS = ROOT / "release" / "platforms.json"
 RELEASE_WORKFLOW = ROOT / ".github" / "workflows" / "release-baml-language.yml"
+CI_WORKFLOW = ROOT / ".github" / "workflows" / "ci.yaml"
 SIZE_POLICY = ROOT / "release" / "csharp-package-size-policy.json"
+HYGIENE_TOOL = ROOT / "scripts" / "baml-bridge-cffi-hygiene"
+CROSS_CONFIG = ROOT / "baml_language" / "Cross.toml"
 NUGET_PUBLISHER = ROOT / ".github" / "workflows" / "publish2-csharp-sdk.yaml"
 CSHARP_PREPARER = (
     ROOT / ".github" / "workflows" / "prepare-csharp-sdk.reusable.yaml"
@@ -502,6 +505,77 @@ class CSharpReleaseContractTests(unittest.TestCase):
                 self.assertNotEqual(result.returncode, 0)
 
 
+class BridgeCffiHygieneTests(unittest.TestCase):
+    def verify_payload(self, payload: bytes) -> subprocess.CompletedProcess[str]:
+        with tempfile.TemporaryDirectory() as temporary:
+            native = Path(temporary) / "native.bin"
+            native.write_bytes(payload)
+            return subprocess.run(
+                [
+                    str(HYGIENE_TOOL),
+                    "verify",
+                    "--native",
+                    str(native),
+                    "--target",
+                    "test-target",
+                ],
+                cwd=ROOT,
+                check=False,
+                text=True,
+                capture_output=True,
+            )
+
+    def test_rejects_ascii_cross_and_runner_paths(self) -> None:
+        payloads = (
+            b"prefix\0/cargo/registry/src/aws-lc/source.c\0suffix",
+            b"/home/runner/work/baml/baml/source.rs",
+            b"/root/.cargo/registry/src/dependency.c",
+        )
+        for payload in payloads:
+            with self.subTest(payload=payload):
+                result = self.verify_payload(payload)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn("absolute build-tree paths", result.stderr)
+
+    def test_rejects_utf16le_windows_paths(self) -> None:
+        secret_path = (
+            "C:\\Users\\runneradmin\\.cargo\\registry\\src\\dependency.c"
+        ).encode("utf-16le")
+        result = self.verify_payload(secret_path)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("C:\\Users\\runneradmin\\.cargo", result.stderr)
+
+    def test_allows_stable_mapped_and_rust_dependency_paths(self) -> None:
+        payload = b"\0".join(
+            (
+                b"cargo-home/registry/src/dependency.c",
+                b"baml-source/crates/bridge_cffi/src/lib.rs",
+                b"rust-toolchain/lib/rustlib/src/rust/library/std/src/lib.rs",
+                b"/rust/deps/compiler_builtins/src/lib.rs",
+                b"http://metadata.google.internal/computeMetadata/v1/project/project-id",
+            )
+        )
+        result = self.verify_payload(payload)
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_rejects_credentials_without_echoing_them(self) -> None:
+        credential = "ghp_" + ("A" * 30)
+        result = self.verify_payload(credential.encode())
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("GitHub token", result.stderr)
+        self.assertNotIn(credential, result.stderr)
+
+    def test_bounds_path_diagnostics(self) -> None:
+        payload = b"\0".join(
+            f"/cargo/registry/src/dependency-{index}/source.c".encode()
+            for index in range(12)
+        )
+        result = self.verify_payload(payload)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual(result.stderr.count("  - /cargo/"), 8)
+        self.assertIn("showing 8 of 12 unique paths", result.stderr)
+
+
 def job_block(text: str, job: str) -> str:
     marker = f"  {job}:\n"
     start = text.index(marker)
@@ -523,6 +597,92 @@ def job_block(text: str, job: str) -> str:
 
 
 class WorkflowGraphTests(unittest.TestCase):
+    def test_cffi_hygiene_is_enforced_at_production_and_package_boundaries(
+        self,
+    ) -> None:
+        builder = CFFI_BUILDER.read_text(encoding="utf-8")
+        cross = CROSS_CONFIG.read_text(encoding="utf-8")
+        pack = PACK_PRODUCT.read_text(encoding="utf-8")
+        ci = CI_WORKFLOW.read_text(encoding="utf-8")
+        ci_builder = job_block(ci, "bridge-cffi-release")
+        ci_alert = job_block(ci, "ci-failure-alert")
+        ci_dispatch = job_block(ci, "dispatch-release")
+
+        self.assertIn("-ffile-prefix-map=/cargo=cargo-home", builder)
+        self.assertIn("cygpath -aw", builder)
+        self.assertIn("/pathmap:$cargo_root_native=cargo-home", builder)
+        self.assertIn('export CFLAGS="${CFLAGS:+$CFLAGS }$native_path_maps"', builder)
+        self.assertIn(
+            'export CXXFLAGS="${CXXFLAGS:+$CXXFLAGS }$native_path_maps"',
+            builder,
+        )
+        self.assertLess(
+            builder.index("- name: Verify shipping artifact hygiene"),
+            builder.index("- name: Upload cdylib artifact"),
+        )
+        self.assertEqual(
+            cross.count('passthrough = ["RUSTFLAGS", "CFLAGS", "CXXFLAGS"]'),
+            4,
+        )
+        self.assertIn("scripts/baml-bridge-cffi-hygiene", pack)
+        self.assertNotIn('strings "$native"', pack)
+
+        self.assertIn("bridge_cffi_release:", ci)
+        self.assertIn(
+            "uses: ./.github/workflows/build2-bridge-cffi.reusable.yaml",
+            ci_builder,
+        )
+        self.assertIn("source_sha: ${{ github.sha }}", ci_builder)
+        self.assertIn("- bridge-cffi-release", ci_alert)
+        self.assertIn("- bridge-cffi-release", ci_dispatch)
+        self.assertIn(
+            '-f source_ci_run_id="$GITHUB_RUN_ID"',
+            ci_dispatch,
+        )
+
+    def test_production_release_is_ci_attested_and_least_privilege(self) -> None:
+        release = RELEASE_WORKFLOW.read_text(encoding="utf-8")
+        ci = CI_WORKFLOW.read_text(encoding="utf-8")
+        plan = job_block(release, "plan")
+        prerequisites = job_block(release, "release-prerequisites-complete")
+        complete = job_block(release, "release-complete")
+        manifest = job_block(release, "publish-pkg-boundaryml-com")
+        channel = job_block(release, "publish-pkg-channel")
+        dry_run = job_block(release, "dry-run-artifacts")
+        nightly = job_block(release, "dispatch-nightly-after-canary")
+
+        self.assertIn("source_ci_run_id:", release)
+        self.assertIn("Attest production source CI run", plan)
+        self.assertIn("production releases require a numeric source_ci_run_id", plan)
+        self.assertIn("CI - BAML Language", plan)
+        self.assertIn('"$workflow_path" != ".github/workflows/ci.yaml"', plan)
+        self.assertIn('"$event" != "push"', plan)
+        self.assertIn('"$branch" != "canary"', plan)
+        self.assertIn('"$head_sha" != "$INPUT_SOURCE_SHA"', plan)
+        self.assertIn('"$conclusion" != "success"', plan)
+        self.assertIn(
+            "permissions:\n  contents: read\n  actions: read\n",
+            release,
+        )
+        for block in (manifest, channel, dry_run):
+            self.assertIn("id-token: write", block)
+        self.assertIn(
+            "needs.all-builds.result == 'success'",
+            prerequisites,
+        )
+        self.assertIn(
+            "needs.release-prerequisites-complete.result == 'success'",
+            complete,
+        )
+        self.assertIn(
+            '-f source_ci_run_id="$GITHUB_RUN_ID"',
+            job_block(ci, "dispatch-release"),
+        )
+        self.assertIn(
+            '-f source_ci_run_id="$SOURCE_CI_RUN_ID"',
+            nightly,
+        )
+
     def test_release_graph_has_early_preflight_parallel_producers_and_complete_fanin(
         self,
     ) -> None:

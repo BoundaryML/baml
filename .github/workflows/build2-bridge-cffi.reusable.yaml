@@ -186,6 +186,35 @@ jobs:
           --remap-path-prefix=/project=baml-source \
           --remap-path-prefix=/cargo=cargo-home \
           --remap-path-prefix=/rust=rust-toolchain"
+          if [[ "$TARGET" == *-windows-msvc ]]; then
+            # Git Bash reports cargo's root as a POSIX path while rustc, MSVC,
+            # and CMake embed native drive-letter paths. Remap the exact native
+            # forms that those compilers see; do not assume a runner drive or
+            # username.
+            source_root_native="$(cygpath -aw "$source_root")"
+            cargo_root_native="$(cygpath -aw "$cargo_root")"
+            rust_sysroot_native="$(cygpath -aw "$rust_sysroot")"
+            export RUSTFLAGS="${RUSTFLAGS:+$RUSTFLAGS }\
+          --remap-path-prefix=$source_root_native=baml-source \
+          --remap-path-prefix=$cargo_root_native=cargo-home \
+          --remap-path-prefix=$rust_sysroot_native=rust-toolchain"
+            native_path_maps="\
+          /pathmap:$source_root_native=baml-source \
+          /pathmap:$cargo_root_native=cargo-home \
+          /pathmap:$rust_sysroot_native=rust-toolchain"
+            export CFLAGS="${CFLAGS:+$CFLAGS }$native_path_maps"
+            export CXXFLAGS="${CXXFLAGS:+$CXXFLAGS }$native_path_maps"
+          else
+            native_path_maps="\
+          -ffile-prefix-map=$source_root=baml-source \
+          -ffile-prefix-map=$cargo_root=cargo-home \
+          -ffile-prefix-map=$rust_sysroot=rust-toolchain \
+          -ffile-prefix-map=/project=baml-source \
+          -ffile-prefix-map=/cargo=cargo-home \
+          -ffile-prefix-map=/rust=rust-toolchain"
+            export CFLAGS="${CFLAGS:+$CFLAGS }$native_path_maps"
+            export CXXFLAGS="${CXXFLAGS:+$CXXFLAGS }$native_path_maps"
+          fi
           # `bridge_cffi` is `crate-type = ["cdylib", "lib"]`; the cdylib is the
           # release artifact. `release-bridge-cffi` = release + panic = "unwind".
           #
@@ -249,6 +278,18 @@ jobs:
           echo "asset=${asset}" >> "$GITHUB_OUTPUT"
           echo "Built ${asset}"
           cat "${outdir}/${asset}.sha256"
+
+      - name: Verify shipping artifact hygiene
+        working-directory: baml_language
+        env:
+          ARTIFACT_DIR: ${{ steps.artifact.outputs.dir }}
+          ARTIFACT_ASSET: ${{ steps.artifact.outputs.asset }}
+          TARGET: ${{ matrix._.target }}
+        run: |
+          set -euo pipefail
+          ../scripts/baml-bridge-cffi-hygiene verify \
+            --native "${ARTIFACT_DIR}/${ARTIFACT_ASSET}" \
+            --target "$TARGET"
 
       - name: Smoke test the public C and C++ ABI (Unix)
         if: ${{ matrix._.smoke && !contains(matrix._.target, 'windows') }}

@@ -21,7 +21,7 @@ native_provenance="$(cd "$(dirname "$3")" && pwd -P)/$(basename "$3")"
 release_plan="$(cd "$(dirname "$4")" && pwd -P)/$(basename "$4")"
 output_directory="$5"
 
-for command in jq llvm-nm llvm-objdump llvm-readobj sha256sum strings unzip; do
+for command in jq llvm-nm llvm-objdump llvm-readobj sha256sum unzip; do
   if ! command -v "$command" >/dev/null 2>&1; then
     echo "required package inspection command is unavailable: $command" >&2
     exit 1
@@ -228,23 +228,9 @@ while IFS=$'\t' read -r target os arch libc rid canonical; do
   esac
   diff -u "$expected_exports" "$exports"
 
-  strings_file="$inspection_root/$rid.strings.txt"
-  strings "$native" > "$strings_file"
-  if [[ "$os" == "windows" ]]; then
-    strings -el "$native" >> "$strings_file"
-  fi
-  if grep -Eiq \
-    '(/home/runner/(work|\.rustup)/|/Users/runner/(work|\.rustup)/|/github/workspace/|/root/(dev|\.rustup)/|/usr/local/rustup/|/builds/|[A-Z]:\\(Users|a)\\)|(^|[[:space:]=])(/project/|/cargo/|/rust/(toolchains|downloads|tmp)/|/rust/settings\.toml)' \
-    "$strings_file"; then
-    echo "shipping native contains an absolute build-tree path: $rid" >&2
-    exit 1
-  fi
-  if grep -Eiq \
-    '(-----BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY-----|github_pat_[A-Za-z0-9_]+|ghp_[A-Za-z0-9]{20,}|AKIA[0-9A-Z]{16})' \
-    "$strings_file"; then
-    echo "shipping native contains credential-shaped material: $rid" >&2
-    exit 1
-  fi
+  "$repository_root/scripts/baml-bridge-cffi-hygiene" verify \
+    --native "$native" \
+    --target "$target"
 done
 
 supported_rids="$(jq -r '
