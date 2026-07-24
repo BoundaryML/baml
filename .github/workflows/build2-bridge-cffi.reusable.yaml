@@ -198,10 +198,44 @@ jobs:
           --remap-path-prefix=$source_root_native=baml-source \
           --remap-path-prefix=$cargo_root_native=cargo-home \
           --remap-path-prefix=$rust_sysroot_native=rust-toolchain"
-            native_path_maps="\
+            if [[ "$TARGET" == "aarch64-pc-windows-msvc" ]]; then
+              # The ARM64 runner uses clang-cl. It rejects MSVC's /pathmap,
+              # so pass Clang's equivalent through the clang-cl driver.
+              native_path_maps="\
+          /clang:-fdebug-prefix-map=$source_root_native=baml-source \
+          /clang:-fdebug-prefix-map=$cargo_root_native=cargo-home \
+          /clang:-fdebug-prefix-map=$rust_sysroot_native=rust-toolchain \
+          /clang:-Wno-builtin-macro-redefined \
+          /D__FILE__=\\\"baml-source/native\\\""
+            else
+              # MSVC's /pathmap sanitizes debug metadata but does not rewrite
+              # __FILE__. Give diagnostic strings a stable identity explicitly;
+              # /wd4005 keeps that intentional built-in redefinition compatible
+              # with native projects that promote warnings to errors.
+              native_path_maps="\
           /pathmap:$source_root_native=baml-source \
           /pathmap:$cargo_root_native=cargo-home \
-          /pathmap:$rust_sysroot_native=rust-toolchain"
+          /pathmap:$rust_sysroot_native=rust-toolchain \
+          /wd4005 \
+          /D__FILE__=\\\"baml-source/native\\\""
+            fi
+            export CFLAGS="${CFLAGS:+$CFLAGS }$native_path_maps"
+            export CXXFLAGS="${CXXFLAGS:+$CXXFLAGS }$native_path_maps"
+          elif [[ "$TARGET" == *-unknown-linux-gnu ]]; then
+            # cross 0.2.5's GNU images intentionally use GCC 5 to retain an old
+            # glibc floor. GCC 5 supports debug-prefix remapping but predates
+            # -ffile-prefix-map/-fmacro-prefix-map. Override the diagnostic-only
+            # __FILE__ identity so AWS-LC cannot retain its /cargo source root,
+            # while still remapping any debug metadata before stripping.
+            native_path_maps="\
+          -fdebug-prefix-map=$source_root=baml-source \
+          -fdebug-prefix-map=$cargo_root=cargo-home \
+          -fdebug-prefix-map=$rust_sysroot=rust-toolchain \
+          -fdebug-prefix-map=/project=baml-source \
+          -fdebug-prefix-map=/cargo=cargo-home \
+          -fdebug-prefix-map=/rust=rust-toolchain \
+          -Wno-builtin-macro-redefined \
+          -D__FILE__=\\\"baml-source/native\\\""
             export CFLAGS="${CFLAGS:+$CFLAGS }$native_path_maps"
             export CXXFLAGS="${CXXFLAGS:+$CXXFLAGS }$native_path_maps"
           else

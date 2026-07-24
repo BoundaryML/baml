@@ -609,8 +609,15 @@ class WorkflowGraphTests(unittest.TestCase):
         ci_dispatch = job_block(ci, "dispatch-release")
 
         self.assertIn("-ffile-prefix-map=/cargo=cargo-home", builder)
+        self.assertIn("-fdebug-prefix-map=/cargo=cargo-home", builder)
+        self.assertIn('-D__FILE__=\\\\\\"baml-source/native\\\\\\"', builder)
         self.assertIn("cygpath -aw", builder)
         self.assertIn("/pathmap:$cargo_root_native=cargo-home", builder)
+        self.assertIn(
+            "/clang:-fdebug-prefix-map=$cargo_root_native=cargo-home", builder
+        )
+        self.assertIn("/clang:-Wno-builtin-macro-redefined", builder)
+        self.assertIn("/wd4005", builder)
         self.assertIn('export CFLAGS="${CFLAGS:+$CFLAGS }$native_path_maps"', builder)
         self.assertIn(
             'export CXXFLAGS="${CXXFLAGS:+$CXXFLAGS }$native_path_maps"',
