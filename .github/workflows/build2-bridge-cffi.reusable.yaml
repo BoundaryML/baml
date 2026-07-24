@@ -194,31 +194,32 @@ jobs:
             source_root_native="$(cygpath -aw "$source_root")"
             cargo_root_native="$(cygpath -aw "$cargo_root")"
             rust_sysroot_native="$(cygpath -aw "$rust_sysroot")"
+            source_root_native_short="$(cygpath --absolute --windows --short-name "$source_root")"
+            cargo_root_native_short="$(cygpath --absolute --windows --short-name "$cargo_root")"
+            rust_sysroot_native_short="$(cygpath --absolute --windows --short-name "$rust_sysroot")"
             export RUSTFLAGS="${RUSTFLAGS:+$RUSTFLAGS }\
           --remap-path-prefix=$source_root_native=baml-source \
           --remap-path-prefix=$cargo_root_native=cargo-home \
-          --remap-path-prefix=$rust_sysroot_native=rust-toolchain"
-            if [[ "$TARGET" == "aarch64-pc-windows-msvc" ]]; then
-              # The ARM64 runner uses clang-cl. It rejects MSVC's /pathmap,
-              # so pass Clang's equivalent through the clang-cl driver.
-              native_path_maps="\
-          /clang:-fdebug-prefix-map=$source_root_native=baml-source \
-          /clang:-fdebug-prefix-map=$cargo_root_native=cargo-home \
-          /clang:-fdebug-prefix-map=$rust_sysroot_native=rust-toolchain \
-          /clang:-Wno-builtin-macro-redefined \
-          /D__FILE__=\\\"baml-source/native\\\""
-            else
-              # MSVC's /pathmap sanitizes debug metadata but does not rewrite
-              # __FILE__. Give diagnostic strings a stable identity explicitly;
-              # /wd4005 keeps that intentional built-in redefinition compatible
-              # with native projects that promote warnings to errors.
-              native_path_maps="\
-          /pathmap:$source_root_native=baml-source \
-          /pathmap:$cargo_root_native=cargo-home \
-          /pathmap:$rust_sysroot_native=rust-toolchain \
-          /wd4005 \
-          /D__FILE__=\\\"baml-source/native\\\""
-            fi
+          --remap-path-prefix=$rust_sysroot_native=rust-toolchain \
+          --remap-path-prefix=$source_root_native_short=baml-source \
+          --remap-path-prefix=$cargo_root_native_short=cargo-home \
+          --remap-path-prefix=$rust_sysroot_native_short=rust-toolchain"
+            # MSVC's /pathmap only sanitizes debug metadata, not AWS-LC's
+            # __FILE__ strings. Use clang-cl for the native dependency build on
+            # both Windows targets: it is MSVC ABI-compatible and supports
+            # -ffile-prefix-map for debug data and predefined macros. CMake/cc
+            # may pass 8.3 short paths, so map both native representations.
+            command -v clang-cl >/dev/null
+            target_key="${TARGET//-/_}"
+            export "CC_${target_key}=clang-cl"
+            export "CXX_${target_key}=clang-cl"
+            native_path_maps="\
+          /clang:-ffile-prefix-map=$source_root_native=baml-source \
+          /clang:-ffile-prefix-map=$cargo_root_native=cargo-home \
+          /clang:-ffile-prefix-map=$rust_sysroot_native=rust-toolchain \
+          /clang:-ffile-prefix-map=$source_root_native_short=baml-source \
+          /clang:-ffile-prefix-map=$cargo_root_native_short=cargo-home \
+          /clang:-ffile-prefix-map=$rust_sysroot_native_short=rust-toolchain"
             export CFLAGS="${CFLAGS:+$CFLAGS }$native_path_maps"
             export CXXFLAGS="${CXXFLAGS:+$CXXFLAGS }$native_path_maps"
           elif [[ "$TARGET" == *-unknown-linux-gnu ]]; then

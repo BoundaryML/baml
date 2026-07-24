@@ -612,12 +612,15 @@ class WorkflowGraphTests(unittest.TestCase):
         self.assertIn("-fdebug-prefix-map=/cargo=cargo-home", builder)
         self.assertIn('-D__FILE__=\\\\\\"baml-source/native\\\\\\"', builder)
         self.assertIn("cygpath -aw", builder)
-        self.assertIn("/pathmap:$cargo_root_native=cargo-home", builder)
+        self.assertIn("--short-name", builder)
         self.assertIn(
-            "/clang:-fdebug-prefix-map=$cargo_root_native=cargo-home", builder
+            "/clang:-ffile-prefix-map=$cargo_root_native=cargo-home", builder
         )
-        self.assertIn("/clang:-Wno-builtin-macro-redefined", builder)
-        self.assertIn("/wd4005", builder)
+        self.assertIn(
+            "/clang:-ffile-prefix-map=$cargo_root_native_short=cargo-home", builder
+        )
+        self.assertIn('export "CC_${target_key}=clang-cl"', builder)
+        self.assertIn('export "CXX_${target_key}=clang-cl"', builder)
         self.assertIn('export CFLAGS="${CFLAGS:+$CFLAGS }$native_path_maps"', builder)
         self.assertIn(
             'export CXXFLAGS="${CXXFLAGS:+$CXXFLAGS }$native_path_maps"',
