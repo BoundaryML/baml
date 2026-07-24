@@ -426,13 +426,12 @@ fn phase3_out_of_body_impl_on_builtin_with_error_throws_it() {
     ));
 }
 
-// FINDING (documents *why* the stdlib `Comparable.CompareError` is undefaulted):
-// when the interface associated type has a default, a bare `T extends Cmp`
-// bound is silently constrained to that default, so an implementor that
-// overrides it (a fallible comparator) is rejected by the blanket impl —
-// `srt` does not resolve on its array. Pinned as a known limitation.
+// A defaulted associated type does not constrain a bare bound: `T extends
+// CmpD` pins nothing, so an implementor that overrides the default (a
+// fallible comparator with `CE = BoomD`) still satisfies the blanket impl and
+// `srt` resolves — the override's error type flows through `SE = T.CE`.
 #[test]
-fn phase3_defaulted_assoc_error_over_constrains_bound() {
+fn phase3_defaulted_assoc_override_satisfies_bare_bound() {
     let errors = collect_compile_errors(
         r#"
         interface CmpD {
@@ -468,8 +467,8 @@ fn phase3_defaulted_assoc_error_over_constrains_bound() {
         "#,
     );
     assert!(
-        errors.iter().any(|e| e.contains("srt")),
-        "expected the defaulted-assoc-type bug to block `srt` resolution; got:\n  {}",
+        errors.is_empty(),
+        "a defaulted-then-overridden associated type must satisfy the bare bound; got:\n  {}",
         errors.join("\n  ")
     );
 }

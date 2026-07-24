@@ -362,6 +362,32 @@ pub fn lower_type_expr(
     lower_type_ref(&store, id, ctx, diagnostics)
 }
 
+/// The syntactic position of the node being lowered, deciding how an interface
+/// head treats associated-type members it does not spell (`TYPE_SYSTEM.md`
+/// "Interfaces"): an existential denotes one complete instantiation, so its
+/// omitted defaulted members are eagerly filled with their declared defaults;
+/// a constraint — a generic-parameter bound or an `implements` target — pins
+/// only what it writes. An implementor may pin a defaulted member differently
+/// than the default, so a bare `T extends I` leaves every unwritten member
+/// free and `T.member` a symbolic projection realized per-receiver.
+///
+/// The position describes the outermost node only: every nested position (a
+/// generic argument, a written pin's type, a container element) denotes a
+/// value type and lowers existentially.
+///
+/// A constraint head must name an interface *directly*. Every other shape —
+/// including a type alias, which denotes a *type* (for an interface body, the
+/// interface-existential), never an interface — lowers exactly as it would in
+/// a type position and is rejected where the constraint is enforced
+/// (`GenericBoundNotInterface`, E0145).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TypePosition {
+    /// An existential/value type position — the default everywhere.
+    Existential,
+    /// The head of a constraint: a generic bound or an `implements` target.
+    ConstraintHead,
+}
+
 /// Resolve a span-free [`TypeRef`](baml_compiler2_hir::type_ref::TypeRef) to a
 /// `Ty` — the native form of [`lower_type_expr`], for callers holding firewall
 /// data (`function_data` / `class_data` / …) rather than AST nodes.
@@ -370,6 +396,38 @@ pub fn lower_type_ref(
     id: baml_compiler2_hir::type_ref::TypeRefId,
     ctx: &dyn TypeExprContext<'_>,
     diagnostics: &mut Vec<TirTypeError>,
+) -> Ty {
+    lower_type_ref_at(store, id, ctx, diagnostics, TypePosition::Existential)
+}
+
+/// [`lower_type_expr`] for the head of a constraint — see [`TypePosition`].
+pub fn lower_constraint_head_type_expr(
+    type_expr: &TypeExpr,
+    ctx: &dyn TypeExprContext<'_>,
+    diagnostics: &mut Vec<TirTypeError>,
+) -> Ty {
+    let mut type_refs = baml_compiler2_hir::type_ref::TypeRefBuilder::new();
+    let id = type_refs.lower(type_expr);
+    let (store, _spans) = type_refs.finish();
+    lower_constraint_head_type_ref(&store, id, ctx, diagnostics)
+}
+
+/// [`lower_type_ref`] for the head of a constraint — see [`TypePosition`].
+pub fn lower_constraint_head_type_ref(
+    store: &baml_compiler2_hir::type_ref::TypeRefStore,
+    id: baml_compiler2_hir::type_ref::TypeRefId,
+    ctx: &dyn TypeExprContext<'_>,
+    diagnostics: &mut Vec<TirTypeError>,
+) -> Ty {
+    lower_type_ref_at(store, id, ctx, diagnostics, TypePosition::ConstraintHead)
+}
+
+fn lower_type_ref_at(
+    store: &baml_compiler2_hir::type_ref::TypeRefStore,
+    id: baml_compiler2_hir::type_ref::TypeRefId,
+    ctx: &dyn TypeExprContext<'_>,
+    diagnostics: &mut Vec<TirTypeError>,
+    position: TypePosition,
 ) -> Ty {
     use baml_compiler2_hir::type_ref::TypeRefKind;
 
@@ -385,6 +443,7 @@ pub fn lower_type_ref(
             associated_type_bindings,
             ctx,
             diagnostics,
+            position,
         ),
         TypeRefKind::Int => Ty::Int {
             attr: TyAttr::default(),
@@ -563,6 +622,7 @@ fn lower_path(
     associated_type_bindings: &[baml_compiler2_hir::type_ref::AssociatedTypeBindingRef],
     ctx: &dyn TypeExprContext<'_>,
     diagnostics: &mut Vec<TirTypeError>,
+    position: TypePosition,
 ) -> Ty {
     let db = ctx.db();
     // `Self` / `Self.Member…`: resolve the receiver through the context, but only
@@ -698,42 +758,47 @@ fn lower_path(
                             })
                             .collect();
                     // §1.7(a): eagerly fill each omitted, defaulted associated type at
-                    // this existential. `Self` is the existential itself (its explicit
-                    // pins plus the defaults filled so far), so a Self-referencing
-                    // default (`type Items = Self.Item[]`) reduces against them. The
-                    // default is lowered once — with a symbolic `Self` — by
-                    // `interface_associated_type_default`, and substituted here.
-                    let iface_generic_params = iface_data.generic_params.clone();
-                    let iface_assoc_names: Vec<_> = iface_data
-                        .associated_types
-                        .iter()
-                        .map(|assoc| assoc.name.clone())
-                        .collect();
+                    // an existential — it denotes one complete instantiation. `Self` is
+                    // the existential itself (its explicit pins plus the defaults
+                    // filled so far), so a Self-referencing default
+                    // (`type Items = Self.Item[]`) reduces against them. The default
+                    // is lowered once — with a symbolic `Self` — by
+                    // `interface_associated_type_default`, and substituted here. A
+                    // constraint head fills nothing: it pins only what it writes (see
+                    // [`TypePosition`]).
                     let mut associated_bindings = lowered_associated_bindings;
-                    for assoc_name in iface_assoc_names {
-                        if associated_bindings.iter().any(|(n, _)| *n == assoc_name) {
-                            continue;
-                        }
-                        if let Some((default, _)) =
-                            crate::interfaces::interface_associated_type_default(
-                                db,
-                                iface_loc,
-                                assoc_name.clone(),
-                            )
-                        {
-                            let self_ty = Ty::Interface(
-                                iface_qtn.clone(),
-                                lowered_args.clone(),
-                                associated_bindings.clone(),
-                                TyAttr::default(),
-                            );
-                            let filled = crate::interfaces::realize_associated_default(
-                                &default,
-                                &iface_generic_params,
-                                &lowered_args,
-                                &self_ty,
-                            );
-                            associated_bindings.push((assoc_name, filled));
+                    if position == TypePosition::Existential {
+                        let iface_generic_params = &iface_data.generic_params;
+                        let iface_assoc_names: Vec<_> = iface_data
+                            .associated_types
+                            .iter()
+                            .map(|assoc| assoc.name.clone())
+                            .collect();
+                        for assoc_name in iface_assoc_names {
+                            if associated_bindings.iter().any(|(n, _)| *n == assoc_name) {
+                                continue;
+                            }
+                            if let Some((default, _)) =
+                                crate::interfaces::interface_associated_type_default(
+                                    db,
+                                    iface_loc,
+                                    assoc_name.clone(),
+                                )
+                            {
+                                let self_ty = Ty::Interface(
+                                    iface_qtn.clone(),
+                                    lowered_args.clone(),
+                                    associated_bindings.clone(),
+                                    TyAttr::default(),
+                                );
+                                let filled = crate::interfaces::realize_associated_default(
+                                    &default,
+                                    iface_generic_params,
+                                    &lowered_args,
+                                    &self_ty,
+                                );
+                                associated_bindings.push((assoc_name, filled));
+                            }
                         }
                     }
                     Ty::Interface(
@@ -821,6 +886,9 @@ fn lower_path(
             if segments.len() >= 2 && generic_args.is_empty() && associated_type_bindings.is_empty()
             {
                 let mut base_diags = Vec::new();
+                // The prefix is a projection *base* — a value type, not the
+                // constraint head itself — so it lowers existentially even
+                // when this path sits in a constraint head.
                 let base_ty = lower_path(
                     store,
                     &segments[..segments.len() - 1],
@@ -828,6 +896,7 @@ fn lower_path(
                     &[],
                     ctx,
                     &mut base_diags,
+                    TypePosition::Existential,
                 );
                 if base_diags.is_empty() && can_be_associated_type_projection_base(&base_ty) {
                     let member = segments.last().expect("non-empty path").clone();

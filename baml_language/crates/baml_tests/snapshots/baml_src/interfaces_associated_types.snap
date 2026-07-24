@@ -355,7 +355,7 @@ function interfaces_associated_types.adb_main() -> string {
 
 function interfaces_associated_types.adb_summarize(holder: H) -> string {
     load_var holder
-    load_type interfaces_associated_types.AdbHolder<interfaces_associated_types.AdbUser, Item = interfaces_associated_types.AdbUser>
+    load_type interfaces_associated_types.AdbHolder<interfaces_associated_types.AdbUser>
     load_const "get"
     virtual_call nargs=1 ntypeargs=0
     store_var _2

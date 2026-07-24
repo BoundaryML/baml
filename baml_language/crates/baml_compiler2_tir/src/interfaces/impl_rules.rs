@@ -201,7 +201,7 @@ fn lower_generic_param_interface_bounds(
 ) -> Vec<baml_type::Interface> {
     let mut ifaces = Vec::new();
     for &bound in bounds {
-        let ty = crate::lower_type_expr::lower_type_ref(
+        let ty = crate::lower_type_expr::lower_constraint_head_type_ref(
             store,
             bound,
             &crate::lower_type_expr::ScopeCtx {

@@ -299,7 +299,7 @@ pub(crate) fn lower_generic_param_bound_refs(
             bound.map(|bound| {
                 if let Some(bindings) = bindings {
                     crate::generics::substitute_ty(
-                        &crate::lower_type_expr::lower_type_ref(
+                        &crate::lower_type_expr::lower_constraint_head_type_ref(
                             store,
                             bound,
                             &crate::lower_type_expr::ScopeCtx {
@@ -315,7 +315,7 @@ pub(crate) fn lower_generic_param_bound_refs(
                         bindings,
                     )
                 } else {
-                    crate::lower_type_expr::lower_type_ref(
+                    crate::lower_type_expr::lower_constraint_head_type_ref(
                         store,
                         bound,
                         &crate::lower_type_expr::ScopeCtx {

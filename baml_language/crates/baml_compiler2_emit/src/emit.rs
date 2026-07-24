@@ -3366,12 +3366,17 @@ impl PullSink for StackifyCodegen<'_, '_> {
             // coarse test is its own `is_type_tag` sink), a bare frame
             // reference (`T`), an interface existential (membership resolved at
             // runtime against the impl registry — never a compile-time
-            // implementor enumeration), or a union that may carry any of these:
-            // the VM value matcher.
+            // implementor enumeration), an associated projection over a frame
+            // base (`(#0 as Holder).Item` — `substitute` reduces it through
+            // the registry at test time, which is total: every baked rule
+            // carries a binding for every declared member, pinned or
+            // defaulted), or a union that may carry any of these: the VM
+            // value matcher.
             TyTemplate::List(..)
             | TyTemplate::Map { .. }
             | TyTemplate::TypeArgRef(_)
             | TyTemplate::Interface(..)
+            | TyTemplate::AssociatedTypeProjection { .. }
             | TyTemplate::Union(..) => emit_structural(self, ty_template),
 
             // ── Function signatures ──────────────────────────────────────────
@@ -3398,10 +3403,10 @@ impl PullSink for StackifyCodegen<'_, '_> {
             other => {
                 // A fully-realized leaf (primitive, enum, alias, literal, …):
                 // class-pointer identity for a `TypeAlias`, otherwise its type
-                // tag. The only non-realized template reaching here is an
-                // associated projection, which has no representable check yet
-                // (a value's concrete type carries no unresolved projection to
-                // unify with).
+                // tag. Every non-realized template kind has its own arm above,
+                // so the narrowing below succeeds for everything that reaches
+                // here; the `emit_false` fallbacks guard absent objects and
+                // tagless leaves, not template residue.
                 if let Ok(realized) = <&RealizedTy>::try_from(other) {
                     if let RealizedTy::TypeAlias(tn, _) = realized {
                         if let Some(class_obj_idx) = self.class_object_index_for_type_name(tn) {

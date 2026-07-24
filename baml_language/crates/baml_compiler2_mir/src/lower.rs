@@ -812,15 +812,19 @@ pub fn tir2_to_template(
             interface,
             member,
             ..
-        } => generic_params
-            .iter()
-            .position(|p| p == member)
+        } => matches!(&**base, Tir2Ty::TypeVar(n, _) if n.as_str() == "Self")
+            .then(|| generic_params.iter().position(|p| p == member))
+            .flatten()
             .map(|n| {
                 TyTemplate::TypeArgRef(u32::try_from(n).expect("generic param index fits in u32"))
             })
-            // The member is a frame generic only inside interface-default-method
-            // bodies (where `enclosing_generic_params` adds the interface's
-            // associated types). Otherwise the projection — e.g. `T.CompareError`
+            // A `Self.<member>` projection collapses to the member's frame
+            // slot — those exist only inside interface-owned bodies, where
+            // `enclosing_generic_params` adds the interface's associated
+            // types (gating on the `Self` base keeps a projection over a
+            // *function* generic — `T.Item` in a fn that also declares a
+            // generic named `Item` — from colliding with that unrelated
+            // param slot). Any other projection — e.g. `T.CompareError`
             // passed as a call's type argument — is kept as a structured
             // projection template: its base/interface positions lower
             // recursively (so a frame-generic base realizes at substitution
@@ -978,19 +982,64 @@ fn realized_leaf_template(ty: &RuntimeTy) -> TyTemplate {
 }
 
 /// Convert a TIR pattern type into a complete [`TyTemplate`], or `None` when
-/// any position is *unresolvable* (an associated projection, a type variable
-/// with no frame slot) — validated here at construction, never erased to a
-/// type or smuggled onward. The caller emits a fail-closed branch for `None`
-/// (`emit_pattern_template_test`).
+/// any position is *unresolvable* (a type variable with no frame slot) —
+/// validated here at construction, never erased to a type or smuggled onward.
+/// The caller emits a fail-closed branch for `None`
+/// (`emit_pattern_template_test`). Projections are resolvable:
+/// `Self.<member>` collapses to its interface-body frame slot, and any other
+/// shape lowers to a structured projection template the runtime reduces
+/// through the impl registry at test time — total, since the baked rules
+/// carry a binding for every declared member, pinned or defaulted.
 fn tir2_to_pattern_template(
     ty: &Tir2Ty,
     resolved: &ResolvedAliases,
     generic_params: &[baml_base::Name],
 ) -> Option<TyTemplate> {
     match ty {
-        // FIXME(typevar-templates): resolvable through the frame once
-        // projection patterns lower to projection templates over frame refs.
-        Tir2Ty::AssociatedTypeProjection { .. } => None,
+        Tir2Ty::AssociatedTypeProjection {
+            base,
+            interface,
+            member,
+            ..
+        } => {
+            // `Self.<member>` collapses to the member's frame slot inside
+            // interface-owned bodies (gating on the `Self` base — see the
+            // materialization arm in `tir2_to_template`); every other
+            // projection stays structured, reduced at test time through the
+            // impl registry (`TyTemplate::substitute` via `ctx.project`),
+            // which is total for every declared member — the baked rules
+            // carry a binding for each one, pinned or defaulted.
+            if matches!(&**base, Tir2Ty::TypeVar(n, _) if n.as_str() == "Self")
+                && let Some(n) = generic_params.iter().position(|p| p == member)
+            {
+                return Some(TyTemplate::TypeArgRef(
+                    u32::try_from(n).expect("generic param index fits in u32"),
+                ));
+            }
+            Some(TyTemplate::AssociatedTypeProjection {
+                base: Box::new(tir2_to_pattern_template(base, resolved, generic_params)?),
+                interface: Box::new(baml_type::TyTemplateInterface {
+                    name: interface.name.clone(),
+                    generics: interface
+                        .generics
+                        .iter()
+                        .map(|g| tir2_to_pattern_template(g, resolved, generic_params))
+                        .collect::<Option<Vec<_>>>()?,
+                    associated_types: interface
+                        .associated_types
+                        .iter()
+                        .map(|(name, ty)| {
+                            Some((
+                                name.clone(),
+                                tir2_to_pattern_template(ty, resolved, generic_params)?,
+                            ))
+                        })
+                        .collect::<Option<Vec<_>>>()?,
+                }),
+                member: member.clone(),
+                attr: TyAttr::default(),
+            })
+        }
         Tir2Ty::TypeVar(name, _) => generic_params.iter().position(|p| p == name).map(|n| {
             // A frame type-parameter lowers to its `TypeArgRef` slot. It used
             // to lower to the covariant `TypeArgRefOrWildcard` band-aid so a
@@ -2724,7 +2773,10 @@ impl<'db> LoweringContext<'db> {
                 continue;
             };
             let mut diags = Vec::new();
-            let bound_ty = baml_compiler2_tir::lower_type_expr::lower_type_ref(
+            // A bound pins only what it writes, so a rigid receiver's dispatch
+            // view keeps unpinned members symbolic and realizes them
+            // per-receiver.
+            let bound_ty = baml_compiler2_tir::lower_type_expr::lower_constraint_head_type_ref(
                 store,
                 id,
                 &baml_compiler2_tir::lower_type_expr::ScopeCtx {
@@ -7992,10 +8044,11 @@ impl<'db> LoweringContext<'db> {
                 // `baml_compiler2_emit` and `enclosing_generic_params`),
                 // expressed over the enclosing impl's generic params. `Self`
                 // is the enclosing implements-block's subject, statically
-                // known at this call. An associated type the block leaves to
-                // its default is padded with the top type `unknown`, mirroring
-                // emit's padding (TODO(M1): complete with the assoc's actual
-                // default). The default body lowers `Self`, the interface's
+                // known at this call. An associated type the block leaves
+                // unpinned is completed from its declared default — realized
+                // at this impl (`Self` := the subject, the interface's params
+                // := the target's arguments), mirroring emit's rule
+                // completion. The default body lowers `Self`, the interface's
                 // params, and its assoc names to `TypeArgRef` slots, so a
                 // short or shifted frame would resolve them wrongly at
                 // runtime.
@@ -8020,12 +8073,13 @@ impl<'db> LoweringContext<'db> {
                             "`default.<method>()` bypass outside an implements-block method"
                         )
                     });
-                    // The target lowered whole: its generic args plus any
-                    // inline `<Item = int>` bindings. Block-level
-                    // `type Item = …;` bindings are appended after (a name is
-                    // bound at most once, so first-match lookup is exact).
+                    // The target lowered whole (as the constraint head it is —
+                    // written pins only): its generic args plus any inline
+                    // `<Item = int>` bindings. Block-level `type Item = …;`
+                    // bindings are appended after (a name is bound at most
+                    // once, so first-match lookup is exact).
                     let (iface_args, mut assoc_bindings) =
-                        match baml_compiler2_tir::lower_type_expr::lower_type_ref(
+                        match baml_compiler2_tir::lower_type_expr::lower_constraint_head_type_ref(
                             &target.type_refs,
                             target.target,
                             &ctx,
@@ -8051,20 +8105,45 @@ impl<'db> LoweringContext<'db> {
                     }
                     let iface_data =
                         baml_compiler2_ppir::item_data::interface_data(self.db, iface_loc);
-                    let mut tys = Vec::with_capacity(
-                        1 + iface_args.len() + iface_data.associated_types.len(),
-                    );
+                    let mut default_bindings: FxHashMap<Name, Tir2Ty> = FxHashMap::default();
+                    default_bindings.insert(Name::new("Self"), self_subject.clone());
+                    for (param, arg) in iface_data.generic_params.iter().zip(&iface_args) {
+                        default_bindings.insert(param.clone(), arg.clone());
+                    }
+                    let assoc_tys: Vec<Tir2Ty> = iface_data
+                        .associated_types
+                        .iter()
+                        .map(|assoc| {
+                            assoc_bindings
+                                .iter()
+                                .find(|(n, _)| *n == assoc.name)
+                                .map(|(_, t)| t.clone())
+                                .or_else(|| {
+                                    baml_compiler2_tir::interfaces::
+                                        interface_associated_type_default(
+                                            self.db,
+                                            iface_loc,
+                                            assoc.name.clone(),
+                                        )
+                                        .map(|(default, _decl_site_diags)| {
+                                            baml_compiler2_tir::generics::substitute_ty(
+                                                &default,
+                                                &default_bindings,
+                                            )
+                                        })
+                                })
+                                // Neither pinned nor defaulted: a diagnosed
+                                // incomplete impl — keep the top type for
+                                // error recovery.
+                                .unwrap_or_else(|| Tir2Ty::BuiltinUnknown {
+                                    attr: TyAttr::default(),
+                                })
+                        })
+                        .collect();
+                    let mut tys = Vec::with_capacity(1 + iface_args.len() + assoc_tys.len());
                     tys.push(self_subject);
                     tys.extend(iface_args);
-                    tys.extend(iface_data.associated_types.iter().map(|assoc| {
-                        assoc_bindings
-                            .iter()
-                            .find(|(n, _)| *n == assoc.name)
-                            .map(|(_, t)| t.clone())
-                            .unwrap_or_else(|| Tir2Ty::BuiltinUnknown {
-                                attr: TyAttr::default(),
-                            })
-                    }));
+                    tys.extend(assoc_tys);
                     tys
                 };
                 let frame_type_arg_ops = self.emit_frame_type_arg_ops(&frame_tys);

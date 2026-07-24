@@ -24,11 +24,12 @@ use crate::BexVm;
 /// enclosing frame's realized `type_args` resolving the template's frame
 /// references. The `IsType` value matcher for `match` and `is` expressions.
 ///
-/// A substitution failure is a broken compiler/VM invariant — a pattern
-/// template carries no projection (the MIR builder reports those as
-/// unresolvable before emission), so the only failure is a frame reference the
-/// seeded frame does not supply, i.e. a frame-layout bug — surfaced as an
-/// internal error rather than silently mis-answering the test.
+/// A substitution failure is a broken compiler/VM invariant, surfaced as an
+/// internal error rather than silently mis-answering the test: a frame
+/// reference the seeded frame does not supply is a frame-layout bug, and a
+/// pattern template's projection reducing opaquely breaks the registry's
+/// completeness guarantee (every baked impl rule carries a binding for every
+/// declared associated member — pinned or baked from its declared default).
 pub(crate) fn value_matches_template(
     vm: &BexVm,
     value: Value,

@@ -502,9 +502,11 @@ fn lower_env_generic_bound(
     };
     match bound {
         #[expect(deprecated, reason = "consumer of the transitional Ast variant")]
-        BoundSource::Ast(te) => crate::lower_type_expr::lower_type_expr(te, &ctx, diags),
+        BoundSource::Ast(te) => {
+            crate::lower_type_expr::lower_constraint_head_type_expr(te, &ctx, diags)
+        }
         BoundSource::Ref(store, id) => {
-            crate::lower_type_expr::lower_type_ref(store, *id, &ctx, diags)
+            crate::lower_type_expr::lower_constraint_head_type_ref(store, *id, &ctx, diags)
         }
     }
 }
@@ -648,9 +650,11 @@ fn lower_declared_interface_bound(
     };
     let bound_ty = match bound {
         #[expect(deprecated, reason = "consumer of the transitional Ast variant")]
-        BoundSource::Ast(te) => crate::lower_type_expr::lower_type_expr(te, &scope, &mut diags),
+        BoundSource::Ast(te) => {
+            crate::lower_type_expr::lower_constraint_head_type_expr(te, &scope, &mut diags)
+        }
         BoundSource::Ref(store, id) => {
-            crate::lower_type_expr::lower_type_ref(store, *id, &scope, &mut diags)
+            crate::lower_type_expr::lower_constraint_head_type_ref(store, *id, &scope, &mut diags)
         }
     };
     if report {

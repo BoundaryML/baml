@@ -312,7 +312,7 @@ fn complete_interface_associated_bindings_from_tys<'db>(
 // trips `needless_pass_by_value`, so an expectation would read as unfulfilled.
 #[allow(clippy::needless_pass_by_value)]
 #[salsa::tracked]
-pub(crate) fn interface_associated_type_default<'db>(
+pub fn interface_associated_type_default<'db>(
     db: &'db dyn crate::Db,
     iface_loc: baml_compiler2_hir::loc::InterfaceLoc<'db>,
     name: Name,
