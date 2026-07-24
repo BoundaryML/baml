@@ -367,18 +367,19 @@ jobs:
           cp "baml_language/target/$target/release/baml" \
             "staging-no-self-update/bin/baml"
       - name: Archive wrapper
+        env:
+          TARGET: ${{ matrix.target }}
+          WRAPPER_VERSION: ${{ needs.plan.outputs.wrapper_version }}
         run: |
           set -euo pipefail
-          version="${{ needs.plan.outputs.wrapper_version }}"
-          target="${{ matrix.target }}"
-          if [[ "$target" == *windows-msvc ]]; then
-            (cd staging && 7z a "../baml-wrapper-$version-$target.zip" .)
+          if [[ "$TARGET" == *windows-msvc ]]; then
+            (cd staging && 7z a "../baml-wrapper-$WRAPPER_VERSION-$TARGET.zip" .)
           else
-            tar -C staging -czf "baml-wrapper-$version-$target.tar.gz" .
+            tar -C staging -czf "baml-wrapper-$WRAPPER_VERSION-$TARGET.tar.gz" .
           fi
-          if [[ "$target" == "aarch64-unknown-linux-gnu" || "$target" == "x86_64-unknown-linux-gnu" ]]; then
+          if [[ "$TARGET" == "aarch64-unknown-linux-gnu" || "$TARGET" == "x86_64-unknown-linux-gnu" ]]; then
             tar -C staging-no-self-update -czf \
-              "baml-wrapper-no-self-update-$version-$target.tar.gz" .
+              "baml-wrapper-no-self-update-$WRAPPER_VERSION-$TARGET.tar.gz" .
           fi
       - uses: actions/upload-artifact@v4
         with:
@@ -1719,12 +1720,15 @@ jobs:
           path: dist/wrapper
           merge-multiple: true
       - name: Generate Homebrew formula
+        env:
+          SOURCE_SHA256: ${{ needs.publish-wrapper-release.outputs.source_sha256 }}
+          WRAPPER_VERSION: ${{ needs.plan.outputs.wrapper_version }}
         run: |
           set -euo pipefail
           scripts/baml-package-manager-artifacts \
             --wrapper-dir dist/wrapper \
-            --version "${{ needs.plan.outputs.wrapper_version }}" \
-            --source-sha256 "${{ needs.publish-wrapper-release.outputs.source_sha256 }}" \
+            --version "$WRAPPER_VERSION" \
+            --source-sha256 "$SOURCE_SHA256" \
             --out package-manager
       - name: Test Homebrew formula
         run: |
@@ -1779,12 +1783,15 @@ jobs:
           ssh-keyscan aur.archlinux.org >> ~/.ssh/known_hosts
           printf 'Host aur.archlinux.org\n  IdentityFile ~/.ssh/aur\n  User aur\n' >> ~/.ssh/config
       - name: Generate AUR package files
+        env:
+          SOURCE_SHA256: ${{ needs.publish-wrapper-release.outputs.source_sha256 }}
+          WRAPPER_VERSION: ${{ needs.plan.outputs.wrapper_version }}
         run: |
           set -euo pipefail
           scripts/baml-package-manager-artifacts \
             --wrapper-dir dist/wrapper \
-            --version "${{ needs.plan.outputs.wrapper_version }}" \
-            --source-sha256 "${{ needs.publish-wrapper-release.outputs.source_sha256 }}" \
+            --version "$WRAPPER_VERSION" \
+            --source-sha256 "$SOURCE_SHA256" \
             --out package-manager
       - name: Push AUR repos
         env:
