@@ -195,6 +195,7 @@ pub struct SemanticIndexExtra {
     pub diagnostics: Vec<Hir2Diagnostic>,
     pub lowering_diagnostics: Vec<LoweringDiagnostic>,
     pub invalid_pattern_bindings: FxHashMap<(FileScopeId, PatId), FxHashSet<Name>>,
+    pub invalid_pattern_binding_scopes: FxHashMap<(TextRange, PatId), FileScopeId>,
 }
 
 // ── FileSemanticIndex ────────────────────────────────────────────────────────

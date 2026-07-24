@@ -25,3 +25,27 @@ source: crates/baml_tests/src/generated_tests.rs
     ·              ────┬───
     ·                  ╰── `item` bound again here
     ╰────
+
+  [hir] E0094
+
+  × duplicate binding `item` in pattern
+    ╭─[main.baml:25:15]
+ 24 │         age: let item,
+    ·              ────┬───
+    ·                  ╰── `item` first bound here
+ 25 │         name: let item,
+    ·               ────┬───
+    ·                   ╰── `item` bound again here
+    ╰────
+
+  [hir] E0094
+
+  × duplicate binding `item` in pattern
+    ╭─[main.baml:36:14]
+ 35 │         name: let item,
+    ·               ────┬───
+    ·                   ╰── `item` first bound here
+ 36 │         age: let item,
+    ·              ────┬───
+    ·                  ╰── `item` bound again here
+    ╰────

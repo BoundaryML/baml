@@ -18,6 +18,16 @@ function user.int_last(person: user.Person) -> string throws never {
     item : !error
   }
 }
+function user.if_let_string_last(person: user.Person | null) -> int throws never {
+  { : !error | 0
+    if let <pat> = person { 0 stmts + tail } else { 0 stmts + tail } : !error | 0
+  }
+}
+function user.if_let_int_last(person: user.Person | null) -> string throws never {
+  { : !error | ""
+    if let <pat> = person { 0 stmts + tail } else { 0 stmts + tail } : !error | ""
+  }
+}
 class user.Person$stream {
   age: int | null
   name: string | null

@@ -15403,15 +15403,17 @@ impl TypeInferenceBuilder<'_> {
         let db = self.context.db();
         let file = self.context.scope().file(db);
         let index = baml_compiler2_ppir::file_semantic_index(db, file);
-        let pattern_scope = index.scope_at_offset(source_map.pattern_span(pattern).start(), None);
-        index
-            .extra
-            .as_ref()
-            .and_then(|extra| {
-                extra
-                    .invalid_pattern_bindings
-                    .get(&(pattern_scope, pattern))
-            })
+        let Some(extra) = index.extra.as_ref() else {
+            return FxHashSet::default();
+        };
+        let pattern_key = (source_map.pattern_span(pattern), pattern);
+        let Some(&registration_scope) = extra.invalid_pattern_binding_scopes.get(&pattern_key)
+        else {
+            return FxHashSet::default();
+        };
+        extra
+            .invalid_pattern_bindings
+            .get(&(registration_scope, pattern))
             .cloned()
             .unwrap_or_default()
     }

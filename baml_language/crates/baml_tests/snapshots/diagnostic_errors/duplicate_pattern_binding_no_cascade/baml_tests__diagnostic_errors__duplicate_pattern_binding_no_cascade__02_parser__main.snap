@@ -106,6 +106,124 @@ SOURCE_FILE
           SEMICOLON ";"
         WORD "item"
         R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "if_let_string_last"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "person"
+        COLON ":"
+        TYPE_EXPR "Person | null"
+          WORD "Person"
+          PIPE "|"
+          WORD "null"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "int"
+      WORD "int"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        IF_LET_EXPR
+          KW_IF "if"
+          PATTERN
+            DESTRUCTURE_PATTERN
+              KW_LET "let"
+              WORD "Person"
+              L_BRACE "{"
+              FIELD_PATTERN
+                WORD "age"
+                COLON ":"
+                PATTERN
+                  BINDING_PATTERN "let item"
+                    KW_LET "let"
+                    WORD "item"
+              COMMA ","
+              FIELD_PATTERN
+                WORD "name"
+                COLON ":"
+                PATTERN
+                  BINDING_PATTERN "let item"
+                    KW_LET "let"
+                    WORD "item"
+              COMMA ","
+              R_BRACE "}"
+          EQUALS "="
+          WORD "person"
+          BLOCK_EXPR "{
+        item
+    }"
+            L_BRACE "{"
+            WORD "item"
+            R_BRACE "}"
+          KW_ELSE "else"
+          BLOCK_EXPR "{
+        0
+    }"
+            L_BRACE "{"
+            INTEGER_LITERAL "0"
+            R_BRACE "}"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "if_let_int_last"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "person"
+        COLON ":"
+        TYPE_EXPR "Person | null"
+          WORD "Person"
+          PIPE "|"
+          WORD "null"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "string"
+      WORD "string"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        IF_LET_EXPR
+          KW_IF "if"
+          PATTERN
+            DESTRUCTURE_PATTERN
+              KW_LET "let"
+              WORD "Person"
+              L_BRACE "{"
+              FIELD_PATTERN
+                WORD "name"
+                COLON ":"
+                PATTERN
+                  BINDING_PATTERN "let item"
+                    KW_LET "let"
+                    WORD "item"
+              COMMA ","
+              FIELD_PATTERN
+                WORD "age"
+                COLON ":"
+                PATTERN
+                  BINDING_PATTERN "let item"
+                    KW_LET "let"
+                    WORD "item"
+              COMMA ","
+              R_BRACE "}"
+          EQUALS "="
+          WORD "person"
+          BLOCK_EXPR "{
+        item
+    }"
+            L_BRACE "{"
+            WORD "item"
+            R_BRACE "}"
+          KW_ELSE "else"
+          BLOCK_EXPR
+            L_BRACE "{"
+            STRING_LITERAL ""
+              QUOTE """
+              QUOTE """
+            R_BRACE "}"
+        R_BRACE "}"
 
 === ERRORS ===
 None

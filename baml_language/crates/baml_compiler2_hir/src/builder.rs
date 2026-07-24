@@ -92,6 +92,7 @@ pub struct SemanticIndexBuilder<'db> {
     diagnostics: Vec<Hir2Diagnostic>,
     lowering_diagnostics: Vec<LoweringDiagnostic>,
     invalid_pattern_bindings: FxHashMap<(FileScopeId, ast::PatId), FxHashSet<Name>>,
+    invalid_pattern_binding_scopes: FxHashMap<(TextRange, ast::PatId), FileScopeId>,
     env_var_refs: Vec<baml_compiler2_ast::EnvVarRef>,
 }
 
@@ -115,6 +116,7 @@ impl<'db> SemanticIndexBuilder<'db> {
             diagnostics: Vec::new(),
             lowering_diagnostics: Vec::new(),
             invalid_pattern_bindings: FxHashMap::default(),
+            invalid_pattern_binding_scopes: FxHashMap::default(),
             env_var_refs: Vec::new(),
         }
     }
@@ -195,6 +197,7 @@ impl<'db> SemanticIndexBuilder<'db> {
                 diagnostics: self.diagnostics,
                 lowering_diagnostics: self.lowering_diagnostics,
                 invalid_pattern_bindings: self.invalid_pattern_bindings,
+                invalid_pattern_binding_scopes: self.invalid_pattern_binding_scopes,
             }))
         };
 
@@ -795,6 +798,8 @@ impl<'db> SemanticIndexBuilder<'db> {
         if !names.duplicates.is_empty() {
             self.invalid_pattern_bindings
                 .insert((scope_id, pat_id), names.duplicates);
+            self.invalid_pattern_binding_scopes
+                .insert((source_map.pattern_span(pat_id), pat_id), scope_id);
         }
 
         for (name, name_range) in names.names {
