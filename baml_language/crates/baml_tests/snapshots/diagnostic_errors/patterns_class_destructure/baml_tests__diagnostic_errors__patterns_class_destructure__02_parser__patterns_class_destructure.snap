@@ -1427,7 +1427,52 @@ SOURCE_FILE
                     WORD "age"
                   R_BRACE "}"
             FAT_ARROW "=>"
-            INTEGER_LITERAL "1"
+            WORD "age"
+          R_BRACE "}"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "class_destructure_or_pattern_same_binding_conflicting_types_reversed"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "v"
+        COLON ":"
+        TYPE_EXPR "Person | Admin"
+          WORD "Person"
+          PIPE "|"
+          WORD "Admin"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "int"
+      WORD "int"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        MATCH_EXPR
+          KW_MATCH "match"
+          L_PAREN "("
+          WORD "v"
+          R_PAREN ")"
+          L_BRACE "{"
+          MATCH_ARM
+            PATTERN
+              UNION_PATTERN
+                DESTRUCTURE_PATTERN
+                  WORD "Admin"
+                  L_BRACE "{"
+                  FIELD_PATTERN "age"
+                    WORD "age"
+                  R_BRACE "}"
+                PIPE "|"
+                DESTRUCTURE_PATTERN
+                  WORD "Person"
+                  L_BRACE "{"
+                  FIELD_PATTERN "age"
+                    WORD "age"
+                  R_BRACE "}"
+            FAT_ARROW "=>"
+            WORD "age"
           R_BRACE "}"
         R_BRACE "}"
   FUNCTION_DEF
