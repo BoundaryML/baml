@@ -7386,6 +7386,7 @@ dependencies = [
  "sys_types",
  "tokio",
  "tokio-rustls",
+ "tokio-tungstenite",
  "tracing",
  "walkdir",
 ]
@@ -7394,6 +7395,7 @@ dependencies = [
 name = "sys_ops"
 version = "0.0.0-beta"
 dependencies = [
+ "baml_base",
  "baml_builtins2",
  "baml_builtins2_codegen",
  "baml_type",
@@ -7404,6 +7406,7 @@ dependencies = [
  "bex_vm_types",
  "indexmap",
  "num-bigint",
+ "serde_json",
  "sys_llm",
  "sys_types",
  "tokio",
@@ -7748,7 +7751,11 @@ checksum = "8f72a05e828585856dacd553fba484c242c46e391fb0e58917c942ee9202915c"
 dependencies = [
  "futures-util",
  "log",
+ "rustls",
+ "rustls-native-certs",
+ "rustls-pki-types",
  "tokio",
+ "tokio-rustls",
  "tungstenite",
 ]
 
@@ -8073,6 +8080,8 @@ dependencies = [
  "httparse",
  "log",
  "rand 0.9.4",
+ "rustls",
+ "rustls-pki-types",
  "sha1",
  "thiserror 2.0.18",
 ]

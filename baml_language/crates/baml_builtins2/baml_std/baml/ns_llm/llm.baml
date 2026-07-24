@@ -97,6 +97,14 @@ function parse<TStream, TFinal>(json: string) -> TFinal throws root.errors.Parse
   }
 }
 
+/// Internal bridge for callers outside `baml.llm` that need a typed stream
+/// cache. Keeping the inference here avoids requiring an explicit static-method
+/// owner at each call site.
+function __new_stream_cache<TStream, TFinal>() -> StreamCache<TStream, TFinal> throws never {
+  let cache: StreamCache<TStream, TFinal> = StreamCache.new(reflect.type_of<TStream>(), reflect.type_of<TFinal>());
+  cache
+}
+
 /// UNSAFE: do not call from user code
 ///
 /// Call an LLM function and return its full result.
