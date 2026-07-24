@@ -22,14 +22,6 @@ source: crates/baml_tests/src/generated_tests.rs
     ·          ╰── field `age` destructured again here
     ╰────
 
-  [type] E0003
-
-  × unresolved name: `first`
-    ╭─[patterns_class_destructure.baml:48:5]
- 48 │     first + second
-    ·     ─────
-    ╰────
-
   [hir] E0012
 
   × duplicate field `age` in class destructure pattern
