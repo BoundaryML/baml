@@ -34,7 +34,7 @@ pub enum PathResolution {
     Unknown,
 }
 
-use rustc_hash::FxHashMap;
+use rustc_hash::{FxHashMap, FxHashSet};
 
 use crate::{
     contributions::FileSymbolContributions,
@@ -194,6 +194,7 @@ pub(crate) fn visible_binding_at_in_scopes(
 pub struct SemanticIndexExtra {
     pub diagnostics: Vec<Hir2Diagnostic>,
     pub lowering_diagnostics: Vec<LoweringDiagnostic>,
+    pub invalid_pattern_bindings: FxHashMap<(FileScopeId, PatId), FxHashSet<Name>>,
 }
 
 // ── FileSemanticIndex ────────────────────────────────────────────────────────

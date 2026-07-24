@@ -15335,23 +15335,36 @@ impl TypeInferenceBuilder<'_> {
         irrefutable: Option<IrrefutablePatternContext>,
         scrut_ty: &Ty,
     ) {
+        let invalid_names = self.invalid_pattern_binding_names(pattern);
+
         // Per-binding pattern_types entry — keyed by source PatId so
         // LSP/codegen can look up the binding's type at any of its source
         // positions (or-pattern alternatives, chain alias binds, etc.).
         for binding in &result.bindings {
-            self.pattern_types
-                .insert(binding.pat_id, binding.ty.clone());
+            let ty = if invalid_names.contains(&binding.name) {
+                Ty::Error {
+                    attr: TyAttr::default(),
+                }
+            } else {
+                binding.ty.clone()
+            };
+            self.pattern_types.insert(binding.pat_id, ty);
         }
 
         // Scope registration. `locals` is by-name so duplicate names
         // (or-pattern alternatives) collapse to the last declared.
         for binding in &result.bindings {
-            let current_ty = if matches!(binding.ty, Ty::Never { .. }) {
-                declared_for_scope
-                    .cloned()
-                    .unwrap_or_else(|| binding.ty.clone())
+            let binding_ty = if invalid_names.contains(&binding.name) {
+                Ty::Error {
+                    attr: TyAttr::default(),
+                }
             } else {
                 binding.ty.clone()
+            };
+            let current_ty = if matches!(binding_ty, Ty::Never { .. }) {
+                declared_for_scope.cloned().unwrap_or(binding_ty)
+            } else {
+                binding_ty
             };
             self.declare_scoped_local(
                 binding.name.clone(),
@@ -15381,6 +15394,26 @@ impl TypeInferenceBuilder<'_> {
                 ctx.context,
             );
         }
+    }
+
+    fn invalid_pattern_binding_names(&self, pattern: PatId) -> FxHashSet<Name> {
+        let Some(source_map) = self.body_source_map.as_ref() else {
+            return FxHashSet::default();
+        };
+        let db = self.context.db();
+        let file = self.context.scope().file(db);
+        let index = baml_compiler2_ppir::file_semantic_index(db, file);
+        let pattern_scope = index.scope_at_offset(source_map.pattern_span(pattern).start(), None);
+        index
+            .extra
+            .as_ref()
+            .and_then(|extra| {
+                extra
+                    .invalid_pattern_bindings
+                    .get(&(pattern_scope, pattern))
+            })
+            .cloned()
+            .unwrap_or_default()
     }
 }
 

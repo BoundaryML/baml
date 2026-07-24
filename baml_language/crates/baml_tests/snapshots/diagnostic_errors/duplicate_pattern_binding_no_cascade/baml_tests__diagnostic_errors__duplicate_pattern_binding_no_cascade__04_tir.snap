@@ -1,0 +1,24 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== TIR2 ===
+class user.Person {
+  age: int
+  name: string
+}
+function user.string_last(person: user.Person) -> int throws never {
+  { : !error
+    let Person { age: item, name: item } = person : user.Person
+    item : !error
+  }
+}
+function user.int_last(person: user.Person) -> string throws never {
+  { : !error
+    let Person { name: item, age: item } = person : user.Person
+    item : !error
+  }
+}
+class user.Person$stream {
+  age: int | null
+  name: string | null
+}

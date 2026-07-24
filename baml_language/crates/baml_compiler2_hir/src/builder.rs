@@ -11,7 +11,7 @@ use std::sync::Arc;
 use baml_base::{Name, SourceFile};
 use baml_compiler_diagnostics::diagnostic::DiagnosticId;
 use baml_compiler2_ast::{self as ast, LoweringDiagnostic};
-use rustc_hash::FxHashMap;
+use rustc_hash::{FxHashMap, FxHashSet};
 use text_size::{TextRange, TextSize};
 
 use crate::{
@@ -37,6 +37,12 @@ struct PathRootReference {
     use_scope: FileScopeId,
     use_offset: TextSize,
     owner_lambda: Option<FileScopeId>,
+}
+
+#[derive(Default)]
+struct PatternNames {
+    names: FxHashMap<Name, TextRange>,
+    duplicates: FxHashSet<Name>,
 }
 
 /// The head name used to seed an impl's stable `ImplId` from a target
@@ -85,6 +91,7 @@ pub struct SemanticIndexBuilder<'db> {
     value_contributions: Vec<(Name, Contribution<'db>)>,
     diagnostics: Vec<Hir2Diagnostic>,
     lowering_diagnostics: Vec<LoweringDiagnostic>,
+    invalid_pattern_bindings: FxHashMap<(FileScopeId, ast::PatId), FxHashSet<Name>>,
     env_var_refs: Vec<baml_compiler2_ast::EnvVarRef>,
 }
 
@@ -107,6 +114,7 @@ impl<'db> SemanticIndexBuilder<'db> {
             value_contributions: Vec::new(),
             diagnostics: Vec::new(),
             lowering_diagnostics: Vec::new(),
+            invalid_pattern_bindings: FxHashMap::default(),
             env_var_refs: Vec::new(),
         }
     }
@@ -177,12 +185,16 @@ impl<'db> SemanticIndexBuilder<'db> {
             })
             .collect();
 
-        let extra = if self.diagnostics.is_empty() && self.lowering_diagnostics.is_empty() {
+        let extra = if self.diagnostics.is_empty()
+            && self.lowering_diagnostics.is_empty()
+            && self.invalid_pattern_bindings.is_empty()
+        {
             None
         } else {
             Some(Box::new(SemanticIndexExtra {
                 diagnostics: self.diagnostics,
                 lowering_diagnostics: self.lowering_diagnostics,
+                invalid_pattern_bindings: self.invalid_pattern_bindings,
             }))
         };
 
@@ -779,8 +791,13 @@ impl<'db> SemanticIndexBuilder<'db> {
         let names =
             Self::collect_pattern_names(&body.patterns, pat_id, source_map, &mut self.diagnostics);
 
-        for (name, name_range) in names {
-            let scope_id = self.current_scope_id();
+        let scope_id = self.current_scope_id();
+        if !names.duplicates.is_empty() {
+            self.invalid_pattern_bindings
+                .insert((scope_id, pat_id), names.duplicates);
+        }
+
+        for (name, name_range) in names.names {
             self.scope_bindings[scope_id.index() as usize]
                 .bindings
                 .push(LocalBinding {
@@ -810,20 +827,22 @@ impl<'db> SemanticIndexBuilder<'db> {
         pat_id: ast::PatId,
         source_map: &ast::AstSourceMap,
         diagnostics: &mut Vec<Hir2Diagnostic>,
-    ) -> FxHashMap<Name, TextRange> {
+    ) -> PatternNames {
         match &patterns[pat_id] {
-            ast::Pattern::Wildcard | ast::Pattern::Type(_) => FxHashMap::default(),
+            ast::Pattern::Wildcard | ast::Pattern::Type(_) => PatternNames::default(),
             ast::Pattern::Bind { name, subpat } => {
-                let mut m = FxHashMap::default();
-                m.insert(name.clone(), source_map.pattern_span(pat_id));
+                let mut result = PatternNames::default();
+                result
+                    .names
+                    .insert(name.clone(), source_map.pattern_span(pat_id));
                 if let Some(sp) = subpat {
                     let inner = Self::collect_pattern_names(patterns, *sp, source_map, diagnostics);
-                    Self::merge_with_dup_check(&mut m, inner, diagnostics);
+                    Self::merge_with_dup_check(&mut result, inner, diagnostics);
                 }
-                m
+                result
             }
             ast::Pattern::Class { fields, .. } => {
-                let mut m: FxHashMap<Name, TextRange> = FxHashMap::default();
+                let mut result = PatternNames::default();
                 let mut seen_fields: FxHashMap<Name, Vec<TextRange>> = FxHashMap::default();
                 for f in fields {
                     seen_fields
@@ -832,14 +851,14 @@ impl<'db> SemanticIndexBuilder<'db> {
                         .push(f.field_span);
                     let inner =
                         Self::collect_pattern_names(patterns, f.pat, source_map, diagnostics);
-                    Self::merge_with_dup_check(&mut m, inner, diagnostics);
+                    Self::merge_with_dup_check(&mut result, inner, diagnostics);
                 }
                 for (name, sites) in seen_fields {
                     if sites.len() > 1 {
                         diagnostics.push(Hir2Diagnostic::DuplicatePatternField { name, sites });
                     }
                 }
-                m
+                result
             }
             ast::Pattern::Array {
                 prefix,
@@ -847,41 +866,46 @@ impl<'db> SemanticIndexBuilder<'db> {
                 suffix,
                 ascription: _,
             } => {
-                let mut m: FxHashMap<Name, TextRange> = FxHashMap::default();
+                let mut result = PatternNames::default();
                 for id in prefix {
                     let inner = Self::collect_pattern_names(patterns, *id, source_map, diagnostics);
-                    Self::merge_with_dup_check(&mut m, inner, diagnostics);
+                    Self::merge_with_dup_check(&mut result, inner, diagnostics);
                 }
                 if let Some(rest) = rest
                     && let Some(id) = rest.pat
                 {
                     let inner = Self::collect_pattern_names(patterns, id, source_map, diagnostics);
-                    Self::merge_with_dup_check(&mut m, inner, diagnostics);
+                    Self::merge_with_dup_check(&mut result, inner, diagnostics);
                 }
                 for id in suffix {
                     let inner = Self::collect_pattern_names(patterns, *id, source_map, diagnostics);
-                    Self::merge_with_dup_check(&mut m, inner, diagnostics);
+                    Self::merge_with_dup_check(&mut result, inner, diagnostics);
                 }
-                m
+                result
             }
             ast::Pattern::Or(parts) => {
                 // Each alternative is its own branch. Collect them
                 // independently; duplicates are checked per-branch (already
                 // done by the recursive call), and across-branch parity is
                 // checked here.
-                let branch_sets: Vec<FxHashMap<Name, TextRange>> = parts
+                let branch_sets: Vec<PatternNames> = parts
                     .iter()
                     .map(|id| Self::collect_pattern_names(patterns, *id, source_map, diagnostics))
                     .collect();
 
+                let duplicates = branch_sets
+                    .iter()
+                    .flat_map(|branch| branch.duplicates.iter().cloned())
+                    .collect();
                 let mut has_mismatch = false;
                 if let Some(first) = branch_sets.first() {
-                    let first_names: std::collections::BTreeSet<&Name> = first.keys().collect();
+                    let first_names: std::collections::BTreeSet<&Name> =
+                        first.names.keys().collect();
                     let mut mismatched: std::collections::BTreeSet<Name> =
                         std::collections::BTreeSet::new();
                     for branch in &branch_sets[1..] {
                         let branch_names: std::collections::BTreeSet<&Name> =
-                            branch.keys().collect();
+                            branch.names.keys().collect();
                         for n in first_names.symmetric_difference(&branch_names) {
                             mismatched.insert((*n).clone());
                         }
@@ -912,11 +936,20 @@ impl<'db> SemanticIndexBuilder<'db> {
                     // (`let x | _` vs `_ | let x` would otherwise behave
                     // differently). The primary diagnostic above captures
                     // the error.
-                    FxHashMap::default()
+                    PatternNames {
+                        names: FxHashMap::default(),
+                        duplicates,
+                    }
                 } else {
                     // Every branch introduces the same set, so the first
                     // branch's contribution is representative.
-                    branch_sets.into_iter().next().unwrap_or_default()
+                    PatternNames {
+                        names: branch_sets
+                            .into_iter()
+                            .next()
+                            .map_or_else(FxHashMap::default, |branch| branch.names),
+                        duplicates,
+                    }
                 }
             }
         }
@@ -925,18 +958,20 @@ impl<'db> SemanticIndexBuilder<'db> {
     /// Merge `source` into `target`. Any name already present in `target`
     /// produces a `DuplicatePatternBinding` diagnostic.
     fn merge_with_dup_check(
-        target: &mut FxHashMap<Name, TextRange>,
-        source: FxHashMap<Name, TextRange>,
+        target: &mut PatternNames,
+        source: PatternNames,
         diagnostics: &mut Vec<Hir2Diagnostic>,
     ) {
-        for (name, range) in source {
-            if let Some(prev) = target.get(&name) {
+        target.duplicates.extend(source.duplicates);
+        for (name, range) in source.names {
+            if let Some(prev) = target.names.get(&name) {
                 diagnostics.push(Hir2Diagnostic::DuplicatePatternBinding {
                     name: name.clone(),
                     sites: vec![*prev, range],
                 });
+                target.duplicates.insert(name);
             } else {
-                target.insert(name, range);
+                target.names.insert(name, range);
             }
         }
     }
