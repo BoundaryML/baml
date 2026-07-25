@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1400" height="820" viewBox="0 0 1400 820">
+  <defs><filter id="s"><feDropShadow dx="0" dy="4" stdDeviation="5" flood-opacity=".12"/></filter><marker id="a" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto"><path d="M0 0L10 5L0 10z" fill="#444"/></marker><style>.t{font-family:Arial,sans-serif;font-size:38px;font-weight:700;fill:#191b20}.h{font-family:Arial,sans-serif;font-size:23px;font-weight:700;fill:#292c33}.b{font-family:Arial,sans-serif;font-size:18px;font-weight:500;fill:#383d46}.m{font-family:Menlo,monospace;font-size:15px;font-weight:700;fill:#252830}.box{stroke:#343941;stroke-width:2.5;rx:20;filter:url(#s)}.ar{stroke:#444;stroke-width:3;fill:none;marker-end:url(#a)}</style></defs>
+  <rect width="1400" height="820" fill="#fffdf8"/><text x="700" y="58" text-anchor="middle" class="t">Round one: the semantic tool made agents do more work</text>
+  <rect x="55" y="120" width="430" height="275" fill="#e8f3ff" class="box"/><text x="270" y="165" text-anchor="middle" class="h">Claude Code</text>
+  <text x="90" y="220" class="b">grep-only</text><text x="265" y="220" class="m">39s · 5 calls · $0.38</text>
+  <text x="90" y="275" class="b">describe skill</text><text x="265" y="275" class="m">99s · 7 calls · $0.44</text>
+  <text x="90" y="330" class="b">navigator agent</text><text x="265" y="330" class="m">151s · 10 calls · $0.49</text>
+  <rect x="515" y="120" width="430" height="275" fill="#f2ecff" class="box"/><text x="730" y="165" text-anchor="middle" class="h">Codex</text>
+  <text x="550" y="230" class="b">grep-only</text><text x="705" y="230" class="m">48s · 7 calls · 62.5k in</text>
+  <text x="550" y="300" class="b">describe skill</text><text x="705" y="300" class="m">66s · 13 calls · 137.6k in</text>
+  <text x="550" y="355" class="b">Accuracy was essentially tied.</text>
+  <rect x="975" y="120" width="370" height="275" fill="#ffe3e3" class="box"/><text x="1160" y="165" text-anchor="middle" class="h">Verdict</text>
+  <text x="1010" y="225" class="b">Same correctness</text><text x="1010" y="270" class="b">More time</text><text x="1010" y="315" class="b">More calls</text><text x="1010" y="360" class="b">More context</text>
+  <path d="M700 415 V470" class="ar"/>
+  <rect x="80" y="485" width="1240" height="265" fill="#fff3bf" class="box"/><text x="700" y="530" text-anchor="middle" class="h">The traces explained the loss</text>
+  <text x="125" y="585" class="b">① 50 KB default project map</text><text x="495" y="585" class="b">② ~7s named-symbol lookup</text><text x="910" y="585" class="b">③ one process per symbol</text>
+  <text x="125" y="650" class="b">④ overview → source double hop</text><text x="495" y="650" class="b">⑤ output not designed for agents</text><text x="910" y="650" class="b">⑥ must-use guidance too rigid</text>
+  <text x="700" y="713" text-anchor="middle" class="m">The score said “lost.” The traces became the feature list.</text>
+</svg>

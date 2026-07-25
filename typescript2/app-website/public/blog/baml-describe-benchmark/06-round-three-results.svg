@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1400" height="860" viewBox="0 0 1400 860">
+  <defs>
+    <filter id="shadow"><feDropShadow dx="0" dy="4" stdDeviation="5" flood-opacity=".11"/></filter>
+    <style>
+      .title{font-family:Arial,sans-serif;font-size:38px;font-weight:700;fill:#181a20}.sub{font-family:Arial,sans-serif;font-size:19px;font-weight:500;fill:#555b65}.head{font-family:Arial,sans-serif;font-size:22px;font-weight:700;fill:#262930}.body{font-family:Arial,sans-serif;font-size:17px;font-weight:600;fill:#373b44}.metric{font-family:Menlo,monospace;font-size:17px;font-weight:700;fill:#252830}.win{fill:#187a36}.loss{fill:#b54834}.box{stroke:#353a43;stroke-width:2.5;rx:20;filter:url(#shadow)}
+    </style>
+  </defs>
+  <rect width="1400" height="860" fill="#fffdf8"/>
+  <text x="700" y="58" text-anchor="middle" class="title">Round three: the correctness gate passed</text>
+  <text x="700" y="92" text-anchor="middle" class="sub">30 runs · 3-vote blinded judge · precision 1.000 on every run</text>
+
+  <rect x="55" y="135" width="620" height="285" fill="#f2ecff" class="box"/>
+  <text x="365" y="178" text-anchor="middle" class="head">Codex · 13.3k-line repo</text>
+  <text x="95" y="230" class="body">Natural</text><text x="350" y="230" class="metric">49s · 86.7k in · 0.857 cov.</text>
+  <text x="95" y="282" class="body">Matched grep</text><text x="350" y="282" class="metric">46s · 78.8k in · 1.000 cov.</text>
+  <text x="95" y="334" class="body">Describe slim</text><text x="350" y="334" class="metric win">41s · 61.6k in · 1.000 cov.</text>
+  <text x="365" y="390" text-anchor="middle" class="body">−22% input vs the matched grep control</text>
+
+  <rect x="725" y="135" width="620" height="285" fill="#e7f6ec" class="box"/>
+  <text x="1035" y="178" text-anchor="middle" class="head">Claude · 13.3k-line repo</text>
+  <text x="765" y="245" class="body">Natural</text><text x="1015" y="245" class="metric">57s · 8 calls · $0.515</text>
+  <text x="765" y="310" class="body">Describe slim</text><text x="1015" y="310" class="metric win">66s · 5 calls · $0.325</text>
+  <text x="1035" y="365" text-anchor="middle" class="body">Perfect correctness · 37% lower cost</text>
+  <text x="1035" y="395" text-anchor="middle" class="body loss">Remaining loss: +9s wall time</text>
+
+  <rect x="55" y="465" width="620" height="285" fill="#e8f3ff" class="box"/>
+  <text x="365" y="508" text-anchor="middle" class="head">Untuned staging audit</text>
+  <text x="95" y="570" class="body">Natural</text><text x="350" y="570" class="metric">71s · 91.3k in</text>
+  <text x="95" y="635" class="body">Describe slim</text><text x="350" y="635" class="metric win">58s · 49.7k in</text>
+  <text x="365" y="695" text-anchor="middle" class="body">Same findings after hand-checking the rubric artifact</text>
+
+  <rect x="725" y="465" width="620" height="285" fill="#fff0e5" class="box"/>
+  <text x="1035" y="508" text-anchor="middle" class="head">Small repo · 1.8k lines</text>
+  <text x="765" y="555" class="body">Natural</text><text x="1015" y="555" class="metric">47s · 48.7k · 1.000 cov.</text>
+  <text x="765" y="605" class="body">Matched grep</text><text x="1015" y="605" class="metric">41s · 45.5k · 0.889 cov.</text>
+  <text x="765" y="655" class="body">Describe slim</text><text x="1015" y="655" class="metric win">48s · 50.4k · 1.000 cov.</text>
+  <text x="1035" y="705" text-anchor="middle" class="body loss">Coverage win; efficiency still loses</text>
+
+  <rect x="225" y="790" width="950" height="48" rx="18" fill="#fff3bf" stroke="#d79b00" stroke-width="2"/>
+  <text x="700" y="821" text-anchor="middle" class="head">Slim guidance fixed the two red cells without changing the CLI.</text>
+</svg>

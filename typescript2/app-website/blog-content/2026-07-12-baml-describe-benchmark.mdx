@@ -1,0 +1,164 @@
+---
+title: "We benchmarked BAML describe against grep."
+description: What 125 agent runs taught us about compiler-aware code navigation, agent steering, and the cases where grep still wins.
+slug: baml-describe-benchmark
+date: Jul 12, 2026
+tags: ['research', 'engineering']
+author:
+  name: Ashley Ha
+---
+
+`BAML describe` exists because we wanted a tool that could search a BAML codebase faster & with less token cost, than grep / find initially did.
+
+The first version ended up being formative in a variety of ways: it let us look at the logs. We could see what Claude was doing, what Codex was doing, whether they were even using `BAML describe`, how they were using it, & how many tool calls they were making.
+
+That visibility helped us shape the next version of `describe`.
+
+![The benchmark loop: real codebase questions go through isolated agent conditions & a blinded judge.](/blog/baml-describe-benchmark/01-benchmark-loop.svg)
+
+## The first benchmark
+
+We ran 45 agent runs on a real BAML app with 53 files & 13,293 lines. The agents answered three cross-file questions, three times per condition, using Claude Code & Codex. Every answer was graded against a key we verified by hand from the raw source.
+
+We tested three ways of introducing our rough semantic codebase discovery tool: explicitly forbidding BAML describe, explicitly telling the agent to use BAML describe with grep available when needed & also delegating navigation to a describe-focused subagent.
+
+Initially, grep won in speed, calls & cost.
+
+| condition | wall time | calls | cost / input tokens |
+|---|---:|---:|---:|
+| Claude, grep only | **39s** | **5** | **$0.38** |
+| Claude, describe skill | 99s | 7 | $0.44 |
+| Claude, describe subagent | 151s | 10 | $0.49 |
+| Codex, grep only | **48s** | **7** | **62,537 input** |
+| Codex, describe skill | 66s | 13 | 137,606 input |
+
+Correctness was close enough that describe had no accuracy win to offset the extra time & context. The first public version was simply worse at the workflow it was supposed to improve.
+
+![Round one results & the failure modes visible in the traces.](/blog/baml-describe-benchmark/02-round-one-lost.svg)
+
+## What the agents were actually doing
+
+The seven-second symbol lookup & the repeated one-symbol calls were an obvious loss. If it takes that long to look up one symbol, then launches the same process again for the next symbol, it is going to do worse than grep.
+
+One run made six separate `baml describe X --view source` calls. The default project map was 594 lines, about 50 KB. Claude truncated it with `head` & sometimes removed a symbol it needed. Codex read the whole thing & paid for it in input tokens. On the frozen round-one binary, a named-symbol lookup took about 7.25 seconds; the equivalent `rg` search took roughly 0.05 seconds.
+
+The benchmark score said grep won. The logs were more useful because they showed us why.
+
+After seeing those traces, it became much clearer how we needed to steer the agent. Grep & find are fast, but agents often collect information they do not need. BAML describe should help narrow that path, not try to replace every source read.
+
+## Version two followed the agent's existing loop
+
+The CLI changed around what the agents were already doing.
+
+Semantic `describe --grep` made discovery targeted instead of printing the full project. Multi-symbol batching removed the one-process-per-symbol pattern. Agent mode put relationships & citations before large source bodies. Hard output limits stopped a useful lookup from turning into a context dump.
+
+The named-symbol latency disappeared too: 7.25 seconds on the round-one frozen binary became 0.29 seconds for source view on the round-two binary. A big win.
+
+In one rerun, BAML output fell from about 22 KB to 2.3 KB.
+
+![The bounded hybrid path: semantic discovery, one expansion, then source verification.](/blog/baml-describe-benchmark/03-bounded-hybrid.svg)
+
+The guidance still had two problems though. It loaded a 19.6 KB BAML skill on every run, even though most of that document was a language tutorial unrelated to navigation. It also told the agent to use no more than three shell commands. That made the runs disciplined, but on a small repo it caused the agent to skip test files & miss facts.
+
+So round three changed only the guidance layer. The full skill became a 2.6 KB navigation note. The hard command cap became a preference: aim for three commands, but read more when completeness requires tests, prompts, or configuration.
+
+No CLI changes.
+
+## Round three
+
+Round three ran 30 more agent sessions (Claude Code & Codex) with the same frozen binary, hand-verified keys, hermetic agent setups & three-vote blinded judge.
+
+Precision was 1.000 on every run with nothing fabricated.
+
+On the large Codex repository, describe used 61.6k input tokens versus 78.8k for the matched grep-discipline control & 86.7k for natural navigation. It was also fastest: 41 seconds versus 46 & 49.
+
+On Claude, describe used five tool calls instead of eight & cost $0.325 instead of $0.515, with perfect coverage & precision on both sides. Claude wall time did not improve in this cell: 66 seconds versus 57. Fewer turns were cheaper but each describe turn was a bit longer.
+
+The small repo result changed in a more interesting way. Describe reached 1.000 coverage on every judge vote. The matched grep control stayed at 0.889 & skipped the same test-file fact it had missed before, even though both conditions received identical adaptive-budget instructions. The usage & impact views surfaced those tests directly.
+
+![Round three fixed the correctness & token gates, while leaving two honest losses.](/blog/baml-describe-benchmark/06-round-three-results.svg)
+
+That small repository is also where describe still does not win on efficiency. It used 50.4k input tokens versus 45.5k for disciplined grep, & took 48 seconds versus 41. On a 1,807-line repo there is not much source for semantic navigation to compress. The navigation document & CLI output become overhead.
+
+This is what we're solving next.
+
+## The dependency-direction benchmark
+
+We later added the opposite of impact analysis:
+
+```bash
+baml describe <SYMBOL> --view dependencies
+```
+
+`--view impact` shows what could be affected by changing a symbol. `--view dependencies` shows what the symbol itself relies on: its input & output types, direct type relationships, fields, functions, methods, enum variants & builtins.
+
+We ran a Claude-only follow-up on three codebases: a plain function, a qualified namespaced function & a qualified class method. Each condition ran twice, producing 18 sessions in the final matrix.
+
+| condition | wall time | calls | cost | context processed |
+|---|---:|---:|---:|---:|
+| natural navigation | 52.5s | 6.5 | $0.281 | 163.0k |
+| bounded grep control | 66s | 7.5 | $0.253 | 209.6k |
+| guided `describe` | **37s** | **3.5** | **$0.152** | **95.3k** |
+
+The new view was 30% faster than natural navigation, used 46% fewer tool calls, cost 46% less & processed 42% less context. It won the median efficiency metrics in all three examples.
+
+The extra runs also did exactly what a benchmark should do: they found a bug. In the parser case, `TokKind.Assign` was initially reported as an unrelated class named `Assign`. We changed member resolution to prefer the qualified enum variant, added regression tests & reran the affected six sessions before keeping the result.
+
+The dependency lists were complete after that fix. The agents still sometimes added behavioral explanations that went beyond what the source proved, across every condition, so this is an efficiency result rather than a claim that generated prose is automatically perfect.
+
+The [standalone runner script](https://github.com/ashley-ha/baml/blob/describe-agent-improvements/docs/benchmarks/baml-describe-dependencies/run-claude-benchmark.sh) runs the same isolated Claude conditions against any local BAML project:
+
+```bash
+./docs/benchmarks/baml-describe-dependencies/run-claude-benchmark.sh \
+  ../baml-demos/bamlcode \
+  "For agent.tool_edit_file, identify its contract and implementation dependencies. Include file:line citations."
+
+# Cheaper smoke test: natural versus describe, one run each.
+REPS=1 VARIANTS=natural,guided-hybrid-slim \
+  ./docs/benchmarks/baml-describe-dependencies/run-claude-benchmark.sh \
+  ../baml-demos/bamlcode \
+  "For agent.tool_edit_file, identify its contract and implementation dependencies. Include file:line citations."
+```
+
+The sanitized command-and-answer transcripts are included with the [`baml describe` PR](https://github.com/BoundaryML/baml/pull/3989). The raw trace folders are intentionally excluded because the isolated Claude home contains authentication material.
+
+## A broader intent benchmark
+
+The dependency benchmark deliberately focused on one new view. We followed it with a broader Claude-only matrix to see whether agents could choose among `overview`, `source`, `usage`, `impact`, `dependencies`, and semantic search without the question naming `baml describe` at all.
+
+The eight questions ranged from simple requests like “What does `parse_trophy` do?” to thrown-error analysis, test coverage, type-change impact, and a cross-file parser change. We compared natural navigation, a bounded grep control, a guided BAML condition whose `CLAUDE.md` explained how to route each intent, and a dedicated BAML describe subagent called once by the main agent.
+
+| condition | wall time | calls | cost | context processed |
+|---|---:|---:|---:|---:|
+| natural navigation | **23s** | 3 | $0.203 | 84.7k |
+| bounded grep control | 25.5s | 4 | $0.155 | 95.9k |
+| guided `describe` | 25s | **2** | **$0.117** | **71.0k** |
+| `describe` subagent | 30s | 3.5 | $0.129 | **69.9k** |
+
+Guided BAML used 33% fewer tool calls than natural navigation, cost 43% less, and processed 16% less context. Natural navigation was still two seconds faster at the median.
+
+The subagent processed slightly less context than direct guidance, but the handoff added a turn: it was five seconds slower, used 75% more calls, and cost 10% more. The main agent delegated exactly once in every cell and made no code-navigation calls itself, so this was a real specialist handoff rather than a label in the prompt.
+
+Natural navigation, grep, and direct guided BAML each produced seven complete core answers and one partial answer. The subagent produced five complete and three partial answers. It also missed the lexical prompt contract, treated propagated builtin errors as out of scope for `agent.tool_edit_file`, and stopped before one deeper parser error origin.
+
+The per-question results matter more than the median. Direct guided BAML was especially efficient for direct source, complete error-contract, and test-coverage questions. The subagent's best result was the hardest one: the full `break;` architecture question fell from 105 seconds naturally to 82, from $0.515 to $0.277, and from 187k context to 158k. But it used 16 calls, and a simple test-coverage question ballooned to 11 calls and 67 seconds while it tried to recover test bodies through semantic search.
+
+This matrix used one run per question and condition, so we treat it as directional evidence, not a stable population estimate. Its main value is showing that the agent can choose useful views from ordinary questions—and exposing the workflows where the instructions or CLI still need work.
+
+## Agents did not adopt the tool on their own
+
+One finding had nothing to do with speed.
+
+Claude had the full describe documentation verified in its context & a describe navigator available. Without an explicit instruction, it ignored both & delegated the search to its built-in Explore agent.
+
+Nothing failed. The familiar path simply won. This proves that including specific instructions to use `BAML describe` + grep together is important to include in an AGENTS.md & CLAUDE.md to help steer the agent.
+
+![The adoption gap: having documentation in context is not the same as changing agent behavior.](/blog/baml-describe-benchmark/05-adoption-gap.svg)
+
+That matters for anyone shipping tools to agents. Making a command available is not the same as making it part of the workflow. Sometimes the product is the command. Sometimes it is the instruction, wrapper, or subagent that reliably puts the command in the path.
+
+We're not trying to completely take away grep. The question is how these tools can work together to make navigation faster, more efficient, & cheaper—and where the extra semantic layer is actually worth paying for.
+
+We're building the first agent-first programming language, so [try BAML early access](https://boundaryml.com/eap).
+
+And [come chat with us on Discord](https://discord.com/invite/yzaTpQ3tdT)!
