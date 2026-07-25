@@ -54,11 +54,15 @@ class PackageManagerArtifactsTest(unittest.TestCase):
             self.assertIn('features: "no-self-update"', formula)
             self.assertIn("test do", formula)
             self.assertIn(
-                'system bin/"baml", "toolchain", "use", "canary"', formula
+                f'assert_match "baml wrapper {VERSION}"', formula
             )
-            self.assertIn('system bin/"baml", "init"', formula)
-            self.assertIn('system bin/"baml", "check"', formula)
+            self.assertIn('shell_output("#{bin}/baml --version")', formula)
+            self.assertIn('assert_match "installed toolchains: (none)"', formula)
+            self.assertIn('shell_output("#{bin}/baml toolchain list")', formula)
             self.assertIn("self-update is disabled in this build", formula)
+            self.assertNotIn('"toolchain", "use"', formula)
+            self.assertNotIn('system bin/"baml", "init"', formula)
+            self.assertNotIn('system bin/"baml", "check"', formula)
             self.assertNotIn('toolchains/1.2.3', formula)
             self.assertNotIn("on_macos", formula)
             self.assertNotIn("/releases/download/", formula)
