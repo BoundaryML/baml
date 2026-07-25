@@ -52,7 +52,7 @@ class PackageManagerArtifactsTest(unittest.TestCase):
             )
 
             formula = (output / "homebrew/Formula/baml.rb").read_text()
-            self.assertIn(f'version "{VERSION}"', formula)
+            self.assertNotRegex(formula, r"(?m)^\s*version\s")
             self.assertNotIn("livecheck do", formula)
             self.assertIn("on_macos do", formula)
             self.assertIn("on_linux do", formula)
@@ -62,7 +62,9 @@ class PackageManagerArtifactsTest(unittest.TestCase):
                     formula,
                 )
                 self.assertIn(f'sha256 "{archive_shas[target]}"', formula)
+            self.assertIn('if (buildpath/"bin/baml").exist?', formula)
             self.assertIn('bin.install "bin/baml"', formula)
+            self.assertIn('bin.install "baml"', formula)
             self.assertIn("test do", formula)
             self.assertIn(
                 f'assert_match "baml wrapper {VERSION}"', formula

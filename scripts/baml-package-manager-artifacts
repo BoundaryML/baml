@@ -40,7 +40,6 @@ def render_formula(version: str, shas: dict[str, str]) -> str:
     return f'''class Baml < Formula
   desc "Toolchain manager and launcher for the BAML language"
   homepage "https://github.com/BoundaryML/baml"
-  version "{version}"
   license "Apache-2.0"
 
   on_macos do
@@ -68,7 +67,11 @@ def render_formula(version: str, shas: dict[str, str]) -> str:
   end
 
   def install
-    bin.install "bin/baml"
+    if (buildpath/"bin/baml").exist?
+      bin.install "bin/baml"
+    else
+      bin.install "baml"
+    end
   end
 
   def caveats
