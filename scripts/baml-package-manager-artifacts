@@ -13,6 +13,12 @@ AUR_BIN_TARGETS = {
     "linux_intel": "x86_64-unknown-linux-gnu",
 }
 
+HOMEBREW_TARGETS = {
+    "mac_arm": "aarch64-apple-darwin",
+    "mac_intel": "x86_64-apple-darwin",
+    **AUR_BIN_TARGETS,
+}
+
 
 def sha256(path: Path) -> str:
     h = hashlib.sha256()
@@ -30,28 +36,39 @@ def wrapper_archive(wrapper_dir: Path, version: str, target: str) -> Path:
     return path
 
 
-def render_formula(version: str, source_sha256: str) -> str:
+def render_formula(version: str, shas: dict[str, str]) -> str:
     return f'''class Baml < Formula
   desc "Toolchain manager and launcher for the BAML language"
   homepage "https://github.com/BoundaryML/baml"
-  url "https://github.com/BoundaryML/baml/archive/refs/tags/baml-wrapper-{version}.tar.gz"
-  sha256 "{source_sha256}"
+  version "{version}"
   license "Apache-2.0"
 
-  livecheck do
-    url :stable
-    regex(/^baml-wrapper[._-]v?(\\d+(?:\\.\\d+)+)$/i)
+  on_macos do
+    on_arm do
+      url "https://github.com/BoundaryML/baml/releases/download/baml-wrapper-{version}/baml-wrapper-no-self-update-{version}-{HOMEBREW_TARGETS["mac_arm"]}.tar.gz"
+      sha256 "{shas[HOMEBREW_TARGETS["mac_arm"]]}"
+    end
+
+    on_intel do
+      url "https://github.com/BoundaryML/baml/releases/download/baml-wrapper-{version}/baml-wrapper-no-self-update-{version}-{HOMEBREW_TARGETS["mac_intel"]}.tar.gz"
+      sha256 "{shas[HOMEBREW_TARGETS["mac_intel"]]}"
+    end
   end
 
-  depends_on "cmake" => :build
-  depends_on "rust" => :build
+  on_linux do
+    on_arm do
+      url "https://github.com/BoundaryML/baml/releases/download/baml-wrapper-{version}/baml-wrapper-no-self-update-{version}-{HOMEBREW_TARGETS["linux_arm"]}.tar.gz"
+      sha256 "{shas[HOMEBREW_TARGETS["linux_arm"]]}"
+    end
+
+    on_intel do
+      url "https://github.com/BoundaryML/baml/releases/download/baml-wrapper-{version}/baml-wrapper-no-self-update-{version}-{HOMEBREW_TARGETS["linux_intel"]}.tar.gz"
+      sha256 "{shas[HOMEBREW_TARGETS["linux_intel"]]}"
+    end
+  end
 
   def install
-    system "cargo", "install",
-           *std_cargo_args(
-             path:     "baml_language/crates/baml",
-             features: "no-self-update",
-           )
+    bin.install "bin/baml"
   end
 
   def caveats
@@ -119,15 +136,13 @@ def main() -> None:
 
     args.out.mkdir(parents=True, exist_ok=True)
     shas = {
-        name: sha256(wrapper_archive(args.wrapper_dir, args.version, target))
-        for name, target in AUR_BIN_TARGETS.items()
+        target: sha256(wrapper_archive(args.wrapper_dir, args.version, target))
+        for target in HOMEBREW_TARGETS.values()
     }
 
     formula_dir = args.out / "homebrew" / "Formula"
     formula_dir.mkdir(parents=True, exist_ok=True)
-    (formula_dir / "baml.rb").write_text(
-        render_formula(args.version, args.source_sha256)
-    )
+    (formula_dir / "baml.rb").write_text(render_formula(args.version, shas))
 
     pkgver = args.version.replace("-", "_")
     aur_source = (
@@ -142,8 +157,8 @@ def main() -> None:
         .read_text()
         .replace("__VERSION__", pkgver)
         .replace("__VERSION_ORIG__", args.version)
-        .replace("__SHA256_X86_64__", shas["linux_intel"])
-        .replace("__SHA256_AARCH64__", shas["linux_arm"])
+        .replace("__SHA256_X86_64__", shas[AUR_BIN_TARGETS["linux_intel"]])
+        .replace("__SHA256_AARCH64__", shas[AUR_BIN_TARGETS["linux_arm"]])
     )
 
     aur_dir = args.out / "aur"
@@ -159,9 +174,9 @@ def main() -> None:
             pkgver,
             [
                 f"\tsource_x86_64 = https://github.com/BoundaryML/baml/releases/download/baml-wrapper-{args.version}/baml-wrapper-no-self-update-{args.version}-x86_64-unknown-linux-gnu.tar.gz",
-                f"\tsha256sums_x86_64 = {shas['linux_intel']}",
+                f"\tsha256sums_x86_64 = {shas[AUR_BIN_TARGETS['linux_intel']]}",
                 f"\tsource_aarch64 = https://github.com/BoundaryML/baml/releases/download/baml-wrapper-{args.version}/baml-wrapper-no-self-update-{args.version}-aarch64-unknown-linux-gnu.tar.gz",
-                f"\tsha256sums_aarch64 = {shas['linux_arm']}",
+                f"\tsha256sums_aarch64 = {shas[AUR_BIN_TARGETS['linux_arm']]}",
             ],
         )
     )
