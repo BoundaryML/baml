@@ -20,11 +20,11 @@ use rustc_hash::{FxHashMap, FxHashSet};
 use crate::{
     generics,
     lower_type_expr::qualify_def,
-    ty::{FunctionParamTy, QualifiedTypeName, Ty, TyAttr},
+    ty::{FunctionParamTy, ParamTy, QualifiedTypeName, Ty, TyAttr},
     type_context::AliasEquivCtx,
 };
 
-pub type TypeBindings = FxHashMap<Name, Ty>;
+pub type TypeBindings = FxHashMap<ParamTy, Ty>;
 pub type AssociatedBindings = Vec<(Name, Ty)>;
 pub type InterfaceClosureEntry<'db> = (
     baml_compiler2_hir::loc::InterfaceLoc<'db>,
@@ -148,7 +148,7 @@ fn lower_interface_associated_bindings<'db>(
     block_associated_bindings: &[baml_compiler2_ppir::item_data::AssociatedTypeBindingData],
     binding_pkg_items: &baml_compiler2_hir::package::PackageItems<'_>,
     binding_namespace_path: &[Name],
-    generic_params: &[Name],
+    generic_params: &[ParamTy],
     caller_bounds: &crate::lower_type_expr::TypeVarBoundsMap,
     diagnostics: &mut Vec<crate::infer_context::TirTypeError>,
 ) -> Vec<(Name, Ty)> {
@@ -163,16 +163,22 @@ fn lower_interface_associated_bindings<'db>(
     // concrete-base projection here would re-enter it). A residual symbolic `Self`
     // substitutes to the for-type afterwards.
     let self_name = Name::new("Self");
+    let iface_env = crate::generic_env::interface_generic_env(db, iface_loc);
+    let iface_params = crate::generic_env::interface_declared_params(db, iface_loc);
+    let self_param = iface_env
+        .resolve_param(&self_name)
+        .expect("interface Self parameter is in its environment")
+        .clone();
     let iface_qtn = interface_loc_qtn(db, iface_loc);
-    let mut value_scope: Vec<Name> = generic_params.to_vec();
-    value_scope.push(self_name.clone());
-    let mut value_bindings: rustc_hash::FxHashMap<Name, Ty> = generic_params
+    let mut value_scope = generic_params.to_vec();
+    value_scope.push(self_param.clone());
+    let mut value_bindings: TypeBindings = generic_params
         .iter()
         .map(|param| (param.clone(), Ty::TypeVar(param.clone(), TyAttr::default())))
         .collect();
-    value_bindings.insert(self_name.clone(), self_ty.clone());
+    value_bindings.insert(self_param.clone(), self_ty.clone());
     let mut resolved_pins: Vec<(Name, Ty)> = Vec::new();
-    let mut default_bindings = generics::bind_type_vars(&iface.generic_params, interface_args);
+    let mut default_bindings = generics::bind_type_vars(&iface_params, interface_args);
 
     iface
         .associated_types
@@ -186,7 +192,7 @@ fn lower_interface_associated_bindings<'db>(
                 let mut bounds = caller_bounds.clone();
                 if let Some(qtn) = &iface_qtn {
                     bounds.insert(
-                        self_name.clone(),
+                        self_param.clone(),
                         vec![baml_type::Interface::new(
                             qtn.clone(),
                             interface_args.to_vec(),
@@ -204,7 +210,7 @@ fn lower_interface_associated_bindings<'db>(
                             ns_context: binding_namespace_path,
                             generic_params: &value_scope,
                             bounds: &bounds,
-                            self_ty: Some(Ty::TypeVar(self_name.clone(), TyAttr::default())),
+                            self_ty: Some(Ty::TypeVar(self_param.clone(), TyAttr::default())),
                         },
                         diagnostics,
                     ),
@@ -217,14 +223,19 @@ fn lower_interface_associated_bindings<'db>(
                     interface_associated_type_default(db, iface_loc, assoc.name.clone())?;
                 let realized = realize_associated_default(
                     &default,
-                    &iface.generic_params,
+                    &iface_params,
                     interface_args,
+                    &self_param,
                     self_ty,
                 );
                 crate::generics::substitute_ty(&realized, &default_bindings)
             };
             resolved_pins.push((assoc.name.clone(), ty.clone()));
-            default_bindings.insert(assoc.name.clone(), ty.clone());
+            let assoc_param = iface_env
+                .resolve_any_param(&assoc.name)
+                .expect("associated type parameter is in its interface environment")
+                .clone();
+            default_bindings.insert(assoc_param, ty.clone());
             Some((assoc.name.clone(), ty))
         })
         .collect()
@@ -242,9 +253,19 @@ fn complete_interface_associated_bindings_from_tys<'db>(
     // stay a symbolic projection instead of collapsing to the interface's default.
     fill_defaults: bool,
 ) -> Vec<(Name, Ty)> {
-    let mut bindings = generics::bind_type_vars(&iface.generic_params, interface_args);
+    let iface_env = crate::generic_env::interface_generic_env(db, iface_loc);
+    let iface_params = crate::generic_env::interface_declared_params(db, iface_loc);
+    let self_param = iface_env
+        .resolve_param(&Name::new("Self"))
+        .expect("interface Self parameter is in its environment")
+        .clone();
+    let mut bindings = generics::bind_type_vars(&iface_params, interface_args);
     for (name, ty) in associated_bindings {
-        bindings.insert(name.clone(), ty.clone());
+        let param = iface_env
+            .resolve_any_param(name)
+            .expect("associated type parameter is in its interface environment")
+            .clone();
+        bindings.insert(param, ty.clone());
     }
 
     iface
@@ -256,7 +277,11 @@ fn complete_interface_associated_bindings_from_tys<'db>(
                 .find(|(name, _)| name == &assoc.name)
             {
                 let ty = generics::substitute_ty(ty, &bindings);
-                bindings.insert(assoc.name.clone(), ty.clone());
+                let assoc_param = iface_env
+                    .resolve_any_param(&assoc.name)
+                    .expect("associated type parameter is in its interface environment")
+                    .clone();
+                bindings.insert(assoc_param, ty.clone());
                 return Some((assoc.name.clone(), ty));
             }
             if !fill_defaults {
@@ -271,7 +296,12 @@ fn complete_interface_associated_bindings_from_tys<'db>(
             let self_pins: Vec<(Name, Ty)> = iface
                 .associated_types
                 .iter()
-                .filter_map(|a| bindings.get(&a.name).map(|t| (a.name.clone(), t.clone())))
+                .filter_map(|assoc| {
+                    let param = iface_env.resolve_any_param(&assoc.name)?;
+                    bindings
+                        .get(param)
+                        .map(|ty| (assoc.name.clone(), ty.clone()))
+                })
                 .collect();
             let self_ty = Ty::Interface(
                 interface_loc_qtn(db, iface_loc)?,
@@ -281,12 +311,17 @@ fn complete_interface_associated_bindings_from_tys<'db>(
             );
             let realized = realize_associated_default(
                 &default,
-                &iface.generic_params,
+                &iface_params,
                 interface_args,
+                &self_param,
                 &self_ty,
             );
             let ty = crate::generics::substitute_ty(&realized, &bindings);
-            bindings.insert(assoc.name.clone(), ty.clone());
+            let assoc_param = iface_env
+                .resolve_any_param(&assoc.name)
+                .expect("associated type parameter is in its interface environment")
+                .clone();
+            bindings.insert(assoc_param, ty.clone());
             Some((assoc.name.clone(), ty))
         })
         .collect()
@@ -328,23 +363,22 @@ pub(crate) fn interface_associated_type_default<'db>(
     // A symbolic `Self`: a rigid type variable bounded by this interface at its own generic
     // parameters, so a `Self.Other` projection in the default resolves through the bound.
     let self_name = Name::new("Self");
+    let generic_env = crate::generic_env::interface_generic_env(db, iface_loc);
+    let generic_params = crate::generic_env::interface_declared_params(db, iface_loc);
+    let self_param = generic_env
+        .resolve_param(&self_name)
+        .expect("interface Self parameter is in its environment")
+        .clone();
     let self_constraint = baml_type::Interface::new(
         crate::lower_type_expr::qualify_def(db, Definition::Interface(iface_loc), &iface.name),
-        iface
-            .generic_params
+        generic_params
             .iter()
             .map(|p| Ty::TypeVar(p.clone(), TyAttr::default()))
             .collect(),
         Vec::new(),
     );
     let mut bounds = crate::lower_type_expr::interface_generic_param_bounds(db, iface_loc).clone();
-    bounds.insert(self_name.clone(), vec![self_constraint]);
-    let generic_params: Vec<Name> = iface
-        .generic_params
-        .iter()
-        .cloned()
-        .chain(std::iter::once(self_name.clone()))
-        .collect();
+    bounds.insert(self_param.clone(), vec![self_constraint]);
 
     let mut diagnostics = Vec::new();
     let lowered = crate::lower_type_expr::lower_type_ref(
@@ -354,9 +388,9 @@ pub(crate) fn interface_associated_type_default<'db>(
             db,
             package_items: pkg_items,
             ns_context: &pkg_info.namespace_path,
-            generic_params: &generic_params,
+            generic_params: generic_env.source_params(),
             bounds: &bounds,
-            self_ty: Some(Ty::TypeVar(self_name, TyAttr::default())),
+            self_ty: Some(Ty::TypeVar(self_param, TyAttr::default())),
         },
         &mut diagnostics,
     );
@@ -369,12 +403,13 @@ pub(crate) fn interface_associated_type_default<'db>(
 /// eagerly wherever the interface is used.
 pub(crate) fn realize_associated_default(
     default: &Ty,
-    generic_params: &[Name],
+    generic_params: &[ParamTy],
     interface_args: &[Ty],
+    self_param: &ParamTy,
     self_ty: &Ty,
 ) -> Ty {
     let mut bindings = generics::bind_type_vars(generic_params, interface_args);
-    bindings.insert(Name::new("Self"), self_ty.clone());
+    bindings.insert(self_param.clone(), self_ty.clone());
     generics::substitute_ty(default, &bindings)
 }
 
@@ -402,11 +437,16 @@ pub(crate) fn existential_associated_default(
         return None;
     };
     let (default, _diagnostics) = interface_associated_type_default(db, iface_loc, member.clone())?;
-    let iface = baml_compiler2_ppir::item_data::interface_data(db, iface_loc);
+    let iface_env = crate::generic_env::interface_generic_env(db, iface_loc);
+    let iface_params = crate::generic_env::interface_declared_params(db, iface_loc);
+    let self_param = iface_env
+        .resolve_param(&Name::new("Self"))
+        .expect("interface Self parameter is in its environment");
     Some(realize_associated_default(
         &default,
-        &iface.generic_params,
+        &iface_params,
         args,
+        self_param,
         self_ty,
     ))
 }
@@ -415,9 +455,15 @@ fn lower_interface_type_associated_bindings(
     ctx: &InterfaceTypeAssocLowering<'_, '_>,
     diagnostics: &mut Vec<crate::infer_context::TirTypeError>,
 ) -> Vec<(Name, Ty)> {
-    let mut bindings = generics::bind_type_vars(&ctx.iface.generic_params, ctx.interface_args);
-    for (name, ty) in ctx.outer_bindings {
-        bindings.entry(name.clone()).or_insert_with(|| ty.clone());
+    let iface_env = crate::generic_env::interface_generic_env(ctx.db, ctx.iface_loc);
+    let iface_params = crate::generic_env::interface_declared_params(ctx.db, ctx.iface_loc);
+    let self_param = iface_env
+        .resolve_param(&Name::new("Self"))
+        .expect("interface Self parameter is in its environment")
+        .clone();
+    let mut bindings = generics::bind_type_vars(&iface_params, ctx.interface_args);
+    for (param, ty) in ctx.outer_bindings {
+        bindings.entry(param.clone()).or_insert_with(|| ty.clone());
     }
     // The interface's declared parameter bounds, so a `T.member` projection in a
     // binding value or default resolves `T`'s declaring interface.
@@ -438,19 +484,18 @@ fn lower_interface_type_associated_bindings(
                 // resolves `Self`, then substitute the realized generics / associated types.
                 let ty = if let Some(self_bound) = &ctx.self_bound {
                     let mut bounds = iface_bounds.clone();
-                    bounds.insert(Name::new("Self"), vec![self_bound.clone()]);
-                    let generic_params: Vec<Name> = bindings
-                        .keys()
-                        .cloned()
-                        .chain(std::iter::once(Name::new("Self")))
-                        .collect();
+                    bounds.insert(self_param.clone(), vec![self_bound.clone()]);
+                    let mut generic_params: Vec<ParamTy> = bindings.keys().cloned().collect();
+                    if !generic_params.contains(&self_param) {
+                        generic_params.push(self_param.clone());
+                    }
                     let scope = crate::lower_type_expr::ScopeCtx {
                         db: ctx.db,
                         package_items: ctx.binding_pkg_items,
                         ns_context: ctx.binding_namespace_path,
                         generic_params: &generic_params,
                         bounds: &bounds,
-                        self_ty: Some(Ty::TypeVar(Name::new("Self"), TyAttr::default())),
+                        self_ty: Some(Ty::TypeVar(self_param.clone(), TyAttr::default())),
                     };
                     generics::substitute_ty(
                         &crate::lower_type_expr::lower_type_ref(
@@ -480,7 +525,11 @@ fn lower_interface_type_associated_bindings(
                         &bindings,
                     )
                 };
-                bindings.insert(assoc.name.clone(), ty.clone());
+                let assoc_param = iface_env
+                    .resolve_any_param(&assoc.name)
+                    .expect("associated type parameter is in its interface environment")
+                    .clone();
+                bindings.insert(assoc_param, ty.clone());
                 return Some((assoc.name.clone(), ty));
             }
             // Fill the omitted default eagerly at this interface realized on the receiver:
@@ -493,7 +542,12 @@ fn lower_interface_type_associated_bindings(
                 .iface
                 .associated_types
                 .iter()
-                .filter_map(|a| bindings.get(&a.name).map(|t| (a.name.clone(), t.clone())))
+                .filter_map(|assoc| {
+                    let param = iface_env.resolve_any_param(&assoc.name)?;
+                    bindings
+                        .get(param)
+                        .map(|ty| (assoc.name.clone(), ty.clone()))
+                })
                 .collect();
             let self_ty = Ty::Interface(
                 interface_loc_qtn(ctx.db, ctx.iface_loc)?,
@@ -503,12 +557,17 @@ fn lower_interface_type_associated_bindings(
             );
             let realized = realize_associated_default(
                 &default,
-                &ctx.iface.generic_params,
+                &iface_params,
                 ctx.interface_args,
+                &self_param,
                 &self_ty,
             );
             let ty = crate::generics::substitute_ty(&realized, &bindings);
-            bindings.insert(assoc.name.clone(), ty.clone());
+            let assoc_param = iface_env
+                .resolve_any_param(&assoc.name)
+                .expect("associated type parameter is in its interface environment")
+                .clone();
+            bindings.insert(assoc_param, ty.clone());
             Some((assoc.name.clone(), ty))
         })
         .collect()
@@ -522,7 +581,7 @@ fn lower_interface_type_associated_bindings(
 /// interface input args simultaneously (a param may appear in either).
 pub fn match_ty_patterns(
     pairs: &[(&Ty, &Ty)],
-    generic_params: &[Name],
+    generic_params: &[ParamTy],
     aliases: &std::collections::HashMap<QualifiedTypeName, Ty>,
 ) -> Option<TypeBindings> {
     let mut bindings = TypeBindings::default();
@@ -538,7 +597,7 @@ pub fn match_ty_patterns(
 pub fn match_ty_pattern_into(
     pattern: &Ty,
     concrete: &Ty,
-    generic_params: &[Name],
+    generic_params: &[ParamTy],
     aliases: &std::collections::HashMap<QualifiedTypeName, Ty>,
     bindings: &mut TypeBindings,
 ) -> Option<()> {
@@ -562,7 +621,8 @@ pub fn match_ty_pattern_into(
     // see). On mismatch fall through: structural matching may still succeed by
     // re-binding positions to equal values.
     if contains_bound_typevar(pattern, generic_params) {
-        let unbound = |name: &Name| generic_params.contains(name) && !bindings.contains_key(name);
+        let unbound =
+            |param: &ParamTy| generic_params.contains(param) && !bindings.contains_key(param);
         if !crate::generics::contains_typevar_where(pattern, &unbound) {
             let substituted = crate::generics::substitute_ty(pattern, bindings);
             if AliasEquivCtx(aliases).equivalent(&substituted, concrete) {
@@ -660,7 +720,7 @@ pub fn match_ty_pattern_into(
 fn match_union_members(
     pattern_members: &[Ty],
     concrete_members: &[Ty],
-    generic_params: &[Name],
+    generic_params: &[ParamTy],
     aliases: &std::collections::HashMap<QualifiedTypeName, Ty>,
     bindings: &mut TypeBindings,
 ) -> Option<()> {
@@ -706,22 +766,22 @@ fn match_union_members(
 }
 
 fn bind_type_var(
-    name: &Name,
+    param: &ParamTy,
     concrete: &Ty,
     bindings: &mut TypeBindings,
     aliases: &std::collections::HashMap<QualifiedTypeName, Ty>,
 ) -> Option<()> {
-    match bindings.get(name) {
+    match bindings.get(param) {
         Some(existing) if AliasEquivCtx(aliases).equivalent(existing, concrete) => Some(()),
         Some(_) => None,
         None => {
-            bindings.insert(name.clone(), concrete.clone());
+            bindings.insert(param.clone(), concrete.clone());
             Some(())
         }
     }
 }
 
-fn contains_bound_typevar(ty: &Ty, generic_params: &[Name]) -> bool {
+fn contains_bound_typevar(ty: &Ty, generic_params: &[ParamTy]) -> bool {
     match ty {
         Ty::TypeVar(name, _) => generic_params.contains(name),
         Ty::Class(_, args, _) | Ty::Union(args, _) => args
@@ -986,9 +1046,15 @@ pub fn interface_closure_locs_with_args_and_assoc<'db>(
         let mut child_ancestors = ancestors.clone();
         child_ancestors.insert(loc);
 
-        let mut bindings = generics::bind_type_vars(&iface.generic_params, &args);
+        let iface_env = crate::generic_env::interface_generic_env(db, loc);
+        let iface_params = crate::generic_env::interface_declared_params(db, loc);
+        let mut bindings = generics::bind_type_vars(&iface_params, &args);
         for (name, ty) in &associated_bindings {
-            bindings.insert(name.clone(), ty.clone());
+            let param = iface_env
+                .resolve_any_param(name)
+                .expect("associated type parameter is in its interface environment")
+                .clone();
+            bindings.insert(param, ty.clone());
         }
 
         // This interface as a constraint (its associated types pinned to the realized
@@ -1171,7 +1237,11 @@ mod tests {
     }
 
     fn type_var(name: &str) -> Ty {
-        Ty::TypeVar(Name::new(name), TyAttr::default())
+        Ty::TypeVar(param(name), TyAttr::default())
+    }
+
+    fn param(name: &str) -> ParamTy {
+        ParamTy::new(0, Name::new(name))
     }
 
     #[test]
@@ -1179,7 +1249,7 @@ mod tests {
         let pattern = class(&[], "Pair", vec![type_var("T"), type_var("T")]);
         let good = class(&[], "Pair", vec![int(), int()]);
         let bad = class(&[], "Pair", vec![int(), string()]);
-        let params = vec![Name::new("T")];
+        let params = vec![param("T")];
 
         assert!(
             match_ty_patterns(
@@ -1228,7 +1298,7 @@ mod tests {
             "Container",
             vec![Ty::List(Box::new(int()), TyAttr::default())],
         );
-        let params = vec![Name::new("T")];
+        let params = vec![param("T")];
 
         let bindings = match_ty_patterns(
             &[(&pattern, &actual)],
@@ -1236,7 +1306,7 @@ mod tests {
             &std::collections::HashMap::default(),
         )
         .expect("nested list arg should bind T");
-        assert_eq!(bindings.get(&Name::new("T")), Some(&int()));
+        assert_eq!(bindings.get(&param("T")), Some(&int()));
     }
 
     #[test]
@@ -1251,8 +1321,8 @@ mod tests {
             TyAttr::default(),
         );
 
-        assert!(contains_bound_typevar(&ty, &[Name::new("T")]));
-        assert!(!contains_bound_typevar(&ty, &[Name::new("U")]));
+        assert!(contains_bound_typevar(&ty, &[param("T")]));
+        assert!(!contains_bound_typevar(&ty, &[param("U")]));
     }
 
     #[test]
@@ -1275,7 +1345,7 @@ mod tests {
     fn match_ty_pattern_unions_are_order_insensitive_with_bindings() {
         let pattern = Ty::Union(vec![type_var("T"), string()], TyAttr::default());
         let actual = Ty::Union(vec![string(), int()], TyAttr::default());
-        let params = vec![Name::new("T")];
+        let params = vec![param("T")];
 
         let bindings = match_ty_patterns(
             &[(&pattern, &actual)],
@@ -1283,6 +1353,6 @@ mod tests {
             &std::collections::HashMap::default(),
         )
         .expect("union members should be matched by type, not position");
-        assert_eq!(bindings.get(&Name::new("T")), Some(&int()));
+        assert_eq!(bindings.get(&param("T")), Some(&int()));
     }
 }

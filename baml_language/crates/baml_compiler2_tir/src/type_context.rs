@@ -22,7 +22,7 @@ use baml_base::Name;
 
 use crate::{
     package_interface::PackageResolutionContext,
-    ty::{QualifiedTypeName, Ty},
+    ty::{ParamTy, QualifiedTypeName, Ty},
 };
 
 /// The nominal facts [`baml_type::normalize`] needs, derived from global
@@ -62,9 +62,8 @@ impl baml_type::normalize::TypeContext for GlobalTypeContext<'_, '_> {
         )
     }
 
-    fn type_var_bound(&self, name: &Name) -> Vec<baml_type::Interface> {
-        // The conjunction bounding `name` (`T: A & B`), or empty if unbounded/unknown.
-        self.bounds.get(name).cloned().unwrap_or_default()
+    fn type_var_bound(&self, param: &ParamTy) -> Vec<baml_type::Interface> {
+        self.bounds.get(param).cloned().unwrap_or_default()
     }
 
     fn interface_requires(&self, sub: &baml_type::Interface, sup: &baml_type::Interface) -> bool {
@@ -219,7 +218,7 @@ impl baml_type::normalize::TypeContext for AliasEquivCtx<'_> {
         false
     }
 
-    fn type_var_bound(&self, _name: &Name) -> Vec<baml_type::Interface> {
+    fn type_var_bound(&self, _param: &ParamTy) -> Vec<baml_type::Interface> {
         // Opaque: a type variable is only equal to itself here; its bound never
         // licenses an absorption.
         Vec::new()

@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use baml_base::{Name, Span, TyAttr};
 use baml_compiler2_hir::{contributions::Definition, package::PackageId};
-use baml_type::{QualifiedTypeName, Ty, normalize::TypeContext};
+use baml_type::{ParamTy, QualifiedTypeName, Ty, normalize::TypeContext};
 
 use crate::{
     generics::{contains_typevar, substitute_ty},
@@ -39,7 +39,7 @@ pub struct ImplData<'db> {
     /// interfaces; multiple per param (`T extends A & B`) are carried. Not yet
     /// consumed by the registry/emit (they keep the legacy single-bound path) —
     /// plumbed for the deferred bound-enforcement work.
-    pub generic_params: Vec<(Name, Vec<baml_type::Interface>)>,
+    pub generic_params: Vec<(ParamTy, Vec<baml_type::Interface>)>,
     /// Diagnostics produced while resolving this impl — lowering errors plus
     /// non-interface generic bounds (the E0142 case). Each is paired with the
     /// span-free [`ImplDiagnosticLocation`] it originated from so check.rs can
@@ -195,7 +195,7 @@ fn lower_generic_param_interface_bounds(
     bounds: &[baml_compiler2_hir::type_ref::TypeRefId],
     pkg_items: &baml_compiler2_hir::package::PackageItems<'_>,
     ns: &[Name],
-    generic_param_names: &[Name],
+    generic_param_names: &[ParamTy],
     diags: &mut Vec<crate::infer_context::TirTypeError>,
 ) -> Vec<baml_type::Interface> {
     let mut ifaces = Vec::new();
@@ -318,11 +318,12 @@ pub fn impl_data<'db>(
     ) = match &block.subject {
         ImplSubjectData::InClass { class, out_of_body } => {
             let class_data = baml_compiler2_ppir::item_data::class_data(db, *class);
+            let generic_env = crate::generic_env::class_generic_env(db, *class);
+            let generic_param_names = generic_env.params().to_vec();
             let class_qtn = qualify_def(db, Definition::Class(*class), &class_data.name);
             let for_ty = Ty::Class(
                 class_qtn.clone(),
-                class_data
-                    .generic_params
+                generic_param_names
                     .iter()
                     .map(|p| Ty::TypeVar(p.clone(), TyAttr::default()))
                     .collect(),
@@ -335,8 +336,7 @@ pub fn impl_data<'db>(
             // to the class, and would otherwise misattribute and duplicate across
             // every in-body impl of that class.
             let mut class_bound_diags = Vec::new();
-            let generic_params: Vec<(Name, Vec<baml_type::Interface>)> = class_data
-                .generic_params
+            let generic_params: Vec<(ParamTy, Vec<baml_type::Interface>)> = generic_param_names
                 .iter()
                 .zip(class_data.generic_param_bounds.iter())
                 .map(|(name, bound)| {
@@ -348,14 +348,14 @@ pub fn impl_data<'db>(
                         &bounds,
                         pkg_items,
                         ns,
-                        &class_data.generic_params,
+                        &generic_param_names,
                         &mut class_bound_diags,
                     );
                     (name.clone(), ifaces)
                 })
                 .collect();
             (
-                class_data.generic_params.clone(),
+                generic_param_names,
                 for_ty,
                 generic_params,
                 // In-body impls have no written for-target, and the class owns
@@ -376,6 +376,9 @@ pub fn impl_data<'db>(
             generics,
         } => {
             let names: Vec<Name> = generics.iter().map(|g| g.name.clone()).collect();
+            let generic_param_names = crate::generic_env::impl_generic_env(db, impl_loc)
+                .params()
+                .to_vec();
             let mut for_target_diags = Vec::new();
             // The impl generics' bounds are not threaded into this header lowering
             // (a `T.member` type-variable projection in an impl header is a separate
@@ -390,7 +393,7 @@ pub fn impl_data<'db>(
                     db,
                     package_items: pkg_items,
                     ns_context: ns,
-                    generic_params: &names,
+                    generic_params: &generic_param_names,
                     bounds: &crate::lower_type_expr::TypeVarBoundsMap::default(),
                     self_ty: None,
                 },
@@ -409,21 +412,22 @@ pub fn impl_data<'db>(
             }
             let generic_params = generics
                 .iter()
-                .map(|g| {
+                .zip(generic_param_names.iter())
+                .map(|(g, param)| {
                     let ifaces = lower_generic_param_interface_bounds(
                         db,
                         &block.type_refs,
                         &g.bounds,
                         pkg_items,
                         ns,
-                        &names,
+                        &generic_param_names,
                         &mut bound_diags,
                     );
-                    (g.name.clone(), ifaces)
+                    (param.clone(), ifaces)
                 })
                 .collect();
             (
-                names,
+                generic_param_names,
                 for_ty,
                 generic_params,
                 for_target_diags,
@@ -862,7 +866,7 @@ pub fn impl_data_source_map<'db>(
 
 /// Collect every `Ty::TypeVar` name in `ty` (at any depth) into `out` — used to decide which
 /// impl generic params the for-type / interface args determine (E0135).
-fn collect_type_var_names(ty: &Ty, out: &mut Vec<Name>) {
+fn collect_type_var_names(ty: &Ty, out: &mut Vec<ParamTy>) {
     match ty {
         Ty::TypeVar(name, _) => out.push(name.clone()),
         Ty::List(inner, _) | Ty::EvolvingList(inner, _) => {
@@ -915,7 +919,7 @@ fn method_generic_bound_interfaces(
     db: &dyn crate::Db,
     pkg_items: &baml_compiler2_hir::package::PackageItems<'_>,
     ns: &[Name],
-    scope_generics: &[Name],
+    scope_generics: &[ParamTy],
     spec: &crate::builder::interface_resolution::InterfaceMethodSpec,
 ) -> Vec<(Name, Vec<baml_type::Interface>)> {
     let empty = crate::lower_type_expr::TypeVarBoundsMap::default();
@@ -973,7 +977,9 @@ fn orphan_check(
             Ty::Class(tn, ..) | Ty::Enum(tn, ..) if tn.package() == current_package => {
                 return OrphanOutcome::Ok;
             }
-            Ty::TypeVar(name, _) => return OrphanOutcome::UncoveredParam(name.clone()),
+            Ty::TypeVar(param, _) => {
+                return OrphanOutcome::UncoveredParam(param.name().clone());
+            }
             _ => {}
         }
     }
@@ -997,32 +1003,34 @@ fn realize_with_symbolic_self<'db>(
     db: &'db dyn crate::Db,
     package_items: &baml_compiler2_hir::package::PackageItems<'db>,
     ns_context: &[Name],
-    base_generics: &[Name],
+    base_generics: &[ParamTy],
+    self_param: &ParamTy,
     base_bounds: &crate::lower_type_expr::TypeVarBoundsMap,
     self_bound: &baml_type::Interface,
     receiver: &Ty,
-    bindings: &rustc_hash::FxHashMap<Name, Ty>,
+    bindings: &TypeBindings,
     lower: impl FnOnce(&crate::lower_type_expr::ScopeCtx<'_, 'db>) -> Ty,
 ) -> Ty {
-    let self_name = Name::new("Self");
     // `Self` joins the in-scope generics with the implemented interface as its bound, so a
     // `Self.member` projection resolves the declaring interface through that bound's closure.
     let mut generics = base_generics.to_vec();
-    generics.push(self_name.clone());
+    if !generics.contains(self_param) {
+        generics.push(self_param.clone());
+    }
     let mut bounds = base_bounds.clone();
-    bounds.insert(self_name.clone(), vec![self_bound.clone()]);
+    bounds.insert(self_param.clone(), vec![self_bound.clone()]);
     let lowered = lower(&crate::lower_type_expr::ScopeCtx {
         db,
         package_items,
         ns_context,
         generic_params: &generics,
         bounds: &bounds,
-        self_ty: Some(Ty::TypeVar(self_name.clone(), TyAttr::default())),
+        self_ty: Some(Ty::TypeVar(self_param.clone(), TyAttr::default())),
     });
     // Substitute the receiver for `Self` last: `(Self as I).member` becomes
     // `(receiver as I).member`, which `normalize` reduces against the receiver's impl.
     let mut substitution = bindings.clone();
-    substitution.insert(self_name, receiver.clone());
+    substitution.insert(self_param.clone(), receiver.clone());
     substitute_ty(&lowered, &substitution)
 }
 
@@ -1079,6 +1087,12 @@ pub fn validate_impl_signatures<'db>(
     };
 
     let iface_data = interface_data(db, data.interface);
+    let iface_env = crate::generic_env::interface_generic_env(db, data.interface);
+    let iface_generic_params = crate::generic_env::interface_declared_params(db, data.interface);
+    let iface_self_param = iface_env
+        .resolve_param(&Name::new("Self"))
+        .expect("interface Self parameter is in its environment")
+        .clone();
     let iface_pkg_info =
         baml_compiler2_hir::file_package::file_package(db, data.interface.file(db));
     let iface_pkg_items =
@@ -1094,7 +1108,7 @@ pub fn validate_impl_signatures<'db>(
             crate::lower_type_expr::interface_generic_param_bounds(db, data.interface);
         // Realize the interface's declared field types at the impl's interface args.
         let iface_bindings =
-            crate::generics::bind_type_vars(&iface_data.generic_params, &data.interface_args);
+            crate::generics::bind_type_vars(&iface_generic_params, &data.interface_args);
         // A field type may name `Self.Item` (an associated-type field); realize it symbolically
         // and substitute `Self -> for-type` last, so `(for-type as I).Item` reduces to the impl's
         // binding — exactly as the method-signature conformance below does.
@@ -1122,7 +1136,8 @@ pub fn validate_impl_signatures<'db>(
                 db,
                 iface_pkg_items,
                 &iface_pkg_info.namespace_path,
-                &iface_data.generic_params,
+                &iface_generic_params,
+                &iface_self_param,
                 iface_field_bounds,
                 &self_bound,
                 &data.for_ty_pattern,
@@ -1173,7 +1188,7 @@ pub fn validate_impl_signatures<'db>(
             if !determined.contains(name) {
                 diags.push((
                     crate::infer_context::TirTypeError::UnconstrainedImplTypeParam {
-                        name: name.clone(),
+                        name: name.name().clone(),
                     },
                     ImplDiagnosticLocation::Bound,
                 ));
@@ -1210,10 +1225,10 @@ pub fn validate_impl_signatures<'db>(
     // both sides; the interface's generics bind to `interface_args`. The override's *effective*
     // throws (declared or inferred from its body) comes from `callable_throws`. ──
     let for_ty = data.for_ty_pattern.clone();
-    let impl_generic_names: Vec<Name> =
+    let impl_generic_names: Vec<ParamTy> =
         data.generic_params.iter().map(|(n, _)| n.clone()).collect();
     let iface_bindings =
-        crate::generics::bind_type_vars(&iface_data.generic_params, &data.interface_args);
+        crate::generics::bind_type_vars(&iface_generic_params, &data.interface_args);
     let iface_bounds = crate::lower_type_expr::interface_generic_param_bounds(db, data.interface);
     // In the interface's own declared signatures (and `requires` clauses), `Self` is a rigid
     // type variable bound to the interface being implemented, realized at the impl's args. Both
@@ -1221,7 +1236,7 @@ pub fn validate_impl_signatures<'db>(
     // `Self -> for_ty` last (see `realize_with_symbolic_self`).
     let self_bound =
         baml_type::Interface::new(iface_qtn.clone(), data.interface_args.clone(), vec![]);
-    let no_bindings = rustc_hash::FxHashMap::<Name, Ty>::default();
+    let no_bindings = TypeBindings::default();
 
     for &method_loc in &data.methods {
         let method_name = function_data(db, method_loc).name.clone();
@@ -1272,13 +1287,16 @@ pub fn validate_impl_signatures<'db>(
         // The override's function type: Self = for-type; impl + method generics in scope. Its
         // declared throws is replaced by the effective (inferred-or-declared) throws.
         let impl_spec = InterfaceMethodSpec::from_default(db, method_loc);
-        let mut impl_scope_generics = impl_generic_names.clone();
-        impl_scope_generics.extend(impl_spec.generic_param_names());
+        let impl_scope_generics = crate::generic_env::append_params(
+            &impl_generic_names,
+            &impl_spec.generic_param_names(),
+        );
         let mut impl_fn = realize_with_symbolic_self(
             db,
             &res_ctx.own_items,
             &pkg_info.namespace_path,
             &impl_scope_generics,
+            &iface_self_param,
             &bounds,
             &self_bound,
             &for_ty,
@@ -1290,13 +1308,16 @@ pub fn validate_impl_signatures<'db>(
         }
 
         // The interface method's function type, realized at `interface_args`.
-        let mut iface_scope_generics = iface_data.generic_params.clone();
-        iface_scope_generics.extend(iface_spec.generic_param_names());
+        let iface_scope_generics = crate::generic_env::append_params(
+            &iface_generic_params,
+            &iface_spec.generic_param_names(),
+        );
         let iface_fn = realize_with_symbolic_self(
             db,
             iface_pkg_items,
             &iface_pkg_info.namespace_path,
             &iface_scope_generics,
+            &iface_self_param,
             iface_bounds,
             &self_bound,
             &for_ty,
@@ -1374,7 +1395,8 @@ pub fn validate_impl_signatures<'db>(
                 db,
                 iface_pkg_items,
                 &iface_pkg_info.namespace_path,
-                &iface_data.generic_params,
+                &iface_generic_params,
+                &iface_self_param,
                 iface_bounds,
                 &self_bound,
                 &for_ty,
@@ -1941,7 +1963,7 @@ fn match_impl_head<'db>(
     {
         return None;
     }
-    let param_names: Vec<Name> = data
+    let param_names: Vec<ParamTy> = data
         .generic_params
         .iter()
         .map(|(name, _)| name.clone())
@@ -2030,7 +2052,7 @@ pub fn impls_for_type<'db>(
             let Ok(data) = impl_data(db, impl_loc).as_ref() else {
                 continue;
             };
-            let param_names: Vec<Name> = data
+            let param_names: Vec<ParamTy> = data
                 .generic_params
                 .iter()
                 .map(|(name, _)| name.clone())
@@ -2087,7 +2109,7 @@ pub(crate) fn first_failing_impl_bound<'db>(
             if interface_loc_qtn(db, data.interface).as_ref() != Some(requested_qtn) {
                 continue;
             }
-            let param_names: Vec<Name> = data
+            let param_names: Vec<ParamTy> = data
                 .generic_params
                 .iter()
                 .map(|(name, _)| name.clone())
@@ -2118,7 +2140,7 @@ pub(crate) fn first_failing_impl_bound<'db>(
                     }
                     let bound_ty = bound.to_ty();
                     if !is_subtype(actual, &bound_ty) {
-                        return Some((name.clone(), bound_ty, actual.clone()));
+                        return Some((name.name().clone(), bound_ty, actual.clone()));
                     }
                 }
             }

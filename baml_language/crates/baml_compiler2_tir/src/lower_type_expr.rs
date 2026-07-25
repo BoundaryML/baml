@@ -10,7 +10,10 @@ use rustc_hash::FxHashSet;
 use crate::{
     builder::associated_projection::resolve_concrete_projection,
     infer_context::TirTypeError,
-    ty::{Freshness, FunctionParamMode, FunctionParamTy, MediaKind, QualifiedTypeName, Ty, TyAttr},
+    ty::{
+        Freshness, FunctionParamMode, FunctionParamTy, MediaKind, ParamTy, QualifiedTypeName, Ty,
+        TyAttr,
+    },
 };
 
 /// The outcome of resolving a concrete base's associated-type projection
@@ -56,10 +59,11 @@ pub trait TypeExprContext<'db> {
     /// (free functions, type aliases).
     fn lower_self(&self) -> Option<Ty>;
 
-    /// If `name` is an in-scope type variable: its interface bounds (empty = unbounded,
-    /// used to resolve a `T.member` projection). It lowers to `Ty::TypeVar(name)`.
-    /// `None` = `name` is not a type variable here; resolve it as a type name instead.
-    fn type_var_bounds(&self, name: &baml_base::Name) -> Option<Box<[baml_type::Interface]>>;
+    /// Resolve an in-scope type-variable name to its declaration identity.
+    fn resolve_type_var(&self, name: &baml_base::Name) -> Option<ParamTy>;
+
+    /// The interface bounds of a resolved type variable.
+    fn type_var_bounds(&self, param: &ParamTy) -> Box<[baml_type::Interface]>;
 
     /// Resolve a concrete base's associated-type projection (`C.member`) through
     /// the impls visible in this scope. Only consulted for concrete bases — an
@@ -135,7 +139,7 @@ fn type_suggestions(
 /// *conjunction* of interface constraints bounding it (`T extends A & B` yields
 /// two entries in `T`'s `Vec`). The bounds helpers
 /// ([`class_generic_param_bounds`] and friends) produce this shape natively.
-pub type TypeVarBoundsMap = rustc_hash::FxHashMap<baml_base::Name, Vec<baml_type::Interface>>;
+pub type TypeVarBoundsMap = rustc_hash::FxHashMap<ParamTy, Vec<baml_type::Interface>>;
 
 /// The general lowering scope: a package's items, a namespace, the in-scope type-variable
 /// names, and their bounds. Constructed directly at each lowering site and passed to
@@ -144,7 +148,7 @@ pub struct ScopeCtx<'a, 'db> {
     pub db: &'db dyn crate::Db,
     pub package_items: &'a PackageItems<'db>,
     pub ns_context: &'a [baml_base::Name],
-    pub generic_params: &'a [baml_base::Name],
+    pub generic_params: &'a [ParamTy],
     /// The in-scope type variables' interface bounds, as *constraints*
     /// ([`baml_type::Interface`], which may pin only some associated types) — never
     /// [`Ty::Interface`] existentials, which would have to specify them all.
@@ -170,10 +174,16 @@ impl<'db> TypeExprContext<'db> for ScopeCtx<'_, 'db> {
         self.self_ty.clone()
     }
 
-    fn type_var_bounds(&self, name: &baml_base::Name) -> Option<Box<[baml_type::Interface]>> {
+    fn resolve_type_var(&self, name: &baml_base::Name) -> Option<ParamTy> {
         self.generic_params
-            .contains(name)
-            .then(|| self.bounds.get(name).cloned().unwrap_or_default().into())
+            .iter()
+            .rev()
+            .find(|param| param.name() == name)
+            .cloned()
+    }
+
+    fn type_var_bounds(&self, param: &ParamTy) -> Box<[baml_type::Interface]> {
+        self.bounds.get(param).cloned().unwrap_or_default().into()
     }
 
     fn concrete_projection(&self, base: &Ty, member: &baml_base::Name) -> ConcreteProjection {
@@ -216,7 +226,10 @@ impl<'db> TypeExprContext<'db> for ScopeCtx<'_, 'db> {
         if self.self_ty.is_none() {
             return Box::new([]);
         }
-        let Some(self_bounds) = self.bounds.get(&baml_base::Name::new("Self")) else {
+        let Some(self_param) = self.resolve_type_var(&baml_base::Name::new("Self")) else {
+            return Box::new([]);
+        };
+        let Some(self_bounds) = self.bounds.get(&self_param) else {
             return Box::new([]);
         };
         let mut names: rustc_hash::FxHashSet<baml_base::Name> = rustc_hash::FxHashSet::default();
@@ -703,7 +716,13 @@ fn lower_path(
                     // default (`type Items = Self.Item[]`) reduces against them. The
                     // default is lowered once — with a symbolic `Self` — by
                     // `interface_associated_type_default`, and substituted here.
-                    let iface_generic_params = iface_data.generic_params.clone();
+                    let iface_env = crate::generic_env::interface_generic_env(db, iface_loc);
+                    let iface_generic_params =
+                        crate::generic_env::interface_declared_params(db, iface_loc);
+                    let self_param = iface_env
+                        .resolve_param(&baml_base::Name::new("Self"))
+                        .expect("interface Self parameter is in its environment")
+                        .clone();
                     let iface_assoc_names: Vec<_> = iface_data
                         .associated_types
                         .iter()
@@ -731,6 +750,7 @@ fn lower_path(
                                 &default,
                                 &iface_generic_params,
                                 &lowered_args,
+                                &self_param,
                                 &self_ty,
                             );
                             associated_bindings.push((assoc_name, filled));
@@ -787,8 +807,10 @@ fn lower_path(
         Err(suggestions) => {
             // A single-segment name that is an in-scope type variable
             // (e.g. T, K, V) lowers to `Ty::TypeVar`, not an error.
-            if segments.len() == 1 && ctx.type_var_bounds(&segments[0]).is_some() {
-                return Ty::TypeVar(segments[0].clone(), TyAttr::default());
+            if segments.len() == 1
+                && let Some(param) = ctx.resolve_type_var(&segments[0])
+            {
+                return Ty::TypeVar(param, TyAttr::default());
             }
             // Enum-variant fallback: a path like `Status.Active` (or
             // `pkg.ns.Status.Active`) won't resolve as a type — `Active`
@@ -890,12 +912,12 @@ pub fn qualify_def(
 /// [`receiver_type_for_class_at`](crate::self_type::receiver_type_for_class_at)).
 pub(crate) fn self_type_for_class_data(
     class_data: &baml_compiler2_ppir::item_data::ClassData<'_>,
+    generic_params: &[ParamTy],
     ns_path: &[baml_base::Name],
     package: baml_base::Name,
 ) -> Ty {
     let qtn = QualifiedTypeName::new(package, ns_path.to_vec(), class_data.name.clone());
-    let args: Vec<Ty> = class_data
-        .generic_params
+    let args: Vec<Ty> = generic_params
         .iter()
         .map(|p| Ty::TypeVar(p.clone(), TyAttr::default()))
         .collect();
@@ -1072,8 +1094,9 @@ mod tests {
         let iterator = QualifiedTypeName::new(Name::new("user"), vec![], Name::new("Iterator"));
 
         let lower_self_item = |bound_assoc: Vec<(Name, Ty)>| -> Ty {
+            let self_param = ParamTy::new(0, Name::new("Self"));
             let bounds: TypeVarBoundsMap = std::iter::once((
-                Name::new("Self"),
+                self_param.clone(),
                 vec![baml_type::Interface::new(
                     iterator.clone(),
                     vec![],
@@ -1081,14 +1104,14 @@ mod tests {
                 )],
             ))
             .collect();
-            let self_param = [Name::new("Self")];
+            let self_params = [self_param.clone()];
             let ctx = ScopeCtx {
                 db: &db,
                 package_items: items,
                 ns_context: &[],
-                generic_params: &self_param,
+                generic_params: &self_params,
                 bounds: &bounds,
-                self_ty: Some(Ty::TypeVar(Name::new("Self"), TyAttr::default())),
+                self_ty: Some(Ty::TypeVar(self_param, TyAttr::default())),
             };
             let mut diags = Vec::new();
             lower_type_expr(&path_segments(&["Self", "Item"]), &ctx, &mut diags)
@@ -1216,7 +1239,7 @@ mod tests {
             vec![],
         );
         let projection = Ty::AssociatedTypeProjection {
-            base: Box::new(Ty::TypeVar(Name::new("Self"), TyAttr::default())),
+            base: Box::new(Ty::type_var("Self")),
             interface: Box::new(foo),
             member: Name::new("Assoc"),
             attr: TyAttr::default(),
@@ -2448,7 +2471,8 @@ mod tests {
         member: &str,
     ) -> (Ty, Vec<TirTypeError>) {
         let items = baml_compiler2_ppir::package_items(db, PackageId::new(db, Name::new("user")));
-        let generic_params = [Name::new(tvar)];
+        let param = ParamTy::new(0, Name::new(tvar));
+        let generic_params = [param.clone()];
         let conjunction: Vec<baml_type::Interface> = bound_names
             .iter()
             .map(|name| {
@@ -2461,7 +2485,7 @@ mod tests {
             .collect();
         let mut bounds = TypeVarBoundsMap::default();
         if !conjunction.is_empty() {
-            bounds.insert(Name::new(tvar), conjunction);
+            bounds.insert(param, conjunction);
         }
         let ctx = ScopeCtx {
             db,
@@ -2591,10 +2615,11 @@ mod tests {
         members: &[&str],
     ) -> (Ty, Vec<TirTypeError>) {
         let items = baml_compiler2_ppir::package_items(db, PackageId::new(db, Name::new("user")));
-        let generic_params = [Name::new(tvar)];
+        let param = ParamTy::new(0, Name::new(tvar));
+        let generic_params = [param.clone()];
         let mut bounds = TypeVarBoundsMap::default();
         bounds.insert(
-            Name::new(tvar),
+            param,
             vec![baml_type::Interface::new(
                 QualifiedTypeName::new(Name::new("user"), vec![], Name::new(bound)),
                 vec![],
@@ -3163,6 +3188,41 @@ function needs<T extends Marker>(x: T) -> int throws never {
         assert!(
             !has_cannot_infer(&errors),
             "a type parameter inferable from an argument should not error, got {errors:?}"
+        );
+    }
+
+    #[test]
+    fn callback_effect_param_is_inferred_from_unannotated_lambda_body() {
+        let errors = all_type_errors(
+            "function invoke<T, E>(f: () -> T throws E) -> T throws E {\n  f()\n}\n\
+             function forward<E>(f: () -> int throws E) -> int throws E {\n\
+               invoke(() -> { f() })\n\
+             }\n",
+        );
+        assert!(
+            errors.is_empty(),
+            "callee and caller effect parameters must remain distinct, got {errors:?}"
+        );
+    }
+
+    #[test]
+    fn associated_projection_preserves_nested_generic_receiver_argument() {
+        let errors = all_type_errors(
+            "interface Driver<Input> {\n\
+               type Output\n\
+               type Error\n\
+               function drive(self, input: Input) -> Self.Output throws Self.Error\n\
+             }\n\
+             class Task<T> {\n\
+               value: T\n\
+               function drive<D extends Driver<Task<T>>>(self, driver: D) -> D.Output throws D.Error {\n\
+                 driver.drive(self)\n\
+               }\n\
+             }\n",
+        );
+        assert!(
+            errors.is_empty(),
+            "associated projection must retain `Task<T>`, got {errors:?}"
         );
     }
 

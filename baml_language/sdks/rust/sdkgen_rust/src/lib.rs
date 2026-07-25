@@ -852,7 +852,10 @@ mod tests {
     }
 
     fn typevar(name: &str) -> Ty {
-        Ty::TypeVar(baml_base::Name::new(name), baml_base::TyAttr::EMPTY)
+        Ty::TypeVar(
+            baml_codegen_types::ParamTy::new(0, baml_base::Name::new(name)),
+            baml_base::TyAttr::EMPTY,
+        )
     }
 
     #[test]

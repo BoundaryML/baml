@@ -24,7 +24,7 @@ use crate::{
     infer_context::TirTypeError,
     lower_type_expr::qualify_def,
     throw_inference::{FunctionThrowSets, function_throw_sets},
-    ty::{FunctionParamMode, FunctionParamTy, QualifiedTypeName, Ty, TyAttr},
+    ty::{FunctionParamMode, FunctionParamTy, ParamTy, QualifiedTypeName, Ty, TyAttr},
 };
 
 /// Count of *honest* (non-seeded) `package_interface` derivations for stdlib
@@ -70,7 +70,7 @@ pub enum ExportedType {
         qtn: QualifiedTypeName,
         fields: Vec<(Name, Ty)>,
         methods: Vec<ExportedFunction>,
-        generic_params: Vec<Name>,
+        generic_params: Vec<ParamTy>,
     },
     Enum {
         qtn: QualifiedTypeName,
@@ -92,7 +92,7 @@ pub struct ExportedFunction {
     pub callable_throws: Ty,
     /// Function-level generic parameters, including any synthetic callback
     /// effect parameters introduced by bounded signature elaboration.
-    pub generic_params: Vec<Name>,
+    pub generic_params: Vec<ParamTy>,
     pub builtin_kind: Option<BuiltinKind>,
 }
 
@@ -137,7 +137,7 @@ pub struct ResolvedFunction {
     pub return_type: Ty,
     pub declared_throws: Option<Ty>,
     pub callable_throws: Ty,
-    pub generic_params: Vec<Name>,
+    pub generic_params: Vec<ParamTy>,
     pub builtin_kind: Option<BuiltinKind>,
 }
 
@@ -145,7 +145,7 @@ pub struct ResolvedFunction {
 pub struct ResolvedMethod {
     pub function: ResolvedFunction,
     pub class_name: Name,
-    pub class_generic_params: Vec<Name>,
+    pub class_generic_params: Vec<ParamTy>,
 }
 
 /// Bundles a package's own items with its dependencies' pre-resolved interfaces.
@@ -275,7 +275,7 @@ struct LoweredClassMethodSignature {
     return_type: Ty,
     declared_throws: Option<Ty>,
     callable_throws: Ty,
-    generic_params: Vec<Name>,
+    generic_params: Vec<ParamTy>,
     builtin_kind: Option<BuiltinKind>,
 }
 
@@ -290,15 +290,18 @@ fn lower_class_method_signature<'db>(
     let sig = baml_compiler2_ppir::item_data::elaborated_function_data(db, method_loc);
     let body = baml_compiler2_ppir::function_body(db, method_loc);
 
-    let mut all_generic_params = class_data.generic_params.clone();
-    all_generic_params.extend(sig.user_generic_params.iter().cloned());
-    all_generic_params.extend(sig.synthetic_effect_params.iter().cloned());
+    let generic_env = crate::generic_env::function_generic_env(db, method_loc);
+    let all_generic_params = generic_env.source_params();
 
     // `Self` is the enclosing class's full receiver type (`Foo<T>`, or `Array<T>`→`List<T>`
     // for the builtin containers) — resolved through the lowering context, not erased to a
     // bare `Ty::Class` by a name-substitution pre-pass.
     let self_ty = crate::lower_type_expr::self_type_for_class_data(
         class_data,
+        generic_env
+            .parent()
+            .expect("class method generic environment has a parent")
+            .params(),
         ns_path,
         file_package::file_package(db, method_loc.file(db)).package,
     );
@@ -311,7 +314,7 @@ fn lower_class_method_signature<'db>(
         db,
         package_items: pkg_items,
         ns_context: ns_path,
-        generic_params: &all_generic_params,
+        generic_params: all_generic_params,
         bounds: method_bounds,
         self_ty: Some(self_ty.clone()),
     };
@@ -362,7 +365,12 @@ fn lower_class_method_signature<'db>(
             .user_generic_params
             .iter()
             .chain(sig.synthetic_effect_params.iter())
-            .cloned()
+            .map(|name| {
+                generic_env
+                    .resolve_param(name)
+                    .expect("method generic parameter is in its environment")
+                    .clone()
+            })
             .collect(),
         builtin_kind,
     }
@@ -380,6 +388,7 @@ fn lower_class_export<'db>(
     name: &Name,
 ) -> ExportedType {
     let class_data = baml_compiler2_ppir::item_data::class_data(db, class_loc);
+    let class_generic_env = crate::generic_env::class_generic_env(db, class_loc);
     let class_ns = file_package::file_package(db, class_loc.file(db)).namespace_path;
 
     // Lower fields. The class's type-variable bounds let an associated-type
@@ -388,7 +397,7 @@ fn lower_class_export<'db>(
         db,
         package_items: pkg_items,
         ns_context: &class_ns,
-        generic_params: &class_data.generic_params,
+        generic_params: class_generic_env.source_params(),
         bounds: crate::lower_type_expr::class_generic_param_bounds(db, class_loc),
         self_ty: None,
     };
@@ -437,7 +446,7 @@ fn lower_class_export<'db>(
         qtn,
         fields,
         methods,
-        generic_params: class_data.generic_params.clone(),
+        generic_params: class_generic_env.params().to_vec(),
     }
 }
 
@@ -500,12 +509,8 @@ fn lower_function_export<'db>(
     let sig = baml_compiler2_ppir::item_data::elaborated_function_data(db, func_loc);
     let body = baml_compiler2_ppir::function_body(db, func_loc);
     let mut diags = Vec::new();
-    let function_generic_params: Vec<Name> = sig
-        .user_generic_params
-        .iter()
-        .chain(sig.synthetic_effect_params.iter())
-        .cloned()
-        .collect();
+    let function_generic_env = crate::generic_env::function_generic_env(db, func_loc);
+    let function_generic_params = function_generic_env.source_params();
 
     // One lowering scope for the whole signature. The function's in-scope
     // type-variable bounds let an associated-type projection `T.member`
@@ -514,7 +519,7 @@ fn lower_function_export<'db>(
         db,
         package_items: pkg_items,
         ns_context: &func_ns,
-        generic_params: &function_generic_params,
+        generic_params: function_generic_params,
         bounds: crate::lower_type_expr::function_in_scope_generic_param_bounds(db, func_loc),
         self_ty: None,
     };
@@ -557,7 +562,7 @@ fn lower_function_export<'db>(
         return_type,
         declared_throws,
         callable_throws,
-        generic_params: function_generic_params,
+        generic_params: function_generic_params.to_vec(),
         builtin_kind,
     }
 }
@@ -972,7 +977,9 @@ impl<'db> PackageResolutionContext<'db> {
                     builtin_kind: lowered.builtin_kind,
                 },
                 class_name: class_name.name().clone(),
-                class_generic_params: class_data.generic_params.clone(),
+                class_generic_params: crate::generic_env::class_generic_env(db, class_loc)
+                    .params()
+                    .to_vec(),
             });
         }
         None
@@ -1005,8 +1012,8 @@ fn def_to_ty<'db>(db: &'db dyn crate::Db, def: Definition<'db>) -> Ty {
             // Declared generics live on the type as `TypeVar` args, matching
             // `ExportedType::to_ty` so own-package and dependency resolution
             // produce the same `Ty::Class(qtn, [TypeVar…])` shape.
-            let args = baml_compiler2_ppir::item_data::class_data(db, loc)
-                .generic_params
+            let args = crate::generic_env::class_generic_env(db, loc)
+                .params()
                 .iter()
                 .map(|p| Ty::TypeVar(p.clone(), TyAttr::default()))
                 .collect();

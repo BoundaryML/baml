@@ -46,11 +46,11 @@ pub struct InterfaceBound {
 /// `frame` is the callee's type-argument layout as templates (De Bruijn over the
 /// impl's generic params), realized against the impl's bound type args at
 /// dispatch. For an impl's **own** method this is the impl's own generics; for an
-/// **inherited default** it is the interface's generic args followed by its
-/// associated types in *declared* order — the default was compiled against the
-/// interface's frame (its body refers to the interface's associated types), not
-/// the implementor's generics. Realizing this frame is what lets a default like
-/// `Iterator.collect` resolve `Item`/`Error` under an open-world virtual call.
+/// **inherited default** it is `Self`, the interface's generic args, then its
+/// associated types in *declared* order. The default was compiled against the
+/// interface's frame, not the implementor's generics. Realizing this frame is
+/// what lets a default like `Iterator.collect` resolve `Self`, `Item`, and
+/// `Error` under an open-world virtual call.
 // No `PartialEq`/`Eq`: `fqn` is a `HeapPtr`, so a derived `Eq` would be pointer
 // identity rather than structural equality — a footgun with no current caller.
 #[derive(Clone, Debug, BorshSerialize, BorshDeserialize)]

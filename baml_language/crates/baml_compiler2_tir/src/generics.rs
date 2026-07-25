@@ -16,10 +16,9 @@
 //!    of erroring as "unresolved type"), then applies [`substitute_ty`] to
 //!    replace those type-variable references with their bound concrete types.
 
-use baml_base::Name;
 use rustc_hash::FxHashMap;
 
-use crate::ty::{FunctionParamTy, Ty};
+use crate::ty::{FunctionParamTy, ParamTy, Ty};
 
 // ── Type variable binding ─────────────────────────────────────────────────────
 
@@ -29,7 +28,7 @@ use crate::ty::{FunctionParamTy, Ty};
 ///
 /// If there are more params than args (or vice versa), the extra entries are
 /// silently ignored — callers are responsible for providing matching lengths.
-pub fn bind_type_vars(generic_params: &[Name], concrete_args: &[Ty]) -> FxHashMap<Name, Ty> {
+pub fn bind_type_vars(generic_params: &[ParamTy], concrete_args: &[Ty]) -> FxHashMap<ParamTy, Ty> {
     let mut bindings = FxHashMap::default();
     for (param, arg) in generic_params.iter().zip(concrete_args.iter()) {
         bindings.insert(param.clone(), arg.clone());
@@ -45,7 +44,7 @@ pub fn bind_type_vars(generic_params: &[Name], concrete_args: &[Ty]) -> FxHashMa
 /// `bindings`. This is used both for callable generic instantiation and for
 /// interface implementation rule instantiation, so it must preserve the full
 /// TIR shape rather than only class/member-signature types.
-pub fn substitute_ty(ty: &Ty, bindings: &FxHashMap<Name, Ty>) -> Ty {
+pub fn substitute_ty(ty: &Ty, bindings: &FxHashMap<ParamTy, Ty>) -> Ty {
     if bindings.is_empty() {
         return ty.clone();
     }
@@ -277,8 +276,8 @@ pub fn contains_concrete_base_projection(ty: &Ty) -> bool {
 /// (`__effect_param_N`). Anything else is a *rigid ambient* var (the caller's
 /// `T` in an instantiation value `foo<T>`), which must be matched structurally
 /// rather than inferred. Used by call-site inference's binding-retention filter.
-pub fn is_value_call_inferable(name: &Name, generic_params: &[Name]) -> bool {
-    generic_params.contains(name) || crate::ty::is_synthetic_effect_param(name)
+pub fn is_value_call_inferable(param: &ParamTy, generic_params: &[ParamTy]) -> bool {
+    generic_params.contains(param) || crate::ty::is_synthetic_effect_param(param.name())
 }
 
 /// Like [`contains_typevar`], but ignores type variables whose name appears in
@@ -290,8 +289,8 @@ pub fn is_value_call_inferable(name: &Name, generic_params: &[Name]) -> bool {
 /// parameter instead of falling back to synthesis (which would reject the bare
 /// param). A typevar that is NOT rigid is one the callee must still infer, so a
 /// param mentioning it genuinely cannot give the lambda a concrete shape.
-pub fn contains_non_rigid_typevar(ty: &Ty, rigid: &[Name]) -> bool {
-    contains_typevar_where(ty, &|name| !rigid.iter().any(|r| r == name))
+pub fn contains_non_rigid_typevar(ty: &Ty, rigid: &[ParamTy]) -> bool {
+    contains_typevar_where(ty, &|param| !rigid.iter().any(|rigid| rigid == param))
 }
 
 /// Returns `true` if `ty` contains any type variable for which `pred` returns
@@ -299,8 +298,8 @@ pub fn contains_non_rigid_typevar(ty: &Ty, rigid: &[Name]) -> bool {
 /// distinguish *rigid* type variables (the pinned `Self`, caller-scope generic
 /// params) — which must be checked — from genuinely-uninferred ones (callee
 /// generics, free inference/effect vars) — which are deferred.
-pub fn contains_typevar_where(ty: &Ty, pred: &dyn Fn(&Name) -> bool) -> bool {
-    contains_ty_where(ty, &|t| matches!(t, Ty::TypeVar(name, _) if pred(name)))
+pub fn contains_typevar_where(ty: &Ty, pred: &dyn Fn(&ParamTy) -> bool) -> bool {
+    contains_ty_where(ty, &|t| matches!(t, Ty::TypeVar(param, _) if pred(param)))
 }
 
 // ── Type variable inference & union normalization ──────────────────────────────
@@ -396,7 +395,7 @@ pub fn erase_unresolved_typevars(
 /// Bounded generic parameters are compile-time evidence, not concrete runtime
 /// type tags. MIR and bytecode metadata both need the same erasure behavior, so
 /// keep the recursive shape walk here beside the other generic utilities.
-pub fn erase_typevars_matching(ty: &Ty, should_erase: &impl Fn(&Name) -> bool) -> Ty {
+pub fn erase_typevars_matching(ty: &Ty, should_erase: &impl Fn(&ParamTy) -> bool) -> Ty {
     if !contains_typevar(ty) {
         return ty.clone();
     }
@@ -486,7 +485,7 @@ pub fn erase_typevars_matching(ty: &Ty, should_erase: &impl Fn(&Name) -> bool) -
 
 #[cfg(test)]
 mod tests {
-    use baml_base::TyAttr;
+    use baml_base::{Name, TyAttr};
     use baml_type::{Interface, QualifiedTypeName};
 
     use super::*;
@@ -622,9 +621,26 @@ mod tests {
 
     #[test]
     fn contains_typevar_where_filters_by_name() {
-        let t = Ty::List(Box::new(Ty::TypeVar(Name::new("T"), attr())), attr());
+        let t = Ty::List(Box::new(Ty::type_var("T")), attr());
         assert!(contains_typevar(&t));
         assert!(contains_typevar_where(&t, &|n| n.as_str() == "T"));
         assert!(!contains_typevar_where(&t, &|n| n.as_str() == "U"));
+    }
+
+    #[test]
+    fn substitution_does_not_conflate_same_named_parameters() {
+        let outer = baml_type::ParamTy::new(0, Name::new("E"));
+        let inner = baml_type::ParamTy::new(1, Name::new("E"));
+        let mut bindings = rustc_hash::FxHashMap::default();
+        bindings.insert(outer.clone(), Ty::int());
+
+        assert_eq!(
+            substitute_ty(&Ty::TypeVar(outer, attr()), &bindings),
+            Ty::int()
+        );
+        assert_eq!(
+            substitute_ty(&Ty::TypeVar(inner.clone(), attr()), &bindings),
+            Ty::TypeVar(inner, attr())
+        );
     }
 }

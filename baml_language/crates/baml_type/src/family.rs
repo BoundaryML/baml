@@ -22,7 +22,7 @@
 use baml_type_macros::ty_family;
 use borsh::{BorshDeserialize, BorshSerialize};
 
-use crate::{Freshness, FunctionParamMode, Literal, MediaKind, Name, TyAttr, TypeName};
+use crate::{Freshness, FunctionParamMode, Literal, MediaKind, Name, ParamTy, TyAttr, TypeName};
 
 ty_family! {
     axes { concrete, abstract, literal, never, typevar, projection, tir, special, template }
@@ -245,7 +245,7 @@ ty_family! {
         /// during inference; can survive at runtime only inside reflective generic
         /// metadata.
         #[axis(typevar)]
-        TypeVar(Name, TyAttr) = 25,
+        TypeVar(ParamTy, TyAttr) = 25,
         /// Associated type projection, e.g. `P.Output` or `(T as Iterator).Item`. Bound
         /// during inference; can survive at runtime only inside reflective generic
         /// metadata. Split into its own `projection` axis (distinct from `typevar`)
@@ -391,7 +391,7 @@ mod tests {
     /// A type variable nested inside a concrete container: representable in
     /// `RuntimeTy` but not `RealizedTy`.
     fn with_typevar() -> Ty {
-        Ty::List(Box::new(Ty::TypeVar(Name::new("T"), a())), a())
+        Ty::List(Box::new(Ty::type_var("T")), a())
     }
 
     /// Widening (`From`) reaches every member above `deep_concrete()`, by ref
@@ -456,7 +456,7 @@ mod tests {
         assert_eq!(RuntimeTy::from(&codegen), runtime);
 
         let projection = Ty::AssociatedTypeProjection {
-            base: Box::new(Ty::TypeVar(Name::new("T"), a())),
+            base: Box::new(Ty::type_var("T")),
             interface: Box::new(crate::Interface::new(
                 qtn("Iterator"),
                 Vec::new(),

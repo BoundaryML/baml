@@ -15,7 +15,7 @@
 
 use std::collections::{HashMap, HashSet};
 
-use baml_codegen_types::{CallableParam, Class, Function, Symbol, SymbolPool, Ty};
+use baml_codegen_types::{CallableParam, Class, Function, ParamTy, Symbol, SymbolPool, Ty};
 
 /// Rewrite every function / method signature in `pool` with its synthetic
 /// effect params renamed, returning the rewritten pool.
@@ -126,7 +126,10 @@ fn pascal_case(s: &str) -> String {
 fn rename_typevars(ty: &Ty, renames: &HashMap<String, String>) -> Ty {
     match ty {
         Ty::TypeVar(name, attr) => match renames.get(name.as_str()) {
-            Some(nice) => Ty::TypeVar(baml_base::Name::new(nice.as_str()), attr.clone()),
+            Some(nice) => Ty::TypeVar(
+                ParamTy::new(name.index(), baml_base::Name::new(nice.as_str())),
+                attr.clone(),
+            ),
             None => ty.clone(),
         },
         Ty::List(inner, attr) => Ty::List(Box::new(rename_typevars(inner, renames)), attr.clone()),

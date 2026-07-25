@@ -1,12 +1,5 @@
-/**
- * THIS FILE IS AUTO-GENERATED — DO NOT EDIT BY HAND.
- *
- * Source: baml_language/sdks/typescript/bridge_typescript/typescript_src/
- * Proto:  baml_language/crates/bridge_ctypes/types/baml_bridge/cffi/v1/*.proto
- * Build:  cd baml_language/sdks/typescript/bridge_typescript && pnpm build:debug
- */
 import * as $protobuf from "protobufjs";
-import Long from "long";
+import Long = require("long");
 /** Namespace baml_bridge. */
 export namespace baml_bridge {
 
@@ -3609,6 +3602,9 @@ export namespace baml_bridge {
 
                 /** BamlTyTypeVar name */
                 name?: (string|null);
+
+                /** BamlTyTypeVar index */
+                index?: (number|null);
             }
 
             /** Represents a BamlTyTypeVar. */
@@ -3622,6 +3618,9 @@ export namespace baml_bridge {
 
                 /** BamlTyTypeVar name. */
                 public name: string;
+
+                /** BamlTyTypeVar index. */
+                public index: number;
 
                 /**
                  * Creates a new BamlTyTypeVar instance using the specified properties.

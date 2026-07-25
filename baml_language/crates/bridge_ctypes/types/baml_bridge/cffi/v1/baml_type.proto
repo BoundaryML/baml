@@ -204,6 +204,7 @@ message BamlTyVoid {}
 // (`RuntimeTy::TypeVar`).
 message BamlTyTypeVar {
   string name = 1;
+  uint32 index = 2;
 }
 
 // An associated-type projection such as `P.Output` or `(T as Iterator).Item`

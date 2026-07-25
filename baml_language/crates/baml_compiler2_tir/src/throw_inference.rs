@@ -143,13 +143,14 @@ pub fn file_throw_facts(db: &dyn crate::Db, file: baml_base::SourceFile) -> File
         let func_data = baml_compiler2_ppir::item_data::function_data(db, func_loc);
         let short_name = &func_data.name;
         let key = function_key(db, func_loc, short_name);
+        let generic_env = crate::generic_env::function_generic_env(db, func_loc);
 
         let (direct, has_declared_contract) = extract_direct_and_declared(
             db,
             pkg_items,
             &func_ns,
             func_loc,
-            &func_data.generic_params,
+            generic_env.source_params(),
             &func_data.type_refs,
             &func_data.params,
         );
@@ -179,13 +180,14 @@ pub fn file_throw_facts(db: &dyn crate::Db, file: baml_base::SourceFile) -> File
             // Key as "ClassName.method_name" (with namespace prefix if any).
             let method_short = Name::new(format!("{class_name}.{method_name}"));
             let key = function_key(db, func_loc, &method_short);
+            let generic_env = crate::generic_env::function_generic_env(db, func_loc);
 
             let (direct, has_declared_contract) = extract_direct_and_declared(
                 db,
                 pkg_items,
                 &func_ns,
                 func_loc,
-                &method_data.generic_params,
+                generic_env.source_params(),
                 &method_data.type_refs,
                 &method_data.params,
             );
@@ -339,7 +341,7 @@ fn extract_direct_and_declared<'db>(
     pkg_items: &PackageItems<'db>,
     ns_context: &[Name],
     func_loc: baml_compiler2_hir::loc::FunctionLoc<'db>,
-    generic_params: &[Name],
+    generic_params: &[crate::ty::ParamTy],
     type_refs: &baml_compiler2_hir::type_ref::TypeRefStore,
     params: &[baml_compiler2_ppir::item_data::FunctionParamData],
 ) -> (BTreeSet<ThrowFact>, bool) {
@@ -455,7 +457,7 @@ fn lower_param_types<'db>(
     db: &'db dyn crate::Db,
     pkg_items: &PackageItems<'db>,
     ns_context: &[Name],
-    generic_params: &[Name],
+    generic_params: &[crate::ty::ParamTy],
     bounds: &crate::lower_type_expr::TypeVarBoundsMap,
     type_refs: &baml_compiler2_hir::type_ref::TypeRefStore,
     params: &[baml_compiler2_ppir::item_data::FunctionParamData],

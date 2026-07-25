@@ -11,7 +11,7 @@ pub use baml_base::{Name, attr::TyAttr};
 // `baml_type` (the single home for the shared type vocabulary). Re-exported
 // here so existing `crate::ty::…` paths keep working.
 pub use baml_type::{
-    CanonicalTyRender, Freshness, FunctionParamMode, FunctionParamTy, MediaKind, Package,
+    CanonicalTyRender, Freshness, FunctionParamMode, FunctionParamTy, MediaKind, Package, ParamTy,
     PrimitiveType, QualifiedTypeName, RESERVED_USER_PACKAGE, SYNTHETIC_EFFECT_PARAM_PREFIX, Ty,
     TyRenderStrategy, is_synthetic_effect_param,
 };

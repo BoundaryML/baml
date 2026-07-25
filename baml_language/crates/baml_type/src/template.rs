@@ -537,10 +537,14 @@ impl TyTemplate {
     fn to_display_ty(&self) -> crate::Ty {
         use crate::Ty;
         match self {
-            Self::TypeArgRef(n) => Ty::TypeVar(Name::new(format!("#{n}")), TyAttr::default()),
-            Self::TypeArgRefOrWildcard(n) => {
-                Ty::TypeVar(Name::new(format!("#{n}?")), TyAttr::default())
-            }
+            Self::TypeArgRef(n) => Ty::TypeVar(
+                crate::ParamTy::new(*n, Name::new(format!("#{n}"))),
+                TyAttr::default(),
+            ),
+            Self::TypeArgRefOrWildcard(n) => Ty::TypeVar(
+                crate::ParamTy::new(*n, Name::new(format!("#{n}?"))),
+                TyAttr::default(),
+            ),
             Self::Wildcard => Ty::Infer {
                 attr: TyAttr::default(),
             },
@@ -634,7 +638,7 @@ mod tests {
         fn implements_interface(&self, _: &Ty, _: &Interface) -> bool {
             false
         }
-        fn type_var_bound(&self, _: &Name) -> Vec<Interface> {
+        fn type_var_bound(&self, _: &crate::ParamTy) -> Vec<Interface> {
             Vec::new()
         }
         fn interface_requires(&self, _: &Interface, _: &Interface) -> bool {
@@ -746,7 +750,7 @@ mod tests {
         fn implements_interface(&self, _: &Ty, _: &Interface) -> bool {
             false
         }
-        fn type_var_bound(&self, _: &Name) -> Vec<Interface> {
+        fn type_var_bound(&self, _: &crate::ParamTy) -> Vec<Interface> {
             Vec::new()
         }
         fn interface_requires(&self, _: &Interface, _: &Interface) -> bool {

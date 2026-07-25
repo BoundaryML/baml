@@ -22,12 +22,14 @@
 //! `TypeExpr`, or `TirTypeError` (e.g. `lower_type_expr_with_generics`,
 //! `erase_unresolved_typevars`) stays in `baml_compiler2_tir::generics`.
 
+#[cfg(test)]
+use baml_type::Name;
 #[expect(
     deprecated,
     reason = "fact-free by necessity: inference runs at the host entry boundary (no VM exists yet) and shares its lattice with compile-time inference — both sides must gain real fact contexts in lockstep"
 )]
 use baml_type::normalize::NoFacts;
-use baml_type::{Name, Ty, TyAttr, normalize::TypeContext};
+use baml_type::{ParamTy, Ty, TyAttr, normalize::TypeContext};
 use rustc_hash::FxHashMap;
 
 // ── Inference options ─────────────────────────────────────────────────────────
@@ -42,7 +44,7 @@ struct InferOpts<'a> {
     allow_typevar_actuals: bool,
     /// A *rigid* type variable that must never be bound from an argument — the
     /// pinned `Self` of an interface method call. `None` = no rigid variable.
-    rigid: Option<&'a Name>,
+    rigid: Option<&'a ParamTy>,
 }
 
 impl InferOpts<'_> {
@@ -99,7 +101,7 @@ impl Variance {
 /// diagnostic (see `03c-impl-guide`).
 #[derive(Clone, Debug)]
 pub struct InferError {
-    pub var: Name,
+    pub var: ParamTy,
     pub message: String,
 }
 
@@ -110,7 +112,7 @@ pub struct InferError {
 /// conflicting occurrences across *different* arguments are caught.
 #[derive(Default)]
 pub struct InferenceConstraints {
-    vars: FxHashMap<Name, Vec<(Variance, Ty)>>,
+    vars: FxHashMap<ParamTy, Vec<(Variance, Ty)>>,
 }
 
 impl InferenceConstraints {
@@ -140,7 +142,7 @@ impl InferenceConstraints {
     /// This is the compile-time path: it preserves today's behavior and leans on
     /// the variance-aware downstream subtyping checks to reject the unsound
     /// joins. The runtime path uses [`solve`](Self::solve) instead.
-    fn solve_best_effort(&self) -> FxHashMap<Name, Ty> {
+    fn solve_best_effort(&self) -> FxHashMap<ParamTy, Ty> {
         let mut out = FxHashMap::default();
         for (name, occ) in &self.vars {
             let mut acc: Option<Ty> = None;
@@ -164,7 +166,7 @@ impl InferenceConstraints {
     /// `join(lowers) <: T <: meet(uppers)` and every equality member mutually
     /// equal and consistent with the bounds; otherwise the var has no solution
     /// and the whole inference fails. On success, returns the resolved bindings.
-    pub fn solve(&self) -> Result<FxHashMap<Name, Ty>, InferError> {
+    pub fn solve(&self) -> Result<FxHashMap<ParamTy, Ty>, InferError> {
         let mut out = FxHashMap::default();
         for (name, occ) in &self.vars {
             if let Some(ty) = solve_var(name, occ)? {
@@ -180,7 +182,7 @@ impl InferenceConstraints {
     deprecated,
     reason = "fact-free by necessity: this solver runs at the host entry boundary (no VM exists yet) and shares its lattice with compile-time inference — both sides must gain real fact contexts in lockstep"
 )]
-fn solve_var(name: &Name, occ: &[(Variance, Ty)]) -> Result<Option<Ty>, InferError> {
+fn solve_var(param: &ParamTy, occ: &[(Variance, Ty)]) -> Result<Option<Ty>, InferError> {
     let mut lowers: Vec<&Ty> = Vec::new();
     let mut uppers: Vec<&Ty> = Vec::new();
     let mut equals: Vec<&Ty> = Vec::new();
@@ -194,7 +196,7 @@ fn solve_var(name: &Name, occ: &[(Variance, Ty)]) -> Result<Option<Ty>, InferErr
 
     let fail = |msg: String| {
         Err(InferError {
-            var: name.clone(),
+            var: param.clone(),
             message: msg,
         })
     };
@@ -207,8 +209,8 @@ fn solve_var(name: &Name, occ: &[(Variance, Ty)]) -> Result<Option<Ty>, InferErr
             for other in rest {
                 if !NoFacts.equivalent(first, other) {
                     return fail(format!(
-                        "`{name}` would have to be both `{first}` and `{other}` at the same \
-                         time. Because `{name}` appears inside a list, map, or class type, it \
+                        "`{param}` would have to be both `{first}` and `{other}` at the same \
+                         time. Because `{param}` appears inside a list, map, or class type, it \
                          has to be exactly the same type in every argument."
                     ));
                 }
@@ -218,7 +220,7 @@ fn solve_var(name: &Name, occ: &[(Variance, Ty)]) -> Result<Option<Ty>, InferErr
     };
 
     let lower = join_all(&lowers);
-    let upper = meet_all(name, &uppers)?;
+    let upper = meet_all(param, &uppers)?;
 
     match rigid {
         Some(eq) => {
@@ -227,17 +229,17 @@ fn solve_var(name: &Name, occ: &[(Variance, Ty)]) -> Result<Option<Ty>, InferErr
                 && !NoFacts.is_subtype(l, &eq)
             {
                 return fail(format!(
-                    "`{name}` would have to be both `{eq}` and `{l}` at the same time: one \
-                     argument fixes `{name}` to `{eq}` (where it appears inside a list, \
+                    "`{param}` would have to be both `{eq}` and `{l}` at the same time: one \
+                     argument fixes `{param}` to `{eq}` (where it appears inside a list, \
                      map, or class type), while another supplies a `{l}`."
                 ));
             }
             for u in &uppers {
                 if !NoFacts.is_subtype(&eq, u) {
                     return fail(format!(
-                        "one argument fixes `{name}` to `{eq}` (where it appears inside a list, \
+                        "one argument fixes `{param}` to `{eq}` (where it appears inside a list, \
                          map, or class type), but a function argument only accepts `{u}` for \
-                         `{name}`, and a `{eq}` is not a `{u}`."
+                         `{param}`, and a `{eq}` is not a `{u}`."
                     ));
                 }
             }
@@ -247,9 +249,9 @@ fn solve_var(name: &Name, occ: &[(Variance, Ty)]) -> Result<Option<Ty>, InferErr
             (Some(l), Some(u)) => {
                 if !NoFacts.is_subtype(&l, &u) {
                     return fail(format!(
-                        "`{name}` can't satisfy every argument at once: one argument supplies a \
-                         `{l}` for `{name}`, while a function argument only accepts `{u}` for \
-                         `{name}`, and a `{l}` is not a `{u}`."
+                        "`{param}` can't satisfy every argument at once: one argument supplies a \
+                         `{l}` for `{param}`, while a function argument only accepts `{u}` for \
+                         `{param}`, and a `{l}` is not a `{u}`."
                     ));
                 }
                 Ok(Some(l))
@@ -278,7 +280,7 @@ fn join_all(tys: &[&Ty]) -> Option<Ty> {
 /// Meet a set of upper bounds. Returns `None` if empty. Fails if the meet
 /// collapses to `Never` (irreconcilable contravariant occurrences, e.g. a `T`
 /// required to be `<: int` *and* `<: string`).
-fn meet_all(name: &Name, tys: &[&Ty]) -> Result<Option<Ty>, InferError> {
+fn meet_all(param: &ParamTy, tys: &[&Ty]) -> Result<Option<Ty>, InferError> {
     let mut acc: Option<Ty> = None;
     for ty in tys {
         acc = Some(match acc {
@@ -290,10 +292,10 @@ fn meet_all(name: &Name, tys: &[&Ty]) -> Result<Option<Ty>, InferError> {
         && matches!(m, Ty::Never { .. })
     {
         return Err(InferError {
-            var: name.clone(),
+            var: param.clone(),
             message: format!(
-                "`{name}` can't satisfy every argument at once: two function arguments \
-                 accept incompatible types for `{name}`, with no type in common."
+                "`{param}` can't satisfy every argument at once: two function arguments \
+                 accept incompatible types for `{param}`, with no type in common."
             ),
         });
     }
@@ -334,7 +336,7 @@ fn collect(
     formal: &Ty,
     actual: &Ty,
     variance: Variance,
-    vars: &mut FxHashMap<Name, Vec<(Variance, Ty)>>,
+    vars: &mut FxHashMap<ParamTy, Vec<(Variance, Ty)>>,
     opts: InferOpts<'_>,
 ) {
     match (formal, actual) {
@@ -557,7 +559,7 @@ fn covers(concrete: &Ty, atom: &Ty) -> bool {
 /// Merge a fresh best-effort solve into an existing bindings map, unioning with
 /// any binding already present — preserving the cross-call accumulation the old
 /// `&mut`-threaded unifier provided (callers invoke it once per argument).
-fn merge_best_effort(bindings: &mut FxHashMap<Name, Ty>, cons: &InferenceConstraints) {
+fn merge_best_effort(bindings: &mut FxHashMap<ParamTy, Ty>, cons: &InferenceConstraints) {
     for (name, ty) in cons.solve_best_effort() {
         bindings
             .entry(name)
@@ -566,13 +568,17 @@ fn merge_best_effort(bindings: &mut FxHashMap<Name, Ty>, cons: &InferenceConstra
     }
 }
 
-pub fn infer_bindings(formal: &Ty, actual: &Ty, bindings: &mut FxHashMap<Name, Ty>) {
+pub fn infer_bindings(formal: &Ty, actual: &Ty, bindings: &mut FxHashMap<ParamTy, Ty>) {
     let mut cons = InferenceConstraints::new();
     cons.record_with(formal, actual, InferOpts::COMPILE_TIME);
     merge_best_effort(bindings, &cons);
 }
 
-pub fn infer_bindings_allow_typevars(formal: &Ty, actual: &Ty, bindings: &mut FxHashMap<Name, Ty>) {
+pub fn infer_bindings_allow_typevars(
+    formal: &Ty,
+    actual: &Ty,
+    bindings: &mut FxHashMap<ParamTy, Ty>,
+) {
     let mut cons = InferenceConstraints::new();
     cons.record_with(
         formal,
@@ -591,8 +597,8 @@ pub fn infer_bindings_allow_typevars(formal: &Ty, actual: &Ty, bindings: &mut Fx
 pub fn infer_bindings_rigid_self(
     formal: &Ty,
     actual: &Ty,
-    bindings: &mut FxHashMap<Name, Ty>,
-    rigid: Option<&Name>,
+    bindings: &mut FxHashMap<ParamTy, Ty>,
+    rigid: Option<&ParamTy>,
 ) {
     let mut cons = InferenceConstraints::new();
     cons.record_with(
@@ -617,7 +623,7 @@ pub fn infer_bindings_rigid_self(
 /// solve one argument at a time. Callers that want the variance-aware reject
 /// (`02d`/`02e`) should accumulate an [`InferenceConstraints`] across all
 /// arguments and call [`InferenceConstraints::solve`].
-pub fn infer_value_bindings(formal: &Ty, actual: &Ty, bindings: &mut FxHashMap<Name, Ty>) {
+pub fn infer_value_bindings(formal: &Ty, actual: &Ty, bindings: &mut FxHashMap<ParamTy, Ty>) {
     let mut cons = InferenceConstraints::new();
     cons.record(formal, actual);
     merge_best_effort(bindings, &cons);
@@ -677,8 +683,18 @@ mod tests {
         TyAttr::default()
     }
 
+    fn param(name: &str) -> ParamTy {
+        let index = match name {
+            "T" => 0,
+            "U" => 1,
+            "E" => 2,
+            _ => 0,
+        };
+        ParamTy::new(index, Name::new(name))
+    }
+
     fn tv(name: &str) -> Ty {
-        Ty::TypeVar(Name::new(name), a())
+        Ty::TypeVar(param(name), a())
     }
 
     fn int() -> Ty {
@@ -697,7 +713,7 @@ mod tests {
     fn binds_bare_typevar() {
         let mut b = FxHashMap::default();
         infer_bindings(&tv("T"), &int(), &mut b);
-        assert_eq!(b.get(&Name::new("T")), Some(&int()));
+        assert_eq!(b.get(&param("T")), Some(&int()));
     }
 
     #[test]
@@ -706,7 +722,7 @@ mod tests {
         let formal = Ty::Union(vec![tv("T"), string(), null()], a());
         let mut b = FxHashMap::default();
         infer_bindings(&formal, &int(), &mut b);
-        assert_eq!(b.get(&Name::new("T")), Some(&int()));
+        assert_eq!(b.get(&param("T")), Some(&int()));
     }
 
     #[test]
@@ -715,7 +731,7 @@ mod tests {
         let formal = Ty::Union(vec![tv("T"), string(), null()], a());
         let mut b = FxHashMap::default();
         infer_bindings(&formal, &string(), &mut b);
-        assert!(!b.contains_key(&Name::new("T")));
+        assert!(!b.contains_key(&param("T")));
     }
 
     #[test]
@@ -724,7 +740,7 @@ mod tests {
         let formal = Ty::Union(vec![tv("T"), string(), null()], a());
         let mut b = FxHashMap::default();
         infer_bindings(&formal, &null(), &mut b);
-        assert_eq!(b.get(&Name::new("T")), Some(&null()));
+        assert_eq!(b.get(&param("T")), Some(&null()));
     }
 
     #[test]
@@ -733,8 +749,8 @@ mod tests {
         let formal = Ty::Union(vec![tv("T"), tv("U"), string()], a());
         let mut b = FxHashMap::default();
         infer_bindings(&formal, &int(), &mut b);
-        assert!(!b.contains_key(&Name::new("T")));
-        assert!(!b.contains_key(&Name::new("U")));
+        assert!(!b.contains_key(&param("T")));
+        assert!(!b.contains_key(&param("U")));
     }
 
     fn boolt() -> Ty {
@@ -750,7 +766,7 @@ mod tests {
         let actual = Ty::Union(vec![int(), string()], a());
         let mut b = FxHashMap::default();
         infer_bindings(&formal, &actual, &mut b);
-        assert_eq!(b.get(&Name::new("T")), Some(&string()));
+        assert_eq!(b.get(&param("T")), Some(&string()));
     }
 
     #[test]
@@ -762,7 +778,7 @@ mod tests {
         let actual = Ty::Union(vec![int(), string()], a());
         let mut b = FxHashMap::default();
         infer_bindings(&formal, &actual, &mut b);
-        assert_eq!(b.get(&Name::new("T")), Some(&string()));
+        assert_eq!(b.get(&param("T")), Some(&string()));
     }
 
     #[test]
@@ -774,8 +790,8 @@ mod tests {
         let actual = Ty::Union(vec![int(), string(), boolt()], a());
         let mut b = FxHashMap::default();
         infer_bindings(&formal, &actual, &mut b);
-        assert!(!b.contains_key(&Name::new("T")));
-        assert!(!b.contains_key(&Name::new("U")));
+        assert!(!b.contains_key(&param("T")));
+        assert!(!b.contains_key(&param("U")));
     }
 
     #[test]
@@ -790,7 +806,7 @@ mod tests {
         let actual = Ty::Union(vec![list_int, int()], a());
         let mut b = FxHashMap::default();
         infer_bindings(&formal, &actual, &mut b);
-        assert_eq!(b.get(&Name::new("T")), Some(&int()));
+        assert_eq!(b.get(&param("T")), Some(&int()));
     }
 
     #[test]
@@ -800,7 +816,7 @@ mod tests {
         let formal = Ty::Union(vec![tv("T"), float], a());
         let mut b = FxHashMap::default();
         infer_bindings(&formal, &int(), &mut b);
-        assert_eq!(b.get(&Name::new("T")), Some(&int()));
+        assert_eq!(b.get(&param("T")), Some(&int()));
     }
 
     // ── §J variance soundness (02d / 02e) ─────────────────────────────────────
@@ -859,7 +875,7 @@ mod tests {
     }
 
     /// Drive the checked solver over a list of `(formal, actual)` argument pairs.
-    fn solve_call(args: &[(Ty, Ty)]) -> Result<FxHashMap<Name, Ty>, InferError> {
+    fn solve_call(args: &[(Ty, Ty)]) -> Result<FxHashMap<ParamTy, Ty>, InferError> {
         let mut cons = InferenceConstraints::new();
         for (formal, actual) in args {
             cons.record(formal, actual);
@@ -867,8 +883,8 @@ mod tests {
         cons.solve()
     }
 
-    fn get<'a>(b: &'a FxHashMap<Name, Ty>, name: &str) -> Option<&'a Ty> {
-        b.get(&Name::new(name))
+    fn get<'a>(b: &'a FxHashMap<ParamTy, Ty>, name: &str) -> Option<&'a Ty> {
+        b.get(&param(name))
     }
 
     /// Assert a binding is a union whose members are exactly `expected` (any order).

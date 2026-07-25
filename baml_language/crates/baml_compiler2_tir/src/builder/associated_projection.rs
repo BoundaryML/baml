@@ -219,28 +219,19 @@ fn determine_interface(
         // A type variable searches the closure of *every* interface in its bound
         // conjunction (`T extends A & B`). No bound at all means it cannot be proven
         // to implement any interface, so no interface can declare `member`.
-        Ty::TypeVar(name, _) => match ctx.type_var_bounds(name) {
-            // A `Ty::TypeVar` projection base is always an in-scope generic parameter — a
-            // bare path lowers to a type variable only when it *is* one, and a rigid `Self`
-            // receiver is registered in `generic_params` wherever its `self_ty` is set. So
-            // this is unreachable; if a lowering site ever sets a type variable / `Self`
-            // receiver without threading it into `generic_params`, that bug surfaces here.
-            None => unreachable!(
-                "type variable `{name}` projected but not in this scope's generic_params — \
-                 a lowering site failed to thread it"
-            ),
+        Ty::TypeVar(param, _) => match ctx.type_var_bounds(param) {
             // Declared but genuinely unbounded: it implements nothing, so an explicit
             // qualifier cannot hold and an unqualified member is undeclared.
-            Some(bounds) if bounds.is_empty() => match explicit {
+            bounds if bounds.is_empty() => match explicit {
                 Some(qualifier) => Determination::SubjectDoesNotImplementQualifier {
                     subject: base.clone(),
                     qualifier,
                 },
                 None => Determination::Undeclared {
-                    container: AssocContainer::TypeVar(name.clone()),
+                    container: AssocContainer::TypeVar(param.name().clone()),
                 },
             },
-            Some(bounds) => {
+            bounds => {
                 // Report against the first bound if none declares `member`.
                 let undeclared = AssocContainer::Interface(bounds[0].name.clone());
                 resolve_via_roots(ctx, bounds.into_vec(), explicit, member, undeclared, &base)
@@ -570,8 +561,13 @@ fn associated_type_bound_interface(
     // The bound is realized at the projection: `Self` is the projection's base, the
     // interface's generics are the realized ones, and each sibling associated type is
     // its inner pin.
-    let mut bindings: FxHashMap<Name, Ty> = FxHashMap::default();
-    bindings.insert(Name::new("Self"), self_ty.clone());
+    let generic_env = crate::generic_env::interface_generic_env(db, iface_loc);
+    let self_param = generic_env
+        .resolve_param(&Name::new("Self"))
+        .expect("interface Self parameter is in its environment")
+        .clone();
+    let mut bindings: FxHashMap<crate::ty::ParamTy, Ty> = FxHashMap::default();
+    bindings.insert(self_param.clone(), self_ty.clone());
     // `realized` should carry exactly one argument per declared generic parameter; a mismatch
     // is a malformed bound (an under-instantiated generic interface, reported as
     // `WrongNumberOfTypeArgs` at its declaration). Bind any un-provided parameter to
@@ -584,9 +580,13 @@ fn associated_type_bound_interface(
         realized.generics.len(),
         iface.generic_params.len(),
     );
-    for (i, param) in iface.generic_params.iter().enumerate() {
+    for (i, name) in iface.generic_params.iter().enumerate() {
         let arg = realized.generics.get(i).cloned().unwrap_or_else(error_ty);
-        bindings.insert(param.clone(), arg);
+        let param = generic_env
+            .resolve_param(name)
+            .expect("interface generic parameter is in its environment")
+            .clone();
+        bindings.insert(param, arg);
     }
     // Every associated type is an in-scope name in the bound expression (`type A extends
     // Inner<C>` references sibling `C`), so each must be bound. Use its realized pin, or —
@@ -606,29 +606,26 @@ fn associated_type_bound_interface(
                 member: assoc.name.clone(),
                 attr: TyAttr::default(),
             });
-        bindings.insert(assoc.name.clone(), value);
+        let param = generic_env
+            .resolve_any_param(&assoc.name)
+            .expect("associated type parameter is in its interface environment")
+            .clone();
+        bindings.insert(param, value);
     }
 
     // The bound is written in the interface's own scope: `Self` is bounded by the
     // interface itself (so `Self.member` in the bound resolves), plus the interface's
     // declared parameter bounds; its generics and associated names are in scope.
     let mut bounds = crate::lower_type_expr::interface_generic_param_bounds(db, iface_loc).clone();
-    bounds.insert(Name::new("Self"), vec![realized.clone()]);
-    let generic_params: Vec<Name> = iface
-        .generic_params
-        .iter()
-        .cloned()
-        .chain(iface.associated_types.iter().map(|a| a.name.clone()))
-        .chain(std::iter::once(Name::new("Self")))
-        .collect();
+    bounds.insert(self_param.clone(), vec![realized.clone()]);
 
     let scope = crate::lower_type_expr::ScopeCtx {
         db,
         package_items: pkg_items,
         ns_context: &pkg.namespace_path,
-        generic_params: &generic_params,
+        generic_params: generic_env.params(),
         bounds: &bounds,
-        self_ty: Some(Ty::TypeVar(Name::new("Self"), TyAttr::default())),
+        self_ty: Some(Ty::TypeVar(self_param, TyAttr::default())),
     };
     // The bound is checked at the interface's declaration; diagnostics are discarded here.
     let mut diags = Vec::new();
@@ -673,7 +670,12 @@ pub(crate) fn associated_type_declared_bound(
     if !arity_ok {
         return Vec::new();
     }
-    let symbolic_self = Ty::TypeVar(Name::new("Self"), TyAttr::default());
+    let generic_env = crate::generic_env::interface_generic_env(db, iface_loc);
+    let self_param = generic_env
+        .resolve_param(&Name::new("Self"))
+        .expect("interface Self parameter is in its environment")
+        .clone();
+    let symbolic_self = Ty::TypeVar(self_param, TyAttr::default());
     associated_type_bound_interface(db, iface_loc, interface, &symbolic_self, member)
         .into_iter()
         .collect()

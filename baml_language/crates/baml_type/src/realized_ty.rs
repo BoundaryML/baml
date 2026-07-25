@@ -172,7 +172,7 @@ mod tests {
         // `AssociatedTypeProjection` is a type variable (the `typevar` axis), so
         // it has no realized form — the conversion rejects it at the top level.
         let ty = Ty::AssociatedTypeProjection {
-            base: Box::new(Ty::TypeVar(Name::new("T"), def())),
+            base: Box::new(Ty::type_var("T")),
             interface: Box::new(Interface {
                 name: qtn("Iterator"),
                 generics: vec![],

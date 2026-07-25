@@ -217,7 +217,7 @@ impl<'vm> ImplResolver<'vm> {
     /// Bruijn over the impl's generic params) against the impl's bound type args
     /// (from [`Self::resolve_implements_rule`]). The result is the `frame.type_args`
     /// to seed the resolved callee with: the impl's own generics for an impl method,
-    /// or the interface's args + associated types for an inherited default.
+    /// or `Self` + the interface's args + associated types for an inherited default.
     pub(crate) fn realize_frame(
         self,
         template: &[TyTemplate],

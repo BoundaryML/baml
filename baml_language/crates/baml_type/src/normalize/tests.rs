@@ -66,9 +66,9 @@ impl TypeContext for Ctx {
         false
     }
 
-    fn type_var_bound(&self, name: &Name) -> Vec<Interface> {
+    fn type_var_bound(&self, param: &ParamTy) -> Vec<Interface> {
         self.var_bounds
-            .get(name)
+            .get(param.name())
             .into_iter()
             .flatten()
             .filter_map(Ty::as_interface)
@@ -136,7 +136,7 @@ fn union(v: Vec<Ty>) -> Ty {
     Ty::Union(v, TyAttr::default())
 }
 fn typevar(s: &str) -> Ty {
-    Ty::TypeVar(Name::new(s), TyAttr::default())
+    Ty::type_var(s)
 }
 fn projection(base: Ty, iface_name: &str, member: &str) -> Ty {
     Ty::AssociatedTypeProjection {
