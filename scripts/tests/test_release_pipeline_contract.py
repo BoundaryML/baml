@@ -788,6 +788,7 @@ class WorkflowGraphTests(unittest.TestCase):
         verify = job_block(workflow, "verify-csharp-sdk")
         all_builds = job_block(workflow, "all-builds")
         nuget = job_block(workflow, "publish-csharp-sdk")
+        crates_io = job_block(workflow, "publish-crates-io")
         prerequisites = job_block(workflow, "release-prerequisites-complete")
         complete = job_block(workflow, "release-complete")
         manifest = job_block(workflow, "publish-pkg-boundaryml-com")
@@ -803,6 +804,8 @@ class WorkflowGraphTests(unittest.TestCase):
         self.assertIn("build-bridge-cffi", verify)
         self.assertIn("- verify-csharp-sdk", all_builds)
         self.assertIn("all-builds", nuget)
+        self.assertIn("environment: boundary-tools-prod", crates_io)
+        self.assertNotIn("environment: release", crates_io)
         for publisher in (
             "publish-pypi",
             "publish-nodejs-sdk",
