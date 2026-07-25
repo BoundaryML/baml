@@ -53,9 +53,7 @@ class PackageManagerArtifactsTest(unittest.TestCase):
 
             formula = (output / "homebrew/Formula/baml.rb").read_text()
             self.assertIn(f'version "{VERSION}"', formula)
-            self.assertIn(
-                r"regex(/^baml-wrapper[._-]v?(\d+(?:\.\d+)+)$/i)", formula
-            )
+            self.assertNotIn("livecheck do", formula)
             self.assertIn("on_macos do", formula)
             self.assertIn("on_linux do", formula)
             for target in targets:

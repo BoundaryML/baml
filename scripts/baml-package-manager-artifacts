@@ -43,11 +43,6 @@ def render_formula(version: str, shas: dict[str, str]) -> str:
   version "{version}"
   license "Apache-2.0"
 
-  livecheck do
-    url :stable
-    regex(/^baml-wrapper[._-]v?(\\d+(?:\\.\\d+)+)$/i)
-  end
-
   on_macos do
     on_arm do
       url "https://github.com/BoundaryML/baml/releases/download/baml-wrapper-{version}/baml-wrapper-no-self-update-{version}-{HOMEBREW_TARGETS["mac_arm"]}.tar.gz"
