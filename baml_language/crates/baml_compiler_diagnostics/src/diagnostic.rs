@@ -365,6 +365,14 @@ pub enum DiagnosticId {
     /// the pattern names. Only the final arm of an exhaustive, guardless,
     /// non-Or `match` (whose test is elided) may be function-typed.
     FunctionTypedPatternNotTestable,
+
+    // Projection bases (E0156)
+    /// The dotted projection shorthand (`Base.Member`) was written with the
+    /// interface itself as the base (`Iterator.Element`). A projection's base
+    /// is an implementor type, a bounded type variable, or `Self` — naming
+    /// the interface explicitly takes a qualified projection
+    /// (`(Base as Iterator).Element`). Rust's E0223 analog.
+    InterfaceProjectionBase,
 }
 
 impl DiagnosticId {
@@ -585,6 +593,7 @@ impl DiagnosticId {
             DiagnosticId::BuiltinInterfaceNotImplementable => "E0153",
             DiagnosticId::BuiltinInterfaceNotABound => "E0154",
             DiagnosticId::FunctionTypedPatternNotTestable => "E0155",
+            DiagnosticId::InterfaceProjectionBase => "E0156",
         }
     }
 }

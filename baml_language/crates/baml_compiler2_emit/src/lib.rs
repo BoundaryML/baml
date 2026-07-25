@@ -766,8 +766,15 @@ fn build_packages(
                 .iter()
                 .filter_map(|&m| {
                     let target = method_interface_target(db, m).as_ref()?;
+                    // A constraint head, like the block's own target below — the
+                    // two lowerings must agree for the instantiation key match.
                     let (m_iface_tn, m_args, _m_assoc) = split_interface(
-                        &lower(&target.type_refs, target.target, generics, class_bounds),
+                        &lower_constraint_head(
+                            &target.type_refs,
+                            target.target,
+                            generics,
+                            class_bounds,
+                        ),
                         resolved,
                         generics,
                     )?;
@@ -3783,14 +3790,39 @@ fn compute_function_metadata<'db>(
 
     // Each scoped generic parameter's bound as a displayable `Ty`, kept only when it
     // lowers cleanly (a bound that fails to resolve is dropped rather than shown as
-    // `unknown`). Rendered into `display_type_params` below.
+    // `unknown`). A bound is a constraint head — it pins only the associated
+    // members it writes, so lowering it existentially would mint completeness
+    // diagnostics for members the bound legitimately leaves free (and drop the
+    // bound from display). Rendered into `display_type_params` below.
     let generic_param_bounds: HashMap<Name, Ty> = scoped_generic_param_names
         .iter()
         .enumerate()
         .filter_map(|(idx, name)| {
             let (store, id) = scoped_generic_bound_refs.get(idx).copied().flatten()?;
             let mut diags = Vec::new();
-            let bound_ty = lower_scoped(store, id, &mut diags);
+            let generic_params = if enclosing_interface.is_some() {
+                &interface_binding_params
+            } else {
+                &enclosing_generics
+            };
+            let lowered = baml_compiler2_tir::lower_type_expr::lower_constraint_head_type_ref(
+                store,
+                id,
+                &ScopeCtx {
+                    db,
+                    package_items: pkg_items,
+                    ns_context: &pkg_info.namespace_path,
+                    generic_params,
+                    bounds: &scope_bounds,
+                    self_ty: None,
+                },
+                &mut diags,
+            );
+            let bound_ty = if enclosing_interface.is_some() {
+                substitute_ty(&lowered, &interface_signature_bindings)
+            } else {
+                lowered
+            };
             diags.is_empty().then(|| (name.clone(), bound_ty))
         })
         .collect();
@@ -3817,14 +3849,17 @@ fn compute_function_metadata<'db>(
     // The receiver type used for a `self` parameter with no written annotation. For
     // an interface method it is the interface at its own params, resolved through
     // the same binding path (a synthetic `Name<params>` path — no item-tree read);
-    // for every other method it is the already-lowered `receiver_ty`.
+    // for every other method it is the already-lowered `receiver_ty`. The interface
+    // view is `Self`'s *bound*, so it lowers as a constraint head: associated
+    // members stay unpinned (they realize per-receiver — a default is not a pin),
+    // rather than demanding the existential's completeness.
     let self_param_ty = || -> Option<Ty> {
         match enclosing_interface {
             Some(iface) => {
                 let te =
                     type_expr_for_name_with_generic_args(iface.name.clone(), &iface.generic_params);
                 let mut diags = Vec::new();
-                let lowered = lower_type_expr(
+                let lowered = baml_compiler2_tir::lower_type_expr::lower_constraint_head_type_expr(
                     &te,
                     &ScopeCtx {
                         db,

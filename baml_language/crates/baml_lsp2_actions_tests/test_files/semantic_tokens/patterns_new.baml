@@ -50,7 +50,7 @@ function bind_callback_union(cb: ((int) -> int throws never) | ((string) -> stri
     }
 }
 
-// Union-typed binding across two function-typed alternatives.
+// Bare union-typed pattern across two function-typed alternatives.
 function bind_either_int_caller(cb: ((int) -> int throws never) | ((bool) -> int throws never)) -> int {
     match (cb) {
         let g: ((int) -> int throws never) | ((bool) -> int throws never) => 1

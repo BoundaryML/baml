@@ -13,7 +13,7 @@ type user.TagAlias$stream = Tagged
 type user.TagChain = user.TagAlias
 type user.TagChain$stream = user.TagAlias$stream
 type user.TagPinned = Tagged<Label = int>
-type user.TagPinned$stream = Tagged
+type user.TagPinned$stream = Tagged<Label = int>
 function user.bare_alias_bound(t: T, v: unknown) -> bool  [expr] {
   {  } v is T.Label
 }

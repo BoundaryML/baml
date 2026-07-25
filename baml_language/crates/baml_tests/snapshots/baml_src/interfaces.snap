@@ -1078,7 +1078,7 @@ function interfaces.$init_test_ns_interfaces_interfaces_3(registry: testing.Test
     pop 1
     load_var registry
     load_const "root.interfaces"
-    load_const "wf3_bare_generic_interface_reflection_is_wildcard_pins"
+    load_const "wf3_generic_interface_reflection_is_per_instantiation"
     make_closure .<lambda($init_test_ns_interfaces_interfaces_3, 13)>, 0
     load_const null
     call testing.TestCollector.register_test_at
@@ -5967,26 +5967,27 @@ function interfaces.w315_main() -> int {
 }
 
 function interfaces.w3bg_main() -> bool {
-    load_type interfaces.W3bgBox
-    store_var bare
-    load_var bare
+    load_type interfaces.W3bgBox<int>
+    store_var int_box
+    load_var int_box
     load_type interfaces.W3bgIntBox
     call baml.TypeValue.implemented_by
     jump_if_false L0
     pop 1
-    load_var bare
+    load_var int_box
     load_type interfaces.W3bgStringBox
     call baml.TypeValue.implemented_by
+    unary_op !
 
   L0:
     jump_if_false L1
     pop 1
-    load_var bare
+    load_var int_box
     call baml.TypeValue.implementors
     container_len
-    store_var _6
-    load_var _6
-    load_const 2
+    store_var _7
+    load_var _7
+    load_const 1
     cmp_int_op ==
 
   L1:

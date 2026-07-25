@@ -101,20 +101,18 @@ source: crates/baml_tests/src/generated_tests.rs
 
   [type] E0001
 
-  × mismatched types
+  × type `Box` expects 1 type argument(s), got 0
      ╭─[patterns_class_destructure.baml:135:9]
  135 │         Box => 1
-     ·         ─┬─
-     ·          ╰── expected `Box<int>`, found `Box`
+     ·         ───
      ╰────
 
   [type] E0001
 
-  × mismatched types
-     ╭─[patterns_class_destructure.baml:141:9]
+  × type `Box` expects 1 type argument(s), got 0
+     ╭─[patterns_class_destructure.baml:141:20]
  141 │         let value: Box => 1
-     ·         ───────┬──────
-     ·                ╰── expected `Box<int>`, found `Box`
+     ·                    ───
      ╰────
 
   [type] E0001

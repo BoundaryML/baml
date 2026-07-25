@@ -592,34 +592,13 @@ fn report_duplicate_generic_params(
     }
 }
 
-/// The number of generic parameters the interface named `qtn` declares, or `None`
-/// if `qtn` does not resolve to an interface.
-pub(crate) fn interface_declared_generic_arity(
-    db: &dyn crate::Db,
-    qtn: &crate::ty::QualifiedTypeName,
-) -> Option<usize> {
-    let pkg_id = baml_compiler2_hir::package::PackageId::new(db, qtn.package().clone());
-    let pkg_items = baml_compiler2_ppir::package_items(db, pkg_id);
-    let baml_compiler2_hir::contributions::Definition::Interface(loc) =
-        pkg_items.lookup_type(qtn.namespace(), qtn.name())?
-    else {
-        return None;
-    };
-    Some(
-        baml_compiler2_ppir::item_data::interface_data(db, loc)
-            .generic_params
-            .len(),
-    )
-}
-
 /// Lower one declared interface bound — from a generic parameter's or an
 /// associated type's `extends` clause — to its interface constraint(s), in
 /// `params` scope. A bound *is* an interface conjunction; the intermediate `Ty`
 /// is used only to classify it for diagnostics. When `report` is true (the owning
-/// declaration's scope), emits its lowering diagnostics plus a bare-generic arity
-/// error (`extends Outer` where `interface Outer<X>` — a bound cannot infer the
-/// missing argument, unlike a value position where the bare form is a wildcard)
-/// and a non-interface bound error (a sibling type variable or an associated-type
+/// declaration's scope), emits its lowering diagnostics (which include arity —
+/// lowering normalizes a mis-shaped head, see `enforce_generic_arity`) and a
+/// non-interface bound error (a sibling type variable or an associated-type
 /// projection); an inherited bound passes `false`, since the owner already
 /// reported them.
 #[expect(clippy::too_many_arguments)]
@@ -675,19 +654,6 @@ fn lower_declared_interface_bound(
                 );
             }
             Ty::Interface(qtn, generics, assoc, _) => {
-                if generics.is_empty()
-                    && let Some(arity) = interface_declared_generic_arity(db, qtn)
-                    && arity > 0
-                {
-                    builder.report_at_span(
-                        crate::infer_context::TirTypeError::WrongNumberOfTypeArgs {
-                            type_name: qtn.name().clone(),
-                            expected: arity,
-                            got: 0,
-                        },
-                        span,
-                    );
-                }
                 // An explicit associated binding written on the bound (`P extends
                 // Parser<Output = V>`) must implement that assoc's own declared bound
                 // (`type Output extends Named`) — the same implements relation the

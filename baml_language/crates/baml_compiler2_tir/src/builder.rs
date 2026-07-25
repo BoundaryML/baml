@@ -1238,9 +1238,22 @@ impl<'db> TypeInferenceBuilder<'db> {
         ty_expr: &TypeExpr,
         diags: &mut Vec<TirTypeError>,
     ) -> Ty {
+        self.lower_type_expr_in_current_body_at(
+            ty_expr,
+            diags,
+            crate::lower_type_expr::TypePosition::Existential,
+        )
+    }
+
+    fn lower_type_expr_in_current_body_at(
+        &self,
+        ty_expr: &TypeExpr,
+        diags: &mut Vec<TirTypeError>,
+        position: crate::lower_type_expr::TypePosition,
+    ) -> Ty {
         let bounds = self.scope_type_var_bounds();
         if self.type_bindings.is_empty() {
-            crate::lower_type_expr::lower_type_expr(
+            crate::lower_type_expr::lower_type_expr_at(
                 ty_expr,
                 &crate::lower_type_expr::ScopeCtx {
                     db: self.context.db(),
@@ -1251,11 +1264,12 @@ impl<'db> TypeInferenceBuilder<'db> {
                     self_ty: self.body_self_ty.clone(),
                 },
                 diags,
+                position,
             )
         } else {
             let generic_params: Vec<_> = self.type_bindings.keys().cloned().collect();
             crate::generics::substitute_ty(
-                &crate::lower_type_expr::lower_type_expr(
+                &crate::lower_type_expr::lower_type_expr_at(
                     ty_expr,
                     &crate::lower_type_expr::ScopeCtx {
                         db: self.context.db(),
@@ -1266,6 +1280,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                         self_ty: self.body_self_ty.clone(),
                     },
                     diags,
+                    position,
                 ),
                 &self.type_bindings,
             )
@@ -5742,7 +5757,13 @@ impl<'db> TypeInferenceBuilder<'db> {
             attrs: Vec::new(),
         }
         .at(text_size::TextRange::default());
-        let ty = self.lower_type_expr_in_current_body(&ty_expr, &mut diags);
+        // A construction head: a bare generic name is legal here — its
+        // arguments are inferred from the construction's fields below.
+        let ty = self.lower_type_expr_in_current_body_at(
+            &ty_expr,
+            &mut diags,
+            crate::lower_type_expr::TypePosition::ConstructorHead,
+        );
         for diag in diags {
             self.context.report_simple(diag, expr_id);
         }
@@ -13733,11 +13754,6 @@ impl<'db> TypeInferenceBuilder<'db> {
                     self.collect_type_generic_bound_errors_inner(arg, seen_aliases, errors);
                 }
                 self.collect_interface_generic_bound_errors(qtn, type_args, errors);
-                // This walk only reaches value-type (existential) positions — never an
-                // interface *bound* (`<T extends I>`), which lowers to a separate
-                // constraint. So an interface here is an existential and must pin every
-                // non-defaulted associated type (E0191-analog).
-                self.collect_missing_associated_type_bindings(qtn, associated_bindings, errors);
             }
             Ty::List(inner, _) | Ty::EvolvingList(inner, _) => {
                 self.collect_type_generic_bound_errors_inner(inner, seen_aliases, errors);
@@ -13823,40 +13839,6 @@ impl<'db> TypeInferenceBuilder<'db> {
         );
     }
 
-    /// Emit `MissingAssociatedTypeBindings` when the interface-existential `qtn` leaves a
-    /// non-defaulted associated type unpinned (E0191-analog). `associated_bindings` are the
-    /// explicit pins on the existential; an associated type with a declared default may be
-    /// omitted. Called only from the value-type walk, so `qtn` is never an interface bound.
-    fn collect_missing_associated_type_bindings(
-        &mut self,
-        qtn: &crate::ty::QualifiedTypeName,
-        associated_bindings: &[(Name, Ty)],
-        errors: &mut Vec<TirTypeError>,
-    ) {
-        let Some(interface_loc) = self.resolve_interface_loc(qtn) else {
-            return;
-        };
-        let db = self.context.db();
-        let interface_data = baml_compiler2_ppir::item_data::interface_data(db, interface_loc);
-        let missing: Vec<Name> = interface_data
-            .associated_types
-            .iter()
-            .filter(|assoc| {
-                assoc.default.is_none()
-                    && !associated_bindings
-                        .iter()
-                        .any(|(name, _)| name == &assoc.name)
-            })
-            .map(|assoc| assoc.name.clone())
-            .collect();
-        if !missing.is_empty() {
-            errors.push(TirTypeError::MissingAssociatedTypeBindings {
-                interface: qtn.clone(),
-                missing,
-            });
-        }
-    }
-
     fn collect_named_generic_bound_errors(
         &mut self,
         generic_params: &[Name],
@@ -13873,7 +13855,11 @@ impl<'db> TypeInferenceBuilder<'db> {
         let pkg_info = baml_compiler2_hir::file_package::file_package(db, file);
         let pkg_id = PackageId::new(db, pkg_info.package.clone());
         let pkg_items = baml_compiler2_ppir::package_items(db, pkg_id);
-        let mut diags = Vec::new();
+        // The declared bounds are re-lowered here only to check `type_args`
+        // against them; a bound's own lowering diagnostics (unresolved name,
+        // arity) belong to — and were already reported by — the declaring
+        // type's scope, so they are discarded rather than re-reported at
+        // every use of the type.
         let lowered_bounds = lower_generic_param_bound_refs(
             db,
             type_refs,
@@ -13882,11 +13868,8 @@ impl<'db> TypeInferenceBuilder<'db> {
             &pkg_info.namespace_path,
             generic_params,
             None,
-            &mut diags,
+            &mut Vec::new(),
         );
-        for diag in diags {
-            errors.push(diag);
-        }
 
         let bindings = crate::generics::bind_type_vars(generic_params, type_args);
         for idx in 0..generic_params.len() {

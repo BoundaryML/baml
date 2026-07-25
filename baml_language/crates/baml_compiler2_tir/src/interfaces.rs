@@ -723,7 +723,9 @@ fn bind_type_var(
 
 /// Resolve a `TypeExprKind::Path` to an interface declaration and its fully
 /// qualified identity. Returns `None` when the path doesn't resolve to an
-/// interface.
+/// interface. The paths resolved here are `requires` / `implements` targets —
+/// constraint heads — and only the identity is consumed, so the lowering
+/// neither fills nor demands associated members.
 pub fn resolve_path_to_interface_identity<'db>(
     db: &'db dyn crate::Db,
     target: &baml_compiler2_ast::TypeExpr,
@@ -731,7 +733,7 @@ pub fn resolve_path_to_interface_identity<'db>(
     current_ns: &[Name],
 ) -> Option<ResolvedInterface<'db>> {
     let mut diagnostics = Vec::new();
-    let ty = crate::lower_type_expr::lower_type_expr(
+    let ty = crate::lower_type_expr::lower_constraint_head_type_expr(
         target,
         &crate::lower_type_expr::ScopeCtx {
             db,
@@ -748,9 +750,8 @@ pub fn resolve_path_to_interface_identity<'db>(
 
 /// The `TypeRef`-arena twin of [`resolve_path_to_interface_identity`], for
 /// callers holding firewall data (`class_data(…).type_refs` + a `TypeRefId`)
-/// rather than an AST node. Identical resolution — it lowers through
-/// [`lower_type_ref`](crate::lower_type_expr::lower_type_ref) instead of
-/// `lower_type_expr`.
+/// rather than an AST node. Identical resolution through the arena form of
+/// the same constraint-head lowering.
 pub fn resolve_ref_to_interface_identity<'db>(
     db: &'db dyn crate::Db,
     store: &baml_compiler2_hir::type_ref::TypeRefStore,
@@ -759,7 +760,7 @@ pub fn resolve_ref_to_interface_identity<'db>(
     current_ns: &[Name],
 ) -> Option<ResolvedInterface<'db>> {
     let mut diagnostics = Vec::new();
-    let ty = crate::lower_type_expr::lower_type_ref(
+    let ty = crate::lower_type_expr::lower_constraint_head_type_ref(
         store,
         target,
         &crate::lower_type_expr::ScopeCtx {

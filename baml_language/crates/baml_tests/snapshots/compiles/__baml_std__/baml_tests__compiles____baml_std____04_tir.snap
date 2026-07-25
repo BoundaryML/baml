@@ -1683,39 +1683,39 @@ class baml.iter.Repeat$stream {
   count: int | null
 }
 class baml.iter.Map$stream {
-  source: baml.iter.Iterator<Error = never> | null
+  source: baml.iter.Iterator<Item = T, Error = E> | null
   func: unknown
 }
 class baml.iter.Filter$stream {
-  source: baml.iter.Iterator<Error = never> | null
+  source: baml.iter.Iterator<Item = T, Error = E> | null
   predicate: unknown
 }
 class baml.iter.FilterMap$stream {
-  source: baml.iter.Iterator<Error = never> | null
+  source: baml.iter.Iterator<Item = T, Error = E> | null
   func: unknown
 }
 class baml.iter.FlatMap$stream {
-  source: baml.iter.Iterator<Error = never> | null
+  source: baml.iter.Iterator<Item = T, Error = E> | null
   func: unknown
-  inner: baml.iter.Iterator<Error = never> | baml.iter.Done$stream | null
+  inner: baml.iter.Iterator<Item = R, Error = E3> | baml.iter.Done$stream | null
 }
 class baml.iter.Flatten$stream {
-  source: baml.iter.Iterator<Error = never> | null
-  inner: baml.iter.Iterator<Error = never> | baml.iter.Done$stream | null
+  source: baml.iter.Iterator<Item = I, Error = E> | null
+  inner: baml.iter.Iterator<Item = R, Error = E3> | baml.iter.Done$stream | null
 }
 class baml.iter.Peekable$stream {
-  source: baml.iter.Iterator<Error = never> | null
+  source: baml.iter.Iterator<Item = T, Error = E> | null
   buffer: T | baml.iter.Done$stream | null
   has_buffer: bool | null
 }
 class baml.iter.StepBy$stream {
-  source: baml.iter.Iterator<Error = never> | null
+  source: baml.iter.Iterator<Item = T, Error = E> | null
   n: int | null
   first: bool | null
 }
 class baml.iter.Chain$stream {
-  first: baml.iter.Iterator<Error = never> | null
-  other: baml.iter.Iterator<Error = never> | null
+  first: baml.iter.Iterator<Item = T, Error = E> | null
+  other: baml.iter.Iterator<Item = T, Error = E2> | null
   first_done: bool | null
 }
 

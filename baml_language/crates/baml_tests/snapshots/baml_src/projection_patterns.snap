@@ -173,7 +173,7 @@ function projection_patterns.IntHolder.Holder.get(self: projection_patterns.IntH
     return
 }
 
-function projection_patterns.Labeled.is_label(self: projection_patterns.Labeled<Label = string>, v: unknown) -> bool {
+function projection_patterns.Labeled.is_label(self: projection_patterns.Labeled, v: unknown) -> bool {
     load_var v
     is_type #1
     pop_jump_if_false L0
@@ -190,7 +190,7 @@ function projection_patterns.Labeled.is_label(self: projection_patterns.Labeled<
     return
 }
 
-function projection_patterns.Labeled.label_name(self: projection_patterns.Labeled<Label = string>) -> string {
+function projection_patterns.Labeled.label_name(self: projection_patterns.Labeled) -> string {
     load_type #1
     call baml.TypeValue.baml.ToString.to_string
     return

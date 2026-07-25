@@ -103,32 +103,32 @@ function user.Shadow.bad<T>(x: T) -> T throws never {
   }
   !! 2755..2799: type parameter `T` on method shadows the same parameter on class `Shadow`. Please use a different name for the type parameter.
 }
-function user.wrong_arity_missing() -> user.Box throws never {
-  { : user.Box
-    Box { value: 42 } : user.Box
+function user.wrong_arity_missing() -> user.Box<!error> throws never {
+  { : user.Box<!error>
+    Box { value: 42 } : user.Box<!error>
   }
+  !! 3050..3053: type `Box` expects 1 type argument(s), got 0
 }
-function user.wrong_arity_extra() -> user.Box<int, string> throws never {
-  { : user.Box<int, string>
-    Box { value: 42 } : user.Box<int, string>
+function user.wrong_arity_extra() -> user.Box<int> throws never {
+  { : user.Box<int>
+    Box { value: 42 } : user.Box<int>
   }
   !! 3130..3146: type `Box` expects 1 type argument(s), got 2
   !! 3153..3183: type `Box` expects 1 type argument(s), got 2
 }
-function user.wrong_arity_partial() -> user.Pair<int> throws never {
-  { : user.Pair<int>
-    Pair { first: 1, second: "two" } : user.Pair<int>
+function user.wrong_arity_partial() -> user.Pair<int, !error> throws never {
+  { : user.Pair<int, !error>
+    Pair { first: 1, second: "two" } : user.Pair<int, !error>
   }
   !! 3257..3266: type `Pair` expects 2 type argument(s), got 1
   !! 3273..3310: type `Pair` expects 2 type argument(s), got 1
-  !! 3303..3308: type mismatch: expected B, got "two"
 }
 class user.Plain {
   name: string
 }
-function user.wrong_arity_on_non_generic() -> user.Plain<int> throws never {
-  { : user.Plain<int>
-    Plain { name: "hello" } : user.Plain<int>
+function user.wrong_arity_on_non_generic() -> user.Plain throws never {
+  { : user.Plain
+    Plain { name: "hello" } : user.Plain
   }
   !! 3571..3581: type `Plain` expects 0 type argument(s), got 1
   !! 3588..3616: type `Plain` expects 0 type argument(s), got 1
@@ -201,14 +201,16 @@ function user.use_stack() -> string throws never {
 class user.Foo {
   value: T
 }
-function user.bare_in_union_param(f: user.Foo<int> | user.Foo) -> string throws never {
+function user.bare_in_union_param(f: user.Foo<int> | user.Foo<!error>) -> string throws never {
   { : "specific" | "bare"
-    match (f : user.Foo<int> | user.Foo) : "specific" | "bare"
+    match (f : user.Foo<int> | user.Foo<!error>) : "specific" | "bare"
       Foo<int> =>
         "specific" : "specific"
       Foo =>
         "bare" : "bare"
   }
+  !! 5672..5686: type `Foo` expects 1 type argument(s), got 0
+  !! 5756..5759: type `Foo` expects 1 type argument(s), got 0
 }
 class user.Box$stream {
   value: T | null

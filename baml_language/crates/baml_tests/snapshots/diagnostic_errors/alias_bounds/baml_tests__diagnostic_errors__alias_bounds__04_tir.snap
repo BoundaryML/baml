@@ -28,7 +28,7 @@ class user.AliasBounded {
   value: T
 }
 type user.TagAlias$stream = user.Tagged<Label = string>
-type user.TagPinned$stream = user.Tagged<Label = string>
+type user.TagPinned$stream = user.Tagged<Label = int>
 type user.TagChain$stream = user.TagAlias$stream
 class user.AliasBounded$stream {
   value: T | null

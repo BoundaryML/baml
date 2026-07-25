@@ -564,6 +564,19 @@ pub enum TirTypeError {
         interface: crate::ty::QualifiedTypeName,
         missing: Vec<Name>,
     },
+    /// The dotted projection shorthand (`Base.Member`) was written with the
+    /// interface itself as the base (`Iterator.Element`). The base of a
+    /// projection is an *implementor* — a concrete type
+    /// (`ArrayIterator.Element`), a bounded type variable (`T.Element`), or
+    /// `Self` inside a body — never the interface: an associated type is
+    /// defined per `(interface, implementor, member)` triple, so the
+    /// interface alone does not determine it (Rust's E0223). Naming the
+    /// interface explicitly takes a qualified projection
+    /// (`(Base as Iterator).Element`).
+    InterfaceProjectionBase {
+        interface: crate::ty::QualifiedTypeName,
+        member: Name,
+    },
     /// A *bare* interface destructure pattern (`Source { value }`, no written generic
     /// args or associated bindings) adopts its associated-type bindings from the
     /// scrutinee — so the scrutinee must determine them uniquely. A scrutinee admitting
@@ -1547,6 +1560,16 @@ impl fmt::Display for TirTypeError {
                      (only associated types with a default may be omitted; an interface *bound* \
                      `<T extends {}>` does not require them)",
                     interface.render_user_facing(),
+                    interface.render_user_facing(),
+                )
+            }
+            TirTypeError::InterfaceProjectionBase { interface, member } => {
+                write!(
+                    f,
+                    "cannot project `{member}` directly off interface `{0}`: a projection's \
+                     base is an implementor type, a bounded type variable, or `Self` — to name \
+                     the interface explicitly, write a qualified projection \
+                     (`(Base as {0}).{member}`)",
                     interface.render_user_facing(),
                 )
             }
