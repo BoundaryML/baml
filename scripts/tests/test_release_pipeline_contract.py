@@ -783,6 +783,7 @@ class WorkflowGraphTests(unittest.TestCase):
     ) -> None:
         workflow = RELEASE_WORKFLOW.read_text(encoding="utf-8")
         build_matrix = job_block(workflow, "build-matrix")
+        wrapper = job_block(workflow, "build-wrapper")
         prepare = job_block(workflow, "prepare-csharp-sdk")
         cffi = job_block(workflow, "build-bridge-cffi")
         verify = job_block(workflow, "verify-csharp-sdk")
@@ -797,6 +798,14 @@ class WorkflowGraphTests(unittest.TestCase):
         dry_run = job_block(workflow, "dry-run-artifacts")
 
         self.assertIn("baml-csharp-release-contract matrix", build_matrix)
+        for target in (
+            "aarch64-apple-darwin",
+            "x86_64-apple-darwin",
+            "aarch64-unknown-linux-gnu",
+            "x86_64-unknown-linux-gnu",
+        ):
+            self.assertIn(target, wrapper)
+        self.assertIn("--features no-self-update", wrapper)
         self.assertIn("needs: [plan, build-matrix]", prepare)
         self.assertNotIn("build-bridge-cffi", prepare)
         self.assertIn("needs: [plan]", cffi)
