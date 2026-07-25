@@ -15,7 +15,7 @@ var (
 	_ func(baml.LlmClient) baml_sdk.LoremExtractResumeBuildRequestStreamOption                                        = baml_sdk.WithLoremExtractResumeBuildRequestStreamClient
 )
 
-func TestBuildRequestStreamSetsStreamingFlag(t *testing.T) {
+func Test_build_request_stream_sets_streaming_flag(t *testing.T) {
 	t.Setenv("OPENAI_API_KEY", "sk-build-stream-test")
 
 	request, err := baml_sdk.LoremExtractResumeBuildRequestStream(
@@ -30,7 +30,7 @@ func TestBuildRequestStreamSetsStreamingFlag(t *testing.T) {
 	assertJSONBoolean(t, request.Body, "stream", true)
 }
 
-func TestBuildRequestStreamAcceptsExplicitClientOption(t *testing.T) {
+func Test_build_request_stream_accepts_explicit_client_option(t *testing.T) {
 	t.Setenv("ANTHROPIC_API_KEY", "sk-build-stream-client-test")
 	client := baml.LlmClient{
 		Name:       "anthropic/claude-3-5-sonnet-latest",
@@ -51,7 +51,7 @@ func TestBuildRequestStreamAcceptsExplicitClientOption(t *testing.T) {
 	assertJSONBoolean(t, request.Body, "stream", true)
 }
 
-func TestBuildRequestStreamHonorsCancellation(t *testing.T) {
+func Test_build_request_stream_honors_cancellation(t *testing.T) {
 	t.Setenv("OPENAI_API_KEY", "sk-build-stream-cancelled")
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
@@ -62,7 +62,7 @@ func TestBuildRequestStreamHonorsCancellation(t *testing.T) {
 	}
 }
 
-func TestBuildRequestStreamReturnsRuntimeErrorForInvalidClient(t *testing.T) {
+func Test_build_request_stream_returns_runtime_error_for_invalid_client(t *testing.T) {
 	client := baml.LlmClient{
 		Name:       "not-a-provider/not-a-model",
 		ClientType: baml.LlmClientTypePrimitive,

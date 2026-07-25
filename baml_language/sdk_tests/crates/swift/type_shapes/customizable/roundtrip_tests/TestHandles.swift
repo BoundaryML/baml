@@ -15,7 +15,7 @@ private let pngB64 =
     "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M8AAAQEAQB9eIv5AAAAAElFTkSuQmCC"
 
 final class TestHandles: XCTestCase {
-    func test_image_from_base64_roundtrips_payload() throws {
+    func test_handles_image_from_base64_roundtrips_payload() throws {
         let img = Baml.baml.media.Image(
             _data: try BamlMedia.fromBase64(.image, pngB64, mimeType: "image/png")
         )
@@ -23,13 +23,13 @@ final class TestHandles: XCTestCase {
         XCTAssertEqual(try img.base64(), pngB64)
     }
 
-    func test_open_file_returns_file_handle() throws {
+    func test_handles_open_file_returns_file_handle() throws {
         let path = try makeTempFile(contents: "0123456789")
         let f = try Baml.baml.fs.open(path: path, mode: "r")
         try f.close()
     }
 
-    func test_file_cursor_state_persists_across_calls() throws {
+    func test_handles_file_cursor_state_persists_across_calls() throws {
         let path = try makeTempFile(contents: "0123456789")
         let f = try Baml.baml.fs.open(path: path, mode: "r")
         XCTAssertEqual(try f.read(n: 3), "012")

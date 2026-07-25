@@ -10,7 +10,7 @@ import (
 	"baml.local/sdk/baml_sdk/baml"
 )
 
-func TestOpaqueRustTypeRoundTripsAndRemainsReusable(t *testing.T) {
+func Test_opaque_rust_type_round_trips_and_remains_reusable(t *testing.T) {
 	ctx := context.Background()
 	response, err := b.GoCodegenRustTypeEdgesMakeOpaqueResponse(ctx, "owned by BAML")
 	if err != nil {
@@ -58,7 +58,7 @@ func TestOpaqueRustTypeRoundTripsAndRemainsReusable(t *testing.T) {
 	}
 }
 
-func TestOpaqueRustTypeNestedContainersClassesAndNull(t *testing.T) {
+func Test_opaque_rust_type_nested_containers_classes_and_null(t *testing.T) {
 	ctx := context.Background()
 	first, err := b.GoCodegenRustTypeEdgesMakeOpaqueResponse(ctx, "first")
 	if err != nil {
@@ -111,7 +111,7 @@ func TestOpaqueRustTypeNestedContainersClassesAndNull(t *testing.T) {
 	}
 }
 
-func TestOpaqueRustTypeDefaultAndHostCallbackPositions(t *testing.T) {
+func Test_opaque_rust_type_default_and_host_callback_positions(t *testing.T) {
 	ctx := context.Background()
 	defaulted, err := b.GoCodegenRustTypeEdgesDefaultedOpaqueResponse(ctx)
 	if err != nil {

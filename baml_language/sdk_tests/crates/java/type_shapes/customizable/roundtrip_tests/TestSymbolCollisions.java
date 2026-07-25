@@ -23,14 +23,14 @@ import org.junit.jupiter.api.Test;
 class TestSymbolCollisions {
 
     @Test
-    void test_round_trip_foo_bar() {
+    void test_symbol_collisions_round_trip_foo_bar() {
         baml_sdk.symbol_collisions.foo.Bar bar =
                 baml_sdk.symbol_collisions.foo.Fns.make_foo_bar("hi", 2L);
         assertEquals(bar, baml_sdk.symbol_collisions.foo.Fns.round_trip_foo_bar(bar));
     }
 
     @Test
-    void test_round_trip_fizz_foo_bar() {
+    void test_symbol_collisions_round_trip_fizz_foo_bar() {
         baml_sdk.symbol_collisions.fizz.foo.Bar bar =
                 baml_sdk.symbol_collisions.fizz.foo.Fns.make_fizz_foo_bar("t", 1.5);
         assertEquals(
@@ -38,7 +38,7 @@ class TestSymbolCollisions {
     }
 
     @Test
-    void test_round_trip_fizz_buzz_foo_bar() {
+    void test_symbol_collisions_round_trip_fizz_buzz_foo_bar() {
         baml_sdk.symbol_collisions.fizz.buzz.foo.Bar bar =
                 baml_sdk.symbol_collisions.fizz.buzz.foo.Fns.make_fizz_buzz_foo_bar(
                         "f", 2.5, true);
@@ -48,7 +48,7 @@ class TestSymbolCollisions {
     }
 
     @Test
-    void test_round_trip_ipsum() {
+    void test_symbol_collisions_round_trip_ipsum() {
         baml_sdk.symbol_collisions.lorem.Ipsum ipsum =
                 baml_sdk.symbol_collisions.lorem.Fns.make_ipsum(
                         baml_sdk.symbol_collisions.foo.Fns.make_foo_bar("a", 1L),
@@ -59,7 +59,7 @@ class TestSymbolCollisions {
     }
 
     @Test
-    void test_round_trip_deep() {
+    void test_symbol_collisions_round_trip_deep() {
         baml_sdk.symbol_collisions.lorem.Ipsum ipsum =
                 baml_sdk.symbol_collisions.lorem.Fns.make_ipsum(
                         baml_sdk.symbol_collisions.foo.Fns.make_foo_bar("a", 1L),

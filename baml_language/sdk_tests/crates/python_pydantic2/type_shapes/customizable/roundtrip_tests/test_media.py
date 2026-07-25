@@ -34,46 +34,46 @@ URL = "https://example.com/asset"
 # --- decode path (return_*) works -----------------------------------------
 
 
-def test_return_image():
+def test_media_return_image():
     assert return_image(url=URL, mime=None) is not None
 
 
-def test_return_audio():
+def test_media_return_audio():
     assert return_audio(url=URL, mime=None) is not None
 
 
-def test_return_video():
+def test_media_return_video():
     assert return_video(url=URL, mime=None) is not None
 
 
-def test_return_pdf():
+def test_media_return_pdf():
     assert return_pdf(url=URL, mime=None) is not None
 
 
 # --- encode path (round_trip_*) ------------------------------------------
 
 
-def test_round_trip_image():
+def test_media_round_trip_image():
     img = return_image(url=URL, mime=None)
     assert round_trip_image(x=img) is not None
 
 
-def test_round_trip_audio():
+def test_media_round_trip_audio():
     aud = return_audio(url=URL, mime=None)
     assert round_trip_audio(x=aud) is not None
 
 
-def test_round_trip_video():
+def test_media_round_trip_video():
     vid = return_video(url=URL, mime=None)
     assert round_trip_video(x=vid) is not None
 
 
-def test_round_trip_pdf():
+def test_media_round_trip_pdf():
     pdf = return_pdf(url=URL, mime=None)
     assert round_trip_pdf(x=pdf) is not None
 
 
-def test_round_trip_media():
+def test_media_round_trip_media():
     m = Media(
         image_field=return_image(url=URL, mime=None),
         audio_field=return_audio(url=URL, mime=None),

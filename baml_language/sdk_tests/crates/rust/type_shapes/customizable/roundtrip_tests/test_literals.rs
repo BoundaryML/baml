@@ -16,7 +16,7 @@ use baml_sdk::literals::{
 };
 
 #[test]
-fn test_return_literals() {
+fn test_literals_return_literals() {
     assert_eq!(return_literal42().unwrap(), 42);
     assert_eq!(return_literal_neg_one().unwrap(), -1);
     assert_eq!(return_literal_draft().unwrap(), "draft");
@@ -26,12 +26,12 @@ fn test_return_literals() {
 }
 
 #[test]
-fn test_round_trip_literal42() {
+fn test_literals_round_trip_literal42() {
     assert_eq!(round_trip_literal42(42).unwrap(), 42);
 }
 
 #[test]
-fn test_round_trip_literal_draft() {
+fn test_literals_round_trip_literal_draft() {
     assert_eq!(
         round_trip_literal_draft("draft".to_string()).unwrap(),
         "draft"
@@ -39,7 +39,7 @@ fn test_round_trip_literal_draft() {
 }
 
 #[test]
-fn test_round_trip_literal_escaped() {
+fn test_literals_round_trip_literal_escaped() {
     assert_eq!(
         round_trip_literal_escaped("has \"quotes\"".to_string()).unwrap(),
         "has \"quotes\""
@@ -47,17 +47,17 @@ fn test_round_trip_literal_escaped() {
 }
 
 #[test]
-fn test_round_trip_literal_true() {
+fn test_literals_round_trip_literal_true() {
     assert!(round_trip_literal_true(true).unwrap());
 }
 
 #[test]
-fn test_round_trip_literal_false() {
+fn test_literals_round_trip_literal_false() {
     assert!(!round_trip_literal_false(false).unwrap());
 }
 
 #[test]
-fn test_round_trip_literals() {
+fn test_literals_round_trip_literals() {
     let lit = Literals {
         literal_42: 42,
         literal_draft: "draft".to_string(),

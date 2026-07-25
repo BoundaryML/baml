@@ -17,13 +17,13 @@ use baml_sdk::generics::{
 };
 
 #[test]
-fn test_round_trip_wrapper_int() {
+fn test_generics_round_trip_wrapper_int() {
     let w = Wrapper::<i64> { value: 5 };
     assert_eq!(round_trip_wrapper_int(w.clone()).unwrap(), w);
 }
 
 #[test]
-fn test_round_trip_generic_linked_list_int() {
+fn test_generics_round_trip_generic_linked_list_int() {
     let ll = GenericLinkedList::<i64> {
         value: 1,
         next: Some(std::boxed::Box::new(GenericLinkedList::<i64> {
@@ -35,7 +35,7 @@ fn test_round_trip_generic_linked_list_int() {
 }
 
 #[test]
-fn test_round_trip_generic_binary_tree_int() {
+fn test_generics_round_trip_generic_binary_tree_int() {
     let t = GenericBinaryTree::<i64> {
         value: 1,
         left: None,
@@ -45,7 +45,7 @@ fn test_round_trip_generic_binary_tree_int() {
 }
 
 #[test]
-fn test_round_trip_box_int() {
+fn test_generics_round_trip_box_int() {
     let b = Box::<i64> {
         value: 3,
         wrapped: Wrapper::<i64> { value: 4 },
@@ -54,7 +54,7 @@ fn test_round_trip_box_int() {
 }
 
 #[test]
-fn test_round_trip_nested_generics() {
+fn test_generics_round_trip_nested_generics() {
     let n = NestedGenerics {
         ww: Wrapper::<Wrapper<i64>> {
             value: Wrapper::<i64> { value: 1 },
@@ -73,7 +73,7 @@ fn test_round_trip_nested_generics() {
 }
 
 #[test]
-fn test_round_trip_differing_instantiation() {
+fn test_generics_round_trip_differing_instantiation() {
     let d = DifferingInstantiation {
         list: GenericLinkedList::<Wrapper<i64>> {
             value: Wrapper::<i64> { value: 1 },

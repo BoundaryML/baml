@@ -17,19 +17,19 @@ use baml_sdk::maps::{
 // enum *values* still round-trip (test_round_trip_sentiment).
 
 #[test]
-fn test_round_trip_simple_map() {
+fn test_maps_round_trip_simple_map() {
     let m = Map::from([("a".to_string(), 1), ("b".to_string(), 2)]);
     assert_eq!(round_trip_simple_map(m.clone()).unwrap(), m);
 }
 
 #[test]
-fn test_round_trip_list_valued_map() {
+fn test_maps_round_trip_list_valued_map() {
     let m = Map::from([("k".to_string(), vec![1, 2])]);
     assert_eq!(round_trip_list_valued_map(m.clone()).unwrap(), m);
 }
 
 #[test]
-fn test_round_trip_sentiment() {
+fn test_maps_round_trip_sentiment() {
     assert_eq!(
         round_trip_sentiment(Sentiment::Positive).unwrap(),
         Sentiment::Positive
@@ -37,7 +37,7 @@ fn test_round_trip_sentiment() {
 }
 
 #[test]
-fn test_round_trip_resume() {
+fn test_maps_round_trip_resume() {
     let r = Resume {
         name: "n".to_string(),
     };

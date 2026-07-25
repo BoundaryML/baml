@@ -13,15 +13,15 @@ import BamlBridge
 private let maxCancellationSeconds = 0.5
 
 final class TestCancellation: XCTestCase {
-    func test_sync_call_returns() throws {
+    func test_cancellation_sync_call_returns_none() throws {
         try Baml.throws_test.SleepMs(ms: 1)
     }
 
-    func test_async_call_returns() async throws {
+    func test_cancellation_async_call_returns_none() async throws {
         try await Baml.throws_test.SleepMs_async(ms: 1)
     }
 
-    func test_async_cancel_via_task_cancel() async throws {
+    func test_cancellation_async_cancel_via_task_cancel() async throws {
         let start = ContinuousClock.now
         let task = Task {
             try await Baml.throws_test.SleepMs_async(ms: 2000)
@@ -38,7 +38,7 @@ final class TestCancellation: XCTestCase {
         XCTAssertLessThan(elapsed, .seconds(maxCancellationSeconds), "cancellation was not fast")
     }
 
-    func test_async_cancel_via_timeout_race() async throws {
+    func test_cancellation_async_cancel_via_timeout_race() async throws {
         // The asyncio.wait_for analog: race the call against a timeout
         // in a task group; the loser is cancelled.
         let start = ContinuousClock.now

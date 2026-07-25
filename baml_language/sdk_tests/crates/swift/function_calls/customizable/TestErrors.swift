@@ -31,18 +31,18 @@ final class TestErrors: XCTestCase {
         }
     }
 
-    func test_stdlib_error_surfaces_as_baml_error() throws {
+    func test_errors_stdlib_error_surfaces_as_baml_error() throws {
         let err = expectBamlError { _ = try Baml.throws_test.ParseJson(s: badJSON) }
         // Typed decode succeeding IS the isinstance assertion.
         _ = try XCTUnwrap(err).value(as: Baml.baml.json.JsonParseError.self)
     }
 
-    func test_user_throw_surfaces_declared_instance() throws {
+    func test_errors_user_throw_surfaces_declared_instance() throws {
         let err = expectBamlError { _ = try Baml.throws_test.ThrowMyError() }
         _ = try XCTUnwrap(err).value(as: Baml.throws_test.MyError.self)
     }
 
-    func test_union_throws_preserves_class_name() throws {
+    func test_errors_union_throws_preserves_class_name() throws {
         let single = try XCTUnwrap(expectBamlError { _ = try Baml.raises_test.Reparse(s: "x") })
         let union = try XCTUnwrap(expectBamlError { _ = try Baml.raises_test.LoadDoc(path: "x") })
 
@@ -51,7 +51,7 @@ final class TestErrors: XCTestCase {
         _ = try union.value(as: Baml.raises_test.ParseError.self)
     }
 
-    func test_user_panic_surfaces_as_baml_panic() throws {
+    func test_errors_user_panic_surfaces_as_baml_panic() throws {
         do {
             try Baml.throws_test.DoPanic(message: "user-initiated boom")
             XCTFail("expected BamlPanic")
@@ -60,12 +60,12 @@ final class TestErrors: XCTestCase {
         }
     }
 
-    func test_error_description_is_non_empty() throws {
+    func test_errors_str_is_non_empty() throws {
         let err = expectBamlError { _ = try Baml.throws_test.ParseJson(s: badJSON) }
         XCTAssertFalse(try XCTUnwrap(err).message.isEmpty)
     }
 
-    func test_baml_error_carries_baml_trace() throws {
+    func test_errors_baml_error_carries_baml_trace() throws {
         let err = try XCTUnwrap(expectBamlError { _ = try Baml.throws_test.ThrowMyError() })
         XCTAssertFalse(err.bamlTrace.isEmpty)
         let last = try XCTUnwrap(err.bamlTrace.last)

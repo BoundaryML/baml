@@ -56,6 +56,8 @@ jobs:
       prof: ${{ steps.check_prof.outputs.changed }}
       # Flag for inputs that can change the shipping bridge_cffi binaries
       bridge_cffi_release: ${{ steps.check_bridge_cffi_release.outputs.changed }}
+      # Flag for SDK test changes - triggers the SDK parity analysis pipeline
+      sdk_tests: ${{ steps.check_sdk_tests.outputs.changed }}
       # Flag that is raised when perf benchmarks (CodSpeed) should run: always
       # after merge (push to main/canary) and on manual dispatch; on PRs only
       # when the PR title/body or a commit message opts in.
@@ -306,6 +308,44 @@ jobs:
             ':baml_language/rust-toolchain.toml' \
             ':baml_language/crates/**' \
           ; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Check if SDK tests changed
+        id: check_sdk_tests
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          MERGE_BASE: ${{ steps.merge_base.outputs.sha }}
+          PUSH_BEFORE: ${{ github.event.before }}
+          PUSH_AFTER: ${{ github.sha }}
+        run: |
+          paths=(
+            'baml_language/sdk_tests/**'
+            'baml_language/sdks/README.md'
+            'tools/sdk-parity-lint/**'
+            'mise.toml'
+            '.github/workflows/ci.yaml'
+          )
+
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          if [ "$EVENT_NAME" = "push" ]; then
+            if [ -z "$PUSH_BEFORE" ] || [ "$PUSH_BEFORE" = "0000000000000000000000000000000000000000" ]; then
+              echo "changed=true" >> "$GITHUB_OUTPUT"
+            elif git diff --quiet "$PUSH_BEFORE" "$PUSH_AFTER" -- "${paths[@]}"; then
+              echo "changed=false" >> "$GITHUB_OUTPUT"
+            else
+              echo "changed=true" >> "$GITHUB_OUTPUT"
+            fi
+            exit 0
+          fi
+
+          if git diff --quiet "${MERGE_BASE}...HEAD" -- "${paths[@]}"; then
             echo "changed=false" >> "$GITHUB_OUTPUT"
           else
             echo "changed=true" >> "$GITHUB_OUTPUT"
@@ -872,6 +912,49 @@ jobs:
           fi
           echo "All generated proto files are in sync."
 
+  sdk_parity_check:
+    name: "SDK parity lint"
+    runs-on: blacksmith-4vcpu-ubuntu-2404
+    needs: determine_changes
+    if: needs.determine_changes.outputs.sdk_tests == 'true'
+    timeout-minutes: 15
+    steps:
+      - name: "Checkout Branch"
+        uses: useblacksmith/checkout@v1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: "Install mise"
+        uses: ./.github/actions/setup-mise
+        with:
+          install_args: "ast-grep"
+
+      - name: "Install Rust toolchain"
+        working-directory: baml_language
+        run: rustup show
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "baml_language -> target"
+          save-if: ${{ github.ref == 'refs/heads/canary' }}
+          shared-key: "sdk-parity-baml-cli"
+
+      - name: "Build local BAML CLI"
+        run: cargo build --manifest-path baml_language/Cargo.toml -p baml_cli --bin baml-cli
+
+      - name: "Run SDK parity analysis"
+        run: tools/sdk-parity-lint/run --repo-root . --baseline baml_language/sdk_tests/crates/parity_analysis.md --output baml_language/sdk_tests/crates/parity_analysis.new.md
+
+      - name: "Upload parity results"
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: sdk-parity-results-${{ github.run_id }}-${{ github.run_attempt }}
+          path: baml_language/sdk_tests/crates/parity_analysis.new.md
+          if-no-files-found: ignore
+          retention-days: 14
+
   # Benchmarks are split into two jobs so the slow compile happens on a fast,
   # cheap machine while the actual measurement happens on a stable CodSpeed
   # macro runner.
@@ -1148,6 +1231,7 @@ jobs:
       # - miri-tests  # TEMPORARILY DISABLED: miri tests timing out
       - prof-concurrency
       - proto-sync
+      - sdk_parity_check
       # NOTE: size-gate is intentionally NOT a required gate. It is an
       # informational signal (PR comment + daily baseline auto-refresh), not
       # a merge blocker: a size bump must never block the merge queue or force
@@ -1176,6 +1260,7 @@ jobs:
           # echo "| miri-tests | ${{ needs.miri-tests.result }} |" >> $GITHUB_STEP_SUMMARY  # TEMPORARILY DISABLED
           echo "| prof-concurrency | ${{ needs.prof-concurrency.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| proto-sync | ${{ needs.proto-sync.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| sdk-parity-check | ${{ needs.sdk_parity_check.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "::error::One or more CI jobs failed!"
           exit 1
@@ -1203,6 +1288,7 @@ jobs:
       # - miri-tests  # TEMPORARILY DISABLED: miri tests timing out
       - prof-concurrency
       - proto-sync
+      - sdk_parity_check
     # `!failure() && !cancelled()` rather than `success()`, because that is what
     # the old `workflow_run.conclusion == 'success'` gate meant: a skipped gate
     # is not a failure. prof-concurrency and proto-sync are change-detected with

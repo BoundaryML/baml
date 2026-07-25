@@ -7,11 +7,11 @@ from baml_sdk import (
 )
 
 
-def test_hello_world_returns_literal():
+def test_main_hello_world_returns_literal():
     assert hello_world() == "hello world"
 
 
-def test_single_required_arg_round_trips():
+def test_main_single_required_arg_round_trips():
     # The next step up from the nullary case: one required positional
     # argument round-trips through the engine unchanged.
     assert single_required_arg("hi") == "hi"

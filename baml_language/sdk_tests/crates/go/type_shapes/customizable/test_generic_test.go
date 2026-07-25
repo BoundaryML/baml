@@ -7,7 +7,7 @@ import (
 	"baml.local/sdk/baml_sdk"
 )
 
-func TestGenericWrapperGetValue(t *testing.T) {
+func Test_generic_wrapper_get_value(t *testing.T) {
 	wrapper, err := baml_sdk.GenericsMakeWrapperMethods(context.Background(), "hello")
 	if err != nil {
 		t.Fatal(err)

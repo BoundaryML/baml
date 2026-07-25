@@ -33,8 +33,9 @@ impl std::fmt::Display for Boom {
 
 impl std::error::Error for Boom {}
 
+// SDK_PARITY_LINT(skip): validates Rust-specific inferred callback error unions
 #[test]
-fn caught_and_replaced_makes_the_function_infallible() {
+fn test_callback_throws_caught_and_replaced_makes_the_function_infallible() {
     // `callback_error_caught` catches the callback's error and yields `0`, so
     // it `throws never` — `E = Infallible` no matter what the closure throws.
     // The effect param exists only in the callback bound.
@@ -43,8 +44,9 @@ fn caught_and_replaced_makes_the_function_infallible() {
     assert_eq!(callback_error_caught(cb).unwrap(), 0);
 }
 
+// SDK_PARITY_LINT(skip): validates Rust-specific inferred callback error unions
 #[test]
-fn caught_then_rethrown_value_is_the_replacement_union() {
+fn test_callback_throws_caught_then_rethrown_value_is_the_replacement_union() {
     // The body catches the callback's error and throws `"oops"`, else throws
     // `1`, so `E = string | int` — a union with no effect param.
 
@@ -67,8 +69,9 @@ fn caught_then_rethrown_value_is_the_replacement_union() {
     }
 }
 
+// SDK_PARITY_LINT(skip): validates Rust-specific inferred callback error unions
 #[test]
-fn rethrown_carries_the_effect_param_into_the_error_union() {
+fn test_callback_throws_rethrown_carries_the_effect_param_into_the_error_union() {
     // The body re-throws the callback's error (`throw e`), so the effect param
     // escapes: `E = int | CbError`, a generic union. `CbError` is inferred
     // from the closure.

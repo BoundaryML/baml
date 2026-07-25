@@ -57,7 +57,7 @@ class TestRaises {
     }
 
     @Test
-    void test_imports() {
+    void test_raises_imports_symbols_reachable() {
         // Namespace-import smoke test: reference known generated symbols so the
         // packages are compile-time reachable. The free functions LoadDoc /
         // Reparse / InferredThrow / PureLen are static methods on `Fns`; the
@@ -69,27 +69,27 @@ class TestRaises {
     }
 
     @Test
-    void test_union_throws_lists_all_names() throws IOException {
+    void test_raises_union_throws_lists_all_names() throws IOException {
         String block = javadocFor(source("Fns"), "LoadDoc(");
         assertTrue(block.contains("@throws ParseError"), block);
         assertTrue(block.contains("@throws TimeoutError"), block);
     }
 
     @Test
-    void test_async_sibling_also_has_raises() throws IOException {
+    void test_raises_async_sibling_also_has_raises() throws IOException {
         String block = javadocFor(source("Fns"), "LoadDoc_async(");
         assertTrue(block.contains("@throws ParseError"), block);
         assertTrue(block.contains("@throws TimeoutError"), block);
     }
 
     @Test
-    void test_single_throws() throws IOException {
+    void test_raises_single_throws() throws IOException {
         String block = javadocFor(source("Fns"), "Reparse(");
         assertTrue(block.contains("@throws ParseError"), block);
     }
 
     @Test
-    void test_summary_precedes_raises_block() throws IOException {
+    void test_raises_summary_precedes_raises_block() throws IOException {
         String block = javadocFor(source("Fns"), "LoadDoc(");
         int summaryAt = block.indexOf("Load a document from a path.");
         int throwsAt = block.indexOf("@throws");
@@ -99,7 +99,7 @@ class TestRaises {
     }
 
     @Test
-    void test_inferred_contract_without_clause_still_raises() throws IOException {
+    void test_raises_inferred_contract_without_clause_still_raises() throws IOException {
         // No written `throws` clause, but the body throws ParseError — the
         // inferred contract (callable_throws) still surfaces a `@throws` tag.
         String block = javadocFor(source("Fns"), "InferredThrow(");
@@ -107,13 +107,13 @@ class TestRaises {
     }
 
     @Test
-    void test_non_throwing_function_has_no_raises_block() throws IOException {
+    void test_raises_non_throwing_function_has_no_raises_block() throws IOException {
         String block = javadocFor(source("Fns"), "PureLen(");
         assertTrue(!block.contains("@throws"), block);
     }
 
     @Test
-    void test_method_raises_block_in_pyi() throws IOException {
+    void test_raises_method_raises_block_in_pyi() throws IOException {
         // java-port note: Python asserts methods carry `Raises:` in the `.pyi`
         // stub (the 32d decision) because their runtime `.py` __doc__ is
         // free-functions-only. Java has no split stub — methods carry `@throws`

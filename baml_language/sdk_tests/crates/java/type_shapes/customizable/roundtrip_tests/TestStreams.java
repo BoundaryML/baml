@@ -45,27 +45,27 @@ import org.junit.jupiter.api.Test;
 class TestStreams {
 
     @Test
-    void test_round_trip_resume_stream() {
+    void test_streams_round_trip_resume_stream() {
         baml_sdk.lorem.Resume$stream r =
                 new baml_sdk.lorem.Resume$stream("ada", null);
         assertEquals(r, Fns.round_trip_resume_stream(r));
     }
 
     @Test
-    void test_round_trip_root_foo_stream() {
+    void test_streams_round_trip_root_foo_stream() {
         baml_sdk.Foo$stream f = new baml_sdk.Foo$stream(3L);
         assertEquals(f, Fns.round_trip_root_foo_stream(f));
     }
 
     @Test
-    void test_round_trip_box_of_resume_stream() {
+    void test_streams_round_trip_box_of_resume_stream() {
         Box<baml_sdk.lorem.Resume$stream> b =
                 new Box<>(new baml_sdk.lorem.Resume$stream("grace", null));
         assertEquals(b, Fns.round_trip_box_of_resume_stream(b));
     }
 
     @Test
-    void test_round_trip_resume_or_resume_stream() {
+    void test_streams_round_trip_resume_or_resume_stream() {
         // Union arm `Resume` (the non-stream side) is host-constructible.
         Resume r = new Resume("hopper", null);
         Object result =
@@ -75,7 +75,7 @@ class TestStreams {
     }
 
     @Test
-    void test_round_trip_resume_or_http_response() {
+    void test_streams_round_trip_resume_or_http_response() {
         // Pass the `Resume` arm; the `baml.http.Response` arm isn't
         // host-constructible.
         Resume r = new Resume("lovelace", "a@x.com");

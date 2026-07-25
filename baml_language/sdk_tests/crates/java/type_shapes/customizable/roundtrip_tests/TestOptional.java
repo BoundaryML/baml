@@ -22,20 +22,20 @@ import org.junit.jupiter.api.Test;
 class TestOptional {
 
     @Test
-    void test_round_trip_optional_int() {
+    void test_optional_round_trip_optional_int() {
         assertEquals(5L, Fns.round_trip_optional_int(5L));
         assertNull(Fns.round_trip_optional_int(null));
     }
 
     @Test
-    void test_round_trip_optional_resume() {
+    void test_optional_round_trip_optional_resume() {
         Resume r = new Resume("ada");
         assertEquals(r, Fns.round_trip_optional_resume(r));
         assertNull(Fns.round_trip_optional_resume(null));
     }
 
     @Test
-    void test_round_trip_optional_union() {
+    void test_optional_round_trip_optional_union() {
         assertEquals(
                 new Union2.Arm0<Long, String>(3L),
                 Fns.round_trip_optional_union(new Union2.Arm0<Long, String>(3L)));
@@ -46,13 +46,13 @@ class TestOptional {
     }
 
     @Test
-    void test_round_trip_resume() {
+    void test_optional_round_trip_resume() {
         Resume r = new Resume("grace");
         assertEquals(r, Fns.round_trip_resume(r));
     }
 
     @Test
-    void test_round_trip_optional_container() {
+    void test_optional_round_trip_optional_container() {
         OptionalContainer c =
                 new OptionalContainer(
                         null, new Resume("x"), new Union2.Arm1<Long, String>("y"));

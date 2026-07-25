@@ -27,54 +27,54 @@ import org.junit.jupiter.api.Test;
 class TestRouting {
 
     @Test
-    void test_make_foo() {
+    void test_routing_make_foo() {
         assertEquals(3L, Fns.make_foo(3L).v());
     }
 
     @Test
-    void test_round_trip_foo() {
+    void test_routing_round_trip_foo() {
         Foo f = new Foo(10L);
         assertEquals(f, Fns.round_trip_foo(f));
     }
 
     @Test
-    void test_round_trip_thing_from_ab() {
+    void test_routing_round_trip_thing_from_ab() {
         Thing t = new Thing(1L);
         assertEquals(t, baml_sdk.a.b.Fns.round_trip_thing_from_ab(t));
     }
 
     @Test
-    void test_round_trip_root_foo_from_ab() {
+    void test_routing_round_trip_root_foo_from_ab() {
         Foo f = new Foo(2L);
         assertEquals(f, baml_sdk.a.b.Fns.round_trip_root_foo_from_ab(f));
     }
 
     @Test
-    void test_round_trip_deep_thing_from_a() {
+    void test_routing_round_trip_deep_thing_from_a() {
         Thing t = new Thing(4L);
         assertEquals(t, baml_sdk.a.Fns.round_trip_deep_thing_from_a(t));
     }
 
     @Test
-    void test_round_trip_deep_thing_from_lorem() {
+    void test_routing_round_trip_deep_thing_from_lorem() {
         Thing t = new Thing(5L);
         assertEquals(t, baml_sdk.lorem.Fns.round_trip_deep_thing_from_lorem(t));
     }
 
     @Test
-    void test_round_trip_resume() {
+    void test_routing_round_trip_resume() {
         Resume r = new Resume("ada", null);
         assertEquals(r, baml_sdk.lorem.Fns.round_trip_resume(r));
     }
 
     @Test
-    void test_round_trip_root_foo() {
+    void test_routing_round_trip_root_foo() {
         Foo f = new Foo(6L);
         assertEquals(f, baml_sdk.lorem.Fns.round_trip_root_foo(f));
     }
 
     @Test
-    void test_round_trip_lorem_resume_from_ipsum() {
+    void test_routing_round_trip_lorem_resume_from_ipsum() {
         Resume r = new Resume("grace", "g@x.com");
         assertEquals(r, baml_sdk.ipsum.Fns.round_trip_lorem_resume_from_ipsum(r));
     }

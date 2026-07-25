@@ -11,7 +11,7 @@ import (
 // Direct synchronous port of Python test_optional_args.py. Python's async
 // siblings are N/A because Go uses the same context-aware call in a goroutine.
 // The OptBox method matrix is ported in test_methods_on_classes_test.go.
-func TestOptionalArgsRuntimeMatrix(t *testing.T) {
+func Test_optional_args_runtime_matrix(t *testing.T) {
 	assertValues := func(label string, got []*int64, err error, want []*int64) {
 		t.Helper()
 		if err != nil {
@@ -44,7 +44,7 @@ func TestOptionalArgsRuntimeMatrix(t *testing.T) {
 	}
 }
 
-func TestUnsetAndNoneDifferInOneCall(t *testing.T) {
+func Test_unset_and_none_differ_in_one_call(t *testing.T) {
 	pointer := func(value int64) *int64 { return &value }
 	got, err := baml_sdk.OptionalArgsProbe(context.Background(), 1, nil, baml_sdk.WithOptionalArgsProbeOpt2(nil))
 	want := []*int64{pointer(1), pointer(5), nil}

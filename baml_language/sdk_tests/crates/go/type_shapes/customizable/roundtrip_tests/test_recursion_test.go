@@ -9,7 +9,7 @@ import (
 )
 
 // Direct port of python_pydantic2/type_shapes/roundtrip_tests/test_recursion.py.
-func TestRoundTripIntBinaryTree(t *testing.T) {
+func Test_round_trip_int_binary_tree(t *testing.T) {
 	want := baml_sdk.RecursionIntBinaryTree{Value: 1, Left: &baml_sdk.RecursionIntBinaryTree{Value: 2}}
 	got, err := baml_sdk.RecursionRoundTripIntBinaryTree(context.Background(), want)
 	if err != nil || !reflect.DeepEqual(got, want) {
@@ -17,7 +17,7 @@ func TestRoundTripIntBinaryTree(t *testing.T) {
 	}
 }
 
-func TestRoundTripMutualRecursion(t *testing.T) {
+func Test_round_trip_mutual_recursion(t *testing.T) {
 	ctx := context.Background()
 	a := baml_sdk.RecursionA{B: &baml_sdk.RecursionB{}}
 	b := baml_sdk.RecursionB{A: &baml_sdk.RecursionA{}}
@@ -29,7 +29,7 @@ func TestRoundTripMutualRecursion(t *testing.T) {
 	}
 }
 
-func TestRoundTripSCCT1T2T3(t *testing.T) {
+func Test_round_trip_scct1_t2_t3(t *testing.T) {
 	ctx := context.Background()
 	t1 := baml_sdk.RecursionT1{Via2: &baml_sdk.RecursionT2{}}
 	t2 := baml_sdk.RecursionT2{Via3: &baml_sdk.RecursionT3{}}
@@ -45,7 +45,7 @@ func TestRoundTripSCCT1T2T3(t *testing.T) {
 	}
 }
 
-func TestRoundTripSCCT4T5T6(t *testing.T) {
+func Test_round_trip_scct4_t5_t6(t *testing.T) {
 	ctx := context.Background()
 	t4 := baml_sdk.RecursionT4{Via5: &baml_sdk.RecursionT5{}}
 	t5 := baml_sdk.RecursionT5{Via6: &baml_sdk.RecursionT6{}}

@@ -31,53 +31,53 @@ class TestMedia {
     // --- decode path (return_*) works ---------------------------------------
 
     @Test
-    void test_return_image() {
+    void test_media_return_image() {
         assertNotNull(Fns.return_image(URL, null));
     }
 
     @Test
-    void test_return_audio() {
+    void test_media_return_audio() {
         assertNotNull(Fns.return_audio(URL, null));
     }
 
     @Test
-    void test_return_video() {
+    void test_media_return_video() {
         assertNotNull(Fns.return_video(URL, null));
     }
 
     @Test
-    void test_return_pdf() {
+    void test_media_return_pdf() {
         assertNotNull(Fns.return_pdf(URL, null));
     }
 
     // --- encode path (round_trip_*) -----------------------------------------
 
     @Test
-    void test_round_trip_image() {
+    void test_media_round_trip_image() {
         Image img = Fns.return_image(URL, null);
         assertNotNull(Fns.round_trip_image(img));
     }
 
     @Test
-    void test_round_trip_audio() {
+    void test_media_round_trip_audio() {
         Audio aud = Fns.return_audio(URL, null);
         assertNotNull(Fns.round_trip_audio(aud));
     }
 
     @Test
-    void test_round_trip_video() {
+    void test_media_round_trip_video() {
         Video vid = Fns.return_video(URL, null);
         assertNotNull(Fns.round_trip_video(vid));
     }
 
     @Test
-    void test_round_trip_pdf() {
+    void test_media_round_trip_pdf() {
         Pdf pdf = Fns.return_pdf(URL, null);
         assertNotNull(Fns.round_trip_pdf(pdf));
     }
 
     @Test
-    void test_round_trip_media() {
+    void test_media_round_trip_media() {
         Media m =
                 new Media(
                         Fns.return_image(URL, null),

@@ -36,8 +36,6 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.ValueSource;
 
 class TestErrors {
 
@@ -48,7 +46,7 @@ class TestErrors {
             Pattern.compile("File \"(?<file>[^\"]*)\", line (?<line>\\d+), in (?<func>[^\"]+)");
 
     @Test
-    void test_stdlib_error_surfaces_as_baml_error() {
+    void test_errors_stdlib_error_surfaces_as_baml_error() {
         // `baml.json.parse` on bad input -> BamlError whose `.value()` is a
         // `JsonParseError` (a plain generated value class). Proves stdlib error
         // classes surface structured, independent of any `throws` clause.
@@ -58,7 +56,7 @@ class TestErrors {
     }
 
     @Test
-    void test_user_throw_surfaces_declared_instance() {
+    void test_errors_user_throw_surfaces_declared_instance() {
         // A user `throw` of a declared error -> BamlError whose `.value()` is
         // the declared user error instance itself.
         BamlError exc =
@@ -67,7 +65,7 @@ class TestErrors {
     }
 
     @Test
-    void test_union_throws_preserves_class_name() {
+    void test_errors_union_throws_preserves_class_name() {
         // A throw escaping a *multi-member* `throws` union must carry the thrown
         // value's class FQN in `class_name()`, exactly like a single-member
         // throws. `Reparse` declares `throws ParseError` (single); `LoadDoc`
@@ -93,12 +91,12 @@ class TestErrors {
                     + "call-site analog. (The encode-time IllegalArgumentException path is "
                     + "covered by TestGenericInference.test_host_only_object_not_encodable.)")
     @Test
-    void test_host_invalid_argument_wraps_baml_errors_invalid_argument() {
+    void test_errors_host_invalid_argument_wraps_baml_errors_invalid_argument() {
         // Intentionally empty — see @Disabled reason.
     }
 
     @Test
-    void test_user_panic_surfaces_as_baml_panic() {
+    void test_errors_user_panic_surfaces_as_baml_panic() {
         // A user-initiated panic via `baml.sys.panic` -> BamlPanic whose
         // `.value()` is a `baml.panics.UserPanic`.
         BamlPanic exc =
@@ -109,7 +107,7 @@ class TestErrors {
     }
 
     @Test
-    void test_cancellation_surfaces_as_baml_panic() {
+    void test_errors_cancellation_surfaces_as_baml_panic() {
         // java-port note: Python drives the low-level `call_function` +
         // `asyncio.gather`, aborting after ~100ms, and asserts an
         // `asyncio.CancelledError` whose `.reason` is a `BamlCancelledError`.
@@ -134,7 +132,7 @@ class TestErrors {
     }
 
     @Test
-    void test_str_is_non_empty() {
+    void test_errors_str_is_non_empty() {
         // `toString()` is non-empty — guards the telemetry path, which records it.
         BamlError exc =
                 assertThrows(BamlError.class, () -> baml_sdk.throws_test.Fns.ParseJson(BAD_JSON));
@@ -142,7 +140,7 @@ class TestErrors {
     }
 
     @Test
-    void test_baml_error_carries_baml_trace() {
+    void test_errors_baml_error_carries_baml_trace() {
         // `.baml_trace()` is the list of rendered BAML stack frames (one per
         // frame), pointing into the throwing function's `.baml` source.
         BamlError exc =
@@ -160,7 +158,7 @@ class TestErrors {
     }
 
     @Test
-    void test_baml_trace_spliced_into_python_traceback() {
+    void test_errors_baml_trace_spliced_into_python_traceback() {
         // java-port note: Python splices the BAML frames into the exception's
         // real Python traceback so `traceback.format_exception` renders the
         // `.baml` source frame inline. Java renders stack frames as
@@ -187,9 +185,17 @@ class TestErrors {
     // `Runtime.getRuntime().halt(code)` per the completeness doc), NOT throw a
     // catchable BamlPanic. Both a non-zero code and exit(0) are covered: zero is
     // exactly what the `is_exit_panic` discriminator protects.
-    @ParameterizedTest
-    @ValueSource(ints = {0, 7})
-    void test_clean_exit_terminates_process_with_code(int code) throws Exception {
+    @Test
+    void test_errors_clean_exit_terminates_process_with_code_0() throws Exception {
+        assertCleanExitTerminatesProcessWithCode(0);
+    }
+
+    @Test
+    void test_errors_clean_exit_terminates_process_with_code_7() throws Exception {
+        assertCleanExitTerminatesProcessWithCode(7);
+    }
+
+    private void assertCleanExitTerminatesProcessWithCode(int code) throws Exception {
         String javaBin = System.getProperty("java.home") + "/bin/java";
         String classpath = System.getProperty("java.class.path");
 
@@ -209,7 +215,7 @@ class TestErrors {
         assertFalse(stdout.contains("UNREACHABLE"));
     }
 
-    // Subprocess entry point for test_clean_exit_terminates_process_with_code.
+    // Subprocess entry point for the clean-exit tests.
     // `DoExit(code)` hard-exits before the print, mirroring Python's os._exit
     // snippet. Launched via `java -cp <cp> TestErrors$ExitSnippet <code>`.
     public static final class ExitSnippet {

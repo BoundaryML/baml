@@ -46,7 +46,7 @@ private func orDefault(_ slot: BamlOptional<Int>, _ defaultValue: Int) -> Int {
 }
 
 final class TestHostCallables: XCTestCase {
-    func test_simple_sync_callable_returns_string() throws {
+    func test_host_callables_simple_sync_callable_returns_string() throws {
         let result = try Baml.host_callable_tests.call_with_callback(
             callback: { x in "got \(x)" },
             x: 5
@@ -54,7 +54,7 @@ final class TestHostCallables: XCTestCase {
         XCTAssertEqual(result, "got 5")
     }
 
-    func test_two_arg_callable_unpacks_positional_args() throws {
+    func test_host_callables_two_arg_callable_unpacks_positional_args() throws {
         let result = try Baml.host_callable_tests.call_with_two_args(
             callback: { x, prefix in "\(prefix):\(x)" },
             x: 7,
@@ -63,7 +63,7 @@ final class TestHostCallables: XCTestCase {
         XCTAssertEqual(result, "answer:7")
     }
 
-    func test_int_return_callable_round_trip() throws {
+    func test_host_callables_int_return_callable_round_trip() throws {
         let result = try Baml.host_callable_tests.call_int_callback(
             callback: { x in x * 2 },
             x: 21
@@ -71,7 +71,7 @@ final class TestHostCallables: XCTestCase {
         XCTAssertEqual(result, 42)
     }
 
-    func test_throwing_callable_round_trips_original_error() throws {
+    func test_host_callables_throwing_callable_round_trips_original_host_exception() throws {
         let raised = TestError(tag: "nope")
         do {
             _ = try Baml.host_callable_tests.call_with_callback(
@@ -85,7 +85,7 @@ final class TestHostCallables: XCTestCase {
         }
     }
 
-    func test_throwing_callable_custom_error_round_trips_with_payload() throws {
+    func test_host_callables_throwing_callable_custom_host_exception_round_trips_with_identity() throws {
         let raised = TestError(tag: "custom domain failure", code: 42)
         do {
             _ = try Baml.host_callable_tests.call_with_callback(
@@ -98,7 +98,7 @@ final class TestHostCallables: XCTestCase {
         }
     }
 
-    func test_throwing_typed_baml_value_is_caught_in_baml() throws {
+    func test_host_callables_throwing_callable_hostthrow_codegenned_class_is_caught_in_baml() throws {
         let result = try Baml.host_callable_tests.call_with_typed_throws(
             callback: { _ in
                 throw BamlThrownValue(
@@ -114,7 +114,7 @@ final class TestHostCallables: XCTestCase {
         XCTAssertEqual(result, "caught: bad shape")
     }
 
-    func test_throwing_typed_baml_value_propagates_back_with_typed_fields() throws {
+    func test_host_callables_throwing_callable_hostthrow_propagates_back_with_typed_fields() throws {
         do {
             _ = try Baml.host_callable_tests.call_with_typed_throws_propagating(
                 callback: { _ in
@@ -137,7 +137,7 @@ final class TestHostCallables: XCTestCase {
         }
     }
 
-    func test_throwing_async_callable_round_trips_original_error() throws {
+    func test_host_callables_throwing_async_callable_round_trips_original_error() throws {
         let raised = TestError(tag: "async nope")
         do {
             _ = try Baml.host_callable_tests.call_with_callback(
@@ -153,7 +153,7 @@ final class TestHostCallables: XCTestCase {
         }
     }
 
-    func test_multiple_throws_in_flight_do_not_collide_in_registry() throws {
+    func test_host_callables_multiple_throws_in_flight_do_not_collide_in_registry() throws {
         let first = TestError(tag: "first")
         let second = TestError(tag: "second")
         var caughtFirst: TestError?
@@ -169,7 +169,7 @@ final class TestHostCallables: XCTestCase {
         XCTAssertNotEqual(caughtFirst, caughtSecond)
     }
 
-    func test_closure_round_trip() throws {
+    func test_host_callables_lambda_round_trip() throws {
         let result = try Baml.host_callable_tests.call_with_callback(
             callback: { x in "lambda-\(x)" },
             x: 99
@@ -177,7 +177,7 @@ final class TestHostCallables: XCTestCase {
         XCTAssertEqual(result, "lambda-99")
     }
 
-    func test_async_callable_runs_to_completion() throws {
+    func test_host_callables_async_callable_runs_to_completion() throws {
         let result = try Baml.host_callable_tests.call_with_callback(
             callback: { x in
                 await Task.yield()
@@ -188,7 +188,7 @@ final class TestHostCallables: XCTestCase {
         XCTAssertEqual(result, "async-4")
     }
 
-    func test_multiple_callable_keys_are_distinct() throws {
+    func test_host_callables_multiple_callable_keys_are_distinct() throws {
         let counter = LockedBox<[String: Int]>([:])
         let a = try Baml.host_callable_tests.call_with_callback(
             callback: { x in
@@ -209,7 +209,7 @@ final class TestHostCallables: XCTestCase {
         XCTAssertEqual(counter.snapshot, ["a": 1, "b": 1])
     }
 
-    func test_class_callback_round_trips_model() throws {
+    func test_host_callables_class_callback_round_trips_class_value() throws {
         let result = try Baml.host_callable_tests.call_with_class_callback(
             callback: { p in "\(p.name) is \(p.age)" },
             p: Baml.host_callable_tests.Person(name: "Ada", age: 37)
@@ -217,7 +217,7 @@ final class TestHostCallables: XCTestCase {
         XCTAssertEqual(result, "Ada is 37")
     }
 
-    func test_call_repeatedly_invokes_callback_n_times() throws {
+    func test_host_callables_call_repeatedly_invokes_callback_n_times() throws {
         let invocations = LockedBox<[Int]>([])
         let results = try Baml.host_callable_tests.call_repeatedly(
             callback: { x in
@@ -230,7 +230,7 @@ final class TestHostCallables: XCTestCase {
         XCTAssertEqual(invocations.snapshot, [0, 1, 2, 3, 4])
     }
 
-    func test_call_repeatedly_with_zero_n_returns_empty_list() throws {
+    func test_host_callables_call_repeatedly_with_zero_n_returns_empty_list() throws {
         let invocations = LockedBox<[Int]>([])
         let results = try Baml.host_callable_tests.call_repeatedly(
             callback: { x in
@@ -243,7 +243,7 @@ final class TestHostCallables: XCTestCase {
         XCTAssertEqual(invocations.snapshot, [])
     }
 
-    func test_call_with_throwing_in_baml_catches_host_callable_error() throws {
+    func test_host_callables_call_with_throwing_in_baml_catches_host_callable_error() throws {
         let result = try Baml.host_callable_tests.call_with_throwing(
             callback: { _ in throw TestError(tag: "boom from host") },
             x: 1
@@ -252,7 +252,7 @@ final class TestHostCallables: XCTestCase {
         XCTAssertEqual(result, "caught:TestError")
     }
 
-    func test_optional_args_all_unset_apply_host_defaults() throws {
+    func test_host_callables_optional_args_all_unset_apply_host_defaults() throws {
         let result = try Baml.host_callable_tests.call_callback_with_optional_args_all_unset(
             callback: { x, y, z in x * 100 + orDefault(y, 8) * 10 + orDefault(z, 9) },
             x: 5
@@ -260,7 +260,7 @@ final class TestHostCallables: XCTestCase {
         XCTAssertEqual(result, [589])
     }
 
-    func test_optional_args_partially_set_deliver_by_name() throws {
+    func test_host_callables_optional_args_partially_set_deliver_by_name() throws {
         let result = try Baml.host_callable_tests.call_callback_with_optional_args_partially_set(
             callback: { x, y, z in x * 100 + orDefault(y, 8) * 10 + orDefault(z, 9) },
             x: 5
@@ -268,7 +268,7 @@ final class TestHostCallables: XCTestCase {
         XCTAssertEqual(result, [529, 583])
     }
 
-    func test_optional_args_all_set_deliver_both() throws {
+    func test_host_callables_optional_args_all_set_deliver_both() throws {
         let result = try Baml.host_callable_tests.call_callback_with_optional_args_all_set(
             callback: { x, y, z in x * 100 + orDefault(y, 8) * 10 + orDefault(z, 9) },
             x: 5

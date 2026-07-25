@@ -8,7 +8,7 @@ import (
 	"baml.local/sdk/baml_sdk"
 )
 
-func TestImports(t *testing.T) {
+func Test_imports(t *testing.T) {
 	_ = baml_sdk.DocsDoc{}
 	_ = baml_sdk.DocsNote{}
 	_ = baml_sdk.DocsPriorityHIGH
@@ -16,7 +16,7 @@ func TestImports(t *testing.T) {
 }
 
 // Go exposes documentation as source comments rather than runtime metadata.
-func TestClassDocSummaryAndAttributes(t *testing.T) {
+func Test_class_doc_summary_and_attributes(t *testing.T) {
 	source := readGeneratedTypes(t)
 	for _, want := range []string{
 		"// DocsDoc A document with a title and an optional body.",
@@ -29,7 +29,7 @@ func TestClassDocSummaryAndAttributes(t *testing.T) {
 	}
 }
 
-func TestUndocumentedFieldHasNoDocArtifact(t *testing.T) {
+func Test_undocumented_field_has_no_doc_artifact(t *testing.T) {
 	source := readGeneratedTypes(t)
 	for _, want := range []string{
 		"// DocsNote A multi-line summary.",
@@ -46,7 +46,7 @@ func TestUndocumentedFieldHasNoDocArtifact(t *testing.T) {
 	}
 }
 
-func TestEnumDocSummaryAndMembers(t *testing.T) {
+func Test_enum_doc_summary_and_members(t *testing.T) {
 	source := readGeneratedTypes(t)
 	for _, want := range []string{
 		"// DocsSentiment Sentiment labels surfaced by the model.",
@@ -62,7 +62,7 @@ func TestEnumDocSummaryAndMembers(t *testing.T) {
 	}
 }
 
-func TestEnumSummaryOnlyOmitsMemberComments(t *testing.T) {
+func Test_enum_summary_only_omits_member_comments(t *testing.T) {
 	source := readGeneratedTypes(t)
 	compactSource := strings.NewReplacer(" ", "", "\t", "").Replace(source)
 	if !strings.Contains(source, "// DocsPriority Pin the \"summary only, no member rollup\" case: this enum has a") {
@@ -78,7 +78,7 @@ func TestEnumSummaryOnlyOmitsMemberComments(t *testing.T) {
 	}
 }
 
-func TestNoInlineFieldOrVariantDocArtifacts(t *testing.T) {
+func Test_no_inline_field_or_variant_doc_artifacts(t *testing.T) {
 	source := readGeneratedTypes(t)
 	if strings.Contains(source, "// Title shown in lists") {
 		t.Error("field doc lost its generated field identifier")

@@ -105,7 +105,7 @@ test_task await_uncaught(throw_future fut) { (void)co_await std::move(fut); }
 
 }  // namespace
 
-BAML_TEST(co_await_pending_future_resumes) {
+BAML_TEST(coawait_co_await_pending_future_resumes) {
   // A genuinely in-flight call: the coroutine suspends and the dispatcher
   // thread resumes it when the envelope lands.
   bool completed = false;
@@ -114,14 +114,14 @@ BAML_TEST(co_await_pending_future_resumes) {
   BAML_ASSERT(completed);
 }
 
-BAML_TEST(co_await_yields_the_decoded_value) {
+BAML_TEST(coawait_co_await_yields_the_decoded_value) {
   int64_t got = 0;
   test_task task = await_int(baml_sdk::round_trip_int_async(7), &got);
   task.join();
   BAML_ASSERT(got == 7);
 }
 
-BAML_TEST(co_await_completed_future_fast_path) {
+BAML_TEST(coawait_co_await_completed_future_fast_path) {
   // await_ready() true: no suspension, the coroutine runs straight through.
   auto fut = baml_sdk::round_trip_int_async(7);
   fut.wait();
@@ -131,7 +131,7 @@ BAML_TEST(co_await_completed_future_fast_path) {
   BAML_ASSERT(got == 7);
 }
 
-BAML_TEST(co_await_throws_typed_into_the_coroutine) {
+BAML_TEST(coawait_co_await_throws_typed_into_the_coroutine) {
   bool caught = false;
   test_task task =
       await_expect_my_error(throws_test::ThrowMyError_async(), &caught);
@@ -139,7 +139,7 @@ BAML_TEST(co_await_throws_typed_into_the_coroutine) {
   BAML_ASSERT(caught);
 }
 
-BAML_TEST(co_await_cancelled_call_throws_cancelled) {
+BAML_TEST(coawait_co_await_cancelled_call_throws_cancelled) {
   auto fut = throws_test::SleepMs_async(2000);
   std::this_thread::sleep_for(std::chrono::milliseconds(50));
   BAML_ASSERT(fut.cancel());
@@ -149,7 +149,7 @@ BAML_TEST(co_await_cancelled_call_throws_cancelled) {
   BAML_ASSERT(cancelled);
 }
 
-BAML_TEST(uncaught_coroutine_exception_reaches_join) {
+BAML_TEST(coawait_uncaught_coroutine_exception_reaches_join) {
   test_task task = await_uncaught(throws_test::ThrowMyError_async());
   bool rethrown = false;
   try {

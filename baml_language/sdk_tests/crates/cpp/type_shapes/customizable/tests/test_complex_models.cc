@@ -29,7 +29,7 @@ using Featured = baml::variant<Invoice, PostalAddress, std::string>;
 using Flag = baml::variant<int64_t, std::string, bool>;
 
 BAML_TEST(
-    round_trip_complex_profile_preserves_deeply_nested_mixed_shape_class) {
+    complex_models_round_trip_complex_profile_preserves_deeply_nested_mixed_shape_class) {
   const PostalAddress home{
       "1 Compiler Way", std::nullopt,
       "San Francisco",  "CA",
