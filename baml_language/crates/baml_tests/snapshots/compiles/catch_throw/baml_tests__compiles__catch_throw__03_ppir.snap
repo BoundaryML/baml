@@ -1,0 +1,41 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 8891
+---
+=== PPIR ===
+function user.AlsoMayFail(x: int) -> string  [expr] {
+  {  } match (x) { 0 => throw "secondary error", _ => "also ok" }
+}
+function user.CatchAndRethrow(x: int) -> string  [expr] {
+  {  } MayFail(x) catch (e) { _ => throw e }
+}
+function user.CatchWithFallback(x: int) -> string  [expr] {
+  {  } MayFailIntOrString(x) catch (e) { string => "caught string" } catch (e2) { int => "caught int fallback" }
+}
+function user.CatchWithTypedArm(x: int) -> string  [expr] {
+  {  } MayFail(x) catch (e) { string => "caught string" }
+}
+function user.ChainedCatchClauses(x: int) -> string  [expr] {
+  {  } MayFailIntOrString(x) catch (e) { string => "first handler" } catch (e2) { int => "second handler" }
+}
+function user.MayFail(x: int) -> string  [expr] {
+  {  } match (x) { 0 => throw "string error", _ => "ok" }
+}
+function user.MayFailIntOrString(x: int) -> string  [expr] {
+  {  } match (x) { 0 => throw "string error", 1 => throw 1, _ => "ok" }
+}
+function user.MultipleCatchArms(x: int) -> string  [expr] {
+  {  } MayFailIntOrString(x) catch (e) { string => "caught string", int => "caught int" }
+}
+function user.NestedCatch(x: int) -> string  [expr] {
+  { let inner = MayFail(x) catch (e) { _ => "inner caught" } } AlsoMayFail(x) catch (e) { _ => inner }
+}
+function user.SingleCatchTyped(x: int) -> string  [expr] {
+  {  } MayFail(x) catch (e) { string => "caught string" }
+}
+function user.SingleCatchWildcard(x: int) -> string  [expr] {
+  {  } MayFail(x) catch (e) { _ => "caught" }
+}
+function user.ThrowStatement(x: int) -> string  [expr] {
+  { throw "error" } "unreachable"
+}

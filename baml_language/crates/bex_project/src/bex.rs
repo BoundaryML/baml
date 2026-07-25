@@ -1,7 +1,7 @@
 use ::bex_heap::HeapPermit as _;
 use ::std::sync::Arc;
 use async_trait::async_trait;
-use bex_engine::{BexCallArg, BexEngine, CallRef, FunctionCallContext};
+use bex_engine::{BexCallArg, BexEngine, CallRef, FunctionCallContext, UnhandledSpawnErrorHandler};
 use bex_heap::{BexExternalValue, BexValue};
 use sys_types::CallId;
 
@@ -48,6 +48,10 @@ pub trait Bex: Send + Sync {
 
     fn cancel_function_call(&self, call_id: CallId) -> Result<(), RuntimeError>;
 
+    fn set_unhandled_spawn_error_handler(&self, handler: Option<UnhandledSpawnErrorHandler>);
+
+    async fn shutdown(self: Arc<Self>);
+
     /// Run-vocabulary alias for host-call cancellation. The parameter is still
     /// the adapter-owned `HostCallId` backing value, not a `RunId`.
     fn cancel_run(&self, host_call_id: CallId) -> Result<(), RuntimeError> {
@@ -81,6 +85,18 @@ impl Bex for BexProject {
         let bex = self.get_bex()?;
         bex.cancel_function_call(call_id)
             .map_err(RuntimeError::from)
+    }
+
+    fn set_unhandled_spawn_error_handler(&self, handler: Option<UnhandledSpawnErrorHandler>) {
+        if let Ok(bex) = self.get_bex() {
+            bex.set_unhandled_spawn_error_handler(handler);
+        }
+    }
+
+    async fn shutdown(self: Arc<Self>) {
+        if let Ok(bex) = self.get_bex() {
+            bex.shutdown().await;
+        }
     }
 }
 
@@ -169,5 +185,13 @@ impl Bex for BexEngine {
 
     fn cancel_function_call(&self, call_id: CallId) -> Result<(), RuntimeError> {
         BexEngine::cancel_function_call(self, call_id).map_err(RuntimeError::from)
+    }
+
+    fn set_unhandled_spawn_error_handler(&self, handler: Option<UnhandledSpawnErrorHandler>) {
+        BexEngine::set_unhandled_spawn_error_handler(self, handler);
+    }
+
+    async fn shutdown(self: Arc<Self>) {
+        BexEngine::shutdown(&self).await;
     }
 }

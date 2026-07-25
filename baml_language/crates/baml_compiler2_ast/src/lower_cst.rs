@@ -8,19 +8,19 @@
 //! No LLM function expansion, no attribute validation, no duplicate detection —
 //! all of that moves downstream.
 
-use baml_base::{Name, TypePath};
+use baml_base::{ClientOptionsPresence, Name, TypePath};
 use baml_compiler_syntax::{SyntaxKind, SyntaxNode, SyntaxNodeExt, ast};
 use rowan::ast::AstNode;
 
 use crate::{
     DeclarativeMeta, LoweringDiagnostic,
     ast::{
-        AssociatedTypeBindingDef, AssociatedTypeDef, AstSourceMap, BuiltinKind, CallArg,
-        ConfigItemDef, EnumDef, Expr, ExprBody, ExprId, FieldDef, FunctionBodyDef, FunctionDef,
-        FunctionDefaults, ImplementsBlockDef, ImplementsForDef, InterfaceDef,
-        InterfaceFieldLinkDef, Interpolation, Item, LetDef, LetOrigin, LlmBodyDef, MethodSigDef,
-        Param, RawAttribute, RawAttributeArg, RawPrompt, TemplateStringDef, TestDef, TypeAliasDef,
-        TypeExpr, TypeExprKind, VariantDef,
+        AssociatedTypeBindingDef, AssociatedTypeDef, AstSourceMap, BuiltinKind, CallArg, EnumDef,
+        Expr, ExprBody, ExprId, FieldDef, FunctionBodyDef, FunctionDef, FunctionDefaults,
+        ImplementsBlockDef, ImplementsForDef, InterfaceDef, InterfaceFieldLinkDef, Interpolation,
+        Item, LetDef, LetOrigin, LlmBodyDef, MethodSigDef, Param, RawAttribute, RawAttributeArg,
+        RawPrompt, TemplateStringDef, TestArgValue, TestDef, TypeAliasDef, TypeExpr, TypeExprKind,
+        VariantDef,
     },
     companions::expand_companions,
     lower_expr_body, lower_type_expr,
@@ -72,6 +72,18 @@ pub fn lower_file(
 pub fn lower_file_with_path(
     root: &SyntaxNode,
     file_path: Option<&std::path::Path>,
+) -> (Vec<Item>, Vec<LoweringDiagnostic>, Vec<crate::EnvVarRef>) {
+    lower_file_with_path_and_test_owner(root, file_path, None)
+}
+
+/// Variant used by project-aware lowering, where the HIR layer already knows
+/// the exact BAML namespace derived from the project root. Keeping the owner an
+/// input avoids accidentally treating an absolute ancestor named `ns_*` as a
+/// user namespace.
+pub fn lower_file_with_path_and_test_owner(
+    root: &SyntaxNode,
+    file_path: Option<&std::path::Path>,
+    test_owner: Option<&str>,
 ) -> (Vec<Item>, Vec<LoweringDiagnostic>, Vec<crate::EnvVarRef>) {
     let mut diags = Vec::new();
     let mut env_var_refs = Vec::new();
@@ -215,6 +227,7 @@ pub fn lower_file_with_path(
         let init_fn = synthesize_init_test_function(
             &test_registrations,
             file_path,
+            test_owner,
             &mut diags,
             &mut env_var_refs,
         );
@@ -268,7 +281,7 @@ fn lower_function(
         diags.push(LoweringDiagnostic::ReservedRuntimeIdBindingName { span: name_span });
     }
 
-    let generic_params_with_bounds = extract_generic_params_with_bounds(node);
+    let generic_params_with_bounds = extract_generic_params_with_bounds(node, diags);
     let generic_params: Vec<Name> = generic_params_with_bounds
         .iter()
         .map(|(n, _)| n.clone())
@@ -298,7 +311,7 @@ fn lower_function(
         .unwrap_or_else(|| (Vec::new(), FunctionDefaults::empty()));
 
     let return_type = func.return_type().map(|te| {
-        let mut expr = lower_type_expr::lower_type_expr_node(&te);
+        let mut expr = lower_type_expr::lower_type_expr_node(&te, diags);
         let te_span = te.syntax().span_range();
         check_unknown_type(&expr, format!("return type of `{name}`"), te_span, diags);
         // void is allowed as a bare return type, but not wrapped (void?, void[], etc.).
@@ -317,7 +330,7 @@ fn lower_function(
         .throws_clause()
         .and_then(|tc| tc.type_expr())
         .map(|te| {
-            let mut expr = lower_type_expr::lower_type_expr_node(&te);
+            let mut expr = lower_type_expr::lower_type_expr_node(&te, diags);
             let te_span = te.syntax().span_range();
             lower_type_expr::check_throws_wildcard(&mut expr, te_span, diags);
             expr.with_span(te_span)
@@ -584,7 +597,7 @@ pub(crate) fn lower_param(
     Some(Param {
         name: Name::new(&param_name_str),
         type_expr: param.ty().map(|te| {
-            let mut expr = lower_type_expr::lower_type_expr_node(&te);
+            let mut expr = lower_type_expr::lower_type_expr_node(&te, diags);
             let te_span = te.syntax().span_range();
             check_unknown_type(
                 &expr,
@@ -1061,7 +1074,7 @@ fn lower_class(
         return None;
     };
 
-    let generic_params_with_bounds = extract_generic_params_with_bounds(node);
+    let generic_params_with_bounds = extract_generic_params_with_bounds(node, diags);
     let generic_params: Vec<Name> = generic_params_with_bounds
         .iter()
         .map(|(n, _)| n.clone())
@@ -1089,7 +1102,7 @@ fn lower_class(
             let field_name_str = fname.text().to_string();
             let mut hoisted_field_attrs = Vec::new();
             let type_expr = f.ty().map(|te| {
-                let mut expr = lower_type_expr::lower_type_expr_node(&te);
+                let mut expr = lower_type_expr::lower_type_expr_node(&te, diags);
                 let te_span = te.syntax().span_range();
                 check_unknown_type(
                     &expr,
@@ -1188,6 +1201,7 @@ fn lower_class(
 /// `Container<int>` round-trip.
 pub(crate) fn extract_generic_params_with_bounds(
     node: &SyntaxNode,
+    diags: &mut Vec<LoweringDiagnostic>,
 ) -> Vec<(Name, Option<crate::ast::TypeExpr>)> {
     use baml_compiler_syntax::SyntaxKind;
 
@@ -1224,7 +1238,7 @@ pub(crate) fn extract_generic_params_with_bounds(
                 })
                 .and_then(|n| {
                     let te = baml_compiler_syntax::ast::TypeExpr::cast(n)?;
-                    Some(lower_type_expr::lower_type_expr_node(&te))
+                    Some(lower_type_expr::lower_type_expr_node(&te, diags))
                 });
             if let Some(n) = name {
                 out.push((n, bound));
@@ -1242,6 +1256,7 @@ pub(crate) fn extract_generic_params_with_bounds(
 /// yet carry multiple bounds.
 pub(crate) fn extract_generic_params_with_all_bounds(
     node: &SyntaxNode,
+    diags: &mut Vec<LoweringDiagnostic>,
 ) -> Vec<(Name, Vec<crate::ast::TypeExpr>)> {
     use baml_compiler_syntax::SyntaxKind;
 
@@ -1271,7 +1286,7 @@ pub(crate) fn extract_generic_params_with_all_bounds(
                         .children()
                         .filter_map(|n| {
                             let te = baml_compiler_syntax::ast::TypeExpr::cast(n)?;
-                            Some(lower_type_expr::lower_type_expr_node(&te))
+                            Some(lower_type_expr::lower_type_expr_node(&te, diags))
                         })
                         .collect()
                 })
@@ -1340,7 +1355,7 @@ fn lower_interface(
         return None;
     };
     let iface_name = name_token.text().to_string();
-    let generic_params_with_bounds = extract_generic_params_with_bounds(node);
+    let generic_params_with_bounds = extract_generic_params_with_bounds(node, diags);
     let generic_params: Vec<Name> = generic_params_with_bounds
         .iter()
         .map(|(n, _)| n.clone())
@@ -1363,7 +1378,7 @@ fn lower_interface(
     let requires: Vec<TypeExpr> = parent_type_nodes
         .into_iter()
         .map(|te| {
-            let mut expr = lower_type_expr::lower_type_expr_node(&te);
+            let mut expr = lower_type_expr::lower_type_expr_node(&te, diags);
             let te_span = te.syntax().span_range();
             check_unknown_type(
                 &expr,
@@ -1393,7 +1408,7 @@ fn lower_interface(
             };
             let field_name_str = fname.text().to_string();
             let type_expr = f.ty().map(|te| {
-                let mut expr = lower_type_expr::lower_type_expr_node(&te);
+                let mut expr = lower_type_expr::lower_type_expr_node(&te, diags);
                 let te_span = te.syntax().span_range();
                 check_unknown_type(
                     &expr,
@@ -1471,7 +1486,7 @@ fn lower_associated_type_def(
     };
     let name = Name::new(name_token.text());
     let bound = decl.bound().map(|te| {
-        let expr = lower_type_expr::lower_type_expr_node(&te);
+        let expr = lower_type_expr::lower_type_expr_node(&te, diags);
         let span = te.syntax().span_range();
         check_unknown_type(
             &expr,
@@ -1482,7 +1497,7 @@ fn lower_associated_type_def(
         expr.with_span(span)
     });
     let default = decl.default_or_binding().map(|te| {
-        let expr = lower_type_expr::lower_type_expr_node(&te);
+        let expr = lower_type_expr::lower_type_expr_node(&te, diags);
         let span = te.syntax().span_range();
         check_unknown_type(
             &expr,
@@ -1514,7 +1529,7 @@ fn lower_associated_type_binding_def(
     };
     let name = Name::new(name_token.text());
     let type_expr = decl.default_or_binding().map(|te| {
-        let expr = lower_type_expr::lower_type_expr_node(&te);
+        let expr = lower_type_expr::lower_type_expr_node(&te, diags);
         let span = te.syntax().span_range();
         check_unknown_type(
             &expr,
@@ -1545,7 +1560,7 @@ fn lower_method_sig(
     };
     let name = Name::new(name_token.text());
     let name_span = name_token.text_range();
-    let generic_params_with_bounds = extract_generic_params_with_bounds(sig.syntax());
+    let generic_params_with_bounds = extract_generic_params_with_bounds(sig.syntax(), diags);
     let generic_params: Vec<Name> = generic_params_with_bounds
         .iter()
         .map(|(n, _)| n.clone())
@@ -1567,7 +1582,7 @@ fn lower_method_sig(
         .unwrap_or_else(|| (Vec::new(), FunctionDefaults::empty()));
 
     let return_type = sig.return_type().map(|te| {
-        let mut expr = lower_type_expr::lower_type_expr_node(&te);
+        let mut expr = lower_type_expr::lower_type_expr_node(&te, diags);
         let te_span = te.syntax().span_range();
         check_unknown_type(&expr, format!("return type of `{name}`"), te_span, diags);
         lower_type_expr::check_void_type(
@@ -1582,7 +1597,7 @@ fn lower_method_sig(
     });
 
     let throws = sig.throws_clause().and_then(|tc| tc.type_expr()).map(|te| {
-        let mut expr = lower_type_expr::lower_type_expr_node(&te);
+        let mut expr = lower_type_expr::lower_type_expr_node(&te, diags);
         let te_span = te.syntax().span_range();
         // A bodyless method signature (interface required method) has nothing to
         // infer an open `throws … | _` from, and its declared throws is compared
@@ -1620,7 +1635,7 @@ fn lower_implements_block(
     let target_node = block.target()?;
     let target_te = target_node.type_expr()?;
     let target_span = target_te.syntax().span_range();
-    let target = lower_type_expr::lower_type_expr_node(&target_te).with_span(target_span);
+    let target = lower_type_expr::lower_type_expr_node(&target_te, diags).with_span(target_span);
     check_unknown_type(
         &target,
         "interface name in `implements`".to_string(),
@@ -1682,13 +1697,14 @@ fn lower_implements_for(
 ) -> Option<ImplementsForDef> {
     let imp = ast::ImplementsFor::cast(node.clone())?;
 
-    let generic_params = extract_generic_params_with_all_bounds(node);
+    let generic_params = extract_generic_params_with_all_bounds(node, diags);
 
     // Interface target (the `I` in `implements I for T`)
     let target_node = imp.target()?;
     let target_te = target_node.type_expr()?;
     let target_span = target_te.syntax().span_range();
-    let interface_target = lower_type_expr::lower_type_expr_node(&target_te).with_span(target_span);
+    let interface_target =
+        lower_type_expr::lower_type_expr_node(&target_te, diags).with_span(target_span);
     check_unknown_type(
         &interface_target,
         "interface name in `implements ... for`".to_string(),
@@ -1700,7 +1716,7 @@ fn lower_implements_for(
     let for_node = imp.for_target()?;
     let for_te = for_node.type_expr()?;
     let for_span = for_te.syntax().span_range();
-    let for_target = lower_type_expr::lower_type_expr_node(&for_te).with_span(for_span);
+    let for_target = lower_type_expr::lower_type_expr_node(&for_te, diags).with_span(for_span);
     check_unknown_type(
         &for_target,
         "target type in `implements ... for`".to_string(),
@@ -1800,7 +1816,7 @@ fn lower_type_alias(
     Some(TypeAliasDef {
         name: Name::new(&alias_name),
         type_expr: alias.ty().map(|te| {
-            let mut expr = lower_type_expr::lower_type_expr_node(&te);
+            let mut expr = lower_type_expr::lower_type_expr_node(&te, diags);
             let te_span = te.syntax().span_range();
             check_unknown_type(&expr, format!("type alias `{alias_name}`"), te_span, diags);
             lower_type_expr::check_void_type(
@@ -1829,17 +1845,127 @@ fn lower_test(node: &SyntaxNode, diags: &mut Vec<LoweringDiagnostic>) -> Option<
     };
 
     let test_name = name_token.text().to_string();
-    let config_items = test
-        .config_block()
-        .map(|cb| lower_config_block(&cb, "test", &test_name, diags))
+    let config_block = test.config_block();
+    if let Some(block) = &config_block {
+        for item in block.items() {
+            if item.key().is_none() {
+                diags.push(LoweringDiagnostic::MissingConfigKey {
+                    block_kind: "test",
+                    block_name: test_name.clone(),
+                    span: item.syntax().span_range(),
+                });
+            }
+        }
+    }
+    let function_refs = test
+        .function_reference_names()
+        .into_iter()
+        .map(Name::new)
+        .collect();
+    let args = config_block
+        .as_ref()
+        .and_then(|block| block.items().find(|item| item.matches_key("args")))
+        .and_then(|item| item.nested_block())
+        .map(|block| lower_test_arg_map(&block))
         .unwrap_or_default();
 
     Some(TestDef {
         name: Name::new(&test_name),
-        config_items,
+        function_refs,
+        args,
         span: node.span_range(),
         name_span: name_token.text_range(),
     })
+}
+
+fn lower_test_arg_map(block: &ast::ConfigBlock) -> Vec<(Name, TestArgValue)> {
+    block
+        .items()
+        .filter_map(|item| {
+            let key = item.key()?;
+            Some((Name::new(key.text()), lower_test_arg_item(&item)))
+        })
+        .collect()
+}
+
+fn lower_test_arg_map_as_value(block: &ast::ConfigBlock) -> TestArgValue {
+    TestArgValue::Map(
+        lower_test_arg_map(block)
+            .into_iter()
+            .map(|(key, value)| (key.to_string(), value))
+            .collect(),
+    )
+}
+
+fn lower_test_arg_item(item: &ast::ConfigItem) -> TestArgValue {
+    if let Some(block) = item.nested_block() {
+        return lower_test_arg_map_as_value(&block);
+    }
+
+    item.config_value_node()
+        .map(|value| lower_test_arg_config_value(&value))
+        .unwrap_or(TestArgValue::Null)
+}
+
+fn lower_test_arg_config_value(value: &SyntaxNode) -> TestArgValue {
+    if let Some(array) = value
+        .children()
+        .find(|child| child.kind() == SyntaxKind::ARRAY_LITERAL)
+    {
+        return TestArgValue::Array(
+            array
+                .children()
+                .filter_map(|element| match element.kind() {
+                    SyntaxKind::CONFIG_VALUE => Some(lower_test_arg_config_value(&element)),
+                    SyntaxKind::CONFIG_BLOCK => ast::ConfigBlock::cast(element)
+                        .map(|block| lower_test_arg_map_as_value(&block)),
+                    _ => None,
+                })
+                .collect(),
+        );
+    }
+
+    let raw = value.text().to_string();
+    if let Some(string) = crate::parse_string_attr_value(raw.trim()) {
+        return TestArgValue::String(string);
+    }
+
+    let text = ast::ConfigValue::cast(value.clone())
+        .and_then(|config_value| config_value.scalar_text())
+        .unwrap_or_default();
+
+    match text.as_str() {
+        "null" => return TestArgValue::Null,
+        "true" => return TestArgValue::Bool(true),
+        "false" => return TestArgValue::Bool(false),
+        _ => {}
+    }
+
+    // Duck-typed scalar: number-shaped text becomes a number, everything
+    // else stays a string, so no diagnostics here. `num_lit` handles base
+    // prefixes and underscores; a leading `-` is handled by hand since the
+    // helper only accepts unsigned magnitudes.
+    let (negated, magnitude) = match text.strip_prefix('-') {
+        Some(rest) => (true, rest),
+        None => (false, text.as_str()),
+    };
+    if let Ok(value) = baml_base::num_lit::parse_int_literal(magnitude) {
+        return TestArgValue::Int(if negated { -value } else { value });
+    }
+    if let Ok(value) = text.parse::<f64>() {
+        return TestArgValue::float(value);
+    }
+    // Underscored floats (`1_000.5`) fail the plain parse; retry with
+    // separators stripped, but only for digit-led text so words containing
+    // underscores (`in_f`) can't be misread as `inf`.
+    if magnitude.starts_with(|c: char| c.is_ascii_digit())
+        && text.contains('_')
+        && let Ok(value) = baml_base::num_lit::normalize_float_literal(&text).parse::<f64>()
+    {
+        return TestArgValue::float(value);
+    }
+
+    TestArgValue::String(text)
 }
 
 /// Extract the name expression element from a `TEST_EXPR_DEF` or `TESTSET_DEF` node.
@@ -1985,6 +2111,44 @@ fn init_test_key_from_path(path: &std::path::Path) -> String {
         .collect()
 }
 
+/// Public owner of tests declared in `path`. User package names are deliberately
+/// not embedded in test ids: `root` is stable across package renames, while
+/// `ns_<name>` directories retain BAML's dotted namespace qualification.
+fn test_owner_from_path(path: Option<&std::path::Path>) -> String {
+    let mut namespaces = Vec::new();
+    if let Some(path) = path {
+        for component in path
+            .parent()
+            .into_iter()
+            .flat_map(std::path::Path::components)
+        {
+            let std::path::Component::Normal(component) = component else {
+                continue;
+            };
+            let Some(component) = component.to_str() else {
+                continue;
+            };
+            let Some(name) = component.strip_prefix("ns_") else {
+                continue;
+            };
+            let mut chars = name.chars();
+            let valid = chars
+                .next()
+                .map(|c| c.is_ascii_alphabetic() || c == '_')
+                .unwrap_or(false)
+                && chars.all(|c| c.is_ascii_alphanumeric() || c == '_');
+            if valid {
+                namespaces.push(name.to_string());
+            }
+        }
+    }
+    if namespaces.is_empty() {
+        "root".to_string()
+    } else {
+        format!("root.{}", namespaces.join("."))
+    }
+}
+
 /// The function is named `"$init_test_<sanitized_path>"` to avoid collisions
 /// when multiple files contain tests. The suffix is derived from the file path
 /// rather than its `FileId`: a `FileId` is a load-order index that shifts
@@ -1995,6 +2159,7 @@ fn init_test_key_from_path(path: &std::path::Path) -> String {
 fn synthesize_init_test_function(
     registrations: &[TestRegistrationItem],
     file_path: Option<&std::path::Path>,
+    explicit_test_owner: Option<&str>,
     diags: &mut Vec<LoweringDiagnostic>,
     env_var_refs: &mut Vec<crate::EnvVarRef>,
 ) -> FunctionDef {
@@ -2005,11 +2170,14 @@ fn synthesize_init_test_function(
     let span = text_size::TextRange::default();
 
     let mut ctx = lower_expr_body::InitTestContext::new();
+    let test_owner = explicit_test_owner
+        .map(str::to_owned)
+        .unwrap_or_else(|| test_owner_from_path(file_path));
 
     // Build statements: one per registration
     let mut stmt_ids: Vec<crate::ast::StmtId> = Vec::with_capacity(registrations.len());
     for reg in registrations {
-        let stmt_expr = synthesize_register_call(reg, &mut ctx, diags, env_var_refs);
+        let stmt_expr = synthesize_register_call(reg, &test_owner, &mut ctx, diags, env_var_refs);
         stmt_ids.push(ctx.alloc_stmt(crate::ast::Stmt::Expr(stmt_expr), span));
     }
 
@@ -2067,6 +2235,7 @@ fn synthesize_init_test_function(
 /// `registry.register_test_set(name, collector_lambda, runner)` call expression.
 fn synthesize_register_call(
     reg: &TestRegistrationItem,
+    test_owner: &str,
     ctx: &mut lower_expr_body::InitTestContext,
     diags: &mut Vec<LoweringDiagnostic>,
     env_var_refs: &mut Vec<crate::EnvVarRef>,
@@ -2102,14 +2271,18 @@ fn synthesize_register_call(
                 name_span: span,
             };
 
-            // registry.register_test
+            // registry.register_test_at(owner, ...)
             let method_call_target = ctx.alloc_expr(
-                Expr::Path(vec![Name::new("registry"), Name::new("register_test")]),
+                Expr::Path(vec![Name::new("registry"), Name::new("register_test_at")]),
                 span,
             );
 
             // Args: (name_expr, lambda, runner_or_null)
             let name_arg = lower_expr_body::lower_runner_element(ctx, name_element);
+            let owner_arg = ctx.alloc_expr(
+                Expr::Literal(crate::ast::Literal::String(test_owner.to_string())),
+                span,
+            );
             // Use the test body's real CST range as the lambda's span so HIR
             // scope lookup resolves names inside the body correctly. The body's
             // statements carry real source offsets, so a synthetic span (disjoint
@@ -2127,6 +2300,7 @@ fn synthesize_register_call(
                     callee: method_call_target,
                     type_args: vec![],
                     args: vec![
+                        CallArg::positional(owner_arg),
                         CallArg::positional(name_arg),
                         CallArg::positional(lambda_arg),
                         CallArg::positional(runner_arg),
@@ -2185,14 +2359,21 @@ fn synthesize_register_call(
                 name_span: span,
             };
 
-            // registry.register_test_set
+            // registry.register_test_set_at(owner, ...)
             let method_call_target = ctx.alloc_expr(
-                Expr::Path(vec![Name::new("registry"), Name::new("register_test_set")]),
+                Expr::Path(vec![
+                    Name::new("registry"),
+                    Name::new("register_test_set_at"),
+                ]),
                 span,
             );
 
             // Args: (name_expr, collector_lambda, runner_or_null)
             let name_arg = lower_expr_body::lower_runner_element(ctx, name_element);
+            let owner_arg = ctx.alloc_expr(
+                Expr::Literal(crate::ast::Literal::String(test_owner.to_string())),
+                span,
+            );
             // Use the testset body's real CST range so HIR scope lookup works
             // correctly for name resolution inside the collector lambda body.
             let collector_lambda_span = body_node.span_range();
@@ -2205,6 +2386,7 @@ fn synthesize_register_call(
                     callee: method_call_target,
                     type_args: vec![],
                     args: vec![
+                        CallArg::positional(owner_arg),
                         CallArg::positional(name_arg),
                         CallArg::positional(collector_arg),
                         CallArg::positional(runner_arg),
@@ -2349,6 +2531,7 @@ fn synthesize_retry_policy_let(
                 &item,
                 &mut alloc,
                 env_var_refs,
+                crate::lower_config_item::EnvReadMode::Strict,
             );
             Some((Name::new(key.text()), value))
         })
@@ -2370,10 +2553,15 @@ fn synthesize_retry_policy_let(
         type_annotations: la_arena::Arena::new(),
         root_expr: Some(root),
     };
-    let source_map = AstSourceMap {
+    let mut source_map = AstSourceMap {
         expr_spans,
         ..Default::default()
     };
+    // The object constructor is an implementation detail of `retry_policy`
+    // config lowering, not a user-written class literal. TIR uses this marker
+    // to avoid applying ordinary object-literal field diagnostics to config
+    // keys such as the legacy `strategy` block.
+    source_map.synthetic_exprs.insert(root);
 
     Some(Item::Let(LetDef {
         name: Name::new(name_token.text()),
@@ -2653,6 +2841,13 @@ fn synthesize_client_new_companion(
 ) -> FunctionDef {
     use baml_base::Literal;
 
+    // The constructor's `lenient: bool` parameter. `env.X` option reads are
+    // lowered to `baml.env.get_or_panic_lenient("X", lenient)` so the offline
+    // `render_prompt` path (which calls the constructor with `lenient = true`)
+    // can build the client for its metadata without a credential env var set,
+    // while the network paths keep `lenient = false` and still panic if unset.
+    let lenient_param_name = Name::new("lenient");
+
     let mut exprs: la_arena::Arena<Expr> = la_arena::Arena::new();
     let mut expr_spans: la_arena::Arena<text_size::TextRange> = la_arena::Arena::new();
     let mut alloc = |expr: Expr| -> ExprId {
@@ -2732,6 +2927,7 @@ fn synthesize_client_new_companion(
                     &opt_item,
                     &mut alloc,
                     env_var_refs,
+                    crate::lower_config_item::EnvReadMode::Lenient(&lenient_param_name),
                 );
                 let is_null = opt_item.value_str().as_deref() == Some("null");
 
@@ -2758,7 +2954,7 @@ fn synthesize_client_new_companion(
     // ── 3. Validate ─────────────────────────────────────────────
 
     if let Some(provider_str) = provider.map(String::as_str) {
-        validate_client_options(
+        report_client_options_validation(
             provider_str,
             client_name,
             has_base_url,
@@ -2869,11 +3065,18 @@ fn synthesize_client_new_companion(
     };
 
     let func_name = format!("{client_name}$new");
+    let lenient_param = Param {
+        name: lenient_param_name,
+        type_expr: Some((TypeExprKind::Bool { attrs: vec![] }).at(span)),
+        default: None,
+        span,
+        name_span: name_token.text_range(),
+    };
     FunctionDef {
         name: Name::new(&func_name),
         generic_params: vec![],
         generic_param_bounds: vec![],
-        params: vec![],
+        params: vec![lenient_param],
         defaults: FunctionDefaults::empty(),
         return_type: None,
         throws: None,
@@ -2920,8 +3123,8 @@ fn is_valid_provider(provider: &str) -> bool {
         .any(|c| c.providers.contains(&provider))
 }
 
-/// Validate provider-specific option constraints at compile time.
-fn validate_client_options(
+/// Attach compile-time source context to shared client option validation errors.
+fn report_client_options_validation(
     provider: &str,
     client_name: &str,
     has_base_url: bool,
@@ -2929,61 +3132,25 @@ fn validate_client_options(
     span: text_size::TextRange,
     diags: &mut Vec<LoweringDiagnostic>,
 ) {
-    let has_prov = |name: &str| -> bool { provider_fields_set.contains(name) };
-
-    if provider == "azure-openai"
-        && !has_base_url
-        && !(has_prov("resource_name") && has_prov("deployment_id"))
-    {
-        let missing = match (has_prov("resource_name"), has_prov("deployment_id")) {
-            (false, false) => "resource_name and deployment_id",
-            (false, true) => "resource_name",
-            (true, false) => "deployment_id",
-            (true, true) => unreachable!(),
-        };
+    let options = ClientOptionsPresence {
+        provider,
+        base_url: has_base_url,
+        resource_name: provider_fields_set.contains("resource_name"),
+        deployment_id: provider_fields_set.contains("deployment_id"),
+    };
+    if let Err(error) = baml_base::validate_client_options(options) {
         diags.push(LoweringDiagnostic::MissingClientOptions {
             client_name: client_name.to_string(),
-            message: format!(
-                "azure-openai requires either base_url or both resource_name and deployment_id (missing: {missing})"
-            ),
+            error,
             span,
         });
     }
 
-    if provider == "vertex-ai" && !has_base_url && !has_prov("location") {
-        diags.push(LoweringDiagnostic::MissingClientOptions {
-            client_name: client_name.to_string(),
-            message: "vertex-ai requires either base_url or location (e.g. us-central1) in options"
-                .to_string(),
-            span,
-        });
-    }
-}
-
-fn lower_config_block(
-    cb: &ast::ConfigBlock,
-    block_kind: &'static str,
-    block_name: &str,
-    diags: &mut Vec<LoweringDiagnostic>,
-) -> Vec<ConfigItemDef> {
-    cb.items()
-        .filter_map(|item| {
-            let Some(key_token) = item.key() else {
-                diags.push(LoweringDiagnostic::MissingConfigKey {
-                    block_kind,
-                    block_name: block_name.to_string(),
-                    span: item.syntax().span_range(),
-                });
-                return None;
-            };
-            let value = item.value_str().unwrap_or_default();
-            Some(ConfigItemDef {
-                key: Name::new(key_token.text()),
-                value,
-                span: item.syntax().span_range(),
-            })
-        })
-        .collect()
+    // vertex-ai deliberately has no compile-time location requirement:
+    // `location` (like `project_id`) can come from the GOOGLE_CLOUD_LOCATION
+    // env var at request time, which the compiler cannot see. A client with
+    // neither base_url, location, nor the env var fails at $build_request
+    // with an actionable error (see sys_llm auth_request/vertex.rs).
 }
 
 /// Lower variant-level attributes from an `EnumVariant` node.
@@ -3053,4 +3220,23 @@ fn lower_attribute_args_from_node(node: &SyntaxNode) -> Vec<RawAttributeArg> {
             })
         })
         .collect()
+}
+
+#[cfg(test)]
+mod test_owner_tests {
+    use std::path::Path;
+
+    use super::test_owner_from_path;
+
+    #[test]
+    fn path_owner_uses_the_same_namespace_identifier_rules_as_hir() {
+        assert_eq!(
+            test_owner_from_path(Some(Path::new("ns_orders/ns_v2/tests.baml"))),
+            "root.orders.v2"
+        );
+        assert_eq!(
+            test_owner_from_path(Some(Path::new("ns_123/tests.baml"))),
+            "root"
+        );
+    }
 }

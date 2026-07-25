@@ -4,18 +4,18 @@
 
 | Suite | Location | Purpose |
 |-------|----------|---------|
-| `baml_tests` | `crates/baml_tests/` | Snapshot tests with detailed CST/HIR/THIR output |
-| `lsp_actions_tests` | `crates/lsp_actions_tests/` | LSP integration tests with inline expectations |
+| `baml_tests` | `crates/baml_tests/` | Snapshot tests with detailed compiler IR output |
+| `baml_lsp2_actions_tests` | `crates/baml_lsp2_actions_tests/` | LSP integration tests with inline expectations |
 
 ## Workflow: Debugging a Failing Test
 
-### 1. Identify the issue in lsp_actions_tests
+### 1. Identify the issue in baml_lsp2_actions_tests
 
 ```bash
-cargo test --package lsp_actions_tests
+cargo test --package baml_lsp2_actions_tests
 ```
 
-Look for errors in `crates/lsp_actions_tests/test_files/syntax/`.
+Look for errors in `crates/baml_lsp2_actions_tests/test_files/syntax/`.
 
 ### 2. Create a minimal repro in baml_tests
 
@@ -46,8 +46,6 @@ Snapshots are created in `crates/baml_tests/snapshots/my_repro/`:
 
 | Snapshot | Contents |
 |----------|----------|
-| `*_01_lexer_*.snap` | Token stream from lexer |
-| `*_02_parser_*.snap` | CST (Concrete Syntax Tree) |
 | `*_03_hir.snap` | HIR (High-level IR) |
 | `*_04_thir.snap` | THIR (Typed HIR) with type inference |
 | `*_05_diagnostics.snap` | All errors and warnings |
@@ -64,16 +62,19 @@ Edit the relevant crate (`baml_compiler_parser`, `baml_compiler_syntax`, `baml_c
 cargo test --package baml_tests my_repro
 cargo insta accept --all
 
-# Update lsp_actions_tests inline expectations
-UPDATE_EXPECT=1 cargo test --package lsp_actions_tests
+# Update baml_lsp2_actions_tests inline expectations
+UPDATE_EXPECT=1 cargo test --package baml_lsp2_actions_tests
 ```
 
 ### 7. Verify all tests pass
 
 ```bash
+# Library unit tests — always run these when Rust code changes
+cargo test --lib
+
 # Run all tests (can skip slow parser_stress with --skip parser_stress)
 cargo test --package baml_tests -- --skip parser_stress
-cargo test --package lsp_actions_tests
+cargo test --package baml_lsp2_actions_tests
 ```
 
 ## Quick Commands
@@ -89,7 +90,7 @@ cargo test --package baml_tests
 cargo test --package baml_tests -- --skip parser_stress
 
 # Run LSP tests and auto-update expectations
-UPDATE_EXPECT=1 cargo test --package lsp_actions_tests
+UPDATE_EXPECT=1 cargo test --package baml_lsp2_actions_tests
 
 # Accept all pending snapshots
 cargo insta accept --all
@@ -108,13 +109,13 @@ cargo insta review
 - **Type checking**: `crates/baml_compiler2_tir/src/builder.rs`
 
 
-DO NOT EDIT the diagnostics manually in lsp_actions_tests. Use update_expect=1
+DO NOT EDIT the diagnostics manually in baml_lsp2_actions_tests. Use UPDATE_EXPECT=1
 
 Find the base-case that makes syntax fail and add that to baml_test with a good name and good folder organization.
 
-A good place to start when given a diagnostic failure or some parser issue is to look at the snapshot test (create one if missing) and checking the .snap files for CST/HIR etc.
+A good place to start when given a diagnostic failure or parser issue is to create a focused compiler test and inspect its diagnostics and IR snapshots.
 
-BEFORE you run these lsp tests with update_expect, make sure to just run without it and figure out if the new results are what you expect.
+BEFORE you run these lsp tests with UPDATE_EXPECT, make sure to just run without it and figure out if the new results are what you expect.
 
 Just because the existing file may say 'no diagnostics expected' doesn't mean it is correct by the way. We haven't finished implementing all diagnostics. You have to see if we added some other comments elsewhere in the file to see what we should sort of expect, or just inspect the behavior manually.
 

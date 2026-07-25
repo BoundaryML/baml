@@ -9,6 +9,11 @@
 //! `lower_cst` is threaded all the way through `execute_once_oneshot`. A
 //! WireMock server captures the outgoing request so we can assert the rendered
 //! prompt actually reaches the wire.
+//!
+//! These tests require Rust-side mocking (WireMock) with dynamic URI injection
+//! into client declarations and wire-level request capture. BAML client options
+//! are static and `baml.env` is read-only, so in-BAML HTTP servers bound to
+//! OS-assigned ports cannot be reached from client declarations.
 
 use baml_tests::baml_test;
 use bex_engine::BexExternalValue;

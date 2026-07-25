@@ -67,57 +67,51 @@ function NominalTypingAssignments() -> int {
 
 //----
 //- diagnostics
-// error: type mismatch: expected Person, got Human
-//     ╭─[ invalid_assignment_nominal_typing.baml:43:7 ]
-//     │
+// E0001
+//
+//   × mismatched types
+//     ╭─[invalid_assignment_nominal_typing.baml:43:7]
 //  43 │     p2 = Human { name: "F", age: 6 };
-//     │          ─────────────┬─────────────
-//     │                       ╰─────────────── type mismatch: expected Person, got Human
-//     │
-//     │ Note: Error code: E0001
-// ────╯
-// error: type mismatch: expected Human, got Person
-//     ╭─[ invalid_assignment_nominal_typing.baml:47:7 ]
-//     │
+//     ·          ─────────────┬─────────────
+//     ·                       ╰── expected `Person`, found `Human`
+//     ╰────
+// E0001
+//
+//   × mismatched types
+//     ╭─[invalid_assignment_nominal_typing.baml:47:7]
 //  47 │     h2 = Person { name: "H", age: 8 };
-//     │          ──────────────┬─────────────
-//     │                        ╰─────────────── type mismatch: expected Human, got Person
-//     │
-//     │ Note: Error code: E0001
-// ────╯
-// error: type mismatch: expected Animal, got Creature
-//     ╭─[ invalid_assignment_nominal_typing.baml:51:7 ]
-//     │
+//     ·          ──────────────┬─────────────
+//     ·                        ╰── expected `Human`, found `Person`
+//     ╰────
+// E0001
+//
+//   × mismatched types
+//     ╭─[invalid_assignment_nominal_typing.baml:51:7]
 //  51 │     a2 = Creature { species: "Lizard", legs: 4 };
-//     │          ───────────────────┬───────────────────
-//     │                             ╰───────────────────── type mismatch: expected Animal, got Creature
-//     │
-//     │ Note: Error code: E0001
-// ────╯
-// error: type mismatch: expected Creature, got Animal
-//     ╭─[ invalid_assignment_nominal_typing.baml:55:7 ]
-//     │
+//     ·          ───────────────────┬───────────────────
+//     ·                             ╰── expected `Animal`, found `Creature`
+//     ╰────
+// E0001
+//
+//   × mismatched types
+//     ╭─[invalid_assignment_nominal_typing.baml:55:7]
 //  55 │     c2 = Animal { species: "Spider", legs: 8 };
-//     │          ──────────────────┬──────────────────
-//     │                            ╰──────────────────── type mismatch: expected Creature, got Animal
-//     │
-//     │ Note: Error code: E0001
-// ────╯
-// error: type mismatch: expected Person, got Human
-//     ╭─[ invalid_assignment_nominal_typing.baml:59:12 ]
-//     │
+//     ·          ──────────────────┬──────────────────
+//     ·                            ╰── expected `Creature`, found `Animal`
+//     ╰────
+// E0001
+//
+//   × mismatched types
+//     ╭─[invalid_assignment_nominal_typing.baml:59:12]
 //  59 │     people = [Human { name: "J", age: 10 }];
-//     │               ──────────────┬─────────────
-//     │                             ╰─────────────── type mismatch: expected Person, got Human
-//     │
-//     │ Note: Error code: E0001
-// ────╯
-// error: type mismatch: expected Human, got Person
-//     ╭─[ invalid_assignment_nominal_typing.baml:63:12 ]
-//     │
+//     ·               ──────────────┬─────────────
+//     ·                             ╰── expected `Person`, found `Human`
+//     ╰────
+// E0001
+//
+//   × mismatched types
+//     ╭─[invalid_assignment_nominal_typing.baml:63:12]
 //  63 │     humans = [Person { name: "L", age: 12 }];
-//     │               ──────────────┬──────────────
-//     │                             ╰──────────────── type mismatch: expected Human, got Person
-//     │
-//     │ Note: Error code: E0001
-// ────╯
+//     ·               ──────────────┬──────────────
+//     ·                             ╰── expected `Human`, found `Person`
+//     ╰────

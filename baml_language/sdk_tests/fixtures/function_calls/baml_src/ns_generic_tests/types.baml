@@ -13,7 +13,7 @@
 //
 // Host tests:
 //   crates/python_pydantic2/function_calls/customizable/test_generic_calls.py
-//   crates/typescript_node/function_calls/customizable/generic_calls.test.ts
+//   crates/typescript/function_calls/customizable/generic_calls.test.ts
 
 // ---------------------------------------------------------------------------
 // Supporting types
@@ -43,6 +43,17 @@ class GenericBox<T> {
   // the static's type param to differ from the class param `T`, §179.)
   function new<V>(value: V) -> GenericBox<V> {
     GenericBox<V> { value: value }
+  }
+
+  // A receiver-free method may still reference an enclosing class TypeVar.
+  // Go exposes that binding as an inferred helper type parameter and sends it
+  // as a named structured type argument.
+  function static_echo(value: T) -> T {
+    value
+  }
+
+  function static_pair<U>(left: T, right: U) -> string {
+    reflect.type_of<T | U>().to_string()
   }
 }
 
@@ -92,6 +103,25 @@ class GenericTriple<A, B, C> {
   first A
   second B[]
   third map<string, C>
+}
+
+// Go projection adversaries: the class and method/free-function TypeVars
+// normalize to the same exported identifier and must still share one
+// collision-safe helper/signature scope without changing their wire names.
+class GenericNameCollision<foo_bar> {
+  value foo_bar
+
+  function pair<fooBar>(self, other: fooBar) -> string {
+    reflect.type_of<foo_bar | fooBar>().to_string()
+  }
+
+  function make<fooBar>(value: fooBar) -> GenericNameCollision<fooBar> {
+    GenericNameCollision<fooBar> { value: value }
+  }
+}
+
+function generic_name_collision<foo_bar, fooBar>(left: foo_bar, right: fooBar) -> string {
+  reflect.type_of<foo_bar | fooBar>().to_string()
 }
 
 // ---------------------------------------------------------------------------
@@ -213,6 +243,50 @@ function parse_as<T>(source: string) -> T throws baml.json.JsonParseError | baml
 
 function consume_int_wrapper(x: GenericBox<int>) -> int {
   x.value
+}
+
+// ---------------------------------------------------------------------------
+// Non-generic functions returning REIFIED generics: the return type pins the
+// class type args at the *definition* site, so there's no caller binding and no
+// inference — the host just has to decode a fully-concrete generic instance
+// flowing OUTBOUND. The outbound mirror of `consume_int_wrapper` (concrete
+// generic inbound). Four reification shapes the host decoder must handle:
+//   * one TypeVar used once           -> GenericBox<int>
+//   * one TypeVar used many times     -> ContainerShapes<int> (bare/list/map/opt/union)
+//   * a nested generic type arg       -> GenericBox<GenericBox<int>>
+//   * multiple TypeVars, mixed fields -> GenericTriple<int, string, bool>
+//                                        (scalar int, string list, bool-valued map)
+// ---------------------------------------------------------------------------
+
+// One TypeVar, used once.
+function make_int_box() -> GenericBox<int> {
+  GenericBox<int> { value: 7 }
+}
+
+// One TypeVar (`int`), reified into every field shape at once.
+function make_int_container() -> ContainerShapes<int> {
+  ContainerShapes<int> {
+    item: 1,
+    items: [1, 2, 3],
+    by_key: { "k": 4 },
+    maybe: null,
+    mixed: 5
+  }
+}
+
+// The type arg is itself a generic instance: GenericBox<GenericBox<int>>.
+function make_nested_box() -> GenericBox<GenericBox<int>> {
+  GenericBox<GenericBox<int>> { value: GenericBox<int> { value: 9 } }
+}
+
+// Multiple TypeVars over mixed field shapes: a scalar int, a string list, and a
+// bool-valued map.
+function make_int_str_bool_triple() -> GenericTriple<int, string, bool> {
+  GenericTriple<int, string, bool> {
+    first: 1,
+    second: ["a", "b"],
+    third: { "k": true }
+  }
 }
 
 // ---------------------------------------------------------------------------

@@ -18,21 +18,17 @@ class TestLiterals {
 
 //----
 //- diagnostics
-// error: unresolved type: True
-//    ╭─[ class_misspeled_boolean_literals.baml:3:17 ]
-//    │
+// E0002
+//
+//   × unresolved type: True
+//    ╭─[class_misspeled_boolean_literals.baml:3:5]
 //  3 │   b "boolean" | True | False
-//    │                 ──┬─
-//    │                   ╰─── unresolved type: True
-//    │
-//    │ Note: Error code: E0002
-// ───╯
-// error: unresolved type: False
-//    ╭─[ class_misspeled_boolean_literals.baml:3:24 ]
-//    │
+//    ·     ────────────────────────
+//    ╰────
+// E0002
+//
+//   × unresolved type: False
+//    ╭─[class_misspeled_boolean_literals.baml:3:5]
 //  3 │   b "boolean" | True | False
-//    │                        ──┬──
-//    │                          ╰──── unresolved type: False
-//    │
-//    │ Note: Error code: E0002
-// ───╯
+//    ·     ────────────────────────
+//    ╰────

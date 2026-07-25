@@ -30,11 +30,16 @@ test "methods_after_successful_settle" {
 }
 
 // Pending future (long sleep keeps the spawn body parked): state() returns
-// Pending. The orphaned 5s-sleep future is parked and does not block the test.
+// Pending. B-650: the root now WAITS for outstanding spawns at end of run, so
+// this 5s-sleep future can no longer be left orphaned — it would stall
+// shutdown. Capture the Pending state, then cancel it so it settles promptly
+// (a cancelled sleep is interrupted immediately, not run to term).
 function methods_on_pending_future() -> baml.future.FutureState {
     let f = spawn { baml.sys.sleep(baml.time.Duration.from_milliseconds(5000n)); 42 };
     let _ = f.is_settled();
-    f.state()
+    let observed = f.state();
+    let _ = f.cancel();
+    observed
 }
 
 test "methods_on_pending_future" {

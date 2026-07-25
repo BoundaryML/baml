@@ -7,7 +7,7 @@ use std::fmt;
 
 use baml_base::{Name, Span};
 pub use baml_compiler2_ast::BuiltinKind;
-use baml_type::{RuntimeTy, TyTemplate};
+use baml_type::{RealizedTy, RuntimeTy, TyTemplate};
 
 // ============================================================================
 // Optimization Level
@@ -85,11 +85,6 @@ impl MirFunctionBody {
         &self.blocks[id.0]
     }
 
-    /// Get a mutable reference to a basic block by ID.
-    pub fn block_mut(&mut self, id: BlockId) -> &mut BasicBlock {
-        &mut self.blocks[id.0]
-    }
-
     /// Get a local declaration by ID.
     pub fn local(&self, id: Local) -> &LocalDecl {
         &self.locals[id.0]
@@ -114,6 +109,41 @@ pub enum MirFunctionKind {
     Builtin(BuiltinKind),
 }
 
+/// Runtime signature metadata stamped onto a compiled `Function` object — the
+/// ONE shape both producers fill: top-level declarations (emit derives it from
+/// the TIR/item-tree in `compute_function_metadata_from_item_tree`) and
+/// lambdas (`lower_lambda` records it here on the `MirFunction`). Consumed by
+/// runtime reflection (BEP-062 `reflect.signature` / `reflect.call_any`),
+/// function-value type reconstruction, and display surfaces
+/// (`baml run --list`, bytecode listings).
+#[derive(Debug, Clone)]
+pub struct RuntimeSignature {
+    /// Parameter names, in declaration order.
+    pub param_names: Vec<String>,
+    /// Parameter types, parallel to `param_names`.
+    pub param_types: Vec<baml_type::RuntimeTy>,
+    /// Whether each parameter has a default, parallel to `param_names`.
+    pub param_has_default: Vec<bool>,
+    /// The declared return type; `unknown` when unannotated.
+    pub return_type: baml_type::RuntimeTy,
+    /// The throws type. `None` == cannot throw. Top-level declarations carry
+    /// TIR's inferred transitive throw set; a lambda carries its declared
+    /// clause (`throws never` == `None`, unannotated == `Some(unknown)`, no
+    /// claim).
+    pub throws_type: Option<baml_type::RuntimeTy>,
+    /// The declaration's joined `///` doc-comment lines, if any.
+    pub docstring: Option<String>,
+    /// The name the declaration was written with; `None` for lambdas
+    /// (which have no source-level name).
+    pub name: Option<String>,
+    /// Display strings for the generic type parameters (`T extends Bound`).
+    pub display_type_params: Vec<String>,
+    /// Display strings for the parameter types, parallel to `param_names`.
+    pub display_param_types: Vec<String>,
+    /// Display string for the return type.
+    pub display_return_type: String,
+}
+
 /// A function represented as a control flow graph.
 #[derive(Debug, Clone)]
 pub struct MirFunction {
@@ -130,6 +160,11 @@ pub struct MirFunction {
     /// Indexed by `lambda_idx` in `Rvalue::MakeClosure`.
     /// Empty until lambda lowering is implemented.
     pub lambdas: Vec<MirFunction>,
+    /// Runtime signature metadata, populated by `lower_lambda` for lambda
+    /// functions only. Top-level functions get theirs from TIR `func_data`
+    /// during emit; `None` there (and on synthetic adapters, which fall back
+    /// to no metadata).
+    pub signature: Option<RuntimeSignature>,
 }
 
 // ============================================================================
@@ -174,8 +209,6 @@ pub struct LocalDecl {
     /// This is debugger metadata used to resolve in-scope variables from
     /// source locations.
     pub scope_span: Option<Span>,
-    /// Whether this local is being watched for changes.
-    pub is_watched: bool,
     /// Whether this local is captured by a nested closure.
     ///
     /// When `true`, the local's stack slot holds an `Object::Cell` rather than
@@ -257,38 +290,13 @@ pub enum IntrinsicOp {
 
 /// The kind of a MIR statement.
 #[derive(Debug, Clone)]
+#[allow(clippy::large_enum_variant)]
 pub enum StatementKind {
     /// Assign a value to a place: `_1 = <rvalue>`
     Assign { destination: Place, value: Rvalue },
 
     /// Drop a value (run destructor if any).
     Drop(Place),
-
-    /// Unwatch a local variable (unregister from watch tracking).
-    /// Emitted when a watched variable goes out of scope.
-    Unwatch(Local),
-
-    /// Block notification: `//# name`
-    /// Emits a block notification when executed.
-    NotifyBlock {
-        /// The name of the block annotation
-        name: Name,
-        /// The header level (number of # symbols)
-        level: usize,
-    },
-
-    /// Set watch options for a watched variable.
-    /// Emitted for `var.$watch.options(filter)`.
-    WatchOptions {
-        /// The watched local variable
-        local: Local,
-        /// The new filter (function, "manual", "never", etc.)
-        filter: Operand,
-    },
-
-    /// Manually trigger notification for a watched variable.
-    /// Emitted for `var.$watch.notify()`.
-    WatchNotify(Local),
 
     /// Enter a visualization node.
     /// Emitted at the start of control flow structures (if, while, etc.).
@@ -327,6 +335,15 @@ pub enum Terminator {
     /// Conditional branch based on a boolean.
     Branch {
         condition: Operand,
+        then_block: BlockId,
+        else_block: BlockId,
+    },
+
+    /// Test one value and bind that same value to `destination` on success.
+    NarrowBind {
+        source: Operand,
+        ty_template: TyTemplate,
+        destination: Local,
         then_block: BlockId,
         else_block: BlockId,
     },
@@ -555,6 +572,11 @@ impl Terminator {
                 else_block,
                 ..
             } => vec![*then_block, *else_block],
+            Terminator::NarrowBind {
+                then_block,
+                else_block,
+                ..
+            } => vec![*then_block, *else_block],
             Terminator::Switch {
                 arms, otherwise, ..
             } => {
@@ -628,31 +650,12 @@ impl Place {
         Place::Local(local)
     }
 
-    /// Create a field projection.
-    pub fn field(base: Place, field: usize) -> Self {
-        Place::Field {
-            base: Box::new(base),
-            field,
-        }
-    }
-
-    /// Create an index projection.
-    pub fn index(base: Place, index: Local, kind: IndexKind) -> Self {
-        Place::Index {
-            base: Box::new(base),
-            index,
-            kind,
-        }
-    }
-
-    /// Get the base local of this place.
-    ///
-    /// Panics for `Place::Capture` — captures have no local base.
-    pub fn base_local(&self) -> Local {
+    /// Get the base local of this place, if it is rooted in a local.
+    pub fn base_local(&self) -> Option<Local> {
         match self {
-            Place::Local(l) => *l,
+            Place::Local(l) => Some(*l),
             Place::Field { base, .. } | Place::Index { base, .. } => base.base_local(),
-            Place::Capture(_) => panic!("Place::Capture has no base local"),
+            Place::Capture(_) => None,
         }
     }
 }
@@ -730,9 +733,9 @@ pub enum Rvalue {
     ///
     /// The type is stored as a `TyTemplate` so that generic class checks like
     /// `value is Foo<T>` (where `T` is a type parameter in scope) resolve
-    /// correctly at runtime via `TypeArgRef` substitution.  For fully-concrete
-    /// types the template is `TyTemplate::Concrete(ty)`, which the emitter
-    /// handles on the same fast path as before.
+    /// correctly at runtime via `TypeArgRef` substitution.  A fully-realized
+    /// template narrows to a `RealizedTy`, which the emitter handles on the
+    /// same tag / class-identity fast path as before.
     IsType {
         operand: Operand,
         ty_template: TyTemplate,
@@ -761,6 +764,27 @@ pub enum Rvalue {
     MakeBoundMethod {
         item_ref: ItemRef,
         receiver: Operand,
+    },
+
+    /// Create a bound method value for an *interface* method whose impl is
+    /// unknown statically — the value analogue of [`Terminator::VirtualCall`]
+    /// (`let f = x.eq` on an existential / bounded-type-var receiver). The VM
+    /// resolves the receiver's concrete `Self` to its impl at bind time and
+    /// produces a `BoundMethod` over the resolved method, carrying the impl's
+    /// realized frame type args.
+    MakeVirtualBoundMethod {
+        /// The interface to resolve against, as a template the emitter pushes
+        /// with `LoadType` (like [`Terminator::VirtualCall`]'s `iface`).
+        iface: TyTemplate,
+        /// The interface method's name.
+        method: String,
+        /// The receiver whose runtime concrete type is the `Self` to resolve on.
+        receiver: Operand,
+        /// Method-level type-argument templates from the reference site (a
+        /// generic interface method's own generics, when specialized there).
+        /// Appended to the resolved impl frame by the VM — dropping them would
+        /// lose the method's own generics.
+        type_args: Vec<TyTemplate>,
     },
 
     /// Create a generic-function value (`foo<T>`) whose type arguments depend on
@@ -793,9 +817,9 @@ pub enum Rvalue {
 
     /// Materialize a `Ty` from a `TyTemplate`.
     ///
-    /// For concrete templates (`TyTemplate::Concrete`), the `Ty` is baked in
-    /// at compile time. For templates containing `TypeArgRef(N)`, the VM
-    /// substitutes `frame.type_args[N]` at execution time.
+    /// For a fully-realized template, the `Ty` is baked in at compile time.
+    /// For templates containing `TypeArgRef(N)`, the VM substitutes
+    /// `frame.type_args[N]` at execution time.
     ///
     /// Emitted by the `reflect.type_of<T>()` intrinsic.
     /// Lowers to `Instruction::LoadType(const_idx)` in bytecode.
@@ -845,11 +869,6 @@ impl Operand {
         Operand::Copy(Place::Local(local))
     }
 
-    /// Create a move operand from a local.
-    pub fn move_local(local: Local) -> Self {
-        Operand::Move(Place::Local(local))
-    }
-
     /// Create a constant operand.
     pub fn constant(c: Constant) -> Self {
         Operand::Constant(c)
@@ -877,8 +896,17 @@ pub enum Constant {
     /// A function reference with structured item identification.
     ///
     /// Carried from TIR resolution through lowering. Converted to a
-    /// runtime string only in the emit phase.
+    /// runtime string only in the emit phase, where it becomes a pooled
+    /// function-value wrapper (see `emit_pooled_function_value`). Only for
+    /// items that ARE functions; a non-function global item read (a client,
+    /// a top-level `let`, ...) is [`Constant::GlobalItem`].
     Function(ItemRef),
+    /// A non-function global item read (a `client<llm>` declaration, a
+    /// top-level `let`, a template string, ...): the value the program's
+    /// `$init` stored in the item's global slot. Emitted as a plain
+    /// `LoadGlobal`, never wrapped — the slot holds an ordinary value
+    /// (an instance, a closure, ...), not a `Function` object.
+    GlobalItem(ItemRef),
     /// A generic function instantiated with concrete type arguments
     /// (`foo<int>` referenced as a value). Emitted as a pooled, interned
     /// `Object::GenericFunction` so identical instantiations share one object
@@ -886,8 +914,9 @@ pub enum Constant {
     GenericFunction {
         /// The base generic function.
         item: ItemRef,
-        /// The concrete type arguments (fully resolved, no type parameters).
-        type_args: Vec<RuntimeTy>,
+        /// The concrete type arguments — fully realized (no type parameters),
+        /// exactly what the runtime `Object::GenericFunction` carries.
+        type_args: Vec<RealizedTy>,
     },
     /// An enum variant value.
     EnumVariant {

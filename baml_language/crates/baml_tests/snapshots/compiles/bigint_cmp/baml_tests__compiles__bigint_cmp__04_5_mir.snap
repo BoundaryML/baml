@@ -2,6 +2,20 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === MIR2 ===
+fn user.EqSameAlloc() -> bool {
+    // Locals:
+    let _0: bool // _0 // return
+
+    bb0: {
+        _0 = const true;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
 fn user.EqDistinctAllocs() -> bool {
     // Locals:
     let _0: bool // _0 // return
@@ -27,7 +41,7 @@ fn user.EqDistinctAllocs() -> bool {
     }
 }
 
-fn user.EqSameAlloc() -> bool {
+fn user.OrderingLt() -> bool {
     // Locals:
     let _0: bool // _0 // return
 
@@ -42,20 +56,6 @@ fn user.EqSameAlloc() -> bool {
 }
 
 fn user.OrderingGtEq() -> bool {
-    // Locals:
-    let _0: bool // _0 // return
-
-    bb0: {
-        _0 = const true;
-        goto -> bb1;
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn user.OrderingLt() -> bool {
     // Locals:
     let _0: bool // _0 // return
 

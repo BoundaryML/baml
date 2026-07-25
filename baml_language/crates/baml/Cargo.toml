@@ -1,6 +1,6 @@
 [package]
 name = "baml"
-version = "0.2.0"
+version = "0.2.2"
 publish = false
 authors = { workspace = true }
 edition = { workspace = true }
@@ -13,9 +13,15 @@ license = { workspace = true }
 [lints]
 workspace = true
 
+[features]
+default = [ "self-update" ]
+self-update = [ "baml_release/self-update" ]
+no-self-update = [ "baml_release/no-self-update" ]
+
 [dependencies]
 baml_release = { workspace = true }
 anyhow = { workspace = true }
+console = { workspace = true }
 reqwest = { workspace = true, features = [ "blocking", "rustls" ] }
 serde = { workspace = true, features = [ "derive" ] }
 serde_json = { workspace = true }

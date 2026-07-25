@@ -1,0 +1,287 @@
+name: BAML SDK Release - Verify Rust
+
+# Consumer-realistic verification of the Rust SDK release artifacts. Downloads
+# only workflow artifacts (the packaged `.crate` and the per-target engine
+# cdylib), then behaves like a user:
+#
+#   1. Generate an SDK with the same-plan `baml-cli` toolchain artifact (the
+#      exact shipped binary), producing a `baml_sdk` crate that pins
+#      `baml_bridge = "=<version>"`.
+#   2. Resolve that pin to the packaged `.crate` via a `[patch.crates-io]`
+#      override of the extracted crate — no repo paths; every other dep comes
+#      from real crates.io, exactly as a published consumer's would.
+#   3. Exercise BOTH engine-acquisition paths against the built consumer:
+#        (a) offline  — `BAML_LIBRARY_PATH` at the downloaded dylib;
+#        (b) download — a local server (`BAML_LIBRARY_DOWNLOAD_BASE`) serving
+#            the release-asset layout, so the loader downloads + checksums +
+#            caches + loads;
+#      and assert the offline/disable switch actually blocks the network.
+#   4. Assert the version triple: crate == dylib `version()` == plan canonical.
+#   5. Inspect artifacts: `.crate` has no absolute build paths; dylib exports
+#      the C ABI and its size is recorded.
+#
+# Runs a per-target matrix over the Unix release targets (linux + darwin, both
+# arches) plus an MSRV compile leg. Windows is covered by `build2-bridge-cffi`'s
+# own dylib smoke for now; a native Windows verify leg (`.dll`/`.zip`/`dumpbin`
+# handling) is a documented follow-up.
+
+on:
+  workflow_call:
+    inputs:
+      release_plan_json:
+        description: "Frozen BAML language release-plan.json content"
+        type: string
+        default: ""
+        required: false
+      source_sha:
+        description: "Exact repository commit to build"
+        type: string
+        default: ""
+        required: false
+  workflow_dispatch:
+
+concurrency:
+  # suffix is important to prevent a concurrency deadlock with the calling workflow
+  group: ${{ github.workflow }}-${{ github.ref }}-verify-rust-sdk
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  platform-matrix:
+    permissions:
+      contents: read
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.derive.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.source_sha || github.sha }}
+          persist-credentials: false
+          sparse-checkout: release
+      - id: derive
+        run: |
+          set -euo pipefail
+          matrix="$(jq -c '{include: ([.targets[]
+            | select((.os == "linux" or .os == "macos")
+                     and .libc != "musl"
+                     and .artifacts.toolchain != null
+                     and .artifacts.cffi != null)
+            | {target: .triple, os: .artifacts.toolchain.runner}]
+            + [{target: "x86_64-unknown-linux-gnu",
+                os: (.targets[]
+                     | select(.triple == "x86_64-unknown-linux-gnu")
+                     | .artifacts.toolchain.runner),
+                toolchain: "1.91.1",
+                label: " (MSRV)",
+                compile_only: true}])}' release/platforms.json)"
+          echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
+
+  verify:
+    needs: platform-matrix
+    name: verify rust sdk (${{ matrix.target }}${{ matrix.label }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.platform-matrix.outputs.matrix) }}
+    env:
+      TARGET: ${{ matrix.target }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.source_sha || github.sha }}
+          persist-credentials: false
+
+      - name: Stamp release plan
+        env:
+          RELEASE_PLAN_JSON: ${{ inputs.release_plan_json }}
+        run: |
+          set -euo pipefail
+          if [[ -n "${RELEASE_PLAN_JSON:-}" ]]; then
+            printf '%s\n' "$RELEASE_PLAN_JSON" > release-plan.json
+          else
+            scripts/baml-language-version plan --channel canary --out release-plan.json
+          fi
+          scripts/baml-language-version stamp --plan release-plan.json
+          echo "CANONICAL=$(jq -r .canonical_version release-plan.json)" >> "$GITHUB_ENV"
+          # The engine cdylib asset name the loader constructs for this target.
+          case "$TARGET" in
+            *apple*)   asset="libbaml_cffi-${TARGET}.dylib" ;;
+            *windows*) asset="baml_cffi-${TARGET}.dll" ;;
+            *)         asset="libbaml_cffi-${TARGET}.so" ;;
+          esac
+          echo "ASSET=$asset" >> "$GITHUB_ENV"
+
+      - name: Setup Rust
+        uses: ./.github/actions/setup-rust
+        with:
+          # Default mirrors the setup-rust action default; the MSRV leg pins the
+          # crate's minimum supported Rust instead.
+          toolchain: ${{ matrix.toolchain || '1.93.0' }}
+          enable-cache: false
+
+      - name: Download release artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Locate downloaded artifacts
+        id: art
+        run: |
+          set -euo pipefail
+          crate="$(ls artifacts/rust-sdk-crate/baml_bridge-*.crate)"
+          dylib="artifacts/bridge-cffi-${TARGET}/${ASSET}"
+          test -f "$crate"  || { echo "::error::crate artifact missing"; exit 1; }
+          test -f "$dylib"  || { echo "::error::dylib artifact ${dylib} missing"; exit 1; }
+          # `realpath` is absent on macOS runners; python is everywhere.
+          abspath() { python3 -c 'import os,sys;print(os.path.realpath(sys.argv[1]))' "$1"; }
+          echo "crate=$(abspath "$crate")" >> "$GITHUB_OUTPUT"
+          echo "dylib=$(abspath "$dylib")" >> "$GITHUB_OUTPUT"
+
+      - name: Assert version triple (crate == dylib version() == plan canonical)
+        working-directory: baml_language
+        run: |
+          set -euo pipefail
+          crate_version="$(basename "${{ steps.art.outputs.crate }}" .crate)"
+          crate_version="${crate_version#baml_bridge-}"
+          [[ "$crate_version" == "$CANONICAL" ]] || {
+            echo "::error::crate version ${crate_version} != plan canonical ${CANONICAL}"; exit 1; }
+          # dylib version() must equal the plan canonical too.
+          python3 crates/bridge_cffi/tests/run_abi_smoke.py \
+            "${{ steps.art.outputs.dylib }}" \
+            "$CANONICAL"
+
+      - name: Extract baml-cli from the same-plan toolchain artifact
+        id: cli
+        run: |
+          set -euo pipefail
+          # Generate with the exact `baml-cli` this release ships (the toolchain
+          # artifact for this target), not a source rebuild — so the consumer
+          # sees what a real user's `baml generate` emits and a toolchain
+          # packaging defect is caught here.
+          tarball="artifacts/toolchain-${TARGET}/baml-language-${CANONICAL}-${TARGET}.tar.gz"
+          test -f "$tarball" || { echo "::error::toolchain artifact ${tarball} missing"; exit 1; }
+          dest="$RUNNER_TEMP/toolchain"
+          mkdir -p "$dest"
+          tar -C "$dest" -xzf "$tarball"
+          cli="$(find "$dest" -type f -name baml-cli | head -n1)"
+          test -n "$cli" || { echo "::error::baml-cli not found in toolchain artifact"; exit 1; }
+          chmod +x "$cli"
+          echo "baml_cli=$cli" >> "$GITHUB_OUTPUT"
+          "$cli" --version
+
+      - name: Generate the SDK
+        working-directory: baml_language
+        run: |
+          set -euo pipefail
+          rm -rf "$RUNNER_TEMP/verify"
+          mkdir -p "$RUNNER_TEMP/verify"
+          cp -r sdks/rust/verify/baml.toml sdks/rust/verify/baml_src "$RUNNER_TEMP/verify/"
+          "${{ steps.cli.outputs.baml_cli }}" generate --from "$RUNNER_TEMP/verify"
+          test -f "$RUNNER_TEMP/verify/gen/baml_sdk/Cargo.toml"
+          grep -q "baml_bridge = \"=${CANONICAL}\"" "$RUNNER_TEMP/verify/gen/baml_sdk/Cargo.toml"
+
+      - name: Assemble the consumer project
+        working-directory: baml_language
+        run: |
+          set -euo pipefail
+          # Extract the packaged crate; the consumer patches baml_bridge to it.
+          mkdir -p "$RUNNER_TEMP/verify/vendor"
+          tar -xzf "${{ steps.art.outputs.crate }}" -C "$RUNNER_TEMP/verify/vendor"
+          crate_dir="$RUNNER_TEMP/verify/vendor/baml_bridge-${CANONICAL}"
+          test -d "$crate_dir"
+
+          consumer="$RUNNER_TEMP/verify/consumer"
+          mkdir -p "$consumer/src"
+          cp sdks/rust/verify/consumer_main.rs "$consumer/src/main.rs"
+          cat > "$consumer/Cargo.toml" <<EOF
+          [package]
+          name = "consumer"
+          version = "0.0.0"
+          edition = "2024"
+
+          [dependencies]
+          baml_sdk = { path = "../gen/baml_sdk" }
+          tokio = { version = "1", features = ["rt", "macros"] }
+
+          # Resolve the unpublished baml_bridge to the extracted PACKAGED crate;
+          # every other dep resolves from real crates.io.
+          [patch.crates-io]
+          baml_bridge = { path = "${crate_dir}" }
+          EOF
+          # Pre-build once so the acquisition-path runs below only re-link.
+          (cd "$consumer" && BAML_LIBRARY_PATH="${{ steps.art.outputs.dylib }}" \
+            BAML_LIBRARY_DISABLE_DOWNLOAD=true cargo build --quiet)
+
+      - name: "Acquisition path (a): offline (BAML_LIBRARY_PATH)"
+        if: ${{ !matrix.compile_only }}
+        working-directory: ${{ runner.temp }}/verify/consumer
+        env:
+          BAML_LIBRARY_PATH: ${{ steps.art.outputs.dylib }}
+          BAML_LIBRARY_DISABLE_DOWNLOAD: "true"
+        run: cargo run --quiet
+
+      - name: "Acquisition path (b): download rehearsal (local server)"
+        if: ${{ !matrix.compile_only }}
+        working-directory: ${{ runner.temp }}/verify/consumer
+        run: |
+          set -euo pipefail
+          # Serve the release-asset layout the loader constructs.
+          assets="$RUNNER_TEMP/verify/served"
+          mkdir -p "$assets"
+          cp "${{ steps.art.outputs.dylib }}" "$assets/$ASSET"
+          # sha256sum (GNU) vs shasum (macOS) — same `<hash>  <name>` output.
+          if command -v sha256sum >/dev/null 2>&1; then
+            (cd "$assets" && sha256sum "$ASSET" > "$ASSET.sha256")
+          else
+            (cd "$assets" && shasum -a 256 "$ASSET" > "$ASSET.sha256")
+          fi
+          (cd "$assets" && python3 -m http.server 8799 >"$RUNNER_TEMP/verify/srv.log" 2>&1 &)
+          for _ in $(seq 1 20); do curl -sf "http://127.0.0.1:8799/$ASSET.sha256" >/dev/null && break; sleep 0.3; done
+
+          cache="$RUNNER_TEMP/verify/cache"
+          rm -rf "$cache"
+          BAML_LIBRARY_DOWNLOAD_BASE="http://127.0.0.1:8799" BAML_CACHE_DIR="$cache" \
+            cargo run --quiet
+          test -f "$cache/$ASSET" || { echo "::error::loader did not cache the download"; exit 1; }
+
+      - name: "Acquisition path (c): offline switch blocks the network"
+        if: ${{ !matrix.compile_only }}
+        working-directory: ${{ runner.temp }}/verify/consumer
+        run: |
+          set -euo pipefail
+          # Disabled download + empty cache + no explicit path => the loader
+          # must fail rather than fetch anything.
+          rm -rf "$RUNNER_TEMP/verify/cache2"
+          if BAML_LIBRARY_DISABLE_DOWNLOAD=true \
+             BAML_CACHE_DIR="$RUNNER_TEMP/verify/cache2" \
+             cargo run --quiet 2>/dev/null; then
+            echo "::error::consumer succeeded with downloads disabled and no local library"
+            exit 1
+          fi
+          echo "OK: offline switch blocked the engine download as expected"
+
+      - name: Inspect artifacts
+        if: ${{ !matrix.compile_only }}
+        run: |
+          set -euo pipefail
+          # .crate must carry no absolute build paths.
+          if tar -tzf "${{ steps.art.outputs.crate }}" | grep -q "^/"; then
+            echo "::error::.crate contains absolute paths"; exit 1
+          fi
+          # dylib must export the C ABI symbols the loader resolves. `nm -D` is a
+          # GNU/Linux invocation; on macOS the functional smokes above already
+          # prove the ABI (the consumer calls through every symbol).
+          if [[ "$RUNNER_OS" == "Linux" ]]; then
+            for sym in version free_buffer create_baml_runtime initialize_runtime_from_bytecode \
+                       register_callback new_function_call call_function; do
+              nm -D "${{ steps.art.outputs.dylib }}" | grep -qw "$sym" || {
+                echo "::error::dylib missing exported symbol $sym"; exit 1; }
+            done
+          fi
+          # `stat` flags differ across GNU/BSD; `wc -c` is portable.
+          size="$(wc -c < "${{ steps.art.outputs.dylib }}")"
+          echo "dylib size: $((size / 1024 / 1024)) MiB ($size bytes)"

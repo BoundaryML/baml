@@ -42,6 +42,8 @@ use crate::{
 /// A single narrowing: how a named variable's type is refined in then/else branches.
 #[derive(Debug, Clone)]
 pub struct Narrowing {
+    /// The path expression whose binding is being narrowed.
+    pub subject: ExprId,
     /// The local variable whose type is narrowed.
     pub name: Name,
     /// Refined type in the then-branch (condition is true).
@@ -102,7 +104,9 @@ fn collect_narrowings(
             lhs,
             rhs,
         } => {
-            if let Some((name, original_ty)) = null_check_name(*lhs, *rhs, body, expr_types) {
+            if let Some((subject, name, original_ty)) =
+                null_check_name(*lhs, *rhs, body, expr_types)
+            {
                 let (then_ty, else_ty) = if negated {
                     // !(x != null) == x == null
                     (
@@ -120,6 +124,7 @@ fn collect_narrowings(
                     )
                 };
                 out.push(Narrowing {
+                    subject,
                     name,
                     then_type: then_ty,
                     else_type: else_ty,
@@ -133,7 +138,9 @@ fn collect_narrowings(
             lhs,
             rhs,
         } => {
-            if let Some((name, original_ty)) = null_check_name(*lhs, *rhs, body, expr_types) {
+            if let Some((subject, name, original_ty)) =
+                null_check_name(*lhs, *rhs, body, expr_types)
+            {
                 let (then_ty, else_ty) = if negated {
                     // !(x == null) == x != null
                     (
@@ -151,6 +158,7 @@ fn collect_narrowings(
                     )
                 };
                 out.push(Narrowing {
+                    subject,
                     name,
                     then_type: then_ty,
                     else_type: else_ty,
@@ -193,6 +201,7 @@ fn collect_narrowings(
                 (matched_ty.clone(), complement)
             };
             out.push(Narrowing {
+                subject: *scrutinee,
                 name: name.clone(),
                 then_type,
                 else_type,
@@ -213,6 +222,7 @@ fn collect_narrowings(
                         (remove_null(ty), ty.clone())
                     };
                     out.push(Narrowing {
+                        subject: expr_id,
                         name: name.clone(),
                         then_type: then_ty,
                         else_type: else_ty,
@@ -238,13 +248,13 @@ fn null_check_name(
     rhs: ExprId,
     body: &ExprBody,
     expr_types: &FxHashMap<ExprId, Ty>,
-) -> Option<(Name, Ty)> {
+) -> Option<(ExprId, Name, Ty)> {
     // lhs is name, rhs is null
     if let Expr::Path(segments) = &body.exprs[lhs] {
         if segments.len() == 1 {
             if let Expr::Null = &body.exprs[rhs] {
                 if let Some(ty) = expr_types.get(&lhs) {
-                    return Some((segments[0].clone(), ty.clone()));
+                    return Some((lhs, segments[0].clone(), ty.clone()));
                 }
             }
         }
@@ -254,7 +264,7 @@ fn null_check_name(
         if segments.len() == 1 {
             if let Expr::Null = &body.exprs[lhs] {
                 if let Some(ty) = expr_types.get(&rhs) {
-                    return Some((segments[0].clone(), ty.clone()));
+                    return Some((rhs, segments[0].clone(), ty.clone()));
                 }
             }
         }

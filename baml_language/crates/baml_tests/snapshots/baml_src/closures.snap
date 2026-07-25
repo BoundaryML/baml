@@ -3,64 +3,74 @@ source: crates/baml_tests/tests/baml_src.rs
 ---
 function closures.$init_test_ns_closures_closures(registry: testing.TestCollector) -> null {
     load_var registry
+    load_const "root.closures"
     load_const "bound_formatter_mapper"
     make_closure .<lambda($init_test_ns_closures_closures, 0)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.closures"
     load_const "unbound_in_map"
     make_closure .<lambda($init_test_ns_closures_closures, 1)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.closures"
     load_const "bound_validator_mapped"
     make_closure .<lambda($init_test_ns_closures_closures, 2)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.closures"
     load_const "mutation_after_bind"
     make_closure .<lambda($init_test_ns_closures_closures, 3)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.closures"
     load_const "repeated_bound_calls"
     make_closure .<lambda($init_test_ns_closures_closures, 4)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.closures"
     load_const "field_chain_bind"
     make_closure .<lambda($init_test_ns_closures_closures, 5)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.closures"
     load_const "strategy_swap"
     make_closure .<lambda($init_test_ns_closures_closures, 6)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.closures"
     load_const "generic_unwrap"
     make_closure .<lambda($init_test_ns_closures_closures, 7)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.closures"
     load_const "bound_in_lambda"
     make_closure .<lambda($init_test_ns_closures_closures, 8)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.closures"
     load_const "bound_throwing_method_reference_catches_error"
     make_closure .<lambda($init_test_ns_closures_closures, 9)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_const null
     return
@@ -349,7 +359,7 @@ function closures.closures_unbound_in_map() -> string[] {
     init_instance user.closures.ClsEmployee .first, .last
     load_type closures.ClsEmployee
     alloc_array 2
-    load_global user.closures.ClsEmployee.full_name
+    load_const user.closures.ClsEmployee.full_name
     call baml.Array.map
     return
 }

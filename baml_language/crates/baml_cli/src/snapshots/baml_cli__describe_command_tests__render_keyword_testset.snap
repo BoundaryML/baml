@@ -1,0 +1,20 @@
+---
+source: crates/baml_cli/src/describe_command_tests.rs
+expression: output
+---
+testset — Groups related tests, optionally sharing setup, under a quoted name.
+
+Syntax:
+  testset "math suite" {
+    let answer = 42
+    test "adds" {
+      assert.equal(answer, 42)
+    }
+    test "is positive" {
+      assert.is_true(answer > 0)
+    }
+  }
+
+A testset is named with a string (`testset "name" { ... }`), not a bare identifier. Its body holds `let` setup bindings plus nested `test` (and further `testset`) blocks; setup bindings are visible to the nested tests. Pick a runner with an optional `with` clause: `testset "name" with <runner> { ... }`. This is unrelated to the old config-block style — there are no `functions`/`cases` keys.
+
+Every leaf gets a canonical ID beginning with `root` (or `root.<namespace>`) and using `::` for testset nesting. For example, the first test above is `root::math suite::adds`. Run `baml test --list` to discover IDs and `baml test --help` for selectors and profiles.

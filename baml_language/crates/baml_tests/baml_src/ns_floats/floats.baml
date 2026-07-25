@@ -1,22 +1,14 @@
 // Tests for the `float` builtin class (BEP-043).
 //
-// Converted from crates/baml_tests/tests/floats.rs. Each Rust test becomes a
-// `test` block with the `main()` body inlined.
-//
 // Assertion strategy:
 //   - Boolean predicates (is_nan, is_infinite, is_finite): deep_equals to true/false.
 //   - Exact float values (integer-valued results): deep_equals.
 //   - Approximate float values (transcendental results): inline epsilon check
 //     `assert.is_true(((result) - (expected)).abs() < eps)`.
 //   - NaN results: assert.is_true(result.is_nan()).
-//   - Multi-case Rust tests are split into separate BAML tests.
 //
 // Random tests use property/coverage checks (looping N samples) instead of
 // asserting exact values; they are included at the bottom of this file.
-//
-// KEPT IN RUST (tests/floats.rs) — no is_sign_positive() in BAML, so
-// sign-of-zero cannot be tested:
-//   float_abs_negative_zero  (checks n == 0.0 && n.is_sign_positive())
 
 // ─── is_nan ───────────────────────────────────────────────────────────────────
 
@@ -83,14 +75,13 @@ test "float_is_finite_false_for_negative_infinity" {
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 // Verify pi via the identity cos(π) == -1 (cos is computed independently of the
-// pi constant). Original asserted float.pi() ≈ std::f64::consts::PI.
+// pi constant).
 test "float_pi_value" {
     assert.is_true(((float.pi().cos()) - (-1.0)).abs() < 0.000000000001)
 }
 
 // e has no simple algebraic identity among the available float ops (no exp/ln,
 // and log_base(base) == 1 for any base), so compare against the constant.
-// Original asserted float.e() ≈ std::f64::consts::E.
 test "float_e_value" {
     assert.is_true(((float.e()) - 2.718281828459045).abs() < 0.000000000001)
 }
@@ -130,8 +121,8 @@ test "float_abs_positive" {
     assert.is_true(((3.5).abs() - 3.5).abs() < 0.000000000001)
 }
 
-// Note: float_abs_negative_zero is kept in tests/floats.rs — requires
-// is_sign_positive() which is not available in BAML.
+// Note: float_abs_negative_zero (sign-of-zero) is at the end of this file —
+// the test registry stays append-only.
 
 test "float_abs_nan_is_nan" {
     assert.is_true(float.nan().abs().is_nan())
@@ -263,7 +254,6 @@ test "float_floor_nan_propagates" {
 }
 
 // ─── ifloor / iceil / iround / itrunc ─────────────────────────────────────────
-// Multi-case Rust tests are split into one BAML test per case.
 
 test "float_ifloor_positive" {
     assert.is_true(baml.deep_equals((3.7).ifloor(), 3))
@@ -412,7 +402,7 @@ test "float_sqrt_basic_4" {
 }
 
 // sqrt(2) is irrational; verify the defining property sqrt(2)*sqrt(2) == 2
-// rather than a hardcoded decimal. Original asserted ≈ std::f64::consts::SQRT_2.
+// rather than a hardcoded decimal.
 test "float_sqrt_basic_2" {
     assert.is_true(((2.0).sqrt() * (2.0).sqrt() - 2.0).abs() < 0.000000000001)
 }
@@ -529,7 +519,6 @@ test "float_atan_one_is_quarter_pi" {
     assert.is_true(((1.0).atan() - (float.pi() / 4.0)).abs() < 0.000000000001)
 }
 
-// atan2 multi-case — split into separate tests.
 test "float_atan2_one_one_is_quarter_pi" {
     assert.is_true(((1.0).atan2(1.0) - (float.pi() / 4.0)).abs() < 0.000000000001)
 }
@@ -1020,4 +1009,45 @@ test "float_nan_lt_method_is_false" {
 
 test "float_nan_ge_method_is_false" {
     assert.is_true(!float.nan().ge(float.nan()))
+}
+
+// ─── regression: bare-literal method receiver (B-614) ─────────────────────────
+//
+// `2.5.floor()` on a bare float literal used to lower its receiver to a Missing
+// expr and fail to type-check. Appended at the end so the test registry stays
+// append-only.
+test "float_floor_bare_literal" {
+    assert.is_true(baml.deep_equals(2.5.floor(), 2.0))
+}
+
+// ─── underscore separators ────────────────────────────────────────────────────
+// `_` digit separators are allowed in the mantissa, fraction, and exponent
+// (the exponent must start with a digit). Underscores are stripped during
+// AST lowering, so downstream f64 parsing never sees them.
+
+test "float_underscore_mantissa" {
+    assert.is_true(baml.deep_equals(1_000.5, 1000.5))
+}
+
+test "float_underscore_fraction" {
+    assert.is_true(baml.deep_equals(1.000_1, 1.0001))
+}
+
+test "float_underscore_exponent" {
+    assert.is_true(baml.deep_equals(1e1_0, 1e10))
+}
+
+test "float_underscore_everywhere" {
+    assert.is_true(baml.deep_equals(1_234.567_8e1_0, 1234.5678e10))
+}
+
+// ─── abs: sign of zero ────────────────────────────────────────────────────────
+// BAML has no is_sign_positive(), but float.to_string() preserves the sign of
+// zero ("-0.0" vs "0.0"), so the sign check is observable through formatting.
+// The first assert is a baseline guard: it proves `-0.0` really reaches the VM
+// as negative zero, so the abs assertion cannot pass vacuously.
+test "float_abs_negative_zero" {
+    assert.equal((-0.0).to_string(), "-0.0");
+    assert.equal((-0.0).abs(), 0.0);
+    assert.equal((-0.0).abs().to_string(), "0.0")
 }

@@ -192,6 +192,19 @@ pub struct Function {
     /// synthesized functions that have no source file.
     pub source_file: String,
 
+    /// The declaration's joined `///` doc-comment lines, if any. Surfaced by
+    /// runtime reflection (BEP-062 `reflect.signature`); `None` for lambdas
+    /// without docs and synthesized functions.
+    pub docstring: Option<String>,
+
+    /// The name the function was declared with (`greet`, `bump`), recorded
+    /// at lowering.
+    /// `None` for callables that have no source-level name: lambdas and
+    /// compiler-synthesized bodies, whose [`Self::name`] is a debug identity
+    /// (`<lambda(...)>`), not a name. Surfaced by runtime reflection
+    /// (BEP-062 `reflect.signature`); never inferred from [`Self::name`].
+    pub declared_name: Option<String>,
+
     /// Number of arguments the function accepts.
     pub arity: usize,
 
@@ -282,29 +295,6 @@ impl std::fmt::Display for Function {
     }
 }
 
-impl Function {
-    /// Get the source span associated with a bytecode PC.
-    pub fn source_span_for_pc(&self, pc: usize) -> Option<baml_base::Span> {
-        self.bytecode.line_entry_for_pc(pc).map(|entry| entry.span)
-    }
-
-    /// Get named locals whose lexical scope contains the source span at `pc`.
-    pub fn debug_locals_in_scope(&self, pc: usize) -> Vec<&crate::bytecode::DebugLocalScope> {
-        let Some(span) = self.source_span_for_pc(pc) else {
-            return Vec::new();
-        };
-
-        self.debug_locals
-            .iter()
-            .filter(|local| {
-                local.scope_span.file_id == span.file_id
-                    && local.scope_span.range.start() <= span.range.start()
-                    && local.scope_span.range.end() >= span.range.end()
-            })
-            .collect()
-    }
-}
-
 /// A closure: a function object paired with a list of captured variable cells.
 #[derive(Clone, Debug, BorshSerialize, BorshDeserialize)]
 pub struct Closure {
@@ -320,19 +310,44 @@ pub struct Closure {
     /// before the cell captures.  These become `frame.type_args` when the
     /// closure is invoked, so that `LoadType(TypeArgRef(N))` inside the
     /// closure body resolves correctly.
-    pub captured_type_args: Box<[baml_type::RuntimeTy]>,
+    pub captured_type_args: Box<[baml_type::RealizedTy]>,
 }
 
 /// A method bound to a specific receiver instance.
 ///
-/// Created by `MakeBoundMethod`. The receiver is inserted as `self`
-/// at call time by `CallIndirect`.
+/// Created by `MakeBoundMethod` (a statically-resolved method) or
+/// `MakeVirtualBoundMethod` (an interface method resolved from the receiver's
+/// runtime `Self` at bind time). The receiver is inserted as `self` at call time
+/// by `CallIndirect`.
+///
+/// Like every callable value, a bound method is fully realized: its complete
+/// type environment is curried in at creation via [`Self::type_args`], so the
+/// `CallIndirect` that invokes it carries no type arguments of its own.
 #[derive(Clone, Debug, BorshSerialize, BorshDeserialize)]
 pub struct BoundMethod {
     /// Pointer to the underlying `Object::Function`.
     pub function: HeapPtr,
     /// The receiver value (inserted as `self` at call time).
     pub receiver: Value,
+    /// The callee frame's **complete** curried type arguments, in the callee
+    /// frame's De Bruijn order — materialized at bind time and installed as
+    /// `frame.type_args` when the value is invoked by `CallIndirect`, so
+    /// `LoadType(TypeArgRef(N))` / `IsType` inside the body resolve correctly.
+    ///
+    /// `MakeBoundMethod` curries `[class generics (→ Self), method fn generics]`
+    /// — the exact vector a direct `receiver.method<…>(…)` call would seed.
+    /// `MakeVirtualBoundMethod` instead curries the resolved impl's realized
+    /// frame — the impl's own generics, or the interface's args + associated
+    /// types for an inherited default (which the receiver's class args cannot
+    /// express, e.g. a blanket `implement<T> I for T[]` bound at `int[]`) —
+    /// followed by any method-level type args from the reference site.
+    ///
+    /// `RuntimeTy` (not `RealizedTy`) mirrors [`Closure::captured_type_args`]
+    /// and [`GenericFunction::type_args`]: these positions should never carry a
+    /// type variable, but the upstream fix that stops typevars leaking into
+    /// value positions is still in flight, so all three stay `RuntimeTy` and
+    /// narrow to `RealizedTy` together once it lands.
+    pub type_args: Box<[baml_type::RealizedTy]>,
 }
 
 /// A generic function instantiation carrying concrete type arguments.
@@ -348,7 +363,7 @@ pub struct GenericFunction {
     /// via the global table, mirroring `MakeBoundMethod`).
     pub function: crate::GlobalIndex,
     /// Concrete type arguments to seed into `frame.type_args` when called.
-    pub type_args: Box<[baml_type::RuntimeTy]>,
+    pub type_args: Box<[baml_type::RealizedTy]>,
 }
 
 /// A host-language callable bound to a BAML function type.
@@ -369,7 +384,7 @@ pub struct HostClosure {
     /// The declared return type of the host-callable, threaded through
     /// `SysOp::BamlHostCallHostValue` as `type_arg_0` so the sysop impl
     /// can validate the host's returned value against the BAML signature.
-    pub ret_ty: Box<baml_type::RuntimeTy>,
+    pub ret_ty: Box<baml_type::RealizedTy>,
     /// The declared error/throws contract of the host-callable (`E` in
     /// `call_host_value<T, E>`), threaded through
     /// `SysOp::BamlHostCallHostValue` as `type_arg_1`. A host throw is
@@ -379,7 +394,7 @@ pub struct HostClosure {
     /// accepts any thrown value — the "unknown" fallback. Concrete throws
     /// (e.g. `throws ParseError`) pass through unchanged so the contract
     /// check can reject off-type throws as `HostContractViolation`.
-    pub throws_ty: Box<baml_type::RuntimeTy>,
+    pub throws_ty: Box<baml_type::RealizedTy>,
     /// Number of value arguments the host callable expects.
     ///
     /// `CallIndirect` reads this to drain the right number of operand slots
@@ -393,7 +408,7 @@ pub struct HostClosure {
     /// optionals, omitted ones dropped), so each bridge can apply its calling
     /// convention (e.g. TypeScript's trailing `$opts`) without the callee type
     /// on the wire. `Box`-ed to keep `Object` within its size budget.
-    pub params: Box<Vec<baml_type::RuntimeFunctionParamTy>>,
+    pub params: Box<Vec<baml_type::RealizedFunctionParamTy>>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, BorshSerialize, BorshDeserialize)]

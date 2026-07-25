@@ -1,73 +1,14 @@
 //! BEP-034: cancellation race tests.
 //!
-//! Audit-driven additions covering paths the earlier `spawn_basic` /
-//! `future_methods` tests didn't reach: a thread whose own cancel token
-//! fires while it is suspended in `await` on a future that's NOT a
-//! descendant must short-circuit instead of hanging on the SetOnce.
-
-use std::time::{Duration, Instant};
+//! Unobserved spawn errors are reported through the host default instead of
+//! being attached to an unrelated `await` or function result.
 
 use baml_tests::baml_test;
+use bex_engine::BexExternalValue;
 
-/// `waiter` awaits `slow` (a 60s sibling, not a child of waiter).
-/// Cancelling `waiter` fires waiter's own cancel token; without the
-/// await-race fix, waiter's `await slow` would block on the SetOnce
-/// until `slow` settles 60s later.
+/// B-405: an unobserved spawn error does not replace an unrelated await.
 #[tokio::test]
-async fn cancel_unblocks_await_on_non_descendant() {
-    // Compile OUTSIDE the timed region: we are measuring cancel-on-await
-    // promptness, not the debug-build compile (which grows with the stdlib and
-    // once crept up toward the bound). Time only the engine run.
-    let program = baml_tests::engine::compile_source_with_opt(
-        r#"
-        function main() -> int {
-            let slow = spawn { baml.sys.sleep(baml.time.Duration.from_milliseconds(60000n)); 42 };
-            let waiter = spawn { await slow };
-            let _ = waiter.cancel();
-            // waiter's BexThread is parked in the engine's await on
-            // `slow`. cancel() fires waiter's cancel token; the engine
-            // race must observe it and settle waiter immediately.
-            await waiter
-        }
-        "#,
-        baml_tests::engine::OptLevel::One,
-    );
-    let started = Instant::now();
-    let output = baml_tests::engine::run_compiled(
-        program,
-        "main",
-        baml_tests::engine::IndexMap::new(),
-        false,
-    )
-    .await;
-    let elapsed = started.elapsed();
-
-    // `await waiter` throws Cancelled because waiter is in Cancelled
-    // state. The unhandled throw bubbles to the host as an EngineError.
-    assert!(
-        output.result.is_err(),
-        "expected unhandled Cancelled throw, got {:?}",
-        output.result,
-    );
-    // Without the fix, waiter would hang ~60s waiting for slow to
-    // settle. Generous bound for CI jitter; the fix should land in tens
-    // of ms.
-    assert!(
-        elapsed < Duration::from_secs(5),
-        "cancel-on-await took {}ms (expected near-instant; await-race fix missing?)",
-        elapsed.as_millis(),
-    );
-}
-
-/// BEP-034: "If a fire-and-forget task throws an unhandled error, the
-/// error propagates to the parent task at its next `await` point."
-///
-/// `bad` is spawned with no handle binding; its body throws Io. We then
-/// `await waiter` — which is what triggers the propagation. The await
-/// must surface the Io error from `bad` instead of returning waiter's
-/// successful value.
-#[tokio::test]
-async fn fire_and_forget_error_surfaces_at_next_await() {
+async fn fire_and_forget_error_does_not_replace_unrelated_await() {
     let output = baml_test!(
         r#"
         function boom() -> int throws baml.errors.Io {
@@ -75,17 +16,9 @@ async fn fire_and_forget_error_surfaces_at_next_await() {
         }
         function main() -> int {
             let _ = spawn { boom() };
-            // Yield so the fire-and-forget thread runs and pushes its
-            // error into our pending_child_errors queue before our next
-            // await checkpoint observes it.
             await spawn { 99 }
         }
         "#
     );
-    // The await on the trivial spawn must surface boom()'s Io error.
-    assert!(
-        output.result.is_err(),
-        "expected Io error propagation, got {:?}",
-        output.result,
-    );
+    assert_eq!(output.result, Ok(BexExternalValue::Int(99)));
 }

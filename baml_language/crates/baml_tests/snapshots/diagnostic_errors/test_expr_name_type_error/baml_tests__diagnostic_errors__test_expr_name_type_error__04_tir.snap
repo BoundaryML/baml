@@ -4,17 +4,17 @@ source: crates/baml_tests/src/generated_tests.rs
 === TIR2 ===
 function user.$init_test_main(registry: testing.TestCollector) -> ? throws never {
   { : null
-    registry.register_test("a" + 1, () -> void { ... }, null) : void
+    registry.register_test_at("root", "a" + 1, () -> void { ... }, null) : void
       () -> void { ... } : () -> void throws unknown
         {
           null
         }
-    registry.register_test(42, () -> void { ... }, null) : void
+    registry.register_test_at("root", 42, () -> void { ... }, null) : void
       () -> void { ... } : () -> void throws unknown
         {
           null
         }
-    registry.register_test_set("int_name", (testset: testing.TestCollector) -> void { ... }, null) : void
+    registry.register_test_set_at("root", "int_name", (testset: testing.TestCollector) -> void { ... }, null) : void
       (testset: testing.TestCollector) -> void { ... } : (testset: testing.TestCollector) -> void throws unknown
         {
           for i in [1, 2, 3]

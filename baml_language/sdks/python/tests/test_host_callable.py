@@ -17,9 +17,9 @@ import weakref
 
 import pytest
 
-import baml_core.proto as _proto
+import baml_bridge.proto as _proto
 
-from baml_core import (
+from baml_bridge import (
     BamlRuntime,
     call_function_sync,
     call_function,
@@ -264,7 +264,7 @@ def test_normal_user_exception_routes_to_BamlError_not_BamlPanic():
     `Exception`), so the `pytest.raises(Exception)` check below would
     miss it.
     """
-    from baml_core.errors import BamlError, BamlPanic
+    from baml_bridge.errors import BamlError, BamlPanic
 
     rt = _make_runtime()
 
@@ -291,8 +291,8 @@ def test_sdk_panic_wire_envelope_decodes_to_BamlPanic():
     engine-level test that pins the inverse direction (a host
     `BridgeFailure` produces this envelope).
     """
-    from baml_core.errors import BamlError, BamlPanic
-    from baml_core.cffi.v1 import baml_outbound_pb2
+    from baml_bridge.errors import BamlError, BamlPanic
+    from baml_bridge.cffi.v1 import baml_outbound_pb2
 
     # `decode_call_result` reads the process-wide typemap to materialize the
     # panic value's class. `baml.panics.SdkPanic` is part of the BAML std

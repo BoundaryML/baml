@@ -2,42 +2,46 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === COMPILER2 DIAGNOSTICS ===
-  [type] error: type mismatch: expected string, got uint8array
-   ╭─[ shell_ops.baml:4:5 ]
-   │
+  [type] E0001
+
+  × mismatched types
+   ╭─[shell_ops.baml:4:5]
  4 │     baml.sys.shell("echo hello", null).stdout
-   │     ────────────────────┬────────────────────  
-   │                         ╰────────────────────── type mismatch: expected string, got uint8array
-   │ 
-   │ Note: Error code: E0001
-───╯
+   ·     ────────────────────┬────────────────────
+   ·                         ╰── expected `string`, found `uint8array`
+   ╰────
 
-  [type] error: type mismatch: expected string, got uint8array
-   ╭─[ shell_ops.baml:9:5 ]
-   │
+  [type] E0001
+
+  × mismatched types
+   ╭─[shell_ops.baml:9:5]
  9 │     baml.sys.shell(cmd, null).stdout
-   │     ────────────────┬───────────────  
-   │                     ╰───────────────── type mismatch: expected string, got uint8array
-   │ 
-   │ Note: Error code: E0001
-───╯
+   ·     ────────────────┬───────────────
+   ·                     ╰── expected `string`, found `uint8array`
+   ╰────
 
-  [type] error: type mismatch: expected string, got uint8array
-    ╭─[ shell_ops.baml:27:5 ]
-    │
+  [type] E0004
+
+  × operator `+` cannot be applied to `uint8array` and `" - "`
+    ╭─[shell_ops.baml:15:5]
+ 15 │     result1.stdout + " - " + result2.stdout
+    ·     ──────────────────────
+    ╰────
+
+  [type] E0001
+
+  × mismatched types
+    ╭─[shell_ops.baml:27:5]
  27 │     baml.sys.exec("echo", ["hello"], null).stdout
-    │     ──────────────────────┬──────────────────────  
-    │                           ╰──────────────────────── type mismatch: expected string, got uint8array
-    │ 
-    │ Note: Error code: E0001
-────╯
+    ·     ──────────────────────┬──────────────────────
+    ·                           ╰── expected `string`, found `uint8array`
+    ╰────
 
-  [type] error: type mismatch: expected string, got uint8array
-    ╭─[ shell_ops.baml:31:5 ]
-    │
+  [type] E0001
+
+  × mismatched types
+    ╭─[shell_ops.baml:31:5]
  31 │     baml.sys.exec("pwd", null, baml.sys.ProcessOptions { cwd: "/tmp" }).stdout
-    │     ─────────────────────────────────────┬────────────────────────────────────  
-    │                                          ╰────────────────────────────────────── type mismatch: expected string, got uint8array
-    │ 
-    │ Note: Error code: E0001
-────╯
+    ·     ─────────────────────────────────────┬────────────────────────────────────
+    ·                                          ╰── expected `string`, found `uint8array`
+    ╰────

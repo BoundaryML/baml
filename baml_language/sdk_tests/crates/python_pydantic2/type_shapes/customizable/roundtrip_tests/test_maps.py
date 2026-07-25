@@ -20,18 +20,18 @@ from baml_sdk.maps import (
 # dropped until that lands; enum *values* still round-trip (test_round_trip_sentiment).
 
 
-def test_round_trip_simple_map():
+def test_maps_round_trip_simple_map():
     assert round_trip_simple_map(m={"a": 1, "b": 2}) == {"a": 1, "b": 2}
 
 
-def test_round_trip_list_valued_map():
+def test_maps_round_trip_list_valued_map():
     assert round_trip_list_valued_map(m={"k": [1, 2]}) == {"k": [1, 2]}
 
 
-def test_round_trip_sentiment():
+def test_maps_round_trip_sentiment():
     assert round_trip_sentiment(s=Sentiment.Positive) == Sentiment.Positive
 
 
-def test_round_trip_resume():
+def test_maps_round_trip_resume():
     r = Resume(name="n")
     assert round_trip_resume(r=r) == r

@@ -45,20 +45,19 @@ function user.test_param_type_mismatch() -> int[] throws never {
   { : int[]
     let items: int[] = [1, 2, 3] : int[]
     items.map<U, E>((x: string) -> { ... }) : int[]
-      (x: string) -> { ... } : (x: string) -> int throws E
+      (x: string) -> { ... } : !error
         {
           x
         }
   }
-  !! 621..641: type mismatch: expected int, got string
-  !! 638..639: type mismatch: expected int, got string
+  !! 621..641: type mismatch: expected (int) -> int throws never, got (x: string) -> string throws never
 }
 lambda user.test_param_type_mismatch {
 }
 function user.test_unknown_param_type() -> int throws never {
   { : 0
-    let f = : (x: unknown) -> 0 throws never
-      (x: NonExistentType) -> { ... } : (x: unknown) -> 0 throws never
+    let f = : (x: !error) -> 0 throws never
+      (x: NonExistentType) -> { ... } : (x: !error) -> 0 throws never
         {
           0
         }
@@ -70,8 +69,8 @@ lambda user.test_unknown_param_type {
 }
 function user.test_unknown_return_type() -> int throws never {
   { : 0
-    let f = : (x: int) -> unknown throws never
-      (x: int) -> NonExistentType { ... } : (x: int) -> unknown throws never
+    let f = : (x: int) -> !error throws never
+      (x: int) -> NonExistentType { ... } : (x: int) -> !error throws never
         {
           x
         }

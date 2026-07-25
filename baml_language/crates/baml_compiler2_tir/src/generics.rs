@@ -10,21 +10,16 @@
 //!    package and extracts its `generic_params` (e.g. `["T"]`).
 //! 2. It provides the concrete type arguments (e.g. `[Ty::Int { attr: TyAttr::default() }]`).
 //! 3. `bind_type_vars` zips them together: `{T → int}`.
-//! 4. For each method parameter/return type, `lower_type_expr_with_generics`
-//!    is called: if the `TypeExpr` is a `Path(["T"])` that matches a bound
-//!    variable, it returns the bound concrete type directly; otherwise it
-//!    falls through to normal `lower_type_expr` and then applies
-//!    `substitute_ty` to replace any residual type-variable references.
+//! 4. For each method parameter/return type, the caller lowers the `TypeExpr`
+//!    through a [`ScopeCtx`](crate::lower_type_expr::ScopeCtx) whose in-scope
+//!    type variables are the binding keys (so `T` stays `Ty::TypeVar` instead
+//!    of erroring as "unresolved type"), then applies [`substitute_ty`] to
+//!    replace those type-variable references with their bound concrete types.
 
 use baml_base::Name;
-use baml_compiler2_ast::{TypeExpr, TypeExprKind};
 use rustc_hash::FxHashMap;
 
-use crate::{
-    infer_context::TirTypeError,
-    lower_type_expr::lower_type_expr_in_ns,
-    ty::{FunctionParamMode, FunctionParamTy, Ty, TyAttr},
-};
+use crate::ty::{FunctionParamTy, Ty};
 
 // ── Type variable binding ─────────────────────────────────────────────────────
 
@@ -86,9 +81,7 @@ pub fn substitute_ty(ty: &Ty, bindings: &FxHashMap<Name, Ty>) -> Ty {
             attr,
         } => Ty::AssociatedTypeProjection {
             base: Box::new(substitute_ty(base, bindings)),
-            interface: interface
-                .as_ref()
-                .map(|interface| Box::new(interface.map_tys(|t| substitute_ty(t, bindings)))),
+            interface: Box::new(interface.map_tys(|t| substitute_ty(t, bindings))),
             member: member.clone(),
             attr: attr.clone(),
         },
@@ -147,252 +140,6 @@ pub fn substitute_ty(ty: &Ty, bindings: &FxHashMap<Name, Ty>) -> Ty {
     }
 }
 
-// ── TypeExpr-level substitution ───────────────────────────────────────────────
-
-/// Check if a `TypeExpr` is a single-segment path that matches a bound type variable.
-///
-/// Returns `Some(bound_ty)` if the expression is `Path(["T"])` and `"T"` is in
-/// `bindings`. Returns `None` if it's not a type variable reference.
-///
-/// This is called at the `TypeExpr` level, before `lower_type_expr`, so we can
-/// intercept `T` references that would otherwise produce `Ty::Unknown`.
-fn substitute_type_expr(expr: &TypeExpr, bindings: &FxHashMap<Name, Ty>) -> Option<Ty> {
-    match &expr.kind {
-        TypeExprKind::Path {
-            segments,
-            generic_args,
-            associated_type_bindings,
-            ..
-        } if segments.len() == 2
-            && segments[0].as_str() == "Self"
-            && generic_args.is_empty()
-            && associated_type_bindings.is_empty() =>
-        {
-            bindings.get(&segments[1]).cloned()
-        }
-        TypeExprKind::Path {
-            segments,
-            generic_args,
-            associated_type_bindings,
-            ..
-        } if segments.len() == 1
-            && generic_args.is_empty()
-            && associated_type_bindings.is_empty() =>
-        {
-            bindings.get(&segments[0]).cloned()
-        }
-        _ => None,
-    }
-}
-
-// ── Combined lowering with generic substitution ───────────────────────────────
-
-/// Lower a `TypeExpr` to `Ty` with type variable substitution applied.
-///
-/// For complex type expressions (e.g. `T[]`, `map<K, V>`, `V?`), first lowers
-/// normally then substitutes type variables in the result. For single-segment
-/// paths that directly name a type variable (e.g. `T`, `K`, `V`), intercepts
-/// before lowering to avoid the "unresolved type" diagnostic that `lower_type_expr`
-/// would otherwise emit.
-///
-/// Diagnostics from the lowering step (for non-variable paths that genuinely
-/// don't exist) are collected into `diagnostics`.
-///
-/// `ns_context` is the defining file's namespace within its package (e.g. `["llm"]`
-/// for `<builtin>/baml/llm/llm.baml`); unqualified type paths resolve there first.
-pub fn lower_type_expr_with_generics(
-    db: &dyn crate::Db,
-    expr: &TypeExpr,
-    package_items: &baml_compiler2_hir::package::PackageItems<'_>,
-    ns_context: &[Name],
-    bindings: &FxHashMap<Name, Ty>,
-    diagnostics: &mut Vec<TirTypeError>,
-) -> Ty {
-    // Fast path: empty bindings — no substitution needed.
-    if bindings.is_empty() {
-        return lower_type_expr_in_ns(db, expr, package_items, ns_context, &[], diagnostics);
-    }
-
-    // Intercept single-segment paths that are type variables.
-    if let Some(ty) = substitute_type_expr(expr, bindings) {
-        return ty;
-    }
-
-    // For composite types (List, Map, Optional, Union), recurse with substitution
-    // rather than lowering first then substituting, so that type-variable references
-    // in nested positions are also intercepted before triggering "unresolved type".
-    match &expr.kind {
-        // `T?` is sugar for `T | null` — lower it directly to a nullable union.
-        TypeExprKind::Optional { inner, .. } => Ty::optional(lower_type_expr_with_generics(
-            db,
-            inner,
-            package_items,
-            ns_context,
-            bindings,
-            diagnostics,
-        )),
-        TypeExprKind::List { inner, .. } => Ty::List(
-            Box::new(lower_type_expr_with_generics(
-                db,
-                inner,
-                package_items,
-                ns_context,
-                bindings,
-                diagnostics,
-            )),
-            TyAttr::default(),
-        ),
-        TypeExprKind::Map { key, value, .. } => Ty::Map {
-            key: Box::new(lower_type_expr_with_generics(
-                db,
-                key,
-                package_items,
-                ns_context,
-                bindings,
-                diagnostics,
-            )),
-            value: Box::new(lower_type_expr_with_generics(
-                db,
-                value,
-                package_items,
-                ns_context,
-                bindings,
-                diagnostics,
-            )),
-            attr: TyAttr::default(),
-        },
-        TypeExprKind::Union {
-            variants: members, ..
-        } => Ty::Union(
-            members
-                .iter()
-                .map(|m| {
-                    lower_type_expr_with_generics(
-                        db,
-                        m,
-                        package_items,
-                        ns_context,
-                        bindings,
-                        diagnostics,
-                    )
-                })
-                .collect(),
-            TyAttr::default(),
-        ),
-        TypeExprKind::Function {
-            params,
-            ret,
-            throws,
-            ..
-        } => {
-            // A function type carries no generics of its own; its type variables
-            // come from the enclosing context (already in `bindings`).
-            Ty::Function {
-                params: params
-                    .iter()
-                    .map(|p| FunctionParamTy {
-                        name: p.name.clone(),
-                        ty: lower_type_expr_with_generics(
-                            db,
-                            &p.ty,
-                            package_items,
-                            ns_context,
-                            bindings,
-                            diagnostics,
-                        ),
-                        mode: if p.optional {
-                            FunctionParamMode::Optional
-                        } else {
-                            FunctionParamMode::Required
-                        },
-                    })
-                    .collect(),
-                ret: Box::new(lower_type_expr_with_generics(
-                    db,
-                    ret,
-                    package_items,
-                    ns_context,
-                    bindings,
-                    diagnostics,
-                )),
-                throws: Box::new(
-                    throws
-                        .as_deref()
-                        .map(|throws| {
-                            lower_type_expr_with_generics(
-                                db,
-                                throws,
-                                package_items,
-                                ns_context,
-                                bindings,
-                                diagnostics,
-                            )
-                        })
-                        .unwrap_or(Ty::Never {
-                            attr: TyAttr::default(),
-                        }),
-                ),
-                attr: TyAttr::default(),
-            }
-        }
-        TypeExprKind::AssociatedTypeProjection {
-            base,
-            interface,
-            member,
-            ..
-        } => Ty::AssociatedTypeProjection {
-            base: Box::new(lower_type_expr_with_generics(
-                db,
-                base,
-                package_items,
-                ns_context,
-                bindings,
-                diagnostics,
-            )),
-            interface: {
-                let interface_ty = interface.as_ref().map(|interface| {
-                    lower_type_expr_with_generics(
-                        db,
-                        interface,
-                        package_items,
-                        ns_context,
-                        bindings,
-                        diagnostics,
-                    )
-                });
-                crate::lower_type_expr::lower_explicit_projection_qualifier(
-                    db,
-                    interface_ty,
-                    member,
-                    diagnostics,
-                )
-            },
-            member: member.clone(),
-            attr: TyAttr::default(),
-        },
-        // For all other type expressions (primitives, multi-segment paths, etc.),
-        // lower normally and then substitute in the result.
-        //
-        // We pass the binding keys as `generic_params` so that nested type variable
-        // references inside path generic args (e.g. `StreamCache<T, S>`) are preserved
-        // as `Ty::TypeVar` by `lower_type_expr_in_ns` rather than triggering "unresolved
-        // type" diagnostics. `substitute_ty` then replaces those TypeVars with the
-        // concrete bound types.
-        _ => {
-            let binding_keys: Vec<Name> = bindings.keys().cloned().collect();
-            let ty = lower_type_expr_in_ns(
-                db,
-                expr,
-                package_items,
-                ns_context,
-                &binding_keys,
-                diagnostics,
-            );
-            substitute_ty(&ty, bindings)
-        }
-    }
-}
-
 // ── Method parameter adjustment ───────────────────────────────────────────────
 
 /// Skip the `self` parameter in a method's parameter list.
@@ -420,41 +167,106 @@ pub fn skip_self_param(params: &[FunctionParamTy]) -> &[FunctionParamTy] {
 
 // ── Type variable utilities ────────────────────────────────────────────────
 
-/// Check if a type contains any `Ty::TypeVar` anywhere in its structure.
-pub fn contains_typevar(ty: &Ty) -> bool {
+/// Deep any-node predicate over a type tree: does `pred` hold for `ty` itself
+/// or for any type nested inside it? The single traversal behind the
+/// `contains_*` family; the arms cover every child position a `Ty` can carry.
+/// A function type carries no generic binders of its own (function values are
+/// realized), so recursion enters its params/ret/throws with `pred` unchanged;
+/// a projection is entered through both its base (`T::Item`) and its
+/// qualifying interface's types.
+pub fn contains_ty_where(ty: &Ty, pred: &dyn Fn(&Ty) -> bool) -> bool {
+    if pred(ty) {
+        return true;
+    }
     match ty {
-        Ty::TypeVar(_, _) => true,
         Ty::AssociatedTypeProjection {
             base, interface, ..
-        } => {
-            contains_typevar(base)
-                || interface
-                    .as_ref()
-                    .is_some_and(|interface| interface.tys().any(contains_typevar))
-        }
-        Ty::List(inner, _) | Ty::EvolvingList(inner, _) => contains_typevar(inner),
+        } => contains_ty_where(base, pred) || interface.tys().any(|t| contains_ty_where(t, pred)),
+        Ty::List(inner, _) | Ty::EvolvingList(inner, _) => contains_ty_where(inner, pred),
         Ty::Map {
             key: k, value: v, ..
         }
-        | Ty::EvolvingMap(k, v, _) => contains_typevar(k) || contains_typevar(v),
-        Ty::Union(tys, _) => tys.iter().any(contains_typevar),
-        Ty::Future(value, error, _) => contains_typevar(value) || contains_typevar(error),
+        | Ty::EvolvingMap(k, v, _) => contains_ty_where(k, pred) || contains_ty_where(v, pred),
+        Ty::Union(tys, _) => tys.iter().any(|t| contains_ty_where(t, pred)),
+        Ty::Future(value, error, _) => {
+            contains_ty_where(value, pred) || contains_ty_where(error, pred)
+        }
         Ty::Function {
             params,
             ret,
             throws,
             ..
         } => {
-            params.iter().any(|param| contains_typevar(&param.ty))
-                || contains_typevar(ret)
-                || contains_typevar(throws)
+            params
+                .iter()
+                .any(|param| contains_ty_where(&param.ty, pred))
+                || contains_ty_where(ret, pred)
+                || contains_ty_where(throws, pred)
         }
-        Ty::Class(_, type_args, _) => type_args.iter().any(contains_typevar),
+        Ty::Class(_, type_args, _) => type_args.iter().any(|t| contains_ty_where(t, pred)),
         Ty::Interface(_, type_args, associated_bindings, _) => {
-            type_args.iter().any(contains_typevar)
+            type_args.iter().any(|t| contains_ty_where(t, pred))
                 || associated_bindings
                     .iter()
-                    .any(|(_, ty)| contains_typevar(ty))
+                    .any(|(_, ty)| contains_ty_where(ty, pred))
+        }
+        _ => false,
+    }
+}
+
+/// Check if a type contains any `Ty::TypeVar` anywhere in its structure.
+pub fn contains_typevar(ty: &Ty) -> bool {
+    contains_ty_where(ty, &|t| matches!(t, Ty::TypeVar(_, _)))
+}
+
+/// Does `ty` carry an error-recovery sentinel (`Ty::Error` or `Ty::Unknown`)
+/// anywhere in its structure? An expression recorded with such a type already
+/// failed to compile at its own site; downstream consumers (e.g. call-site
+/// generic inference) use this to recognize an already-failed input and avoid
+/// cascading a second diagnostic off it.
+pub fn contains_error_recovery(ty: &Ty) -> bool {
+    contains_ty_where(ty, &|t| matches!(t, Ty::Error { .. } | Ty::Unknown { .. }))
+}
+
+/// Whether `ty` contains an associated-type projection whose base carries no
+/// type variables — one that substitution has made concrete, so the canonical
+/// algebra can reduce it to its realization (`(Risky as HasErr).E` → `Kaboom`).
+/// Used to gate a post-substitution `normalize`: types without such a
+/// projection are left exactly as written.
+pub fn contains_concrete_base_projection(ty: &Ty) -> bool {
+    match ty {
+        Ty::AssociatedTypeProjection { base, .. } => {
+            !contains_typevar(base) || contains_concrete_base_projection(base)
+        }
+        Ty::List(inner, _) | Ty::EvolvingList(inner, _) => contains_concrete_base_projection(inner),
+        Ty::Map {
+            key: k, value: v, ..
+        }
+        | Ty::EvolvingMap(k, v, _) => {
+            contains_concrete_base_projection(k) || contains_concrete_base_projection(v)
+        }
+        Ty::Union(tys, _) => tys.iter().any(contains_concrete_base_projection),
+        Ty::Future(value, error, _) => {
+            contains_concrete_base_projection(value) || contains_concrete_base_projection(error)
+        }
+        Ty::Function {
+            params,
+            ret,
+            throws,
+            ..
+        } => {
+            params
+                .iter()
+                .any(|param| contains_concrete_base_projection(&param.ty))
+                || contains_concrete_base_projection(ret)
+                || contains_concrete_base_projection(throws)
+        }
+        Ty::Class(_, type_args, _) => type_args.iter().any(contains_concrete_base_projection),
+        Ty::Interface(_, type_args, associated_bindings, _) => {
+            type_args.iter().any(contains_concrete_base_projection)
+                || associated_bindings
+                    .iter()
+                    .any(|(_, ty)| contains_concrete_base_projection(ty))
         }
         _ => false,
     }
@@ -488,56 +300,7 @@ pub fn contains_non_rigid_typevar(ty: &Ty, rigid: &[Name]) -> bool {
 /// params) — which must be checked — from genuinely-uninferred ones (callee
 /// generics, free inference/effect vars) — which are deferred.
 pub fn contains_typevar_where(ty: &Ty, pred: &dyn Fn(&Name) -> bool) -> bool {
-    match ty {
-        Ty::TypeVar(name, _) => pred(name),
-        Ty::List(inner, _) | Ty::EvolvingList(inner, _) => contains_typevar_where(inner, pred),
-        Ty::Map {
-            key: k, value: v, ..
-        }
-        | Ty::EvolvingMap(k, v, _) => {
-            contains_typevar_where(k, pred) || contains_typevar_where(v, pred)
-        }
-        Ty::Union(tys, _) => tys.iter().any(|t| contains_typevar_where(t, pred)),
-        Ty::Future(value, error, _) => {
-            contains_typevar_where(value, pred) || contains_typevar_where(error, pred)
-        }
-        Ty::Function {
-            params,
-            ret,
-            throws,
-            ..
-        } => {
-            // A function type carries no generic binders of its own (function
-            // values are realized): every type var in its body is the
-            // caller-scope/rigid var the outer `pred` reasons about, so recurse
-            // with `pred` unchanged.
-            params
-                .iter()
-                .any(|param| contains_typevar_where(&param.ty, pred))
-                || contains_typevar_where(ret, pred)
-                || contains_typevar_where(throws, pred)
-        }
-        Ty::Class(_, type_args, _) => type_args.iter().any(|t| contains_typevar_where(t, pred)),
-        Ty::Interface(_, type_args, associated_bindings, _) => {
-            type_args.iter().any(|t| contains_typevar_where(t, pred))
-                || associated_bindings
-                    .iter()
-                    .any(|(_, ty)| contains_typevar_where(ty, pred))
-        }
-        // Mirror `contains_typevar`: a type variable can hide in the projection
-        // base (e.g. `T::Item`) or the qualifying interface. Without this arm
-        // the deferral check (`defers_typevar`) is blind to an associated-type
-        // parameter and may check it against an under-determined type.
-        Ty::AssociatedTypeProjection {
-            base, interface, ..
-        } => {
-            contains_typevar_where(base, pred)
-                || interface.as_ref().is_some_and(|interface| {
-                    interface.tys().any(|t| contains_typevar_where(t, pred))
-                })
-        }
-        _ => false,
-    }
+    contains_ty_where(ty, &|t| matches!(t, Ty::TypeVar(name, _) if pred(name)))
 }
 
 // ── Type variable inference & union normalization ──────────────────────────────
@@ -551,119 +314,6 @@ pub use baml_type_runtime::{
     infer_bindings, infer_bindings_allow_typevars, infer_bindings_rigid_self,
     normalize_union_members, union_ty,
 };
-
-/// Replace any remaining `Ty::TypeVar` with `Ty::Unknown` and emit diagnostics.
-///
-/// Called after call-site inference to ensure no type variables escape to
-/// VIR/runtime. Each erased `TypeVar` produces a `CannotInferTypeParameter`
-/// diagnostic.
-#[allow(clippy::only_used_in_recursion)] // diagnostics param kept for future use
-/// Replace every `Ty::TypeVar` for which `pred` returns `true` with
-/// `Ty::Never`, recursing structurally. Used to drop UNBOUND callee generics
-/// from an instantiated throws type: an unconstrained type variable there
-/// means "nothing nameable is thrown", and `Never` vanishes from throw-fact
-/// sets (`flatten_ty_to_facts` skips it), while a raw `TypeVar` fact would
-/// poison the enclosing effective-throws surface.
-pub fn erase_typevars_where(ty: &Ty, pred: &dyn Fn(&Name) -> bool) -> Ty {
-    match ty {
-        Ty::TypeVar(name, attr) => {
-            if pred(name) {
-                Ty::Never { attr: attr.clone() }
-            } else {
-                ty.clone()
-            }
-        }
-        Ty::List(inner, attr) => {
-            Ty::List(Box::new(erase_typevars_where(inner, pred)), attr.clone())
-        }
-        Ty::Map {
-            key: k,
-            value: v,
-            attr,
-        } => Ty::Map {
-            key: Box::new(erase_typevars_where(k, pred)),
-            value: Box::new(erase_typevars_where(v, pred)),
-            attr: attr.clone(),
-        },
-        Ty::Union(members, attr) => Ty::Union(
-            members
-                .iter()
-                .map(|m| erase_typevars_where(m, pred))
-                .collect(),
-            attr.clone(),
-        ),
-        Ty::EvolvingList(inner, attr) => {
-            Ty::EvolvingList(Box::new(erase_typevars_where(inner, pred)), attr.clone())
-        }
-        Ty::EvolvingMap(k, v, attr) => Ty::EvolvingMap(
-            Box::new(erase_typevars_where(k, pred)),
-            Box::new(erase_typevars_where(v, pred)),
-            attr.clone(),
-        ),
-        Ty::Class(name, type_args, attr) => Ty::Class(
-            name.clone(),
-            type_args
-                .iter()
-                .map(|t| erase_typevars_where(t, pred))
-                .collect(),
-            attr.clone(),
-        ),
-        Ty::Interface(name, type_args, associated_bindings, attr) => Ty::Interface(
-            name.clone(),
-            type_args
-                .iter()
-                .map(|t| erase_typevars_where(t, pred))
-                .collect(),
-            associated_bindings
-                .iter()
-                .map(|(n, t)| (n.clone(), erase_typevars_where(t, pred)))
-                .collect(),
-            attr.clone(),
-        ),
-        Ty::AssociatedTypeProjection {
-            base,
-            interface,
-            member,
-            attr,
-        } => Ty::AssociatedTypeProjection {
-            base: Box::new(erase_typevars_where(base, pred)),
-            interface: interface
-                .as_ref()
-                .map(|interface| Box::new(interface.map_tys(|t| erase_typevars_where(t, pred)))),
-            member: member.clone(),
-            attr: attr.clone(),
-        },
-        Ty::Future(value, error, attr) => Ty::Future(
-            Box::new(erase_typevars_where(value, pred)),
-            Box::new(erase_typevars_where(error, pred)),
-            attr.clone(),
-        ),
-        Ty::Function {
-            params,
-            ret,
-            throws,
-            attr,
-        } => {
-            // A function type carries no generic binders of its own (function
-            // values are realized), so recurse with `pred` unchanged.
-            Ty::Function {
-                params: params
-                    .iter()
-                    .map(|p| FunctionParamTy {
-                        name: p.name.clone(),
-                        ty: erase_typevars_where(&p.ty, pred),
-                        mode: p.mode,
-                    })
-                    .collect(),
-                ret: Box::new(erase_typevars_where(ret, pred)),
-                throws: Box::new(erase_typevars_where(throws, pred)),
-                attr: attr.clone(),
-            }
-        }
-        // Leaves (primitives, enums, etc.) — pass through.
-        _ => ty.clone(),
-    }
-}
 
 #[allow(clippy::only_used_in_recursion)]
 pub fn erase_unresolved_typevars(
@@ -696,9 +346,7 @@ pub fn erase_unresolved_typevars(
             attr,
         } => Ty::AssociatedTypeProjection {
             base: Box::new(erase_unresolved_typevars(base, diagnostics)),
-            interface: interface.as_ref().map(|interface| {
-                Box::new(interface.map_tys(|t| erase_unresolved_typevars(t, diagnostics)))
-            }),
+            interface: Box::new(interface.map_tys(|t| erase_unresolved_typevars(t, diagnostics))),
             member: member.clone(),
             attr: attr.clone(),
         },
@@ -810,9 +458,7 @@ pub fn erase_typevars_matching(ty: &Ty, should_erase: &impl Fn(&Name) -> bool) -
             attr,
         } => Ty::AssociatedTypeProjection {
             base: Box::new(erase_typevars_matching(base, should_erase)),
-            interface: interface.as_ref().map(|interface| {
-                Box::new(interface.map_tys(|t| erase_typevars_matching(t, should_erase)))
-            }),
+            interface: Box::new(interface.map_tys(|t| erase_typevars_matching(t, should_erase))),
             member: member.clone(),
             attr: attr.clone(),
         },
@@ -835,5 +481,150 @@ pub fn erase_typevars_matching(ty: &Ty, should_erase: &impl Fn(&Name) -> bool) -
             attr: attr.clone(),
         },
         _ => ty.clone(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use baml_base::TyAttr;
+    use baml_type::{Interface, QualifiedTypeName};
+
+    use super::*;
+
+    fn attr() -> TyAttr {
+        TyAttr::default()
+    }
+
+    fn err() -> Ty {
+        Ty::Error { attr: attr() }
+    }
+
+    fn unknown() -> Ty {
+        Ty::Unknown { attr: attr() }
+    }
+
+    fn int() -> Ty {
+        Ty::Int { attr: attr() }
+    }
+
+    fn qn(name: &str) -> QualifiedTypeName {
+        QualifiedTypeName::new(Name::new("test"), vec![], Name::new(name))
+    }
+
+    #[test]
+    fn sentinels_match_directly() {
+        assert!(contains_error_recovery(&err()));
+        assert!(contains_error_recovery(&unknown()));
+        assert!(!contains_error_recovery(&int()));
+    }
+
+    #[test]
+    fn descends_into_lists() {
+        assert!(contains_error_recovery(&Ty::List(Box::new(err()), attr())));
+        assert!(contains_error_recovery(&Ty::EvolvingList(
+            Box::new(unknown()),
+            attr()
+        )));
+        assert!(!contains_error_recovery(&Ty::List(Box::new(int()), attr())));
+    }
+
+    #[test]
+    fn descends_into_map_key_and_value() {
+        let map = |key: Ty, value: Ty| Ty::Map {
+            key: Box::new(key),
+            value: Box::new(value),
+            attr: attr(),
+        };
+        assert!(contains_error_recovery(&map(err(), int())));
+        assert!(contains_error_recovery(&map(int(), err())));
+        assert!(!contains_error_recovery(&map(int(), int())));
+        assert!(contains_error_recovery(&Ty::EvolvingMap(
+            Box::new(int()),
+            Box::new(err()),
+            attr()
+        )));
+    }
+
+    #[test]
+    fn descends_into_unions_and_futures() {
+        assert!(contains_error_recovery(&Ty::Union(
+            vec![int(), err()],
+            attr()
+        )));
+        assert!(!contains_error_recovery(&Ty::Union(
+            vec![int(), int()],
+            attr()
+        )));
+        assert!(contains_error_recovery(&Ty::Future(
+            Box::new(err()),
+            Box::new(int()),
+            attr()
+        )));
+        assert!(contains_error_recovery(&Ty::Future(
+            Box::new(int()),
+            Box::new(err()),
+            attr()
+        )));
+    }
+
+    #[test]
+    fn descends_into_function_params_ret_and_throws() {
+        let func = |param: Ty, ret: Ty, throws: Ty| Ty::Function {
+            params: vec![FunctionParamTy::required(None, param)],
+            ret: Box::new(ret),
+            throws: Box::new(throws),
+            attr: attr(),
+        };
+        assert!(contains_error_recovery(&func(err(), int(), int())));
+        assert!(contains_error_recovery(&func(int(), err(), int())));
+        assert!(contains_error_recovery(&func(int(), int(), err())));
+        assert!(!contains_error_recovery(&func(int(), int(), int())));
+    }
+
+    #[test]
+    fn descends_into_class_and_interface_type_args() {
+        assert!(contains_error_recovery(&Ty::Class(
+            qn("Box"),
+            vec![err()],
+            attr()
+        )));
+        assert!(!contains_error_recovery(&Ty::Class(
+            qn("Box"),
+            vec![int()],
+            attr()
+        )));
+        assert!(contains_error_recovery(&Ty::Interface(
+            qn("BoxLike"),
+            vec![err()],
+            vec![],
+            attr()
+        )));
+        assert!(contains_error_recovery(&Ty::Interface(
+            qn("Iter"),
+            vec![],
+            vec![(Name::new("Item"), err())],
+            attr()
+        )));
+    }
+
+    #[test]
+    fn descends_into_projection_base_and_interface() {
+        let projection = |base: Ty, iface_generic: Ty| Ty::AssociatedTypeProjection {
+            base: Box::new(base),
+            interface: Box::new(Interface::new(qn("Iter"), vec![iface_generic], vec![])),
+            member: Name::new("Item"),
+            attr: attr(),
+        };
+        assert!(contains_error_recovery(&projection(err(), int())));
+        assert!(contains_error_recovery(&projection(int(), err())));
+        assert!(!contains_error_recovery(&projection(int(), int())));
+    }
+
+    #[test]
+    fn contains_typevar_where_filters_by_name() {
+        let t = Ty::List(Box::new(Ty::TypeVar(Name::new("T"), attr())), attr());
+        assert!(contains_typevar(&t));
+        assert!(contains_typevar_where(&t, &|n| n.as_str() == "T"));
+        assert!(!contains_typevar_where(&t, &|n| n.as_str() == "U"));
     }
 }

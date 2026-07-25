@@ -4,7 +4,7 @@
 use std::collections::HashMap;
 
 use super::*;
-use crate::{Freshness, Literal, Name, QualifiedTypeName, Ty, TyAttr};
+use crate::{Freshness, FunctionParamTy, Literal, Name, QualifiedTypeName, Ty, TyAttr};
 
 // ── stub context ───────────────────────────────────────────────────────────
 
@@ -20,6 +20,11 @@ struct Ctx {
     /// Conjunction (`T: A + B`) bounds per type variable.
     var_bounds: HashMap<Name, Vec<Ty>>,
     enums: HashMap<QualifiedTypeName, Vec<Name>>,
+    /// Declared `extends` bounds per `(interface head, associated-type name)`.
+    assoc_bounds: HashMap<(QualifiedTypeName, Name), Vec<Ty>>,
+    /// `(base, interface head, member) → reduced type` projection facts, for the
+    /// `project` oracle. A `Vec` (not a map) because `Ty` is not `Hash`.
+    projections: Vec<(Ty, QualifiedTypeName, Name, Ty)>,
 }
 
 fn nominal_head(ty: &Ty) -> Option<QualifiedTypeName> {
@@ -78,6 +83,30 @@ impl TypeContext for Ctx {
     fn enum_variants(&self, name: &QualifiedTypeName) -> Option<Vec<Name>> {
         self.enums.get(name).cloned()
     }
+
+    fn associated_type_bound(&self, interface: &Interface, assoc: Name) -> Vec<Interface> {
+        self.assoc_bounds
+            .get(&(interface.name.clone(), assoc))
+            .into_iter()
+            .flatten()
+            .filter_map(Ty::as_interface)
+            .collect()
+    }
+
+    fn project(
+        &self,
+        base: &Ty,
+        interface: &Interface,
+        member: &Name,
+        _fuel: u32,
+    ) -> ProjectionStep {
+        self.projections
+            .iter()
+            .find(|(b, i, m, _)| b == base && i == &interface.name && m == member)
+            .map_or(ProjectionStep::Opaque, |(_, _, _, reduced)| {
+                ProjectionStep::Reduced(reduced.clone())
+            })
+    }
 }
 
 // ── constructors ─────────────────────────────────────────────────────────--
@@ -108,6 +137,60 @@ fn union(v: Vec<Ty>) -> Ty {
 }
 fn typevar(s: &str) -> Ty {
     Ty::TypeVar(Name::new(s), TyAttr::default())
+}
+fn projection(base: Ty, iface_name: &str, member: &str) -> Ty {
+    Ty::AssociatedTypeProjection {
+        base: Box::new(base),
+        interface: Box::new(Interface::new(qtn(iface_name), vec![], vec![])),
+        member: Name::new(member),
+        attr: TyAttr::default(),
+    }
+}
+
+// ── projection reduction ─────────────────────────────────────────────────--
+
+#[test]
+fn projection_reduces_to_its_binding() {
+    // `(C as Foo).Assoc` *is* the type the oracle reduces it to — a pure type-level
+    // operator, so its canonical form is the reduced type.
+    let ctx = Ctx {
+        projections: vec![(class("C"), qtn("Foo"), Name::new("Assoc"), Ty::string())],
+        ..Ctx::default()
+    };
+    assert!(equivalent(
+        &projection(class("C"), "Foo", "Assoc"),
+        &Ty::string(),
+        &ctx,
+    ));
+}
+
+#[test]
+fn cyclic_projection_reduction_terminates_and_stays_opaque() {
+    // `(C as I).A → (C as J).B → (C as I).A → …`: fuel-bounded, so normalization
+    // terminates (this test completing proves it) and the projection stays opaque —
+    // never wrongly equated to a concrete type.
+    let ctx = Ctx {
+        projections: vec![
+            (
+                class("C"),
+                qtn("I"),
+                Name::new("A"),
+                projection(class("C"), "J", "B"),
+            ),
+            (
+                class("C"),
+                qtn("J"),
+                Name::new("B"),
+                projection(class("C"), "I", "A"),
+            ),
+        ],
+        ..Ctx::default()
+    };
+    assert!(!equivalent(
+        &projection(class("C"), "I", "A"),
+        &Ty::int(),
+        &ctx,
+    ));
 }
 
 // ── union algebra ────────────────────────────────────────────────────────--
@@ -160,6 +243,53 @@ fn never_is_removed_unknown_absorbs() {
         },
         &ctx,
     ));
+}
+
+#[test]
+fn literal_types_are_subtypes_of_their_base_only() {
+    // A literal type is a member of its base primitive's value set — a free,
+    // representation-preserving widening (TYPE_SYSTEM.md §BAML Subtyping Cases) —
+    // and of any union/optional containing it. It does NOT cross representations:
+    // `42 <: float` would be an int→float coercion, which is not a subtype
+    // relation.
+    let ctx = Ctx::default();
+    assert!(is_subtype(&lit_int(42), &Ty::int(), &ctx));
+    assert!(is_subtype(&lit_float("3.14"), &Ty::float(), &ctx));
+    assert!(is_subtype(
+        &Ty::Literal(
+            Literal::String("hello".to_string()),
+            Freshness::Regular,
+            TyAttr::default(),
+        ),
+        &Ty::string(),
+        &ctx
+    ));
+    assert!(is_subtype(
+        &Ty::Literal(Literal::Bool(true), Freshness::Regular, TyAttr::default()),
+        &Ty::bool(),
+        &ctx
+    ));
+    assert!(!is_subtype(&lit_int(42), &Ty::float(), &ctx));
+    // Union / optional membership.
+    assert!(is_subtype(
+        &lit_int(42),
+        &union(vec![Ty::string(), Ty::int()]),
+        &ctx
+    ));
+    assert!(is_subtype(&lit_int(42), &Ty::optional(Ty::int()), &ctx));
+    assert!(is_subtype(&Ty::null(), &Ty::optional(Ty::string()), &ctx));
+}
+
+#[test]
+fn numeric_types_do_not_widen_across_representations() {
+    // Concrete types are atomic: `int` (i64) is not a subtype of `float` (f64 —
+    // precision loss past 2^53) nor of `bigint` (heap representation); those
+    // conversions are explicit or FFI-boundary coercions, never subtyping. The
+    // same holds under an (invariant) container.
+    let ctx = Ctx::default();
+    assert!(!is_subtype(&Ty::int(), &Ty::float(), &ctx));
+    assert!(!is_subtype(&Ty::int(), &bigint(), &ctx));
+    assert!(!is_subtype(&Ty::list(Ty::int()), &Ty::list(bigint()), &ctx));
 }
 
 #[test]
@@ -387,6 +517,250 @@ fn subtype_basics() {
     ));
 }
 
+// ── subtyping: variance, holes, unions (flip de-risk) ─────────────────────--
+
+#[test]
+fn invariant_arg_distinguishes_top_from_recovery_hole() {
+    // The exact divergence the subtyping migration relies on. Generics are
+    // invariant (TYPE_SYSTEM.md §Variance), so the genuine top type `unknown`
+    // (`BuiltinUnknown`) is invariant-distinct: `Box<unknown>` is NOT `Box<int>`.
+    // The error-recovery sentinel (`Unknown`) is different — it stays
+    // bidirectionally compatible, so a recovered `Box<Unknown>` never cascades a
+    // subtype error. Keeping the two apart is what lets error recovery use the
+    // recovery sentinel while `unknown` keeps its sound invariant identity.
+    let ctx = Ctx::default();
+    let top = Ty::BuiltinUnknown {
+        attr: TyAttr::default(),
+    };
+    let hole = Ty::Unknown {
+        attr: TyAttr::default(),
+    };
+
+    assert!(!is_subtype(
+        &class1("Box", top.clone()),
+        &class1("Box", Ty::int()),
+        &ctx
+    ));
+    assert!(!is_subtype(
+        &class1("Box", Ty::int()),
+        &class1("Box", top),
+        &ctx
+    ));
+
+    assert!(is_subtype(
+        &class1("Box", hole.clone()),
+        &class1("Box", Ty::int()),
+        &ctx
+    ));
+    assert!(is_subtype(
+        &class1("Box", Ty::int()),
+        &class1("Box", hole),
+        &ctx
+    ));
+}
+
+#[test]
+fn function_subtyping_is_contravariant_in_params_covariant_in_return() {
+    // TYPE_SYSTEM.md §Variance: `foo: (int | string) -> bool throws never` is a
+    // subtype of `(int) -> bool | float throws never` — the parameter is
+    // contravariant (`int <: int | string`) and the return covariant
+    // (`bool <: bool | float`).
+    let ctx = Ctx::default();
+    let never = Ty::Never {
+        attr: TyAttr::default(),
+    };
+    let float = Ty::Float {
+        attr: TyAttr::default(),
+    };
+    let foo = Ty::Function {
+        params: vec![FunctionParamTy::required(
+            None,
+            union(vec![Ty::int(), Ty::string()]),
+        )],
+        ret: Box::new(Ty::bool()),
+        throws: Box::new(never.clone()),
+        attr: TyAttr::default(),
+    };
+    let expected = Ty::Function {
+        params: vec![FunctionParamTy::required(None, Ty::int())],
+        ret: Box::new(union(vec![Ty::bool(), float])),
+        throws: Box::new(never),
+        attr: TyAttr::default(),
+    };
+    assert!(is_subtype(&foo, &expected, &ctx));
+    // The reverse fails: `int | string` (foo's param) is not <: `int`, so the
+    // contravariant direction rejects it.
+    assert!(!is_subtype(&expected, &foo, &ctx));
+}
+
+#[test]
+fn function_throws_is_covariant() {
+    // Error type is covariant (TYPE_SYSTEM.md, Subtyping Rules → Variance): a
+    // function that throws `never` is a subtype of one that throws `int`, but not
+    // the reverse.
+    let ctx = Ctx::default();
+    let mk = |throws: Ty| Ty::Function {
+        params: vec![],
+        ret: Box::new(Ty::string()),
+        throws: Box::new(throws),
+        attr: TyAttr::default(),
+    };
+    let never = Ty::Never {
+        attr: TyAttr::default(),
+    };
+    assert!(is_subtype(&mk(never.clone()), &mk(Ty::int()), &ctx));
+    assert!(!is_subtype(&mk(Ty::int()), &mk(never), &ctx));
+}
+
+#[test]
+fn function_required_param_names_are_insignificant() {
+    // Required params are positional; their names are not part of the type
+    // (TYPE_SYSTEM.md, Subtyping Rules), so two functions differing only in a
+    // required param's name are equivalent (a named vs unnamed one too).
+    let ctx = Ctx::default();
+    let mk = |name: Option<&str>| Ty::Function {
+        params: vec![FunctionParamTy::required(name.map(Name::new), Ty::int())],
+        ret: Box::new(Ty::string()),
+        throws: Box::new(Ty::Never {
+            attr: TyAttr::default(),
+        }),
+        attr: TyAttr::default(),
+    };
+    assert!(equivalent(&mk(Some("a")), &mk(Some("b")), &ctx));
+    assert!(equivalent(&mk(Some("a")), &mk(None), &ctx));
+}
+
+#[test]
+fn function_optional_params_follow_the_superset_rule() {
+    // Optional params (BEP-033) are matched by name, and the *subtype* declares a
+    // superset of them — a subset function type accepts more optional args
+    // (TYPE_SYSTEM.md, Subtyping Rules). Their order is insignificant.
+    let ctx = Ctx::default();
+    let func = |params: Vec<FunctionParamTy>| Ty::Function {
+        params,
+        ret: Box::new(Ty::string()),
+        throws: Box::new(Ty::Never {
+            attr: TyAttr::default(),
+        }),
+        attr: TyAttr::default(),
+    };
+    let req = FunctionParamTy::required(None, Ty::string());
+    let opt_max = FunctionParamTy::optional(Some(Name::new("max")), Ty::int());
+    let opt_filter = FunctionParamTy::optional(Some(Name::new("filter")), Ty::string());
+
+    let two = func(vec![req.clone(), opt_max.clone(), opt_filter.clone()]);
+    let one = func(vec![req.clone(), opt_filter.clone()]);
+
+    // More optionals <: fewer optionals; the reverse fails (missing `max`).
+    assert!(is_subtype(&two, &one, &ctx));
+    assert!(!is_subtype(&one, &two, &ctx));
+
+    // Optional order does not matter: reordered forms are mutual subtypes.
+    let two_reordered = func(vec![req, opt_filter, opt_max]);
+    assert!(is_subtype(&two, &two_reordered, &ctx));
+    assert!(is_subtype(&two_reordered, &two, &ctx));
+}
+
+#[test]
+fn function_optional_and_required_params_are_incomparable() {
+    // A single-required-param function and a single-optional-param function are
+    // unrelated: the required-arity check (equal counts) already fails both ways.
+    let ctx = Ctx::default();
+    let mk = |optional: bool| Ty::Function {
+        params: vec![if optional {
+            FunctionParamTy::optional(Some(Name::new("value")), Ty::int())
+        } else {
+            FunctionParamTy::required(Some(Name::new("value")), Ty::int())
+        }],
+        ret: Box::new(Ty::string()),
+        throws: Box::new(Ty::Never {
+            attr: TyAttr::default(),
+        }),
+        attr: TyAttr::default(),
+    };
+    assert!(!is_subtype(&mk(true), &mk(false), &ctx));
+    assert!(!is_subtype(&mk(false), &mk(true), &ctx));
+}
+
+#[test]
+fn interface_membership_through_unions() {
+    let mut ctx = Ctx::default();
+    ctx.impls.push((qtn("Dog"), qtn("Animal")));
+    ctx.impls.push((qtn("Cat"), qtn("Animal")));
+
+    // A concrete implementor is a subtype of an interface wrapped in a union.
+    assert!(is_subtype(
+        &class("Dog"),
+        &union(vec![iface("Animal"), Ty::null()]),
+        &ctx,
+    ));
+    // A union of implementors is a subtype of the interface (left-union rule).
+    assert!(is_subtype(
+        &union(vec![class("Dog"), class("Cat")]),
+        &iface("Animal"),
+        &ctx,
+    ));
+    // …but `null` is not a member of the bare interface.
+    assert!(!is_subtype(
+        &Ty::optional(class("Dog")),
+        &iface("Animal"),
+        &ctx
+    ));
+}
+
+#[test]
+fn type_var_is_reflexive_independent_of_its_bound() {
+    // A type variable is a subtype of itself, of a union containing itself, and
+    // of its own optional — by identity, no bound needed. (The legacy oracle
+    // special-cased this before bound expansion; the canonical algebra gets it
+    // from reflexivity + the right-union rule.)
+    let ctx = Ctx::default();
+    assert!(is_subtype(&typevar("T"), &typevar("T"), &ctx));
+    assert!(is_subtype(
+        &typevar("T"),
+        &union(vec![typevar("T"), typevar("U")]),
+        &ctx,
+    ));
+    assert!(is_subtype(&typevar("T"), &Ty::optional(typevar("T")), &ctx));
+    // An unbounded `T` is not a subtype of an unrelated concrete type.
+    assert!(!is_subtype(&typevar("T"), &Ty::int(), &ctx));
+}
+
+#[test]
+fn symbolic_associated_type_projection_subtypes_via_its_bound() {
+    // `interface Iter { type Item extends Summarizable }`, with `Summarizable`
+    // transitively requiring `Displayable`. A still-symbolic projection
+    // `(T as Iter).Item` (the base is a type variable, so it can't be resolved
+    // to a concrete type) is a subtype of its declared bound's supertypes — the
+    // projection analogue of a type-var bound.
+    let mut ctx = Ctx::default();
+    ctx.assoc_bounds.insert(
+        (qtn("Iter"), Name::new("Item")),
+        vec![iface("Summarizable")],
+    );
+    ctx.requires.push((qtn("Summarizable"), qtn("Displayable")));
+
+    let proj = |interface: Interface| Ty::AssociatedTypeProjection {
+        base: Box::new(typevar("T")),
+        interface: Box::new(interface),
+        member: Name::new("Item"),
+        attr: TyAttr::default(),
+    };
+    let iter_proj = proj(
+        iface("Iter")
+            .as_interface()
+            .expect("iface() builds an interface existential"),
+    );
+
+    assert!(is_subtype(&iter_proj, &iface("Summarizable"), &ctx));
+    // …including transitively through the bound's `requires`.
+    assert!(is_subtype(&iter_proj, &iface("Displayable"), &ctx));
+    // Not a subtype of an interface the bound doesn't provide.
+    assert!(!is_subtype(&iter_proj, &iface("Unrelated"), &ctx));
+    // Reflexivity still holds (the projection is equal to itself).
+    assert!(is_subtype(&iter_proj, &iter_proj, &ctx));
+}
+
 // ── aliases & recursion ──────────────────────────────────────────────────--
 
 #[test]
@@ -514,6 +888,42 @@ fn map_ty(key: Ty, value: Ty) -> Ty {
         value: Box::new(value),
         attr: TyAttr::default(),
     }
+}
+
+#[test]
+fn containers_are_invariant_even_when_the_element_is_a_genuine_subtype() {
+    // The memory-corruption example (TYPE_SYSTEM.md §Variance): `Dog <: Animal`
+    // does NOT make `list<Dog> <: list<Animal>`. Element subtyping would let a
+    // caller holding the `list<Animal>` view store a non-`Dog` into a `list<Dog>`,
+    // so the containers are invariant — related only when the elements are mutual
+    // subtypes (equivalent). This is the exact rule value-checking now enforces by
+    // routing through this relation instead of the legacy element-covariant one.
+    let mut ctx = Ctx::default();
+    ctx.impls.push((qtn("Dog"), qtn("Animal")));
+    assert!(is_subtype(&class("Dog"), &iface("Animal"), &ctx));
+
+    assert!(!is_subtype(
+        &Ty::list(class("Dog")),
+        &Ty::list(iface("Animal")),
+        &ctx,
+    ));
+    assert!(!is_subtype(
+        &map_ty(Ty::string(), class("Dog")),
+        &map_ty(Ty::string(), iface("Animal")),
+        &ctx,
+    ));
+    // A generic class is invariant in its argument for the same reason.
+    assert!(!is_subtype(
+        &class1("Box", class("Dog")),
+        &class1("Box", iface("Animal")),
+        &ctx,
+    ));
+    // Reflexive same-instantiation still holds.
+    assert!(is_subtype(
+        &Ty::list(class("Dog")),
+        &Ty::list(class("Dog")),
+        &ctx,
+    ));
 }
 
 #[test]
@@ -698,4 +1108,136 @@ fn equal_requires_singleton_with_unoverridable_eq() {
     ));
     // Class singletons (and distinct values generally) are not folded.
     assert!(!definitely_equal(&class("Dog"), &class("Dog"), &ctx));
+}
+
+// ── BEP-062: baml.AnyFunction ──────────────────────────────────────────────
+
+/// `baml.AnyFunction<...pins>` with the given associated-type pins. An empty
+/// list models a pre-default-fill existential (lowering normally fills
+/// `Returns`/`Throws` with `unknown`).
+fn any_function(pins: Vec<(&str, Ty)>) -> Ty {
+    Ty::Interface(
+        QualifiedTypeName::new(Name::new("baml"), vec![], Name::new("AnyFunction")),
+        vec![],
+        pins.into_iter().map(|(n, t)| (Name::new(n), t)).collect(),
+        TyAttr::default(),
+    )
+}
+
+fn simple_fn(ret: Ty, throws: Ty) -> Ty {
+    Ty::Function {
+        params: vec![FunctionParamTy::required(None, Ty::int())],
+        ret: Box::new(ret),
+        throws: Box::new(throws),
+        attr: TyAttr::default(),
+    }
+}
+
+#[test]
+fn every_function_implements_bare_any_function() {
+    // BEP-062: conformance is compiler-derived with no impl in the context.
+    // Both the default-filled existential (`Returns`/`Throws` pinned to
+    // `unknown`) and a pin-free one accept any function shape.
+    let ctx = Ctx::default();
+    let never = Ty::Never {
+        attr: TyAttr::default(),
+    };
+    let filled = any_function(vec![("Returns", Ty::unknown()), ("Throws", Ty::unknown())]);
+    assert!(is_subtype(
+        &simple_fn(Ty::string(), never.clone()),
+        &filled,
+        &ctx
+    ));
+    assert!(is_subtype(
+        &simple_fn(class("Doc"), class("HttpError")),
+        &filled,
+        &ctx
+    ));
+    assert!(is_subtype(
+        &simple_fn(Ty::string(), never),
+        &any_function(vec![]),
+        &ctx
+    ));
+    // Non-function values do not conform through the derived rule; they fall
+    // to the ordinary nominal fact, which this context does not claim.
+    assert!(!is_subtype(&Ty::int(), &filled, &ctx));
+    assert!(!is_subtype(&class("Doc"), &filled, &ctx));
+}
+
+#[test]
+fn any_function_pins_check_the_functions_channels_covariantly() {
+    let ctx = Ctx::default();
+    let never = Ty::Never {
+        attr: TyAttr::default(),
+    };
+    let ret_pin = any_function(vec![
+        ("Returns", union(vec![Ty::int(), Ty::string()])),
+        ("Throws", Ty::unknown()),
+    ]);
+    // `int <: int | string` fits the `Returns` pin; `bool` does not.
+    assert!(is_subtype(
+        &simple_fn(Ty::int(), never.clone()),
+        &ret_pin,
+        &ctx
+    ));
+    assert!(!is_subtype(
+        &simple_fn(Ty::bool(), never.clone()),
+        &ret_pin,
+        &ctx
+    ));
+    // A non-throwing function (`throws never`) fits every `Throws` pin; a
+    // mismatched error class does not.
+    let throws_pin = any_function(vec![
+        ("Returns", Ty::unknown()),
+        ("Throws", class("ToolError")),
+    ]);
+    assert!(is_subtype(&simple_fn(Ty::int(), never), &throws_pin, &ctx));
+    assert!(is_subtype(
+        &simple_fn(Ty::int(), class("ToolError")),
+        &throws_pin,
+        &ctx
+    ));
+    assert!(!is_subtype(
+        &simple_fn(Ty::int(), class("IoError")),
+        &throws_pin,
+        &ctx
+    ));
+}
+
+#[test]
+fn any_function_existentials_are_covariant_in_their_pins() {
+    // Unlike every other interface binding (invariant), `AnyFunction`'s pins
+    // only describe outputs of the held function, so the existentials
+    // themselves relate covariantly: `AnyFunction<Returns = int>` fits where
+    // `AnyFunction<Returns = int | string>` is expected.
+    let ctx = Ctx::default();
+    let narrow = any_function(vec![
+        ("Returns", Ty::int()),
+        (
+            "Throws",
+            Ty::Never {
+                attr: TyAttr::default(),
+            },
+        ),
+    ]);
+    let wide = any_function(vec![
+        ("Returns", union(vec![Ty::int(), Ty::string()])),
+        ("Throws", class("ToolError")),
+    ]);
+    let bare = any_function(vec![("Returns", Ty::unknown()), ("Throws", Ty::unknown())]);
+    assert!(is_subtype(&narrow, &wide, &ctx));
+    assert!(is_subtype(&narrow, &bare, &ctx));
+    assert!(is_subtype(&wide, &bare, &ctx));
+    assert!(!is_subtype(&wide, &narrow, &ctx));
+    assert!(!is_subtype(&bare, &narrow, &ctx));
+    // The carve-out is AnyFunction-specific: an unrelated same-shape interface
+    // still goes through the invariant `interface_requires` fact, which this
+    // context does not claim.
+    let other = Ty::Interface(
+        qtn("Callable"),
+        vec![],
+        vec![(Name::new("Returns"), Ty::int())],
+        TyAttr::default(),
+    );
+    assert!(!is_subtype(&other, &any_function(vec![]), &ctx));
 }

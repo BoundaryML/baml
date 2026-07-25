@@ -5,19 +5,20 @@
 //! the VM with the confusing `type error: expected int, got any`. The subscript
 //! is now validated at compile time, so these are rejected with a clear
 //! diagnostic before they ever run.
+//!
+//! Compile-error tests using `#[should_panic]` stay in Rust because the BAML
+//! corpus only runs code that successfully compiles.
 
 use baml_tests::baml_test;
-use bex_engine::BexExternalValue;
 
 // ============================================================================
 // §1 — A null array index is rejected at compile time (plain `[]`)
 // ============================================================================
 
-/// Previously this compiled and aborted the VM at runtime with the confusing
-/// `got any`. It is now a compile-time type mismatch (`got int | null`), so
-/// `baml_test!` fails compilation before execution.
+/// Null indices are rejected at compile time with a mismatched-types diagnostic
+/// (`found int | null`). This test verifies the rejection using `#[should_panic]`.
 #[tokio::test]
-#[should_panic(expected = "type mismatch: expected int, got int | null")]
+#[should_panic(expected = "mismatched types: expected `int`, found `int | null`")]
 async fn array_index_with_null_is_rejected_at_compile_time() {
     let _ = baml_test!(
         r#"
@@ -31,50 +32,6 @@ async fn array_index_with_null_is_rejected_at_compile_time() {
 }
 
 // ============================================================================
-// §2 — The optional index `?.[]` is null-safe in the *index* too
-// ============================================================================
-
-/// `?.[]` is the null-safe index operator, so a null subscript short-circuits
-/// the whole expression to null instead of aborting the VM (it used to crash
-/// with `got any`). The base guard and the index guard are symmetric.
-#[tokio::test]
-async fn optional_index_with_null_index_returns_null() {
-    let output = baml_test!(
-        r#"
-        function main() -> int? {
-            let arr: int[]? = [10, 20, 30];
-            let i: int? = null;
-            arr?.[i]
-        }
-    "#
-    );
-    assert!(
-        matches!(output.result, Ok(BexExternalValue::Null)),
-        "expected null (not a crash), got: {:?}",
-        output.result
-    );
-}
-
-/// A valid (non-null) index through `?.[]` still returns the element.
-#[tokio::test]
-async fn optional_index_with_valid_index_returns_element() {
-    let output = baml_test!(
-        r#"
-        function main() -> int? {
-            let arr: int[]? = [10, 20, 30];
-            let i: int? = 1;
-            arr?.[i]
-        }
-    "#
-    );
-    assert!(
-        matches!(output.result, Ok(BexExternalValue::Int(20))),
-        "expected 20, got: {:?}",
-        output.result
-    );
-}
-
-// ============================================================================
 // §N — Integer literals outside the i63 `int` range (B-266)
 // ============================================================================
 
@@ -82,7 +39,7 @@ async fn optional_index_with_valid_index_returns_element() {
 /// (a valid i64, but `INT_MAX + 1`) is rejected at compile time rather than
 /// panicking the VM at engine load. The diagnostic points at `bigint`.
 #[tokio::test]
-#[should_panic(expected = "[E0139]")]
+#[should_panic(expected = "[E0150]")]
 async fn int_literal_above_max_is_rejected_at_compile_time() {
     let _ = baml_test!(
         r#"
@@ -96,7 +53,7 @@ async fn int_literal_above_max_is_rejected_at_compile_time() {
 /// A genuinely-too-large negated literal (magnitude past `INT_MIN`) is also a
 /// compile error — the negated value is range-checked, not just the token.
 #[tokio::test]
-#[should_panic(expected = "[E0139]")]
+#[should_panic(expected = "[E0150]")]
 async fn negated_int_literal_below_min_is_rejected_at_compile_time() {
     let _ = baml_test!(
         r#"
@@ -112,7 +69,7 @@ async fn negated_int_literal_below_min_is_rejected_at_compile_time() {
 /// child node, so the `+2^62` is rejected just like a bare one (matching the
 /// Rust/Java/C# rule, where parentheses break the negative-literal form).
 #[tokio::test]
-#[should_panic(expected = "[E0139]")]
+#[should_panic(expected = "[E0150]")]
 async fn parenthesized_oversized_literal_is_rejected() {
     let _ = baml_test!(
         r#"
@@ -120,28 +77,6 @@ async fn parenthesized_oversized_literal_is_rejected() {
             -(4611686018427387904)
         }
     "#
-    );
-}
-
-/// `int.min_value()` (`-2^62`) must remain writable as a negated literal even
-/// though `+2^62` is not a legal `int` literal: the leading `-` forms a single
-/// negative literal. (Mirrors the i64::MIN literal rule in Rust/Java/C#.)
-#[tokio::test]
-async fn negated_int_min_literal_is_valid() {
-    let output = baml_test!(
-        r#"
-        function main() -> int {
-            -4611686018427387904
-        }
-    "#
-    );
-    assert!(
-        matches!(
-            output.result,
-            Ok(BexExternalValue::Int(-4611686018427387904))
-        ),
-        "expected INT_MIN, got: {:?}",
-        output.result
     );
 }
 
@@ -168,48 +103,11 @@ async fn map_with_int_key_is_rejected_at_compile_time() {
 }
 
 #[tokio::test]
-async fn map_with_string_alias_key_is_accepted() {
-    let output = baml_test!(
-        r#"
-        type Key = string
-
-        function main() -> int {
-            let counts: map<Key, int> = {};
-            let _ = counts.set("x", 1);
-            counts.get("x") ?? 0
-        }
-    "#
-    );
-    assert!(
-        matches!(output.result, Ok(BexExternalValue::Int(1))),
-        "expected aliased string key map to work, got: {:?}",
-        output.result
-    );
-}
-
-#[tokio::test]
-async fn map_with_repeated_string_alias_union_key_is_accepted() {
-    let output = baml_test!(
-        r#"
-        type Key = string
-
-        function main() -> int {
-            let counts: map<Key | Key, int> = {};
-            let _ = counts.set("x", 1);
-            counts.get("x") ?? 0
-        }
-    "#
-    );
-    assert!(
-        matches!(output.result, Ok(BexExternalValue::Int(1))),
-        "expected repeated aliased string key union map to work, got: {:?}",
-        output.result
-    );
-}
-
-#[tokio::test]
-async fn generic_map_key_annotation_is_deferred() {
-    let output = baml_test!(
+#[should_panic(expected = "map keys must be `string`; got `K`")]
+async fn generic_map_key_annotation_is_rejected() {
+    // No bound can prove a type variable string-denoting, so `map<K, V>` could be
+    // instantiated at a non-string key — rejected at the declaration (E0067).
+    let _ = baml_test!(
         r#"
         function passthrough<K, V>(items: map<K, V>) -> map<K, V> {
             items
@@ -219,11 +117,6 @@ async fn generic_map_key_annotation_is_deferred() {
             0
         }
     "#
-    );
-    assert!(
-        matches!(output.result, Ok(BexExternalValue::Int(0))),
-        "expected generic map key annotation to compile, got: {:?}",
-        output.result
     );
 }
 

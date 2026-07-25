@@ -374,7 +374,7 @@ fn append_lazy_children_block(out: &mut String, children: &BTreeSet<String>) {
 fn render_root_init(top_children: &BTreeSet<String>, use_bytecode: bool) -> String {
     let mut out = String::new();
     out.push_str("from __future__ import annotations\n\n");
-    out.push_str("from baml_core import BamlRuntime, set_type_map\n");
+    out.push_str("from baml_bridge import BamlRuntime, set_type_map\n");
     out.push_str("from . import _inlinedbaml\n");
     out.push_str("from ._typemap import _TYPE_MAP\n\n");
     if use_bytecode {
@@ -567,6 +567,30 @@ mod tests {
         )
     }
 
+    fn class_ty(name: Name, args: Vec<Ty>) -> Ty {
+        Ty::Class(name, args, baml_base::TyAttr::EMPTY)
+    }
+
+    fn enum_ty(name: Name) -> Ty {
+        Ty::Enum(name, baml_base::TyAttr::EMPTY)
+    }
+
+    fn alias_ty(name: Name) -> Ty {
+        Ty::TypeAlias(name, baml_base::TyAttr::EMPTY)
+    }
+
+    fn type_var(name: BaseName) -> Ty {
+        Ty::TypeVar(name, baml_base::TyAttr::EMPTY)
+    }
+
+    fn list(inner: Box<Ty>) -> Ty {
+        Ty::List(inner, baml_base::TyAttr::EMPTY)
+    }
+
+    fn union(members: Vec<Ty>) -> Ty {
+        Ty::Union(members, baml_base::TyAttr::EMPTY)
+    }
+
     fn origin(file: &str, span: u32) -> Origin {
         Origin {
             source_file_path: file.to_string(),
@@ -586,7 +610,9 @@ mod tests {
             properties: vec![ClassProperty {
                 name: BaseName::new("a"),
                 docstring: None,
-                ty: Ty::Int,
+                ty: Ty::Int {
+                    attr: baml_base::TyAttr::EMPTY,
+                },
             }],
             static_methods: vec![],
             instance_methods: vec![],
@@ -610,7 +636,9 @@ mod tests {
     fn alias(name: Name, file: &str, span: u32) -> Symbol {
         Symbol::TypeAlias(TypeAlias {
             name,
-            resolves_to: Ty::Int,
+            resolves_to: Ty::Int {
+                attr: baml_base::TyAttr::EMPTY,
+            },
             recursive: false,
             origin: origin(file, span),
         })
@@ -624,10 +652,14 @@ mod tests {
             arguments: vec![FunctionArgument {
                 name: BaseName::new("x"),
                 docstring: None,
-                ty: Ty::Int,
+                ty: Ty::Int {
+                    attr: baml_base::TyAttr::EMPTY,
+                },
                 default: None,
             }],
-            return_type: Ty::Int,
+            return_type: Ty::Int {
+                attr: baml_base::TyAttr::EMPTY,
+            },
             throws: None,
             watchers: vec![],
             origin: origin(file, span),
@@ -687,7 +719,7 @@ mod tests {
         assert!(out.contains_key(&PathBuf::from("py.typed")));
 
         let root = &out[&PathBuf::from("__init__.py")];
-        assert!(root.contains("from baml_core import BamlRuntime, set_type_map"));
+        assert!(root.contains("from baml_bridge import BamlRuntime, set_type_map"));
         assert!(root.contains("from . import _inlinedbaml"));
         assert!(root.contains("from ._typemap import _TYPE_MAP"));
         assert!(root.contains("set_type_map(_TYPE_MAP)"));
@@ -771,11 +803,25 @@ mod tests {
         let mut pool: SymbolPool = HashMap::new();
         pool.insert(
             cg_name("boundary", &[], "id"),
-            zero_arg_func("id", Ty::String, "core.baml", 0),
+            zero_arg_func(
+                "id",
+                Ty::String {
+                    attr: baml_base::TyAttr::EMPTY,
+                },
+                "core.baml",
+                0,
+            ),
         );
         pool.insert(
             cg_name("boundary", &["id"], "current"),
-            zero_arg_func("current", Ty::String, "id.baml", 0),
+            zero_arg_func(
+                "current",
+                Ty::String {
+                    attr: baml_base::TyAttr::EMPTY,
+                },
+                "id.baml",
+                0,
+            ),
         );
 
         let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
@@ -825,7 +871,9 @@ mod tests {
                 vec![ClassProperty {
                     name: BaseName::new("a"),
                     docstring: None,
-                    ty: Ty::Int,
+                    ty: Ty::Int {
+                        attr: baml_base::TyAttr::EMPTY,
+                    },
                 }],
             ),
         );
@@ -852,7 +900,9 @@ mod tests {
                 vec![ClassProperty {
                     name: BaseName::new("a"),
                     docstring: Some("Identifier".to_string()),
-                    ty: Ty::Int,
+                    ty: Ty::Int {
+                        attr: baml_base::TyAttr::EMPTY,
+                    },
                 }],
             ),
         );
@@ -886,12 +936,21 @@ mod tests {
                     ClassProperty {
                         name: BaseName::new("title"),
                         docstring: Some("Title shown in lists.".to_string()),
-                        ty: Ty::String,
+                        ty: Ty::String {
+                            attr: baml_base::TyAttr::EMPTY,
+                        },
                     },
                     ClassProperty {
                         name: BaseName::new("body"),
                         docstring: Some("Free-form body text.".to_string()),
-                        ty: Ty::Union(vec![Ty::String, Ty::Null]),
+                        ty: union(vec![
+                            Ty::String {
+                                attr: baml_base::TyAttr::EMPTY,
+                            },
+                            Ty::Null {
+                                attr: baml_base::TyAttr::EMPTY,
+                            },
+                        ]),
                     },
                 ],
             ),
@@ -919,7 +978,9 @@ mod tests {
                 vec![ClassProperty {
                     name: BaseName::new("a"),
                     docstring: None,
-                    ty: Ty::Int,
+                    ty: Ty::Int {
+                        attr: baml_base::TyAttr::EMPTY,
+                    },
                 }],
             ),
         );
@@ -1027,12 +1088,16 @@ mod tests {
                     ClassProperty {
                         name: BaseName::new("a"),
                         docstring: None,
-                        ty: Ty::Int,
+                        ty: Ty::Int {
+                            attr: baml_base::TyAttr::EMPTY,
+                        },
                     },
                     ClassProperty {
                         name: BaseName::new("b"),
                         docstring: None,
-                        ty: Ty::Int,
+                        ty: Ty::Int {
+                            attr: baml_base::TyAttr::EMPTY,
+                        },
                     },
                 ],
             ),
@@ -1062,12 +1127,16 @@ mod tests {
                     ClassProperty {
                         name: BaseName::new("a"),
                         docstring: Some("First.".to_string()),
-                        ty: Ty::Int,
+                        ty: Ty::Int {
+                            attr: baml_base::TyAttr::EMPTY,
+                        },
                     },
                     ClassProperty {
                         name: BaseName::new("b"),
                         docstring: None,
-                        ty: Ty::Int,
+                        ty: Ty::Int {
+                            attr: baml_base::TyAttr::EMPTY,
+                        },
                     },
                 ],
             ),
@@ -1141,7 +1210,7 @@ mod tests {
         method.arguments = vec![FunctionArgument {
             name: BaseName::new("self"),
             docstring: None,
-            ty: Ty::Class(n.clone(), vec![]),
+            ty: class_ty(n.clone(), vec![]),
             default: None,
         }];
         pool.insert(
@@ -1153,7 +1222,9 @@ mod tests {
                 properties: vec![ClassProperty {
                     name: BaseName::new("a"),
                     docstring: None,
-                    ty: Ty::Int,
+                    ty: Ty::Int {
+                        attr: baml_base::TyAttr::EMPTY,
+                    },
                 }],
                 static_methods: vec![],
                 instance_methods: vec![method],
@@ -1375,7 +1446,7 @@ mod tests {
         // per leaf that carries any function/companion binding, and
         // never in leaves that don't. 25b Phase 2: every leaf with a
         // class/enum/alias also pulls `register_class`/`register_enum`/
-        // `register_type_alias`, so the surrounding `from baml_core ...`
+        // `register_type_alias`, so the surrounding `from baml_bridge ...`
         // block is no longer factory-exclusive — we assert on the
         // factory name itself.
         let mut pool: SymbolPool = HashMap::new();
@@ -1534,9 +1605,29 @@ mod tests {
             class_with_props(
                 n,
                 vec![
-                    ("name", Ty::String),
-                    ("email", Ty::Union(vec![Ty::String, Ty::Null])),
-                    ("tags", Ty::List(Box::new(Ty::String))),
+                    (
+                        "name",
+                        Ty::String {
+                            attr: baml_base::TyAttr::EMPTY,
+                        },
+                    ),
+                    (
+                        "email",
+                        union(vec![
+                            Ty::String {
+                                attr: baml_base::TyAttr::EMPTY,
+                            },
+                            Ty::Null {
+                                attr: baml_base::TyAttr::EMPTY,
+                            },
+                        ]),
+                    ),
+                    (
+                        "tags",
+                        list(Box::new(Ty::String {
+                            attr: baml_base::TyAttr::EMPTY,
+                        })),
+                    ),
                 ],
                 "x.baml",
                 0,
@@ -1630,10 +1721,14 @@ mod tests {
         // schema build.
         let mut pool: SymbolPool = HashMap::new();
         let n = cg_name("user", &["tree"], "JsonValue");
-        let rhs = Ty::Union(vec![
-            Ty::Int,
-            Ty::String,
-            Ty::List(Box::new(Ty::TypeAlias(n.clone()))),
+        let rhs = union(vec![
+            Ty::Int {
+                attr: baml_base::TyAttr::EMPTY,
+            },
+            Ty::String {
+                attr: baml_base::TyAttr::EMPTY,
+            },
+            list(Box::new(alias_ty(n.clone()))),
         ]);
         pool.insert(n.clone(), alias_full(n, rhs, true, "tree.baml", 0));
         let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
@@ -1662,10 +1757,10 @@ mod tests {
             alias.clone(),
             alias_full(
                 alias.clone(),
-                Ty::Union(vec![
-                    Ty::Class(foo, vec![]),
-                    Ty::Class(bar, vec![]),
-                    Ty::List(Box::new(Ty::TypeAlias(alias))),
+                union(vec![
+                    class_ty(foo, vec![]),
+                    class_ty(bar, vec![]),
+                    list(Box::new(alias_ty(alias))),
                 ]),
                 true,
                 "lorem.baml",
@@ -1692,7 +1787,12 @@ mod tests {
             json.clone(),
             alias_full(
                 json.clone(),
-                Ty::Union(vec![Ty::Int, Ty::TypeAlias(json.clone())]),
+                union(vec![
+                    Ty::Int {
+                        attr: baml_base::TyAttr::EMPTY,
+                    },
+                    alias_ty(json.clone()),
+                ]),
                 true,
                 "tree.baml",
                 0,
@@ -1700,13 +1800,7 @@ mod tests {
         );
         pool.insert(
             bar.clone(),
-            alias_full(
-                bar,
-                Ty::List(Box::new(Ty::TypeAlias(json))),
-                false,
-                "tree.baml",
-                100,
-            ),
+            alias_full(bar, list(Box::new(alias_ty(json))), false, "tree.baml", 100),
         );
         let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
         let leaf = &out[&PathBuf::from("tree/__init__.py")];
@@ -1721,16 +1815,36 @@ mod tests {
         let stream = cg_name("user", &["lorem"], "Resume$stream");
         pool.insert(
             non_stream.clone(),
-            class_with_props(non_stream.clone(), vec![("name", Ty::String)], "x.baml", 0),
+            class_with_props(
+                non_stream.clone(),
+                vec![(
+                    "name",
+                    Ty::String {
+                        attr: baml_base::TyAttr::EMPTY,
+                    },
+                )],
+                "x.baml",
+                0,
+            ),
         );
         pool.insert(
             stream.clone(),
             class_with_props(
                 stream,
                 vec![
-                    ("summary", Ty::Union(vec![Ty::String, Ty::Null])),
+                    (
+                        "summary",
+                        union(vec![
+                            Ty::String {
+                                attr: baml_base::TyAttr::EMPTY,
+                            },
+                            Ty::Null {
+                                attr: baml_base::TyAttr::EMPTY,
+                            },
+                        ]),
+                    ),
                     // Non-stream FQN -> resolves to baml_sdk.lorem.Resume
-                    ("origin", Ty::Class(non_stream, vec![])),
+                    ("origin", class_ty(non_stream, vec![])),
                 ],
                 "x.baml",
                 0,
@@ -1790,7 +1904,7 @@ mod tests {
             envelope.clone(),
             class_with_props(
                 envelope,
-                vec![("sentiment", Ty::Enum(sentiment))],
+                vec![("sentiment", enum_ty(sentiment))],
                 "lorem.baml",
                 0,
             ),
@@ -1820,11 +1934,15 @@ mod tests {
                 .map(|n| FunctionArgument {
                     name: BaseName::new(*n),
                     docstring: None,
-                    ty: Ty::String,
+                    ty: Ty::String {
+                        attr: baml_base::TyAttr::EMPTY,
+                    },
                     default: None,
                 })
                 .collect(),
-            return_type: Ty::Int,
+            return_type: Ty::Int {
+                attr: baml_base::TyAttr::EMPTY,
+            },
             throws: None,
             watchers: vec![],
             origin: origin(file, span),
@@ -1918,13 +2036,17 @@ mod tests {
                     FunctionArgument {
                         name: BaseName::new("query"),
                         docstring: None,
-                        ty: Ty::String,
+                        ty: Ty::String {
+                            attr: baml_base::TyAttr::EMPTY,
+                        },
                         default: None,
                     },
                     FunctionArgument {
                         name: BaseName::new("max_results"),
                         docstring: None,
-                        ty: Ty::Int,
+                        ty: Ty::Int {
+                            attr: baml_base::TyAttr::EMPTY,
+                        },
                         default: Some(FunctionArgumentDefault::Literal(DefaultLiteral::Scalar(
                             baml_base::Literal::Int(10),
                         ))),
@@ -1932,7 +2054,9 @@ mod tests {
                     FunctionArgument {
                         name: BaseName::new("filter"),
                         docstring: None,
-                        ty: Ty::String,
+                        ty: Ty::String {
+                            attr: baml_base::TyAttr::EMPTY,
+                        },
                         default: Some(FunctionArgumentDefault::Expression {
                             source: Some("default_filter()".to_string()),
                         }),
@@ -1940,26 +2064,42 @@ mod tests {
                     FunctionArgument {
                         name: BaseName::new("tags"),
                         docstring: None,
-                        ty: Ty::List(Box::new(Ty::String)),
+                        ty: list(Box::new(Ty::String {
+                            attr: baml_base::TyAttr::EMPTY,
+                        })),
                         default: Some(FunctionArgumentDefault::Literal(DefaultLiteral::EmptyList)),
                     },
                     FunctionArgument {
                         name: BaseName::new("metadata"),
                         docstring: None,
                         ty: Ty::Map {
-                            key: Box::new(Ty::String),
-                            value: Box::new(Ty::String),
+                            key: Box::new(Ty::String {
+                                attr: baml_base::TyAttr::EMPTY,
+                            }),
+                            value: Box::new(Ty::String {
+                                attr: baml_base::TyAttr::EMPTY,
+                            }),
+                            attr: baml_base::TyAttr::EMPTY,
                         },
                         default: Some(FunctionArgumentDefault::Literal(DefaultLiteral::EmptyMap)),
                     },
                     FunctionArgument {
                         name: BaseName::new("fallback"),
                         docstring: None,
-                        ty: Ty::Union(vec![Ty::String, Ty::Null]),
+                        ty: union(vec![
+                            Ty::String {
+                                attr: baml_base::TyAttr::EMPTY,
+                            },
+                            Ty::Null {
+                                attr: baml_base::TyAttr::EMPTY,
+                            },
+                        ]),
                         default: Some(FunctionArgumentDefault::Null),
                     },
                 ],
-                return_type: Ty::String,
+                return_type: Ty::String {
+                    attr: baml_base::TyAttr::EMPTY,
+                },
                 throws: None,
                 watchers: vec![],
                 origin: origin("x.baml", 0),
@@ -1991,7 +2131,7 @@ mod tests {
     #[test]
     fn llm_default_client_argument_renders_in_function_and_companion_signatures() {
         let mut pool: SymbolPool = HashMap::new();
-        let client_ty = Ty::Class(cg_name("baml", &["llm"], "Client"), vec![]);
+        let client_ty = class_ty(cg_name("baml", &["llm"], "Client"), vec![]);
         let client_default = Some(FunctionArgumentDefault::Expression {
             source: Some("GPT4".to_string()),
         });
@@ -2018,8 +2158,15 @@ mod tests {
                 generic_params: Vec::new(),
                 name: BaseName::new("extract_resume"),
                 docstring: None,
-                arguments: make_args("resume", Ty::String),
-                return_type: Ty::String,
+                arguments: make_args(
+                    "resume",
+                    Ty::String {
+                        attr: baml_base::TyAttr::EMPTY,
+                    },
+                ),
+                return_type: Ty::String {
+                    attr: baml_base::TyAttr::EMPTY,
+                },
                 throws: None,
                 watchers: vec![],
                 origin: origin("x.baml", 0),
@@ -2031,8 +2178,13 @@ mod tests {
                 generic_params: Vec::new(),
                 name: BaseName::new("extract_resume$build_request"),
                 docstring: None,
-                arguments: make_args("resume", Ty::String),
-                return_type: Ty::Class(cg_name("baml", &["http"], "Request"), vec![]),
+                arguments: make_args(
+                    "resume",
+                    Ty::String {
+                        attr: baml_base::TyAttr::EMPTY,
+                    },
+                ),
+                return_type: class_ty(cg_name("baml", &["http"], "Request"), vec![]),
                 throws: None,
                 watchers: vec![],
                 origin: origin("x.baml", 0),
@@ -2071,26 +2223,42 @@ mod tests {
                     FunctionArgument {
                         name: BaseName::new("tags"),
                         docstring: None,
-                        ty: Ty::List(Box::new(Ty::String)),
+                        ty: list(Box::new(Ty::String {
+                            attr: baml_base::TyAttr::EMPTY,
+                        })),
                         default: Some(FunctionArgumentDefault::Literal(DefaultLiteral::EmptyList)),
                     },
                     FunctionArgument {
                         name: BaseName::new("metadata"),
                         docstring: None,
                         ty: Ty::Map {
-                            key: Box::new(Ty::String),
-                            value: Box::new(Ty::Int),
+                            key: Box::new(Ty::String {
+                                attr: baml_base::TyAttr::EMPTY,
+                            }),
+                            value: Box::new(Ty::Int {
+                                attr: baml_base::TyAttr::EMPTY,
+                            }),
+                            attr: baml_base::TyAttr::EMPTY,
                         },
                         default: Some(FunctionArgumentDefault::Literal(DefaultLiteral::EmptyMap)),
                     },
                     FunctionArgument {
                         name: BaseName::new("fallback"),
                         docstring: None,
-                        ty: Ty::Union(vec![Ty::String, Ty::Null]),
+                        ty: union(vec![
+                            Ty::String {
+                                attr: baml_base::TyAttr::EMPTY,
+                            },
+                            Ty::Null {
+                                attr: baml_base::TyAttr::EMPTY,
+                            },
+                        ]),
                         default: Some(FunctionArgumentDefault::Null),
                     },
                 ],
-                return_type: Ty::String,
+                return_type: Ty::String {
+                    attr: baml_base::TyAttr::EMPTY,
+                },
                 throws: None,
                 watchers: vec![],
                 origin: origin("x.baml", 0),
@@ -2242,11 +2410,31 @@ mod tests {
         let b = cg_name("user", &["lorem"], "Beta");
         pool.insert(
             a.clone(),
-            class_with_props(a, vec![("x", Ty::Int)], "a.baml", 0),
+            class_with_props(
+                a,
+                vec![(
+                    "x",
+                    Ty::Int {
+                        attr: baml_base::TyAttr::EMPTY,
+                    },
+                )],
+                "a.baml",
+                0,
+            ),
         );
         pool.insert(
             b.clone(),
-            class_with_props(b, vec![("y", Ty::String)], "b.baml", 0),
+            class_with_props(
+                b,
+                vec![(
+                    "y",
+                    Ty::String {
+                        attr: baml_base::TyAttr::EMPTY,
+                    },
+                )],
+                "b.baml",
+                0,
+            ),
         );
         let out1 = to_source_code(&pool, &[], NamingConvention::PreserveCase);
         let out2 = to_source_code(&pool, &[], NamingConvention::PreserveCase);
@@ -2289,11 +2477,15 @@ mod tests {
                 .map(|n| FunctionArgument {
                     name: BaseName::new(*n),
                     docstring: None,
-                    ty: Ty::Int,
+                    ty: Ty::Int {
+                        attr: baml_base::TyAttr::EMPTY,
+                    },
                     default: None,
                 })
                 .collect(),
-            return_type: Ty::Int,
+            return_type: Ty::Int {
+                attr: baml_base::TyAttr::EMPTY,
+            },
             throws: None,
             watchers: vec![],
             origin: origin(file, span),
@@ -2401,7 +2593,7 @@ mod tests {
         // `define_function` factory, so the import collapses to one
         // line — no parenthesized form needed.
         assert!(
-            leaf.contains("from baml_core import define_function as _define_function\n"),
+            leaf.contains("from baml_bridge import define_function as _define_function\n"),
             "missing single-line factory import:\n{leaf}"
         );
     }
@@ -2486,8 +2678,23 @@ mod tests {
             class_with_props(
                 n,
                 vec![
-                    ("name", Ty::String),
-                    ("email", Ty::Union(vec![Ty::String, Ty::Null])),
+                    (
+                        "name",
+                        Ty::String {
+                            attr: baml_base::TyAttr::EMPTY,
+                        },
+                    ),
+                    (
+                        "email",
+                        union(vec![
+                            Ty::String {
+                                attr: baml_base::TyAttr::EMPTY,
+                            },
+                            Ty::Null {
+                                attr: baml_base::TyAttr::EMPTY,
+                            },
+                        ]),
+                    ),
                 ],
                 "x.baml",
                 0,
@@ -2564,10 +2771,12 @@ mod tests {
                 arguments: vec![FunctionArgument {
                     name: BaseName::new("text"),
                     docstring: None,
-                    ty: Ty::String,
+                    ty: Ty::String {
+                        attr: baml_base::TyAttr::EMPTY,
+                    },
                     default: None,
                 }],
-                return_type: Ty::Class(resume, vec![]),
+                return_type: class_ty(resume, vec![]),
                 throws: None,
                 watchers: vec![],
                 origin: origin("x.baml", 100),
@@ -2587,7 +2796,7 @@ mod tests {
         );
         // No factory call, no `_define_function`.
         assert!(!leaf.contains("_define_function"));
-        assert!(!leaf.contains("baml_core"));
+        assert!(!leaf.contains("baml_bridge"));
     }
 
     #[test]
@@ -2612,10 +2821,12 @@ mod tests {
                 arguments: vec![FunctionArgument {
                     name: BaseName::new("json"),
                     docstring: None,
-                    ty: Ty::String,
+                    ty: Ty::String {
+                        attr: baml_base::TyAttr::EMPTY,
+                    },
                     default: None,
                 }],
-                return_type: Ty::Class(resume.clone(), vec![]),
+                return_type: class_ty(resume.clone(), vec![]),
                 throws: None,
                 watchers: vec![],
                 // Companions share the parent's span so they cluster.
@@ -2631,10 +2842,12 @@ mod tests {
                 arguments: vec![FunctionArgument {
                     name: BaseName::new("text"),
                     docstring: None,
-                    ty: Ty::String,
+                    ty: Ty::String {
+                        attr: baml_base::TyAttr::EMPTY,
+                    },
                     default: None,
                 }],
-                return_type: Ty::Class(resume, vec![]),
+                return_type: class_ty(resume, vec![]),
                 throws: None,
                 watchers: vec![],
                 origin: origin("x.baml", 100),
@@ -2675,10 +2888,14 @@ mod tests {
         // `typing_extensions.TypeAliasType` (18c).
         let mut pool: SymbolPool = HashMap::new();
         let n = cg_name("user", &["tree"], "JsonValue");
-        let rhs = Ty::Union(vec![
-            Ty::Int,
-            Ty::String,
-            Ty::List(Box::new(Ty::TypeAlias(n.clone()))),
+        let rhs = union(vec![
+            Ty::Int {
+                attr: baml_base::TyAttr::EMPTY,
+            },
+            Ty::String {
+                attr: baml_base::TyAttr::EMPTY,
+            },
+            list(Box::new(alias_ty(n.clone()))),
         ]);
         pool.insert(n.clone(), alias_full(n, rhs, true, "tree.baml", 0));
 
@@ -2816,8 +3033,8 @@ mod tests {
                 continue;
             }
             assert!(
-                !content.contains("baml_core"),
-                "{} must not import baml_core",
+                !content.contains("baml_bridge"),
+                "{} must not import baml_bridge",
                 path.display()
             );
             assert!(
@@ -2854,7 +3071,7 @@ mod tests {
             envelope.clone(),
             class_with_props(
                 envelope,
-                vec![("sentiment", Ty::Enum(sentiment))],
+                vec![("sentiment", enum_ty(sentiment))],
                 "lorem.baml",
                 0,
             ),
@@ -2900,7 +3117,7 @@ mod tests {
             envelope.clone(),
             class_with_props(
                 envelope,
-                vec![("inner", Ty::Class(foo, vec![]))],
+                vec![("inner", class_ty(foo, vec![]))],
                 "lorem.baml",
                 0,
             ),
@@ -2936,7 +3153,7 @@ mod tests {
             consumer.clone(),
             class_with_props(
                 consumer,
-                vec![("inner", Ty::Class(foo, vec![]))],
+                vec![("inner", class_ty(foo, vec![]))],
                 "root.baml",
                 0,
             ),
@@ -2963,7 +3180,7 @@ mod tests {
             envelope.clone(),
             class_with_props(
                 envelope,
-                vec![("resp", Ty::Class(response, vec![]))],
+                vec![("resp", class_ty(response, vec![]))],
                 "x.baml",
                 0,
             ),
@@ -2994,12 +3211,7 @@ mod tests {
         pool.insert(bucket.clone(), class(bucket.clone()));
         pool.insert(
             envelope.clone(),
-            class_with_props(
-                envelope,
-                vec![("b", Ty::Class(bucket, vec![]))],
-                "x.baml",
-                0,
-            ),
+            class_with_props(envelope, vec![("b", class_ty(bucket, vec![]))], "x.baml", 0),
         );
         let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
         let py = &out[&PathBuf::from("lorem/__init__.py")];
@@ -3025,13 +3237,23 @@ mod tests {
         let stream = cg_name("user", &["lorem"], "Resume$stream");
         pool.insert(
             non_stream.clone(),
-            class_with_props(non_stream.clone(), vec![("name", Ty::String)], "x.baml", 0),
+            class_with_props(
+                non_stream.clone(),
+                vec![(
+                    "name",
+                    Ty::String {
+                        attr: baml_base::TyAttr::EMPTY,
+                    },
+                )],
+                "x.baml",
+                0,
+            ),
         );
         pool.insert(
             stream.clone(),
             class_with_props(
                 stream,
-                vec![("origin", Ty::Class(non_stream, vec![]))],
+                vec![("origin", class_ty(non_stream, vec![]))],
                 "x.baml",
                 0,
             ),
@@ -3065,7 +3287,7 @@ mod tests {
             stream_bucket.clone(),
             class_with_props(
                 stream_bucket,
-                vec![("resp", Ty::Class(response, vec![]))],
+                vec![("resp", class_ty(response, vec![]))],
                 "x.baml",
                 0,
             ),
@@ -3113,9 +3335,9 @@ mod tests {
             class_with_props(
                 resume,
                 vec![
-                    ("s", Ty::Enum(sentiment)),
-                    ("b", Ty::Class(bucket, vec![])),
-                    ("r", Ty::Class(response, vec![])),
+                    ("s", enum_ty(sentiment)),
+                    ("b", class_ty(bucket, vec![])),
+                    ("r", class_ty(response, vec![])),
                 ],
                 "x.baml",
                 0,
@@ -3164,8 +3386,8 @@ mod tests {
             class_with_props(
                 resume,
                 vec![
-                    ("a", Ty::Class(s3_bucket, vec![])),
-                    ("b", Ty::Class(gcs_object, vec![])),
+                    ("a", class_ty(s3_bucket, vec![])),
+                    ("b", class_ty(gcs_object, vec![])),
                 ],
                 "x.baml",
                 0,
@@ -3192,7 +3414,7 @@ mod tests {
         pool.insert(resume.clone(), class(resume.clone()));
         pool.insert(
             other.clone(),
-            class_with_props(other, vec![("r", Ty::Class(resume, vec![]))], "x.baml", 100),
+            class_with_props(other, vec![("r", class_ty(resume, vec![]))], "x.baml", 100),
         );
         let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
         let py = &out[&PathBuf::from("lorem/__init__.py")];
@@ -3232,10 +3454,12 @@ mod tests {
                 arguments: vec![FunctionArgument {
                     name: BaseName::new("text"),
                     docstring: None,
-                    ty: Ty::String,
+                    ty: Ty::String {
+                        attr: baml_base::TyAttr::EMPTY,
+                    },
                     default: None,
                 }],
-                return_type: Ty::Enum(sentiment),
+                return_type: enum_ty(sentiment),
                 throws: None,
                 watchers: vec![],
                 origin: origin("x.baml", 100),
@@ -3315,7 +3539,7 @@ mod tests {
                 properties: vec![ClassProperty {
                     name: BaseName::new("item"),
                     docstring: None,
-                    ty: Ty::TypeVar(BaseName::new("T")),
+                    ty: type_var(BaseName::new("T")),
                 }],
                 static_methods: vec![],
                 instance_methods: vec![],
@@ -3331,9 +3555,9 @@ mod tests {
                 properties: vec![ClassProperty {
                     name: BaseName::new("contents"),
                     docstring: None,
-                    ty: Ty::List(Box::new(Ty::Class(
+                    ty: list(Box::new(class_ty(
                         cg_name("user", &["lorem"], "Box"),
-                        vec![Ty::TypeVar(BaseName::new("T"))],
+                        vec![type_var(BaseName::new("T"))],
                     ))),
                 }],
                 static_methods: vec![],
@@ -3406,10 +3630,10 @@ mod tests {
                 arguments: vec![FunctionArgument {
                     name: BaseName::new("value"),
                     docstring: None,
-                    ty: Ty::TypeVar(BaseName::new("T")),
+                    ty: type_var(BaseName::new("T")),
                     default: None,
                 }],
-                return_type: Ty::TypeVar(BaseName::new("T")),
+                return_type: type_var(BaseName::new("T")),
                 throws: None,
                 watchers: vec![],
                 origin: origin("echo.baml", 0),

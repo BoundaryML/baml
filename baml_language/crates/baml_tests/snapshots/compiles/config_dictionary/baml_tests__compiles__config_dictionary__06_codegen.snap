@@ -17,7 +17,13 @@ function boundary.id() -> boundary.LocalId {
 function boundary.id.current() -> string {
 }
 
-function user.MyClient$new() -> null {
+function reflect.call_any(f: baml.AnyFunction<Returns = R, Throws = E>, args: map<string, unknown>) -> R {
+}
+
+function reflect.signature(f: baml.AnyFunction<Returns = unknown, Throws = unknown>) -> reflect.Signature {
+}
+
+function user.MyClient$new(lenient: bool) -> null {
     load_const "MyClient"
     load_const "openai"
     load_const null

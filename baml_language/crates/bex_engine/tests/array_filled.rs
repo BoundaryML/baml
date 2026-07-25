@@ -78,3 +78,29 @@ async fn array_filled_infers_element_type() {
         BexExternalValue::String("ab-ab-ab".into())
     );
 }
+
+/// Filling with a mutable reference type aliases that same object in each slot:
+/// mutating one inner array is visible through all of them.
+#[tokio::test]
+async fn array_filled_mutable_value_aliases_all_slots() {
+    let source = r#"
+        function main() -> int {
+            let rows = baml.Array.filled(3, [0]);
+            match (rows.at(0)) {
+                null => 0,
+                let first: int[] => {
+                    first.push(1);
+                    let total = 0;
+                    for (let row in rows) {
+                        total += row.length();
+                    }
+                    total
+                }
+            }
+        }
+    "#;
+    // If each slot had an independent copy we'd get 4 (2 + 1 + 1).
+    // The current `Array.filled` contract aliases the same inner array, so
+    // all rows have length 2 after one push: 2 + 2 + 2 = 6.
+    assert_eq!(run_main(source).await.unwrap(), BexExternalValue::Int(6));
+}

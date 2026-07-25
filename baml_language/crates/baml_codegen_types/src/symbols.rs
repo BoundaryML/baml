@@ -4,6 +4,7 @@ use crate::{CodegenTypeError, Ty};
 
 pub type SymbolPool = std::collections::HashMap<super::Name, Symbol>;
 
+#[derive(Clone)]
 pub enum Symbol {
     Function(Function),
     Class(Class),
@@ -24,6 +25,7 @@ pub struct Origin {
     pub span_start: u32,
 }
 
+#[derive(Clone)]
 pub struct Function {
     pub name: baml_base::Name,
     /// `TypeVar`s declared on this function. Empty for non-generic functions.
@@ -72,6 +74,7 @@ pub enum DefaultLiteral {
     EmptyMap,
 }
 
+#[derive(Clone)]
 pub struct Class {
     pub name: super::Name,
     /// `TypeVar`s declared on this class. Empty for non-generic classes.
@@ -92,12 +95,14 @@ pub struct Class {
     pub origin: Origin,
 }
 
+#[derive(Clone)]
 pub struct ClassProperty {
     pub name: baml_base::Name,
     pub docstring: Option<String>,
     pub ty: super::Ty,
 }
 
+#[derive(Clone)]
 pub struct Enum {
     pub name: super::Name,
     pub docstring: Option<String>,
@@ -105,12 +110,14 @@ pub struct Enum {
     pub origin: Origin,
 }
 
+#[derive(Clone)]
 pub struct EnumVariant {
     pub name: baml_base::Name,
     pub docstring: Option<String>,
     pub value: String,
 }
 
+#[derive(Clone)]
 pub struct TypeAlias {
     pub name: super::Name,
     pub resolves_to: super::Ty,
@@ -120,15 +127,6 @@ pub struct TypeAlias {
 }
 
 impl Symbol {
-    pub fn validate(&self) -> Result<(), CodegenTypeError> {
-        match self {
-            Symbol::Function(function) => function.validate(),
-            Symbol::Class(class) => class.validate(),
-            Symbol::Enum(_) => Ok(()),
-            Symbol::TypeAlias(type_alias) => type_alias.validate(),
-        }
-    }
-
     pub fn walk_all_unions(&self) -> HashSet<super::Ty> {
         match self {
             Symbol::Function(function) => function.walk_all_unions(),
@@ -139,17 +137,26 @@ impl Symbol {
     }
 }
 
-impl Function {
-    fn validate(&self) -> Result<(), CodegenTypeError> {
-        self.arguments
-            .iter()
-            .map(|args| args.ty.validate())
-            .collect::<Result<Vec<_>, _>>()?;
-        self.return_type.validate()?;
-
-        Ok(())
+/// Validate map keys throughout a complete generator-facing symbol pool.
+///
+/// This is the authoritative alias-aware check: it follows canonical alias
+/// declaration targets by fully-qualified name, rejects missing or cyclic
+/// targets, and accepts only the string-denoting types supported by BAML.
+pub fn validate_symbol_pool_map_keys(pool: &SymbolPool) -> Result<(), CodegenTypeError> {
+    for symbol in pool.values() {
+        match symbol {
+            Symbol::Function(function) => function.validate_map_keys(pool)?,
+            Symbol::Class(class) => class.validate_map_keys(pool)?,
+            Symbol::Enum(_) => {}
+            Symbol::TypeAlias(alias) => {
+                validate_map_keys_ty(&alias.resolves_to, pool, &mut HashSet::new())?;
+            }
+        }
     }
+    Ok(())
+}
 
+impl Function {
     fn walk_all_unions(&self) -> HashSet<super::Ty> {
         self.arguments
             .iter()
@@ -157,20 +164,23 @@ impl Function {
             .chain(self.return_type.walk_all_unions())
             .collect()
     }
-}
 
-impl Class {
-    fn validate(&self) -> Result<(), CodegenTypeError> {
-        self.properties
-            .iter()
-            .map(|prop| prop.ty.validate())
-            .collect::<Result<Vec<_>, _>>()?;
-        for method in self.static_methods.iter().chain(&self.instance_methods) {
-            method.validate()?;
+    fn validate_map_keys(&self, pool: &SymbolPool) -> Result<(), CodegenTypeError> {
+        for argument in &self.arguments {
+            validate_map_keys_ty(&argument.ty, pool, &mut HashSet::new())?;
+        }
+        validate_map_keys_ty(&self.return_type, pool, &mut HashSet::new())?;
+        if let Some(throws) = &self.throws {
+            validate_map_keys_ty(throws, pool, &mut HashSet::new())?;
+        }
+        for (_, watcher) in &self.watchers {
+            validate_map_keys_ty(watcher, pool, &mut HashSet::new())?;
         }
         Ok(())
     }
+}
 
+impl Class {
     fn walk_all_unions(&self) -> HashSet<super::Ty> {
         self.properties
             .iter()
@@ -183,60 +193,302 @@ impl Class {
             )
             .collect::<_>()
     }
+
+    fn validate_map_keys(&self, pool: &SymbolPool) -> Result<(), CodegenTypeError> {
+        for property in &self.properties {
+            validate_map_keys_ty(&property.ty, pool, &mut HashSet::new())?;
+        }
+        for method in self.static_methods.iter().chain(&self.instance_methods) {
+            method.validate_map_keys(pool)?;
+        }
+        Ok(())
+    }
 }
 
 impl TypeAlias {
-    fn validate(&self) -> Result<(), CodegenTypeError> {
-        self.resolves_to.validate()
-    }
-
     fn walk_all_unions(&self) -> HashSet<super::Ty> {
         self.resolves_to.walk_all_unions()
     }
 }
 
-impl super::Ty {
-    pub fn walk_all_unions(&self) -> HashSet<super::Ty> {
-        let mut unions = HashSet::<Ty>::default();
-        if matches!(self, Ty::Union(_)) {
+trait WalkAllUnions {
+    fn walk_all_unions(&self) -> HashSet<Ty>;
+}
+
+impl WalkAllUnions for Ty {
+    fn walk_all_unions(&self) -> HashSet<Ty> {
+        let mut unions = HashSet::default();
+        if matches!(self, Ty::Union(..)) {
             unions.insert(self.clone());
         }
 
         match self {
-            Ty::Int
-            | Ty::Bigint
-            | Ty::Float
-            | Ty::String
-            | Ty::Bool
-            | Ty::Null
-            | Ty::Unit
-            | Ty::Uint8Array
-            | Ty::Media(_)
-            | Ty::Enum(_)
-            | Ty::TypeAlias(_)
-            | Ty::TypeVar(_)
-            | Ty::RustType
-            | Ty::BuiltinUnknown
-            // Unions are guaranteed to not have unions thanks to .validate()
-            | Ty::Union(_)
-            | Ty::Literal(_) => {}
-            Ty::Class(_, args) => {
-                for a in args {
-                    unions.extend(a.walk_all_unions());
+            Ty::Int { .. }
+            | Ty::Bigint { .. }
+            | Ty::Float { .. }
+            | Ty::String { .. }
+            | Ty::Bool { .. }
+            | Ty::Null { .. }
+            | Ty::Void { .. }
+            | Ty::Uint8Array { .. }
+            | Ty::Media(..)
+            | Ty::Enum(..)
+            | Ty::EnumVariant(..)
+            | Ty::TypeAlias(..)
+            | Ty::TypeVar(..)
+            | Ty::RustType { .. }
+            | Ty::Type { .. }
+            | Ty::Resource { .. }
+            | Ty::PromptAst { .. }
+            | Ty::BuiltinUnknown { .. }
+            | Ty::Never { .. }
+            | Ty::Literal(..) => {}
+            Ty::Class(_, args, _) => {
+                for arg in args {
+                    unions.extend(arg.walk_all_unions());
                 }
             }
-            Ty::List(ty) | Ty::Map { key: _, value: ty } => {
-                unions.extend(ty.walk_all_unions());
+            Ty::Interface(_, generics, associated_types, _) => {
+                for generic in generics {
+                    unions.extend(generic.walk_all_unions());
+                }
+                for (_, ty) in associated_types {
+                    unions.extend(ty.walk_all_unions());
+                }
             }
-            Ty::Callable { params, ret } => {
-                for p in params {
-                    unions.extend(p.ty.walk_all_unions());
+            Ty::List(ty, _) => unions.extend(ty.walk_all_unions()),
+            Ty::Map { key, value, .. } => {
+                unions.extend(key.walk_all_unions());
+                unions.extend(value.walk_all_unions());
+            }
+            Ty::Function {
+                params,
+                ret,
+                throws,
+                ..
+            } => {
+                for param in params {
+                    unions.extend(param.ty.walk_all_unions());
                 }
                 unions.extend(ret.walk_all_unions());
+                unions.extend(throws.walk_all_unions());
             }
-            Ty::BamlOptions => {}
+            Ty::Future(value, error, _) => {
+                unions.extend(value.walk_all_unions());
+                unions.extend(error.walk_all_unions());
+            }
+            // Codegen types are canonical at the compiler boundary, but keep
+            // this public symbol traversal total for manually assembled pools.
+            Ty::Union(members, _) => {
+                for member in members {
+                    unions.extend(member.walk_all_unions());
+                }
+            }
         }
 
         unions
+    }
+}
+
+fn validate_map_keys_ty(
+    ty: &Ty,
+    pool: &SymbolPool,
+    resolving_aliases: &mut HashSet<super::Name>,
+) -> Result<(), CodegenTypeError> {
+    match ty {
+        Ty::Map { key, value, .. } => {
+            if !map_key_resolves_to_string(key, pool, resolving_aliases) {
+                return Err(CodegenTypeError::InvalidMapKey(key.clone()));
+            }
+            validate_map_keys_ty(value, pool, resolving_aliases)
+        }
+        Ty::Class(_, args, _) => args
+            .iter()
+            .try_for_each(|arg| validate_map_keys_ty(arg, pool, resolving_aliases)),
+        Ty::Interface(_, generics, associated_types, _) => {
+            generics
+                .iter()
+                .try_for_each(|ty| validate_map_keys_ty(ty, pool, resolving_aliases))?;
+            associated_types
+                .iter()
+                .try_for_each(|(_, ty)| validate_map_keys_ty(ty, pool, resolving_aliases))
+        }
+        Ty::List(inner, _) => validate_map_keys_ty(inner, pool, resolving_aliases),
+        Ty::Union(members, _) => members
+            .iter()
+            .try_for_each(|member| validate_map_keys_ty(member, pool, resolving_aliases)),
+        Ty::Function {
+            params,
+            ret,
+            throws,
+            ..
+        } => {
+            for param in params {
+                validate_map_keys_ty(&param.ty, pool, resolving_aliases)?;
+            }
+            validate_map_keys_ty(ret, pool, resolving_aliases)?;
+            validate_map_keys_ty(throws, pool, resolving_aliases)
+        }
+        Ty::Future(value, error, _) => {
+            validate_map_keys_ty(value, pool, resolving_aliases)?;
+            validate_map_keys_ty(error, pool, resolving_aliases)
+        }
+        _ => Ok(()),
+    }
+}
+
+fn map_key_resolves_to_string(
+    key: &Ty,
+    pool: &SymbolPool,
+    resolving_aliases: &mut HashSet<super::Name>,
+) -> bool {
+    match key {
+        Ty::String { .. } | Ty::Literal(baml_base::Literal::String(_), ..) => true,
+        Ty::Never { .. } => true,
+        Ty::Union(members, _) => members
+            .iter()
+            .all(|member| map_key_resolves_to_string(member, pool, resolving_aliases)),
+        Ty::TypeAlias(name, _) => {
+            if !resolving_aliases.insert(name.clone()) {
+                return false;
+            }
+            let valid = matches!(pool.get(name), Some(Symbol::TypeAlias(alias)) if
+                map_key_resolves_to_string(&alias.resolves_to, pool, resolving_aliases));
+            resolving_aliases.remove(name);
+            valid
+        }
+        _ => false,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use baml_base::{Name as BaseName, TyAttr};
+
+    use super::*;
+
+    fn name(value: &str) -> crate::Name {
+        crate::Name::new(BaseName::new("user"), Vec::new(), BaseName::new(value))
+    }
+
+    fn origin() -> Origin {
+        Origin {
+            source_file_path: "types.baml".to_string(),
+            span_start: 0,
+        }
+    }
+
+    fn alias(name: crate::Name, resolves_to: Ty) -> Symbol {
+        Symbol::TypeAlias(TypeAlias {
+            name,
+            resolves_to,
+            recursive: false,
+            origin: origin(),
+        })
+    }
+
+    fn map_with_key(key: Ty) -> Symbol {
+        Symbol::Class(Class {
+            name: name("Holder"),
+            generic_params: Vec::new(),
+            docstring: None,
+            properties: vec![ClassProperty {
+                name: BaseName::new("values"),
+                docstring: None,
+                ty: Ty::Map {
+                    key: Box::new(key),
+                    value: Box::new(Ty::Int {
+                        attr: TyAttr::EMPTY,
+                    }),
+                    attr: TyAttr::EMPTY,
+                },
+            }],
+            static_methods: Vec::new(),
+            instance_methods: Vec::new(),
+            origin: origin(),
+        })
+    }
+
+    #[test]
+    fn map_key_validation_follows_alias_chains() {
+        let key = name("Key");
+        let key_chain = name("KeyChain");
+        let mut pool = SymbolPool::new();
+        pool.insert(
+            key.clone(),
+            alias(
+                key.clone(),
+                Ty::String {
+                    attr: TyAttr::EMPTY,
+                },
+            ),
+        );
+        pool.insert(
+            key_chain.clone(),
+            alias(key_chain.clone(), Ty::TypeAlias(key, TyAttr::EMPTY)),
+        );
+        pool.insert(
+            name("Holder"),
+            map_with_key(Ty::TypeAlias(key_chain, TyAttr::EMPTY)),
+        );
+
+        assert_eq!(validate_symbol_pool_map_keys(&pool), Ok(()));
+    }
+
+    #[test]
+    fn map_key_validation_rejects_non_string_and_cyclic_aliases() {
+        for (label, target) in [
+            (
+                "non-string",
+                Ty::Int {
+                    attr: TyAttr::EMPTY,
+                },
+            ),
+            ("cycle", Ty::TypeAlias(name("Key"), TyAttr::EMPTY)),
+        ] {
+            let key = name("Key");
+            let mut pool = SymbolPool::new();
+            pool.insert(key.clone(), alias(key.clone(), target));
+            pool.insert(
+                name("Holder"),
+                map_with_key(Ty::TypeAlias(key, TyAttr::EMPTY)),
+            );
+
+            assert!(
+                matches!(
+                    validate_symbol_pool_map_keys(&pool),
+                    Err(CodegenTypeError::InvalidMapKey(key))
+                        if matches!(key.as_ref(), Ty::TypeAlias(..))
+                ),
+                "{label} alias key must be rejected"
+            );
+        }
+    }
+
+    #[test]
+    fn union_walker_is_total_for_noncanonical_pools() {
+        let nested = Ty::Union(
+            vec![
+                Ty::String {
+                    attr: TyAttr::EMPTY,
+                },
+                Ty::Null {
+                    attr: TyAttr::EMPTY,
+                },
+            ],
+            TyAttr::EMPTY,
+        );
+        let outer = Ty::Union(
+            vec![
+                Ty::Int {
+                    attr: TyAttr::EMPTY,
+                },
+                nested.clone(),
+            ],
+            TyAttr::EMPTY,
+        );
+        let symbol = alias(name("Nested"), outer.clone());
+
+        assert_eq!(symbol.walk_all_unions(), HashSet::from([outer, nested]));
     }
 }

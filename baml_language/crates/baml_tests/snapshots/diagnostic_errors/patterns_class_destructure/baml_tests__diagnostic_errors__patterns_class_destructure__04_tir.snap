@@ -25,13 +25,13 @@ function user.class_destructure_unknown_field_in_let() -> int throws never {
     let Person { missing: missing } = Person { age: 1, flexible_age: 2, address: Address { zip: 3 } } : user.Person
     0 : 0
   }
+  !! 540..562: class `Person` has no field `missing`
 }
 function user.class_destructure_duplicate_field_key_in_let() -> int throws never {
   { : unknown
     let Person { age: first, age: second } = Person { age: 1, flexible_age: 2, address: Address { zip: 3 } } : user.Person
     first + second : unknown
   }
-  !! 902..907: unresolved name: first
 }
 function user.class_destructure_duplicate_field_key_with_wildcards() -> int throws never {
   { : 1
@@ -63,6 +63,7 @@ function user.nested_class_destructure_unknown_field_in_let() -> int throws neve
     let Person { address: Address { missing: missing } } = Person { age: 1, flexible_age: 2, address: Address { zip: 3 } } : user.Person
     0 : 0
   }
+  !! 2063..2082: class `Address` has no field `missing`
 }
 function user.match_class_destructure_unknown_field() -> int throws never {
   { : 1 | 0
@@ -72,7 +73,7 @@ function user.match_class_destructure_unknown_field() -> int throws never {
       _ =>
         0 : 0
   }
-  !! 2375..2376: unreachable arm
+  !! 2337..2355: class `Person` has no field `missing`
 }
 function user.class_destructure_unresolved_class() -> int throws never {
   { : 0
@@ -90,7 +91,6 @@ function user.class_destructure_field_pattern_type_mismatch() -> int throws neve
         0 : 0
   }
   !! 2740..2746: type mismatch: expected int, got string
-  !! 2768..2769: unreachable arm
 }
 function user.class_destructure_invalid_chain_type() -> int throws never {
   { : int
@@ -205,12 +205,20 @@ function user.class_destructure_or_pattern_must_bind_same_names(v: user.Person |
   }
 }
 function user.class_destructure_or_pattern_same_binding_conflicting_types(v: user.Person | user.Admin) -> int throws never {
-  { : 1
-    match (v : user.Person | user.Admin) : 1
+  { : !error
+    match (v : user.Person | user.Admin) : !error
       Person { age: age } | Admin { age: age } =>
-        1 : 1
+        age : !error
   }
   !! 5786..5789: Or-pattern alternatives bind `age` with conflicting types: `int` vs `string`
+}
+function user.class_destructure_or_pattern_same_binding_conflicting_types_reversed(v: user.Person | user.Admin) -> int throws never {
+  { : !error
+    match (v : user.Person | user.Admin) : !error
+      Admin { age: age } | Person { age: age } =>
+        age : !error
+  }
+  !! 5963..5966: Or-pattern alternatives bind `age` with conflicting types: `string` vs `int`
 }
 function user.generic_class_destructure_or_pattern_same_binding_conflicting_types(v: user.Box<int> | user.Box<string>) -> int throws never {
   { : 1
@@ -218,7 +226,7 @@ function user.generic_class_destructure_or_pattern_same_binding_conflicting_type
       Box<int> { value: value } | Box<string> { value: value } =>
         1 : 1
   }
-  !! 5996..6005: Or-pattern alternatives bind `value` with conflicting types: `int` vs `string`
+  !! 6175..6184: Or-pattern alternatives bind `value` with conflicting types: `int` vs `string`
 }
 function user.nested_generic_class_destructure_duplicate_binding_name() -> int throws never {
   { : 0
@@ -235,19 +243,18 @@ function user.nested_class_destructure_field_pattern_type_mismatch() -> int thro
       _ =>
         0 : 0
   }
-  !! 6495..6501: type mismatch: expected int, got string
-  !! 6525..6526: unreachable arm
+  !! 6674..6680: type mismatch: expected int, got string
 }
 function user.class_destructure_unknown_renamed_field_span() -> int throws never {
   { : unknown
     let Person { missing: renamed } = Person { age: 1, flexible_age: 2, address: Address { zip: 3 } } : user.Person
     renamed : unknown
   }
-  !! 6752..6759: unresolved name: renamed
+  !! 6784..6831: class `Person` has no field `missing`
 }
 function user.lambda_class_destructure_field_pattern_type_mismatch_span() -> int throws never {
   { : int
-    let f: (Person) -> int = : (p: user.Person) -> int throws never -> (user.Person) -> int throws never
+    let f: (Person) -> int throws never = : (p: user.Person) -> int throws never -> (user.Person) -> int throws never
       (p: Person) -> int { ... } : (p: user.Person) -> int throws never
         {
           let Person { age: string } = p
@@ -255,10 +262,9 @@ function user.lambda_class_destructure_field_pattern_type_mismatch_span() -> int
         }
     f(Person { age: 1, flexible_age: 2, address: Address { zip: 3 } }) : int
   }
-  !! 6917..6923: type mismatch: expected int, got string
+  !! 7109..7115: type mismatch: expected int, got string
 }
 lambda user.lambda_class_destructure_field_pattern_type_mismatch_span {
-  !! 6928..6929: type mismatch: expected int, got string
 }
 function user.class_destructure_formatter_trivia_preserved() -> int throws never {
   { : int

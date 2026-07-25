@@ -10,9 +10,11 @@ mod media;
 mod py_handle;
 pub mod runtime;
 pub mod types;
+mod unhandled_spawn;
 
 use pyo3::{
     Bound,
+    exceptions::PyImportError,
     prelude::{PyModule, PyResult, pyfunction, pymodule},
     types::PyModuleMethods,
     wrap_pyfunction,
@@ -45,6 +47,12 @@ fn cancel_function_call(call_id: u64) -> bool {
 
 #[pymodule]
 fn baml_py(m: &Bound<'_, PyModule>) -> PyResult<()> {
+    bridge_cffi::register_bridge(bridge_cffi::BridgeInfo {
+        language: bridge_cffi::BridgeLanguage::Python,
+        sdk_version: baml_version::CANONICAL_VERSION.to_string(),
+    })
+    .map_err(PyImportError::new_err)?;
+
     m.add_class::<baml_call_context::BamlCallContext>()?;
     m.add_class::<py_handle::BamlPyHandle>()?;
     m.add_wrapped(wrap_pyfunction!(py_handle::_seed_function_ref_handle))?;
@@ -62,6 +70,10 @@ fn baml_py(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_wrapped(wrap_pyfunction!(flush_events))?;
     m.add_wrapped(wrap_pyfunction!(new_function_call))?;
     m.add_wrapped(wrap_pyfunction!(cancel_function_call))?;
+    m.add_wrapped(wrap_pyfunction!(
+        unhandled_spawn::register_unhandled_spawn_error_callback
+    ))?;
+    m.add_wrapped(wrap_pyfunction!(unhandled_spawn::shutdown_runtime))?;
     m.add_wrapped(wrap_pyfunction!(runtime::get_runtime))?;
     m.add_wrapped(wrap_pyfunction!(host_value::register_host_callable))?;
     m.add_wrapped(wrap_pyfunction!(host_value::release_host_callable))?;

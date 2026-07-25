@@ -3,58 +3,67 @@ source: crates/baml_tests/tests/baml_src.rs
 ---
 function soundness.$init_test_ns_soundness_soundness(registry: testing.TestCollector) -> null {
     load_var registry
+    load_const "root.soundness"
     load_const "call_result_immediate_right_operand_subtraction"
     make_closure .<lambda($init_test_ns_soundness_soundness, 0)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.soundness"
     load_const "phi_like_right_operand_subtraction"
     make_closure .<lambda($init_test_ns_soundness_soundness, 1)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.soundness"
     load_const "cross_block_field_mutation"
     make_closure .<lambda($init_test_ns_soundness_soundness, 2)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.soundness"
     load_const "cross_block_let_mutation"
     make_closure .<lambda($init_test_ns_soundness_soundness, 3)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.soundness"
     load_const "cross_block_let_mutation_false_branch"
     make_closure .<lambda($init_test_ns_soundness_soundness, 4)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.soundness"
     load_const "cross_block_param_mutation"
     make_closure .<lambda($init_test_ns_soundness_soundness, 5)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.soundness"
     load_const "copy_of_mutable_param"
     make_closure .<lambda($init_test_ns_soundness_soundness, 6)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.soundness"
     load_const "transitive_param_copy_mutation"
     make_closure .<lambda($init_test_ns_soundness_soundness, 7)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.soundness"
     load_const "multiple_defs_preserve_side_effects"
     make_closure .<lambda($init_test_ns_soundness_soundness, 8)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_const null
     return

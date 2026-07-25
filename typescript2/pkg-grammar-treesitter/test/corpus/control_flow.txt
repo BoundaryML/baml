@@ -1,0 +1,524 @@
+==================
+if / else if / else with parenthesized and bare conditions
+==================
+
+function f(x: int) -> string {
+  if (x < 0) { "negative" }
+  else if x == 0 { "zero" }
+  else { "positive" }
+}
+
+---
+
+(source_file
+  (function_declaration
+    (identifier)
+    (parameter_list
+      (parameter
+        (identifier)
+        (type_path
+          (identifier))))
+    (type_path
+      (identifier))
+    (function_body
+      (expression_statement
+        (if_expression
+          (parenthesized_expression
+            (binary_expression
+              (identifier)
+              (number)))
+          (block
+            (expression_statement
+              (string)))
+          (if_expression
+            (binary_expression
+              (identifier)
+              (number))
+            (block
+              (expression_statement
+                (string)))
+            (block
+              (expression_statement
+                (string)))))))))
+
+==================
+if let / else if let chains, if const
+==================
+
+function g(r: Ok | Err | Empty, value: int | string) -> string {
+  if let o: Ok = r {
+    o.value
+  } else if let e: Err = r {
+    e.message
+  } else if r is Empty {
+    "empty"
+  } else {
+    "other"
+  }
+  if const narrowed: int = value {
+    narrowed;
+  };
+  "done"
+}
+
+---
+
+(source_file
+  (function_declaration
+    (identifier)
+    (parameter_list
+      (parameter
+        (identifier)
+        (union_type
+          (union_type
+            (type_path
+              (identifier))
+            (type_path
+              (identifier)))
+          (type_path
+            (identifier))))
+      (parameter
+        (identifier)
+        (union_type
+          (type_path
+            (identifier))
+          (type_path
+            (identifier)))))
+    (type_path
+      (identifier))
+    (function_body
+      (expression_statement
+        (if_expression
+          (chain_pattern
+            (type_pattern
+              (type_path
+                (identifier)))
+            (type_pattern
+              (type_path
+                (identifier))))
+          (identifier)
+          (block
+            (expression_statement
+              (member_expression
+                (identifier)
+                (property_identifier))))
+          (if_expression
+            (chain_pattern
+              (type_pattern
+                (type_path
+                  (identifier)))
+              (type_pattern
+                (type_path
+                  (identifier))))
+            (identifier)
+            (block
+              (expression_statement
+                (member_expression
+                  (identifier)
+                  (property_identifier))))
+            (if_expression
+              (is_expression
+                (identifier)
+                (type_pattern
+                  (type_path
+                    (identifier))))
+              (block
+                (expression_statement
+                  (string)))
+              (block
+                (expression_statement
+                  (string)))))))
+      (expression_statement
+        (if_expression
+          (chain_pattern
+            (type_pattern
+              (type_path
+                (identifier)))
+            (type_pattern
+              (type_path
+                (identifier))))
+          (identifier)
+          (block
+            (expression_statement
+              (identifier)))))
+      (expression_statement
+        (string)))))
+
+==================
+while, while let, while const
+==================
+
+function f() -> int {
+  let i = 0;
+  while (i < 10) {
+    i = i + 1;
+  };
+  while let Destructure { field } = root.next(inputs) {
+    break;
+  }
+  while const loop_value: int = value {
+    break;
+  }
+  i
+}
+
+---
+
+(source_file
+  (function_declaration
+    (identifier)
+    (parameter_list)
+    (type_path
+      (identifier))
+    (function_body
+      (let_declaration
+        (type_pattern
+          (type_path
+            (identifier)))
+        (number))
+      (while_statement
+        (parenthesized_expression
+          (binary_expression
+            (identifier)
+            (number)))
+        (block
+          (expression_statement
+            (assignment_expression
+              (identifier)
+              (binary_expression
+                (identifier)
+                (number))))))
+      (while_statement
+        (destructure_pattern
+          (identifier)
+          (field_pattern
+            (property_identifier)))
+        (call_expression
+          (member_expression
+            (identifier)
+            (property_identifier))
+          (arguments
+            (identifier)))
+        (block
+          (expression_statement
+            (break_expression))))
+      (while_statement
+        (chain_pattern
+          (type_pattern
+            (type_path
+              (identifier)))
+          (type_pattern
+            (type_path
+              (identifier))))
+        (identifier)
+        (block
+          (expression_statement
+            (break_expression))))
+      (expression_statement
+        (identifier)))))
+
+==================
+for loops: C-style, for-in parenthesized, for-in bare
+==================
+
+function f(items: int[], rows: string[][]) -> int {
+  for (let i = 0; i < 10; i += 1) {
+    continue;
+  };
+  for (const item in items) {
+    item;
+  }
+  for const item in items {
+    item;
+  }
+  for let [let first, ..let rest]: string[] in rows {
+    first;
+  }
+  0
+}
+
+---
+
+(source_file
+  (function_declaration
+    (identifier)
+    (parameter_list
+      (parameter
+        (identifier)
+        (array_type
+          (type_path
+            (identifier))))
+      (parameter
+        (identifier)
+        (array_type
+          (array_type
+            (type_path
+              (identifier))))))
+    (type_path
+      (identifier))
+    (function_body
+      (for_statement
+        (let_declaration
+          (type_pattern
+            (type_path
+              (identifier)))
+          (number))
+        (binary_expression
+          (identifier)
+          (number))
+        (assignment_expression
+          (identifier)
+          (number))
+        (block
+          (expression_statement
+            (continue_expression))))
+      (for_statement
+        (type_pattern
+          (type_path
+            (identifier)))
+        (identifier)
+        (block
+          (expression_statement
+            (identifier))))
+      (for_statement
+        (type_pattern
+          (type_path
+            (identifier)))
+        (identifier)
+        (block
+          (expression_statement
+            (identifier))))
+      (for_statement
+        (chain_pattern
+          (array_pattern
+            (binding_pattern
+              (identifier))
+            (rest_pattern
+              (binding_pattern
+                (identifier))))
+          (type_pattern
+            (array_type
+              (type_path
+                (identifier)))))
+        (identifier)
+        (block
+          (expression_statement
+            (identifier))))
+      (expression_statement
+        (number)))))
+
+==================
+let else, defer, watch let
+==================
+
+function f(value: int | string) -> int {
+  let v: int = value else { return 0; };
+  defer {
+    let cleanup = v;
+    cleanup;
+  }
+  watch let observed = v;
+  observed
+}
+
+---
+
+(source_file
+  (function_declaration
+    (identifier)
+    (parameter_list
+      (parameter
+        (identifier)
+        (union_type
+          (type_path
+            (identifier))
+          (type_path
+            (identifier)))))
+    (type_path
+      (identifier))
+    (function_body
+      (let_declaration
+        (chain_pattern
+          (type_pattern
+            (type_path
+              (identifier)))
+          (type_pattern
+            (type_path
+              (identifier))))
+        (identifier)
+        (else_clause
+          (block
+            (expression_statement
+              (return_expression
+                (number))))))
+      (defer_statement
+        (block
+          (let_declaration
+            (type_pattern
+              (type_path
+                (identifier)))
+            (identifier))
+          (expression_statement
+            (identifier))))
+      (let_declaration
+        (type_pattern
+          (type_path
+            (identifier)))
+        (identifier))
+      (expression_statement
+        (identifier)))))
+
+==================
+catch, catch_all, chained catch clauses, rethrow
+==================
+
+function f(x: int) -> string {
+  MayFailIntOrString(x) catch (e) {
+    string => "caught string"
+  } catch_all (e2) {
+    int => "caught int",
+    _ => throw e2
+  }
+}
+
+---
+
+(source_file
+  (function_declaration
+    (identifier)
+    (parameter_list
+      (parameter
+        (identifier)
+        (type_path
+          (identifier))))
+    (type_path
+      (identifier))
+    (function_body
+      (expression_statement
+        (catch_expression
+          (catch_expression
+            (call_expression
+              (identifier)
+              (arguments
+                (identifier)))
+            (catch_clause
+              (identifier)
+              (match_arm
+                (type_pattern
+                  (type_path
+                    (identifier)))
+                (string))))
+          (catch_clause
+            (identifier)
+            (match_arm
+              (type_pattern
+                (type_path
+                  (identifier)))
+              (string))
+            (match_arm
+              (wildcard_pattern)
+              (throw_expression
+                (identifier)))))))))
+
+==================
+throw statement and throw of a constructor
+==================
+
+function f(x: int) -> string throws MyError {
+  if (x < 0) {
+    throw MyError { message: "negative" }
+  }
+  throw "error"
+}
+
+---
+
+(source_file
+  (function_declaration
+    (identifier)
+    (parameter_list
+      (parameter
+        (identifier)
+        (type_path
+          (identifier))))
+    (type_path
+      (identifier))
+    (throws_clause
+      (type_path
+        (identifier)))
+    (function_body
+      (expression_statement
+        (if_expression
+          (parenthesized_expression
+            (binary_expression
+              (identifier)
+              (number)))
+          (block
+            (expression_statement
+              (throw_expression
+                (constructor_expression
+                  (identifier)
+                  (constructor_body
+                    (constructor_field
+                      (property_identifier)
+                      (string)))))))))
+      (expression_statement
+        (throw_expression
+          (string))))))
+
+==================
+break / continue / return as match arm values
+==================
+
+function f(xs: int[]) -> int {
+  for (let x in xs) {
+    match (x) {
+      0 => break,
+      1 => continue,
+      _ => return x,
+    }
+  }
+  0
+}
+
+---
+
+(source_file
+  (function_declaration
+    (identifier)
+    (parameter_list
+      (parameter
+        (identifier)
+        (array_type
+          (type_path
+            (identifier)))))
+    (type_path
+      (identifier))
+    (function_body
+      (for_statement
+        (type_pattern
+          (type_path
+            (identifier)))
+        (identifier)
+        (block
+          (expression_statement
+            (match_expression
+              (parenthesized_expression
+                (identifier))
+              (match_body
+                (match_arm
+                  (type_pattern
+                    (literal_type
+                      (number)))
+                  (break_expression))
+                (match_arm
+                  (type_pattern
+                    (literal_type
+                      (number)))
+                  (continue_expression))
+                (match_arm
+                  (wildcard_pattern)
+                  (return_expression
+                    (identifier))))))))
+      (expression_statement
+        (number)))))

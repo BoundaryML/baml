@@ -19,6 +19,10 @@ class Greeter {
     greeting
   }
 
+  function wait(self, callback: () -> string throws never) -> string {
+    callback()
+  }
+
   // Static method (no `self`): a factory that constructs the class.
   function create(name: string) -> Greeter {
     Greeter { name: name }

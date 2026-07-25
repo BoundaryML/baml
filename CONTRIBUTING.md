@@ -17,3 +17,21 @@ Please remember that BAML is maintained by humans and is used in production
 for a wide range of critical use cases. We expect our contributors to be
 thoughtful about their work and engage with us, either in our Discord or on
 the issue or pull request.
+
+# Getting Started
+
+See [README-DEV.md](./README-DEV.md) for environment setup (via
+[mise](https://mise.jdx.dev/) and `./scripts/setup-dev.sh`), the development
+workflow, and how to run tests. In short:
+
+```bash
+curl https://mise.run | sh   # install mise
+./scripts/setup-dev.sh       # install Rust and everything else
+```
+
+Rust changes go in the `baml_language/` workspace — run `cargo test --lib`
+there before submitting, and format with:
+
+```bash
+cargo fmt -- --config imports_granularity="Crate" --config group_imports="StdExternalCrate"
+```

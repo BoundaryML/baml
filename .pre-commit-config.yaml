@@ -33,6 +33,7 @@ repos:
         fail_fast: true
 
       - id: check-yaml
+        args: [--allow-multiple-documents]
         fail_fast: true
 
   - repo: local
@@ -46,7 +47,7 @@ repos:
         entry: bash -c 'node typescript2/pkg-grammar/scripts/sync.mjs --check'
         language: system
         pass_filenames: false
-        files: ^typescript2/(pkg-grammar/.*\.tmLanguage\.json|app-vscode-ext/syntaxes/.*\.tmLanguage\.json)$
+        files: ^typescript2/(pkg-grammar/(.*\.tmLanguage\.json|language-configuration\.json)|app-vscode-ext/(syntaxes/.*\.tmLanguage\.json|language-configuration\.json))$
         priority: 0
 
       - id: cargo-fmt
@@ -56,6 +57,14 @@ repos:
         pass_filenames: false
         types: [rust]
         files: ^baml_language/
+        priority: 2
+
+      - id: clang-format-cpp
+        name: clang-format (C++ SDK)
+        entry: bash -c 'cd baml_language && mise run fmt-cpp'
+        language: system
+        pass_filenames: false
+        files: ^baml_language/(sdks/cpp/|sdk_tests/crates/cpp/).*\.(h|cc)$
         priority: 2
 
       - id: cargo-stow
@@ -92,3 +101,12 @@ repos:
         files: ^baml_language/
         priority: 4
         stages: [manual]
+
+      # Temporarily disabled while the Hawk check is paused in CI.
+      # - id: cargo-hawk
+      #   name: cargo hawk (dead public)
+      #   entry: bash -c 'cd baml_language && scripts/hawk'
+      #   language: system
+      #   pass_filenames: false
+      #   files: ^baml_language/(.*\.rs|.*Cargo\.toml|Cargo\.lock|hawk\.toml|scripts/hawk)$
+      #   priority: 5

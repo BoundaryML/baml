@@ -7,6 +7,7 @@ python = "3.13"     # Will use uv for Python package management
 ruby = "3.2.2"
 node = "22"         # For pnpm
 java = "temurin-23"
+gradle = "8.14"     # sdk_tests/crates/java fixtures (compiled with --release 17)
 
 uv = "0.11.3"
 direnv = "2.37.1"
@@ -17,13 +18,14 @@ clang = "22.1.7" # LLVM tools for CI, including llvm-strip
 "cargo:bacon" = "latest"
 "cargo:cross" = "latest"
 "cargo:cargo-watch" = "latest"
-"cargo:wasm-pack" = "0.14.0"
+"github:rustwasm/wasm-pack" = "0.14.0"
 "cargo:ripgrep" = "latest"
 "cargo:just" = "latest"
 "cargo:prek" = "0.3.13"
 "cargo:cargo-nextest" = "latest"
 "cargo:cargo-insta" = "latest"
 "cargo:cargo-shear" = "latest"
+"cargo:https://github.com/astral-sh/hawk" = { version = "rev:42b09e72b2bf79f75aa8ce5f4563576f2dedf4c1", crate = "cargo-hawk", locked = true, install_env = { RUSTC_BOOTSTRAP = "1", RUSTUP_TOOLCHAIN = "1.97.1" } }
 
 # Go tools
 # locked to match the version in .github/actions/setup-go/action.yml
@@ -42,6 +44,7 @@ protoc = "27.1"
 "npm:@infisical/cli" = "latest"
 
 actionlint = "latest"
+ast-grep = "0.44.1"
 
 [tasks.pr-unresolved]
 run = "./scripts/pr-unresolved"

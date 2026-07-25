@@ -390,18 +390,6 @@ fn render_builtin_namespace_llm() {
     insta::assert_snapshot!(output);
 }
 
-/// `baml describe baml.math` — list items in the `math` sub-namespace.
-#[test]
-fn render_builtin_namespace_math() {
-    let db = simple_project();
-    let pkg_id = baml_compiler2_hir::package::PackageId::new(&db, baml_db::Name::new("baml"));
-    let ns_path = vec![baml_db::Name::new("math")];
-    let entries = baml_lsp2_actions::list_namespace_items(&db, pkg_id, &ns_path).unwrap();
-    assert!(!entries.is_empty());
-    let output = capture_listing(&entries);
-    insta::assert_snapshot!(output);
-}
-
 /// `baml describe testing` — list items in the `testing` package.
 #[test]
 fn render_testing_package_listing() {
@@ -1005,7 +993,7 @@ fn render_describe_fields_only_body_fits_tight_budget() {
     let tight = capture_description(&db, &descs[0], 5);
     let full = capture_description(&db, &descs[0], 1000);
     assert!(
-        !tight.contains("[INFO] Showing"),
+        !tight.contains("[INFO] showing"),
         "fields-only body must not truncate at budget 5:\n{tight}"
     );
     // The header + body block is identical at both budgets; only the trailing
@@ -1070,14 +1058,50 @@ fn render_keyword_class() {
 }
 
 #[test]
+fn render_keyword_generator() {
+    let output = capture_keyword("generator");
+    insta::assert_snapshot!(output);
+}
+
+#[test]
 fn render_keyword_if() {
     let output = capture_keyword("if");
     insta::assert_snapshot!(output);
 }
 
 #[test]
+fn render_keyword_test() {
+    let output = capture_keyword("test");
+    insta::assert_snapshot!(output);
+}
+
+#[test]
+fn render_keyword_testset() {
+    let output = capture_keyword("testset");
+    insta::assert_snapshot!(output);
+}
+
+#[test]
 fn render_keyword_spawn() {
     let output = capture_keyword("spawn");
+    insta::assert_snapshot!(output);
+}
+
+#[test]
+fn render_keyword_defer() {
+    let output = capture_keyword("defer");
+    insta::assert_snapshot!(output);
+}
+
+#[test]
+fn render_keyword_cleanup() {
+    let output = capture_keyword("cleanup");
+    insta::assert_snapshot!(output);
+}
+
+#[test]
+fn render_keyword_playground() {
+    let output = capture_keyword("playground");
     insta::assert_snapshot!(output);
 }
 
@@ -1105,11 +1129,32 @@ fn render_keyword_patterns() {
     insta::assert_snapshot!(output);
 }
 
+/// `defer` and `cleanup` (BEP-042) resolve to keyword topics rather than
+/// falling through to "No symbol found" (regression test for B-632).
+#[test]
+fn dispatch_defer_and_cleanup_resolve_to_keyword() {
+    let db = simple_project();
+    for name in ["defer", "cleanup"] {
+        assert!(
+            matches!(dispatch(&db, name), Some(ResolvedTarget::Keyword(_))),
+            "`{name}` should resolve to a keyword topic, not fall through to 'No symbol found'"
+        );
+    }
+}
+
 #[test]
 fn dispatch_language_topic_resolves_to_keyword() {
-    // Language/SDK + pattern topics route to keyword docs, not package resolution.
+    // Language/SDK + pattern topics and CLI-command topics route to keyword
+    // docs, not package resolution.
     let db = simple_project();
-    for name in ["python", "typescript", "baml_sdk", "patterns", "pattern"] {
+    for name in [
+        "python",
+        "typescript",
+        "baml_sdk",
+        "patterns",
+        "pattern",
+        "playground",
+    ] {
         assert!(
             matches!(dispatch(&db, name), Some(ResolvedTarget::Keyword(_))),
             "`{name}` should resolve to a keyword topic"
@@ -1266,6 +1311,33 @@ fn dispatch_keyword_interfaces() {
     let db = simple_project();
     let output = describe_via_dispatch(&db, "interfaces");
     insta::assert_snapshot!(output);
+}
+
+#[test]
+fn dispatch_keyword_google_ai_documents_enterprise_vertex_delegation() {
+    let db = simple_project();
+    let output = describe_via_dispatch(&db, "google-ai");
+    assert!(
+        output.contains("Google AI Studio API")
+            && output.contains("gemini-3.5-flash")
+            && output.contains("GOOGLE_GENAI_USE_ENTERPRISE=true")
+            && output.contains("passthrough to the `vertex-ai` backend"),
+        "google-ai documentation must explain enterprise delegation to Vertex AI:\n{output}"
+    );
+}
+
+#[test]
+fn dispatch_keyword_vertex_ai_documents_google_cloud_setup() {
+    let db = simple_project();
+    let output = describe_via_dispatch(&db, "vertex-ai");
+    assert!(
+        output.contains("Google Cloud Vertex AI")
+            && output.contains("gemini-3.1-pro-preview")
+            && output.contains("location \"global\"")
+            && output.contains("GOOGLE_CLOUD_PROJECT")
+            && output.contains("Application Default Credentials"),
+        "vertex-ai documentation must explain Google Cloud setup:\n{output}"
+    );
 }
 
 /// Unknown keyword should fall through to normal resolution.

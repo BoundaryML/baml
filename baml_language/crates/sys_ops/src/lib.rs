@@ -630,6 +630,537 @@ impl<T> io::IoClassLlmContext for T {
     }
 }
 
+/// Blanket impl — `PromptAst` accessors read the wrapped `bex_vm_types::PromptAst`
+/// and render it readably (B-627). `text()` is the single-string rendering (role
+/// headers + content) that also backs `string.from` / `to_string`; `messages()`
+/// is the structured role/content list.
+impl<T> io::IoClassLlmPromptAst for T {
+    fn text(
+        &self,
+        _heap: &std::sync::Arc<BexHeap>,
+        _call_id: CallId,
+        prompt_ast: io::owned::llm::PromptAst,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<String> {
+        SysOpOutput::ok(unwrap_prompt_ast(&prompt_ast).render_text())
+    }
+
+    fn messages(
+        &self,
+        _heap: &std::sync::Arc<BexHeap>,
+        _call_id: CallId,
+        prompt_ast: io::owned::llm::PromptAst,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<Vec<io::owned::llm::PromptMessage>> {
+        let messages = unwrap_prompt_ast(&prompt_ast)
+            .to_messages()
+            .into_iter()
+            .map(|(role, content)| io::owned::llm::PromptMessage { role, content })
+            .collect();
+        SysOpOutput::ok(messages)
+    }
+}
+
+// ============================================================================
+// `baml.schema` — provider-neutral JSON Schema lowering
+// ============================================================================
+
+impl<T> io::IoNamespaceSchema for T {
+    fn json_schema(
+        &self,
+        _heap: &std::sync::Arc<BexHeap>,
+        _call_id: CallId,
+        t: baml_type::RuntimeTy,
+        ctx: &SysOpContext,
+    ) -> SysOpOutput<BexExternalValue> {
+        match schema::json_schema(&t, ctx) {
+            Ok(value) => SysOpOutput::ok(schema::json_to_bex(value)),
+            Err(message) => SysOpOutput::err(VmBamlError::Unsupported { message }),
+        }
+    }
+}
+
+mod schema {
+    use std::collections::HashSet;
+
+    use baml_type::RuntimeTy;
+    use bex_external_types::BexExternalValue;
+    use serde_json::{Value, json};
+    use sys_types::SysOpContext;
+
+    fn json_alias_ty() -> RuntimeTy {
+        RuntimeTy::TypeAlias(
+            baml_type::TypeName::from_dotted_path(baml_base::qualified_name::BAML_JSON_JSON),
+            baml_type::TyAttr::default(),
+        )
+    }
+
+    pub(super) fn json_to_bex(value: Value) -> BexExternalValue {
+        match value {
+            Value::Null => BexExternalValue::Null,
+            Value::Bool(value) => BexExternalValue::Bool(value),
+            Value::Number(value) => match value.as_i64() {
+                Some(value) => BexExternalValue::Int(value),
+                None => BexExternalValue::Float(value.as_f64().unwrap_or_default()),
+            },
+            Value::String(value) => BexExternalValue::String(value.into()),
+            Value::Array(items) => BexExternalValue::Array {
+                element_type: json_alias_ty(),
+                items: items.into_iter().map(json_to_bex).collect(),
+            },
+            Value::Object(entries) => BexExternalValue::Map {
+                key_type: RuntimeTy::string(),
+                value_type: json_alias_ty(),
+                entries: entries
+                    .into_iter()
+                    .map(|(key, value)| (key, json_to_bex(value)))
+                    .collect(),
+            },
+        }
+    }
+
+    pub(super) fn json_schema(ty: &RuntimeTy, ctx: &SysOpContext) -> Result<Value, String> {
+        let mut builder = SchemaBuilder {
+            ctx,
+            definitions: serde_json::Map::new(),
+            building: HashSet::new(),
+            referenced: HashSet::new(),
+        };
+
+        let (mut root, root_class_key) = match ty {
+            RuntimeTy::Class(name, _, _) => {
+                let key = definition_key(name);
+                builder.building.insert(key.clone());
+                let schema = builder.class_object(name)?;
+                builder.building.remove(&key);
+                (schema, Some(key))
+            }
+            _ => (builder.ty_schema(ty)?, None),
+        };
+
+        if let Some(key) = root_class_key
+            && builder.referenced.contains(&key)
+        {
+            builder.definitions.insert(key, root.clone());
+        }
+
+        if !builder.definitions.is_empty() {
+            let Value::Object(root_object) = &mut root else {
+                return Err("json_schema: schema root must be a JSON object".to_string());
+            };
+            root_object.insert("$defs".to_string(), Value::Object(builder.definitions));
+        }
+        Ok(root)
+    }
+
+    struct SchemaBuilder<'a> {
+        ctx: &'a SysOpContext,
+        definitions: serde_json::Map<String, Value>,
+        building: HashSet<String>,
+        referenced: HashSet<String>,
+    }
+
+    impl SchemaBuilder<'_> {
+        fn ty_schema(&mut self, ty: &RuntimeTy) -> Result<Value, String> {
+            match ty {
+                RuntimeTy::Int { .. } | RuntimeTy::Bigint { .. } => {
+                    Ok(json!({ "type": "integer" }))
+                }
+                RuntimeTy::Float { .. } => Ok(json!({ "type": "number" })),
+                RuntimeTy::String { .. } => Ok(json!({ "type": "string" })),
+                RuntimeTy::Bool { .. } => Ok(json!({ "type": "boolean" })),
+                RuntimeTy::Null { .. } => Ok(json!({ "type": "null" })),
+                RuntimeTy::Uint8Array { .. } => Ok(json!({ "type": "string" })),
+                RuntimeTy::Literal(lit, _, _) => Ok(Self::literal_schema(lit)),
+                RuntimeTy::List(inner, _) => Ok(json!({
+                    "type": "array",
+                    "items": self.ty_schema(inner)?,
+                })),
+                RuntimeTy::Map { value, .. } => Ok(json!({
+                    "type": "object",
+                    "additionalProperties": self.ty_schema(value)?,
+                })),
+                RuntimeTy::Union(members, _) => self.union_schema(members),
+                RuntimeTy::Enum(name, _) => Self::enum_schema(name, self.ctx),
+                RuntimeTy::Class(name, _, _) => self.class_ref(name),
+                RuntimeTy::TypeAlias(name, _) => self.type_alias_ref(name),
+                RuntimeTy::BuiltinUnknown { .. } => Ok(json!({})),
+                other => Err(format!(
+                    "json_schema: no JSON Schema representation for `{other}`"
+                )),
+            }
+        }
+
+        fn literal_schema(lit: &baml_base::Literal) -> Value {
+            use baml_base::Literal;
+            match lit {
+                Literal::Int(i) => json!({ "type": "integer", "const": i }),
+                Literal::Bigint(n) => json!({ "type": "integer", "const": n.to_string() }),
+                Literal::Float(s) => {
+                    json!({ "type": "number", "const": s.parse::<f64>().unwrap_or(0.0) })
+                }
+                Literal::String(s) => json!({ "type": "string", "const": s }),
+                Literal::Bool(b) => json!({ "type": "boolean", "const": b }),
+            }
+        }
+
+        fn union_schema(&mut self, members: &[RuntimeTy]) -> Result<Value, String> {
+            let has_null = members.iter().any(RuntimeTy::is_null);
+            let non_null: Vec<&RuntimeTy> = members.iter().filter(|m| !m.is_null()).collect();
+            if non_null.is_empty() {
+                return Ok(json!({ "type": "null" }));
+            }
+            let mut schemas = non_null
+                .iter()
+                .map(|member| self.ty_schema(member))
+                .collect::<Result<Vec<_>, _>>()?;
+            if schemas.len() == 1 {
+                let base = schemas.pop().unwrap_or_else(|| json!({}));
+                return Ok(if has_null {
+                    Self::with_null(base)
+                } else {
+                    base
+                });
+            }
+            if has_null {
+                schemas.push(json!({ "type": "null" }));
+            }
+            Ok(json!({ "anyOf": schemas }))
+        }
+
+        fn with_null(base: Value) -> Value {
+            if let Value::Object(mut object) = base {
+                if let Some(Value::String(kind)) = object.get("type") {
+                    let widened = json!([kind, "null"]);
+                    object.insert("type".to_string(), widened);
+                    return Value::Object(object);
+                }
+                return json!({ "anyOf": [Value::Object(object), { "type": "null" }] });
+            }
+            json!({ "anyOf": [base, { "type": "null" }] })
+        }
+
+        fn enum_schema(name: &baml_type::TypeName, ctx: &SysOpContext) -> Result<Value, String> {
+            let enum_def = find_enum_definition(ctx, name)
+                .ok_or_else(|| format!("json_schema: unknown enum `{}`", name.display_name()))?;
+            let variants: Vec<Value> = enum_def
+                .variants
+                .iter()
+                .map(|variant| {
+                    json!(
+                        variant
+                            .alias
+                            .clone()
+                            .unwrap_or_else(|| variant.name.clone())
+                    )
+                })
+                .collect();
+            Ok(json!({ "type": "string", "enum": variants }))
+        }
+
+        fn class_ref(&mut self, name: &baml_type::TypeName) -> Result<Value, String> {
+            let key = definition_key(name);
+            self.referenced.insert(key.clone());
+
+            if !self.definitions.contains_key(&key) && !self.building.contains(&key) {
+                self.building.insert(key.clone());
+                let definition = self.class_object(name)?;
+                self.building.remove(&key);
+                self.definitions.insert(key.clone(), definition);
+            }
+
+            Ok(json!({ "$ref": format!("#/$defs/{}", json_pointer_escape(&key)) }))
+        }
+
+        fn type_alias_ref(&mut self, name: &baml_type::TypeName) -> Result<Value, String> {
+            let key = definition_key(name);
+            self.referenced.insert(key.clone());
+
+            if !self.definitions.contains_key(&key) && !self.building.contains(&key) {
+                let target = find_type_alias_definition(self.ctx, name)
+                    .cloned()
+                    .ok_or_else(|| {
+                        format!("json_schema: unknown type alias `{}`", name.display_name())
+                    })?;
+                self.building.insert(key.clone());
+                let definition = self.ty_schema(&target)?;
+                self.building.remove(&key);
+                self.definitions.insert(key.clone(), definition);
+            }
+
+            Ok(json!({ "$ref": format!("#/$defs/{}", json_pointer_escape(&key)) }))
+        }
+
+        fn class_object(&mut self, name: &baml_type::TypeName) -> Result<Value, String> {
+            let class_def = find_class_definition(self.ctx, name)
+                .ok_or_else(|| format!("json_schema: unknown class `{}`", name.display_name()))?
+                .clone();
+
+            let mut properties = serde_json::Map::new();
+            let mut required = Vec::new();
+            for field in &class_def.fields {
+                if field.skip {
+                    continue;
+                }
+                let prop_name = field.alias.clone().unwrap_or_else(|| field.name.clone());
+                properties.insert(prop_name.clone(), self.ty_schema(&field.field_type)?);
+                if !(field.field_type.is_nullable_union() || field.field_type.is_null()) {
+                    required.push(json!(prop_name));
+                }
+            }
+
+            Ok(json!({
+                "type": "object",
+                "properties": properties,
+                "required": required,
+            }))
+        }
+    }
+
+    fn definition_key(name: &baml_type::TypeName) -> String {
+        name.display_name().to_string()
+    }
+
+    fn json_pointer_escape(value: &str) -> String {
+        value.replace('~', "~0").replace('/', "~1")
+    }
+
+    fn find_class_definition<'a>(
+        ctx: &'a SysOpContext,
+        type_name: &baml_type::TypeName,
+    ) -> Option<&'a sys_types::ClassDefinition> {
+        ctx.class_definitions.get(type_name).or_else(|| {
+            let mut matches = ctx
+                .class_definitions
+                .iter()
+                .filter(|(name, _)| name.display_name() == type_name.display_name())
+                .map(|(_, definition)| definition);
+            let first = matches.next()?;
+            matches.next().is_none().then_some(first)
+        })
+    }
+
+    fn find_enum_definition<'a>(
+        ctx: &'a SysOpContext,
+        type_name: &baml_type::TypeName,
+    ) -> Option<&'a sys_types::EnumDefinition> {
+        ctx.enum_definitions.get(type_name).or_else(|| {
+            let mut matches = ctx
+                .enum_definitions
+                .iter()
+                .filter(|(name, _)| name.display_name() == type_name.display_name())
+                .map(|(_, definition)| definition);
+            let first = matches.next()?;
+            matches.next().is_none().then_some(first)
+        })
+    }
+
+    fn find_type_alias_definition<'a>(
+        ctx: &'a SysOpContext,
+        type_name: &baml_type::TypeName,
+    ) -> Option<&'a RuntimeTy> {
+        ctx.type_alias_definitions.get(type_name).or_else(|| {
+            let mut matches = ctx
+                .type_alias_definitions
+                .iter()
+                .filter(|(name, _)| name.display_name() == type_name.display_name())
+                .map(|(_, ty)| ty);
+            let first = matches.next()?;
+            matches.next().is_none().then_some(first)
+        })
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use std::sync::Arc;
+
+        use baml_type::{RuntimeTy, TyAttr, TypeName};
+        use serde_json::json;
+        use sys_types::{
+            ClassDefinition, ClassFieldDefinition, EnumDefinition, EnumVariantDefinition,
+            SysOpContext,
+        };
+
+        use super::json_schema;
+
+        fn type_name(name: &str) -> TypeName {
+            TypeName::from_dotted_path(name)
+        }
+
+        fn class_ty(name: &TypeName) -> RuntimeTy {
+            RuntimeTy::Class(name.clone(), Vec::new(), TyAttr::default())
+        }
+
+        fn alias_ty(name: &TypeName) -> RuntimeTy {
+            RuntimeTy::TypeAlias(name.clone(), TyAttr::default())
+        }
+
+        fn field(name: &str, field_type: RuntimeTy) -> ClassFieldDefinition {
+            ClassFieldDefinition {
+                name: name.to_string(),
+                field_type,
+                description: None,
+                alias: None,
+                skip: false,
+            }
+        }
+
+        fn class_definition(name: &TypeName, fields: Vec<ClassFieldDefinition>) -> ClassDefinition {
+            ClassDefinition {
+                name: name.display_name().to_string(),
+                description: None,
+                alias: None,
+                fields,
+            }
+        }
+
+        #[test]
+        fn self_referential_class_uses_defs_ref() {
+            let node = type_name("pkg.Node");
+            let mut classes = indexmap::IndexMap::new();
+            classes.insert(
+                node.clone(),
+                class_definition(
+                    &node,
+                    vec![field("next", RuntimeTy::optional(class_ty(&node)))],
+                ),
+            );
+            let mut ctx = SysOpContext::empty();
+            ctx.class_definitions = Arc::new(classes);
+
+            let schema = json_schema(&class_ty(&node), &ctx).expect("schema should lower");
+            assert_eq!(schema["type"], "object");
+            assert_eq!(
+                schema["properties"]["next"]["anyOf"][0]["$ref"],
+                "#/$defs/pkg.Node"
+            );
+            assert_eq!(schema["$defs"]["pkg.Node"]["type"], "object");
+        }
+
+        #[test]
+        fn mutually_recursive_classes_share_defs() {
+            let a = type_name("pkg.A");
+            let b = type_name("pkg.B");
+            let mut classes = indexmap::IndexMap::new();
+            classes.insert(
+                a.clone(),
+                class_definition(&a, vec![field("b", class_ty(&b))]),
+            );
+            classes.insert(
+                b.clone(),
+                class_definition(&b, vec![field("a", RuntimeTy::optional(class_ty(&a)))]),
+            );
+            let mut ctx = SysOpContext::empty();
+            ctx.class_definitions = Arc::new(classes);
+
+            let schema = json_schema(&class_ty(&a), &ctx).expect("schema should lower");
+            assert_eq!(schema["properties"]["b"]["$ref"], "#/$defs/pkg.B");
+            assert_eq!(
+                schema["$defs"]["pkg.B"]["properties"]["a"]["anyOf"][0]["$ref"],
+                "#/$defs/pkg.A"
+            );
+            assert_eq!(schema["$defs"]["pkg.A"]["type"], "object");
+        }
+
+        #[test]
+        fn nullable_union_widens_primitive_type() {
+            let schema = json_schema(
+                &RuntimeTy::optional(RuntimeTy::string()),
+                &SysOpContext::empty(),
+            )
+            .expect("schema should lower");
+            assert_eq!(schema, json!({ "type": ["string", "null"] }));
+        }
+
+        #[test]
+        fn class_refs_escape_json_pointer_tokens() {
+            let holder = type_name("pkg.Holder");
+            let escaped = type_name("pkg.A/B~C");
+            let mut classes = indexmap::IndexMap::new();
+            classes.insert(
+                holder.clone(),
+                class_definition(&holder, vec![field("value", class_ty(&escaped))]),
+            );
+            classes.insert(
+                escaped.clone(),
+                class_definition(&escaped, vec![field("value", RuntimeTy::int())]),
+            );
+            let mut ctx = SysOpContext::empty();
+            ctx.class_definitions = Arc::new(classes);
+
+            let schema = json_schema(&class_ty(&holder), &ctx).expect("schema should lower");
+            assert_eq!(schema["properties"]["value"]["$ref"], "#/$defs/pkg.A~1B~0C");
+            assert_eq!(schema["$defs"]["pkg.A/B~C"]["type"], "object");
+        }
+
+        #[test]
+        fn enum_variant_aliases_become_schema_values() {
+            let status = type_name("pkg.Status");
+            let mut enums = indexmap::IndexMap::new();
+            enums.insert(
+                status.clone(),
+                EnumDefinition {
+                    name: "Status".to_string(),
+                    description: None,
+                    alias: None,
+                    variants: vec![
+                        EnumVariantDefinition {
+                            name: "Ready".to_string(),
+                            description: None,
+                            alias: Some("ready-now".to_string()),
+                        },
+                        EnumVariantDefinition {
+                            name: "Done".to_string(),
+                            description: None,
+                            alias: None,
+                        },
+                    ],
+                },
+            );
+            let mut ctx = SysOpContext::empty();
+            ctx.enum_definitions = Arc::new(enums);
+
+            let schema = json_schema(&RuntimeTy::Enum(status, TyAttr::default()), &ctx)
+                .expect("schema should lower");
+            assert_eq!(
+                schema,
+                json!({ "type": "string", "enum": ["ready-now", "Done"] })
+            );
+        }
+
+        #[test]
+        fn recursive_json_alias_uses_a_self_ref() {
+            let json_name = type_name(baml_base::qualified_name::BAML_JSON_JSON);
+            let json_alias = alias_ty(&json_name);
+            let target = RuntimeTy::union([
+                RuntimeTy::null(),
+                RuntimeTy::bool(),
+                RuntimeTy::int(),
+                RuntimeTy::float(),
+                RuntimeTy::string(),
+                RuntimeTy::list(json_alias.clone()),
+                RuntimeTy::map(RuntimeTy::string(), json_alias.clone()),
+            ]);
+            let mut aliases = indexmap::IndexMap::new();
+            aliases.insert(json_name, target);
+            let mut ctx = SysOpContext::empty();
+            ctx.type_alias_definitions = Arc::new(aliases);
+
+            let schema = json_schema(&json_alias, &ctx).expect("schema should lower");
+            assert_eq!(schema["$ref"], "#/$defs/baml.json.json");
+            let definition = &schema["$defs"]["baml.json.json"];
+            assert_eq!(
+                definition["anyOf"][4]["items"]["$ref"],
+                "#/$defs/baml.json.json"
+            );
+            assert_eq!(
+                definition["anyOf"][5]["additionalProperties"]["$ref"],
+                "#/$defs/baml.json.json"
+            );
+        }
+    }
+}
+
 impl<T> io::IoNamespaceLlm for T {
     fn get_jinja_template(
         &self,
@@ -713,35 +1244,12 @@ impl<T> io::IoNamespaceLlm for T {
         _heap: &std::sync::Arc<BexHeap>,
         _call_id: CallId,
         shorthand: String,
-        ctx: &SysOpContext,
+        _ctx: &SysOpContext,
     ) -> SysOpOutput<io::owned::llm::PrimitiveClient> {
-        // Shorthand has no syntactic api_key binding to populate at lower
-        // time, so for the two providers whose env-var convention is
-        // ubiquitous enough to be safe to assume — `OPENAI_API_KEY` for
-        // openai and `ANTHROPIC_API_KEY` for anthropic — pull the key
-        // from the environment here. Other providers (vertex, bedrock,
-        // azure, …) need explicit configuration and stay untouched.
-        let mut client = match shorthand_to_primitive_client(&shorthand) {
-            Ok(c) => c,
-            Err(e) => return SysOpOutput::err(e),
-        };
-        let env_var: Option<&'static str> = match client.provider.as_str() {
-            "openai" | "openai-responses" => Some("OPENAI_API_KEY"),
-            "anthropic" => Some("ANTHROPIC_API_KEY"),
-            _ => None,
-        };
-        let Some(env_var) = env_var else {
-            return SysOpOutput::ok(client);
-        };
-        let io = ctx.runtime_io.clone();
-        SysOpOutput::async_op(async move {
-            if let Ok(Some(val)) = io.env_get(env_var.to_string()).await {
-                client.options.api_key = Some(val);
-            }
-            // Body never errors; annotate the error type so the
-            // `Result<_, VmRustFnError>` return contract is locked in.
-            Ok::<_, bex_vm_types::errors::VmRustFnError>(client)
-        })
+        match shorthand_to_primitive_client(&shorthand) {
+            Ok(client) => SysOpOutput::ok(client),
+            Err(error) => SysOpOutput::err(error),
+        }
     }
 
     fn __sap_parse_final(
@@ -1373,6 +1881,61 @@ impl io::IoNamespaceHttp for DefaultIoOps {
     }
 }
 
+impl io::IoClassWsWsStream for DefaultIoOps {
+    fn send(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        _stream: io::owned::ws::WsStream,
+        _text: String,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<()> {
+        SysOpOutput::err(VmBamlError::Unsupported {
+            message: "Operation not supported on this platform".to_string(),
+        })
+    }
+
+    fn next(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        _stream: io::owned::ws::WsStream,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<Option<String>> {
+        SysOpOutput::err(VmBamlError::Unsupported {
+            message: "Operation not supported on this platform".to_string(),
+        })
+    }
+
+    fn close(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        _stream: io::owned::ws::WsStream,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<()> {
+        SysOpOutput::err(VmBamlError::Unsupported {
+            message: "Operation not supported on this platform".to_string(),
+        })
+    }
+}
+
+impl io::IoNamespaceWs for DefaultIoOps {
+    fn _connect(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        _url: String,
+        _headers: indexmap::IndexMap<String, String>,
+        _timeout_nanos: Arc<num_bigint::BigInt>,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<io::owned::ws::WsStream> {
+        SysOpOutput::err(VmBamlError::Unsupported {
+            message: "Operation not supported on this platform".to_string(),
+        })
+    }
+}
+
 impl io::IoClassNetTcpStream for DefaultIoOps {
     fn _connect(
         &self,
@@ -1586,6 +2149,17 @@ impl io::IoNamespaceIo for DefaultIoOps {
 }
 
 impl io::IoNamespaceSys for DefaultIoOps {
+    fn collect_garbage(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<()> {
+        // The engine handles this intrinsic before consulting the platform IO
+        // table. Returning success is the safe fallback for other runtimes.
+        SysOpOutput::ok(())
+    }
+
     fn exec(
         &self,
         _h: &Arc<BexHeap>,
@@ -1738,6 +2312,29 @@ impl io::IoNamespaceTime for DefaultIoOps {
     }
 }
 
+impl io::IoClassRandomSystemRandom for DefaultIoOps {
+    fn random(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        _bytes: i64,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<Vec<u8>> {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "randomness".to_string(),
+            message: "Operation not supported on this platform".to_string(),
+        })
+    }
+    fn random_int(&self, _h: &Arc<BexHeap>, _c: CallId, _ctx: &SysOpContext) -> SysOpOutput<i64> {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "randomness".to_string(),
+            message: "Operation not supported on this platform".to_string(),
+        })
+    }
+}
+
+impl io::IoNamespaceRandom for DefaultIoOps {}
+
 impl io::IoPackageBaml for DefaultIoOps {}
 
 /// Builder for composing an [`io::SysOps`] table by overriding namespaces.
@@ -1784,12 +2381,6 @@ impl IoSysOpsBuilder {
         self
     }
 
-    /// Override the `env` namespace with a default-constructible type.
-    #[must_use]
-    pub fn with_env<T: io::IoNamespaceEnv + Default + Send + Sync + 'static>(self) -> Self {
-        self.with_env_instance(Arc::new(T::default()))
-    }
-
     /// Override the `io` namespace with a pre-built instance.
     #[must_use]
     pub fn with_io_instance(
@@ -1827,12 +2418,6 @@ impl IoSysOpsBuilder {
             })
         };
         self
-    }
-
-    /// Override the `io` namespace with a default-constructible type.
-    #[must_use]
-    pub fn with_io<T: io::IoNamespaceIo + Default + Send + Sync + 'static>(self) -> Self {
-        self.with_io_instance(Arc::new(T::default()))
     }
 
     /// Override the `fs` namespace (including `fs.File` methods) with a pre-built instance.
@@ -1946,6 +2531,21 @@ impl IoSysOpsBuilder {
         self
     }
 
+    /// Override only `baml.fs.read`, leaving every other filesystem operation unsupported.
+    #[must_use]
+    pub fn with_fs_read_instance(
+        mut self,
+        instance: Arc<dyn io::IoNamespaceFs + Send + Sync + 'static>,
+    ) -> Self {
+        self.inner.baml_fs_read = {
+            let t = instance;
+            Arc::new(move |heap, permit, args, ctx, call_id| {
+                t.__glue_baml_fs_read(heap, permit, args, ctx, call_id)
+            })
+        };
+        self
+    }
+
     /// Override the `fs` namespace with a default-constructible type.
     #[must_use]
     pub fn with_fs<T: io::IoNamespaceFs + Default + Send + Sync + 'static>(self) -> Self {
@@ -1977,12 +2577,6 @@ impl IoSysOpsBuilder {
             })
         };
         self
-    }
-
-    /// Override the `glob` namespace with a default-constructible type.
-    #[must_use]
-    pub fn with_glob<T: io::IoNamespaceGlob + Default + Send + Sync + 'static>(self) -> Self {
-        self.with_glob_instance(Arc::new(T::default()))
     }
 
     /// Override the `http` namespace (including `http.Response` methods) with a pre-built instance.
@@ -2078,10 +2672,40 @@ impl IoSysOpsBuilder {
         self
     }
 
-    /// Override the `http` namespace with a default-constructible type.
+    /// Override the non-streaming HTTP client operations only.
+    ///
+    /// Installs `_fetch`, `_send`, `Response.text`, and `Response.bytes` while
+    /// leaving SSE, server, TLS, and response-construction slots unsupported.
     #[must_use]
-    pub fn with_http<T: io::IoNamespaceHttp + Default + Send + Sync + 'static>(self) -> Self {
-        self.with_http_instance(Arc::new(T::default()))
+    pub fn with_http_fetch_instance(
+        mut self,
+        instance: Arc<dyn io::IoNamespaceHttp + Send + Sync + 'static>,
+    ) -> Self {
+        self.inner.baml_http__fetch = {
+            let t = instance.clone();
+            Arc::new(move |heap, permit, args, ctx, call_id| {
+                t.__glue_baml_http__fetch(heap, permit, args, ctx, call_id)
+            })
+        };
+        self.inner.baml_http__send = {
+            let t = instance.clone();
+            Arc::new(move |heap, permit, args, ctx, call_id| {
+                t.__glue_baml_http__send(heap, permit, args, ctx, call_id)
+            })
+        };
+        self.inner.baml_http_response_text = {
+            let t = instance.clone();
+            Arc::new(move |heap, permit, args, ctx, call_id| {
+                t.__glue_baml_http_response_text(heap, permit, args, ctx, call_id)
+            })
+        };
+        self.inner.baml_http_response_bytes = {
+            let t = instance;
+            Arc::new(move |heap, permit, args, ctx, call_id| {
+                t.__glue_baml_http_response_bytes(heap, permit, args, ctx, call_id)
+            })
+        };
+        self
     }
 
     /// Override the `net` namespace (`TcpStream` / `TcpListener` / `UdpSocket`
@@ -2223,12 +2847,6 @@ impl IoSysOpsBuilder {
         self
     }
 
-    /// Override the `host` namespace with a default-constructible type.
-    #[must_use]
-    pub fn with_host<T: io::IoNamespaceHost + Default + Send + Sync + 'static>(self) -> Self {
-        self.with_host_instance(Arc::new(T::default()))
-    }
-
     /// Override the `time` namespace (`Instant.now`) with a pre-built instance.
     #[must_use]
     pub fn with_time_instance(
@@ -2244,10 +2862,26 @@ impl IoSysOpsBuilder {
         self
     }
 
-    /// Override the `time` namespace with a default-constructible type.
+    /// Override the `random` namespace (`SystemRandom.random` / `random_int`)
+    /// with a pre-built instance.
     #[must_use]
-    pub fn with_time<T: io::IoNamespaceTime + Default + Send + Sync + 'static>(self) -> Self {
-        self.with_time_instance(Arc::new(T::default()))
+    pub fn with_random_instance(
+        mut self,
+        instance: Arc<dyn io::IoNamespaceRandom + Send + Sync + 'static>,
+    ) -> Self {
+        self.inner.baml_random_systemrandom_rng_random = {
+            let t = instance.clone();
+            Arc::new(move |heap, permit, args, ctx, call_id| {
+                t.__glue_baml_random_systemrandom_rng_random(heap, permit, args, ctx, call_id)
+            })
+        };
+        self.inner.baml_random_systemrandom_rng_random_int = {
+            let t = instance;
+            Arc::new(move |heap, permit, args, ctx, call_id| {
+                t.__glue_baml_random_systemrandom_rng_random_int(heap, permit, args, ctx, call_id)
+            })
+        };
+        self
     }
 }
 
@@ -2262,7 +2896,7 @@ use ::std::sync::Arc;
 // Re-export io::SysOps as the primary SysOps type.
 use ::sys_types::{
     AsBexExternalValue as _, CallId, FunctionRef, LlmFunctionInfo, SysOpContext, SysOpOutput,
-    VmBamlError, VmRustFnError,
+    VmBamlError, VmPanic, VmRustFnError,
 };
 pub use io::SysOps;
 

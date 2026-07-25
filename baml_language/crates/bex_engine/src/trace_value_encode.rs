@@ -179,8 +179,6 @@ enum BamlTyVariant {
     PromptAst(BamlTyPromptAst),
     #[prost(message, tag = "20")]
     Void(BamlTyVoid),
-    #[prost(message, tag = "21")]
-    WatchAccessor(BamlTyWatchAccessor),
     #[prost(message, tag = "22")]
     TypeVar(BamlTyTypeVar),
     #[prost(message, tag = "23")]
@@ -342,12 +340,6 @@ struct BamlTyFuture {
     value: Option<Box<BamlTy>>,
     #[prost(message, optional, boxed, tag = "2")]
     error: Option<Box<BamlTy>>,
-}
-
-#[derive(Clone, PartialEq, Message)]
-struct BamlTyWatchAccessor {
-    #[prost(message, optional, boxed, tag = "1")]
-    inner: Option<Box<BamlTy>>,
 }
 
 #[derive(Clone, PartialEq, Message)]
@@ -660,9 +652,6 @@ fn runtime_ty_to_variant(ty: &RuntimeTy) -> BamlTyVariant {
         RuntimeTy::Resource { .. } => BamlTyVariant::Resource(BamlTyResource {}),
         RuntimeTy::PromptAst { .. } => BamlTyVariant::PromptAst(BamlTyPromptAst {}),
         RuntimeTy::Void { .. } => BamlTyVariant::Void(BamlTyVoid {}),
-        RuntimeTy::WatchAccessor(inner, _) => BamlTyVariant::WatchAccessor(BamlTyWatchAccessor {
-            inner: Some(Box::new(runtime_ty_to_proto_ty(inner))),
-        }),
         RuntimeTy::TypeVar(name, _) => BamlTyVariant::TypeVar(BamlTyTypeVar {
             name: name.as_str().to_string(),
         }),
@@ -673,13 +662,12 @@ fn runtime_ty_to_variant(ty: &RuntimeTy) -> BamlTyVariant {
             ..
         } => BamlTyVariant::AssociatedTypeProjection(BamlTyAssociatedTypeProjection {
             base: Some(Box::new(runtime_ty_to_proto_ty(base))),
-            interface: interface.as_deref().map(|interface| {
-                Box::new(interface_to_proto_ty(
-                    &interface.name,
-                    &interface.generics,
-                    &interface.associated_types,
-                ))
-            }),
+            // Always present on the Rust side; the wire field stays optional.
+            interface: Some(Box::new(interface_to_proto_ty(
+                &interface.name,
+                &interface.generics,
+                &interface.associated_types,
+            ))),
             member: member.as_str().to_string(),
         }),
         RuntimeTy::BuiltinUnknown { .. } => BamlTyVariant::Unknown(BamlTyUnknown {}),
@@ -733,9 +721,26 @@ fn bigint_to_hex(value: &str) -> String {
         .unwrap_or_else(|_| value.to_string())
 }
 
+/// Render the trace wire value in the same user-facing shape used by live log
+/// consumers: scalar values are unwrapped, while structured values retain a
+/// complete debug representation.
+pub(crate) fn render_encoded_trace_value(body: &[u8]) -> Result<String, String> {
+    let value = BamlOutboundValue::decode(body)
+        .map_err(|err| format!("failed to decode captured BAML log body: {err}"))?;
+    Ok(match value.value.as_ref() {
+        None | Some(BamlValueVariant::NullValue(_)) => "null".to_string(),
+        Some(BamlValueVariant::StringValue(value)) => value.clone(),
+        Some(BamlValueVariant::IntValue(value)) => value.to_string(),
+        Some(BamlValueVariant::FloatValue(value)) => value.to_string(),
+        Some(BamlValueVariant::BoolValue(value)) => value.to_string(),
+        Some(BamlValueVariant::BigintValue(value)) => value.clone(),
+        Some(_) => format!("{value:?}"),
+    })
+}
+
 #[cfg(test)]
 mod tests {
-    use bridge_ctypes::baml_core::cffi::{
+    use bridge_ctypes::baml_bridge::cffi::{
         BamlOutboundValue, BamlTyPrimitiveKind, baml_outbound_value::Value as BamlValueVariant,
         baml_ty,
     };
@@ -807,7 +812,7 @@ mod tests {
         assert_eq!(media.mime_type.as_deref(), Some("image/png"));
         assert!(matches!(
             media.value,
-            Some(bridge_ctypes::baml_core::cffi::baml_value_media::Value::Base64(_))
+            Some(bridge_ctypes::baml_bridge::cffi::baml_value_media::Value::Base64(_))
         ));
     }
 

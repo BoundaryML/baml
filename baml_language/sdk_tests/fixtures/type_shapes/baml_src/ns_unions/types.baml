@@ -37,6 +37,14 @@ function round_trip_optional_plus_null(u: T? | string) -> T? | string {
   u
 }
 
+// Differently-typed list arms. An empty list carries no item evidence, so a
+// statically typed bridge annotates that selected child node with the exact
+// list `value_type`. The round-trip pins that values land on the selected arm,
+// rather than whichever list arm happens to be declared first.
+function round_trip_str_or_int_list(x: string[] | int[]) -> string[] | int[] {
+  x
+}
+
 function round_trip_t(t: T) -> T {
   t
 }

@@ -35,39 +35,31 @@ function CompoundAssignments() -> int {
 
 //----
 //- diagnostics
-// error: operator `+` cannot be applied to `int` and `"five"`
-//     ╭─[ invalid_assignment_compound_ops.baml:15:2 ]
-//     │
+// E0004
+//
+//   × operator `+` cannot be applied to `int` and `"five"`
+//     ╭─[invalid_assignment_compound_ops.baml:15:2]
 //  15 │     c += "five";
-//     │     ┬
-//     │     ╰── operator `+` cannot be applied to `int` and `"five"`
-//     │
-//     │ Note: Error code: E0004
-// ────╯
-// error: operator `+` cannot be applied to `string` and `100`
-//     ╭─[ invalid_assignment_compound_ops.baml:19:2 ]
-//     │
+//     ·     ─
+//     ╰────
+// E0004
+//
+//   × operator `+` cannot be applied to `string` and `100`
+//     ╭─[invalid_assignment_compound_ops.baml:19:2]
 //  19 │     d += 100;
-//     │     ┬
-//     │     ╰── operator `+` cannot be applied to `string` and `100`
-//     │
-//     │ Note: Error code: E0004
-// ────╯
-// error: operator `+` cannot be applied to `int` and `true`
-//     ╭─[ invalid_assignment_compound_ops.baml:23:2 ]
-//     │
+//     ·     ─
+//     ╰────
+// E0004
+//
+//   × operator `+` cannot be applied to `int` and `true`
+//     ╭─[invalid_assignment_compound_ops.baml:23:2]
 //  23 │     e += true;
-//     │     ┬
-//     │     ╰── operator `+` cannot be applied to `int` and `true`
-//     │
-//     │ Note: Error code: E0004
-// ────╯
-// error: operator `+` cannot be applied to `bool` and `1`
-//     ╭─[ invalid_assignment_compound_ops.baml:27:2 ]
-//     │
+//     ·     ─
+//     ╰────
+// E0004
+//
+//   × operator `+` cannot be applied to `bool` and `1`
+//     ╭─[invalid_assignment_compound_ops.baml:27:2]
 //  27 │     f += 1;
-//     │     ┬
-//     │     ╰── operator `+` cannot be applied to `bool` and `1`
-//     │
-//     │ Note: Error code: E0004
-// ────╯
+//     ·     ─
+//     ╰────

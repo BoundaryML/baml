@@ -191,6 +191,11 @@ pub(crate) fn consumer_main(control: &mpsc::Receiver<ControlMsg>, env: &Consumer
                         }
                     }
                     state.close_engine(engine_id);
+                    // All of the engine's events have been delivered; let
+                    // observers (run store, history store) release whatever
+                    // they buffered for it.
+                    crate::run::publish_engine_closed(crate::ids::EngineId(engine_id));
+                    crate::history::publish_history_engine_closed(crate::ids::EngineId(engine_id));
                 }
             }
         }

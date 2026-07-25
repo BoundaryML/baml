@@ -1,0 +1,91 @@
+---
+source: crates/baml_tests/tests/baml_src.rs
+---
+function interfaces_class_generics.$init_test_ns_interfaces_class_generics_interfaces_class_generics(registry: testing.TestCollector) -> null {
+    load_var registry
+    load_const "root.interfaces_class_generics"
+    load_const "class_generic_bound_member_access_runs_in_class_method"
+    make_closure .<lambda($init_test_ns_interfaces_class_generics_interfaces_class_generics, 0)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.interfaces_class_generics"
+    load_const "function_class_generic_bound_member_access_runs"
+    make_closure .<lambda($init_test_ns_interfaces_class_generics_interfaces_class_generics, 1)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_const null
+    return
+}
+
+function interfaces_class_generics.Box.label(self: interfaces_class_generics.Box<T>) -> string {
+    load_var self
+    load_field .value
+    store_var_load_var _2
+    is_type interfaces_class_generics.Person
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var _2
+    is_type interfaces_class_generics.Dog
+    pop_jump_if_false L3
+    load_var _2
+    load_field .0
+    jump L2
+
+  L1:
+    load_var _2
+    load_field .0
+
+  L2:
+    return
+
+  L3:
+    unreachable
+}
+
+function interfaces_class_generics.class_generic_bound_member_access_fn() -> string {
+    load_type interfaces_class_generics.Dog
+    load_const "Rex"
+    init_instance user.interfaces_class_generics.Dog .name
+    load_type interfaces_class_generics.Dog
+    init_instance<1> user.interfaces_class_generics.Box .value
+    call user.interfaces_class_generics.Box.label
+    return
+}
+
+function interfaces_class_generics.function_class_generic_bound_member_access_fn() -> string {
+    load_type interfaces_class_generics.Person
+    load_const "Ada"
+    init_instance user.interfaces_class_generics.Person .name
+    call user.interfaces_class_generics.get_name
+    return
+}
+
+function interfaces_class_generics.get_name(value: T) -> string {
+    load_var value
+    is_type interfaces_class_generics.Person
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var value
+    is_type interfaces_class_generics.Dog
+    pop_jump_if_false L3
+    load_var value
+    load_field .0
+    jump L2
+
+  L1:
+    load_var value
+    load_field .0
+
+  L2:
+    return
+
+  L3:
+    unreachable
+}

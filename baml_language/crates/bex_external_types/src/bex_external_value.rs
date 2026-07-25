@@ -32,6 +32,12 @@ use indexmap::IndexMap;
 /// easy serialization for FFI consumers.
 #[derive(Clone, Debug, PartialEq)]
 pub struct UnionMetadata {
+    /// Whether this is the transient engine carrier for a sparse inbound
+    /// `InboundValue.value_type` annotation, rather than a value produced from
+    /// a declared union. The annotation carries only `selected_option`; the
+    /// contextual declared type supplies any enclosing union.
+    pub is_inbound_type_annotation: bool,
+
     /// Name of the union type (for named type aliases like `type Result = Success | Failure`).
     pub name: Option<String>,
 
@@ -66,18 +72,13 @@ impl UnionMetadata {
         };
 
         Self {
+            is_inbound_type_annotation: false,
             name: None,
             is_optional,
             is_single_pattern,
             union_type,
             selected_option,
         }
-    }
-
-    /// Set the name for this union (for named type aliases).
-    pub fn with_name(mut self, name: impl Into<String>) -> Self {
-        self.name = Some(name.into());
-        self
     }
 }
 
@@ -166,8 +167,8 @@ pub enum BexExternalValue {
         /// `GenericBox<int>` instance's `[int]` across the FFI boundary (the
         /// value-level type channel — distinct from a call's
         /// `CallFunctionArgs.type_args`). Populated inbound from
-        /// `InboundClassValue.class_ty`; landed into the VM
-        /// `Object::Instance::class_type_args` in Phase 3.
+        /// the sparse `InboundValue.value_type`; landed into the VM
+        /// `Object::Instance::class_type_args` during contextual materialization.
         type_args: Vec<RuntimeTy>,
         fields: IndexMap<String, BexExternalValue>,
     },
@@ -376,6 +377,22 @@ impl BexExternalAdt {
 }
 
 impl BexExternalValue {
+    /// Construct the transient carrier for an inbound value paired with its
+    /// exact host-known type. This reuses the external union representation so
+    /// existing type-directed VM materialization can honor `value_type`, while
+    /// explicitly distinguishing it from an actual declared union.
+    pub fn typed(value: BexExternalValue, value_type: RuntimeTy) -> Self {
+        let mut metadata = UnionMetadata::new(
+            RuntimeTy::Union(vec![value_type.clone()], TyAttr::default()),
+            value_type,
+        );
+        metadata.is_inbound_type_annotation = true;
+        BexExternalValue::Union {
+            value: Box::new(value),
+            metadata,
+        }
+    }
+
     /// Construct a union value (`A | B | ...`) with metadata.
     ///
     /// ```ignore
@@ -390,22 +407,6 @@ impl BexExternalValue {
         BexExternalValue::Union {
             value: Box::new(value),
             metadata: UnionMetadata::new(union_type, selected),
-        }
-    }
-
-    /// Construct an optional value (`T?`) with metadata.
-    ///
-    /// Selected type is auto-detected: `inner` when non-null, `RuntimeTy::null()` when null.
-    pub fn optional(value: BexExternalValue, inner: RuntimeTy) -> Self {
-        let selected = if matches!(value, BexExternalValue::Null) {
-            RuntimeTy::null()
-        } else {
-            inner.clone()
-        };
-        let optional_type = RuntimeTy::optional(inner);
-        BexExternalValue::Union {
-            value: Box::new(value),
-            metadata: UnionMetadata::new(optional_type, selected),
         }
     }
 
@@ -492,8 +493,70 @@ impl BexExternalValue {
         }
     }
 
-    pub fn is_host_value(&self) -> bool {
-        matches!(self, Self::HostValue(_))
+    /// Human-readable, structural rendering of this value — the form `baml run`
+    /// prints in debug mode and the form the CLI surfaces for an uncaught
+    /// `throw`.
+    ///
+    /// This is deliberately distinct from the [`Debug`](std::fmt::Debug) impl,
+    /// which leaks Rust-internal shapes: a thrown
+    /// `baml.errors.Io { message: "boom" }` renders here as
+    /// `baml.errors.Io { message: "boom" }` rather than
+    /// `Instance { class_name: "baml.errors.Io", type_args: [], fields: {..} }`,
+    /// and a generic instance's `type_args` are omitted entirely instead of
+    /// dumping `Class(QualifiedTypeName { .. }, [], TyAttr { .. })`.
+    ///
+    /// It is a pure structural pretty-printer, not the VM's `baml.ToString`
+    /// dispatch: it runs without a live VM (e.g. after the VM has unwound on an
+    /// uncaught throw), so it cannot honor user `to_string` overrides.
+    pub fn render_readable(&self) -> String {
+        match self {
+            BexExternalValue::Null => "null".to_string(),
+            BexExternalValue::Int(i) => i.to_string(),
+            BexExternalValue::Bigint(i) => i.to_string(),
+            BexExternalValue::Float(f) => {
+                let s = f.to_string();
+                if s.contains('.') || !f.is_finite() {
+                    s
+                } else {
+                    format!("{s}.0")
+                }
+            }
+            BexExternalValue::Bool(b) => b.to_string(),
+            BexExternalValue::String(s) => format!("{s:?}"),
+            BexExternalValue::Array { items, .. } => {
+                let inner: Vec<String> = items.iter().map(Self::render_readable).collect();
+                format!("[{}]", inner.join(", "))
+            }
+            BexExternalValue::Map { entries, .. } => {
+                let inner: Vec<String> = entries
+                    .iter()
+                    .map(|(k, v)| format!("{k:?}: {}", v.render_readable()))
+                    .collect();
+                format!("{{{}}}", inner.join(", "))
+            }
+            BexExternalValue::Instance {
+                class_name, fields, ..
+            } => {
+                let inner: Vec<String> = fields
+                    .iter()
+                    .map(|(k, v)| format!("{k}: {}", v.render_readable()))
+                    .collect();
+                if class_name.is_empty() {
+                    format!("{{{}}}", inner.join(", "))
+                } else {
+                    format!("{class_name} {{{}}}", inner.join(", "))
+                }
+            }
+            BexExternalValue::Variant { variant_name, .. } => variant_name.clone(),
+            BexExternalValue::Union { value, .. } => value.render_readable(),
+            BexExternalValue::Uint8Array(bytes) => format!("<bytes:{}>", bytes.len()),
+            // A rendered prompt handle: render its readable text instead of the
+            // `Adt(PromptAst(Message { .. }))` Rust `Debug` dump (B-627). Nested
+            // inside a `baml.llm.PromptAst { _data: .. }` instance, this makes the
+            // CLI's value print readable.
+            BexExternalValue::Adt(BexExternalAdt::PromptAst(ast)) => ast.render_text(),
+            _ => format!("{self:?}"),
+        }
     }
 }
 
@@ -722,4 +785,94 @@ pub fn try_convert_rust_data(
         return Some(BexExternalValue::HostValue(typed));
     }
     None
+}
+
+#[cfg(test)]
+mod render_readable_tests {
+    use super::*;
+
+    /// A thrown error instance renders as `Class { field: value }`, not the
+    /// Rust `Debug` shape `Instance { class_name: .., type_args: [], fields: .. }`.
+    /// This is the exact B-623 repro.
+    #[test]
+    fn instance_renders_class_and_fields_not_debug() {
+        let value = BexExternalValue::instance(
+            "baml.errors.Io",
+            IndexMap::from([("message", BexExternalValue::from("boom"))]),
+        );
+        assert_eq!(
+            value.render_readable(),
+            r#"baml.errors.Io {message: "boom"}"#
+        );
+    }
+
+    /// A generic error instance carrying a `Class(..)` in its `type_args` — the
+    /// shape that used to dump `Class(QualifiedTypeName { .. }, [], TyAttr { .. })`
+    /// under `Debug` — renders readably with the `type_args` omitted and no Rust
+    /// internals leaked.
+    #[test]
+    fn generic_instance_omits_type_args_and_never_leaks_debug() {
+        let inner = BexExternalValue::instance(
+            "baml.errors.Io",
+            IndexMap::from([("message", BexExternalValue::from("boom"))]),
+        );
+        let value = BexExternalValue::instance_generic(
+            "baml.future.AllFailed",
+            vec![RuntimeTy::class("baml.errors.Io")],
+            IndexMap::from([(
+                "errors",
+                BexExternalValue::Array {
+                    element_type: RuntimeTy::class("baml.errors.Io"),
+                    items: vec![inner],
+                },
+            )]),
+        );
+
+        let rendered = value.render_readable();
+        assert!(
+            rendered.starts_with("baml.future.AllFailed {"),
+            "unexpected render: {rendered}"
+        );
+        assert!(
+            rendered.contains(r#"errors: [baml.errors.Io {message: "boom"}]"#),
+            "unexpected render: {rendered}"
+        );
+        // The bug: `Debug` leaks Rust-internal shapes. The readable form must not.
+        for leak in ["Instance {", "QualifiedTypeName", "TyAttr", "Class("] {
+            assert!(!rendered.contains(leak), "leaked `{leak}` in: {rendered}");
+        }
+    }
+
+    /// A rendered-prompt handle (`baml.llm.PromptAst`'s `_data`) renders as its
+    /// readable prompt text, not the `Adt(PromptAst(Message { .. }))` Rust
+    /// `Debug` dump. This is the B-627 repro for the CLI value print.
+    #[test]
+    #[allow(clippy::default_trait_access)]
+    fn prompt_ast_renders_readable_text_not_debug() {
+        use std::sync::Arc;
+
+        use baml_builtins2::{PromptAst, PromptAstSimple};
+
+        // `metadata` is `serde_json::Value` (not a direct dep of this crate); its
+        // `Default` is `Value::Null`, so use `Default::default()` to avoid naming it.
+        let message = |role: &str, text: &str| {
+            Arc::new(PromptAst::Message {
+                role: role.to_string(),
+                content: Arc::new(PromptAstSimple::String(text.to_string())),
+                metadata: Default::default(),
+            })
+        };
+        let ast = Arc::new(PromptAst::Vec(vec![
+            message("system", "You are helpful."),
+            message("user", "Hi!"),
+        ]));
+        let value = BexExternalValue::Adt(BexExternalAdt::PromptAst(ast));
+
+        let rendered = value.render_readable();
+        assert_eq!(rendered, "[system]\nYou are helpful.\n\n[user]\nHi!");
+        // The bug: the opaque handle used to dump Rust `Debug`. Must not leak.
+        for leak in ["Adt(", "PromptAst(", "Message {", "String(", "Null"] {
+            assert!(!rendered.contains(leak), "leaked `{leak}` in: {rendered}");
+        }
+    }
 }

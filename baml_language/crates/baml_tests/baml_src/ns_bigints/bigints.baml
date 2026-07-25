@@ -720,3 +720,46 @@ test "test_bigint_to_json_returns_string" {
 test "test_bigint_to_json_large" {
     assert.equal((99999999999999999999n).to_json(), "99999999999999999999")
 }
+
+// ─── regression: bare-literal method receiver (B-614) ─────────────────────────
+//
+// `42n.to_string()` on a bare bigint literal used to lower its receiver to a
+// Missing expr and panic at runtime. Appended at the end so the test registry
+// stays append-only.
+test "bigint_to_string_bare_literal" {
+    assert.is_true(baml.deep_equals(42n.to_string(), "42"))
+}
+
+// ─── literal bases and underscore separators ─────────────────────────────────
+// Bigint literals support the same 0x/0o/0b prefixes and `_` separators as
+// int literals, with the trailing `n` suffix.
+
+test "bigint_hex_literal" {
+    assert.is_true(baml.deep_equals(0xFFn, 255n))
+}
+
+test "bigint_octal_literal" {
+    assert.is_true(baml.deep_equals(0o755n, 493n))
+}
+
+test "bigint_binary_literal" {
+    assert.is_true(baml.deep_equals(0b1010n, 10n))
+}
+
+test "bigint_underscore_separators" {
+    assert.is_true(baml.deep_equals(1_000n, 1000n))
+}
+
+test "bigint_hex_underscores" {
+    assert.is_true(baml.deep_equals(0xFF_FFn, 65535n))
+}
+
+test "bigint_negative_prefixed" {
+    assert.is_true(baml.deep_equals(-0xFFn, -255n))
+}
+
+// 2^80 - 1: prefixed bigint literals are not bounded by the i64 (or i63)
+// limits that apply to int literals.
+test "bigint_hex_beyond_int_range" {
+    assert.is_true(baml.deep_equals(0xFFFF_FFFF_FFFF_FFFF_FFFFn, 1208925819614629174706175n))
+}

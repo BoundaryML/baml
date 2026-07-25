@@ -12,7 +12,7 @@
 use std::sync::{Arc, atomic::AtomicBool};
 
 use baml_project::testing::compile_source;
-use baml_type::{Name, RuntimeTy, TyAttr, TyTemplate, TypeName};
+use baml_type::{Name, RealizedTy, RuntimeTy, TyAttr, TyTemplate, TypeName};
 use bex_vm::{BexVm, VmExecState};
 use bex_vm_types::{
     ConstValue, FunctionCaptureProps, Instruction, Object, ObjectIndex, Value,
@@ -41,6 +41,8 @@ fn inject_function(
     let func = Function {
         name: fn_name.to_string(),
         source_file: String::new(),
+        docstring: None,
+        declared_name: None,
         arity,
         real_local_count: 0,
         bytecode,
@@ -125,7 +127,9 @@ fn alloc_instance_ntypeargs_stores_class_type_args() {
             },
             Instruction::Return,
         ],
-        vec![ConstValue::Type(TyTemplate::Concrete(RuntimeTy::int()))],
+        vec![ConstValue::Type(TyTemplate::from(
+            baml_type::RealizedTy::int(),
+        ))],
     );
 
     let (result, vm) = run_fn(program, fn_name);
@@ -137,8 +141,8 @@ fn alloc_instance_ntypeargs_stores_class_type_args() {
         Object::Instance(inst) => {
             assert_eq!(
                 inst.class_type_args.to_vec(),
-                vec![RuntimeTy::int()],
-                "Instance::class_type_args should equal [RuntimeTy::int()]"
+                vec![RealizedTy::int()],
+                "Instance::class_type_args should equal [RealizedTy::int()]"
             );
         }
         other => panic!("expected Object::Instance, got {other:?}"),
@@ -223,7 +227,7 @@ fn method_frame_type_args_seeded_with_class_type_args() {
         use bex_vm::Frame;
         let frame = vm.frames.last_mut().expect("entry frame");
         if let Frame::Bytecode(bf) = frame {
-            bf.type_args = vec![RuntimeTy::int()]; // receiver.class_type_args = [int]
+            bf.type_args = vec![RealizedTy::int()]; // receiver.class_type_args = [int]
         } else {
             panic!("entry frame should be Bytecode");
         }
@@ -244,7 +248,7 @@ fn method_frame_type_args_seeded_with_class_type_args() {
         Object::Type(ty) => {
             assert_eq!(
                 **ty,
-                RuntimeTy::int(),
+                RealizedTy::int(),
                 "TypeArgRef(0) with class_type_args=[int] should yield int"
             );
         }
@@ -275,7 +279,7 @@ fn method_frame_type_args_seeded_string() {
         use bex_vm::Frame;
         let frame = vm.frames.last_mut().expect("entry frame");
         if let Frame::Bytecode(bf) = frame {
-            bf.type_args = vec![RuntimeTy::string()];
+            bf.type_args = vec![RealizedTy::string()];
         }
     }
 
@@ -294,7 +298,7 @@ fn method_frame_type_args_seeded_string() {
         Object::Type(ty) => {
             assert_eq!(
                 **ty,
-                RuntimeTy::string(),
+                RealizedTy::string(),
                 "TypeArgRef(0) with class_type_args=[string] should yield string"
             );
         }
@@ -324,7 +328,7 @@ function f() -> string[] {
         .expect("map result should be an array object");
     match vm.get_object(ptr) {
         Object::Array(arr) => assert!(
-            matches!(&*arr.element_ty, RuntimeTy::String { .. }),
+            matches!(&*arr.element_ty, RealizedTy::String { .. }),
             "map result element_ty should be `string` (closure return `U`), not `{:?}` \
              (the receiver `T`)",
             arr.element_ty

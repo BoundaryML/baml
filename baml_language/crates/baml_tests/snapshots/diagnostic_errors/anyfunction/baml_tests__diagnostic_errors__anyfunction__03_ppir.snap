@@ -1,0 +1,37 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== PPIR ===
+class user.Doc {
+  title: string
+}
+class user.Doc$stream {
+  title: string | null
+}
+class user.Holder {
+  f: T
+}
+class user.Holder$stream {
+  f: T | null
+}
+class user.MyTool {
+  name: string
+}
+class user.MyTool$stream {
+  name: string | null
+}
+class user.ToolError {
+  message: string
+}
+class user.ToolError$stream {
+  message: string | null
+}
+function user.main() -> int  [expr] {
+  { let bad_ret: baml.AnyFunction<Returns = string> = web_search; let bad_throws: baml.AnyFunction<Throws = never> = web_search; let not_a_fn: baml.AnyFunction = 42; let narrow: baml.AnyFunction<Returns = user.Doc[]> = web_search; let bad_widen: baml.AnyFunction<Returns = string> = narrow; return 0 }
+}
+function user.pick(f: T) -> T  [expr] {
+  { return f }
+}
+function user.web_search(q: string) -> user.Doc[]  [expr] {
+  { if (q Eq "boom") { throw user.ToolError { message: "no results" } }; return [user.Doc { title: q }] }
+}

@@ -109,11 +109,6 @@ impl BlobStore {
         Self::new(boundary_dir.as_ref().join("blobs"))
     }
 
-    #[must_use]
-    pub fn root(&self) -> &Path {
-        &self.root
-    }
-
     pub fn path_for(&self, blob_ref: &BlobRef) -> io::Result<PathBuf> {
         let digest = blob_ref.normalized_digest()?;
         let prefix = digest.get(..2).ok_or_else(|| {
@@ -212,19 +207,6 @@ impl FileValueArtifactSink {
     }
 
     #[must_use]
-    pub fn path(&self) -> &Path {
-        &self.path
-    }
-
-    pub fn sync(&mut self) -> io::Result<ValueArtifactRef> {
-        self.file.flush()?;
-        self.file.sync_all()?;
-        Ok(ValueArtifactRef::NativeFile {
-            path: self.path.clone(),
-        })
-    }
-
-    #[must_use]
     pub fn bytes_written(&self) -> u64 {
         self.bytes_written
     }
@@ -274,11 +256,6 @@ impl ByteValueArtifactSink {
     #[must_use]
     pub fn bytes(&self) -> &[u8] {
         &self.bytes
-    }
-
-    #[must_use]
-    pub fn into_bytes(self) -> Vec<u8> {
-        self.bytes
     }
 
     #[must_use]

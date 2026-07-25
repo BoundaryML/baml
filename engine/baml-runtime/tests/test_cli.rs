@@ -6,7 +6,6 @@ use std::{
 };
 
 use anyhow::{Context, Result};
-use eventsource_stream::Eventsource;
 use futures::stream::StreamExt;
 use harness::Harness;
 use http::StatusCode;
@@ -91,9 +90,7 @@ mod test_cli {
             .send()
             .await?;
         assert!(resp.status().is_success());
-        let resp = resp
-            .bytes_stream()
-            .eventsource()
+        let resp = baml_runtime::sse::eventsource(resp.bytes_stream())
             .map(|event| match event {
                 Ok(event) => Ok((
                     serde_json::from_str::<serde_json::Value>(&event.data)?,

@@ -31,6 +31,14 @@ use crate::{
 
 pub trait ProfileEventObserver: Send + Sync + 'static {
     fn ingest_profile_event(&self, envelope: ProfileEventEnvelope);
+
+    /// Called after an engine has been dropped and all of its remaining
+    /// profile events have been delivered. Observers that buffer events may
+    /// release everything associated with the engine — no further events or
+    /// runs can arrive for it.
+    fn engine_closed(&self, engine_id: EngineId) {
+        let _ = engine_id;
+    }
 }
 
 #[must_use]
@@ -60,6 +68,20 @@ pub(crate) fn publish_profile_event(envelope: &ProfileEventEnvelope) {
         let envelope = envelope.clone();
         let _ =
             std::panic::catch_unwind(AssertUnwindSafe(|| observer.ingest_profile_event(envelope)));
+    }
+}
+
+#[cfg_attr(target_arch = "wasm32", allow(dead_code))]
+pub(crate) fn publish_engine_closed(engine_id: EngineId) {
+    let observers = profile_observers()
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .observers
+        .iter()
+        .map(|(_, observer)| observer.clone())
+        .collect::<Vec<_>>();
+    for observer in observers {
+        let _ = std::panic::catch_unwind(AssertUnwindSafe(|| observer.engine_closed(engine_id)));
     }
 }
 
@@ -1112,8 +1134,7 @@ impl InMemoryRunStore {
             .inner
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        let profile_events = inner.profile_events.clone();
-        let retention = inner.retention.clone();
+        let inner = &mut *inner;
         let Some(record) = inner.runs.get_mut(&boundary_id) else {
             return AttachRootTraceResult::RunMissing;
         };
@@ -1130,8 +1151,8 @@ impl InMemoryRunStore {
         }
         let patches = recompute_record_profile(
             record,
-            &profile_events,
-            &retention,
+            &inner.profile_events,
+            &inner.retention,
             graph_overlay_span_provider.as_deref(),
         );
         AttachRootTraceResult::Attached { patches }
@@ -1147,25 +1168,74 @@ impl InMemoryRunStore {
             .inner
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let inner = &mut *inner;
+        // An event can only belong to runs rooted in the same
+        // process/engine: component membership is resolved over the
+        // thread/call parent graph, which never crosses engines.
+        let event_scope = (envelope.process_euid, envelope.engine_id);
         inner.profile_events.push(envelope);
-        let profile_events = inner.profile_events.clone();
-        let retention = inner.retention.clone();
-        let roots: Vec<BoundaryId> = inner
-            .runs
-            .iter()
-            .filter_map(|(boundary_id, record)| record.root_trace.map(|_| *boundary_id))
-            .collect();
+        trim_profile_events(&mut inner.profile_events);
         let mut patches = Vec::new();
-        for boundary_id in roots {
-            if let Some(record) = inner.runs.get_mut(&boundary_id) {
-                patches.extend(recompute_record_profile(
-                    record,
-                    &profile_events,
-                    &retention,
-                    graph_overlay_span_provider.as_deref(),
-                ));
+        for record in inner.runs.values_mut() {
+            let Some(root_trace) = record.root_trace else {
+                continue;
+            };
+            if (root_trace.process_euid, root_trace.engine_id) != event_scope {
+                continue;
             }
+            patches.extend(recompute_record_profile(
+                record,
+                &inner.profile_events,
+                &inner.retention,
+                graph_overlay_span_provider.as_deref(),
+            ));
         }
+        patches
+    }
+
+    /// Number of buffered profile events (diagnostics/tests).
+    #[must_use]
+    pub fn profile_events_len(&self) -> usize {
+        self.inner
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .profile_events
+            .len()
+    }
+
+    /// Release everything buffered for a closed engine. Runs rooted in the
+    /// engine get one final profile recompute (the engine is drained before
+    /// this is called), then the engine's profile events are dropped — no
+    /// further events or runs can arrive for a closed engine.
+    pub fn engine_closed(&self, engine_id: EngineId) -> Vec<RunPatch> {
+        let graph_overlay_span_provider = self
+            .graph_overlay_span_provider
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone();
+        let mut inner = self
+            .inner
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let inner = &mut *inner;
+        let mut patches = Vec::new();
+        for record in inner.runs.values_mut() {
+            let Some(root_trace) = record.root_trace else {
+                continue;
+            };
+            if root_trace.engine_id != engine_id {
+                continue;
+            }
+            patches.extend(recompute_record_profile(
+                record,
+                &inner.profile_events,
+                &inner.retention,
+                graph_overlay_span_provider.as_deref(),
+            ));
+        }
+        inner
+            .profile_events
+            .retain(|envelope| envelope.engine_id != engine_id);
         patches
     }
 
@@ -1204,22 +1274,16 @@ impl InMemoryRunStore {
             }
         }
         let status = outcome.status();
-        Some(push_patch(
+        let patch = push_patch(
             record,
             &retention,
             vec![
                 RunPatchChange::SetStatus(status),
                 RunPatchChange::Complete(outcome),
             ],
-        ))
-    }
-
-    pub fn complete_run_now(
-        &self,
-        boundary_id: BoundaryId,
-        outcome: RunOutcome,
-    ) -> Option<RunPatch> {
-        self.complete_run(boundary_id, outcome, epoch_ms())
+        );
+        enforce_terminal_retention(&mut inner, completed_at_ms);
+        Some(patch)
     }
 
     pub fn add_diagnostic(
@@ -1240,32 +1304,6 @@ impl InMemoryRunStore {
             &retention,
             vec![RunPatchChange::UpsertDiagnostic(diagnostic)],
         ))
-    }
-
-    pub fn ingest_payload(
-        &self,
-        boundary_id: BoundaryId,
-        kind: PayloadKind,
-        call_node_id: Option<CallNodeId>,
-        body: Option<PayloadBody>,
-        redaction: RedactionMetadata,
-    ) -> Option<RunPatch> {
-        let mut inner = self
-            .inner
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        let payload_id = inner.allocate_payload_id();
-        let retention = inner.retention.clone();
-        let record = inner.runs.get_mut(&boundary_id)?;
-        let payload = PayloadEvent {
-            id: payload_id,
-            call_node_id,
-            timestamp_ms: epoch_ms(),
-            kind,
-            redaction,
-            body,
-        };
-        Some(push_payload_patch(record, &retention, payload, None))
     }
 
     pub fn ingest_root_input_value_ref(
@@ -2385,6 +2423,75 @@ fn next_active_request_status(record: &RunRecord) -> Option<RunStatus> {
     Some(RunStatus::Running)
 }
 
+/// Hard backstop on the retained profile-event window. Engine closure is the
+/// primary release point (`InMemoryRunStore::engine_closed`); this cap only
+/// bounds a single long-lived engine that emits events faster than runs
+/// complete. Matches `BoundaryTraceRouter`'s bound in `history::router`.
+const PROFILE_EVENTS_CAP: usize = 100_000;
+
+fn trim_profile_events(profile_events: &mut Vec<ProfileEventEnvelope>) {
+    if profile_events.len() > PROFILE_EVENTS_CAP {
+        let excess = profile_events.len() - PROFILE_EVENTS_CAP;
+        profile_events.drain(..excess);
+    }
+}
+
+/// Evict the oldest terminal runs beyond the retention policy's
+/// `max_terminal_runs` / `terminal_ttl_ms`. Evicted runs disappear from
+/// `list_runs`/`snapshot`; on native the playground rehydrates them from the
+/// disk-backed history store on demand.
+fn enforce_terminal_retention(inner: &mut RunStoreInner, now_ms: u64) {
+    let RunRetentionPolicy {
+        max_terminal_runs,
+        terminal_ttl_ms,
+        ..
+    } = inner.retention;
+    if max_terminal_runs.is_none() && terminal_ttl_ms.is_none() {
+        return;
+    }
+
+    let mut terminal: Vec<(u64, BoundaryId)> = inner
+        .runs
+        .iter()
+        .filter(|(_, record)| record.run.status.is_terminal())
+        .map(|(boundary_id, record)| (record.run.completed_at_ms.unwrap_or_default(), *boundary_id))
+        .collect();
+    terminal.sort_unstable_by_key(|(completed_at_ms, _)| *completed_at_ms);
+
+    let mut evict: HashSet<BoundaryId> = HashSet::new();
+    if let Some(ttl_ms) = terminal_ttl_ms {
+        evict.extend(
+            terminal
+                .iter()
+                .filter(|(completed_at_ms, _)| now_ms.saturating_sub(*completed_at_ms) > ttl_ms)
+                .map(|(_, boundary_id)| *boundary_id),
+        );
+    }
+    if let Some(max) = max_terminal_runs {
+        let retained = terminal.len() - evict.len();
+        if retained > max {
+            evict.extend(
+                terminal
+                    .iter()
+                    .filter(|(_, boundary_id)| !evict.contains(boundary_id))
+                    .take(retained - max)
+                    .map(|(_, boundary_id)| *boundary_id)
+                    .collect::<Vec<_>>(),
+            );
+        }
+    }
+    if evict.is_empty() {
+        return;
+    }
+
+    inner
+        .runs
+        .retain(|boundary_id, _| !evict.contains(boundary_id));
+    inner
+        .host_call_index
+        .retain(|_, boundary_id| !evict.contains(boundary_id));
+}
+
 fn recompute_record_profile(
     record: &mut RunRecord,
     profile_events: &[ProfileEventEnvelope],
@@ -2786,12 +2893,12 @@ fn component_events_for_root(
         .collect()
 }
 
-pub(crate) fn component_event_indices_for_root(
-    events: &[ProfileEventEnvelope],
+pub(crate) fn component_event_indices_for_root<'a>(
+    events: impl IntoIterator<Item = &'a ProfileEventEnvelope>,
     root_trace: TraceCallKey,
 ) -> Vec<usize> {
     let mut adjacency: HashMap<TraceGraphNode, HashSet<TraceGraphNode>> = HashMap::new();
-    let mut event_nodes = Vec::<Vec<TraceGraphNode>>::with_capacity(events.len());
+    let mut event_nodes = Vec::<Vec<TraceGraphNode>>::new();
 
     for envelope in events {
         if envelope.process_euid != root_trace.process_euid
@@ -5609,5 +5716,190 @@ mod tests {
         assert!(codes.contains(&ReconstructionDiagnosticCode::MissingThreadEnd));
         assert!(codes.contains(&ReconstructionDiagnosticCode::MissingCallEnd));
         assert!(codes.contains(&ReconstructionDiagnosticCode::MissingParentCall));
+    }
+
+    fn succeeded() -> RunOutcome {
+        RunOutcome::Succeeded(RunResult {
+            value_ref: None,
+            renderer_hint: None,
+            supporting_payload_ids: Vec::new(),
+        })
+    }
+
+    #[test]
+    fn terminal_runs_evicted_beyond_retention_cap() {
+        let store = InMemoryRunStore::new(RunRetentionPolicy {
+            max_terminal_runs: Some(2),
+            ..Default::default()
+        });
+        let mut boundary_ids = Vec::new();
+        for i in 0..4u64 {
+            let start = create_test_run(&store, request("main"), RequestId(i));
+            let host_call_id = HostCallId::Native(sys_types::CallId(i));
+            assert!(
+                store
+                    .attach_host_call(start.boundary_id, host_call_id)
+                    .is_some()
+            );
+            boundary_ids.push(start.boundary_id);
+            store.complete_run(start.boundary_id, succeeded(), 100 + i);
+        }
+
+        // The two oldest terminal runs are gone, along with their host-call
+        // index entries; the two newest survive.
+        assert!(store.snapshot(boundary_ids[0]).is_none());
+        assert!(store.snapshot(boundary_ids[1]).is_none());
+        assert!(store.snapshot(boundary_ids[2]).is_some());
+        assert!(store.snapshot(boundary_ids[3]).is_some());
+        assert_eq!(
+            store.boundary_id_for_host_call(&HostCallId::Native(sys_types::CallId(0))),
+            None
+        );
+        assert_eq!(
+            store.boundary_id_for_host_call(&HostCallId::Native(sys_types::CallId(3))),
+            Some(boundary_ids[3])
+        );
+        assert_eq!(store.list_runs(&RunFilter::default()).len(), 2);
+    }
+
+    #[test]
+    fn active_runs_are_never_evicted_by_terminal_cap() {
+        let store = InMemoryRunStore::new(RunRetentionPolicy {
+            max_terminal_runs: Some(1),
+            ..Default::default()
+        });
+        let active = create_test_run(&store, request("active"), RequestId(1));
+        let mut terminal_ids = Vec::new();
+        for i in 0..3u64 {
+            let start = create_test_run(&store, request("main"), RequestId(10 + i));
+            terminal_ids.push(start.boundary_id);
+            store.complete_run(start.boundary_id, succeeded(), 100 + i);
+        }
+        assert!(store.snapshot(active.boundary_id).is_some());
+        assert!(store.snapshot(terminal_ids[2]).is_some());
+        assert!(store.snapshot(terminal_ids[0]).is_none());
+    }
+
+    #[test]
+    fn terminal_ttl_evicts_old_runs() {
+        let store = InMemoryRunStore::new(RunRetentionPolicy {
+            terminal_ttl_ms: Some(1_000),
+            ..Default::default()
+        });
+        let old = create_test_run(&store, request("old"), RequestId(1));
+        store.complete_run(old.boundary_id, succeeded(), 1_000);
+        let new = create_test_run(&store, request("new"), RequestId(2));
+        store.complete_run(new.boundary_id, succeeded(), 5_000);
+
+        assert!(store.snapshot(old.boundary_id).is_none());
+        assert!(store.snapshot(new.boundary_id).is_some());
+    }
+
+    fn thread_and_root_call_events(engine_id: EngineId) -> Vec<ProfileEventEnvelope> {
+        let live = |kind, timestamp_ns| ProfileEventEnvelope {
+            source: ProfileEventSource::Live {
+                target: RuntimeTarget::Native,
+                source_id: "test".to_string(),
+            },
+            process_euid: ProcessEuid([1; 16]),
+            engine_id,
+            event: ProfileEvent { timestamp_ns, kind },
+        };
+        vec![
+            live(
+                ProfileEventKind::StartThread {
+                    thread_id: BexThreadId(1),
+                    parent_thread_id: None,
+                    parent_call_id: None,
+                    name: None,
+                },
+                10,
+            ),
+            live(
+                ProfileEventKind::CallFunction {
+                    thread_id: BexThreadId(1),
+                    call_id: BexCallId(1),
+                    parent_call_id: None,
+                    function_id: FunctionId(1),
+                    call_site_source: None,
+                },
+                20,
+            ),
+        ]
+    }
+
+    fn engine_root_call_ref(engine_id: EngineId) -> CallRef {
+        CallRef {
+            process_euid: ProcessEuid([1; 16]),
+            engine_id,
+            thread_id: BexThreadId(1),
+            call_id: BexCallId(1),
+        }
+    }
+
+    #[test]
+    fn profile_event_recompute_is_scoped_to_the_event_engine() {
+        let store = InMemoryRunStore::default();
+        let run_a = create_test_run(&store, request("a"), RequestId(1));
+        let run_b = create_test_run(&store, request("b"), RequestId(2));
+        assert!(matches!(
+            store.attach_root_trace(run_a.boundary_id, engine_root_call_ref(EngineId(2))),
+            AttachRootTraceResult::Attached { .. }
+        ));
+        assert!(matches!(
+            store.attach_root_trace(run_b.boundary_id, engine_root_call_ref(EngineId(3))),
+            AttachRootTraceResult::Attached { .. }
+        ));
+
+        // Events for engine 2 must only patch the run rooted in engine 2.
+        for event in thread_and_root_call_events(EngineId(2)) {
+            for patch in store.ingest_profile_event(event) {
+                assert_eq!(patch.boundary_id, run_a.boundary_id);
+            }
+        }
+        assert!(!store.snapshot(run_a.boundary_id).unwrap().calls.is_empty());
+        assert!(store.snapshot(run_b.boundary_id).unwrap().calls.is_empty());
+    }
+
+    #[test]
+    fn engine_closed_releases_events_and_keeps_reconstructed_runs() {
+        let store = InMemoryRunStore::default();
+        let start = create_test_run(&store, request("main"), RequestId(1));
+        assert!(matches!(
+            store.attach_root_trace(start.boundary_id, engine_root_call_ref(EngineId(2))),
+            AttachRootTraceResult::Attached { .. }
+        ));
+        for event in thread_and_root_call_events(EngineId(2)) {
+            store.ingest_profile_event(event);
+        }
+        let calls_before = store.snapshot(start.boundary_id).unwrap().calls;
+        assert!(!calls_before.is_empty());
+
+        store.engine_closed(EngineId(2));
+        assert_eq!(store.profile_events_len(), 0);
+        // The run keeps the call tree reconstructed before the release.
+        assert_eq!(
+            store.snapshot(start.boundary_id).unwrap().calls,
+            calls_before
+        );
+    }
+
+    #[test]
+    fn trim_profile_events_drops_oldest_beyond_cap() {
+        let mut events: Vec<ProfileEventEnvelope> = (0..PROFILE_EVENTS_CAP + 5)
+            .map(|i| {
+                thread_and_root_call_events(EngineId(2))
+                    .into_iter()
+                    .next()
+                    .map(|mut envelope| {
+                        envelope.event.timestamp_ns = i as u64;
+                        envelope
+                    })
+                    .unwrap()
+            })
+            .collect();
+        trim_profile_events(&mut events);
+        assert_eq!(events.len(), PROFILE_EVENTS_CAP);
+        assert_eq!(events[0].event.timestamp_ns, 5);
     }
 }

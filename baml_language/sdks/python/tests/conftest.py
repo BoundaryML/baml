@@ -56,6 +56,6 @@ class MockLLMHandler(http.server.BaseHTTPRequestHandler):
 def flush_traces():
     """Ensure traces are flushed when pytest exits."""
     yield
-    from baml_core import flush_events
+    from baml_bridge import flush_events
 
     flush_events()

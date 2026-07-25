@@ -11,7 +11,7 @@ use pyo3_stub_gen::derive::{gen_stub_pyclass, gen_stub_pymethods};
 /// ```python
 /// ctx = BamlCallContext()
 /// # Pass to call_function / call_function_sync:
-/// result = await call_function(rt, "MyFunc", args, ctx=ctx)
+/// result = await call_function(rt, "MyFunc", args, _ctx=ctx)
 /// # Cancel from another task:
 /// ctx.abort()
 /// ```
@@ -59,7 +59,7 @@ impl BamlCallContext {
     }
 
     /// Bind this controller to an in-flight CFFI call id for the duration of
-    /// one host call. Private runtime hook used by `baml_core`.
+    /// one host call. Private runtime hook used by `baml_bridge`.
     fn _attach_call_id(&self, call_id: u64) {
         if let Ok(mut ids) = self.active_call_ids.lock()
             && !ids.contains(&call_id)

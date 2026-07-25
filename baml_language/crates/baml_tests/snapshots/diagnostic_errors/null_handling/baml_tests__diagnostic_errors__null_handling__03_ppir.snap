@@ -1,0 +1,60 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 51674
+---
+=== PPIR ===
+class user.Address {
+  street: string
+  zip: string?
+}
+class user.Address$stream {
+  street: string | null
+  zip: string | null
+}
+class user.Node {
+  value: int
+  next: user.Node?
+  children: user.Node[]?
+  labels: map<string, user.Node>?
+}
+class user.Node$stream {
+  value: int | null
+  next: user.Node$stream | null
+  children: user.Node$stream[] | null
+  labels: map<string, user.Node$stream> | null
+}
+class user.Profile {
+  name: string
+  address: user.Address?
+  scores: int[]?
+  settings: map<string, string>?
+}
+class user.Profile$stream {
+  name: string | null
+  address: user.Address$stream | null
+  scores: int[] | null
+  settings: map<string, string> | null
+}
+class user.User {
+  id: int
+  profile: user.Profile?
+}
+class user.User$stream {
+  id: int | null
+  profile: user.Profile$stream | null
+}
+function user.Combined(user: user.User?, node: user.Node?, items: int[]?) -> string  [expr] {
+  { let e1 = user?.profile?.address?.street NullCoalesce "unknown"; let e2 = node?.children?.[node?.value NullCoalesce 0]; let e3 = user?.profile?.name NullCoalesce node?.labels?.["name"]?.value.to_string() NullCoalesce "fallback"; node?.children?.[0].next?.value = user?.id NullCoalesce 0; node?.value Add= items?.[0] NullCoalesce 1; let e4 = <missing>; let e5 = node?.children?.[user?.profile?.scores?.[0] NullCoalesce 0].value; let e6 = node?.labels?.["first"]?.children?.[0].value; node?.labels?.["counter"].value = items?.[0] NullCoalesce 0 Add 1; node?.labels?.["counter"].value Add= items?.[0] NullCoalesce 0; node?.children?.[node?.value NullCoalesce 0]?.next?.value = node?.value NullCoalesce 0; return e3 }
+}
+function user.NullCoalescing(user: user.User?, fallback: string, count: int) -> string  [expr] {
+  { let d1 = user?.profile?.name NullCoalesce "Anonymous"; let d2 = user?.profile?.name NullCoalesce user?.profile?.address?.street NullCoalesce "Unknown"; let d3: string = user?.profile?.name NullCoalesce fallback; let d4: string? = user?.profile?.name NullCoalesce user?.profile?.address?.zip; let d5 = user?.profile?.scores?.[0] NullCoalesce 0; let d6 = user?.profile?.name NullCoalesce fallback; user?.profile?.name = user?.profile?.address?.street NullCoalesce "no street"; let d7 = user?.profile?.name NullCoalesce fallback; let d8 = count NullCoalesce 0; let d9 = user?.profile?.name NullCoalesce null; let d10 = user?.profile?.name Or "Anonymous"; return d1 }
+}
+function user.OptionalCall(callback: (int) -> string?, nonNullCb: (int) -> string, name: string?) -> string  [expr] {
+  { let c1 = callback?.(42); let c2 = callback?.(42).length; let c3 = callback?.(42).length; let c4 = name?.(42); let c5 = nonNullCb?.(42); return c1 NullCoalesce "default" }
+}
+function user.OptionalChaining(user: user.User?, nonNullUser: user.User, node: user.Node?) -> string  [expr] {
+  { let a1 = user?.id; let a2 = user?.profile?.name; let a3 = user?.profile?.address?.street; let a4 = user?.profile.name; let a5 = user?.profile.address.street; let a6 = user?.profile?.address.street; let a7 = user?.profile.name; let a8 = user?.profile?.name; let a9 = user?.profile?.address?.zip; let a10 = nonNullUser?.id; user?.profile?.name = "updated"; user?.profile?.address?.street = "123 Main St"; user?.profile.name = "updated2"; user?.id Add= 1; let a11 = <missing>; return a2 NullCoalesce "default" }
+}
+function user.OptionalIndex(node: user.Node?, items: int[]?, lookup: map<string, int>?, nonNullItems: int[]) -> int  [expr] {
+  { let b1 = items?.[0]; let b2 = node?.children?.[0]; let b3 = node?.children?.[0].value; let b4 = node?.children?.[0].next?.value; let b5 = lookup?.["total"]; let b6 = node?.labels?.["main"]; let b7 = node?.labels?.["main"].value; let b8 = node?.children?.[0]; let b9 = items?.[0].to_string(); let b10 = node?.children?.[node?.value]; let b11 = node?.children?.[items?.[0] NullCoalesce 0]; let b12 = nonNullItems?.[0]; items?.[0] = 42; node?.children?.[0].value = 99; lookup?.["total"] = 100; node?.labels?.["main"].value = 50; items?.[0] Add= 10; lookup?.["total"] Add= 5; let b13 = <missing>; return b1 NullCoalesce 0 }
+}

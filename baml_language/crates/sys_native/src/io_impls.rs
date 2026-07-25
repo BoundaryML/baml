@@ -7,11 +7,9 @@
 use std::sync::{Arc, OnceLock};
 
 use bex_heap::{BexExternalValue, BexHeap};
-// Only the non-`bundle-http` HTTP stubs use `VmPanic` (to surface an
-// unsupported-platform panic); under `bundle-http` the real impls run instead.
-#[cfg(not(feature = "bundle-http"))]
-use sys_ops::io::VmPanic;
-use sys_ops::io::{self, CallId, SysOpContext, SysOpOutput, VmBamlError, VmRustFnError, owned};
+use sys_ops::io::{
+    self, CallId, SysOpContext, SysOpOutput, VmBamlError, VmPanic, VmRustFnError, owned,
+};
 
 // Process-level shared BufReader for stdin, preventing data loss when
 // BufReader over-reads into its internal buffer across multiple io.input() calls.
@@ -163,6 +161,62 @@ impl io::IoNamespaceTime for NativeSysOps {
         }
     }
 }
+
+// ============================================================================
+// Random (operating-system entropy)
+// ============================================================================
+
+impl io::IoClassRandomSystemRandom for NativeSysOps {
+    fn random(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        bytes: i64,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<Vec<u8>> {
+        let Ok(n) = usize::try_from(bytes) else {
+            return SysOpOutput::err(VmPanic::UserPanic {
+                message: format!("Rng.random: byte count must be non-negative, got {bytes}"),
+            });
+        };
+        // Allocate fallibly so an unsatisfiable request is a catchable
+        // `AllocFailure` panic, not a host-process abort.
+        let mut buf = Vec::new();
+        if buf.try_reserve(n).is_err() {
+            return SysOpOutput::err(VmPanic::AllocFailure {
+                message: format!("Rng.random: allocation of {n} bytes failed"),
+            });
+        }
+        buf.resize(n, 0u8);
+        match getrandom::getrandom(&mut buf) {
+            Ok(()) => SysOpOutput::ok(buf),
+            Err(e) => SysOpOutput::err(VmPanic::HostUnavailable {
+                resource: "randomness".to_string(),
+                message: format!("SystemRandom.random: system entropy unavailable: {e}"),
+            }),
+        }
+    }
+
+    fn random_int(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<i64> {
+        let mut buf = [0u8; 8];
+        match getrandom::getrandom(&mut buf) {
+            // Arithmetic shift right by one maps the uniform 64-bit draw onto
+            // the BAML i63 range `[INT_MIN, INT_MAX]`.
+            Ok(()) => SysOpOutput::ok(i64::from_le_bytes(buf) >> 1),
+            Err(e) => SysOpOutput::err(VmPanic::HostUnavailable {
+                resource: "randomness".to_string(),
+                message: format!("SystemRandom.random_int: system entropy unavailable: {e}"),
+            }),
+        }
+    }
+}
+
+impl io::IoNamespaceRandom for NativeSysOps {}
 
 // ============================================================================
 // IO (stdin input)
@@ -1136,6 +1190,19 @@ async fn run_process(
 }
 
 impl io::IoNamespaceSys for NativeSysOps {
+    fn collect_garbage(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<()> {
+        // BexEngine intercepts this operation before ordinary sys-op dispatch
+        // so it can release the calling VM's heap permit and coordinate a
+        // stop-the-world collection. This fallback keeps the generated IO
+        // contract complete for alternate dispatchers.
+        SysOpOutput::ok(())
+    }
+
     fn exec(
         &self,
         _heap: &Arc<BexHeap>,
@@ -2331,6 +2398,262 @@ impl io::IoNamespaceHttp for NativeSysOps {
     ) -> SysOpOutput<owned::http::SseStream> {
         SysOpOutput::err(VmPanic::HostUnavailable {
             resource: "http".to_string(),
+            message: "Operation not supported on this platform".to_string(),
+        })
+    }
+}
+
+impl io::IoClassWsWsStream for NativeSysOps {
+    #[cfg(feature = "bundle-http")]
+    fn send(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        stream: owned::ws::WsStream,
+        text: String,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<()> {
+        use futures::SinkExt;
+        use tokio_tungstenite::tungstenite::Message;
+
+        SysOpOutput::async_op(async move {
+            let handle = stream
+                ._handle
+                .downcast::<bex_resource_types::ResourceHandle>()
+                .map_err(|_| VmBamlError::DevOther {
+                    message: "Invalid WebSocket stream handle type".into(),
+                })?;
+            let (sink, _) = crate::registry::REGISTRY
+                .get_ws_stream(handle.key())
+                .ok_or_else(|| VmBamlError::DevOther {
+                    message: "WebSocket stream handle is invalid".into(),
+                })?;
+            sink.lock()
+                .await
+                .send(Message::text(text))
+                .await
+                .map_err(|error| VmBamlError::Io {
+                    message: format!("WebSocket send failed: {error}"),
+                })?;
+            Ok(())
+        })
+    }
+
+    #[cfg(not(feature = "bundle-http"))]
+    fn send(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        _stream: owned::ws::WsStream,
+        _text: String,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<()> {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "ws".to_string(),
+            message: "Operation not supported on this platform".to_string(),
+        })
+    }
+
+    #[cfg(feature = "bundle-http")]
+    fn next(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        stream: owned::ws::WsStream,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<Option<String>> {
+        use futures::{SinkExt, StreamExt};
+        use tokio_tungstenite::tungstenite::Message;
+
+        SysOpOutput::async_op(async move {
+            let handle = stream
+                ._handle
+                .downcast::<bex_resource_types::ResourceHandle>()
+                .map_err(|_| VmBamlError::DevOther {
+                    message: "Invalid WebSocket stream handle type".into(),
+                })?;
+            let (sink, source) = crate::registry::REGISTRY
+                .get_ws_stream(handle.key())
+                .ok_or_else(|| VmBamlError::DevOther {
+                    message: "WebSocket stream handle is invalid".into(),
+                })?;
+            let mut source = source.lock().await;
+            loop {
+                match source.next().await {
+                    Some(Ok(Message::Text(text))) => {
+                        return Ok(Some(text.as_str().to_string()));
+                    }
+                    Some(Ok(Message::Binary(bytes))) => {
+                        return Err(VmBamlError::Io {
+                            message: format!(
+                                "received unexpected binary WebSocket frame ({} bytes) on a text-oriented stream",
+                                bytes.len()
+                            ),
+                        }
+                        .into());
+                    }
+                    Some(Ok(Message::Close(_))) | None => return Ok(None),
+                    Some(Ok(Message::Ping(payload))) => {
+                        sink.lock()
+                            .await
+                            .send(Message::Pong(payload))
+                            .await
+                            .map_err(|error| VmBamlError::Io {
+                                message: format!("WebSocket pong failed: {error}"),
+                            })?;
+                    }
+                    Some(Ok(Message::Pong(_) | Message::Frame(_))) => {}
+                    Some(Err(error)) => {
+                        return Err(VmBamlError::Io {
+                            message: format!("WebSocket receive failed: {error}"),
+                        }
+                        .into());
+                    }
+                }
+            }
+        })
+    }
+
+    #[cfg(not(feature = "bundle-http"))]
+    fn next(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        _stream: owned::ws::WsStream,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<Option<String>> {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "ws".to_string(),
+            message: "Operation not supported on this platform".to_string(),
+        })
+    }
+
+    #[cfg(feature = "bundle-http")]
+    fn close(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        stream: owned::ws::WsStream,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<()> {
+        use bex_resource_types::ResourceRegistryRef;
+        use futures::SinkExt;
+        use tokio_tungstenite::tungstenite::Message;
+
+        SysOpOutput::async_op(async move {
+            if let Ok(handle) = stream
+                ._handle
+                .downcast::<bex_resource_types::ResourceHandle>()
+            {
+                if let Some((sink, _)) = crate::registry::REGISTRY.get_ws_stream(handle.key()) {
+                    let _ = sink.lock().await.send(Message::Close(None)).await;
+                }
+                crate::registry::REGISTRY.remove(handle.key());
+            }
+            Ok(())
+        })
+    }
+
+    #[cfg(not(feature = "bundle-http"))]
+    fn close(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        stream: owned::ws::WsStream,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<()> {
+        use bex_resource_types::ResourceRegistryRef;
+
+        if let Ok(handle) = stream
+            ._handle
+            .downcast::<bex_resource_types::ResourceHandle>()
+        {
+            crate::registry::REGISTRY.remove(handle.key());
+        }
+        SysOpOutput::ok(())
+    }
+}
+
+impl io::IoNamespaceWs for NativeSysOps {
+    #[cfg(feature = "bundle-http")]
+    fn _connect(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        url: String,
+        headers: indexmap::IndexMap<String, String>,
+        timeout_nanos: Arc<num_bigint::BigInt>,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<owned::ws::WsStream> {
+        use futures::StreamExt;
+        use tokio::sync::Mutex;
+        use tokio_tungstenite::tungstenite::{
+            client::IntoClientRequest,
+            http::{HeaderName, HeaderValue},
+        };
+
+        let timeout = timeout_from_nanos(&timeout_nanos);
+        SysOpOutput::async_op(async move {
+            crate::ensure_rustls_crypto_provider();
+
+            let mut request =
+                url.as_str()
+                    .into_client_request()
+                    .map_err(|error| VmBamlError::Io {
+                        message: format!("invalid WebSocket URL '{url}': {error}"),
+                    })?;
+            for (name, value) in &headers {
+                let name =
+                    HeaderName::from_bytes(name.as_bytes()).map_err(|error| VmBamlError::Io {
+                        message: format!("invalid WebSocket header name '{name}': {error}"),
+                    })?;
+                let value = HeaderValue::from_str(value).map_err(|error| VmBamlError::Io {
+                    message: format!("invalid WebSocket header value for '{name}': {error}"),
+                })?;
+                request.headers_mut().insert(name, value);
+            }
+
+            let connect = tokio_tungstenite::connect_async(request);
+            let connected = match timeout {
+                Some(duration) => match tokio::time::timeout(duration, connect).await {
+                    Ok(result) => result,
+                    Err(_) => {
+                        return Err(VmBamlError::Timeout {
+                            message: format!("Connecting WebSocket to '{url}' timed out"),
+                            duration_ms: i64::try_from(duration.as_millis()).ok(),
+                        }
+                        .into());
+                    }
+                },
+                None => connect.await,
+            };
+            let (transport, _) = connected.map_err(|error| VmBamlError::Io {
+                message: format!("WebSocket connect failed: {error}"),
+            })?;
+            let (sink, source) = transport.split();
+            let handle = crate::registry::REGISTRY.register_ws_stream(
+                Arc::new(Mutex::new(sink)),
+                Arc::new(Mutex::new(source)),
+                url,
+            );
+            Ok(owned::ws::WsStream {
+                _handle: Arc::new(handle),
+            })
+        })
+    }
+
+    #[cfg(not(feature = "bundle-http"))]
+    fn _connect(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        _url: String,
+        _headers: indexmap::IndexMap<String, String>,
+        _timeout_nanos: Arc<num_bigint::BigInt>,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<owned::ws::WsStream> {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "ws".to_string(),
             message: "Operation not supported on this platform".to_string(),
         })
     }

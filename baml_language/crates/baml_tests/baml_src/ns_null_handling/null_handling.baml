@@ -184,12 +184,18 @@ test "combined_compound_assign_lhs_null_skips" {
 // Regression (CodeRabbit): optional member access on a MULTI-member nullable
 // union `(A | B)?.field` must strip null from the receiver and route through
 // the union (not a single class).
+// A shared member accessed on a union (`(NhCat | NhDog).sound`) is reachable
+// only through an interface both arms implement.
+interface NhHasSound { sound string }
+
 class NhCat {
     sound string
+    implements NhHasSound {}
 }
 
 class NhDog {
     sound string
+    implements NhHasSound {}
 }
 
 function nh_multi_union_optional_access(animal: (NhCat | NhDog)?) -> string? {

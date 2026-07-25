@@ -10,6 +10,28 @@ function deep_equals<T>(a: T, b: T) -> bool throws never {
   $rust_function
 }
 
+/// Implemented by all concrete types.
+/// Can be used to check or bound a type to only include concrete types.
+interface Concrete {
+
+}
+
+implement<T> Concrete for T {
+
+}
+
+/// Implemented automatically by every function value, with its parameter
+/// list erased. `Returns` pins the held function's return type and `Throws`
+/// its error type; both default to `unknown`, so a bare `AnyFunction`
+/// accepts any function. A compiler builtin: it cannot be implemented by
+/// hand, cannot be used as a generic bound, and declares no methods. Call
+/// the held function through `reflect.call_any`; read its signature with
+/// `reflect.signature`.
+interface AnyFunction {
+  type Returns = unknown
+  type Throws = unknown
+}
+
 /// The structured value a tagged template literal produces.
 ///
 /// BEP-049 §10. A `tag` ` `…` ` call site lowers to `tag(body = () -> TaggedString { … })`;

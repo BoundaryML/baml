@@ -117,6 +117,23 @@ impl QualifiedTypeName {
         &self.name
     }
 
+    /// Whether this is the generated stream-view companion for a local type.
+    ///
+    /// Stream types currently use the `$stream` source-level suffix. Keeping
+    /// this query on the compiler-owned qualified name avoids duplicating that
+    /// identity rule in each code generator.
+    pub fn is_stream(&self) -> bool {
+        self.name.as_str().ends_with("$stream")
+    }
+
+    /// The unqualified source name, without the generated stream prefix.
+    pub fn bare_name(&self) -> &str {
+        self.name
+            .as_str()
+            .strip_suffix("$stream")
+            .unwrap_or_else(|| self.name.as_str())
+    }
+
     pub fn is_builtin_root_type(&self, name: &str) -> bool {
         self.package().as_str() == "baml" && self.namespace.is_empty() && self.name.as_str() == name
     }
@@ -125,14 +142,6 @@ impl QualifiedTypeName {
     /// (i.e. it is a panic class or the `Panic` type alias).
     pub fn is_panic_type(&self) -> bool {
         baml_base::is_panic_namespace(self.package().as_str(), &self.namespace)
-    }
-
-    pub fn to_path_in_package(&self) -> Vec<Name> {
-        self.namespace
-            .iter()
-            .chain(std::iter::once(&self.name))
-            .cloned()
-            .collect::<Vec<_>>()
     }
 
     /// The flat `[package, ...namespace]` path, matching the legacy

@@ -355,6 +355,128 @@ function get_prompt() -> baml.llm.PromptAst {
     assert_eq!(result, prompt_ast_message("system", "Hello, World!"));
 }
 
+/// B-626: `<Fn>$render_prompt` renders offline and must NOT require the client's
+/// `api_key` env var.
+///
+/// The client here reads `api_key` from `OPENAI_API_KEY_UNSET_B626`, a variable
+/// that is never set. Before the fix, `render_prompt` eagerly constructed the
+/// real primitive client (`Fast$new` → `baml.env.get_or_panic`) and panicked
+/// with `UserPanic { "env var not found: ..." }` before rendering. Now the
+/// render path constructs the client leniently (for its provider/role metadata
+/// only), so the prompt renders without any credential set.
+#[tokio::test]
+async fn test_render_prompt_offline_without_api_key_env() {
+    use bex_engine::BexEngine;
+    use sys_native::SysOpsExt;
+
+    let source = r##"
+class C { x: string }
+
+client Fast {
+    provider openai
+    options {
+        model "gpt-4o-mini"
+        api_key env.OPENAI_API_KEY_UNSET_B626
+    }
+}
+
+function Extract(raw: string) -> C {
+    client Fast
+    prompt #"
+        Extract from {{ raw }}.
+        {{ ctx.output_format }}
+    "#
+}
+
+function get_prompt() -> baml.llm.PromptAst {
+    Extract$render_prompt("hello")
+}
+"##;
+
+    let snapshot = common::compile_for_engine(source);
+    let engine = std::sync::Arc::new(
+        BexEngine::new(snapshot, sys_native::SysOps::native().into(), Vec::new())
+            .expect("Failed to create engine"),
+    );
+
+    let result = engine
+        .call_function(
+            "get_prompt",
+            vec![],
+            FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+            true,
+        )
+        .await
+        .expect("render_prompt must succeed offline without the api_key env var");
+
+    let rendered = common::prompt_ast_to_string(&result);
+    assert!(
+        rendered.contains("Extract from hello."),
+        "rendered prompt should contain the interpolated arg, got: {rendered}"
+    );
+    assert!(
+        rendered.contains("x: string"),
+        "rendered prompt should contain the output-format schema, got: {rendered}"
+    );
+}
+
+/// B-626 boundary: the offline `render_prompt` path tolerates a missing
+/// credential env var, but the request-building path must NOT. With the same
+/// unset `api_key` env var, `<Fn>$build_request` still constructs the client
+/// strictly and surfaces the missing variable (as a `get_or_panic` `UserPanic`),
+/// so we don't over-loosen and silently build an unauthenticated request.
+#[tokio::test]
+async fn test_build_request_still_requires_api_key_env() {
+    use bex_engine::BexEngine;
+    use sys_native::SysOpsExt;
+
+    let source = r##"
+class C { x: string }
+
+client Fast {
+    provider openai
+    options {
+        model "gpt-4o-mini"
+        api_key env.OPENAI_API_KEY_UNSET_B626
+    }
+}
+
+function Extract(raw: string) -> C {
+    client Fast
+    prompt #"
+        Extract from {{ raw }}.
+        {{ ctx.output_format }}
+    "#
+}
+
+function get_request() -> int {
+    let request = Extract$build_request("hello");
+    42
+}
+"##;
+
+    let snapshot = common::compile_for_engine(source);
+    let engine = std::sync::Arc::new(
+        BexEngine::new(snapshot, sys_native::SysOps::native().into(), Vec::new())
+            .expect("Failed to create engine"),
+    );
+
+    let result = engine
+        .call_function(
+            "get_request",
+            vec![],
+            FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+            true,
+        )
+        .await;
+
+    let err = result.expect_err("build_request must still require the api_key env var");
+    assert!(
+        err.to_string().contains("OPENAI_API_KEY_UNSET_B626"),
+        "error should name the missing env var, got: {err}"
+    );
+}
+
 /// Test that `render_prompt` returns a `PromptAst` value.
 ///
 /// This test calls `render_prompt` and verifies the result is a `PromptAst`
@@ -382,7 +504,7 @@ function Greet(name: string) -> string {
 // Function that returns the PromptAst type - this should work since
 // PromptAst is now a visible builtin type
 function get_prompt() -> baml.llm.PromptAst {
-    let args = { "name": "World" };
+    let args: map<string, unknown> = { "name": "World" };
     baml.llm.render_prompt(TestClient, "Greet", args)
 }
 "##;
@@ -461,7 +583,7 @@ function Greet(name: string) -> string {
 }
 
 function test_build_request() -> int {
-    let args = { "name": "World" };
+    let args: map<string, unknown> = { "name": "World" };
     let request = baml.llm.build_request(TestClient, "Greet", args);
     42
 }
@@ -505,7 +627,7 @@ function Greet(name: string) -> string {
 }
 
 function test_call_llm() -> unknown {
-    let args = { "name": "World" };
+    let args: map<string, unknown> = { "name": "World" };
     baml.llm.call_llm_function(TestClient, "Greet", args)
 }
 "##;
@@ -641,7 +763,7 @@ function Greet(name: string) -> map<string, int> {
 }
 
 function test_call_llm() -> unknown {
-    let args = { "name": "World" };
+    let args: map<string, unknown> = { "name": "World" };
     baml.llm.call_llm_function(TestClient, "Greet", args)
 }
 "##;
@@ -719,7 +841,7 @@ function TestFunc(name: string) -> string {
 }
 
 function get_prompt() -> baml.llm.PromptAst {
-    let args = { "name": "Alice" };
+    let args: map<string, unknown> = { "name": "Alice" };
     baml.llm.render_prompt(TestClient, "TestFunc", args)
 }
 "##;
@@ -817,7 +939,7 @@ function TestFunc(label: string, person: Person) -> string {
 }
 
 function get_prompt() -> baml.llm.PromptAst {
-    let args = { "label": "User", "person": { "name": "Bob", "age": 42 } };
+    let args: map<string, unknown> = { "label": "User", "person": { "name": "Bob", "age": 42 } };
     baml.llm.render_prompt(TestClient, "TestFunc", args)
 }
 "##;

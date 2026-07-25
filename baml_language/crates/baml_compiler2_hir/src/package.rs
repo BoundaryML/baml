@@ -41,10 +41,10 @@ impl<'db> NamespaceShadow<'db> {
             .map(|(_, c)| c.name_span);
 
         let message = format!(
-            "Namespace `{}` (from `ns_{}/`) shadows root-level {} `{}`",
+            "namespace `{}` (from `ns_{}/`) shadows root-level {} `{}`",
             self.ns_name,
             self.ns_name,
-            def.kind_name(),
+            def.source_kind_name(db),
             self.ns_name
         );
 
@@ -55,7 +55,7 @@ impl<'db> NamespaceShadow<'db> {
                 Span { file_id, range },
                 format!(
                     "this {} is shadowed by namespace `{}`",
-                    def.kind_name(),
+                    def.source_kind_name(db),
                     self.ns_name
                 ),
             );
@@ -82,6 +82,10 @@ pub struct PackageItemsExtra<'db> {
 /// All items across all namespaces within a package.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PackageItems<'db> {
+    /// The name of the package these items belong to — the scope in which they,
+    /// and any impls resolving their members, are visible. Reconstruct the
+    /// interned id with `PackageId::new(db, package.clone())` when one is needed.
+    pub package: Name,
     /// Namespace path -> items within that namespace.
     pub namespaces: FxHashMap<Vec<Name>, NamespaceItems<'db>>,
     /// Conflicts and other rare data. `None` when no conflicts exist.
@@ -226,7 +230,11 @@ pub fn package_items<'db>(db: &'db dyn crate::Db, package_id: PackageId<'db>) ->
         }))
     };
 
-    PackageItems { namespaces, extra }
+    PackageItems {
+        package: package_name,
+        namespaces,
+        extra,
+    }
 }
 
 fn is_allowed_builtin_namespace_shadow(

@@ -51,6 +51,12 @@ pub trait HistoryEventObserver: Send + Sync + 'static {
         envelope: ProfileEventEnvelope,
         disk_event: pb::DiskEventV1,
     );
+
+    /// Called after an engine has been dropped and all of its remaining
+    /// profile events have been delivered.
+    fn engine_closed(&self, engine_id: crate::ids::EngineId) {
+        let _ = engine_id;
+    }
 }
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -94,6 +100,20 @@ pub(crate) fn publish_history_profile_event(
     _envelope: &ProfileEventEnvelope,
     _disk_event: &pb::DiskEventV1,
 ) {
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+pub(crate) fn publish_history_engine_closed(engine_id: crate::ids::EngineId) {
+    let observers = history_observers()
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .observers
+        .iter()
+        .map(|(_, observer)| observer.clone())
+        .collect::<Vec<_>>();
+    for observer in observers {
+        let _ = std::panic::catch_unwind(AssertUnwindSafe(|| observer.engine_closed(engine_id)));
+    }
 }
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -201,6 +221,9 @@ struct BoundaryState {
     claimed_profile_record_ids: HashSet<HistoryProfileRecordId>,
     profile_write_error: Option<String>,
     completed: Option<RunCompletedRecord>,
+    /// Set when the boundary's engine closed before the run completed; the
+    /// entry is released as soon as the completion record is flushed.
+    engine_closed: bool,
     writer: BoundaryWriter,
 }
 
@@ -294,6 +317,7 @@ impl HistoryStore {
                 claimed_profile_record_ids: HashSet::new(),
                 profile_write_error: None,
                 completed: None,
+                engine_closed: false,
                 writer,
             },
         );
@@ -452,7 +476,14 @@ impl HistoryStore {
         let thread_id = state.root_trace.map_or(0, |root| root.thread_id.0);
         state.writer.write_run_completed(thread_id, &record)?;
         state.completed = Some(record);
-        state.writer.flush()
+        state.writer.flush()?;
+        // The run is durable on disk; if its engine is already gone, no more
+        // events can arrive for it and the in-memory state can be released
+        // (open() and read_value() fall back to scanning the disk history).
+        if state.engine_closed {
+            inner.boundaries.remove(&boundary_id);
+        }
+        Ok(())
     }
 
     #[must_use]
@@ -581,6 +612,33 @@ impl HistoryEventObserver for HistoryStore {
                 remember_profile_write_error(&mut inner, boundary_id, &err);
             }
         }
+    }
+
+    fn engine_closed(&self, engine_id: crate::ids::EngineId) {
+        let mut inner = self
+            .inner
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        // Everything for the engine has been drained and routed; release the
+        // per-boundary bookkeeping (open writer fd, claimed-record set) for
+        // boundaries that already flushed their completion record. Boundaries
+        // still awaiting complete() are flagged and released there.
+        inner.boundaries.retain(|_, state| {
+            let matches_engine = state
+                .root_trace
+                .is_some_and(|root| root.engine_id == engine_id);
+            if !matches_engine {
+                return true;
+            }
+            if state.completed.is_some() {
+                let _ = state.writer.flush();
+                false
+            } else {
+                state.engine_closed = true;
+                true
+            }
+        });
+        inner.router.release_engine(engine_id);
     }
 }
 
@@ -940,28 +998,11 @@ fn open_boundary_from_segments_with_fallback(
     })
 }
 
-pub fn read_value_from_segments(
-    value_segments: &[HistoryValueSegment],
-    value_ref_id: &str,
-) -> io::Result<Option<HistoryValueBody>> {
-    read_value_from_segments_result(value_segments, value_ref_id)
-        .map(HistoryValueReadResult::into_body)
-}
-
 pub fn read_value_from_segments_result(
     value_segments: &[HistoryValueSegment],
     value_ref_id: &str,
 ) -> io::Result<HistoryValueReadResult> {
     read_value_from_segments_with_blobs_result(value_segments, value_ref_id, None)
-}
-
-pub fn read_value_from_segments_with_blobs(
-    value_segments: &[HistoryValueSegment],
-    value_ref_id: &str,
-    blob_store: Option<&BlobStore>,
-) -> io::Result<Option<HistoryValueBody>> {
-    read_value_from_segments_with_blobs_result(value_segments, value_ref_id, blob_store)
-        .map(HistoryValueReadResult::into_body)
 }
 
 pub fn read_value_from_segments_with_blobs_result(

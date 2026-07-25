@@ -70,6 +70,16 @@ pub struct TyAttr {
 }
 
 impl TyAttr {
+    /// The all-`Unset` attribute set — a `const` equal to
+    /// [`TyAttr::default`], usable where a `&'static TyAttr` is needed (e.g.
+    /// the `ty_family!`-generated `attr()` accessor's fallback for variants
+    /// that carry no attribute of their own).
+    pub const EMPTY: TyAttr = TyAttr {
+        sap_parse_without_null: TyAttrValue::Unset,
+        sap_pending_never: TyAttrValue::Unset,
+        sap_in_progress_never: TyAttrValue::Unset,
+    };
+
     /// Return the canonical names of all attributes that are `Set`.
     pub fn attr_names(&self) -> Vec<&'static str> {
         let mut names = Vec::new();

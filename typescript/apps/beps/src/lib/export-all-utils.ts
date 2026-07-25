@@ -33,6 +33,17 @@ export interface ExportAllPage {
   title: string;
   content: string;
   order: number;
+  parentSlug?: string;
+}
+
+/**
+ * Relative path of a page file within a BEP folder.
+ * Nested pages live in a subfolder named after their parent slug.
+ */
+function pagePath(page: { slug: string; parentSlug?: string }): string {
+  return page.parentSlug
+    ? `pages/${page.parentSlug}/${page.slug}.md`
+    : `pages/${page.slug}.md`;
 }
 
 export interface ExportAllData {
@@ -294,6 +305,7 @@ export interface BepMetadata {
     slug: string;
     title: string;
     order: number;
+    parentSlug?: string;
   }>;
 }
 
@@ -313,6 +325,7 @@ export function generateBepMetaJson(bep: ExportAllBep): string {
       slug: p.slug,
       title: p.title,
       order: p.order,
+      ...(p.parentSlug ? { parentSlug: p.parentSlug } : {}),
     })),
   };
   return JSON.stringify(metadata, null, 2);
@@ -352,11 +365,30 @@ export function generateBepReadme(bep: ExportAllBep): string {
     md += `# ${bepNum}: ${bep.title}\n\n*No content available.*\n`;
   }
 
-  // Link to additional pages if any
+  // Link to additional pages if any (children listed under their parent)
   if (bep.pages.length > 0) {
     md += `\n\n---\n\n## Additional Pages\n\n`;
+    const childrenByParent = new Map<string, ExportAllPage[]>();
     for (const page of bep.pages) {
-      md += `- [${page.title}](./pages/${page.slug}.md)\n`;
+      if (page.parentSlug) {
+        const list = childrenByParent.get(page.parentSlug) ?? [];
+        list.push(page);
+        childrenByParent.set(page.parentSlug, list);
+      }
+    }
+    for (const page of bep.pages) {
+      if (page.parentSlug) continue;
+      md += `- [${page.title}](./${pagePath(page)})\n`;
+      for (const child of childrenByParent.get(page.slug) ?? []) {
+        md += `  - [${child.title}](./${pagePath(child)})\n`;
+      }
+    }
+    // Children whose parent slug doesn't match any page
+    for (const [parentSlug, children] of childrenByParent) {
+      if (bep.pages.some((p) => !p.parentSlug && p.slug === parentSlug)) continue;
+      for (const child of children) {
+        md += `- [${child.title}](./${pagePath(child)})\n`;
+      }
     }
   }
 
@@ -419,8 +451,25 @@ BEP-001-your-proposal-slug/
 ├── README.md           # Main proposal content
 └── pages/              # Additional pages (addenda)
     ├── background.md
-    └── examples.md
+    ├── examples.md
+    └── design/         # One level of nesting is supported
+        ├── api.md      # Becomes a child of the "design" page
+        └── schema.md
 \`\`\`
+
+### Page Hierarchy
+
+Pages support **one level of nesting**: a markdown file inside a subfolder of
+\`pages/\` (e.g., \`pages/design/api.md\`) is imported as a child of the page
+whose slug matches the folder name (\`design\`). In the API this is expressed
+with the optional \`parentSlug\` field on a page object.
+
+Rules:
+- Slugs are unique per BEP, even across folders — \`pages/a/notes.md\` and
+  \`pages/b/notes.md\` would collide.
+- The parent folder name should match an existing top-level page slug so the
+  child nests under it in the UI; otherwise the child is shown at top level.
+- Folders deeper than one level are not supported and will be skipped on import.
 
 ---
 
@@ -510,6 +559,12 @@ curl -X POST "${apiBaseUrl}/api/agent/beps" \\
         "slug": "background",
         "title": "Background Research",
         "content": "# Background\\n\\nDetailed research..."
+      },
+      {
+        "slug": "api",
+        "title": "API Details",
+        "content": "# API Details\\n\\n...",
+        "parentSlug": "background"
       }
     ]
   }'
@@ -582,9 +637,10 @@ Downloads all BEPs as a ZIP archive. No authentication required.
 
 | Field | Required | Description |
 |-------|----------|-------------|
-| \`slug\` | Yes | URL-safe identifier (e.g., \`"background"\`) |
+| \`slug\` | Yes | URL-safe identifier (e.g., \`"background"\`), unique per BEP |
 | \`title\` | Yes | Display title |
 | \`content\` | Yes | Full markdown content |
+| \`parentSlug\` | No | Slug of the parent page to nest under (one level) |
 
 ### Update (PUT /api/agent/beps)
 
@@ -732,7 +788,7 @@ export function generateAllBepsExportFiles(data: ExportAllData, apiBaseUrl: stri
     // Additional pages
     for (const page of bep.pages) {
       files.push({
-        path: `${bepFolder}/pages/${page.slug}.md`,
+        path: `${bepFolder}/${pagePath(page)}`,
         content: generatePageMd(page),
       });
     }

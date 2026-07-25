@@ -66,12 +66,11 @@ function ForLoopWithHeaders() -> int {
 
 //----
 //- diagnostics
-// error: type mismatch: expected string, got int
-//     ╭─[ headers_complex_headers_test.baml:43:5 ]
-//     │
+// E0001
+//
+//   × mismatched types
+//     ╭─[headers_complex_headers_test.baml:43:5]
 //  43 │     final_result
-//     │     ──────┬─────  
-//     │           ╰─────── type mismatch: expected string, got int
-//     │ 
-//     │ Note: Error code: E0001
-// ────╯
+//     ·     ──────┬─────
+//     ·           ╰── expected `string`, found `int`
+//     ╰────

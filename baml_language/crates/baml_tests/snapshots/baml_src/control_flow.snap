@@ -3,148 +3,172 @@ source: crates/baml_tests/tests/baml_src.rs
 ---
 function control_flow.$init_test_ns_control_flow_control_flow(registry: testing.TestCollector) -> null {
     load_var registry
+    load_const "root.control_flow"
     load_const "match_arm_break_exits_infinite_while_loop"
     make_closure .<lambda($init_test_ns_control_flow_control_flow, 0)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.control_flow"
     load_const "match_arm_continue_continues_loop_without_falling_through"
     make_closure .<lambda($init_test_ns_control_flow_control_flow, 1)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.control_flow"
     load_const "match_arm_return_returns_without_falling_through"
     make_closure .<lambda($init_test_ns_control_flow_control_flow, 2)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.control_flow"
     load_const "if_let_takes_then_branch_when_pattern_matches"
     make_closure .<lambda($init_test_ns_control_flow_control_flow, 3)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.control_flow"
     load_const "if_let_takes_else_branch_when_pattern_does_not_match"
     make_closure .<lambda($init_test_ns_control_flow_control_flow, 4)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.control_flow"
     load_const "if_let_destructure_binds_fields_at_runtime"
     make_closure .<lambda($init_test_ns_control_flow_control_flow, 5)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.control_flow"
     load_const "if_let_else_if_let_chain_runs_correct_arm"
     make_closure .<lambda($init_test_ns_control_flow_control_flow, 6)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.control_flow"
     load_const "if_let_chain_falls_through_to_final_else"
     make_closure .<lambda($init_test_ns_control_flow_control_flow, 7)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.control_flow"
     load_const "if_let_or_pattern_dispatches_to_either_alternative"
     make_closure .<lambda($init_test_ns_control_flow_control_flow, 8)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.control_flow"
     load_const "if_let_nested_shadowing_restores_outer_binding"
     make_closure .<lambda($init_test_ns_control_flow_control_flow, 9)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.control_flow"
     load_const "if_let_composite_scrutinee_binds_call_result"
     make_closure .<lambda($init_test_ns_control_flow_control_flow, 10)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.control_flow"
     load_const "if_let_optional_scrutinee_some"
     make_closure .<lambda($init_test_ns_control_flow_control_flow, 11)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.control_flow"
     load_const "if_let_optional_scrutinee_null"
     make_closure .<lambda($init_test_ns_control_flow_control_flow, 12)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.control_flow"
     load_const "if_let_statement_form_with_return_in_then"
     make_closure .<lambda($init_test_ns_control_flow_control_flow, 13)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.control_flow"
     load_const "let_else_binds_when_pattern_matches"
     make_closure .<lambda($init_test_ns_control_flow_control_flow, 14)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.control_flow"
     load_const "let_else_takes_else_branch_when_pattern_does_not_match"
     make_closure .<lambda($init_test_ns_control_flow_control_flow, 15)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.control_flow"
     load_const "let_else_destructure_binds_fields_at_runtime"
     make_closure .<lambda($init_test_ns_control_flow_control_flow, 16)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.control_flow"
     load_const "let_else_or_pattern_matches_either_alternative"
     make_closure .<lambda($init_test_ns_control_flow_control_flow, 17)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.control_flow"
     load_const "let_else_break_in_else_inside_loop"
     make_closure .<lambda($init_test_ns_control_flow_control_flow, 18)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.control_flow"
     load_const "let_else_continue_in_else_inside_loop"
     make_closure .<lambda($init_test_ns_control_flow_control_flow, 19)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.control_flow"
     load_const "let_else_multiple_consecutive_bindings"
     make_closure .<lambda($init_test_ns_control_flow_control_flow, 20)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.control_flow"
     load_const "let_else_second_miss_skips_first_binding"
     make_closure .<lambda($init_test_ns_control_flow_control_flow, 21)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.control_flow"
     load_const "let_else_throw_in_else_is_caught_by_outer_catch"
     make_closure .<lambda($init_test_ns_control_flow_control_flow, 22)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.control_flow"
     load_const "let_else_throw_in_else_propagates_when_uncaught"
     make_closure .<lambda($init_test_ns_control_flow_control_flow, 23)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_const null
     return
@@ -177,7 +201,9 @@ function control_flow.break_loop(x: int) -> int {
 
 function control_flow.chain_two(a: control_flow.Ok | control_flow.Err, b: control_flow.Ok | control_flow.Err) -> string {
     load_var a
-    is_type control_flow.Ok
+    store_var _3
+    load_var _3
+    narrow_bind control_flow.Ok, slot=3
     pop_jump_if_false L0
     jump L1
 
@@ -186,8 +212,12 @@ function control_flow.chain_two(a: control_flow.Ok | control_flow.Err, b: contro
     jump L4
 
   L1:
+    load_var _3
+    store_var oa
     load_var b
-    is_type control_flow.Ok
+    store_var _5
+    load_var _5
+    narrow_bind control_flow.Ok, slot=5
     pop_jump_if_false L2
     jump L3
 
@@ -196,11 +226,11 @@ function control_flow.chain_two(a: control_flow.Ok | control_flow.Err, b: contro
     jump L4
 
   L3:
-    load_var a
+    load_var oa
     load_field .value
     load_const "-"
     bin_op +
-    load_var b
+    load_var _5
     load_field .value
     bin_op +
 
@@ -234,8 +264,9 @@ function control_flow.concat_oks(items: (control_flow.Ok | control_flow.Err)[]) 
     add_int
     store_var i
     load_var item
-    store_var_load_var _9
-    is_type control_flow.Ok
+    store_var _10
+    load_var _10
+    narrow_bind control_flow.Ok, slot=5
     pop_jump_if_false L0
     load_var2 2 5
     load_field .value
@@ -283,7 +314,9 @@ function control_flow.continue_loop(x: int) -> int {
 
 function control_flow.describe_else_message(r: control_flow.Ok | control_flow.Err) -> string {
     load_var r
-    is_type control_flow.Ok
+    store_var _2
+    load_var _2
+    narrow_bind control_flow.Ok, slot=2
     pop_jump_if_false L0
     jump L1
 
@@ -293,7 +326,7 @@ function control_flow.describe_else_message(r: control_flow.Ok | control_flow.Er
     jump L2
 
   L1:
-    load_var r
+    load_var _2
     load_field .value
 
   L2:
@@ -302,13 +335,17 @@ function control_flow.describe_else_message(r: control_flow.Ok | control_flow.Er
 
 function control_flow.describe_or_pattern(r: control_flow.Ok | control_flow.Warn | control_flow.Err) -> string {
     load_var r
-    is_type control_flow.Ok
+    store_var _2
+    load_var _2
+    narrow_bind control_flow.Ok, slot=2
     pop_jump_if_false L0
     jump L2
 
   L0:
     load_var r
-    is_type control_flow.Warn
+    store_var _3
+    load_var _3
+    narrow_bind control_flow.Warn, slot=3
     pop_jump_if_false L1
     jump L2
 
@@ -340,7 +377,9 @@ function control_flow.describe_or_pattern(r: control_flow.Ok | control_flow.Warn
 
 function control_flow.describe_then_default(r: control_flow.Ok | control_flow.Err) -> string {
     load_var r
-    is_type control_flow.Ok
+    store_var _2
+    load_var _2
+    narrow_bind control_flow.Ok, slot=2
     pop_jump_if_false L0
     jump L1
 
@@ -349,7 +388,7 @@ function control_flow.describe_then_default(r: control_flow.Ok | control_flow.Er
     jump L2
 
   L1:
-    load_var r
+    load_var _2
     load_field .value
 
   L2:
@@ -358,7 +397,9 @@ function control_flow.describe_then_default(r: control_flow.Ok | control_flow.Er
 
 function control_flow.first_value_statement(r: control_flow.Ok | control_flow.Err) -> string {
     load_var r
-    is_type control_flow.Ok
+    store_var _2
+    load_var _2
+    narrow_bind control_flow.Ok, slot=2
     pop_jump_if_false L0
     jump L1
 
@@ -367,7 +408,7 @@ function control_flow.first_value_statement(r: control_flow.Ok | control_flow.Er
     jump L2
 
   L1:
-    load_var r
+    load_var _2
     load_field .value
 
   L2:
@@ -376,7 +417,9 @@ function control_flow.first_value_statement(r: control_flow.Ok | control_flow.Er
 
 function control_flow.get_value_or_fallback(r: control_flow.Ok | control_flow.Err) -> string {
     load_var r
-    is_type control_flow.Ok
+    store_var _2
+    load_var _2
+    narrow_bind control_flow.Ok, slot=2
     pop_jump_if_false L0
     jump L1
 
@@ -385,7 +428,7 @@ function control_flow.get_value_or_fallback(r: control_flow.Ok | control_flow.Er
     jump L2
 
   L1:
-    load_var r
+    load_var _2
     load_field .value
 
   L2:
@@ -430,9 +473,9 @@ function control_flow.greet_let_else(u: control_flow.User | control_flow.Admin) 
 
 function control_flow.if_let_call() -> string {
     call user.control_flow.maybe_ok
-    store_var _1
-    load_var _1
-    is_type control_flow.Ok
+    store_var _2
+    load_var _2
+    narrow_bind control_flow.Ok, slot=1
     pop_jump_if_false L0
     jump L1
 
@@ -441,7 +484,7 @@ function control_flow.if_let_call() -> string {
     jump L2
 
   L1:
-    load_var _1
+    load_var _2
     load_field .value
 
   L2:
@@ -450,7 +493,9 @@ function control_flow.if_let_call() -> string {
 
 function control_flow.inner_throws(r: control_flow.Ok | control_flow.Err) -> string {
     load_var r
-    is_type control_flow.Ok
+    store_var _2
+    load_var _2
+    narrow_bind control_flow.Ok, slot=2
     pop_jump_if_false L0
     jump L1
 
@@ -459,7 +504,7 @@ function control_flow.inner_throws(r: control_flow.Ok | control_flow.Err) -> str
     throw
 
   L1:
-    load_var r
+    load_var _2
     load_field .value
     return
 }
@@ -504,8 +549,9 @@ function control_flow.pick_first_ok(items: (control_flow.Ok | control_flow.Err)[
     pop_jump_if_false L1
     load_var2 1 3
     load_array_element
-    store_var_load_var _9
-    is_type control_flow.Ok
+    store_var _10
+    load_var _10
+    narrow_bind control_flow.Ok, slot=4
     pop_jump_if_false L1
     jump L2
 
@@ -514,7 +560,7 @@ function control_flow.pick_first_ok(items: (control_flow.Ok | control_flow.Err)[
     return
 
   L2:
-    load_var _9
+    load_var _10
     load_field .value
     store_var result
     load_var i
@@ -526,13 +572,17 @@ function control_flow.pick_first_ok(items: (control_flow.Ok | control_flow.Err)[
 
 function control_flow.pick_let_else(r: control_flow.Ok | control_flow.Warn | control_flow.Err) -> string {
     load_var r
-    is_type control_flow.Ok
+    store_var _3
+    load_var _3
+    narrow_bind control_flow.Ok, slot=2
     pop_jump_if_false L0
     jump L2
 
   L0:
     load_var r
-    is_type control_flow.Warn
+    store_var _4
+    load_var _4
+    narrow_bind control_flow.Warn, slot=3
     pop_jump_if_false L1
     jump L2
 
@@ -542,6 +592,7 @@ function control_flow.pick_let_else(r: control_flow.Ok | control_flow.Warn | con
 
   L2:
     load_var r
+    store_var_load_var s
     type_tag
     load_const Ok
     cmp_int_op ==
@@ -549,12 +600,12 @@ function control_flow.pick_let_else(r: control_flow.Ok | control_flow.Warn | con
     jump L4
 
   L3:
-    load_var r
+    load_var s
     load_field .0
     jump L5
 
   L4:
-    load_var r
+    load_var s
     load_field .0
 
   L5:
@@ -563,7 +614,9 @@ function control_flow.pick_let_else(r: control_flow.Ok | control_flow.Warn | con
 
 function control_flow.pick_nested(outer: control_flow.Wrapper, inner: control_flow.Wrapper | control_flow.Other) -> string {
     load_var outer
-    is_type control_flow.Wrapper
+    store_var _3
+    load_var _3
+    narrow_bind control_flow.Wrapper, slot=3
     pop_jump_if_false L0
     jump L1
 
@@ -572,18 +625,22 @@ function control_flow.pick_nested(outer: control_flow.Wrapper, inner: control_fl
     jump L4
 
   L1:
+    load_var _3
+    store_var w
     load_var inner
-    is_type control_flow.Wrapper
+    store_var _5
+    load_var _5
+    narrow_bind control_flow.Wrapper, slot=5
     pop_jump_if_false L2
     jump L3
 
   L2:
-    load_var outer
+    load_var w
     load_field .payload
     jump L4
 
   L3:
-    load_var inner
+    load_var _5
     load_field .payload
 
   L4:
@@ -592,13 +649,17 @@ function control_flow.pick_nested(outer: control_flow.Wrapper, inner: control_fl
 
 function control_flow.pick_ok_err_empty(r: control_flow.Ok | control_flow.Err | control_flow.Empty) -> string {
     load_var r
-    is_type control_flow.Ok
+    store_var _2
+    load_var _2
+    narrow_bind control_flow.Ok, slot=2
     pop_jump_if_false L0
     jump L3
 
   L0:
     load_var r
-    is_type control_flow.Err
+    store_var _4
+    load_var _4
+    narrow_bind control_flow.Err, slot=3
     pop_jump_if_false L1
     jump L2
 
@@ -607,12 +668,12 @@ function control_flow.pick_ok_err_empty(r: control_flow.Ok | control_flow.Err | 
     jump L4
 
   L2:
-    load_var r
+    load_var _4
     load_field .message
     jump L4
 
   L3:
-    load_var r
+    load_var _2
     load_field .value
 
   L4:
@@ -621,7 +682,9 @@ function control_flow.pick_ok_err_empty(r: control_flow.Ok | control_flow.Err | 
 
 function control_flow.pick_optional(item: control_flow.Item | null) -> string {
     load_var item
-    is_type control_flow.Item
+    store_var _2
+    load_var _2
+    narrow_bind control_flow.Item, slot=2
     pop_jump_if_false L0
     jump L1
 
@@ -630,7 +693,7 @@ function control_flow.pick_optional(item: control_flow.Item | null) -> string {
     jump L2
 
   L1:
-    load_var item
+    load_var _2
     load_field .name
 
   L2:

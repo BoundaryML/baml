@@ -63,39 +63,35 @@ client<llm> GPT4 {
 //----
 //- diagnostics
 // (expect errors for invalid header patterns)
-// error: Expected expression, found '#'
-//     ╭─[ headers_invalid.baml:12:21 ]
-//     │
+// E0010
+//
+//   × unexpected token
+//     ╭─[headers_invalid.baml:12:21]
 //  12 │     let x = "hello" ## Inline Header // Should fail
-//     │                     ┬
-//     │                     ╰── Expected expression, found '#'
-//     │
-//     │ Note: Error code: E0010
-// ────╯
-// error: Expected expression, found '#'
-//     ╭─[ headers_invalid.baml:12:22 ]
-//     │
+//     ·                     ┬
+//     ·                     ╰── expected `expression`, found `'#'`
+//     ╰────
+// E0010
+//
+//   × unexpected token
+//     ╭─[headers_invalid.baml:12:22]
 //  12 │     let x = "hello" ## Inline Header // Should fail
-//     │                      ┬
-//     │                      ╰── Expected expression, found '#'
-//     │
-//     │ Note: Error code: E0010
-// ────╯
-// error: Expected expression, found '#'
-//     ╭─[ headers_invalid.baml:33:23 ]
-//     │
+//     ·                      ┬
+//     ·                      ╰── expected `expression`, found `'#'`
+//     ╰────
+// E0010
+//
+//   × unexpected token
+//     ╭─[headers_invalid.baml:33:23]
 //  33 │     let x = "start" + # Middle Header // Should fail
-//     │                       ┬
-//     │                       ╰── Expected expression, found '#'
-//     │
-//     │ Note: Error code: E0010
-// ────╯
-// error: Header comments (//#) are not allowed inside LLM functions
-//     ╭─[ headers_invalid.baml:50:5 ]
-//     │
+//     ·                       ┬
+//     ·                       ╰── expected `expression`, found `'#'`
+//     ╰────
+// E0010
+//
+//   × invalid syntax
+//     ╭─[headers_invalid.baml:50:5]
 //  50 │     //# Section Header
-//     │     ─────────┬────────
-//     │              ╰────────── Header comments (//#) are not allowed inside LLM functions
-//     │
-//     │ Note: Error code: E0010
-// ────╯
+//     ·     ─────────┬────────
+//     ·              ╰── header comments (`//#`) are not allowed inside LLM functions
+//     ╰────

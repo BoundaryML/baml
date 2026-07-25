@@ -116,19 +116,30 @@ impl LeafBody {
 
     /// True when any class field, function/method param, or return type
     /// in this leaf is `Ty::RustType` — i.e. needs the
-    /// `from baml_core import BamlPyHandle as _BamlPyHandle` line.
+    /// `from baml_bridge import BamlPyHandle as _BamlPyHandle` line.
     pub(crate) fn needs_baml_pyhandle(&self) -> bool {
         fn ty_uses_rust_type(ty: &Ty) -> bool {
             match ty {
-                Ty::RustType => true,
-                Ty::List(inner) => ty_uses_rust_type(inner),
-                Ty::Map { key, value } => ty_uses_rust_type(key) || ty_uses_rust_type(value),
-                Ty::Union(items) => items.iter().any(ty_uses_rust_type),
-                Ty::Class(_, args) => args.iter().any(ty_uses_rust_type),
-                Ty::Callable { params, ret } => {
+                Ty::RustType { .. } => true,
+                Ty::List(inner, _) => ty_uses_rust_type(inner),
+                Ty::Map { key, value, .. } => ty_uses_rust_type(key) || ty_uses_rust_type(value),
+                Ty::Union(items, _) => items.iter().any(ty_uses_rust_type),
+                Ty::Class(_, args, _) => args.iter().any(ty_uses_rust_type),
+                Ty::Interface(_, generics, associated_types, _) => {
+                    generics.iter().any(ty_uses_rust_type)
+                        || associated_types.iter().any(|(_, ty)| ty_uses_rust_type(ty))
+                }
+                Ty::Function {
+                    params,
+                    ret,
+                    throws,
+                    ..
+                } => {
                     params.iter().any(|param| ty_uses_rust_type(&param.ty))
                         || ty_uses_rust_type(ret)
+                        || ty_uses_rust_type(throws)
                 }
+                Ty::Future(value, error, _) => ty_uses_rust_type(value) || ty_uses_rust_type(error),
                 _ => false,
             }
         }
@@ -158,7 +169,7 @@ impl LeafBody {
         self.symbols.is_empty()
     }
 
-    /// The optional-argument `Ty::Callable`s reachable from this leaf's
+    /// The optional-argument `Ty::Function`s reachable from this leaf's
     /// function/method/field signatures, in deterministic first-seen order,
     /// each paired with the `_<owner>__<param>` prefix for its Protocol name
     /// (`render_leaf_body_pyi` appends a per-prefix counter, giving e.g.
@@ -503,7 +514,7 @@ fn fqn_leaf(fqn: &str) -> &str {
     fqn.rsplit('.').next().unwrap_or(fqn)
 }
 
-/// Recursively collect every optional-argument `Ty::Callable` reachable from
+/// Recursively collect every optional-argument `Ty::Function` reachable from
 /// `ty`, in first-seen order, skipping duplicates (`seen`). Each is paired with
 /// `base` — the `_<owner>__<param>` prefix for its Protocol name (the final
 /// name appends a per-base counter in `LeafBody::callback_protocols`). Children
@@ -516,22 +527,22 @@ fn collect_optional_callables(
     out: &mut Vec<(Ty, String)>,
 ) {
     match ty {
-        Ty::List(inner) => collect_optional_callables(inner, base, seen, out),
-        Ty::Map { key, value } => {
+        Ty::List(inner, _) => collect_optional_callables(inner, base, seen, out),
+        Ty::Map { key, value, .. } => {
             collect_optional_callables(key, base, seen, out);
             collect_optional_callables(value, base, seen, out);
         }
-        Ty::Union(items) => {
+        Ty::Union(items, _) => {
             for item in items {
                 collect_optional_callables(item, base, seen, out);
             }
         }
-        Ty::Class(_, args) => {
+        Ty::Class(_, args, _) => {
             for a in args {
                 collect_optional_callables(a, base, seen, out);
             }
         }
-        Ty::Callable { params, ret } => {
+        Ty::Function { params, ret, .. } => {
             for p in params {
                 collect_optional_callables(&p.ty, base, seen, out);
             }
@@ -549,26 +560,26 @@ fn collect_optional_callables(
 
 fn collect_root_imports(ty: &Ty, current: &LeafPath, out: &mut RootImportSets) {
     match ty {
-        Ty::Class(name, args) => {
+        Ty::Class(name, args, _) => {
             record_name_routing(name, current, out);
             for a in args {
                 collect_root_imports(a, current, out);
             }
         }
-        Ty::Enum(name) | Ty::TypeAlias(name) => {
+        Ty::Enum(name, _) | Ty::EnumVariant(name, _, _) | Ty::TypeAlias(name, _) => {
             record_name_routing(name, current, out);
         }
-        Ty::List(inner) => collect_root_imports(inner, current, out),
-        Ty::Map { key, value } => {
+        Ty::List(inner, _) => collect_root_imports(inner, current, out),
+        Ty::Map { key, value, .. } => {
             collect_root_imports(key, current, out);
             collect_root_imports(value, current, out);
         }
-        Ty::Union(items) => {
+        Ty::Union(items, _) => {
             for item in items {
                 collect_root_imports(item, current, out);
             }
         }
-        Ty::Callable { params, ret } => {
+        Ty::Function { params, ret, .. } => {
             for p in params {
                 collect_root_imports(&p.ty, current, out);
             }
@@ -582,10 +593,10 @@ fn collect_root_imports(ty: &Ty, current: &LeafPath, out: &mut RootImportSets) {
         // `media` as an attribute of `baml` for the dotted access.
         //
         // `Ty::RustType` renders as `_BamlPyHandle` and gets its own
-        // `from baml_core import BamlPyHandle as _BamlPyHandle`
+        // `from baml_bridge import BamlPyHandle as _BamlPyHandle`
         // line via `needs_baml_pyhandle` — it does *not* go through
         // the cross-leaf segment set.
-        Ty::Media(_) => {
+        Ty::Media(..) => {
             // Skip when current leaf IS `baml/media` (same-leaf ref).
             let target: &[&str] = &["baml", "media"];
             let target_eq = current.segments.len() == target.len()
@@ -606,19 +617,24 @@ fn collect_root_imports(ty: &Ty, current: &LeafPath, out: &mut RootImportSets) {
                 anchor: "baml".to_string(),
             });
         }
-        Ty::Int
-        | Ty::Bigint
-        | Ty::Float
-        | Ty::String
-        | Ty::Bool
-        | Ty::Null
-        | Ty::Literal(_)
-        | Ty::Uint8Array
-        | Ty::TypeVar(_)
-        | Ty::RustType
-        | Ty::BuiltinUnknown
-        | Ty::Unit
-        | Ty::BamlOptions => {}
+        Ty::Int { .. }
+        | Ty::Bigint { .. }
+        | Ty::Float { .. }
+        | Ty::String { .. }
+        | Ty::Bool { .. }
+        | Ty::Null { .. }
+        | Ty::Literal(..)
+        | Ty::Uint8Array { .. }
+        | Ty::TypeVar(..)
+        | Ty::RustType { .. }
+        | Ty::Type { .. }
+        | Ty::Resource { .. }
+        | Ty::PromptAst { .. }
+        | Ty::BuiltinUnknown { .. }
+        | Ty::Never { .. }
+        | Ty::Void { .. }
+        | Ty::Interface(..)
+        | Ty::Future(..) => {}
     }
 }
 
@@ -733,10 +749,10 @@ fn render_class_bases(generic_params: &[String]) -> String {
 ///
 /// `baml.media.{Image,Video,Audio,Pdf}` (15b §lines 14-19): re-exports
 /// of `PyO3` types holding `Arc<MediaValue>` directly — live in
-/// `baml_core.baml_py` (the `PyO3` extension module).
+/// `baml_bridge.baml_py` (the `PyO3` extension module).
 ///
-/// `baml.llm.Stream`: pure-Python wrapper re-exported from `baml_core`
-/// (`sdks/python/src/baml_core/_stream.py`). Lives outside the `PyO3`
+/// `baml.llm.Stream`: pure-Python wrapper re-exported from `baml_bridge`
+/// (`sdks/python/src/baml_bridge/_stream.py`). Lives outside the `PyO3`
 /// module because nothing on the call path needed Rust — the args
 /// encoder, runtime accessor, and result decoder are all already
 /// exposed to Python.
@@ -744,11 +760,11 @@ fn media_reexport_rust_name(
     c: &crate::emit::class::PyClass,
 ) -> Option<(&'static str, &'static str)> {
     match c.source.to_string().as_str() {
-        "baml.media.Image" => Some(("baml_core.baml_py", "BamlImage")),
-        "baml.media.Video" => Some(("baml_core.baml_py", "BamlVideo")),
-        "baml.media.Audio" => Some(("baml_core.baml_py", "BamlAudio")),
-        "baml.media.Pdf" => Some(("baml_core.baml_py", "BamlPdf")),
-        "baml.llm.Stream" => Some(("baml_core", "BamlStream")),
+        "baml.media.Image" => Some(("baml_bridge.baml_py", "BamlImage")),
+        "baml.media.Video" => Some(("baml_bridge.baml_py", "BamlVideo")),
+        "baml.media.Audio" => Some(("baml_bridge.baml_py", "BamlAudio")),
+        "baml.media.Pdf" => Some(("baml_bridge.baml_py", "BamlPdf")),
+        "baml.llm.Stream" => Some(("baml_bridge", "BamlStream")),
         _ => None,
     }
 }
@@ -921,7 +937,7 @@ fn render_symbol(s: &EmittedSymbol, leaf: &LeafPath) -> String {
                 // 25b2 Phase 4: media re-export is now a pure import
                 // line. The engine FQN lives only in `_TYPE_MAP`'s
                 // reverse map (seeded with the PyO3 identity →
-                // `baml.media.*` overrides in `baml_core/typemap.py`).
+                // `baml.media.*` overrides in `baml_bridge/typemap.py`).
                 return format!(
                     "from {module} import {rust_name} as {py_name}\n",
                     py_name = c.py_name,
@@ -1040,9 +1056,9 @@ fn render_type_alias(a: &crate::emit::type_alias::PyTypeAlias, leaf: &LeafPath) 
     // TODO: replace with a proper recursive-alias representation once
     // pyright handles `TypeAliasType` forward-refs (or once we move json to
     // a stricter codegen surface).
-    if a.source.pkg.as_str() == "baml"
-        && a.source.namespace_path.len() == 1
-        && a.source.namespace_path[0].as_str() == "json"
+    if a.source.package().as_str() == "baml"
+        && a.source.namespace().len() == 1
+        && a.source.namespace()[0].as_str() == "json"
         && a.source.bare_name() == "json"
     {
         let py_name = &a.py_name;
@@ -1325,7 +1341,7 @@ pub(crate) fn render_leaf_body(body: &LeafBody, callable_child_names: &BTreeSet<
         }
     }
     let _ = (root_segments, root_names);
-    // Factory imports use absolute paths (`baml_core` is a
+    // Factory imports use absolute paths (`baml_bridge` is a
     // separate installed package, not reachable from this SDK tree)
     // with a `_` alias to keep them private to the module.
     //
@@ -1345,9 +1361,9 @@ pub(crate) fn render_leaf_body(body: &LeafBody, callable_child_names: &BTreeSet<
         out.push('\n');
         if runtime_imports.len() == 1 {
             let (original, alias) = runtime_imports[0];
-            writeln!(out, "from baml_core import {original} as {alias}").unwrap();
+            writeln!(out, "from baml_bridge import {original} as {alias}").unwrap();
         } else {
-            out.push_str("from baml_core import (\n");
+            out.push_str("from baml_bridge import (\n");
             for (original, alias) in &runtime_imports {
                 writeln!(out, "    {original} as {alias},").unwrap();
             }
@@ -1356,14 +1372,14 @@ pub(crate) fn render_leaf_body(body: &LeafBody, callable_child_names: &BTreeSet<
     }
 
     // The `BamlError` / `BamlPanic` wrappers and optional-argument sentinel
-    // are defined in `baml_core` and
+    // are defined in `baml_bridge` and
     // re-exported on the top-level `baml` builtins package so user code can
     // `from baml_sdk.baml import BamlError, BamlPanic, UNSET`.
     let is_baml_builtins_root = body.leaf.segments == ["baml"];
     if is_baml_builtins_root {
         out.push('\n');
         out.push_str(
-            "from baml_core import BamlError as BamlError, BamlPanic as BamlPanic, UNSET as UNSET\n",
+            "from baml_bridge import BamlError as BamlError, BamlPanic as BamlPanic, UNSET as UNSET\n",
         );
     }
 
@@ -1930,7 +1946,7 @@ fn render_literal_default(lit: &Literal) -> String {
 }
 
 /// Mirrors `render_leaf_body` with these differences: no
-/// `baml_core` factory imports; `typing` is needed whenever a
+/// `baml_bridge` factory imports; `typing` is needed whenever a
 /// signature is present (`needs_typing_pyi`); `enum` and `pydantic`
 /// follow the `.py` rule.
 pub(crate) fn render_leaf_body_pyi(
@@ -1999,7 +2015,7 @@ pub(crate) fn render_leaf_body_pyi(
     // can resolve `$rust_type` field annotations.
     if body.needs_baml_pyhandle() {
         out.push('\n');
-        out.push_str("from baml_core import BamlPyHandle as _BamlPyHandle\n");
+        out.push_str("from baml_bridge import BamlPyHandle as _BamlPyHandle\n");
     }
 
     // Mirror the `.py` re-export so `from baml_sdk.baml import BamlError,
@@ -2008,7 +2024,7 @@ pub(crate) fn render_leaf_body_pyi(
     if is_baml_builtins_root {
         out.push('\n');
         out.push_str(
-            "from baml_core import BamlError as BamlError, BamlPanic as BamlPanic, UNSET as UNSET\n",
+            "from baml_bridge import BamlError as BamlError, BamlPanic as BamlPanic, UNSET as UNSET\n",
         );
     }
 
@@ -2053,7 +2069,7 @@ pub(crate) fn render_leaf_body_pyi(
             callback_protocols: Some(map.clone()),
         };
         for (ty, _base) in &protocol_tys {
-            if let Ty::Callable { params, ret } = ty {
+            if let Ty::Function { params, ret, .. } = ty {
                 out.push_str("\n\n");
                 out.push_str(&render_callback_protocol(&map[ty], params, ret, &proto_ctx));
             }

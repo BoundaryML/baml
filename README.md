@@ -12,17 +12,21 @@ BAML is the programming language for agents.
 
 [![BAML Version](https://img.shields.io/pypi/v/baml-py?color=006dad&label=BAML%20Version)](https://pypi.org/project/baml-py/)
 
-[Homepage](https://www.boundaryml.com/) | [Explore BAML](https://www.boundaryml.com/explore) | [Docs](https://docs.boundaryml.com) | [Discord](https://www.boundaryml.com/discord)
+[Homepage](https://www.boundaryml.com/) | [Explore BAML](https://www.boundaryml.com/explore) | [Discord](https://www.boundaryml.com/discord)
 
 </div>
 
 BAML looks like TypeScript, but every feature is built so agents make fewer mistakes:
 
-- Statically typed like Rust, with colorless concurrency like Go.
-- Types persist at runtime. There is no `any`.
+- It has a type system like Rust, but compiles even faster than Go.
+- Types persist at runtime. There is no `any` nor casting dangerously to any type.
 - Errors are typed and statically analyzed.
 - The filesystem describes the modules/namespaces.
-- Run BAML standalone, or call it from any language of your choice (Python, TypeScript, Go, and more).
+- Has green threads, and colorless concurrency like Go
+- Built-in tests / eval framework
+- Built-in stdlib for agents
+- Every baml tool is natively designed for agents, with no garbage outputs, etc.
+- Can be run standalone or adopt incrementally (you can call a BAML function from TS, Py, Go, C#, Java, etc).
 
 [Explore the website and examples](https://www.boundaryml.com/explore).
 
@@ -35,7 +39,7 @@ baml init
 baml ide install --code
 ```
 
-Or read the [quickstart](https://docs.boundaryml.com/get-started/quickstart).
+Or read the [quickstart](https://boundaryml.com/quickstart).
 
 ## Contributing
 

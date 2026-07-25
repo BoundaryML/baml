@@ -1,6 +1,8 @@
 //! Stamped BAML language product version.
 
-pub const CANONICAL_VERSION: &str = "0.13.0";
-pub const PYPI_VERSION: &str = "0.13.0";
+pub const CANONICAL_VERSION: &str = "0.15.0";
+#[allow(dead_code)]
+const PYPI_VERSION: &str = "0.15.0";
 pub const CHANNEL: &str = "canary";
-pub const STABLE_VERSION: &str = "0.13.0";
+#[allow(dead_code)]
+const STABLE_VERSION: &str = "0.15.0";

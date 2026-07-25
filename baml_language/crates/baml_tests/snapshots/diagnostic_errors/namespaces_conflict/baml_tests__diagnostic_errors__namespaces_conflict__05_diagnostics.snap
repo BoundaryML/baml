@@ -2,18 +2,16 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === COMPILER2 DIAGNOSTICS ===
-  [validation] error: Duplicate class `Response`
-   ╭─[ a.baml:2:7 ]
-   │
+  [validation] E0011
+
+  × duplicate class `Response`
+   ╭─[b.baml:2:7]
  2 │ class Response {
-   │       ────┬───  
-   │           ╰───── first defined as class here
-   │
-   ├─[ b.baml:2:7 ]
-   │
- 2 │ class Response {
-   │       ────┬───  
-   │           ╰───── duplicate class definition
-   │ 
-   │ Note: Error code: E0011
-───╯
+   ·       ────┬───
+   ·           ╰── duplicate class definition
+   ╰────
+  ╰─▶   ☞ first defined as class here
+         ╭─[a.baml:2:7]
+       2 │ class Response {
+         ·       ────────
+         ╰────

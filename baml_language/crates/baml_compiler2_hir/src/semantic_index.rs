@@ -34,11 +34,13 @@ pub enum PathResolution {
     Unknown,
 }
 
+use rustc_hash::{FxHashMap, FxHashSet};
+
 use crate::{
     contributions::FileSymbolContributions,
     diagnostic::Hir2Diagnostic,
     item_tree::{ItemTree, ItemTreeSourceMap},
-    scope::{FileScopeId, Scope, ScopeId, ScopeKind},
+    scope::{FileScopeId, ItemScopeOwner, Scope, ScopeId, ScopeKind},
 };
 
 // ── DefinitionSite ───────────────────────────────────────────────────────────
@@ -50,8 +52,12 @@ pub enum DefinitionSite {
     Statement(StmtId),
     /// Defined as a function parameter (with its index).
     Parameter(usize),
-    /// Defined by a pattern binding (match arm, catch arm, catch clause, etc.).
+    /// Defined by a pattern binding (match arm, if-let, etc.).
     PatternBinding(PatId),
+    /// The error (and optional stack-trace) binding of a `catch (e) { … }`
+    /// clause. Like a function parameter — a value bound by the clause and
+    /// scoped to its body — so it is highlighted as a parameter.
+    CatchBinding(PatId),
 }
 
 // ── BindingId ────────────────────────────────────────────────────────────────
@@ -188,6 +194,8 @@ pub(crate) fn visible_binding_at_in_scopes(
 pub struct SemanticIndexExtra {
     pub diagnostics: Vec<Hir2Diagnostic>,
     pub lowering_diagnostics: Vec<LoweringDiagnostic>,
+    pub invalid_pattern_bindings: FxHashMap<(FileScopeId, PatId), FxHashSet<Name>>,
+    pub invalid_pattern_binding_scopes: FxHashMap<(TextRange, PatId), FileScopeId>,
 }
 
 // ── FileSemanticIndex ────────────────────────────────────────────────────────
@@ -218,7 +226,21 @@ pub struct FileSemanticIndex<'db> {
     /// Avoids repeated Salsa interning at query time.
     pub scope_ids: Vec<ScopeId<'db>>,
 
+    /// Item → the scope it opened. The inverse of `Scope::owner`.
+    ///
+    /// Recorded by the builder, which creates the scope in the same step that
+    /// allocates the item. Replaces the `item.span == scope.range` join that
+    /// consumers used to do, and is what lets item spans move into the source map.
+    pub item_scopes: FxHashMap<ItemScopeOwner, FileScopeId>,
+
     /// Per-file item tree — maps `LocalItemId` to item data.
+    ///
+    /// Reachable only inside HIR and PPIR: the `file_item_tree` doors in both
+    /// crates are `pub(crate)`, and everything downstream uses the PPIR
+    /// `item_data` firewall queries instead. This field stays `pub` solely
+    /// because PPIR (a separate crate) builds and reads the index; do not read
+    /// it from any other crate. (Collapsing HIR+PPIR onto one index would let
+    /// this become `pub(crate)` — see the plan's Fork B follow-up.)
     pub item_tree: Arc<ItemTree>,
 
     /// Source map for item tree — field/variant name spans.
@@ -388,11 +410,14 @@ impl FileSemanticIndex<'_> {
             .get(idx)
     }
 
-    pub fn binding_site(&self, binding_id: BindingId) -> Option<DefinitionSite> {
-        match binding_id.kind {
-            BindingKind::Local(_) => self.local_binding(binding_id).map(|binding| binding.site),
-            BindingKind::Parameter(param_idx) => Some(DefinitionSite::Parameter(param_idx)),
-        }
+    /// The scope opened for `owner`, if it opened one.
+    pub fn item_scope(&self, owner: ItemScopeOwner) -> Option<FileScopeId> {
+        self.item_scopes.get(&owner).copied()
+    }
+
+    /// The item `scope` was opened for, if it belongs to one.
+    pub fn scope_owner(&self, scope: FileScopeId) -> Option<ItemScopeOwner> {
+        self.scopes.get(scope.index() as usize)?.owner
     }
 
     pub fn diagnostics(&self) -> &[Hir2Diagnostic] {
@@ -400,16 +425,5 @@ impl FileSemanticIndex<'_> {
             .as_ref()
             .map(|e| e.diagnostics.as_slice())
             .unwrap_or(&[])
-    }
-
-    /// Look up the path resolution for a multi-segment `Path` expression.
-    ///
-    /// Returns `None` if `expr_id` was not a multi-segment path (i.e., single-
-    /// segment paths and non-path expressions are not recorded here).
-    pub fn path_resolution(&self, expr_id: ExprId) -> Option<&PathResolution> {
-        self.path_resolutions
-            .binary_search_by_key(&expr_id, |(id, _)| *id)
-            .ok()
-            .map(|idx| &self.path_resolutions[idx].1)
     }
 }
