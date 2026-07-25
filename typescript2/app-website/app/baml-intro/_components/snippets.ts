@@ -190,25 +190,33 @@ export const GREP_EVENTS: TermEvent[] = [
   { text: '# caller list is still just text matches', tone: 'dim' },
 ];
 
-// Captured from `baml describe greet` on this branch's release CLI.
+// Captured from `baml describe greet --agent` on the agent-oriented
+// describe CLI (PR #3989): compact facts first, then the overview
+// sections.
 export const DESCRIBE_EVENTS: TermEvent[] = [
-  { cmd: 'baml describe greet' },
+  { cmd: 'baml describe greet --agent' },
   { text: 'function greet  baml_src/main.baml:5-7', tone: 'accent' },
+  { text: 'depends on class Greeting  baml_src/main.baml:1' },
+  { text: 'used at baml_src/main.baml:10  greet("world").message' },
+  { text: 'used at baml_src/main.baml:18  assert.equal(greet("bob")…' },
   { text: '' },
-  { text: 'function greet(name: string) -> Greeting {' },
-  { text: '    Greeting { message: "hi, " + name }' },
-  { text: '}' },
+  { text: 'signature' },
+  { text: '  greet(name: string) -> Greeting' },
   { text: '' },
-  { text: 'dependencies:' },
-  { text: '  class  Greeting  baml_src/main.baml:1' },
+  { text: 'output Greeting  baml_src/main.baml:1' },
   { text: '' },
-  { text: 'references (2):' },
+  { text: 'usage (2 references)' },
   { text: '  baml_src/main.baml:10  greet("world").message' },
-  { text: '  baml_src/main.baml:18  assert.equal(greet("bob")…' },
+  { text: '  … 1 more — --view usage', tone: 'dim' },
+  { text: '' },
+  { text: 'implementation (3 lines)' },
+  { text: '  function greet(name: string) -> Greeting {' },
+  { text: '      Greeting { message: "hi, " + name }' },
+  { text: '  }' },
   { text: '' },
   {
     pause: 0.3,
-    text: '✓ baml describe gives you signature, deps, every reference',
+    text: '✓ signature, deps, every call site — in one call',
     tone: 'ok',
   },
 ];

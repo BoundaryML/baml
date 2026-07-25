@@ -1471,20 +1471,23 @@
   font-weight: 500;
   color: var(--ink);
 }
+/* + when closed / − when open, so collapsed rows read as expandable
+   rather than as static bullets */
 .l6-tenets-accordion .acc-title::before {
   margin-right: 0.7rem;
   color: var(--accent);
-  content: "—";
+  content: "+";
 }
 .l6-tenets-accordion .acc-item.is-open .acc-title::before {
-  content: "+";
+  content: "−";
 }
 .l6-tenets-accordion .acc-chev {
   flex: none;
   width: 9px;
   height: 9px;
   color: var(--soft);
-  opacity: 0;
+  /* visible at rest: hover-only left no affordance on touch devices */
+  opacity: 0.45;
   transition:
     transform 220ms cubic-bezier(0.2, 0.7, 0.2, 1),
     opacity 140ms ease;

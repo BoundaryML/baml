@@ -47,7 +47,7 @@ const TENETS: Tenet[] = [
       { t: '\n' },
       { c: 'ok', t: 'function ExtractUser(text: string) -> User' },
     ],
-    title: 'Read like TypeScript, without the footguns.',
+    title: 'Read like TypeScript, without the escape hatches.',
     why: 'Agents love TypeScript, and humans do too. Types, unions, generics, give me more. But TypeScript is bandaging up broken JavaScript, so it has real escape hatches agents love to abuse.',
   },
   {
@@ -56,7 +56,7 @@ const TENETS: Tenet[] = [
       { c: 'cm', t: '// a typo like "opne" will not compile' },
       { t: '\n}' },
     ],
-    title: 'Make undesired state unrepresentable.',
+    title: "If it's wrong, it can't compile.",
     why: "An agent sampling tokens will eventually write an invalid state. If it can't compile, it can't ship, and no human has to catch it.",
   },
   {
@@ -76,7 +76,7 @@ const TENETS: Tenet[] = [
   },
   {
     title: 'Build tools for agents, not just IDEs.',
-    why: "Humans still need their IDEs. But most code is now read and written by agents, and an agent can't hover, click, or read a tooltip.",
+    why: "Humans still need their IDEs. But most code is now read and written by agents — and while an agent can drive a browser to hover and click, it shouldn't have to. Put what the tooltip knows in plain text.",
   },
 ];
 
