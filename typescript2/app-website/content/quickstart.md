@@ -11,7 +11,7 @@ Choose one method for your operating system.
 ### Homebrew on macOS or Linux
 
 ```sh
-brew install boundaryml/tap/baml
+brew install baml
 ```
 
 ### Install script on macOS or Linux
