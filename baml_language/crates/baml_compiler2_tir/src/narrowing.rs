@@ -1,8 +1,8 @@
 //! Type narrowing for control-flow-dependent type refinement.
 //!
 //! Analyzes condition expressions to produce narrowing information that refines
-//! variable types inside then/else branches of `if` expressions, and after
-//! diverging branches (early-return narrowing).
+//! variable types inside then/else branches of `if` expressions, short-circuit
+//! boolean operands, and after diverging branches (early-return narrowing).
 //!
 //! ## Patterns recognized
 //!
@@ -14,6 +14,8 @@
 //!   union minus the matched members (TypeScript-style for `typeof` /
 //!   `instanceof`; falls back to the original scrutinee type when the
 //!   subtraction doesn't simplify, e.g. literal patterns on primitives)
+//! - `a && b` → then: facts guaranteed by both operands, else: original
+//! - `a || b` → then: original, else: facts guaranteed by both operands
 //!
 //! ## Early-return narrowing
 //!
@@ -57,9 +59,7 @@ pub struct Narrowing {
 /// Extract narrowing information from a condition expression.
 ///
 /// Walks the condition looking for patterns that constrain a local variable's
-/// type. Returns a `Vec<Narrowing>` — one per narrowed variable. Most conditions
-/// narrow zero or one variable; `&&` chains could narrow multiple, but we don't
-/// handle that yet.
+/// type. Returns a `Vec<Narrowing>` — one per narrowed variable.
 ///
 /// # Parameters
 /// - `condition`: the `ExprId` of the condition expression (already inferred)
@@ -174,6 +174,45 @@ fn collect_narrowings(
             collect_narrowings(*inner, body, expr_types, pattern_types, !negated, out);
         }
 
+        // Short-circuit boolean composition. For `a && b`, a true result
+        // guarantees both operands were true, while a false result does not
+        // guarantee either individual false branch. `a || b` is dual: only a
+        // false result guarantees both operands were false. Under `!`, De
+        // Morgan swaps the effective operator and flips each operand's facts.
+        Expr::Binary {
+            op: op @ (BinaryOp::And | BinaryOp::Or),
+            lhs,
+            rhs,
+        } => {
+            let mut lhs_narrowings = Vec::new();
+            let mut rhs_narrowings = Vec::new();
+            collect_narrowings(
+                *lhs,
+                body,
+                expr_types,
+                pattern_types,
+                negated,
+                &mut lhs_narrowings,
+            );
+            collect_narrowings(
+                *rhs,
+                body,
+                expr_types,
+                pattern_types,
+                negated,
+                &mut rhs_narrowings,
+            );
+
+            let effective_and = matches!(op, BinaryOp::And) != negated;
+            compose_short_circuit_narrowings(
+                lhs_narrowings,
+                rhs_narrowings,
+                expr_types,
+                effective_and,
+                out,
+            );
+        }
+
         // `name is <pattern>` — narrow `name` to the pattern's matched type
         // in the then-branch (or in the else-branch if negated). The
         // opposite branch tries to subtract the matched members from the
@@ -237,6 +276,96 @@ fn collect_narrowings(
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
+
+/// Compose narrowing facts for an effective `&&` (`effective_and = true`) or
+/// `||` (`false`). The RHS was inferred under the LHS short-circuit facts, so
+/// when both sides constrain the same name its type already includes the LHS
+/// constraint and may safely win.
+///
+/// The non-guaranteed branch is deliberately restored to the pre-condition
+/// type. For example, `x != null && predicate(x)` being false does not imply
+/// that `x` is null, and `x == null || predicate(x)` being true does not imply
+/// that it is null.
+fn compose_short_circuit_narrowings(
+    lhs: Vec<Narrowing>,
+    rhs: Vec<Narrowing>,
+    expr_types: &FxHashMap<ExprId, Ty>,
+    effective_and: bool,
+    out: &mut Vec<Narrowing>,
+) {
+    let mut by_name: indexmap::IndexMap<Name, (Option<Narrowing>, Option<Narrowing>)> =
+        indexmap::IndexMap::new();
+    for narrowing in lhs {
+        let name = narrowing.name.clone();
+        by_name.entry(name).or_default().0 = Some(narrowing);
+    }
+    for narrowing in rhs {
+        let name = narrowing.name.clone();
+        by_name.entry(name).or_default().1 = Some(narrowing);
+    }
+
+    for (name, (lhs, rhs)) in by_name {
+        let representative = lhs.as_ref().or(rhs.as_ref()).expect("entry has a fact");
+        let original = lhs
+            .as_ref()
+            .and_then(|n| expr_types.get(&n.subject))
+            .or_else(|| expr_types.get(&representative.subject))
+            .cloned()
+            .unwrap_or_else(|| join_types(&representative.then_type, &representative.else_type));
+
+        let guaranteed = if effective_and {
+            rhs.as_ref()
+                .map(|n| n.then_type.clone())
+                .or_else(|| lhs.as_ref().map(|n| n.then_type.clone()))
+        } else {
+            rhs.as_ref()
+                .map(|n| n.else_type.clone())
+                .or_else(|| lhs.as_ref().map(|n| n.else_type.clone()))
+        }
+        .expect("entry has a fact");
+
+        let (then_type, else_type) = if effective_and {
+            (guaranteed, original)
+        } else {
+            (original, guaranteed)
+        };
+        out.push(Narrowing {
+            subject: representative.subject,
+            name,
+            then_type,
+            else_type,
+        });
+    }
+}
+
+/// Small, shape-based union join used only as a recovery fallback when the
+/// original expression type is unavailable.
+fn join_types(a: &Ty, b: &Ty) -> Ty {
+    if ty_shape_eq(a, b) {
+        return a.clone();
+    }
+    let mut members = Vec::new();
+    let mut push = |ty: &Ty| match ty {
+        Ty::Union(inner, _) => {
+            for member in inner {
+                if !members.iter().any(|seen| ty_shape_eq(seen, member)) {
+                    members.push(member.clone());
+                }
+            }
+        }
+        _ if !members.iter().any(|seen| ty_shape_eq(seen, ty)) => members.push(ty.clone()),
+        _ => {}
+    };
+    push(a);
+    push(b);
+    match members.len() {
+        0 => Ty::Never {
+            attr: TyAttr::default(),
+        },
+        1 => members.pop().unwrap(),
+        _ => Ty::Union(members, TyAttr::default()),
+    }
+}
 
 /// Check if a binary comparison is `name op null` or `null op name`.
 ///

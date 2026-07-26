@@ -5248,6 +5248,7 @@ impl<'a> Parser<'a> {
 
     /// Parse a binding-introducer-prefixed pattern. Either:
     /// - `let _` / `const _` — `WILDCARD_PATTERN`
+    /// - `let _: PATTERN` / `const _: PATTERN` — discarded typed binding
     /// - `let WORD` / `const WORD` — simple `BINDING_PATTERN`
     /// - `let PATH { fields }` / `const PATH { fields }` — `DESTRUCTURE_PATTERN`
     fn parse_let_pattern(&mut self) {
@@ -5262,10 +5263,19 @@ impl<'a> Parser<'a> {
             return;
         }
 
-        // `let _` is a wildcard, not a binding to a name called `_`.
+        // Bare `let _` is a wildcard, not a binding to a name called `_`.
+        // With an ascription, keep a BINDING_PATTERN wrapper so AST lowering
+        // can preserve the sub-pattern while discarding the binding name:
+        // `let _: int` matches `int` without introducing `_` into scope.
         if self.at_wildcard_word() {
             self.bump(); // _
-            self.wrap_events_in_node(start, SyntaxKind::WILDCARD_PATTERN);
+            if self.at(TokenKind::Colon) {
+                self.bump(); // :
+                self.parse_pattern();
+                self.wrap_events_in_node(start, SyntaxKind::BINDING_PATTERN);
+            } else {
+                self.wrap_events_in_node(start, SyntaxKind::WILDCARD_PATTERN);
+            }
             self.finish_node();
             return;
         }
@@ -10364,6 +10374,40 @@ function Demo() -> int {
             )
         });
         assert!(has_let, "`let _` wildcard must keep the KW_LET token");
+    }
+
+    #[test]
+    fn pattern_typed_let_underscore_preserves_ascription() {
+        let source = r#"
+function Demo(x: int) -> int {
+  match (x) {
+    let _: int => 0,
+  }
+}
+"#;
+
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+
+        let arm = root
+            .descendants()
+            .find(|node| node.kind() == SyntaxKind::MATCH_ARM)
+            .expect("expected MATCH_ARM");
+        let pattern = arm
+            .children()
+            .find(|node| node.kind() == SyntaxKind::PATTERN)
+            .expect("expected PATTERN");
+        assert_eq!(
+            child_kinds(&pattern),
+            vec![SyntaxKind::BINDING_PATTERN],
+            "typed `let _` must preserve its nested type pattern"
+        );
+        assert!(
+            pattern
+                .descendants()
+                .any(|node| node.kind() == SyntaxKind::TYPE_PATTERN),
+            "typed `let _` must contain a TYPE_PATTERN"
+        );
     }
 
     #[test]

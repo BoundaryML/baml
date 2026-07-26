@@ -1855,11 +1855,11 @@ impl LoweringContext {
     }
 
     /// Lower a `BINDING_PATTERN` (`let WORD` / `const WORD`). The parser routes
-    /// `let _` / `const _` to
-    /// `WILDCARD_PATTERN` before it ever reaches here, so the WORD's text is
-    /// never `_`. The only defensive case is a malformed `let` without a
-    /// following WORD (parse error like `let = 1`), which we recover as
-    /// wildcard.
+    /// bare `let _` / `const _` to `WILDCARD_PATTERN`; an ascribed discard
+    /// (`let _: PATTERN`) reaches here so its sub-pattern can be preserved
+    /// without introducing a binding named `_`. The other defensive case is a
+    /// malformed `let` without a following WORD (parse error like `let = 1`),
+    /// which we recover as wildcard.
     fn lower_binding_pattern(&mut self, node: &SyntaxNode) -> PatId {
         let name_token = node
             .children_with_tokens()
@@ -1893,6 +1893,9 @@ impl LoweringContext {
             .map(|pat_node| self.lower_pattern(&pat_node));
 
         let pat = match name {
+            Some(name) if name.as_str() == "_" => subpat
+                .map(|subpat| self.patterns[subpat].clone())
+                .unwrap_or(Pattern::Wildcard),
             Some(name) => Pattern::Bind { name, subpat },
             None => Pattern::Wildcard,
         };

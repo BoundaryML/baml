@@ -856,6 +856,10 @@ pub struct TypeInferenceBuilder<'db> {
     /// before checking. Used to resolve `PatId` → `TextRange` when emitting
     /// pattern-position diagnostics.
     body_source_map: Option<AstSourceMap>,
+    /// True only while lowering a source `match` arm pattern. Lets unresolved
+    /// bare type patterns suggest the binding syntax without adding that hint
+    /// to ordinary annotations or `is` tests.
+    suggest_match_binding_hint: bool,
     /// Depth counter for `OptionalChain` scopes. When > 0, `FieldAccess` and
     /// `Index` auto-unwrap nullable bases (null is caught by the chain wrapper).
     /// When 0, accessing a member on a nullable type is a type error.
@@ -1150,6 +1154,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             scoped_local_declarations: Vec::new(),
             scoped_local_assignments: Vec::new(),
             body_source_map: None,
+            suggest_match_binding_hint: false,
             resolutions: FxHashMap::default(),
             res_ctx,
             package_items,
@@ -4756,7 +4761,32 @@ impl<'db> TypeInferenceBuilder<'db> {
             }
             Expr::Binary { op, lhs, rhs } => {
                 let lhs_ty = self.infer_expr(*lhs, body);
+
+                // Short-circuit flow: the RHS of `a && b` runs only when `a`
+                // is true, while the RHS of `a || b` runs only when `a` is
+                // false. Infer it under those transient facts, then restore
+                // the surrounding scope before continuing.
+                let lhs_narrowings = matches!(op, ast::BinaryOp::And | ast::BinaryOp::Or)
+                    .then(|| self.uncaptured_condition_narrowings(*lhs, body))
+                    .unwrap_or_default();
+                let saved = if lhs_narrowings.is_empty() {
+                    None
+                } else {
+                    let saved =
+                        crate::narrowing::apply_then_narrowings(&lhs_narrowings, &mut self.locals);
+                    if matches!(op, ast::BinaryOp::Or) {
+                        crate::narrowing::restore_and_apply_else(
+                            &lhs_narrowings,
+                            &saved,
+                            &mut self.locals,
+                        );
+                    }
+                    Some(saved)
+                };
                 let rhs_ty = self.infer_expr(*rhs, body);
+                if let Some(saved) = saved {
+                    crate::narrowing::restore_narrowings(saved, &mut self.locals);
+                }
                 self.report_chaining_lints(*op, &lhs_ty, *lhs, *rhs, expr_id, body);
                 self.infer_binary_op(*op, &lhs_ty, &rhs_ty, expr_id)
             }
@@ -8046,16 +8076,25 @@ impl<'db> TypeInferenceBuilder<'db> {
         let mut matrix_arms: Vec<crate::exhaustiveness::DPat> = Vec::new();
         let mut matrix_arm_ids: Vec<ExprId> = Vec::new();
         let mut match_had_pattern_error = false;
+        let mut residual_ty = scrutinee_ty.clone();
 
         for arm_id in arms {
             let arm = &body.match_arms[*arm_id];
             let pattern_id = arm.pattern;
 
             let diag_count_before_pattern = self.context.diagnostic_count();
+            let previous_binding_hint = self.suggest_match_binding_hint;
+            self.suggest_match_binding_hint = true;
             let result = self.analyze_and_lower(pattern_id, &scrutinee_ty, body, arm.body);
+            self.suggest_match_binding_hint = previous_binding_hint;
             let pattern_had_error = self.context.diagnostic_count() > diag_count_before_pattern;
             match_had_pattern_error |= pattern_had_error;
-            let narrowed = result.matched_ty.clone();
+            // The arm body can only observe values not consumed by earlier
+            // unguarded arms. Intersecting the pattern's matched type with
+            // that residual makes a trailing wildcard inherit useful facts
+            // (`null => ..., _ => v + 1` narrows `v` to non-null) without
+            // trying to represent value-level exclusions such as `int - 5`.
+            let narrowed = self.intersect_pattern_flow_types(&residual_ty, &result.matched_ty);
 
             // Snapshot/restore the scope for this arm's bindings.
             let snapshot = self.snapshot_scoped_locals();
@@ -8081,6 +8120,15 @@ impl<'db> TypeInferenceBuilder<'db> {
 
             // Guarded arms don't contribute to coverage.
             if arm.guard.is_none() {
+                // Structural patterns can filter values *within* one top-level
+                // type member (class fields, array length/elements), which the
+                // flow type cannot represent. Only subtract type-only patterns;
+                // the helper itself stays conservative for singleton literals
+                // over open primitives.
+                if Self::pattern_is_type_only_for_residual(pattern_id, body) {
+                    residual_ty =
+                        crate::narrowing::subtract_pattern_type(&residual_ty, &result.matched_ty);
+                }
                 matrix_arms.push(result.dpat);
                 matrix_arm_ids.push(arm.body);
             }
@@ -8933,6 +8981,23 @@ impl<'db> TypeInferenceBuilder<'db> {
         }
     }
 
+    /// Whether a pattern's coverage is representable solely by subtracting its
+    /// matched top-level type from the scrutinee union. Structural patterns can
+    /// reject values within a class/list member, so subtracting that whole
+    /// member would make later-arm narrowing unsound.
+    fn pattern_is_type_only_for_residual(pat_id: PatId, body: &ExprBody) -> bool {
+        match &body.patterns[pat_id] {
+            ast::Pattern::Wildcard | ast::Pattern::Type(_) => true,
+            ast::Pattern::Bind { subpat, .. } => {
+                subpat.is_none_or(|subpat| Self::pattern_is_type_only_for_residual(subpat, body))
+            }
+            ast::Pattern::Or(parts) => parts
+                .iter()
+                .all(|part| Self::pattern_is_type_only_for_residual(*part, body)),
+            ast::Pattern::Class { .. } | ast::Pattern::Array { .. } => false,
+        }
+    }
+
     fn check_or_binding_type_compatibility(
         &mut self,
         bindings_by_name: &FxHashMap<Name, Vec<(PatId, Ty)>>,
@@ -9030,7 +9095,30 @@ impl<'db> TypeInferenceBuilder<'db> {
             },
             &mut diags,
         );
-        for diag in diags {
+        let bare_binding_name = match &ty.kind {
+            TypeExprKind::Path {
+                segments,
+                generic_args,
+                associated_type_bindings,
+                ..
+            } if segments.len() == 1
+                && generic_args.is_empty()
+                && associated_type_bindings.is_empty() =>
+            {
+                Some(segments[0].clone())
+            }
+            _ => None,
+        };
+        for mut diag in diags {
+            if self.suggest_match_binding_hint
+                && let (Some(binding_name), TirTypeError::UnresolvedType { name, suggestions }) =
+                    (&bare_binding_name, &mut diag)
+                && name == binding_name
+                && suggestions.is_empty()
+            {
+                *suggestions =
+                    vec![Name::new(format!("let {binding_name}: T =>"))].into_boxed_slice();
+            }
             self.report_at_pat_or_expr(diag, pat_id, fallback_expr);
         }
         if let Some(sm) = self.body_source_map.as_ref() {
