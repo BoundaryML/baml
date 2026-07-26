@@ -3748,7 +3748,8 @@ fn compute_function_metadata<'db>(
     }
 }
 
-/// Project-root-relative display path for `file` (our `-trimpath`).
+/// `/`-separated project-root-relative display path for `file` (our
+/// `-trimpath`).
 ///
 /// `Function::source_file` is display/metadata-only (backtraces, event
 /// metadata, reflection locations) — never opened from disk — so stripping
@@ -3759,10 +3760,12 @@ fn compute_function_metadata<'db>(
 fn relative_source_path(db: &dyn baml_compiler2_mir::Db, file: baml_base::SourceFile) -> String {
     let path = file.path(db);
     let root = db.project().root(db);
-    path.strip_prefix(&root)
-        .unwrap_or(&path)
-        .display()
-        .to_string()
+    let display = path.strip_prefix(&root).unwrap_or(&path).to_string_lossy();
+    if std::path::MAIN_SEPARATOR == '/' {
+        display.into_owned()
+    } else {
+        display.replace(std::path::MAIN_SEPARATOR, "/")
+    }
 }
 
 /// Build a table of byte offsets where each line starts in the source text.
@@ -5158,6 +5161,16 @@ mod tests {
 
     #[salsa::db]
     impl Db for TestDb {}
+
+    #[test]
+    fn relative_source_paths_use_forward_slashes() {
+        let mut db = TestDb::default();
+        let root = PathBuf::from("project");
+        let file = db.add_file(root.join("nested").join("main.baml"), "");
+        db.project = Some(Project::new(&db, root, vec![file]));
+
+        assert_eq!(relative_source_path(&db, file), "nested/main.baml");
+    }
 
     // ── parse_string_attr_value ─────────────────────────────────────────
 

@@ -131,16 +131,13 @@ impl CacheContext {
             .unwrap_or_else(|| resolved.root.join(".baml").join("cache"));
         let fingerprint = compiler_fingerprint(&dir);
 
-        // Root-relative paths keep the key location-independent. Discovery
-        // order is sorted by full path; stripping the shared root prefix
-        // preserves that order.
+        // Portable root-relative paths keep the key location- and
+        // platform-independent. Discovery order is sorted by full path;
+        // stripping the shared root prefix preserves that order.
         let files: Vec<(String, &str)> = resolved
             .files
             .iter()
-            .map(|(path, content)| {
-                let rel = path.strip_prefix(&resolved.root).unwrap_or(path);
-                (rel.to_string_lossy().into_owned(), content.as_str())
-            })
+            .map(|(path, content)| (rel_path(&resolved.root, path), content.as_str()))
             .collect();
 
         let key = compute_key(&KeyInputs {
@@ -2532,6 +2529,101 @@ mod tests {
             clean,
             seeded,
         })
+    }
+
+    /// Exercise the same canonical root and on-disk source paths a real CLI
+    /// project uses. Besides proving macOS `/var` canonicalization does not
+    /// disable partial reuse, the nested file locks the cache key, manifest,
+    /// and compilation-unit path spelling to portable `/` separators.
+    #[test]
+    fn plan_reuse_real_on_disk_project_uses_portable_rel_paths() {
+        if cache_disabled() {
+            return;
+        }
+        let root = bc_root();
+        let source_root = root.join("baml_src");
+        let nested = source_root.join("nested");
+        std::fs::create_dir_all(&nested).expect("create real project");
+        std::fs::write(
+            nested.join("edited.baml"),
+            "function edited() -> int {\n  1\n}\n",
+        )
+        .expect("write edited source");
+        std::fs::write(
+            source_root.join("stable.baml"),
+            "function stable() -> int {\n  2\n}\n",
+        )
+        .expect("write stable source");
+        std::fs::write(
+            source_root.join("also_stable.baml"),
+            "function also_stable() -> int {\n  3\n}\n",
+        )
+        .expect("write second stable source");
+
+        let r1 = crate::project_load::resolve_project_sources(Some(&root))
+            .expect("resolve real project");
+        let key_files: Vec<(String, &str)> = r1
+            .files
+            .iter()
+            .map(|(path, content)| (rel_path(&r1.root, path), content.as_str()))
+            .collect();
+        let expected_key = compute_key(&KeyInputs {
+            compiler_fingerprint: compiler_fingerprint(&r1.root.join(".baml").join("cache")),
+            opt_level: CLI_OPT_LEVEL as u8,
+            emit_test_cases: false,
+            manifest: None,
+            files: &key_files,
+        });
+        let db1 = crate::project_load::build_db_from_sources(&r1, |_| {});
+        let ctx1 = CacheContext::open(&r1, false).expect("cache opens");
+        assert_eq!(ctx1.key, expected_key, "cache key uses shared rel paths");
+        let program1 =
+            compile_program(&db1, &opts(), Some(&ctx1), None).expect("v1 compile succeeds");
+        let fresh1 = ctx1
+            .collect_diagnostics_incremental(&db1, None)
+            .fresh_by_file;
+        ctx1.store_with_manifest(&db1, &program1, &fresh1, None)
+            .expect("v1 manifest stored");
+
+        let manifest_bytes = ctx1
+            .cache
+            .load_raw(&ctx1.manifest_key)
+            .expect("manifest stored");
+        let manifest: ProjectManifest =
+            borsh::from_slice(&manifest_bytes).expect("manifest decodes");
+        let manifest_paths: Vec<&str> = manifest
+            .files
+            .iter()
+            .map(|file| file.rel_path.as_str())
+            .collect();
+        assert_eq!(
+            manifest_paths,
+            [
+                "baml_src/also_stable.baml",
+                "baml_src/nested/edited.baml",
+                "baml_src/stable.baml",
+            ]
+        );
+
+        std::fs::write(
+            nested.join("edited.baml"),
+            "function edited() -> int {\n  4\n}\n",
+        )
+        .expect("edit source");
+        let r2 =
+            crate::project_load::resolve_project_sources(Some(&root)).expect("reload real project");
+        let db2 = crate::project_load::build_db_from_sources(&r2, |_| {});
+        let ctx2 = CacheContext::open(&r2, false).expect("cache reopens");
+        let plan = ctx2
+            .plan_reuse(&db2)
+            .expect("real on-disk project has a partial reuse plan");
+        assert_eq!(
+            dirty_basenames(&plan.dirty_files, &db2),
+            HashSet::from(["edited.baml".to_string()])
+        );
+        assert_eq!(plan.clean_files.len(), 2);
+
+        let _ = std::fs::remove_dir_all(&root);
     }
 
     /// Like [`plan_after_edit`], but also runs the full incremental flow the CLI

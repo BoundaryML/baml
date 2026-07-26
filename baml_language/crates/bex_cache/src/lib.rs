@@ -89,7 +89,8 @@ pub struct KeyInputs<'a> {
     /// `baml.toml` content, if the project has one.
     pub manifest: Option<&'a str>,
     /// `(project-root-relative path, content)` for every source file,
-    /// **sorted by path**. Relative paths keep the key location-independent.
+    /// **sorted by path**. Paths use `/` separators so the key stays location-
+    /// and platform-independent.
     pub files: &'a [(String, &'a str)],
 }
 
@@ -177,7 +178,8 @@ pub struct ProjectManifest {
 
 #[derive(Debug, borsh::BorshSerialize, borsh::BorshDeserialize)]
 pub struct ManifestFile {
-    /// Project-root-relative path (the `Function::source_file` form).
+    /// `/`-separated project-root-relative path (the `Function::source_file`
+    /// form).
     pub rel_path: String,
     /// Hash of the file's full content.
     pub content_hash: [u8; 32],
@@ -739,15 +741,18 @@ pub fn env_flag(name: &str) -> bool {
     std::env::var_os(name).is_some_and(|value| value == "1")
 }
 
-/// `path` relative to `root` as a display string, falling back to the full path
-/// when it is not under `root`. Manifests and cache keys store this
-/// project-root-relative form to stay location-independent; the CLI writer and
-/// the LSP reader both derive it here so their rel-path keys agree.
+/// `path` relative to `root` as a `/`-separated display string, falling back to
+/// the full path when it is not under `root`. Manifests and cache keys store
+/// this project-root-relative form to stay location- and platform-independent;
+/// the CLI writer and the LSP reader both derive it here so their rel-path keys
+/// agree.
 pub fn rel_path(root: &Path, path: &Path) -> String {
-    path.strip_prefix(root)
-        .unwrap_or(path)
-        .display()
-        .to_string()
+    let display = path.strip_prefix(root).unwrap_or(path).to_string_lossy();
+    if std::path::MAIN_SEPARATOR == '/' {
+        display.into_owned()
+    } else {
+        display.replace(std::path::MAIN_SEPARATOR, "/")
+    }
 }
 
 #[cfg(test)]
@@ -801,6 +806,13 @@ mod tests {
             compute_key(&dummy_inputs(&a)),
             compute_key(&dummy_inputs(&b))
         );
+    }
+
+    #[test]
+    fn relative_paths_use_forward_slashes() {
+        let root = Path::new("project");
+        let nested = root.join("baml_src").join("nested").join("main.baml");
+        assert_eq!(rel_path(root, &nested), "baml_src/nested/main.baml");
     }
 
     #[test]
