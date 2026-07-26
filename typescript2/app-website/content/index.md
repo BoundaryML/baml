@@ -38,7 +38,7 @@ Install the toolchain and initialize a project:
 
 ```sh
 # Homebrew on macOS or Linux
-brew install boundaryml/tap/baml
+brew install baml
 
 # Or use the install script on macOS or Linux
 curl -fsSL https://pkg.boundaryml.com/install.sh | sh -s
