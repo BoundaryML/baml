@@ -464,6 +464,14 @@ struct ScopedLocalsSnapshot {
 #[derive(Clone)]
 pub(crate) struct LocalBinding {
     pub(crate) current_ty: Ty,
+    /// Stable assignment bound inferred at an unannotated declaration site.
+    ///
+    /// Unlike `current_ty`, narrowing and assignment never replace this type.
+    /// It is separate from `declared_ty` because explicitly annotated
+    /// containers use their annotation as an expected type when checking
+    /// literal assignments, while inferred evolving containers retain their
+    /// existing same-kind establishment behavior.
+    pub(crate) inferred_declared_ty: Option<Ty>,
     pub(crate) declared_ty: Option<Ty>,
     pub(crate) pattern: Option<PatId>,
 }
@@ -787,8 +795,9 @@ pub struct TypeInferenceBuilder<'db> {
     /// `union_targets_for_pattern`, and the opaque-scrut dispatch).
     pattern_natural_cache: FxHashMap<(PatId, NaturalKind), Ty>,
     /// Local variable bindings. Each entry keeps the flow-sensitive type used
-    /// for reads, the stable assignment contract from an explicit annotation,
-    /// and the optional pattern identity for scoped assignment propagation.
+    /// for reads, stable assignment contracts from explicit annotations or
+    /// declaration-site inference, and the optional pattern identity for
+    /// scoped assignment propagation.
     locals: FxHashMap<Name, LocalBinding>,
     /// Per-declaration restore points for active name-keyed lookup maps.
     ///
@@ -1102,7 +1111,8 @@ impl<'db> TypeInferenceBuilder<'db> {
         self.locals.insert(
             name,
             LocalBinding {
-                current_ty: ty,
+                current_ty: ty.clone(),
+                inferred_declared_ty: declared_ty.is_none().then_some(ty),
                 declared_ty,
                 pattern: Some(pattern),
             },
@@ -1121,6 +1131,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 name.clone(),
                 LocalBinding {
                     current_ty: ty,
+                    inferred_declared_ty: None,
                     declared_ty: None,
                     pattern: None,
                 },
@@ -1380,6 +1391,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 name,
                 LocalBinding {
                     current_ty: ty.clone(),
+                    inferred_declared_ty: None,
                     declared_ty: Some(ty),
                     pattern: None,
                 },
@@ -1402,6 +1414,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 name,
                 LocalBinding {
                     current_ty: ty,
+                    inferred_declared_ty: None,
                     declared_ty: None,
                     pattern: None,
                 },
@@ -1462,6 +1475,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             name,
             LocalBinding {
                 current_ty: ty,
+                inferred_declared_ty: None,
                 declared_ty: None,
                 pattern: None,
             },
@@ -4964,6 +4978,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                             name.clone(),
                             LocalBinding {
                                 current_ty: param.ty.clone(),
+                                inferred_declared_ty: None,
                                 declared_ty: Some(param.ty.clone()),
                                 pattern: None,
                             },
@@ -7604,6 +7619,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 } else {
                     self.get_declared_type(*target, body)
                 };
+                let inferred_declared_ty = self.get_inferred_declared_type(*target, body);
                 // A container literal assigned to a matching structural declared
                 // type is typed by `check_expr`, which adopts the declared
                 // element/key/value types *recursively* (so nested `[[]]` does not
@@ -7673,14 +7689,39 @@ impl<'db> TypeInferenceBuilder<'db> {
                             self.assign_local(segments[0].clone(), assigned_ty);
                         }
                     }
+                } else if let Some(inferred_declared_ty) = inferred_declared_ty {
+                    // An unannotated local is assignable against the stable type
+                    // inferred at its declaration, not the flow-sensitive type
+                    // used for reads. In particular, an `is` check may narrow a
+                    // union for the branch without preventing assignment of the
+                    // original union back into the local.
+                    //
+                    // Keep the evolving-empty compatibility rule from B-236:
+                    // an empty list/map can establish a concrete type of the
+                    // same kind, while unrelated or cross-kind values remain
+                    // invalid.
+                    if !self.reassignment_is_compatible(&value_ty, &inferred_declared_ty) {
+                        self.context.report(
+                            TirTypeError::TypeMismatch {
+                                expected: inferred_declared_ty,
+                                got: value_ty.clone(),
+                            },
+                            *value,
+                            Vec::new(),
+                        );
+                    }
+                    if let Expr::Path(segments) = &body.exprs[*target]
+                        && segments.len() == 1
+                    {
+                        // Assignment invalidates any prior narrowing. The
+                        // assigned value's type becomes the new flow type.
+                        self.assign_local(segments[0].clone(), value_ty);
+                    }
                 } else {
-                    // No annotated declared type. Member/index/`$id` targets are
-                    // handled structurally elsewhere; an *unannotated local*,
-                    // though, still carries a flow type in `current_ty` that a
-                    // reassignment must stay compatible with. Without this guard
-                    // `let x = {}; x = []` keeps `x` map-typed while it holds an
-                    // array at runtime, so indexing it aborts the VM with
-                    // "expected map, got array" (B-236).
+                    // Member/index targets are handled structurally elsewhere.
+                    // A path without a declaration-site assignment bound is an
+                    // error-recovery binding (for example, a seeded capture);
+                    // infer it normally without changing a local contract.
                     if let Expr::Path(segments) = &body.exprs[*target]
                         && segments.len() == 1
                         && segments[0].as_str() != "$id"
@@ -7940,8 +7981,22 @@ impl<'db> TypeInferenceBuilder<'db> {
         None
     }
 
-    /// Whether reassigning a value of type `value_ty` to an *unannotated* local
-    /// currently typed `current_ty` is sound (B-236).
+    /// Look up the stable declaration-site type inferred for an unannotated
+    /// assignment target.
+    fn get_inferred_declared_type(&self, target: ExprId, body: &ExprBody) -> Option<Ty> {
+        if let Expr::Path(segments) = &body.exprs[target] {
+            if segments.len() == 1 {
+                return self
+                    .locals
+                    .get(&segments[0])
+                    .and_then(|binding| binding.inferred_declared_ty.clone());
+            }
+        }
+        None
+    }
+
+    /// Whether reassigning a value of type `value_ty` to an unannotated local
+    /// with declaration-site type `declared_ty` is sound (B-236).
     ///
     /// A concrete local requires the new value to be a subtype — its static
     /// type and the runtime value must not diverge. An *empty evolving*
@@ -7950,19 +8005,19 @@ impl<'db> TypeInferenceBuilder<'db> {
     /// adopt any value of the *same container kind* — `let a = []; a = [1, 2,
     /// 3]` keeps working — but never across kinds (`let x = {}; x = []` is the
     /// crash). Cross-kind and unrelated-type reassignments are rejected.
-    fn reassignment_is_compatible(&self, value_ty: &Ty, current_ty: &Ty) -> bool {
+    fn reassignment_is_compatible(&self, value_ty: &Ty, declared_ty: &Ty) -> bool {
         // Error recovery / a diverging RHS: don't pile on additional errors.
         if matches!(
             value_ty,
             Ty::Unknown { .. } | Ty::Error { .. } | Ty::Never { .. }
-        ) || matches!(current_ty, Ty::Unknown { .. } | Ty::Error { .. })
+        ) || matches!(declared_ty, Ty::Unknown { .. } | Ty::Error { .. })
         {
             return true;
         }
-        if self.is_subtype(value_ty, current_ty) {
+        if self.is_subtype(value_ty, declared_ty) {
             return true;
         }
-        match current_ty {
+        match declared_ty {
             // Empty evolving list: accepts any list-shaped value.
             Ty::List(inner, _) | Ty::EvolvingList(inner, _)
                 if matches!(**inner, Ty::Never { .. }) =>
@@ -14954,6 +15009,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                     name.clone(),
                     LocalBinding {
                         current_ty: ty.clone(),
+                        inferred_declared_ty: None,
                         declared_ty: Some(ty),
                         pattern: None,
                     },

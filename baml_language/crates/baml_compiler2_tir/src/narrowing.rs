@@ -503,6 +503,7 @@ fn set_current_type(locals: &mut FxHashMap<Name, LocalBinding>, name: Name, ty: 
             name,
             LocalBinding {
                 current_ty: ty,
+                inferred_declared_ty: None,
                 declared_ty: None,
                 pattern: None,
             },

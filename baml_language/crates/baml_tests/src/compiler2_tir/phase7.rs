@@ -427,6 +427,88 @@ fn assignment_uses_declared_type_after_narrowing() {
 }
 
 #[test]
+fn inferred_union_can_be_reassigned_after_is_narrowing() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"function pick() -> int | string {
+  5
+}
+
+function f() -> int | string {
+  let v = pick();
+  if (v is int) {
+    v = pick();
+  }
+  v
+}"#,
+    );
+    let output = render_tir(&db, file);
+    assert!(
+        !output.contains("type mismatch"),
+        "assignment should use the inferred declaration-site union, not the narrowed read type:\n{output}"
+    );
+}
+
+#[test]
+fn inferred_union_reads_narrow_then_rewiden_after_assignment() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"function pick() -> int | string {
+  5
+}
+
+function f() -> int | string {
+  let v = pick();
+  if (v is int) {
+    let narrowed: int = v;
+    v = pick();
+    let rewidened: int | string = v;
+  }
+  v
+}"#,
+    );
+    let output = render_tir(&db, file);
+    assert!(
+        output.contains("let narrowed: int = v : int"),
+        "the `is` check should still narrow reads before assignment:\n{output}"
+    );
+    assert!(
+        output.contains("let rewidened: int | string = v : int | string"),
+        "assignment should update the read type to the assigned union:\n{output}"
+    );
+    assert!(
+        !output.contains("type mismatch"),
+        "narrowing and re-widening should both type-check:\n{output}"
+    );
+}
+
+#[test]
+fn inferred_union_reassignment_rejects_value_outside_declaration_type() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"function pick() -> int | string {
+  5
+}
+
+function f() -> int | string {
+  let v = pick();
+  if (v is int) {
+    v = true;
+  }
+  v
+}"#,
+    );
+    let output = render_tir(&db, file);
+    assert!(
+        output.contains("type mismatch: expected int | string, got true"),
+        "a value outside the inferred declaration type must still be rejected:\n{output}"
+    );
+}
+
+#[test]
 fn unannotated_inner_shadow_masks_outer_declared_type() {
     let mut db = make_db();
     let file = db.add_file(
