@@ -7,7 +7,7 @@ function baml.Array.at(self: baml.Array<T>, index: int) -> T | null {
 function baml.Array.clear(self: baml.Array<T>) -> null {
 }
 
-function baml.Array.concat(self: baml.Array<T>, other: T[]) -> T[] {
+function baml.Array.concat(self: baml.Array<T>, other: U[]) -> (T | U)[] {
 }
 
 function baml.Array.every(self: baml.Array<T>, predicate: (T) -> bool throws E) -> bool {

@@ -129,7 +129,7 @@ class Array<T> {
   }
 
   /// Returns a new array with the elements of `self` followed by the elements of `other`.
-  function concat(self, other: T[]) -> T[] throws never {
+  function concat<U>(self, other: U[]) -> (T | U)[] throws never {
     $rust_function
   }
 

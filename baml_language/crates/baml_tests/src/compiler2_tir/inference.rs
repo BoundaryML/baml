@@ -1033,3 +1033,52 @@ function wrong_type_argument() -> Left<int> {
         "{tir}"
     );
 }
+
+#[test]
+fn array_concat_widens_primitive_element_types() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+function combine() -> int {
+  let combined = [1].concat(["a"])
+  combined.length()
+}
+"#,
+    );
+
+    assert_eq!(
+        expr_type_in_function(&db, file, "combine", "[1].concat([\"a\"])"),
+        "(int | string)[]"
+    );
+}
+
+#[test]
+fn array_concat_widens_future_error_types() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+function ok() -> int throws baml.errors.Io {
+  throw baml.errors.Io { message: "o" }
+}
+
+function bad() -> int throws baml.errors.Timeout {
+  throw baml.errors.Timeout { message: "t" }
+}
+
+function combine() -> int {
+  let a = spawn { ok() }
+  let b = spawn { bad() }
+  let lit = [a, b]
+  let combined = [a].concat([b])
+  lit.length() + combined.length()
+}
+"#,
+    );
+
+    assert_eq!(
+        expr_type_in_function(&db, file, "combine", "[a].concat([b])"),
+        "(Future<int, baml.errors.Io> | Future<int, baml.errors.Timeout>)[]"
+    );
+}
