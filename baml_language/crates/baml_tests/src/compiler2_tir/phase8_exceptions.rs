@@ -62,6 +62,125 @@ function f() -> int {
 }
 
 #[test]
+fn catch_empty_array_adopts_base_type_in_synthesis_positions() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"enum Err { Boom }
+
+function docs() -> int[] throws Err.Boom {
+  throw Err.Boom
+}
+
+function for_in_use() -> int {
+  for (let value in (docs() catch_all (e) { _ => [] })) {}
+  0
+}
+
+function direct_use() -> int {
+  (docs() catch_all (e) { _ => [] }).length()
+}
+
+function let_bound_use() -> int {
+  let values = docs() catch_all (e) { _ => [] }
+  values.length()
+}"#,
+    );
+
+    let output = render_tir(&db, file);
+    assert!(
+        !output.contains("cannot iterate over type"),
+        "for-in should see one concrete int[] catch result, got:\n{output}"
+    );
+    assert!(
+        output.contains("catch (docs() : int[]) : int[]") && output.contains("[] : int[]"),
+        "the synthesized catch result and arm should both be int[], got:\n{output}"
+    );
+    assert!(
+        output.contains(".length() : int"),
+        "direct and let-bound catch results should resolve array methods, got:\n{output}"
+    );
+}
+
+#[test]
+fn catch_container_literals_adopt_base_type_recursively() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"enum Err { Boom }
+
+function nested_docs() -> int[][] throws Err.Boom {
+  throw Err.Boom
+}
+
+function nested_fallback() -> int {
+  let values = nested_docs() catch_all (e) { _ => [[]] }
+  values.length()
+}
+
+function docs() -> int[] throws Err.Boom {
+  throw Err.Boom
+}
+
+function non_empty_fallback() -> int {
+  let values = docs() catch_all (e) { _ => [1] }
+  values.length()
+}
+
+function map_docs() -> map<string, int> throws Err.Boom {
+  throw Err.Boom
+}
+
+function empty_map_fallback() -> int {
+  let values = map_docs() catch_all (e) { _ => map {} }
+  values.length()
+}"#,
+    );
+
+    let output = render_tir(&db, file);
+    assert!(
+        output.contains("[[]] : int[][]"),
+        "nested empty arrays should recursively adopt int[][], got:\n{output}"
+    );
+    assert!(
+        output.contains("[1] : int[]"),
+        "a compatible non-empty literal arm should keep the base int[] type, got:\n{output}"
+    );
+    assert!(
+        output.contains("map {  } : map<string, int>"),
+        "an empty map arm should adopt the base map type, got:\n{output}"
+    );
+}
+
+#[test]
+fn catch_incompatible_arm_still_forms_union() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"enum Err { Boom }
+
+function docs() -> int[] throws Err.Boom {
+  throw Err.Boom
+}
+
+function union_result() -> int {
+  let values = docs() catch_all (e) { _ => ["fallback"] }
+  0
+}"#,
+    );
+
+    let output = render_tir(&db, file);
+    assert!(
+        output.contains("int[] | string[]") || output.contains("string[] | int[]"),
+        "a genuinely different catch arm should still form a union, got:\n{output}"
+    );
+    assert!(
+        !output.contains("type mismatch"),
+        "forming an inferred catch union should not introduce a mismatch, got:\n{output}"
+    );
+}
+
+#[test]
 fn throws_never_contract_violation_reports_error() {
     let mut db = make_db();
     let file = db.add_file(

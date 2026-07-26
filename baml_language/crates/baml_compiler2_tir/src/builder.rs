@@ -8338,7 +8338,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         } else {
             self.infer_expr(base_expr_id, body)
         };
-        let mut result_members = vec![base_ty];
+        let mut result_members = vec![base_ty.clone()];
         let mut residual = self.catch_base_throw_types(base_expr_id, body);
 
         for clause in clauses {
@@ -8506,7 +8506,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 // leaking `EvolvingList(Never)`. Mirrors the base above.
                 let arm_ty = match expected {
                     Some(expected) => self.check_expr(arm.body, body, expected),
-                    None => self.infer_expr(arm.body, body),
+                    None => self.infer_catch_arm_with_base_expectation(arm.body, body, &base_ty),
                 };
                 result_members.push(arm_ty);
 
@@ -8557,6 +8557,143 @@ impl<'db> TypeInferenceBuilder<'db> {
         self.catch_residual_throws
             .insert(catch_expr_id, residual.clone());
         Self::join_all(&result_members)
+    }
+
+    /// Infer a catch arm in synthesis position while using the try-block type
+    /// as a soft, bidirectional expectation.
+    ///
+    /// A catch expression is still allowed to widen into a union when an arm
+    /// genuinely returns a different type. The base type therefore cannot be
+    /// passed to [`Self::check_expr`] as a hard expectation: doing so would
+    /// reject that valid union. Instead, infer the arm first and then adopt the
+    /// base type only when the expression fits it contextually. This is
+    /// significant for invariant container literals, where an empty `[]` (or
+    /// nested empty container) has no element type of its own but can adopt one
+    /// from the try-block.
+    fn infer_catch_arm_with_base_expectation(
+        &mut self,
+        arm_expr_id: ExprId,
+        body: &ExprBody,
+        base_ty: &Ty,
+    ) -> Ty {
+        let inferred = self.infer_expr(arm_expr_id, body);
+        let mut updates = Vec::new();
+        if self.collect_contextual_expr_updates(arm_expr_id, body, base_ty, &mut updates) {
+            for (expr_id, ty) in updates {
+                self.record_expr_type(expr_id, ty);
+            }
+            base_ty.clone()
+        } else {
+            inferred
+        }
+    }
+
+    /// Check whether an already-inferred expression can adopt `expected`
+    /// without emitting a hard mismatch, collecting the expression-type
+    /// rewrites needed for container literals.
+    ///
+    /// Ordinary subtypes need no rewrite. Container literals are checked
+    /// element-by-element because lists and maps are invariant: `[1]` may
+    /// contextually become `json[]`, while a non-literal `int[]` value may not.
+    /// Updates are accumulated transactionally so a partially matching nested
+    /// literal is left untouched when another element makes the whole literal
+    /// incompatible.
+    fn collect_contextual_expr_updates(
+        &self,
+        expr_id: ExprId,
+        body: &ExprBody,
+        expected: &Ty,
+        updates: &mut Vec<(ExprId, Ty)>,
+    ) -> bool {
+        let Some(inferred) = self.expressions.get(&expr_id) else {
+            return false;
+        };
+        if self.is_subtype(inferred, expected) {
+            return true;
+        }
+
+        let update_start = updates.len();
+        let adopted = match &body.exprs[expr_id] {
+            Expr::Array { elements } => self
+                .adopted_container_for_literal(expected, ContainerLiteralKind::List)
+                .and_then(|container| {
+                    let (Ty::List(element_ty, _) | Ty::EvolvingList(element_ty, _)) = &container
+                    else {
+                        unreachable!("adopted list container has list shape")
+                    };
+                    elements
+                        .iter()
+                        .all(|element| {
+                            self.collect_contextual_expr_updates(
+                                *element, body, element_ty, updates,
+                            )
+                        })
+                        .then_some(container)
+                }),
+            Expr::Map { entries } => self
+                .adopted_container_for_literal(expected, ContainerLiteralKind::Map)
+                .and_then(|container| {
+                    let (Ty::Map {
+                        key: key_ty,
+                        value: value_ty,
+                        ..
+                    }
+                    | Ty::EvolvingMap(key_ty, value_ty, _)) = &container
+                    else {
+                        unreachable!("adopted map container has map shape")
+                    };
+                    entries
+                        .iter()
+                        .all(|(key, value)| {
+                            self.collect_contextual_expr_updates(*key, body, key_ty, updates)
+                                && self.collect_contextual_expr_updates(
+                                    *value, body, value_ty, updates,
+                                )
+                        })
+                        .then_some(container)
+                }),
+            Expr::Object {
+                type_name,
+                type_args,
+                fields,
+                spreads,
+                ..
+            } if Self::is_map_object_literal(type_name, type_args, spreads) => self
+                .adopted_container_for_literal(expected, ContainerLiteralKind::Map)
+                .and_then(|container| {
+                    let (Ty::Map {
+                        key: key_ty,
+                        value: value_ty,
+                        ..
+                    }
+                    | Ty::EvolvingMap(key_ty, value_ty, _)) = &container
+                    else {
+                        unreachable!("adopted map container has map shape")
+                    };
+                    if !fields.is_empty() && !self.is_subtype(&Ty::string(), key_ty) {
+                        None
+                    } else if fields.iter().all(|(_, value)| {
+                        self.collect_contextual_expr_updates(*value, body, value_ty, updates)
+                    }) {
+                        Some(container)
+                    } else {
+                        None
+                    }
+                }),
+            Expr::Block { stmts, tail_expr } if stmts.is_empty() => tail_expr.and_then(|tail| {
+                self.collect_contextual_expr_updates(tail, body, expected, updates)
+                    .then_some(expected.clone())
+            }),
+            _ => None,
+        };
+
+        if let Some(adopted) = adopted {
+            updates.push((expr_id, adopted));
+            true
+        } else {
+            updates.truncate(update_start);
+            false
+        }
     }
 
     /// Validate declared `throws` against effective escaping throws from the body.
