@@ -2364,8 +2364,8 @@ function baml.llm.Client.execute_once_oneshot<T>(self: baml.llm.Client, context:
             }
           else
             { : never
-              let error_body = : string | "" -> string
-                catch (http_response.text() : string) : string | ""
+              let error_body = : string
+                catch (http_response.text() : string) : string
                   catch (e)
                     _ =>
                       { : ""
