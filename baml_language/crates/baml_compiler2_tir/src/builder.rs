@@ -9365,6 +9365,19 @@ impl<'db> TypeInferenceBuilder<'db> {
                 for arg in args {
                     self.collect_throw_facts_from_expr(arg.expr, body, out);
                 }
+                // Keep catch-domain inference aligned with the whole-body
+                // throws walker: an unresolved `recv.to_string()` call on a
+                // known receiver is the total `string.from(recv)` fallback,
+                // not an unaccounted call that contributes `unknown`.
+                if arg_exprs.is_empty()
+                    && crate::throws_analysis::is_to_string_fallback_callee(
+                        &BuilderThrowsAnalysis { builder: self },
+                        *callee,
+                        body,
+                    )
+                {
+                    return;
+                }
                 crate::throws_analysis::collect_callee_escaping_throws(
                     &BuilderThrowsAnalysis { builder: self },
                     *callee,

@@ -63,7 +63,7 @@ pub fn is_to_string_call_callee(expr: &Expr) -> bool {
 /// `to_string` call shape the type checker left untyped (`Unknown`/`Error`)
 /// because the receiver has no real `to_string` method. Such a call lowers to
 /// `string.from(recv)`, which is `throws never`.
-fn is_to_string_fallback_callee<C: ThrowsAnalysisContext>(
+pub(crate) fn is_to_string_fallback_callee<C: ThrowsAnalysisContext>(
     context: &C,
     callee: ExprId,
     body: &ExprBody,
