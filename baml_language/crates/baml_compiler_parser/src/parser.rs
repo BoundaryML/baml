@@ -233,6 +233,10 @@ pub(crate) struct Parser<'a> {
     /// `ARRAY_PATTERN` so nested patterns regain normal destructure
     /// parsing. Counter so nested conditions nest correctly.
     suppress_destructure_pattern_depth: u32,
+    /// Track when a type expression is being parsed in pattern position.
+    /// Float literal types remain unsupported in declarations, but the same
+    /// syntax is valid as a literal pattern and lowers to an equality test.
+    pattern_depth: u32,
 }
 
 impl<'a> Parser<'a> {
@@ -249,6 +253,7 @@ impl<'a> Parser<'a> {
             suppress_object_literal_depth: 0,
             allow_object_literal_before_for_body_depth: 0,
             suppress_destructure_pattern_depth: 0,
+            pattern_depth: 0,
         }
     }
 
@@ -2953,7 +2958,7 @@ impl<'a> Parser<'a> {
         // Negative numeric literal type: `-42`, `-3.14`. Recognised before
         // the unary-`-` falls through to the generic error path so literal
         // unions like `-1 | 0 | 1` and pattern atoms like `match { -42 => ... }`
-        // parse uniformly. Floats still error to match the positive case.
+        // parse uniformly. Float literals are only supported in patterns.
         if self.at(TokenKind::Minus)
             && matches!(
                 self.peek(1).map(|t| t.kind),
@@ -2964,6 +2969,7 @@ impl<'a> Parser<'a> {
         {
             let next_kind = self.peek(1).map(|t| t.kind);
             if next_kind == Some(TokenKind::FloatLiteral)
+                && self.pattern_depth == 0
                 && let Some(token) = self.peek(1)
             {
                 let span = token.span;
@@ -2991,9 +2997,12 @@ impl<'a> Parser<'a> {
             return;
         }
 
-        // Float literal types are not supported - emit error at parse time
+        // Float literal types are not supported in declarations. In pattern
+        // position they lower to literal equality, just like int literals.
         if self.at(TokenKind::FloatLiteral) {
-            if let Some(token) = self.current() {
+            if self.pattern_depth == 0
+                && let Some(token) = self.current()
+            {
                 self.error(
                     format!("float literal values are not supported: {}", token.text),
                     token.span,
@@ -4934,7 +4943,9 @@ impl<'a> Parser<'a> {
     /// not a separate combinator.
     fn parse_pattern(&mut self) {
         self.with_node(SyntaxKind::PATTERN, |p| {
+            p.pattern_depth += 1;
             p.parse_pattern_union();
+            p.pattern_depth -= 1;
         });
     }
 
@@ -10409,6 +10420,44 @@ function Demo() -> int {
             })
             .collect();
         assert_eq!(kinds, vec![SyntaxKind::MINUS, SyntaxKind::INTEGER_LITERAL]);
+    }
+
+    #[test]
+    fn pattern_float_literals_in_match_and_class_fields() {
+        let source = r#"
+class Num {
+  value float
+}
+
+function Demo(x: float, n: Num) -> int {
+  match (x) {
+    -1.5 => 1,
+    0.0 => match (n) {
+      Num { value: 0.0 } => 2,
+      _ => 3,
+    },
+    _ => 4,
+  }
+}
+"#;
+
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+
+        let float_patterns: Vec<_> = root
+            .descendants()
+            .filter(|n| n.kind() == SyntaxKind::TYPE_PATTERN)
+            .filter(|n| {
+                n.descendants_with_tokens().any(|element| {
+                    matches!(
+                        element,
+                        rowan::NodeOrToken::Token(token)
+                            if token.kind() == SyntaxKind::FLOAT_LITERAL
+                    )
+                })
+            })
+            .collect();
+        assert_eq!(float_patterns.len(), 3);
     }
 
     #[test]

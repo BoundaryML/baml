@@ -148,6 +148,11 @@ class Refund { id: string }
 class Question { text: string }
 ```
 
+Float literal patterns use the same IEEE 754 equality as `==`: `0.0` matches
+`-0.0`, while `NaN` never matches a literal arm. Any finite set of float
+literal patterns is still non-exhaustive for `float`, so include a `_` or
+`float` catch-all arm.
+
 Design proposal: [BEP-015](https://beps.boundaryml.com/beps/15).
 
 ### Typed error handling

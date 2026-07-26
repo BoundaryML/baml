@@ -1487,6 +1487,11 @@ mod tests {
             attr: Default::default(),
         }
     }
+    fn float_ty() -> Ty {
+        Ty::Float {
+            attr: Default::default(),
+        }
+    }
 
     #[test]
     fn bool_exhaustive_with_both_arms() {
@@ -1575,6 +1580,23 @@ mod tests {
         let c = ty_ctor_identity(&float_lit("1e0"));
         assert_eq!(a, b);
         assert_eq!(a, c);
+
+        let positive_zero = ty_ctor_identity(&float_lit("0.0"));
+        let negative_zero = ty_ctor_identity(&float_lit("-0.0"));
+        assert_eq!(positive_zero, negative_zero);
+    }
+
+    #[test]
+    fn float_literals_never_make_raw_float_exhaustive() {
+        let ty = float_ty();
+        let arms = vec![
+            DPat::single(float_lit("-1.5"), ty.clone()),
+            DPat::single(float_lit("0.0"), ty.clone()),
+            DPat::single(float_lit("1.5"), ty.clone()),
+        ];
+        let report = compute_match_usefulness(&StubCtx, &arms, ty);
+        assert_eq!(report.missing.len(), 1);
+        assert!(matches!(report.missing[0].ctor, Ctor::NonExhaustive));
     }
 
     /// `Array<bool>` with `[true, _]` and `[false, true]` should report

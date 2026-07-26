@@ -5,10 +5,8 @@
 // Converted from crates/baml_tests/tests/match_basics.rs.
 //
 // SKIPPED:
-//   - match_float_literal: #[ignore = "patterns phase2: float switch lowering"]
 //   - match_negative_int_first_arm: #[ignore = "compiler2 todo"]
 //   - match_negative_int_fallback: #[ignore = "compiler2 todo"]
-//   - match_negative_float_pattern: #[ignore = "compiler2 todo"]
 //   - match_multiple_negative_patterns: #[ignore = "compiler2 todo"]
 //   - match_negative_in_union_pattern: #[ignore = "compiler2 todo"]
 
@@ -375,41 +373,9 @@ test "match_negative_int_first_arm" {
 //     assert.is_true(baml.deep_equals(match_negative_int_fallback_literal(), "other"))
 // }
 
-// BUG: compile error — "Float literal values are not supported"
-// Float literals are not yet allowed as match-arm patterns; the checker
-// reports E0010 for each float pattern.
-// The original RS test was `#[ignore = "patterns phase2: float switch lowering"]`.
-//
-// function match_float_literal_fn() -> string {
-//     let x = 1.5;
-//     match (x) {
-//         1.0 => "one",
-//         1.5 => "one point five",
-//         2.0 => "two",
-//         _ => "other"
-//     }
-// }
-//
-// test "match_float_literal" {
-//     assert.is_true(baml.deep_equals(match_float_literal_fn(), "one point five"))
-// }
-
-// BUG: compile error — "Float literal values are not supported" (E0010)
-// Negative float patterns are not supported in match arms.
-// Original RS test: `match (-1.5) { -1.5 => ..., 0.0 => ..., 1.5 => ..., _ => ... }`.
-//
-// function match_negative_float_pattern_fn() -> string {
-//     match (-1.5) {
-//         -1.5 => "negative one point five",
-//         0.0 => "zero",
-//         1.5 => "one point five",
-//         _ => "other"
-//     }
-// }
-//
-// test "match_negative_float_pattern" {
-//     assert.is_true(baml.deep_equals(match_negative_float_pattern_fn(), "negative one point five"))
-// }
+// Float pattern coverage (including class-field, negative-zero, and NaN
+// equality semantics) lives in the focused Rust regression tests at
+// `crates/baml_tests/src/float_patterns.rs`.
 
 // BUG: compile error — "type mismatch: expected -2, got -3" and "unreachable arm"
 // Literal-scrutinee constant-folding makes all other arms type errors.
