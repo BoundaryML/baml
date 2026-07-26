@@ -24,7 +24,7 @@ func makeCollisionBars(t *testing.T) (baml_sdk.SymbolCollisionsFooBar, baml_sdk.
 	return a, b, c
 }
 
-func TestRoundTripFooBar(t *testing.T) {
+func Test_round_trip_foo_bar(t *testing.T) {
 	got, err := baml_sdk.SymbolCollisionsFooMakeFooBar(context.Background(), "hi", 2)
 	if err != nil {
 		t.Fatal(err)
@@ -34,7 +34,7 @@ func TestRoundTripFooBar(t *testing.T) {
 		t.Fatalf("got %#v, %v", round, err)
 	}
 }
-func TestRoundTripFizzFooBar(t *testing.T) {
+func Test_round_trip_fizz_foo_bar(t *testing.T) {
 	got, err := baml_sdk.SymbolCollisionsFizzFooMakeFizzFooBar(context.Background(), "t", 1.5)
 	if err != nil {
 		t.Fatal(err)
@@ -44,7 +44,7 @@ func TestRoundTripFizzFooBar(t *testing.T) {
 		t.Fatalf("got %#v, %v", round, err)
 	}
 }
-func TestRoundTripFizzBuzzFooBar(t *testing.T) {
+func Test_round_trip_fizz_buzz_foo_bar(t *testing.T) {
 	got, err := baml_sdk.SymbolCollisionsFizzBuzzFooMakeFizzBuzzFooBar(context.Background(), "f", 2.5, true)
 	if err != nil {
 		t.Fatal(err)
@@ -54,7 +54,7 @@ func TestRoundTripFizzBuzzFooBar(t *testing.T) {
 		t.Fatalf("got %#v, %v", round, err)
 	}
 }
-func TestRoundTripIpsum(t *testing.T) {
+func Test_round_trip_ipsum(t *testing.T) {
 	a, b, c := makeCollisionBars(t)
 	want, err := baml_sdk.SymbolCollisionsLoremMakeIpsum(context.Background(), a, b, c)
 	if err != nil {
@@ -65,7 +65,7 @@ func TestRoundTripIpsum(t *testing.T) {
 		t.Fatalf("got %#v, %v", got, err)
 	}
 }
-func TestRoundTripDeep(t *testing.T) {
+func Test_round_trip_deep(t *testing.T) {
 	a, b, c := makeCollisionBars(t)
 	nested, err := baml_sdk.SymbolCollisionsLoremMakeIpsum(context.Background(), a, b, c)
 	if err != nil {

@@ -44,18 +44,18 @@ fn _assert_fast_cancellation(start: Instant) {
 }
 
 #[test]
-fn test_sync_call_returns_none() {
+fn test_cancellation_sync_call_returns_none() {
     // `SleepMs` returns `null`: the `Result<(), _>` unwrap is the `is None`.
     throws_test::SleepMs(1).unwrap();
 }
 
 #[tokio::test]
-async fn test_async_call_returns_none() {
+async fn test_cancellation_async_call_returns_none() {
     throws_test::SleepMs_async(1).await.unwrap();
 }
 
 #[test]
-fn test_sync_cancel_via_call_context() {
+fn test_cancellation_sync_cancel_via_call_context() {
     let start = Instant::now();
     let ctx = BamlCallContext::new();
 
@@ -78,7 +78,7 @@ fn test_sync_cancel_via_call_context() {
 }
 
 #[tokio::test]
-async fn test_async_cancel_via_call_context() {
+async fn test_cancellation_async_cancel_via_call_context() {
     let start = Instant::now();
     let ctx = BamlCallContext::new();
 
@@ -96,7 +96,7 @@ async fn test_async_cancel_via_call_context() {
 }
 
 #[tokio::test]
-async fn test_async_cancel_via_task_cancel() {
+async fn test_cancellation_async_cancel_via_task_cancel() {
     let start = Instant::now();
     let task = tokio::spawn(throws_test::SleepMs_async(2000));
 
@@ -112,7 +112,7 @@ async fn test_async_cancel_via_task_cancel() {
 }
 
 #[tokio::test]
-async fn test_async_cancel_via_task_group_sibling() {
+async fn test_cancellation_async_cancel_via_task_group_sibling() {
     let start = Instant::now();
 
     async fn _fail_soon() -> Result<(), &'static str> {
@@ -139,7 +139,7 @@ async fn test_async_cancel_via_task_group_sibling() {
 }
 
 #[tokio::test]
-async fn test_async_cancel_via_asyncio_timeout() {
+async fn test_cancellation_async_cancel_via_asyncio_timeout() {
     let start = Instant::now();
     // `asyncio.wait_for(..., timeout=0.05)` → `tokio::time::timeout`; the
     // elapsed error is the `TimeoutError`, and the timed-out call future is

@@ -9,13 +9,13 @@ use baml_sdk::forward_refs::round_trip_node as _; // uninhabitable (required sel
 use baml_sdk::forward_refs::{Other, round_trip_other};
 
 #[test]
-fn test_round_trip_other() {
+fn test_forward_refs_round_trip_other() {
     let o = Other { v: 7 };
     assert_eq!(round_trip_other(o.clone()).unwrap(), o);
 }
 
 #[test]
-fn test_round_trip_rec_list() {
+fn test_forward_refs_round_trip_rec_list() {
     // DIVERGENCE(rust): `RecList = int | RecList[]` is a *recursive* alias —
     // not representable as a plain Rust `type`, so codegen skips it (fail
     // closed) and this round trip is inexpressible. Intended body if a
@@ -30,7 +30,7 @@ fn test_round_trip_rec_list() {
 }
 
 #[test]
-fn test_round_trip_rec_list_with_other() {
+fn test_forward_refs_round_trip_rec_list_with_other() {
     // RecListWithOther = int | Other | RecListWithOther[]
     //
     // DIVERGENCE(rust): a recursive alias — same story as
@@ -49,7 +49,7 @@ fn test_round_trip_rec_list_with_other() {
 }
 
 #[test]
-fn test_round_trip_g_node_int() {
+fn test_forward_refs_round_trip_g_node_int() {
     // DIVERGENCE(rust): `GNode<T> { children: GNode<T>[] }` uses its type
     // parameter ONLY inside its recursive self-reference, which Rust rejects
     // outright ("type parameter `T` is only used recursively" — the param's

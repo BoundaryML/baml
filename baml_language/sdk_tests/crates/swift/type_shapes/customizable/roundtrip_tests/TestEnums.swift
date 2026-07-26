@@ -4,12 +4,12 @@ import XCTest
 import Baml
 
 final class TestEnums: XCTestCase {
-    func test_pick_sentiment() throws {
+    func test_enums_pick_sentiment() throws {
         XCTAssertEqual(try Baml.enums.pick_sentiment(b: true), .Positive)
         XCTAssertEqual(try Baml.enums.pick_sentiment(b: false), .Negative)
     }
 
-    func test_round_trip_sentiment() throws {
+    func test_enums_round_trip_sentiment() throws {
         XCTAssertEqual(try Baml.enums.round_trip_sentiment(s: .Negative), .Negative)
     }
 }

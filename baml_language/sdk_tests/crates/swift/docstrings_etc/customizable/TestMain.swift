@@ -23,31 +23,31 @@ final class TestMain: XCTestCase {
         return try String(contentsOf: url, encoding: .utf8)
     }
 
-    func test_imports() {
+    func test_main_imports_symbols_reachable() {
         _ = Baml.docs.Doc.self
         _ = Baml.docs.Note.self
         _ = Baml.docs.Priority.self
         _ = Baml.docs.Sentiment.self
     }
 
-    func test_class_doc_summary_present() throws {
+    func test_main_class_doc_summary_present() throws {
         let source = try generatedSource("docs.swift")
         XCTAssertTrue(source.contains("/// A document with a title and an optional body."))
     }
 
-    func test_multi_line_class_doc_preserved() throws {
+    func test_main_multi_line_class_doc_preserved() throws {
         let source = try generatedSource("docs.swift")
         XCTAssertTrue(source.contains("/// A multi-line summary."))
         XCTAssertTrue(source.contains("/// Continuation line of the summary"))
     }
 
-    func test_field_docs_attached() throws {
+    func test_main_field_docs_attached() throws {
         let source = try generatedSource("docs.swift")
         XCTAssertTrue(source.contains("/// Title shown in lists and search results."))
         XCTAssertTrue(source.contains("/// Stable identifier — surfaces in URLs."))
     }
 
-    func test_enum_and_variant_docs_attached() throws {
+    func test_main_enum_and_variant_docs_attached() throws {
         let source = try generatedSource("docs.swift")
         XCTAssertTrue(source.contains("/// Sentiment labels surfaced by the model."))
         XCTAssertTrue(source.contains("/// Smiling face."))

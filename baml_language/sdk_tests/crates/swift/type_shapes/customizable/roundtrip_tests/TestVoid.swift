@@ -4,7 +4,7 @@ import XCTest
 import Baml
 
 final class TestVoid: XCTestCase {
-    func test_no_op() throws {
+    func test_void_no_op() throws {
         try Baml.void.no_op()
     }
 }

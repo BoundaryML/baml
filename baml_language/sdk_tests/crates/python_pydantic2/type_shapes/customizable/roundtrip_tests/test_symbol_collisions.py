@@ -17,22 +17,22 @@ from baml_sdk.symbol_collisions.lorem import make_ipsum, round_trip_ipsum
 from baml_sdk.symbol_collisions.a.b.c.d import make_deep, round_trip_deep
 
 
-def test_round_trip_foo_bar():
+def test_symbol_collisions_round_trip_foo_bar():
     bar = make_foo_bar(label="hi", count=2)
     assert round_trip_foo_bar(b=bar) == bar
 
 
-def test_round_trip_fizz_foo_bar():
+def test_symbol_collisions_round_trip_fizz_foo_bar():
     bar = make_fizz_foo_bar(tag="t", ratio=1.5)
     assert round_trip_fizz_foo_bar(b=bar) == bar
 
 
-def test_round_trip_fizz_buzz_foo_bar():
+def test_symbol_collisions_round_trip_fizz_buzz_foo_bar():
     bar = make_fizz_buzz_foo_bar(flavor="f", weight=2.5, active=True)
     assert round_trip_fizz_buzz_foo_bar(b=bar) == bar
 
 
-def test_round_trip_ipsum():
+def test_symbol_collisions_round_trip_ipsum():
     ipsum = make_ipsum(
         bar1=make_foo_bar(label="a", count=1),
         bar2=make_fizz_foo_bar(tag="b", ratio=2.0),
@@ -41,7 +41,7 @@ def test_round_trip_ipsum():
     assert round_trip_ipsum(i=ipsum) == ipsum
 
 
-def test_round_trip_deep():
+def test_symbol_collisions_round_trip_deep():
     ipsum = make_ipsum(
         bar1=make_foo_bar(label="a", count=1),
         bar2=make_fizz_foo_bar(tag="b", ratio=2.0),

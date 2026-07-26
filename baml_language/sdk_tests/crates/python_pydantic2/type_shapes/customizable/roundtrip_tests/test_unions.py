@@ -14,29 +14,29 @@ from baml_sdk.unions import (
 )
 
 
-def test_round_trip_null_to_end():
+def test_unions_round_trip_null_to_end():
     assert round_trip_null_to_end(u=1) == 1
     assert round_trip_null_to_end(u="s") == "s"
     assert round_trip_null_to_end(u=None) is None
 
 
-def test_round_trip_dedup():
+def test_unions_round_trip_dedup():
     assert round_trip_dedup(u=2) == 2
     assert round_trip_dedup(u="x") == "x"
 
 
-def test_round_trip_singleton_unwrap():
+def test_unions_round_trip_singleton_unwrap():
     # `int | int` collapses to plain `int`.
     assert round_trip_singleton_unwrap(u=7) == 7
 
 
-def test_round_trip_optional_plus_null():
+def test_unions_round_trip_optional_plus_null():
     assert round_trip_optional_plus_null(u=T(v=1)) == T(v=1)
     assert round_trip_optional_plus_null(u="s") == "s"
     assert round_trip_optional_plus_null(u=None) is None
 
 
-def test_round_trip_str_or_int_list():
+def test_unions_round_trip_str_or_int_list():
     # Differently-typed list arms. The wire's `item_type` (populated by the
     # engine even for an empty list) is what selects the arm; Python drops the
     # union wrapper and returns the bare list, so these assert the value
@@ -49,11 +49,11 @@ def test_round_trip_str_or_int_list():
     assert round_trip_str_or_int_list(x=[]) == []
 
 
-def test_round_trip_t():
+def test_unions_round_trip_t():
     assert round_trip_t(t=T(v=4)) == T(v=4)
 
 
-def test_round_trip_union_container():
+def test_unions_round_trip_union_container():
     c = UnionContainer(
         null_to_end=None,
         dedup="d",

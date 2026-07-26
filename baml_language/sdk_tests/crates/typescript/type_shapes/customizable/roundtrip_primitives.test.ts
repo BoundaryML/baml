@@ -19,25 +19,25 @@ import {
 } from "./baml_sdk/primitives/index.js";
 
 describe("roundtrip primitives", () => {
-  it("return_int", () => expect(return_int()).toBeCloseTo(42));
-  it("return_float", () => expect(return_float()).toBeCloseTo(3.14));
-  it("return_string", () => expect(return_string()).toBe("hello"));
-  it("return_bool", () => expect(return_bool()).toBe(true));
-  it("return_null", () => expect(return_null()).toBeNull());
+  it("primitives_return_int", () => expect(return_int()).toBeCloseTo(42));
+  it("primitives_return_float", () => expect(return_float()).toBeCloseTo(3.14));
+  it("primitives_return_string", () => expect(return_string()).toBe("hello"));
+  it("primitives_return_bool", () => expect(return_bool()).toBe(true));
+  it("primitives_return_null", () => expect(return_null()).toBeNull());
 
-  it("round_trip_int", () => expect(round_trip_int(7)).toBeCloseTo(7));
-  it("round_trip_float", () =>
+  it("primitives_round_trip_int", () => expect(round_trip_int(7)).toBeCloseTo(7));
+  it("primitives_round_trip_float", () =>
     expect(round_trip_float(2.5)).toBeCloseTo(2.5));
-  it("round_trip_string", () => expect(round_trip_string("hi")).toBe("hi"));
-  it("round_trip_bool", () => expect(round_trip_bool(false)).toBe(false));
-  it("round_trip_null", () => expect(round_trip_null(null)).toBeNull());
+  it("primitives_round_trip_string", () => expect(round_trip_string("hi")).toBe("hi"));
+  it("primitives_round_trip_bool", () => expect(round_trip_bool(false)).toBe(false));
+  it("primitives_round_trip_null", () => expect(round_trip_null(null)).toBeNull());
 
-  it("round_trip_uint8_array", () => {
+  it("primitives_round_trip_uint8_array", () => {
     const r = round_trip_uint8_array(new Uint8Array([0, 1, 2]));
     expect(Array.from(r as Uint8Array)).toEqual([0, 1, 2]);
   });
 
-  it("round_trip_primitives", () => {
+  it("primitives_round_trip_primitives", () => {
     const p = new Primitives({
       int_field: 1,
       float_field: 1.5,

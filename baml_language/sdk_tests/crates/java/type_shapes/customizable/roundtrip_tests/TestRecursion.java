@@ -24,13 +24,13 @@ import org.junit.jupiter.api.Test;
 class TestRecursion {
 
     @Test
-    void test_round_trip_int_binary_tree() {
+    void test_recursion_round_trip_int_binary_tree() {
         IntBinaryTree t = new IntBinaryTree(1L, new IntBinaryTree(2L, null, null), null);
         assertEquals(t, Fns.round_trip_int_binary_tree(t));
     }
 
     @Test
-    void test_round_trip_mutual_recursion() {
+    void test_recursion_round_trip_mutual_recursion() {
         A a = new A(new B(null));
         B b = new B(new A(null));
         assertEquals(a, Fns.round_trip_a(a));
@@ -38,7 +38,7 @@ class TestRecursion {
     }
 
     @Test
-    void test_round_trip_scc_t1_t2_t3() {
+    void test_recursion_round_trip_scc_t1_t2_t3() {
         T1 t1 = new T1(new T2(null, null), null);
         T2 t2 = new T2(null, new T3(null, null));
         T3 t3 = new T3(null, null);
@@ -48,7 +48,7 @@ class TestRecursion {
     }
 
     @Test
-    void test_round_trip_scc_t4_t5_t6() {
+    void test_recursion_round_trip_scc_t4_t5_t6() {
         T4 t4 = new T4(new T5(null, null), null);
         T5 t5 = new T5(null, new T6(null, null));
         T6 t6 = new T6(null, null);

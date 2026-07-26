@@ -20,12 +20,12 @@ import org.junit.jupiter.api.Test;
 class TestLists {
 
     @Test
-    void test_round_trip_ints() {
+    void test_lists_round_trip_ints() {
         assertEquals(List.of(1L, 2L, 3L), Fns.round_trip_ints(List.of(1L, 2L, 3L)));
     }
 
     @Test
-    void test_round_trip_empty_list() {
+    void test_lists_round_trip_empty_list() {
         // Regression for Bug A (35b), fixed by `SetInParent()` on the
         // `list_value` oneof arm in proto.py: an empty list used to encode
         // as an unset oneof, which the engine read as null and returned as
@@ -34,7 +34,7 @@ class TestLists {
     }
 
     @Test
-    void test_round_trip_optional_strings() {
+    void test_lists_round_trip_optional_strings() {
         // java-port note: `List.of` rejects null elements; `Arrays.asList`
         // permits them and is used wherever a list literal carries a
         // `null` element.
@@ -43,7 +43,7 @@ class TestLists {
     }
 
     @Test
-    void test_round_trip_union_list() {
+    void test_lists_round_trip_union_list() {
         List<Union2<Long, String>> xs =
                 List.of(
                         new Union2.Arm0<Long, String>(1L),
@@ -53,7 +53,7 @@ class TestLists {
     }
 
     @Test
-    void test_round_trip_list_container() {
+    void test_lists_round_trip_list_container() {
         ListContainer c =
                 new ListContainer(
                         List.of(1L, 2L),

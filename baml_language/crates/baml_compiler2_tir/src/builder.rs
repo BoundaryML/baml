@@ -8249,7 +8249,9 @@ impl<'db> TypeInferenceBuilder<'db> {
 
         // Lower the pattern against the scrutinee type. Same machinery as
         // `match` arms — does subtype check, populates `pattern_types`.
+        let diag_count_before_pattern = self.context.diagnostic_count();
         let result = self.analyze_and_lower(pattern_id, &scrutinee_ty, body, then_branch);
+        let pattern_had_error = self.context.diagnostic_count() > diag_count_before_pattern;
         let matched_ty = result.matched_ty.clone();
 
         // Then-branch: push a fresh scope, narrow scrutinee, register
@@ -8287,19 +8289,21 @@ impl<'db> TypeInferenceBuilder<'db> {
         // Refutability check: run the matrix with a single arm. If nothing
         // is missing, the pattern covers every value of the scrutinee — the
         // else branch is dead.
-        let scrutinee_ty_for_matrix = self.matrix_normalize_scrut(&scrutinee_ty);
-        let report = crate::pattern_lowering::compute_match_usefulness(
-            self,
-            std::slice::from_ref(&result.dpat),
-            scrutinee_ty_for_matrix,
-        );
-        if report.missing.is_empty() {
-            let err = crate::infer_context::TirTypeError::IrrefutablePatternInIfLet;
-            if let Some(sm) = self.body_source_map.as_ref() {
-                self.context
-                    .report_warning_at_span(err, sm.pattern_span(pattern_id));
-            } else {
-                self.context.report_warning_simple(err, if_let_expr_id);
+        if !pattern_had_error {
+            let scrutinee_ty_for_matrix = self.matrix_normalize_scrut(&scrutinee_ty);
+            let report = crate::pattern_lowering::compute_match_usefulness(
+                self,
+                std::slice::from_ref(&result.dpat),
+                scrutinee_ty_for_matrix,
+            );
+            if report.missing.is_empty() {
+                let err = crate::infer_context::TirTypeError::IrrefutablePatternInIfLet;
+                if let Some(sm) = self.body_source_map.as_ref() {
+                    self.context
+                        .report_warning_at_span(err, sm.pattern_span(pattern_id));
+                } else {
+                    self.context.report_warning_simple(err, if_let_expr_id);
+                }
             }
         }
 
@@ -8450,12 +8454,14 @@ impl<'db> TypeInferenceBuilder<'db> {
                 // Probe the arm pattern's matched type for narrowing.
                 // Bindings/refutability are handled by the per-arm walk
                 // below, after the narrowed type is finalised.
+                let probe_diag_start = self.context.diagnostic_count();
                 let arm_probe = self.analyze_and_lower_no_subtype_check(
                     arm.pattern,
                     &clause_binding_ty,
                     body,
                     arm.body,
                 );
+                self.context.truncate_diagnostics(probe_diag_start);
                 let mut narrowed_ty = arm_probe.matched_ty.clone();
                 let written_arm_ty = arm_expected_ty
                     .clone()
@@ -16605,13 +16611,25 @@ impl TypeInferenceBuilder<'_> {
         }
 
         if !matches!(class_ty, Ty::Class(..)) {
-            // Resolution failed; bail out with a wildcard so downstream
-            // can keep going. Diagnostics already emitted by resolver.
+            // Resolution failed. Continue through every field subpattern so
+            // its bindings and per-pattern types survive recovery, but poison
+            // the bindings so their later uses do not produce cascades.
+            let error_ty = Ty::Error {
+                attr: TyAttr::default(),
+            };
+            let mut bindings = Vec::new();
+            for field in fields {
+                let result = self.analyze_and_lower(field.pat, &error_ty, body, at_expr);
+                bindings.extend(result.bindings.into_iter().map(|mut binding| {
+                    binding.ty = error_ty.clone();
+                    binding
+                }));
+            }
             return PatternResult {
                 dpat: DPat::wildcard(scrut_ty.clone()),
                 required_ty: Some(class_ty.clone()),
                 matched_ty: class_ty,
-                bindings: Vec::new(),
+                bindings,
             };
         }
         // Missing generic args on a destructure of a generic class:

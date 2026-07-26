@@ -150,6 +150,8 @@ pyvenv.cfg
 report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
 sample/baml_client/*target
 test_logs/**
+baml_language/sdk_tests/crates/parity_analysis.new.md
+/profiles/*.bamlprof
 tmp
 tmp/
 vendor/

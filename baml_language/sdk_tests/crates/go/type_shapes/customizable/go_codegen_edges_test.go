@@ -133,7 +133,7 @@ var (
 	}
 )
 
-func TestPrimitiveClassRoundTrip(t *testing.T) {
+func Test_primitive_class_round_trip(t *testing.T) {
 	want := baml_sdk.GoCodegenPrimitiveEdgesWirePrimitives{
 		StringValue: "wire",
 		IntValue:    42,
@@ -157,7 +157,7 @@ func TestPrimitiveClassRoundTrip(t *testing.T) {
 	}
 }
 
-func TestNestedClassRoundTrip(t *testing.T) {
+func Test_nested_class_round_trip(t *testing.T) {
 	want := baml_sdk.ClassRefsOuter{Inner: baml_sdk.ClassRefsInner{Value: 42}}
 	got, err := baml_sdk.ClassRefsRoundTripOuter(context.Background(), want)
 	if err != nil {
@@ -176,7 +176,7 @@ func TestNestedClassRoundTrip(t *testing.T) {
 	}
 }
 
-func TestOptionalTopLevelRoundTrips(t *testing.T) {
+func Test_optional_top_level_round_trips(t *testing.T) {
 	stringValue := "value"
 	intValue := int64(42)
 	bigintValue := new(big.Int).Lsh(big.NewInt(1), 80)
@@ -202,7 +202,7 @@ func TestOptionalTopLevelRoundTrips(t *testing.T) {
 	assertOptionalRoundTrip(t, baml_sdk.GoCodegenPrimitiveEdgesRoundTripOptionalClass, &classValue)
 }
 
-func TestNullableClassFieldsRoundTrip(t *testing.T) {
+func Test_nullable_class_fields_round_trip(t *testing.T) {
 	empty, err := baml_sdk.GoCodegenPrimitiveEdgesRoundTripNullableWire(
 		context.Background(),
 		baml_sdk.GoCodegenPrimitiveEdgesNullableWire{},
@@ -247,7 +247,7 @@ func TestNullableClassFieldsRoundTrip(t *testing.T) {
 	}
 }
 
-func TestNullableRecursiveClassesRoundTrip(t *testing.T) {
+func Test_nullable_recursive_classes_round_trip(t *testing.T) {
 	tree := baml_sdk.RecursionIntBinaryTree{
 		Value: 1,
 		Left:  &baml_sdk.RecursionIntBinaryTree{Value: 2},
@@ -274,7 +274,7 @@ func TestNullableRecursiveClassesRoundTrip(t *testing.T) {
 	}
 }
 
-func TestRequiredContainerRoundTrips(t *testing.T) {
+func Test_required_container_round_trips(t *testing.T) {
 	ints := []int64{1, 2, 3}
 	gotInts, err := baml_sdk.ListsRoundTripInts(context.Background(), ints)
 	if err != nil {
@@ -338,7 +338,7 @@ func TestRequiredContainerRoundTrips(t *testing.T) {
 	}
 }
 
-func TestNullableContainerBoundariesRoundTrip(t *testing.T) {
+func Test_nullable_container_boundaries_round_trip(t *testing.T) {
 	if got, err := baml_sdk.GoCodegenPrimitiveEdgesRoundTripOptionalList(context.Background(), nil); err != nil || got != nil {
 		t.Fatalf("null list round trip = %#v, %v", got, err)
 	}
@@ -395,7 +395,7 @@ func TestNullableContainerBoundariesRoundTrip(t *testing.T) {
 	assertOptionalRoundTrip(t, baml_sdk.GoCodegenPrimitiveEdgesRoundTripRepeatedNull, &text)
 }
 
-func TestNullableContainerFieldsRoundTrip(t *testing.T) {
+func Test_nullable_container_fields_round_trip(t *testing.T) {
 	text := "present"
 	integer := int64(7)
 	list := []string{"one", "two"}
@@ -428,7 +428,7 @@ func TestNullableContainerFieldsRoundTrip(t *testing.T) {
 	}
 }
 
-func TestEverySupportedLeafThroughListsAndMaps(t *testing.T) {
+func Test_every_supported_leaf_through_lists_and_maps(t *testing.T) {
 	stringValue := "optional"
 	intValue := int64(8)
 	floatValue := 2.5
@@ -486,7 +486,7 @@ func TestEverySupportedLeafThroughListsAndMaps(t *testing.T) {
 	}
 }
 
-func TestContainerRecursiveClassRoundTrip(t *testing.T) {
+func Test_container_recursive_class_round_trip(t *testing.T) {
 	want := baml_sdk.GoCodegenPrimitiveEdgesContainerTree{
 		Value: 1,
 		Children: []baml_sdk.GoCodegenPrimitiveEdgesContainerTree{
@@ -508,7 +508,7 @@ func TestContainerRecursiveClassRoundTrip(t *testing.T) {
 	}
 }
 
-func TestDeclaredEnumFunctionsAndClassRoundTrip(t *testing.T) {
+func Test_declared_enum_functions_and_class_round_trip(t *testing.T) {
 	positive, err := baml_sdk.EnumsPickSentiment(context.Background(), true)
 	if err != nil || positive != baml_sdk.EnumsSentimentPositive {
 		t.Fatalf("PickSentiment(true) = %q, %v", positive, err)
@@ -555,7 +555,7 @@ func TestDeclaredEnumFunctionsAndClassRoundTrip(t *testing.T) {
 	}
 }
 
-func TestEnumCompositionMatrixRoundTrip(t *testing.T) {
+func Test_enum_composition_matrix_round_trip(t *testing.T) {
 	pending := baml_sdk.GoCodegenEnumEdgesResponseStatePendingReview
 	accepted := baml_sdk.GoCodegenEnumEdgesResponseStateAccepted
 	httpError := baml_sdk.GoCodegenEnumEdgesResponseStateHTTPError
@@ -604,7 +604,7 @@ func TestEnumCompositionMatrixRoundTrip(t *testing.T) {
 	)
 }
 
-func TestDefaultedEnumArgumentAndInvalidValues(t *testing.T) {
+func Test_defaulted_enum_argument_and_invalid_values(t *testing.T) {
 	pending := baml_sdk.GoCodegenEnumEdgesResponseStatePendingReview
 	httpError := baml_sdk.GoCodegenEnumEdgesResponseStateHTTPError
 
@@ -644,7 +644,7 @@ func TestDefaultedEnumArgumentAndInvalidValues(t *testing.T) {
 	}
 }
 
-func TestEnumPackageScopeCollisionsCompileAndRun(t *testing.T) {
+func Test_enum_package_scope_collisions_compile_and_run(t *testing.T) {
 	_ = baml_sdk.GoCodegenEnumEdgesCollisionItem_737da72b
 	_ = baml_sdk.GoCodegenEnumEdgesCollisionItem_3b21dc73{}
 	got, err := baml_sdk.GoCodegenEnumEdgesCollisionItem_40cc0a70(context.Background())
@@ -653,7 +653,7 @@ func TestEnumPackageScopeCollisionsCompileAndRun(t *testing.T) {
 	}
 }
 
-func TestTransparentAliasFunctionsRoundTrip(t *testing.T) {
+func Test_transparent_alias_functions_round_trip(t *testing.T) {
 	list := baml_sdk.AliasesStringList{"first", "second"}
 	gotList, err := baml_sdk.AliasesRoundTripStringList(context.Background(), list)
 	if err != nil || !reflect.DeepEqual(gotList, list) {
@@ -715,7 +715,7 @@ func TestTransparentAliasFunctionsRoundTrip(t *testing.T) {
 	}
 }
 
-func TestAliasContainerCompositionAndDefaults(t *testing.T) {
+func Test_alias_container_composition_and_defaults(t *testing.T) {
 	pending := baml_sdk.GoCodegenAliasEdgesState(
 		baml_sdk.GoCodegenEnumEdgesResponseStatePendingReview,
 	)
@@ -773,7 +773,7 @@ func TestAliasContainerCompositionAndDefaults(t *testing.T) {
 	}
 }
 
-func TestAliasPackageScopeCollisionsCompileAndRun(t *testing.T) {
+func Test_alias_package_scope_collisions_compile_and_run(t *testing.T) {
 	_ = baml_sdk.GoCodegenAliasEdgesCollisionItem_ea5961c6("alias")
 	_ = baml_sdk.GoCodegenAliasEdgesCollisionItem_f279d073
 	got, err := baml_sdk.GoCodegenAliasEdgesCollisionItem_77850bc8(context.Background())

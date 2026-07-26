@@ -52,7 +52,7 @@ from baml_sdk.generic_tests import (
 # --- identity<T>(x: T) -> T : single TypeVar --------------------------------
 
 
-def test_identity_explicit():
+def test_generic_calls_identity_explicit():
     assert identity[int](5) == 5
     assert identity[str]("hi") == "hi"
 
@@ -70,7 +70,7 @@ def test_identity_explicit():
     assert identity[GenericTriple[GenericBox[str], float, bool]](triple) == triple
 
 
-async def test_identity_async_explicit():
+async def test_generic_calls_identity_async_explicit():
     from baml_sdk.generic_tests import identity_async
 
     assert await identity_async[int](7) == 7
@@ -79,7 +79,7 @@ async def test_identity_async_explicit():
 # --- tag_or_value<T>(x: T | string | null) -> string : TypeVar in a union ---
 
 
-def test_tag_or_value_explicit():
+def test_generic_calls_tag_or_value_explicit():
     # `tag_or_value` reflects its bound `T` back as a string; `x` must inhabit
     # the substituted `T | string | null`. Proves `T` is bound from the
     # subscript.
@@ -92,7 +92,7 @@ def test_tag_or_value_explicit():
 # --- make_triple<A, B, C>(...) -> GenericTriple<A, B, C> : multiple TypeVars -
 
 
-def test_make_triple_explicit():
+def test_generic_calls_make_triple_explicit():
     # A=int, B=str, C=bool, bound positionally by the subscript.
     t = make_triple[int, str, bool](1, ["a", "b"], {"k": True})
     assert isinstance(t, GenericTriple)
@@ -106,7 +106,7 @@ def test_make_triple_explicit():
 # cleanest proof the inbound path does not rely on argument inference.
 
 
-def test_one_type_arg_explicit():
+def test_generic_calls_one_type_arg_explicit():
     assert one_type_arg[int]() == "int"
     assert one_type_arg[str]() == "string"
     # Nested generic binding must encode fully (base class + concrete arg).
@@ -114,11 +114,11 @@ def test_one_type_arg_explicit():
     assert "GenericBox" in nested and "int" in nested
 
 
-def test_two_type_args_explicit():
+def test_generic_calls_two_type_args_explicit():
     assert two_type_args[int, str]() == "int | string"
 
 
-def test_generic_free_fn_requires_binding():
+def test_generic_calls_generic_free_fn_requires_binding():
     # Inbound-inference is now on, so a bare generic call no longer raises in the
     # SDK. But `one_type_arg<T>()` / `two_type_args<A,B>()` are return/body-only:
     # NO argument carries the TypeVar, so inference finds no evidence and the
@@ -138,7 +138,7 @@ def test_generic_free_fn_requires_binding():
     assert "could not infer a type" in str(exc_two.value)
 
 
-def test_subscript_wrong_arity_raises():
+def test_generic_calls_subscript_wrong_arity_raises():
     with pytest.raises(TypeError) as exc:
         two_type_args[int]()  # needs two type args
     assert str(exc.value) == "expected 2 type argument(s) for ['A', 'B'], got 1"
@@ -152,7 +152,7 @@ def test_subscript_wrong_arity_raises():
 # --- consume_int_wrapper(x: GenericBox<int>) -> int : fully-bound TypeVar ----
 
 
-def test_consume_int_wrapper_baseline():
+def test_generic_calls_consume_int_wrapper_baseline():
     # No binding of any kind: a concretely-instantiated `GenericBox<int>` flows
     # in and the `int` field flows back out. Anchors the suite — if this breaks,
     # the generic *class* boundary regressed independent of TypeVar binding.
@@ -164,7 +164,7 @@ def test_consume_int_wrapper_baseline():
 # so there's nothing to subscript — `T` rides on the parameterized receiver.
 
 
-def test_genericbox_get_explicit():
+def test_generic_calls_genericbox_get_explicit():
     # `GenericBox[int](...)` carries the type arg; the host recovers it from the
     # receiver and seeds it as the method frame's class-level `T`.
     b = GenericBox[int](value=5)
@@ -174,7 +174,7 @@ def test_genericbox_get_explicit():
 # --- GenericBox<T>.pair_with<U>(self, other: U) -> string : class T + method U
 
 
-def test_genericbox_pair_with_explicit():
+def test_generic_calls_genericbox_pair_with_explicit():
     # `T` from the `GenericBox[int]` receiver, `U` from the method subscript.
     b = GenericBox[int](value=5)
     assert b.pair_with[str]("hello world") == "int | string"
@@ -185,13 +185,13 @@ def test_genericbox_pair_with_explicit():
 # class type args ride along.
 
 
-def test_genericbox_new_static_explicit():
+def test_generic_calls_genericbox_new_static_explicit():
     box = GenericBox.new[int](value=5)
     assert isinstance(box, GenericBox)
     assert box.value == 5
 
 
-def test_generic_static_infers_binding():
+def test_generic_calls_generic_static_infers_binding():
     # A generic static method's own `V` appears in a parameter (`value: V`), so
     # a bare call now INFERS it from the value — no subscript needed. (Was a hard
     # SDK error pre-inference; see test_generic_inference.py for the inference
@@ -207,7 +207,7 @@ def test_generic_static_infers_binding():
 # case the named wire exists for (01pt5).
 
 
-def test_named_static_distinct_typevar_names():
+def test_generic_calls_named_static_distinct_typevar_names():
     assert NamedStatic.make[int, str](1, "x") == "int | string"
 
 
@@ -215,7 +215,7 @@ def test_named_static_distinct_typevar_names():
 # receiver must raise (the class TypeVars can't be recovered).
 
 
-def test_instance_method_unparameterized_receiver_raises():
+def test_generic_calls_instance_method_unparameterized_receiver_raises():
     # `GenericBox(value=5)` (no `[int]`) carries no concrete class type args, so
     # `pair_with`'s class `T` can't be recovered host-side.
     with pytest.raises(TypeError) as exc:
@@ -230,7 +230,7 @@ def test_instance_method_unparameterized_receiver_raises():
 # Nested generic. Binding-sensitive: body is `reflect.type_of<A|B|C|D>()`.
 
 
-def test_extract_explicit():
+def test_generic_calls_extract_explicit():
     pair = GenericPair[GenericPair[int, str], GenericPair[bool, float]](
         first=GenericPair[int, str](first=1, second="a"),
         second=GenericPair[bool, float](first=True, second=1.5),
@@ -246,7 +246,7 @@ def test_extract_explicit():
 # --- parse_as<T>(source: string) -> T : return-position-only TypeVar --------
 
 
-def test_parse_as_explicit():
+def test_generic_calls_parse_as_explicit():
     # `T` bound by the host via the subscript (Python surface for `$types`).
     pair = parse_as[StringIntPair]('{"my_string": "x", "my_int": 3}')
     assert pair == StringIntPair(my_string="x", my_int=3)
@@ -261,7 +261,7 @@ def test_parse_as_explicit():
 # --- second_of<T>(p: GenericPair<int, T>) -> T : partially-bound class param -
 
 
-def test_second_of_explicit():
+def test_generic_calls_second_of_explicit():
     assert second_of[str](GenericPair[int, str](first=1, second="hi")) == "hi"
     pair = StringIntPair(my_string="z", my_int=9)
     p = GenericPair[int, StringIntPair](first=0, second=pair)
@@ -271,7 +271,7 @@ def test_second_of_explicit():
 # --- list_head<T>(list: GenericRecursive<T>) -> T : recursive generic arg ----
 
 
-def test_list_head_explicit():
+def test_generic_calls_list_head_explicit():
     linked_list = GenericRecursive[int](
         value=7, next=GenericRecursive[int](value=8, next=None)
     )
@@ -281,7 +281,7 @@ def test_list_head_explicit():
 # --- choose<T>(left: T, right: T) -> T : unification across two args ---------
 
 
-def test_choose_explicit():
+def test_generic_calls_choose_explicit():
     assert choose[int](1, 2) == 1
     assert choose[str]("a", "b") == "a"
 
@@ -289,7 +289,7 @@ def test_choose_explicit():
 # --- read_items<T>(shape: ContainerShapes<T>) -> T[] : one T, many fields ----
 
 
-def test_read_items_explicit():
+def test_generic_calls_read_items_explicit():
     container = ContainerShapes[int](
         item=1,
         items=[1, 2, 3],
@@ -308,7 +308,7 @@ def test_read_items_explicit():
 # --- wrap<T>(x: T) -> GenericBox<T> : bind `T`, return a generic over it ------
 
 
-def test_wrap_explicit():
+def test_generic_calls_wrap_explicit():
     w = wrap[int](5)
     assert isinstance(w, GenericBox)
     assert w.value == 5
@@ -337,7 +337,7 @@ def _type_args(obj):
 # --- make_int_box() -> GenericBox<int> : one TypeVar, used once -------------
 
 
-def test_make_int_box_reified():
+def test_generic_calls_make_int_box_reified():
     box = make_int_box()
     assert isinstance(box, GenericBox)
     assert _type_args(box) == (int,)
@@ -349,7 +349,7 @@ def test_make_int_box_reified():
 # optional, union) — the host must decode all of them off one instance.
 
 
-def test_make_int_container_reified():
+def test_generic_calls_make_int_container_reified():
     c = make_int_container()
     assert isinstance(c, ContainerShapes)
     assert _type_args(c) == (int,)
@@ -365,7 +365,7 @@ def test_make_int_container_reified():
 # GenericBox out of the outer one's field.
 
 
-def test_make_nested_box_reified():
+def test_generic_calls_make_nested_box_reified():
     outer = make_nested_box()
     assert isinstance(outer, GenericBox)
     # The outer box's single type arg is itself the parametrized `GenericBox[int]`.
@@ -380,7 +380,7 @@ def test_make_nested_box_reified():
 # bool-valued map.
 
 
-def test_make_int_str_bool_triple_reified():
+def test_generic_calls_make_int_str_bool_triple_reified():
     t = make_int_str_bool_triple()
     assert isinstance(t, GenericTriple)
     assert _type_args(t) == (int, str, bool)

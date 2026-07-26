@@ -48,7 +48,7 @@ class TestHandles {
     // --- media: Image.from_base64 -------------------------------------------
 
     @Test
-    void test_image_from_base64_roundtrips_payload() {
+    void test_handles_image_from_base64_roundtrips_payload() {
         Image img = Image.from_base64(PNG_B64, "image/png");
         assertEquals("image/png", img.mime_type());
         assertEquals(PNG_B64, img.base64());
@@ -60,7 +60,7 @@ class TestHandles {
             "hello from localhost".getBytes(StandardCharsets.UTF_8);
 
     @Test
-    void test_http_get_response_fields_and_methods() throws IOException {
+    void test_handles_http_get_response_fields_and_methods() throws IOException {
         HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
         server.createContext(
                 "/",
@@ -86,7 +86,7 @@ class TestHandles {
     // --- baml.fs.File: cursor state preserved across calls --------------------
 
     @Test
-    void test_open_file_returns_file_handle() throws IOException {
+    void test_handles_open_file_returns_file_handle() throws IOException {
         Path dir = Files.createTempDirectory("baml-handles-test");
         Path path = dir.resolve("digits.txt");
         Files.writeString(path, "0123456789");
@@ -104,7 +104,7 @@ class TestHandles {
     }
 
     @Test
-    void test_file_cursor_state_persists_across_calls() throws IOException {
+    void test_handles_file_cursor_state_persists_across_calls() throws IOException {
         Path dir = Files.createTempDirectory("baml-handles-test");
         Path path = dir.resolve("digits.txt");
         Files.writeString(path, "0123456789");

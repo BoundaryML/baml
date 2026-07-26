@@ -31,7 +31,7 @@ const clip = (
 
 const OS_OPTS: Opt[] = [
   {
-    cmd: 'brew install boundaryml/tap/baml',
+    cmd: 'brew install baml',
     icon: (
       <svg
         aria-hidden="true"
@@ -183,7 +183,7 @@ const ENV_OPTS: Opt[] = [
 const PROMPT = `Set up BAML in this repo so I can write great agent first code.
 
 Install the toolchain (pick one for this machine):
-- Homebrew (macOS/Linux): \`brew install boundaryml/tap/baml\`
+- Homebrew (macOS/Linux): \`brew install baml\`
 - curl (macOS/Linux): \`curl -fsSL https://pkg.boundaryml.com/install.sh | sh -s\`
 - Arch: \`yay -S baml-bin\`
 - Windows: \`irm https://pkg.boundaryml.com/install.ps1 | iex\`

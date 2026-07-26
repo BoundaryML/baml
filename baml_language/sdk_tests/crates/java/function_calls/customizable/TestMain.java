@@ -12,12 +12,12 @@ import org.junit.jupiter.api.Test;
 class TestMain {
 
     @Test
-    void test_hello_world_returns_literal() {
+    void test_main_hello_world_returns_literal() {
         assertEquals("hello world", Fns.hello_world());
     }
 
     @Test
-    void test_single_required_arg_round_trips() {
+    void test_main_single_required_arg_round_trips() {
         // The next step up from the nullary case: one required positional
         // argument round-trips through the engine unchanged.
         assertEquals("hi", Fns.single_required_arg("hi"));

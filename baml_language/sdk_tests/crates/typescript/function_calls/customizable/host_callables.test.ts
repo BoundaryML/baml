@@ -24,13 +24,13 @@ import {
 import { isTestRuntime } from "./test_runtime.js";
 
 describe("function_calls — generated SDK host callables", () => {
-  it("passes a plain function callback and returns a string", async () => {
+  it("host_callables_simple_sync_callable_returns_string", async () => {
     const cb = (x: number) => `got ${x}`;
 
     await expect(call_with_callback_async(cb, 5)).resolves.toBe("got 5");
   });
 
-  it("unpacks two callback args positionally", async () => {
+  it("host_callables_two_arg_callable_unpacks_positional_args", async () => {
     const cb = (x: number, prefix: string) => `${prefix}:${x}`;
 
     await expect(call_with_two_args_async(cb, 7, "answer")).resolves.toBe(
@@ -38,13 +38,13 @@ describe("function_calls — generated SDK host callables", () => {
     );
   });
 
-  it("round-trips an int callback return value", async () => {
+  it("host_callables_int_return_callable_round_trip", async () => {
     const cb = (x: number) => x * 2;
 
     await expect(call_int_callback_async(cb, 21)).resolves.toBe(42);
   });
 
-  it("surfaces a throwing callback as a BAML error", async () => {
+  it("host_callables_surfaces_a_throwing_callback_as_a_baml_error", async () => {
     const cb = (_x: number): string => {
       throw new Error("nope");
     };
@@ -52,13 +52,13 @@ describe("function_calls — generated SDK host callables", () => {
     await expect(call_with_callback_async(cb, 1)).rejects.toThrow(/nope|Error/);
   });
 
-  it("preserves same-realm thrown object identity", async () => {
+  it("host_callables_preserves_same_realm_thrown_object_identity", async () => {
     const thrown = new Error("same object");
     const callback = (): string => { throw thrown; };
     await expect(call_with_throwing_propagating_async(callback, 1)).rejects.toBe(thrown);
   });
 
-  it("preserves arbitrary thrown JS values without hanging", async () => {
+  it("host_callables_preserves_arbitrary_thrown_js_values_without_hanging", async () => {
     const values: unknown[] = [
       new Error("ordinary error"),
       "string failure",
@@ -78,7 +78,7 @@ describe("function_calls — generated SDK host callables", () => {
     }
   });
 
-  it("preserves an Error whose stack is not a string", async () => {
+  it("host_callables_preserves_an_error_whose_stack_is_not_a_string", async () => {
     const thrown = new Error("non-string stack");
     Object.defineProperty(thrown, "stack", { value: { frames: ["host"] } });
     const callback = (): string => { throw thrown; };
@@ -86,7 +86,7 @@ describe("function_calls — generated SDK host callables", () => {
     await expect(call_with_throwing_propagating_async(callback, 1)).rejects.toBe(thrown);
   });
 
-  it("completes through the metadata fallback for a hostile thrown object", async () => {
+  it("host_callables_completes_through_the_metadata_fallback_for_a_hostile_thrown_object", async () => {
     const thrown = new Proxy({}, {
       get(_target, property) {
         if (property === "constructor" || property === "toString") throw new Error("hostile getter");
@@ -98,14 +98,14 @@ describe("function_calls — generated SDK host callables", () => {
     await expect(call_with_throwing_propagating_async(callback, 1)).rejects.toBeInstanceOf(BamlError);
   });
 
-  it("preserves a rejected Promise reason by identity", async () => {
+  it("host_callables_preserves_a_rejected_promise_reason_by_identity", async () => {
     const thrown = { reason: "rejected Promise" };
     const callback = ((_value: number) => Promise.reject(thrown)) as unknown as (value: number) => string;
 
     await expect(call_with_throwing_propagating_async(callback, 1)).rejects.toBe(thrown);
   });
 
-  it("round-trips a typed BamlError through typed catch and propagation", async () => {
+  it("host_callables_round_trips_a_typed_baml_error_through_typed_catch_and_propagation", async () => {
     const typedValue = new ValidationError({ code: 422, message: "invalid profile", fields: ["name"] });
     const callback = (): string => { throw new BamlError("validation failed", { value: typedValue }); };
 
@@ -120,7 +120,7 @@ describe("function_calls — generated SDK host callables", () => {
     }
   });
 
-  it("surfaces a wrong callback return type as HostContractViolation", async () => {
+  it("host_callables_surfaces_a_wrong_callback_return_type_as_host_contract_violation", async () => {
     const callback = ((_value: number) => "not an int") as unknown as (value: number) => number;
 
     try {
@@ -132,7 +132,7 @@ describe("function_calls — generated SDK host callables", () => {
     }
   });
 
-  it("adopts a custom thenable exactly once", async () => {
+  it("host_callables_adopts_a_custom_thenable_exactly_once", async () => {
     let settlements = 0;
     const callback = (value: number): string => ({
       then(resolve: (result: string) => void, reject: (reason: unknown) => void) {
@@ -145,7 +145,7 @@ describe("function_calls — generated SDK host callables", () => {
     expect(settlements).toBe(1);
   });
 
-  it.runIf(isTestRuntime("web"))("adopts a Promise from a separate browser realm", async () => {
+  it.runIf(isTestRuntime("web"))("host_callables_adopts_a_promise_from_a_separate_browser_realm", async () => {
     type ForeignIframe = { contentWindow: { Promise: PromiseConstructor } | null; remove(): void };
     type BrowserDocument = { createElement(name: "iframe"): ForeignIframe; body: { append(value: ForeignIframe): void } };
     const browserDocument = (globalThis as unknown as { document: BrowserDocument }).document;
@@ -161,17 +161,17 @@ describe("function_calls — generated SDK host callables", () => {
     }
   });
 
-  it("returns and invokes a nested host callable", async () => {
+  it("host_callables_returns_and_invokes_a_nested_host_callable", async () => {
     const factory = () => (value: number) => `nested-${value}`;
     await expect(call_returned_callback_async(factory, 6)).resolves.toBe("nested-6");
   });
 
-  it("returns and invokes a host callable nested in a list", async () => {
+  it("host_callables_returns_and_invokes_a_host_callable_nested_in_a_list", async () => {
     const factory = () => [(value: number) => `nested-list-${value}`];
     await expect(call_returned_callback_in_list_async(factory, 7)).resolves.toBe("nested-list-7");
   });
 
-  it("completes a pending host call after runtime replacement", async () => {
+  it("host_callables_completes_a_pending_host_call_after_runtime_replacement", async () => {
     let resolveResult!: (value: string) => void;
     let dispatched!: () => void;
     const wasDispatched = new Promise<void>((resolve) => { dispatched = resolve; });
@@ -187,7 +187,7 @@ describe("function_calls — generated SDK host callables", () => {
     await expect(pending).resolves.toBe("after-replacement");
   });
 
-  it("ignores a host Promise settlement after its outer call is cancelled", async () => {
+  it("host_callables_ignores_a_host_promise_settlement_after_its_outer_call_is_cancelled", async () => {
     const ctx = new BamlCallContext();
     let settle!: (value: string) => void;
     let dispatched!: () => void;
@@ -206,7 +206,7 @@ describe("function_calls — generated SDK host callables", () => {
     await expect(call_with_callback_async((value) => `later-${value}`, 11)).resolves.toBe("later-11");
   });
 
-  it("cancels through the originating runtime after runtime replacement", async () => {
+  it("host_callables_cancels_through_the_originating_runtime_after_runtime_replacement", async () => {
     const ctx = new BamlCallContext();
     let settle!: (value: string) => void;
     let dispatched!: () => void;
@@ -225,7 +225,8 @@ describe("function_calls — generated SDK host callables", () => {
   });
 
   // FinalizationRegistry scheduling is nondeterministic and the runners do not expose forced GC; deterministic registry release is covered by the raw Web bridge tests.
-  it.skip("releases callable objects after the engine drops the HostClosure", async () => {
+  // SDK_PARITY_LINT(skip): callable release coverage depends on host weak-reference support and remains nondeterministic
+  it.skip("host_callables_release_fires_on_drop_of_callable", async () => {
     async function callAndDrop(): Promise<WeakRef<object>> {
       let cb: ((x: number) => string) | undefined = (x: number) => `${x}`;
       const ref = new WeakRef(cb);
@@ -239,13 +240,13 @@ describe("function_calls — generated SDK host callables", () => {
     expect(ref.deref()).toBeUndefined();
   });
 
-  it("round-trips an arrow function callback", async () => {
+  it("host_callables_round_trips_an_arrow_function_callback", async () => {
     await expect(
       call_with_callback_async((x: number) => `lambda-${x}`, 99),
     ).resolves.toBe("lambda-99");
   });
 
-  it("awaits a Promise-returning callback", async () => {
+  it("host_callables_awaits_a_promise_returning_callback", async () => {
     const cb = async (x: number): Promise<string> => {
       await new Promise<void>((resolve) => setTimeout(resolve, 0));
       return `async-${x}`;
@@ -256,7 +257,7 @@ describe("function_calls — generated SDK host callables", () => {
     ).resolves.toBe("async-4");
   });
 
-  it("keeps multiple callback registry keys distinct", async () => {
+  it("host_callables_multiple_callable_keys_are_distinct", async () => {
     const counter = { a: 0, b: 0 };
     const cbA = (x: number) => {
       counter.a += 1;
@@ -272,7 +273,7 @@ describe("function_calls — generated SDK host callables", () => {
     expect(counter).toEqual({ a: 1, b: 1 });
   });
 
-  it("passes a generated class instance into the callback", async () => {
+  it("host_callables_passes_a_generated_class_instance_into_the_callback", async () => {
     const cb = (p: Person) => {
       expect(p).toBeInstanceOf(Person);
       return `${p.name} is ${p.age}`;
@@ -284,7 +285,7 @@ describe("function_calls — generated SDK host callables", () => {
     );
   });
 
-  it("invokes the callback once per BAML loop iteration", async () => {
+  it("host_callables_call_repeatedly_invokes_callback_n_times", async () => {
     const invocations: number[] = [];
     const cb = (x: number) => {
       invocations.push(x);
@@ -301,7 +302,7 @@ describe("function_calls — generated SDK host callables", () => {
     expect(invocations).toEqual([0, 1, 2, 3, 4]);
   });
 
-  it("does not invoke the callback for a zero-iteration loop", async () => {
+  it("host_callables_call_repeatedly_with_zero_n_returns_empty_list", async () => {
     const invocations: number[] = [];
     const cb = (x: number) => {
       invocations.push(x);
@@ -312,7 +313,7 @@ describe("function_calls — generated SDK host callables", () => {
     expect(invocations).toEqual([]);
   });
 
-  it("catches a host-callable throw in the BAML catch arm", async () => {
+  it("host_callables_call_with_throwing_in_baml_catches_host_callable_error", async () => {
     // The fixture's body is `callback(x) catch (e) { _ => "caught:" + e.class_name }`.
     // Now that sysop throws are injected into the VM's exception unwinder, the
     // BAML `catch` actually fires and the function resolves to the caught
@@ -327,7 +328,7 @@ describe("function_calls — generated SDK host callables", () => {
 });
 
 describe("function_calls — generated SDK sync guard for host callables", () => {
-  it("rejects callable args on the generated sync path instead of hanging", { timeout: 2_000 }, () => {
+  it("host_callables_rejects_callable_args_on_the_generated_sync_path_instead_of_hanging", { timeout: 2_000 }, () => {
     expect(() => call_with_callback((x: number) => `got ${x}`, 5)).toThrow(
       /host callable/i,
     );
@@ -352,7 +353,7 @@ describe("function_calls — optional-arg host callables (the combination)", () 
   const cb = (x: number, $opts?: { y?: number; z?: number }) =>
     x * 100 + ($opts?.y ?? 8) * 10 + ($opts?.z ?? 9);
 
-  it("omits both optionals so the callback's own defaults apply", async () => {
+  it("host_callables_omits_both_optionals_so_the_callback_s_own_defaults_apply", async () => {
     // `callback(x)` supplies neither optional; both are dropped before dispatch,
     // so the callback runs with no `$opts` object and its own `?? 8` / `?? 9`
     // fill them, yielding `5*100 + 8*10 + 9 = 589`.
@@ -361,7 +362,7 @@ describe("function_calls — optional-arg host callables (the combination)", () 
     ).resolves.toEqual([589]);
   });
 
-  it("delivers a single supplied optional by name, defaulting the rest", async () => {
+  it("host_callables_delivers_a_single_supplied_optional_by_name_defaulting_the_rest", async () => {
     // Two calls each supplying exactly one optional: `callback(x, y = 2)`
     // (→ 500 + 20 + 9 = 529) then `callback(x, z = 3)` (→ 500 + 80 + 3 = 583).
     // Optionals cross by name, so each supplied value lands in `$opts` and the
@@ -372,7 +373,7 @@ describe("function_calls — optional-arg host callables (the combination)", () 
     ).resolves.toEqual([529, 583]);
   });
 
-  it("delivers both supplied optionals in one $opts object", async () => {
+  it("host_callables_delivers_both_supplied_optionals_in_one_opts_object", async () => {
     // `callback(x, y = 2, z = 3)` supplies both optionals; both arrive in `$opts`
     // and override the callback's defaults.
     await expect(

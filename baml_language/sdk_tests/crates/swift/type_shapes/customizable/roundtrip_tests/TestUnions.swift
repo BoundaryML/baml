@@ -11,35 +11,35 @@ import Baml
 import BamlBridge
 
 final class TestUnions: XCTestCase {
-    func test_round_trip_null_to_end() throws {
+    func test_unions_round_trip_null_to_end() throws {
         XCTAssertEqual(try Baml.unions.round_trip_null_to_end(u: .t0(1)), .t0(1))
         XCTAssertEqual(try Baml.unions.round_trip_null_to_end(u: .t1("s")), .t1("s"))
         XCTAssertNil(try Baml.unions.round_trip_null_to_end(u: nil))
     }
 
-    func test_round_trip_dedup() throws {
+    func test_unions_round_trip_dedup() throws {
         // `int | int | string` dedups upstream: same BamlUnion2.
         XCTAssertEqual(try Baml.unions.round_trip_dedup(u: .t0(2)), .t0(2))
         XCTAssertEqual(try Baml.unions.round_trip_dedup(u: .t1("x")), .t1("x"))
     }
 
-    func test_round_trip_singleton_unwrap() throws {
+    func test_unions_round_trip_singleton_unwrap() throws {
         // `int | int` collapses to plain `Int` — no union type at all.
         XCTAssertEqual(try Baml.unions.round_trip_singleton_unwrap(u: 7), 7)
     }
 
-    func test_round_trip_optional_plus_null() throws {
+    func test_unions_round_trip_optional_plus_null() throws {
         let t = Baml.unions.T(v: 1)
         XCTAssertEqual(try Baml.unions.round_trip_optional_plus_null(u: .t0(t)), .t0(t))
         XCTAssertEqual(try Baml.unions.round_trip_optional_plus_null(u: .t1("s")), .t1("s"))
         XCTAssertNil(try Baml.unions.round_trip_optional_plus_null(u: nil))
     }
 
-    func test_round_trip_t() throws {
+    func test_unions_round_trip_t() throws {
         XCTAssertEqual(try Baml.unions.round_trip_t(t: Baml.unions.T(v: 4)), Baml.unions.T(v: 4))
     }
 
-    func test_round_trip_union_container() throws {
+    func test_unions_round_trip_union_container() throws {
         let c = Baml.unions.UnionContainer(
             null_to_end: nil,
             dedup: .t1("d"),
@@ -58,7 +58,7 @@ final class TestUnions: XCTestCase {
     }
 
     // Swift-specific: the three consumption tiers over one result.
-    func test_consumption_surfaces() throws {
+    func test_unions_consumption_surfaces() throws {
         let result = try Baml.unions.round_trip_dedup(u: .init("hi"))  // type-directed init
 
         // 1. Exhaustive native switch (compiler-checked coverage).

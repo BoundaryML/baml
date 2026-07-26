@@ -36,7 +36,7 @@ import org.junit.jupiter.api.Test;
 class TestUnions {
 
     @Test
-    void test_round_trip_null_to_end() {
+    void test_unions_round_trip_null_to_end() {
         assertEquals(
                 new Union2.Arm0<Long, String>(1L),
                 Fns.round_trip_null_to_end(new Union2.Arm0<Long, String>(1L)));
@@ -47,7 +47,7 @@ class TestUnions {
     }
 
     @Test
-    void test_round_trip_dedup() {
+    void test_unions_round_trip_dedup() {
         assertEquals(
                 new Union2.Arm0<Long, String>(2L),
                 Fns.round_trip_dedup(new Union2.Arm0<Long, String>(2L)));
@@ -57,14 +57,14 @@ class TestUnions {
     }
 
     @Test
-    void test_round_trip_singleton_unwrap() {
+    void test_unions_round_trip_singleton_unwrap() {
         // `int | int` collapses to plain `int` after dedup — no union
         // wrapper.
         assertEquals(7L, Fns.round_trip_singleton_unwrap(7L));
     }
 
     @Test
-    void test_round_trip_optional_plus_null() {
+    void test_unions_round_trip_optional_plus_null() {
         assertEquals(
                 new Union2.Arm0<T, String>(new T(1L)),
                 Fns.round_trip_optional_plus_null(new Union2.Arm0<T, String>(new T(1L))));
@@ -75,7 +75,7 @@ class TestUnions {
     }
 
     @Test
-    void test_round_trip_str_or_int_list() {
+    void test_unions_round_trip_str_or_int_list() {
         // Differently-typed list arms: the generated arm wrapper selects the
         // contextual list type. The encoder places that exact type on the list
         // node, so neither non-empty nor empty values depend on element inference.
@@ -100,12 +100,12 @@ class TestUnions {
     }
 
     @Test
-    void test_round_trip_t() {
+    void test_unions_round_trip_t() {
         assertEquals(new T(4L), Fns.round_trip_t(new T(4L)));
     }
 
     @Test
-    void test_round_trip_union_container() {
+    void test_unions_round_trip_union_container() {
         UnionContainer c =
                 new UnionContainer(
                         null,

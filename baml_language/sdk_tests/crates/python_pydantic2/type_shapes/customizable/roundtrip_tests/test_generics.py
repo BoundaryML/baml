@@ -23,27 +23,27 @@ from baml_sdk.generics import (
 )
 
 
-def test_round_trip_wrapper_int():
+def test_generics_round_trip_wrapper_int():
     w = Wrapper[int](value=5)
     assert round_trip_wrapper_int(w=w) == w
 
 
-def test_round_trip_generic_linked_list_int():
+def test_generics_round_trip_generic_linked_list_int():
     ll = GenericLinkedList[int](value=1, next=GenericLinkedList[int](value=2, next=None))
     assert round_trip_generic_linked_list_int(l=ll) == ll
 
 
-def test_round_trip_generic_binary_tree_int():
+def test_generics_round_trip_generic_binary_tree_int():
     t = GenericBinaryTree[int](value=1, left=None, right=None)
     assert round_trip_generic_binary_tree_int(t=t) == t
 
 
-def test_round_trip_box_int():
+def test_generics_round_trip_box_int():
     b = Box[int](value=3, wrapped=Wrapper[int](value=4))
     assert round_trip_box_int(b=b) == b
 
 
-def test_round_trip_nested_generics():
+def test_generics_round_trip_nested_generics():
     n = NestedGenerics(
         ww=Wrapper[Wrapper[int]](value=Wrapper[int](value=1)),
         wl=Wrapper[list](value=[1, 2]),
@@ -54,7 +54,7 @@ def test_round_trip_nested_generics():
     assert round_trip_nested_generics(n=n) == n
 
 
-def test_round_trip_differing_instantiation():
+def test_generics_round_trip_differing_instantiation():
     d = DifferingInstantiation(
         list=GenericLinkedList[Wrapper[int]](value=Wrapper[int](value=1), next=None)
     )

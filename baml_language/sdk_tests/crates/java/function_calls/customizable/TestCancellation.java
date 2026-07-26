@@ -73,17 +73,17 @@ class TestCancellation {
     }
 
     @Test
-    void test_sync_call_returns_none() {
+    void test_cancellation_sync_call_returns_none() {
         assertNull(Fns.SleepMs(1L));
     }
 
     @Test
-    void test_async_call_returns_none() {
+    void test_cancellation_async_call_returns_none() {
         assertNull(Fns.SleepMs_async(1L).join());
     }
 
     @Test
-    void test_sync_cancel_via_call_context() {
+    void test_cancellation_sync_cancel_via_call_context() {
         long start = System.nanoTime();
         BamlCallContext ctx = new BamlCallContext();
         Timer timer = new Timer();
@@ -108,7 +108,7 @@ class TestCancellation {
     }
 
     @Test
-    void test_async_cancel_via_call_context() {
+    void test_cancellation_async_cancel_via_call_context() {
         long start = System.nanoTime();
         BamlCallContext ctx = new BamlCallContext();
         CompletableFuture<Void> future = Fns.SleepMs_async(2000L, ctx);
@@ -126,7 +126,7 @@ class TestCancellation {
     }
 
     @Test
-    void test_async_cancel_via_task_cancel() {
+    void test_cancellation_async_cancel_via_task_cancel() {
         long start = System.nanoTime();
         CompletableFuture<Void> future = Fns.SleepMs_async(2000L);
 
@@ -138,7 +138,7 @@ class TestCancellation {
     }
 
     @Test
-    void test_async_cancel_via_task_group_sibling() {
+    void test_cancellation_async_cancel_via_task_group_sibling() {
         long start = System.nanoTime();
 
         CompletableFuture<Void> sleep = Fns.SleepMs_async(2000L);
@@ -168,7 +168,7 @@ class TestCancellation {
     }
 
     @Test
-    void test_async_cancel_via_asyncio_timeout() {
+    void test_cancellation_async_cancel_via_asyncio_timeout() {
         long start = System.nanoTime();
         CompletableFuture<Void> future = Fns.SleepMs_async(2000L);
 

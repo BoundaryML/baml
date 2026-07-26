@@ -22,7 +22,7 @@ import org.junit.jupiter.api.Test;
 class TestMethodsOnClasses {
 
     @Test
-    void test_method_bindings_exist() {
+    void test_methods_on_classes_method_bindings_exist() {
         // java-port note: Python asserts `callable(Greeter.create)` etc. on the
         // (un)bound attributes. The Java analog is that each binding resolves as
         // a method reference at compile time (static bindings hang off the class;
@@ -43,39 +43,39 @@ class TestMethodsOnClasses {
     }
 
     @Test
-    void test_static_create_round_trips() {
+    void test_methods_on_classes_static_create_round_trips() {
         Greeter g = Greeter.create("ada");
         assertInstanceOf(Greeter.class, g);
         assertEquals("ada", g.name());
     }
 
     @Test
-    void test_static_create_async_round_trips() {
+    void test_methods_on_classes_static_create_async_round_trips() {
         Greeter g = Greeter.create_async("grace").join();
         assertInstanceOf(Greeter.class, g);
         assertEquals("grace", g.name());
     }
 
     @Test
-    void test_instance_who_round_trips() {
+    void test_methods_on_classes_instance_who_round_trips() {
         Greeter g = Greeter.create("hopper");
         assertEquals("hopper", g.who());
     }
 
     @Test
-    void test_instance_who_async_round_trips() {
+    void test_methods_on_classes_instance_who_async_round_trips() {
         Greeter g = Greeter.create_async("hopper").join();
         assertEquals("hopper", g.who_async().join());
     }
 
     @Test
-    void test_instance_greet_with_arg_round_trips() {
+    void test_methods_on_classes_instance_greet_with_arg_round_trips() {
         Greeter g = Greeter.create("lovelace");
         assertEquals("hi", g.greet("hi"));
     }
 
     @Test
-    void test_instance_greet_async_with_arg_round_trips() {
+    void test_methods_on_classes_instance_greet_async_with_arg_round_trips() {
         Greeter g = Greeter.create_async("lovelace").join();
         assertEquals("hi", g.greet_async("hi").join());
     }

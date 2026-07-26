@@ -10,7 +10,7 @@ import (
 
 // Supported subset of the direct Python test_aliases.py port. Recursive aliases
 // and their containing class remain explicitly deferred with general unions.
-func TestRoundTripStringList(t *testing.T) {
+func Test_round_trip_string_list(t *testing.T) {
 	want := baml_sdk.AliasesStringList{"a", "b"}
 	got, err := baml_sdk.AliasesRoundTripStringList(context.Background(), want)
 	if err != nil || !reflect.DeepEqual(got, want) {

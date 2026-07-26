@@ -9,13 +9,13 @@ import XCTest
 import Baml
 
 final class TestForwardRefs: XCTestCase {
-    func test_round_trip_rec_list() throws {
+    func test_forward_refs_round_trip_rec_list() throws {
         // Python value [1, [2, 3]].
         let r: Baml.forward_refs.RecList = .t1([.t0(1), .t1([.t0(2), .t0(3)])])
         XCTAssertEqual(try Baml.forward_refs.round_trip_rec_list(r: r), r)
     }
 
-    func test_round_trip_rec_list_with_other() throws {
+    func test_forward_refs_round_trip_rec_list_with_other() throws {
         // RecListWithOther = int | Other | RecListWithOther[].
         XCTAssertEqual(
             try Baml.forward_refs.round_trip_rec_list_with_other(r: .t0(1)),
@@ -25,12 +25,12 @@ final class TestForwardRefs: XCTestCase {
         XCTAssertEqual(try Baml.forward_refs.round_trip_rec_list_with_other(r: listy), listy)
     }
 
-    func test_round_trip_other() throws {
+    func test_forward_refs_round_trip_other() throws {
         let o = Baml.forward_refs.Other(v: 7)
         XCTAssertEqual(try Baml.forward_refs.round_trip_other(o: o), o)
     }
 
-    func test_node_symbol_exists() {
+    func test_forward_refs_round_trip_node_symbol_exists() {
         // Compile-time analog of Python's import-only assertion for the
         // uninhabitable `Node` (required self-reference).
         _ = Baml.forward_refs.Node.self

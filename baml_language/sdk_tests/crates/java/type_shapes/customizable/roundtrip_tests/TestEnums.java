@@ -14,23 +14,23 @@ import org.junit.jupiter.api.Test;
 class TestEnums {
 
     @Test
-    void test_pick_sentiment() {
+    void test_enums_pick_sentiment() {
         assertEquals(Sentiment.Positive, Fns.pick_sentiment(true));
         assertEquals(Sentiment.Negative, Fns.pick_sentiment(false));
     }
 
     @Test
-    void test_pick_positive() {
+    void test_enums_pick_positive() {
         assertEquals(Sentiment.Positive, Fns.pick_positive());
     }
 
     @Test
-    void test_round_trip_sentiment() {
+    void test_enums_round_trip_sentiment() {
         assertEquals(Sentiment.Negative, Fns.round_trip_sentiment(Sentiment.Negative));
     }
 
     @Test
-    void test_round_trip_sentiment_positive() {
+    void test_enums_round_trip_sentiment_positive() {
         // java-port note: EnumVariant-as-type (`Sentiment.Positive` used as a
         // BAML *type*) drops the variant tag during TIR->codegen, same as
         // Python — the Java parameter/return type is just `Sentiment`.
@@ -39,7 +39,7 @@ class TestEnums {
     }
 
     @Test
-    void test_round_trip_enums() {
+    void test_enums_round_trip_enums() {
         Enums e = new Enums(Sentiment.Positive, Sentiment.Positive);
         assertEquals(e, Fns.round_trip_enums(e));
     }

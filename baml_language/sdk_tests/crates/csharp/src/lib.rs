@@ -2,8 +2,9 @@
 mod tests {
     use std::{collections::HashSet, env, path::PathBuf, process::Command};
 
+    // SDK_PARITY_LINT(skip): validates C#-specific generated union runtime source
     #[test]
-    fn checked_in_union_runtime_source_matches_generator() {
+    fn test_checked_in_union_runtime_source_matches_generator() {
         let manifest =
             PathBuf::from(env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR is not set"));
         let language_root = manifest.join("../../..");
@@ -31,8 +32,9 @@ mod tests {
         );
     }
 
+    // SDK_PARITY_LINT(skip): validates C#-specific generated-client repository hygiene
     #[test]
-    fn generated_baml_clients_are_not_tracked() {
+    fn test_generated_baml_clients_are_not_tracked() {
         let manifest =
             PathBuf::from(env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR is not set"));
         let output = Command::new("git")
@@ -80,8 +82,9 @@ mod tests {
         );
     }
 
+    // SDK_PARITY_LINT(skip): exercises C#-specific native SDK integration coverage
     #[test]
-    fn primitive_slice_executes_sync_and_async() {
+    fn test_primitive_slice_executes_sync_and_async() {
         assert_eq!(
             env::var("SDK_TEST_CSHARP_SETUP").as_deref(),
             Ok("1"),
@@ -115,8 +118,9 @@ mod tests {
         );
     }
 
+    // SDK_PARITY_LINT(skip): exercises C#-specific native SDK integration coverage
     #[test]
-    fn phase5_slice_executes_nominals_collections_defaults_and_unions() {
+    fn test_phase5_slice_executes_nominals_collections_defaults_and_unions() {
         assert_eq!(
             env::var("SDK_TEST_CSHARP_SETUP").as_deref(),
             Ok("1"),
@@ -148,8 +152,9 @@ mod tests {
         );
     }
 
+    // SDK_PARITY_LINT(skip): exercises C#-specific native SDK integration coverage
     #[test]
-    fn phase6_slice_executes_inferred_and_explicit_generics() {
+    fn test_phase6_slice_executes_inferred_and_explicit_generics() {
         assert_eq!(
             env::var("SDK_TEST_CSHARP_SETUP").as_deref(),
             Ok("1"),
@@ -182,8 +187,9 @@ mod tests {
     }
 
     #[cfg(unix)]
+    // SDK_PARITY_LINT(skip): exercises C#-specific generated-surface compile coverage
     #[test]
-    fn phase6_generated_surface_rejects_ambiguous_generic_calls() {
+    fn test_phase6_generated_surface_rejects_ambiguous_generic_calls() {
         assert_eq!(
             env::var("SDK_TEST_CSHARP_SETUP").as_deref(),
             Ok("1"),
@@ -211,8 +217,9 @@ mod tests {
         );
     }
 
+    // SDK_PARITY_LINT(skip): exercises C#-specific native SDK integration coverage
     #[test]
-    fn phase7_executes_typed_failures_cancellation_and_exit() {
+    fn test_phase7_executes_typed_failures_cancellation_and_exit() {
         assert_eq!(
             env::var("SDK_TEST_CSHARP_SETUP").as_deref(),
             Ok("1"),
@@ -246,8 +253,9 @@ mod tests {
         );
     }
 
+    // SDK_PARITY_LINT(skip): exercises C#-specific native SDK integration coverage
     #[test]
-    fn phase9_executes_media_in_both_directions() {
+    fn test_phase9_executes_media_in_both_directions() {
         assert_eq!(
             env::var("SDK_TEST_CSHARP_SETUP").as_deref(),
             Ok("1"),
@@ -279,8 +287,9 @@ mod tests {
         );
     }
 
+    // SDK_PARITY_LINT(skip): exercises C#-specific native SDK integration coverage
     #[test]
-    fn phase10_executes_generated_native_stream_and_request_failure() {
+    fn test_phase10_executes_generated_native_stream_and_request_failure() {
         assert_eq!(
             env::var("SDK_TEST_CSHARP_SETUP").as_deref(),
             Ok("1"),
@@ -312,8 +321,9 @@ mod tests {
         );
     }
 
+    // SDK_PARITY_LINT(skip): exercises C#-specific native SDK integration coverage
     #[test]
-    fn phase11_executes_generated_native_host_callbacks() {
+    fn test_phase11_executes_generated_native_host_callbacks() {
         assert_eq!(
             env::var("SDK_TEST_CSHARP_SETUP").as_deref(),
             Ok("1"),
@@ -347,8 +357,9 @@ mod tests {
         );
     }
 
+    // SDK_PARITY_LINT(skip): exercises C#-specific native SDK integration coverage
     #[test]
-    fn phase12_executes_native_typed_resource_apis_lifetimes_and_state() {
+    fn test_phase12_executes_native_typed_resource_apis_lifetimes_and_state() {
         assert_eq!(
             env::var("SDK_TEST_CSHARP_SETUP").as_deref(),
             Ok("1"),
@@ -382,8 +393,9 @@ mod tests {
         );
     }
 
+    // SDK_PARITY_LINT(skip): exercises C#-specific native SDK integration coverage
     #[test]
-    fn phase13_executes_native_primitive_and_nullable_edges() {
+    fn test_phase13_executes_native_primitive_and_nullable_edges() {
         assert_eq!(
             env::var("SDK_TEST_CSHARP_SETUP").as_deref(),
             Ok("1"),
@@ -417,8 +429,9 @@ mod tests {
         );
     }
 
+    // SDK_PARITY_LINT(skip): exercises C#-specific native SDK integration coverage
     #[test]
-    fn phase14_executes_native_stdlib_structural_roundtrips() {
+    fn test_phase14_executes_native_stdlib_structural_roundtrips() {
         assert_eq!(
             env::var("SDK_TEST_CSHARP_SETUP").as_deref(),
             Ok("1"),
@@ -453,8 +466,9 @@ mod tests {
         );
     }
 
+    // SDK_PARITY_LINT(skip): exercises C#-specific native SDK integration coverage
     #[test]
-    fn phase15_executes_native_dynamic_value_parity() {
+    fn test_phase15_executes_native_dynamic_value_parity() {
         assert_eq!(
             env::var("SDK_TEST_CSHARP_SETUP").as_deref(),
             Ok("1"),
@@ -507,8 +521,9 @@ mod tests {
         );
     }
 
+    // SDK_PARITY_LINT(skip): validates the C#-specific documentation consumer
     #[test]
-    fn canonical_documentation_consumer_compiles_and_executes() {
+    fn test_canonical_documentation_consumer_compiles_and_executes() {
         assert_eq!(
             env::var("SDK_TEST_CSHARP_SETUP").as_deref(),
             Ok("1"),

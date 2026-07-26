@@ -7,7 +7,7 @@ import (
 	"baml.local/sdk/baml_sdk"
 )
 
-func TestRoundTripOptionalInt(t *testing.T) {
+func Test_round_trip_optional_int(t *testing.T) {
 	ctx := context.Background()
 	value := int64(5)
 	if got, err := baml_sdk.OptionalRoundTripOptionalInt(ctx, &value); err != nil || got == nil || *got != value {
@@ -18,7 +18,7 @@ func TestRoundTripOptionalInt(t *testing.T) {
 	}
 }
 
-func TestRoundTripOptionalUnion(t *testing.T) {
+func Test_round_trip_optional_union(t *testing.T) {
 	ctx := context.Background()
 	integer := baml_sdk.NewStringOrIntFromInt(3)
 	if got, err := baml_sdk.OptionalRoundTripOptionalUnion(ctx, &integer); err != nil || got == nil {
@@ -37,7 +37,7 @@ func TestRoundTripOptionalUnion(t *testing.T) {
 	}
 }
 
-func TestRoundTripOptionalResume(t *testing.T) {
+func Test_round_trip_optional_resume(t *testing.T) {
 	ctx := context.Background()
 	resume := baml_sdk.OptionalResume{Name: "ada"}
 	if got, err := baml_sdk.OptionalRoundTripOptionalResume(ctx, &resume); err != nil || got == nil || *got != resume {
@@ -48,7 +48,7 @@ func TestRoundTripOptionalResume(t *testing.T) {
 	}
 }
 
-func TestRoundTripRequiredResume(t *testing.T) {
+func Test_round_trip_required_resume(t *testing.T) {
 	want := baml_sdk.OptionalResume{Name: "grace"}
 	got, err := baml_sdk.OptionalRoundTripResume(context.Background(), want)
 	if err != nil || got != want {
@@ -56,7 +56,7 @@ func TestRoundTripRequiredResume(t *testing.T) {
 	}
 }
 
-func TestRoundTripOptionalContainer(t *testing.T) {
+func Test_round_trip_optional_container(t *testing.T) {
 	resume := baml_sdk.OptionalResume{Name: "x"}
 	union := baml_sdk.NewStringOrIntFromString("y")
 	want := baml_sdk.OptionalOptionalContainer{

@@ -20,7 +20,7 @@ streams, no `StreamFinished` union — just `WrapperMethods<T>.get_value(self)
 fix lands, this test goes green without touching the streaming path.
 """
 
-def test_generic():
+def test_generic_generic():
     """`WrapperMethods<string>.get_value_or_marker()` should still round-trip
     a string when the declared return is `T | WrapperMarker`.
 
@@ -47,7 +47,7 @@ def test_generic():
     assert w.get_value_or_marker() == "hello"
 
 
-def test_generic_wrapper_get_value():
+def test_generic_generic_wrapper_get_value():
     """`WrapperMethods<string>.get_value()` should round-trip a string.
 
     Equivalent BAML:

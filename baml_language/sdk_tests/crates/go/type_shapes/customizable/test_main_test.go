@@ -5,9 +5,9 @@ import (
 	"testing"
 )
 
-func TestRootImportsCleanly(t *testing.T) { _ = baml_sdk.Foo{} }
+func Test_root_imports_cleanly(t *testing.T) { _ = baml_sdk.Foo{} }
 
-func TestSupportedNamespacesReachable(t *testing.T) {
+func Test_supported_namespaces_reachable(t *testing.T) {
 	_ = baml_sdk.PrimitivesPrimitives{}
 	_ = baml_sdk.EnumsEnums{}
 	_ = baml_sdk.LiteralsLiterals{}
@@ -22,6 +22,6 @@ func TestSupportedNamespacesReachable(t *testing.T) {
 	// Recursive aliases and host-created opaque handles remain deferred.
 }
 
-func TestRootFooReachable(t *testing.T)            { _ = baml_sdk.Foo{} }
-func TestLoremResumeReachable(t *testing.T)        { _ = baml_sdk.LoremResume{} }
-func TestDeepNamespaceThingReachable(t *testing.T) { _ = baml_sdk.ABThing{} }
+func Test_root_foo_reachable(t *testing.T)             { _ = baml_sdk.Foo{} }
+func Test_lorem_resume_reachable(t *testing.T)         { _ = baml_sdk.LoremResume{} }
+func Test_deep_namespace_thing_reachable(t *testing.T) { _ = baml_sdk.ABThing{} }

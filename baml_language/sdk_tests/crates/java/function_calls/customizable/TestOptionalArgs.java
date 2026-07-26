@@ -55,7 +55,7 @@ class TestOptionalArgs {
     }
 
     @Test
-    void test_python_unset_and_none_differ_in_one_call() {
+    void test_optional_args_python_unset_and_none_differ_in_one_call() {
         // UNSET means "omit this argument"; None means "pass an explicit null".
         // The two must stay distinct within a single call.
         //
@@ -83,7 +83,7 @@ class TestOptionalArgs {
     }
 
     @Test
-    void test_opt_box_method_matrix() {
+    void test_optional_args_opt_box_method_matrix() {
         OptBox box = OptBox.make(10L);
         assertEquals(17L, box.base());
 
@@ -102,7 +102,7 @@ class TestOptionalArgs {
                     + "arg0 all fail javac. The compile-surface analog is documented in "
                     + "OptionalArgsStatic.java, mirroring optional_args_static.py.")
     @Test
-    void test_negative_runtime_cases_reject() {
+    void test_optional_args_negative_runtime_cases_reject() {
         // Intentionally empty — see @Disabled reason and OptionalArgsStatic.java.
     }
 }

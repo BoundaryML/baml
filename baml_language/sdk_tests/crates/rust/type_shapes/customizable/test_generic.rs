@@ -39,7 +39,7 @@
 /// [Void { ... }, Class(... WrapperMarker ...)]" — the same shape as
 /// the streaming smoke's error.
 #[test]
-fn test_generic() {
+fn test_generic_generic() {
     // ADAPTATION(rust): the anonymous `T | WrapperMarker` return union
     // synthesizes the arm-named generic enum `TOrWrapperMarker<T>`; with
     // `T = String` the returned string decodes into the `T` variant (decode
@@ -72,7 +72,7 @@ fn test_generic() {
 /// returned `WrapperMethods<string>`, the re-encoded receiver has empty
 /// class args and the call is rejected at the inbound boundary.
 #[test]
-fn test_generic_wrapper_get_value() {
+fn test_generic_generic_wrapper_get_value() {
     use baml_sdk::generics::make_wrapper_methods;
 
     let w = make_wrapper_methods("hello".to_string()).unwrap();

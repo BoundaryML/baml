@@ -46,7 +46,7 @@ func durationPointer(value baml.TimeDuration) *baml.TimeDuration                
 func plainTimePointer(value baml.TimePlainTime) *baml.TimePlainTime             { return &value }
 func zonedDateTimePointer(value baml.TimeZonedDateTime) *baml.TimeZonedDateTime { return &value }
 
-func TestBAMLTimeClassAndFieldWireNamesAreExact(t *testing.T) {
+func Test_baml_time_class_and_field_wire_names_are_exact(t *testing.T) {
 	classes := []struct {
 		value interface{ BAMLClassName() string }
 		name  string
@@ -109,7 +109,7 @@ func assertTimeWireFields(t *testing.T, typ reflect.Type, fields map[string]stri
 	}
 }
 
-func TestBAMLTimeConstructorsAndParsersReturnLosslessInternalValues(t *testing.T) {
+func Test_baml_time_constructors_and_parsers_return_lossless_internal_values(t *testing.T) {
 	ctx := context.Background()
 	large := mustBigInt(t, "1234567890123456789012345678901234567890")
 
@@ -182,7 +182,7 @@ func TestBAMLTimeConstructorsAndParsersReturnLosslessInternalValues(t *testing.T
 	}
 }
 
-func TestBAMLTimeGoConstructedValuesRoundTripAtNumericBoundaries(t *testing.T) {
+func Test_baml_time_go_constructed_values_round_trip_at_numeric_boundaries(t *testing.T) {
 	ctx := context.Background()
 	positive := mustBigInt(t, "99999999999999999999999999999999999999999999999999")
 	negative := new(big.Int).Neg(positive)
@@ -234,7 +234,7 @@ func TestBAMLTimeGoConstructedValuesRoundTripAtNumericBoundaries(t *testing.T) {
 	}
 }
 
-func TestBAMLTimeNestedContainersAndBAMLFieldInspection(t *testing.T) {
+func Test_baml_time_nested_containers_and_baml_field_inspection(t *testing.T) {
 	ctx := context.Background()
 	instant := baml.TimeInstant{Nanoseconds: mustBigInt(t, "123456789012345678901")}
 	duration := baml.TimeDuration{Nanoseconds: mustBigInt(t, "-987654321098765432109")}
@@ -348,7 +348,7 @@ func optionalTimeZonedDateTimeEqual(left, right *baml.TimeZonedDateTime) bool {
 	return (left == nil && right == nil) || (left != nil && right != nil && timeZonedDateTimeEqual(*left, *right))
 }
 
-func TestBAMLTimeNullableAndDefaultedPositions(t *testing.T) {
+func Test_baml_time_nullable_and_defaulted_positions(t *testing.T) {
 	ctx := context.Background()
 	if got, err := baml_sdk.GoTimeTestsRoundTripOptionalInstant(ctx, nil); err != nil || got != nil {
 		t.Fatalf("nil optional instant = %#v, %v", got, err)
@@ -380,7 +380,7 @@ func TestBAMLTimeNullableAndDefaultedPositions(t *testing.T) {
 	}
 }
 
-func TestBAMLTimeRawClassTransportDoesNotEnforceSemanticInvariants(t *testing.T) {
+func Test_baml_time_raw_class_transport_does_not_enforce_semantic_invariants(t *testing.T) {
 	ctx := context.Background()
 
 	invalidPlainTime := baml.TimePlainTime{Nanoseconds: -1}
@@ -408,7 +408,7 @@ func TestBAMLTimeRawClassTransportDoesNotEnforceSemanticInvariants(t *testing.T)
 	}
 }
 
-func TestBAMLTimeMalformedValuesFailAtTheEarliestTypedBoundary(t *testing.T) {
+func Test_baml_time_malformed_values_fail_at_the_earliest_typed_boundary(t *testing.T) {
 	ctx := context.Background()
 	for name, call := range map[string]func() error{
 		"instant nil bigint": func() error {

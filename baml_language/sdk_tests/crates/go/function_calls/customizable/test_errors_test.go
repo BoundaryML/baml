@@ -26,12 +26,12 @@ func initializeGeneratedRuntime(t *testing.T) {
 }
 
 // Direct Go counterpart to Python test_stdlib_error_surfaces_as_baml_error.
-func TestStdlibErrorSurfacesAsGoError(t *testing.T) {
+func Test_stdlib_error_surfaces_as_go_error(t *testing.T) {
 	_, err := baml_sdk.ThrowsTestParseJson(context.Background(), badJSON)
 	assertErrorContains(t, err, "BAML error", "baml.json.JsonParseError")
 }
 
-func TestParseJsonSuccessfulValueUsesGeneratedJSONProjection(t *testing.T) {
+func Test_parse_json_successful_value_uses_generated_json_projection(t *testing.T) {
 	got, err := baml_sdk.ThrowsTestParseJson(context.Background(), `{"name":"Ada","items":[null,true,7,1.5]}`)
 	want := map[string]any{"name": "Ada", "items": []any{nil, true, int64(7), 1.5}}
 	if err != nil || !reflect.DeepEqual(got, want) {
@@ -42,13 +42,13 @@ func TestParseJsonSuccessfulValueUsesGeneratedJSONProjection(t *testing.T) {
 // Direct Go counterpart to Python test_user_throw_surfaces_declared_instance.
 // Go currently exposes the declared class identity in Error(), not a decoded
 // structured error value.
-func TestUserThrowSurfacesDeclaredClassIdentity(t *testing.T) {
+func Test_user_throw_surfaces_declared_class_identity(t *testing.T) {
 	_, err := baml_sdk.ThrowsTestThrowMyError(context.Background())
 	assertErrorContains(t, err, "BAML error", "user.throws_test.MyError")
 }
 
 // Direct Go counterpart to Python test_union_throws_preserves_class_name.
-func TestUnionThrowsPreservesConcreteClassIdentity(t *testing.T) {
+func Test_union_throws_preserves_concrete_class_identity(t *testing.T) {
 	_, single := baml_sdk.RaisesTestReparse(context.Background(), "x")
 	_, union := baml_sdk.RaisesTestLoadDoc(context.Background(), "x")
 	assertErrorContains(t, single, "BAML error", "user.raises_test.ParseError")
@@ -59,7 +59,7 @@ func TestUnionThrowsPreservesConcreteClassIdentity(t *testing.T) {
 // test_host_invalid_argument_wraps_baml_errors_invalid_argument. Generated Go
 // signatures prevent extra arguments statically, so use the low-level call to
 // prove the BAML-owned relation reports the canonical runtime error.
-func TestInvalidFunctionArgumentsSurfaceBAMLError(t *testing.T) {
+func Test_invalid_function_arguments_surface_baml_error(t *testing.T) {
 	initializeGeneratedRuntime(t)
 	_, err := baml_go.Call(context.Background(), "user.hello_world", map[string]baml_go.Input{
 		"not_a_param": baml_go.Int64(2),
@@ -69,7 +69,7 @@ func TestInvalidFunctionArgumentsSurfaceBAMLError(t *testing.T) {
 
 // Direct Go counterpart to Python test_user_panic_surfaces_as_baml_panic.
 // Go intentionally returns a plain error and never raises a Go panic.
-func TestUserPanicSurfacesAsGoErrorWithoutPanicking(t *testing.T) {
+func Test_user_panic_surfaces_as_go_error_without_panicking(t *testing.T) {
 	err := baml_sdk.ThrowsTestDoPanic(context.Background(), "user-initiated boom")
 	assertErrorContains(t, err, "BAML panic", "baml.panics.UserPanic", "user-initiated boom")
 }
@@ -77,7 +77,7 @@ func TestUserPanicSurfacesAsGoErrorWithoutPanicking(t *testing.T) {
 // Direct synchronous Go counterpart to Python
 // test_cancellation_surfaces_as_baml_panic. Go cancellation preserves the
 // context error identity rather than exposing the runtime panic envelope.
-func TestErrorCallCancellationPreservesContextIdentity(t *testing.T) {
+func Test_error_call_cancellation_preserves_context_identity(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	timer := time.AfterFunc(50*time.Millisecond, cancel)
 	defer timer.Stop()
@@ -88,7 +88,7 @@ func TestErrorCallCancellationPreservesContextIdentity(t *testing.T) {
 }
 
 // Direct Go counterpart to Python test_str_is_non_empty.
-func TestErrorStringIsNonEmpty(t *testing.T) {
+func Test_error_string_is_non_empty(t *testing.T) {
 	_, err := baml_sdk.ThrowsTestThrowMyError(context.Background())
 	if err == nil || err.Error() == "" {
 		t.Fatalf("error = %v", err)
@@ -96,7 +96,7 @@ func TestErrorStringIsNonEmpty(t *testing.T) {
 }
 
 // Direct Go counterpart to Python test_baml_error_carries_baml_trace.
-func TestBAMLErrorCarriesBAMLTrace(t *testing.T) {
+func Test_baml_error_carries_baml_trace(t *testing.T) {
 	_, err := baml_sdk.ThrowsTestThrowMyError(context.Background())
 	assertErrorContains(t, err, "user.throws_test.ThrowMyError", "types.baml")
 }
@@ -104,7 +104,7 @@ func TestBAMLErrorCarriesBAMLTrace(t *testing.T) {
 // Python's traceback-object splicing is host-specific. Go honestly embeds
 // every BAML frame in the returned error string; it does not synthesize Go
 // runtime stack frames.
-func TestBAMLTraceIsEmbeddedInGoErrorString(t *testing.T) {
+func Test_baml_trace_is_embedded_in_go_error_string(t *testing.T) {
 	initializeGeneratedRuntime(t)
 	_, err := baml_go.Call(context.Background(), "user.throws_test.ParseJson", map[string]baml_go.Input{
 		"s": baml_go.String(badJSON),
@@ -115,10 +115,10 @@ func TestBAMLTraceIsEmbeddedInGoErrorString(t *testing.T) {
 // Direct subprocess-safe Go counterpart to Python
 // test_clean_exit_terminates_process_with_code. The helper is the only process
 // that invokes the generated exit function; the main test runner never does.
-func TestCleanExitTerminatesProcessWithCode(t *testing.T) {
+func Test_clean_exit_terminates_process_with_code(t *testing.T) {
 	for _, code := range []int{0, 7} {
 		t.Run(strconv.Itoa(code), func(t *testing.T) {
-			command := exec.Command(os.Args[0], "-test.run=^TestCleanExitHelperProcess$")
+			command := exec.Command(os.Args[0], "-test.run=^Test_clean_exit_helper_process$")
 			command.Env = append(os.Environ(), fmt.Sprintf("BAML_GO_EXIT_HELPER=%d", code))
 			output, err := command.CombinedOutput()
 			if code == 0 {
@@ -138,7 +138,7 @@ func TestCleanExitTerminatesProcessWithCode(t *testing.T) {
 	}
 }
 
-func TestCleanExitHelperProcess(t *testing.T) {
+func Test_clean_exit_helper_process(t *testing.T) {
 	raw := os.Getenv("BAML_GO_EXIT_HELPER")
 	if raw == "" {
 		return

@@ -8,7 +8,7 @@ import (
 	"baml.local/sdk/baml_sdk"
 )
 
-func TestRoundTripComplexProfilePreservesDeeplyNestedMixedShapeClass(t *testing.T) {
+func Test_round_trip_complex_profile_preserves_deeply_nested_mixed_shape_class(t *testing.T) {
 	line2 := "Suite 42"
 	home := baml_sdk.ComplexModelsPostalAddress{
 		Line1:      "1 Compiler Way",

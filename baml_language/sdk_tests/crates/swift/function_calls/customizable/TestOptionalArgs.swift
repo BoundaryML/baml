@@ -25,14 +25,14 @@ final class TestOptionalArgs: XCTestCase {
         XCTAssertEqual(try Baml.optional_args_probe(arg0: 1, opt1: .value(8), opt2: .value(9)), [1, 8, 9])
     }
 
-    func test_unset_and_nil_differ_in_one_call() throws {
+    func test_optional_args_unset_and_null_differ_in_one_call() throws {
         // `.unset` means "omit this argument"; `nil` means "pass an
         // explicit null". The two must stay distinct within one call.
         XCTAssertEqual(try Baml.optional_args_probe(arg0: 1, opt1: .unset, opt2: nil), [1, 5, nil])
         XCTAssertEqual(try Baml.optional_args_probe(arg0: 1, opt1: nil, opt2: .unset), [1, nil, 99])
     }
 
-    func test_opt_box_method_matrix() throws {
+    func test_optional_args_opt_box_method_matrix() throws {
         let box = try Baml.OptBox.make(base: 10)
         XCTAssertEqual(box.base, 17)
 

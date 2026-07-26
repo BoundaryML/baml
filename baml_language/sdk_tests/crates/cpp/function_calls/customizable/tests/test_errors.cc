@@ -17,7 +17,7 @@ using baml_sdk::raises_test::ParseError;
 using baml_sdk::raises_test::TimeoutError;
 using baml_sdk::throws_test::MyError;
 
-BAML_TEST(stdlib_error_surfaces_typed) {
+BAML_TEST(errors_stdlib_error_surfaces_typed) {
   // `baml.json.parse` on bad input -> thrown whose value decodes to a
   // JsonParseError (a plain generated struct). Proves stdlib error classes
   // surface structured, independent of any user `throws` clause.
@@ -29,7 +29,7 @@ BAML_TEST(stdlib_error_surfaces_typed) {
   }
 }
 
-BAML_TEST(user_throw_surfaces_declared_instance) {
+BAML_TEST(errors_user_throw_surfaces_declared_instance) {
   // A user throw of a declared error -> the declared user error instance
   // itself, typed.
   try {
@@ -45,7 +45,7 @@ BAML_TEST(user_throw_surfaces_declared_instance) {
   }
 }
 
-BAML_TEST(union_throws_preserves_class_name) {
+BAML_TEST(errors_union_throws_preserves_class_name) {
   // Single-member (Reparse: throws ParseError) and multi-member (LoadDoc:
   // throws ParseError | TimeoutError) must agree on class_name: the engine
   // wraps multi-member throws in union_variant_value, and the decoder must
@@ -74,7 +74,7 @@ BAML_TEST(union_throws_preserves_class_name) {
   }
 }
 
-BAML_TEST(async_sibling_throws_typed) {
+BAML_TEST(errors_async_sibling_throws_typed) {
   // C++-specific: the Async sibling's get() surfaces the identical typed
   // throw as the sync form (python covers this through await semantics).
   try {
@@ -85,7 +85,7 @@ BAML_TEST(async_sibling_throws_typed) {
   }
 }
 
-BAML_TEST(typed_throw_is_still_a_baml_error) {
+BAML_TEST(errors_typed_throw_is_still_a_baml_error) {
   // Backward compatibility: an untyped catch site sees the same throw.
   try {
     baml_sdk::throws_test::ThrowMyError();

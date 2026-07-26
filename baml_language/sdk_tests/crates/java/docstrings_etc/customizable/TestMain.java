@@ -111,7 +111,7 @@ class TestMain {
     // --- tests -------------------------------------------------------------
 
     @Test
-    void test_imports() {
+    void test_main_imports_symbols_reachable() {
         // java-port note: the Python `import baml_sdk[.docs]` smoke maps to
         // referencing each generated symbol's `.class` (compile-time
         // reachability + class-load side effects), per the codegen-conventions
@@ -123,7 +123,7 @@ class TestMain {
     }
 
     @Test
-    void test_class_doc_summary_and_attributes_section_in_dunder_doc() throws IOException {
+    void test_main_class_doc_summary_and_attributes_section() throws IOException {
         String src = readSource("Doc.java");
         String doc = javadocOf(src, "class Doc");
         String expected =
@@ -136,7 +136,7 @@ class TestMain {
     }
 
     @Test
-    void test_undocumented_field_listed_as_bare_name_under_attributes() throws IOException {
+    void test_main_undocumented_field_listed_as_bare_name_under_attributes() throws IOException {
         // Note: `id` is documented, `text` is not. The "any-doc" rule says the
         // Attributes: section appears (because `id` carries a `///`) and lists
         // every field, with `text` rendered as a bare name.
@@ -149,7 +149,7 @@ class TestMain {
     }
 
     @Test
-    void test_enum_doc_summary_and_members_section_in_dunder_doc() throws IOException {
+    void test_main_enum_doc_summary_and_members_section() throws IOException {
         String src = readSource("Sentiment.java");
         String doc = javadocOf(src, "enum Sentiment");
         String expected =
@@ -163,7 +163,7 @@ class TestMain {
     }
 
     @Test
-    void test_enum_summary_only_omits_members_section_when_no_variant_documented()
+    void test_main_enum_summary_only_omits_members_section()
             throws IOException {
         // Priority has a class-level /// but no variant carries one — the
         // Members: section should be suppressed entirely. Variants are still
@@ -184,7 +184,7 @@ class TestMain {
     }
 
     @Test
-    void test_no_inline_field_or_variant_doc_artifacts() throws IOException {
+    void test_main_no_inline_field_or_variant_doc_artifacts() throws IOException {
         // Field/variant `///` lines must not produce inline `// …` comments or
         // per-member Javadoc — they live exclusively inside the parent's
         // Attributes:/Members: section.

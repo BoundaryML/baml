@@ -42,7 +42,7 @@ import org.junit.jupiter.api.Test;
 class TestComplexModels {
 
     @Test
-    void test_round_trip_complex_profile_preserves_deeply_nested_mixed_shape_class() {
+    void test_complex_models_round_trip_complex_profile_preserves_deeply_nested_mixed_shape_class() {
         PostalAddress home =
                 new PostalAddress(
                         "1 Compiler Way",
