@@ -73,7 +73,7 @@ Just want to install it and run something? Install the toolchain and run a proje
 
 ```sh
 # macOS or Linux (Homebrew)
-brew install boundaryml/tap/baml
+brew install baml
 # or: curl -fsSL https://pkg.boundaryml.com/install.sh | sh -s
 
 baml init
@@ -485,7 +485,7 @@ Install the toolchain using one of these commands:
 
 ```sh
 # Homebrew on macOS or Linux
-brew install boundaryml/tap/baml
+brew install baml
 
 # Install script on macOS or Linux
 curl -fsSL https://pkg.boundaryml.com/install.sh | sh -s
