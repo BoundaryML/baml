@@ -190,8 +190,9 @@ A `RealtimeProvider` is not prohibited from also implementing
 `DriveProvider`. A concrete provider may implement both when it offers both
 interaction shapes. But `RealtimeProvider` alone cannot imply `drive<T>`:
 
-- `open_live` accepts an instruction-only `Task<null>` and returns a long-lived
-  `Live` resource, while `drive<T>` must terminate with one `Response<T>`;
+- realtime execution accepts an instruction-only `Task<null>` and returns a
+  long-lived `LiveSession` resource, while `drive<T>` must terminate with one
+  `Response<T>`;
 - a live session may contain many user turns and many assistant responses, so
   there is no intrinsic single turn whose output is the function's `T`;
 - normal termination may be the caller closing the connection, a network
@@ -210,16 +211,18 @@ function Talk(message: string) -> null {
 }
 
 let task = Talk.task("Hello")
-let live = ai.drivers.open_live(task, channel)
+let live_session = task.run(
+  runner = ai.run.Realtime.new(channel),
+)
 
 // Compile error: RealtimeOnly does not implement DriveProvider.
 // let reply = Talk("Hello", $provider = RealtimeOnly)
 ```
 
-**Normative usage rule:** `open_live` accepts `Task<null>`, because a live
+**Normative usage rule:** the `Realtime` runner accepts `Task<null>`, because a live
 session has no single final application value. The task supplies instructions,
 arguments, tools, and provider selection. The caller retains the `Channel` for
-ongoing input/output and the returned `Live` resource for events,
+ongoing input/output and the returned `LiveSession` resource for events,
 interruptions, and cleanup.
 
 `null` describes the absence of a task result; it does not define when the live
@@ -236,7 +239,7 @@ behavior—not something implied by supporting realtime.
 
 A future bounded realtime driver may instead return `LiveRun<T>` with an
 explicit `final() -> Response<T>`. Until that completion boundary exists,
-making `Live` generic would only hide the ambiguity.
+making `LiveSession` generic would only hide the ambiguity.
 
 Putting a default `drive<T>` on `Provider` would make the direct form compile,
 then force realtime-only, background-only, and other specialized providers to
@@ -271,7 +274,7 @@ The suffix tells readers that the value can occupy a provider slot and that
 the interface is capability evidence for a safe driver. It does not apply to:
 
 - data/view interfaces such as `Messages` and `Transcript`;
-- resource interfaces such as `Job`, `Session`, and `Live`;
+- resource interfaces such as `Job`, `Session`, and `LiveSession`;
 - policies and hooks such as `RetryPolicy` and `AgentHooks`; or
 - syntax-only extension interfaces such as `ProviderSugar`.
 

@@ -16,7 +16,7 @@ function InspectImage_manual(
     value: image,
     provider: root.ai.Provider,
 ) -> string throws root.ai.CallError | baml.errors.UnknownError {
-    root.ai.drivers.complete<string>(InspectImage_task(value, provider))
+    InspectImage_task(value, provider).run(runner = root.ai.run.Completion<string>.new())
 }
 
 // Future compiler lowering for a PDF-valued domain argument.
@@ -24,9 +24,7 @@ function InspectPdf_task(
     value: pdf,
     provider: root.ai.Provider,
 ) -> root.ai.Task<string> throws never {
-    root.ai.task_named<string>(provider, "InspectPdf", { "pdf": value }, [], (
-        ctx: baml.llm.Context,
-    ) -> baml.llm.PromptAst {
+    root.ai.task_named<string>(provider, "InspectPdf", { "pdf": value }, [], (ctx: baml.llm.Context) -> baml.llm.PromptAst {
         baml.llm.assemble_prompt_ast(["Summarize this PDF: ", ""], [value])
     })
 }
@@ -35,7 +33,7 @@ function InspectPdf_manual(
     value: pdf,
     provider: root.ai.Provider,
 ) -> string throws root.ai.CallError | baml.errors.UnknownError {
-    root.ai.drivers.complete<string>(InspectPdf_task(value, provider))
+    InspectPdf_task(value, provider).run(runner = root.ai.run.Completion<string>.new())
 }
 
 // Future compiler lowering:
@@ -59,5 +57,5 @@ function VoiceSupport_manual(
     instructions: string,
     provider: root.ai.Provider,
 ) -> null throws root.ai.CallError | baml.errors.UnknownError {
-    root.ai.drivers.complete<null>(VoiceSupport_task(instructions, provider))
+    VoiceSupport_task(instructions, provider).run(runner = root.ai.run.Completion<null>.new())
 }

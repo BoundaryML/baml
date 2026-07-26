@@ -703,9 +703,16 @@ test "fails" {
     let stdout = String::from_utf8_lossy(&info.stdout);
     assert!(stdout.contains("[INFO] info-detail"), "stdout: {stdout}");
     assert!(stdout.contains("[WARN] warn-detail"), "stdout: {stdout}");
-    assert!(stdout.contains("user"), "stdout: {stdout}");
-    assert!(stdout.contains("ada"), "stdout: {stdout}");
-    assert!(stdout.contains("attempts"), "stdout: {stdout}");
+    assert!(
+        stdout.contains(r#"[WARN] {"user": "ada", "attempts": [1, 2]}"#),
+        "stdout: {stdout}"
+    );
+    for implementation_detail in ["BamlOutboundValue", "MapValue", "ListValue", "Some("] {
+        assert!(
+            !stdout.contains(implementation_detail),
+            "stdout leaked `{implementation_detail}`: {stdout}"
+        );
+    }
     assert!(stdout.contains("[ERROR] error-detail"), "stdout: {stdout}");
     assert!(!stdout.contains("debug-detail"), "stdout: {stdout}");
     assert!(
@@ -1284,14 +1291,14 @@ fn describe_walks_up_to_ancestor_project() {
     );
 }
 
-/// `baml fmt` in a directory with no project is a no-op success, not an
-/// error — nothing to format is not a failure.
+/// `baml fmt` with no explicit source and no discoverable project is a no-op
+/// success. An explicit `--from` is different: it opts into that source tree.
 #[test]
-fn fmt_without_project_is_noop_success() {
+fn fmt_without_from_or_project_is_noop_success() {
     let built = &common::baml_cli();
     let tmp = tempfile::tempdir().unwrap();
 
-    let output = run_baml_cli(built, tmp.path(), &["fmt", "--from", "."]);
+    let output = run_baml_cli(built, tmp.path(), &["fmt"]);
 
     assert!(
         output.status.success(),
@@ -1383,14 +1390,13 @@ fn run_list_without_baml_toml_using_baml_src_succeeds() {
     );
 }
 
-/// A directory with neither a `baml.toml` nor a `baml_src/` is still
-/// rejected — but the error points at `baml_src/`, `baml init`, and
-/// `--file`, not just "missing baml.toml".
+/// An explicit source directory needs neither `baml.toml` nor a `baml_src/`
+/// wrapper: `--from` itself is the opt-in to load that tree.
 #[test]
-fn run_without_any_project_marker_errors_with_hint() {
+fn run_list_accepts_explicit_unmarked_source_root() {
     let built = &common::baml_cli();
     let tmp = tempfile::tempdir().unwrap();
-    // A loose .baml at the root, but no baml.toml and no baml_src/.
+    // A loose .baml at the root, with no baml.toml and no baml_src/.
     std::fs::write(
         tmp.path().join("loose.baml"),
         "function f() -> int {\n  1\n}\n",
@@ -1400,17 +1406,17 @@ fn run_without_any_project_marker_errors_with_hint() {
     let output = run_baml_cli(built, tmp.path(), &["run", "--list", "--from", "."]);
 
     assert!(
-        !output.status.success(),
-        "Expected non-zero exit when neither project marker is present",
+        output.status.success(),
+        "Expected explicit unmarked source root to load, got {:?}\nstdout: {}\nstderr: {}",
+        output.status.code(),
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr),
     );
-    let stderr = String::from_utf8_lossy(&output.stderr);
-    // The hint names all three escape hatches.
-    for needle in ["baml_src/", "baml init", "--file"] {
-        assert!(
-            stderr.contains(needle),
-            "Expected the error to mention `{needle}`, got:\n{stderr}",
-        );
-    }
+    assert!(
+        String::from_utf8_lossy(&output.stdout).contains('f'),
+        "Expected function list to contain `f`, got:\n{}",
+        String::from_utf8_lossy(&output.stdout),
+    );
 }
 
 /// `baml run <fn>` actually *executes* a function in a manifest-less

@@ -1292,6 +1292,11 @@ impl DefaultParameterInference<'_> {
 pub struct CallPlan {
     pub bindings: Vec<ParamBinding>,
     pub type_args: Vec<Ty>,
+    /// The callee's declared throws after applying the exact generic bindings
+    /// solved by call checking. Throws analysis must reuse this instead of
+    /// independently re-inferring from value parameters: associated-type
+    /// bindings can be learned only through a generic bound.
+    pub instantiated_throws: Option<Ty>,
     /// Hidden call metadata which is not part of the callee's parameter list.
     pub side_channels: CallSideChannels,
 }

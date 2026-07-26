@@ -30,7 +30,9 @@ use crate::{bytecode_cache::CacheContext, reporter::Reporter, test_filter::TestF
     after_help = "SELECTORS:\n  Test IDs are case-sensitive and canonical: `root[.namespace]::testset::test`.\n  A plain -i/--include or -x/--exclude value matches anywhere in the full ID. A\n  value containing `*` is instead an anchored full-ID glob; `*` also matches\n  `::`. Repeated includes are OR. Excludes always win. With no includes, every\n  non-excluded test is selected.\n\nPROFILES:\n  Profile names are case-sensitive. A profile is preset `baml test` argv, parsed\n  without shell expansion:\n\n    [test]\n    default = \"regular\"\n\n    [test.profiles.regular]\n    args = [\"-x\", \"::integration::\", \"--color\", \"never\"]\n\n  Profile includes establish the initial candidates; direct CLI includes narrow\n  them rather than reopening the set. Excludes accumulate and always win. Direct\n  scalar options override profile scalar options. Bootstrap options --profile,\n  --no-profile, --from, and --help are not allowed in profile args.\n  With no default profile, `baml test` runs all tests.\n\nRun `baml test --list` to discover IDs and `baml test --help` for this reference."
 )]
 pub struct TestArgs {
-    #[arg(long, help = "Project search starting point", value_name = "PATH")]
+    /// Project or source directory. An explicit directory outside a discovered
+    /// project's `baml_src/` is loaded directly. Defaults to the current directory.
+    #[arg(long, value_name = "PATH")]
     pub from: Option<PathBuf>,
 
     /// Use a named test profile from `[test.profiles.<name>]` in `baml.toml`.

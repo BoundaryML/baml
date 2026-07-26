@@ -2669,6 +2669,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             crate::inference::CallPlan {
                 bindings: plan_bindings,
                 type_args: Vec::new(),
+                instantiated_throws: None,
                 side_channels: crate::inference::CallSideChannels { runtime_id },
             },
         );
@@ -2815,6 +2816,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             .or_insert_with(|| crate::inference::CallPlan {
                 bindings: Vec::new(),
                 type_args,
+                instantiated_throws: None,
                 side_channels: crate::inference::CallSideChannels::default(),
             });
     }
@@ -3738,7 +3740,12 @@ impl<'db> TypeInferenceBuilder<'db> {
         let callee_ty = self.expand_alias_chains(callee_ty);
 
         match &callee_ty {
-            Ty::Function { params, ret, .. } => {
+            Ty::Function {
+                params,
+                ret,
+                throws,
+                ..
+            } => {
                 // Function values are realized: the type no longer carries its own
                 // generics, so the callee's inferable params *and their bounds* come
                 // from its *declaration* (resolved via the callee expr). A plain
@@ -4122,6 +4129,27 @@ impl<'db> TypeInferenceBuilder<'db> {
                         &runtime_type_arg_bindings,
                     );
                     self.record_call_type_args(expr_id, type_args);
+                }
+                if crate::generics::contains_typevar(throws) {
+                    let instantiated_throws = crate::generics::substitute_ty(throws, &bindings);
+                    let instantiated_throws =
+                        if crate::generics::contains_concrete_base_projection(&instantiated_throws)
+                        {
+                            self.normalize(&instantiated_throws)
+                        } else {
+                            instantiated_throws
+                        };
+                    self.call_plans
+                        .entry(expr_id)
+                        .and_modify(|plan| {
+                            plan.instantiated_throws = Some(instantiated_throws.clone());
+                        })
+                        .or_insert_with(|| crate::inference::CallPlan {
+                            bindings: Vec::new(),
+                            type_args: Vec::new(),
+                            instantiated_throws: Some(instantiated_throws),
+                            side_channels: crate::inference::CallSideChannels::default(),
+                        });
                 }
 
                 // Final argument validation after bindings are known. This is
@@ -9323,6 +9351,16 @@ impl<'db> TypeInferenceBuilder<'db> {
         }
 
         let substituted = crate::generics::substitute_ty(&throws, &bindings);
+        // Value-parameter inference cannot recover a generic that is bound only
+        // through another generic's interface constraint (for example
+        // `Error` in `R extends Runner<..., Error = Error>`). Call checking
+        // already solved that constraint, so reuse its exact instantiation only
+        // when the legacy pass still has an unresolved type variable.
+        if crate::generics::contains_typevar(&substituted)
+            && let Some(instantiated) = call_plan.and_then(|plan| plan.instantiated_throws.as_ref())
+        {
+            return Some(instantiated.clone());
+        }
         // Post-substitution collapse: a projection whose base just became concrete
         // reduces to its realization (`(T as HasErr).E` at `T = Risky` IS `Kaboom`),
         // so the throw facts — and everything downstream of them: catch narrowing,

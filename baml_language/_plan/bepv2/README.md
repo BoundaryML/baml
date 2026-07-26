@@ -143,7 +143,7 @@ accepts `Task<T>` must make `T` observable on at least one successful terminal
 path: directly, inside a response, through a deferred result, or in a terminal
 outcome. An open-ended lifecycle with no single result accepts `Task<null>`
 instead. For example, a realtime task supplies instructions and tools while
-its `Live` resource supplies events; it does not pretend that the session
+its `LiveSession` resource supplies events; it does not pretend that the session
 produces one hidden `T`.
 
 Safe drivers require the provider capability they use. An explicitly unsafe
@@ -206,15 +206,13 @@ Background jobs, batches, sessions, realtime connections, caches, and harness
 sessions return resource values. Every resource provides idempotent cleanup:
 
 ```baml
-let live = ai.drivers.open_live(
-  VoiceSupport.task(customer_id),
-  channel,
+let live_session = VoiceSupport.task(customer_id).run(
+  runner = ai.run.Realtime.new(channel),
 )
-defer { live.cleanup() }
 ```
 
 `VoiceSupport` returns `null`: it describes how the live interaction should
-behave, while the `Live` resource exposes its many observable events and
+behave, while the `LiveSession` resource exposes its many observable events and
 controls.
 
 `defer` is the deterministic production path. Runtime finalization is the

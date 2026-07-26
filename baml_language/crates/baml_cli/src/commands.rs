@@ -369,13 +369,16 @@ mod tests {
     }
 
     #[test]
-    fn check_help_mentions_default_search_start() {
+    fn check_help_explains_explicit_source_directory() {
         let help = help_for(&["baml-cli", "check", "--help"]);
         assert!(help.contains("Usage: baml check [OPTIONS]"), "{help}");
         assert!(
-            help.contains("Project search starting point. Defaults to the current directory"),
+            help.contains(
+                "Project or source directory. An explicit directory outside a discovered"
+            ),
             "{help}"
         );
+        assert!(help.contains("Defaults to the current directory"), "{help}");
     }
 
     #[test]

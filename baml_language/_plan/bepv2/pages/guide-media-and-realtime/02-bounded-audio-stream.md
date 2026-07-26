@@ -40,7 +40,7 @@ buffers it explicitly.
 
 An input stream does not supply speaker output, event handling, barge-in,
 response cancellation, multiple turns, or live cleanup. Those belong to
-`Channel` plus the `Live` resource.
+`Channel` plus the `LiveSession` resource.
 
 ```text
 AudioStream answers: how does bounded input arrive?

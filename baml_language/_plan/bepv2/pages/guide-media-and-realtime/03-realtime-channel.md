@@ -1,4 +1,4 @@
-# Realtime interaction with `Channel` and `Live`
+# Realtime interaction with `Channel` and `LiveSession`
 
 > **Status:** Implemented in the executable reference.
 
@@ -18,14 +18,18 @@ function VoiceSupport(customer_id: string) -> null {
 
 let task = VoiceSupport.task(customer_id)
 
-let live = ai.drivers.open_live(task, audio_channel)
-defer { live.cleanup() }
+let live_session = task.run(
+  runner = ai.run.Realtime.new(trace_channel),
+)
 
-for (let event in live.events()) {
-  match (event) {
-    let delta: ai.TranscriptDelta => ui.append(delta.text),
-    let closed: ai.LiveClosed => return,
-    _ => {},
+let closed = false
+while (!closed) {
+  for (let event in live_session.receive()) {
+    match (event) {
+      let delta: ai.TranscriptDelta => ui.append(delta.text),
+      let ended: ai.LiveClosed => { closed = true },
+      _ => {},
+    }
   }
 }
 ```
@@ -36,12 +40,58 @@ and selected provider. Text, audio, tool calls, interruptions, and closure are
 observed through `LiveEvent` values instead. There is no
 `${ctx.output_format}` because there is no final `T` to parse.
 
+## Duplex audio stays small
+
+The audio device and provider session are separate resources. Provider-side
+VAD is session configuration; it is not another provider or runner.
+
+```baml
+function run_voice_agent(task: ai.Task<null>, audio: ai.RealtimeAudioDevice) -> null {
+  let live_session = task.run(
+    runner = ai.run.Realtime.new(trace_channel),
+  )
+
+  let microphone_pump = spawn {
+    pump_microphone(audio, live_session)
+  }
+
+  let closed = false
+  while (!closed) {
+    let events = live_session.receive()
+    for (let event in events) {
+      match (event) {
+        let audio_delta: ai.AssistantAudioDelta => {
+          audio.play_output(audio_delta.audio)
+        },
+        let speech: ai.UserSpeechStarted => {
+          let played_ms = audio.stop_output()
+          live_session.truncate_assistant_audio(played_ms)
+        },
+        let tools: ai.LiveToolCalls => {
+          live_session.submit_tool_results(dispatch(tools.calls))
+        },
+        let ended: ai.LiveClosed => {
+          microphone_pump.cancel()
+          closed = true
+        },
+        _ => log.info(event),
+      }
+    }
+  }
+}
+```
+
+`OpenAiRealtime.server_vad` enables the provider's speech boundaries,
+automatic response creation, and interruption. A manually delimited recording
+can instead use `send_audio_turn(...)`; continuous microphone capture should
+use `send_audio(...)`.
+
 ## Ownership
 
 ```text
-Channel: caller-owned input/output plumbing
-Live:    provider-session identity, event ordering, controls, cleanup
-Task:    instructions, arguments, tools, and selected provider
+Channel:     caller-owned tracing/transport observation
+LiveSession: provider-session identity, event ordering, input, and controls
+Task:        instructions, arguments, tools, and selected provider
 ```
 
 A realtime-only provider implements `RealtimeProvider`, not `DriveProvider`
@@ -74,7 +124,7 @@ let resolution = ResolveCall(collected_conversation)
 
 That gives the typed result a clear completion boundary. A future bounded
 realtime API may expose a separate `LiveRun<T>` with `final() -> Response<T>`,
-but open-ended `Live` should not pretend every session produces one `T`.
+but open-ended `LiveSession` should not pretend every session produces one `T`.
 
 ## Related design
 

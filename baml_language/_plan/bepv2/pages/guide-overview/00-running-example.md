@@ -137,7 +137,7 @@ provider owns:    wire protocol and exact continuation transcript
 
 Later chapters add resources without changing this boundary. Application-owned
 history remains editable `Conversation` data. Provider-owned sessions return
-opaque resume tokens. Realtime interaction returns a `Live` resource while the
+opaque resume tokens. Realtime interaction returns a `LiveSession` resource while the
 caller retains its input/output `Channel`.
 
 ## Deliberate exceptions

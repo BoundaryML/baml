@@ -335,7 +335,13 @@ pub(crate) fn instantiated_callee_throws(
                 });
             crate::generics::infer_bindings_allow_typevars(&param.ty, &arg_ty, &mut bindings);
         }
-        crate::generics::substitute_ty(throws, &bindings)
+        let substituted = crate::generics::substitute_ty(throws, &bindings);
+        if crate::generics::contains_typevar(&substituted)
+            && let Some(instantiated) = call_plan.and_then(|plan| plan.instantiated_throws.as_ref())
+        {
+            return instantiated.clone();
+        }
+        substituted
     };
 
     match &typed_callee {

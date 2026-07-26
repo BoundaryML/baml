@@ -2,18 +2,19 @@
 
 > **Status:** Implemented in the executable reference.
 
-Interruption controls operate on the opened `Live` resource because they must
+Interruption controls operate on the opened `LiveSession` resource because they must
 target one provider session and its audio timeline.
 
 ## React to user speech
 
 ```baml
-for (let event in live.events()) {
+for (let event in live_session.receive()) {
   match (event) {
     let speech: ai.UserSpeechStarted => {
-      live.cancel_response()
-      live.truncate_assistant_audio(speech.played_ms)
-      ui.mark_interrupted(speech.played_ms)
+      // With server VAD, the provider already interrupts generation.
+      let played_ms = audio.stop_output()
+      live_session.truncate_assistant_audio(played_ms)
+      ui.mark_interrupted(played_ms)
     },
     let delta: ai.TranscriptDelta => ui.append(delta.text),
     _ => {},
@@ -28,7 +29,7 @@ what the model generated.
 ## Why this is not a channel method
 
 The channel transports frames and may be reattached or multiplexed. It does
-not identify which provider response should be cancelled. `Live` owns that
+not identify which provider response should be cancelled. `LiveSession` owns that
 identity and ordering.
 
 ## Test it

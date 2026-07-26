@@ -9,7 +9,8 @@ use crate::reporter::Reporter;
 
 #[derive(Args, Debug)]
 pub struct CheckArgs {
-    /// Project search starting point. Defaults to the current directory.
+    /// Project or source directory. An explicit directory outside a discovered
+    /// project's `baml_src/` is loaded directly. Defaults to the current directory.
     #[arg(long, value_name = "PATH")]
     pub from: Option<PathBuf>,
 }

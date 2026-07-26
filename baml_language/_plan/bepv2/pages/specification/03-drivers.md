@@ -27,7 +27,7 @@ An event stream preserves `T` through its terminal accessor. For example,
 A lifecycle with no single final application value must not accept an
 arbitrary `Task<T>` and discard `T`. It accepts `Task<null>` or a specialized
 intent type instead. Realtime follows this rule: `Task<null>` supplies the
-instructions, arguments, tools, and provider; `Live` supplies the session's
+instructions, arguments, tools, and provider; `LiveSession` supplies the session's
 events and controls.
 
 ## Default catalog
@@ -58,7 +58,7 @@ type explains where typed work happens later.
 | Driver | Input | Result | How typed output works |
 | --- | --- | --- | --- |
 | `open_session` | provider + options | `Session` | no task yet; `session.run(Task<T>)` returns `Response<T>` |
-| `open_live` | `Task<null>` + channel/options | `Live` | no single `T`; output arrives as `LiveEvent` values |
+| `task.run(runner = run.Realtime.new(...))` | `Task<null>` + channel/options | `LiveSession` | no single `T`; output arrives as `LiveEvent` values |
 | `create_cache` | provider + messages/options | `Cache` | no task yet; `cache.run(Task<T>)` returns `Response<T>` |
 
 ### Specialized media operations

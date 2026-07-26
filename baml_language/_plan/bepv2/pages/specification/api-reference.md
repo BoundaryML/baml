@@ -411,8 +411,12 @@ interface Session requires Resource {
   function token(self) -> SessionToken throws never
 }
 
-interface Live requires Resource {
-  function events(self) -> LiveEvent[] throws baml.errors.UnknownError
+interface LiveSession requires Resource {
+  function receive(self) -> LiveEvent[] throws baml.errors.UnknownError
+  function send_text(self, text: string) -> null throws baml.errors.UnknownError
+  function send_audio(self, pcm16_24khz_mono: uint8array) -> null
+    throws baml.errors.UnknownError
+  function commit_audio(self) -> null throws baml.errors.UnknownError
   function submit_tool_results(self, results: ToolResult[]) -> null
     throws baml.errors.UnknownError
   function cancel_response(self) -> null throws baml.errors.UnknownError
@@ -448,7 +452,7 @@ interface SessionProvider requires Provider {
 }
 
 interface RealtimeProvider requires Provider {
-  function open_live(self, task: Task<null>, channel: Channel) -> Live
+  function open_live(self, task: Task<null>, channel: Channel) -> LiveSession
     throws baml.errors.UnknownError
 }
 
@@ -459,7 +463,7 @@ interface ManagedCacheProvider requires Provider {
 
 ```
 
-`Job<T>`, `Batch<T>`, `Session`, `Live`, `Cache`, `AgentEventStream<T>`,
+`Job<T>`, `Batch<T>`, `Session`, `LiveSession`, `Cache`, `AgentEventStream<T>`,
 `HarnessSession`, and `HarnessEventStream<T>` are resource interfaces with
 owned lifecycle methods, serializable opaque tokens where resumption exists,
 and at-most-once `cleanup()`.
@@ -566,7 +570,9 @@ function drivers.submit_batch<T, P extends BatchProvider>(provider: P, tasks: Ta
   -> Batch<T>
 function drivers.open_session<P extends SessionProvider>(provider: P, options: SessionOptions) -> Session
 function drivers.run_in_session<T>(session: Session, task: Task<T>) -> Response<T>
-function drivers.open_live<P extends RealtimeProvider>(task: Task<null, P>, channel: Channel) -> Live
+class run.Realtime implements Runner<Task<null>> {
+  type Output = LiveSession
+}
 function drivers.create_cache<P extends ManagedCacheProvider>(provider: P, content: Messages, options: CacheOptions) -> Cache
 function drivers.transcribe<P extends TranscriptionProvider>(provider: P, stream: AudioStream, options: TranscriptionOptions) -> string
 function drivers.transcribe_with_meta<P extends TranscriptionProvider>(provider: P, stream: AudioStream, options: TranscriptionOptions) -> Response<string>

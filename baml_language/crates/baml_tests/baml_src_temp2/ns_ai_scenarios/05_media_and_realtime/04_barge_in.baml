@@ -1,13 +1,11 @@
 test "guide 05.04: interruption belongs to the opened live resource" {
-    let live = VoiceSupport_task("talk", root.ai.FakeRealtimeProvider { transcript: "hello" })
+    let live_session = VoiceSupport_task("talk", root.ai.FakeRealtimeProvider { transcript: "hello" })
         .run(runner = root.ai.run.Realtime.new(root.ai.RecordingChannel { frames: [] }));
-    live.cancel_response();
-    live.truncate_assistant_audio(250);
-    // live.cleanup();
-    // live.cleanup();
-    assert.equal(root.ai.collect_live_text(live), "hello");
-    match (live) {
-        let buffered: root.ai.BufferedLive => {
+    live_session.cancel_response();
+    live_session.truncate_assistant_audio(250);
+    assert.equal(root.ai.collect_live_text(live_session), "hello");
+    match (live_session) {
+        let buffered: root.ai.BufferedLiveSession => {
             // assert.is_true(buffered.is_closed);
             assert.equal(buffered.control_frames.length(), 2);
             assert
@@ -29,18 +27,22 @@ test "guide 05.04: interruption belongs to the opened live resource" {
 testset "integ-test-guide-05-barge-in" {
     test "guide 05.04 live OpenAI: cancel precedes played-position truncation on one session" {
         let channel = root.ai.RecordingChannel { frames: [] };
-        let live = VoiceSupport_task(
+        let live_session = VoiceSupport_task(
             "Begin a spoken explanation of why duplicate card charges can appear.",
             root.ai.OpenAiRealtime {
                 model: "gpt-realtime",
                 voice: "alloy",
                 api_key: baml.env.get_or_panic("OPENAI_API_KEY"),
                 output_audio: true,
+                instructions: null,
+                input_transcription_model: null,
+                server_vad: null,
+                keep_open: false,
             },
         )
         .run(runner = root.ai.run.Realtime.new(channel));
-        // Wait only until an assistant audio item exists; the response remains live.
-        let started = live.events();
+        // Wait only until an assistant audio item exists; the response remains in flight.
+        let started = live_session.receive();
         assert
             .is_true(
                 started
@@ -50,12 +52,12 @@ testset "integ-test-guide-05-barge-in" {
                     .length()
                     == 1,
             );
-        live.cancel_response();
-        live.truncate_assistant_audio(0);
+        live_session.cancel_response();
+        live_session.truncate_assistant_audio(0);
         // Drain the provider's cancellation boundary.
-        live.events();
-        match (live) {
-            let session: root.ai.OpenAiRealtimeLive => {
+        live_session.receive();
+        match (live_session) {
+            let session: root.ai.OpenAiRealtimeSession => {
                 log.info(
                     baml.json
                         .stringify(

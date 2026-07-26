@@ -187,22 +187,23 @@ A live connection is the most stateful resource: it owns the socket, the
 event ordering, and the interruption controls. The intended entry point is an
 explicit realtime driver, not a direct LLM-function call: the caller creates a
 `Task<null>` with `.task(...)`, supplies a `Channel`, and retains the returned
-`Live` resource. `null` is intentional: a live session has many observable
+`LiveSession` resource. `null` is intentional: a live session has many observable
 events, not one final application value.
 
 ```baml
-let live = ai.drivers.open_live(
-  VoiceAssistant.task(instructions, $provider = RealtimeModel),
-  audio_channel,
+let live_session = VoiceAssistant.task(
+  instructions,
+  $provider = RealtimeModel,
+).run(
+  runner = ai.run.Realtime.new(trace_channel),
 )
-defer { live.cleanup() }
 
-for (let event in live.events()) {
+for (let event in live_session.receive()) {
   match (event) {
     let t: ai.TranscriptDelta => ui.append(t.text),
     let barge: ai.UserSpeechStarted => {
-      live.cancel_response()
-      live.truncate_assistant_audio(barge.played_ms)
+      let played_ms = audio.stop_output()
+      live_session.truncate_assistant_audio(played_ms)
     },
     _ => {},
   }
@@ -219,7 +220,7 @@ would leave the caller unable to drive or clean up the live interaction.
 If an application needs a typed value after the session, it runs a separate
 typed task over the conversation it collected. A future bounded realtime
 operation could instead return a distinct `LiveRun<T>` with an explicit
-terminal result; the open-ended `Live` resource should remain non-generic.
+terminal result; the open-ended `LiveSession` resource should remain non-generic.
 
 ## Managed caches
 

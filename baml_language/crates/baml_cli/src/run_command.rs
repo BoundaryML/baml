@@ -176,7 +176,8 @@ pub struct RunArgs {
     #[arg(long, short = 'h')]
     pub help: bool,
 
-    /// Project search starting point. Mutually exclusive with `--file`.
+    /// Project or source directory. An explicit directory outside a discovered
+    /// project's `baml_src/` is loaded directly. Mutually exclusive with `--file`.
     #[arg(long, value_name = "PATH")]
     pub from: Option<PathBuf>,
 

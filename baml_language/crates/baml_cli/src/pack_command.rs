@@ -84,7 +84,8 @@ pub struct PackArgs {
     #[arg(long, value_enum, default_value_t = OutputFormat::Json)]
     pub output_format: OutputFormat,
 
-    /// Project search starting point. Mutually exclusive with `--file`.
+    /// Project or source directory. An explicit directory outside a discovered
+    /// project's `baml_src/` is loaded directly. Mutually exclusive with `--file`.
     #[arg(long, value_name = "PATH")]
     pub from: Option<PathBuf>,
 

@@ -29,14 +29,14 @@ function run_negotiated(
     match (provider) {
         let realtime: root.ai.RealtimeProvider => {
             let channel = root.ai.RecordingChannel { frames: [] };
-            // Calling the concrete runner directly avoids the current compiler's
-            // unresolved associated-Error projection in an explicitly-throws helper.
-            let runner = root.ai.run.Realtime.new(channel);
-            let live = runner.run(VoiceSupport_task("Reply with exactly: negotiated realtime", realtime));
+            let live_session = VoiceSupport_task(
+                "Reply with exactly: negotiated realtime",
+                realtime,
+            ).run(runner = root.ai.run.Realtime.new(channel));
             NegotiatedRun {
                 provider: realtime.name(),
                 mode: "realtime",
-                output: root.ai.collect_live_text(live),
+                output: root.ai.collect_live_text(live_session),
             }
         },
         let stream: root.ai.StreamingProvider => {
@@ -44,10 +44,8 @@ function run_negotiated(
             NegotiatedRun { provider: stream.name(), mode: "stream", output: resolution.reply }
         },
         let completion: root.ai.CompletionProvider => {
-            // Concrete runner dispatch preserves the associated Error through this
-            // explicitly-annotated helper on the current baml-cli compiler path.
-            let runner = root.ai.run.Completion<Resolution>.new();
-            let resolution = runner.run(ResolveTicket_task(sample_ticket(), completion));
+            let resolution = ResolveTicket_task(sample_ticket(), completion)
+                .run(runner = root.ai.run.Completion<Resolution>.new());
             NegotiatedRun {
                 provider: completion.name(),
                 mode: "completion",
@@ -71,6 +69,10 @@ testset "integ-test-guide-07-capability-negotiation" {
                 voice: "alloy",
                 api_key: baml.env.get_or_panic("OPENAI_API_KEY"),
                 output_audio: false,
+                instructions: null,
+                input_transcription_model: null,
+                server_vad: null,
+                keep_open: false,
             },
         ];
         //# Run each erased provider only after its capability match succeeds

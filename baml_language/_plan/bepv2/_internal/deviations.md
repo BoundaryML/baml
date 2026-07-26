@@ -97,19 +97,16 @@ Making `ai` a reserved top-level namespace is separate compiler/stdlib work.
 **Why:** Today's BAML type aliases cannot declare generic parameters. The
 concrete outcome classes and their matching behavior are otherwise identical.
 
-### D-006: Realtime caller-audio input is not wired yet
+### D-006: Realtime caller-audio input is wired
 
 **Normative design:** realtime tasks may carry tools and media, and the opened
 channel owns interruption and realtime tool-result submission.
 
-**Reference-code spelling:** `OpenAiRealtime` exercises a real WebSocket,
-supports text requests, audio output, cancellation, played-position
-truncation, native tool calls, and correlated tool-result submission. It does
-not yet send caller audio frames through the provider's input-audio buffer.
-
-**Follow-up:** Add typed caller-audio frames and OpenAI
-`input_audio_buffer.append`/commit events without moving session ownership out
-of the `Live` resource.
+**Reference-code spelling:** `LiveSession.send_audio` streams caller PCM frames,
+`commit_audio` ends manually delimited turns, and `send_audio_turn` is the
+bounded convenience. `OpenAiRealtime.server_vad` enables provider-owned speech
+boundaries, response creation, and interruption without moving session
+ownership out of the `LiveSession` resource.
 
 ### D-008: Provider prompt rendering uses a shorthand string
 
@@ -212,22 +209,19 @@ streaming semantics.
 provider deltas with tool lifecycle events, then implement both `Task` and
 `StreamTask` overloads.
 
-### D-013: Realtime tasks still claim a `string` result
+### D-013: Realtime tasks use `null`
 
 **Normative design:** `open_live` accepts `Task<null>`. The task supplies
-instructions, arguments, tools, and provider selection; the non-generic `Live`
+instructions, arguments, tools, and provider selection; the non-generic `LiveSession`
 resource supplies events and controls. A driver must not accept `Task<T>` when
 no successful terminal path exposes `T`.
 
-**Reference-code spelling:** `VoiceSupport_task` returns `Task<string>`, and
-the executable `RealtimeProvider.open_live<T>` accepts any `Task<T>`. The
-provider sends the prompt and tools but never parses or returns the declared
-`string`.
-
-**Follow-up:** migrate the hand-written realtime task and provider/driver
-signatures to `Task<null>`. If a bounded realtime operation is added later,
-give it a distinct `LiveRun<T>` contract with an explicit terminal result
-instead of making open-ended `Live` generic.
+**Reference-code spelling:** `VoiceSupport_task` returns `Task<null>`, and the
+public `Realtime` runner implements only `Runner<Task<null>>`. The provider's
+internal opener remains generic implementation plumbing, but callers cannot
+discard an arbitrary task result through the runner. A future bounded
+realtime operation should use a distinct `LiveRun<T>` contract with an
+explicit terminal result instead of making open-ended `LiveSession` generic.
 
 ## Closed deviations
 
