@@ -24,6 +24,7 @@ use std::{
 };
 
 use bex_vm_types::{CompilationUnit, Program};
+use hmac::{Hmac, Mac};
 use sha2::{Digest, Sha256};
 
 /// Bump whenever the serialized `Program` layout or the entry header changes.
@@ -56,6 +57,18 @@ const MAGIC: [u8; 4] = *b"BEXC";
 /// Fixed-size entry header preceding the borsh payload:
 /// magic(4) + `format_version`(4) + key echo(32) + `payload_len`(8) + `payload_sha256`(32)
 const HEADER_LEN: usize = 4 + 4 + 32 + 8 + 32;
+
+/// Remote-only authenticated envelope:
+/// magic(8) + HMAC-SHA256(32) + the ordinary cache entry.
+///
+/// The local entry format stays unchanged. This wrapper is deliberately opaque
+/// to the HTTP server, so a plain GET/PUT blob store does not need to preserve
+/// custom response headers or know anything about cache authentication.
+const REMOTE_SIGNED_MAGIC: [u8; 8] = *b"BEXSIG01";
+const REMOTE_SIGNATURE_LEN: usize = 32;
+const REMOTE_SIGNED_HEADER_LEN: usize = REMOTE_SIGNED_MAGIC.len() + REMOTE_SIGNATURE_LEN;
+const REMOTE_SIGNATURE_DOMAIN: &[u8] = b"BAML remote bytecode cache entry signature v1\0";
+type HmacSha256 = Hmac<Sha256>;
 
 /// A 256-bit content-addressed cache key.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -1048,18 +1061,29 @@ mod tests {
 ///
 /// Configured via `BAML_CACHE_REMOTE=<base-url>` (entries live at
 /// `<base-url>/<key-hex>`) and optional `BAML_CACHE_REMOTE_TOKEN` (sent as a
-/// bearer token). Only immutable entries — Program blobs, stdlib slices, and
-/// content-addressed compilation units — are shared; the per-project manifest
-/// is a mutable local-latest pointer and deliberately stays local.
+/// bearer token). `BAML_CACHE_REMOTE_SIGNING_KEY` and
+/// `BAML_CACHE_REMOTE_VERIFICATION_KEY` are separate, 64-hex-character
+/// HMAC-SHA256 key settings for writers and readers respectively. They must
+/// contain the same random key bytes, must be different from the bearer token,
+/// and are never sent to the blob-serving endpoint. Only immutable entries —
+/// Program blobs, stdlib slices, and content-addressed compilation units — are
+/// shared; the per-project manifest is a mutable local-latest pointer and
+/// deliberately stays local.
 ///
-/// The configured origin is a trust boundary because it supplies executable VM
-/// programs. Non-loopback remotes therefore require HTTPS. Failures are bounded
-/// by a short timeout and degrade to local-only behavior. Downloaded entries
-/// still pass the local header/checksum validation and are persisted locally so
-/// the remote is hit at most once per entry.
+/// When a verification key is configured, every download must carry a valid
+/// authenticated envelope before its cache header is checked or its payload is
+/// deserialized. This lets CI sign uploads while developer machines reject
+/// bytecode forged by a malicious or compromised blob server. Without a
+/// verification key, remote entries are integrity-checked but **not
+/// authenticated**: the remote must be trusted to supply executable VM
+/// programs, and HTTPS is strongly preferred. Failures are bounded by a short
+/// timeout and degrade to local-only behavior. Validated entries are persisted
+/// locally so the remote is hit at most once per entry.
 pub struct RemoteCache {
     base_url: String,
     token: Option<String>,
+    signing_key: Option<[u8; 32]>,
+    verification_key: Option<[u8; 32]>,
     client: reqwest::blocking::Client,
 }
 
@@ -1075,8 +1099,9 @@ fn remote_url_allowed(url: &reqwest::Url) -> bool {
 }
 
 impl RemoteCache {
-    /// Build from `BAML_CACHE_REMOTE` / `BAML_CACHE_REMOTE_TOKEN`; `None`
-    /// when unset or the HTTP client cannot be constructed.
+    /// Build from the `BAML_CACHE_REMOTE*` environment settings; `None` when
+    /// the URL is unset, a configured signing/verification key is invalid, or
+    /// the HTTP client cannot be constructed.
     pub fn from_env() -> Option<RemoteCache> {
         let base_url = std::env::var("BAML_CACHE_REMOTE").ok()?;
         if base_url.is_empty() {
@@ -1100,9 +1125,13 @@ impl RemoteCache {
             .ok()?;
         let base_url = base_url.trim_end_matches('/').to_string();
         let token = std::env::var("BAML_CACHE_REMOTE_TOKEN").ok();
+        let signing_key = remote_key_from_env("BAML_CACHE_REMOTE_SIGNING_KEY").ok()?;
+        let verification_key = remote_key_from_env("BAML_CACHE_REMOTE_VERIFICATION_KEY").ok()?;
         Some(RemoteCache {
             base_url,
             token,
+            signing_key,
+            verification_key,
             client,
         })
     }
@@ -1146,21 +1175,91 @@ impl RemoteCache {
         if body.len() as u64 > Self::REMOTE_MAX_BYTES {
             return None;
         }
-        Some(body)
+        self.authenticate_download(body)
     }
 
     fn put(&self, key: &CacheKey, entry: Vec<u8>) {
+        let body = match &self.signing_key {
+            Some(signing_key) => authenticated_remote_entry(signing_key, &entry),
+            None => entry,
+        };
         let mut request = self
             .client
             .put(self.entry_url(key))
             .header("content-type", "application/octet-stream")
-            .body(entry);
+            .body(body);
         if let Some(token) = &self.token {
             request = request.bearer_auth(token);
         }
         // Best-effort: sharing is an optimization, never a failure mode.
         let _ = request.send();
     }
+
+    /// Authenticate and unwrap a downloaded remote body. With a verification
+    /// key configured, an unsigned body is a miss. Without one, preserve the
+    /// historical integrity-only behavior while also tolerating signed uploads.
+    fn authenticate_download(&self, mut body: Vec<u8>) -> Option<Vec<u8>> {
+        let is_signed = body.starts_with(&REMOTE_SIGNED_MAGIC);
+        match (&self.verification_key, is_signed) {
+            (Some(verification_key), true) => {
+                let signature = body.get(
+                    REMOTE_SIGNED_MAGIC.len()..REMOTE_SIGNED_MAGIC.len() + REMOTE_SIGNATURE_LEN,
+                )?;
+                let entry = body.get(REMOTE_SIGNED_HEADER_LEN..)?;
+                let mut mac = HmacSha256::new_from_slice(verification_key).ok()?;
+                mac.update(REMOTE_SIGNATURE_DOMAIN);
+                mac.update(entry);
+                mac.verify_slice(signature).ok()?;
+                Some(body.split_off(REMOTE_SIGNED_HEADER_LEN))
+            }
+            (Some(_), false) => None,
+            (None, true) => {
+                body.get(REMOTE_SIGNED_HEADER_LEN..)?;
+                Some(body.split_off(REMOTE_SIGNED_HEADER_LEN))
+            }
+            (None, false) => Some(body),
+        }
+    }
+}
+
+/// Parse one optional fixed-size HMAC key. A present but malformed setting
+/// disables the remote rather than silently downgrading to unauthenticated
+/// mode.
+fn remote_key_from_env(name: &str) -> Result<Option<[u8; 32]>, ()> {
+    match std::env::var(name) {
+        Err(std::env::VarError::NotPresent) => Ok(None),
+        Err(std::env::VarError::NotUnicode(_)) => {
+            warn_invalid_remote_key(name);
+            Err(())
+        }
+        Ok(value) => match unhex32(&value) {
+            Some(key) => Ok(Some(key)),
+            None => {
+                warn_invalid_remote_key(name);
+                Err(())
+            }
+        },
+    }
+}
+
+fn warn_invalid_remote_key(name: &str) {
+    #[allow(clippy::print_stderr)]
+    {
+        eprintln!("warning: BAML_CACHE_REMOTE ignored — {name} must be a 32-byte hex key");
+    }
+}
+
+fn authenticated_remote_entry(signing_key: &[u8; 32], entry: &[u8]) -> Vec<u8> {
+    let mut mac = HmacSha256::new_from_slice(signing_key).expect("HMAC accepts 32-byte keys");
+    mac.update(REMOTE_SIGNATURE_DOMAIN);
+    mac.update(entry);
+    let signature = mac.finalize().into_bytes();
+
+    let mut body = Vec::with_capacity(REMOTE_SIGNED_HEADER_LEN + entry.len());
+    body.extend_from_slice(&REMOTE_SIGNED_MAGIC);
+    body.extend_from_slice(&signature);
+    body.extend_from_slice(entry);
+    body
 }
 
 impl BytecodeCache {
@@ -1193,17 +1292,17 @@ impl BytecodeCache {
     }
 
     /// Like [`Self::load`], but on a local miss consults the remote backend:
-    /// a downloaded entry is validated exactly like a local one (magic,
-    /// version, key echo, payload checksum) and persisted locally before use.
+    /// when configured, remote authentication is required first; then the
+    /// downloaded entry is validated exactly like a local one (magic, version,
+    /// key echo, payload checksum) and persisted locally before use.
     pub fn load_shared(&self, key: &CacheKey) -> Option<Program> {
         if let Some(program) = self.load(key) {
             return Some(program);
         }
         let remote = self.remote.as_ref()?;
         let entry = remote.get(key)?;
-        // The configured HTTPS origin (or local loopback server) is trusted to
-        // supply executable VM programs. The entry framing additionally rejects
-        // corruption, truncation, version skew, and responses for another key.
+        // `RemoteCache::get` authenticates (and unwraps) the download before the
+        // attacker-controlled entry reaches structural checks or deserialization.
         let payload = check_entry(&entry, key)?;
         let program = borsh::from_slice::<Program>(payload).ok()?;
         self.persist_from_remote(key, &entry);
@@ -1243,7 +1342,9 @@ mod remote_tests {
     type SharedStore = Arc<Mutex<HashMap<String, Vec<u8>>>>;
 
     /// Minimal in-process HTTP store: GET serves stored bodies, PUT stores
-    /// them. Std-only so the test needs no async runtime.
+    /// them. Authenticated envelopes remain opaque bytes, matching a real blob
+    /// store that never receives the signing/verification key. Std-only so the
+    /// test needs no async runtime.
     fn spawn_http_store() -> (String, SharedStore) {
         let listener = TcpListener::bind("127.0.0.1:0").expect("bind");
         let addr = listener.local_addr().expect("addr");
@@ -1310,9 +1411,19 @@ mod remote_tests {
     }
 
     fn remote_for(base_url: &str) -> RemoteCache {
+        remote_for_with_keys(base_url, None, None)
+    }
+
+    fn remote_for_with_keys(
+        base_url: &str,
+        signing_key: Option<[u8; 32]>,
+        verification_key: Option<[u8; 32]>,
+    ) -> RemoteCache {
         RemoteCache {
             base_url: base_url.trim_end_matches('/').to_string(),
             token: None,
+            signing_key,
+            verification_key,
             client: reqwest::blocking::Client::new(),
         }
     }
@@ -1382,6 +1493,163 @@ mod remote_tests {
         assert!(
             cache_b.load_shared(&key2).is_none(),
             "corrupt remote entry rejected"
+        );
+    }
+
+    #[test]
+    fn valid_remote_signature_is_accepted() {
+        const AUTH_KEY: [u8; 32] = [0xa5; 32];
+
+        let (url, store) = spawn_http_store();
+        let program = Program::default();
+        let files = vec![("signed.baml".to_string(), "fn signed {}")];
+        let key = compute_key(&KeyInputs {
+            compiler_fingerprint: [11u8; 32],
+            opt_level: 2,
+            emit_test_cases: false,
+            manifest: None,
+            files: &files,
+        });
+
+        let writer_dir = tempfile::tempdir().expect("writer tempdir");
+        let mut writer = BytecodeCache::open(writer_dir.path().to_path_buf());
+        writer.remote = Some(remote_for_with_keys(&url, Some(AUTH_KEY), None));
+        writer.store_shared(&key, &program).expect("signed store");
+        let unit = CompilationUnit {
+            source_file: "signed.baml".to_string(),
+            ..CompilationUnit::default()
+        };
+        let (unit_key, _) = writer.store_unit_shared(&unit).expect("signed unit store");
+        assert!(
+            store
+                .lock()
+                .expect("lock")
+                .get(&format!("/{}", key.hex()))
+                .is_some_and(|body| body.starts_with(&REMOTE_SIGNED_MAGIC)),
+            "writer uploads an authenticated envelope"
+        );
+
+        let reader_dir = tempfile::tempdir().expect("reader tempdir");
+        let mut reader = BytecodeCache::open(reader_dir.path().to_path_buf());
+        reader.remote = Some(remote_for_with_keys(&url, None, Some(AUTH_KEY)));
+        assert!(
+            reader.load_shared(&key).is_some(),
+            "valid signature is accepted"
+        );
+        assert!(
+            reader.load(&key).is_some(),
+            "authenticated entry is persisted in the ordinary local format"
+        );
+        assert_eq!(
+            reader
+                .load_unit_shared(&unit_key)
+                .expect("signed unit load")
+                .source_file,
+            "signed.baml",
+            "raw shared entries use the same authenticated path"
+        );
+    }
+
+    #[test]
+    fn bad_remote_signature_is_rejected() {
+        const AUTH_KEY: [u8; 32] = [0xb6; 32];
+
+        let (url, store) = spawn_http_store();
+        let program = Program::default();
+        let files = vec![("tampered.baml".to_string(), "fn tampered {}")];
+        let key = compute_key(&KeyInputs {
+            compiler_fingerprint: [12u8; 32],
+            opt_level: 2,
+            emit_test_cases: false,
+            manifest: None,
+            files: &files,
+        });
+
+        let writer_dir = tempfile::tempdir().expect("writer tempdir");
+        let mut writer = BytecodeCache::open(writer_dir.path().to_path_buf());
+        writer.remote = Some(remote_for_with_keys(&url, Some(AUTH_KEY), None));
+        writer.store_shared(&key, &program).expect("signed store");
+        let mut locked = store.lock().expect("lock");
+        let body = locked
+            .get_mut(&format!("/{}", key.hex()))
+            .expect("uploaded body");
+        body[REMOTE_SIGNED_MAGIC.len()] ^= 1;
+        drop(locked);
+
+        let reader_dir = tempfile::tempdir().expect("reader tempdir");
+        let mut reader = BytecodeCache::open(reader_dir.path().to_path_buf());
+        reader.remote = Some(remote_for_with_keys(&url, None, Some(AUTH_KEY)));
+        assert!(
+            reader.load_shared(&key).is_none(),
+            "bad signature is rejected"
+        );
+        assert!(
+            reader.load(&key).is_none(),
+            "unauthenticated entry is not persisted"
+        );
+    }
+
+    #[test]
+    fn missing_remote_signature_is_rejected_when_verification_is_configured() {
+        const AUTH_KEY: [u8; 32] = [0xc7; 32];
+
+        let (url, _) = spawn_http_store();
+        let program = Program::default();
+        let files = vec![("unsigned.baml".to_string(), "fn unsigned {}")];
+        let key = compute_key(&KeyInputs {
+            compiler_fingerprint: [13u8; 32],
+            opt_level: 2,
+            emit_test_cases: false,
+            manifest: None,
+            files: &files,
+        });
+
+        let writer_dir = tempfile::tempdir().expect("writer tempdir");
+        let mut writer = BytecodeCache::open(writer_dir.path().to_path_buf());
+        writer.remote = Some(remote_for(&url));
+        writer.store_shared(&key, &program).expect("unsigned store");
+
+        let reader_dir = tempfile::tempdir().expect("reader tempdir");
+        let mut reader = BytecodeCache::open(reader_dir.path().to_path_buf());
+        reader.remote = Some(remote_for_with_keys(&url, None, Some(AUTH_KEY)));
+        assert!(
+            reader.load_shared(&key).is_none(),
+            "missing signature is rejected"
+        );
+    }
+
+    #[test]
+    fn unsigned_remote_entry_still_works_without_verification_key() {
+        let (url, store) = spawn_http_store();
+        let program = Program::default();
+        let files = vec![("legacy.baml".to_string(), "fn legacy {}")];
+        let key = compute_key(&KeyInputs {
+            compiler_fingerprint: [14u8; 32],
+            opt_level: 2,
+            emit_test_cases: false,
+            manifest: None,
+            files: &files,
+        });
+
+        let writer_dir = tempfile::tempdir().expect("writer tempdir");
+        let mut writer = BytecodeCache::open(writer_dir.path().to_path_buf());
+        writer.remote = Some(remote_for(&url));
+        writer.store_shared(&key, &program).expect("unsigned store");
+        assert!(
+            store
+                .lock()
+                .expect("lock")
+                .get(&format!("/{}", key.hex()))
+                .is_some_and(|body| body.starts_with(&MAGIC)),
+            "no-key writer preserves the original remote entry format"
+        );
+
+        let reader_dir = tempfile::tempdir().expect("reader tempdir");
+        let mut reader = BytecodeCache::open(reader_dir.path().to_path_buf());
+        reader.remote = Some(remote_for(&url));
+        assert!(
+            reader.load_shared(&key).is_some(),
+            "no-key reader preserves integrity-only behavior"
         );
     }
 

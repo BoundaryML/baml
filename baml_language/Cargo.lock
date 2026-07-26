@@ -1269,6 +1269,7 @@ dependencies = [
  "baml_version",
  "bex_vm_types",
  "borsh",
+ "hmac",
  "reqwest",
  "rustls",
  "sha2",

@@ -28,6 +28,7 @@ baml_type = { workspace = true }
 baml_version = { workspace = true }
 bex_vm_types = { workspace = true }
 borsh = { workspace = true }
+hmac = { workspace = true }
 reqwest = { workspace = true, features = [ "blocking" ] }
 rustls = { workspace = true, optional = true }
 
