@@ -166,6 +166,12 @@ test "guide 05.06: sustained server-VAD speech stops playback, cancels, then tru
         )
 }
 
+test "guide 05.06: truncation cannot exceed the exact assistant item's audio" {
+    assert.equal(root.ai.openai_realtime_audio_end_ms(9475, 8950 * 48), 8950);
+    assert.equal(root.ai.openai_realtime_audio_end_ms(4000, 8950 * 48), 4000);
+    assert.equal(root.ai.openai_realtime_audio_end_ms(-1, 8950 * 48), 0)
+}
+
 test "guide 05.06: speech stopped before the threshold does not interrupt" {
     let assistant_audio = baml.Uint8Array.from_base64("AQI=");
     let audio = root.ai.BufferedRealtimeAudioDevice {

@@ -605,6 +605,7 @@ class OpenAiRealtimeSession {
     audio_boundary_emitted: bool,
     awaiting_input_transcript: bool,
     last_assistant_item_id: string?,
+    assistant_audio_bytes_by_item_id: map<string, int>,
     pending_tool_calls: ToolCall[],
     response_finished: bool,
     cancel_requests: int,
@@ -746,6 +747,15 @@ class OpenAiRealtimeSession {
                 }
                                 },
                             };
+                            let item_id = baml.json.path_or(event, ".item_id", self.last_assistant_item_id ?? "");
+                            if (item_id != "") {
+                                self.assistant_audio_bytes_by_item_id
+                                    .set(
+                                        item_id,
+                                        (self.assistant_audio_bytes_by_item_id.get(item_id) ?? 0)
+                                            + audio.length(),
+                                    );
+                            }
                             batch.push(AssistantAudioDelta { audio: audio });
                             batch_done = true;
                         }
@@ -807,6 +817,12 @@ class OpenAiRealtimeSession {
                             if (item_type == "message") {
                                 self.last_assistant_item_id
                                     = baml.json.path_or(event, ".item.id", "");
+                                match (self.last_assistant_item_id) {
+                                    let item_id: string => {
+                                        self.assistant_audio_bytes_by_item_id.set(item_id, 0);
+                                    },
+                                    null => {},
+                                }
                                 if (self.output_audio && !self.audio_boundary_emitted) {
                                     self.audio_boundary_emitted = true;
                                     batch
@@ -1022,6 +1038,8 @@ class OpenAiRealtimeSession {
         }
                 },
             };
+            let received_audio_bytes = self.assistant_audio_bytes_by_item_id.get(item_id) ?? 0;
+            let audio_end_ms = openai_realtime_audio_end_ms(played_ms, received_audio_bytes);
             //# Rewrite provider memory to exactly what the caller played
             self.send_frame(
                 baml.json
@@ -1030,12 +1048,12 @@ class OpenAiRealtimeSession {
                             "type": "conversation.item.truncate",
                             "item_id": item_id,
                             "content_index": 0,
-                            "audio_end_ms": played_ms,
+                            "audio_end_ms": audio_end_ms,
                         },
                     ),
                 "realtime conversation.item.truncate failed",
             );
-            self.truncate_positions_ms.push(played_ms);
+            self.truncate_positions_ms.push(audio_end_ms);
             null
         }
 
@@ -1136,12 +1154,29 @@ implements RealtimeProvider for OpenAiRealtime {
       audio_boundary_emitted: false,
       awaiting_input_transcript: false,
       last_assistant_item_id: null,
+      assistant_audio_bytes_by_item_id: {},
       pending_tool_calls: [],
       response_finished: false,
       cancel_requests: 0,
       truncate_positions_ms: [],
     }
   }
+}
+
+// OpenAI rejects conversation.item.truncate when audio_end_ms is beyond the
+// audio retained for that exact item. PCM16 mono at 24 kHz contains 48 bytes/ms.
+function openai_realtime_audio_end_ms(
+    locally_played_ms: int,
+    item_audio_bytes: int,
+) -> int throws never {
+    let item_duration_ms = item_audio_bytes / 48;
+    if (locally_played_ms < 0) {
+        0
+    } else if (locally_played_ms > item_duration_ms) {
+        item_duration_ms
+    } else {
+        locally_played_ms
+    }
 }
 
 function collect_live_text(live_session: LiveSession) -> string throws baml.errors.UnknownError {

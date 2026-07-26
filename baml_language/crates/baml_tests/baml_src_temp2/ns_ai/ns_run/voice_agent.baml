@@ -10,7 +10,7 @@ class VoiceAgent {
         audio: root.ai.RealtimeAudioDevice,
         channel: root.ai.Channel,
         completion_tool: string? = null,
-        barge_in_after_ms: int = 1500,
+        barge_in_after_ms: int = 500,
     ) -> VoiceAgent throws never {
         VoiceAgent {
             audio: audio,
@@ -43,6 +43,16 @@ class VoiceAgent {
             };
             let barge_in_timers: baml.future.Future<null, null>[] = [];
             let completion_call_ids: string[] = [];
+            defer {
+                state.closed = true;
+                state.user_speaking = false;
+                microphone_pump.cancel();
+                for (let timer in barge_in_timers) {
+                    timer.cancel();
+                }
+                live_session.close();
+                self.audio.close();
+            }
             while (!closed) {
                 let events = live_session.receive();
                 if (events.length() == 0) {
@@ -143,14 +153,6 @@ class VoiceAgent {
                 }
             }
 
-            state.closed = true;
-            state.user_speaking = false;
-            microphone_pump.cancel();
-            for (let timer in barge_in_timers) {
-                timer.cancel();
-            }
-            live_session.close();
-            self.audio.close();
             null
         }
     }
@@ -221,11 +223,27 @@ function interrupt_after_sustained_user_speech(
 function pump_voice_input(
     audio: root.ai.RealtimeAudioDevice,
     live_session: root.ai.LiveSession,
-) -> null throws baml.errors.UnknownError {
+) -> null throws never {
     let listening = true;
     while (listening) {
-        match (audio.next_input()) {
-            let pcm: uint8array => live_session.send_audio(pcm),
+        let next_input = audio.next_input() catch_all (e) {
+            _ => {
+                log.debug({ "voice_agent_microphone_stopped": e });
+                return null;
+            }
+        };
+        match (next_input) {
+            let pcm: uint8array => {
+                live_session.send_audio(pcm) catch_all (e) {
+                    _ => {
+                        // The receive loop owns session errors. If it closes the
+                        // session, the microphone pump should stop without
+                        // producing a second unhandled spawned-task failure.
+                        log.debug({ "voice_agent_microphone_stopped": e });
+                        return null;
+                    }
+                };
+            },
             null => {
                 listening = false;
             },

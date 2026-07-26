@@ -324,7 +324,7 @@ function openai_realtime_call_center(
             // Keep OpenAI VAD's speech boundary events and automatic input
             // commits, but let VoiceAgent own response timing and barge-in.
             create_response: false,
-            // VoiceAgent applies the 1.5-second sustained-speech policy and
+            // VoiceAgent applies the 500 ms sustained-speech policy and
             // then cancels, stops local playback, and truncates explicitly.
             interrupt_response: false,
         },
@@ -345,7 +345,7 @@ function openai_realtime_call_center(
                 MacRealtimeAudioDevice.new(),
                 channel,
                 completion_tool = "mark_conversation_complete",
-                barge_in_after_ms = 1500,
+                barge_in_after_ms = 500,
             ),
     );
     baml.io.println("Call ended.");
