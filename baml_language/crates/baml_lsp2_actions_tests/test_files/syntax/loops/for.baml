@@ -68,6 +68,14 @@ function SumUnknownType(xs: int, b: string) -> int {
 //     ·                  ┬
 //     ·                  ╰── expected `int`, found `string`
 //     ╰────
+// E0001
+//
+//   × mismatched types
+//     ╭─[loops_for.baml:19:2]
+//  19 │     result
+//     ·     ───┬──
+//     ·        ╰── expected `int`, found `string`
+//     ╰────
 // E0006
 //
 //   × cannot iterate over type `int`
