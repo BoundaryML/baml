@@ -1,5 +1,6 @@
-use borsh::{BorshDeserialize, BorshSerialize};
 use std::fmt;
+
+use borsh::{BorshDeserialize, BorshSerialize};
 
 use crate::Name;
 
