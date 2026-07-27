@@ -668,19 +668,11 @@ function patterns_new_runtime.classify_box_either(box: patterns_new_runtime.BoxT
     load_var box
     is_type patterns_new_runtime.BoxT<...>
     pop_jump_if_false L0
-    load_var box
-    load_field .0
-    is_type int
-    pop_jump_if_false L0
     jump L1
 
   L0:
     load_var box
     is_type patterns_new_runtime.BoxT<...>
-    pop_jump_if_false L2
-    load_var box
-    load_field .0
-    is_type string
     pop_jump_if_false L2
     load_const 7
     jump L2
@@ -708,12 +700,8 @@ function patterns_new_runtime.classify_box_union_by_field(box: patterns_new_runt
     pop_jump_if_false L0
     load_var box
     load_field .0
-    is_type int
-    pop_jump_if_false L0
-    load_var box
-    load_field .0
-    store_var _6
-    load_var _6
+    store_var _4
+    load_var _4
     narrow_bind int, slot=2
     pop_jump_if_false L0
     jump L1
@@ -725,7 +713,7 @@ function patterns_new_runtime.classify_box_union_by_field(box: patterns_new_runt
     jump L2
 
   L1:
-    load_var _6
+    load_var _4
 
   L2:
     return
@@ -879,12 +867,8 @@ function patterns_new_runtime.from_optional_box(box: patterns_new_runtime.BoxT<i
     pop_jump_if_false L0
     load_var box
     load_field .0
-    is_type int
-    pop_jump_if_false L0
-    load_var box
-    load_field .0
-    store_var _6
-    load_var _6
+    store_var _4
+    load_var _4
     narrow_bind int, slot=2
     pop_jump_if_false L0
     jump L1
@@ -894,7 +878,7 @@ function patterns_new_runtime.from_optional_box(box: patterns_new_runtime.BoxT<i
     jump L2
 
   L1:
-    load_var _6
+    load_var _4
 
   L2:
     return
@@ -906,12 +890,8 @@ function patterns_new_runtime.from_union_box(box: patterns_new_runtime.BoxT<int>
     pop_jump_if_false L0
     load_var box
     load_field .0
-    is_type int
-    pop_jump_if_false L0
-    load_var box
-    load_field .0
-    store_var _6
-    load_var _6
+    store_var _4
+    load_var _4
     narrow_bind int, slot=2
     pop_jump_if_false L0
     jump L1
@@ -921,7 +901,7 @@ function patterns_new_runtime.from_union_box(box: patterns_new_runtime.BoxT<int>
     jump L2
 
   L1:
-    load_var _6
+    load_var _4
 
   L2:
     return

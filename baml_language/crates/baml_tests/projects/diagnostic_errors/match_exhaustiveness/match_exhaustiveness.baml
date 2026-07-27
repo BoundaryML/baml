@@ -1030,3 +1030,20 @@ function JumpTableClassTypeTag(pet: Cat | Dog | Bird | Fish) -> string {
         let f: Fish => "fish"
     }
 }
+
+// An opaque (`unknown`) column has an infinite alphabet, so every present ctor
+// is its own branch rather than being drawn from a finite `all` set. Two
+// instantiations of one generic class are two such branches, and each has a
+// refutable field, so each contributes a witness. The two witnesses must stay
+// distinguishable: rendering them both as `WitBox { v: _ }` would ask for one
+// arm where two different ones are missing.
+class WitBox<T> {
+    v: T
+}
+
+function DistinctInstantiationWitnesses(x: unknown) -> int {
+    match (x) {
+        WitBox<int> { v: 1 } => 1,
+        WitBox<string> { v: "a" } => 2
+    }
+}

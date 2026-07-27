@@ -259,3 +259,89 @@ function pick_bounded_miss_fn() -> string {
 test "bounded_rigid_arm_rejects_other_member" {
     assert.equal(pick_bounded_miss_fn(), "other")
 }
+
+// ─── 5. a refutable rigid arm ahead of a concrete cover ───────────────────────
+// A rigid arm sits outside its column's alphabet, so it is specialized in a
+// branch of its own purely to keep it reachable. That branch excludes the
+// concrete covering arm (`RigidCell<T>` and `RigidCell<int>` are distinct
+// invariant ctors), so when the rigid arm's own fields are refutable the
+// branch looks non-exhaustive from the inside — but the values it describes
+// are a subset of the concrete arm's, which covers them all. These matches are
+// exhaustive and must compile without a trailing `_`.
+
+class RigidCell<T> {
+    v: T
+}
+
+function rigid_cell_split<T>(c: RigidCell<int>) -> string {
+    match (c) {
+        RigidCell<T> { v: 1 } => "rigid-one",
+        RigidCell<int> { v: _ } => "concrete",
+    }
+}
+
+function rigid_cell_hit_fn() -> string {
+    rigid_cell_split<int>(RigidCell<int> { v: 1 })
+}
+
+test "refutable_rigid_arm_matches_at_realized_arg" {
+    assert.equal(rigid_cell_hit_fn(), "rigid-one")
+}
+
+function rigid_cell_field_miss_fn() -> string {
+    // Right instantiation, wrong field value: falls through to the cover.
+    rigid_cell_split<int>(RigidCell<int> { v: 2 })
+}
+
+test "refutable_rigid_arm_field_test_still_applies" {
+    assert.equal(rigid_cell_field_miss_fn(), "concrete")
+}
+
+function rigid_cell_arg_miss_fn() -> string {
+    // `T = string`: invariant generics, so the rigid arm cannot match at all.
+    rigid_cell_split<string>(RigidCell<int> { v: 1 })
+}
+
+test "refutable_rigid_arm_rejects_foreign_realization" {
+    assert.equal(rigid_cell_arg_miss_fn(), "concrete")
+}
+
+// The same shape with the rigid row in a *list* column: a slice arm covers
+// every length class, and the rigid `T[]` head — which no slice ctor covers —
+// must not fabricate a missing case out of its own refutable sibling field.
+
+class RigidRow {
+    xs: string[]
+    n: int
+}
+
+function rigid_row_split<T>(r: RigidRow) -> string {
+    match (r) {
+        RigidRow { xs: let t: T[], n: 1 } => "rigid-one",
+        RigidRow { xs: [..], n: _ } => "slice",
+    }
+}
+
+function rigid_row_hit_fn() -> string {
+    rigid_row_split<string>(RigidRow { xs: ["a"], n: 1 })
+}
+
+test "refutable_rigid_list_arm_matches_at_realized_arg" {
+    assert.equal(rigid_row_hit_fn(), "rigid-one")
+}
+
+function rigid_row_field_miss_fn() -> string {
+    rigid_row_split<string>(RigidRow { xs: ["a"], n: 2 })
+}
+
+test "refutable_rigid_list_arm_field_test_still_applies" {
+    assert.equal(rigid_row_field_miss_fn(), "slice")
+}
+
+function rigid_row_arg_miss_fn() -> string {
+    rigid_row_split<int>(RigidRow { xs: ["a"], n: 1 })
+}
+
+test "refutable_rigid_list_arm_rejects_foreign_realization" {
+    assert.equal(rigid_row_arg_miss_fn(), "slice")
+}

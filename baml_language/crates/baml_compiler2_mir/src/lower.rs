@@ -13008,17 +13008,6 @@ impl LoweringContext<'_> {
         }
     }
 
-    fn emit_is_tir_type_branch(
-        &mut self,
-        scrutinee: Local,
-        ty: &Tir2Ty,
-        success: BlockId,
-        failure: BlockId,
-    ) {
-        let mut visited = HashSet::new();
-        self.emit_is_tir_type_branch_inner(scrutinee, ty, success, failure, &mut visited);
-    }
-
     /// The members of a union receiver, transparently unwrapping `Optional`
     /// layers — `(Dog | Named)?` after a null check still dispatches the
     /// field/method on the underlying union. Returns `None` when `ty` isn't a
@@ -13046,98 +13035,46 @@ impl LoweringContext<'_> {
         }
     }
 
-    fn emit_is_tir_type_branch_inner(
+    fn emit_is_tir_type_branch(
         &mut self,
         scrutinee: Local,
         ty: &Tir2Ty,
         success: BlockId,
         failure: BlockId,
-        visited: &mut HashSet<String>,
     ) {
         match ty {
             Tir2Ty::Union(members, _) => {
                 let mut remaining = members.iter().peekable();
                 while let Some(member) = remaining.next() {
                     if remaining.peek().is_none() {
-                        self.emit_is_tir_type_branch_inner(
-                            scrutinee, member, success, failure, visited,
-                        );
+                        self.emit_is_tir_type_branch(scrutinee, member, success, failure);
                     } else {
                         let next_check = self.builder.create_block();
-                        self.emit_is_tir_type_branch_inner(
-                            scrutinee, member, success, next_check, visited,
-                        );
+                        self.emit_is_tir_type_branch(scrutinee, member, success, next_check);
                         self.builder.set_current_block(next_check);
                     }
                 }
             }
-            Tir2Ty::Class(qtn, type_args, _) if !type_args.is_empty() => {
-                // Build the header test TIR-side so the enclosing function's
-                // type variables (including an interface-owned body's `Self`)
-                // lower to `TypeArgRef` frame slots (an arg-precise, invariant
-                // instantiation test) instead of being erased by `convert`
-                // into unresolvable names. Residual symbolic args (projections,
-                // a slotless type variable) make the build `None`, failing the
-                // test closed.
+            Tir2Ty::Class(_, type_args, _) if !type_args.is_empty() => {
+                // One arg-precise instantiation test. Building it TIR-side lets
+                // the enclosing function's type variables (including an
+                // interface-owned body's `Self`) lower to `TypeArgRef` frame
+                // slots, so the VM compares the value's stored class type args
+                // against this frame's realizations invariantly, rather than
+                // `convert` erasing them into unresolvable names. Residual
+                // symbolic args (projections, a slotless type variable) make
+                // the build `None`, failing the test closed.
+                //
+                // This test is complete on its own — do not add a walk over the
+                // class's declared field types. A value's fields already
+                // inhabit its own instantiation, so testing them decides
+                // nothing the arg comparison hasn't; and under a rigid
+                // instantiation (`Cell<T>`) a declared field type is the bare
+                // type variable, which no value-level test can decide, so such
+                // a walk fails every such pattern closed.
                 let generic_params = self.enclosing_generic_params();
                 let header = tir2_to_pattern_template(ty, self.resolved_aliases, &generic_params);
-                let class_fields = self.lookup_tir_class_fields(qtn, type_args);
-                if class_fields.is_empty() {
-                    self.emit_pattern_template_test(scrutinee, header, success, failure);
-                    return;
-                }
-
-                let class_success = self.builder.create_block();
-                self.emit_pattern_template_test(scrutinee, header, class_success, failure);
-                self.builder.set_current_block(class_success);
-
-                let key = format!("{qtn:?}<{type_args:?}>");
-                if !visited.insert(key.clone()) {
-                    self.builder.goto(success);
-                    return;
-                }
-
-                let class_tn = qtn.clone();
-                let fields: Vec<_> = class_fields.into_iter().collect();
-                for (idx, (field_name, field_ty)) in fields.iter().enumerate() {
-                    let next = if idx + 1 == fields.len() {
-                        success
-                    } else {
-                        self.builder.create_block()
-                    };
-
-                    let Some(field_idx) = self
-                        .class_fields
-                        .get(&class_tn)
-                        .and_then(|fields| fields.get(field_name.as_str()))
-                        .copied()
-                    else {
-                        self.builder.goto(failure);
-                        visited.remove(&key);
-                        return;
-                    };
-
-                    let field_local = self.builder.temp(self.resolved_aliases.convert(field_ty));
-                    self.builder.assign(
-                        Place::local(field_local),
-                        Rvalue::Use(Operand::Copy(Place::Field {
-                            base: Box::new(Place::Local(scrutinee)),
-                            field: field_idx,
-                        })),
-                    );
-                    self.emit_is_tir_type_branch_inner(
-                        field_local,
-                        field_ty,
-                        next,
-                        failure,
-                        visited,
-                    );
-                    if idx + 1 < fields.len() {
-                        self.builder.set_current_block(next);
-                    }
-                }
-
-                visited.remove(&key);
+                self.emit_pattern_template_test(scrutinee, header, success, failure);
             }
             // An interface pattern (`Slot<int>`, `Source<Item = int>`, or a bare
             // `Named`) is a single membership test against the interface

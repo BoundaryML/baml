@@ -17063,9 +17063,9 @@ impl TypeInferenceBuilder<'_> {
 
         use crate::exhaustiveness::Ctor;
         match &w.ctor {
-            Ctor::Class(qtn, _) => {
+            Ctor::Class(qtn, args) => {
                 let names = self.class_field_names_ordered(qtn);
-                let qtn_str = qtn.render_user_facing();
+                let qtn_str = crate::exhaustiveness::class_witness_head(qtn, args);
                 if w.fields.is_empty() {
                     return format!("{qtn_str} {{}}");
                 }
