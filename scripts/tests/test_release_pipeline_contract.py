@@ -13,6 +13,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 CONTRACT_TOOL = ROOT / "scripts" / "baml-csharp-release-contract"
 VERSION_TOOL = ROOT / "scripts" / "baml-language-version"
+GO_RELEASE_SMOKE = ROOT / "scripts" / "smoke-go-release.py"
 PLATFORMS = ROOT / "release" / "platforms.json"
 RELEASE_WORKFLOW = ROOT / ".github" / "workflows" / "release-baml-language.yml"
 CI_WORKFLOW = ROOT / ".github" / "workflows" / "ci.yaml"
@@ -990,6 +991,15 @@ class WorkflowGraphTests(unittest.TestCase):
             self.assertIn("!cancelled()", block)
             for result in required_results:
                 self.assertIn(result, block)
+
+    def test_go_release_smoke_reconciles_complete_dependency_graph(self) -> None:
+        smoke = GO_RELEASE_SMOKE.read_text(encoding="utf-8")
+
+        self.assertIn('["go", "mod", "tidy"]', smoke)
+        self.assertNotIn(
+            '["go", "mod", "download",',
+            smoke,
+        )
 
     def test_nuget_repair_and_nightly_pack_contracts_are_fail_closed(self) -> None:
         publisher = NUGET_PUBLISHER.read_text(encoding="utf-8")
