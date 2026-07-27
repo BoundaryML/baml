@@ -159,7 +159,8 @@ fn make_llm_companion(
     // New-mode (backtick) parents stashed a closure-carrying companion body for
     // this target during CST lowering (the backtick CST isn't reachable here);
     // use it so the companion renders the prompt through its closure — matching
-    // execution. Legacy Jinja parents fall back to the plain 3-arg builtin call.
+    // execution. Legacy Jinja parents fall back to the plain 3-arg builtin call
+    // (whose null closure throws at render time since B-1024).
     let (body, source_map) = llm_companion_body(parent, target).unwrap_or_else(|| {
         synthesize_llm_builtin_call(
             target,
@@ -192,7 +193,8 @@ fn make_llm_companion(
 /// The pre-lowered, closure-carrying companion body for `target` that a new-mode
 /// (backtick) LLM parent stashed during CST lowering (see
 /// [`LlmBodyDef::companion_bodies`](crate::ast::LlmBodyDef::companion_bodies)),
-/// or `None` for a legacy Jinja parent (which renders via the 3-arg builtin).
+/// or `None` for a legacy Jinja parent (whose 3-arg builtin call throws at
+/// render time since B-1024).
 fn llm_companion_body(
     parent: &FunctionDef,
     target: &str,

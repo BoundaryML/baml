@@ -14,8 +14,6 @@ pub struct TemplateStringData {
     /// Type references in this template's parameter list. Scoped to the item.
     pub type_refs: TypeRefStore,
     pub params: Vec<FunctionParamData>,
-    /// Template body text (Jinja).
-    pub body: Option<String>,
 }
 
 /// Spans for a `TemplateString`, parallel to [`TemplateStringData`].
@@ -72,7 +70,6 @@ fn lower<'db>(
             name: data.name.clone(),
             type_refs: store,
             params,
-            body: data.body.clone(),
         },
         TemplateStringSourceMap {
             span: data.span,

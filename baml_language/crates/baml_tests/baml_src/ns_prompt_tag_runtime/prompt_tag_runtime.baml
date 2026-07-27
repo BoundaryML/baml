@@ -205,3 +205,22 @@ test "prompt_output_format_with_can_render_null_as_omit" {
     // …and the default null rendering is replaced.
     assert.is_true(pt_output_format_with_null_as_omit_fn().includes("string or null") == false)
 }
+
+// Regression (B-1024): a user-defined class named `Role` is an ordinary
+// interpolation, not a chat-role marker. Only the stdlib `baml.llm.Role`
+// built by `${role(...)}` splits messages.
+class Role {
+    name string
+}
+
+function pt_user_role_class_fn() -> string {
+    let impostor = Role { name: "impostor" }
+    let cc = baml.llm.ContextClient { name: "c", provider: "openai", default_role: "user", allowed_roles: ["user"] }
+    let ctx = baml.llm.Context { client: cc, tags: {} }
+    let render = prompt`before ${impostor} after`
+    render(ctx).text()
+}
+
+test "user_role_class_is_not_a_chat_role_marker" {
+    assert.equal(pt_user_role_class_fn(), "before Role { name: \"impostor\" } after")
+}

@@ -1464,10 +1464,9 @@ pub enum Item {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum DeclarativeMeta {
-    /// LLM function metadata (client name, prompt template).
+    /// LLM function metadata (client name, synthesized companion bodies).
     /// Present only for functions declared with `{ client ...; prompt ... }` syntax.
-    /// The body is desugared to a synthetic `Expr` calling `baml.llm.call_llm_function`,
-    /// while this field preserves the original metadata for Jinja type-checking.
+    /// The body is desugared to a synthetic `Expr` calling `baml.llm.call_llm_function`.
     Llm(LlmBodyDef),
 }
 
@@ -1546,7 +1545,6 @@ pub enum BuiltinKind {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LlmBodyDef {
     pub client: Option<Name>,
-    pub prompt: Option<RawPrompt>,
     /// BEP-049 M5e: for a new-mode (backtick) prompt, the pre-lowered body of
     /// the `$stream` companion — a `stream_llm_function(...)` call whose 4th
     /// argument is the synthesized prompt closure. Built in `lower_cst` while
@@ -1566,21 +1564,6 @@ pub struct LlmBodyDef {
     /// `stream_body`) and read back by `make_llm_companion`. Empty for legacy
     /// Jinja `#"..."#` prompts (their companions use the 3-arg Jinja path).
     pub companion_bodies: Vec<(std::string::String, (ExprBody, AstSourceMap))>,
-    pub span: TextRange,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct RawPrompt {
-    pub text: std::string::String,
-    /// Interpolation locations within the template.
-    pub interpolations: Vec<Interpolation>,
-    pub span: TextRange,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Interpolation {
-    pub content: std::string::String,
-    /// Span of the full interpolation, including delimiters.
     pub span: TextRange,
 }
 
@@ -1831,7 +1814,6 @@ impl TestArgValue {
 pub struct TemplateStringDef {
     pub name: Name,
     pub params: Vec<Param>,
-    pub body: Option<RawPrompt>,
     pub span: TextRange,
     pub name_span: TextRange,
 }

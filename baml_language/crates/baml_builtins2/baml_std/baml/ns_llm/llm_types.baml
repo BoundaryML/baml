@@ -63,9 +63,9 @@ class Role {
 }
 
 /// BEP-049 §10. The resolved-client view exposed to a `prompt` tag body as
-/// `ctx.client`. Flattened to mirror the runtime `RenderContextClient` the
-/// orchestrator already assembles for the current attempt (sys_llm), so
-/// `${ctx.client.provider}` etc. read the chosen client's fields directly.
+/// `ctx.client`. Flattened from the primitive client the orchestrator resolves
+/// for the current attempt, so `${ctx.client.provider}` etc. read the chosen
+/// client's fields directly.
 class ContextClient {
   name string
   provider string
@@ -73,17 +73,17 @@ class ContextClient {
   allowed_roles string[]
 }
 
-/// BEP-049 §10. Per-render context passed to a `prompt` tag body as `ctx`.
-/// Carries the same per-attempt data BAML's Jinja runtime injects today
-/// (client info, runtime tags, output-format schema), resolved AFTER the
-/// orchestrator picks the client for this attempt — preserving lazy eval.
+/// BEP-049 §10. Per-render context passed to a `prompt` tag body as `ctx`:
+/// per-attempt data (client info, runtime tags, output-format schema) resolved
+/// AFTER the orchestrator picks the client for this attempt — preserving lazy
+/// eval, exactly like the legacy Jinja runtime it replaced.
 ///
 /// `output_format` is the default-rendered schema string for the call's return
-/// type — the dominant `${ctx.output_format}` usage, byte-equivalent to Jinja's
-/// `{{ ctx.output_format }}`. `output_format_with(...)` re-renders the schema
-/// with caller options (the rare `{{ ctx.output_format(...) }}` form), backed by
-/// the opaque `_output_format` handle. The orchestrator populates both once the
-/// client is chosen.
+/// type — the dominant `${ctx.output_format}` usage, byte-equivalent to the
+/// legacy Jinja `{{ ctx.output_format }}`. `output_format_with(...)` re-renders
+/// the schema with caller options (the rare `{{ ctx.output_format(...) }}`
+/// form), backed by the opaque `_output_format` handle. The orchestrator
+/// populates both once the client is chosen.
 class Context {
   /// The client chosen for this attempt.
   client ContextClient
@@ -292,6 +292,10 @@ class Client {
             context,
             attempt_delay,
           ) catch (e) {
+            // Deterministic render failure (e.g. a legacy Jinja prompt after
+            // B-1024): retrying or falling back cannot help, so surface it
+            // instead of the generic "All orchestration steps failed".
+            root.errors.RenderPrompt { message } => throw root.errors.RenderPrompt { message: message },
             _ => { continue; }
           };
 
@@ -346,6 +350,10 @@ class Client {
             context,
             active_delay_ms,
           ) catch (e) {
+            // Deterministic render failure (e.g. a legacy Jinja prompt after
+            // B-1024): retrying or falling back cannot help, so surface it
+            // instead of the generic "All orchestration steps failed".
+            root.errors.RenderPrompt { message } => throw root.errors.RenderPrompt { message: message },
             _ => { continue; }
           };
           return result2;
@@ -405,6 +413,10 @@ class Client {
             context,
             attempt_delay,
           ) catch (e) {
+            // Deterministic render failure (e.g. a legacy Jinja prompt after
+            // B-1024): retrying or falling back cannot help, so surface it
+            // instead of the generic "All orchestration steps failed".
+            root.errors.RenderPrompt { message } => throw root.errors.RenderPrompt { message: message },
             _ => { continue; }
           };
 
@@ -468,6 +480,10 @@ class Client {
             context,
             active_delay_ms,
           ) catch (e) {
+            // Deterministic render failure (e.g. a legacy Jinja prompt after
+            // B-1024): retrying or falling back cannot help, so surface it
+            // instead of the generic "All orchestration steps failed".
+            root.errors.RenderPrompt { message } => throw root.errors.RenderPrompt { message: message },
             _ => { continue; }
           };
           return result2;
@@ -819,12 +835,12 @@ function assemble_prompt_ast(parts: string[], values: unknown[], rendered: unkno
 /// assembler unrendered would silently produce an empty string (B-563). Route
 /// every value through `string.from` — BAML's implicit `to_string`, the exact
 /// conversion an ordinary `${expr}` applies (honoring `baml.ToString` overrides)
-/// — except a `Role` marker (from `${role(...)}`), which stays raw so
-/// `assemble_prompt_ast` can still use it to split the prompt into chat
-/// messages. Media interpolations are recognized by the assembler on the RAW
-/// values array (their string form here is ignored): host-injected media does
-/// not inhabit the `baml.media.*` classes, so it cannot be exempted by a class
-/// match at this level.
+/// — except a `Role` marker (from `${role(...)}`), which stays raw here (the
+/// assembler reads roles and media off the separately-passed RAW values array;
+/// stringifying a `Role` would be wasted work since its rendered slot is never
+/// read). Media interpolations keep their string form here but the assembler
+/// ignores it: host-injected media does not inhabit the `baml.media.*` classes,
+/// so it cannot be exempted by a class match at this level.
 function render_prompt_values(values: unknown[]) -> unknown[] throws never {
   let rendered: unknown[] = []
   for (let value in values) {

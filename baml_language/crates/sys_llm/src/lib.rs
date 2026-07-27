@@ -62,7 +62,7 @@ pub(crate) fn ensure_rustls_crypto_provider() {}
 
 /// BEP-049 §10 (M5b). Render `return_type`'s schema with default options — the
 /// string a `prompt` body reads as `ctx.output_format`. Equivalent to the Jinja
-/// path's `{{ ctx.output_format }}` (`OutputFormatObject`'s `Display`): build the
+/// path's `{{ ctx.output_format }}` (removed in B-1024): build the
 /// `OutputFormatContent`, render with `RenderOptions::default()`. An empty/`None`
 /// render (e.g. a primitive return type with no schema) becomes the empty string.
 pub fn render_output_format(
@@ -1677,7 +1677,7 @@ mod tests {
     fn render_output_format_renders_class_schema() {
         // BEP-049 M5b: `render_output_format` is the `ctx.output_format` backing.
         // For a class return type it must emit the schema (field names), matching
-        // what `OutputFormatObject`'s `Display` (the Jinja `{{ ctx.output_format }}`)
+        // what the legacy Jinja `{{ ctx.output_format }}` (removed in B-1024)
         // produces from the same `OutputFormatContent`.
         let ctx = ctx_with(
             vec![(

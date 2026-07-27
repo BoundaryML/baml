@@ -560,7 +560,6 @@ function get_body() -> string {
 // ============================================================================
 
 #[tokio::test]
-#[ignore = "request builder emits role user for media messages; assertion pins system"]
 async fn test_openai_mixed_text_and_image() {
     let source = [
         OPENAI_CLIENT,
@@ -590,7 +589,7 @@ function get_body(img: image) -> string {
             "model": "gpt-4o",
             "messages": [
                 {
-                    "role": "system",
+                    "role": "user",
                     "content": [
                         {"type": "text", "text": "What is in this image?"},
                         {"type": "image_url", "image_url": {"url": "https://example.com/photo.jpg"}}
@@ -1015,7 +1014,6 @@ function get_body() -> string {
 // ============================================================================
 
 #[tokio::test]
-#[ignore = "request builder now defaults max_tokens to 8192; assertion pins 4096"]
 async fn test_anthropic_mixed_text_and_image() {
     let source = [
         ANTHROPIC_CLIENT,
@@ -1043,7 +1041,7 @@ function get_body(img: image) -> string {
         body,
         serde_json::json!({
             "model": "claude-3-5-sonnet-20241022",
-            "max_tokens": 4096,
+            "max_tokens": 8192,
             "messages": [
                 {
                     "role": "user",

@@ -4458,7 +4458,7 @@ function baml.llm.Client.execute_once_oneshot(self: baml.llm.Client, context: ba
     load_const ClientType.Primitive
     cmp_int_op ==
     pop_jump_if_false L0
-    jump L9
+    jump L11
 
   L0:
     load_var self
@@ -4473,8 +4473,8 @@ function baml.llm.Client.execute_once_oneshot(self: baml.llm.Client, context: ba
     load_var self
     load_field .sub_clients
     container_len
-    store_var _46
-    load_var _46
+    store_var _51
+    load_var _51
     load_const 0
     cmp_int_op ==
     pop_jump_if_false L2
@@ -4483,11 +4483,11 @@ function baml.llm.Client.execute_once_oneshot(self: baml.llm.Client, context: ba
   L2:
     load_var self
     load_field .counter
-    store_var _50
+    store_var _55
     load_var self
     load_field .sub_clients
     container_len
-    store_var _51
+    store_var _56
     load_var self
     copy 0
     load_field .counter
@@ -4502,7 +4502,7 @@ function baml.llm.Client.execute_once_oneshot(self: baml.llm.Client, context: ba
     load_array_element
     load_var2 2 3
     call baml.llm.Client.execute_oneshot
-    jump L15
+    jump L17
 
   L3:
     load_const "RoundRobin client has no sub-clients"
@@ -4526,27 +4526,39 @@ function baml.llm.Client.execute_once_oneshot(self: baml.llm.Client, context: ba
     load_var _37
     is_type baml.iter.Done
     pop_jump_if_false L6
-    jump L8
+    jump L10
 
   L6:
     load_type #0
     load_var2 13 2
     load_var active_delay_ms
     call baml.llm.Client.execute_oneshot
-    jump L7
+    jump L9
+    load_var e
+    is_type baml.errors.RenderPrompt
+    pop_jump_if_false L7
+    jump L8
+
+  L7:
     load_var e
     throw_if_panic
     jump L5
 
-  L7:
-    jump L15
-
   L8:
+    load_var e
+    load_field .0
+    init_instance baml.errors.RenderPrompt .message
+    throw
+
+  L9:
+    jump L17
+
+  L10:
     load_const "All orchestration steps failed"
     init_instance baml.errors.DevOther .message
     throw
 
-  L9:
+  L11:
     load_var self
     load_const <omitted>
     call baml.llm.Client.to_primitive_client
@@ -4566,48 +4578,20 @@ function baml.llm.Client.execute_once_oneshot(self: baml.llm.Client, context: ba
     store_var http_response
     load_var http_response
     call baml.http.Response.ok
-    pop_jump_if_false L10
-    jump L13
+    pop_jump_if_false L12
+    jump L15
 
-  L10:
+  L12:
     load_var http_response
     sys_op baml.http.Response.text
     store_var error_body
-    jump L11
+    jump L13
     load_var e
     throw_if_panic
     load_const ""
     store_var error_body
 
-  L11:
-    load_var active_delay_ms
-    load_const 0
-    cmp_int_op >
-    pop_jump_if_false L12
-    load_var active_delay_ms
-    load_const 1000000n
-    mul_bigint
-    call baml.time.Duration.from_nanoseconds
-    sys_op baml.sys.sleep
-    pop 1
-
-  L12:
-    load_const "HTTP request failed: "
-    load_var error_body
-    bin_op +
-    init_instance baml.errors.DevOther .message
-    throw
-
   L13:
-    load_var http_response
-    sys_op baml.http.Response.text
-    store_var body
-    load_var2 4 8
-    load_type #0
-    sys_op baml.llm.PrimitiveClient.parse
-    jump L15
-    load_var e
-    throw_if_panic
     load_var active_delay_ms
     load_const 0
     cmp_int_op >
@@ -4620,10 +4604,38 @@ function baml.llm.Client.execute_once_oneshot(self: baml.llm.Client, context: ba
     pop 1
 
   L14:
+    load_const "HTTP request failed: "
+    load_var error_body
+    bin_op +
+    init_instance baml.errors.DevOther .message
+    throw
+
+  L15:
+    load_var http_response
+    sys_op baml.http.Response.text
+    store_var body
+    load_var2 4 8
+    load_type #0
+    sys_op baml.llm.PrimitiveClient.parse
+    jump L17
+    load_var e
+    throw_if_panic
+    load_var active_delay_ms
+    load_const 0
+    cmp_int_op >
+    pop_jump_if_false L16
+    load_var active_delay_ms
+    load_const 1000000n
+    mul_bigint
+    call baml.time.Duration.from_nanoseconds
+    sys_op baml.sys.sleep
+    pop 1
+
+  L16:
     load_var e
     rethrow
 
-  L15:
+  L17:
     return
 }
 
@@ -4634,7 +4646,7 @@ function baml.llm.Client.execute_once_stream(self: baml.llm.Client, context: bam
     load_const ClientType.Primitive
     cmp_int_op ==
     pop_jump_if_false L0
-    jump L9
+    jump L11
 
   L0:
     load_var self
@@ -4649,8 +4661,8 @@ function baml.llm.Client.execute_once_stream(self: baml.llm.Client, context: bam
     load_var self
     load_field .sub_clients
     container_len
-    store_var _33
-    load_var _33
+    store_var _38
+    load_var _38
     load_const 0
     cmp_int_op ==
     pop_jump_if_false L2
@@ -4659,11 +4671,11 @@ function baml.llm.Client.execute_once_stream(self: baml.llm.Client, context: bam
   L2:
     load_var self
     load_field .counter
-    store_var _37
+    store_var _42
     load_var self
     load_field .sub_clients
     container_len
-    store_var _38
+    store_var _43
     load_var self
     copy 0
     load_field .counter
@@ -4679,7 +4691,7 @@ function baml.llm.Client.execute_once_stream(self: baml.llm.Client, context: bam
     load_array_element
     load_var2 2 3
     call baml.llm.Client.execute_stream
-    jump L10
+    jump L12
 
   L3:
     load_const "RoundRobin client has no sub-clients"
@@ -4703,7 +4715,7 @@ function baml.llm.Client.execute_once_stream(self: baml.llm.Client, context: bam
     load_var _23
     is_type baml.iter.Done
     pop_jump_if_false L6
-    jump L8
+    jump L10
 
   L6:
     load_type #0
@@ -4711,20 +4723,32 @@ function baml.llm.Client.execute_once_stream(self: baml.llm.Client, context: bam
     load_var2 9 2
     load_var active_delay_ms
     call baml.llm.Client.execute_stream
-    jump L7
+    jump L9
+    load_var e
+    is_type baml.errors.RenderPrompt
+    pop_jump_if_false L7
+    jump L8
+
+  L7:
     load_var e
     throw_if_panic
     jump L5
 
-  L7:
-    jump L10
-
   L8:
+    load_var e
+    load_field .0
+    init_instance baml.errors.RenderPrompt .message
+    throw
+
+  L9:
+    jump L12
+
+  L10:
     load_const "All orchestration steps failed"
     init_instance baml.errors.DevOther .message
     throw
 
-  L9:
+  L11:
     load_var self
     load_const <omitted>
     call baml.llm.Client.to_primitive_client
@@ -4748,7 +4772,7 @@ function baml.llm.Client.execute_once_stream(self: baml.llm.Client, context: bam
     load_var2 1 7
     call baml.llm.Client.__make_stream
 
-  L10:
+  L12:
     return
 }
 
@@ -4766,7 +4790,7 @@ function baml.llm.Client.execute_oneshot(self: baml.llm.Client, context: baml.ll
     load_var2 1 2
     load_var inherited_delay_ms
     call baml.llm.Client.execute_once_oneshot
-    jump L9
+    jump L11
 
   L1:
     load_var _5
@@ -4837,7 +4861,13 @@ function baml.llm.Client.execute_oneshot(self: baml.llm.Client, context: baml.ll
     load_var2 1 2
     load_var attempt_delay
     call baml.llm.Client.execute_once_oneshot
-    jump L9
+    jump L11
+    load_var e
+    is_type baml.errors.RenderPrompt
+    pop_jump_if_false L9
+    jump L10
+
+  L9:
     load_var e
     throw_if_panic
     load_var attempt
@@ -4846,7 +4876,13 @@ function baml.llm.Client.execute_oneshot(self: baml.llm.Client, context: baml.ll
     store_var attempt
     jump L2
 
-  L9:
+  L10:
+    load_var e
+    load_field .0
+    init_instance baml.errors.RenderPrompt .message
+    throw
+
+  L11:
     return
 }
 
@@ -4865,7 +4901,7 @@ function baml.llm.Client.execute_stream(self: baml.llm.Client, context: baml.llm
     load_var2 1 2
     load_var inherited_delay_ms
     call baml.llm.Client.execute_once_stream
-    jump L9
+    jump L11
 
   L1:
     load_var _5
@@ -4937,7 +4973,13 @@ function baml.llm.Client.execute_stream(self: baml.llm.Client, context: baml.llm
     load_var2 1 2
     load_var attempt_delay
     call baml.llm.Client.execute_once_stream
-    jump L9
+    jump L11
+    load_var e
+    is_type baml.errors.RenderPrompt
+    pop_jump_if_false L9
+    jump L10
+
+  L9:
     load_var e
     throw_if_panic
     load_var attempt
@@ -4946,7 +4988,13 @@ function baml.llm.Client.execute_stream(self: baml.llm.Client, context: baml.llm
     store_var attempt
     jump L2
 
-  L9:
+  L10:
+    load_var e
+    load_field .0
+    init_instance baml.errors.RenderPrompt .message
+    throw
+
+  L11:
     return
 }
 

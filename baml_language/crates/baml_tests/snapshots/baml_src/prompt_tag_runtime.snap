@@ -65,6 +65,13 @@ function prompt_tag_runtime.$init_test_ns_prompt_tag_runtime_prompt_tag_runtime(
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
+    load_var registry
+    load_const "root.prompt_tag_runtime"
+    load_const "user_role_class_is_not_a_chat_role_marker"
+    make_closure .<lambda($init_test_ns_prompt_tag_runtime_prompt_tag_runtime, 9)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
     load_const null
     return
 }
@@ -356,6 +363,36 @@ function prompt_tag_runtime.pt_unqualified_prompt_fn() -> string {
     store_deref ?1
     load_var name
     make_closure .<tagged(pt_unqualified_prompt_fn, 0)>, 1
+    call baml.llm.prompt
+    store_var render
+    load_const "c"
+    load_const "openai"
+    load_const "user"
+    load_const "user"
+    load_type string
+    alloc_array 1
+    init_instance baml.llm.ContextClient .name, .provider, .default_role, .allowed_roles
+    load_type string
+    load_type unknown
+    alloc_map 0
+    load_const null
+    load_const null
+    init_instance baml.llm.Context .client, .tags, .output_format, ._output_format
+    load_var render
+    call_indirect
+    sys_op baml.llm.PromptAst.text
+    return
+}
+
+function prompt_tag_runtime.pt_user_role_class_fn() -> string {
+    load_var ?1
+    make_cell
+    store_var ?1
+    load_const "impostor"
+    init_instance user.prompt_tag_runtime.Role .name
+    store_deref ?1
+    load_var impostor
+    make_closure .<tagged(pt_user_role_class_fn, 0)>, 1
     call baml.llm.prompt
     store_var render
     load_const "c"

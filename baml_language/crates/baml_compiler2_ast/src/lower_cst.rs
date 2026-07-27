@@ -17,10 +17,9 @@ use crate::{
     ast::{
         AssociatedTypeBindingDef, AssociatedTypeDef, AstSourceMap, BuiltinKind, CallArg, EnumDef,
         Expr, ExprBody, ExprId, FieldDef, FunctionBodyDef, FunctionDef, FunctionDefaults,
-        ImplementsBlockDef, ImplementsForDef, InterfaceDef, InterfaceFieldLinkDef, Interpolation,
-        Item, LetDef, LetOrigin, LlmBodyDef, MethodSigDef, Param, RawAttribute, RawAttributeArg,
-        RawPrompt, TemplateStringDef, TestArgValue, TestDef, TypeAliasDef, TypeExpr, TypeExprKind,
-        VariantDef,
+        ImplementsBlockDef, ImplementsForDef, InterfaceDef, InterfaceFieldLinkDef, Item, LetDef,
+        LetOrigin, LlmBodyDef, MethodSigDef, Param, RawAttribute, RawAttributeArg,
+        TemplateStringDef, TestArgValue, TestDef, TypeAliasDef, TypeExpr, TypeExprKind, VariantDef,
     },
     companions::expand_companions,
     lower_expr_body, lower_type_expr,
@@ -362,7 +361,8 @@ fn lower_function(
         // New-mode (BEP-049 M5f): a backtick prompt compiles to a `prompt`…``
         // closure passed as the 4th arg to `call_llm_function`; the orchestrator
         // invokes it per attempt. Legacy `#"..."#` Jinja prompts keep the 3-arg
-        // path (the closure defaults to `null`, so the Jinja render runs).
+        // path (the closure defaults to `null`; since B-1024 removed the Jinja
+        // engine, rendering such a function throws `baml.errors.RenderPrompt`).
         let prompt_backtick = llm.prompt_field().and_then(|pf| pf.backtick_string());
         let (expr_body, source_map) = if let Some(backtick) = &prompt_backtick {
             let (body, sm, mut closure_diags, mut closure_env_refs) =
@@ -731,14 +731,8 @@ fn lower_llm_body(llm_body: &ast::LlmFunctionBody) -> LlmBodyDef {
         .and_then(|cf| cf.value())
         .map(|name| Name::new(&name));
 
-    let prompt = llm_body
-        .prompt_field()
-        .and_then(|pf| pf.raw_string())
-        .map(|raw_str| lower_raw_prompt(&raw_str));
-
     LlmBodyDef {
         client,
-        prompt,
         // Filled in by the LLM-function branch once param names are known.
         stream_body: None,
         companion_bodies: Vec::new(),
@@ -1013,51 +1007,6 @@ pub fn synthesize_llm_make_stream_call(
     };
 
     (body, source_map)
-}
-
-fn lower_raw_prompt(raw_string: &ast::RawStringLiteral) -> RawPrompt {
-    use baml_compiler_syntax::{
-        SyntaxKind,
-        ast::{JinjaExpression, JinjaStatement, PromptText},
-    };
-
-    let mut text = String::new();
-    let mut interpolations = Vec::new();
-    let prompt_span = raw_string.syntax().span_range();
-
-    for child in raw_string.syntax().children() {
-        match child.kind() {
-            SyntaxKind::PROMPT_TEXT => {
-                if let Some(prompt_text) = PromptText::cast(child.clone()) {
-                    text.push_str(&prompt_text.text());
-                }
-            }
-            SyntaxKind::TEMPLATE_INTERPOLATION => {
-                if let Some(jinja_expr) = JinjaExpression::cast(child.clone()) {
-                    let inner = jinja_expr.inner_text();
-                    let full = jinja_expr.full_text();
-                    let span = child.span_range();
-                    interpolations.push(Interpolation {
-                        content: inner,
-                        span,
-                    });
-                    text.push_str(&full);
-                }
-            }
-            SyntaxKind::TEMPLATE_CONTROL => {
-                if let Some(jinja_stmt) = JinjaStatement::cast(child.clone()) {
-                    text.push_str(&jinja_stmt.full_text());
-                }
-            }
-            _ => {}
-        }
-    }
-
-    RawPrompt {
-        text,
-        interpolations,
-        span: prompt_span,
-    }
 }
 
 fn lower_class(
@@ -2466,12 +2415,9 @@ fn lower_template_string(
         .map(|pl| lower_params(&pl, &ts_name, &context, diags))
         .unwrap_or_default();
 
-    let body = ts.raw_string().map(|rs| lower_raw_prompt(&rs));
-
     Some(TemplateStringDef {
         name: Name::new(name_token.text()),
         params,
-        body,
         span: node.span_range(),
         name_span: name_token.text_range(),
     })

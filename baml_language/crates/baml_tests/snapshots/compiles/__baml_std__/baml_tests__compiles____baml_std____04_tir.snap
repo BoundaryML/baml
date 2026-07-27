@@ -2194,6 +2194,8 @@ function baml.llm.Client.execute_stream<TStream, TFinal>(self: baml.llm.Client, 
                 let result2: Stream<TStream, TFinal> = : baml.llm.Stream<TStream, TFinal>
                   catch (self.execute_once_stream(context, attempt_delay) : baml.llm.Stream<TStream, TFinal>) : baml.llm.Stream<TStream, TFinal>
                     catch (e)
+                      root.errors.RenderPrompt { message: message } =>
+                        throw root.errors.RenderPrompt { message: message } : never
                       _ =>
                         { : never
                           continue
@@ -2230,6 +2232,8 @@ function baml.llm.Client.execute_once_stream<TStream, TFinal>(self: baml.llm.Cli
               let result2: Stream<TStream, TFinal> = : baml.llm.Stream<TStream, TFinal>
                 catch (sub.execute_stream(context, active_delay_ms) : baml.llm.Stream<TStream, TFinal>) : baml.llm.Stream<TStream, TFinal>
                   catch (e)
+                    root.errors.RenderPrompt { message: message } =>
+                      throw root.errors.RenderPrompt { message: message } : never
                     _ =>
                       { : never
                         continue
@@ -2290,6 +2294,8 @@ function baml.llm.Client.execute_oneshot<T>(self: baml.llm.Client, context: baml
                 let result2: T = : T
                   catch (self.execute_once_oneshot<T>(context, attempt_delay) : T) : T
                     catch (e)
+                      root.errors.RenderPrompt { message: message } =>
+                        throw root.errors.RenderPrompt { message: message } : never
                       _ =>
                         { : never
                           continue
@@ -2355,6 +2361,8 @@ function baml.llm.Client.execute_once_oneshot<T>(self: baml.llm.Client, context:
               let result2: T = : T
                 catch (sub.execute_oneshot<T>(context, active_delay_ms) : T) : T
                   catch (e)
+                    root.errors.RenderPrompt { message: message } =>
+                      throw root.errors.RenderPrompt { message: message } : never
                     _ =>
                       { : never
                         continue

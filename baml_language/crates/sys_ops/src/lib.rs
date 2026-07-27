@@ -1241,11 +1241,16 @@ impl<T> io::IoNamespaceLlm for T {
 
 /// Role name of an interpolated value if it is a `baml.llm.Role` instance (set
 /// by the in-template `role(...)` constructor), else `None`.
+///
+/// The match must be exact: the assembler now receives RAW interpolation
+/// values, so a suffix match would swallow a user-defined class named `Role`
+/// (with a string `name` field) as a chat-role marker instead of letting its
+/// rendered form flow into the message text.
 fn prompt_role_name(v: &BexExternalValue) -> Option<String> {
     if let BexExternalValue::Instance {
         class_name, fields, ..
     } = v
-        && (class_name == "baml.llm.Role" || class_name.ends_with(".Role"))
+        && class_name == "baml.llm.Role"
         && let Some(BexExternalValue::String(name)) = fields.get("name")
     {
         return Some(name.to_string());
@@ -1268,6 +1273,11 @@ fn prompt_value_text(v: &BexExternalValue) -> String {
 /// Media payload of an interpolated value if it is a `baml.media.*` wrapper
 /// instance (unwrapped to its `_data` field, like the legacy Jinja converter
 /// did) or a raw media ADT, else `None`.
+///
+/// Known gap (B-1024 follow-up): only TOP-LEVEL media interpolations become
+/// media parts. Media nested in a composite (`${images}` for an `image[]`
+/// param, a class field, a map value) is stringified with its container; the
+/// legacy Jinja converter recursed into composites.
 fn prompt_media_value(v: &BexExternalValue) -> Option<bex_vm_types::MediaValue> {
     use bex_external_types::BexExternalAdt;
     match v {
@@ -3043,5 +3053,188 @@ mod tests {
                 message: "Invalid short hand name: openai".to_string()
             })
         );
+    }
+
+    mod prompt_assembly {
+        use baml_builtins2::{MediaContent, MediaValue, PromptAst, PromptAstSimple};
+        use baml_type::MediaKind;
+        use bex_external_types::BexExternalAdt;
+
+        use super::*;
+
+        fn text(v: &str) -> BexExternalValue {
+            BexExternalValue::String(v.into())
+        }
+
+        fn role(name: &str) -> BexExternalValue {
+            let mut fields = indexmap::IndexMap::new();
+            fields.insert("name".to_string(), text(name));
+            BexExternalValue::Instance {
+                class_name: "baml.llm.Role".to_string(),
+                type_args: vec![],
+                fields,
+            }
+        }
+
+        fn media_adt() -> BexExternalValue {
+            BexExternalValue::Adt(BexExternalAdt::Media(std::sync::Arc::new(MediaValue::new(
+                MediaKind::Image,
+                MediaContent::Url {
+                    url: "https://example.com/photo.jpg".into(),
+                    base64_data: None,
+                },
+                Some("image/jpeg".to_string()),
+            ))))
+        }
+
+        fn media_wrapper() -> BexExternalValue {
+            let mut fields = indexmap::IndexMap::new();
+            fields.insert("_data".to_string(), media_adt());
+            BexExternalValue::Instance {
+                class_name: "baml.media.Image".to_string(),
+                type_args: vec![],
+                fields,
+            }
+        }
+
+        fn parts(strs: &[&str]) -> Vec<String> {
+            strs.iter().map(|s| (*s).to_string()).collect()
+        }
+
+        #[test]
+        fn all_text_stays_single_untrimmed_string() {
+            let ast =
+                assemble_prompt_ast_impl(&parts(&["  a ", " b  "]), &[text("X")], &[text("X")]);
+            assert_eq!(
+                ast,
+                PromptAst::Simple(std::sync::Arc::new(PromptAstSimple::String(
+                    "  a X b  ".to_string()
+                )))
+            );
+        }
+
+        #[test]
+        fn media_between_text_trims_text_like_the_legacy_renderer() {
+            // Mirrors the deleted jinja parse_message_content: with media in the
+            // content, text segments are trimmed and empty ones dropped.
+            let ast = assemble_prompt_ast_impl(
+                &parts(&["What is in this image? ", ""]),
+                &[media_adt()],
+                &[text("")],
+            );
+            let PromptAst::Simple(content) = ast else {
+                panic!("expected Simple, got {ast:?}");
+            };
+            let PromptAstSimple::Multiple(items) = content.as_ref() else {
+                panic!("expected Multiple, got {content:?}");
+            };
+            assert_eq!(items.len(), 2);
+            assert_eq!(
+                *items[0],
+                PromptAstSimple::String("What is in this image?".to_string())
+            );
+            assert!(matches!(&*items[1], PromptAstSimple::Media(_)));
+        }
+
+        #[test]
+        fn media_wrapper_instance_unwraps_to_media_part() {
+            let ast = assemble_prompt_ast_impl(&parts(&["", ""]), &[media_wrapper()], &[text("")]);
+            let PromptAst::Simple(content) = ast else {
+                panic!("expected Simple, got {ast:?}");
+            };
+            assert!(matches!(content.as_ref(), PromptAstSimple::Media(_)));
+        }
+
+        #[test]
+        fn media_after_role_lands_in_that_message() {
+            let ast = assemble_prompt_ast_impl(
+                &parts(&["", "look: ", ""]),
+                &[role("user"), media_adt()],
+                &[text(""), text("")],
+            );
+            let PromptAst::Message { role, content, .. } = ast else {
+                panic!("expected Message, got {ast:?}");
+            };
+            assert_eq!(role, "user");
+            let PromptAstSimple::Multiple(items) = content.as_ref() else {
+                panic!("expected Multiple, got {content:?}");
+            };
+            assert_eq!(items.len(), 2);
+            assert_eq!(*items[0], PromptAstSimple::String("look:".to_string()));
+            assert!(matches!(&*items[1], PromptAstSimple::Media(_)));
+        }
+
+        #[test]
+        fn consecutive_media_keep_order() {
+            let ast = assemble_prompt_ast_impl(
+                &parts(&["a ", "", " b"]),
+                &[media_adt(), media_adt()],
+                &[text(""), text("")],
+            );
+            let PromptAst::Simple(content) = ast else {
+                panic!("expected Simple, got {ast:?}");
+            };
+            let PromptAstSimple::Multiple(items) = content.as_ref() else {
+                panic!("expected Multiple, got {content:?}");
+            };
+            let shape: Vec<&str> = items
+                .iter()
+                .map(|i| match &**i {
+                    PromptAstSimple::String(_) => "text",
+                    PromptAstSimple::Media(_) => "media",
+                    PromptAstSimple::Multiple(_) => "multiple",
+                })
+                .collect();
+            assert_eq!(shape, ["text", "media", "media", "text"]);
+        }
+
+        #[test]
+        fn non_role_non_media_uses_rendered_string_form() {
+            // The raw value (an Instance) carries no text; its rendered
+            // (string.from) twin is what reaches the message content.
+            let mut fields = indexmap::IndexMap::new();
+            fields.insert("name".to_string(), text("Bob"));
+            let raw = BexExternalValue::Instance {
+                class_name: "user.Person".to_string(),
+                type_args: vec![],
+                fields,
+            };
+            let ast = assemble_prompt_ast_impl(
+                &parts(&["", ""]),
+                &[raw],
+                &[text("Person { name: Bob }")],
+            );
+            assert_eq!(
+                ast,
+                PromptAst::Simple(std::sync::Arc::new(PromptAstSimple::String(
+                    "Person { name: Bob }".to_string()
+                )))
+            );
+        }
+
+        #[test]
+        fn user_class_named_role_is_not_a_role_marker() {
+            // Regression: `prompt_role_name` must match the stdlib class
+            // exactly. A user class named `Role` with a string `name` field is
+            // an ordinary interpolation, rendered via its string form.
+            let mut fields = indexmap::IndexMap::new();
+            fields.insert("name".to_string(), text("impostor"));
+            let raw = BexExternalValue::Instance {
+                class_name: "user.Role".to_string(),
+                type_args: vec![],
+                fields,
+            };
+            let ast = assemble_prompt_ast_impl(
+                &parts(&["before ", " after"]),
+                &[raw],
+                &[text("Role { name: \"impostor\" }")],
+            );
+            assert_eq!(
+                ast,
+                PromptAst::Simple(std::sync::Arc::new(PromptAstSimple::String(
+                    "before Role { name: \"impostor\" } after".to_string()
+                )))
+            );
+        }
     }
 }
