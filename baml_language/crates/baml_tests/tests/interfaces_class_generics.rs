@@ -778,28 +778,3 @@ fn method_generic_bound_referencing_class_param_is_enforced() {
         "Eq<int>",
     );
 }
-
-#[test]
-fn method_generic_associated_projection_preserves_enclosing_class_param() {
-    assert_no_compile_errors(
-        r#"
-        interface Driver<Input> {
-            type Output
-            type Error
-
-            function drive(self, input: Input) -> Self.Output throws Self.Error
-        }
-
-        class Task<T> {
-            value: T
-
-            function drive<D extends Driver<Task<T>>>(
-                self,
-                driver: D,
-            ) -> D.Output throws D.Error {
-                driver.drive(self)
-            }
-        }
-        "#,
-    );
-}

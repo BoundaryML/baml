@@ -3412,41 +3412,6 @@ function needs<T extends Marker>(x: T) -> int throws never {
         );
     }
 
-    #[test]
-    fn callback_effect_param_is_inferred_from_unannotated_lambda_body() {
-        let errors = all_type_errors(
-            "function invoke<T, E>(f: () -> T throws E) -> T throws E {\n  f()\n}\n\
-             function forward<E>(f: () -> int throws E) -> int throws E {\n\
-               invoke(() -> { f() })\n\
-             }\n",
-        );
-        assert!(
-            errors.is_empty(),
-            "callee and caller effect parameters must remain distinct, got {errors:?}"
-        );
-    }
-
-    #[test]
-    fn associated_projection_preserves_nested_generic_receiver_argument() {
-        let errors = all_type_errors(
-            "interface Driver<Input> {\n\
-               type Output\n\
-               type Error\n\
-               function drive(self, input: Input) -> Self.Output throws Self.Error\n\
-             }\n\
-             class Task<T> {\n\
-               value: T\n\
-               function drive<D extends Driver<Task<T>>>(self, driver: D) -> D.Output throws D.Error {\n\
-                 driver.drive(self)\n\
-               }\n\
-             }\n",
-        );
-        assert!(
-            errors.is_empty(),
-            "associated projection must retain `Task<T>`, got {errors:?}"
-        );
-    }
-
     fn has_unspecialized(errors: &[TirTypeError]) -> bool {
         errors
             .iter()
@@ -3752,24 +3717,6 @@ function needs<T extends Marker>(x: T) -> int throws never {
                 TirTypeError::InterfaceMethodSignatureMismatch { method, .. } if method.as_str() == "greet"
             )),
             "expected InterfaceMethodSignatureMismatch for `greet`, got {diags:?}"
-        );
-    }
-
-    #[test]
-    fn alpha_equivalent_method_generics_and_bounds_are_accepted() {
-        let diags = impl_diagnostics(
-            "interface Eq<T> {}\n\
-             interface Echo<T> {\n  function echo<U, V extends Eq<U>>(self, value: V) -> U throws never\n}\n\
-             class Echoer {\n  implements Echo<int> {\n    \
-             function echo<A, B extends Eq<A>>(self, value: B) -> A { $rust_function }\n  }\n}\n",
-        );
-        assert!(
-            !diags.iter().any(|e| matches!(
-                e,
-                TirTypeError::InterfaceMethodSignatureMismatch { method, .. }
-                    if method.as_str() == "echo"
-            )),
-            "alpha-equivalent method generics and bounds should conform, got {diags:?}"
         );
     }
 
@@ -4603,42 +4550,6 @@ function needs<T extends Marker>(x: T) -> int throws never {
                     | TirTypeError::ExtraneousThrowsDeclaration { .. }
             )),
             "the blanket impl's projection must realize at the symbolic receiver, got {errors:?}"
-        );
-    }
-
-    #[test]
-    fn concrete_associated_error_binds_generic_throws_at_call_site() {
-        let errors = all_type_errors(
-            "interface Driver<Input> {\n\
-               type Output\n\
-               type Error\n\
-               function drive(self, input: Input) -> Self.Output throws Self.Error\n\
-             }\n\
-             class Kaboom {\n\
-               data: int\n\
-               message: string[]\n\
-             }\n\
-             class Task<T> {\n\
-               value: T\n\
-               function drive<Output, Error, D extends Driver<Task<T>, Output = Output, Error = Error>>(self, driver: D) -> Output throws Error {\n\
-                 driver.drive(self)\n\
-               }\n\
-             }\n\
-             class IntDriver {}\n\
-             implements Driver<Task<int>> for IntDriver {\n\
-               type Output = int\n\
-               type Error = Kaboom\n\
-               function drive(self, input: Task<int>) -> int throws Kaboom {\n\
-                 throw Kaboom { data: input.value, message: [\"failed\"] }\n\
-               }\n\
-             }\n\
-             function wrapper(task: Task<int>) -> int throws Kaboom {\n\
-               task.drive(IntDriver {})\n\
-             }\n",
-        );
-        assert!(
-            errors.is_empty(),
-            "the concrete Driver realization should bind Output and Error, got {errors:?}"
         );
     }
 

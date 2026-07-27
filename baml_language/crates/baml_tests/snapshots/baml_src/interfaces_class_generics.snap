@@ -16,7 +16,37 @@ function interfaces_class_generics.$init_test_ns_interfaces_class_generics_inter
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
+    load_var registry
+    load_const "root.interfaces_class_generics"
+    load_const "method_associated_projection_preserves_class_generic"
+    make_closure .<lambda($init_test_ns_interfaces_class_generics_interfaces_class_generics, 2)>, 0
     load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.interfaces_class_generics"
+    load_const "alpha_equivalent_method_generics_and_bounds_run"
+    make_closure .<lambda($init_test_ns_interfaces_class_generics_interfaces_class_generics, 3)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_const null
+    return
+}
+
+function interfaces_class_generics.AemEchoer.AemEcho<int>.echo(self: interfaces_class_generics.AemEchoer, value: B) -> A {
+    load_var value
+    load_type interfaces_class_generics.AemEq<#0>
+    load_const "get"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _0
+    load_var _0
+    return
+}
+
+function interfaces_class_generics.AemValue.AemEq<T>.get(self: interfaces_class_generics.AemValue<T>) -> T {
+    load_var self
+    load_field .value
     return
 }
 
@@ -45,6 +75,40 @@ function interfaces_class_generics.Box.label(self: interfaces_class_generics.Box
 
   L3:
     unreachable
+}
+
+function interfaces_class_generics.McapIntDriver.McapDriver<McapTask<int>>.drive(self: interfaces_class_generics.McapIntDriver, input: interfaces_class_generics.McapTask<int>) -> string {
+    load_var input
+    load_field .value
+    load_const 42
+    cmp_int_op ==
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const "wrong"
+    jump L2
+
+  L1:
+    load_const "ok"
+
+  L2:
+    return
+}
+
+function interfaces_class_generics.McapTask.drive(self: interfaces_class_generics.McapTask<T>, driver: D) -> (D as interfaces_class_generics.McapDriver<interfaces_class_generics.McapTask<T>>).Output {
+    load_var2 2 1
+    load_type interfaces_class_generics.McapDriver<interfaces_class_generics.McapTask<#0>>
+    load_const "drive"
+    virtual_call nargs=2 ntypeargs=0
+    store_var _0
+    load_var _0
+    return
+}
+
+function interfaces_class_generics.aem_accept_echo(value: interfaces_class_generics.AemEcho<int>) -> int {
+    load_const 42
+    return
 }
 
 function interfaces_class_generics.class_generic_bound_member_access_fn() -> string {
