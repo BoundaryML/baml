@@ -1,15 +1,15 @@
 class Fallback {
-  members: Provider[],
+    first: Provider,
+    rest: Provider[],
+
+    function providers(self) -> Provider[] throws never {
+        [self.first].concat(self.rest)
+    }
 }
 
 implements Provider for Fallback {
   function name(self) -> string throws never { "fallback" }
-  function render_shorthand(self) -> string throws never {
-    match (self.members.at(0)) {
-      let first: Provider => first.render_shorthand(),
-      null => "openai/gpt-5.6-luna",
-    }
-  }
+  function render_shorthand(self) -> string throws never { self.first.render_shorthand() }
 }
 
 implements GenerationProvider for Fallback {
@@ -17,7 +17,7 @@ implements GenerationProvider for Fallback {
       throws root.ai.CallError | baml.errors.UnknownError {
     let policy = ReplayPolicy { kind: ReplayKind.Safe, idempotency_key: null };
     //# Try generation providers in order
-    for (let member in self.members) {
+    for (let member in self.providers()) {
       //## Select a generation-capable member
       match (member) {
         let provider: GenerationProvider => {
@@ -43,7 +43,7 @@ implements CompletionProvider for Fallback {
   function complete<T>(self, task: Task<T>) -> Response<T>
       throws root.ai.CallError | baml.errors.UnknownError {
     //# Try drive providers in order
-    for (let member in self.members) {
+    for (let member in self.providers()) {
       //## Select a drive-capable member
       match (member) {
         let provider: CompletionProvider => {
@@ -72,7 +72,7 @@ implements CompletionProvider for Fallback {
 
   function replay_policy<T>(self, task: Task<T>) -> ReplayPolicy throws never {
     //# Prove the entire fallback chain is replay-safe
-    for (let member in self.members) {
+    for (let member in self.providers()) {
       //## Inspect each member policy
       match (member) {
         let provider: CompletionProvider => {
@@ -88,6 +88,15 @@ implements CompletionProvider for Fallback {
   }
 }
 
-function fallback(providers: Provider[]) -> Fallback throws never {
-  Fallback { members: providers }
+function fallback(providers: Provider[]) -> Fallback throws baml.errors.InvalidArgument {
+    match (providers.at(0)) {
+        let first: Provider => {
+            Fallback { first: first, rest: providers.slice(1, providers.length()) }
+        },
+        null => {
+            throw baml.errors.InvalidArgument {
+      message: "fallback requires at least one provider",
+    }
+        },
+    }
 }

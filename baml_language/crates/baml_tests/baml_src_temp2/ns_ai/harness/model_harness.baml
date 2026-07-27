@@ -1,6 +1,6 @@
-// A small in-process harness adapter backed by any CompletionProvider. It is useful
-// both as a real OpenAI/Anthropic integration adapter and as the blueprint for
-// an external coding-harness implementation.
+// A small in-process harness adapter backed by any CompletionProvider. It is
+// useful both with a hosted model and as the blueprint for an external
+// coding-harness implementation.
 class ModelHarness {
   inner: Provider,
   sessions: LocalHarnessSession[],
@@ -27,98 +27,6 @@ function model_harness_task<T>(
   }
 }
 
-class ModelHarnessEventStream<TPartial, T> {
-  owner: ModelHarness,
-  session: LocalHarnessSession,
-  task: Task<T>,
-  inner: baml.llm.Stream<TPartial, T>,
-  emitted: AgentEvent[],
-  started_emitted: bool,
-  is_closed: bool,
-  cached_run: HarnessRun<T>?,
-
-  // function cleanup(self) -> void throws never {
-  //   if (!self.is_closed) {
-  //     self.inner._sse.close();
-  //     self.is_closed = true;
-  //   }
-  // }
-
-  implements HarnessEventStream<T> {
-    function next(self) -> AgentEvent | baml.stream.StreamFinished
-        throws baml.errors.UnknownError {
-      if (!self.started_emitted) {
-        let started: AgentEvent = ModelStartedEvent {
-          id: self.session.session_id,
-          provider: self.owner.inner.name(),
-        };
-        self.started_emitted = true;
-        self.emitted.push(started);
-        return started;
-      }
-      if (self.is_closed) { return baml.stream.StreamFinished {}; }
-      //# Pull one actual provider partial and normalize it as a harness event
-      let next = self.inner.next() catch (e) {
-        _ => throw baml.errors.UnknownError {
-          data: e,
-          message: ["harness provider stream failed"],
-        },
-      };
-      match (next) {
-        let done: baml.stream.StreamFinished => {
-          self.is_closed = true;
-          done
-        },
-        let partial: TPartial => {
-          let text = baml.json.to_string<TPartial>(partial) catch (e) {
-            _ => throw baml.errors.UnknownError {
-              data: e,
-              message: ["harness partial serialization failed"],
-            },
-          };
-          let event: AgentEvent = TextDeltaEvent {
-            id: self.session.session_id,
-            text: text,
-            metadata: { "source": "provider_stream" },
-          };
-          self.emitted.push(event);
-          event
-        },
-      }
-    }
-
-    function final(self) -> HarnessRun<T> throws baml.errors.UnknownError {
-      match (self.cached_run) {
-        let run: HarnessRun<T> => return run,
-        null => null,
-      };
-      //# Drain and validate the provider's authoritative typed final value
-      let value = self.inner.final() catch (e) {
-        _ => throw baml.errors.UnknownError {
-          data: e,
-          message: ["harness provider stream finalization failed"],
-        },
-      };
-      self.is_closed = true;
-      self.session.history = self.task.messages().to_history();
-      let finished: AgentEvent = RunFinishedEvent {
-        id: self.session.session_id,
-        outcome: "done",
-      };
-      self.emitted.push(finished);
-      let run = HarnessRun<T> {
-        value: value,
-        events: self.emitted,
-        token: self.owner.save_session(self.session),
-        history: self.session.history,
-      };
-      self.cached_run = run;
-      run
-    }
-  }
-  implements Resource {}
-}
-
 implements Provider for ModelHarness {
   function name(self) -> string throws never { "model-harness(" + self.inner.name() + ")" }
   function render_shorthand(self) -> string throws never { self.inner.render_shorthand() }
@@ -134,7 +42,7 @@ implements CompletionProvider for ModelHarness {
       attributes: {},
     });
     //# Run the task inside the session
-    let run = self.run<T>(session, task);
+    let run = self.run<T>(session, task, null);
     //# Return harness output as a provider response
     Response<T> {
       value: run.value,
@@ -171,8 +79,12 @@ implements Harness for ModelHarness {
     session
   }
 
-  function run<T>(self, session: HarnessSession, task: Task<T>) -> HarnessRun<T>
-      throws baml.errors.UnknownError {
+  function run<T>(
+    self,
+    session: HarnessSession,
+    task: Task<T>,
+    on_event: ((AgentEvent) -> null throws never)?,
+  ) -> HarnessRun<T> throws baml.errors.UnknownError {
     //# Validate the harness session
     let local = match (session) {
       let value: LocalHarnessSession => value,
@@ -186,6 +98,16 @@ implements Harness for ModelHarness {
       let capability: CompletionProvider => capability,
       _ => throw baml.errors.UnknownError { data: null, message: ["harness inner cannot complete"] },
     };
+    let events: AgentEvent[] = [];
+    //# Announce the harness run before starting blocking provider work
+    emit_harness_event(
+      ModelStartedEvent {
+        id: local.session_id,
+        provider: self.inner.name(),
+      },
+      events,
+      on_event,
+    );
     //# Run the model through the harness
     let effective_task = model_harness_task<T>(self.inner, local, task);
     let response = provider.complete<T>(effective_task) catch (e) {
@@ -193,50 +115,24 @@ implements Harness for ModelHarness {
     };
     //# Save conversation and resumable coordinates
     local.history = effective_task.messages().to_history();
-    let events: AgentEvent[] = [ModelStartedEvent {
-      id: local.session_id,
-      provider: self.inner.name(),
-    }];
     match (response.meta.usage) {
-      let usage: Usage => events.push(UsageEvent { id: local.session_id, usage: usage }),
+      let usage: Usage => emit_harness_event(
+        UsageEvent { id: local.session_id, usage: usage },
+        events,
+        on_event,
+      ),
       null => null,
     };
-    events.push(RunFinishedEvent { id: local.session_id, outcome: "done" });
+    emit_harness_event(
+      RunFinishedEvent { id: local.session_id, outcome: "done" },
+      events,
+      on_event,
+    );
     HarnessRun<T> {
       value: response.value,
       events: events,
       token: self.save_session(local),
       history: local.history,
-    }
-  }
-
-  function stream<TPartial, T>(self, session: HarnessSession, task: Task<T>)
-      -> HarnessEventStream<T> throws baml.errors.UnknownError {
-    let local = match (session) {
-      let value: LocalHarnessSession => value,
-      _ => throw baml.errors.UnknownError { data: null, message: ["unsupported harness session"] },
-    };
-    if (local.is_stopped) {
-      throw baml.errors.UnknownError { data: null, message: ["harness session is stopped"] };
-    }
-    let provider = match (self.inner) {
-      let capability: StreamingProvider => capability,
-      _ => throw baml.errors.UnknownError { data: null, message: ["harness inner cannot stream"] },
-    };
-    let effective_task = model_harness_task<T>(self.inner, local, task);
-    //# Retain the real provider stream behind the harness event resource
-    let stream = provider.stream<TPartial, T>(effective_task) catch (e) {
-      _ => throw baml.errors.UnknownError { data: e, message: ["harness stream open failed"] },
-    };
-    ModelHarnessEventStream<TPartial, T> {
-      owner: self,
-      session: local,
-      task: effective_task,
-      inner: stream,
-      emitted: [],
-      started_emitted: false,
-      is_closed: false,
-      cached_run: null,
     }
   }
 

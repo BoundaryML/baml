@@ -2,9 +2,10 @@
 
 Drivers either run a task or construct a resource used to run tasks later. For
 example, a driver can request one result, stream partial output, run a tool
-loop, open a realtime connection, or create a provider-managed cache. Drivers
-are normal library functions, so applications can add new lifecycles without
-changing the compiler.
+loop, or create a provider-managed cache. Drivers are normal library functions,
+so applications can add new lifecycles without changing the compiler. A raw
+realtime connection is opened directly with `ai.open_live`; the operation adds
+no portable execution lifecycle that would justify a runner value.
 
 Drivers live under `ai.drivers`. `ai` is a top-level namespace, parallel to
 `baml` and `assert`; it is not nested under `baml`.
@@ -58,7 +59,7 @@ type explains where typed work happens later.
 | Driver | Input | Result | How typed output works |
 | --- | --- | --- | --- |
 | `open_session` | provider + options | `Session` | no task yet; `session.run(Task<T>)` returns `Response<T>` |
-| `task.run(runner = run.Realtime.new(...))` | `Task<null>` + channel/options | `LiveSession` | no single `T`; output arrives as `LiveEvent` values |
+| `ai.open_live(task, channel)` | `Task<null>` + channel | `LiveSession` | raw provider resource; no single `T`; output arrives as `LiveEvent` values |
 | `create_cache` | provider + messages/options | `Cache` | no task yet; `cache.run(Task<T>)` returns `Response<T>` |
 
 ### Specialized media operations

@@ -339,13 +339,14 @@ fields.
 Because the task is a declaration, the ecosystem can hang everything on it:
 
 ```baml
-test "extracts the total" {
-  let r = ExtractInvoice(fixture_pdf, $provider = FakeProvider { reply: "..." })
-  assert.equal(r.total, 1042.50)
+test "renders the invoice task" {
+  let task = ExtractInvoice.task(fixture_pdf);
+  assert.contains(ai.inspect.prompt(task), "invoice")
 }
 ```
 
-- **Tests** name the task and swap the provider for a deterministic fake.
+- **Tests** can inspect the task without model I/O, test downstream logic with
+  literal output values, or rebind to an application-owned provider double.
 - **Traces** carry the task identity, not an anonymous prompt string.
 - **SDKs** generate a typed `extract_invoice(document)` in every host
   language.

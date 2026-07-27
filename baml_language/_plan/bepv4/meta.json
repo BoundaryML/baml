@@ -1,0 +1,74 @@
+{
+  "id": "BEP-064",
+  "number": 64,
+  "title": "AI Functions and Agents",
+  "status": "proposed",
+  "version": 1,
+  "shepherds": [],
+  "created": "2026-07-26",
+  "updated": "2026-07-26",
+  "isGoodReference": false,
+  "openIssueCount": 0,
+  "pages": [
+    {
+      "slug": "agents-and-tools",
+      "title": "Agents and tools",
+      "order": 0
+    },
+    {
+      "slug": "why-baml",
+      "title": "BAML vs. Other AI Frameworks",
+      "order": 1
+    },
+    {
+      "slug": "tasks-runners-and-results",
+      "title": "Tasks, runners, and results",
+      "order": 2
+    },
+    {
+      "slug": "dynamic-tools-and-mcp",
+      "title": "Dynamic tools and MCP",
+      "order": 3
+    },
+    {
+      "slug": "approvals-limits-and-handoffs",
+      "title": "Approvals, limits, and handoffs",
+      "order": 4
+    },
+    {
+      "slug": "conversations-and-resuming",
+      "title": "Conversations and resuming",
+      "order": 5
+    },
+    {
+      "slug": "streaming-media-and-transcription",
+      "title": "Streaming, media, and transcription",
+      "order": 6
+    },
+    {
+      "slug": "routing-retry-and-fallback",
+      "title": "Routing, retry, and fallback",
+      "order": 7
+    },
+    {
+      "slug": "jobs-batches-and-caches",
+      "title": "Jobs, batches, and caches",
+      "order": 8
+    },
+    {
+      "slug": "voice-and-live-sessions",
+      "title": "Voice and live sessions",
+      "order": 9
+    },
+    {
+      "slug": "testing-and-observability",
+      "title": "Testing and observability",
+      "order": 10
+    },
+    {
+      "slug": "harnesses-and-custom-extensions",
+      "title": "Harnesses and custom extensions",
+      "order": 11
+    }
+  ]
+}

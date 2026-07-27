@@ -18,9 +18,7 @@ function VoiceSupport(customer_id: string) -> null {
 
 let task = VoiceSupport.task(customer_id)
 
-let live_session = task.run(
-  runner = ai.run.Realtime.new(trace_channel),
-)
+let live_session = ai.open_live(task, trace_channel)
 
 let closed = false
 while (!closed) {
@@ -47,9 +45,7 @@ VAD is session configuration; it is not another provider or runner.
 
 ```baml
 function run_voice_agent(task: ai.Task<null>, audio: ai.RealtimeAudioDevice) -> null {
-  let live_session = task.run(
-    runner = ai.run.Realtime.new(trace_channel),
-  )
+  let live_session = ai.open_live(task, trace_channel)
 
   let microphone_pump = spawn {
     pump_microphone(audio, live_session)

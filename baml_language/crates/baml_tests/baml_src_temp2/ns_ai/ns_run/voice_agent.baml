@@ -1,5 +1,6 @@
-// High-level realtime runner. Unlike Realtime, which returns an open
-// LiveSession, VoiceAgent owns the session loop and audio device lifecycle.
+// High-level realtime runner. Raw provider sessions are opened with
+// root.ai.open_live; VoiceAgent adds the managed event loop, application-tool
+// execution, and audio device lifecycle.
 class VoiceAgent {
     audio: root.ai.RealtimeAudioDevice,
     channel: root.ai.Channel,
@@ -28,7 +29,37 @@ class VoiceAgent {
             self,
             task: root.ai.Task<null>,
         ) -> null throws baml.errors.UnknownError | baml.errors.Unsupported {
-            let live_session = task.run(runner = Realtime.new(self.channel));
+            //# Open the raw provider-owned realtime resource
+            let raw_live_session = root.ai.open_live(task, self.channel);
+            //# Add application tool execution only for the managed voice lifecycle
+            let live_session = if (task.tools.length() > 0) {
+                root.ai
+                    .with_automatic_tools(
+                        raw_live_session,
+                        root.ai.tool_inputs_from_tools(task.tools),
+                    )
+            } else {
+                raw_live_session
+            };
+            //# Verify the audio device and provider session negotiated the same formats
+            let device_input = self.audio.input_format();
+            let session_input = live_session.input_audio_format();
+            if (!device_input.is_compatible_with(session_input)) {
+                live_session.close();
+                self.audio.close();
+                throw baml.errors.Unsupported {
+                    message: `voice input format mismatch: device=${device_input.describe()}, session=${session_input.describe()}`,
+                };
+            }
+            let device_output = self.audio.output_format();
+            let session_output = live_session.output_audio_format();
+            if (!device_output.is_compatible_with(session_output)) {
+                live_session.close();
+                self.audio.close();
+                throw baml.errors.Unsupported {
+                    message: `voice output format mismatch: device=${device_output.describe()}, session=${session_output.describe()}`,
+                };
+            }
             let microphone_pump = spawn { pump_voice_input(self.audio, live_session) };
 
             let closed = false;
@@ -63,9 +94,9 @@ class VoiceAgent {
                     log.info(event);
                     match (event) {
                         let started: root.ai.UserSpeechStarted => {
-                            // OpenAI server VAD is the source of truth for whether the
-                            // microphone contains speech. Brief detections do not barge in:
-                            // speech_stopped invalidates this timer before it fires.
+                            // Provider-side VAD is the source of truth for whether the
+                            // microphone contains speech. Brief detections do not barge
+                            // in: speech_stopped invalidates this timer before it fires.
                             state.user_speaking = true;
                             state.user_speech_item_id = started.item_id;
                             state.speech_generation = state.speech_generation + 1;
@@ -86,7 +117,7 @@ class VoiceAgent {
                                 state.user_speech_item_id = null;
                                 if (state.assistant_response_active) {
                                     // The committed user turn waits until the current
-                                    // response reaches its OpenAI completion boundary.
+                                    // response reaches the provider's completion boundary.
                                     state.user_turn_pending = true;
                                 } else {
                                     live_session.request_response();
@@ -189,9 +220,9 @@ function interrupt_after_sustained_user_speech(
         return null;
     }
 
-    // With a WebSocket client, OpenAI cannot know how much locally-buffered
-    // audio was heard. Stop it first, then cancel generation and truncate the
-    // assistant item to the exact local playback position.
+    // A remote session cannot know how much locally-buffered audio was heard.
+    // Stop it first, then cancel generation and truncate the assistant item to
+    // the exact local playback position.
     let played_ms = audio.stop_output() catch_all (e) {
         _ => {
             log.info({ "voice_agent_barge_in_error": e });
@@ -233,8 +264,8 @@ function pump_voice_input(
             }
         };
         match (next_input) {
-            let pcm: uint8array => {
-                live_session.send_audio(pcm) catch_all (e) {
+            let audio_frame: uint8array => {
+                live_session.send_audio(audio_frame) catch_all (e) {
                     _ => {
                         // The receive loop owns session errors. If it closes the
                         // session, the microphone pump should stop without

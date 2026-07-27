@@ -4,7 +4,31 @@ test "guide 05.05: realtime tasks retain the same tool roster" {
     assert.equal(with_tools.tools[0].name, "lookup_account")
 }
 
-test "guide 05.05: realtime sessions execute task tools automatically" {
+test "guide 05.05: raw realtime sessions expose tool calls without executing them" {
+    let raw = root.ai.BufferedLiveSession {
+        items: [
+            root.ai.LiveToolCalls {
+                calls: [
+                    root.ai.ToolCall {
+                        id: "call-raw",
+                        name: "lookup_account",
+                        args: { "customer_id": "C-1" },
+                    },
+                ],
+            },
+        ],
+        channel: root.ai.RecordingChannel { frames: [] },
+        is_closed: false,
+        control_frames: [],
+    };
+
+    let events = raw.receive();
+    assert.equal(events.length(), 1);
+    assert.equal(events[0].kind(), "tool_calls");
+    assert.equal(raw.control_frames.length(), 0)
+}
+
+test "guide 05.05: the explicit automatic-tool wrapper executes task tools" {
     let channel = root.ai.RecordingChannel { frames: [] };
     let raw = root.ai.BufferedLiveSession {
         items: [
@@ -22,7 +46,7 @@ test "guide 05.05: realtime sessions execute task tools automatically" {
         is_closed: false,
         control_frames: [],
     };
-    let live_session: root.ai.LiveSession = root.ai.AutomaticToolLiveSession { inner: raw, tools: [root.ai.normalize_tool(lookup_account)] };
+    let live_session = root.ai.with_automatic_tools(raw, [lookup_account]);
 
     let events = live_session.receive();
     let results: root.ai.ToolResult[] = [];
@@ -44,8 +68,8 @@ test "guide 05.05: realtime sessions execute task tools automatically" {
 }
 
 testset "integ-test-guide-05-realtime-tools" {
-    test "guide 05.05 live OpenAI: tool result is spliced into the retained realtime session" {
-        let provider = root.ai.OpenAiRealtime {
+    test "guide 05.05 live OpenAI: explicit automatic tools splice a correlated result into the session" {
+        let provider = root.openai.Realtime {
             model: "gpt-realtime",
             voice: "alloy",
             api_key: baml.env.get_or_panic("OPENAI_API_KEY"),
@@ -61,7 +85,7 @@ testset "integ-test-guide-05-realtime-tools" {
         )
         .with_tools([lookup_account]);
         let channel = root.ai.RecordingChannel { frames: [] };
-        let live_session = task.run(runner = root.ai.run.Realtime.new(channel));
+        let live_session = root.ai.with_automatic_tools(root.ai.open_live(task, channel), [lookup_account]);
         let requested = live_session.receive();
         let calls: root.ai.ToolCall[] = [];
         let results: root.ai.ToolResult[] = [];

@@ -4,12 +4,22 @@ test "guide 03.04: prepare_step can switch providers through conversation import
     ...fake_tool_provider([]),
     provider_name: "fake-tools-secondary",
   };
-  let hooks = GuideHooks { ...no_op_hooks(), switch_after_step: second };
+  let trace = guide_agent_trace();
   let task = ResolveTicketWithTools_task(sample_ticket(), first, [search_knowledge]);
   let outcome = task.run(
     runner = root.ai.run.Agent<Resolution>.new(
       tools = [search_knowledge],
-      hooks = hooks,
+      prepare_step = (context) -> {
+        root.ai.StepPlan {
+          provider: if (context.step == 1) { second } else { null },
+          tools: null,
+          stop: null,
+        }
+      },
+      on_event = (event) -> {
+        trace.events.push(event.kind());
+        null
+      },
     ),
   );
   match (outcome) {
@@ -19,11 +29,11 @@ test "guide 03.04: prepare_step can switch providers through conversation import
     ),
     _ => assert.is_true(false),
   }
-  assert.contains(hooks.hook_events.join(","), "provider_changed")
+  assert.contains(trace.events.join(","), "provider_changed")
 }
 
 test "guide 03.04: OpenAI import keeps a tool result paired with its tool call" {
-  let provider = root.ai.OpenAi { ...root.ai.openai(), api_key: "unused" };
+  let provider = root.openai.Chat { ...root.openai.chat(), api_key: "unused" };
   let calls: json[] = [{
     "id": "call-1",
     "type": "function",
@@ -49,7 +59,7 @@ test "guide 03.04: OpenAI import keeps a tool result paired with its tool call" 
   ] };
   let imported = provider.import_messages(history);
   match (imported.conversation) {
-    let state: root.ai.OpenAiConversation => {
+    let state: root.openai.Conversation => {
       assert.equal(state.wire_messages.length(), 2)
       assert.equal(baml.json.path_or(state.wire_messages[0], ".role", ""), "assistant")
       assert.equal(baml.json.path_or(state.wire_messages[0], ".tool_calls[0].id", ""), "call-1")
@@ -62,7 +72,7 @@ test "guide 03.04: OpenAI import keeps a tool result paired with its tool call" 
 
 class NamedOpenAiToolProvider {
   label: string,
-  inner: root.ai.OpenAi,
+  inner: root.openai.Chat,
 
   implements root.ai.Provider {
     function name(self) -> string throws never { self.label }
@@ -104,7 +114,7 @@ testset "integ-test-guide-03-switch-between-turns" {
       label: "openai-secondary",
       inner: live_openai(),
     };
-    let hooks = GuideHooks { ...no_op_hooks(), switch_after_step: second };
+    let trace = guide_agent_trace();
     let observer = GuideObserver { kinds: [] };
     let task = ToolInstructions_task(
       first,
@@ -114,13 +124,23 @@ testset "integ-test-guide-03-switch-between-turns" {
     let outcome = task.run(
       runner = root.ai.run.Agent<Resolution>.new(
         tools = [search_knowledge],
-        hooks = hooks,
+        prepare_step = (context) -> {
+          root.ai.StepPlan {
+            provider: if (context.step == 1) { second } else { null },
+            tools: null,
+            stop: null,
+          }
+        },
+        on_event = (event) -> {
+          trace.events.push(event.kind());
+          null
+        },
         observers = [observer],
       ),
     );
     log.info("live provider switch " + {
       "events": observer.kinds,
-      "hook_events": hooks.hook_events,
+      "callback_events": trace.events,
     }.to_string());
     assert.contains(observer.kinds.join(","), "provider_changed")
     match (outcome) {

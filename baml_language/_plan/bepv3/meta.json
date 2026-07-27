@@ -1,0 +1,401 @@
+{
+  "id": "BEP-064",
+  "number": 64,
+  "title": "AI Functions and Agents",
+  "status": "proposed",
+  "version": 1,
+  "shepherds": [],
+  "created": "2026-07-26",
+  "updated": "2026-07-26",
+  "isGoodReference": false,
+  "openIssueCount": 0,
+  "pages": [
+    {
+      "slug": "tasks-and-runners",
+      "title": "Tasks and runners",
+      "order": 0
+    },
+    {
+      "slug": "task-values",
+      "title": "Create and inspect a task",
+      "order": 1,
+      "parentSlug": "tasks-and-runners"
+    },
+    {
+      "slug": "completion-and-generation",
+      "title": "Completion and generation",
+      "order": 2,
+      "parentSlug": "tasks-and-runners"
+    },
+    {
+      "slug": "response-metadata",
+      "title": "Keep response metadata",
+      "order": 3,
+      "parentSlug": "tasks-and-runners"
+    },
+    {
+      "slug": "streaming-a-task",
+      "title": "Stream a task",
+      "order": 4,
+      "parentSlug": "tasks-and-runners"
+    },
+    {
+      "slug": "provider-configuration",
+      "title": "Configure a provider",
+      "order": 5,
+      "parentSlug": "tasks-and-runners"
+    },
+    {
+      "slug": "provider-overrides",
+      "title": "Override a provider",
+      "order": 6,
+      "parentSlug": "tasks-and-runners"
+    },
+    {
+      "slug": "provider-capabilities",
+      "title": "Provider capabilities",
+      "order": 7,
+      "parentSlug": "tasks-and-runners"
+    },
+    {
+      "slug": "custom-runner",
+      "title": "Write a custom runner",
+      "order": 8,
+      "parentSlug": "tasks-and-runners"
+    },
+    {
+      "slug": "tools-and-agents",
+      "title": "Tools and agents",
+      "order": 9
+    },
+    {
+      "slug": "agent-runner",
+      "title": "The Agent runner",
+      "order": 10,
+      "parentSlug": "tools-and-agents"
+    },
+    {
+      "slug": "multiple-and-parallel-tools",
+      "title": "Multiple and parallel tools",
+      "order": 11,
+      "parentSlug": "tools-and-agents"
+    },
+    {
+      "slug": "tool-errors-and-invalid-arguments",
+      "title": "Tool errors and invalid arguments",
+      "order": 12,
+      "parentSlug": "tools-and-agents"
+    },
+    {
+      "slug": "hooks-and-approvals",
+      "title": "Hooks and approvals",
+      "order": 13,
+      "parentSlug": "tools-and-agents"
+    },
+    {
+      "slug": "modify-or-block-tool-calls",
+      "title": "Modify or block a tool call",
+      "order": 14,
+      "parentSlug": "tools-and-agents"
+    },
+    {
+      "slug": "dynamic-tool-registry",
+      "title": "Change tools between turns",
+      "order": 15,
+      "parentSlug": "tools-and-agents"
+    },
+    {
+      "slug": "discover-mcp-tools",
+      "title": "Discover MCP tools during a run",
+      "order": 16,
+      "parentSlug": "tools-and-agents"
+    },
+    {
+      "slug": "handoffs-and-budgets",
+      "title": "Handoffs and limits",
+      "order": 17,
+      "parentSlug": "tools-and-agents"
+    },
+    {
+      "slug": "remove-or-replace-tools",
+      "title": "Remove or replace tools",
+      "order": 18,
+      "parentSlug": "tools-and-agents"
+    },
+    {
+      "slug": "provider-owned-tools",
+      "title": "Provider-owned tools",
+      "order": 19,
+      "parentSlug": "tools-and-agents"
+    },
+    {
+      "slug": "routing-and-reliability",
+      "title": "Routing and reliability",
+      "order": 20
+    },
+    {
+      "slug": "fallback-between-providers",
+      "title": "Fall back between providers",
+      "order": 21,
+      "parentSlug": "routing-and-reliability"
+    },
+    {
+      "slug": "route-before-running",
+      "title": "Route before running",
+      "order": 22,
+      "parentSlug": "routing-and-reliability"
+    },
+    {
+      "slug": "switch-provider-between-turns",
+      "title": "Switch provider between turns",
+      "order": 23,
+      "parentSlug": "routing-and-reliability"
+    },
+    {
+      "slug": "switch-provider-after-failure",
+      "title": "Switch provider after failure",
+      "order": 24,
+      "parentSlug": "routing-and-reliability"
+    },
+    {
+      "slug": "side-effects-and-idempotency",
+      "title": "Side effects and idempotency",
+      "order": 25,
+      "parentSlug": "routing-and-reliability"
+    },
+    {
+      "slug": "streaming-failure-boundaries",
+      "title": "Streaming failure boundaries",
+      "order": 26,
+      "parentSlug": "routing-and-reliability"
+    },
+    {
+      "slug": "conversations-and-state",
+      "title": "Conversations and state",
+      "order": 27
+    },
+    {
+      "slug": "compact-history-and-extract-memory",
+      "title": "Compact history and extract memory",
+      "order": 28,
+      "parentSlug": "conversations-and-state"
+    },
+    {
+      "slug": "fork-a-conversation",
+      "title": "Fork a conversation",
+      "order": 29,
+      "parentSlug": "conversations-and-state"
+    },
+    {
+      "slug": "resume-an-agent",
+      "title": "Resume an Agent",
+      "order": 30,
+      "parentSlug": "conversations-and-state"
+    },
+    {
+      "slug": "move-messages-between-providers",
+      "title": "Move messages between providers",
+      "order": 31,
+      "parentSlug": "conversations-and-state"
+    },
+    {
+      "slug": "save-and-restore-a-conversation",
+      "title": "Save and restore a conversation",
+      "order": 32,
+      "parentSlug": "conversations-and-state"
+    },
+    {
+      "slug": "provider-owned-sessions",
+      "title": "Provider-owned sessions",
+      "order": 33,
+      "parentSlug": "conversations-and-state"
+    },
+    {
+      "slug": "media-and-live-sessions",
+      "title": "Media and live sessions",
+      "order": 34
+    },
+    {
+      "slug": "images-pdfs-and-audio",
+      "title": "Images, PDFs, and audio",
+      "order": 35,
+      "parentSlug": "media-and-live-sessions"
+    },
+    {
+      "slug": "bounded-audio-streams",
+      "title": "Bounded audio streams",
+      "order": 36,
+      "parentSlug": "media-and-live-sessions"
+    },
+    {
+      "slug": "transcribe-audio",
+      "title": "Transcribe audio",
+      "order": 37,
+      "parentSlug": "media-and-live-sessions"
+    },
+    {
+      "slug": "open-a-live-session",
+      "title": "Open a live session",
+      "order": 38,
+      "parentSlug": "media-and-live-sessions"
+    },
+    {
+      "slug": "run-a-voice-agent",
+      "title": "Run a voice agent",
+      "order": 39,
+      "parentSlug": "media-and-live-sessions"
+    },
+    {
+      "slug": "handle-barge-in",
+      "title": "Handle barge-in",
+      "order": 40,
+      "parentSlug": "media-and-live-sessions"
+    },
+    {
+      "slug": "live-session-tools",
+      "title": "Use tools during a live session",
+      "order": 41,
+      "parentSlug": "media-and-live-sessions"
+    },
+    {
+      "slug": "observability-and-testing",
+      "title": "Observability and testing",
+      "order": 42
+    },
+    {
+      "slug": "observe-an-agent",
+      "title": "Observe an Agent",
+      "order": 43,
+      "parentSlug": "observability-and-testing"
+    },
+    {
+      "slug": "usage-and-cost",
+      "title": "Track usage and cost",
+      "order": 44,
+      "parentSlug": "observability-and-testing"
+    },
+    {
+      "slug": "test-across-providers",
+      "title": "Test one task across providers",
+      "order": 45,
+      "parentSlug": "observability-and-testing"
+    },
+    {
+      "slug": "evaluate-provider-quality",
+      "title": "Evaluate provider quality",
+      "order": 46,
+      "parentSlug": "observability-and-testing"
+    },
+    {
+      "slug": "production-resources",
+      "title": "Production resources",
+      "order": 47
+    },
+    {
+      "slug": "poll-cancel-and-resume-a-job",
+      "title": "Poll, cancel, and resume a job",
+      "order": 48,
+      "parentSlug": "production-resources"
+    },
+    {
+      "slug": "submit-a-batch",
+      "title": "Submit a batch",
+      "order": 49,
+      "parentSlug": "production-resources"
+    },
+    {
+      "slug": "provider-managed-caches",
+      "title": "Provider-managed caches",
+      "order": 50,
+      "parentSlug": "production-resources"
+    },
+    {
+      "slug": "cleanup-and-defer",
+      "title": "Cleanup and defer",
+      "order": 51,
+      "parentSlug": "production-resources"
+    },
+    {
+      "slug": "deployment-and-transports",
+      "title": "Deployment and transports",
+      "order": 52,
+      "parentSlug": "production-resources"
+    },
+    {
+      "slug": "capability-negotiation",
+      "title": "Negotiate capabilities intentionally",
+      "order": 53,
+      "parentSlug": "production-resources"
+    },
+    {
+      "slug": "external-harnesses",
+      "title": "External harnesses",
+      "order": 54
+    },
+    {
+      "slug": "observe-harness-events",
+      "title": "Observe harness events",
+      "order": 55,
+      "parentSlug": "external-harnesses"
+    },
+    {
+      "slug": "permissions-and-sandboxes",
+      "title": "Harness permissions and sandboxes",
+      "order": 56,
+      "parentSlug": "external-harnesses"
+    },
+    {
+      "slug": "steer-and-interrupt",
+      "title": "Steer and interrupt a harness",
+      "order": 57,
+      "parentSlug": "external-harnesses"
+    },
+    {
+      "slug": "save-and-resume-a-harness",
+      "title": "Save and resume a harness",
+      "order": 58,
+      "parentSlug": "external-harnesses"
+    },
+    {
+      "slug": "implement-a-harness-adapter",
+      "title": "Implement a harness adapter",
+      "order": 59,
+      "parentSlug": "external-harnesses"
+    },
+    {
+      "slug": "build-your-own",
+      "title": "Build your own",
+      "order": 60
+    },
+    {
+      "slug": "implement-a-provider",
+      "title": "Implement a provider",
+      "order": 61,
+      "parentSlug": "build-your-own"
+    },
+    {
+      "slug": "inject-a-provider-transport",
+      "title": "Inject a provider transport",
+      "order": 62,
+      "parentSlug": "build-your-own"
+    },
+    {
+      "slug": "provider-request-middleware",
+      "title": "Add provider request middleware",
+      "order": 63,
+      "parentSlug": "build-your-own"
+    },
+    {
+      "slug": "add-a-provider-capability",
+      "title": "Add a provider capability",
+      "order": 64,
+      "parentSlug": "build-your-own"
+    },
+    {
+      "slug": "create-a-resource",
+      "title": "Create a resource",
+      "order": 65,
+      "parentSlug": "build-your-own"
+    }
+  ]
+}

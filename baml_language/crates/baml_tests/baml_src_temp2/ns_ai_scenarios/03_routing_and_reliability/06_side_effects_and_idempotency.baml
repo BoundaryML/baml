@@ -56,7 +56,7 @@ implements root.ai.CallError for LiveEffectCommittedFailure {
 }
 
 class EffectfulAfterLiveResponse {
-  inner: root.ai.OpenAi,
+  inner: root.openai.Chat,
   calls: int,
   observed_request_ids: string[],
 

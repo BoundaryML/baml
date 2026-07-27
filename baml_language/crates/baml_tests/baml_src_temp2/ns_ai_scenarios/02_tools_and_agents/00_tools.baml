@@ -180,82 +180,13 @@ class GuideObserver {
     }
 }
 
-class GuideHooks {
-    tool_to_add: root.ai.Tool?,
-    block_name: string?,
-    replace_name: string?,
-    switch_after_step: root.ai.Provider?,
+class GuideAgentTrace {
     after_calls: string[],
-    hook_events: string[],
-
-    implements root.ai.AgentHooks {
-        function prepare_step(self, context: root.ai.StepContext) -> root.ai.StepPlan throws never {
-            let next_tools: root.ai.Tool[]? = null;
-            if (context.step == 0) {
-                match (self.tool_to_add) {
-                    let tool: root.ai.Tool => {
-                        let replacement = context.tools.slice(0, context.tools.length());
-                        replacement.push(tool);
-                        next_tools = replacement;
-                    },
-                    null => {},
-                }
-            }
-            root.ai.StepPlan {
-                provider: if (context.step == 1) {
-                    self.switch_after_step
-                } else {
-                    null
-                },
-                tools: next_tools,
-                stop: null,
-            }
-        }
-
-        function before_tool_call(
-            self,
-            event: root.ai.BeforeToolCall,
-        ) -> root.ai.ToolDecision throws never {
-            if (self.block_name == event.call.name) {
-                return root.ai.ToolDecision.block("blocked by policy");
-            }
-            match (self.replace_name) {
-                let replacement: string => {
-                    root.ai
-                        .ToolDecision
-                        .replace(
-                            root.ai.ToolCall {
-                                id: event.call.id,
-                                name: replacement,
-                                args: event.call.args,
-                            },
-                        )
-                },
-                null => root.ai.ToolDecision.allow(event.call),
-            }
-        }
-
-        function after_tool_call(self, event: root.ai.AfterToolCall) -> null throws never {
-            self.after_calls.push(event.call.name);
-            null
-        }
-
-        function on_event(self, event: root.ai.AgentEvent) -> null throws never {
-            self.hook_events.push(event.kind());
-            null
-        }
-    }
+    events: string[],
 }
 
-function no_op_hooks() -> GuideHooks throws never {
-    GuideHooks {
-        tool_to_add: null,
-        block_name: null,
-        replace_name: null,
-        switch_after_step: null,
-        after_calls: [],
-        hook_events: [],
-    }
+function guide_agent_trace() -> GuideAgentTrace throws never {
+    GuideAgentTrace { after_calls: [], events: [] }
 }
 
 function fake_tool_provider(

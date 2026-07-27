@@ -37,7 +37,7 @@ class FakeMcpConnection {
   }
 }
 
-// The bootstrap tool changes application state. The prepare-step hook turns
+// The bootstrap tool changes application state. The prepare-step callback turns
 // pending requests into a complete next roster, which the runner validates and
 // applies before the next provider step.
 class McpServerBroker {
@@ -75,18 +75,6 @@ class McpServerBroker {
       }
     }
     if (changed) { next_tools } else { null }
-  }
-}
-
-class McpBootstrapHooks {
-  broker: McpServerBroker,
-
-  implements root.ai.AgentHooks {
-    function prepare_step(self, context: root.ai.StepContext) -> root.ai.StepPlan throws never {
-      //# Apply bootstrap requests before the next model step
-      let next_tools = self.broker.activate_pending(context.tools);
-      root.ai.StepPlan { provider: null, tools: next_tools, stop: null }
-    }
   }
 }
 
@@ -148,7 +136,11 @@ test "guide 02.07: a bootstrap tool adds an MCP server between model steps" {
   let runner = root.ai.run.Agent<Resolution>.new(
     tools = [],
     tool_registry = registry,
-    hooks = McpBootstrapHooks { broker: broker },
+    prepare_step = (context) -> {
+      //# Apply bootstrap requests before the next model step
+      let next_tools = broker.activate_pending(context.tools);
+      root.ai.StepPlan { provider: null, tools: next_tools, stop: null }
+    },
   );
 
   //# Run across bootstrap, discovery, MCP execution, and completion
@@ -181,8 +173,8 @@ testset "integ-test-guide-02-mcp-bootstrap" {
     let bootstrap_tool = add_mcp_server_tool(broker);
     let registry = root.ai.ToolRegistry.new([bootstrap_tool]);
     let observer = GuideObserver { kinds: [] };
-    let provider = root.ai.OpenAi {
-      ...root.ai.openai(),
+    let provider = root.openai.Chat {
+      ...root.openai.chat(),
       model: "gpt-5.6-luna",
       api_key: baml.env.get_or_panic("OPENAI_API_KEY"),
     };
@@ -191,7 +183,11 @@ testset "integ-test-guide-02-mcp-bootstrap" {
       runner = root.ai.run.Agent<Resolution>.new(
         tools = [],
         tool_registry = registry,
-        hooks = McpBootstrapHooks { broker: broker },
+        prepare_step = (context) -> {
+          //# Apply bootstrap requests before the next model step
+          let next_tools = broker.activate_pending(context.tools);
+          root.ai.StepPlan { provider: null, tools: next_tools, stop: null }
+        },
         observers = [observer],
       ),
     );

@@ -1,26 +1,30 @@
 class FakeToolConversation {
-  owner: FakeToolProvider,
-  history: MessageHistory,
-  turn: int,
-  last_tools: Tool[],
-  last_provider_tools: ProviderTool[],
+    owner: FakeToolProvider,
+    history: MessageHistory,
+    turn: int,
+    last_tools: Tool[],
+    last_provider_tools: ProviderTool[],
 
-  implements Conversation {
-    function provider(self) -> Provider throws never { self.owner }
-    function messages(self) -> Messages throws never { self.history }
-  }
+    implements Conversation {
+        function provider(self) -> Provider throws never {
+            self.owner
+        }
+        function messages(self) -> Messages throws never {
+            self.history
+        }
+    }
 }
 
 class FakeToolProvider {
-  provider_name: string,
-  tool_calls: ToolCall[],
-  final_output: string,
-  provider_tools: ProviderTool[],
+    provider_name: string,
+    tool_calls: ToolCall[],
+    final_output: string,
+    provider_tools: ProviderTool[],
 }
 
 implements Provider for FakeToolProvider {
   function name(self) -> string throws never { self.provider_name }
-  function render_shorthand(self) -> string throws never { "openai/gpt-5.6-luna" }
+  function render_shorthand(self) -> string throws never { fake_render_shorthand() }
 }
 
 implements GenerationProvider for FakeToolProvider {
@@ -96,27 +100,31 @@ implements ConversationImportProvider for FakeToolProvider {
 }
 
 class ScriptedToolConversation {
-  owner: ScriptedToolProvider,
-  history: MessageHistory,
-  turn: int,
-  observed_tool_rosters: string[][],
-  submitted_results: ToolResult[][],
+    owner: ScriptedToolProvider,
+    history: MessageHistory,
+    turn: int,
+    observed_tool_rosters: string[][],
+    submitted_results: ToolResult[][],
 
-  implements Conversation {
-    function provider(self) -> Provider throws never { self.owner }
-    function messages(self) -> Messages throws never { self.history }
-  }
+    implements Conversation {
+        function provider(self) -> Provider throws never {
+            self.owner
+        }
+        function messages(self) -> Messages throws never {
+            self.history
+        }
+    }
 }
 
 class ScriptedToolProvider {
-  turns: ToolCalls[],
-  final_output: string,
-  usage_per_step: Usage?,
+    turns: ToolCalls[],
+    final_output: string,
+    usage_per_step: Usage?,
 }
 
 implements Provider for ScriptedToolProvider {
   function name(self) -> string throws never { "scripted-tools" }
-  function render_shorthand(self) -> string throws never { "openai/gpt-5.6-luna" }
+  function render_shorthand(self) -> string throws never { fake_render_shorthand() }
 }
 
 implements ToolCallingProvider for ScriptedToolProvider {
@@ -177,31 +185,31 @@ implements ToolCallingProvider for ScriptedToolProvider {
 }
 
 function fake_tool_step_meta(provider: string, turn: int) -> Meta throws never {
-  Meta {
-    provider: provider,
-    model: "fake",
-    request_id: "fake-tool-" + turn.to_string(),
-    finish_reason: null,
-    usage: Usage {
-      input_tokens: 1,
-      output_tokens: 1,
-      cached_input_tokens: 0,
-      reasoning_tokens: 0,
-      cost_usd: 0.0,
-    },
-    attributes: {},
-    raw: null,
-  }
+    Meta {
+        provider: provider,
+        model: "fake",
+        request_id: "fake-tool-" + turn.to_string(),
+        finish_reason: null,
+        usage: Usage {
+            input_tokens: 1,
+            output_tokens: 1,
+            cached_input_tokens: 0,
+            reasoning_tokens: 0,
+            cost_usd: 0.0,
+        },
+        attributes: {},
+        raw: null,
+    }
 }
 
 function scripted_tool_step_meta(provider: ScriptedToolProvider, turn: int) -> Meta throws never {
-  Meta {
-    provider: provider.name(),
-    model: "fake",
-    request_id: "scripted-tool-" + turn.to_string(),
-    finish_reason: null,
-    usage: provider.usage_per_step,
-    attributes: {},
-    raw: null,
-  }
+    Meta {
+        provider: provider.name(),
+        model: "fake",
+        request_id: "scripted-tool-" + turn.to_string(),
+        finish_reason: null,
+        usage: provider.usage_per_step,
+        attributes: {},
+        raw: null,
+    }
 }

@@ -52,26 +52,27 @@ loop. Both must finish as `Resolution` or throw.
 
 ## Test it
 
-Use a deterministic fake provider for an ordinary unit test:
+Use a clearly named live test when the assertion depends on model behavior:
 
 ```baml
-test "classifies an order-status ticket" {
-  let result = ResolveTicket(
-    Ticket {
-      id: "ticket_4821",
-      customer_id: "cus_123",
-      message: "Where is order 4821?",
-    },
-    $provider = FakeSupportModel,
-  )
+testset "integ-live-support-model" {
+  test "classifies an order-status ticket" {
+    let result = ResolveTicket(
+      Ticket {
+        id: "ticket_4821",
+        customer_id: "cus_123",
+        message: "Where is order 4821?",
+      },
+    );
 
-  assert.equal(result.intent, Intent.OrderStatus)
-  assert.is_true(result.reply.length() > 0)
+    assert.equal(result.intent, Intent.OrderStatus);
+    assert.is_true(result.reply.length() > 0)
+  }
 }
 ```
 
-Keep credentialed model comparisons in live testsets. A passing unit test
-should not depend on model sampling.
+Test downstream business logic separately with literal `Resolution` values so
+ordinary unit tests do not depend on model sampling.
 
 ## Related design
 

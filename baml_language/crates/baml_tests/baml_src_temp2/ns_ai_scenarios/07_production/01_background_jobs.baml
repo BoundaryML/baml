@@ -22,7 +22,7 @@ testset "integ-test-guide-07-background" {
         baml.sys.sleep(baml.time.Duration.from_seconds(15)) catch (e) {
             _ => null
         };
-        let provider = root.ai.OpenAiBackground {
+        let provider = root.openai.Responses {
             model: "gpt-5.6-luna",
             api_key: baml.env.get_or_panic("OPENAI_API_KEY"),
             base_url: null,

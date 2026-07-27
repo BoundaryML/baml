@@ -53,6 +53,8 @@ test "guide 05.06: conversation completion is an explicit task tool" {
 
 test "guide 05.06: a duplex voice agent pumps microphone input beside session events" {
     let audio = root.ai.BufferedRealtimeAudioDevice {
+        input_audio_format: root.ai.fake_realtime_audio_format(),
+        output_audio_format: root.ai.fake_realtime_audio_format(),
         input_chunks: [],
         next_input_index: 0,
         output_chunks: [],
@@ -66,6 +68,33 @@ test "guide 05.06: a duplex voice agent pumps microphone input beside session ev
             "Say hello.",
         );
     task.run(runner = root.ai.run.VoiceAgent.new(audio, root.ai.RecordingChannel { frames: [] }));
+    assert.is_true(audio.is_closed)
+}
+
+test "guide 05.06: voice agent rejects an incompatible audio device" {
+    let audio = root.ai.BufferedRealtimeAudioDevice {
+        input_audio_format: root.ai.RealtimeAudioFormat { encoding: "other", sample_rate_hz: 8_000, channels: 1 },
+        output_audio_format: root.ai.fake_realtime_audio_format(),
+        input_chunks: [],
+        next_input_index: 0,
+        output_chunks: [],
+        played_ms: 0,
+        is_closed: false,
+    };
+    let task = root
+        .ai_scenarios
+        .realtime_call_center_task(
+            root.ai.FakeRealtimeProvider { transcript: "hello" },
+            "Say hello.",
+        );
+    let rejected = false;
+    task.run(runner = root.ai.run.VoiceAgent.new(audio, root.ai.RecordingChannel { frames: [] })) catch (e) {
+        let unsupported: baml.errors.Unsupported => {
+            rejected = unsupported.message.includes("input format mismatch");
+            null
+        },
+    };
+    assert.is_true(rejected);
     assert.is_true(audio.is_closed)
 }
 
@@ -100,6 +129,8 @@ test "guide 05.06: a newer assistant item replaces queued older audio" {
     let old_audio = baml.Uint8Array.from_base64("AQI=");
     let latest_audio = baml.Uint8Array.from_base64("AwQ=");
     let audio = root.ai.BufferedRealtimeAudioDevice {
+        input_audio_format: root.ai.fake_realtime_audio_format(),
+        output_audio_format: root.ai.fake_realtime_audio_format(),
         input_chunks: [],
         next_input_index: 0,
         output_chunks: [],
@@ -126,6 +157,8 @@ test "guide 05.06: a newer assistant item replaces queued older audio" {
 test "guide 05.06: sustained server-VAD speech stops playback, cancels, then truncates" {
     let assistant_audio = baml.Uint8Array.from_base64("AQI=");
     let audio = root.ai.BufferedRealtimeAudioDevice {
+        input_audio_format: root.ai.fake_realtime_audio_format(),
+        output_audio_format: root.ai.fake_realtime_audio_format(),
         input_chunks: [],
         next_input_index: 0,
         output_chunks: [assistant_audio],
@@ -167,14 +200,16 @@ test "guide 05.06: sustained server-VAD speech stops playback, cancels, then tru
 }
 
 test "guide 05.06: truncation cannot exceed the exact assistant item's audio" {
-    assert.equal(root.ai.openai_realtime_audio_end_ms(9475, 8950 * 48), 8950);
-    assert.equal(root.ai.openai_realtime_audio_end_ms(4000, 8950 * 48), 4000);
-    assert.equal(root.ai.openai_realtime_audio_end_ms(-1, 8950 * 48), 0)
+    assert.equal(root.openai.realtime_audio_end_ms(9475, 8950 * 48), 8950);
+    assert.equal(root.openai.realtime_audio_end_ms(4000, 8950 * 48), 4000);
+    assert.equal(root.openai.realtime_audio_end_ms(-1, 8950 * 48), 0)
 }
 
 test "guide 05.06: speech stopped before the threshold does not interrupt" {
     let assistant_audio = baml.Uint8Array.from_base64("AQI=");
     let audio = root.ai.BufferedRealtimeAudioDevice {
+        input_audio_format: root.ai.fake_realtime_audio_format(),
+        output_audio_format: root.ai.fake_realtime_audio_format(),
         input_chunks: [],
         next_input_index: 0,
         output_chunks: [assistant_audio],
@@ -208,12 +243,12 @@ test "guide 05.06: server VAD is realtime session configuration" {
     let update = baml
         .json
         .parse(
-            root.ai
+            root.openai
                 .openai_realtime_session_update(
                     "schedule meetings",
                     "marin",
                     "gpt-4o-mini-transcribe",
-                    root.ai.RealtimeServerVad {
+                    root.openai.RealtimeServerVad {
                         threshold: 0.5,
                         prefix_padding_ms: 300,
                         silence_duration_ms: 500,
@@ -242,7 +277,7 @@ test "guide 05.06: server VAD is realtime session configuration" {
 
 testset "integ-test-guide-05-realtime-call-center" {
     test "guide 05.06 live OpenAI: the agent waits for complete confirmed meeting details" {
-        let provider = root.ai.OpenAiRealtime {
+        let provider = root.openai.Realtime {
             model: "gpt-realtime-2.1",
             voice: "marin",
             api_key: baml.env.get_or_panic("OPENAI_API_KEY"),
@@ -258,7 +293,12 @@ testset "integ-test-guide-05-realtime-call-center" {
                 provider,
                 "Introduce yourself in one short sentence and ask how you can help.",
             );
-        let live_session = task.run(runner = root.ai.run.Realtime.new(root.ai.RecordingChannel { frames: [] }));
+        let live_session = root
+            .ai
+            .with_automatic_tools(
+                root.ai.open_live(task, root.ai.RecordingChannel { frames: [] }),
+                root.ai.tool_inputs_from_tools(task.tools),
+            );
 
         let opening = root.ai.collect_live_turn(live_session);
         assert.equal(opening.tool_calls.length(), 0);

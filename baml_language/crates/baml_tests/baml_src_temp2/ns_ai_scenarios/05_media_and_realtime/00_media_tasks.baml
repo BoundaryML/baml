@@ -52,10 +52,26 @@ function VoiceSupport_task(
 }
 
 // The ordinary direct-call lowering exists, but a realtime-only provider will
-// fail capability checking; callers use task.run(runner = root.ai.run.Realtime.new(channel)) instead.
+// fail capability checking; callers explicitly open its LiveSession resource.
 function VoiceSupport_manual(
     instructions: string,
     provider: root.ai.Provider,
 ) -> null throws root.ai.CallError | baml.errors.UnknownError {
     VoiceSupport_task(instructions, provider).run(runner = root.ai.run.Completion<null>.new())
+}
+
+// Future compiler lowering:
+//   TranscribeCall.task(audio, $provider = provider)
+// becomes this hand-written function-specific task companion. The task owns
+// both the provider and its strongly typed audio argument.
+function TranscribeCall_task(
+    audio: root.ai.AudioStream,
+    provider: root.ai.Provider,
+) -> root.ai.TranscriptionTask throws never {
+    root.ai.TranscriptionTask {
+        provider: provider,
+        audio: audio,
+        prompt: "Transcribe this finite customer-support recording.",
+        identity: root.ai.TaskIdentity { name: "TranscribeCall", package: "bepv2_reference" },
+    }
 }

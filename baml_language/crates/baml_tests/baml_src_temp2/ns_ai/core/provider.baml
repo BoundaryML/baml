@@ -2,7 +2,10 @@
 // interface so a realtime channel cannot accidentally promise a final T.
 interface Provider {
   function name(self) -> string throws never { "provider" }
-  function render_shorthand(self) -> string throws never { "openai/gpt-5.6-luna" }
+  // The provider owns the primitive client used to render its prompt. There is
+  // no portable default because role, media, and schema behavior vary by
+  // provider.
+  function render_shorthand(self) -> string throws never
 }
 
 // Bounded provider-default completion. The implementation may be one model

@@ -29,10 +29,12 @@ function run_negotiated(
     match (provider) {
         let realtime: root.ai.RealtimeProvider => {
             let channel = root.ai.RecordingChannel { frames: [] };
-            let live_session = VoiceSupport_task(
-                "Reply with exactly: negotiated realtime",
-                realtime,
-            ).run(runner = root.ai.run.Realtime.new(channel));
+            let live_session = root
+                .ai
+                .open_live(
+                    VoiceSupport_task("Reply with exactly: negotiated realtime", realtime),
+                    channel,
+                );
             NegotiatedRun {
                 provider: realtime.name(),
                 mode: "realtime",
@@ -64,7 +66,7 @@ testset "integ-test-guide-07-capability-negotiation" {
     test "guide 07.04 live providers: erased configuration selects stream and realtime paths" {
         let providers: root.ai.Provider[] = [
             live_openai(),
-            root.ai.OpenAiRealtime {
+            root.openai.Realtime {
                 model: "gpt-realtime",
                 voice: "alloy",
                 api_key: baml.env.get_or_panic("OPENAI_API_KEY"),

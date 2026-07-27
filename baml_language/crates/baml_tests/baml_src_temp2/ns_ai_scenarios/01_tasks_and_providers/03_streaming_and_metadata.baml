@@ -22,8 +22,8 @@ function drain_resolution_interface_stream(
 
 testset "integ-test-guide-01-streaming" {
   test "guide 01.03 live OpenAI: structured stream reaches a final value" {
-    let value = drain_resolution_interface_stream(ResolveTicket_task(sample_ticket(), root.ai.OpenAi {
-      ...root.ai.openai(),
+    let value = drain_resolution_interface_stream(ResolveTicket_task(sample_ticket(), root.openai.Chat {
+      ...root.openai.chat(),
       model: "gpt-5.6-luna",
       api_key: baml.env.get_or_panic("OPENAI_API_KEY"),
     }));
@@ -31,8 +31,8 @@ testset "integ-test-guide-01-streaming" {
   }
 
   test "guide 01.03 live Anthropic: same stream consumer" {
-    let value = drain_resolution_interface_stream(ResolveTicket_task(sample_ticket(), root.ai.Anthropic {
-      ...root.ai.anthropic(),
+    let value = drain_resolution_interface_stream(ResolveTicket_task(sample_ticket(), root.anthropic.Messages {
+      ...root.anthropic.messages(),
       model: "claude-sonnet-4-6",
       api_key: baml.env.get_or_panic("ANTHROPIC_API_KEY"),
     }));

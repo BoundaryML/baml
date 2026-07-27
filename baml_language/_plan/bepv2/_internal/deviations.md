@@ -217,11 +217,11 @@ resource supplies events and controls. A driver must not accept `Task<T>` when
 no successful terminal path exposes `T`.
 
 **Reference-code spelling:** `VoiceSupport_task` returns `Task<null>`, and the
-public `Realtime` runner implements only `Runner<Task<null>>`. The provider's
+public `open_live` resource operation accepts only `Task<null>`. The provider's
 internal opener remains generic implementation plumbing, but callers cannot
-discard an arbitrary task result through the runner. A future bounded
-realtime operation should use a distinct `LiveRun<T>` contract with an
-explicit terminal result instead of making open-ended `LiveSession` generic.
+discard an arbitrary task result through the public helper. A future bounded
+realtime operation should use a distinct `LiveRun<T>` contract with an explicit
+terminal result instead of making open-ended `LiveSession` generic.
 
 ## Closed deviations
 
@@ -230,5 +230,5 @@ explicit terminal result instead of making open-ended `LiveSession` generic.
 The reference now has a real OpenAI Responses background provider and a real
 Gemini managed-cache provider. Live tests submit and resume remote background
 work, create and use a provider cache, and verify its remote deletion after
-resource cleanup. The fake providers remain useful for fast deterministic
-tests, but they are no longer the only implementations.
+resource cleanup. Private provider fixtures remain useful for fast
+deterministic conformance tests, but they are not proposed public APIs.

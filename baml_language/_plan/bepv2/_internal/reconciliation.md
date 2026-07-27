@@ -9,8 +9,9 @@ agreement is not sufficient.
 
 - [x] Keep the BEP's task/driver/provider/resource split. The reference may use
   runtime capability matches only where `Task<T, P>` cannot yet be expressed.
-- [x] Rename `fake(output)` to `fake_output_provider(output)`. The longer name
-  makes its canned-output behavior explicit and leaves room for other fakes.
+- [x] Rename the reference suite's `fake(output)` fixture to
+  `fake_output_provider(output)`. This is private test support, not a proposed
+  public `ai` API.
 - [x] Keep the symmetric driver surface: `drive` and `generate` return `T`;
   `drive_with_meta` and `generate_with_meta` return `Response<T>`.
 - [x] Use the current `baml.errors.Failure` predicates as the error facts.

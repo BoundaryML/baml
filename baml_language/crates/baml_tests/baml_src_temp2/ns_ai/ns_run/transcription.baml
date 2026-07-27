@@ -1,36 +1,45 @@
-// Bounded transcription is not prompt-shaped Task<T> execution. The runner
-// captures the selected provider and options, then consumes one finite stream.
+// Bounded transcription executes a typed task. The task owns the selected
+// provider and finite audio argument; the runner owns only transcription
+// policy.
+
+function transcription_options(
+    task: root.ai.TranscriptionTask,
+    configured: root.ai.TranscriptionOptions,
+) -> root.ai.TranscriptionOptions throws never {
+    root.ai.TranscriptionOptions {
+        language: configured.language,
+        prompt: configured.prompt ?? task.prompt,
+    }
+}
+
 class TranscribeWithMeta {
-    provider: root.ai.Provider,
     options: root.ai.TranscriptionOptions,
 
     function new(
-        provider: root.ai.Provider,
         language: string? = null,
         prompt: string? = null,
     ) -> TranscribeWithMeta throws never {
         TranscribeWithMeta {
-            provider: provider,
             options: root.ai.TranscriptionOptions { language: language, prompt: prompt },
         }
     }
 
-    implements root.ai.Runner<root.ai.AudioStream> {
+    implements root.ai.Runner<root.ai.TranscriptionTask> {
         type Output = root.ai.Response<string>
         type Error = root.ai.CallError | baml.errors.UnknownError
 
         function run(
             self,
-            stream: root.ai.AudioStream,
+            task: root.ai.TranscriptionTask,
         ) -> root.ai.Response<string> throws root.ai.CallError | baml.errors.UnknownError {
-            match (self.provider) {
+            match (task.provider) {
                 let capability: root.ai.TranscriptionProvider => {
-                    capability.transcribe(stream, self.options)
+                    capability.transcribe(task.audio, transcription_options(task, self.options))
                 },
                 _ => {
                     throw baml.errors.Unsupported {
-          message: "provider cannot transcribe audio",
-        }
+                        message: "provider cannot transcribe audio",
+                    }
                 },
             }
         }
@@ -38,36 +47,28 @@ class TranscribeWithMeta {
 }
 
 class Transcribe {
-    provider: root.ai.Provider,
     options: root.ai.TranscriptionOptions,
 
-    function new(
-        provider: root.ai.Provider,
-        language: string? = null,
-        prompt: string? = null,
-    ) -> Transcribe throws never {
-        Transcribe {
-            provider: provider,
-            options: root.ai.TranscriptionOptions { language: language, prompt: prompt },
-        }
+    function new(language: string? = null, prompt: string? = null) -> Transcribe throws never {
+        Transcribe { options: root.ai.TranscriptionOptions { language: language, prompt: prompt } }
     }
 
-    implements root.ai.Runner<root.ai.AudioStream> {
+    implements root.ai.Runner<root.ai.TranscriptionTask> {
         type Output = string
         type Error = root.ai.CallError | baml.errors.UnknownError
 
         function run(
             self,
-            stream: root.ai.AudioStream,
+            task: root.ai.TranscriptionTask,
         ) -> string throws root.ai.CallError | baml.errors.UnknownError {
-            match (self.provider) {
+            match (task.provider) {
                 let capability: root.ai.TranscriptionProvider => {
-                    capability.transcribe(stream, self.options).value
+                    capability.transcribe(task.audio, transcription_options(task, self.options)).value
                 },
                 _ => {
                     throw baml.errors.Unsupported {
-          message: "provider cannot transcribe audio",
-        }
+                        message: "provider cannot transcribe audio",
+                    }
                 },
             }
         }

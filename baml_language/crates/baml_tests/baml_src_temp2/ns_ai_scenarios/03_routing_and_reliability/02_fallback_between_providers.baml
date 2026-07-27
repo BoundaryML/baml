@@ -11,6 +11,17 @@ test "guide 03.02: fallback re-renders and tries the next provider" {
   assert.equal(response.meta.provider, "second")
 }
 
+test "guide 03.02: fallback requires at least one provider" {
+  let rejected = false;
+  root.ai.fallback([]) catch (e) {
+    let invalid: baml.errors.InvalidArgument => {
+      rejected = invalid.message.includes("at least one provider");
+      null
+    },
+  };
+  assert.is_true(rejected)
+}
+
 testset "integ-test-guide-03-fallback" {
   test "guide 03.02 live Anthropic: fallback reaches a real second provider" {
     //# Configure a failing fake and live fallback
@@ -18,8 +29,8 @@ testset "integ-test-guide-03-fallback" {
       {
         root.ai.FakeProvider { ...fake_resolution(), failures_remaining: 1 }
       },
-      root.ai.Anthropic {
-        ...root.ai.anthropic(),
+      root.anthropic.Messages {
+        ...root.anthropic.messages(),
         model: "claude-sonnet-4-6",
         api_key: baml.env.get_or_panic("ANTHROPIC_API_KEY"),
       },

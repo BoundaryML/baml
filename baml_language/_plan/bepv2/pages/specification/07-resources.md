@@ -184,18 +184,19 @@ pattern for durable conversations.
 ## Realtime
 
 A live connection is the most stateful resource: it owns the socket, the
-event ordering, and the interruption controls. The intended entry point is an
-explicit realtime driver, not a direct LLM-function call: the caller creates a
-`Task<null>` with `.task(...)`, supplies a `Channel`, and retains the returned
-`LiveSession` resource. `null` is intentional: a live session has many observable
-events, not one final application value.
+event ordering, and the interruption controls. The intended entry point is the
+explicit `ai.open_live` resource operation, not a direct LLM-function call:
+the caller creates a `Task<null>` with `.task(...)`, supplies a `Channel`, and
+retains the returned `LiveSession` resource. `null` is intentional: a live
+session has many observable events, not one final application value.
 
 ```baml
-let live_session = VoiceAssistant.task(
-  instructions,
-  $provider = RealtimeModel,
-).run(
-  runner = ai.run.Realtime.new(trace_channel),
+let live_session = ai.open_live(
+  VoiceAssistant.task(
+    instructions,
+    $provider = RealtimeModel,
+  ),
+  trace_channel,
 )
 
 for (let event in live_session.receive()) {

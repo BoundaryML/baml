@@ -206,8 +206,9 @@ Background jobs, batches, sessions, realtime connections, caches, and harness
 sessions return resource values. Every resource provides idempotent cleanup:
 
 ```baml
-let live_session = VoiceSupport.task(customer_id).run(
-  runner = ai.run.Realtime.new(channel),
+let live_session = ai.open_live(
+  VoiceSupport.task(customer_id),
+  channel,
 )
 ```
 
@@ -269,8 +270,6 @@ failure path.
 
 ## Open Questions
 
-- What final constructor names should the public `ai.testing` namespace use
-  for scripted outputs, tool turns, and classified failures?
 - Should provider switching after a failed model turn have a standard hook, or
   remain a custom driver built from replay-policy primitives?
 - Which persistent process transport should host runtimes expose for external

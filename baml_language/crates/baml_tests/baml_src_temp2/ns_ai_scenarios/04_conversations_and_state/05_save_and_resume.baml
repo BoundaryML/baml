@@ -1,7 +1,7 @@
 test "guide 04.05: OpenAI seals and restores its exact provider conversation" {
   //# Begin a native provider conversation
-  let provider = root.ai.OpenAi {
-    ...root.ai.openai(),
+  let provider = root.openai.Chat {
+    ...root.openai.chat(),
     model: "gpt-5.6-luna",
     api_key: "unused",
   };
@@ -31,12 +31,15 @@ test "guide 04.05: an agent resumes the supplied conversation instead of startin
     root.ai.invoke_tool(tools[0], call)
   });
   let resumed = provider.submit(conversation, results);
-  let hooks = no_op_hooks();
+  let dispatched: string[] = [];
   //# Resume the agent from existing continuation state
   let outcome = task.run(
     runner = root.ai.run.Agent<Resolution>.new(
       tools = [search_knowledge],
-      hooks = hooks,
+      after_tool_call = (event) -> {
+        dispatched.push(event.call.name);
+        null
+      },
       conversation = resumed,
     ),
   );
@@ -45,13 +48,13 @@ test "guide 04.05: an agent resumes the supplied conversation instead of startin
     _ => assert.is_true(false),
   }
   //# Verify the completed tool call was not replayed
-  assert.equal(hooks.after_calls.length(), 0)
+  assert.equal(dispatched.length(), 0)
 }
 
 test "guide 04.05: conversation tokens validate provider ownership" {
   //# Construct a token owned by another provider
-  let provider = root.ai.OpenAi {
-    ...root.ai.openai(),
+  let provider = root.openai.Chat {
+    ...root.openai.chat(),
     model: "gpt-5.6-luna",
     api_key: "unused",
   };
@@ -84,11 +87,14 @@ testset "integ-test-guide-04-save-and-resume" {
       root.ai.invoke_tool(tools[0], call)
     });
     let resumed = provider.submit(restored, results);
-    let hooks = no_op_hooks();
+    let dispatched: string[] = [];
     let outcome = task.run(
       runner = root.ai.run.Agent<Resolution>.new(
         tools = [search_knowledge],
-        hooks = hooks,
+        after_tool_call = (event) -> {
+          dispatched.push(event.call.name);
+          null
+        },
         conversation = resumed,
       ),
     );
@@ -96,10 +102,10 @@ testset "integ-test-guide-04-save-and-resume" {
       "saved_provider": token.provider,
       "saved_bytes": token.sealed.length(),
       "pre_resume_calls": calls.calls.map((call: root.ai.ToolCall) -> string { call.name }),
-      "replayed_dispatches": hooks.after_calls,
+      "replayed_dispatches": dispatched,
     }.to_string());
     assert.equal(token.provider, "openai")
-    assert.equal(hooks.after_calls.length(), 0)
+    assert.equal(dispatched.length(), 0)
     match (outcome) {
       let done: root.ai.Done<Resolution> => assert.is_true(done.value.reply.length() > 0),
       _ => assert.is_true(false),

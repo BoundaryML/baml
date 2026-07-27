@@ -6,14 +6,13 @@ implements root.ai.Harness for NamedHarness {
   function label(self) -> string throws never { "custom-coding-harness" }
   function open(self, options: root.ai.HarnessOptions) -> root.ai.HarnessSession
       { self.inner.open(options) }
-  function run<T>(self, session: root.ai.HarnessSession, task: root.ai.Task<T>) -> root.ai.HarnessRun<T>
-      throws baml.errors.UnknownError { self.inner.run<T>(session, task) }
-  function stream<TPartial, T>(
+  function run<T>(
     self,
     session: root.ai.HarnessSession,
     task: root.ai.Task<T>,
-  ) -> root.ai.HarnessEventStream<T> throws baml.errors.UnknownError {
-    self.inner.stream<TPartial, T>(session, task)
+    on_event: ((root.ai.AgentEvent) -> null throws never)?,
+  ) -> root.ai.HarnessRun<T> throws baml.errors.UnknownError {
+    self.inner.run<T>(session, task, on_event = on_event)
   }
   function save_session(self, session: root.ai.HarnessSession) -> root.ai.HarnessSessionToken
       { self.inner.save_session(session) }
@@ -28,7 +27,19 @@ implements root.ai.Harness for NamedHarness {
 test "guide 08.06: a custom harness composes through out-of-body implements" {
     let harness = NamedHarness { inner: fake_model_harness() };
     let run = InvestigateRepository_task(sample_ticket(), harness.inner.inner)
-        .run(runner = harness_runner<Resolution>(harness));
+        .run(
+            runner = root
+                .ai
+                .run
+                .Harness<Resolution>
+                .new(
+                    harness,
+                    cwd = "/workspace",
+                    permission_mode = "read-only",
+                    sandbox = "workspace",
+                    attributes = { "team": "support" },
+                ),
+        );
     assert.equal(harness.label(), "custom-coding-harness");
     assert.equal(run.value.category, "billing")
 }
@@ -39,7 +50,19 @@ testset "integ-test-guide-08-custom-harness" {
         let harness = NamedHarness { inner: inner };
         //# Execute a real provider through the custom out-of-body Harness impl
         let run = InvestigateRepository_task(sample_ticket(), inner.inner)
-            .run(runner = harness_runner<Resolution>(harness));
+            .run(
+                runner = root
+                    .ai
+                    .run
+                    .Harness<Resolution>
+                    .new(
+                        harness,
+                        cwd = "/workspace",
+                        permission_mode = "read-only",
+                        sandbox = "workspace",
+                        attributes = { "team": "support" },
+                    ),
+            );
         log.info(
             baml.json
                 .stringify(

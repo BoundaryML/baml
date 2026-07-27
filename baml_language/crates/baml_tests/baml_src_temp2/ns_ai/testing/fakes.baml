@@ -1,12 +1,19 @@
 enum FakeFailureMode {
-  Retryable
-  Terminal
-  Unknown
+    Retryable,
+    Terminal,
+    Unknown,
+}
+
+// A recognized strategy shorthand gives deterministic providers a prompt
+// rendering context without coupling the portable ai namespace to a model
+// vendor.
+function fake_render_shorthand() -> string throws never {
+    "baml-fallback/fake"
 }
 
 class FakeCallFailure {
-  message: string,
-  retryable: bool,
+    message: string,
+    retryable: bool,
 }
 
 implements root.ai.Failure for FakeCallFailure {
@@ -24,16 +31,16 @@ implements root.ai.CallError for FakeCallFailure {
 }
 
 class FakeProvider {
-  provider_name: string,
-  output: string,
-  calls: int,
-  failures_remaining: int,
-  failure_mode: FakeFailureMode,
+    provider_name: string,
+    output: string,
+    calls: int,
+    failures_remaining: int,
+    failure_mode: FakeFailureMode,
 }
 
 implements Provider for FakeProvider {
   function name(self) -> string throws never { self.provider_name }
-  function render_shorthand(self) -> string throws never { "openai/gpt-5.6-luna" }
+  function render_shorthand(self) -> string throws never { fake_render_shorthand() }
 }
 
 implements GenerationProvider for FakeProvider {
@@ -93,11 +100,11 @@ implements CompletionProvider for FakeProvider {
 }
 
 function fake_output_provider(output: string) -> FakeProvider throws never {
-  FakeProvider {
-    provider_name: "fake",
-    output: output,
-    calls: 0,
-    failures_remaining: 0,
-    failure_mode: FakeFailureMode.Retryable,
-  }
+    FakeProvider {
+        provider_name: "fake",
+        output: output,
+        calls: 0,
+        failures_remaining: 0,
+        failure_mode: FakeFailureMode.Retryable,
+    }
 }

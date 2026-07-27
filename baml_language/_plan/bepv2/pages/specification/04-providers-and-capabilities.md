@@ -202,7 +202,7 @@ interaction shapes. But `RealtimeProvider` alone cannot imply `drive<T>`:
   nowhere to supply or expose those decisions.
 
 A realtime-only provider can therefore be used honestly through its explicit
-driver:
+resource operation:
 
 ```baml
 function Talk(message: string) -> null {
@@ -211,19 +211,18 @@ function Talk(message: string) -> null {
 }
 
 let task = Talk.task("Hello")
-let live_session = task.run(
-  runner = ai.run.Realtime.new(channel),
-)
+let live_session = ai.open_live(task, channel)
 
 // Compile error: RealtimeOnly does not implement DriveProvider.
 // let reply = Talk("Hello", $provider = RealtimeOnly)
 ```
 
-**Normative usage rule:** the `Realtime` runner accepts `Task<null>`, because a live
+**Normative usage rule:** `ai.open_live` accepts `Task<null>`, because a live
 session has no single final application value. The task supplies instructions,
 arguments, tools, and provider selection. The caller retains the `Channel` for
 ongoing input/output and the returned `LiveSession` resource for events,
-interruptions, and cleanup.
+interruptions, and cleanup. Opening the raw resource does not implicitly
+execute application tools.
 
 `null` describes the absence of a task result; it does not define when the live
 session ends. A realtime-only provider MUST NOT implement `DriveProvider`

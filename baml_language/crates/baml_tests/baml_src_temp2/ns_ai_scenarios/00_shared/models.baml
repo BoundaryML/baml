@@ -44,17 +44,17 @@ function fake_resolution() -> root.ai.FakeProvider throws never {
   }`)
 }
 
-function live_openai() -> root.ai.OpenAi throws baml.errors.Io | baml.errors.ParseError {
-  root.ai.OpenAi {
-    ...root.ai.openai(),
+function live_openai() -> root.openai.Chat throws baml.errors.Io | baml.errors.ParseError {
+  root.openai.Chat {
+    ...root.openai.chat(),
     model: "gpt-5.6-luna",
     api_key: baml.env.get_or_panic("OPENAI_API_KEY"),
   }
 }
 
-function live_anthropic() -> root.ai.Anthropic throws baml.errors.Io | baml.errors.ParseError {
-  root.ai.Anthropic {
-    ...root.ai.anthropic(),
+function live_anthropic() -> root.anthropic.Messages throws baml.errors.Io | baml.errors.ParseError {
+  root.anthropic.Messages {
+    ...root.anthropic.messages(),
     model: "claude-sonnet-4-6",
     api_key: baml.env.get_or_panic("ANTHROPIC_API_KEY"),
   }

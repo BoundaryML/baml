@@ -1,16 +1,16 @@
 class HarnessOptions {
-  cwd: string?,
-  permission_mode: string?,
-  sandbox: string?,
-  attributes: map<string, string>,
+    cwd: string?,
+    permission_mode: string?,
+    sandbox: string?,
+    attributes: map<string, string>,
 }
 
 class HarnessSessionToken {
-  provider: string,
-  runtime: string,
-  session_id: string,
-  version: int,
-  sealed: string,
+    provider: string,
+    runtime: string,
+    session_id: string,
+    version: int,
+    sealed: string,
 }
 
 interface HarnessSession requires Resource {
@@ -20,54 +20,68 @@ interface HarnessSession requires Resource {
 }
 
 class LocalHarnessSession {
-  session_id: string,
-  options: HarnessOptions,
-  history: MessageHistory,
-  is_stopped: bool,
-  is_cleaned: bool,
-  steering: string[],
-  cleanup_count: int,
+    session_id: string,
+    options: HarnessOptions,
+    history: MessageHistory,
+    is_stopped: bool,
+    is_cleaned: bool,
+    steering: string[],
+    cleanup_count: int,
 
-  // function cleanup(self) -> void throws never {
-  //   if (!self.is_cleaned) {
-  //     self.is_cleaned = true;
-  //     self.is_stopped = true;
-  //     self.cleanup_count = self.cleanup_count + 1;
-  //   }
-  // }
+    // function cleanup(self) -> void throws never {
+    //   if (!self.is_cleaned) {
+    //     self.is_cleaned = true;
+    //     self.is_stopped = true;
+    //     self.cleanup_count = self.cleanup_count + 1;
+    //   }
+    // }
 
-  implements HarnessSession {
-    function id(self) -> string throws never { self.session_id }
-    function messages(self) -> Messages throws never { self.history }
-    function stopped(self) -> bool throws never { self.is_stopped }
-  }
-  implements Resource {}
+    implements HarnessSession {
+        function id(self) -> string throws never {
+            self.session_id
+        }
+        function messages(self) -> Messages throws never {
+            self.history
+        }
+        function stopped(self) -> bool throws never {
+            self.is_stopped
+        }
+    }
+    implements Resource {}
 }
 
 class HarnessRun<T> {
-  value: T,
-  events: AgentEvent[],
-  token: HarnessSessionToken,
-  history: MessageHistory,
+    value: T,
+    events: AgentEvent[],
+    token: HarnessSessionToken,
+    history: MessageHistory,
 }
 
-// A harness stream owns the provider stream and the session it is updating.
-// next() exposes normalized harness events; final() remains the authoritative
-// typed outcome and continuation token.
-interface HarnessEventStream<T> requires Resource {
-  function next(self) -> AgentEvent | baml.stream.StreamFinished
-    throws baml.errors.UnknownError
-  function final(self) -> HarnessRun<T> throws baml.errors.UnknownError
+function emit_harness_event(
+    event: AgentEvent,
+    events: AgentEvent[],
+    on_event: ((AgentEvent) -> null throws never)?,
+) -> null throws never {
+    //# Retain every event in the completed run
+    events.push(event);
+    //# Notify the per-run listener immediately
+    match (on_event) {
+        let callback: ((AgentEvent) -> null throws never) => callback(event),
+        null => null,
+    };
+    null
 }
 
 interface Harness {
   function label(self) -> string throws never { "harness" }
   function open(self, options: HarnessOptions) -> HarnessSession
     throws baml.errors.UnknownError
-  function run<T>(self, session: HarnessSession, task: Task<T>) -> HarnessRun<T>
-    throws baml.errors.UnknownError
-  function stream<TPartial, T>(self, session: HarnessSession, task: Task<T>)
-    -> HarnessEventStream<T> throws baml.errors.UnknownError
+  function run<T>(
+    self,
+    session: HarnessSession,
+    task: Task<T>,
+    on_event: ((AgentEvent) -> null throws never)?,
+  ) -> HarnessRun<T> throws baml.errors.UnknownError
   function save_session(self, session: HarnessSession) -> HarnessSessionToken
     throws baml.errors.UnknownError
   function restore_session(self, token: HarnessSessionToken) -> HarnessSession

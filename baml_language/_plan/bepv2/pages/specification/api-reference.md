@@ -570,9 +570,10 @@ function drivers.submit_batch<T, P extends BatchProvider>(provider: P, tasks: Ta
   -> Batch<T>
 function drivers.open_session<P extends SessionProvider>(provider: P, options: SessionOptions) -> Session
 function drivers.run_in_session<T>(session: Session, task: Task<T>) -> Response<T>
-class run.Realtime implements Runner<Task<null>> {
-  type Output = LiveSession
-}
+function open_live<P extends RealtimeProvider>(task: Task<null, P>, channel: Channel)
+  -> LiveSession
+function with_automatic_tools(session: LiveSession, tools: ToolInput[])
+  -> LiveSession
 function drivers.create_cache<P extends ManagedCacheProvider>(provider: P, content: Messages, options: CacheOptions) -> Cache
 function drivers.transcribe<P extends TranscriptionProvider>(provider: P, stream: AudioStream, options: TranscriptionOptions) -> string
 function drivers.transcribe_with_meta<P extends TranscriptionProvider>(provider: P, stream: AudioStream, options: TranscriptionOptions) -> Response<string>

@@ -9,7 +9,7 @@ test "guide 03.01: retry repeats only a replay-safe direct call" {
 }
 
 class FlakyOnceLiveGeneration {
-  inner: root.ai.OpenAi,
+  inner: root.openai.Chat,
   attempts: int,
 
   implements root.ai.Provider {

@@ -62,7 +62,7 @@ test "guide 02.08: a cost budget stops between provider steps" {
 }
 
 class LiveCostedToolProvider {
-    inner: root.ai.OpenAi,
+    inner: root.openai.Chat,
     cost_per_step_usd: float,
 
     implements root.ai.Provider {

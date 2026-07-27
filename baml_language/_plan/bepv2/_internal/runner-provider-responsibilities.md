@@ -71,13 +71,34 @@ The parameter is deliberately named `runner`, producing a readable call site:
 task.run(runner = ai.run.Stream.new())
 ```
 
-Inputs that are not naturally owned by one task use the runner directly:
+Every runner invocation starts from a task. The task owns the operation's
+typed inputs and provider; the runner owns execution policy and its associated
+output type:
 
 ```baml
-let batch = ai.run.Batch.new(provider).run(tasks)
-let cache = ai.run.CreateCache.new(messages, ttl).run(provider)
-let text = ai.run.Transcribe.new(provider).run(audio_stream)
+let text = TranscribeAudio
+  .task(audio_stream)
+  .run(
+    runner = ai.run.Transcribe.new(language = "en"),
+  )
 ```
+
+Batch queues, caches, and provider sessions are resources rather than
+task-less runner inputs. Their resource APIs may accept tasks or provider
+values directly without pretending that a raw value is a task. For example,
+opening a raw provider-owned resource without adding a portable lifecycle
+policy is a direct resource operation:
+
+```baml
+let live_session = ai.open_live(task, channel)
+```
+
+`open_live` checks `RealtimeProvider` and returns its `LiveSession`; it does not
+run an event loop or execute application tools. Tool execution is an explicit
+wrapper through `ai.with_automatic_tools(...)`. The higher-level
+`ai.run.VoiceAgent` remains a runner because it owns the session loop, audio
+device lifecycle, barge-in policy, application-tool execution, and terminal
+result.
 
 ## Responsibility model
 

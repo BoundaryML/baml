@@ -208,6 +208,14 @@ class MacRealtimeAudioDevice {
     }
 
     implements root.ai.RealtimeAudioDevice {
+        function input_format(self) -> root.ai.RealtimeAudioFormat throws never {
+            root.openai.realtime_audio_format()
+        }
+
+        function output_format(self) -> root.ai.RealtimeAudioFormat throws never {
+            root.openai.realtime_audio_format()
+        }
+
         function next_input(self) -> uint8array? throws baml.errors.UnknownError {
             if (self.is_closed) {
                 return null;
@@ -310,14 +318,14 @@ class MacRealtimeAudioDevice {
 //     --from crates/baml_tests/baml_src_temp2
 function openai_realtime_call_center(
 ) -> null throws baml.errors.UnknownError | baml.errors.Unsupported {
-    let provider = root.ai.OpenAiRealtime {
+    let provider = root.openai.Realtime {
         model: "gpt-realtime-2.1",
         voice: "marin",
         api_key: realtime_openai_api_key(),
         output_audio: true,
         instructions: realtime_call_center_instructions(),
         input_transcription_model: "gpt-4o-mini-transcribe",
-        server_vad: root.ai.RealtimeServerVad {
+        server_vad: root.openai.RealtimeServerVad {
             threshold: 0.5,
             prefix_padding_ms: 300,
             silence_duration_ms: 500,

@@ -29,29 +29,6 @@ function InvestigateRepository_manual(
         .run(runner = root.ai.run.Completion<Resolution>.new())
 }
 
-function harness_options() -> root.ai.HarnessOptions throws never {
-    root.ai.HarnessOptions {
-        cwd: "/workspace",
-        permission_mode: "read-only",
-        sandbox: "workspace",
-        attributes: { "team": "support" },
-    }
-}
-
-function harness_runner<T>(harness: root.ai.Harness) -> root.ai.run.Harness<T> throws never {
-    let options = harness_options();
-    root.ai
-        .run
-        .Harness<T>
-        .new(
-            harness,
-            cwd = options.cwd,
-            permission_mode = options.permission_mode,
-            sandbox = options.sandbox,
-            attributes = options.attributes,
-        )
-}
-
 function fake_model_harness() -> root.ai.ModelHarness throws never {
     root.ai.ModelHarness { inner: fake_resolution(), sessions: [] }
 }

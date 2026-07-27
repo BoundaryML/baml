@@ -22,7 +22,7 @@ test "guide 07.02: managed cache lifetime is explicit" {
 }
 
 function run_with_managed_cache(
-    provider: root.ai.GeminiManagedCacheProvider,
+    provider: root.google.Gemini,
 ) -> root.ai.Response<Resolution> throws baml.errors.UnknownError | baml.errors.Unsupported {
     // The repeated policy corpus is intentionally above Gemini's explicit-cache
     // minimum.
@@ -45,7 +45,7 @@ function run_with_managed_cache(
 
 testset "integ-test-guide-07-managed-cache" {
     test "guide 07.02 live Gemini: create, use, and automatically delete a remote cache" {
-        let provider = root.ai.GeminiManagedCacheProvider {
+        let provider = root.google.Gemini {
             model: "gemini-2.5-flash",
             api_key: baml.env.get_or_panic("GOOGLE_API_KEY"),
             base_url: null,
