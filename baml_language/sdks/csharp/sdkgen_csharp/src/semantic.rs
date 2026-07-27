@@ -13,7 +13,7 @@ use std::{
 use baml_base::{Literal, MediaKind, Name as BaseName, TyAttr, TyAttrValue};
 use baml_codegen_types::{
     CallableParam, Class, ClassProperty, CodegenFunctionParamMode, EnumVariant, Function,
-    FunctionArgument, Name, Symbol, Ty,
+    FunctionArgument, Name, ParamTy, Symbol, Ty,
 };
 use sha2::{Digest, Sha256};
 
@@ -799,7 +799,7 @@ impl RenderContext<'_> {
             Ty::TypeVar(name, _) => parameters
                 .iter()
                 .rev()
-                .find(|parameter| parameter.name == name)
+                .find(|parameter| parameter.name == name.name())
                 .map(|parameter| {
                     allocated(self.names, &parameter.request)
                         .source()
@@ -2010,7 +2010,16 @@ fn class_receiver_type(class: &ClassSpec<'_>) -> Ty {
             .class
             .generic_params
             .iter()
-            .map(|parameter| Ty::TypeVar(parameter.clone(), TyAttr::EMPTY))
+            .enumerate()
+            .map(|(index, parameter)| {
+                Ty::TypeVar(
+                    ParamTy::new(
+                        u32::try_from(index).expect("generic parameter index fits in u32"),
+                        parameter.clone(),
+                    ),
+                    TyAttr::EMPTY,
+                )
+            })
             .collect(),
         TyAttr::EMPTY,
     )
@@ -2035,7 +2044,7 @@ fn project_resource_method_result(owner: &Name, class: &Class, method: &Function
             method
                 .generic_params
                 .first()
-                .map(|parameter| Ty::TypeVar(parameter.clone(), TyAttr::EMPTY))
+                .map(|parameter| Ty::TypeVar(ParamTy::new(0, parameter.clone()), TyAttr::EMPTY))
                 .into_iter()
                 .collect(),
             attr.clone(),
@@ -2045,7 +2054,16 @@ fn project_resource_method_result(owner: &Name, class: &Class, method: &Function
             class
                 .generic_params
                 .iter()
-                .map(|parameter| Ty::TypeVar(parameter.clone(), TyAttr::EMPTY))
+                .enumerate()
+                .map(|(index, parameter)| {
+                    Ty::TypeVar(
+                        ParamTy::new(
+                            u32::try_from(index).expect("generic parameter index fits in u32"),
+                            parameter.clone(),
+                        ),
+                        TyAttr::EMPTY,
+                    )
+                })
                 .collect(),
             attr.clone(),
         ),
@@ -2518,7 +2536,7 @@ fn render_generic_type_token(
             let parameter = function
                 .generic_params
                 .iter()
-                .find(|parameter| parameter.name == name)
+                .find(|parameter| parameter.name == name.name())
                 .unwrap_or_else(|| panic!("unbound generated type variable {name}"));
             let index = function
                 .generic_params
@@ -2851,7 +2869,7 @@ fn substitute_type_variables(ty: &Ty, parameters: &[BaseName], arguments: &[Ty])
     match ty {
         Ty::TypeVar(name, _) => parameters
             .iter()
-            .position(|parameter| parameter == name)
+            .position(|parameter| parameter == name.name())
             .and_then(|index| arguments.get(index))
             .cloned()
             .unwrap_or_else(|| ty.clone()),
@@ -3169,7 +3187,7 @@ fn render_method_type_token(
             let index = method
                 .type_params
                 .iter()
-                .rposition(|parameter| parameter.name == name)
+                .rposition(|parameter| parameter.name == name.name())
                 .unwrap_or_else(|| panic!("unbound generated method type variable {name}"));
             allocated(render.names, &method.locals.type_requests[index])
                 .source()
@@ -3954,7 +3972,7 @@ fn render_generic_class_type_token(
             let parameter = class
                 .generic_params
                 .iter()
-                .find(|parameter| parameter.name == name)
+                .find(|parameter| parameter.name == name.name())
                 .unwrap_or_else(|| panic!("unbound generated class type variable {name}"));
             format!(
                 "type_{}",
@@ -4996,7 +5014,7 @@ mod tests {
                 vec![type_parameter.clone()],
                 vec![property(
                     "value",
-                    Ty::TypeVar(type_parameter, TyAttr::EMPTY),
+                    Ty::TypeVar(ParamTy::new(0, type_parameter), TyAttr::EMPTY),
                 )],
             ),
         );
@@ -5607,8 +5625,8 @@ mod tests {
         );
         let parameter_t = BaseName::new("T");
         let parameter_r = BaseName::new("R");
-        let type_t = Ty::TypeVar(parameter_t.clone(), TyAttr::EMPTY);
-        let type_r = Ty::TypeVar(parameter_r.clone(), TyAttr::EMPTY);
+        let type_t = Ty::TypeVar(ParamTy::new(0, parameter_t.clone()), TyAttr::EMPTY);
+        let type_r = Ty::TypeVar(ParamTy::new(1, parameter_r.clone()), TyAttr::EMPTY);
         let callback = Ty::Function {
             params: vec![CallableParam {
                 name: Some(BaseName::new("value")),

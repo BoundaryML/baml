@@ -3015,7 +3015,7 @@ fn .<lambda(<lambda(all, 0)>, 1)>(f: null) -> null {
         _3 = copy _2;
         _5 = make_closure lambda[0]<2 type_args>();
         _6 = load_type(bool);
-        _7 = load_type(#1);
+        _7 = load_type(never);
         _8 = load_type(future<#0, #1>);
         _4 = call const fn baml.Array.map<copy _8, copy _6, copy _7>(copy capture[0], copy _5) -> [bb4];
     }
@@ -3134,7 +3134,7 @@ fn .<lambda(race, 0)>() -> null {
     bb1: {
         _4 = make_closure lambda[0]<2 type_args>();
         _5 = load_type(bool);
-        _6 = load_type(#1);
+        _6 = load_type(never);
         _7 = load_type(future<#0, #1>);
         _3 = call const fn baml.Array.map<copy _7, copy _5, copy _6>(copy capture[0], copy _4) -> [bb2];
     }
@@ -3754,9 +3754,9 @@ fn baml.io.eprint = builtin(io)
 
 fn baml.io.eprintln = builtin(io)
 
-fn baml.iter.Iterator.map(self: baml.iter.Iterator, fn: (Item) -> R throws E2) -> baml.iter.Iterator<Error = E2 | Error, Item = R> {
+fn baml.iter.Iterator.map(self: baml.iter.Iterator, fn: (Item) -> R throws E2) -> baml.iter.Iterator<Error = Error | E2, Item = R> {
     // Locals:
-    let _0: baml.iter.Iterator<Error = E2 | Error, Item = R> // _0 // return
+    let _0: baml.iter.Iterator<Error = Error | E2, Item = R> // _0 // return
     let _1: baml.iter.Iterator // self // param
     let _2: (Item) -> R throws E2 // fn // param
 
@@ -3770,9 +3770,9 @@ fn baml.iter.Iterator.map(self: baml.iter.Iterator, fn: (Item) -> R throws E2) -
     }
 }
 
-fn baml.iter.Iterator.filter(self: baml.iter.Iterator, predicate: (Item) -> bool throws E2) -> baml.iter.Iterator<Error = E2 | Error, Item = Item> {
+fn baml.iter.Iterator.filter(self: baml.iter.Iterator, predicate: (Item) -> bool throws E2) -> baml.iter.Iterator<Error = Error | E2, Item = Item> {
     // Locals:
-    let _0: baml.iter.Iterator<Error = E2 | Error, Item = Item> // _0 // return
+    let _0: baml.iter.Iterator<Error = Error | E2, Item = Item> // _0 // return
     let _1: baml.iter.Iterator // self // param
     let _2: (Item) -> bool throws E2 // predicate // param
 
@@ -3786,9 +3786,9 @@ fn baml.iter.Iterator.filter(self: baml.iter.Iterator, predicate: (Item) -> bool
     }
 }
 
-fn baml.iter.Iterator.filter_map(self: baml.iter.Iterator, fn: (Item) -> null | R throws E2) -> baml.iter.Iterator<Error = E2 | Error, Item = R> {
+fn baml.iter.Iterator.filter_map(self: baml.iter.Iterator, fn: (Item) -> null | R throws E2) -> baml.iter.Iterator<Error = Error | E2, Item = R> {
     // Locals:
-    let _0: baml.iter.Iterator<Error = E2 | Error, Item = R> // _0 // return
+    let _0: baml.iter.Iterator<Error = Error | E2, Item = R> // _0 // return
     let _1: baml.iter.Iterator // self // param
     let _2: (Item) -> null | R throws E2 // fn // param
 
@@ -3802,9 +3802,9 @@ fn baml.iter.Iterator.filter_map(self: baml.iter.Iterator, fn: (Item) -> null | 
     }
 }
 
-fn baml.iter.Iterator.flat_map(self: baml.iter.Iterator, fn: (Item) -> baml.iter.Iterable<Error = E3, Item = R> throws E2) -> baml.iter.Iterator<Error = E2 | E3 | Error, Item = R> {
+fn baml.iter.Iterator.flat_map(self: baml.iter.Iterator, fn: (Item) -> baml.iter.Iterable<Error = E3, Item = R> throws E2) -> baml.iter.Iterator<Error = Error | E2 | E3, Item = R> {
     // Locals:
-    let _0: baml.iter.Iterator<Error = E2 | E3 | Error, Item = R> // _0 // return
+    let _0: baml.iter.Iterator<Error = Error | E2 | E3, Item = R> // _0 // return
     let _1: baml.iter.Iterator // self // param
     let _2: (Item) -> baml.iter.Iterable<Error = E3, Item = R> throws E2 // fn // param
     let _3: baml.iter.Done
@@ -3836,9 +3836,9 @@ fn baml.iter.Iterator.step_by(self: baml.iter.Iterator, n: int) -> baml.iter.Ite
     }
 }
 
-fn baml.iter.Iterator.chain(self: baml.iter.Iterator, other: baml.iter.Iterable<Error = E2, Item = Item>) -> baml.iter.Iterator<Error = E2 | Error, Item = Item> {
+fn baml.iter.Iterator.chain(self: baml.iter.Iterator, other: baml.iter.Iterable<Error = E2, Item = Item>) -> baml.iter.Iterator<Error = Error | E2, Item = Item> {
     // Locals:
-    let _0: baml.iter.Iterator<Error = E2 | Error, Item = Item> // _0 // return
+    let _0: baml.iter.Iterator<Error = Error | E2, Item = Item> // _0 // return
     let _1: baml.iter.Iterator // self // param
     let _2: baml.iter.Iterable<Error = E2, Item = Item> // other // param
     let _3: baml.iter.Iterator<Error = E2, Item = Item>

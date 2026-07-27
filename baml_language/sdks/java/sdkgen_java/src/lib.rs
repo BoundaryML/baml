@@ -645,7 +645,7 @@ mod tests {
         Ty::Uint8Array { attr: a() }
     }
     fn t_typevar(n: &str) -> Ty {
-        Ty::TypeVar(BaseName::new(n), a())
+        Ty::TypeVar(baml_codegen_types::ParamTy::new(0, BaseName::new(n)), a())
     }
     fn t_union(items: Vec<Ty>) -> Ty {
         Ty::Union(items, a())

@@ -7,7 +7,7 @@
 
 use baml_base::{Name, Span, TyAttr};
 use baml_compiler2_hir::package::PackageId;
-use baml_type::{Ty, TypeName};
+use baml_type::{ParamTy, Ty, TypeName};
 
 use crate::{
     interfaces::{ImplData, impl_data, impl_data_source_map, interface_loc_qtn, package_impl_locs},
@@ -211,7 +211,8 @@ fn impls_overlap<'db>(
     if a_args.len() != b_args.len() {
         return Overlap::No;
     }
-    let mut vars: Vec<Name> = Vec::with_capacity(a.generic_params.len() + b.generic_params.len());
+    let mut vars: Vec<ParamTy> =
+        Vec::with_capacity(a.generic_params.len() + b.generic_params.len());
     vars.extend((0..a.generic_params.len()).map(|i| renamed_var('a', i)));
     vars.extend((0..b.generic_params.len()).map(|i| renamed_var('b', i)));
 
@@ -268,7 +269,7 @@ fn bounds_hold_at_common_instance<'db>(
     pkg_id: PackageId<'db>,
     rule: &ImplData<'db>,
     prefix: char,
-    vars: &[Name],
+    vars: &[ParamTy],
     bindings: &TypeBindings,
     subject: &[&Ty],
     aliases: &std::collections::HashMap<TypeName, Ty>,
@@ -332,12 +333,13 @@ fn bounds_hold_at_common_instance<'db>(
     true
 }
 
-/// Fresh unification-variable name for the `idx`-th generic param of the impl
-/// on side `prefix`. Guillemets can't appear in user type-var names, so the two
-/// impls' renamed params are guaranteed disjoint from each other and from any
-/// real type.
-fn renamed_var(prefix: char, idx: usize) -> Name {
-    Name::new(format!("«{prefix}{idx}»"))
+/// Fresh unification parameter for the `idx`-th generic param of the impl on
+/// side `prefix`.
+fn renamed_var(prefix: char, idx: usize) -> ParamTy {
+    ParamTy::new(
+        u32::try_from(idx).expect("coherence variable index fits in u32"),
+        Name::new(format!("__coherence_{prefix}_{idx}")),
+    )
 }
 
 /// The impl's subject — for-type and interface args — normalized (CNF) with its generic

@@ -83,7 +83,7 @@ pub(crate) fn class_type_arg_matches<C: normalize::TypeContext>(
 #[cfg(test)]
 mod tests {
     use baml_type::{
-        Interface, Name, QualifiedTypeName, RealizedTy, RuntimeTy, TyTemplate, TypeName,
+        Interface, Name, ParamTy, QualifiedTypeName, RealizedTy, RuntimeTy, TyTemplate, TypeName,
         normalize::TypeContext,
     };
 
@@ -102,7 +102,7 @@ mod tests {
         fn implements_interface(&self, _: &baml_type::Ty, _: &Interface) -> bool {
             false
         }
-        fn type_var_bound(&self, _: &Name) -> Vec<Interface> {
+        fn type_var_bound(&self, _: &ParamTy) -> Vec<Interface> {
             Vec::new()
         }
         fn interface_requires(&self, _: &Interface, _: &Interface) -> bool {

@@ -1657,7 +1657,7 @@ function baml.iter.Chain.next(self: baml.iter.Chain<T, E, E2>) -> T | baml.iter.
     self.other.next<T, E2>() : T | baml.iter.Done
   }
 }
-function baml.iter.iter(self: unknown) -> baml.iter.Iterator<Item = !error, Error = never> throws never {
+function baml.iter.iter(self: unknown) -> baml.iter.Iterator<Item = T, Error = never> throws never {
   { : baml.iter.ArrayIterator<T>
     ArrayIterator.new<T>(self) : baml.iter.ArrayIterator<T>
   }
@@ -2793,22 +2793,22 @@ class baml.net.Datagram$stream {
 }
 
 --- <builtin>/baml/ns_ops/comparison.baml ---
-function baml.ops.Equals.neq(self: baml.ops.Equals, other: !error) -> bool throws never {
+function baml.ops.Equals.neq(self: baml.ops.Equals, other: Self) -> bool throws never {
   { : bool
     Not self.eq(other) : bool
   }
 }
-function baml.ops.Compare.le(self: baml.ops.Compare, other: !error) -> bool throws never {
+function baml.ops.Compare.le(self: baml.ops.Compare, other: Self) -> bool throws never {
   { : bool
     self.lt(other) || self.eq(other) : bool
   }
 }
-function baml.ops.Compare.gt(self: baml.ops.Compare, other: !error) -> bool throws never {
+function baml.ops.Compare.gt(self: baml.ops.Compare, other: Self) -> bool throws never {
   { : bool
     Not self.le(other) : bool
   }
 }
-function baml.ops.Compare.ge(self: baml.ops.Compare, other: !error) -> bool throws never {
+function baml.ops.Compare.ge(self: baml.ops.Compare, other: Self) -> bool throws never {
   { : bool
     Not self.lt(other) : bool
   }

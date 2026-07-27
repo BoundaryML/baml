@@ -9953,6 +9953,7 @@ export const baml_bridge = $root.baml_bridge = (() => {
                  * @memberof baml_bridge.cffi.v1
                  * @interface IBamlTyTypeVar
                  * @property {string|null} [name] BamlTyTypeVar name
+                 * @property {number|null} [index] BamlTyTypeVar index
                  */
 
                 /**
@@ -9977,6 +9978,14 @@ export const baml_bridge = $root.baml_bridge = (() => {
                  * @instance
                  */
                 BamlTyTypeVar.prototype.name = "";
+
+                /**
+                 * BamlTyTypeVar index.
+                 * @member {number} index
+                 * @memberof baml_bridge.cffi.v1.BamlTyTypeVar
+                 * @instance
+                 */
+                BamlTyTypeVar.prototype.index = 0;
 
                 /**
                  * Creates a new BamlTyTypeVar instance using the specified properties.
@@ -10008,6 +10017,8 @@ export const baml_bridge = $root.baml_bridge = (() => {
                         throw Error("max depth exceeded");
                     if (message.name != null && Object.hasOwnProperty.call(message, "name"))
                         writer.uint32(/* id 1, wireType 2 =*/10).string(message.name);
+                    if (message.index != null && Object.hasOwnProperty.call(message, "index"))
+                        writer.uint32(/* id 2, wireType 0 =*/16).uint32(message.index);
                     return writer;
                 };
 
@@ -10052,6 +10063,10 @@ export const baml_bridge = $root.baml_bridge = (() => {
                                 message.name = reader.string();
                                 break;
                             }
+                        case 2: {
+                                message.index = reader.uint32();
+                                break;
+                            }
                         default:
                             reader.skipType(tag & 7, long);
                             break;
@@ -10094,6 +10109,9 @@ export const baml_bridge = $root.baml_bridge = (() => {
                     if (message.name != null && message.hasOwnProperty("name"))
                         if (!$util.isString(message.name))
                             return "name: string expected";
+                    if (message.index != null && message.hasOwnProperty("index"))
+                        if (!$util.isInteger(message.index))
+                            return "index: integer expected";
                     return null;
                 };
 
@@ -10117,6 +10135,8 @@ export const baml_bridge = $root.baml_bridge = (() => {
                     let message = new $root.baml_bridge.cffi.v1.BamlTyTypeVar();
                     if (object.name != null)
                         message.name = String(object.name);
+                    if (object.index != null)
+                        message.index = object.index >>> 0;
                     return message;
                 };
 
@@ -10137,10 +10157,14 @@ export const baml_bridge = $root.baml_bridge = (() => {
                     if (q > $util.recursionLimit)
                         throw Error("max depth exceeded");
                     let object = {};
-                    if (options.defaults)
+                    if (options.defaults) {
                         object.name = "";
+                        object.index = 0;
+                    }
                     if (message.name != null && message.hasOwnProperty("name"))
                         object.name = message.name;
+                    if (message.index != null && message.hasOwnProperty("index"))
+                        object.index = message.index;
                     return object;
                 };
 

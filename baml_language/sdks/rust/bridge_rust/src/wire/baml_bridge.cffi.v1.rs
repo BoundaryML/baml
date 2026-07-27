@@ -347,6 +347,8 @@ pub struct BamlTyVoid {
 pub struct BamlTyTypeVar {
     #[prost(string, tag = "1")]
     pub name: ::prost::alloc::string::String,
+    #[prost(uint32, tag = "2")]
+    pub index: u32,
 }
 /// An associated-type projection such as `P.Output` or `(T as Iterator).Item`
 /// (`RuntimeTy::AssociatedTypeProjection`). `interface` is absent when the

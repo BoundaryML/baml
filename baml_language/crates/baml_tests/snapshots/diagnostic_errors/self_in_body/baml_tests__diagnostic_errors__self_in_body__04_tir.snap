@@ -46,7 +46,7 @@ function user.Box.turbofish_self(self: user.Box<T>) -> string throws never {
   }
   !! 1609..1632: unresolved type: Self
 }
-function user.Tester.check(self: user.Tester, other: !error) -> bool throws never {
+function user.Tester.check(self: user.Tester, other: Self) -> bool throws never {
   { : bool
     other is Self : bool
   }
@@ -56,7 +56,7 @@ function user.Tester.describe(self: user.Tester) -> string throws never {
     reflect.type_of<Self>().to_string() : string
   }
 }
-function user.Tester.bind_self(self: user.Tester, other: !error) -> bool throws never {
+function user.Tester.bind_self(self: user.Tester, other: Self) -> bool throws never {
   { : true
     let a: Self = other : Self
     true : true

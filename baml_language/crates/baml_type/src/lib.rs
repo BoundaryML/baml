@@ -36,6 +36,7 @@ mod defs;
 mod family;
 mod names;
 pub mod normalize;
+mod param;
 mod primitive;
 mod realized_ty;
 mod runtime_ty;
@@ -47,6 +48,7 @@ pub use attr::*;
 pub use defs::*;
 pub use family::*;
 pub use names::*;
+pub use param::*;
 pub use primitive::*;
 pub use runtime_ty::*;
 pub use template::SubstituteError;
@@ -481,7 +483,7 @@ impl Ty {
     }
 
     pub fn type_var(name: &str) -> Self {
-        Ty::TypeVar(Name::new(name), TyAttr::default())
+        Ty::TypeVar(ParamTy::new(0, Name::new(name)), TyAttr::default())
     }
 
     /// View this type as an [`Interface`] constraint when it is an interface
@@ -806,7 +808,7 @@ impl Ty {
                     throws.render_with(s),
                 )
             }
-            Ty::TypeVar(name, _) => s.type_var(name),
+            Ty::TypeVar(param, _) => s.type_var(param.name()),
             Ty::AssociatedTypeProjection {
                 base,
                 interface,
@@ -1110,9 +1112,9 @@ mod tests {
             Ty::Never {
                 attr: TyAttr::default(),
             },
-            Ty::TypeVar(Name::new("T"), TyAttr::default()),
+            Ty::type_var("T"),
             Ty::AssociatedTypeProjection {
-                base: boxed(Ty::TypeVar(Name::new("T"), TyAttr::default())),
+                base: boxed(Ty::type_var("T")),
                 interface: Box::new(Interface::new(qtn("Iterator"), vec![], vec![])),
                 member: Name::new("Item"),
                 attr: TyAttr::default(),
@@ -1228,9 +1230,9 @@ mod tests {
             Ty::Void {
                 attr: TyAttr::default(),
             },
-            Ty::TypeVar(Name::new("T"), TyAttr::default()),
+            Ty::type_var("T"),
             Ty::AssociatedTypeProjection {
-                base: boxed(Ty::TypeVar(Name::new("T"), TyAttr::default())),
+                base: boxed(Ty::type_var("T")),
                 interface: Box::new(Interface::new(qtn("Iterator"), vec![], vec![])),
                 member: Name::new("Item"),
                 attr: TyAttr::default(),

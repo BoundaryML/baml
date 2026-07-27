@@ -123,7 +123,7 @@ fn user.call_int_callback(cb: (int) -> int throws never) -> int {
     let _0: int // _0 // return
     let _1: (int) -> int throws never // cb // param
     let _2: (int) -> int throws unknown // f
-    let _3: (int) -> int throws __effect_param_0
+    let _3: (int) -> int throws unknown
 
     bb0: {
         _2 = copy _1;
@@ -249,7 +249,7 @@ fn user.fn_pattern(cb: (int) -> int throws never) -> int {
     let _0: int // _0 // return
     let _1: (int) -> int throws never // cb // param
     let _2: (int) -> int throws unknown // f
-    let _3: (int) -> int throws __effect_param_0
+    let _3: (int) -> int throws unknown
 
     bb0: {
         _2 = copy _1;

@@ -210,6 +210,43 @@ test "explicit_throwing_lambda_catches_error" {
     assert.is_true(baml.deep_equals(lambdas_explicit_throwing_lambda_catches_error(), -1))
 }
 
+function lambda_effect_invoke<T, E>(f: () -> T throws E) -> T throws E {
+    f()
+}
+
+function lambda_effect_forward<E>(f: () -> int throws E) -> int throws E {
+    lambda_effect_invoke(() -> { f() })
+}
+
+function lambda_effect_fail() -> int throws string {
+    throw "callback"
+}
+
+function lambda_effect_main() -> int {
+    lambda_effect_forward(lambda_effect_fail) catch (e) {
+        string => 1
+    }
+}
+
+test "callback_effect_param_is_inferred_from_unannotated_lambda_body" {
+    assert.equal(lambda_effect_main(), 1)
+}
+
+function lambda_contextual_call(cb: (x: int) -> int throws int | string) -> int throws int | string {
+    cb(1)
+}
+
+function lambda_contextual_main() -> int {
+    lambda_contextual_call((x: int) -> int { throw "contextual" }) catch (e) {
+        string => 1,
+        int => 2,
+    }
+}
+
+test "contextual_lambda_preserves_omitted_throws_surface" {
+    assert.equal(lambda_contextual_main(), 1)
+}
+
 // ─── lambda_inside_catch_base_keeps_parameter_scope ───────────────────────────
 
 function lambdas_lambda_inside_catch_base_keeps_parameter_scope() -> int {

@@ -877,6 +877,8 @@ nonisolated struct BamlBridge_Cffi_V1_BamlTyTypeVar: Sendable {
 
   var name: String = String()
 
+  var index: UInt32 = 0
+
   var unknownFields = SwiftProtobuf.UnknownStorage()
 
   init() {}
@@ -2350,7 +2352,7 @@ nonisolated extension BamlBridge_Cffi_V1_BamlTyVoid: SwiftProtobuf.Message, Swif
 
 nonisolated extension BamlBridge_Cffi_V1_BamlTyTypeVar: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   static let protoMessageName: String = _protobuf_package + ".BamlTyTypeVar"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}name\0")
+  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}name\0\u{1}index\0")
 
   mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -2359,6 +2361,7 @@ nonisolated extension BamlBridge_Cffi_V1_BamlTyTypeVar: SwiftProtobuf.Message, S
       // enabled. https://github.com/apple/swift-protobuf/issues/1034
       switch fieldNumber {
       case 1: try { try decoder.decodeSingularStringField(value: &self.name) }()
+      case 2: try { try decoder.decodeSingularUInt32Field(value: &self.index) }()
       default: break
       }
     }
@@ -2368,11 +2371,15 @@ nonisolated extension BamlBridge_Cffi_V1_BamlTyTypeVar: SwiftProtobuf.Message, S
     if !self.name.isEmpty {
       try visitor.visitSingularStringField(value: self.name, fieldNumber: 1)
     }
+    if self.index != 0 {
+      try visitor.visitSingularUInt32Field(value: self.index, fieldNumber: 2)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
   static func ==(lhs: BamlBridge_Cffi_V1_BamlTyTypeVar, rhs: BamlBridge_Cffi_V1_BamlTyTypeVar) -> Bool {
     if lhs.name != rhs.name {return false}
+    if lhs.index != rhs.index {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

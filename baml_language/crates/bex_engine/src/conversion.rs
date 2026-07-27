@@ -1585,7 +1585,8 @@ pub(crate) fn infer_bindings_runtime(
     actual: &RuntimeTy,
     out: &mut indexmap::IndexMap<String, RuntimeTy>,
 ) {
-    let mut bindings: rustc_hash::FxHashMap<baml_type::Name, Ty> = rustc_hash::FxHashMap::default();
+    let mut bindings: rustc_hash::FxHashMap<baml_type::ParamTy, Ty> =
+        rustc_hash::FxHashMap::default();
     baml_type_runtime::infer_value_bindings(&Ty::from(formal), &Ty::from(actual), &mut bindings);
     for (name, ty) in bindings {
         // A binding is always a subterm/union of a runtime-derived actual, so the
@@ -5125,7 +5126,10 @@ mod inference_unifier_tests {
     use super::*;
 
     fn tv(name: &str) -> RuntimeTy {
-        RuntimeTy::TypeVar(Name::new(name), TyAttr::default())
+        RuntimeTy::TypeVar(
+            baml_type::ParamTy::new(0, Name::new(name)),
+            TyAttr::default(),
+        )
     }
     fn int() -> RuntimeTy {
         RuntimeTy::int()

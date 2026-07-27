@@ -580,7 +580,10 @@ mod tests {
     }
 
     fn type_var(name: BaseName) -> Ty {
-        Ty::TypeVar(name, baml_base::TyAttr::EMPTY)
+        Ty::TypeVar(
+            baml_codegen_types::ParamTy::new(0, name),
+            baml_base::TyAttr::EMPTY,
+        )
     }
 
     fn list(inner: Box<Ty>) -> Ty {

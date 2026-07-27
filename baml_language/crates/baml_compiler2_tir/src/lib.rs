@@ -27,6 +27,7 @@ pub mod analysis;
 pub mod builder;
 pub mod callable;
 pub mod exhaustiveness;
+mod generic_env;
 pub mod generics;
 pub mod infer_context;
 pub mod inference;
@@ -46,6 +47,46 @@ pub mod ty;
 pub mod type_context;
 pub mod unify;
 pub mod user_facing;
+
+pub fn class_generic_params(
+    db: &dyn Db,
+    class: baml_compiler2_hir::loc::ClassLoc<'_>,
+) -> Vec<ty::ParamTy> {
+    generic_env::class_generic_env(db, class).params().to_vec()
+}
+
+pub fn interface_generic_params(
+    db: &dyn Db,
+    interface: baml_compiler2_hir::loc::InterfaceLoc<'_>,
+) -> Vec<ty::ParamTy> {
+    generic_env::interface_generic_env(db, interface)
+        .params()
+        .to_vec()
+}
+
+pub fn interface_declared_generic_params(
+    db: &dyn Db,
+    interface: baml_compiler2_hir::loc::InterfaceLoc<'_>,
+) -> Vec<ty::ParamTy> {
+    let env = generic_env::interface_generic_env(db, interface);
+    env.interface_param_parts().1.to_vec()
+}
+
+pub fn impl_generic_params(
+    db: &dyn Db,
+    block: baml_compiler2_hir::loc::ImplLoc<'_>,
+) -> Vec<ty::ParamTy> {
+    generic_env::impl_generic_env(db, block).params().to_vec()
+}
+
+pub fn function_generic_params(
+    db: &dyn Db,
+    function: baml_compiler2_hir::loc::FunctionLoc<'_>,
+) -> Vec<ty::ParamTy> {
+    generic_env::function_generic_env(db, function)
+        .params()
+        .to_vec()
+}
 
 // ── Db trait ──────────────────────────────────────────────────────────────────
 

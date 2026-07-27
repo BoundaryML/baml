@@ -1635,7 +1635,7 @@ mod tests {
 
     #[test]
     fn typevar_requires_wildcard() {
-        let tv = Ty::TypeVar(Name::new("T"), Default::default());
+        let tv = Ty::type_var("T");
         let arms = vec![DPat::wildcard(tv.clone())];
         let report = compute_match_usefulness(&StubCtx, &arms, tv);
         assert!(report.missing.is_empty());

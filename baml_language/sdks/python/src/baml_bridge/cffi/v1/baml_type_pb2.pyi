@@ -255,10 +255,12 @@ class BamlTyVoid(_message.Message):
     def __init__(self) -> None: ...
 
 class BamlTyTypeVar(_message.Message):
-    __slots__ = ("name",)
+    __slots__ = ("name", "index")
     NAME_FIELD_NUMBER: _ClassVar[int]
+    INDEX_FIELD_NUMBER: _ClassVar[int]
     name: str
-    def __init__(self, name: _Optional[str] = ...) -> None: ...
+    index: int
+    def __init__(self, name: _Optional[str] = ..., index: _Optional[int] = ...) -> None: ...
 
 class BamlTyAssociatedTypeProjection(_message.Message):
     __slots__ = ("base", "interface", "member")

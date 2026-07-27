@@ -29,7 +29,9 @@
 //! stricter than the compiler where it would break a proven-exhaustive match —
 //! see the List/Map-invariance sequencing constraint).
 
-use baml_type::{Interface, Name, QualifiedTypeName, RealizedTy, Ty, normalize::TypeContext};
+use baml_type::{
+    Interface, Name, ParamTy, QualifiedTypeName, RealizedTy, Ty, normalize::TypeContext,
+};
 use bex_vm_types::types::Object;
 
 use crate::BexVm;
@@ -73,7 +75,7 @@ impl TypeContext for BexVm {
         )
     }
 
-    fn type_var_bound(&self, _name: &Name) -> Vec<Interface> {
+    fn type_var_bound(&self, _param: &ParamTy) -> Vec<Interface> {
         // Runtime subtype queries are always over realized operands: templates are
         // substituted against realized frame args before any comparison, and the
         // resolver narrows to `RealizedTy` — so a `NormalTy::TypeVar` node (the
@@ -223,7 +225,7 @@ impl TypeContext for StructuralEquivCtx<'_> {
         false // Opaque: re-entrant (→ the resolver), unboundedly.
     }
 
-    fn type_var_bound(&self, _name: &Name) -> Vec<Interface> {
+    fn type_var_bound(&self, _param: &ParamTy) -> Vec<Interface> {
         Vec::new()
     }
 

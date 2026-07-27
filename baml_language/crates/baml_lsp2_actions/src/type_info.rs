@@ -553,13 +553,16 @@ fn display_local_binding_ty(
     utils::display_ty_for_file(db, file, ty)
 }
 
-fn function_param_matches_effect_slot(ty: &baml_compiler2_tir::ty::Ty, effect_name: &Name) -> bool {
+fn function_param_matches_effect_slot(
+    ty: &baml_compiler2_tir::ty::Ty,
+    effect_param: &baml_compiler2_tir::ty::ParamTy,
+) -> bool {
     use baml_compiler2_tir::ty::Ty;
 
     match ty {
         Ty::Function { throws, .. } => matches!(
             throws.as_ref(),
-            Ty::TypeVar(name, _) if name == effect_name
+            Ty::TypeVar(param, _) if param == effect_param
         ),
         Ty::Union(members, _) => {
             let mut matched = false;
@@ -567,7 +570,7 @@ fn function_param_matches_effect_slot(ty: &baml_compiler2_tir::ty::Ty, effect_na
                 if matches!(member, Ty::Null { .. }) {
                     continue;
                 }
-                if !function_param_matches_effect_slot(member, effect_name) {
+                if !function_param_matches_effect_slot(member, effect_param) {
                     return false;
                 }
                 matched = true;
@@ -592,7 +595,7 @@ fn callback_forwarding_note(
     let Ty::TypeVar(effect_name, _) = only_fact else {
         return None;
     };
-    if !baml_compiler2_tir::ty::is_synthetic_effect_param(effect_name) {
+    if !baml_compiler2_tir::ty::is_synthetic_effect_param(effect_name.name()) {
         return None;
     }
 

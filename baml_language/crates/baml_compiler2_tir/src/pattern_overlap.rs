@@ -16,8 +16,8 @@
 //!    contract, whereas a wrong `No` rejects valid code and a wrong "definite"
 //!    would skip a needed test.
 
-use baml_base::{Name, TyAttr};
-use baml_type::{Ty, TypeName};
+use baml_base::TyAttr;
+use baml_type::{ParamTy, Ty, TypeName};
 
 use crate::{
     lower_type_expr::TypeVarBoundsMap,
@@ -51,7 +51,7 @@ pub(crate) struct PatternOverlapEnv<'a> {
     /// must first check that every free type variable of both inputs is in this set
     /// (see `TypeInferenceBuilder::all_type_vars_in_scope`); `Yes`/`Unknown` are
     /// safe regardless.
-    pub vars: &'a [Name],
+    pub vars: &'a [ParamTy],
     /// Interface bounds of the rigid params (`T extends I`). Bounds only ever
     /// *refute* (a pinned witness that provably fails a bound → `No`); they never
     /// upgrade a possible overlap to a definite one.
@@ -383,12 +383,16 @@ fn pattern_bounds_refute(
 
 #[cfg(test)]
 mod tests {
-    use baml_base::Literal;
+    use baml_base::{Literal, Name};
 
     use super::*;
 
-    fn names(vars: &[&str]) -> Vec<Name> {
-        vars.iter().map(Name::new).collect()
+    fn param(name: &str) -> ParamTy {
+        ParamTy::new(0, Name::new(name))
+    }
+
+    fn params(vars: &[&str]) -> Vec<ParamTy> {
+        vars.iter().map(|name| param(name)).collect()
     }
 
     fn interface(name: &str, args: Vec<Ty>) -> Ty {
@@ -491,7 +495,7 @@ mod tests {
     fn pattern_overlap_with(
         pat: &Ty,
         member: &Ty,
-        vars: &[Name],
+        vars: &[ParamTy],
         bounds: &TypeVarBoundsMap,
         aliases: &std::collections::HashMap<TypeName, Ty>,
         implements: ImplementsOracle<'_>,
@@ -512,7 +516,7 @@ mod tests {
     /// The oracle over an empty program: no aliases, no bounds, and a registry that
     /// refutes every membership question (irrelevant unless the test involves
     /// interface-existentials).
-    fn pattern_overlap_plain(pat: &Ty, member: &Ty, vars: &[Name]) -> Overlap {
+    fn pattern_overlap_plain(pat: &Ty, member: &Ty, vars: &[ParamTy]) -> Overlap {
         pattern_overlap_with(
             pat,
             member,
@@ -525,7 +529,7 @@ mod tests {
 
     #[test]
     fn pattern_overlap_same_var_is_reflexively_yes() {
-        let vars = names(&["T"]);
+        let vars = params(&["T"]);
         let t = Ty::type_var("T");
         assert_eq!(pattern_overlap_plain(&t, &t, &vars), Overlap::Yes);
     }
@@ -534,7 +538,7 @@ mod tests {
     fn pattern_overlap_var_vs_concrete_is_possible_both_directions() {
         // An unbounded rigid var can realize to any type — the pattern-side and the
         // member-side (scrutinee) directions are the same question.
-        let vars = names(&["T"]);
+        let vars = params(&["T"]);
         let t = Ty::type_var("T");
         assert_eq!(pattern_overlap_plain(&t, &Ty::int(), &vars), Overlap::Yes);
         assert_eq!(pattern_overlap_plain(&Ty::int(), &t, &vars), Overlap::Yes);
@@ -544,7 +548,7 @@ mod tests {
     fn pattern_overlap_var_vs_ctor_carrying_var_is_possible() {
         // `T` vs `Box<U>` overlaps at `T := Box<U>` (vars may bind to var-bearing
         // types; possibility, not a witness).
-        let vars = names(&["T", "U"]);
+        let vars = params(&["T", "U"]);
         assert_eq!(
             pattern_overlap_plain(&Ty::type_var("T"), &class1("Box", Ty::type_var("U")), &vars),
             Overlap::Yes
@@ -555,7 +559,7 @@ mod tests {
     fn pattern_overlap_binding_consistency_across_positions() {
         // `Pair<T, T>` requires one consistent realization: `Pair<int, string>`
         // forces `T := int` then `T := string` — no common instance.
-        let vars = names(&["T"]);
+        let vars = params(&["T"]);
         let pat = class2("Pair", Ty::type_var("T"), Ty::type_var("T"));
         assert_eq!(
             pattern_overlap_plain(&pat, &class2("Pair", Ty::int(), Ty::string()), &vars),
@@ -573,7 +577,7 @@ mod tests {
         // in one scope: their `T`s are the same variable. `Pair<T, string>` vs
         // `Pair<T, T>` overlaps at `T := string`; `Pair<int, T>` vs `Pair<T, string>`
         // forces `T := int` and `T := string` — disjoint.
-        let vars = names(&["T"]);
+        let vars = params(&["T"]);
         let t = || Ty::type_var("T");
         assert_eq!(
             pattern_overlap_plain(
@@ -595,7 +599,7 @@ mod tests {
 
     #[test]
     fn pattern_overlap_ground_mismatch_is_no() {
-        let vars = names(&["T"]);
+        let vars = params(&["T"]);
         assert_eq!(
             pattern_overlap_plain(&Ty::int(), &Ty::string(), &vars),
             Overlap::No
@@ -615,7 +619,7 @@ mod tests {
         // Top level compares value sets: `1 ⊂ int`, so they share values (both
         // directions). Inside an invariant constructor argument the relation is
         // equality, so `Box<1>` and `Box<int>` are disjoint types.
-        let vars = names(&["T"]);
+        let vars = params(&["T"]);
         assert_eq!(
             pattern_overlap_plain(&int_literal(1), &Ty::int(), &vars),
             Overlap::Yes
@@ -636,7 +640,7 @@ mod tests {
 
     #[test]
     fn pattern_overlap_enum_variant_meets_its_enum_only() {
-        let vars = names(&[]);
+        let vars = params(&[]);
         assert_eq!(
             pattern_overlap_plain(&enum_variant("Color", "Red"), &enum_ty("Color"), &vars),
             Overlap::Yes
@@ -651,7 +655,7 @@ mod tests {
     fn pattern_overlap_union_decomposes_by_intersection() {
         // Top-level unions meet by intersection, not union equality: one overlapping
         // member pair suffices.
-        let vars = names(&["T"]);
+        let vars = params(&["T"]);
         assert_eq!(
             pattern_overlap_plain(
                 &Ty::union([Ty::type_var("T"), Ty::int()]),
@@ -679,7 +683,7 @@ mod tests {
         // The empty set has no common value with anything — not even itself
         // (equality-unification would call two `never`s the same type; overlap must
         // not).
-        let vars = names(&["T"]);
+        let vars = params(&["T"]);
         assert_eq!(
             pattern_overlap_plain(&never(), &Ty::type_var("T"), &vars),
             Overlap::No
@@ -696,7 +700,7 @@ mod tests {
 
     #[test]
     fn pattern_overlap_unknown_top_type_meets_everything() {
-        let vars = names(&[]);
+        let vars = params(&[]);
         let unknown = Ty::BuiltinUnknown {
             attr: TyAttr::default(),
         };
@@ -714,12 +718,12 @@ mod tests {
         // (the `other is Self` shape inside an interface default method). In an
         // invariant *argument* position the question is equality instead, and a
         // bounded var genuinely cannot realize to `unknown` — refuted.
-        let vars = names(&["T"]);
+        let vars = params(&["T"]);
         let unknown = Ty::BuiltinUnknown {
             attr: TyAttr::default(),
         };
         let mut bounds = TypeVarBoundsMap::default();
-        bounds.insert(Name::new("T"), vec![constraint("I")]);
+        bounds.insert(param("T"), vec![constraint("I")]);
         let aliases = std::collections::HashMap::default();
         assert_eq!(
             pattern_overlap_with(
@@ -755,9 +759,9 @@ mod tests {
         // equality view — a bounded var cannot *realize to* an existential —
         // still refutes in invariant argument positions
         // (`pattern_overlap_bounded_var_cannot_realize_to_union_or_existential`).
-        let vars = names(&["T"]);
+        let vars = params(&["T"]);
         let mut bounds = TypeVarBoundsMap::default();
-        bounds.insert(Name::new("T"), vec![constraint("I")]);
+        bounds.insert(param("T"), vec![constraint("I")]);
         let aliases = std::collections::HashMap::default();
         assert_eq!(
             pattern_overlap_with(
@@ -787,7 +791,7 @@ mod tests {
     fn pattern_overlap_error_sentinel_overlaps_nothing() {
         // An errored type carries its own diagnostic; the oracle must not stack an
         // overlap claim (in either direction) on top of it.
-        let vars = names(&["T"]);
+        let vars = params(&["T"]);
         let error = Ty::Error {
             attr: TyAttr::default(),
         };
@@ -801,7 +805,7 @@ mod tests {
     fn pattern_overlap_projection_is_conservatively_possible() {
         // A residual projection could stand for any type; identical projections are
         // trivially possible too.
-        let vars = names(&["T"]);
+        let vars = params(&["T"]);
         let proj = projection(Ty::type_var("T"), "Iter", "Item");
         assert_eq!(
             pattern_overlap_plain(&proj, &Ty::int(), &vars),
@@ -815,9 +819,9 @@ mod tests {
         // `T extends I` vs a member that pins `T := int`: the registry's answer for
         // `int implements I` decides — bounds refute (`No`) but never confirm (a
         // positive answer just leaves the possibility standing).
-        let vars = names(&["T"]);
+        let vars = params(&["T"]);
         let mut bounds = TypeVarBoundsMap::default();
-        bounds.insert(Name::new("T"), vec![constraint("I")]);
+        bounds.insert(param("T"), vec![constraint("I")]);
         let aliases = std::collections::HashMap::default();
         assert_eq!(
             pattern_overlap_with(
@@ -847,9 +851,9 @@ mod tests {
     fn pattern_overlap_bound_on_unpinned_witness_is_assumed_satisfiable() {
         // `T extends I` vs `Box<U>` pins `T := Box<U>` — still variable-bearing, so
         // the bound cannot refute in an open world.
-        let vars = names(&["T", "U"]);
+        let vars = params(&["T", "U"]);
         let mut bounds = TypeVarBoundsMap::default();
-        bounds.insert(Name::new("T"), vec![constraint("I")]);
+        bounds.insert(param("T"), vec![constraint("I")]);
         assert_eq!(
             pattern_overlap_with(
                 &Ty::type_var("T"),
@@ -868,9 +872,9 @@ mod tests {
         // Bounded params must realize to *concrete* types (TYPE_SYSTEM.md, Generics
         // on Functions), so a witness pinned to a union or an interface-existential
         // refutes structurally — even with the registry answering yes to everything.
-        let vars = names(&["T"]);
+        let vars = params(&["T"]);
         let mut bounds = TypeVarBoundsMap::default();
-        bounds.insert(Name::new("T"), vec![constraint("I")]);
+        bounds.insert(param("T"), vec![constraint("I")]);
         let aliases = std::collections::HashMap::default();
         let always = |_: &Ty, _: &baml_type::Interface| true;
         assert_eq!(
@@ -903,9 +907,9 @@ mod tests {
         // search, which binds `T` to *one* of several possible witnesses; disproving
         // the bound against that arbitrary pick would be unsound, so refutation is
         // skipped for params occurring under a union (non-principality).
-        let vars = names(&["T"]);
+        let vars = params(&["T"]);
         let mut bounds = TypeVarBoundsMap::default();
-        bounds.insert(Name::new("T"), vec![constraint("I")]);
+        bounds.insert(param("T"), vec![constraint("I")]);
         assert_eq!(
             pattern_overlap_with(
                 &class1("Box", Ty::union([Ty::list(Ty::type_var("T")), Ty::int()])),
@@ -923,7 +927,7 @@ mod tests {
     fn pattern_overlap_membership_refutes_only_fully_realized_pairs() {
         // Concrete-vs-existential is membership: the registry may refute a ground
         // class, but a var-bearing side stays possible whatever the registry says.
-        let vars = names(&["T"]);
+        let vars = params(&["T"]);
         let bounds = TypeVarBoundsMap::default();
         let aliases = std::collections::HashMap::default();
         let iface = interface("I", vec![]);
@@ -968,7 +972,7 @@ mod tests {
         // rule closes the world only for already-loaded pairs) — including same-name
         // existentials with different args, since one type may implement both
         // `I<int>` and `I<string>` coherently.
-        let vars = names(&[]);
+        let vars = params(&[]);
         assert_eq!(
             pattern_overlap_plain(
                 &interface("I", vec![Ty::int()]),
@@ -989,7 +993,7 @@ mod tests {
         // function types can share values (a common structural subtype) — but at an
         // invariant constructor argument the relation is equality, so `Box<fn>`s
         // with different component types stay disjoint.
-        let vars = names(&[]);
+        let vars = params(&[]);
         assert_eq!(
             pattern_overlap_plain(&fn_returning(Ty::int()), &fn_returning(Ty::string()), &vars),
             Overlap::Yes
@@ -1009,7 +1013,7 @@ mod tests {
         // A union member that is itself an alias to a union must decompose through
         // the alias — union *equality* (covering) on the raw pair would wrongly
         // answer `No` for `string` vs `A = int | string`.
-        let vars = names(&[]);
+        let vars = params(&[]);
         let mut aliases = std::collections::HashMap::default();
         aliases.insert(
             TypeName::local(Name::new("A")),
@@ -1033,7 +1037,7 @@ mod tests {
         // Mutually-recursive union aliases can neither be proven overlapping nor
         // disjoint by finite expansion; the depth cap degrades to `Unknown`
         // (possible — the sound direction), never a hang or a wrong `No`.
-        let vars = names(&[]);
+        let vars = params(&[]);
         let mut aliases = std::collections::HashMap::default();
         aliases.insert(
             TypeName::local(Name::new("A")),
@@ -1060,7 +1064,7 @@ mod tests {
     fn pattern_overlap_normalizes_inputs_before_comparing() {
         // `nf` folds finite bases inside invariant args (`true | false` → `bool`),
         // so the spelled-out and folded forms are the same type, not a mismatch.
-        let vars = names(&[]);
+        let vars = params(&[]);
         assert_eq!(
             pattern_overlap_plain(
                 &class1("Bar", Ty::union([bool_literal(true), bool_literal(false)])),
