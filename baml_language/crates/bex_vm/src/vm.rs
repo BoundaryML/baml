@@ -1010,19 +1010,35 @@ fn realized_arg(ty: &baml_type::RuntimeTy) -> Option<baml_type::RealizedTy> {
 /// function).
 ///
 /// BUG(erased-signature-reconstruction): every callable VALUE is fully
-/// realized — a `Closure` carries `captured_type_args`, a `BoundMethod` its
-/// complete curried `type_args` — but this reconstruction reads only the
-/// `Function`'s stored signature, which erases generic positions to `unknown`
-/// (`Function::param_types` / `return_type`) instead of referencing the frame
-/// slots those curried args fill. So a callable minted in a generic frame
-/// reconstructs coarsely, faithful only to the erased storage, not to the
-/// value. The fix is to store the signature as a template over the frame's
-/// type-arg slots and substitute the value's curried args here — which would
-/// also let `BoundMethod` reconstruct (its arm currently returns no type) and
-/// unlock relaxing E0155 (function-typed patterns).
+/// realized — a `Closure` carries `captured_type_args`, a `BoundMethod` and a
+/// `GenericFunction` their complete curried `type_args` — but this
+/// reconstruction never reads them. It sees only the `Function`'s stored
+/// signature, which keeps a generic position *symbolically* (`param_types`
+/// holds `RuntimeTy::TypeVar("T")`, faithfully — it is not erased). A type
+/// variable is not a `RealizedTy`, so `realized_arg` rejects it and the whole
+/// callable reconstructs as `None`: fail-closed, never wrong, but blind for
+/// anything minted in a generic frame.
+///
+/// The fix is to store the signature as `TyTemplate`s over the frame's
+/// De Bruijn slots (as bodies already do for `TypeArgRef`) and substitute the
+/// value's curried args here. That is what would let a generic callable
+/// reconstruct precisely and unlock relaxing E0155 (function-typed patterns);
+/// the reflection-facing twin `function_callable_signature` papers over the
+/// same gap by widening an unrealizable slot to `unknown`.
 ///
 /// [`ConcreteRealizedTy::Function`]: baml_type::ConcreteRealizedTy::Function
 fn function_object_ty(f: &bex_vm_types::types::Function) -> Option<baml_type::ConcreteRealizedTy> {
+    function_object_ty_dropping_receiver(f, false)
+}
+
+/// [`function_object_ty`], optionally skipping the leading `self` parameter —
+/// a bound method's type is its function's type with the receiver already
+/// applied. Mirrors the `drop_receiver` handling in
+/// [`function_callable_signature`], which is the reflection-facing twin.
+fn function_object_ty_dropping_receiver(
+    f: &bex_vm_types::types::Function,
+    drop_receiver: bool,
+) -> Option<baml_type::ConcreteRealizedTy> {
     use baml_type::{
         ConcreteRealizedTy, FunctionParamMode, RealizedFunctionParamTy, RealizedTy, TyAttr,
     };
@@ -1030,6 +1046,7 @@ fn function_object_ty(f: &bex_vm_types::types::Function) -> Option<baml_type::Co
         .param_types
         .iter()
         .enumerate()
+        .skip(usize::from(drop_receiver))
         .map(|(i, ty)| {
             Some(RealizedFunctionParamTy {
                 name: f
@@ -2091,10 +2108,11 @@ impl BexVm {
 
             // ── Function-pointer values ──────────────────────────────────────
             // These are user-facing callables; their concrete type is the
-            // reconstructed function signature. (The signature stored on the
-            // underlying `Function` erases unresolved generics to `unknown`, so a
-            // generic closure reconstructs coarsely — but it is a real function
-            // type, not "no type".)
+            // reconstructed function signature. A callable minted in a generic
+            // frame reconstructs as "no type" rather than a coarse one, because
+            // its signature keeps the frame's type variables symbolically and
+            // this reconstruction does not yet substitute the value's curried
+            // args — see BUG(erased-signature-reconstruction).
             Object::Closure(closure) => {
                 // SAFETY: `closure.function` points to a live `Function`, the
                 // same invariant `resolve_callable_target` relies on.
@@ -2120,16 +2138,19 @@ impl BexVm {
                 throws: Box::new((*hc.throws_ty).clone()),
                 attr: TyAttr::default(),
             },
-            // BUG(erased-signature-reconstruction): a `BoundMethod` is a fully
-            // realized callable value — its complete curried frame IS on the
-            // object (`BoundMethod::type_args`) — and *should* reconstruct to
-            // its underlying function's type with the bound `self` parameter
-            // dropped. What's missing is a stored signature that references
-            // the frame's type-arg slots to substitute those curried args
-            // into (the `Function` signature erases generic positions — see
-            // `function_object_ty`); until then it reports no type rather
-            // than a wrong one.
-            Object::BoundMethod(_) => return None,
+            // A bound method's type is its function's type with the receiver
+            // already applied, so the leading `self` parameter drops. A method
+            // whose signature is generic in the *enclosing* frame still yields
+            // `None` here, for the same reason a generic closure does — see
+            // BUG(erased-signature-reconstruction) on `function_object_ty`.
+            Object::BoundMethod(bm) => {
+                // SAFETY: `bm.function` points to a live `Function`, the same
+                // invariant `resolve_callable_target` relies on.
+                match unsafe { bm.function.get() } {
+                    Object::Function(f) => function_object_ty_dropping_receiver(f, true)?,
+                    _ => return None,
+                }
+            }
 
             // `Object::Function` is NOT a function-pointer value — it is the
             // internal function representation that acts as the type constructor

@@ -3325,6 +3325,12 @@ impl PullSink for StackifyCodegen<'_, '_> {
             let inst = this.emit(Instruction::LoadConst(idx));
             this.set_operand(inst, OperandMeta::Const("false".to_string()));
         };
+        let emit_true = |this: &mut Self| {
+            this.emit(Instruction::Pop(1));
+            let idx = this.add_constant(ConstValue::Bool(true));
+            let inst = this.emit(Instruction::LoadConst(idx));
+            this.set_operand(inst, OperandMeta::Const("true".to_string()));
+        };
         // Hand the whole template to the VM's value matcher
         // (`type_match::value_matches_template`) via a raw `ConstValue::Type`:
         // it resolves the template's frame refs against `frame.type_args` and
@@ -3402,6 +3408,14 @@ impl PullSink for StackifyCodegen<'_, '_> {
                 let inst = self.emit(Instruction::IsType(c));
                 self.set_operand(inst, OperandMeta::Const(ty_template.to_string()));
             }
+
+            // `unknown` is the top type: every value inhabits it, so the test is
+            // constant-true. It is a realized *leaf* with no type tag, so without
+            // this arm it falls into the tagless-leaf fallback below and compiles
+            // to constant-FALSE — silently misrouting every value, not just the
+            // valueless ones. (Only refutable positions reach here at all: an
+            // exhaustive final `let v: unknown` arm has its test elided.)
+            TyTemplate::BuiltinUnknown { .. } => emit_true(self),
 
             // Everything else keeps its existing coarse check.
             other => {

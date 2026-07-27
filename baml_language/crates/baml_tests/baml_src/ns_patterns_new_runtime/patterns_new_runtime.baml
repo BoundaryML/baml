@@ -1616,3 +1616,62 @@ test "rustc_port_optional_literal_or_arm_null" {
 test "rustc_port_optional_literal_or_arm_other" {
     assert.equal(score_int_optional(99), 0)
 }
+
+// ─── `unknown` is the top type, including in a refutable position ────────────
+// An exhaustive final `let v: unknown` arm has its test elided, so the bug this
+// pins is only reachable when the arm must actually be tested — here a guard
+// forces that. Emitting the tagless `unknown` leaf as a coarse type-tag check
+// used to fall through to constant-FALSE, so every value fell past the arm.
+
+class UnknownArmBox {
+    v: int
+}
+
+function unknown_arm_tested(x: unknown, gate: bool) -> string {
+    match (x) {
+        let v: unknown if gate => "top",
+        _ => "fell-through",
+    }
+}
+
+function unknown_arm_int_fn() -> string {
+    unknown_arm_tested(5, true)
+}
+
+test "guarded_unknown_arm_matches_int" {
+    assert.equal(unknown_arm_int_fn(), "top")
+}
+
+function unknown_arm_class_fn() -> string {
+    unknown_arm_tested(UnknownArmBox { v: 1 }, true)
+}
+
+test "guarded_unknown_arm_matches_class" {
+    assert.equal(unknown_arm_class_fn(), "top")
+}
+
+function unknown_arm_closure_fn() -> string {
+    unknown_arm_tested((n: int) -> int throws never { n }, true)
+}
+
+test "guarded_unknown_arm_matches_closure" {
+    assert.equal(unknown_arm_closure_fn(), "top")
+}
+
+function unknown_arm_null_fn() -> string {
+    unknown_arm_tested(null, true)
+}
+
+test "guarded_unknown_arm_matches_null" {
+    assert.equal(unknown_arm_null_fn(), "top")
+}
+
+// The guard still decides: a false gate falls through, so the arm is a real
+// test rather than an unconditional jump.
+function unknown_arm_gate_false_fn() -> string {
+    unknown_arm_tested(5, false)
+}
+
+test "guarded_unknown_arm_respects_guard" {
+    assert.equal(unknown_arm_gate_false_fn(), "fell-through")
+}

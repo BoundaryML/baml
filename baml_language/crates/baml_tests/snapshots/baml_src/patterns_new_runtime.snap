@@ -660,6 +660,41 @@ function patterns_new_runtime.$init_test_ns_patterns_new_runtime_patterns_new_ru
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
+    load_var registry
+    load_const "root.patterns_new_runtime"
+    load_const "guarded_unknown_arm_matches_int"
+    make_closure .<lambda($init_test_ns_patterns_new_runtime_patterns_new_runtime, 94)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.patterns_new_runtime"
+    load_const "guarded_unknown_arm_matches_class"
+    make_closure .<lambda($init_test_ns_patterns_new_runtime_patterns_new_runtime, 95)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.patterns_new_runtime"
+    load_const "guarded_unknown_arm_matches_closure"
+    make_closure .<lambda($init_test_ns_patterns_new_runtime_patterns_new_runtime, 96)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.patterns_new_runtime"
+    load_const "guarded_unknown_arm_matches_null"
+    make_closure .<lambda($init_test_ns_patterns_new_runtime_patterns_new_runtime, 97)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.patterns_new_runtime"
+    load_const "guarded_unknown_arm_respects_guard"
+    make_closure .<lambda($init_test_ns_patterns_new_runtime_patterns_new_runtime, 98)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
     load_const null
     return
 }
@@ -4499,5 +4534,63 @@ function patterns_new_runtime.test_or_four_alternates() -> int {
     add_int
     load_var d
     add_int
+    return
+}
+
+function patterns_new_runtime.unknown_arm_class_fn() -> string {
+    load_const 1
+    init_instance user.patterns_new_runtime.UnknownArmBox .v
+    load_const true
+    call user.patterns_new_runtime.unknown_arm_tested
+    return
+}
+
+function patterns_new_runtime.unknown_arm_closure_fn() -> string {
+    make_closure .<lambda(unknown_arm_closure_fn, 0)>, 0
+    load_const true
+    call user.patterns_new_runtime.unknown_arm_tested
+    return
+}
+
+function patterns_new_runtime.unknown_arm_gate_false_fn() -> string {
+    load_const 5
+    load_const false
+    call user.patterns_new_runtime.unknown_arm_tested
+    return
+}
+
+function patterns_new_runtime.unknown_arm_int_fn() -> string {
+    load_const 5
+    load_const true
+    call user.patterns_new_runtime.unknown_arm_tested
+    return
+}
+
+function patterns_new_runtime.unknown_arm_null_fn() -> string {
+    load_const null
+    load_const true
+    call user.patterns_new_runtime.unknown_arm_tested
+    return
+}
+
+function patterns_new_runtime.unknown_arm_tested(x: unknown, gate: bool) -> string {
+    load_var x
+    store_var _3
+    load_var _3
+    pop 1
+    load_const true
+    pop_jump_if_false L0
+    load_var gate
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const "fell-through"
+    jump L2
+
+  L1:
+    load_const "top"
+
+  L2:
     return
 }
