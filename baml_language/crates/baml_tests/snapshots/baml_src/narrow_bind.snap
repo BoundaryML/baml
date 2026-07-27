@@ -1,0 +1,47 @@
+---
+source: crates/baml_tests/tests/baml_src.rs
+---
+function narrow_bind.$init_test_ns_narrow_bind_narrow_bind(registry: testing.TestCollector) -> null {
+    load_var registry
+    load_const "root.narrow_bind"
+    load_const "typed_pattern_tests_and_binds_the_same_value"
+    make_closure .<lambda($init_test_ns_narrow_bind_narrow_bind, 0)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_const null
+    return
+}
+
+function narrow_bind.pick(x: narrow_bind.Foo | int) -> int {
+    load_var x
+    store_var _2
+    load_var _2
+    narrow_bind narrow_bind.Foo, slot=2
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var x
+    jump L2
+
+  L1:
+    load_var _2
+    load_field .field
+
+  L2:
+    return
+}
+
+function narrow_bind.typed_pattern_tests_and_binds_the_same_value_fn() -> int {
+    load_const 1
+    init_instance user.narrow_bind.Foo .field
+    call user.narrow_bind.pick
+    store_var _1
+    load_const 2
+    call user.narrow_bind.pick
+    store_var _3
+    load_var2 1 2
+    add_int
+    return
+}

@@ -16,6 +16,20 @@ function parse_companions.$init_test_ns_parse_companions_parse_companions(regist
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
+    load_var registry
+    load_const "root.parse_companions"
+    load_const "sap_parse_decodes_a_complete_top_level_json_string"
+    make_closure .<lambda($init_test_ns_parse_companions_parse_companions, 2)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.parse_companions"
+    load_const "sap_parse_preserves_plain_llm_text"
+    make_closure .<lambda($init_test_ns_parse_companions_parse_companions, 3)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
     load_const null
     return
 }
@@ -280,6 +294,136 @@ function parse_companions.ParseCompanionsParseOptPayload$stream(client: baml.llm
     return
 }
 
+function parse_companions.ParseCompanionsParseString(client: baml.llm.Client) -> string {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_global user.parse_companions.ParseCompanionsTestClient
+    store_var client
+
+  L0:
+    load_type string
+    load_var client
+    load_const "ParseCompanionsParseString"
+    load_type string
+    load_type unknown
+    alloc_map 0
+    load_const <omitted>
+    call baml.llm.call_llm_function
+    return
+}
+
+function parse_companions.ParseCompanionsParseString$build_request(client: baml.llm.Client) -> baml.http.Request {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_global user.parse_companions.ParseCompanionsTestClient
+    store_var client
+
+  L0:
+    load_var client
+    load_const "ParseCompanionsParseString"
+    load_type string
+    load_type unknown
+    alloc_map 0
+    load_const <omitted>
+    call baml.llm.build_request
+    return
+}
+
+function parse_companions.ParseCompanionsParseString$build_request_stream(client: baml.llm.Client) -> baml.http.Request {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_global user.parse_companions.ParseCompanionsTestClient
+    store_var client
+
+  L0:
+    load_var client
+    load_const "ParseCompanionsParseString"
+    load_type string
+    load_type unknown
+    alloc_map 0
+    load_const <omitted>
+    call baml.llm.build_request_stream
+    return
+}
+
+function parse_companions.ParseCompanionsParseString$parse(json: string, client: baml.llm.Client) -> string {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_global user.parse_companions.ParseCompanionsTestClient
+    store_var client
+
+  L0:
+    load_type string | null
+    load_type string
+    load_var json
+    call baml.llm.parse
+    return
+}
+
+function parse_companions.ParseCompanionsParseString$parse_stream(sse: baml.http.SseStream, client: baml.llm.Client) -> baml.llm.Stream<string | null, string> {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_global user.parse_companions.ParseCompanionsTestClient
+    store_var client
+
+  L0:
+    load_type string | null
+    load_type string
+    load_var2 2 1
+    call baml.llm.Client.__make_stream
+    return
+}
+
+function parse_companions.ParseCompanionsParseString$render_prompt(client: baml.llm.Client) -> baml.llm.PromptAst {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_global user.parse_companions.ParseCompanionsTestClient
+    store_var client
+
+  L0:
+    load_var client
+    load_const "ParseCompanionsParseString"
+    load_type string
+    load_type unknown
+    alloc_map 0
+    load_const <omitted>
+    call baml.llm.render_prompt
+    return
+}
+
+function parse_companions.ParseCompanionsParseString$stream(client: baml.llm.Client) -> baml.llm.Stream<string | null, string> {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_global user.parse_companions.ParseCompanionsTestClient
+    store_var client
+
+  L0:
+    load_type string | null
+    load_type string
+    load_var client
+    load_const "ParseCompanionsParseString"
+    load_type string
+    load_type unknown
+    alloc_map 0
+    load_const <omitted>
+    call baml.llm.stream_llm_function
+    return
+}
+
 function parse_companions.ParseCompanionsTestClient$new(lenient: bool) -> null {
     load_const "ParseCompanionsTestClient"
     load_const "openai"
@@ -309,6 +453,13 @@ function parse_companions.ParseCompanionsTestClient$new(lenient: bool) -> null {
     return
 }
 
+function parse_companions.parse_companions_complete_json_string_fn() -> string {
+    load_const "\"Fred\""
+    load_const <omitted>
+    call user.parse_companions.ParseCompanionsParseString$parse
+    return
+}
+
 function parse_companions.parse_companions_missing_alias_fn() -> bool {
     load_const "{}"
     load_const <omitted>
@@ -332,5 +483,12 @@ function parse_companions.parse_companions_missing_optional_fn() -> bool {
     load_const null
     init_instance user.parse_companions.ParseCompanionsOptPayload .text
     call baml.deep_equals
+    return
+}
+
+function parse_companions.parse_companions_plain_text_fn() -> string {
+    load_const "Fred says hello"
+    load_const <omitted>
+    call user.parse_companions.ParseCompanionsParseString$parse
     return
 }

@@ -74,3 +74,19 @@ function sap_nullable_container_types_are_preserved() -> bool throws unknown {
   let statuses_ok = statuses?.at(0) == ParsedStatus.Ready;
   empty_ok && map_ok && children_ok && statuses_ok
 }
+
+test "model_step_flattens_union_type_arg_before_sap_conversion" {
+    assert.is_true(model_step_flattens_union_type_arg())
+}
+
+test "sap_parses_null_as_optional_json" {
+    assert.is_true(sap_parses_optional_json_null())
+}
+
+test "sap_parses_non_null_optional_json_value" {
+    assert.is_true(sap_parses_optional_json_value())
+}
+
+test "sap_preserves_declared_types_for_nullable_containers" {
+    assert.is_true(sap_nullable_container_types_are_preserved())
+}

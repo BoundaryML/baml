@@ -1,0 +1,215 @@
+---
+source: crates/baml_tests/tests/baml_src.rs
+---
+function string_literals.$init_test_ns_string_literals_string_literals(registry: testing.TestCollector) -> null {
+    load_var registry
+    load_const "root.string_literals"
+    load_const "quoted_string_escape_sequences_decode_to_exact_bytes"
+    make_closure .<lambda($init_test_ns_string_literals_string_literals, 0)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.string_literals"
+    load_const "quoted_string_escape_lengths_match"
+    make_closure .<lambda($init_test_ns_string_literals_string_literals, 1)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.string_literals"
+    load_const "json_body_is_parseable_by_serde"
+    make_closure .<lambda($init_test_ns_string_literals_string_literals, 2)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.string_literals"
+    load_const "raw_strings_do_not_decode_escapes"
+    make_closure .<lambda($init_test_ns_string_literals_string_literals, 3)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.string_literals"
+    load_const "escaped_backslash_at_string_boundary"
+    make_closure .<lambda($init_test_ns_string_literals_string_literals, 4)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.string_literals"
+    load_const "escaped_backslash_boundary_lengths"
+    make_closure .<lambda($init_test_ns_string_literals_string_literals, 5)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.string_literals"
+    load_const "replace_all_with_backslash_arguments"
+    make_closure .<lambda($init_test_ns_string_literals_string_literals, 6)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.string_literals"
+    load_const "raw_strings_preserve_backslash_sequences"
+    make_closure .<lambda($init_test_ns_string_literals_string_literals, 7)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_const null
+    return
+}
+
+function string_literals.double_backslash() -> string {
+    load_const "\\\\"
+    return
+}
+
+function string_literals.double_backslash_length() -> int {
+    load_const "\\\\"
+    call baml.String.length
+    return
+}
+
+function string_literals.escaped_backslash() -> string {
+    load_const "a\\b"
+    return
+}
+
+function string_literals.escaped_backslash_length() -> int {
+    load_const "a\\b"
+    call baml.String.length
+    return
+}
+
+function string_literals.escaped_cr() -> string {
+    load_const "a\rb"
+    return
+}
+
+function string_literals.escaped_newline() -> string {
+    load_const "a\nb"
+    return
+}
+
+function string_literals.escaped_newline_length() -> int {
+    load_const "a\nb"
+    call baml.String.length
+    return
+}
+
+function string_literals.escaped_quote() -> string {
+    load_const "a\"b"
+    return
+}
+
+function string_literals.escaped_quote_length() -> int {
+    load_const "a\"b"
+    call baml.String.length
+    return
+}
+
+function string_literals.escaped_tab() -> string {
+    load_const "a\tb"
+    return
+}
+
+function string_literals.escaped_tab_length() -> int {
+    load_const "a\tb"
+    call baml.String.length
+    return
+}
+
+function string_literals.json_body() -> string {
+    load_const "{\"input\":\"hello\\nworld\",\"model\":\"m\"}"
+    return
+}
+
+function string_literals.json_body_is_parseable_fn() -> bool {
+    call user.string_literals.json_body
+    store_var _2
+    load_type map<string, string>
+    load_var _2
+    call baml.json.from_string
+    store_var parsed
+    load_var parsed
+    load_const "input"
+    load_map_element
+    call baml.String.to_utf8
+    call baml.Uint8Array.to_hex
+    load_const "68656c6c6f0a776f726c64"
+    cmp_op ==
+    jump_if_false L0
+    pop 1
+    load_var parsed
+    load_const "model"
+    load_map_element
+    load_const "m"
+    cmp_op ==
+
+  L0:
+    return
+}
+
+function string_literals.lone_backslash() -> string {
+    load_const "\\"
+    return
+}
+
+function string_literals.lone_backslash_length() -> int {
+    load_const "\\"
+    call baml.String.length
+    return
+}
+
+function string_literals.lone_newline() -> string {
+    load_const "\n"
+    return
+}
+
+function string_literals.lone_newline_length() -> int {
+    load_const "\n"
+    call baml.String.length
+    return
+}
+
+function string_literals.raw_double_backslash() -> string {
+    load_const "\\\\"
+    return
+}
+
+function string_literals.raw_keeps_backslash_n() -> string {
+    load_const "a\\nb"
+    return
+}
+
+function string_literals.raw_keeps_quote() -> string {
+    load_const "\""
+    return
+}
+
+function string_literals.raw_quad_backslash() -> string {
+    load_const "\\\\\\\\"
+    return
+}
+
+function string_literals.replace_backslash() -> string {
+    load_const "a\\b\\c"
+    load_const "\\"
+    load_const "/"
+    call baml.String.replace_all
+    return
+}
+
+function string_literals.trailing_double_backslash() -> string {
+    load_const "a\\\\"
+    return
+}
+
+function string_literals.trailing_double_backslash_length() -> int {
+    load_const "a\\\\"
+    call baml.String.length
+    return
+}

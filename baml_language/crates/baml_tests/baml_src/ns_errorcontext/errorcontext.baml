@@ -386,3 +386,140 @@ function ec_deferthrow_check() -> bool {
 test "defer_that_throws_still_chains_through_wrap" {
     assert.is_true(ec_deferthrow_check())
 }
+
+class ErrorContextDetail {
+    label: string,
+
+    implements baml.ToString {
+        function to_string(self) -> string throws never {
+            "DETAIL OVERRIDE"
+        }
+    }
+}
+
+class ErrorContextAppError {
+    message: string,
+    detail: ErrorContextDetail,
+
+    implements baml.ToString {
+        function to_string(self) -> string throws never {
+            "ERROR OVERRIDE"
+        }
+    }
+}
+
+function errorcontext_render_class_error() -> string {
+    (
+        throw ErrorContextAppError {
+      message: "boom",
+      detail: ErrorContextDetail { label: "visible" },
+    }
+    ) catch (e, ctx) {
+        _ => ctx.to_string()
+    }
+}
+
+function errorcontext_class_error_rendering_check() -> bool {
+    let rendered = errorcontext_render_class_error();
+    rendered
+        .includes(
+            #"user.errorcontext.ErrorContextAppError { message: "boom", detail: user.errorcontext.ErrorContextDetail { label: "visible" } }"#,
+        )
+        && !rendered.includes("OVERRIDE")
+}
+
+test "class_error_renders_qualified_name_and_structural_fields" {
+    assert.is_true(errorcontext_class_error_rendering_check())
+}
+
+function errorcontext_render_non_class_error() -> string {
+    (throw {"first": "alpha", "second": "beta"}) catch (e, ctx) {
+        _ => ctx.to_string()
+    }
+}
+
+function errorcontext_non_class_rendering_check() -> bool {
+    let rendered = errorcontext_render_non_class_error();
+    rendered.includes(#"{"first": "alpha", "second": "beta"}"#) && !rendered.includes("<error>")
+}
+
+test "non_class_error_renders_structurally" {
+    assert.is_true(errorcontext_non_class_rendering_check())
+}
+
+class ErrorContextRecursiveError {
+    next: ErrorContextRecursiveError?,
+}
+
+function errorcontext_fail_cycle() -> string {
+    let error = ErrorContextRecursiveError { next: null };
+    error.next = error;
+    throw error
+}
+
+function errorcontext_render_cycle() -> string {
+    errorcontext_fail_cycle() catch (e, ctx) {
+        _ => ctx.to_string()
+    }
+}
+
+function errorcontext_cycle_rendering_check() -> bool {
+    let rendered = errorcontext_render_cycle();
+    rendered.includes("user.errorcontext.ErrorContextRecursiveError { next: ")
+        && rendered.ends_with(" }")
+        && rendered.to_utf8().to_hex().includes("e280a6")
+}
+
+test "structural_error_rendering_truncates_object_cycles" {
+    assert.is_true(errorcontext_cycle_rendering_check())
+}
+
+class ErrorContextLink {
+    next: ErrorContextLink?,
+}
+
+function errorcontext_fail_deep() -> string {
+    let root = ErrorContextLink { next: null };
+    let current = root;
+    let i = 0;
+    while (i < 40) {
+        let next = ErrorContextLink { next: null };
+        current.next = next;
+        current = next;
+        i += 1
+    }
+    throw root
+}
+
+function errorcontext_fail_wide() -> string {
+    let values: int[] = [];
+    let i = 0;
+    while (i < 300) {
+        values.push(i);
+        i += 1
+    }
+    throw values
+}
+
+function errorcontext_render_deep() -> string {
+    errorcontext_fail_deep() catch (e, ctx) {
+        _ => ctx.to_string()
+    }
+}
+
+function errorcontext_render_wide() -> string {
+    errorcontext_fail_wide() catch (e, ctx) {
+        _ => ctx.to_string()
+    }
+}
+
+function errorcontext_budget_rendering_check() -> bool {
+    let deep_hex = errorcontext_render_deep().to_utf8().to_hex();
+    let wide_hex = errorcontext_render_wide().to_utf8().to_hex();
+    let marker = "e280a6";
+    deep_hex.includes(marker) && wide_hex.includes(marker) && wide_hex.split(marker).length() == 2
+}
+
+test "structural_error_rendering_enforces_depth_and_node_budgets" {
+    assert.is_true(errorcontext_budget_rendering_check())
+}

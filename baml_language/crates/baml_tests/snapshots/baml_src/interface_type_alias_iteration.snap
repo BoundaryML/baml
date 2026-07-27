@@ -1,0 +1,67 @@
+---
+source: crates/baml_tests/tests/baml_src.rs
+---
+function interface_type_alias_iteration.$init_test_ns_interface_type_alias_iteration_interface_type_alias_iteration(registry: testing.TestCollector) -> null {
+    load_var registry
+    load_const "root.interface_type_alias_iteration"
+    load_const "interface_method_array_alias_is_iterable"
+    make_closure .<lambda($init_test_ns_interface_type_alias_iteration_interface_type_alias_iteration, 0)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_const null
+    return
+}
+
+function interface_type_alias_iteration.Fixture.Live.events(self: interface_type_alias_iteration.Fixture) -> interface_type_alias_iteration.Event[] {
+    load_const 2
+    init_instance user.interface_type_alias_iteration.Event .value
+    load_const 3
+    init_instance user.interface_type_alias_iteration.Event .value
+    load_type interface_type_alias_iteration.Event
+    alloc_array 2
+    return
+}
+
+function interface_type_alias_iteration.interface_method_array_alias_is_iterable_fn() -> int {
+    alloc_instance user.interface_type_alias_iteration.Fixture
+    call user.interface_type_alias_iteration.total
+    return
+}
+
+function interface_type_alias_iteration.total(live: interface_type_alias_iteration.Live) -> int {
+    load_const 0
+    store_var sum
+    load_var live
+    load_type interface_type_alias_iteration.Live
+    load_const "events"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _3
+    load_var _3
+    load_type baml.iter.Iterable<Item = interface_type_alias_iteration.Event, Error = never>
+    load_const "iter"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _4
+
+  L0:
+    load_var _4
+    load_type baml.iter.Iterator<Item = interface_type_alias_iteration.Event, Error = never>
+    load_const "next"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _5
+    load_var _5
+    is_type baml.iter.Done
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_var2 2 5
+    load_field .value
+    add_int
+    store_var sum
+    jump L0
+
+  L2:
+    load_var sum
+    return
+}

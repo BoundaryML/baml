@@ -1,0 +1,112 @@
+---
+source: crates/baml_tests/tests/baml_src.rs
+---
+function json_typed_union.$init_test_ns_json_typed_union_json_typed_union(registry: testing.TestCollector) -> null {
+    load_var registry
+    load_const "root.json_typed_union"
+    load_const "typed_union_preserves_class_enum_and_media_values"
+    make_closure .<lambda($init_test_ns_json_typed_union_json_typed_union, 0)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.json_typed_union"
+    load_const "typed_class_and_union_serialization_are_equivalent"
+    make_closure .<lambda($init_test_ns_json_typed_union_json_typed_union, 1)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.json_typed_union"
+    load_const "typed_union_preserves_uint8array_serialization_error"
+    make_closure .<lambda($init_test_ns_json_typed_union_json_typed_union, 2)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_const null
+    return
+}
+
+function json_typed_union.serialize_payload(value: json_typed_union.Record | json_typed_union.Phase | image) -> string {
+    load_type json_typed_union.Record | json_typed_union.Phase | image
+    load_var value
+    call baml.json.to_string
+    return
+}
+
+function json_typed_union.typed_class_and_union_serialization_are_equivalent_fn() -> string {
+    load_const "Ada"
+    load_const "nested"
+    init_instance user.json_typed_union.Detail .label
+    init_instance user.json_typed_union.NestedRecord .name, .detail
+    store_var record
+    load_type json_typed_union.NestedRecord
+    load_var record
+    call baml.json.to_string
+    store_var _4
+    load_type json_typed_union.NestedRecord | string
+    load_var record
+    call baml.json.to_string
+    store_var _7
+    load_var _4
+    load_const "|"
+    bin_op +
+    load_var _7
+    bin_op +
+    return
+}
+
+function json_typed_union.typed_union_preserves_class_enum_and_media_values_fn() -> string {
+    load_const "Ada"
+    init_instance user.json_typed_union.Record .name
+    call user.json_typed_union.serialize_payload
+    store_var _4
+    load_const user.json_typed_union.Phase.Ready
+    alloc_variant user.json_typed_union.Phase
+    call user.json_typed_union.serialize_payload
+    store_var _6
+    load_const "https://example.com/a.png"
+    load_const "image/png"
+    call baml.media.Image.from_url
+    call user.json_typed_union.serialize_payload
+    store_var _7
+    load_var _4
+    load_const "|"
+    bin_op +
+    load_var _6
+    bin_op +
+    load_const "|"
+    bin_op +
+    load_var _7
+    bin_op +
+    return
+}
+
+function json_typed_union.typed_union_preserves_uint8array_serialization_error_fn() -> string {
+    load_const "00ff"
+    call baml.Uint8Array.from_hex
+    store_var _3
+    load_type uint8array | string
+    load_var _3
+    call baml.json.to_string
+    pop 1
+    jump L2
+    load_var e
+    is_type baml.json.JsonSerializationError
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var e
+    rethrow
+
+  L1:
+    load_const "serialization error"
+    jump L3
+
+  L2:
+    load_const "unexpected success"
+
+  L3:
+    return
+}

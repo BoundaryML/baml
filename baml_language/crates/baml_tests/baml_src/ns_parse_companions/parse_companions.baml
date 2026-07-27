@@ -62,3 +62,24 @@ function parse_companions_missing_alias_fn() -> bool {
 test "parse_companion_allows_missing_nullable_alias_field" {
     assert.is_true(parse_companions_missing_alias_fn())
 }
+
+function ParseCompanionsParseString() -> string {
+    client: ParseCompanionsTestClient
+    prompt: #"{{ ctx.output_format }}"#
+}
+
+function parse_companions_complete_json_string_fn() -> string {
+    ParseCompanionsParseString$parse(#""Fred""#)
+}
+
+function parse_companions_plain_text_fn() -> string {
+    ParseCompanionsParseString$parse("Fred says hello")
+}
+
+test "sap_parse_decodes_a_complete_top_level_json_string" {
+    assert.equal(parse_companions_complete_json_string_fn(), "Fred")
+}
+
+test "sap_parse_preserves_plain_llm_text" {
+    assert.equal(parse_companions_plain_text_fn(), "Fred says hello")
+}

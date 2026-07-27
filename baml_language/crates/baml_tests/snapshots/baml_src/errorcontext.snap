@@ -86,7 +86,45 @@ function errorcontext.$init_test_ns_errorcontext_errorcontext(registry: testing.
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
+    load_var registry
+    load_const "root.errorcontext"
+    load_const "class_error_renders_qualified_name_and_structural_fields"
+    make_closure .<lambda($init_test_ns_errorcontext_errorcontext, 12)>, 0
     load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.errorcontext"
+    load_const "non_class_error_renders_structurally"
+    make_closure .<lambda($init_test_ns_errorcontext_errorcontext, 13)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.errorcontext"
+    load_const "structural_error_rendering_truncates_object_cycles"
+    make_closure .<lambda($init_test_ns_errorcontext_errorcontext, 14)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.errorcontext"
+    load_const "structural_error_rendering_enforces_depth_and_node_budgets"
+    make_closure .<lambda($init_test_ns_errorcontext_errorcontext, 15)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_const null
+    return
+}
+
+function errorcontext.ErrorContextAppError.baml.ToString.to_string(self: errorcontext.ErrorContextAppError) -> string {
+    load_const "ERROR OVERRIDE"
+    return
+}
+
+function errorcontext.ErrorContextDetail.baml.ToString.to_string(self: errorcontext.ErrorContextDetail) -> string {
+    load_const "DETAIL OVERRIDE"
     return
 }
 
@@ -701,4 +739,259 @@ function errorcontext.ec_tostring_mid() -> string {
     return
     load_var _1
     rethrow
+}
+
+function errorcontext.errorcontext_budget_rendering_check() -> bool {
+    call user.errorcontext.errorcontext_render_deep
+    call baml.String.to_utf8
+    call baml.Uint8Array.to_hex
+    store_var deep_hex
+    call user.errorcontext.errorcontext_render_wide
+    call baml.String.to_utf8
+    call baml.Uint8Array.to_hex
+    store_var wide_hex
+    load_var deep_hex
+    load_const "e280a6"
+    call baml.String.includes
+    jump_if_false L0
+    pop 1
+    load_var wide_hex
+    load_const "e280a6"
+    call baml.String.includes
+
+  L0:
+    jump_if_false L1
+    pop 1
+    load_var wide_hex
+    load_const "e280a6"
+    call baml.String.split
+    container_len
+    store_var _12
+    load_var _12
+    load_const 2
+    cmp_int_op ==
+
+  L1:
+    return
+}
+
+function errorcontext.errorcontext_class_error_rendering_check() -> bool {
+    call user.errorcontext.errorcontext_render_class_error
+    store_var rendered
+    load_var rendered
+    load_const "user.errorcontext.ErrorContextAppError { message: \"boom\", detail: user.errorcontext.ErrorContextDetail { label: \"visible\" } }"
+    call baml.String.includes
+    jump_if_false L0
+    pop 1
+    load_var rendered
+    load_const "OVERRIDE"
+    call baml.String.includes
+    unary_op !
+
+  L0:
+    return
+}
+
+function errorcontext.errorcontext_cycle_rendering_check() -> bool {
+    call user.errorcontext.errorcontext_render_cycle
+    store_var rendered
+    load_var rendered
+    load_const "user.errorcontext.ErrorContextRecursiveError { next: "
+    call baml.String.includes
+    jump_if_false L0
+    pop 1
+    load_var rendered
+    load_const " }"
+    call baml.String.ends_with
+
+  L0:
+    jump_if_false L1
+    pop 1
+    load_var rendered
+    call baml.String.to_utf8
+    call baml.Uint8Array.to_hex
+    load_const "e280a6"
+    call baml.String.includes
+
+  L1:
+    return
+}
+
+function errorcontext.errorcontext_fail_cycle() -> string {
+    load_const null
+    init_instance user.errorcontext.ErrorContextRecursiveError .next
+    store_var error
+    load_var2 2 2
+    store_field .next
+    load_var error
+    throw
+}
+
+function errorcontext.errorcontext_fail_deep() -> string {
+    load_const null
+    init_instance user.errorcontext.ErrorContextLink .next
+    store_var root
+    load_var root
+    store_var current
+    load_const 0
+    store_var i
+
+  L0:
+    load_var i
+    load_const 40
+    cmp_int_op <
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_var root
+    throw
+
+  L2:
+    load_const null
+    init_instance user.errorcontext.ErrorContextLink .next
+    store_var next
+    load_var2 3 5
+    store_field .next
+    load_var next
+    store_var current
+    load_var i
+    load_const 1
+    add_int
+    store_var i
+    jump L0
+}
+
+function errorcontext.errorcontext_fail_wide() -> string {
+    load_type int
+    alloc_array 0
+    store_var values
+    load_const 0
+    store_var i
+
+  L0:
+    load_var i
+    load_const 300
+    cmp_int_op <
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_var values
+    throw
+
+  L2:
+    load_var2 2 3
+    call baml.Array.push
+    pop 1
+    load_var i
+    load_const 1
+    add_int
+    store_var i
+    jump L0
+}
+
+function errorcontext.errorcontext_non_class_rendering_check() -> bool {
+    call user.errorcontext.errorcontext_render_non_class_error
+    store_var rendered
+    load_var rendered
+    load_const "{\"first\": \"alpha\", \"second\": \"beta\"}"
+    call baml.String.includes
+    jump_if_false L0
+    pop 1
+    load_var rendered
+    load_const "<error>"
+    call baml.String.includes
+    unary_op !
+
+  L0:
+    return
+}
+
+function errorcontext.errorcontext_render_class_error() -> string {
+    load_const "boom"
+    load_const "visible"
+    init_instance user.errorcontext.ErrorContextDetail .label
+    init_instance user.errorcontext.ErrorContextAppError .message, .detail
+    throw
+    load_var e
+    throw_if_panic
+    load_var _2
+    load_type baml.ToString
+    load_const "to_string"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _0
+    load_var _0
+    return
+}
+
+function errorcontext.errorcontext_render_cycle() -> string {
+    call user.errorcontext.errorcontext_fail_cycle
+    store_var _0
+    jump L0
+    load_var e
+    throw_if_panic
+    load_var _2
+    load_type baml.ToString
+    load_const "to_string"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _0
+
+  L0:
+    load_var _0
+    return
+}
+
+function errorcontext.errorcontext_render_deep() -> string {
+    call user.errorcontext.errorcontext_fail_deep
+    store_var _0
+    jump L0
+    load_var e
+    throw_if_panic
+    load_var _2
+    load_type baml.ToString
+    load_const "to_string"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _0
+
+  L0:
+    load_var _0
+    return
+}
+
+function errorcontext.errorcontext_render_non_class_error() -> string {
+    load_const "alpha"
+    load_const "beta"
+    load_const "first"
+    load_const "second"
+    load_type string
+    load_type string
+    alloc_map 2
+    throw
+    load_var e
+    throw_if_panic
+    load_var _2
+    load_type baml.ToString
+    load_const "to_string"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _0
+    load_var _0
+    return
+}
+
+function errorcontext.errorcontext_render_wide() -> string {
+    call user.errorcontext.errorcontext_fail_wide
+    store_var _0
+    jump L0
+    load_var e
+    throw_if_panic
+    load_var _2
+    load_type baml.ToString
+    load_const "to_string"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _0
+
+  L0:
+    load_var _0
+    return
 }

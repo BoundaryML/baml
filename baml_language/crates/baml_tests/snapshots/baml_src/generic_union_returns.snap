@@ -1,6 +1,39 @@
 ---
 source: crates/baml_tests/tests/baml_src.rs
 ---
+function generic_union_returns.$init_test_ns_generic_union_returns_generic_union_returns(registry: testing.TestCollector) -> null {
+    load_var registry
+    load_const "root.generic_union_returns"
+    load_const "model_step_flattens_union_type_arg_before_sap_conversion"
+    make_closure .<lambda($init_test_ns_generic_union_returns_generic_union_returns, 0)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.generic_union_returns"
+    load_const "sap_parses_null_as_optional_json"
+    make_closure .<lambda($init_test_ns_generic_union_returns_generic_union_returns, 1)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.generic_union_returns"
+    load_const "sap_parses_non_null_optional_json_value"
+    make_closure .<lambda($init_test_ns_generic_union_returns_generic_union_returns, 2)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.generic_union_returns"
+    load_const "sap_preserves_declared_types_for_nullable_containers"
+    make_closure .<lambda($init_test_ns_generic_union_returns_generic_union_returns, 3)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_const null
+    return
+}
+
 function generic_union_returns.model_step_flattens_union_type_arg() -> bool {
     load_type generic_union_returns.FinalValue | string
     load_const "\"done\""

@@ -1,0 +1,1024 @@
+---
+source: crates/baml_tests/tests/baml_src.rs
+---
+function reflect_call_any.$init_test_ns_reflect_call_any_reflect_call_any(registry: testing.TestCollector) -> null {
+    load_var registry
+    load_const "root.reflect_call_any"
+    load_const "call_any_dispatches_named_args"
+    make_closure .<lambda($init_test_ns_reflect_call_any_reflect_call_any, 0)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.reflect_call_any"
+    load_const "call_any_absent_optional_fires_callee_default"
+    make_closure .<lambda($init_test_ns_reflect_call_any_reflect_call_any, 1)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.reflect_call_any"
+    load_const "call_any_rejects_missing_key_and_type_mismatches"
+    make_closure .<lambda($init_test_ns_reflect_call_any_reflect_call_any, 2)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.reflect_call_any"
+    load_const "call_any_invalid_argument_error_carries_types"
+    make_closure .<lambda($init_test_ns_reflect_call_any_reflect_call_any, 3)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.reflect_call_any"
+    load_const "call_any_propagates_callee_typed_throw"
+    make_closure .<lambda($init_test_ns_reflect_call_any_reflect_call_any, 4)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.reflect_call_any"
+    load_const "call_any_heterogeneous_tool_map_dispatch"
+    make_closure .<lambda($init_test_ns_reflect_call_any_reflect_call_any, 5)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.reflect_call_any"
+    load_const "call_any_lambda_callee"
+    make_closure .<lambda($init_test_ns_reflect_call_any_reflect_call_any, 6)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.reflect_call_any"
+    load_const "call_any_bound_method_callee"
+    make_closure .<lambda($init_test_ns_reflect_call_any_reflect_call_any, 7)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.reflect_call_any"
+    load_const "signature_reports_types_and_param_split"
+    make_closure .<lambda($init_test_ns_reflect_call_any_reflect_call_any, 8)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.reflect_call_any"
+    load_const "signature_bound_method_drops_receiver"
+    make_closure .<lambda($init_test_ns_reflect_call_any_reflect_call_any, 9)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.reflect_call_any"
+    load_const "generic_function_reflects_coarsely_and_dispatches"
+    make_closure .<lambda($init_test_ns_reflect_call_any_reflect_call_any, 10)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.reflect_call_any"
+    load_const "signature_object_literal_construction"
+    make_closure .<lambda($init_test_ns_reflect_call_any_reflect_call_any, 11)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_const null
+    return
+}
+
+function reflect_call_any.Counter.bump(self: reflect_call_any.Counter, amount: int) -> int {
+    load_var self
+    load_field .base
+    load_var amount
+    add_int
+    return
+}
+
+function reflect_call_any.add(x: int, y: int) -> int {
+    load_var2 1 2
+    add_int
+    return
+}
+
+function reflect_call_any.call_any_absent_optional_fires_callee_default_fn() -> int {
+    load_type int
+    load_type never
+    load_const user.reflect_call_any.scale
+    load_const 5
+    load_const "x"
+    load_type string
+    load_type unknown
+    alloc_map 1
+    call reflect.call_any
+    store_var defaulted
+    jump L0
+    load_var e
+    throw_if_panic
+    load_const 1
+    unary_op -
+    store_var defaulted
+
+  L0:
+    load_type int
+    load_type never
+    load_const user.reflect_call_any.scale
+    load_const 5
+    load_const 10
+    load_const "x"
+    load_const "factor"
+    load_type string
+    load_type unknown
+    alloc_map 2
+    call reflect.call_any
+    store_var supplied
+    jump L1
+    load_var e
+    throw_if_panic
+    load_const 1
+    unary_op -
+    store_var supplied
+
+  L1:
+    load_var defaulted
+    load_const 1000
+    mul_int
+    load_var supplied
+    add_int
+    return
+}
+
+function reflect_call_any.call_any_bound_method_callee_fn() -> int {
+    load_type int
+    load_type never
+    load_const 40
+    init_instance user.reflect_call_any.Counter .base
+    make_bound_method user.reflect_call_any.Counter.bump
+    load_const 2
+    load_const "amount"
+    load_type string
+    load_type unknown
+    alloc_map 1
+    call reflect.call_any
+    jump L0
+    load_var e
+    throw_if_panic
+    load_const 1
+    unary_op -
+
+  L0:
+    return
+}
+
+function reflect_call_any.call_any_dispatches_named_args_fn() -> int {
+    load_type int
+    load_type never
+    load_const user.reflect_call_any.add
+    load_const 20
+    load_const 22
+    load_const "x"
+    load_const "y"
+    load_type string
+    load_type unknown
+    alloc_map 2
+    call reflect.call_any
+    jump L0
+    load_var e
+    throw_if_panic
+    load_const 1
+    unary_op -
+
+  L0:
+    return
+}
+
+function reflect_call_any.call_any_heterogeneous_tool_map_dispatch_fn() -> string {
+    load_const user.reflect_call_any.shout
+    load_const user.reflect_call_any.fail
+    load_const "shout"
+    load_const "fail"
+    load_type string
+    load_type baml.AnyFunction<Returns = string, Throws = reflect_call_any.ToolError>
+    alloc_map 2
+    store_var_load_var tools
+    load_const "shout"
+    load_const "hi"
+    load_const "s"
+    load_type string
+    load_type unknown
+    alloc_map 1
+    call user.reflect_call_any.dispatch
+    store_var _5
+    load_var tools
+    load_const "fail"
+    load_const "down"
+    load_const "s"
+    load_type string
+    load_type unknown
+    alloc_map 1
+    call user.reflect_call_any.dispatch
+    store_var _8
+    load_var tools
+    load_const "nope"
+    load_type string
+    load_type unknown
+    alloc_map 0
+    call user.reflect_call_any.dispatch
+    store_var _11
+    load_var _5
+    load_const "/"
+    bin_op +
+    load_var _8
+    bin_op +
+    load_const "/"
+    bin_op +
+    load_var _11
+    bin_op +
+    return
+}
+
+function reflect_call_any.call_any_invalid_argument_error_carries_types_fn() -> string {
+    load_type string
+    load_type never
+    load_const user.reflect_call_any.name_only
+    load_const 42
+    load_const "name"
+    load_type string
+    load_type unknown
+    alloc_map 1
+    call reflect.call_any
+    store_var bad_value
+    jump L2
+    load_var e
+    is_type reflect.InvalidArgumentError
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var e
+    rethrow
+
+  L1:
+    load_var e
+    load_field .expected
+    call baml.TypeValue.baml.ToString.to_string
+    store_var _13
+    load_var e
+    load_field .got
+    call baml.TypeValue.baml.ToString.to_string
+    store_var _15
+    load_var e
+    load_field .argument
+    load_const ":"
+    bin_op +
+    load_var _13
+    bin_op +
+    load_const "|"
+    bin_op +
+    load_var _15
+    bin_op +
+    store_var bad_value
+
+  L2:
+    load_type string
+    load_type never
+    load_const user.reflect_call_any.name_only
+    load_type string
+    load_type unknown
+    alloc_map 0
+    call reflect.call_any
+    store_var missing
+    jump L5
+    load_var e
+    is_type reflect.InvalidArgumentError
+    pop_jump_if_false L3
+    jump L4
+
+  L3:
+    load_var e
+    rethrow
+
+  L4:
+    load_var e
+    load_field .expected
+    call baml.TypeValue.baml.ToString.to_string
+    store_var _28
+    load_var e
+    load_field .got
+    call baml.TypeValue.baml.ToString.to_string
+    store_var _30
+    load_var e
+    load_field .argument
+    load_const ":"
+    bin_op +
+    load_var _28
+    bin_op +
+    load_const "|"
+    bin_op +
+    load_var _30
+    bin_op +
+    store_var missing
+
+  L5:
+    load_const "?"
+    store_var out
+    load_var bad_value
+    is_type string
+    pop_jump_if_false L6
+    jump L7
+
+  L6:
+    load_const false
+    jump L8
+
+  L7:
+    load_const true
+
+  L8:
+    pop_jump_if_false L9
+    load_var bad_value
+    store_var out
+
+  L9:
+    load_var missing
+    is_type string
+    pop_jump_if_false L10
+    jump L11
+
+  L10:
+    load_const false
+    jump L12
+
+  L11:
+    load_const true
+
+  L12:
+    pop_jump_if_false L13
+    load_var out
+    load_const "/"
+    bin_op +
+    load_var missing
+    bin_op +
+    store_var out
+
+  L13:
+    load_var out
+    return
+}
+
+function reflect_call_any.call_any_lambda_callee_fn() -> int {
+    load_type int
+    load_type never
+    make_closure .<lambda(call_any_lambda_callee_fn, 0)>, 0
+    load_const 21
+    load_const "x"
+    load_type string
+    load_type unknown
+    alloc_map 1
+    call reflect.call_any
+    jump L0
+    load_var e
+    throw_if_panic
+    load_const 1
+    unary_op -
+
+  L0:
+    return
+}
+
+function reflect_call_any.call_any_propagates_callee_typed_throw_fn() -> string {
+    load_type string
+    load_type reflect_call_any.ToolError
+    load_const user.reflect_call_any.fail_search
+    load_const "cats"
+    load_const "q"
+    load_type string
+    load_type unknown
+    alloc_map 1
+    call reflect.call_any
+    jump L4
+    load_var e
+    is_type reflect_call_any.ToolError
+    pop_jump_if_false L0
+    jump L3
+
+  L0:
+    load_var e
+    is_type reflect.InvalidArgumentError
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_var e
+    rethrow
+
+  L2:
+    load_const "iae"
+    jump L4
+
+  L3:
+    load_var e
+    load_field .message
+
+  L4:
+    return
+}
+
+function reflect_call_any.call_any_rejects_missing_key_and_type_mismatches_fn() -> int {
+    load_type string
+    load_type never
+    load_const user.reflect_call_any.greet
+    load_type string
+    load_type unknown
+    alloc_map 0
+    call reflect.call_any
+    store_var missing
+    jump L2
+    load_var e
+    is_type reflect.InvalidArgumentError
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var e
+    rethrow
+
+  L1:
+    load_const 1
+    store_var missing
+
+  L2:
+    load_type string
+    load_type never
+    load_const user.reflect_call_any.greet
+    load_const 42
+    load_const "name"
+    load_type string
+    load_type unknown
+    alloc_map 1
+    call reflect.call_any
+    store_var ty
+    jump L5
+    load_var e
+    is_type reflect.InvalidArgumentError
+    pop_jump_if_false L3
+    jump L4
+
+  L3:
+    load_var e
+    rethrow
+
+  L4:
+    load_const 1
+    store_var ty
+
+  L5:
+    load_type string
+    load_type never
+    load_const user.reflect_call_any.greet
+    load_const "x"
+    load_const 11
+    load_const "name"
+    load_const "volume"
+    load_type string
+    load_type unknown
+    alloc_map 2
+    call reflect.call_any
+    store_var key
+    jump L8
+    load_var e
+    is_type reflect.InvalidArgumentError
+    pop_jump_if_false L6
+    jump L7
+
+  L6:
+    load_var e
+    rethrow
+
+  L7:
+    load_const 1
+    store_var key
+
+  L8:
+    load_type string
+    load_type never
+    load_const user.reflect_call_any.greet
+    load_const "x"
+    load_const "yes"
+    load_const "name"
+    load_const "excited"
+    load_type string
+    load_type unknown
+    alloc_map 2
+    call reflect.call_any
+    store_var opt_ty
+    jump L11
+    load_var e
+    is_type reflect.InvalidArgumentError
+    pop_jump_if_false L9
+    jump L10
+
+  L9:
+    load_var e
+    rethrow
+
+  L10:
+    load_const 1
+    store_var opt_ty
+
+  L11:
+    load_const 0
+    store_var failures
+    load_var missing
+    is_type int
+    pop_jump_if_false L12
+    jump L13
+
+  L12:
+    load_const false
+    jump L14
+
+  L13:
+    load_const true
+
+  L14:
+    pop_jump_if_false L15
+    load_var2 9 1
+    add_int
+    store_var failures
+
+  L15:
+    load_var ty
+    is_type int
+    pop_jump_if_false L16
+    jump L17
+
+  L16:
+    load_const false
+    jump L18
+
+  L17:
+    load_const true
+
+  L18:
+    pop_jump_if_false L19
+    load_var2 9 3
+    add_int
+    store_var failures
+
+  L19:
+    load_var key
+    is_type int
+    pop_jump_if_false L20
+    jump L21
+
+  L20:
+    load_const false
+    jump L22
+
+  L21:
+    load_const true
+
+  L22:
+    pop_jump_if_false L23
+    load_var2 9 5
+    add_int
+    store_var failures
+
+  L23:
+    load_var opt_ty
+    is_type int
+    pop_jump_if_false L24
+    jump L25
+
+  L24:
+    load_const false
+    jump L26
+
+  L25:
+    load_const true
+
+  L26:
+    pop_jump_if_false L27
+    load_var2 9 7
+    add_int
+    store_var failures
+
+  L27:
+    load_var failures
+    return
+}
+
+function reflect_call_any.dispatch(tools: map<string, baml.AnyFunction<Returns = string, Throws = reflect_call_any.ToolError>>, name: string, args: map<string, unknown>) -> string {
+    load_type string
+    load_type baml.AnyFunction<Returns = string, Throws = reflect_call_any.ToolError>
+    load_var2 1 2
+    call baml.Map.get
+    store_var f
+    load_var f
+    load_const null
+    call baml.ops.equals_equals
+    pop_jump_if_false L0
+    jump L5
+
+  L0:
+    load_type string
+    load_type reflect_call_any.ToolError
+    load_var2 4 3
+    call reflect.call_any
+    jump L6
+    load_var e
+    is_type reflect_call_any.ToolError
+    pop_jump_if_false L1
+    jump L4
+
+  L1:
+    load_var e
+    is_type reflect.InvalidArgumentError
+    pop_jump_if_false L2
+    jump L3
+
+  L2:
+    load_var e
+    rethrow
+
+  L3:
+    load_const "iae"
+    jump L6
+
+  L4:
+    load_const "err:"
+    load_var e
+    load_field .message
+    bin_op +
+    jump L6
+
+  L5:
+    load_const "no-such-tool"
+
+  L6:
+    return
+}
+
+function reflect_call_any.fail(s: string) -> string {
+    load_var s
+    init_instance user.reflect_call_any.ToolError .message
+    throw
+}
+
+function reflect_call_any.fail_search(q: string) -> string {
+    load_const "no results for "
+    load_var q
+    bin_op +
+    init_instance user.reflect_call_any.ToolError .message
+    throw
+}
+
+function reflect_call_any.generic_function_reflects_coarsely_and_dispatches_fn() -> string {
+    load_const user.reflect_call_any.ident
+    call reflect.signature
+    store_var sig
+    load_type unknown
+    load_type unknown
+    load_const user.reflect_call_any.ident
+    load_const 42
+    load_const "x"
+    load_type string
+    load_type unknown
+    alloc_map 1
+    call reflect.call_any
+    store_var result
+    jump L0
+    load_var e
+    throw_if_panic
+    load_const 1
+    unary_op -
+    store_var result
+
+  L0:
+    load_const "no"
+    store_var called
+    load_var result
+    is_type int
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_const false
+    jump L3
+
+  L2:
+    load_const true
+
+  L3:
+    pop_jump_if_false L4
+    load_type int
+    load_var result
+    call baml.String.from
+    store_var called
+
+  L4:
+    load_var sig
+    load_field .returns
+    call baml.TypeValue.baml.ToString.to_string
+    store_var _17
+    load_var sig
+    load_field .args
+    container_len
+    store_var _20
+    load_type int
+    load_var _20
+    call baml.String.from
+    store_var _19
+    load_var _17
+    load_const "|"
+    bin_op +
+    load_var _19
+    bin_op +
+    load_const "|"
+    bin_op +
+    load_var called
+    bin_op +
+    return
+}
+
+function reflect_call_any.greet(name: string, excited: bool) -> string {
+    load_var excited
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const false
+    store_var excited
+
+  L0:
+    load_var name
+    return
+}
+
+function reflect_call_any.ident(x: T) -> T {
+    load_var x
+    return
+}
+
+function reflect_call_any.name_only(name: string) -> string {
+    load_var name
+    return
+}
+
+function reflect_call_any.scale(x: int, factor: int) -> int {
+    load_var factor
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_var x
+    load_const 1
+    add_int
+    store_var factor
+
+  L0:
+    load_var2 1 2
+    mul_int
+    return
+}
+
+function reflect_call_any.search(q: string, limit: int) -> string[] {
+    load_var limit
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const 10
+    store_var limit
+
+  L0:
+    load_var q
+    load_const "boom"
+    cmp_op ==
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_var q
+    load_type string
+    alloc_array 1
+    return
+
+  L2:
+    load_const "x"
+    init_instance user.reflect_call_any.ToolError .message
+    throw
+}
+
+function reflect_call_any.shout(s: string) -> string {
+    load_var s
+    load_const "!"
+    bin_op +
+    return
+}
+
+function reflect_call_any.signature_bound_method_drops_receiver_fn() -> string {
+    load_const 40
+    init_instance user.reflect_call_any.Counter .base
+    make_bound_method user.reflect_call_any.Counter.bump
+    call reflect.signature
+    store_var sig
+    load_const "unnamed"
+    store_var method_name
+    load_var sig
+    load_field .name
+    store_var_load_var signature_name
+    load_const null
+    call baml.ops.equals_equals
+    unary_op !
+    pop_jump_if_false L0
+    load_var signature_name
+    store_var method_name
+
+  L0:
+    load_const "some"
+    store_var lambda_name
+    make_closure .<lambda(signature_bound_method_drops_receiver_fn, 0)>, 0
+    call reflect.signature
+    load_field .name
+    load_const null
+    call baml.ops.equals_equals
+    pop_jump_if_false L1
+    load_const "null"
+    store_var lambda_name
+
+  L1:
+    load_var method_name
+    load_const "|"
+    bin_op +
+    load_var lambda_name
+    bin_op +
+    load_const "|"
+    bin_op +
+    store_var _19
+    load_var sig
+    load_field .args
+    container_len
+    store_var _25
+    load_type int
+    load_var _25
+    call baml.String.from
+    store_var _24
+    load_var sig
+    load_field .returns
+    call baml.TypeValue.baml.ToString.to_string
+    store_var _28
+    load_var sig
+    load_field .errors
+    call baml.TypeValue.baml.ToString.to_string
+    store_var _30
+    load_var2 5 6
+    bin_op +
+    load_const "|"
+    bin_op +
+    load_var _28
+    bin_op +
+    load_const "|"
+    bin_op +
+    load_var _30
+    bin_op +
+    return
+}
+
+function reflect_call_any.signature_object_literal_construction_fn() -> string {
+    load_const null
+    load_type reflect.Arg
+    alloc_array 0
+    load_type string
+    load_type reflect.Arg
+    alloc_map 0
+    load_type int
+    load_type never
+    load_const null
+    init_instance reflect.Signature .name, .args, .opts, .returns, .errors, .docstring
+    store_var_load_var manual
+    load_field .returns
+    call baml.TypeValue.baml.ToString.to_string
+    store_var _7
+    load_var manual
+    load_field .errors
+    call baml.TypeValue.baml.ToString.to_string
+    store_var _9
+    load_var _7
+    load_const "|"
+    bin_op +
+    load_var _9
+    bin_op +
+    return
+}
+
+function reflect_call_any.signature_reports_types_and_param_split_fn() -> string {
+    load_const user.reflect_call_any.search
+    call reflect.signature
+    store_var sig
+    load_type string
+    load_type reflect.Arg
+    load_var sig
+    load_field .opts
+    load_const "limit"
+    call baml.Map.get
+    store_var limit
+    load_const "absent"
+    store_var limit_str
+    load_var limit
+    load_const null
+    call baml.ops.equals_equals
+    unary_op !
+    pop_jump_if_false L0
+    load_var limit
+    load_field .1
+    call baml.TypeValue.baml.ToString.to_string
+    store_var limit_str
+
+  L0:
+    load_const "unnamed"
+    store_var fn_name
+    load_var sig
+    load_field .name
+    store_var_load_var signature_name
+    load_const null
+    call baml.ops.equals_equals
+    unary_op !
+    pop_jump_if_false L1
+    load_var signature_name
+    store_var fn_name
+
+  L1:
+    load_const "no-doc"
+    store_var doc
+    load_var sig
+    load_field .docstring
+    store_var_load_var signature_docstring
+    load_const null
+    call baml.ops.equals_equals
+    unary_op !
+    pop_jump_if_false L2
+    load_var signature_docstring
+    store_var doc
+
+  L2:
+    load_var fn_name
+    load_const "|"
+    bin_op +
+    store_var _35
+    load_var sig
+    load_field .returns
+    call baml.TypeValue.baml.ToString.to_string
+    store_var _37
+    load_var sig
+    load_field .errors
+    call baml.TypeValue.baml.ToString.to_string
+    store_var _39
+    load_var sig
+    load_field .args
+    container_len
+    store_var _42
+    load_type int
+    load_var _42
+    call baml.String.from
+    store_var _41
+    load_var sig
+    load_field .args
+    load_const 0
+    load_array_element
+    load_field .type
+    call baml.TypeValue.baml.ToString.to_string
+    store_var _45
+    load_var2 8 9
+    bin_op +
+    load_const "|"
+    bin_op +
+    load_var _39
+    bin_op +
+    load_const "|"
+    bin_op +
+    load_var _41
+    bin_op +
+    load_const "|"
+    bin_op +
+    load_var _45
+    bin_op +
+    load_const "|"
+    bin_op +
+    load_var sig
+    load_field .args
+    load_const 0
+    load_array_element
+    load_field .name
+    bin_op +
+    load_const "|"
+    bin_op +
+    load_var limit_str
+    bin_op +
+    load_const "|"
+    bin_op +
+    load_var doc
+    bin_op +
+    return
+}
