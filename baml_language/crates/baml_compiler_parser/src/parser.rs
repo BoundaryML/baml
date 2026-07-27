@@ -3247,8 +3247,12 @@ impl<'a> Parser<'a> {
                 } else if p.at(TokenKind::Word) {
                     // Enum variant
                     p.parse_enum_variant();
-                    // Optional comma after variant (allows both comma and no-comma styles)
-                    p.eat(TokenKind::Comma);
+                    // Optional delimiter after a variant. Commas are canonical,
+                    // but a semicolon is an unambiguous punctuation slip that
+                    // the formatter can repair.
+                    if !p.eat(TokenKind::Comma) {
+                        p.eat(TokenKind::Semicolon);
+                    }
                 } else {
                     // Skip unexpected token
                     p.error_unexpected_token("Unexpected token in enum body".to_string());
@@ -4010,6 +4014,7 @@ impl<'a> Parser<'a> {
                     && !p.at(TokenKind::Less)
                     && !p.at(TokenKind::LBrace)
                     && !p.at(TokenKind::Arrow)
+                    && !p.at(TokenKind::FatArrow)
                     && !p.at_end()
                 {
                     p.bump();
@@ -4043,7 +4048,10 @@ impl<'a> Parser<'a> {
 
             // Return type
             let mut allow_llm_body = true;
-            if p.eat(TokenKind::Arrow) {
+            // Accept the common JS/TS `=>` slip as well as canonical `->`.
+            // The formatter owns canonicalization and always emits `->`, just
+            // as it already does for lambda expressions.
+            if p.eat(TokenKind::Arrow) || p.eat(TokenKind::FatArrow) {
                 if p.at(TokenKind::LBrace) {
                     // The `{` belongs to the function body, not a return type.
                     // Keep recovery in expression-body mode so `client` text
@@ -7104,7 +7112,8 @@ impl<'a> Parser<'a> {
     }
 
     /// Parse a map literal in expression context: { "key": value, ... }
-    /// Requires colons and commas (JSON-style)
+    /// Colons are required. Commas are canonical but may be omitted when the
+    /// following token unambiguously starts another key.
     fn parse_map_literal(&mut self) {
         self.with_node(SyntaxKind::MAP_LITERAL, |p| {
             p.expect(TokenKind::LBrace);
@@ -7124,18 +7133,14 @@ impl<'a> Parser<'a> {
                         if p.at_statement_recovery_boundary() {
                             break;
                         }
-                        if !p.eat(TokenKind::Comma) {
-                            // Missing comma - error but try to continue
+                        if !p.eat(TokenKind::Comma)
+                            && !p.at(TokenKind::Word)
+                            && !p.at(TokenKind::Quote)
+                            && !p.at(TokenKind::Hash)
+                            && !p.at(TokenKind::RBrace)
+                        {
                             p.error_unexpected_token("',' or '}' after map entry".to_string());
-                            // Try to recover
-                            if !p.at(TokenKind::Word)
-                                && !p.at(TokenKind::Quote)
-                                && !p.at(TokenKind::Hash)
-                                && !p.at(TokenKind::RBrace)
-                            {
-                                // Skip unexpected token
-                                p.bump();
-                            }
+                            p.bump();
                         }
                     }
                 } else if p.eat(TokenKind::Comma) {
@@ -10899,6 +10904,57 @@ function Demo() -> int {
                 |it| matches!(it, rowan::NodeOrToken::Token(t) if t.kind() == SyntaxKind::EQUALS)
             ),
             "expected lambda parameter default equals token"
+        );
+    }
+
+    #[test]
+    fn lambda_body_requires_braces() {
+        for source in [
+            "function Demo() -> int { let add_one = (x: int) -> x + 1; add_one(41) }",
+            "function Demo() -> int { let add_one = (x: int) => x + 1; add_one(41) }",
+        ] {
+            let (_root, errors) = parse_source(source);
+            assert!(
+                errors.iter().any(|error| matches!(
+                    error,
+                    ParseError::UnexpectedToken {
+                        expected,
+                        found,
+                        ..
+                    } if expected == "lambda body '{'" && found == "'+'"
+                )),
+                "expected a required lambda block-body diagnostic, got: {errors:#?}"
+            );
+        }
+    }
+
+    #[test]
+    fn enum_semicolon_delimiter_is_accepted_for_formatter_repair() {
+        let source = "enum Status { Pending; Complete; }\n";
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+        assert_eq!(
+            root.descendants()
+                .filter(|node| node.kind() == SyntaxKind::ENUM_VARIANT)
+                .count(),
+            2
+        );
+    }
+
+    #[test]
+    fn map_entries_without_commas_are_accepted_for_formatter_repair() {
+        let source = "function Demo() -> int { { \"left\": 1 \"right\": 2 } }\n";
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+        let map = root
+            .descendants()
+            .find(|node| node.kind() == SyntaxKind::MAP_LITERAL)
+            .expect("expected map literal");
+        assert_eq!(
+            map.children()
+                .filter(|node| node.kind() == SyntaxKind::OBJECT_FIELD)
+                .count(),
+            2
         );
     }
 

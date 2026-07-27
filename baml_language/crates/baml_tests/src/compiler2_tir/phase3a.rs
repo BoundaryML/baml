@@ -1016,6 +1016,26 @@ fn invalid_binary_op_bigint_plus_float() {
 }
 
 #[test]
+fn compound_assign_float_plus_string_is_rejected_in_tir() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+function f() -> float {
+  let g = 3.5;
+  g += "add";
+  g
+}
+"#,
+    );
+    let tir = render_tir(&db, file);
+    assert!(
+        tir.contains("operator `+` cannot be applied") && tir.contains("and `\"add\"`"),
+        "expected compound assignment to fail during TIR inference:\n{tir}"
+    );
+}
+
+#[test]
 fn invalid_binary_op_float_lt_bigint() {
     let mut db = make_db();
     let file = db.add_file("test.baml", "function f() -> bool { return 1.5 < 100n; }");
