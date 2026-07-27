@@ -64,11 +64,14 @@ pub(crate) enum Commands {
 
     // #[command(about = "Starts a development server")]
     // Dev(baml_runtime::cli::dev::DevArgs),
-    #[command(subcommand, about = "Manage authentication and claim your project")]
+    #[command(subcommand, about = "Manage your Boundary session")]
     Auth(crate::auth::AuthCommands),
 
-    #[command(about = "Start an anonymous project (claim it later with `baml auth login`)")]
+    #[command(about = "Log in to Boundary with your email")]
     Login(crate::auth::LoginArgs),
+
+    #[command(about = "Report an issue or improvement to Boundary")]
+    Feedback(crate::feedback_command::FeedbackArgs),
 
     #[command(about = "Format BAML source files", name = "fmt")]
     Format(crate::format::FormatArgs),
@@ -272,6 +275,7 @@ impl RuntimeCli {
             },
             Commands::Auth(args) => args.run(),
             Commands::Login(args) => args.run(),
+            Commands::Feedback(args) => args.run(),
             Commands::Telemetry(args) => args.run(),
             // Handled by the early return above, before telemetry wiring.
             Commands::FlushTelemetry(args) => args.run(),

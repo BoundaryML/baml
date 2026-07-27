@@ -54,10 +54,9 @@ env:
   CARGO_TERM_COLOR: always
   RUSTUP_MAX_RETRIES: 10
   AWS_REGION: us-east-1
-  # WorkOS environment for `baml auth` (public identifiers, not secrets).
-  # Captured by option_env! in baml_cli at build time; the repo variables
-  # are configured in Settings -> Actions -> Variables.
-  BAML_WORKOS_AUTHKIT_DOMAIN: ${{ vars.BAML_WORKOS_AUTHKIT_DOMAIN }}
+  # WorkOS client id for `baml login` (a public identifier, not a secret).
+  # Captured by option_env! in baml_cli at build time; the repo variable is
+  # configured in Settings -> Actions -> Variables.
   BAML_WORKOS_CLIENT_ID: ${{ vars.BAML_WORKOS_CLIENT_ID }}
   AWS_ROLE_ARN: arn:aws:iam::277707123528:role/pkg-boundaryml-com-github-release
   PKG_BUCKET: pkgboundarymlcomstack-pkgboundarymlcomsitebucket4f-ybhvygkqittp
