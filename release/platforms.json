@@ -1,5 +1,5 @@
 {
-  "description": "Repository-owned platform contract: the single machine-readable source for the BAML language release target set, per-target per-artifact support, and each artifact's build config. The cffi, toolchain, python, java, and C# matrices are generated from this file. CFFI entries own language-neutral native production; sibling C# entries own .NET RID projection, package-native filenames, native consumer runners, support tier, and package policy. C# requires CFFI, while CFFI support does not imply C# support. A missing artifact key means unsupported; `experimental: true` means best-effort; absent/false means required.",
+  "description": "Repository-owned platform contract: the single machine-readable source for the BAML language release target set, per-target per-artifact support, and each artifact's build config. The wrapper, cffi, toolchain, python, java, and C# matrices are generated from this file. Wrapper entries own their runners and published variants. CFFI entries own language-neutral native production; sibling C# entries own .NET RID projection, package-native filenames, native consumer runners, support tier, and package policy. C# requires CFFI, while CFFI support does not imply C# support. A missing artifact key means unsupported; `experimental: true` means best-effort; absent/false means required.",
   "schema": 1,
   "targets": [
     {
@@ -10,6 +10,7 @@
       "archive_suffix": ".tar.gz",
       "artifacts": {
         "toolchain": { "runner": "macos-14" },
+        "wrapper": { "runner": "macos-14", "variants": ["self-update", "no-self-update"] },
         "python": { "runner": "macos-latest" },
         "nodejs": {},
         "java": { "platform": "macos-aarch64", "runner": "macos-14" },
@@ -25,6 +26,7 @@
       "archive_suffix": ".tar.gz",
       "artifacts": {
         "toolchain": { "runner": "macos-15-intel" },
+        "wrapper": { "runner": "macos-15-intel", "variants": ["self-update", "no-self-update"] },
         "python": { "runner": "macos-latest" },
         "nodejs": {},
         "java": { "platform": "macos-x86_64", "runner": "macos-15-intel" },
@@ -40,6 +42,7 @@
       "archive_suffix": ".tar.gz",
       "artifacts": {
         "toolchain": { "runner": "ubuntu-24.04-arm" },
+        "wrapper": { "runner": "ubuntu-24.04-arm", "variants": ["self-update", "no-self-update"] },
         "python": { "runner": "ubuntu-latest", "manylinux": "2_24" },
         "nodejs": {},
         "java": { "platform": "linux-aarch64", "runner": "ubuntu-24.04-arm" },
@@ -55,6 +58,7 @@
       "archive_suffix": ".tar.gz",
       "artifacts": {
         "toolchain": { "runner": "ubuntu-24.04-arm" },
+        "wrapper": { "runner": "ubuntu-24.04-arm", "variants": ["self-update"] },
         "python": { "runner": "ubuntu-latest", "manylinux": "musllinux_1_1" },
         "nodejs": {},
         "java": { "platform": "linux-aarch64-musl", "runner": "ubuntu-latest", "experimental": true },
@@ -70,6 +74,7 @@
       "archive_suffix": ".tar.gz",
       "artifacts": {
         "toolchain": { "runner": "ubuntu-latest" },
+        "wrapper": { "runner": "ubuntu-latest", "variants": ["self-update", "no-self-update"] },
         "python": { "runner": "ubuntu-latest", "manylinux": "2_17" },
         "nodejs": {},
         "java": { "platform": "linux-x86_64", "runner": "ubuntu-latest" },
@@ -85,6 +90,7 @@
       "archive_suffix": ".tar.gz",
       "artifacts": {
         "toolchain": { "runner": "ubuntu-latest" },
+        "wrapper": { "runner": "ubuntu-latest", "variants": ["self-update"] },
         "python": { "runner": "ubuntu-latest", "manylinux": "musllinux_1_1" },
         "nodejs": {},
         "java": { "platform": "linux-x86_64-musl", "runner": "ubuntu-latest", "experimental": true },
@@ -100,6 +106,7 @@
       "archive_suffix": ".zip",
       "artifacts": {
         "toolchain": { "runner": "windows-latest" },
+        "wrapper": { "runner": "windows-latest", "variants": ["self-update", "no-self-update"] },
         "python": { "runner": "windows-latest" },
         "nodejs": {},
         "java": { "platform": "windows-x86_64", "runner": "windows-latest" },
@@ -115,6 +122,7 @@
       "archive_suffix": ".zip",
       "artifacts": {
         "toolchain": { "runner": "windows-latest" },
+        "wrapper": { "runner": "windows-latest", "variants": ["self-update", "no-self-update"] },
         "python": { "runner": "windows-11-arm", "architecture": "arm64" },
         "nodejs": {},
         "java": { "platform": "windows-aarch64", "runner": "windows-11-arm", "experimental": true },

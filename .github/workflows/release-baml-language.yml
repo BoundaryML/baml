@@ -275,6 +275,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       toolchain: ${{ steps.gen.outputs.toolchain }}
+      wrapper: ${{ steps.gen.outputs.wrapper }}
       csharp: ${{ steps.gen.outputs.csharp }}
     steps:
       - uses: actions/checkout@v4
@@ -292,6 +293,9 @@ jobs:
             | {target: .triple, os: .artifacts.toolchain.runner, libc: .libc}]' release/platforms.json)"
           echo "toolchain=$toolchain" >> "$GITHUB_OUTPUT"
           jq . <<<"$toolchain"
+          wrapper="$(scripts/baml-release-platforms wrapper-matrix)"
+          echo "wrapper=$wrapper" >> "$GITHUB_OUTPUT"
+          jq . <<<"$wrapper"
           csharp="$(scripts/baml-csharp-release-contract matrix)"
           echo "csharp=$csharp" >> "$GITHUB_OUTPUT"
           jq . <<<"$csharp"
@@ -431,14 +435,12 @@ jobs:
 
   build-wrapper:
     name: Build wrapper (${{ matrix.target }})
-    # The wrapper is a native release build of the workspace, so it uses the
-    # same per-target runners as the toolchain and reuses that generated matrix.
     needs: [plan, build-matrix]
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
-        include: ${{ fromJson(needs.build-matrix.outputs.toolchain) }}
+        include: ${{ fromJson(needs.build-matrix.outputs.wrapper) }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -459,45 +461,55 @@ jobs:
         with:
           target: ${{ matrix.target }}
       - name: Build wrapper
+        env:
+          EXECUTABLE_SUFFIX: ${{ matrix.executable_suffix }}
+          TARGET: ${{ matrix.target }}
         run: |
           set -euo pipefail
-          target="${{ matrix.target }}"
-          cargo build --manifest-path baml_language/Cargo.toml --release --bin baml --target "$target"
-          suffix=""
-          if [[ "$target" == *windows-msvc ]]; then suffix=".exe"; fi
+          cargo build --manifest-path baml_language/Cargo.toml --release --bin baml --target "$TARGET"
           mkdir -p staging/bin
-          cp "baml_language/target/$target/release/baml$suffix" "staging/bin/baml$suffix"
-          if test -f "staging/bin/baml-cli$suffix"; then
+          cp "baml_language/target/$TARGET/release/baml$EXECUTABLE_SUFFIX" \
+            "staging/bin/baml$EXECUTABLE_SUFFIX"
+          if test -f "staging/bin/baml-cli$EXECUTABLE_SUFFIX"; then
             exit 1
           fi
-      - name: Build package-manager wrapper
-        if: ${{ matrix.target == 'aarch64-apple-darwin' || matrix.target == 'x86_64-apple-darwin' || matrix.target == 'aarch64-unknown-linux-gnu' || matrix.target == 'x86_64-unknown-linux-gnu' }}
+      - name: Build no-self-update wrapper
+        if: ${{ matrix.no_self_update }}
+        env:
+          EXECUTABLE_SUFFIX: ${{ matrix.executable_suffix }}
+          TARGET: ${{ matrix.target }}
         run: |
           set -euo pipefail
-          target="${{ matrix.target }}"
           cargo build \
             --manifest-path baml_language/Cargo.toml \
             --release \
             --bin baml \
             --features no-self-update \
-            --target "$target"
+            --target "$TARGET"
           mkdir -p staging-no-self-update/bin
-          cp "baml_language/target/$target/release/baml" \
-            "staging-no-self-update/bin/baml"
+          cp "baml_language/target/$TARGET/release/baml$EXECUTABLE_SUFFIX" \
+            "staging-no-self-update/bin/baml$EXECUTABLE_SUFFIX"
       - name: Archive wrapper
         env:
+          ARCHIVE_SUFFIX: ${{ matrix.archive_suffix }}
+          NO_SELF_UPDATE: ${{ matrix.no_self_update }}
           TARGET: ${{ matrix.target }}
           WRAPPER_VERSION: ${{ needs.plan.outputs.wrapper_version }}
         run: |
           set -euo pipefail
-          if [[ "$TARGET" == *windows-msvc ]]; then
-            (cd staging && 7z a "../baml-wrapper-$WRAPPER_VERSION-$TARGET.zip" .)
-          else
-            tar -C staging -czf "baml-wrapper-$WRAPPER_VERSION-$TARGET.tar.gz" .
-          fi
-          if [[ "$TARGET" == "aarch64-apple-darwin" || "$TARGET" == "x86_64-apple-darwin" || "$TARGET" == "aarch64-unknown-linux-gnu" || "$TARGET" == "x86_64-unknown-linux-gnu" ]]; then
-            tar -C staging-no-self-update -czf \
-              "baml-wrapper-no-self-update-$WRAPPER_VERSION-$TARGET.tar.gz" .
+          archive() {
+            local staging="$1"
+            local product="$2"
+            local destination="$product-$WRAPPER_VERSION-$TARGET$ARCHIVE_SUFFIX"
+            case "$ARCHIVE_SUFFIX" in
+              .zip) (cd "$staging" && 7z a "../$destination" .) ;;
+              .tar.gz) tar -C "$staging" -czf "$destination" . ;;
+              *) echo "unsupported archive suffix: $ARCHIVE_SUFFIX" >&2; exit 1 ;;
+            esac
+          }
+          archive staging baml-wrapper
+          if [[ "$NO_SELF_UPDATE" == "true" ]]; then
+            archive staging-no-self-update baml-wrapper-no-self-update
           fi
       - uses: actions/upload-artifact@v4
         with:
@@ -1218,11 +1230,22 @@ jobs:
     permissions:
       contents: write
     steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.plan.outputs.source_sha }}
+          persist-credentials: false
       - uses: actions/download-artifact@v4
         with:
           pattern: wrapper-*
           path: dist/wrapper
           merge-multiple: true
+      - name: Verify wrapper artifact set
+        env:
+          WRAPPER_VERSION: ${{ needs.plan.outputs.wrapper_version }}
+        run: |
+          scripts/baml-release-platforms verify-wrapper-artifacts \
+            --wrapper-dir dist/wrapper \
+            --version "$WRAPPER_VERSION"
       - name: Generate checksum sidecars
         run: |
           set -euo pipefail

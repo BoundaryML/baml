@@ -845,6 +845,7 @@ class WorkflowGraphTests(unittest.TestCase):
         all_builds = job_block(workflow, "all-builds")
         nuget = job_block(workflow, "publish-csharp-sdk")
         crates_io = job_block(workflow, "publish-crates-io")
+        wrapper_release = job_block(workflow, "publish-wrapper-release")
         prerequisites = job_block(workflow, "release-prerequisites-complete")
         complete = job_block(workflow, "release-complete")
         manifest = job_block(workflow, "publish-pkg-boundaryml-com")
@@ -853,13 +854,14 @@ class WorkflowGraphTests(unittest.TestCase):
         dry_run = job_block(workflow, "dry-run-artifacts")
 
         self.assertIn("baml-csharp-release-contract matrix", build_matrix)
-        for target in (
-            "aarch64-apple-darwin",
-            "x86_64-apple-darwin",
-            "aarch64-unknown-linux-gnu",
-            "x86_64-unknown-linux-gnu",
-        ):
-            self.assertIn(target, wrapper)
+        self.assertIn("baml-release-platforms wrapper-matrix", build_matrix)
+        self.assertIn("needs.build-matrix.outputs.wrapper", wrapper)
+        self.assertIn("matrix.no_self_update", wrapper)
+        self.assertIn("matrix.archive_suffix", wrapper)
+        self.assertIn("matrix.executable_suffix", wrapper)
+        self.assertIn("verify-wrapper-artifacts", wrapper_release)
+        self.assertNotIn("unknown-linux-gnu' ||", wrapper)
+        self.assertNotIn("windows-msvc", wrapper)
         self.assertIn("--features no-self-update", wrapper)
         self.assertIn("needs: [plan, build-matrix]", prepare)
         self.assertNotIn("build-bridge-cffi", prepare)

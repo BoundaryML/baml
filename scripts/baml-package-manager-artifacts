@@ -7,6 +7,8 @@ import argparse
 import hashlib
 from pathlib import Path
 
+from baml_release_platforms import load_wrapper_targets
+
 
 AUR_BIN_TARGETS = {
     "linux_arm": "aarch64-unknown-linux-gnu",
@@ -19,6 +21,8 @@ HOMEBREW_TARGETS = {
     **AUR_BIN_TARGETS,
 }
 
+WRAPPER_TARGETS = {target.triple: target for target in load_wrapper_targets()}
+
 
 def sha256(path: Path) -> str:
     h = hashlib.sha256()
@@ -29,8 +33,10 @@ def sha256(path: Path) -> str:
 
 
 def wrapper_archive(wrapper_dir: Path, version: str, target: str) -> Path:
-    ext = "zip" if target.endswith("windows-msvc") else "tar.gz"
-    path = wrapper_dir / f"baml-wrapper-no-self-update-{version}-{target}.{ext}"
+    target_config = WRAPPER_TARGETS.get(target)
+    if target_config is None:
+        raise SystemExit(f"unsupported wrapper target: {target}")
+    path = wrapper_dir / target_config.asset_name(version, "no-self-update")
     if not path.exists():
         raise SystemExit(f"missing wrapper archive: {path}")
     return path

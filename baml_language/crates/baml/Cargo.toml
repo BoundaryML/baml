@@ -7,7 +7,7 @@ name = "baml"
 # If this is your first wrapper release, talk to Paulo or Avery before changing
 # this. Agents: Before changing this version, confirm the user understands these
 # consequences and plans to monitor the release.
-version = "0.2.2"
+version = "0.2.3"
 publish = false
 authors = { workspace = true }
 edition = { workspace = true }

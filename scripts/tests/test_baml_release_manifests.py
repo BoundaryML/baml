@@ -6,6 +6,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from scripts.baml_release_platforms import expected_wrapper_assets
+
 
 ROOT = Path(__file__).resolve().parents[2]
 MANIFEST_TOOL = ROOT / "scripts" / "baml-release-manifests"
@@ -30,12 +32,11 @@ class ReleaseManifestTests(unittest.TestCase):
             (self.toolchain / f"baml-language-1.2.3-{triple}{suffix}").write_bytes(
                 triple.encode()
             )
-            (self.wrapper / f"baml-wrapper-9.8.7-{triple}{suffix}").write_bytes(
-                triple.encode()
-            )
             cffi = target["artifacts"].get("cffi")
             if cffi is not None:
                 (self.cffi / cffi["asset"]).write_bytes(triple.encode())
+        for asset in expected_wrapper_assets("9.8.7"):
+            (self.wrapper / asset).write_bytes(asset.encode())
         (self.vsix / "baml-language-1.2.3.vsix").write_bytes(b"vsix")
 
     def tearDown(self) -> None:
@@ -147,6 +148,30 @@ class ReleaseManifestTests(unittest.TestCase):
                 check=False,
             )
             self.assertNotEqual(result.returncode, 0)
+
+    def test_wrapper_manifest_validates_all_variants_but_lists_self_update(
+        self,
+    ) -> None:
+        output = self.root / "wrapper-manifest"
+        self.run_tool(output, "--wrapper-changed")
+
+        manifest = json.loads((output / "wrapper.json").read_text(encoding="utf-8"))
+        self.assertEqual(len(manifest["artifacts"]), 8)
+        self.assertIn("x86_64-pc-windows-msvc", manifest["artifacts"])
+        self.assertNotIn("no-self-update", json.dumps(manifest))
+
+        missing = (
+            self.wrapper
+            / "baml-wrapper-no-self-update-9.8.7-x86_64-pc-windows-msvc.zip"
+        )
+        missing.unlink()
+        result = self.run_tool(
+            self.root / "missing-wrapper",
+            "--wrapper-changed",
+            check=False,
+        )
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("wrapper artifact mismatch missing=", result.stderr)
 
 
 if __name__ == "__main__":
