@@ -293,7 +293,7 @@ jobs:
             | {target: .triple, os: .artifacts.toolchain.runner, libc: .libc}]' release/platforms.json)"
           echo "toolchain=$toolchain" >> "$GITHUB_OUTPUT"
           jq . <<<"$toolchain"
-          wrapper="$(python3 scripts/baml_release_platforms.py wrapper-matrix)"
+          wrapper="$(scripts/baml-release-platforms wrapper-matrix)"
           echo "wrapper=$wrapper" >> "$GITHUB_OUTPUT"
           jq . <<<"$wrapper"
           csharp="$(scripts/baml-csharp-release-contract matrix)"
@@ -1243,7 +1243,7 @@ jobs:
         env:
           WRAPPER_VERSION: ${{ needs.plan.outputs.wrapper_version }}
         run: |
-          python3 scripts/baml_release_platforms.py verify-wrapper-artifacts \
+          scripts/baml-release-platforms verify-wrapper-artifacts \
             --wrapper-dir dist/wrapper \
             --version "$WRAPPER_VERSION"
       - name: Generate checksum sidecars

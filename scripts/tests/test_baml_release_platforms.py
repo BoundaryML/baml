@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import copy
 import json
+import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -15,9 +17,24 @@ from scripts.baml_release_platforms import (
 
 
 VERSION = "1.2.3"
+ROOT = Path(__file__).resolve().parents[2]
+CLI = ROOT / "scripts" / "baml-release-platforms"
 
 
 class WrapperReleasePlatformTests(unittest.TestCase):
+    def test_extensionless_cli_generates_wrapper_matrix(self) -> None:
+        result = subprocess.run(
+            [sys.executable, CLI, "wrapper-matrix"],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+
+        self.assertEqual(
+            json.loads(result.stdout),
+            [target.matrix_entry() for target in load_wrapper_targets()],
+        )
+
     def test_wrapper_matrix_carries_variants_and_platform_suffixes(self) -> None:
         targets = {target.triple: target for target in load_wrapper_targets()}
 

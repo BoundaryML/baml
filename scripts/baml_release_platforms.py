@@ -1,9 +1,7 @@
-#!/usr/bin/env python3
-"""Validate release platforms and derive wrapper release artifacts."""
+"""Shared wrapper release platform contract."""
 
 from __future__ import annotations
 
-import argparse
 import json
 from dataclasses import dataclass
 from pathlib import Path
@@ -172,29 +170,3 @@ def verify_wrapper_artifacts(
     extra = sorted(actual - expected)
     if missing or extra:
         fail(f"wrapper artifact mismatch missing={missing} extra={extra}")
-
-
-def main() -> None:
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--platforms", type=Path, default=DEFAULT_PLATFORMS)
-    subparsers = parser.add_subparsers(dest="command", required=True)
-    subparsers.add_parser("wrapper-matrix")
-    verify = subparsers.add_parser("verify-wrapper-artifacts")
-    verify.add_argument("--wrapper-dir", required=True, type=Path)
-    verify.add_argument("--version", required=True)
-    args = parser.parse_args()
-
-    if args.command == "wrapper-matrix":
-        matrix = [
-            target.matrix_entry() for target in load_wrapper_targets(args.platforms)
-        ]
-        print(json.dumps(matrix, separators=(",", ":")))
-    elif args.command == "verify-wrapper-artifacts":
-        verify_wrapper_artifacts(args.wrapper_dir, args.version, args.platforms)
-        print(
-            f"ok: {len(expected_wrapper_assets(args.version, args.platforms))} wrapper artifacts"
-        )
-
-
-if __name__ == "__main__":
-    main()

@@ -833,7 +833,7 @@ class WorkflowGraphTests(unittest.TestCase):
         dry_run = job_block(workflow, "dry-run-artifacts")
 
         self.assertIn("baml-csharp-release-contract matrix", build_matrix)
-        self.assertIn("baml_release_platforms.py wrapper-matrix", build_matrix)
+        self.assertIn("baml-release-platforms wrapper-matrix", build_matrix)
         self.assertIn("needs.build-matrix.outputs.wrapper", wrapper)
         self.assertIn("matrix.no_self_update", wrapper)
         self.assertIn("matrix.archive_suffix", wrapper)
