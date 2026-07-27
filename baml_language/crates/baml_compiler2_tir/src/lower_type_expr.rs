@@ -4607,6 +4607,42 @@ function needs<T extends Marker>(x: T) -> int throws never {
     }
 
     #[test]
+    fn concrete_associated_error_binds_generic_throws_at_call_site() {
+        let errors = all_type_errors(
+            "interface Driver<Input> {\n\
+               type Output\n\
+               type Error\n\
+               function drive(self, input: Input) -> Self.Output throws Self.Error\n\
+             }\n\
+             class Kaboom {\n\
+               data: int\n\
+               message: string[]\n\
+             }\n\
+             class Task<T> {\n\
+               value: T\n\
+               function drive<Output, Error, D extends Driver<Task<T>, Output = Output, Error = Error>>(self, driver: D) -> Output throws Error {\n\
+                 driver.drive(self)\n\
+               }\n\
+             }\n\
+             class IntDriver {}\n\
+             implements Driver<Task<int>> for IntDriver {\n\
+               type Output = int\n\
+               type Error = Kaboom\n\
+               function drive(self, input: Task<int>) -> int throws Kaboom {\n\
+                 throw Kaboom { data: input.value, message: [\"failed\"] }\n\
+               }\n\
+             }\n\
+             function wrapper(task: Task<int>) -> int throws Kaboom {\n\
+               task.drive(IntDriver {})\n\
+             }\n",
+        );
+        assert!(
+            errors.is_empty(),
+            "the concrete Driver realization should bind Output and Error, got {errors:?}"
+        );
+    }
+
+    #[test]
     fn concrete_projection_receiver_reduces_before_member_access() {
         // A value typed as a concrete-base projection IS its realization: `(Risky as
         // HasErr).E` with `type E = Kaboom` reduces to `Kaboom`, so `.message`

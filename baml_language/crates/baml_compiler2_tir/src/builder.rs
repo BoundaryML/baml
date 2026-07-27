@@ -520,15 +520,12 @@ impl ThrowsAnalysisContext for BuilderThrowsAnalysis<'_, '_> {
 
     fn instantiated_callee_throws(
         &self,
+        call_expr_id: ExprId,
         callee_expr_id: ExprId,
         args: &[ExprId],
         unwrap_optional_callee: bool,
     ) -> Option<Ty> {
-        let call_plan = self
-            .builder
-            .call_plans
-            .values()
-            .find(|plan| plan.matches_provided_args(args));
+        let call_plan = self.builder.call_plans.get(&call_expr_id);
         self.builder.instantiated_callee_throws(
             callee_expr_id,
             args,
@@ -2743,6 +2740,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             crate::inference::CallPlan {
                 bindings: plan_bindings,
                 type_args: Vec::new(),
+                instantiated_throws: None,
                 side_channels: crate::inference::CallSideChannels { runtime_id },
             },
         );
@@ -2865,6 +2863,19 @@ impl<'db> TypeInferenceBuilder<'db> {
             .or_insert_with(|| crate::inference::CallPlan {
                 bindings: Vec::new(),
                 type_args,
+                instantiated_throws: None,
+                side_channels: crate::inference::CallSideChannels::default(),
+            });
+    }
+
+    fn record_call_throws(&mut self, expr_id: ExprId, throws: Ty) {
+        self.call_plans
+            .entry(expr_id)
+            .and_modify(|plan| plan.instantiated_throws = Some(throws.clone()))
+            .or_insert_with(|| crate::inference::CallPlan {
+                bindings: Vec::new(),
+                type_args: Vec::new(),
+                instantiated_throws: Some(throws),
                 side_channels: crate::inference::CallSideChannels::default(),
             });
     }
@@ -3788,7 +3799,12 @@ impl<'db> TypeInferenceBuilder<'db> {
         let callee_ty = self.expand_alias_chains(callee_ty);
 
         match &callee_ty {
-            Ty::Function { params, ret, .. } => {
+            Ty::Function {
+                params,
+                ret,
+                throws,
+                ..
+            } => {
                 // Function values are realized: the type no longer carries its own
                 // generics, so the callee's inferable params *and their bounds* come
                 // from its *declaration* (resolved via the callee expr). A plain
@@ -4316,6 +4332,15 @@ impl<'db> TypeInferenceBuilder<'db> {
                         }
                     }
                 }
+
+                let instantiated_throws = crate::generics::substitute_ty(throws, &bindings);
+                let instantiated_throws =
+                    if crate::generics::contains_concrete_base_projection(&instantiated_throws) {
+                        self.normalize(&instantiated_throws)
+                    } else {
+                        instantiated_throws
+                    };
+                self.record_call_throws(expr_id, instantiated_throws);
 
                 let substituted_ret = crate::generics::substitute_ty(ret, &bindings);
                 // *Every* declared type parameter must be resolved after inference — not only
@@ -9458,6 +9483,9 @@ impl<'db> TypeInferenceBuilder<'db> {
         unwrap_optional_callee: bool,
         call_plan: Option<&crate::inference::CallPlan>,
     ) -> Option<Ty> {
+        if let Some(throws) = call_plan.and_then(|plan| plan.instantiated_throws.clone()) {
+            return Some(throws);
+        }
         let callee_ty = self.expressions.get(&callee_expr_id)?;
         let typed_callee = if unwrap_optional_callee {
             self.analyze_optional_base(callee_ty).inner
@@ -9557,6 +9585,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 }
                 crate::throws_analysis::collect_callee_escaping_throws(
                     &BuilderThrowsAnalysis { builder: self },
+                    expr_id,
                     *callee,
                     &arg_exprs,
                     body,
@@ -9653,6 +9682,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 }
                 crate::throws_analysis::collect_callee_escaping_throws(
                     &BuilderThrowsAnalysis { builder: self },
+                    expr_id,
                     *callee,
                     &arg_exprs,
                     body,

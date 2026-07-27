@@ -913,6 +913,8 @@ impl DefaultParameterInference<'_> {
 pub struct CallPlan {
     pub bindings: Vec<ParamBinding>,
     pub type_args: Vec<Ty>,
+    /// The callee's `throws` type after call-site generic inference.
+    pub instantiated_throws: Option<Ty>,
     /// Hidden call metadata which is not part of the callee's parameter list.
     pub side_channels: CallSideChannels,
 }
@@ -953,15 +955,6 @@ impl CallPlan {
             } if *binding_param_index == param_index => Some(*arg),
             ParamBinding::Provided { .. } | ParamBinding::OmittedDefault { .. } => None,
         })
-    }
-
-    pub fn matches_provided_args(&self, args: &[ExprId]) -> bool {
-        let side_channel_count = usize::from(self.side_channels.runtime_id.is_some());
-        self.provided_arg_count() + side_channel_count == args.len()
-            && args.iter().all(|arg| {
-                self.provided_args().any(|provided| provided == *arg)
-                    || self.side_channels.runtime_id == Some(*arg)
-            })
     }
 }
 
@@ -1055,12 +1048,6 @@ impl<'db> ScopeInference<'db> {
     /// Look up the full argument binding plan for a call expression.
     pub fn call_plan(&self, expr_id: ExprId) -> Option<&CallPlan> {
         self.call_plans.get(&expr_id)
-    }
-
-    pub fn call_plan_for_provided_args(&self, args: &[ExprId]) -> Option<&CallPlan> {
-        self.call_plans
-            .values()
-            .find(|plan| plan.matches_provided_args(args))
     }
 
     /// Iterate over all call binding plans in this scope.

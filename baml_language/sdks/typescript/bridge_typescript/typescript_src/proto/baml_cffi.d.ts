@@ -1,5 +1,12 @@
+/**
+ * THIS FILE IS AUTO-GENERATED — DO NOT EDIT BY HAND.
+ *
+ * Source: baml_language/sdks/typescript/bridge_typescript/typescript_src/
+ * Proto:  baml_language/crates/bridge_ctypes/types/baml_bridge/cffi/v1/*.proto
+ * Build:  cd baml_language/sdks/typescript/bridge_typescript && pnpm build:debug
+ */
 import * as $protobuf from "protobufjs";
-import Long = require("long");
+import Long from "long";
 /** Namespace baml_bridge. */
 export namespace baml_bridge {
 

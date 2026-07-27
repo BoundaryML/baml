@@ -15,6 +15,7 @@ pub(crate) trait ThrowsAnalysisContext {
 
     fn instantiated_callee_throws(
         &self,
+        call_expr_id: ExprId,
         callee_expr_id: ExprId,
         args: &[ExprId],
         unwrap_optional_callee: bool,
@@ -177,6 +178,7 @@ fn collect_value_throw_facts<C: ThrowsAnalysisContext>(
 
 pub(crate) fn collect_callee_escaping_throws<C: ThrowsAnalysisContext>(
     context: &C,
+    call_expr_id: ExprId,
     callee_expr_id: ExprId,
     args: &[ExprId],
     body: &ExprBody,
@@ -185,9 +187,12 @@ pub(crate) fn collect_callee_escaping_throws<C: ThrowsAnalysisContext>(
 ) {
     let mut accounted = false;
 
-    if let Some(throws) =
-        context.instantiated_callee_throws(callee_expr_id, args, unwrap_optional_callee)
-    {
+    if let Some(throws) = context.instantiated_callee_throws(
+        call_expr_id,
+        callee_expr_id,
+        args,
+        unwrap_optional_callee,
+    ) {
         out.extend(flatten_ty_to_facts(&throws));
         accounted = true;
     }
@@ -351,6 +356,7 @@ fn collect_from_expr<C: ThrowsAnalysisContext>(
             let unwrap_optional = matches!(&body.exprs[*callee], Expr::OptionalMemberAccess { .. });
             collect_callee_escaping_throws(
                 context,
+                expr_id,
                 *callee,
                 &arg_exprs,
                 body,
@@ -364,7 +370,7 @@ fn collect_from_expr<C: ThrowsAnalysisContext>(
             for arg in args {
                 collect_from_expr(context, arg.expr, body, out);
             }
-            collect_callee_escaping_throws(context, *callee, &arg_exprs, body, true, out);
+            collect_callee_escaping_throws(context, expr_id, *callee, &arg_exprs, body, true, out);
         }
         Expr::Catch { base, clauses } => {
             if let Some(residual) = context.catch_residual_throws(expr_id) {
@@ -525,7 +531,7 @@ fn collect_from_expr<C: ThrowsAnalysisContext>(
                 collect_from_expr(context, *tag, body, out);
                 // A tagged template invokes the tag fn, so its declared `throws`
                 // escape just like a direct call's would.
-                collect_callee_escaping_throws(context, *tag, &[], body, false, out);
+                collect_callee_escaping_throws(context, expr_id, *tag, &[], body, false, out);
             }
             collect_from_template_segments(context, segments, body, out);
         }

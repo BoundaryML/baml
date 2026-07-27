@@ -198,11 +198,12 @@ impl ThrowsAnalysisContext for CallableThrowsAnalysis<'_, '_> {
 
     fn instantiated_callee_throws(
         &self,
+        call_expr_id: baml_compiler2_ast::ExprId,
         callee_expr_id: baml_compiler2_ast::ExprId,
         args: &[baml_compiler2_ast::ExprId],
         unwrap_optional_callee: bool,
     ) -> Option<Ty> {
-        let call_plan = self.inference.call_plan_for_provided_args(args);
+        let call_plan = self.inference.call_plan(call_expr_id);
         instantiated_callee_throws(
             self.inference,
             self.aliases,
@@ -270,6 +271,9 @@ pub(crate) fn instantiated_callee_throws(
     unwrap_optional_callee: bool,
     call_plan: Option<&CallPlan>,
 ) -> Option<Ty> {
+    if let Some(throws) = call_plan.and_then(|plan| plan.instantiated_throws.clone()) {
+        return Some(throws);
+    }
     let callee_ty = inference.expression_type(callee_expr_id)?;
     let typed_callee = if unwrap_optional_callee {
         crate::narrowing::remove_null(callee_ty)

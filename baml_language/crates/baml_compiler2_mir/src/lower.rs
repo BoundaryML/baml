@@ -9391,6 +9391,9 @@ impl LoweringContext<'_> {
             .unwrap_or_default();
         let caller_generic_params = self.enclosing_generic_params();
         for ty in &mut inferred_type_args {
+            *ty = baml_compiler2_tir::generics::erase_typevars_matching(ty, &|param| {
+                baml_compiler2_tir::ty::is_synthetic_effect_param(param.name())
+            });
             if baml_compiler2_tir::generics::contains_typevar_where(ty, &|name| {
                 !caller_generic_params.iter().any(|param| param == name)
             }) {
