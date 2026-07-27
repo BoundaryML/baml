@@ -61,14 +61,13 @@ jobs:
           name: nodejs-umbrella-dist
           path: baml_language/sdks/typescript/bridge_typescript/dist
       - name: Setup Node.js
-        # Mirror legacy release.yml publish-to-npm: the composite sets registry-url
-        # (writes the .npmrc that npm/pnpm OIDC trusted publishing keys off of) and
-        # provides pnpm. latest ships an npm new enough for OIDC (checked below).
-        uses: ./.github/actions/setup-node
+        # The publisher only uses npm. Avoid the repository composite here because
+        # it always enables pnpm caching, whose post-job save fails when this job
+        # intentionally does not install a pnpm store.
+        uses: actions/setup-node@v6
         with:
-          node-action-version: v6
           node-version: latest
-          install-dependencies: false
+          registry-url: "https://registry.npmjs.org"
       - name: Ensure npm CLI supports trusted publishing
         run: |
           set -euo pipefail

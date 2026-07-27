@@ -23,6 +23,10 @@ BRIDGE_CFFI_PUBLIC_EXPORTS = (
 HYGIENE_TOOL = ROOT / "scripts" / "baml-bridge-cffi-hygiene"
 CROSS_CONFIG = ROOT / "baml_language" / "Cross.toml"
 NUGET_PUBLISHER = ROOT / ".github" / "workflows" / "publish2-csharp-sdk.yaml"
+NODE_NPM_PUBLISHER = (
+    ROOT / ".github" / "workflows" / "publish2-nodejs-sdk.yaml"
+)
+WEB_NPM_PUBLISHER = ROOT / ".github" / "workflows" / "publish2-web-sdk.yaml"
 CSHARP_PREPARER = (
     ROOT / ".github" / "workflows" / "prepare-csharp-sdk.reusable.yaml"
 )
@@ -926,6 +930,15 @@ class WorkflowGraphTests(unittest.TestCase):
         self.assertIn("left.ReadExactly(leftChunk)", normalizer)
         self.assertIn("right.ReadExactly(rightChunk)", normalizer)
         self.assertNotIn("left.Read(leftBuffer)", normalizer)
+
+    def test_npm_publishers_do_not_enable_an_unused_pnpm_cache(self) -> None:
+        for path in (NODE_NPM_PUBLISHER, WEB_NPM_PUBLISHER):
+            with self.subTest(workflow=path.name):
+                publisher = path.read_text(encoding="utf-8")
+                self.assertIn("uses: actions/setup-node@v6", publisher)
+                self.assertIn('registry-url: "https://registry.npmjs.org"', publisher)
+                self.assertNotIn("uses: ./.github/actions/setup-node", publisher)
+                self.assertNotIn("cache: pnpm", publisher)
 
     def test_csharp_consumer_repository_path_scan_requires_a_separator(self) -> None:
         primitive_consumer = PRIMITIVE_CONSUMER.read_text(encoding="utf-8")
