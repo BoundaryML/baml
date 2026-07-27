@@ -15,15 +15,15 @@
 
 namespace throws_test = baml_sdk::throws_test;
 
-BAML_TEST(sync_call_returns_none) {
+BAML_TEST(cancellation_sync_call_returns_none) {
   BAML_ASSERT(throws_test::SleepMs(1) == std::monostate{});
 }
 
-BAML_TEST(async_call_returns_none) {
+BAML_TEST(cancellation_async_call_returns_none) {
   BAML_ASSERT(throws_test::SleepMs_async(1).get() == std::monostate{});
 }
 
-BAML_TEST(async_cancel_via_future_cancel) {
+BAML_TEST(cancellation_async_cancel_via_future_cancel) {
   const auto start = std::chrono::steady_clock::now();
   auto fut = throws_test::SleepMs_async(2000);
   std::this_thread::sleep_for(std::chrono::milliseconds(50));
@@ -39,7 +39,7 @@ BAML_TEST(async_cancel_via_future_cancel) {
   BAML_ASSERT(elapsed < std::chrono::milliseconds(500));
 }
 
-BAML_TEST(future_wait_then_get) {
+BAML_TEST(cancellation_future_wait_then_get) {
   auto fut = throws_test::SleepMs_async(1);
   BAML_ASSERT(fut.valid());
   BAML_ASSERT(fut.wait_for(std::chrono::seconds(30)) ==
@@ -48,7 +48,7 @@ BAML_TEST(future_wait_then_get) {
   BAML_ASSERT(!fut.valid());
 }
 
-BAML_TEST(future_second_get_throws_future_error) {
+BAML_TEST(cancellation_future_second_get_throws_future_error) {
   auto fut = throws_test::SleepMs_async(1);
   (void)fut.get();
   bool threw = false;
@@ -60,7 +60,7 @@ BAML_TEST(future_second_get_throws_future_error) {
   BAML_ASSERT(threw);
 }
 
-BAML_TEST(future_wait_for_times_out_while_in_flight) {
+BAML_TEST(cancellation_future_wait_for_times_out_while_in_flight) {
   auto fut = throws_test::SleepMs_async(2000);
   BAML_ASSERT(fut.wait_for(std::chrono::milliseconds(1)) ==
               std::future_status::timeout);
@@ -74,7 +74,7 @@ BAML_TEST(future_wait_for_times_out_while_in_flight) {
   BAML_ASSERT(cancelled);
 }
 
-BAML_TEST(future_destruction_detaches) {
+BAML_TEST(cancellation_future_destruction_detaches) {
   // The temporary future is dropped at the end of the statement: neither
   // blocks nor cancels, and later calls are unaffected.
   (void)throws_test::SleepMs_async(1);

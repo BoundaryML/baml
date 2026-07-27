@@ -12,7 +12,7 @@ import (
 	"github.com/boundaryml/baml-go"
 )
 
-func TestStaticMethodRequiredDefaultAndStructuredRoundTrips(t *testing.T) {
+func Test_static_method_required_default_and_structured_round_trips(t *testing.T) {
 	ctx := context.Background()
 	if got, err := baml_sdk.StaticMethodEdgesEdgeRequired(ctx, "required"); err != nil || got != "required" {
 		t.Fatalf("required = %q, %v", got, err)
@@ -63,7 +63,7 @@ func TestStaticMethodRequiredDefaultAndStructuredRoundTrips(t *testing.T) {
 	}
 }
 
-func TestStaticMethodMediaJSONTypeAndRustTypeRoundTrips(t *testing.T) {
+func Test_static_method_media_json_type_and_rust_type_round_trips(t *testing.T) {
 	ctx := context.Background()
 	image, err := baml_go.NewImageFromUrl("https://example.com/static.png", nil)
 	if err != nil {
@@ -105,7 +105,7 @@ func TestStaticMethodMediaJSONTypeAndRustTypeRoundTrips(t *testing.T) {
 	}
 }
 
-func TestStaticMethodErrorsNeverCancellationAndCollisionNames(t *testing.T) {
+func Test_static_method_errors_never_cancellation_and_collision_names(t *testing.T) {
 	ctx := context.Background()
 	if got, err := baml_sdk.StaticMethodEdgesEdgeRoundTrip_9a9648a9(ctx, "method"); err != nil || got != "method" {
 		t.Fatalf("Edge.round_trip = %q, %v", got, err)

@@ -54,7 +54,7 @@ fn _getdoc(src: &str, marker: &str) -> Option<String> {
 }
 
 #[test]
-fn test_imports() {
+fn test_raises_imports() {
     // python asserts the generated symbols import; in Rust the `use` above
     // resolving at compile time is the assertion. Touch each symbol so the
     // imports are exercised.
@@ -63,7 +63,7 @@ fn test_imports() {
 }
 
 #[test]
-fn test_union_throws_lists_all_names() {
+fn test_raises_union_throws_lists_all_names() {
     let src = _raises_test_source();
     let doc = _getdoc(&src, "fn LoadDoc(").expect("no doc comment on LoadDoc");
     assert!(
@@ -74,7 +74,7 @@ fn test_union_throws_lists_all_names() {
 }
 
 #[test]
-fn test_async_sibling_also_has_raises() {
+fn test_raises_async_sibling_also_has_raises() {
     let src = _raises_test_source();
     let doc = _getdoc(&src, "fn LoadDoc_async(").expect("no doc comment on LoadDoc_async");
     assert!(
@@ -85,7 +85,7 @@ fn test_async_sibling_also_has_raises() {
 }
 
 #[test]
-fn test_single_throws() {
+fn test_raises_single_throws() {
     let src = _raises_test_source();
     let doc = _getdoc(&src, "fn Reparse(").expect("no doc comment on Reparse");
     assert!(
@@ -95,7 +95,7 @@ fn test_single_throws() {
 }
 
 #[test]
-fn test_summary_precedes_raises_block() {
+fn test_raises_summary_precedes_raises_block() {
     let src = _raises_test_source();
     let doc = _getdoc(&src, "fn LoadDoc(").expect("no doc comment on LoadDoc");
     assert!(doc.starts_with("Load a document from a path."), "{doc:?}");
@@ -103,7 +103,7 @@ fn test_summary_precedes_raises_block() {
 }
 
 #[test]
-fn test_inferred_contract_without_clause_still_raises() {
+fn test_raises_inferred_contract_without_clause_still_raises() {
     // No written `throws` clause, but the body throws ParseError — the
     // inferred contract (callable_throws) still surfaces an Errors section.
     let src = _raises_test_source();
@@ -115,14 +115,14 @@ fn test_inferred_contract_without_clause_still_raises() {
 }
 
 #[test]
-fn test_non_throwing_function_has_no_raises_block() {
+fn test_raises_non_throwing_function_has_no_raises_block() {
     let src = _raises_test_source();
     let doc = _getdoc(&src, "fn PureLen(").unwrap_or_default();
     assert!(!doc.contains("# Errors"), "{doc:?}");
 }
 
 #[test]
-fn test_method_raises_block_in_pyi() {
+fn test_raises_method_raises_block_in_pyi() {
     // python carries method `Raises:` blocks in the .pyi (the pyright/IDE
     // surface) only, with the runtime `.py` __doc__ trailer reserved for
     // free functions.

@@ -48,7 +48,7 @@ BAML_TEST(optional_args_async_samples) {
                   .get() == (Probe{1, 5, 9}));
 }
 
-BAML_TEST(opt_box_method_matrix) {
+BAML_TEST(optional_args_opt_box_method_matrix) {
   using baml_sdk::OptBox;
   const OptBox box = OptBox::make(10);
   BAML_ASSERT_EQ(box.base, int64_t{17});
@@ -61,7 +61,7 @@ BAML_TEST(opt_box_method_matrix) {
               (Probe{10, 1, 8}));
 }
 
-BAML_TEST(unset_and_null_differ_in_one_call) {
+BAML_TEST(optional_args_unset_and_null_differ_in_one_call) {
   // unset means "omit this argument"; nullopt means "pass an explicit
   // null". The two must stay distinct within a single call.
   BAML_ASSERT(baml_sdk::optional_args_probe(1, optional_args_probe_opts{}

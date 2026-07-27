@@ -27,7 +27,7 @@ import org.junit.jupiter.api.Test;
 class TestLiterals {
 
     @Test
-    void test_return_literals() {
+    void test_literals_return_literals() {
         assertEquals(42L, Fns.return_literal42());
         assertEquals(-1L, Fns.return_literal_neg_one());
         assertEquals("draft", Fns.return_literal_draft());
@@ -37,32 +37,32 @@ class TestLiterals {
     }
 
     @Test
-    void test_round_trip_literal42() {
+    void test_literals_round_trip_literal42() {
         assertEquals(42L, Fns.round_trip_literal42(42L));
     }
 
     @Test
-    void test_round_trip_literal_draft() {
+    void test_literals_round_trip_literal_draft() {
         assertEquals("draft", Fns.round_trip_literal_draft("draft"));
     }
 
     @Test
-    void test_round_trip_literal_escaped() {
+    void test_literals_round_trip_literal_escaped() {
         assertEquals("has \"quotes\"", Fns.round_trip_literal_escaped("has \"quotes\""));
     }
 
     @Test
-    void test_round_trip_literal_true() {
+    void test_literals_round_trip_literal_true() {
         assertTrue(Fns.round_trip_literal_true(true));
     }
 
     @Test
-    void test_round_trip_literal_false() {
+    void test_literals_round_trip_literal_false() {
         assertFalse(Fns.round_trip_literal_false(false));
     }
 
     @Test
-    void test_round_trip_literals() {
+    void test_literals_round_trip_literals() {
         Literals lit = new Literals(42L, "draft", "has \"quotes\"", true, false);
         assertEquals(lit, Fns.round_trip_literals(lit));
     }

@@ -13,21 +13,21 @@
 // of the first arm's type-set. This is intended set-membership semantics, not
 // an ordering bug.
 //
-// BUG(static-coverage): the unreachable-arm analysis treats a typevar arm as
-// covering the whole scrutinee, so an unguarded arm after `let t: T` is
-// rejected as unreachable (E0063) — even though at runtime `T` covers only its
-// realized type and later arms are reachable (e.g. `pick<int>("hi")` must reach
-// the `string` arm). The `if true` guards below exist solely to keep the later
-// arms statically reachable; remove them when the coverage analysis models
-// typevar arms as covering only their own type-set.
+// Static coverage models a typevar arm as covering exactly its own type-set:
+// `let t: T` covers the scrutinee's `T` member (reflexively) and is a
+// possible-but-not-covering match against the concrete members, so the later
+// concrete arms stay statically reachable (`pick<int>("hi")` reaches the
+// `string` arm) and no guards are needed.
 
 // ─── 1. bare `T` arm (non-last), both polarities ──────────────────────────────
 
+// (No trailing wildcard here: the `T` arm covers the `T` member and the
+// `string` arm covers the `string` member, so a `_` after them is rejected as
+// unreachable.)
 function pick<T>(x: T | string) -> string {
     match (x) {
-        let t: T if true => "T",
+        let t: T => "T",
         let s: string => "string",
-        _ => "other",
     }
 }
 
@@ -57,12 +57,12 @@ test "typevar_arm_dynamic_first_match_capture" {
 
 // ─── 2. `T[]` arm: element compared against the realized binding ──────────────
 
-// (No trailing wildcard here: the coverage analysis deems the `string[]` arm
-// to cover the `T[]` member too, so a wildcard after it is rejected as
-// unreachable.)
+// (No trailing wildcard here: the `T[]` arm covers the `T[]` member
+// reflexively and the `string[]` arm covers the `string[]` member, so a
+// wildcard after them is rejected as unreachable.)
 function pick_list<T>(x: T[] | string[]) -> string {
     match (x) {
-        let t: T[] if true => "T[]",
+        let t: T[] => "T[]",
         let s: string[] => "string[]",
     }
 }
@@ -93,12 +93,12 @@ test "typevar_list_arm_dynamic_first_match_capture" {
 
 // ─── 3. `map<string, T>` arm ──────────────────────────────────────────────────
 
-// (No trailing wildcard here: the coverage analysis deems the
-// `map<string, string>` arm to cover the `map<string, T>` member too, so a
-// wildcard after it is rejected as unreachable.)
+// (No trailing wildcard here: the `map<string, T>` arm covers its member
+// reflexively and the `map<string, string>` arm covers its member, so a
+// wildcard after them is rejected as unreachable.)
 function pick_map<T>(x: map<string, T> | map<string, string>) -> string {
     match (x) {
-        let t: map<string, T> if true => "map<T>",
+        let t: map<string, T> => "map<T>",
         let s: map<string, string> => "map<string>",
     }
 }

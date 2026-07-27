@@ -1,0 +1,75 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [type] E0003
+
+  × unresolved name: `Missing`
+    ╭─[main.baml:11:5]
+ 11 │     let Missing { age } = person;
+    ·     ───────────────────
+    ╰────
+
+  [type] E0003
+
+  × unresolved name: `Missing`
+    ╭─[main.baml:16:5]
+ 16 │     let Missing { age: let years } = person;
+    ·     ──────────────────────────────
+    ╰────
+
+  [type] E0003
+
+  × unresolved name: `Missing`
+    ╭─[main.baml:21:5]
+ 21 │     let Missing { address: Address { zip } } = person;
+    ·     ────────────────────────────────────────
+    ╰────
+
+  [type] E0003
+
+  × unresolved name: `Missing`
+    ╭─[main.baml:27:5]
+ 27 │     let Missing { age } = person else {
+    ·     ───────────────────
+    ╰────
+
+  [type] E0003
+
+  × unresolved name: `Missing`
+    ╭─[main.baml:34:8]
+ 34 │     if let Missing { age } = person {
+    ·        ───────────────────
+    ╰────
+
+  [type] E0003
+
+  × unresolved name: `Missing`
+    ╭─[main.baml:42:11]
+ 42 │     while let Missing { age } = person {
+    ·           ───────────────────
+    ╰────
+
+  [type] E0003
+
+  × unresolved name: `Missing`
+    ╭─[main.baml:49:10]
+ 49 │     for (let Missing { age } in [person]) {
+    ·          ───────────────────
+    ╰────
+
+  [type] E0003
+
+  × unresolved name: `Missing`
+    ╭─[main.baml:57:9]
+ 57 │         Missing { age } => age,
+    ·         ───────────────
+    ╰────
+
+  [type] E0003
+
+  × unresolved name: `Missing`
+    ╭─[main.baml:68:9]
+ 68 │         Missing { age } => age,
+    ·         ───────────────
+    ╰────

@@ -7,15 +7,15 @@ import Foundation
 import Baml
 
 final class TestStdlibEntrypoints: XCTestCase {
-    func test_native_now_ms_callable_as_entry_point() throws {
+    func test_stdlib_entrypoints_native_now_ms_callable_as_entry_point() throws {
         XCTAssertGreaterThan(try Baml.baml.sys.now_ms(), 0)
     }
 
-    func test_sysop_fs_exists_callable_as_entry_point() throws {
+    func test_stdlib_entrypoints_sysop_fs_exists_callable_as_entry_point() throws {
         XCTAssertTrue(try Baml.baml.fs.exists(path: "."))
     }
 
-    func test_compiler_intrinsics_are_not_emitted_as_entry_points() throws {
+    func test_stdlib_entrypoints_compiler_intrinsics_are_not_emitted_as_entry_points() throws {
         // Python inspects generated .py files; the Swift analog reads
         // the generated sources. `vendor.log.*` and `baml.events.send`
         // are compiler intrinsics and must not surface as entry points.

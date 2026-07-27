@@ -19,7 +19,7 @@ var (
 	_ func(context.Context, string, ...baml_sdk.IpsumClassifySentimentParseOption) (baml_sdk.IpsumSentiment, error) = baml_sdk.IpsumClassifySentimentParse
 )
 
-func TestParseCompanionReturnsTypedClassAndFillsMissingNullableField(t *testing.T) {
+func Test_parse_companion_returns_typed_class_and_fills_missing_nullable_field(t *testing.T) {
 	withoutProviderCredentials(t)
 
 	got, err := baml_sdk.LoremExtractResumeParse(context.Background(), `{"name":"Ada"}`)
@@ -31,7 +31,7 @@ func TestParseCompanionReturnsTypedClassAndFillsMissingNullableField(t *testing.
 	}
 }
 
-func TestParseCompanionReturnsClosedEnum(t *testing.T) {
+func Test_parse_companion_returns_closed_enum(t *testing.T) {
 	withoutProviderCredentials(t)
 
 	got, err := baml_sdk.IpsumClassifySentimentParse(context.Background(), `"POSITIVE"`)
@@ -43,7 +43,7 @@ func TestParseCompanionReturnsClosedEnum(t *testing.T) {
 	}
 }
 
-func TestParseCompanionAcceptsExplicitClientOption(t *testing.T) {
+func Test_parse_companion_accepts_explicit_client_option(t *testing.T) {
 	withoutProviderCredentials(t)
 	client := baml.LlmClient{
 		Name:       "anthropic/claude-3-5-sonnet-latest",
@@ -64,7 +64,7 @@ func TestParseCompanionAcceptsExplicitClientOption(t *testing.T) {
 	}
 }
 
-func TestParseCompanionHonorsCancellation(t *testing.T) {
+func Test_parse_companion_honors_cancellation(t *testing.T) {
 	withoutProviderCredentials(t)
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
@@ -75,7 +75,7 @@ func TestParseCompanionHonorsCancellation(t *testing.T) {
 	}
 }
 
-func TestParseCompanionReturnsRuntimeErrorForInvalidOutput(t *testing.T) {
+func Test_parse_companion_returns_runtime_error_for_invalid_output(t *testing.T) {
 	withoutProviderCredentials(t)
 
 	_, err := baml_sdk.LoremExtractResumeParse(context.Background(), `not a resume`)

@@ -2,10 +2,11 @@
 //!
 //! [`ty_family!`](baml_type_macros::ty_family) expands the master `Ty` enum
 //! below into the whole family — `Ty`, [`RuntimeTy`], [`CodegenTy`],
-//! [`RealizedTy`], [`ConcreteTy`], [`ConcreteRealizedTy`] — plus the per-member
-//! `FunctionParamTy` companion structs. Membership is by axis: each variant is
-//! tagged with exactly one `#[axis(..)]`, and each member includes a set of
-//! axes (a variant is present iff its axis is included). Nested positions are
+//! [`RealizedTy`], [`ConcreteTy`], [`ConcreteRealizedTy`], [`TyTemplate`] —
+//! plus the per-member `FunctionParamTy` companion structs. Membership is by
+//! axis: each variant is tagged with exactly one `#[axis(..)]`, and each
+//! member includes a set of axes (a variant is present iff its axis is
+//! included). Nested positions are
 //! retargeted per member: deep members (`child: Self`) recurse into themselves;
 //! the shallow `Concrete*` members nest their declared `child`.
 //!
@@ -13,19 +14,13 @@
 //! conversions, and the `lower_to_runtime` boundary)
 //! stay hand-written in `lib.rs`, `runtime_ty.rs`, and `realized_ty.rs`.
 
-// The macro-generated accessors, conversions, and borsh impls reference every
-// variant — including the deprecated `TyTemplate::TypeArgRefOrWildcard` — which
-// is generated infrastructure, not misuse. Consumers importing from the crate
-// root still receive the deprecation warning.
-#![allow(deprecated)]
-
 use baml_type_macros::ty_family;
 use borsh::{BorshDeserialize, BorshSerialize};
 
 use crate::{Freshness, FunctionParamMode, Literal, MediaKind, Name, ParamTy, TyAttr, TypeName};
 
 ty_family! {
-    axes { concrete, abstract, literal, never, typevar, projection, tir, special, template }
+    axes { concrete, abstract, literal, never, typevar, projection, tir, special, frame }
 
     type Ty                 { includes: [concrete, abstract, literal, never, typevar, projection, tir, special], child: Self }
     type RuntimeTy          { includes: [concrete, abstract, literal, never, typevar, projection, special],      child: Self }
@@ -37,14 +32,15 @@ ty_family! {
     type RealizedTy         { includes: [concrete, abstract, literal, never, special],                           child: Self }
     type ConcreteTy         { includes: [concrete, never],                                                       child: RuntimeTy }
     type ConcreteRealizedTy { includes: [concrete, never],                                                       child: RealizedTy }
-    // A `Ty`-shaped template that may contain unresolved generic references. It
-    // swaps the `typevar` axis's name-based `TypeVar` for the positional
-    // `template`-axis leaves (`TypeArgRef`/`Wildcard`), while keeping the
-    // `projection` axis so a symbolic associated projection can still be carried
+    // A *complete* `Ty`-shaped template: every leaf is either realized or a
+    // positional `frame`-axis reference (`TypeArgRef`), so `substitute` always
+    // has a single concrete answer per position. It swaps the `typevar` axis's
+    // name-based `TypeVar` for `TypeArgRef`, while keeping the `projection`
+    // axis so a symbolic associated projection can still be carried
     // structurally. `RealizedTy` is its fully-resolved subset (every
     // `RealizedTy` is a valid `TyTemplate`; narrowing back proves no template
     // leaf survives), giving the "is fully realized" check for free.
-    type TyTemplate         { includes: [concrete, abstract, literal, never, projection, special, template],     child: Self }
+    type TyTemplate         { includes: [concrete, abstract, literal, never, projection, special, frame],        child: Self }
 
     satellite FunctionParamTy {
         pub name: Option<Name>,
@@ -315,28 +311,19 @@ ty_family! {
             attr: TyAttr,
         } = 33,
 
-        // --- Template-only: positional references into an enclosing frame's
-        // type arguments, present only in `TyTemplate` (the `template` axis).
-        // These carry no `TyAttr` — they are pure structure — so the generated
-        // `attr()`/`with_attr()` accessors fall back to `TyAttr::EMPTY`.
+        // --- Template-only: a positional reference into an enclosing frame's
+        // type arguments, present only in `TyTemplate` (the `frame` axis). It
+        // always materializes to exactly one type. It carries no `TyAttr` — it
+        // is pure structure — so the generated `attr()`/`with_attr()`
+        // accessors fall back to `TyAttr::EMPTY`.
         /// A De Bruijn reference to the n-th type argument of the enclosing
         /// call frame. Materialized to a concrete type by `TyTemplate::substitute`
         /// against the frame's `type_args`; the template-space replacement for a
         /// name-based `TypeVar`.
-        #[axis(template)]
+        #[axis(frame)]
         TypeArgRef(u32) = 34,
-        /// De Bruijn reference like [`TyTemplate::TypeArgRef`], but a dispatch-guard hole:
-        /// an unconcretized runtime slot matches any actual type argument instead
-        /// of materializing `unknown` as a constraint. A type-erasure bandaid to be
-        /// removed once associated-type resolution is complete.
-        #[axis(template)]
-        #[deprecated = "Once type erasure is eliminated and associated type resolution are fixed this bandaid will be removed."]
-        TypeArgRefOrWildcard(u32) = 35,
-        /// Matches any type at this position — a guard hole (BEP-044) that pins
-        /// some type-args while leaving others unconstrained (e.g. `Pair<string, _>`).
-        /// Never materialized to a concrete type.
-        #[axis(template)]
-        Wildcard = 36,
+        // reserved = 35 (the removed `TypeArgRefOrWildcard` dispatch-guard ref)
+        // reserved = 36 (the removed `Wildcard` match-any hole)
     }
 }
 
@@ -578,6 +565,8 @@ mod tests {
         assert_eq!(in_memory_tag(&CodegenTy::Int { attr: a() }), 0);
         assert_eq!(in_memory_tag(&ConcreteTy::Int { attr: a() }), 0);
         assert_eq!(in_memory_tag(&ConcreteRealizedTy::Int { attr: a() }), 0);
+        // The template-only frame leaf keeps its master tag.
+        assert_eq!(in_memory_tag(&TyTemplate::TypeArgRef(0)), 34);
     }
 
     /// The borrowed upcast (`RuntimeTy::as_ty`, `RealizedTy::as_runtime_ty`, …)

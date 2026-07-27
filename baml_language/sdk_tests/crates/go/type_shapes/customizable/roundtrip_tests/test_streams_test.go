@@ -11,7 +11,7 @@ import (
 // Direct host-constructible subset of the Python test_streams.py port. These
 // calls round-trip stream companion types as ordinary values; they do not open
 // or consume an actual stream.
-func TestRoundTripResumeStream(t *testing.T) {
+func Test_round_trip_resume_stream(t *testing.T) {
 	resume := baml_sdk.LoremResumeStream{}
 	name := "ada"
 	resume.Name = &name
@@ -20,7 +20,7 @@ func TestRoundTripResumeStream(t *testing.T) {
 	}
 }
 
-func TestRoundTripRootFooStream(t *testing.T) {
+func Test_round_trip_root_foo_stream(t *testing.T) {
 	value := int64(3)
 	foo := baml_sdk.FooStream{V: &value}
 	if got, err := baml_sdk.LoremRoundTripRootFooStream(context.Background(), foo); err != nil || got.V == nil || *got.V != value {
@@ -28,7 +28,7 @@ func TestRoundTripRootFooStream(t *testing.T) {
 	}
 }
 
-func TestRoundTripBoxOfResumeStream(t *testing.T) {
+func Test_round_trip_box_of_resume_stream(t *testing.T) {
 	name := "grace"
 	want := baml_sdk.LoremBox[baml_sdk.LoremResumeStream]{
 		V: baml_sdk.LoremResumeStream{Name: &name},
@@ -39,7 +39,7 @@ func TestRoundTripBoxOfResumeStream(t *testing.T) {
 	}
 }
 
-func TestRoundTripResumeOrResumeStream(t *testing.T) {
+func Test_round_trip_resume_or_resume_stream(t *testing.T) {
 	resume := baml_sdk.LoremResume{Name: "hopper"}
 	want := baml_sdk.NewLoremResumeOrLoremResumeStreamFromLoremResume(resume)
 	got, err := baml_sdk.LoremRoundTripResumeOrResumeStream(context.Background(), want)
@@ -52,7 +52,7 @@ func TestRoundTripResumeOrResumeStream(t *testing.T) {
 	}
 }
 
-func TestRoundTripResumeOrHTTPResponse(t *testing.T) {
+func Test_round_trip_resume_or_http_response(t *testing.T) {
 	email := "a@x.com"
 	resume := baml_sdk.LoremResume{Name: "lovelace", Email: &email}
 	want := baml_sdk.NewHttpResponseOrLoremResumeFromLoremResume(resume)

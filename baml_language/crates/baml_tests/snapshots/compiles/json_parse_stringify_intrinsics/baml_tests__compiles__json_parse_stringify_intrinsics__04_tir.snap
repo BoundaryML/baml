@@ -4,20 +4,20 @@ source: crates/baml_tests/src/generated_tests.rs
 === TIR2 ===
 function user.parse_and_roundtrip(s: string) -> string throws never {
   { : string
-    let j: baml.json.json = baml.json.parse(s) : baml.json.json -> bool | int | float | string | baml.json.json[] | map<string, baml.json.json> | null
+    let j: baml.json.json = baml.json.parse(s) : baml.json.json -> int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>
     baml.json.stringify(j) : string
   }
 }
 function user.parse_and_roundtrip_pretty(s: string) -> string throws never {
   { : string
-    let j: baml.json.json = baml.json.parse(s) : baml.json.json -> bool | int | float | string | baml.json.json[] | map<string, baml.json.json> | null
+    let j: baml.json.json = baml.json.parse(s) : baml.json.json -> int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>
     baml.json.stringify_pretty(j) : string
   }
 }
 function user.match_parsed(s: string) -> string throws never {
   { : string | "int" | "float" | "bool" | "null"
-    let j: baml.json.json = baml.json.parse(s) : baml.json.json -> bool | int | float | string | baml.json.json[] | map<string, baml.json.json> | null
-    match (j : bool | int | float | string | baml.json.json[] | map<string, baml.json.json> | null) : string | "int" | "float" | "bool" | "null"
+    let j: baml.json.json = baml.json.parse(s) : baml.json.json -> int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>
+    match (j : int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>) : string | "int" | "float" | "bool" | "null"
       arr: baml.json.json[] =>
         baml.json.stringify(arr) : string
       m: map<string, baml.json.json> =>

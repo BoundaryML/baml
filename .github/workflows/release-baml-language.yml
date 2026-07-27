@@ -471,7 +471,7 @@ jobs:
             exit 1
           fi
       - name: Build package-manager wrapper
-        if: ${{ matrix.target == 'aarch64-unknown-linux-gnu' || matrix.target == 'x86_64-unknown-linux-gnu' }}
+        if: ${{ matrix.target == 'aarch64-apple-darwin' || matrix.target == 'x86_64-apple-darwin' || matrix.target == 'aarch64-unknown-linux-gnu' || matrix.target == 'x86_64-unknown-linux-gnu' }}
         run: |
           set -euo pipefail
           target="${{ matrix.target }}"
@@ -495,7 +495,7 @@ jobs:
           else
             tar -C staging -czf "baml-wrapper-$WRAPPER_VERSION-$TARGET.tar.gz" .
           fi
-          if [[ "$TARGET" == "aarch64-unknown-linux-gnu" || "$TARGET" == "x86_64-unknown-linux-gnu" ]]; then
+          if [[ "$TARGET" == "aarch64-apple-darwin" || "$TARGET" == "x86_64-apple-darwin" || "$TARGET" == "aarch64-unknown-linux-gnu" || "$TARGET" == "x86_64-unknown-linux-gnu" ]]; then
             tar -C staging-no-self-update -czf \
               "baml-wrapper-no-self-update-$WRAPPER_VERSION-$TARGET.tar.gz" .
           fi
@@ -1325,7 +1325,16 @@ jobs:
     # once a tag reaches proxy.golang.org it is immutable, while baml-go needs
     # that manifest to resolve its native runtime on first use.
     needs: [plan, build-go-sdk, all-builds, publish-pkg-boundaryml-com]
-    if: ${{ needs.plan.outputs.dry_run == 'false' && needs.plan.outputs.source_branch == 'canary' }}
+    if: >-
+      ${{
+        !cancelled() &&
+        needs.plan.result == 'success' &&
+        needs.build-go-sdk.result == 'success' &&
+        needs.all-builds.result == 'success' &&
+        needs.publish-pkg-boundaryml-com.result == 'success' &&
+        needs.plan.outputs.dry_run == 'false' &&
+        needs.plan.outputs.source_branch == 'canary'
+      }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v4
@@ -1522,7 +1531,7 @@ jobs:
     # like PyPI/npm above. Match the builder's runner + toolchain so the
     # repackaged `.crate` is byte-reproducible.
     runs-on: ubuntu-22.04
-    environment: release
+    environment: boundary-tools-prod
     permissions:
       id-token: write
       contents: read
@@ -1702,7 +1711,14 @@ jobs:
     # complete before the manifest is made immutable; Go closes the final gate
     # afterward without creating a dependency cycle.
     needs: [plan, release-prerequisites-complete]
-    if: ${{ needs.plan.outputs.dry_run == 'false' && needs.plan.outputs.source_branch == 'canary' }}
+    if: >-
+      ${{
+        !cancelled() &&
+        needs.plan.result == 'success' &&
+        needs.release-prerequisites-complete.result == 'success' &&
+        needs.plan.outputs.dry_run == 'false' &&
+        needs.plan.outputs.source_branch == 'canary'
+      }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -1854,7 +1870,15 @@ jobs:
   smoke-go-release:
     name: Smoke published Go SDK (${{ matrix.os }})
     needs: [plan, publish-go-sdk, publish-pkg-boundaryml-com]
-    if: ${{ needs.plan.outputs.dry_run == 'false' && needs.plan.outputs.source_branch == 'canary' }}
+    if: >-
+      ${{
+        !cancelled() &&
+        needs.plan.result == 'success' &&
+        needs.publish-go-sdk.result == 'success' &&
+        needs.publish-pkg-boundaryml-com.result == 'success' &&
+        needs.plan.outputs.dry_run == 'false' &&
+        needs.plan.outputs.source_branch == 'canary'
+      }}
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -1949,7 +1973,17 @@ jobs:
     # release until every publisher completes and the public Go and Swift
     # packages execute their native runtimes successfully.
     needs: [plan, publish-pkg-boundaryml-com, release-complete, smoke-go-release, smoke-swift-release]
-    if: ${{ needs.plan.outputs.dry_run == 'false' && needs.plan.outputs.source_branch == 'canary' }}
+    if: >-
+      ${{
+        !cancelled() &&
+        needs.plan.result == 'success' &&
+        needs.publish-pkg-boundaryml-com.result == 'success' &&
+        needs.release-complete.result == 'success' &&
+        needs.smoke-go-release.result == 'success' &&
+        needs.smoke-swift-release.result == 'success' &&
+        needs.plan.outputs.dry_run == 'false' &&
+        needs.plan.outputs.source_branch == 'canary'
+      }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -1977,7 +2011,15 @@ jobs:
   dispatch-nightly-after-canary:
     name: Queue nightly after canary publish
     needs: [plan, publish-pkg-channel]
-    if: ${{ needs.plan.outputs.dispatch_nightly_after_canary == 'true' && needs.plan.outputs.dry_run == 'false' && needs.plan.outputs.source_branch == 'canary' }}
+    if: >-
+      ${{
+        !cancelled() &&
+        needs.plan.result == 'success' &&
+        needs.publish-pkg-channel.result == 'success' &&
+        needs.plan.outputs.dispatch_nightly_after_canary == 'true' &&
+        needs.plan.outputs.dry_run == 'false' &&
+        needs.plan.outputs.source_branch == 'canary'
+      }}
     runs-on: ubuntu-latest
     permissions:
       actions: write

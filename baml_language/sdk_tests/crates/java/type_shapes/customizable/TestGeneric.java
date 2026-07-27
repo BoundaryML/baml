@@ -25,7 +25,7 @@ import org.junit.jupiter.api.Test;
 class TestGeneric {
 
     @Test
-    void test_generic() {
+    void test_generic_generic() {
         // `WrapperMethods<String>.get_value_or_marker()` should still
         // round-trip a string when the declared return is
         // `T | WrapperMarker`.
@@ -43,7 +43,7 @@ class TestGeneric {
     }
 
     @Test
-    void test_generic_wrapper_get_value() {
+    void test_generic_generic_wrapper_get_value() {
         // `WrapperMethods<String>.get_value()` should round-trip a string.
         //
         // The engine-side strict path (full-binding Gate A on instance

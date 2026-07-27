@@ -37,7 +37,7 @@ func assertOptionalString(t *testing.T, got *string, want string) {
 	}
 }
 
-func TestMediaReturnAndRoundTripAllKinds(t *testing.T) {
+func Test_media_return_and_round_trip_all_kinds(t *testing.T) {
 	ctx := context.Background()
 	mime := "application/octet-stream"
 
@@ -139,7 +139,7 @@ func TestMediaReturnAndRoundTripAllKinds(t *testing.T) {
 
 }
 
-func TestMediaConstructorsAndAccessors(t *testing.T) {
+func Test_media_constructors_and_accessors(t *testing.T) {
 	mime := "text/plain"
 	image, err := baml_go.NewImageFromBase64(mediaBase64, &mime)
 	if err != nil {
@@ -218,7 +218,7 @@ func TestMediaConstructorsAndAccessors(t *testing.T) {
 	}
 }
 
-func TestMediaNestedOptionalAndContainers(t *testing.T) {
+func Test_media_nested_optional_and_containers(t *testing.T) {
 	ctx := context.Background()
 	image, err := baml_go.NewImageFromUrl(mediaURL, nil)
 	if err != nil {

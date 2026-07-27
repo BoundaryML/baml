@@ -12,7 +12,7 @@ use baml_sdk::unions::{
 };
 
 #[test]
-fn test_round_trip_null_to_end() {
+fn test_unions_round_trip_null_to_end() {
     assert_eq!(
         round_trip_null_to_end(Some(IntOrString::Int(1))).unwrap(),
         Some(IntOrString::Int(1))
@@ -25,7 +25,7 @@ fn test_round_trip_null_to_end() {
 }
 
 #[test]
-fn test_round_trip_dedup() {
+fn test_unions_round_trip_dedup() {
     assert_eq!(
         round_trip_dedup(IntOrString::Int(2)).unwrap(),
         IntOrString::Int(2)
@@ -37,13 +37,13 @@ fn test_round_trip_dedup() {
 }
 
 #[test]
-fn test_round_trip_singleton_unwrap() {
+fn test_unions_round_trip_singleton_unwrap() {
     // `int | int` collapses to plain `int`.
     assert_eq!(round_trip_singleton_unwrap(7).unwrap(), 7);
 }
 
 #[test]
-fn test_round_trip_optional_plus_null() {
+fn test_unions_round_trip_optional_plus_null() {
     assert_eq!(
         round_trip_optional_plus_null(Some(TOrString::T(T { v: 1 }))).unwrap(),
         Some(TOrString::T(T { v: 1 }))
@@ -56,7 +56,7 @@ fn test_round_trip_optional_plus_null() {
 }
 
 #[test]
-fn test_round_trip_str_or_int_list() {
+fn test_unions_round_trip_str_or_int_list() {
     for value in [
         StringListOrIntList::StringList(vec!["hello".to_string()]),
         StringListOrIntList::IntList(vec![1, 2]),
@@ -68,12 +68,12 @@ fn test_round_trip_str_or_int_list() {
 }
 
 #[test]
-fn test_round_trip_t() {
+fn test_unions_round_trip_t() {
     assert_eq!(round_trip_t(T { v: 4 }).unwrap(), T { v: 4 });
 }
 
 #[test]
-fn test_round_trip_union_container() {
+fn test_unions_round_trip_union_container() {
     let c = UnionContainer {
         null_to_end: None,
         dedup: IntOrString::String("d".to_string()),

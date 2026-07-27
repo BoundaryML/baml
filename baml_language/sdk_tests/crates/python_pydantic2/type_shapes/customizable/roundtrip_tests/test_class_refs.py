@@ -10,16 +10,16 @@ from baml_sdk.class_refs import (
 )
 
 
-def test_make_outer():
+def test_class_refs_make_outer():
     o = make_outer(value=5)
     assert o.inner.value == 5
 
 
-def test_round_trip_inner():
+def test_class_refs_round_trip_inner():
     i = Inner(value=3)
     assert round_trip_inner(i=i) == i
 
 
-def test_round_trip_outer():
+def test_class_refs_round_trip_outer():
     o = Outer(inner=Inner(value=9))
     assert round_trip_outer(o=o) == o

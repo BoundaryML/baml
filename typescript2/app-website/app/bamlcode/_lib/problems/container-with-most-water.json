@@ -1,0 +1,17 @@
+{
+  "slug": "container-with-most-water",
+  "id": 11,
+  "title": "Container With Most Water",
+  "difficulty": "Medium",
+  "category": "Two Pointers",
+  "statement": "You are given an integer array `height` of length `n`. There are `n` vertical lines where line `i` has endpoints `(i, 0)` and `(i, height[i])`.\n\nFind two lines that together with the x-axis form a container holding the **most water**, and return that maximum area.\n\n**Example**\n\n```\nheight = [1, 8, 6, 2, 5, 4, 8, 3, 7]  => 49\n```",
+  "signature": "function MaxArea(height: int[]) -> int",
+  "starter": "function MaxArea(height: int[]) -> int {\n  // Return the maximum water area between two lines.\n  return 0;\n}",
+  "solution": "function MaxArea(height: int[]) -> int {\n  let lo = 0;\n  let hi = height.length() - 1;\n  let best = 0;\n  while (lo < hi) {\n    let h = height[lo];\n    let h2 = height[hi];\n    let minh = h;\n    if (h2 < h) {\n      minh = h2;\n    }\n    let area = minh * (hi - lo);\n    if (area > best) {\n      best = area;\n    }\n    if (h < h2) {\n      lo += 1;\n    } else {\n      hi -= 1;\n    }\n  }\n  return best;\n}",
+  "tests": [
+    { "call": "MaxArea([1, 8, 6, 2, 5, 4, 8, 3, 7])", "expected": "49" },
+    { "call": "MaxArea([1, 1])", "expected": "1" },
+    { "call": "MaxArea([4, 3, 2, 1, 4])", "expected": "16", "hidden": true },
+    { "call": "MaxArea([1, 2, 1])", "expected": "2", "hidden": true }
+  ]
+}

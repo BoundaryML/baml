@@ -925,6 +925,16 @@ class baml.errors.StackTrace$stream {
   frames: baml.errors.StackFrame$stream[]
 }
 
+--- <builtin>/baml/ns_errors/unknown_error.baml ---
+class baml.errors.UnknownError {
+  data: unknown
+  message: string[]
+}
+class baml.errors.UnknownError$stream {
+  data: unknown
+  message: string[]
+}
+
 --- <builtin>/baml/ns_events/events.baml ---
 
 --- <builtin>/baml/ns_fs/fs.baml ---
@@ -1314,16 +1324,14 @@ function baml.iter.ArrayIterator.iter(self: baml.iter.ArrayIterator<T>) -> baml.
   }
 }
 function baml.iter.ArrayIterator.next(self: baml.iter.ArrayIterator<T>) -> T | baml.iter.Done throws never {
-  { : T
+  { : never
     if (self.idx >= self.arr.length() : bool) : void
       { : never
         return Done {  } : baml.iter.Done
       }
-    let item = self.arr.at<T>(self.idx) : T | null
+    let item = self.arr[self.idx] : T
     self.idx Add= 1 : int
-    match (item : T | null) : T
-      value: T =>
-        value : T
+    return item : T
   }
 }
 class baml.iter.Range {
@@ -1675,39 +1683,39 @@ class baml.iter.Repeat$stream {
   count: int | null
 }
 class baml.iter.Map$stream {
-  source: baml.iter.Iterator<Error = never> | null
+  source: baml.iter.Iterator<Item = T, Error = E> | null
   func: unknown
 }
 class baml.iter.Filter$stream {
-  source: baml.iter.Iterator<Error = never> | null
+  source: baml.iter.Iterator<Item = T, Error = E> | null
   predicate: unknown
 }
 class baml.iter.FilterMap$stream {
-  source: baml.iter.Iterator<Error = never> | null
+  source: baml.iter.Iterator<Item = T, Error = E> | null
   func: unknown
 }
 class baml.iter.FlatMap$stream {
-  source: baml.iter.Iterator<Error = never> | null
+  source: baml.iter.Iterator<Item = T, Error = E> | null
   func: unknown
-  inner: baml.iter.Iterator<Error = never> | baml.iter.Done$stream | null
+  inner: baml.iter.Iterator<Item = R, Error = E3> | baml.iter.Done$stream | null
 }
 class baml.iter.Flatten$stream {
-  source: baml.iter.Iterator<Error = never> | null
-  inner: baml.iter.Iterator<Error = never> | baml.iter.Done$stream | null
+  source: baml.iter.Iterator<Item = I, Error = E> | null
+  inner: baml.iter.Iterator<Item = R, Error = E3> | baml.iter.Done$stream | null
 }
 class baml.iter.Peekable$stream {
-  source: baml.iter.Iterator<Error = never> | null
+  source: baml.iter.Iterator<Item = T, Error = E> | null
   buffer: T | baml.iter.Done$stream | null
   has_buffer: bool | null
 }
 class baml.iter.StepBy$stream {
-  source: baml.iter.Iterator<Error = never> | null
+  source: baml.iter.Iterator<Item = T, Error = E> | null
   n: int | null
   first: bool | null
 }
 class baml.iter.Chain$stream {
-  first: baml.iter.Iterator<Error = never> | null
-  other: baml.iter.Iterator<Error = never> | null
+  first: baml.iter.Iterator<Item = T, Error = E> | null
+  other: baml.iter.Iterator<Item = T, Error = E2> | null
   first_done: bool | null
 }
 
@@ -1735,6 +1743,145 @@ function baml.json.to<T>(j: baml.json.json) -> T throws baml.json.JsonDecodeErro
     root._from_json_shim<T>(j) : T
   }
 }
+class baml.json.JsonPathError {
+  message: string
+  selector: string
+}
+function baml.json._path_field(current: baml.json.json, key: string, selector: string) -> baml.json.json throws baml.json.JsonPathError {
+  { : baml.json.json | null
+    match (current : baml.json.json) : baml.json.json | null
+      m: map<string, baml.json.json> =>
+        { : baml.json.json | null
+          if (Not m.has(key) : bool) : void
+            { : never
+              throw JsonPathError { message: "missing field '" + key + "'", selector: selector } : baml.json.JsonPathError
+            }
+          m.get(key) : baml.json.json | null
+        }
+      _ =>
+        throw JsonPathError { message: "field access '." + key + "' on a non-object", selector: selector } : never
+  }
+}
+function baml.json._path_index(current: baml.json.json, idx: int, selector: string) -> baml.json.json throws baml.json.JsonPathError {
+  { : baml.json.json | null
+    match (current : baml.json.json) : baml.json.json | null
+      arr: baml.json.json[] =>
+        { : baml.json.json | null
+          if (idx < 0 || idx >= arr.length() : bool) : void
+            { : never
+              throw JsonPathError { message: "index [" + idx.to_string() + "] out of bounds (..." + arr.length().to_string() + ")", selector: selector } : baml.json.JsonPathError
+            }
+          arr.at(idx) : baml.json.json | null
+        }
+      _ =>
+        throw JsonPathError { message: "index [" + idx.to_string() + "] on a non-array", selector: selector } : never
+  }
+}
+function baml.json.path<T>(j: baml.json.json, selector: string) -> T throws baml.json.JsonPathError {
+  { : T
+    if (Not selector.starts_with(".") || selector.starts_with("[") : bool) : void
+      { : never
+        throw JsonPathError { message: "selector must sta..." + selector + "'", selector: selector } : baml.json.JsonPathError
+      }
+    let current: baml.json.json = j : baml.json.json -> int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>
+    let i = 0 : 0 -> int
+    while i < selector.length()
+      { : void
+        let marker = selector.substring(i, i + 1) : string
+        if (marker == "." : bool) : void
+          { : never
+            i Add= 1 : int
+            let start = i : int
+            while i < selector.length() && selector.substring(i, i + 1) != "." && selector.substring(i, i + 1) != "["
+              { : void
+                i Add= 1 : int
+              }
+            if (i > start : bool) : void
+              { : void
+                current = _path_field(current, selector.substring(start, i), selector) : baml.json.json
+              }
+            continue
+          }
+        if (marker != "[" : bool) : void
+          { : never
+            throw JsonPathError { message: "expected '.' or '..." + i.to_string(), selector: selector } : baml.json.JsonPathError
+          }
+        i Add= 1 : int
+        if (i >= selector.length() : bool) : void
+          { : never
+            throw JsonPathError { message: "unterminated '[' ...", selector: selector } : baml.json.JsonPathError
+          }
+        let first = selector.substring(i, i + 1) : string
+        if (first == "\"" || first == "'" : bool) : void
+          { : never
+            let quote = first : string
+            i Add= 1 : int
+            let key = "" : "" -> string
+            let closed = false : false -> bool
+            while i < selector.length()
+              { : void
+                let ch = selector.substring(i, i + 1) : string
+                if (ch == "\\" : bool) : void
+                  { : never
+                    if (i + 1 >= selector.length() : bool) : void
+                      { : never
+                        throw JsonPathError { message: "unterminated esca...", selector: selector } : baml.json.JsonPathError
+                      }
+                    key = key + selector.substring(i + 1, i + 2) : string
+                    i Add= 2 : int
+                    continue
+                  }
+                if (ch == quote : bool) : void
+                  { : never
+                    closed = true : true
+                    i Add= 1 : int
+                    break
+                  }
+                key = key + ch : string
+                i Add= 1 : int
+              }
+            if (Not closed || i >= selector.length() || selector.substring(i, i + 1) != "]" : bool) : void
+              { : never
+                throw JsonPathError { message: "unterminated quot...", selector: selector } : baml.json.JsonPathError
+              }
+            i Add= 1 : int
+            current = _path_field(current, key, selector) : baml.json.json
+            continue
+          }
+        let start = i : int
+        while i < selector.length() && selector.substring(i, i + 1) != "]"
+          { : void
+            i Add= 1 : int
+          }
+        if (i >= selector.length() : bool) : void
+          { : never
+            throw JsonPathError { message: "unterminated '[' ...", selector: selector } : baml.json.JsonPathError
+          }
+        let token = selector.substring(start, i) : string
+        i Add= 1 : int
+        let idx = : int
+          catch (int.parse(token) : int) : int
+            catch (_)
+              root.errors.ParseError =>
+                { : never
+                  throw JsonPathError { message: "bad bracket token '[" + token + "]'", selector: selector } : baml.json.JsonPathError
+                }
+        current = _path_index(current, idx, selector) : baml.json.json
+      }
+    catch (to<T>(current) : T) : T
+      catch (_)
+        JsonDecodeError =>
+          throw JsonPathError { message: "leaf does not coe...", selector: selector } : never
+  }
+}
+function baml.json.path_or<T>(j: baml.json.json, selector: string, default: T) -> T throws never {
+  { : T
+    catch (path<T>(j, selector) : T) : T
+      catch (_)
+        JsonPathError =>
+          default : T
+  }
+}
 function baml.json.serialize<T>(v: T) -> string throws baml.json.JsonSerializationError {
   { : string
     stringify(to_json<T>(v)) : string
@@ -1757,6 +1904,10 @@ class baml.json.JsonSerializationError$stream {
   message: string | null
   path: string | null
   reason: string | null
+}
+class baml.json.JsonPathError$stream {
+  message: string | null
+  selector: string | null
 }
 
 --- <builtin>/baml/ns_llm/llm.baml ---
@@ -1835,6 +1986,12 @@ function baml.llm.parse<TStream, TFinal>(json: string) -> TFinal throws baml.err
       catch (_)
         root.errors.LlmClient { message: message } =>
           throw root.errors.ParseError { message: message } : never
+  }
+}
+function baml.llm.__new_stream_cache<TStream, TFinal>() -> baml.llm.StreamCache<TStream, TFinal> throws never {
+  { : baml.llm.StreamCache<TStream, TFinal>
+    let cache: StreamCache<TStream, TFinal> = StreamCache.new(reflect.type_of<TStream>(), reflect.type_of<TFinal>()) : baml.llm.StreamCache<TStream, TFinal>
+    cache : baml.llm.StreamCache<TStream, TFinal>
   }
 }
 function baml.llm.call_llm_function<T>(client: baml.llm.Client, function_name: string, args: map<string, unknown>, prompt_closure: ((baml.llm.Context) -> baml.llm.PromptAst throws never) | null = null) -> T throws never {
@@ -2846,6 +3003,22 @@ class baml.random.ChaCha20$stream {
   _state: $rust_type
 }
 
+--- <builtin>/baml/ns_sap/sap.baml ---
+function baml.sap.parse<T>(text: string) -> T throws baml.errors.LlmClient {
+  { : T
+    let cache = root.llm.__new_stream_cache() : baml.llm.StreamCache<T, T>
+    root.llm.__sap_parse_final<TFinal>(text, cache) : T
+  }
+}
+function baml.sap.parse_type(t: type, text: string) -> unknown throws baml.errors.LlmClient {
+  { : unknown
+    let cache: root.llm.StreamCache<unknown, unknown> = root.llm.StreamCache.new(t, t) : baml.llm.StreamCache<unknown, unknown>
+    root.llm.__sap_parse_final<TFinal>(text, cache) : unknown
+  }
+}
+
+--- <builtin>/baml/ns_schema/schema.baml ---
+
 --- <builtin>/baml/ns_spawn/spawn.baml ---
 class baml.spawn.SpawnParams {
   body: () -> T throws E
@@ -3623,6 +3796,19 @@ class baml.toml.Table$stream {
 }
 class baml.toml.TomlParseError$stream {
   message: string | null
+}
+
+--- <builtin>/baml/ns_ws/ws.baml ---
+class baml.ws.WsStream {
+  _handle: $rust_type
+}
+function baml.ws.connect(url: string, headers: map<string, string>, timeout: baml.time.Duration = root.time.Duration.from_seconds(30)) -> baml.ws.WsStream throws baml.errors.Io | baml.errors.Timeout {
+  { : baml.ws.WsStream
+    _connect(url, headers, timeout.to_nanoseconds()) : baml.ws.WsStream
+  }
+}
+class baml.ws.WsStream$stream {
+  _handle: $rust_type
 }
 
 --- <builtin>/baml/ns_yaml/yaml.baml ---

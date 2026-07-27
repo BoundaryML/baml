@@ -32,7 +32,7 @@ class TestStdlibEntrypoints {
     // Calling it as an entry point should run the native and return a positive
     // millisecond timestamp, not reject with `NotInvokableAsEntry`.
     @Test
-    void test_native_now_ms_callable_as_entry_point() {
+    void test_stdlib_entrypoints_native_now_ms_callable_as_entry_point() {
         assertTrue(baml_sdk.baml.sys.Fns.now_ms() > 0);
     }
 
@@ -41,12 +41,12 @@ class TestStdlibEntrypoints {
     // filesystem sysop and return a bool. `.` exists in the generated fixture
     // directory on the test host.
     @Test
-    void test_sysop_fs_exists_callable_as_entry_point() {
+    void test_stdlib_entrypoints_sysop_fs_exists_callable_as_entry_point() {
         assertTrue(baml_sdk.baml.fs.Fns.exists("."));
     }
 
     @Test
-    void test_compiler_intrinsics_are_not_emitted_as_entry_points() throws IOException {
+    void test_stdlib_entrypoints_compiler_intrinsics_are_not_emitted_as_entry_points() throws IOException {
         // java-port note: Python inspects both the `.py` (wire FQN string
         // literals) and the `.pyi` (stub `def` decls). Java emits a single
         // `Fns.java` per namespace, so each row checks that holder for either

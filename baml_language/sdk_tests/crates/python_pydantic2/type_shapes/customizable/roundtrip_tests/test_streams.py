@@ -30,28 +30,28 @@ from baml_sdk.stream_types.lorem import Resume as StreamResume
 from baml_sdk.stream_types import Foo as StreamFoo
 
 
-def test_round_trip_resume_stream():
+def test_streams_round_trip_resume_stream():
     r = StreamResume(name="ada", email=None)
     assert round_trip_resume_stream(r=r) == r
 
 
-def test_round_trip_root_foo_stream():
+def test_streams_round_trip_root_foo_stream():
     f = StreamFoo(v=3)
     assert round_trip_root_foo_stream(f=f) == f
 
 
-def test_round_trip_box_of_resume_stream():
+def test_streams_round_trip_box_of_resume_stream():
     b = Box(v=StreamResume(name="grace", email=None))
     assert round_trip_box_of_resume_stream(b=b) == b
 
 
-def test_round_trip_resume_or_resume_stream():
+def test_streams_round_trip_resume_or_resume_stream():
     # Union arm `Resume` (the non-stream side) is host-constructible.
     r = Resume(name="hopper", email=None)
     assert round_trip_resume_or_resume_stream(u=r) == r
 
 
-def test_round_trip_resume_or_http_response():
+def test_streams_round_trip_resume_or_http_response():
     # Pass the `Resume` arm; the `baml.http.Response` arm isn't
     # host-constructible.
     r = Resume(name="lovelace", email="a@x.com")

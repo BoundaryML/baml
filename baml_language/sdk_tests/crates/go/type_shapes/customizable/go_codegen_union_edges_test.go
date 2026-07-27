@@ -9,7 +9,7 @@ import (
 	"baml.local/sdk/baml_sdk"
 )
 
-func TestDynamicUnionCandidatesRoundTripAsConcreteGoValues(t *testing.T) {
+func Test_dynamic_union_candidates_round_trip_as_concrete_go_values(t *testing.T) {
 	ctx := context.Background()
 	cases := []any{int64(7), "seven", 7.5, true}
 	for _, want := range cases {
@@ -20,14 +20,14 @@ func TestDynamicUnionCandidatesRoundTripAsConcreteGoValues(t *testing.T) {
 	}
 }
 
-func TestDynamicUnionAcceptsNaturalGoIntegers(t *testing.T) {
+func Test_dynamic_union_accepts_natural_go_integers(t *testing.T) {
 	got, err := baml_sdk.GoCodegenUnionEdgesRoundTripLargeUnion(context.Background(), 7)
 	if err != nil || got != int64(7) {
 		t.Fatalf("got %T(%v), %v", got, got, err)
 	}
 }
 
-func TestDynamicUnionDelegatesSemanticValidationToBAML(t *testing.T) {
+func Test_dynamic_union_delegates_semantic_validation_to_baml(t *testing.T) {
 	_, err := baml_sdk.GoCodegenUnionEdgesRoundTripLargeUnion(context.Background(), []string{"not", "an", "arm"})
 	if err == nil {
 		t.Fatal("expected BAML argument type-mismatch error")
@@ -37,14 +37,14 @@ func TestDynamicUnionDelegatesSemanticValidationToBAML(t *testing.T) {
 	}
 }
 
-func TestDynamicUnionRejectsUnserializableGoValuesInBridge(t *testing.T) {
+func Test_dynamic_union_rejects_unserializable_go_values_in_bridge(t *testing.T) {
 	_, err := baml_sdk.GoCodegenUnionEdgesRoundTripLargeUnion(context.Background(), func() {})
 	if err == nil || !strings.Contains(err.Error(), "unsupported Go value") {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }
 
-func TestDynamicUnionNestedContainersRoundTrip(t *testing.T) {
+func Test_dynamic_union_nested_containers_round_trip(t *testing.T) {
 	values := []any{int64(1), "two", 3.5, false}
 	gotValues, err := baml_sdk.GoCodegenUnionEdgesRoundTripLargeUnionList(context.Background(), values)
 	if err != nil || !reflect.DeepEqual(gotValues, values) {
@@ -62,7 +62,7 @@ func TestDynamicUnionNestedContainersRoundTrip(t *testing.T) {
 	}
 }
 
-func TestDynamicUnionOfContainersUsesSelectedTypeMetadata(t *testing.T) {
+func Test_dynamic_union_of_containers_uses_selected_type_metadata(t *testing.T) {
 	cases := []any{
 		[]int64{},
 		[]string{},
@@ -77,7 +77,7 @@ func TestDynamicUnionOfContainersUsesSelectedTypeMetadata(t *testing.T) {
 	}
 }
 
-func TestUnionAliasesAreTransparentAndFlattenBeforeThresholding(t *testing.T) {
+func Test_union_aliases_are_transparent_and_flatten_before_thresholding(t *testing.T) {
 	ctx := context.Background()
 	small := baml_sdk.NewStringOrIntFromInt(9)
 	gotSmall, err := baml_sdk.GoCodegenUnionEdgesRoundTripSmallAlias(ctx, small)
@@ -102,7 +102,7 @@ func TestUnionAliasesAreTransparentAndFlattenBeforeThresholding(t *testing.T) {
 	}
 }
 
-func TestClosedUnionZeroValueReturnsAnInputError(t *testing.T) {
+func Test_closed_union_zero_value_returns_an_input_error(t *testing.T) {
 	var zero baml_sdk.StringOrInt
 	_, err := baml_sdk.GoCodegenUnionEdgesRoundTripSmallAlias(context.Background(), zero)
 	if err == nil || !strings.Contains(err.Error(), "zero or invalid") {
@@ -110,7 +110,7 @@ func TestClosedUnionZeroValueReturnsAnInputError(t *testing.T) {
 	}
 }
 
-func TestOverlappingListArmsPreserveExactKindForEmptyAndNonemptyValues(t *testing.T) {
+func Test_overlapping_list_arms_preserve_exact_kind_for_empty_and_nonempty_values(t *testing.T) {
 	integer := int64(7)
 	cases := []baml_sdk.IntListOrOptionalIntList{
 		baml_sdk.NewIntListOrOptionalIntListFromIntList([]int64{}),
@@ -133,7 +133,7 @@ func TestOverlappingListArmsPreserveExactKindForEmptyAndNonemptyValues(t *testin
 	}
 }
 
-func TestOverlappingMapArmsPreserveExactKindForEmptyAndNonemptyValues(t *testing.T) {
+func Test_overlapping_map_arms_preserve_exact_kind_for_empty_and_nonempty_values(t *testing.T) {
 	integer := int64(7)
 	cases := []baml_sdk.StringToIntMapOrStringToOptionalIntMap{
 		baml_sdk.NewStringToIntMapOrStringToOptionalIntMapFromStringToIntMap(map[string]int64{}),
@@ -156,7 +156,7 @@ func TestOverlappingMapArmsPreserveExactKindForEmptyAndNonemptyValues(t *testing
 	}
 }
 
-func TestOverlappingLiteralArmsRoundTripWithExactKind(t *testing.T) {
+func Test_overlapping_literal_arms_round_trip_with_exact_kind(t *testing.T) {
 	broad := baml_sdk.NewStringOrStringLiteral5cbcfd2eFromString("ordinary")
 	literal := baml_sdk.NewStringOrStringLiteral5cbcfd2eFromStringLiteral5cbcfd2e()
 	for _, input := range []baml_sdk.StringOrStringLiteral5cbcfd2e{broad, literal} {
@@ -180,7 +180,7 @@ func TestOverlappingLiteralArmsRoundTripWithExactKind(t *testing.T) {
 	}
 }
 
-func TestPrimitiveLiteralUnionConstructorsRoundTripWithExactKindAndValue(t *testing.T) {
+func Test_primitive_literal_union_constructors_round_trip_with_exact_kind_and_value(t *testing.T) {
 	ctx := context.Background()
 
 	minusOne := baml_sdk.NewIntLiteral49b6f42bOrIntLiteral49d0b523FromIntLiteral49b6f42b()

@@ -9,7 +9,7 @@ import Baml
 import BamlBridge
 
 final class TestComplexModels: XCTestCase {
-    func test_round_trip_complex_profile_preserves_deeply_nested_mixed_shape_class() throws {
+    func test_complex_models_round_trip_complex_profile_preserves_deeply_nested_mixed_shape_class() throws {
         typealias M = Baml.complex_models
 
         let home = M.PostalAddress(

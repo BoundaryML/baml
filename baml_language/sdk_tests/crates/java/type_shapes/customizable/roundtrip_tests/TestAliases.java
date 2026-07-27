@@ -27,12 +27,12 @@ import org.junit.jupiter.api.Test;
 class TestAliases {
 
     @Test
-    void test_round_trip_string_list() {
+    void test_aliases_round_trip_string_list() {
         assertEquals(List.of("a", "b"), Fns.round_trip_string_list(List.of("a", "b")));
     }
 
     @Test
-    void test_round_trip_rec_list() {
+    void test_aliases_round_trip_rec_list() {
         // RecList = int | RecList[]
         assertEquals(
                 new RecList.IntValue(1L), Fns.round_trip_rec_list(new RecList.IntValue(1L)));
@@ -49,7 +49,7 @@ class TestAliases {
     }
 
     @Test
-    void test_round_trip_alias_container() {
+    void test_aliases_round_trip_alias_container() {
         AliasContainer c =
                 new AliasContainer(
                         List.of("x"),

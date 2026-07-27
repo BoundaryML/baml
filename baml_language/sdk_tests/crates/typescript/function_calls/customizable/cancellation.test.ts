@@ -65,7 +65,7 @@ function pendingNoArgCallback(): {
 describe(
   "function_calls — explicit runtime cancellation",
   () => {
-    it("surfaces sync pre-aborted cancellation as AbortError", () => {
+    it("cancellation_surfaces_sync_pre_aborted_cancellation_as_abort_error", () => {
       const start = performance.now();
       // True in-flight sync cancellation cannot be scheduled from JS: the sync
       // bridge blocks the Node main thread, so setTimeout/setImmediate and
@@ -91,7 +91,7 @@ describe(
       expectFastCancellation(start);
     });
 
-    it("surfaces async cancellation as AbortError with BAML reason", async () => {
+    it("cancellation_surfaces_async_cancellation_as_abort_error_with_baml_reason", async () => {
       const start = performance.now();
       const ctx = new BamlCallContext();
       const host = pendingIntCallback();
@@ -117,7 +117,7 @@ describe(
       expectFastCancellation(start);
     });
 
-    it("can pre-abort async BAML cancellation", async () => {
+    it("cancellation_can_pre_abort_async_baml_cancellation", async () => {
       const start = performance.now();
       const ctx = new BamlCallContext();
       ctx.abort();
@@ -139,7 +139,7 @@ describe(
       expectFastCancellation(start);
     });
 
-    it("surfaces cancellation through Promise.all", async () => {
+    it("cancellation_surfaces_cancellation_through_promise_all", async () => {
       const start = performance.now();
       const ctx = new BamlCallContext();
       const first = pendingIntCallback();
@@ -176,7 +176,7 @@ describe(
       expectFastCancellation(start);
     });
 
-    it("surfaces a reused call context as AbortError with BAML reason", async () => {
+    it("cancellation_surfaces_a_reused_call_context_as_abort_error_with_baml_reason", async () => {
       const ctx = new BamlCallContext();
       const host = pendingIntCallback();
       const pending = callFunction(
@@ -202,7 +202,7 @@ describe(
 );
 
 describe("function_calls — generated call cancellation", () => {
-  it("cancels an async generated free function", async () => {
+  it("cancellation_cancels_an_async_generated_free_function", async () => {
     const ctx = new BamlCallContext();
     const host = pendingIntCallback();
     const pending = call_with_callback_async(host.callback, 1, { $ctx: ctx });
@@ -211,7 +211,7 @@ describe("function_calls — generated call cancellation", () => {
     await expect(pending).rejects.toBeInstanceOf(BamlAbortError);
   });
 
-  it("cancels an async generated instance method", async () => {
+  it("cancellation_cancels_an_async_generated_instance_method", async () => {
     const ctx = new BamlCallContext();
     const greeter = new Greeter({ name: "cancel-me" });
     const host = pendingNoArgCallback();
@@ -221,13 +221,13 @@ describe("function_calls — generated call cancellation", () => {
     await expect(pending).rejects.toBeInstanceOf(BamlAbortError);
   });
 
-  it("pre-aborts a generated synchronous call", () => {
+  it("cancellation_pre_aborts_a_generated_synchronous_call", () => {
     const ctx = new BamlCallContext();
     ctx.abort();
     expect(() => SleepMs(2000, { $ctx: ctx })).toThrow(BamlAbortError);
   });
 
-  it("detaches a completed call before aborting the remaining call", async () => {
+  it("cancellation_detaches_a_completed_call_before_aborting_the_remaining_call", async () => {
     const ctx = new BamlCallContext();
     await expect(call_with_callback_async((value) => `${value}`, 1, { $ctx: ctx })).resolves.toBe("1");
     const host = pendingIntCallback();
@@ -237,7 +237,7 @@ describe("function_calls — generated call cancellation", () => {
     await expect(pending).rejects.toBeInstanceOf(BamlAbortError);
   });
 
-  it("immediately cancels every call attached after abort", async () => {
+  it("cancellation_immediately_cancels_every_call_attached_after_abort", async () => {
     const ctx = new BamlCallContext();
     ctx.abort();
     await expect(Promise.all([
@@ -249,7 +249,7 @@ describe("function_calls — generated call cancellation", () => {
 });
 
 describe("function_calls — call context ID parser parity", () => {
-  it("accepts the native decimal uint64 boundary spellings", () => {
+  it("cancellation_accepts_the_native_decimal_uint64_boundary_spellings", () => {
     const ctx = new BamlCallContext();
     for (const callId of ["0", "+1", "01", "9007199254740992", "18446744073709551615"]) {
       expect(() => ctx._attachCallId(callId)).not.toThrow();
@@ -257,7 +257,7 @@ describe("function_calls — call context ID parser parity", () => {
     }
   });
 
-  it("rejects malformed and overflowing IDs", () => {
+  it("cancellation_rejects_malformed_and_overflowing_ids", () => {
     const ctx = new BamlCallContext();
     for (const callId of ["", " ", " 1", "1 ", "-0", "1.0", "0x10", "1_000", "+", "18446744073709551616"]) {
       expect(() => ctx._attachCallId(callId)).toThrow(/decimal uint64 string/);

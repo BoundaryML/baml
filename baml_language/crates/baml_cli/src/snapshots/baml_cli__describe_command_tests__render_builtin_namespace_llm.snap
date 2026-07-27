@@ -10,8 +10,9 @@ function         baml.llm.render_prompt           <builtin>/baml/ns_llm/llm.baml
 function         baml.llm.build_request           <builtin>/baml/ns_llm/llm.baml:61
 function         baml.llm.build_request_stream    <builtin>/baml/ns_llm/llm.baml:70
 function         baml.llm.parse                   <builtin>/baml/ns_llm/llm.baml:93
-function         baml.llm.call_llm_function       <builtin>/baml/ns_llm/llm.baml:103
-function         baml.llm.stream_llm_function     <builtin>/baml/ns_llm/llm.baml:127
+function         baml.llm.__new_stream_cache      <builtin>/baml/ns_llm/llm.baml:103
+function         baml.llm.call_llm_function       <builtin>/baml/ns_llm/llm.baml:111
+function         baml.llm.stream_llm_function     <builtin>/baml/ns_llm/llm.baml:135
 class            baml.llm.PromptMessage           <builtin>/baml/ns_llm/llm_types.baml:4
 class            baml.llm.PromptAst               <builtin>/baml/ns_llm/llm_types.baml:19
 class            baml.llm.OutputFormat            <builtin>/baml/ns_llm/llm_types.baml:49

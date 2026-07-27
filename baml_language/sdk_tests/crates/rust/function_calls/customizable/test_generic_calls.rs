@@ -34,7 +34,7 @@ use baml_sdk::generic_tests::{
 // --- identity<T>(x: T) -> T : single TypeVar --------------------------------
 
 #[test]
-fn test_identity_explicit() {
+fn test_generic_calls_identity_explicit() {
     assert_eq!(identity::<i64>(5).unwrap(), 5);
     assert_eq!(identity::<String>("hi".to_string()).unwrap(), "hi");
 
@@ -68,7 +68,7 @@ fn test_identity_explicit() {
 }
 
 #[tokio::test]
-async fn test_identity_async_explicit() {
+async fn test_generic_calls_identity_async_explicit() {
     use baml_sdk::generic_tests::identity_async;
 
     assert_eq!(identity_async::<i64>(7).await.unwrap(), 7);
@@ -77,7 +77,7 @@ async fn test_identity_async_explicit() {
 // --- tag_or_value<T>(x: T | string | null) -> string : TypeVar in a union ---
 
 #[test]
-fn test_tag_or_value_explicit() {
+fn test_generic_calls_tag_or_value_explicit() {
     // `tag_or_value` reflects its bound `T` back as a string; `x` must inhabit
     // the substituted `T | string | null`. Proves `T` is bound from the
     // subscript.
@@ -105,7 +105,7 @@ fn test_tag_or_value_explicit() {
 // --- make_triple<A, B, C>(...) -> GenericTriple<A, B, C> : multiple TypeVars -
 
 #[test]
-fn test_make_triple_explicit() {
+fn test_generic_calls_make_triple_explicit() {
     // A=int, B=str, C=bool, bound positionally by the subscript.
     let t = make_triple::<i64, String, bool>(
         1,
@@ -125,7 +125,7 @@ fn test_make_triple_explicit() {
 // cleanest proof the inbound path does not rely on argument inference.
 
 #[test]
-fn test_one_type_arg_explicit() {
+fn test_generic_calls_one_type_arg_explicit() {
     assert_eq!(one_type_arg::<i64>().unwrap(), "int");
     assert_eq!(one_type_arg::<String>().unwrap(), "string");
     // Nested generic binding must encode fully (base class + concrete arg).
@@ -134,12 +134,12 @@ fn test_one_type_arg_explicit() {
 }
 
 #[test]
-fn test_two_type_args_explicit() {
+fn test_generic_calls_two_type_args_explicit() {
     assert_eq!(two_type_args::<i64, String>().unwrap(), "int | string");
 }
 
 #[test]
-fn test_generic_free_fn_requires_binding() {
+fn test_generic_calls_generic_free_fn_requires_binding() {
     // Inbound-inference is now on, so a bare generic call no longer raises in
     // the SDK. But `one_type_arg<T>()` / `two_type_args<A,B>()` are
     // return/body-only: NO argument carries the TypeVar, so inference finds no
@@ -153,7 +153,7 @@ fn test_generic_free_fn_requires_binding() {
 }
 
 #[test]
-fn test_subscript_wrong_arity_raises() {
+fn test_generic_calls_subscript_wrong_arity_raises() {
     // DIVERGENCE(rust): `two_type_args::<i64>()` — one type argument where two
     // are declared — is a compile error (wrong number of generic arguments,
     // rustc E0107), not a runtime TypeError.
@@ -166,7 +166,7 @@ fn test_subscript_wrong_arity_raises() {
 // --- consume_int_wrapper(x: GenericBox<int>) -> int : fully-bound TypeVar ----
 
 #[test]
-fn test_consume_int_wrapper_baseline() {
+fn test_generic_calls_consume_int_wrapper_baseline() {
     // No binding of any kind: a concretely-instantiated `GenericBox<int>` flows
     // in and the `int` field flows back out. Anchors the suite — if this
     // breaks, the generic *class* boundary regressed independent of TypeVar
@@ -182,7 +182,7 @@ fn test_consume_int_wrapper_baseline() {
 // so there's nothing to subscript — `T` rides on the parameterized receiver.
 
 #[test]
-fn test_genericbox_get_explicit() {
+fn test_generic_calls_genericbox_get_explicit() {
     // `GenericBox[int](...)` carries the type arg; the host recovers it from
     // the receiver and seeds it as the method frame's class-level `T`.
     let b = GenericBox::<i64> { value: 5 };
@@ -192,7 +192,7 @@ fn test_genericbox_get_explicit() {
 // --- GenericBox<T>.pair_with<U>(self, other: U) -> string : class T + method U
 
 #[test]
-fn test_genericbox_pair_with_explicit() {
+fn test_generic_calls_genericbox_pair_with_explicit() {
     // `T` from the `GenericBox[int]` receiver, `U` from the method subscript.
     let b = GenericBox::<i64> { value: 5 };
     assert_eq!(
@@ -206,7 +206,7 @@ fn test_genericbox_pair_with_explicit() {
 // class type args ride along.
 
 #[test]
-fn test_genericbox_new_static_explicit() {
+fn test_generic_calls_genericbox_new_static_explicit() {
     // ADAPTATION(rust): the static's own `V` is a method-level generic,
     // inferred here from the argument. The class turbofish names the impl —
     // BAML follows Rust in that the class params belong on the struct — but
@@ -218,7 +218,7 @@ fn test_genericbox_new_static_explicit() {
 }
 
 #[test]
-fn test_generic_static_infers_binding() {
+fn test_generic_calls_generic_static_infers_binding() {
     // A generic static method's own `V` appears in a parameter (`value: V`),
     // so `V` needs no subscript — rustc infers it from the value.
     // ADAPTATION(rust): the impl's class param must still be named to reach
@@ -234,7 +234,7 @@ fn test_generic_static_infers_binding() {
 // case the named wire exists for (01pt5).
 
 #[test]
-fn test_named_static_distinct_typevar_names() {
+fn test_generic_calls_named_static_distinct_typevar_names() {
     // The static's own TypeVars (`D`, `E`) are turbofished on the method.
     // ADAPTATION(rust): the enclosing class params (`A`, `B`, `C`) must be
     // named to reach the associated function (the turbofish belongs on the
@@ -251,7 +251,7 @@ fn test_named_static_distinct_typevar_names() {
 // receiver must raise (the class TypeVars can't be recovered).
 
 #[test]
-fn test_instance_method_unparameterized_receiver_raises() {
+fn test_generic_calls_instance_method_unparameterized_receiver_raises() {
     // DIVERGENCE(rust): python's `GenericBox(value=5)` (no `[int]`) constructs
     // an un-parameterized receiver whose class type args can't be recovered
     // host-side. A Rust struct literal is always fully typed — the class `T`
@@ -264,7 +264,7 @@ fn test_instance_method_unparameterized_receiver_raises() {
 // Nested generic. Binding-sensitive: body is `reflect.type_of<A|B|C|D>()`.
 
 #[test]
-fn test_extract_explicit() {
+fn test_generic_calls_extract_explicit() {
     let pair = GenericPair::<GenericPair<i64, String>, GenericPair<bool, f64>> {
         first: GenericPair::<i64, String> {
             first: 1,
@@ -288,7 +288,7 @@ fn test_extract_explicit() {
 // --- parse_as<T>(source: string) -> T : return-position-only TypeVar --------
 
 #[test]
-fn test_parse_as_explicit() {
+fn test_generic_calls_parse_as_explicit() {
     // `T` bound by the host via the subscript (Python surface for `$types`).
     let pair = parse_as::<StringIntPair>(r#"{"my_string": "x", "my_int": 3}"#.to_string()).unwrap();
     assert_eq!(
@@ -308,7 +308,7 @@ fn test_parse_as_explicit() {
 // --- second_of<T>(p: GenericPair<int, T>) -> T : partially-bound class param -
 
 #[test]
-fn test_second_of_explicit() {
+fn test_generic_calls_second_of_explicit() {
     assert_eq!(
         second_of::<String>(GenericPair::<i64, String> {
             first: 1,
@@ -331,7 +331,7 @@ fn test_second_of_explicit() {
 // --- list_head<T>(list: GenericRecursive<T>) -> T : recursive generic arg ----
 
 #[test]
-fn test_list_head_explicit() {
+fn test_generic_calls_list_head_explicit() {
     // Provisional: the recursive `next` field is assumed to codegen boxed
     // (`Option<Box<GenericRecursive<T>>>`) — a recursive Rust struct needs the
     // indirection.
@@ -348,7 +348,7 @@ fn test_list_head_explicit() {
 // --- choose<T>(left: T, right: T) -> T : unification across two args ---------
 
 #[test]
-fn test_choose_explicit() {
+fn test_generic_calls_choose_explicit() {
     assert_eq!(choose::<i64>(1, 2).unwrap(), 1);
     assert_eq!(
         choose::<String>("a".to_string(), "b".to_string()).unwrap(),
@@ -359,7 +359,7 @@ fn test_choose_explicit() {
 // --- read_items<T>(shape: ContainerShapes<T>) -> T[] : one T, many fields ----
 
 #[test]
-fn test_read_items_explicit() {
+fn test_generic_calls_read_items_explicit() {
     let container = ContainerShapes::<i64> {
         item: 1,
         items: vec![1, 2, 3],
@@ -380,7 +380,7 @@ fn test_read_items_explicit() {
 // --- wrap<T>(x: T) -> GenericBox<T> : bind `T`, return a generic over it ------
 
 #[test]
-fn test_wrap_explicit() {
+fn test_generic_calls_wrap_explicit() {
     let w = wrap::<i64>(5).unwrap();
     // DIVERGENCE(rust): python's `isinstance(w, GenericBox)` is guaranteed by
     // the static return type.
@@ -412,7 +412,7 @@ fn _type_args<T>(_obj: &T) -> &'static str {
 // --- make_int_box() -> GenericBox<int> : one TypeVar, used once -------------
 
 #[test]
-fn test_make_int_box_reified() {
+fn test_generic_calls_make_int_box_reified() {
     let boxed = make_int_box().unwrap();
     let name = _type_args(&boxed);
     assert!(name.contains("GenericBox") && name.contains("i64"));
@@ -424,7 +424,7 @@ fn test_make_int_box_reified() {
 // optional, union) — the host must decode all of them off one instance.
 
 #[test]
-fn test_make_int_container_reified() {
+fn test_generic_calls_make_int_container_reified() {
     let c = make_int_container().unwrap();
     let name = _type_args(&c);
     assert!(name.contains("ContainerShapes") && name.contains("i64"));
@@ -444,7 +444,7 @@ fn test_make_int_container_reified() {
 // GenericBox out of the outer one's field.
 
 #[test]
-fn test_make_nested_box_reified() {
+fn test_generic_calls_make_nested_box_reified() {
     let outer = make_nested_box().unwrap();
     // The outer box's single type arg is itself the parametrized `GenericBox[int]`.
     let outer_name = _type_args(&outer);
@@ -459,7 +459,7 @@ fn test_make_nested_box_reified() {
 // bool-valued map.
 
 #[test]
-fn test_make_int_str_bool_triple_reified() {
+fn test_generic_calls_make_int_str_bool_triple_reified() {
     let t = make_int_str_bool_triple().unwrap();
     let name = _type_args(&t);
     assert!(

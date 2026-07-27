@@ -8,7 +8,7 @@ import org.junit.jupiter.api.Test;
 
 class TestUnhandledSpawnErrors {
     @Test
-    void unhandled_spawn_error_uses_host_default() throws Exception {
+    void test_unhandled_spawn_error_uses_host_default() throws Exception {
         String javaBin = System.getProperty("java.home") + "/bin/java";
         String classpath = System.getProperty("java.class.path");
         Process process =

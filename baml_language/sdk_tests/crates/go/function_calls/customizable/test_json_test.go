@@ -29,7 +29,7 @@ func (nestedJSONMarshaler) BAMLInput() baml_go.Input {
 	return baml_go.String("must not bypass the JSON codec")
 }
 
-func TestCanonicalJSONRoundTripsAtTopLevelAndThroughAlias(t *testing.T) {
+func Test_canonical_json_round_trips_at_top_level_and_through_alias(t *testing.T) {
 	ctx := context.Background()
 	want := canonicalJSONFixture()
 	for name, call := range map[string]func(context.Context, any) (any, error){
@@ -45,7 +45,7 @@ func TestCanonicalJSONRoundTripsAtTopLevelAndThroughAlias(t *testing.T) {
 	}
 }
 
-func TestCanonicalJSONComposesThroughContainersAndClasses(t *testing.T) {
+func Test_canonical_json_composes_through_containers_and_classes(t *testing.T) {
 	ctx := context.Background()
 	values := []any{nil, canonicalJSONFixture(), []any{}, map[string]any{}}
 	gotList, err := baml_sdk.GoJsonTestsRoundTripJsonList(ctx, values)
@@ -71,7 +71,7 @@ func TestCanonicalJSONComposesThroughContainersAndClasses(t *testing.T) {
 	}
 }
 
-func TestCanonicalJSONDefaultsAndCallbacks(t *testing.T) {
+func Test_canonical_json_defaults_and_callbacks(t *testing.T) {
 	ctx := context.Background()
 	got, err := baml_sdk.GoJsonTestsDefaultJson(ctx)
 	if err != nil || got != nil {
@@ -95,7 +95,7 @@ func TestCanonicalJSONDefaultsAndCallbacks(t *testing.T) {
 	}
 }
 
-func TestCanonicalJSONDynamicUnion(t *testing.T) {
+func Test_canonical_json_dynamic_union(t *testing.T) {
 	ctx := context.Background()
 	for name, want := range map[string]any{
 		"object": canonicalJSONFixture(),
@@ -128,7 +128,7 @@ func TestCanonicalJSONDynamicUnion(t *testing.T) {
 	}
 }
 
-func TestCanonicalJSONClassUnionUsesDeclaredFieldCodecs(t *testing.T) {
+func Test_canonical_json_class_union_uses_declared_field_codecs(t *testing.T) {
 	ctx := context.Background()
 	var typedNilMap map[string]any
 	box := baml_sdk.GoJsonTestsJsonBox{
@@ -179,7 +179,7 @@ func TestCanonicalJSONClassUnionUsesDeclaredFieldCodecs(t *testing.T) {
 	}
 }
 
-func TestCanonicalJSONRejectsExtensionsBeforeDispatch(t *testing.T) {
+func Test_canonical_json_rejects_extensions_before_dispatch(t *testing.T) {
 	ctx := context.Background()
 	invalid := []struct {
 		name  string

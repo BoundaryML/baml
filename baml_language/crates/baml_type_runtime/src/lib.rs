@@ -385,20 +385,32 @@ fn collect(
             let actual_inner = nullable_non_null_part(actual).unwrap_or_else(|| actual.clone());
             collect(&formal_inner, &actual_inner, variance, vars, opts);
         }
-        // Equal-length union ↔ union positional zip. This is only sound when the
-        // formal carries NO *direct* `TypeVar` member: it matches structurally-
-        // parallel unions like `List<T> | int` ↔ `List<int> | int` (the `T` is
-        // nested inside a member, so the residual arm below would not see it).
-        // When the formal HAS a direct `TypeVar` member, positional zip is
-        // unsound — it binds by accidental member ordering (`T | int` ↔
-        // `int | string` would bind `T = int` instead of routing the unmatched
-        // `string` atom to `T`). Defer those to the residual/ambiguity arm below.
+        // Equal-length union ↔ union member pairing, for formals with NO
+        // *direct* `TypeVar` member (a nested one — `List<T> | int` — is what
+        // this arm serves; direct ones defer to the residual/ambiguity arm
+        // below). A union denotes a member *set*, and an actual's spelling
+        // reaches here in whatever order the source or a canonicalization
+        // produced — so each formal member binds against the single actual
+        // member its HEAD corresponds to (same class/interface name, same
+        // structural constructor), never by position: `Opt<T> | Non` must
+        // bind `T := Shape` from `Non | Opt<Shape>` exactly as it does from
+        // `Opt<Shape> | Non`. A formal member with zero correspondents is
+        // unwitnessed by this argument; one with several has no principled
+        // pairing — either way it binds nothing, leaving its vars to other
+        // arguments or the caller's unresolved-type-arg error rather than
+        // guessing by member order.
         (Ty::Union(f_members, _), Ty::Union(a_members, _))
             if f_members.len() == a_members.len()
                 && !f_members.iter().any(|m| matches!(m, Ty::TypeVar(_, _))) =>
         {
-            for (formal_member, actual_member) in f_members.iter().zip(a_members.iter()) {
-                collect(formal_member, actual_member, variance, vars, opts);
+            for formal_member in f_members {
+                let mut correspondents = a_members
+                    .iter()
+                    .filter(|a_member| heads_correspond(formal_member, a_member));
+                if let (Some(actual_member), None) = (correspondents.next(), correspondents.next())
+                {
+                    collect(formal_member, actual_member, variance, vars, opts);
+                }
             }
         }
         // A union formal carrying a `TypeVar` beside concrete members — e.g.
@@ -527,6 +539,26 @@ fn nullable_non_null_part(ty: &Ty) -> Option<Ty> {
         [] => None,
         [single] => Some(single.clone()),
         _ => Some(Ty::Union(non_null, attr.clone())),
+    }
+}
+
+/// Whether a formal union member and an actual union member denote the same
+/// head constructor — the pairing key for order-insensitive union ↔ union
+/// inference. Nominal heads must name the same type; structural heads pair by
+/// constructor alone. Heads `collect` cannot descend into (primitives,
+/// literals, enums, variants — its catch-all no-op) never pair: collecting
+/// them binds nothing, so pairing one would only steal the slot from a
+/// genuine correspondent.
+fn heads_correspond(formal: &Ty, actual: &Ty) -> bool {
+    match (formal, actual) {
+        (Ty::Class(f, ..), Ty::Class(a, ..)) | (Ty::Interface(f, ..), Ty::Interface(a, ..)) => {
+            f == a
+        }
+        (Ty::List(..), Ty::List(..))
+        | (Ty::Map { .. }, Ty::Map { .. })
+        | (Ty::Function { .. }, Ty::Function { .. })
+        | (Ty::Future(..), Ty::Future(..)) => true,
+        _ => false,
     }
 }
 
@@ -795,11 +827,11 @@ mod tests {
     }
 
     #[test]
-    fn equal_len_union_without_direct_typevar_still_zips() {
-        // The equal-length positional-zip arm is preserved for unions whose
-        // TypeVar is *nested* inside a member: `List<T> | int` vs
-        // `List<int> | int` must still bind T = int (the residual arm only sees
-        // direct TypeVar members, so without the zip arm T would stay unbound).
+    fn equal_len_union_nested_typevar_binds_by_head() {
+        // The equal-length union arm serves unions whose TypeVar is *nested*
+        // inside a member: `List<T> | int` vs `List<int> | int` binds T = int
+        // (the residual arm only sees direct TypeVar members, so without this
+        // arm T would stay unbound).
         let list_tv = Ty::List(Box::new(tv("T")), a());
         let list_int = Ty::List(Box::new(int()), a());
         let formal = Ty::Union(vec![list_tv, int()], a());
@@ -807,6 +839,43 @@ mod tests {
         let mut b = FxHashMap::default();
         infer_bindings(&formal, &actual, &mut b);
         assert_eq!(b.get(&param("T")), Some(&int()));
+    }
+
+    fn opt_of(arg: Ty) -> Ty {
+        Ty::Class(baml_type::TypeName::local(Name::new("Opt")), vec![arg], a())
+    }
+
+    fn non() -> Ty {
+        Ty::Class(baml_type::TypeName::local(Name::new("Non")), vec![], a())
+    }
+
+    #[test]
+    fn union_members_pair_by_head_not_position() {
+        // A union denotes a member SET: `Opt<T> | Non` must bind T from a
+        // reordered actual spelling exactly as from the declaration-ordered
+        // one. Positional zip paired `Opt<T>` with `Non` and bound nothing —
+        // the R15 order-sensitivity a canonically sorted binding type exposed.
+        let formal = Ty::Union(vec![opt_of(tv("T")), non()], a());
+        let reordered = Ty::Union(vec![non(), opt_of(int())], a());
+        let mut b = FxHashMap::default();
+        infer_bindings(&formal, &reordered, &mut b);
+        assert_eq!(b.get(&param("T")), Some(&int()));
+
+        let declared = Ty::Union(vec![opt_of(int()), non()], a());
+        let mut b2 = FxHashMap::default();
+        infer_bindings(&formal, &declared, &mut b2);
+        assert_eq!(b2.get(&param("T")), Some(&int()));
+    }
+
+    #[test]
+    fn union_member_with_ambiguous_head_correspondent_binds_nothing() {
+        // Two same-head actual members have no principled pairing for one
+        // formal member — bind nothing rather than guess by order.
+        let formal = Ty::Union(vec![opt_of(tv("T")), non()], a());
+        let actual = Ty::Union(vec![opt_of(int()), opt_of(string())], a());
+        let mut b = FxHashMap::default();
+        infer_bindings(&formal, &actual, &mut b);
+        assert!(!b.contains_key(&param("T")));
     }
 
     #[test]

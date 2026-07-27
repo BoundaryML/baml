@@ -358,14 +358,14 @@ function iter_impl_generics_only.core.Flatten.Iterator<R, E | E3>.next(self: ite
 function iter_impl_generics_only.core.Iterator.chain(self: iter_impl_generics_only.core.Iterator<T, E>, other: iter_impl_generics_only.core.Iterator<T, E>) -> iter_impl_generics_only.core.Iterator<T, E> {
     load_var2 1 2
     load_const false
-    load_type #0
     load_type #1
+    load_type #2
     init_instance<2> user.iter_impl_generics_only.core.Chain .iter, .other, .first_done
     return
 }
 
 function iter_impl_generics_only.core.Iterator.collect(self: iter_impl_generics_only.core.Iterator<T, E>) -> T[] {
-    load_type #0
+    load_type #1
     alloc_array 0
     store_var r
 
@@ -373,7 +373,7 @@ function iter_impl_generics_only.core.Iterator.collect(self: iter_impl_generics_
     load_const true
     pop_jump_if_false L2
     load_var self
-    load_type iter_impl_generics_only.core.Iterator<#0, #1>
+    load_type iter_impl_generics_only.core.Iterator<#1, #2>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
     store_var _4
@@ -401,7 +401,7 @@ function iter_impl_generics_only.core.Iterator.count(self: iter_impl_generics_on
     load_const true
     pop_jump_if_false L2
     load_var self
-    load_type iter_impl_generics_only.core.Iterator<#0, #1>
+    load_type iter_impl_generics_only.core.Iterator<#1, #2>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
     store_var _3
@@ -427,7 +427,7 @@ function iter_impl_generics_only.core.Iterator.every(self: iter_impl_generics_on
     load_const true
     pop_jump_if_false L2
     load_var self
-    load_type iter_impl_generics_only.core.Iterator<#0, #1>
+    load_type iter_impl_generics_only.core.Iterator<#1, #2>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
     store_var _3
@@ -453,19 +453,19 @@ function iter_impl_generics_only.core.Iterator.every(self: iter_impl_generics_on
 
 function iter_impl_generics_only.core.Iterator.filter(self: iter_impl_generics_only.core.Iterator<T, E>, predicate: (T) -> bool throws E2) -> iter_impl_generics_only.core.Iterator<T, E | E2> {
     load_var2 1 2
-    load_type #0
     load_type #1
     load_type #2
+    load_type #3
     init_instance<3> user.iter_impl_generics_only.core.Filter .iter, .predicate
     return
 }
 
 function iter_impl_generics_only.core.Iterator.filter_map(self: iter_impl_generics_only.core.Iterator<T, E>, fn: (T) -> R | null throws E2) -> iter_impl_generics_only.core.Iterator<R, E | E2> {
     load_var2 1 2
-    load_type #0
-    load_type #2
     load_type #1
     load_type #3
+    load_type #2
+    load_type #4
     init_instance<4> user.iter_impl_generics_only.core.FilterMap .iter, .func
     return
 }
@@ -475,7 +475,7 @@ function iter_impl_generics_only.core.Iterator.find(self: iter_impl_generics_onl
     load_const true
     pop_jump_if_false L2
     load_var self
-    load_type iter_impl_generics_only.core.Iterator<#0, #1>
+    load_type iter_impl_generics_only.core.Iterator<#1, #2>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
     store_var _3
@@ -503,21 +503,21 @@ function iter_impl_generics_only.core.Iterator.find(self: iter_impl_generics_onl
 function iter_impl_generics_only.core.Iterator.flat_map(self: iter_impl_generics_only.core.Iterator<T, E>, fn: (T) -> iter_impl_generics_only.core.Iterable<R, E3> throws E2) -> iter_impl_generics_only.core.Iterator<R, E | E2 | E3> {
     load_var2 1 2
     alloc_instance user.iter_impl_generics_only.core.Done
-    load_type #0
-    load_type #2
     load_type #1
     load_type #3
+    load_type #2
     load_type #4
+    load_type #5
     init_instance<5> user.iter_impl_generics_only.core.FlatMap .iter, .func, .inner
     return
 }
 
 function iter_impl_generics_only.core.Iterator.map(self: iter_impl_generics_only.core.Iterator<T, E>, fn: (T) -> R throws E2) -> iter_impl_generics_only.core.Iterator<R, E | E2> {
     load_var2 1 2
-    load_type #0
-    load_type #2
     load_type #1
     load_type #3
+    load_type #2
+    load_type #4
     init_instance<4> user.iter_impl_generics_only.core.Map .iter, .func
     return
 }
@@ -526,8 +526,8 @@ function iter_impl_generics_only.core.Iterator.peekable(self: iter_impl_generics
     load_var self
     alloc_instance user.iter_impl_generics_only.core.Done
     load_const false
-    load_type #0
     load_type #1
+    load_type #2
     init_instance<2> user.iter_impl_generics_only.core.Peekable .iter, .buffer, .has_buffer
     return
 }
@@ -540,7 +540,7 @@ function iter_impl_generics_only.core.Iterator.reduce(self: iter_impl_generics_o
     load_const true
     pop_jump_if_false L2
     load_var self
-    load_type iter_impl_generics_only.core.Iterator<#0, #1>
+    load_type iter_impl_generics_only.core.Iterator<#1, #2>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
     store_var _5
@@ -566,7 +566,7 @@ function iter_impl_generics_only.core.Iterator.some(self: iter_impl_generics_onl
     load_const true
     pop_jump_if_false L2
     load_var self
-    load_type iter_impl_generics_only.core.Iterator<#0, #1>
+    load_type iter_impl_generics_only.core.Iterator<#1, #2>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
     store_var _3
@@ -592,8 +592,8 @@ function iter_impl_generics_only.core.Iterator.some(self: iter_impl_generics_onl
 function iter_impl_generics_only.core.Iterator.step_by(self: iter_impl_generics_only.core.Iterator<T, E>, n: int) -> iter_impl_generics_only.core.Iterator<T, E> {
     load_var2 1 2
     load_const true
-    load_type #0
     load_type #1
+    load_type #2
     init_instance<2> user.iter_impl_generics_only.core.StepBy .iter, .n, .first
     return
 }

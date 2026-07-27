@@ -496,9 +496,43 @@ fn simulate_terminator_stack(
             }
             sim.pop_n(1)
         }
-        Terminator::Switch { discriminant, .. } => {
-            // All switch strategies pull the discriminant first; that's the carried-use point.
-            simulate_operand_pull_stack(discriminant, sim, carried_local, classifications, def_use)
+        Terminator::Switch {
+            discriminant,
+            arms,
+            exhaustive,
+            ..
+        } => {
+            // Simulate the discriminant pull once per pull the chosen emission
+            // strategy actually emits (`switch_discriminant_pulls` is derived
+            // from the same `SwitchStrategy` the emitter dispatches on, so
+            // this simulation and the emitters cannot drift apart). The
+            // single-pull strategies consume the carried value exactly once —
+            // the carried-use point. The if-else chain re-loads the
+            // discriminant per comparison: its second simulated pull finds the
+            // carried value already consumed (`sim.used`) — including when the
+            // carry is reached through a Virtual chain such as
+            // `discriminant(call_result)` — and rejects the candidate, because
+            // the emitted pulls 2..N would pop unrelated stack slots (a crash
+            // when the popped value is type-incompatible, a SILENT wrong arm
+            // when it is compatible). The chain's no-comparison forms (no
+            // arms; a single exhaustive arm) pull zero times, so the carried
+            // value is never consumed and the region-end `sim.used` check
+            // rejects — it would be orphaned on the operand stack. A rejected
+            // discriminant takes its regular slot, which every strategy
+            // re-loads correctly.
+            let pulls = crate::emit::switch_discriminant_pulls(arms, *exhaustive);
+            for _ in 0..pulls {
+                if !simulate_operand_pull_stack(
+                    discriminant,
+                    sim,
+                    carried_local,
+                    classifications,
+                    def_use,
+                ) {
+                    return false;
+                }
+            }
+            true
         }
         Terminator::Return => {
             let mut sink = StackCarryPullSink {
@@ -1365,6 +1399,15 @@ impl PullSink for StackCarryPullSink<'_> {
 
     fn is_type(&mut self, _ty: &baml_type::TyTemplate) -> Result<(), Self::Error> {
         // Emitter consumes operand and pushes boolean result.
+        if !self.sim.pop_n(1) {
+            return Err(());
+        }
+        self.sim.push();
+        Ok(())
+    }
+
+    fn is_type_tag(&mut self, _tag: i64) -> Result<(), Self::Error> {
+        // Same stack shape as `is_type`: consume the operand, push the bool.
         if !self.sim.pop_n(1) {
             return Err(());
         }

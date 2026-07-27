@@ -15,11 +15,11 @@ import { Stream$stream } from "./baml_sdk/baml/llm/index.js";
 import { describe, expect, it } from "vitest";
 
 describe("generated SDK typemap", () => {
-  it("is installed during root-module evaluation", () => {
+  it("typemap_is_installed_during_root_module_evaluation", () => {
     expect(getTypeMap().getClass("user.lorem.Resume")).toBe(Resume);
   });
 
-  it("resolves every runtime-owned base to one bridge constructor identity", () => {
+  it("typemap_resolves_every_runtime_owned_base_to_one_bridge_constructor_identity", () => {
     const cases = [
       ["baml.media.Image", generatedSdk.baml.media.Image, BamlImage],
       ["baml.media.Audio", generatedSdk.baml.media.Audio, BamlAudio],
@@ -34,7 +34,7 @@ describe("generated SDK typemap", () => {
     }
   });
 
-  it("preserves user, enum, generic, and companion mappings", () => {
+  it("typemap_preserves_user_enum_generic_and_companion_mappings", () => {
     expect(getTypeMap().getClass("user.lorem.Resume")).toBe(Resume);
     expect(getTypeMap().jsTypeToBamlType(Resume)).toBe("user.lorem.Resume");
     expect(getTypeMap().getEnum("user.enums.Sentiment")).toBe(Sentiment);
@@ -43,7 +43,7 @@ describe("generated SDK typemap", () => {
     expect(getTypeMap().getClass("user.lorem.Resume$stream")).toBe(Resume$stream);
   });
 
-  it("keeps generated stream companions distinct from runtime-owned bases", () => {
+  it("typemap_keeps_generated_stream_companions_distinct_from_runtime_owned_bases", () => {
     for (const [fqn, companion, base] of [
       ["baml.media.Image$stream", Image$stream, BamlImage],
       ["baml.media.Audio$stream", Audio$stream, BamlAudio],

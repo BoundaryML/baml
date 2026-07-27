@@ -14,7 +14,7 @@ use baml_sdk::complex_models::{
 };
 
 #[test]
-fn test_round_trip_complex_profile_preserves_deeply_nested_mixed_shape_class() {
+fn test_complex_models_round_trip_complex_profile_preserves_deeply_nested_mixed_shape_class() {
     let home = PostalAddress {
         line1: "1 Compiler Way".to_string(),
         line2: None,

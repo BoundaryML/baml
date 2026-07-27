@@ -31,13 +31,13 @@ class TestForwardRefs {
             Fns::round_trip_node;
 
     @Test
-    void test_round_trip_other() {
+    void test_forward_refs_round_trip_other() {
         Other o = new Other(7L);
         assertEquals(o, Fns.round_trip_other(o));
     }
 
     @Test
-    void test_round_trip_rec_list() {
+    void test_forward_refs_round_trip_rec_list() {
         RecList r =
                 new RecList.RecListListValue(
                         List.of(
@@ -50,7 +50,7 @@ class TestForwardRefs {
     }
 
     @Test
-    void test_round_trip_rec_list_with_other() {
+    void test_forward_refs_round_trip_rec_list_with_other() {
         // RecListWithOther = int | Other | RecListWithOther[]
         assertEquals(
                 new RecListWithOther.IntValue(1L),
@@ -65,7 +65,7 @@ class TestForwardRefs {
     }
 
     @Test
-    void test_round_trip_g_node_int() {
+    void test_forward_refs_round_trip_g_node_int() {
         // The leaf node carries `children=[]`; this exercises the empty-list
         // round trip fixed under Bug A (35b). See TestGenerics.java for the
         // java-port note on the `new GNode<Long>(...)` generic-constructor

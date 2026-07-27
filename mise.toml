@@ -44,6 +44,7 @@ protoc = "27.1"
 "npm:@infisical/cli" = "latest"
 
 actionlint = "latest"
+ast-grep = "0.44.1"
 
 [tasks.pr-unresolved]
 run = "./scripts/pr-unresolved"

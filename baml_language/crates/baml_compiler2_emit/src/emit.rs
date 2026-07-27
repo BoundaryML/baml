@@ -123,6 +123,30 @@ fn analyze_switch(arms: &[(i64, BlockId)]) -> SwitchStrategy {
     }
 }
 
+/// Number of times the emission strategy chosen by [`analyze_switch`] pulls
+/// the discriminant operand. Derived from the same `SwitchStrategy` value the
+/// emitter dispatches on, so the stack-carry simulation (`stack_carry`) and
+/// the emitters cannot disagree about pull counts:
+///
+/// - `JumpTable` / `PerfectHash` / `BinarySearch` pull exactly once
+///   (`BinarySearch` keeps the value on the stack via `Copy` thereafter);
+/// - `IfElseChain` re-loads the discriminant once per emitted comparison —
+///   `arms.len()` minus the exhaustive-final elision — including ZERO pulls
+///   for its no-comparison forms (no arms; a single exhaustive arm).
+///
+/// A stack-carried discriminant is only sound at exactly one pull: the carried
+/// value is consumed by the first pull, so later pulls would pop unrelated
+/// stack slots and a zero-pull form would orphan it (see `stack_carry`'s
+/// `Terminator::Switch` arm, the sole consumer).
+pub(crate) fn switch_discriminant_pulls(arms: &[(i64, BlockId)], exhaustive: bool) -> usize {
+    match analyze_switch(arms) {
+        SwitchStrategy::JumpTable { .. }
+        | SwitchStrategy::PerfectHash(_)
+        | SwitchStrategy::BinarySearch => 1,
+        SwitchStrategy::IfElseChain => arms.len().saturating_sub(usize::from(exhaustive)),
+    }
+}
+
 /// Result of a successful perfect hash search.
 #[derive(Debug)]
 struct PerfectHashResult {
@@ -788,6 +812,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                 self.place_reads_spawn_captured_local(place, seen)
             }
             Rvalue::IsType { operand, .. }
+            | Rvalue::IsTypeTag { operand, .. }
             | Rvalue::MakeBoundMethod {
                 receiver: operand, ..
             }
@@ -3308,15 +3333,12 @@ impl PullSink for StackifyCodegen<'_, '_> {
             let inst = this.emit(Instruction::IsType(c));
             this.set_operand(inst, OperandMeta::Const(template.to_string()));
         };
-        // A template position is a match-any hole (`_`) when it is a bare
-        // `Wildcard` — the only leaf that matches any type at its slot.
-        let is_match_any = |t: &TyTemplate| matches!(t, TyTemplate::Wildcard);
-
         match ty_template {
             // ── Class check ──────────────────────────────────────────────────
             // Every class (monomorphic `Foo`, concrete `Foo<int>`, or generic
             // `Foo<T>`) is a `Class` template. Non-empty args → `ClassWithTypeArgs`
-            // so the VM compares each arg; empty args → class-pointer identity.
+            // so the VM compares each arg invariantly; empty args →
+            // class-pointer identity.
             TyTemplate::Class(tn, type_args_templates, _) => {
                 let class_name_str = tn.display_name();
                 let Some(class_obj_idx) = self.class_object_index_for_type_name(tn) else {
@@ -3338,42 +3360,23 @@ impl PullSink for StackifyCodegen<'_, '_> {
                 }
             }
 
-            // ── Containers ───────────────────────────────────────────────────
-            // A list/map whose element positions are all match-any holes is
-            // exactly the coarse "any list" / "any map" check, so the cheap type
-            // tag suffices — and this preserves an erased `T[]` / `_[]` pattern's
-            // "any list" semantics. When an element carries a discriminating type
-            // the tag would conflate `int[]` with `string[]`, so route the whole
-            // template through the structural matcher instead.
-            TyTemplate::List(elem, _) if is_match_any(elem) => {
-                let c = self.add_constant(ConstValue::Int(baml_type::typetag::LIST));
-                let inst = self.emit(Instruction::IsType(c));
-                self.set_operand(inst, OperandMeta::Const(ty_template.to_string()));
-            }
-            TyTemplate::Map { key, value, .. } if is_match_any(key) && is_match_any(value) => {
-                let c = self.add_constant(ConstValue::Int(baml_type::typetag::MAP));
-                let inst = self.emit(Instruction::IsType(c));
-                self.set_operand(inst, OperandMeta::Const(ty_template.to_string()));
-            }
-
             // ── Structural (value matcher) ───────────────────────────────────
-            // Element/key/value discriminates, a bare frame reference (`T`,
-            // `T[]`), an interface existential (membership resolved at runtime
-            // against the impl registry — never a compile-time implementor
-            // enumeration), or a union that may carry any of these: the VM value
-            // matcher. The deprecated `TypeArgRefOrWildcard` is no longer
-            // produced (typevars now lower to `TypeArgRef`), but is still routed
-            // here defensively — `substitute` resolves it to the same frame slot
-            // as `TypeArgRef`.
-            #[expect(
-                deprecated,
-                reason = "TypeArgRefOrWildcard is a still-defined (unemitted) template variant until type erasure is removed"
-            )]
+            // A container (element/key/value may discriminate — a coarse tag
+            // would conflate `int[]` with `string[]`; the proven-sufficient
+            // coarse test is its own `is_type_tag` sink), a bare frame
+            // reference (`T`), an interface existential (membership resolved at
+            // runtime against the impl registry — never a compile-time
+            // implementor enumeration), an associated projection over a frame
+            // base (`(#0 as Holder).Item` — `substitute` reduces it through
+            // the registry at test time, which is total: every baked rule
+            // carries a binding for every declared member, pinned or
+            // defaulted), or a union that may carry any of these: the VM
+            // value matcher.
             TyTemplate::List(..)
             | TyTemplate::Map { .. }
             | TyTemplate::TypeArgRef(_)
-            | TyTemplate::TypeArgRefOrWildcard(_)
             | TyTemplate::Interface(..)
+            | TyTemplate::AssociatedTypeProjection { .. }
             | TyTemplate::Union(..) => emit_structural(self, ty_template),
 
             // ── Function signatures ──────────────────────────────────────────
@@ -3396,20 +3399,14 @@ impl PullSink for StackifyCodegen<'_, '_> {
                 self.set_operand(inst, OperandMeta::Const(ty_template.to_string()));
             }
 
-            // A bare wildcard is the erased/unrepresentable fallback — an
-            // unresolved `Self` or associated projection lowered to a hole. Keep
-            // it constant-false rather than over-matching every value; faithful
-            // `Self` and projection lowering land in later units.
-            TyTemplate::Wildcard => emit_false(self),
-
             // Everything else keeps its existing coarse check.
             other => {
                 // A fully-realized leaf (primitive, enum, alias, literal, …):
                 // class-pointer identity for a `TypeAlias`, otherwise its type
-                // tag. The only non-realized template reaching here is an
-                // associated projection, which has no representable check yet
-                // (a value's concrete type carries no unresolved projection to
-                // unify with).
+                // tag. Every non-realized template kind has its own arm above,
+                // so the narrowing below succeeds for everything that reaches
+                // here; the `emit_false` fallbacks guard absent objects and
+                // tagless leaves, not template residue.
                 if let Ok(realized) = <&RealizedTy>::try_from(other) {
                     if let RealizedTy::TypeAlias(tn, _) = realized {
                         if let Some(class_obj_idx) = self.class_object_index_for_type_name(tn) {
@@ -3453,6 +3450,23 @@ impl PullSink for StackifyCodegen<'_, '_> {
                 }
             }
         }
+        Ok(())
+    }
+
+    fn is_type_tag(&mut self, tag: i64) -> Result<(), Self::Error> {
+        // The proven coarse-tag test: identical `IsType`-against-`Int` bytecode
+        // to the tag checks `is_type` emits for realized leaves. The operand
+        // meta reproduces the strings the wildcarded container templates used
+        // to render (`_[]` / `map<_, _>`) so bytecode display stays stable
+        // across the `IsTypeTag` re-home; other tags have no MIR producer.
+        let c = self.add_constant(ConstValue::Int(tag));
+        let inst = self.emit(Instruction::IsType(c));
+        let meta = match tag {
+            baml_type::typetag::LIST => "_[]".to_string(),
+            baml_type::typetag::MAP => "map<_, _>".to_string(),
+            other => format!("type tag {other}"),
+        };
+        self.set_operand(inst, OperandMeta::Const(meta));
         Ok(())
     }
 
@@ -3718,6 +3732,37 @@ mod tests {
                 )),
             "expected branch bytecode to load the condition before PopJumpIfFalse, got: {:?}",
             function.bytecode.instructions
+        );
+    }
+
+    /// Pin `switch_discriminant_pulls` to each strategy's emitted pull count —
+    /// the contract the stack-carry simulation rejects candidates against. A
+    /// drift here (a strategy pulling more or less than reported) recreates
+    /// the stray-pop miscompile: pulls 2..N of an if-else chain popping
+    /// unrelated stack slots under a stack-carried discriminant.
+    #[test]
+    fn switch_discriminant_pull_counts_per_strategy() {
+        use super::switch_discriminant_pulls;
+        let arms = |values: &[i64]| -> Vec<(i64, BlockId)> {
+            values.iter().map(|&v| (v, BlockId(0))).collect()
+        };
+
+        // If-else chain (< 4 arms): one pull per emitted comparison; the
+        // exhaustive final arm is elided, and its no-comparison forms (no
+        // arms; a single exhaustive arm) pull zero times.
+        assert_eq!(switch_discriminant_pulls(&arms(&[0, 1, 2]), false), 3);
+        assert_eq!(switch_discriminant_pulls(&arms(&[0, 1, 2]), true), 2);
+        assert_eq!(switch_discriminant_pulls(&arms(&[0, 1]), true), 1);
+        assert_eq!(switch_discriminant_pulls(&arms(&[0]), true), 0);
+        assert_eq!(switch_discriminant_pulls(&arms(&[]), false), 0);
+        assert_eq!(switch_discriminant_pulls(&arms(&[]), true), 0);
+
+        // Dense 4+ arms: jump table, single pull.
+        assert_eq!(switch_discriminant_pulls(&arms(&[0, 1, 2, 3]), false), 1);
+        // Sparse 4+ arms: perfect hash (or binary search), single pull either way.
+        assert_eq!(
+            switch_discriminant_pulls(&arms(&[10, 2000, 300_000, 40_000_000]), false),
+            1
         );
     }
 }

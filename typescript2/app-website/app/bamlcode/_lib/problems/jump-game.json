@@ -1,0 +1,18 @@
+{
+  "slug": "jump-game",
+  "id": 55,
+  "title": "Jump Game",
+  "difficulty": "Medium",
+  "category": "Greedy",
+  "statement": "You are given an integer array `nums`. You start at the first index, and each element represents your **maximum jump length** from that position. Return `true` if you can reach the last index, otherwise `false`.\n\n**Example**\n\n```\nnums = [2, 3, 1, 1, 4]  => true\nnums = [3, 2, 1, 0, 4]  => false\n```",
+  "signature": "function CanJump(nums: int[]) -> bool",
+  "starter": "function CanJump(nums: int[]) -> bool {\n  // Return true if the last index is reachable.\n  return false;\n}",
+  "solution": "function CanJump(nums: int[]) -> bool {\n  let reach = 0;\n  let i = 0;\n  let n = nums.length();\n  while (i < n) {\n    if (i > reach) {\n      return false;\n    }\n    let far = i + nums[i];\n    if (far > reach) {\n      reach = far;\n    }\n    i += 1;\n  }\n  return true;\n}",
+  "tests": [
+    { "call": "CanJump([2, 3, 1, 1, 4])", "expected": "true" },
+    { "call": "CanJump([3, 2, 1, 0, 4])", "expected": "false" },
+    { "call": "CanJump([0])", "expected": "true" },
+    { "call": "CanJump([2, 0, 0])", "expected": "true", "hidden": true },
+    { "call": "CanJump([1, 0, 1, 0])", "expected": "false", "hidden": true }
+  ]
+}

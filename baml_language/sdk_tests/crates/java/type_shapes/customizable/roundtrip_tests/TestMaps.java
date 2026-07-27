@@ -27,25 +27,25 @@ import org.junit.jupiter.api.Test;
 class TestMaps {
 
     @Test
-    void test_round_trip_simple_map() {
+    void test_maps_round_trip_simple_map() {
         assertEquals(
                 Map.of("a", 1L, "b", 2L), Fns.round_trip_simple_map(Map.of("a", 1L, "b", 2L)));
     }
 
     @Test
-    void test_round_trip_list_valued_map() {
+    void test_maps_round_trip_list_valued_map() {
         assertEquals(
                 Map.of("k", List.of(1L, 2L)),
                 Fns.round_trip_list_valued_map(Map.of("k", List.of(1L, 2L))));
     }
 
     @Test
-    void test_round_trip_sentiment() {
+    void test_maps_round_trip_sentiment() {
         assertEquals(Sentiment.Positive, Fns.round_trip_sentiment(Sentiment.Positive));
     }
 
     @Test
-    void test_round_trip_resume() {
+    void test_maps_round_trip_resume() {
         Resume r = new Resume("n");
         assertEquals(r, Fns.round_trip_resume(r));
     }

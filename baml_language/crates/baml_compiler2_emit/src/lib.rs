@@ -288,6 +288,15 @@ fn build_interface_def(
 /// selection) to dispatch an interface method — operator overloading today;
 /// reflection once unified. Built from the item tree in two parts: (a)
 /// out-of-body `implements_for` blocks; (b) methods folded onto a class.
+/// An interface's generic parameter names paired with its declared
+/// associated-type members in order, each with its lowered default (if any) —
+/// the [`build_packages`] prepass entry per assoc-carrying interface.
+type IfaceAssocDecls = (
+    ParamTy,
+    Vec<ParamTy>,
+    Vec<(Name, Option<baml_compiler2_tir::ty::Ty>)>,
+);
+
 fn build_packages(
     db: &dyn baml_compiler2_mir::Db,
     all_files: &[baml_base::SourceFile],
@@ -369,29 +378,56 @@ fn build_packages(
         baml_type::TypeName,
         indexmap::IndexMap<Name, String>,
     > = indexmap::IndexMap::new();
-    // Per interface (with defaults), its declared associated-type names *in order*.
-    // An inherited default is compiled against the interface's frame, so its
-    // type-arg layout is `[Self ++ interface generic args ++ associated types]`, the assoc
-    // ordered by this declaration order (matching the closed-world switch's
-    // `interface_assoc_frame_tys`). Used to build each default method's frame.
-    let mut iface_assoc_order: indexmap::IndexMap<baml_type::TypeName, Vec<Name>> =
+    // Per interface, its generic parameter names and its declared
+    // associated-type members *in order*, each with its default (lowered once
+    // with symbolic `Self` by the shared query) where one is declared. Rule
+    // construction bakes the default into every impl that leaves the member
+    // unpinned, so the registry answers every declared member identically —
+    // pinned or defaulted — and an inherited default's frame layout
+    // (`[Self ++ interface generic args ++ associated types]`, matching MIR's
+    // `enclosing_generic_params` for interface-owned bodies) carries a real
+    // binding in every slot.
+    let mut iface_assoc_decls: indexmap::IndexMap<baml_type::TypeName, IfaceAssocDecls> =
         indexmap::IndexMap::new();
     for file in all_files {
         for &iface_loc in file_interfaces(db, *file) {
             let iface_data = interface_data(db, iface_loc);
+            let iface_tn = qualify_def(db, Definition::Interface(iface_loc), &iface_data.name);
+            if !iface_data.associated_types.is_empty() {
+                iface_assoc_decls
+                    .entry(iface_tn.clone())
+                    .or_insert_with(|| {
+                        let frame_params =
+                            baml_compiler2_tir::interface_generic_params(db, iface_loc);
+                        let self_param = frame_params
+                            .first()
+                            .expect("interface frame starts with Self")
+                            .clone();
+                        (
+                            self_param,
+                            baml_compiler2_tir::interface_declared_generic_params(db, iface_loc),
+                            iface_data
+                                .associated_types
+                                .iter()
+                                .map(|assoc| {
+                                    (
+                                        assoc.name.clone(),
+                                        baml_compiler2_tir::interfaces::
+                                            interface_associated_type_default(
+                                                db,
+                                                iface_loc,
+                                                assoc.name.clone(),
+                                            )
+                                            .map(|(ty, _decl_site_diags)| ty),
+                                    )
+                                })
+                                .collect(),
+                        )
+                    });
+            }
             if iface_data.default_methods.is_empty() {
                 continue;
             }
-            let iface_tn = qualify_def(db, Definition::Interface(iface_loc), &iface_data.name);
-            iface_assoc_order
-                .entry(iface_tn.clone())
-                .or_insert_with(|| {
-                    iface_data
-                        .associated_types
-                        .iter()
-                        .map(|assoc| assoc.name.clone())
-                        .collect()
-                });
             let entry = iface_defaults.entry(iface_tn).or_default();
             for &m in &iface_data.default_methods {
                 entry.insert(
@@ -402,31 +438,31 @@ fn build_packages(
         }
     }
     // The frame an inherited default of `iface_tn` is invoked with, for a rule
-    // implementing it at `interface_args` / `interface_assoc`: the interface's
-    // concrete `Self`, generic args, and associated types in declared order
-    // (templates over the impl's generics).
+    // implementing it at `for_ty_pattern` / `interface_args` / `interface_assoc`:
+    // the implementor type (`Self`) at slot 0, then the interface's generic args,
+    // then its associated types in declared order (all templates over the impl's
+    // generics). `realize_frame` substitutes the rule's bound args — recovered by
+    // matching `for_ty_pattern` against the receiver's concrete type — so slot 0
+    // realizes to exactly that concrete type. A non-generic interface with no
+    // associated types (`Equals`/`Compare`) yields just the `Self` slot.
     let interface_frame = |iface_tn: &baml_type::TypeName,
-                           self_ty: &baml_type::TyTemplate,
+                           for_ty_pattern: &baml_type::TyTemplate,
                            interface_args: &[baml_type::TyTemplate],
                            interface_assoc: &[(Name, baml_type::TyTemplate)]|
      -> Vec<baml_type::TyTemplate> {
-        let mut frame = Vec::with_capacity(1 + interface_args.len() + interface_assoc.len());
-        frame.push(self_ty.clone());
-        frame.extend_from_slice(interface_args);
-        if let Some(order) = iface_assoc_order.get(iface_tn) {
-            for name in order {
+        let mut frame: Vec<baml_type::TyTemplate> = Vec::with_capacity(1 + interface_args.len());
+        frame.push(for_ty_pattern.clone());
+        frame.extend(interface_args.iter().cloned());
+        if let Some((_, _, decls)) = iface_assoc_decls.get(iface_tn) {
+            for (name, _) in decls {
                 // One slot per *declared* associated type, in order — so the frame
-                // width is always `interface_args + assoc_count` and the method-level
-                // type args (appended after this frame at the call site) land at the
-                // De Bruijn indices the callee expects. An associated type the impl
-                // leaves to its default is padded with `BuiltinUnknown`, matching the
-                // closed-world switch's `interface_assoc_frame_tys` still-missing
-                // fallback; a short frame would instead shift every later slot and
-                // miscompile the method's own type args.
-                // TODO(M1): for a defaulted assoc *read as a runtime type* in a default
-                // body, complete with the assoc's actual default rather than this
-                // placeholder (needs TyTemplate-space default completion). Currently
-                // unobservable — std defaults read assoc only in `throws` position.
+                // width is always `1 (Self) + interface_args + assoc_count` and the
+                // method-level type args (appended after this frame at the call
+                // site) land at the De Bruijn indices the callee expects. The
+                // rule's bindings are complete (pinned or baked from the declared
+                // default), so every slot carries a real binding; a member absent
+                // here is a diagnosed incomplete impl (no pin, no default), kept
+                // at the top type for error recovery.
                 let slot = interface_assoc
                     .iter()
                     .find(|(an, _)| an == name)
@@ -440,6 +476,44 @@ fn build_packages(
             }
         }
         frame
+    };
+    // Complete a rule's associated bindings: every declared member the impl
+    // leaves unpinned is baked from the interface's declared default,
+    // substituted at this impl — `Self` := the for-type, the interface's
+    // params := the target's arguments — so the registry answers every
+    // declared member identically, pinned or defaulted. A Self-referencing
+    // default (`type Items = Self.Item[]`) keeps its projections symbolic in
+    // the baked template; the runtime reduces them back through this same
+    // rule at realization time (fuel-bounded against cycles). A member with
+    // neither pin nor default is a diagnosed incomplete impl and stays absent.
+    let complete_interface_assoc = |interface_assoc: &mut Vec<(Name, baml_type::TyTemplate)>,
+                                    iface_tn: &baml_type::TypeName,
+                                    iface_arg_tys: &[ty::Ty],
+                                    for_ty: &ty::Ty,
+                                    generics: &[ParamTy],
+                                    resolved: &ResolvedAliases| {
+        let Some((self_param, params, decls)) = iface_assoc_decls.get(iface_tn) else {
+            return;
+        };
+        for (name, default) in decls {
+            if interface_assoc.iter().any(|(an, _)| an == name) {
+                continue;
+            }
+            let Some(default) = default else {
+                continue;
+            };
+            let mut bindings: rustc_hash::FxHashMap<ParamTy, ty::Ty> =
+                rustc_hash::FxHashMap::default();
+            bindings.insert(self_param.clone(), for_ty.clone());
+            for (param, arg) in params.iter().zip(iface_arg_tys) {
+                bindings.insert(param.clone(), arg.clone());
+            }
+            let completed = baml_compiler2_tir::generics::substitute_ty(default, &bindings);
+            interface_assoc.push((
+                name.clone(),
+                baml_compiler2_mir::tir2_to_template(&completed, resolved, generics),
+            ));
+        }
     };
     // Fill a rule's method table with the interface's defaults (override winning),
     // each carrying the interface frame it is invoked with.
@@ -493,6 +567,30 @@ fn build_packages(
                 &mut diags,
             )
         };
+        // [`lower`] for a constraint head — a generic bound or an `implements`
+        // target pins only the associated members it writes (unwritten members
+        // bake their declared defaults into the rule; a pinning impl can still
+        // discharge a bare bound at runtime).
+        let lower_constraint_head = |store: &TypeRefStore,
+                                     id: TypeRefId,
+                                     generics: &[ParamTy],
+                                     bounds: &TypeVarBoundsMap|
+         -> ty::Ty {
+            let mut diags = Vec::new();
+            baml_compiler2_tir::lower_type_expr::lower_constraint_head_type_ref(
+                store,
+                id,
+                &ScopeCtx {
+                    db,
+                    package_items: pkg_items,
+                    ns_context: ns,
+                    generic_params: generics,
+                    bounds,
+                    self_ty: None,
+                },
+                &mut diags,
+            )
+        };
         // Each generic param's interface bound set (`T extends A & B` → {A, B};
         // a param has at most one bound today). A bound is an interface, possibly
         // generic or carrying associated bindings — `split_interface` captures its
@@ -510,14 +608,16 @@ fn build_packages(
                 .map(|b| match b {
                     None => Some(Vec::new()),
                     Some(id) => {
-                        split_interface(&lower(store, *id, generics, bounds), resolved, generics)
-                            .map(|(interface, args, assoc)| {
+                        let bound_ty = lower_constraint_head(store, *id, generics, bounds);
+                        split_interface(&bound_ty, resolved, generics).map(
+                            |(interface, args, assoc)| {
                                 vec![InterfaceBound {
                                     interface,
                                     args,
                                     assoc,
                                 }]
-                            })
+                            },
+                        )
                     }
                 })
                 .collect()
@@ -566,11 +666,14 @@ fn build_packages(
                 generics.iter().map(|g| g.bounds.first().copied()).collect();
             let impl_bounds =
                 baml_compiler2_tir::lower_type_expr::impl_generic_param_bounds(db, impl_loc);
-            let Some((iface_tn, interface_args, mut interface_assoc)) = split_interface(
-                &lower(store, block.interface_target, &impl_params, impl_bounds),
-                resolved,
-                &impl_params,
-            ) else {
+            // The target is a constraint, not an existential: it carries only
+            // its written inline pins (block-level pins append below; unpinned
+            // members bake their declared defaults).
+            let iface_ty =
+                lower_constraint_head(store, block.interface_target, &impl_params, impl_bounds);
+            let Some((iface_tn, interface_args, mut interface_assoc)) =
+                split_interface(&iface_ty, resolved, &impl_params)
+            else {
                 continue;
             };
             interface_assoc.extend(lower_assoc(
@@ -579,11 +682,21 @@ fn build_packages(
                 &impl_params,
                 impl_bounds,
             ));
-            let for_ty_pattern = baml_compiler2_mir::tir2_to_template(
-                &lower(store, *for_target, &impl_params, impl_bounds),
-                resolved,
+            let for_ty = lower(store, *for_target, &impl_params, impl_bounds);
+            let iface_arg_tys = match &iface_ty {
+                ty::Ty::Interface(_, args, _, _) => args.clone(),
+                _ => unreachable!("split_interface matched an interface"),
+            };
+            complete_interface_assoc(
+                &mut interface_assoc,
+                &iface_tn,
+                &iface_arg_tys,
+                &for_ty,
                 &impl_params,
+                resolved,
             );
+            let for_ty_pattern =
+                baml_compiler2_mir::tir2_to_template(&for_ty, resolved, &impl_params);
             let Some(generic_param_bounds) =
                 bound_sets(store, &impl_param_bounds, &impl_params, impl_bounds)
             else {
@@ -670,8 +783,15 @@ fn build_packages(
                 .iter()
                 .filter_map(|&m| {
                     let target = method_interface_target(db, m).as_ref()?;
+                    // A constraint head, like the block's own target below — the
+                    // two lowerings must agree for the instantiation key match.
                     let (m_iface_tn, m_args, _m_assoc) = split_interface(
-                        &lower(&target.type_refs, target.target, &generics, class_bounds),
+                        &lower_constraint_head(
+                            &target.type_refs,
+                            target.target,
+                            &generics,
+                            class_bounds,
+                        ),
                         resolved,
                         &generics,
                     )?;
@@ -711,12 +831,23 @@ fn build_packages(
                 .map(baml_type::TyTemplate::TypeArgRef)
                 .collect();
 
+            // The receiver type `Self` denotes for this class's blocks, in
+            // `Ty` space for default-binding completion (structural sugar for
+            // the builtin containers, matching TIR's receiver typing).
+            let class_receiver_ty = baml_compiler2_tir::self_type::receiver_type_for_class_at(
+                class_tn.clone(),
+                generics
+                    .iter()
+                    .map(|p| ty::Ty::TypeVar(p.clone(), TyAttr::default()))
+                    .collect(),
+            );
             for block in &class.implements {
-                let Some((iface_tn, interface_args, mut interface_assoc)) = split_interface(
-                    &lower(store, block.target, &generics, class_bounds),
-                    resolved,
-                    &generics,
-                ) else {
+                // Constraint position: written inline pins only (see the
+                // free-impl site above).
+                let iface_ty = lower_constraint_head(store, block.target, &generics, class_bounds);
+                let Some((iface_tn, interface_args, mut interface_assoc)) =
+                    split_interface(&iface_ty, resolved, &generics)
+                else {
                     continue;
                 };
                 interface_assoc.extend(lower_assoc(
@@ -725,6 +856,18 @@ fn build_packages(
                     &generics,
                     class_bounds,
                 ));
+                let iface_arg_tys = match &iface_ty {
+                    ty::Ty::Interface(_, args, _, _) => args.clone(),
+                    _ => unreachable!("split_interface matched an interface"),
+                };
+                complete_interface_assoc(
+                    &mut interface_assoc,
+                    &iface_tn,
+                    &iface_arg_tys,
+                    &class_receiver_ty,
+                    &generics,
+                    resolved,
+                );
                 // Match folded methods to THIS block by the full interface
                 // instantiation (name + args), not name alone — coherence makes a
                 // given `(type, Iface<Args>)` unique, so this picks exactly this
@@ -3696,14 +3839,39 @@ fn compute_function_metadata<'db>(
 
     // Each scoped generic parameter's bound as a displayable `Ty`, kept only when it
     // lowers cleanly (a bound that fails to resolve is dropped rather than shown as
-    // `unknown`). Rendered into `display_type_params` below.
+    // `unknown`). A bound is a constraint head — it pins only the associated
+    // members it writes, so lowering it existentially would mint completeness
+    // diagnostics for members the bound legitimately leaves free (and drop the
+    // bound from display). Rendered into `display_type_params` below.
     let generic_param_bounds: HashMap<Name, Ty> = scoped_generic_param_names
         .iter()
         .enumerate()
         .filter_map(|(idx, name)| {
             let (store, id) = scoped_generic_bound_refs.get(idx).copied().flatten()?;
             let mut diags = Vec::new();
-            let bound_ty = lower_scoped(store, id, &mut diags);
+            let generic_params = if enclosing_interface.is_some() {
+                &interface_binding_params
+            } else {
+                &enclosing_generics
+            };
+            let lowered = baml_compiler2_tir::lower_type_expr::lower_constraint_head_type_ref(
+                store,
+                id,
+                &ScopeCtx {
+                    db,
+                    package_items: pkg_items,
+                    ns_context: &pkg_info.namespace_path,
+                    generic_params,
+                    bounds: &scope_bounds,
+                    self_ty: None,
+                },
+                &mut diags,
+            );
+            let bound_ty = if enclosing_interface.is_some() {
+                substitute_ty(&lowered, &interface_signature_bindings)
+            } else {
+                lowered
+            };
             diags.is_empty().then(|| (name.clone(), bound_ty))
         })
         .collect();
@@ -3730,14 +3898,17 @@ fn compute_function_metadata<'db>(
     // The receiver type used for a `self` parameter with no written annotation. For
     // an interface method it is the interface at its own params, resolved through
     // the same binding path (a synthetic `Name<params>` path — no item-tree read);
-    // for every other method it is the already-lowered `receiver_ty`.
+    // for every other method it is the already-lowered `receiver_ty`. The interface
+    // view is `Self`'s *bound*, so it lowers as a constraint head: associated
+    // members stay unpinned (they realize per-receiver — a default is not a pin),
+    // rather than demanding the existential's completeness.
     let self_param_ty = || -> Option<Ty> {
         match enclosing_interface {
             Some(iface) => {
                 let te =
                     type_expr_for_name_with_generic_args(iface.name.clone(), &iface.generic_params);
                 let mut diags = Vec::new();
-                let lowered = lower_type_expr(
+                let lowered = baml_compiler2_tir::lower_type_expr::lower_constraint_head_type_expr(
                     &te,
                     &ScopeCtx {
                         db,

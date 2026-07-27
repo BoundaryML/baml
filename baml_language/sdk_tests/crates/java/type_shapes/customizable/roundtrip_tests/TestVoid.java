@@ -10,7 +10,7 @@ import org.junit.jupiter.api.Test;
 class TestVoid {
 
     @Test
-    void test_no_op() {
+    void test_void_no_op() {
         // java-port note: the BAML namespace is literally named `void`,
         // which is a reserved Java keyword and cannot appear as a package
         // segment verbatim (unlike Python, where `void` is a legal module

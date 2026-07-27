@@ -699,7 +699,7 @@ fn walk_rvalue_locals(rvalue: &Rvalue, f: &mut impl FnMut(Local)) {
         Rvalue::Discriminant(place) | Rvalue::TypeTag(place) | Rvalue::Len(place) => {
             walk_place_locals(place, f);
         }
-        Rvalue::IsType { operand, .. } => {
+        Rvalue::IsType { operand, .. } | Rvalue::IsTypeTag { operand, .. } => {
             walk_operand_locals(operand, f);
         }
         Rvalue::MakeClosure { captures, .. } => {
@@ -1533,7 +1533,9 @@ fn rvalue_has_projection_reads(rvalue: &Rvalue) -> bool {
         Rvalue::Discriminant(place) | Rvalue::TypeTag(place) | Rvalue::Len(place) => {
             place_has_projection(place)
         }
-        Rvalue::IsType { operand, .. } => operand_has_projection(operand),
+        Rvalue::IsType { operand, .. } | Rvalue::IsTypeTag { operand, .. } => {
+            operand_has_projection(operand)
+        }
         Rvalue::MakeClosure { captures, .. } => captures.iter().any(operand_has_projection),
         Rvalue::MakeBoundMethod { receiver, .. }
         | Rvalue::MakeVirtualBoundMethod { receiver, .. } => operand_has_projection(receiver),

@@ -34,7 +34,7 @@ fn test_optional_args_runtime_matrix() {
 }
 
 #[test]
-fn test_python_unset_and_none_differ_in_one_call() {
+fn test_optional_args_python_unset_and_none_differ_in_one_call() {
     // Unset means "omit this argument"; None means "pass an explicit null".
     // The two must stay distinct within a single call.
     assert_eq!(
@@ -64,7 +64,7 @@ async fn test_optional_args_async_samples() {
 }
 
 #[test]
-fn test_opt_box_method_matrix() {
+fn test_optional_args_opt_box_method_matrix() {
     let boxed = OptBox::make(10, Unset).unwrap();
     assert_eq!(boxed.base, 17);
 
@@ -81,7 +81,7 @@ fn test_opt_box_method_matrix() {
 }
 
 #[test]
-fn test_negative_runtime_cases_reject() {
+fn test_optional_args_negative_runtime_cases_reject() {
     // DIVERGENCE(rust): the python cases here — an unknown keyword argument,
     // a call with no arguments, and a duplicated argument — are compile
     // errors under Rust's typed signatures, not runtime failures. The

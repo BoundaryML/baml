@@ -862,6 +862,11 @@ fn ty_value_to_serde(
                     &TyTemplate::from((*member).clone()),
                     &[],
                 )
+                // A template built from a `RealizedTy` carries no frame refs
+                // and no projections, so substitution cannot fail.
+                .unwrap_or_else(|e| {
+                    unreachable!("realized union-member template failed to substitute: {e}")
+                })
             });
             match member {
                 Some(member) => ty_value_to_serde(vm, value, member, path),

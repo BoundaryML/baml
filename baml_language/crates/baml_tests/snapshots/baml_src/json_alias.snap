@@ -70,7 +70,7 @@ function json_alias.json_array_len() -> int {
     alloc_array 3
     store_var _2
     load_var _2
-    narrow_bind baml.json.json[], slot=1
+    narrow_bind (int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>)[], slot=1
     pop_jump_if_false L0
     jump L1
 
@@ -95,7 +95,7 @@ function json_alias.json_map_has_key() -> bool {
     alloc_map 1
     store_var _2
     load_var _2
-    narrow_bind map<string, baml.json.json>, slot=1
+    narrow_bind map<string, int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>>, slot=1
     pop_jump_if_false L0
     jump L1
 

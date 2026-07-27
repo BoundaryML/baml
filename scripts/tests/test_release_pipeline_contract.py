@@ -23,6 +23,10 @@ BRIDGE_CFFI_PUBLIC_EXPORTS = (
 HYGIENE_TOOL = ROOT / "scripts" / "baml-bridge-cffi-hygiene"
 CROSS_CONFIG = ROOT / "baml_language" / "Cross.toml"
 NUGET_PUBLISHER = ROOT / ".github" / "workflows" / "publish2-csharp-sdk.yaml"
+NODE_NPM_PUBLISHER = (
+    ROOT / ".github" / "workflows" / "publish2-nodejs-sdk.yaml"
+)
+WEB_NPM_PUBLISHER = ROOT / ".github" / "workflows" / "publish2-web-sdk.yaml"
 CSHARP_PREPARER = (
     ROOT / ".github" / "workflows" / "prepare-csharp-sdk.reusable.yaml"
 )
@@ -612,6 +616,36 @@ def job_block(text: str, job: str) -> str:
     return "".join(lines[:next_job])
 
 
+def step_block(job: str, step: str) -> str:
+    marker = f"      - name: {step}\n"
+    start = job.index(marker)
+    remainder = job[start + len(marker) :]
+    lines = remainder.splitlines(keepends=True)
+    next_step = next(
+        (
+            index
+            for index, line in enumerate(lines)
+            if line.startswith("      - ")
+        ),
+        None,
+    )
+    if next_step is None:
+        return remainder
+    return "".join(lines[:next_step])
+
+
+def step_inputs(step: str) -> dict[str, str]:
+    marker = "        with:\n"
+    start = step.index(marker)
+    inputs: dict[str, str] = {}
+    for line in step[start + len(marker) :].splitlines():
+        if not line.startswith("          "):
+            break
+        key, value = line.strip().split(":", maxsplit=1)
+        inputs[key] = value.strip().strip("\"'")
+    return inputs
+
+
 class WorkflowGraphTests(unittest.TestCase):
     def test_cffi_hygiene_is_enforced_at_production_and_package_boundaries(
         self,
@@ -783,11 +817,13 @@ class WorkflowGraphTests(unittest.TestCase):
     ) -> None:
         workflow = RELEASE_WORKFLOW.read_text(encoding="utf-8")
         build_matrix = job_block(workflow, "build-matrix")
+        wrapper = job_block(workflow, "build-wrapper")
         prepare = job_block(workflow, "prepare-csharp-sdk")
         cffi = job_block(workflow, "build-bridge-cffi")
         verify = job_block(workflow, "verify-csharp-sdk")
         all_builds = job_block(workflow, "all-builds")
         nuget = job_block(workflow, "publish-csharp-sdk")
+        crates_io = job_block(workflow, "publish-crates-io")
         prerequisites = job_block(workflow, "release-prerequisites-complete")
         complete = job_block(workflow, "release-complete")
         manifest = job_block(workflow, "publish-pkg-boundaryml-com")
@@ -796,6 +832,14 @@ class WorkflowGraphTests(unittest.TestCase):
         dry_run = job_block(workflow, "dry-run-artifacts")
 
         self.assertIn("baml-csharp-release-contract matrix", build_matrix)
+        for target in (
+            "aarch64-apple-darwin",
+            "x86_64-apple-darwin",
+            "aarch64-unknown-linux-gnu",
+            "x86_64-unknown-linux-gnu",
+        ):
+            self.assertIn(target, wrapper)
+        self.assertIn("--features no-self-update", wrapper)
         self.assertIn("needs: [plan, build-matrix]", prepare)
         self.assertNotIn("build-bridge-cffi", prepare)
         self.assertIn("needs: [plan]", cffi)
@@ -803,6 +847,8 @@ class WorkflowGraphTests(unittest.TestCase):
         self.assertIn("build-bridge-cffi", verify)
         self.assertIn("- verify-csharp-sdk", all_builds)
         self.assertIn("all-builds", nuget)
+        self.assertIn("environment: boundary-tools-prod", crates_io)
+        self.assertNotIn("environment: release", crates_io)
         for publisher in (
             "publish-pypi",
             "publish-nodejs-sdk",
@@ -864,6 +910,67 @@ class WorkflowGraphTests(unittest.TestCase):
             CFFI_BUILDER.read_text(encoding="utf-8"),
         )
 
+    def test_expected_nightly_skips_do_not_poison_release_tail(self) -> None:
+        workflow = RELEASE_WORKFLOW.read_text(encoding="utf-8")
+        prerequisites = job_block(workflow, "release-prerequisites-complete")
+        manifest = job_block(workflow, "publish-pkg-boundaryml-com")
+        go_publisher = job_block(workflow, "publish-go-sdk")
+        go_smoke = job_block(workflow, "smoke-go-release")
+        channel = job_block(workflow, "publish-pkg-channel")
+        nightly = job_block(workflow, "dispatch-nightly-after-canary")
+
+        self.assertIn(
+            'require_skipped Gradle-Plugin-Portal "$GRADLE_PLUGIN"',
+            prerequisites,
+        )
+        guarded_tail = (
+            (
+                manifest,
+                (
+                    "needs.plan.result == 'success'",
+                    "needs.release-prerequisites-complete.result == 'success'",
+                ),
+            ),
+            (
+                go_publisher,
+                (
+                    "needs.plan.result == 'success'",
+                    "needs.build-go-sdk.result == 'success'",
+                    "needs.all-builds.result == 'success'",
+                    "needs.publish-pkg-boundaryml-com.result == 'success'",
+                ),
+            ),
+            (
+                go_smoke,
+                (
+                    "needs.plan.result == 'success'",
+                    "needs.publish-go-sdk.result == 'success'",
+                    "needs.publish-pkg-boundaryml-com.result == 'success'",
+                ),
+            ),
+            (
+                channel,
+                (
+                    "needs.plan.result == 'success'",
+                    "needs.publish-pkg-boundaryml-com.result == 'success'",
+                    "needs.release-complete.result == 'success'",
+                    "needs.smoke-go-release.result == 'success'",
+                    "needs.smoke-swift-release.result == 'success'",
+                ),
+            ),
+            (
+                nightly,
+                (
+                    "needs.plan.result == 'success'",
+                    "needs.publish-pkg-channel.result == 'success'",
+                ),
+            ),
+        )
+        for block, required_results in guarded_tail:
+            self.assertIn("!cancelled()", block)
+            for result in required_results:
+                self.assertIn(result, block)
+
     def test_nuget_repair_and_nightly_pack_contracts_are_fail_closed(self) -> None:
         publisher = NUGET_PUBLISHER.read_text(encoding="utf-8")
         preparer = CSHARP_PREPARER.read_text(encoding="utf-8")
@@ -888,7 +995,8 @@ class WorkflowGraphTests(unittest.TestCase):
         self.assertIn("environment: boundary-tools-prod", publisher)
         self.assertIn("publish2-csharp-sdk.yaml", publisher)
         self.assertNotIn("\n    secrets:\n", publisher)
-        self.assertIn("user: ${{ secrets.NUGET_USER }}", publisher)
+        self.assertIn("user: ${{ vars.NUGET_USER }}", publisher)
+        self.assertNotIn("secrets.NUGET_USER", publisher)
         self.assertNotIn("NUGET_USER: ${{ secrets.NUGET_USER }}", release)
         self.assertIn("write-generated-manifest", preparer)
         self.assertIn("verify-generated-sources", verifier)
@@ -914,6 +1022,21 @@ class WorkflowGraphTests(unittest.TestCase):
         self.assertIn("right.ReadExactly(rightChunk)", normalizer)
         self.assertNotIn("left.Read(leftBuffer)", normalizer)
 
+    def test_npm_publishers_do_not_enable_an_unused_pnpm_cache(self) -> None:
+        for path in (NODE_NPM_PUBLISHER, WEB_NPM_PUBLISHER):
+            with self.subTest(workflow=path.name):
+                publisher = path.read_text(encoding="utf-8")
+                publish_job = job_block(publisher, "publish-npm")
+                setup = step_block(publish_job, "Setup Node.js")
+                inputs = step_inputs(setup)
+                self.assertIn("        uses: actions/setup-node@v6", setup)
+                self.assertNotIn("./.github/actions/setup-node", setup)
+                self.assertEqual(
+                    inputs["registry-url"],
+                    "https://registry.npmjs.org",
+                )
+                self.assertNotEqual(inputs.get("cache"), "pnpm")
+
     def test_csharp_consumer_repository_path_scan_requires_a_separator(self) -> None:
         primitive_consumer = PRIMITIVE_CONSUMER.read_text(encoding="utf-8")
         self.assertIn(
@@ -921,13 +1044,14 @@ class WorkflowGraphTests(unittest.TestCase):
             primitive_consumer,
         )
         self.assertIn(
-            'rg -a -F -l -- "$repository_path_prefix" "$publish"',
+            'grep -r -a -F -l -- "$repository_path_prefix" "$publish"',
             primitive_consumer,
         )
         self.assertNotIn(
-            'rg -a -F -l "$repository_root" "$publish"',
+            'grep -r -a -F -l -- "$repository_root" "$publish"',
             primitive_consumer,
         )
+        self.assertNotIn("rg -a", primitive_consumer)
 
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

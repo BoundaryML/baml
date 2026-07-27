@@ -79,7 +79,7 @@ class TestStreamingE2e {
     // -----------------------------------------------------------------------
 
     @Test
-    void test_stream() throws Exception {
+    void test_streaming_e2e_stream() throws Exception {
         // Sync `next()` yields a stream of partials and drains to `StreamFinished`.
         try (ReplayHarness h = ReplayHarness.start("replay_extract_string")) {
             BamlStream<String, String> stream =
@@ -100,7 +100,7 @@ class TestStreamingE2e {
     }
 
     @Test
-    void test_stream_async() throws Exception {
+    void test_streaming_e2e_stream_async() throws Exception {
         // Async sibling over the CompletableFuture path: next_async() / get_final_async().
         try (ReplayHarness h = ReplayHarness.start("replay_extract_string")) {
             BamlStream<String, String> stream =
@@ -121,7 +121,7 @@ class TestStreamingE2e {
     }
 
     @Test
-    void test_stream_collect_in_baml() throws Exception {
+    void test_streaming_e2e_stream_collect_in_baml() throws Exception {
         // BAML-driven counterpart: the `S | StreamFinished` union stays engine-side.
         // java-port note: `result`/`item` are statically typed, so the
         // `assertInstanceOf` / `instanceof String` checks are the compile-time
@@ -143,7 +143,7 @@ class TestStreamingE2e {
     // -----------------------------------------------------------------------
 
     @Test
-    void test_stream_doc() throws Exception {
+    void test_streaming_e2e_stream_doc() throws Exception {
         // Sync `next()` yields >= 10 doc partials; `get_final()` is a typed `StreamingDoc`.
         try (ReplayHarness h = ReplayHarness.start("replay_extract_doc")) {
             BamlStream<baml_sdk.lorem.StreamingDoc$stream, StreamingDoc> stream =
@@ -166,7 +166,7 @@ class TestStreamingE2e {
     }
 
     @Test
-    void test_stream_doc_async() throws Exception {
+    void test_streaming_e2e_stream_doc_async() throws Exception {
         // Async sibling over the CompletableFuture path for a class `T`.
         try (ReplayHarness h = ReplayHarness.start("replay_extract_doc")) {
             BamlStream<baml_sdk.lorem.StreamingDoc$stream, StreamingDoc> stream =
@@ -189,7 +189,7 @@ class TestStreamingE2e {
     }
 
     @Test
-    void test_stream_doc_collect_in_baml() throws Exception {
+    void test_streaming_e2e_stream_doc_collect_in_baml() throws Exception {
         // BAML-driven counterpart: the `S | StreamFinished` union stays
         // engine-side; only the concrete `StreamingDoc` crosses the FFI boundary.
         try (ReplayHarness h = ReplayHarness.start("replay_extract_doc")) {

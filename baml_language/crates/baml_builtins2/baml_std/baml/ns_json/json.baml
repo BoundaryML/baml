@@ -158,6 +158,151 @@ function field(j: json, key: string) -> json throws never {
   $rust_function
 }
 
+/// A missing field, shape mismatch, out-of-bounds index, malformed selector,
+/// or leaf that does not coerce to the requested type.
+class JsonPathError {
+  message string
+  selector string
+}
+
+function _path_field(current: json, key: string, selector: string) -> json throws JsonPathError {
+  match (current) {
+    let m: map<string, json> => {
+      if (!m.has(key)) {
+        throw JsonPathError { message: "missing field '" + key + "'", selector: selector };
+      }
+      m.get(key)
+    },
+    _ => throw JsonPathError {
+      message: "field access '." + key + "' on a non-object",
+      selector: selector,
+    },
+  }
+}
+
+function _path_index(current: json, idx: int, selector: string) -> json throws JsonPathError {
+  match (current) {
+    let arr: json[] => {
+      if (idx < 0 || idx >= arr.length()) {
+        throw JsonPathError {
+          message: "index [" + idx.to_string() + "] out of bounds (length " + arr.length().to_string() + ")",
+          selector: selector,
+        };
+      }
+      arr.at(idx)
+    },
+    _ => throw JsonPathError {
+      message: "index [" + idx.to_string() + "] on a non-array",
+      selector: selector,
+    },
+  }
+}
+
+/// Navigate a jq-style selector into a JSON value and coerce the leaf to `T`.
+/// Selectors start with `.` or `[`. Dot and quoted-bracket steps address object
+/// fields; integer bracket steps address arrays.
+function path<T>(j: json, selector: string) -> T throws JsonPathError {
+  if (!(selector.starts_with(".") || selector.starts_with("["))) {
+    throw JsonPathError {
+      message: "selector must start with '.' or '[' (jq style), got '" + selector + "'",
+      selector: selector,
+    };
+  }
+  let current: json = j;
+  let i = 0;
+  while (i < selector.length()) {
+    let marker = selector.substring(i, i + 1);
+    if (marker == ".") {
+      i += 1;
+      let start = i;
+      while (
+        i < selector.length()
+        && selector.substring(i, i + 1) != "."
+        && selector.substring(i, i + 1) != "["
+      ) {
+        i += 1;
+      }
+      if (i > start) {
+        current = _path_field(current, selector.substring(start, i), selector);
+      }
+      continue;
+    }
+
+    if (marker != "[") {
+      throw JsonPathError {
+        message: "expected '.' or '[' at offset " + i.to_string(),
+        selector: selector,
+      };
+    }
+
+    i += 1;
+    if (i >= selector.length()) {
+      throw JsonPathError { message: "unterminated '[' segment", selector: selector };
+    }
+
+    let first = selector.substring(i, i + 1);
+    if (first == "\"" || first == "'") {
+      let quote = first;
+      i += 1;
+      let key = "";
+      let closed = false;
+      while (i < selector.length()) {
+        let ch = selector.substring(i, i + 1);
+        if (ch == "\\") {
+          if (i + 1 >= selector.length()) {
+            throw JsonPathError { message: "unterminated escape in quoted bracket key", selector: selector };
+          }
+          key = key + selector.substring(i + 1, i + 2);
+          i += 2;
+          continue;
+        }
+        if (ch == quote) {
+          closed = true;
+          i += 1;
+          break;
+        }
+        key = key + ch;
+        i += 1;
+      }
+      if (!closed || i >= selector.length() || selector.substring(i, i + 1) != "]") {
+        throw JsonPathError { message: "unterminated quoted bracket key", selector: selector };
+      }
+      i += 1;
+      current = _path_field(current, key, selector);
+      continue;
+    }
+
+    let start = i;
+    while (i < selector.length() && selector.substring(i, i + 1) != "]") {
+      i += 1;
+    }
+    if (i >= selector.length()) {
+      throw JsonPathError { message: "unterminated '[' segment", selector: selector };
+    }
+    let token = selector.substring(start, i);
+    i += 1;
+    let idx = int.parse(token) catch (_) {
+      root.errors.ParseError => {
+        throw JsonPathError { message: "bad bracket token '[" + token + "]'", selector: selector };
+      },
+    };
+    current = _path_index(current, idx, selector);
+  }
+  to<T>(current) catch (_) {
+    JsonDecodeError => throw JsonPathError {
+      message: "leaf does not coerce to the requested type",
+      selector: selector,
+    },
+  }
+}
+
+/// Return `default` when [`path`] cannot resolve or coerce the selected value.
+function path_or<T>(j: json, selector: string, default: T) -> T throws never {
+  path<T>(j, selector) catch (_) {
+    JsonPathError => default,
+  }
+}
+
 /// Serialize `v` to JSON text, honoring user-defined `to_json` overrides on
 /// classes (via [`to_json<T>`]). Equivalent to `stringify(to_json<T>(v))`.
 ///

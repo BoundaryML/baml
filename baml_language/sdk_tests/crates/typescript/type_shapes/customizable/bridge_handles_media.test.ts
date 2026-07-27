@@ -19,7 +19,7 @@ function releaseForWeb(value: unknown): boolean {
 }
 
 describe("bridge handles and media — key ownership", () => {
-  it("normalizes key halves losslessly and returns defensive key objects", () => {
+  it("bridge_handles_media_normalizes_key_halves_losslessly_and_returns_defensive_key_objects", () => {
     const input = { low: 0xffff_ffff, high: -1 };
     const handle = new BamlHandle(input, 15);
     input.low = 0;
@@ -30,7 +30,7 @@ describe("bridge handles and media — key ownership", () => {
     expect(handle.key).toEqual({ low: -1, high: -1 });
   });
 
-  it("clones ordinary owners and wire keys independently", () => {
+  it("bridge_handles_media_clones_ordinary_owners_and_wire_keys_independently", () => {
     const [key, handleType] = _seedFunctionRefHandle(0xffff_ffff);
     expect(handleType).toBe(5);
     const owner = new BamlHandle(key, handleType);
@@ -56,14 +56,14 @@ describe("bridge handles and media — key ownership", () => {
     }
   });
 
-  it("rejects an invalid ordinary key only when an operation resolves it", () => {
+  it("bridge_handles_media_rejects_an_invalid_ordinary_key_only_when_an_operation_resolves_it", () => {
     const invalid = new BamlHandle({ low: 0x7fff_fffe, high: 0 }, 5);
     expect(invalid.key).toEqual({ low: 0x7fff_fffe, high: 0 });
     expect(() => invalid.clone()).toThrow(/invalid handle/);
     if (isWebRuntime) expect(releaseForWeb(invalid)).toBe(false);
   });
 
-  it("keeps host-value tags outside ordinary clone and release", () => {
+  it("bridge_handles_media_keeps_host_value_tags_outside_ordinary_clone_and_release", () => {
     if (!isWebRuntime) return;
     for (const handleType of [15, 16]) {
       const owner = new BamlHandle({ low: 1, high: 0 }, handleType);
@@ -74,7 +74,7 @@ describe("bridge handles and media — key ownership", () => {
     }
   });
 
-  it("exposes stable seed tags", () => {
+  it("bridge_handles_media_exposes_stable_seed_tags", () => {
     const [functionKey, functionType] = _seedFunctionRefHandle(7);
     const [mediaKey, mediaType] = _seedGenericMediaHandle();
     expect(functionType).toBe(5);
@@ -108,8 +108,15 @@ type MediaConstructor = {
   _fromHandle(handle: BamlHandle): MediaValue;
 };
 
-describe.each(mediaKinds)("bridge handles and media — %s", (_name: string, Media: MediaConstructor, handleType: number) => {
-  it("constructs URL, file, and base64 descriptors", () => {
+describe.each(mediaKinds)(
+  "bridge handles and media — %s",
+  (
+    _name: string,
+    Media: MediaConstructor,
+    handleType: number,
+  ) => {
+  // SDK_PARITY_LINT(skip): exercises TypeScript bridge media descriptor APIs
+  it("bridge_handles_media_constructs_url_file_and_base64_descriptors", () => {
     const url = Media.fromUrl("https://example.com/asset", "application/test");
     expect(url.url()).toBe("https://example.com/asset");
     expect(url.file()).toBeNull();
@@ -133,7 +140,8 @@ describe.each(mediaKinds)("bridge handles and media — %s", (_name: string, Med
     }
   });
 
-  it("clones ownership through _toHandle and _fromHandle", () => {
+  // SDK_PARITY_LINT(skip): exercises TypeScript bridge media handle ownership APIs
+  it("bridge_handles_media_clones_ownership_through_to_handle_and_from_handle", () => {
     const original = Media.fromUrl("https://example.com/asset", "application/test");
     const handle = original._toHandle();
     expect(handle.handleType).toBe(handleType);
@@ -152,4 +160,5 @@ describe.each(mediaKinds)("bridge handles and media — %s", (_name: string, Med
       expect(releaseForWeb(decoded)).toBe(true);
     }
   });
-});
+  },
+);

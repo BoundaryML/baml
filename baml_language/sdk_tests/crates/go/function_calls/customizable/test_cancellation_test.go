@@ -11,13 +11,13 @@ import (
 
 // Direct synchronous Go counterparts to Python test_cancellation.py. Go uses
 // context cancellation rather than a separate generated async API.
-func TestSyncCallReturnsNull(t *testing.T) {
+func Test_sync_call_returns_null(t *testing.T) {
 	if _, err := baml_sdk.ThrowsTestSleepMs(context.Background(), 1); err != nil {
 		t.Fatal(err)
 	}
 }
 
-func TestSyncCancelViaContext(t *testing.T) {
+func Test_sync_cancel_via_context(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	timer := time.AfterFunc(50*time.Millisecond, cancel)
 	defer timer.Stop()

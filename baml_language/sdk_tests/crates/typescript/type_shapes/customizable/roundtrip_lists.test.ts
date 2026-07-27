@@ -10,13 +10,13 @@ import {
 } from "./baml_sdk/lists/index.js";
 
 describe("roundtrip lists", () => {
-  it("round_trip_ints", () => expect(round_trip_ints([1, 2, 3])).toEqual([1, 2, 3]));
-  it("round_trip_empty_list", () => expect(round_trip_ints([])).toEqual([]));
-  it("round_trip_optional_strings", () =>
+  it("lists_round_trip_ints", () => expect(round_trip_ints([1, 2, 3])).toEqual([1, 2, 3]));
+  it("lists_round_trip_empty_list", () => expect(round_trip_ints([])).toEqual([]));
+  it("lists_round_trip_optional_strings", () =>
     expect(round_trip_optional_strings(["a", null, "b"])).toEqual(["a", null, "b"]));
-  it("round_trip_union_list", () =>
+  it("lists_round_trip_union_list", () =>
     expect(round_trip_union_list([1, "two", 3])).toEqual([1, "two", 3]));
-  it("round_trip_list_container", () => {
+  it("lists_round_trip_list_container", () => {
     const c = new ListContainer({
       ints: [1, 2],
       optional_strings: [null, "z"],

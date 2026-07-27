@@ -7,7 +7,7 @@ import (
 	"baml.local/sdk/baml_sdk"
 )
 
-func TestRoundTripNullToEnd(t *testing.T) {
+func Test_round_trip_null_to_end(t *testing.T) {
 	ctx := context.Background()
 	integer := baml_sdk.NewStringOrIntFromInt(1)
 	gotInteger, err := baml_sdk.UnionsRoundTripNullToEnd(ctx, &integer)
@@ -30,7 +30,7 @@ func TestRoundTripNullToEnd(t *testing.T) {
 	}
 }
 
-func TestRoundTripDedup(t *testing.T) {
+func Test_round_trip_dedup(t *testing.T) {
 	ctx := context.Background()
 	integer := baml_sdk.NewStringOrIntFromInt(2)
 	if got, err := baml_sdk.UnionsRoundTripDedup(ctx, integer); err != nil {
@@ -46,13 +46,13 @@ func TestRoundTripDedup(t *testing.T) {
 	}
 }
 
-func TestRoundTripSingletonUnwrap(t *testing.T) {
+func Test_round_trip_singleton_unwrap(t *testing.T) {
 	if got, err := baml_sdk.UnionsRoundTripSingletonUnwrap(context.Background(), 7); err != nil || got != 7 {
 		t.Fatalf("singleton union = %v, %v", got, err)
 	}
 }
 
-func TestRoundTripOptionalPlusNull(t *testing.T) {
+func Test_round_trip_optional_plus_null(t *testing.T) {
 	ctx := context.Background()
 	class := baml_sdk.NewStringOrUnionsTFromUnionsT(baml_sdk.UnionsT{V: 1})
 	if got, err := baml_sdk.UnionsRoundTripOptionalPlusNull(ctx, &class); err != nil || got == nil {
@@ -71,21 +71,21 @@ func TestRoundTripOptionalPlusNull(t *testing.T) {
 	}
 }
 
-func TestRoundTripUnionT(t *testing.T) {
+func Test_round_trip_union_t(t *testing.T) {
 	want := baml_sdk.UnionsT{V: 4}
 	if got, err := baml_sdk.UnionsRoundTripT(context.Background(), want); err != nil || got != want {
 		t.Fatalf("T = %#v, %v", got, err)
 	}
 }
 
-func TestRoundTripUnionContainer(t *testing.T) {
+func Test_round_trip_union_container(t *testing.T) {
 	nullToEnd := (*baml_sdk.StringOrInt)(nil)
 	dedup := baml_sdk.NewStringOrIntFromString("d")
 	optional := baml_sdk.NewStringOrUnionsTFromUnionsT(baml_sdk.UnionsT{V: 2})
 	want := baml_sdk.UnionsUnionContainer{
-		NullToEnd:       nullToEnd,
-		Dedup:           dedup,
-		SingletonUnwrap: 5,
+		NullToEnd:        nullToEnd,
+		Dedup:            dedup,
+		SingletonUnwrap:  5,
 		OptionalPlusNull: &optional,
 	}
 	got, err := baml_sdk.UnionsRoundTripUnionContainer(context.Background(), want)
