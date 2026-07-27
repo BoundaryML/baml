@@ -12,8 +12,8 @@ pub use baml_base::{Name, attr::TyAttr};
 // here so existing `crate::ty::…` paths keep working.
 pub use baml_type::{
     CanonicalTyRender, Freshness, FunctionParamMode, FunctionParamTy, MediaKind, Package, ParamTy,
-    PrimitiveType, QualifiedTypeName, RESERVED_USER_PACKAGE, SYNTHETIC_EFFECT_PARAM_PREFIX, Ty,
-    TyRenderStrategy, is_synthetic_effect_param,
+    PrimitiveType, QualifiedTypeName, RESERVED_USER_PACKAGE, RuntimeGenericLayout,
+    SYNTHETIC_EFFECT_PARAM_PREFIX, Ty, TyRenderStrategy, is_synthetic_effect_param,
 };
 
 /// Re-export `baml_base::Literal` as `LiteralValue` for backward compatibility.

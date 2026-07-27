@@ -681,7 +681,7 @@ struct CallCheckRequest<'a> {
     /// For static methods on generic classes this includes owner class params
     /// before method params; for bound methods the receiver seeds owner params,
     /// so this is just the method params.
-    runtime_type_arg_params: Vec<crate::ty::ParamTy>,
+    runtime_generic_layout: crate::ty::RuntimeGenericLayout,
     /// Pre-bound runtime type args that were substituted out of the callable
     /// type before ordinary call inference ran.
     runtime_type_arg_binding_seed: Vec<(crate::ty::ParamTy, Ty)>,
@@ -2813,13 +2813,13 @@ impl<'db> TypeInferenceBuilder<'db> {
         (owner_params, fn_params)
     }
 
-    fn runtime_type_arg_params_for_call(
+    fn runtime_generic_layout_for_call(
         &self,
         callee_id: ExprId,
         callee_generic_params: &[crate::ty::ParamTy],
         _is_method_call: bool,
         is_value_call: bool,
-    ) -> Vec<crate::ty::ParamTy> {
+    ) -> crate::ty::RuntimeGenericLayout {
         let params = if is_value_call {
             callee_generic_params.to_vec()
         } else if let Some(resolution) = self.callee_member_resolution(callee_id) {
@@ -2850,10 +2850,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             callee_generic_params.to_vec()
         };
 
-        params
-            .into_iter()
-            .filter(|param| !crate::ty::is_synthetic_effect_param(param.name()))
-            .collect()
+        crate::ty::RuntimeGenericLayout::new(params)
     }
 
     fn record_call_type_args(&mut self, expr_id: ExprId, type_args: Vec<Ty>) {
@@ -3789,7 +3786,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             is_optional_call,
             explicit_type_args,
             callee_expr,
-            runtime_type_arg_params,
+            runtime_generic_layout,
             runtime_type_arg_binding_seed,
             rigid_self_var,
         } = request;
@@ -4183,14 +4180,9 @@ impl<'db> TypeInferenceBuilder<'db> {
                         }
                     }
                 }
-                let runtime_type_arg_params = if runtime_type_arg_params.is_empty() {
-                    generic_params.as_slice()
-                } else {
-                    runtime_type_arg_params.as_slice()
-                };
-                if !explicit_args_used && !runtime_type_arg_params.is_empty() {
+                if !explicit_args_used && !runtime_generic_layout.params().is_empty() {
                     let type_args = self.runtime_call_type_args(
-                        runtime_type_arg_params,
+                        runtime_generic_layout.params(),
                         &runtime_type_arg_bindings,
                     );
                     self.record_call_type_args(expr_id, type_args);
@@ -4543,8 +4535,8 @@ impl<'db> TypeInferenceBuilder<'db> {
                             None => ExplicitTypeArgs::NotProvided,
                         },
                         callee_expr,
-                        runtime_type_arg_params: Vec::new(),
-                        runtime_type_arg_binding_seed: Vec::new(),
+                        runtime_generic_layout,
+                        runtime_type_arg_binding_seed,
                         rigid_self_var,
                     });
                 }
@@ -4664,7 +4656,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             .callee_declared_generic_params(callee_id)
             .map(|(params, _)| params)
             .unwrap_or_default();
-        let runtime_type_arg_params = self.runtime_type_arg_params_for_call(
+        let runtime_generic_layout = self.runtime_generic_layout_for_call(
             callee_id,
             &callee_generic_params,
             is_method_call,
@@ -4681,7 +4673,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             is_optional_call: true,
             explicit_type_args: ExplicitTypeArgs::NotProvided,
             callee_expr: Some(callee_id),
-            runtime_type_arg_params,
+            runtime_generic_layout,
             runtime_type_arg_binding_seed: self
                 .owner_type_arg_binding_seed
                 .get(&callee_id)
@@ -6664,7 +6656,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             .callee_declared_generic_params(callee)
             .map(|(params, _)| params)
             .unwrap_or_default();
-        let runtime_type_arg_params = self.runtime_type_arg_params_for_call(
+        let runtime_generic_layout = self.runtime_generic_layout_for_call(
             callee,
             &callee_generic_params,
             is_method_call,
@@ -6685,7 +6677,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             is_optional_call: false,
             explicit_type_args,
             callee_expr: Some(callee),
-            runtime_type_arg_params,
+            runtime_generic_layout,
             runtime_type_arg_binding_seed: self
                 .owner_type_arg_binding_seed
                 .get(&callee)

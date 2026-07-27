@@ -2,8 +2,8 @@ use std::collections::{HashMap, HashSet};
 
 use baml_base::{Name, TypePath};
 use baml_type::{
-    ParamTy, RealizedTy, ResolvedAliases, RuntimeTy, TyAttr, TyTemplate, TypeName,
-    normalize::TypeContext as _,
+    ParamTy, RealizedTy, ResolvedAliases, RuntimeGenericLayout, RuntimeTy, TyAttr, TyTemplate,
+    TypeName, normalize::TypeContext as _,
 };
 use indexmap::IndexMap;
 
@@ -804,7 +804,7 @@ enum TemplateMode {
 fn lower_tir_template(
     ty: &Tir2Ty,
     resolved: &ResolvedAliases,
-    generic_params: &[ParamTy],
+    generic_layout: &RuntimeGenericLayout,
     mode: TemplateMode,
 ) -> Option<TyTemplate> {
     match ty {
@@ -815,22 +815,18 @@ fn lower_tir_template(
             ..
         } => {
             if matches!(&**base, Tir2Ty::TypeVar(param, _) if param.as_str() == "Self")
-                && let Some(index) = generic_params
-                    .iter()
-                    .position(|param| param.name() == member)
+                && let Some(index) = generic_layout.slot_by_name(member)
             {
-                return Some(TyTemplate::TypeArgRef(
-                    u32::try_from(index).expect("runtime type argument index fits in u32"),
-                ));
+                return Some(TyTemplate::TypeArgRef(index));
             }
             Some(TyTemplate::AssociatedTypeProjection {
-                base: Box::new(lower_tir_template(base, resolved, generic_params, mode)?),
+                base: Box::new(lower_tir_template(base, resolved, generic_layout, mode)?),
                 interface: Box::new(baml_type::TyTemplateInterface {
                     name: interface.name.clone(),
                     generics: interface
                         .generics
                         .iter()
-                        .map(|ty| lower_tir_template(ty, resolved, generic_params, mode))
+                        .map(|ty| lower_tir_template(ty, resolved, generic_layout, mode))
                         .collect::<Option<Vec<_>>>()?,
                     associated_types: interface
                         .associated_types
@@ -838,7 +834,7 @@ fn lower_tir_template(
                         .map(|(name, ty)| {
                             Some((
                                 name.clone(),
-                                lower_tir_template(ty, resolved, generic_params, mode)?,
+                                lower_tir_template(ty, resolved, generic_layout, mode)?,
                             ))
                         })
                         .collect::<Option<Vec<_>>>()?,
@@ -848,13 +844,8 @@ fn lower_tir_template(
             })
         }
         Tir2Ty::TypeVar(param, _) => {
-            if let Some(index) = generic_params
-                .iter()
-                .position(|candidate| candidate == param)
-            {
-                Some(TyTemplate::TypeArgRef(
-                    u32::try_from(index).expect("runtime type argument index fits in u32"),
-                ))
+            if let Some(index) = generic_layout.slot(param) {
+                Some(TyTemplate::TypeArgRef(index))
             } else if mode == TemplateMode::Value {
                 unreachable!("type variable not found in type args: {param}")
             } else {
@@ -862,19 +853,19 @@ fn lower_tir_template(
             }
         }
         Tir2Ty::List(inner, _) | Tir2Ty::EvolvingList(inner, _) => Some(TyTemplate::list(
-            lower_tir_template(inner, resolved, generic_params, mode)?,
+            lower_tir_template(inner, resolved, generic_layout, mode)?,
         )),
         Tir2Ty::Map {
             key: k, value: v, ..
         }
         | Tir2Ty::EvolvingMap(k, v, _) => Some(TyTemplate::map(
-            lower_tir_template(k, resolved, generic_params, mode)?,
-            lower_tir_template(v, resolved, generic_params, mode)?,
+            lower_tir_template(k, resolved, generic_layout, mode)?,
+            lower_tir_template(v, resolved, generic_layout, mode)?,
         )),
         Tir2Ty::Union(parts, _) => Some(TyTemplate::union(
             parts
                 .iter()
-                .map(|ty| lower_tir_template(ty, resolved, generic_params, mode))
+                .map(|ty| lower_tir_template(ty, resolved, generic_layout, mode))
                 .collect::<Option<Vec<_>>>()?,
         )),
         Tir2Ty::Class(qtn, type_args, attr) => {
@@ -883,7 +874,7 @@ fn lower_tir_template(
                     qtn.clone(),
                     type_args
                         .iter()
-                        .map(|ty| lower_tir_template(ty, resolved, generic_params, mode))
+                        .map(|ty| lower_tir_template(ty, resolved, generic_layout, mode))
                         .collect::<Option<Vec<_>>>()?,
                 ))
             } else {
@@ -907,14 +898,14 @@ fn lower_tir_template(
                     qtn.clone(),
                     type_args
                         .iter()
-                        .map(|ty| lower_tir_template(ty, resolved, generic_params, mode))
+                        .map(|ty| lower_tir_template(ty, resolved, generic_layout, mode))
                         .collect::<Option<Vec<_>>>()?,
                     associated_bindings
                         .iter()
                         .map(|(name, ty)| {
                             Some((
                                 name.clone(),
-                                lower_tir_template(ty, resolved, generic_params, mode)?,
+                                lower_tir_template(ty, resolved, generic_layout, mode)?,
                             ))
                         })
                         .collect::<Option<Vec<_>>>()?,
@@ -947,13 +938,13 @@ fn lower_tir_template(
                     .map(|param| {
                         Some(baml_type::TyTemplateFunctionParamTy {
                             name: param.name.clone(),
-                            ty: lower_tir_template(&param.ty, resolved, generic_params, mode)?,
+                            ty: lower_tir_template(&param.ty, resolved, generic_layout, mode)?,
                             mode: param.mode,
                         })
                     })
                     .collect::<Option<Vec<_>>>()?,
-                ret: Box::new(lower_tir_template(ret, resolved, generic_params, mode)?),
-                throws: Box::new(lower_tir_template(throws, resolved, generic_params, mode)?),
+                ret: Box::new(lower_tir_template(ret, resolved, generic_layout, mode)?),
+                throws: Box::new(lower_tir_template(throws, resolved, generic_layout, mode)?),
                 attr: TyAttr::default(),
             })
         }
@@ -961,13 +952,13 @@ fn lower_tir_template(
             Box::new(lower_tir_template(
                 value,
                 resolved,
-                generic_params,
+                generic_layout,
                 TemplateMode::Value,
             )?),
             Box::new(lower_tir_template(
                 error,
                 resolved,
-                generic_params,
+                generic_layout,
                 TemplateMode::Value,
             )?),
             TyAttr::default(),
@@ -986,12 +977,8 @@ pub fn tir2_to_template(
     let ty = baml_compiler2_tir::generics::erase_typevars_matching(ty, &|param| {
         baml_compiler2_tir::ty::is_synthetic_effect_param(param.name())
     });
-    let generic_params: Vec<_> = generic_params
-        .iter()
-        .filter(|param| !baml_compiler2_tir::ty::is_synthetic_effect_param(param.name()))
-        .cloned()
-        .collect();
-    lower_tir_template(&ty, resolved, &generic_params, TemplateMode::Value)
+    let generic_layout = RuntimeGenericLayout::new(generic_params.iter().cloned());
+    lower_tir_template(&ty, resolved, &generic_layout, TemplateMode::Value)
         .unwrap_or_else(|| unreachable!("value template lowering is infallible"))
 }
 
@@ -1014,7 +1001,8 @@ fn tir2_to_pattern_template(
     resolved: &ResolvedAliases,
     generic_params: &[ParamTy],
 ) -> Option<TyTemplate> {
-    lower_tir_template(ty, resolved, generic_params, TemplateMode::Pattern)
+    let generic_layout = RuntimeGenericLayout::new(generic_params.iter().cloned());
+    lower_tir_template(ty, resolved, &generic_layout, TemplateMode::Pattern)
 }
 
 /// Convert an already-resolved `baml_type::RuntimeTy` into a complete
@@ -4836,16 +4824,7 @@ impl<'db> LoweringContext<'db> {
         // Build TyTemplate entries for each enclosing generic type param so
         // the closure can materialise them at runtime.  These resolve in the
         // **outer** frame (TypeArgRef(N) → outer frame.type_args[N]).
-        let enclosing_params: Vec<_> = self
-            .enclosing_generic_params()
-            .into_iter()
-            .filter(|param| !baml_compiler2_tir::ty::is_synthetic_effect_param(param.name()))
-            .collect();
-        let type_arg_templates: Vec<TyTemplate> = enclosing_params
-            .iter()
-            .enumerate()
-            .map(|(n, _)| TyTemplate::TypeArgRef(n as u32))
-            .collect();
+        let type_arg_templates = self.enclosing_runtime_type_arg_templates();
 
         self.builder.assign(
             dest,
@@ -5351,16 +5330,7 @@ impl LoweringContext<'_> {
         let lambda_pending_idx = self.pending_lambdas.len();
         self.pending_lambdas.push(lambda_mir);
 
-        let enclosing_params: Vec<_> = self
-            .enclosing_generic_params()
-            .into_iter()
-            .filter(|param| !baml_compiler2_tir::ty::is_synthetic_effect_param(param.name()))
-            .collect();
-        let type_arg_templates: Vec<TyTemplate> = enclosing_params
-            .iter()
-            .enumerate()
-            .map(|(n, _)| TyTemplate::TypeArgRef(n as u32))
-            .collect();
+        let type_arg_templates = self.enclosing_runtime_type_arg_templates();
 
         let closure_local = self.builder.temp(closure_ty);
         self.builder.assign(
@@ -9286,15 +9256,9 @@ impl LoweringContext<'_> {
         if segments.len() != 1 || !generic_args.is_empty() || !associated_type_bindings.is_empty() {
             return None;
         }
-        generic_params
-            .iter()
-            .filter(|param| !baml_compiler2_tir::ty::is_synthetic_effect_param(param.name()))
-            .position(|param| param.name() == &segments[0])
-            .map(|index| {
-                TyTemplate::TypeArgRef(
-                    u32::try_from(index).expect("runtime type argument index fits in u32"),
-                )
-            })
+        RuntimeGenericLayout::new(generic_params.iter().cloned())
+            .slot_by_name(&segments[0])
+            .map(TyTemplate::TypeArgRef)
     }
 
     /// Recursively convert a `Tir2Ty` to a `TyTemplate`.
@@ -9330,6 +9294,13 @@ impl LoweringContext<'_> {
         let mut params = baml_compiler2_tir::function_generic_params(self.db, fl);
         params.extend(self.lambda_generic_params.iter().cloned());
         params
+    }
+
+    fn enclosing_runtime_type_arg_templates(&self) -> Vec<TyTemplate> {
+        RuntimeGenericLayout::new(self.enclosing_generic_params())
+            .slots()
+            .map(TyTemplate::TypeArgRef)
+            .collect()
     }
 
     /// The interface bounds of the type variables in scope for this function body, keyed by
