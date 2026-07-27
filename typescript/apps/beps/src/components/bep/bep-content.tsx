@@ -4,6 +4,7 @@ import { MarkdownHooks } from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeRaw from "rehype-raw";
 import { ShikiCodeBlock } from "@/components/ui/shiki-code-block";
+import { MermaidDiagram } from "@/components/ui/mermaid-diagram";
 import Link from "next/link";
 import { ReactNode, isValidElement, useMemo } from "react";
 import type { Components } from "react-markdown";
@@ -140,6 +141,9 @@ function createComponents(
           (codeElement.properties?.className as string[] | undefined)?.[0] || "";
         const language = className.replace(/^language-/, "");
         const code = getTextContent(codeElement).replace(/\n$/, "");
+        if (language === "mermaid") {
+          return <MermaidDiagram code={code} />;
+        }
         return <ShikiCodeBlock code={code} language={language} showLineNumbers />;
       }
 
