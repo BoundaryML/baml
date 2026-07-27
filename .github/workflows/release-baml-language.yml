@@ -1758,7 +1758,7 @@ jobs:
         with:
           name: swift-xcframework
           path: dist/swift
-      - uses: aws-actions/configure-aws-credentials@v4
+      - uses: aws-actions/configure-aws-credentials@v6
         with:
           role-to-assume: ${{ env.AWS_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
@@ -1993,7 +1993,7 @@ jobs:
         with:
           name: release-manifests
           path: manifests
-      - uses: aws-actions/configure-aws-credentials@v4
+      - uses: aws-actions/configure-aws-credentials@v6
         with:
           role-to-assume: ${{ env.AWS_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
@@ -2251,7 +2251,7 @@ jobs:
         with:
           name: dry-run-release-files
           path: dry-run
-      - uses: aws-actions/configure-aws-credentials@v4
+      - uses: aws-actions/configure-aws-credentials@v6
         if: ${{ needs.plan.outputs.source_branch == 'canary' }}
         with:
           role-to-assume: ${{ env.AWS_ROLE_ARN }}
