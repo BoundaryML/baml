@@ -2574,14 +2574,14 @@ function main(value: WrongId) -> int {
 
     #[test]
     fn parse_error_in_body_taints_scope_and_descendants() {
-        // A braceless lambda is a syntax error; parser recovery leaves a
-        // malformed lambda that would otherwise emit cascading type errors. The
-        // function-body scope containing the parse error — and its descendant
-        // lambda scope — must be tainted so those type errors are suppressed.
+        // A missing right-hand operand is a syntax error in the function body.
+        // The function-body scope containing the parse error — and its
+        // descendant lambda scope — must be tainted so cascading type errors
+        // are suppressed.
         let mut builder = ProjectTest::builder();
         builder.source(
             "test.baml",
-            "function Braceless() -> int {\n  let f = (x: int) => x + 1;\n  f(2)\n}\n",
+            "function Broken() -> int {\n  let broken = 1 + ;\n  let f = (x: int) -> { x + 1 };\n  f(2)\n}\n",
         );
         let test = builder.build();
         let file = test.files[0];
@@ -2590,7 +2590,7 @@ function main(value: WrongId) -> int {
         let parse_errors = baml_compiler_parser::parse_errors(&test.db, file);
         assert!(
             !parse_errors.is_empty(),
-            "braceless lambda should produce a parse error"
+            "missing right-hand operand should produce a parse error"
         );
 
         let tainted = parse_error_tainted_scopes(index, &parse_errors);
@@ -2605,7 +2605,7 @@ function main(value: WrongId) -> int {
             .scopes
             .iter()
             .position(|s| s.kind == ScopeKind::Lambda)
-            .expect("a lambda scope should exist for the braceless lambda");
+            .expect("a descendant lambda scope should exist");
         assert!(
             tainted.contains(&lambda_idx),
             "descendant lambda scope (index {lambda_idx}) must be tainted, got {tainted:?}"

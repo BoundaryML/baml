@@ -852,21 +852,24 @@ impl BexLspRequest for BexMulitProject {
         let path = self.get_path_from_uri(&params.text_document.uri)?;
         let root_path = Self::get_baml_project_root(&path)?;
         let project_handle = self.get_or_create_project(root_path)?;
-        // Get current file text from the project database.
-        let text = {
+        // Format the current source file in the project database. Keep the
+        // text for edit comparison and diagnostics, but reuse the existing
+        // Salsa input instead of constructing a second ProjectDatabase and
+        // reparsing cloned source through `baml_fmt::format`.
+        let (text, formatted) = {
             let guard = read_for_request(&project_handle.project)?;
             let lsp_db = guard.db();
             let Some(source_file) = lsp_db.get_file(std::path::Path::new(path.as_str())) else {
                 return Err(LspError::FileNotFound(path));
             };
-            source_file.text(lsp_db).clone()
+            let text = source_file.text(lsp_db).clone();
+            let formatted =
+                baml_fmt::format_salsa(lsp_db, source_file, baml_fmt::FormatOptions::default());
+            (text, formatted)
         };
 
-        // Map LSP FormattingOptions → baml_fmt FormatOptions.
-        let options = baml_fmt::FormatOptions::default();
-
         // Run the formatter. On parse errors, return no edits (silently skip).
-        let formatted = match baml_fmt::format(&text, &options) {
+        let formatted = match formatted {
             Ok(f) => f,
             Err(baml_fmt::FormatterError::ParseErrors { .. }) => return Ok(None),
             Err(baml_fmt::FormatterError::StrongAstError(e)) => {

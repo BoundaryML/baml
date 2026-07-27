@@ -11,10 +11,28 @@ source: crates/baml_tests/src/generated_tests.rs
    ·                            ╰── expected `lambda body '{'`, found `'+'`
    ╰────
 
+  [parse] E0010
+
+  × unexpected token
+    ╭─[braceless_lambda.baml:15:28]
+ 15 │   let add1 = (x: int) => x + ;
+    ·                            ┬
+    ·                            ╰── expected `lambda body '{'`, found `'+'`
+    ╰────
+
+  [parse] E0010
+
+  × unexpected token
+    ╭─[braceless_lambda.baml:15:30]
+ 15 │   let add1 = (x: int) => x + ;
+    ·                              ┬
+    ·                              ╰── expected `expression`, found `';'`
+    ╰────
+
   [type] E0004
 
   × operator `+` cannot be applied to `"hello"` and `5`
-    ╭─[braceless_lambda.baml:15:3]
- 15 │   "hello" + 5
+    ╭─[braceless_lambda.baml:22:3]
+ 22 │   "hello" + 5
     ·   ───────────
     ╰────
