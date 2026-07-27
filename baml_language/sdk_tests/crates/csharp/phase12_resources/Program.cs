@@ -548,14 +548,27 @@ static async Task RequireEventuallyAsync(
     string message)
 {
     Stopwatch stopwatch = Stopwatch.StartNew();
-    while (!condition())
+    TimeSpan pollInterval = TimeSpan.FromMilliseconds(10);
+    while (true)
     {
-        if (stopwatch.Elapsed >= timeout)
+        TimeSpan remaining = timeout - stopwatch.Elapsed;
+        if (remaining <= TimeSpan.Zero)
         {
             throw new InvalidOperationException(message);
         }
 
-        await Task.Delay(TimeSpan.FromMilliseconds(10));
+        if (condition())
+        {
+            return;
+        }
+
+        remaining = timeout - stopwatch.Elapsed;
+        if (remaining <= TimeSpan.Zero)
+        {
+            throw new InvalidOperationException(message);
+        }
+
+        await Task.Delay(remaining < pollInterval ? remaining : pollInterval);
     }
 }
 
