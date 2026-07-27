@@ -322,9 +322,8 @@ class Client {
         // the `$stream` companion calls this without explicit type-args and
         // inferred type-args don't reach MIR (see `__make_stream`'s registry
         // fallback). Resolve the real return type from the registry by name and
-        // use it for the whole attempt — the Jinja template may render
-        // `{{ ctx.output_format }}`, the closure's `${ctx.output_format}` needs
-        // it, and `build_request_stream` keys provider config off it. (The
+        // use it for the whole attempt — the closure's `${ctx.output_format}`
+        // needs it, and `build_request_stream` keys provider config off it. (The
         // oneshot path instead uses `reflect.type_of<T>()`, which DOES reach
         // MIR there.) Caveat: for a *generic* streaming function the registry
         // holds the unspecialized return type, so `${ctx.output_format}` renders
@@ -333,8 +332,7 @@ class Client {
 
         // Render + specialize via the shared `render_specialized_prompt` (same
         // path as oneshot and the static `build_request_stream` companion).
-        let specialized = primitive.render_specialized_prompt(
-          context.jinja_string, context.args, return_type, context.prompt_closure);
+        let specialized = primitive.render_specialized_prompt(return_type, context.prompt_closure);
 
         let http_request = primitive.build_request_stream(specialized, return_type);
         let sse = root.http.fetch_sse(http_request);
@@ -435,11 +433,10 @@ class Client {
         let primitive = self.to_primitive_client()
         let return_type = reflect.type_of<T>()
 
-        // Render (new-mode closure or legacy Jinja) + specialize via the shared
-        // `render_specialized_prompt`, the same path the static `build_request`
-        // companion uses — so execution and preview never drift.
-        let specialized = primitive.render_specialized_prompt(
-          context.jinja_string, context.args, return_type, context.prompt_closure)
+        // Render + specialize via the shared `render_specialized_prompt`, the
+        // same path the static `build_request` companion uses — so execution
+        // and preview never drift.
+        let specialized = primitive.render_specialized_prompt(return_type, context.prompt_closure)
         let http_request = primitive.build_request(specialized, return_type)
         let http_response = root.http.send(http_request)
 
@@ -724,15 +721,6 @@ class PrimitiveClient {
   provider string
   options PrimitiveClientOptions
 
-  function render_prompt(
-    self,
-    template: string,
-    args: map<string, unknown>,
-    return_type: type,
-  ) -> PromptAst throws root.errors.RenderPrompt {
-    $rust_io_function
-  }
-
   function specialize_prompt(
     self,
     prompt: PromptAst,
@@ -741,22 +729,23 @@ class PrimitiveClient {
   }
 
   /// BEP-049 M5: turn a function's prompt into a request-ready (specialized)
-  /// `PromptAst`, dispatching on mode. A new-mode `prompt`…`` compiles to a
-  /// `(Context) -> PromptAst` closure rendered against a per-attempt `Context`;
-  /// a legacy `#"..."#` function (null closure) renders the stored Jinja
-  /// `template`. This is the SINGLE source of truth for prompt rendering: the
-  /// orchestrator (`execute_once_oneshot` / `execute_stream`) and the static
-  /// `render_prompt` / `build_request` companions both call it, so the playground
-  /// preview/cURL and actual execution render byte-identically.
+  /// `PromptAst`. A `prompt` backtick body compiles to a `(Context) -> PromptAst`
+  /// closure rendered against a per-attempt `Context`. A legacy `#"..."#`
+  /// function (null closure) can no longer be rendered: its Jinja engine was
+  /// removed (B-1024), so it throws with a migration hint. This is the SINGLE
+  /// source of truth for prompt rendering: the orchestrator
+  /// (`execute_once_oneshot` / `execute_stream`) and the static `render_prompt`
+  /// / `build_request` companions both call it, so the playground preview/cURL
+  /// and actual execution render byte-identically.
   function render_specialized_prompt(
     self,
-    template: string,
-    args: map<string, unknown>,
     return_type: type,
     prompt_closure: ((Context) -> PromptAst throws never)?,
   ) -> PromptAst throws root.errors.RenderPrompt | root.errors.LlmClient {
     let prompt = match (prompt_closure) {
-      null => self.render_prompt(template, args, return_type),
+      null => throw root.errors.RenderPrompt {
+        message: "this function's prompt uses the legacy Jinja template syntax (prompt #\"...\"#), which is no longer supported at runtime; rewrite it as a backtick prompt (prompt `...`)",
+      },
       let closure: (Context) -> PromptAst throws never => closure(build_prompt_context(self, return_type)),
     };
     self.specialize_prompt(prompt)
@@ -809,17 +798,16 @@ function from_shorthand(
   $rust_io_function
 }
 
-function get_jinja_template(function_name: string) -> string throws root.errors.InvalidArgument {
-  $rust_io_function
-}
-
 /// BEP-049 §10 (M5d). Assemble a `PromptAst` from a tagged template's flattened
-/// `parts`/`values`. A `Role` value (from `${role("system")}`) starts a new chat
-/// message; strings — and other scalar values via their string form — accumulate
-/// into the current message's content. With no `Role` values the whole template
-/// becomes a single `PromptAst::Simple`. This replaces the magic-delimiter role
-/// mechanism of the Jinja path with direct structural assembly.
-function assemble_prompt_ast(parts: string[], values: unknown[]) -> PromptAst throws never {
+/// `parts` plus each interpolation twice: `values` holds the raw value (so a
+/// `Role` marker from `${role("system")}` can start a new chat message and a
+/// media value can become a media content part, whatever its host
+/// representation), `rendered` holds its `render_prompt_values` string form
+/// (used as the text of every other interpolation). With no `Role` values the
+/// whole template becomes a single `PromptAst::Simple`. This replaces the
+/// magic-delimiter role mechanism of the Jinja path with direct structural
+/// assembly.
+function assemble_prompt_ast(parts: string[], values: unknown[], rendered: unknown[]) -> PromptAst throws never {
   $rust_io_function
 }
 
@@ -832,7 +820,11 @@ function assemble_prompt_ast(parts: string[], values: unknown[]) -> PromptAst th
 /// every value through `string.from` — BAML's implicit `to_string`, the exact
 /// conversion an ordinary `${expr}` applies (honoring `baml.ToString` overrides)
 /// — except a `Role` marker (from `${role(...)}`), which stays raw so
-/// `assemble_prompt_ast` can still use it to split the prompt into chat messages.
+/// `assemble_prompt_ast` can still use it to split the prompt into chat
+/// messages. Media interpolations are recognized by the assembler on the RAW
+/// values array (their string form here is ignored): host-injected media does
+/// not inhabit the `baml.media.*` classes, so it cannot be exempted by a class
+/// match at this level.
 function render_prompt_values(values: unknown[]) -> unknown[] throws never {
   let rendered: unknown[] = []
   for (let value in values) {
@@ -897,7 +889,7 @@ function prompt(
 ) -> (Context) -> PromptAst throws never {
   let render = (ctx: Context) -> {
     let t = body(make_role, ctx)
-    assemble_prompt_ast(t.parts, render_prompt_values(t.values))
+    assemble_prompt_ast(t.parts, t.values, render_prompt_values(t.values))
   }
   render
 }

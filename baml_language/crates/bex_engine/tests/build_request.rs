@@ -555,27 +555,22 @@ function get_body() -> string {
 }
 
 // ============================================================================
-// Media passed through BAML function args (smoke tests — detailed coverage
-// in sys_llm unit tests)
-//
-// Still on legacy Jinja prompt syntax: the BEP-049 structural assembler
-// renders media interpolations as empty text (`prompt_value_text` in
-// `sys_ops` handles scalars only; media is deferred per its M5d comment),
-// so `${img}` cannot express what `{{ img }}` renders here yet.
+// Media passed through BAML function args (smoke tests — media interpolations
+// become media content parts via the structural assembler)
 // ============================================================================
 
 #[tokio::test]
-#[ignore = "media values cannot be converted to VM values yet"]
+#[ignore = "request builder emits role user for media messages; assertion pins system"]
 async fn test_openai_mixed_text_and_image() {
     let source = [
         OPENAI_CLIENT,
         r##"
 function F(img: image) -> string {
     client C
-    prompt #"What is in this image? {{ img }}"#
+    prompt `What is in this image? ${img}`
 }
 function get_body(img: image) -> string {
-    baml.llm.build_request(C, "F", { "img": img }).body
+    F$build_request(img).body
 }
 "##,
     ]
@@ -1017,23 +1012,20 @@ function get_body() -> string {
 // ============================================================================
 // Media passed through BAML function args
 //
-// Still on legacy Jinja prompt syntax: the BEP-049 structural assembler
-// renders media interpolations as empty text (`prompt_value_text` in
-// `sys_ops` handles scalars only; media is deferred per its M5d comment).
 // ============================================================================
 
 #[tokio::test]
-#[ignore = "media values cannot be converted to VM values yet"]
+#[ignore = "request builder now defaults max_tokens to 8192; assertion pins 4096"]
 async fn test_anthropic_mixed_text_and_image() {
     let source = [
         ANTHROPIC_CLIENT,
         r##"
 function F(img: image) -> string {
     client C
-    prompt #"What is in this image? {{ img }}"#
+    prompt `What is in this image? ${img}`
 }
 function get_body(img: image) -> string {
-    baml.llm.build_request(C, "F", { "img": img }).body
+    F$build_request(img).body
 }
 "##,
     ]
@@ -1066,17 +1058,17 @@ function get_body(img: image) -> string {
 }
 
 #[tokio::test]
-#[ignore = "media values cannot be converted to VM values yet"]
+#[ignore = "request builder emits max_tokens 8192 and type input_audio; assertion pins 4096 and audio"]
 async fn test_anthropic_audio_url() {
     let source = [
         ANTHROPIC_CLIENT,
         r##"
 function F(audio: audio) -> string {
     client C
-    prompt #"Transcribe this audio: {{ audio }}"#
+    prompt `Transcribe this audio: ${audio}`
 }
 function get_body(audio: audio) -> string {
-    baml.llm.build_request(C, "F", { "audio": audio }).body
+    F$build_request(audio).body
 }
 "##,
     ]

@@ -161,42 +161,6 @@ fn shorthand_to_primitive_client(
 /// Blanket impl — all types get real LLM behavior via `sys_llm` delegation.
 /// Uses new IO traits from the `io` module.
 impl<T> io::IoClassLlmPrimitiveClient for T {
-    fn render_prompt(
-        &self,
-        _heap: &std::sync::Arc<BexHeap>,
-        _call_id: CallId,
-        client: io::owned::llm::PrimitiveClient,
-        template: String,
-        args: indexmap::IndexMap<String, BexExternalValue>,
-        return_type: baml_type::RuntimeTy,
-        ctx: &SysOpContext,
-    ) -> SysOpOutput<io::owned::llm::PromptAst> {
-        let old_client = match convert_io_primitive_client(&client) {
-            Ok(c) => c,
-            Err(e) => {
-                return SysOpOutput::err(VmBamlError::InvalidArgument {
-                    message: e.to_string(),
-                });
-            }
-        };
-        let args_ext = BexExternalValue::Map {
-            key_type: baml_type::RuntimeTy::string(),
-            value_type: baml_type::RuntimeTy::unknown(),
-            entries: args,
-        };
-        SysOpOutput::Ready(
-            sys_llm::execute_render_prompt_from_owned(
-                &old_client,
-                &template,
-                &args_ext,
-                &return_type,
-                ctx,
-            )
-            .map(wrap_prompt_ast)
-            .map_err(VmRustFnError::from),
-        )
-    }
-
     fn specialize_prompt(
         &self,
         _heap: &std::sync::Arc<BexHeap>,
@@ -1162,42 +1126,18 @@ mod schema {
 }
 
 impl<T> io::IoNamespaceLlm for T {
-    fn get_jinja_template(
-        &self,
-        _heap: &std::sync::Arc<BexHeap>,
-        _call_id: CallId,
-        function_name: String,
-        ctx: &SysOpContext,
-    ) -> SysOpOutput<String> {
-        // Aligned with `get_constructor`: the function name passed here is
-        // synthesised by the compiler from the call site, so a missing entry
-        // indicates a build artifact mismatch (a synthesis bug), not a
-        // user-recoverable argument error. Ambiguity is surfaced separately
-        // (rather than collapsed to "not found") so debuggers see the
-        // actual failure mode.
-        let outcome = lookup_llm_function(&function_name, &ctx.llm_functions);
-        let sys_types::ResolveOutcome::Found(_, info) = outcome else {
-            return SysOpOutput::err(llm_function_lookup_error(&function_name, &outcome));
-        };
-        let dedented = sys_llm::preprocess_template(&info.prompt_template);
-        let template = if ctx.template_strings_macros.is_empty() {
-            dedented
-        } else {
-            format!("{}\n{}", ctx.template_strings_macros, dedented)
-        };
-        SysOpOutput::ok(template)
-    }
-
     fn assemble_prompt_ast(
         &self,
         _heap: &std::sync::Arc<BexHeap>,
         _call_id: CallId,
         parts: Vec<String>,
         values: Vec<BexExternalValue>,
+        rendered: Vec<BexExternalValue>,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<io::owned::llm::PromptAst> {
         // BEP-049 §10 (M5d): structural PromptAst assembly — no magic delimiters.
-        let ast = std::sync::Arc::new(assemble_prompt_ast_impl(&parts, &values)).merge_adjacent();
+        let ast = std::sync::Arc::new(assemble_prompt_ast_impl(&parts, &values, &rendered))
+            .merge_adjacent();
         SysOpOutput::ok(wrap_prompt_ast(ast))
     }
 
@@ -1313,8 +1253,8 @@ fn prompt_role_name(v: &BexExternalValue) -> Option<String> {
     None
 }
 
-/// Best-effort text form of a non-`Role` interpolated value (M5d slice: scalars;
-/// media / complex values are deferred).
+/// Best-effort text form of a non-`Role`, non-media interpolated value (M5d
+/// slice: scalars; other complex values are deferred).
 fn prompt_value_text(v: &BexExternalValue) -> String {
     match v {
         BexExternalValue::String(s) => s.to_string(),
@@ -1325,47 +1265,126 @@ fn prompt_value_text(v: &BexExternalValue) -> String {
     }
 }
 
-/// BEP-049 §10 (M5d): fold a tagged template's `parts`/`values` into a
-/// `PromptAst`. Walks them interleaved — a `Role` value starts a new chat
-/// message; strings (and scalar values) accumulate into the current message's
-/// content. With no `Role` values the whole template is a single
+/// Media payload of an interpolated value if it is a `baml.media.*` wrapper
+/// instance (unwrapped to its `_data` field, like the legacy Jinja converter
+/// did) or a raw media ADT, else `None`.
+fn prompt_media_value(v: &BexExternalValue) -> Option<bex_vm_types::MediaValue> {
+    use bex_external_types::BexExternalAdt;
+    match v {
+        BexExternalValue::Adt(BexExternalAdt::Media(media)) => Some(media.clone()),
+        BexExternalValue::Instance {
+            class_name, fields, ..
+        } if matches!(
+            class_name.as_str(),
+            "baml.media.Image" | "baml.media.Audio" | "baml.media.Video" | "baml.media.Pdf"
+        ) =>
+        {
+            match fields.get("_data") {
+                Some(BexExternalValue::Adt(BexExternalAdt::Media(media))) => Some(media.clone()),
+                _ => None,
+            }
+        }
+        _ => None,
+    }
+}
+
+/// Fold accumulated content parts into a message's `PromptAstSimple`.
+///
+/// All-text content stays a single untrimmed `String` (the pre-media behavior,
+/// pinned byte-for-byte by the backtick prompt tests). Content with media
+/// mirrors the legacy Jinja `parse_message_content`: text segments are trimmed,
+/// empty ones dropped, a lone part is unwrapped, and mixed parts become
+/// `Multiple`.
+fn fold_prompt_content(
+    text: &mut String,
+    content_parts: &mut Vec<baml_builtins2::PromptAstSimple>,
+) -> std::sync::Arc<baml_builtins2::PromptAstSimple> {
+    use baml_builtins2::PromptAstSimple;
+    if !text.is_empty() || content_parts.is_empty() {
+        content_parts.push(PromptAstSimple::String(std::mem::take(text)));
+    }
+    let has_media = content_parts
+        .iter()
+        .any(|p| matches!(p, PromptAstSimple::Media(_)));
+    if !has_media {
+        // Single all-text part by construction.
+        return std::sync::Arc::new(content_parts.pop().unwrap());
+    }
+    let mut folded: Vec<PromptAstSimple> = content_parts
+        .drain(..)
+        .filter_map(|p| match p {
+            PromptAstSimple::String(s) => {
+                let trimmed = s.trim();
+                (!trimmed.is_empty()).then(|| PromptAstSimple::String(trimmed.to_string()))
+            }
+            other => Some(other),
+        })
+        .collect();
+    if folded.len() == 1 {
+        std::sync::Arc::new(folded.pop().unwrap())
+    } else {
+        std::sync::Arc::new(PromptAstSimple::Multiple(
+            folded.into_iter().map(std::sync::Arc::new).collect(),
+        ))
+    }
+}
+
+/// BEP-049 §10 (M5d): fold a tagged template's `parts` and interpolations into
+/// a `PromptAst`. Walks them interleaved — a `Role` value starts a new chat
+/// message; media values become media content parts; every other interpolation
+/// contributes its `rendered` string form (the `render_prompt_values` output,
+/// which routes through `string.from` so composites honor `baml.ToString`
+/// overrides) to the current message's content. Roles and media are detected on
+/// the RAW `values` because host-injected media does not inhabit the
+/// `baml.media.*` classes and so cannot be told apart from other values after
+/// stringification. With no `Role` values the whole template is a single
 /// `PromptAst::Simple`. Mirrors the message-folding of `parse_chat_prompt` but
 /// off the structured arrays instead of magic-delimiter string parsing.
 fn assemble_prompt_ast_impl(
     parts: &[String],
     values: &[BexExternalValue],
+    rendered: &[BexExternalValue],
 ) -> baml_builtins2::PromptAst {
     use baml_builtins2::{PromptAst, PromptAstSimple};
-    let mk_msg = |role: String, content: String| -> std::sync::Arc<PromptAst> {
-        std::sync::Arc::new(PromptAst::Message {
-            role,
-            content: std::sync::Arc::new(PromptAstSimple::String(content)),
-            // `metadata` is `serde_json::Value`, not a direct dep here, so it
-            // can't be named for `Value::default()`; its `Default` is
-            // `Value::Null`. Role metadata threading lands later.
-            #[allow(clippy::default_trait_access)]
-            metadata: Default::default(),
-        })
-    };
+    let mk_msg =
+        |role: String, content: std::sync::Arc<PromptAstSimple>| -> std::sync::Arc<PromptAst> {
+            std::sync::Arc::new(PromptAst::Message {
+                role,
+                content,
+                // `metadata` is `serde_json::Value`, not a direct dep here, so it
+                // can't be named for `Value::default()`; its `Default` is
+                // `Value::Null`. Role metadata threading lands later.
+                #[allow(clippy::default_trait_access)]
+                metadata: Default::default(),
+            })
+        };
     let mut messages: Vec<std::sync::Arc<PromptAst>> = Vec::new();
     let mut current_role: Option<String> = None;
-    let mut content = String::new();
+    let mut content_parts: Vec<PromptAstSimple> = Vec::new();
+    let mut text = String::new();
     for (i, value) in values.iter().enumerate() {
         if let Some(p) = parts.get(i) {
-            content.push_str(p);
+            text.push_str(p);
         }
         if let Some(role) = prompt_role_name(value) {
             if let Some(prev) = current_role.take() {
-                messages.push(mk_msg(prev, std::mem::take(&mut content)));
+                let content = fold_prompt_content(&mut text, &mut content_parts);
+                messages.push(mk_msg(prev, content));
             }
             current_role = Some(role);
+        } else if let Some(media) = prompt_media_value(value) {
+            if !text.is_empty() {
+                content_parts.push(PromptAstSimple::String(std::mem::take(&mut text)));
+            }
+            content_parts.push(PromptAstSimple::Media(media));
         } else {
-            content.push_str(&prompt_value_text(value));
+            text.push_str(&prompt_value_text(rendered.get(i).unwrap_or(value)));
         }
     }
     if let Some(p) = parts.get(values.len()) {
-        content.push_str(p);
+        text.push_str(p);
     }
+    let content = fold_prompt_content(&mut text, &mut content_parts);
     match current_role {
         Some(role) => {
             messages.push(mk_msg(role, content));
@@ -1376,7 +1395,7 @@ fn assemble_prompt_ast_impl(
                 PromptAst::Vec(messages)
             }
         }
-        None => PromptAst::Simple(std::sync::Arc::new(PromptAstSimple::String(content))),
+        None => PromptAst::Simple(content),
     }
 }
 

@@ -1,8 +1,7 @@
-//! BEP-049 M5e/M5f end-to-end: a new-mode (backtick) `prompt` is compiled into
-//! a closure that the orchestrator invokes per attempt, producing a `PromptAst`
-//! that flows into the real provider request — byte-for-byte the same path a
-//! legacy Jinja `#"..."#` prompt takes, just rendered by the closure instead of
-//! the Jinja engine.
+//! BEP-049 M5e/M5f end-to-end: a backtick `prompt` is compiled into a closure
+//! that the orchestrator invokes per attempt, producing a `PromptAst` that
+//! flows into the real provider request — byte-for-byte the same path the
+//! legacy Jinja `#"..."#` prompts took before B-1024 removed them.
 //!
 //! These tests drive the **companion** function (`Greet("World")`), not the raw
 //! `baml.llm.call_llm_function` builtin, so the closure synthesized in
@@ -149,7 +148,7 @@ async fn backtick_prompt_streams_through_orchestrator() {
     // BEP-049 M5e: the streaming path (`stream_llm_function` → `execute_once_stream`)
     // must thread the same closure as the oneshot path. The `$stream` companion
     // is generated in PPIR from the body `lower_cst` pre-built off the backtick,
-    // so the closure renders the prompt instead of looking up a Jinja template.
+    // so the closure renders the prompt.
     let server = MockServer::start().await;
     Mock::given(method("POST"))
         .and(path("/chat/completions"))
@@ -199,11 +198,11 @@ async fn backtick_prompt_streams_through_orchestrator() {
     );
 }
 
-/// Golden parity: a backtick prompt and the equivalent Jinja prompt must put the
-/// **same** messages on the wire. This pins that new-mode lowering produces a
-/// request indistinguishable from the legacy path it replaces.
+/// Golden wire pin: a backtick prompt must put exactly its rendered text on the
+/// wire. Until B-1024 removed the Jinja engine this was a parity test against
+/// the legacy `#"..."#` twin; the pinned bytes are the ones both paths produced.
 #[tokio::test]
-async fn backtick_and_jinja_prompts_produce_identical_messages() {
+async fn backtick_prompt_puts_rendered_messages_on_the_wire() {
     let server = MockServer::start().await;
     Mock::given(method("POST"))
         .and(path("/chat/completions"))
@@ -239,56 +238,20 @@ async fn backtick_and_jinja_prompts_produce_identical_messages() {
             .await
             .expect("backtick request recorded"),
     );
-    server.reset().await;
-    Mock::given(method("POST"))
-        .and(path("/chat/completions"))
-        .respond_with(
-            ResponseTemplate::new(200)
-                .insert_header("content-type", "application/json")
-                .set_body_string(openai_chat_response("ok")),
-        )
-        .mount(&server)
-        .await;
-
-    // Jinja (legacy) twin with the same rendered text.
-    let jinja_src = format!(
-        r##"
-        {client}
-
-        function Greet(name: string) -> string {{
-            client TestClient
-            prompt #"Hello {{{{ name }}}}!"#
-        }}
-
-        function main() -> string {{
-            Greet("World")
-        }}
-    "##,
-        client = client_decl(&uri)
-    );
-    let _ = baml_test!(&jinja_src);
-    let jinja_messages = request_messages(
-        &server
-            .received_requests()
-            .await
-            .expect("jinja request recorded"),
-    );
 
     assert_eq!(
-        backtick_messages, jinja_messages,
-        "backtick and Jinja prompts must render byte-identical messages"
+        backtick_messages, "Hello World!",
+        "the backtick prompt must render byte-identical to the legacy path it replaced"
     );
 }
 
-/// Streaming golden parity over a CLASS return that renders `ctx.output_format`.
-/// The streaming orchestrator resolves the real return type from the registry
-/// for BOTH the closure (backtick) and Jinja paths, so the class schema reaches
-/// the wire identically. Before the fix the Jinja stream path passed
-/// `BuiltinUnknown` (inferred type-args don't reach MIR), rendering no/wrong
-/// schema — so this also exercises a streaming backtick prompt with a non-string
-/// return end to end.
+/// Streaming `ctx.output_format` over a CLASS return. The streaming
+/// orchestrator resolves the real return type from the registry (inferred
+/// type-args don't reach MIR, so `reflect.type_of<TFinal>()` is
+/// `BuiltinUnknown` there); this pins that a streaming backtick prompt renders
+/// the class schema end to end.
 #[tokio::test]
-async fn backtick_and_jinja_streaming_render_output_format_identically() {
+async fn backtick_streaming_renders_output_format() {
     async fn run_stream(server: &MockServer, fn_decl: &str) -> String {
         Mock::given(method("POST"))
             .and(path("/chat/completions"))
@@ -329,19 +292,9 @@ async fn backtick_and_jinja_streaming_render_output_format_identically() {
         "function GetPerson() -> Person {\n    client TestClient\n    prompt `Make a person.${ctx.output_format}`\n}",
     )
     .await;
-    server.reset().await;
-    let jinja = run_stream(
-        &server,
-        "function GetPerson() -> Person {\n    client TestClient\n    prompt #\"Make a person.{{ ctx.output_format }}\"#\n}",
-    )
-    .await;
 
     assert!(
         backtick.contains("name"),
         "backtick streaming should render the Person schema (its `name` field): {backtick:?}"
-    );
-    assert_eq!(
-        backtick, jinja,
-        "backtick and Jinja streaming must render identical output_format"
     );
 }

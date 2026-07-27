@@ -211,7 +211,7 @@ namespace baml.llm:
   class OrchestrationStep { methods: [] }
   class OutputFormat { methods: [] }
   class PlannerState { methods: [rr_local_offset, rr_pick_index] }
-  class PrimitiveClient { methods: [render_prompt, specialize_prompt, render_specialized_prompt, build_request, build_request_stream, new_stream_accumulator, validate_finish_reason, parse] }
+  class PrimitiveClient { methods: [specialize_prompt, render_specialized_prompt, build_request, build_request_stream, new_stream_accumulator, validate_finish_reason, parse] }
   class PrimitiveClientOptions { methods: [] }
   class PromptAst { methods: [text, messages, to_string] }
   class PromptMessage { methods: [] }
@@ -231,12 +231,10 @@ namespace baml.llm:
   function build_request_stream
   function call_llm_function<T>
   function from_shorthand
-  function get_jinja_template
   function get_return_type
   function make_role
   function parse<TStream, TFinal>
   function prompt
-  function prompt_template_for
   function render_output_format
   function render_prompt
   function render_prompt_values

@@ -7,9 +7,8 @@
 //!    (backtick) prompts, including `ctx.output_format`
 //! 3. the orchestration entry points fail cleanly without a valid API key
 
-use baml_builtins2::{PromptAst as BuiltinPromptAst, PromptAstSimple};
-use baml_type::TyAttr;
-use bex_engine::{FunctionCallContextBuilder, RuntimeTy};
+use baml_builtins2::PromptAst as BuiltinPromptAst;
+use bex_engine::FunctionCallContextBuilder;
 use bex_heap::BexExternalValue;
 
 /// A backtick `prompt` closure applied to a hand-built `Context` substitutes
@@ -98,63 +97,6 @@ function render_messages(question: string) -> string {
                 .into()
         )
     );
-}
-
-/// Enum rendering via `ctx.enums.<Enum>.<Variant>` has no backtick-prompt
-/// equivalent (the new `baml.llm.Context` carries no enums), so this test stays
-/// on the legacy Rust-level `sys_llm::render_prompt` API until one exists.
-#[tokio::test]
-async fn test_render_prompt_with_enums() {
-    use indexmap::IndexMap;
-    use sys_llm::{RenderEnum, RenderEnumVariant};
-
-    let template = "Category: {{ ctx.enums.Category.SPORTS }}";
-    let args = IndexMap::new();
-
-    let mut enums = std::collections::HashMap::new();
-    enums.insert(
-        "Category".to_string(),
-        RenderEnum {
-            name: "Category".to_string(),
-            variants: vec![
-                RenderEnumVariant {
-                    name: "SPORTS".to_string(),
-                },
-                RenderEnumVariant {
-                    name: "TECH".to_string(),
-                },
-                RenderEnumVariant {
-                    name: "POLITICS".to_string(),
-                },
-            ],
-        },
-    );
-
-    let ctx = sys_llm::RenderContext {
-        client: sys_llm::RenderContextClient {
-            name: "test".to_string(),
-            provider: "openai".to_string(),
-            default_role: "user".to_string(),
-            allowed_roles: vec!["user".to_string()],
-        },
-        output_format: sys_llm::OutputFormatContent::new(RuntimeTy::String {
-            attr: TyAttr::default(),
-        }),
-        tags: IndexMap::new(),
-        enums,
-    };
-
-    let result = sys_llm::render_prompt(template, &args, &ctx).unwrap();
-
-    match result {
-        BuiltinPromptAst::Simple(s) => {
-            let PromptAstSimple::String(s) = s.as_ref() else {
-                panic!("Expected string content");
-            };
-            assert_eq!(s, "Category: SPORTS");
-        }
-        _ => panic!("Expected string result"),
-    }
 }
 
 mod common;

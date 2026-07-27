@@ -30,9 +30,8 @@ use baml_compiler2_ppir::{
     function_body,
     item_data::{
         class_data, enum_data, file_classes, file_enums, file_free_impls, file_functions,
-        file_interfaces, file_lets, file_template_strings, file_tests, function_data,
-        function_llm_meta, function_llm_prompt, impl_block_data, interface_data,
-        method_interface_target, template_string_data, test_data,
+        file_interfaces, file_lets, file_tests, function_data, function_llm_meta, impl_block_data,
+        interface_data, method_interface_target, test_data,
     },
 };
 use baml_type::{RuntimeTy, TyAttr};
@@ -1841,15 +1840,6 @@ pub fn decompose_units(
         units[carrier].package_fragment = frag;
     }
 
-    // ---- Template-string macros (Pass 5 fragment, per file) -----------------
-    for (fi, file) in all_files.iter().enumerate() {
-        for &ts_loc in file_template_strings(db, *file) {
-            if let Some(macro_def) = render_template_macro(template_string_data(db, ts_loc)) {
-                units[fi].template_macros.push(macro_def);
-            }
-        }
-    }
-
     // ---- Test cases (Pass 8 fragment, per file by source path) --------------
     if options.emit_test_cases {
         for test in &program.test_cases {
@@ -1895,24 +1885,6 @@ fn local_ref_sort_key(r: LocalRef) -> (u8, u32) {
         LocalRef::Interface(k) => (2, k),
         LocalRef::Code(k) => (3, k),
     }
-}
-
-/// Render one template-string definition as a Jinja `{% macro %}` block, or
-/// `None` for a body-less (declaration-only) template string.
-fn render_template_macro(
-    ts: &baml_compiler2_ppir::item_data::TemplateStringData,
-) -> Option<String> {
-    let body = ts.body.as_ref()?;
-    let args = ts
-        .params
-        .iter()
-        .map(|param| param.name.to_string())
-        .collect::<Vec<_>>()
-        .join(", ");
-    Some(format!(
-        "{{% macro {name}({args}) %}}{body}{{% endmacro %}}",
-        name = ts.name,
-    ))
 }
 
 /// Fully-qualified name of a class/enum/interface definition object.
@@ -2467,15 +2439,8 @@ fn generate_impl(
     )?;
 
     // --- Pass 5: Template string macros ---
-    let mut template_macros = Vec::new();
-    for file in &all_files {
-        for &ts_loc in file_template_strings(db, *file) {
-            if let Some(macro_def) = render_template_macro(template_string_data(db, ts_loc)) {
-                template_macros.push(macro_def);
-            }
-        }
-    }
-    program.template_strings_macros = template_macros.join("\n");
+    // Removed with the Jinja engine (B-1024): template strings no longer emit
+    // `{% macro %}` fragments. Pass 5 is intentionally empty.
 
     // --- Pass 6: Retry policies ---
     // Retry policies are now synthesized as Item::Let bindings during CST lowering.
@@ -4904,19 +4869,11 @@ fn attach_function_metadata<'db>(
     if let Some(llm_meta) = function_llm_meta(db, func_loc)
         && let Some(client) = &llm_meta.client_name
     {
-        // New-mode (BEP-049 M5) functions have no Jinja `prompt` text — the compiled
-        // closure renders it — but they still need a registry entry so
-        // `get_return_type` / `get_stream_return_type` (used by `__make_stream` and
-        // the streaming `Context`) resolve by name. The empty template is never read
-        // for them (their `prompt_closure` is non-null, so the Jinja
-        // `get_jinja_template` branch is skipped). The prompt text is fetched from
-        // the span-carrying `function_llm_prompt` sibling of `function_llm_meta`.
-        let prompt_template = function_llm_prompt(db, func_loc)
-            .as_ref()
-            .map(|p| p.text.clone())
-            .unwrap_or_default();
+        // LLM functions need a registry entry so `get_return_type` /
+        // `get_stream_return_type` (used by `__make_stream` and the streaming
+        // `Context`) resolve by name. The prompt itself is rendered by the
+        // function's compiled closure, not from registered text (B-1024).
         compiled_fn.body_meta = Some(FunctionMeta::Llm {
-            prompt_template,
             client: client.to_string(),
         });
         compiled_fn.capture = FunctionCaptureProps::disabled()
