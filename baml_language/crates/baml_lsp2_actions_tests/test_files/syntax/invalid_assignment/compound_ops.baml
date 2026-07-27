@@ -63,3 +63,10 @@ function CompoundAssignments() -> int {
 //  27 │     f += 1;
 //     ·     ─
 //     ╰────
+// E0004
+//
+//   × operator `+` cannot be applied to `float` and `"add"`
+//     ╭─[invalid_assignment_compound_ops.baml:31:2]
+//  31 │     g += "add";
+//     ·     ─
+//     ╰────

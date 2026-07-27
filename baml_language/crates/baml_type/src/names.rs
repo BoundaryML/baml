@@ -221,6 +221,20 @@ impl QualifiedTypeName {
         self.render_dotted(true)
     }
 
+    /// Return the primitive represented by a builtin companion class.
+    pub fn builtin_primitive(&self) -> Option<PrimitiveType> {
+        if self.package().as_str() != "baml" {
+            return None;
+        }
+        let path: Vec<&str> = self
+            .namespace
+            .iter()
+            .map(Name::as_str)
+            .chain(std::iter::once(self.name.as_str()))
+            .collect();
+        PrimitiveType::from_builtin_class_path(&path)
+    }
+
     /// If this names a builtin `baml` companion class that has a lowercase
     /// primitive/keyword alias, return that alias: `baml.String` → `string`,
     /// `baml.media.Image` → `image`, `baml.json.json` → `json`. Returns `None`
@@ -231,23 +245,15 @@ impl QualifiedTypeName {
     /// type printer; it must stay in sync with
     /// [`PrimitiveType::builtin_class_path`].
     pub fn builtin_alias(&self) -> Option<&'static str> {
-        if self.package().as_str() != "baml" {
-            return None;
-        }
         // `json` is the `baml.json.json` type alias, not a `PrimitiveType`.
-        if self.namespace.len() == 1
+        if self.package().as_str() == "baml"
+            && self.namespace.len() == 1
             && self.namespace[0].as_str() == "json"
             && self.name.as_str() == "json"
         {
             return Some("json");
         }
-        let path: Vec<&str> = self
-            .namespace
-            .iter()
-            .map(Name::as_str)
-            .chain(std::iter::once(self.name.as_str()))
-            .collect();
-        PrimitiveType::from_builtin_class_path(&path).map(|p| p.alias())
+        self.builtin_primitive().map(|p| p.alias())
     }
 }
 
@@ -333,6 +339,19 @@ mod alias_tests {
         assert_eq!(baml_qtn(&[], "Int").builtin_alias(), Some("int"));
         assert_eq!(baml_qtn(&["media"], "Image").builtin_alias(), Some("image"));
         assert_eq!(baml_qtn(&["media"], "Pdf").builtin_alias(), Some("pdf"));
+    }
+
+    #[test]
+    fn builtin_primitive_recognizes_companion_classes() {
+        assert_eq!(
+            baml_qtn(&[], "String").builtin_primitive(),
+            Some(PrimitiveType::String)
+        );
+        assert_eq!(
+            baml_qtn(&["media"], "Image").builtin_primitive(),
+            Some(PrimitiveType::Image)
+        );
+        assert_eq!(baml_qtn(&["json"], "json").builtin_primitive(), None);
     }
 
     #[test]

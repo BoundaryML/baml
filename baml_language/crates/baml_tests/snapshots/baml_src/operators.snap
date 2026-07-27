@@ -340,22 +340,29 @@ function operators.$init_test_ns_operators_operators(registry: testing.TestColle
     pop 1
     load_var registry
     load_const "root.operators"
-    load_const "driver_mixed_widening_matches_opcodes"
+    load_const "driver_string_add_matches_opcode"
     make_closure .<lambda($init_test_ns_operators_operators, 48)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.operators"
-    load_const "operator_mixed_primitive_union_add"
+    load_const "driver_mixed_widening_matches_opcodes"
     make_closure .<lambda($init_test_ns_operators_operators, 49)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.operators"
-    load_const "driver_panics_match_opcodes"
+    load_const "operator_mixed_primitive_union_add"
     make_closure .<lambda($init_test_ns_operators_operators, 50)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.operators"
+    load_const "driver_panics_match_opcodes"
+    make_closure .<lambda($init_test_ns_operators_operators, 51)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
@@ -787,6 +794,13 @@ function operators.drv_neg(a: T) -> T {
 function operators.drv_rem(a: T, b: T) -> T {
     load_var2 1 2
     call baml.ops.__union_rem
+    return
+}
+
+function operators.drv_string_add(a: string, b: string) -> string {
+    load_type string
+    load_var2 1 2
+    call user.operators.drv_add
     return
 }
 

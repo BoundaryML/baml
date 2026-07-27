@@ -5928,6 +5928,9 @@ function baml.ops.Add<int>$for$float.add(self: float, rhs: int) -> float {
 function baml.ops.Add<int>$for$int.add(self: int, rhs: int) -> int {
 }
 
+function baml.ops.Add<string>$for$string.add(self: string, rhs: string) -> string {
+}
+
 function baml.ops.Compare$for$bigint.lt(self: bigint, other: bigint) -> bool {
 }
 
