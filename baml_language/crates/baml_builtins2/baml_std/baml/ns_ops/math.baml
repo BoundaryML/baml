@@ -1,4 +1,4 @@
-// Native math operators (`+ - * / %` and unary `-`) for the numeric primitives,
+// Native math operators (`+ - * / %` and unary `-`) for primitive values,
 // declared as `baml.ops.{Add,Subtract,Multiply,Divide,Remainder,Negate}` and
 // implemented in `crates/bex_vm/src/package_baml/ops_math.rs`.
 //
@@ -295,12 +295,12 @@ implement Remainder<bigint> for int {
 }
 
 // ==== string ====
-//
-// Deliberately no impls: `string + string` concatenation is compiler
-// fast-path only, and `string + <non-string>` / `string * int` stay type
-// errors. `string` therefore never satisfies an `Add` bound and never
-// reaches the `__union_*` drivers (a union pair involving it fails the
-// type check first).
+
+implement Add<string> for string {
+    function add(self, rhs: string) -> string throws never {
+        $rust_function
+    }
+}
 
 // ==== operator dispatch drivers ====
 //

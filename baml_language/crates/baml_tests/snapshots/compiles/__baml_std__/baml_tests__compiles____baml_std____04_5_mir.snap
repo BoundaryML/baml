@@ -8861,6 +8861,8 @@ fn baml.ops.Divide<bigint>$for$int.div = builtin(vm)
 
 fn baml.ops.Remainder<bigint>$for$int.rem = builtin(vm)
 
+fn baml.ops.Add<string>$for$string.add = builtin(vm)
+
 fn baml.ops.__union_add = builtin(vm)
 
 fn baml.ops.__union_sub = builtin(vm)

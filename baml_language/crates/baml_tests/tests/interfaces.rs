@@ -12122,6 +12122,95 @@ fn ordering_on_same_concrete_primitive_is_ok() {
 // outputs.
 
 #[test]
+fn scalar_arithmetic_matches_builtin_impl_matrix() {
+    let types = [
+        ("int", "int"),
+        ("float", "float"),
+        ("bigint", "bigint"),
+        ("string", "string"),
+        ("bool", "bool"),
+        ("null", "null"),
+    ];
+    let operators = [
+        ("add", "+"),
+        ("sub", "-"),
+        ("mul", "*"),
+        ("div", "/"),
+        ("rem", "%"),
+    ];
+    let numeric_pair = |lhs: &str, rhs: &str| {
+        matches!(
+            (lhs, rhs),
+            ("int", "int")
+                | ("int", "float")
+                | ("float", "int")
+                | ("float", "float")
+                | ("int", "bigint")
+                | ("bigint", "int")
+                | ("bigint", "bigint")
+        )
+    };
+
+    let mut valid_source = String::new();
+    let mut invalid_source = String::new();
+    let mut invalid_count = 0;
+    for (lhs_name, lhs_ty) in types {
+        for (rhs_name, rhs_ty) in types {
+            for (op_name, symbol) in operators {
+                let is_valid = numeric_pair(lhs_name, rhs_name)
+                    || (lhs_name == "string" && rhs_name == "string" && op_name == "add");
+                let source = format!(
+                    "function {op_name}_{lhs_name}_{rhs_name}(lhs: {lhs_ty}, rhs: {rhs_ty}) -> int {{ lhs {symbol} rhs; 0 }}\n"
+                );
+                if is_valid {
+                    valid_source.push_str(&source);
+                } else {
+                    invalid_source.push_str(&source);
+                    invalid_count += 1;
+                }
+            }
+        }
+    }
+
+    assert_no_compile_errors(&valid_source);
+    let errors = collect_compile_errors(&invalid_source);
+    assert_eq!(
+        errors.len(),
+        invalid_count,
+        "each missing impl must produce one error:\n  {}",
+        errors.join("\n  ")
+    );
+    assert!(
+        errors
+            .iter()
+            .all(|error| error.contains("cannot be applied")),
+        "unexpected diagnostics:\n  {}",
+        errors.join("\n  ")
+    );
+}
+
+#[test]
+fn structural_arithmetic_without_impls_is_rejected() {
+    let errors = collect_compile_errors(
+        r#"
+        function f(xs: int[], values: map<string, int>, n: float) -> int {
+            xs + n;
+            n + xs;
+            values + n;
+            n + values;
+            0
+        }
+        "#,
+    );
+    assert_eq!(errors.len(), 4, "unexpected diagnostics: {errors:#?}");
+    assert!(
+        errors
+            .iter()
+            .all(|error| error.contains("cannot be applied"))
+    );
+}
+
+#[test]
 fn arithmetic_on_user_type_implementing_add_is_ok() {
     assert_no_compile_errors(
         r#"
