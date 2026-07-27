@@ -69,6 +69,9 @@ PRIMITIVE_CONSUMER = (
     / "Baml.Bridge.PrimitivePackageConsumer"
     / "verify.sh"
 )
+PKG_BOUNDARYML_COM_STACK = (
+    ROOT / "tools" / "pkg_boundaryml_com" / "lib" / "pkg-boundaryml-com-stack.ts"
+)
 
 
 class CSharpReleaseContractTests(unittest.TestCase):
@@ -746,6 +749,7 @@ class WorkflowGraphTests(unittest.TestCase):
     def test_production_release_is_ci_attested_and_least_privilege(self) -> None:
         release = RELEASE_WORKFLOW.read_text(encoding="utf-8")
         ci = CI_WORKFLOW.read_text(encoding="utf-8")
+        pkg_stack = PKG_BOUNDARYML_COM_STACK.read_text(encoding="utf-8")
         plan = job_block(release, "plan")
         prerequisites = job_block(release, "release-prerequisites-complete")
         complete = job_block(release, "release-complete")
@@ -811,6 +815,22 @@ class WorkflowGraphTests(unittest.TestCase):
             nightly,
         )
         self.assertNotIn("--ref canary", nightly)
+        self.assertIn(
+            "`repo:${GITHUB_REPO}:ref:refs/heads/canary`",
+            pkg_stack,
+        )
+        self.assertIn(
+            "`repo:${GITHUB_REPO}:ref:refs/tags/baml-language-source-*`",
+            pkg_stack,
+        )
+        self.assertIn(
+            "'token.actions.githubusercontent.com:sub': GITHUB_OIDC_SUBJECTS",
+            pkg_stack,
+        )
+        self.assertNotIn(
+            "`repo:${GITHUB_REPO}:ref:*`",
+            pkg_stack,
+        )
 
     def test_release_graph_has_early_preflight_parallel_producers_and_complete_fanin(
         self,
