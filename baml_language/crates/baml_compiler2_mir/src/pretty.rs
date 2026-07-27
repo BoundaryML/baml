@@ -356,10 +356,15 @@ fn write_terminator(f: &mut impl Write, term: &Terminator) -> fmt::Result {
             closure,
             name,
             config,
+            future_ty,
             future,
             resume,
         } => {
-            write!(f, "{future} = spawn ")?;
+            write!(
+                f,
+                "{future} = spawn<{}, {}> ",
+                future_ty.returns, future_ty.throws
+            )?;
             write_operand(f, closure)?;
             write!(f, " name=")?;
             write_operand(f, name)?;

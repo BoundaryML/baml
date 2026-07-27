@@ -2315,6 +2315,8 @@ function baml.future.all(futures: future<T, E>[]) -> future<T[], E> {
     make_closure .<lambda(all, 0)>, captures=1, ntypeargs=2
     load_const null
     load_const null
+    load_type #0[]
+    load_type #1
     spawn
     store_var _3
     load_var _3
@@ -2331,6 +2333,8 @@ function baml.future.all_complete(futures: future<T, E>[]) -> future<T[], E> {
     make_closure .<lambda(all_complete, 0)>, captures=1, ntypeargs=2
     load_const null
     load_const null
+    load_type #0[]
+    load_type #1
     spawn
     store_var _3
     load_var _3
@@ -2347,6 +2351,8 @@ function baml.future.any(futures: future<T, Err>[]) -> future<T, baml.future.All
     make_closure .<lambda(any, 0)>, captures=1, ntypeargs=2
     load_const null
     load_const null
+    load_type #0
+    load_type baml.future.AllFailed<#1>
     spawn
     store_var _3
     load_var _3
@@ -2363,6 +2369,8 @@ function baml.future.race(futures: future<T, E>[]) -> future<T, E> {
     make_closure .<lambda(race, 0)>, captures=1, ntypeargs=2
     load_const null
     load_const null
+    load_type #0
+    load_type #1
     spawn
     store_var _3
     load_var _3

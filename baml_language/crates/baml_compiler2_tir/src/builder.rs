@@ -5453,29 +5453,18 @@ impl<'db> TypeInferenceBuilder<'db> {
             Ty::Function { ret, .. } => ret.as_ref().clone(),
             _ => lambda_ty.clone(),
         };
-        // Read the body's effective throws from the side table
-        // populated by `infer_lambda_body`. `Never` means the
-        // body throws nothing; BAML lacks a `never` type
-        // variant, so approximate with `Null` (per the BEP's
-        // "Future<T, never> ≈ Future<T, null> in v1" note).
+        // Read the body's effective throws from the side table populated by
+        // `infer_lambda_body`, which computes it for every lambda it infers and
+        // collapses "throws nothing" to `Never` — so a body that statically
+        // cannot throw types the future as `Future<T, never>`. `Expr::Spawn`'s
+        // body is always the synthetic `<spawn>` lambda (`lower_spawn_expr`
+        // lowers a block-less `spawn` to `Expr::Missing` outright rather than
+        // building a `Spawn` around a non-lambda body), so the entry exists.
         let throws_ty = self
             .lambda_effective_throws
             .get(&spawn_body)
             .cloned()
-            .map_or_else(
-                || Ty::Null {
-                    attr: TyAttr::default(),
-                },
-                |t| {
-                    if matches!(t, Ty::Never { .. }) {
-                        Ty::Null {
-                            attr: TyAttr::default(),
-                        }
-                    } else {
-                        t
-                    }
-                },
-            );
+            .unwrap_or_else(|| unreachable!("Unknown effective lambda throws"));
 
         // BEP-034 middleware: fold the `with` transformers left-to-right.
         // The body seeds an implicit `SpawnParams<T0, E0>`; each transformer
@@ -5488,8 +5477,8 @@ impl<'db> TypeInferenceBuilder<'db> {
         // spawn's `Future`. Type-changing transformers (e.g. a fallback
         // erasing the error type) fall out naturally.
         // Widen fresh literal types out of the seed (`spawn with t { 1 }`
-        // must read `SpawnParams<int, null>` in diagnostics and bindings,
-        // not `SpawnParams<1, null>`).
+        // must read `SpawnParams<int, never>` in diagnostics and bindings,
+        // not `SpawnParams<1, never>`).
         let mut cur_value = value_ty.widen_fresh();
         let mut cur_error = throws_ty.widen_fresh();
         for with_id in with_exprs {
@@ -15253,9 +15242,13 @@ impl crate::exhaustiveness::PatCtx for TypeInferenceBuilder<'_> {
             // Open interfaces always require a wildcard — new implementors
             // can appear in any file. See BEP-044 §"Interaction with match".
             Ty::Interface(_, _, _, _) => vec![Ctor::NonExhaustive],
-            // Futures are non-exhaustive at the pattern level: there is
-            // no surface syntax to match against `Future<T, E>` other
-            // than a wildcard.
+            // `Future`'s instantiations cannot be enumerated, so a `Future`
+            // column is covered only by a row that is wildcard-shaped at it.
+            // A same-instantiation `Future<T, E>` pattern *is* such a row
+            // (`dpat_for_type` lowers it to a wildcard once the column is
+            // already that instantiation), so a single arm still exhausts a
+            // `Future<int, never>` scrutinee; a differently-instantiated pattern
+            // claims a different union member instead (`atoms_overlap`).
             Ty::Future(..) => vec![Ctor::NonExhaustive],
             // Slice path in `split_ctors` enumerates length classes from
             // the matrix; this branch is only reached if the algorithm
@@ -16119,6 +16112,15 @@ impl TypeInferenceBuilder<'_> {
                 }
                 | Ty::EvolvingMap(b_k, b_v, _),
             ) => self.dispatch_args_compatible(a_k, b_k) && self.dispatch_args_compatible(a_v, b_v),
+            // Future: same head AND both type arguments could be the same
+            // realized argument — invariant positions, exactly like the
+            // containers above. A spawned future carries the `<T, E>` its spawn
+            // site was typed at, so a `Future<int, never>` pattern does not
+            // target a `Future<string, never>` member.
+            (Ty::Future(a_value, a_error, _), Ty::Future(b_value, b_error, _)) => {
+                self.dispatch_args_compatible(a_value, b_value)
+                    && self.dispatch_args_compatible(a_error, b_error)
+            }
             // Function: arities match AND every param pair overlaps AND
             // returns overlap. A `(int) -> int` pattern can never match a
             // `(string) -> int` value, so they must not be reported as

@@ -1,3 +1,7 @@
 # Generated content inside each sdk-test crate. The `generated/` tree
 # is build.rs output — never committed; regenerated on every build.
 **/generated/
+**/.generated.baml-staging/
+**/.baml_client.baml-staging/
+**/.generated.baml-backup/
+**/.baml_client.baml-backup/

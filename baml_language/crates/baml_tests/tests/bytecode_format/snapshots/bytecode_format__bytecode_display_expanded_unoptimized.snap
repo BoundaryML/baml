@@ -177,7 +177,7 @@ function testing.$invoke_collector(collector: (testing.TestCollector) -> void th
 }
 
 function testing.FailFast() -> (testing.TestSetChild[]) -> testing.TestSetReport throws never {
-  102   0   make_closure 1502 0   
+  102   0   make_closure 1501 0   
         1   store_var 1           (_0)
         2   load_var 1            (_0)
         3   return                
@@ -204,7 +204,7 @@ function testing.PassRate(threshold: float) -> (testing.TestSetChild[]) -> testi
        15   pop 1                  
 
   74   16   load_var 1             (threshold)
-       17   make_closure 1497 1    
+       17   make_closure 1496 1    
        18   store_var 2            (_0)
        19   load_var 2             (_0)
        20   return                 
@@ -245,7 +245,7 @@ function testing.Quorum(n: int, m: int) -> (() -> testing.TestReport throws neve
        27   pop 1                  
 
   10   28   load_var2 1 2          
-       29   make_closure 1481 2    
+       29   make_closure 1480 2    
        30   store_var 3            (_0)
        31   load_var 3             (_0)
        32   return                 
@@ -266,14 +266,14 @@ function testing.Retry(max_attempts: int) -> (() -> testing.TestReport throws ne
        9    pop 1                  
 
   41   10   load_var 1             (max_attempts)
-       11   make_closure 1491 1    
+       11   make_closure 1490 1    
        12   store_var 2            (_0)
        13   load_var 2             (_0)
        14   return                 
 }
 
 function testing.Sequential() -> (testing.TestSetChild[]) -> testing.TestSetReport throws never {
-  96   0   make_closure 1500 0   
+  96   0   make_closure 1499 0   
        1   store_var 1           (_0)
        2   load_var 1            (_0)
        3   return                
@@ -2765,7 +2765,7 @@ function testing.run_children_parallel(children: testing.TestSetChild[]) -> test
         16   load_var 4                         (_4)
         17   is_type 5                          
         18   pop_jump_if_false +2               (to 20)
-        19   jump +16                           (to 35)
+        19   jump +18                           (to 37)
         20   load_const 6                       (null)
         21   make_cell                          
         22   store_var 5                        (child)
@@ -2776,27 +2776,23 @@ function testing.run_children_parallel(children: testing.TestSetChild[]) -> test
         26   make_closure 1384 1                
         27   load_const 6                       (null)
         28   load_const 6                       (null)
-        29   spawn                              
-        30   store_var 6                        (_11)
-        31   load_var2 2 6                      
-        32   call 4 ntypeargs=0                 (baml.Array.push)
-        33   pop 1                              
-        34   jump -23                           (to 11)
+        29   load_type 7                        
+        30   load_type 8                        
+        31   spawn                              
+        32   store_var 6                        (_11)
+        33   load_var2 2 6                      
+        34   call 4 ntypeargs=0                 (baml.Array.push)
+        35   pop 1                              
+        36   jump -25                           (to 11)
 
-  403   35   load_type 7                        
-        36   load_type 8                        
-        37   load_var 2                         (futures)
-        38   call 522 ntypeargs=2               (baml.future.all_complete)
-        39   await                              
-        40   jump +5                            (to 45)
-        41   load_var 7                         (e)
-        42   throw_if_panic                     
+  405   37   load_type 7                        
+        38   load_type 8                        
+        39   load_var 2                         (futures)
+        40   call 522 ntypeargs=2               (baml.future.all_complete)
+        41   await                              
 
-  404   43   load_const 9                       ("unexpected test child failure")
-        44   call 247 ntypeargs=0               (baml.sys.panic)
-
-  406   45   call 762 ntypeargs=0               (testing.aggregate_reports)
-        46   return                             
+  406   42   call 762 ntypeargs=0               (testing.aggregate_reports)
+        43   return                             
 }
 
 function testing.run_children_sequential(children: testing.TestSetChild[], fail_fast: bool) -> testing.TestSetReport {
@@ -2877,7 +2873,7 @@ function testing.run_test(body: () -> void throws unknown, runner: ((() -> testi
         2    store_var 1            
 
   411   3    load_var 1             (body)
-        4    make_closure 1394 1    
+        4    make_closure 1393 1    
         5    store_var 3            (base_run)
 
   435   6    load_var 2             (runner)

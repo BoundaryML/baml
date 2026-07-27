@@ -1513,8 +1513,8 @@ const BLANKET_IMPL_BOUND_DEPTH: u32 = 16;
 ///
 /// This is a broader question than [`Ty::is_valid_impl_subject`], which asks
 /// whether a type may be a *written* impl's for-type: `Future` is excluded there
-/// (a top-level `implement I for Future<T>` would bake an undispatchable rule)
-/// but is a valid blanket *receiver* here — the blanket's for-template is a
+/// only because written impls on it are not implemented yet (see that doc), but
+/// it is a valid blanket *receiver* here — the blanket's for-template is a
 /// wildcard that binds the concrete `Future<…>` at runtime.
 fn is_concrete_receiver(ty: &Ty) -> bool {
     matches!(

@@ -38,6 +38,8 @@ function cancel_cascade.cancel_after_gc_relocation_still_settles() -> int {
     make_closure .<lambda(cancel_after_gc_relocation_still_settles, 0)>, 0
     load_const null
     load_const null
+    load_type int
+    load_type baml.errors.Io
     spawn
     store_var _3
     load_var _3
@@ -105,6 +107,8 @@ function cancel_cascade.cancel_from_handle_then_await_catches_cancelled() -> int
     make_closure .<lambda(cancel_from_handle_then_await_catches_cancelled, 0)>, 0
     load_const null
     load_const null
+    load_type int
+    load_type baml.errors.Io
     spawn
     store_var _3
     load_var _3
@@ -140,6 +144,8 @@ function cancel_cascade.cancel_unblocks_await_on_non_descendant_fn() -> bool {
     make_closure .<lambda(cancel_unblocks_await_on_non_descendant_fn, 0)>, 0
     load_const null
     load_const null
+    load_type int
+    load_type baml.errors.Io
     spawn
     store_var _4
     load_var _4
@@ -148,6 +154,8 @@ function cancel_cascade.cancel_unblocks_await_on_non_descendant_fn() -> bool {
     make_closure .<lambda(cancel_unblocks_await_on_non_descendant_fn, 1)>, 1
     load_const null
     load_const null
+    load_type int
+    load_type baml.errors.Io
     spawn
     store_var _7
     load_var _7
@@ -199,6 +207,8 @@ function cancel_cascade.cancelled_child_future_state_is_cancelled() -> baml.futu
     make_closure .<lambda(cancelled_child_future_state_is_cancelled, 0)>, 0
     load_const null
     load_const null
+    load_type int
+    load_type baml.errors.Io
     spawn
     store_var _3
     load_var _3
@@ -207,6 +217,8 @@ function cancel_cascade.cancelled_child_future_state_is_cancelled() -> baml.futu
     make_closure .<lambda(cancelled_child_future_state_is_cancelled, 1)>, 1
     load_const null
     load_const null
+    load_type int
+    load_type baml.errors.Io
     spawn
     store_var _6
     load_var _6

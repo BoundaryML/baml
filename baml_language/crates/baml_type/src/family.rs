@@ -189,8 +189,8 @@ ty_family! {
         /// before `await`.
         ///
         /// Carries both the value type the future resolves to and the error
-        /// type the future may throw. The error type approximates `never` as
-        /// `Null` when the body of the future statically cannot throw.
+        /// type the future may throw. A future whose body statically cannot
+        /// throw has error type `never`.
         #[axis(concrete)]
         Future(Box<Ty>, Box<Ty>, TyAttr) = 17,
         /// Opaque Rust-managed state (`$rust_type` fields in builtin class stubs,

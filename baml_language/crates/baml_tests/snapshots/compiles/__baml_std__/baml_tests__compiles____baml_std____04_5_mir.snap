@@ -2876,11 +2876,11 @@ fn baml.future.all_complete(futures: future<T, E>[]) -> future<T[], E> {
     let _0: future<T[], E> // _0 // return
     let _1: future<T, E>[] // futures // param [captured]
     let _2: null
-    let _3: null
+    let _3: future<T[], E>
 
     bb0: {
         _2 = make_closure lambda[0]<2 type_args>(copy _1);
-        _3 = spawn copy _2 name=const null -> bb1;
+        _3 = spawn<#0[], #1> copy _2 name=const null -> bb1;
     }
 
     bb1: {
@@ -2935,11 +2935,11 @@ fn baml.future.all(futures: future<T, E>[]) -> future<T[], E> {
     let _0: future<T[], E> // _0 // return
     let _1: future<T, E>[] // futures // param [captured]
     let _2: null
-    let _3: null
+    let _3: future<T[], E>
 
     bb0: {
         _2 = make_closure lambda[0]<2 type_args>(copy _1);
-        _3 = spawn copy _2 name=const null -> bb1;
+        _3 = spawn<#0[], #1> copy _2 name=const null -> bb1;
     }
 
     bb1: {
@@ -3094,11 +3094,11 @@ fn baml.future.race(futures: future<T, E>[]) -> future<T, E> {
     let _0: future<T, E> // _0 // return
     let _1: future<T, E>[] // futures // param [captured]
     let _2: null
-    let _3: null
+    let _3: future<T, E>
 
     bb0: {
         _2 = make_closure lambda[0]<2 type_args>(copy _1);
-        _3 = spawn copy _2 name=const null -> bb1;
+        _3 = spawn<#0, #1> copy _2 name=const null -> bb1;
     }
 
     bb1: {
@@ -3171,11 +3171,11 @@ fn baml.future.any(futures: future<T, Err>[]) -> future<T, baml.future.AllFailed
     let _0: future<T, baml.future.AllFailed<Err>> // _0 // return
     let _1: future<T, Err>[] // futures // param [captured]
     let _2: null
-    let _3: null
+    let _3: future<T, baml.future.AllFailed<Err>>
 
     bb0: {
         _2 = make_closure lambda[0]<2 type_args>(copy _1);
-        _3 = spawn copy _2 name=const null -> bb1;
+        _3 = spawn<#0, baml.future.AllFailed<#1>> copy _2 name=const null -> bb1;
     }
 
     bb1: {

@@ -551,6 +551,7 @@ impl MirBuilder {
         closure: Operand,
         name: Operand,
         config: Option<Box<Operand>>,
+        future_ty: Box<crate::ir::SpawnFutureTy>,
         future: Place,
         resume: BlockId,
     ) {
@@ -562,6 +563,7 @@ impl MirBuilder {
             closure,
             name,
             config,
+            future_ty,
             future,
             resume,
         });

@@ -194,7 +194,7 @@ function testing.run_all(self: ?) -> TestSetReport  [expr] {
   {  } root.run_testset(root.testset_children(self), null)
 }
 function testing.run_children_parallel(children: TestSetChild[]) -> TestSetReport  [expr] {
-  { let futures: baml.future.Future<NamedChildReport, null>[] = []; for child in children {  } futures.push(spawn { () -> { {  } NamedChildReport { name: child.name, report: child.run() } } }); let named_results = await baml.future.all_complete(futures) catch_all (e) { _ => baml.sys.panic("unexpected test c...") } } root.aggregate_reports(named_results)
+  { let futures: baml.future.Future<NamedChildReport, never>[] = []; for child in children {  } futures.push(spawn { () -> { {  } NamedChildReport { name: child.name, report: child.run() } } }); let named_results = await baml.future.all_complete(futures) } root.aggregate_reports(named_results)
 }
 function testing.run_filtered(self: ?, profile_include: string[], profile_exclude: string[], cli_include: string[], cli_exclude: string[]) -> FlatTestReport  [expr] {
   { let selected_names = root.select_names_layered(self, profile_include, profile_exclude, cli_include, cli_exclude); let report = if (profile_include.length() Eq 0 And profile_exclude.length() Eq 0 And cli_include.length() Eq 0 And cli_exclude.length() Eq 0) {  } self.run_all() else {  } self.run_selected(selected_names) } root.flatten_with_tolerated(report, selected_names)

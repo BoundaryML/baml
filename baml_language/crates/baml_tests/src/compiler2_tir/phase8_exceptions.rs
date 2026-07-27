@@ -991,7 +991,7 @@ fn spawn_with_non_callable_reports_concrete_mismatch() {
     let output = render_tir(&db, file);
     assert!(
         output.contains(
-            "expected (baml.spawn.SpawnParams<int, null>) -> baml.spawn.SpawnParams<unknown, unknown> throws unknown, got 42"
+            "expected (baml.spawn.SpawnParams<int, never>) -> baml.spawn.SpawnParams<unknown, unknown> throws unknown, got 42"
         ),
         "non-callable `with` must report the concrete transformer shape, got:\n{output}"
     );
@@ -1023,7 +1023,7 @@ function f() -> int { let x = spawn with h() { 1 }; await x }"#,
     );
     let output = render_tir(&db, file);
     assert!(
-        output.contains("this link receives `baml.spawn.SpawnParams<int, null>`")
+        output.contains("this link receives `baml.spawn.SpawnParams<int, never>`")
             && output.contains("must return a `baml.spawn.SpawnParams`"),
         "wrong-return transformer must report the link's concrete input, got:\n{output}"
     );
@@ -1034,13 +1034,13 @@ fn spawn_with_chain_input_mismatch_is_concrete() {
     let mut db = make_db();
     let file = db.add_file(
         "test.baml",
-        r#"function fix() -> (baml.spawn.SpawnParams<string, null>) -> baml.spawn.SpawnParams<string, null> throws never { (p) -> { p } }
+        r#"function fix() -> (baml.spawn.SpawnParams<string, never>) -> baml.spawn.SpawnParams<string, never> throws never { (p) -> { p } }
 function f() -> int { let x = spawn with fix() { 1 }; await x }"#,
     );
     let output = render_tir(&db, file);
     assert!(
-        output.contains("got (baml.spawn.SpawnParams<string, null>)")
-            && output.contains("expected (baml.spawn.SpawnParams<int, null>)"),
+        output.contains("got (baml.spawn.SpawnParams<string, never>)")
+            && output.contains("expected (baml.spawn.SpawnParams<int, never>)"),
         "chain input mismatch must show both concrete SpawnParams types, got:\n{output}"
     );
 }
@@ -1077,7 +1077,7 @@ function f() -> int {
     );
     let output = render_tir(&db, file);
     assert!(
-        output.contains("this link receives `baml.spawn.SpawnParams<int, null>`"),
+        output.contains("this link receives `baml.spawn.SpawnParams<int, never>`"),
         "wrong-param variable transformer must report the link input, got:\n{output}"
     );
 }

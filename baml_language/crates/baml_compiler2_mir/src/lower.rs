@@ -1242,44 +1242,70 @@ fn member_is_opaque_for_tag_proof(m: &RuntimeTy) -> bool {
     }
 }
 
-/// Whether a coarse `LIST`/`MAP` type-tag test for the container arm `arm` is a
-/// *provably sound* substitute for the element-discriminating structural test,
-/// for values of the scrutinee's resolved static type `scrutinee`.
+/// A parametric shape whose every instantiation collapses onto one coarse type
+/// tag. Two arms at different instantiations therefore dedup onto the same
+/// jump-table slot, and the first swallows the rest — the conflation
+/// [`parametric_arm_tag_sufficient`] has to rule out. Values of *different*
+/// shapes carry different tags and can never collide.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum TagConflatedShape {
+    List,
+    Map,
+    /// A `Future<T, E>`: every instantiation is `FUTURE`-tagged, and a spawned
+    /// future carries the `<T, E>` its spawn site was typed at, so the tag alone
+    /// no longer pins which arm a value belongs to.
+    Future,
+}
+
+/// The [`TagConflatedShape`] of `ty`, or `None` when its tag already pins its
+/// values (a primitive, a monomorphic class, …).
+fn tag_conflated_shape(ty: &RuntimeTy) -> Option<TagConflatedShape> {
+    match ty {
+        RuntimeTy::List(..) => Some(TagConflatedShape::List),
+        RuntimeTy::Map { .. } => Some(TagConflatedShape::Map),
+        RuntimeTy::Future(..) => Some(TagConflatedShape::Future),
+        _ => None,
+    }
+}
+
+/// Whether a coarse `LIST`/`MAP`/`FUTURE` type-tag test for the parametric arm
+/// `arm` is a *provably sound* substitute for the argument-discriminating
+/// structural test, for values of the scrutinee's resolved static type
+/// `scrutinee`.
 ///
 /// Generic-argument positions are invariant (`TYPE_SYSTEM.md` "Variance"): `int[]`,
-/// `string[]`, and `json[]` are mutually unrelated types. So the coarse "any
-/// list" / "any map" tag is sound only when no value the scrutinee admits could
-/// carry that tag with a different element type than the arm. That holds when
-/// every same-shape (list/map) member of the scrutinee shares the arm's
-/// constructor identity, and every other member carries a tag that provably
-/// can't be the arm's — a different-shape container or a concrete non-container
-/// leaf.
+/// `string[]`, and `json[]` are mutually unrelated types, as are
+/// `Future<int, never>` and `Future<string, never>`. So the coarse "any list" /
+/// "any map" / "any future" tag is sound only when no value the scrutinee admits
+/// could carry that tag with different type arguments than the arm. That holds
+/// when every same-shape member of the scrutinee shares the arm's constructor
+/// identity, and every other member carries a tag that provably can't be the
+/// arm's — a different parametric shape or a concrete leaf.
 ///
 /// We **fail closed**: an opaque member (see [`member_is_opaque_for_tag_proof`])
-/// could hide a container of a differing element type, so it blocks the proof
+/// could hide an instantiation with differing arguments, so it blocks the proof
 /// and routes the arm through the structural matcher. In particular a `json`
 /// scrutinee (an opaque alias leaf) no longer makes an element-specific `int[]`
 /// arm "tag-sufficient" — that was fail-*open* covariance, matching any array.
 ///
-/// Returns `false` for a non-container `arm` (the caller only asks about one).
-fn container_arm_tag_sufficient(arm: &RuntimeTy, scrutinee: &RuntimeTy) -> bool {
+/// Returns `false` for a non-parametric `arm` (the caller only asks about one).
+fn parametric_arm_tag_sufficient(arm: &RuntimeTy, scrutinee: &RuntimeTy) -> bool {
     use baml_compiler2_tir::exhaustiveness::ty_ctor_identity;
-    let arm_is_list = match arm {
-        RuntimeTy::List(..) => true,
-        RuntimeTy::Map { .. } => false,
-        _ => return false,
+    let Some(arm_shape) = tag_conflated_shape(arm) else {
+        return false;
     };
     let arm_id = ty_ctor_identity(arm.as_ty());
     let mut members = Vec::new();
     flatten_runtime_union(scrutinee, &mut members);
-    members.iter().all(|m| match m {
-        // Same-shape container: sound only for the arm's exact instantiation.
-        RuntimeTy::List(..) if arm_is_list => ty_ctor_identity(m.as_ty()) == arm_id,
-        RuntimeTy::Map { .. } if !arm_is_list => ty_ctor_identity(m.as_ty()) == arm_id,
-        // Anything else is sound iff it cannot secretly be a differing-element
-        // container — i.e. iff it is not opaque. A different-shape container and
-        // every concrete leaf carry a tag that can't be the arm's, so they pass.
-        _ => !member_is_opaque_for_tag_proof(m),
+    members.iter().all(|m| match tag_conflated_shape(m) {
+        // Same shape: sound only for the arm's exact instantiation.
+        Some(shape) if shape == arm_shape => ty_ctor_identity(m.as_ty()) == arm_id,
+        // A different parametric shape carries a tag that can't be the arm's.
+        Some(_) => true,
+        // Anything else is sound iff it cannot secretly be a differing
+        // instantiation — i.e. iff it is not opaque. Every concrete leaf carries
+        // a tag that can't be the arm's, so it passes.
+        None => !member_is_opaque_for_tag_proof(m),
     })
 }
 
@@ -1292,7 +1318,7 @@ fn container_arm_tag_sufficient(arm: &RuntimeTy, scrutinee: &RuntimeTy) -> bool 
 /// first arm carrying that tag. A member is tag-sufficient only when no value
 /// the scrutinee admits could be conflated onto it:
 ///
-/// - a list/map member defers to [`container_arm_tag_sufficient`] (which
+/// - a list/map/future member defers to [`parametric_arm_tag_sufficient`] (which
 ///   deliberately treats opaque scrutinee members as non-blockers, preserving
 ///   the pre-structural erased semantics the chain path keeps for them); with
 ///   no scrutinee the equivalence is unprovable, so it fails closed to the
@@ -1308,8 +1334,8 @@ fn container_arm_tag_sufficient(arm: &RuntimeTy, scrutinee: &RuntimeTy) -> bool 
 fn switch_member_tag_sufficient(member: &RuntimeTy, scrutinee: Option<&RuntimeTy>) -> bool {
     use baml_compiler2_tir::exhaustiveness::ty_ctor_identity;
     match member {
-        RuntimeTy::List(..) | RuntimeTy::Map { .. } => {
-            scrutinee.is_some_and(|scrutinee| container_arm_tag_sufficient(member, scrutinee))
+        RuntimeTy::List(..) | RuntimeTy::Map { .. } | RuntimeTy::Future(..) => {
+            scrutinee.is_some_and(|scrutinee| parametric_arm_tag_sufficient(member, scrutinee))
         }
         // Every enum collapses onto the single shared `ENUM` type tag, so the
         // jump table can key an enum-type arm only when no *other* enum type
@@ -1978,7 +2004,7 @@ struct LoweringContext<'db> {
     /// across nested matches). A container arm's runtime type test consults this
     /// — guarded on the local matching — to decide whether a coarse `LIST`/`MAP`
     /// tag suffices in place of a structural element check (see
-    /// [`container_arm_tag_sufficient`]). `None` outside a match, and the local
+    /// [`parametric_arm_tag_sufficient`]). `None` outside a match, and the local
     /// guard keeps `is` / standalone tests element-precise even inside one.
     match_scrutinee: Option<(Local, RuntimeTy)>,
 
@@ -3903,6 +3929,26 @@ impl<'db> LoweringContext<'db> {
                 TyTemplate::from(RealizedTy::unknown()),
             ),
         }
+    }
+
+    /// The `T`/`E` templates for a `spawn` expression — the arguments of its
+    /// `Future<T, E>` static type — for [`Terminator::Spawn`]. TIR has already
+    /// folded any `with` transformers into that type, so this is the future the
+    /// spawn actually hands back. Falls back to `unknown` when the recorded type
+    /// is not a future (error recovery).
+    fn spawn_future_ty(&self, expr_id: AstExprId) -> Box<crate::ir::SpawnFutureTy> {
+        let generic_params = self.enclosing_generic_params();
+        let (returns, throws) = match self.tir_expr_type(self.expr_metadata_key(expr_id)) {
+            Some(Tir2Ty::Future(value, error, _)) => (
+                self.ty_to_template(value, &generic_params),
+                self.ty_to_template(error, &generic_params),
+            ),
+            _ => (
+                TyTemplate::from(RealizedTy::unknown()),
+                TyTemplate::from(RealizedTy::unknown()),
+            ),
+        };
+        Box::new(crate::ir::SpawnFutureTy { returns, throws })
     }
 
     fn object_class_type_arg_templates(
@@ -5971,26 +6017,28 @@ impl LoweringContext<'_> {
             Some(Box::new(Operand::Copy(Place::Local(cur))))
         };
 
-        // Allocate the future temp. Phase C uses a defaulted `Null` type
-        // for the future local; the TIR-tracked value/error types flow
-        // through to runtime via the surrounding context. A follow-up
-        // can plumb `Tir2Ty::Future` directly through `convert_tir_ty_for_runtime`
-        // here once we read it from `self.expr_types`.
-        let future_local = self.builder.temp(RuntimeTy::Null {
-            attr: TyAttr::default(),
-        });
+        // Allocate the future temp, typed as the `Future<T, E>` TIR inferred.
+        let future_local = self.builder.temp(self.expr_ty(expr_id));
         let future_place = Place::Local(future_local);
 
+        // The same `Future<T, E>`, as templates: the runtime resolves them
+        // against the spawning frame's type args and stores the pair on the
+        // heap `Future` for reflection and `is`/`match`.
+        let future_ty = self.spawn_future_ty(expr_id);
+
         let resume = self.builder.create_block();
-        self.builder
-            .spawn(closure_op, name_op, config_op, future_place.clone(), resume);
+        self.builder.spawn(
+            closure_op,
+            name_op,
+            config_op,
+            future_ty,
+            future_place.clone(),
+            resume,
+        );
         self.builder.set_current_block(resume);
         // The result of `spawn` is the Future handle.
         self.builder
             .assign(dest, Rvalue::Use(Operand::Copy(future_place)));
-        // Phase C: `expr_id` is recorded for source-span tracking but
-        // is not used for type lookup here.
-        let _ = expr_id;
     }
 
     /// Lower `await expr` into a `Terminator::Await` whose destination is
@@ -13015,24 +13063,25 @@ impl LoweringContext<'_> {
                 }
             }
         } else {
-            // If this is a container arm whose element the emitter would otherwise
-            // check structurally, but the enclosing match's scrutinee statically
-            // proves a coarse `LIST`/`MAP` tag suffices, emit the tag test
-            // directly. Guarded on the scrutinee local so an `is` / nested test
-            // against a different value stays element-precise.
+            // If this is a parametric arm whose type arguments the emitter would
+            // otherwise check structurally, but the enclosing match's scrutinee
+            // statically proves a coarse `LIST`/`MAP`/`FUTURE` tag suffices,
+            // emit the tag test directly. Guarded on the scrutinee local so an
+            // `is` / nested test against a different value stays arg-precise.
             if self
                 .match_scrutinee
                 .as_ref()
                 .is_some_and(|(local, scrutinee_ty)| {
-                    *local == scrutinee && container_arm_tag_sufficient(&ty, scrutinee_ty)
+                    *local == scrutinee && parametric_arm_tag_sufficient(&ty, scrutinee_ty)
                 })
             {
                 let tag = match &ty {
                     RuntimeTy::List(..) => baml_type::typetag::LIST,
                     RuntimeTy::Map { .. } => baml_type::typetag::MAP,
-                    // `container_arm_tag_sufficient` returns false for every
-                    // non-container arm.
-                    other => unreachable!("tag-sufficient non-container arm: {other}"),
+                    RuntimeTy::Future(..) => baml_type::typetag::FUTURE,
+                    // `parametric_arm_tag_sufficient` returns false for every
+                    // non-parametric arm.
+                    other => unreachable!("tag-sufficient non-parametric arm: {other}"),
                 };
                 self.emit_is_type_tag_branch(scrutinee, tag, success, failure);
                 return;
