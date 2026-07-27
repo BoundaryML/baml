@@ -14988,9 +14988,10 @@ impl<'db> TypeInferenceBuilder<'db> {
 
     /// Infer/check a lambda body using a save/restore approach.
     ///
-    /// Saves the current locals, `declared_return_ty`, `generic_params`, and
-    /// `expressions` (to avoid `ExprId` collisions between the lambda's arena
-    /// and the parent's arena). After inference, restores all saved state; the
+    /// Saves the current locals, `declared_return_ty`, `generic_params`,
+    /// `implements_block_interface`, and `expressions` (to avoid `ExprId`
+    /// collisions between the lambda's arena and the parent's arena). After
+    /// inference, restores all saved state; the
     /// lambda's own inference tables are *moved* into `nested_lambda_inference`
     /// keyed by the lambda's `FileScopeId`, so the standalone
     /// `ScopeKind::Lambda` query can project them instead of re-inferring the
@@ -15039,6 +15040,9 @@ impl<'db> TypeInferenceBuilder<'db> {
         let saved_scoped_local_assignments = std::mem::take(&mut self.scoped_local_assignments);
         let saved_return_ty = self.declared_return_ty.clone();
         let saved_generic_params = self.generic_params.clone();
+        // BEP-044: `default` is scoped to the method body and must not be
+        // captured across a closure boundary.
+        let saved_implements_block_interface = self.implements_block_interface.take();
         let saved_expressions = std::mem::take(&mut self.expressions);
         let saved_bindings = std::mem::take(&mut self.pattern_types);
         let saved_pattern_natural_cache = std::mem::take(&mut self.pattern_natural_cache);
@@ -15296,6 +15300,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         self.scoped_local_assignments = saved_scoped_local_assignments;
         self.declared_return_ty = saved_return_ty;
         self.generic_params = saved_generic_params;
+        self.implements_block_interface = saved_implements_block_interface;
         self.loop_depth = saved_loop_depth;
         self.defer_loop_floors = saved_defer_loop_floors;
         // Freeze this lambda's diagnostic spans against its own source map

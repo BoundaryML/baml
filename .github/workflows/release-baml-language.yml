@@ -1758,7 +1758,7 @@ jobs:
         with:
           name: swift-xcframework
           path: dist/swift
-      - uses: aws-actions/configure-aws-credentials@v4
+      - uses: aws-actions/configure-aws-credentials@v6
         with:
           role-to-assume: ${{ env.AWS_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
@@ -1993,7 +1993,7 @@ jobs:
         with:
           name: release-manifests
           path: manifests
-      - uses: aws-actions/configure-aws-credentials@v4
+      - uses: aws-actions/configure-aws-credentials@v6
         with:
           role-to-assume: ${{ env.AWS_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
@@ -2251,7 +2251,7 @@ jobs:
         with:
           name: dry-run-release-files
           path: dry-run
-      - uses: aws-actions/configure-aws-credentials@v4
+      - uses: aws-actions/configure-aws-credentials@v6
         if: ${{ needs.plan.outputs.source_branch == 'canary' }}
         with:
           role-to-assume: ${{ env.AWS_ROLE_ARN }}
@@ -2285,3 +2285,77 @@ jobs:
             echo "BAML_HOME=\"\$(mktemp -d)\" BAML_MANIFEST_BASE_URL=\"$base\" baml toolchain use ${{ needs.plan.outputs.channel }}"
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
+
+  notify-slack:
+    name: Notify Slack on failure
+    needs:
+      - plan
+      - build-matrix
+      - build-toolchain
+      - build-vsix
+      - build-wrapper
+      - build-python-sdk
+      - build-nodejs-sdk
+      - build-java-sdk
+      - build-web-sdk
+      - build-bridge-cffi
+      - build-go-sdk
+      - verify-cpp-sdk
+      - build-rust-sdk
+      - verify-rust-sdk
+      - all-builds
+      - publish-pypi
+      - publish-nodejs-sdk
+      - publish-web-sdk
+      - publish-maven
+      - publish-gradle-plugin
+      - publish-toolchain-release
+      - publish-wrapper-release
+      - publish-bridge-cffi-release
+      - publish-go-sdk
+      - publish-crates-io
+      - publish-pkg-boundaryml-com
+      - smoke-go-release
+      - dispatch-nightly-after-canary
+      - publish-homebrew
+      - publish-aur
+      - dry-run-artifacts
+      - dry-run-summary
+      - build-swift-sdk
+      - verify-swift-sdk
+      - prepare-csharp-sdk
+      - verify-csharp-sdk
+      - publish-csharp-sdk
+      - release-prerequisites-complete
+      - release-complete
+      - publish-pkg-channel
+      - smoke-swift-release
+    # Use the dispatch input so a failure in plan itself is still reportable.
+    # This job must run after failed dependencies; the script posts only when the run contains failures.
+    if: ${{ always() && inputs.dry_run == false && needs.plan.outputs.source_branch == 'canary' }}
+    runs-on: ubuntu-latest
+    environment: boundary-tools-dev
+    permissions:
+      actions: read
+      contents: read
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          ref: ${{ needs.plan.outputs.source_sha || github.sha }}
+          sparse-checkout: |
+            .github/actions/setup-mise
+            mise.toml
+            tools/notify-release-failure.py
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+      - uses: ./.github/actions/setup-mise
+        with:
+          install_args: uv
+      - name: Find failures and notify Slack
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SLACK_CHANNEL: "#general"
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOUNDARY_BOT_TOKEN }}
+          VERSION: ${{ needs.plan.outputs.version }}
+          CHANNEL: ${{ needs.plan.outputs.channel }}
+        run: uv run --script tools/notify-release-failure.py

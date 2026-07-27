@@ -4636,23 +4636,77 @@ impl Printable for ThrowsClause {
     }
 }
 
-/// Arrow token in a lambda expression. Accepts either `->` (canonical) or
+/// Arrow token in a function signature. Accepts either `->` (canonical) or
 /// `=>` (accepted permissively for ergonomic parity with JS/TS arrow functions);
-/// the formatter always emits `->`.
+/// the formatter always emits `->`. Shared by declarations and lambdas so the
+/// compiler's permissive syntax and formatter repair stay in lockstep.
 #[derive(Debug)]
-pub enum LambdaArrow {
+pub enum FunctionArrow {
     Arrow(t::Arrow),
     FatArrow(t::FatArrow),
 }
 
-impl FromCST for LambdaArrow {
+impl FunctionArrow {
+    #[must_use]
+    pub fn span(&self) -> TextRange {
+        match self {
+            FunctionArrow::Arrow(t) => t.span(),
+            FunctionArrow::FatArrow(t) => t.span(),
+        }
+    }
+
+    /// Returns true if the source used `=>` instead of the canonical `->`.
+    #[must_use]
+    pub fn is_fat_arrow(&self) -> bool {
+        matches!(self, FunctionArrow::FatArrow(_))
+    }
+
+    /// Print trivia between the source arrow and the next canonical element.
+    /// The arrow spelling may be synthesized, but its source span still owns
+    /// comments that must survive normalization.
+    pub(crate) fn print_separator_before(
+        &self,
+        next_leftmost: Option<TextRange>,
+        continuation_indent: usize,
+        printer: &mut Printer,
+    ) {
+        let (_, arrow_trailing) = printer.trivia.get_for_range_split(self.span());
+        let next_leading = next_leftmost
+            .map(|range| printer.trivia.get_for_range_split(range).0)
+            .unwrap_or(&[]);
+        let mut printed_comment = false;
+        let mut continued_on_newline = false;
+
+        for trivia in arrow_trailing.iter().chain(next_leading) {
+            if !trivia.is_comment() {
+                continue;
+            }
+            if !continued_on_newline {
+                printer.print_spaces(1);
+            }
+            printer.print_trivia(trivia);
+            printed_comment = true;
+            continued_on_newline = trivia.single_line_len(printer.input).is_none();
+            if continued_on_newline {
+                printer.print_newline();
+                printer.print_spaces(continuation_indent);
+            }
+        }
+
+        if !printed_comment || !continued_on_newline {
+            printer.print_spaces(1);
+        }
+    }
+}
+
+impl FromCST for FunctionArrow {
     fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
         let token = StrongAstError::assert_is_token(elem)?;
         match token.kind() {
-            SyntaxKind::ARROW => Ok(LambdaArrow::Arrow(t::Arrow::new_from_span(
+            SyntaxKind::ARROW => Ok(FunctionArrow::Arrow(t::Arrow::new_from_span(
                 token.text_range(),
             ))),
-            SyntaxKind::FAT_ARROW => Ok(LambdaArrow::FatArrow(t::FatArrow::new_from_span(
+            SyntaxKind::FAT_ARROW => Ok(FunctionArrow::FatArrow(t::FatArrow::new_from_span(
                 token.text_range(),
             ))),
             _ => Err(StrongAstError::UnexpectedKindDesc {
@@ -4664,7 +4718,7 @@ impl FromCST for LambdaArrow {
     }
 }
 
-impl KnownKind for LambdaArrow {
+impl KnownKind for FunctionArrow {
     fn kind() -> SyntaxKind {
         // Primary/canonical kind; `from_cst` also accepts FAT_ARROW.
         SyntaxKind::ARROW
@@ -4678,7 +4732,7 @@ impl KnownKind for LambdaArrow {
 pub struct LambdaExpr {
     pub generic_params: Option<GenericParamList>,
     pub param_list: super::FunctionParamList,
-    pub arrow: LambdaArrow,
+    pub arrow: FunctionArrow,
     pub return_type: Option<crate::ast::Type>,
     pub throws: Option<ThrowsClause>,
     pub block: BlockExpr,
@@ -4705,7 +4759,7 @@ impl FromCST for LambdaExpr {
         let param_list: super::FunctionParamList = it.expect_parse()?;
 
         // Arrow: `->` or `=>` (formatter normalizes to `->`)
-        let arrow: LambdaArrow = it.expect_parse()?;
+        let arrow: FunctionArrow = it.expect_parse()?;
 
         // Optional return type: TYPE_EXPR before THROWS_CLAUSE or BLOCK_EXPR
         let return_type = if it.peek().map(|e| e.kind()) == Some(SyntaxKind::TYPE_EXPR) {
@@ -4760,18 +4814,33 @@ impl Printable for LambdaExpr {
 
         // Optional return type
         if let Some(ref ret) = self.return_type {
-            printer.print_str(" ");
+            self.arrow.print_separator_before(
+                Some(ret.leftmost_token()),
+                shape.indent + printer.config.indent_width,
+                printer,
+            );
             printer.print(ret, shape.clone());
-        }
-
-        // Optional throws clause
-        if let Some(ref throws) = self.throws {
+            if let Some(ref throws) = self.throws {
+                printer.print_str(" ");
+                printer.print(throws, shape.clone());
+            }
             printer.print_str(" ");
+        } else if let Some(ref throws) = self.throws {
+            self.arrow.print_separator_before(
+                Some(throws.leftmost_token()),
+                shape.indent + printer.config.indent_width,
+                printer,
+            );
             printer.print(throws, shape.clone());
+            printer.print_str(" ");
+        } else {
+            self.arrow.print_separator_before(
+                Some(self.block.leftmost_token()),
+                shape.indent + printer.config.indent_width,
+                printer,
+            );
         }
 
-        // Space + block
-        printer.print_str(" ");
         printer.print(&self.block, shape);
 
         PrintInfo::default_multi_lined()
