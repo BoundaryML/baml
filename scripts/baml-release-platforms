@@ -16,6 +16,7 @@ from baml_release_platforms import (
 
 
 def main() -> None:
+    """Emit the build matrix or validate a complete wrapper artifact set."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--platforms", type=Path, default=DEFAULT_PLATFORMS)
     subparsers = parser.add_subparsers(dest="command", required=True)
