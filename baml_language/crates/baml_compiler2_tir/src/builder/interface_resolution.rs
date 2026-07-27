@@ -1058,20 +1058,12 @@ impl<'db> TypeInferenceBuilder<'db> {
         let db = self.context.db();
         let data = baml_compiler2_ppir::item_data::interface_data(db, view.loc);
         let interface_env = crate::generic_env::interface_generic_env(db, view.loc);
-        let interface_params = crate::generic_env::interface_declared_params(&interface_env);
-        let self_param = crate::generic_env::interface_self_param(&interface_env).clone();
-        let method_params = extra_generic_names
-            .iter()
-            .enumerate()
-            .map(|(offset, name)| {
-                crate::ty::ParamTy::new(
-                    interface_env.param_count()
-                        + u32::try_from(offset)
-                            .expect("method generic parameter index fits in u32"),
-                    name.clone(),
-                )
-            })
-            .collect::<Vec<_>>();
+        let (self_param, interface_params) = interface_env.interface_param_parts();
+        let self_param = self_param.clone();
+        let mut all_generic_params = interface_env.params().to_vec();
+        let inherited_count = all_generic_params.len();
+        crate::ty::ParamTy::extend_frame(&mut all_generic_params, extra_generic_names);
+        let method_params = &all_generic_params[inherited_count..];
         let prefer_symbolic = matches!(recv, SelfReceiver::RigidVar(_));
         let mut diags = Vec::new();
 
@@ -1086,7 +1078,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             view.realized.generics.clone()
         };
         let mut base_bindings = crate::generics::bind_type_vars(interface_params, &iface_args);
-        for generic_param in interface_params.iter().chain(&method_params) {
+        for generic_param in interface_params.iter().chain(method_params) {
             base_bindings
                 .entry(generic_param.clone())
                 .or_insert_with(|| Ty::TypeVar(generic_param.clone(), TyAttr::default()));
@@ -1144,8 +1136,6 @@ impl<'db> TypeInferenceBuilder<'db> {
             SelfReceiver::Existential(existential_ty) => (existential_ty.clone(), None),
         };
 
-        let mut all_generic_params = interface_env.params().to_vec();
-        all_generic_params.extend(method_params);
         if let Some(param) = &self_bound_name
             && !all_generic_params.contains(param)
         {
@@ -1253,8 +1243,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         // reduces against them. The default was lowered once (symbolic `Self`) by the shared
         // query; realize substitutes this receiver for `Self` and the realized generic args.
         let interface_env = crate::generic_env::interface_generic_env(db, view.loc);
-        let iface_generic_params = crate::generic_env::interface_declared_params(&interface_env);
-        let self_param = crate::generic_env::interface_self_param(&interface_env);
+        let (self_param, iface_generic_params) = interface_env.interface_param_parts();
         let self_ty = Ty::Interface(
             view.realized.name.clone(),
             view.realized.generics.clone(),
@@ -1298,8 +1287,8 @@ impl<'db> TypeInferenceBuilder<'db> {
         let symbolic_receiver =
             !access.bound && !matches!(recv, SelfReceiver::ExactTy(_) | SelfReceiver::Union(_));
         let interface_env = crate::generic_env::interface_generic_env(db, view.loc);
-        let receiver_generic = symbolic_receiver
-            .then(|| crate::generic_env::interface_self_param(&interface_env).clone());
+        let receiver_generic =
+            symbolic_receiver.then(|| interface_env.interface_param_parts().0.clone());
 
         let MemberLoweringEnv {
             all_generic_params,

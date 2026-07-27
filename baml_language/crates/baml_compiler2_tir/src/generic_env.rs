@@ -22,10 +22,8 @@ pub(crate) enum BoundSource<'db> {
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct GenericEnvData<'db> {
     parent: Option<GenericEnv<'db>>,
-    parent_count: u32,
-    own_params: Vec<ParamTy>,
     own_predicates: Vec<(ParamTy, BoundSource<'db>)>,
-    own_concrete_bounds: Vec<(ParamTy, baml_type::Interface)>,
+    self_bound: Option<(ParamTy, baml_type::Interface)>,
     all_params: Vec<ParamTy>,
     source_params: Vec<ParamTy>,
 }
@@ -34,7 +32,7 @@ struct GenericEnvData<'db> {
 ///
 /// Like rustc's `ty::Generics`, an environment owns only the parameters declared
 /// by its scope and links to the enclosing declaration. `all_params` is a
-/// derived flat lookup cache; declaration data remains in `own_params`.
+/// derived flat lookup cache.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct GenericEnv<'db>(Arc<GenericEnvData<'db>>);
 
@@ -49,35 +47,27 @@ impl<'db> GenericEnv<'db> {
         parent: Option<Self>,
         params: impl IntoIterator<Item = (Name, Vec<BoundSource<'db>>)>,
     ) -> Self {
-        let parent_count = parent.as_ref().map_or(0, Self::param_count);
         let mut own_predicates = Vec::new();
-        let own_params: Vec<_> = params
-            .into_iter()
-            .enumerate()
-            .map(|(local_index, (name, bounds))| {
-                let index = parent_count
-                    + u32::try_from(local_index).expect("generic parameter index fits in u32");
-                let param = ParamTy::new(index, name);
-                own_predicates.extend(bounds.into_iter().map(|bound| (param.clone(), bound)));
-                param
-            })
-            .collect();
         let mut all_params = parent
             .as_ref()
             .map(|parent| parent.params().to_vec())
             .unwrap_or_default();
-        all_params.extend(own_params.iter().cloned());
         let mut source_params = parent
             .as_ref()
             .map(|parent| parent.source_params().to_vec())
             .unwrap_or_default();
-        source_params.extend(own_params.iter().cloned());
+        for (name, bounds) in params {
+            let index =
+                u32::try_from(all_params.len()).expect("generic parameter index fits in u32");
+            let param = ParamTy::new(index, name);
+            own_predicates.extend(bounds.into_iter().map(|bound| (param.clone(), bound)));
+            all_params.push(param.clone());
+            source_params.push(param);
+        }
         Self(Arc::new(GenericEnvData {
             parent,
-            parent_count,
-            own_params,
             own_predicates,
-            own_concrete_bounds: Vec::new(),
+            self_bound: None,
             all_params,
             source_params,
         }))
@@ -166,11 +156,9 @@ impl<'db> GenericEnv<'db> {
     ) -> Self {
         let data = Arc::make_mut(&mut self.0);
         for name in params {
-            let index = data.parent_count
-                + u32::try_from(data.own_params.len())
-                    .expect("generic parameter index fits in u32");
+            let index =
+                u32::try_from(data.all_params.len()).expect("generic parameter index fits in u32");
             let param = ParamTy::new(index, name);
-            data.own_params.push(param.clone());
             data.all_params.push(param.clone());
             if source_visible {
                 data.source_params.push(param);
@@ -187,14 +175,8 @@ impl<'db> GenericEnv<'db> {
         self.with_additional_params(params, false)
     }
 
-    pub(crate) fn with_concrete_bound(
-        mut self,
-        param: ParamTy,
-        bound: baml_type::Interface,
-    ) -> Self {
-        Arc::make_mut(&mut self.0)
-            .own_concrete_bounds
-            .push((param, bound));
+    fn with_self_bound(mut self, param: ParamTy, bound: baml_type::Interface) -> Self {
+        Arc::make_mut(&mut self.0).self_bound = Some((param, bound));
         self
     }
 
@@ -203,11 +185,11 @@ impl<'db> GenericEnv<'db> {
     }
 
     pub(crate) fn parent_count(&self) -> u32 {
-        self.0.parent_count
+        self.parent().map_or(0, Self::param_count)
     }
 
     pub(crate) fn own_params(&self) -> &[ParamTy] {
-        &self.0.own_params
+        &self.params()[self.parent_count() as usize..]
     }
 
     pub(crate) fn visit_predicates(&self, visitor: &mut impl FnMut(&ParamTy, &BoundSource<'db>)) {
@@ -234,6 +216,15 @@ impl<'db> GenericEnv<'db> {
         &self.0.source_params
     }
 
+    pub(crate) fn interface_param_parts(&self) -> (&ParamTy, &[ParamTy]) {
+        let (self_param, declared_params) = self
+            .source_params()
+            .split_first()
+            .expect("interface generic environment starts with Self");
+        debug_assert_eq!(self_param.as_str(), "Self");
+        (self_param, declared_params)
+    }
+
     pub(crate) fn resolve_param(&self, name: &Name) -> Option<&ParamTy> {
         self.source_params()
             .iter()
@@ -252,25 +243,11 @@ impl<'db> GenericEnv<'db> {
         u32::try_from(self.0.all_params.len()).expect("generic parameter count fits in u32")
     }
 
-    pub(crate) fn concrete_bounds(&self) -> Vec<(&ParamTy, &baml_type::Interface)> {
-        fn collect<'a>(
-            env: &'a GenericEnv<'_>,
-            bounds: &mut Vec<(&'a ParamTy, &'a baml_type::Interface)>,
-        ) {
-            if let Some(parent) = env.parent() {
-                collect(parent, bounds);
-            }
-            bounds.extend(
-                env.0
-                    .own_concrete_bounds
-                    .iter()
-                    .map(|(name, bound)| (name, bound)),
-            );
+    pub(crate) fn self_bound(&self) -> Option<(&ParamTy, &baml_type::Interface)> {
+        if let Some((param, bound)) = &self.0.self_bound {
+            return Some((param, bound));
         }
-
-        let mut bounds = Vec::new();
-        collect(self, &mut bounds);
-        bounds
+        self.parent()?.self_bound()
     }
 }
 
@@ -312,27 +289,15 @@ pub(crate) fn interface_generic_env<'db>(
         baml_compiler2_hir::contributions::Definition::Interface(interface),
         &data.name,
     );
-    let args = interface_declared_params(&env)
-        .iter()
-        .map(|param| Ty::TypeVar(param.clone(), TyAttr::default()))
-        .collect();
-    let self_param = interface_self_param(&env).clone();
-    env.with_concrete_bound(self_param, baml_type::Interface::new(qtn, args, Vec::new()))
-}
-
-pub(crate) fn interface_self_param<'a>(env: &'a GenericEnv<'_>) -> &'a ParamTy {
-    env.source_params()
-        .first()
-        .expect("interface generic environment starts with Self")
-}
-
-pub(crate) fn interface_declared_params<'a>(env: &'a GenericEnv<'_>) -> &'a [ParamTy] {
-    let (self_param, params) = env
-        .source_params()
-        .split_first()
-        .expect("interface generic environment starts with Self");
-    debug_assert_eq!(self_param.as_str(), "Self");
-    params
+    let (self_param, args) = {
+        let (self_param, declared_params) = env.interface_param_parts();
+        let args = declared_params
+            .iter()
+            .map(|param| Ty::TypeVar(param.clone(), TyAttr::default()))
+            .collect();
+        (self_param.clone(), args)
+    };
+    env.with_self_bound(self_param, baml_type::Interface::new(qtn, args, Vec::new()))
 }
 
 pub(crate) fn append_params(parent: &[ParamTy], names: &[Name]) -> Vec<ParamTy> {

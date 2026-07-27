@@ -893,10 +893,8 @@ fn lower_path(
                     let mut associated_bindings = lowered_associated_bindings;
                     if position == TypePosition::Existential {
                         let iface_env = crate::generic_env::interface_generic_env(db, iface_loc);
-                        let iface_generic_params =
-                            crate::generic_env::interface_declared_params(&iface_env);
-                        let self_param =
-                            crate::generic_env::interface_self_param(&iface_env).clone();
+                        let (self_param, iface_generic_params) = iface_env.interface_param_parts();
+                        let self_param = self_param.clone();
                         let iface_assoc_names: Vec<_> = iface_data
                             .associated_types
                             .iter()

@@ -31,11 +31,7 @@ impl ParamTy {
     }
 
     pub fn extend_frame(frame: &mut Vec<Self>, names: &[Name]) {
-        let first_index = frame
-            .iter()
-            .map(Self::index)
-            .max()
-            .map_or(0, |index| index + 1);
+        let first_index = u32::try_from(frame.len()).expect("generic parameter count fits in u32");
         frame.extend(names.iter().enumerate().map(|(offset, name)| {
             Self::new(
                 first_index + u32::try_from(offset).expect("generic parameter index fits in u32"),

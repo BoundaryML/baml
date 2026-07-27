@@ -12416,7 +12416,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         );
         let iface_data = baml_compiler2_ppir::item_data::interface_data(db, source.iface_loc);
         let iface_env = crate::generic_env::interface_generic_env(db, source.iface_loc);
-        let iface_generic_params = crate::generic_env::interface_declared_params(&iface_env);
+        let (_, iface_generic_params) = iface_env.interface_param_parts();
         let field = iface_data.fields.iter().find(|f| f.name == *field_name)?;
         let iface_pkg_items = self.resolve_class_pkg_items(source.interface.name.package())?;
         let iface_ns =
@@ -12725,9 +12725,8 @@ impl<'db> TypeInferenceBuilder<'db> {
                 {
                     let iface_data = baml_compiler2_ppir::item_data::interface_data(db, iface_loc);
                     let iface_env = crate::generic_env::interface_generic_env(db, iface_loc);
-                    let iface_params = crate::generic_env::interface_declared_params(&iface_env);
-                    let iface_self_param =
-                        crate::generic_env::interface_self_param(&iface_env).clone();
+                    let (iface_self_param, iface_params) = iface_env.interface_param_parts();
+                    let iface_self_param = iface_self_param.clone();
                     {
                         if let baml_compiler2_hir::type_ref::TypeRefKind::Path {
                             generic_args,
@@ -13819,7 +13818,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         let db = self.context.db();
         let interface_data = baml_compiler2_ppir::item_data::interface_data(db, interface_loc);
         let generic_env = crate::generic_env::interface_generic_env(db, interface_loc);
-        let generic_params = crate::generic_env::interface_declared_params(&generic_env);
+        let (_, generic_params) = generic_env.interface_param_parts();
         self.collect_named_generic_bound_errors(
             generic_params,
             &interface_data.type_refs,

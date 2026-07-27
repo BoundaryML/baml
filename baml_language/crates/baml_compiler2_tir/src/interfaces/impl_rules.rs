@@ -1078,8 +1078,8 @@ pub fn validate_impl_signatures<'db>(
 
     let iface_data = interface_data(db, data.interface);
     let iface_env = crate::generic_env::interface_generic_env(db, data.interface);
-    let iface_generic_params = crate::generic_env::interface_declared_params(&iface_env);
-    let iface_self_param = crate::generic_env::interface_self_param(&iface_env).clone();
+    let (iface_self_param, iface_generic_params) = iface_env.interface_param_parts();
+    let iface_self_param = iface_self_param.clone();
     let iface_pkg_info =
         baml_compiler2_hir::file_package::file_package(db, data.interface.file(db));
     let iface_pkg_items =

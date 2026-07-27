@@ -795,176 +795,187 @@ fn tir_contains_symbolic(ty: &Tir2Ty) -> bool {
     baml_compiler2_tir::generics::contains_typevar(ty) || tir_contains_projection(ty)
 }
 
-/// Convert a `Tir2Ty` to `TyTemplate`, mapping each type variable to its
-/// canonical runtime frame index.
-///
-/// Free function counterpart to `MirLowerer::ty_to_template`, exposed so
-/// that callers outside of MIR (e.g. `baml_compiler2_emit`'s class-field
-/// type lowering) can build the same templates.
-pub fn tir2_to_template(
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum TemplateMode {
+    Value,
+    Pattern,
+}
+
+fn lower_tir_template(
     ty: &Tir2Ty,
     resolved: &ResolvedAliases,
     generic_params: &[ParamTy],
-) -> TyTemplate {
+    mode: TemplateMode,
+) -> Option<TyTemplate> {
     match ty {
         Tir2Ty::AssociatedTypeProjection {
             base,
             interface,
             member,
             ..
-        } => matches!(&**base, Tir2Ty::TypeVar(param, _) if param.as_str() == "Self")
-            .then(|| generic_params.iter().find(|param| param.name() == member))
-            .flatten()
-            .map(|param| TyTemplate::TypeArgRef(param.index()))
-            // A `Self.<member>` projection collapses to the member's frame
-            // slot — those exist only inside interface-owned bodies, where
-            // `enclosing_generic_params` adds the interface's associated
-            // types (gating on the `Self` base keeps a projection over a
-            // *function* generic — `T.Item` in a fn that also declares a
-            // generic named `Item` — from colliding with that unrelated
-            // param slot). Any other projection — e.g. `T.CompareError`
-            // passed as a call's type argument — is kept as a structured
-            // projection template: its base/interface positions lower
-            // recursively (so a frame-generic base realizes at substitution
-            // time) while the projection itself stays symbolic for the
-            // consumer to resolve. Never an error, never erased.
-            .unwrap_or_else(|| TyTemplate::AssociatedTypeProjection {
-                base: Box::new(tir2_to_template(base, resolved, generic_params)),
+        } => {
+            if matches!(&**base, Tir2Ty::TypeVar(param, _) if param.as_str() == "Self")
+                && let Some(param) = generic_params.iter().find(|param| param.name() == member)
+            {
+                return Some(TyTemplate::TypeArgRef(param.index()));
+            }
+            Some(TyTemplate::AssociatedTypeProjection {
+                base: Box::new(lower_tir_template(base, resolved, generic_params, mode)?),
                 interface: Box::new(baml_type::TyTemplateInterface {
                     name: interface.name.clone(),
                     generics: interface
                         .generics
                         .iter()
-                        .map(|g| tir2_to_template(g, resolved, generic_params))
-                        .collect(),
+                        .map(|ty| lower_tir_template(ty, resolved, generic_params, mode))
+                        .collect::<Option<Vec<_>>>()?,
                     associated_types: interface
                         .associated_types
                         .iter()
                         .map(|(name, ty)| {
-                            (name.clone(), tir2_to_template(ty, resolved, generic_params))
+                            Some((
+                                name.clone(),
+                                lower_tir_template(ty, resolved, generic_params, mode)?,
+                            ))
                         })
-                        .collect(),
+                        .collect::<Option<Vec<_>>>()?,
                 }),
                 member: member.clone(),
                 attr: TyAttr::default(),
-            }),
+            })
+        }
         Tir2Ty::TypeVar(param, _) => {
-            if !generic_params.contains(param) {
-                // A type variable with no frame position is a defect: either a
-                // lowering gap (it should have been resolved upstream) or a
-                // real user error the checker should have rejected. It cannot
-                // be represented faithfully — a symbolic name is meaningless
-                // to the runtime — and erasing it would violate the type
-                // contract, so fail loudly rather than smuggle it. This
-                // includes `Self`: interface-owned bodies carry it at frame
-                // slot 0, implements-block bodies never emit it (TIR
-                // statically substitutes the block's `for` target), and a
-                // plain class body's `Self` is rejected as an unresolved name.
+            if generic_params.get(param.index() as usize) == Some(param) {
+                Some(TyTemplate::TypeArgRef(param.index()))
+            } else if mode == TemplateMode::Value {
                 unreachable!("type variable not found in type args: {param}")
+            } else {
+                None
             }
-            TyTemplate::TypeArgRef(param.index())
         }
-        Tir2Ty::List(inner, _) => {
-            TyTemplate::list(tir2_to_template(inner, resolved, generic_params))
-        }
+        Tir2Ty::List(inner, _) | Tir2Ty::EvolvingList(inner, _) => Some(TyTemplate::list(
+            lower_tir_template(inner, resolved, generic_params, mode)?,
+        )),
         Tir2Ty::Map {
             key: k, value: v, ..
-        } => TyTemplate::map(
-            tir2_to_template(k, resolved, generic_params),
-            tir2_to_template(v, resolved, generic_params),
-        ),
-        Tir2Ty::Union(parts, _) => TyTemplate::union(
+        }
+        | Tir2Ty::EvolvingMap(k, v, _) => Some(TyTemplate::map(
+            lower_tir_template(k, resolved, generic_params, mode)?,
+            lower_tir_template(v, resolved, generic_params, mode)?,
+        )),
+        Tir2Ty::Union(parts, _) => Some(TyTemplate::union(
             parts
                 .iter()
-                .map(|p| tir2_to_template(p, resolved, generic_params)),
-        ),
+                .map(|ty| lower_tir_template(ty, resolved, generic_params, mode))
+                .collect::<Option<Vec<_>>>()?,
+        )),
         Tir2Ty::Class(qtn, type_args, attr) => {
-            if type_args.iter().any(tir_contains_symbolic) {
-                let template_args: Vec<TyTemplate> = type_args
-                    .iter()
-                    .map(|a| tir2_to_template(a, resolved, generic_params))
-                    .collect();
-                TyTemplate::class(qtn.clone(), template_args)
+            if mode == TemplateMode::Pattern || type_args.iter().any(tir_contains_symbolic) {
+                Some(TyTemplate::class(
+                    qtn.clone(),
+                    type_args
+                        .iter()
+                        .map(|ty| lower_tir_template(ty, resolved, generic_params, mode))
+                        .collect::<Option<Vec<_>>>()?,
+                ))
             } else {
-                // The symbolic check above guarantees the args are realized.
                 let resolved_args: Vec<RuntimeTy> =
-                    type_args.iter().map(|a| resolved.convert(a)).collect();
-                realized_leaf_template(&RuntimeTy::Class(qtn.clone(), resolved_args, attr.clone()))
+                    type_args.iter().map(|ty| resolved.convert(ty)).collect();
+                Some(realized_leaf_template(&RuntimeTy::Class(
+                    qtn.clone(),
+                    resolved_args,
+                    attr.clone(),
+                )))
             }
         }
         Tir2Ty::Interface(qtn, type_args, associated_bindings, attr) => {
-            if type_args.iter().any(tir_contains_symbolic)
+            if mode == TemplateMode::Pattern
+                || type_args.iter().any(tir_contains_symbolic)
                 || associated_bindings
                     .iter()
                     .any(|(_, ty)| tir_contains_symbolic(ty))
             {
-                let template_args: Vec<TyTemplate> = type_args
-                    .iter()
-                    .map(|a| tir2_to_template(a, resolved, generic_params))
-                    .collect();
-                let template_bindings = associated_bindings
-                    .iter()
-                    .map(|(name, ty)| {
-                        (name.clone(), tir2_to_template(ty, resolved, generic_params))
-                    })
-                    .collect();
-                TyTemplate::interface(qtn.clone(), template_args, template_bindings)
+                Some(TyTemplate::interface(
+                    qtn.clone(),
+                    type_args
+                        .iter()
+                        .map(|ty| lower_tir_template(ty, resolved, generic_params, mode))
+                        .collect::<Option<Vec<_>>>()?,
+                    associated_bindings
+                        .iter()
+                        .map(|(name, ty)| {
+                            Some((
+                                name.clone(),
+                                lower_tir_template(ty, resolved, generic_params, mode)?,
+                            ))
+                        })
+                        .collect::<Option<Vec<_>>>()?,
+                ))
             } else {
                 let resolved_args: Vec<RuntimeTy> =
-                    type_args.iter().map(|a| resolved.convert(a)).collect();
+                    type_args.iter().map(|ty| resolved.convert(ty)).collect();
                 let resolved_bindings = associated_bindings
                     .iter()
                     .map(|(name, ty)| (name.clone(), resolved.convert(ty)))
                     .collect();
-                // The symbolic check above guarantees the args are realized.
-                realized_leaf_template(&RuntimeTy::Interface(
+                Some(realized_leaf_template(&RuntimeTy::Interface(
                     qtn.clone(),
                     resolved_args,
                     resolved_bindings,
                     attr.clone(),
-                ))
+                )))
             }
         }
-        Tir2Ty::EvolvingList(inner, _) => {
-            TyTemplate::list(tir2_to_template(inner, resolved, generic_params))
-        }
-        Tir2Ty::EvolvingMap(k, v, _) => TyTemplate::map(
-            tir2_to_template(k, resolved, generic_params),
-            tir2_to_template(v, resolved, generic_params),
-        ),
-        // The remaining nested-type-bearing constructors recurse structurally,
-        // so a type variable in any position lowers to its `TypeArgRef` frame
-        // slot instead of leaking a symbolic name.
         Tir2Ty::Function {
             params,
             ret,
             throws,
             ..
-        } => TyTemplate::Function {
-            params: params
-                .iter()
-                .map(|p| baml_type::TyTemplateFunctionParamTy {
-                    name: p.name.clone(),
-                    ty: tir2_to_template(&p.ty, resolved, generic_params),
-                    mode: p.mode,
-                })
-                .collect(),
-            ret: Box::new(tir2_to_template(ret, resolved, generic_params)),
-            throws: Box::new(tir2_to_template(throws, resolved, generic_params)),
-            attr: TyAttr::default(),
-        },
-        Tir2Ty::Future(value, error, _) => TyTemplate::Future(
-            Box::new(tir2_to_template(value, resolved, generic_params)),
-            Box::new(tir2_to_template(error, resolved, generic_params)),
+        } => {
+            let mode = TemplateMode::Value;
+            Some(TyTemplate::Function {
+                params: params
+                    .iter()
+                    .map(|param| {
+                        Some(baml_type::TyTemplateFunctionParamTy {
+                            name: param.name.clone(),
+                            ty: lower_tir_template(&param.ty, resolved, generic_params, mode)?,
+                            mode: param.mode,
+                        })
+                    })
+                    .collect::<Option<Vec<_>>>()?,
+                ret: Box::new(lower_tir_template(ret, resolved, generic_params, mode)?),
+                throws: Box::new(lower_tir_template(throws, resolved, generic_params, mode)?),
+                attr: TyAttr::default(),
+            })
+        }
+        Tir2Ty::Future(value, error, _) => Some(TyTemplate::Future(
+            Box::new(lower_tir_template(
+                value,
+                resolved,
+                generic_params,
+                TemplateMode::Value,
+            )?),
+            Box::new(lower_tir_template(
+                error,
+                resolved,
+                generic_params,
+                TemplateMode::Value,
+            )?),
             TyAttr::default(),
-        ),
-        // Everything else is a leaf with no nested type positions (primitives,
-        // enums, aliases, `Type`/`Resource`/`PromptAst`, …) — `convert` lowers
-        // it faithfully and the narrowing proves it realized. The symbolic
-        // kinds (`TypeVar`, projections) have their own arms above, so a
-        // failure here is a compiler invariant violation.
-        other => realized_leaf_template(&resolved.convert(other)),
+        )),
+        other => Some(realized_leaf_template(&resolved.convert(other))),
     }
+}
+
+/// Convert a `Tir2Ty` to `TyTemplate`, mapping each type variable to its
+/// canonical runtime frame index.
+pub fn tir2_to_template(
+    ty: &Tir2Ty,
+    resolved: &ResolvedAliases,
+    generic_params: &[ParamTy],
+) -> TyTemplate {
+    lower_tir_template(ty, resolved, generic_params, TemplateMode::Value)
+        .unwrap_or_else(|| unreachable!("value template lowering is infallible"))
 }
 
 /// A resolved `RuntimeTy` with no residual type variables, as a leaf template:
@@ -979,113 +990,14 @@ fn realized_leaf_template(ty: &RuntimeTy) -> TyTemplate {
     )
 }
 
-/// Convert a TIR pattern type into a complete [`TyTemplate`], or `None` when
-/// any position is *unresolvable* (a type variable with no frame slot) —
-/// validated here at construction, never erased to a type or smuggled onward.
-/// The caller emits a fail-closed branch for `None`
-/// (`emit_pattern_template_test`). Projections are resolvable:
-/// `Self.<member>` collapses to its interface-body frame slot, and any other
-/// shape lowers to a structured projection template the runtime reduces
-/// through the impl registry at test time — total, since the baked rules
-/// carry a binding for every declared member, pinned or defaulted.
+/// Convert a TIR pattern type into a complete [`TyTemplate`], failing closed
+/// when a type variable has no runtime frame slot.
 fn tir2_to_pattern_template(
     ty: &Tir2Ty,
     resolved: &ResolvedAliases,
     generic_params: &[ParamTy],
 ) -> Option<TyTemplate> {
-    match ty {
-        Tir2Ty::AssociatedTypeProjection {
-            base,
-            interface,
-            member,
-            ..
-        } => {
-            // `Self.<member>` collapses to the member's frame slot inside
-            // interface-owned bodies (gating on the `Self` base — see the
-            // materialization arm in `tir2_to_template`); every other
-            // projection stays structured, reduced at test time through the
-            // impl registry (`TyTemplate::substitute` via `ctx.project`),
-            // which is total for every declared member — the baked rules
-            // carry a binding for each one, pinned or defaulted.
-            if matches!(&**base, Tir2Ty::TypeVar(param, _) if param.as_str() == "Self")
-                && let Some(param) = generic_params.iter().find(|param| param.name() == member)
-            {
-                return Some(TyTemplate::TypeArgRef(param.index()));
-            }
-            Some(TyTemplate::AssociatedTypeProjection {
-                base: Box::new(tir2_to_pattern_template(base, resolved, generic_params)?),
-                interface: Box::new(baml_type::TyTemplateInterface {
-                    name: interface.name.clone(),
-                    generics: interface
-                        .generics
-                        .iter()
-                        .map(|g| tir2_to_pattern_template(g, resolved, generic_params))
-                        .collect::<Option<Vec<_>>>()?,
-                    associated_types: interface
-                        .associated_types
-                        .iter()
-                        .map(|(name, ty)| {
-                            Some((
-                                name.clone(),
-                                tir2_to_pattern_template(ty, resolved, generic_params)?,
-                            ))
-                        })
-                        .collect::<Option<Vec<_>>>()?,
-                }),
-                member: member.clone(),
-                attr: TyAttr::default(),
-            })
-        }
-        Tir2Ty::TypeVar(param, _) => generic_params.contains(param).then(|| {
-            // A frame type-parameter lowers to its `TypeArgRef` slot. It used
-            // to lower to the covariant `TypeArgRefOrWildcard` band-aid so a
-            // reified-and-widened `T` (`Shape | Sq`) would match a value's
-            // narrower `Shape`; that is unnecessary now the runtime relates
-            // type args through the canonical algebra, which absorbs
-            // `Shape | Sq == Shape` (`Sq <: Shape`) and matches invariantly.
-            TyTemplate::TypeArgRef(param.index())
-        }),
-        Tir2Ty::List(inner, _) | Tir2Ty::EvolvingList(inner, _) => Some(TyTemplate::list(
-            tir2_to_pattern_template(inner, resolved, generic_params)?,
-        )),
-        Tir2Ty::Map {
-            key: k, value: v, ..
-        }
-        | Tir2Ty::EvolvingMap(k, v, _) => Some(TyTemplate::map(
-            tir2_to_pattern_template(k, resolved, generic_params)?,
-            tir2_to_pattern_template(v, resolved, generic_params)?,
-        )),
-        Tir2Ty::Union(parts, _) => Some(TyTemplate::union(
-            parts
-                .iter()
-                .map(|p| tir2_to_pattern_template(p, resolved, generic_params))
-                .collect::<Option<Vec<_>>>()?,
-        )),
-        Tir2Ty::Class(qtn, type_args, _) => Some(TyTemplate::class(
-            qtn.clone(),
-            type_args
-                .iter()
-                .map(|arg| tir2_to_pattern_template(arg, resolved, generic_params))
-                .collect::<Option<Vec<_>>>()?,
-        )),
-        Tir2Ty::Interface(qtn, type_args, assoc, _) => Some(TyTemplate::interface(
-            qtn.clone(),
-            type_args
-                .iter()
-                .map(|arg| tir2_to_pattern_template(arg, resolved, generic_params))
-                .collect::<Option<Vec<_>>>()?,
-            assoc
-                .iter()
-                .map(|(name, ty)| {
-                    Some((
-                        name.clone(),
-                        tir2_to_pattern_template(ty, resolved, generic_params)?,
-                    ))
-                })
-                .collect::<Option<Vec<_>>>()?,
-        )),
-        other => Some(tir2_to_template(other, resolved, generic_params)),
-    }
+    lower_tir_template(ty, resolved, generic_params, TemplateMode::Pattern)
 }
 
 /// Convert an already-resolved `baml_type::RuntimeTy` into a complete

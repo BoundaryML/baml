@@ -184,38 +184,6 @@ fn fetch_scope_body<'db>(
     }
 }
 
-fn enclosing_type_generics(
-    db: &dyn crate::Db,
-    file: SourceFile,
-    type_name: &Name,
-) -> Option<(crate::infer_context::ShadowedParamOwner, Vec<Name>)> {
-    for &class_loc in baml_compiler2_ppir::item_data::file_classes(db, file) {
-        let class_data = baml_compiler2_ppir::item_data::class_data(db, class_loc);
-        if class_data.name == *type_name {
-            return Some((
-                crate::infer_context::ShadowedParamOwner::Class,
-                class_data.generic_params.clone(),
-            ));
-        }
-    }
-
-    for &iface_loc in baml_compiler2_ppir::item_data::file_interfaces(db, file) {
-        let iface_data = baml_compiler2_ppir::item_data::interface_data(db, iface_loc);
-        if iface_data.name == *type_name {
-            // Associated types are NOT type-level parameters: a bare associated-type
-            // name (`Item`) is illegal and must be written `Self.Item`, so it never
-            // resolves as an in-scope type variable. Only the interface's declared
-            // generics are.
-            return Some((
-                crate::infer_context::ShadowedParamOwner::Interface,
-                iface_data.generic_params.clone(),
-            ));
-        }
-    }
-
-    None
-}
-
 /// Every associated-type name the interface named `qtn` declares — its own plus
 /// each one transitively inherited through `requires`. Empty if `qtn` does not
 /// resolve to an interface. Used to recognise a bare associated-type reference
@@ -328,11 +296,10 @@ fn lower_bound_source(
 /// carries a `Self` constraint, the symbolic `Self` type — so a declared bound
 /// mentioning `Self.Item` lowers inside the same scope its enforcement runs in.
 fn env_concrete_lowering_scope(env: &GenericEnv) -> (TypeVarBoundsMap, Option<Ty>) {
-    let bounds: TypeVarBoundsMap = env
-        .concrete_bounds()
-        .into_iter()
-        .map(|(param, constraint)| (param.clone(), vec![constraint.clone()]))
-        .collect();
+    let mut bounds = TypeVarBoundsMap::default();
+    if let Some((param, constraint)) = env.self_bound() {
+        bounds.insert(param.clone(), vec![constraint.clone()]);
+    }
     let self_ty = bounds
         .keys()
         .find(|param| param.name().as_str() == "Self")
@@ -342,8 +309,8 @@ fn env_concrete_lowering_scope(env: &GenericEnv) -> (TypeVarBoundsMap, Option<Ty
 
 /// A [`GenericEnv`]'s interface-constraint bounds, for resolving a `T.member`
 /// projection in a type expression lowered against it — the env's lowered
-/// `extends` bounds (interface ones only) plus its `concrete_bounds` (e.g. the
-/// `Self` constraint inside an interface default). The projection view of the
+/// `extends` bounds (interface ones only) plus its `Self` constraint inside an
+/// interface default. The projection view of the
 /// same env that [`install_generic_param_bounds`] installs as the `Ty`-typed
 /// enforcement table; bound-lowering diagnostics are the enforcement path's to
 /// report, so they are discarded here.
@@ -392,10 +359,8 @@ fn lower_env_interface_bounds(
             bounds.insert(param.clone(), vec![constraint]);
         }
     });
-    if include_concrete {
-        for (name, constraint) in env.concrete_bounds() {
-            bounds.insert(name.clone(), vec![constraint.clone()]);
-        }
+    if include_concrete && let Some((param, constraint)) = env.self_bound() {
+        bounds.insert(param.clone(), vec![constraint.clone()]);
     }
     bounds
 }
@@ -588,11 +553,9 @@ fn install_generic_param_bounds(
         );
         bounds.insert(param.clone(), constraint.into_vec());
     });
-    bounds.extend(
-        env.concrete_bounds()
-            .into_iter()
-            .map(|(name, constraint)| (name.clone(), vec![constraint.clone()])),
-    );
+    if let Some((param, constraint)) = env.self_bound() {
+        bounds.insert(param.clone(), vec![constraint.clone()]);
+    }
     builder.set_generic_param_bounds(bounds);
 }
 
@@ -608,55 +571,24 @@ fn apply_generic_env(
     install_generic_param_bounds(db, builder, pkg_items, ns_context, env, span);
 }
 
-#[derive(Clone, Copy)]
-struct GenericLookupContext<'a, 'db> {
-    db: &'db dyn crate::Db,
-    index: &'a baml_compiler2_hir::semantic_index::FileSemanticIndex<'db>,
-    file: SourceFile,
-}
-
-/// The enclosing class/interface declaration whose type-level parameters a method's
-/// signature env extends — with the declaration kind for shadowing diagnostics.
-struct ParentTypeGenerics {
-    type_name: Name,
-    owner: crate::infer_context::ShadowedParamOwner,
-    params: Vec<Name>,
-}
-
-fn parent_type_generic_env(
-    ctx: GenericLookupContext<'_, '_>,
-    parent_scope_id: Option<FileScopeId>,
-) -> Option<ParentTypeGenerics> {
-    let parent = &ctx.index.scopes[parent_scope_id?.index() as usize];
-    if !matches!(parent.kind, ScopeKind::Class) {
-        return None;
-    }
-    let type_name = parent.name.clone()?;
-    let (owner, params) = enclosing_type_generics(ctx.db, ctx.file, &type_name)?;
-    Some(ParentTypeGenerics {
-        type_name,
-        owner,
-        params,
-    })
-}
-
 fn enclosing_function_generic_env_from_let<'db>(
-    ctx: GenericLookupContext<'_, 'db>,
+    db: &'db dyn crate::Db,
+    index: &baml_compiler2_hir::semantic_index::FileSemanticIndex<'db>,
     let_scope: &baml_compiler2_hir::scope::Scope,
 ) -> Option<GenericEnv<'db>> {
     let mut current = let_scope.parent;
     while let Some(fsi) = current {
-        let scope = &ctx.index.scopes[fsi.index() as usize];
+        let scope = &index.scopes[fsi.index() as usize];
         match scope.kind {
             ScopeKind::Function => {
                 let owner = baml_compiler2_ppir::item_data::scope_owner(
-                    ctx.db,
-                    ctx.index.scope_ids[fsi.index() as usize],
+                    db,
+                    index.scope_ids[fsi.index() as usize],
                 )?;
                 let baml_compiler2_ppir::item_data::ScopeOwner::Function(func_loc) = owner else {
                     return None;
                 };
-                return Some(crate::generic_env::function_generic_env(ctx.db, func_loc));
+                return Some(crate::generic_env::function_generic_env(db, func_loc));
             }
             ScopeKind::Let => current = scope.parent,
             _ => current = scope.parent,
@@ -1424,62 +1356,75 @@ pub fn infer_scope_types<'db>(
                 let body = baml_compiler2_ppir::function_body(db, func_loc);
                 let sig = baml_compiler2_ppir::item_data::elaborated_function_data(db, func_loc);
 
-                let enclosing_impl =
-                    match baml_compiler2_ppir::item_data::method_owner(db, func_loc) {
-                        Some(baml_compiler2_ppir::item_data::MethodOwner::FreeImpl(impl_loc)) => {
-                            Some(baml_compiler2_ppir::item_data::impl_block_data(
-                                db, impl_loc,
-                            ))
-                        }
-                        Some(
-                            baml_compiler2_ppir::item_data::MethodOwner::Class(_)
-                            | baml_compiler2_ppir::item_data::MethodOwner::Interface(_),
-                        )
-                        | None => None,
-                    };
+                let method_owner = baml_compiler2_ppir::item_data::method_owner(db, func_loc);
+                let enclosing_impl = match &method_owner {
+                    Some(baml_compiler2_ppir::item_data::MethodOwner::FreeImpl(impl_loc)) => Some(
+                        baml_compiler2_ppir::item_data::impl_block_data(db, *impl_loc),
+                    ),
+                    Some(
+                        baml_compiler2_ppir::item_data::MethodOwner::Class(_)
+                        | baml_compiler2_ppir::item_data::MethodOwner::Interface(_),
+                    )
+                    | None => None,
+                };
 
                 let env = crate::generic_env::function_generic_env(db, func_loc).clone();
                 report_duplicate_generic_params(&builder, &sig.user_generic_params, func_span);
-                if let Some(imp) = enclosing_impl {
-                    let impl_generic_params: Vec<_> = match &imp.subject {
-                        baml_compiler2_ppir::item_data::ImplSubjectData::Free {
+                let report_type_shadowing = |owner, type_name: &Name, parent_params: &[Name]| {
+                    for param in &sig.user_generic_params {
+                        if !parent_params.contains(param) {
+                            continue;
+                        }
+                        builder.report_at_span(
+                            crate::infer_context::TirTypeError::TypeParamShadowed {
+                                param_name: param.clone(),
+                                type_name: type_name.clone(),
+                                owner,
+                            },
+                            func_span,
+                        );
+                    }
+                };
+                match method_owner {
+                    Some(baml_compiler2_ppir::item_data::MethodOwner::Class(class_loc)) => {
+                        let class = baml_compiler2_ppir::item_data::class_data(db, class_loc);
+                        report_type_shadowing(
+                            crate::infer_context::ShadowedParamOwner::Class,
+                            &class.name,
+                            &class.generic_params,
+                        );
+                    }
+                    Some(baml_compiler2_ppir::item_data::MethodOwner::Interface(iface_loc)) => {
+                        let interface =
+                            baml_compiler2_ppir::item_data::interface_data(db, iface_loc);
+                        report_type_shadowing(
+                            crate::infer_context::ShadowedParamOwner::Interface,
+                            &interface.name,
+                            &interface.generic_params,
+                        );
+                    }
+                    Some(baml_compiler2_ppir::item_data::MethodOwner::FreeImpl(impl_loc)) => {
+                        let imp = baml_compiler2_ppir::item_data::impl_block_data(db, impl_loc);
+                        let baml_compiler2_ppir::item_data::ImplSubjectData::Free {
                             generics, ..
-                        } => generics.iter().map(|param| param.name.clone()).collect(),
-                        baml_compiler2_ppir::item_data::ImplSubjectData::InClass { .. } => {
-                            Vec::new()
-                        }
-                    };
-                    for mp in &sig.user_generic_params {
-                        if impl_generic_params.iter().any(|cp| cp == mp) {
-                            builder.report_at_span(
-                                crate::infer_context::TirTypeError::TypeParamShadowedImplParam {
-                                    param_name: mp.clone(),
-                                },
-                                func_span,
-                            );
-                        }
-                    }
-                } else if let Some(parent) =
-                    parent_type_generic_env(GenericLookupContext { db, index, file }, scope.parent)
-                {
-                    for mp in &sig.user_generic_params {
-                        if parent.params.iter().any(|cp| cp == mp) {
-                            builder.report_at_span(
-                                crate::infer_context::TirTypeError::TypeParamShadowed {
-                                    param_name: mp.clone(),
-                                    type_name: parent.type_name.clone(),
-                                    owner: parent.owner,
-                                },
-                                func_span,
-                            );
+                        } = &imp.subject
+                        else {
+                            unreachable!("free impl method has free impl subject")
+                        };
+                        for param in &sig.user_generic_params {
+                            if generics.iter().any(|generic| generic.name == *param) {
+                                builder.report_at_span(
+                                    crate::infer_context::TirTypeError::TypeParamShadowedImplParam {
+                                        param_name: param.clone(),
+                                    },
+                                    func_span,
+                                );
+                            }
                         }
                     }
+                    None => {}
                 }
-                let interface_self_bound = env
-                    .concrete_bounds()
-                    .into_iter()
-                    .find(|(param, _)| param.name().as_str() == "Self")
-                    .map(|(_, bound)| bound.clone());
+                let interface_self_bound = env.self_bound().map(|(_, bound)| bound.clone());
                 apply_generic_env(
                     db,
                     &mut builder,
@@ -1525,23 +1470,23 @@ pub fn infer_scope_types<'db>(
                     // interface arguments, or a binding value resolves nominally.
                     let env_bounds =
                         env_interface_bounds(db, pkg_items, &pkg_info.namespace_path, &env);
-                    // Determine enclosing class name for `self` parameter
-                    // resolution and BEP-044 `Self`-type substitution.
-                    let enclosing_class_name: Option<Name> = scope.parent.and_then(|parent_idx| {
-                        let parent = &index.scopes[parent_idx.index() as usize];
-                        if matches!(parent.kind, ScopeKind::Class) {
-                            parent.name.clone()
-                        } else {
-                            None
+                    let enclosing_class_name = match method_owner {
+                        Some(baml_compiler2_ppir::item_data::MethodOwner::Class(class_loc)) => {
+                            Some(
+                                baml_compiler2_ppir::item_data::class_data(db, class_loc)
+                                    .name
+                                    .clone(),
+                            )
                         }
-                    });
+                        _ => None,
+                    };
                     // `Self`'s type for this body — resolved through the lowering context
                     // below, never a bare-name substitution: the rigid `Self` type variable
                     // (interface's own default method), the impl's receiver pattern, or the
                     // enclosing class's full receiver type (`Foo<T>`, carrying its generics).
                     let self_ty: Option<Ty> = if interface_self_bound.is_some() {
                         Some(crate::self_type::self_type_for_interface_default(
-                            crate::generic_env::interface_self_param(&env),
+                            env.interface_param_parts().0,
                         ))
                     } else if let Some(imp) = enclosing_impl
                         && let baml_compiler2_ppir::item_data::ImplSubjectData::Free {
@@ -1770,7 +1715,7 @@ pub fn infer_scope_types<'db>(
                         )
                         .clone();
                     if let Some(bound) = &self_bound {
-                        let self_param = crate::generic_env::interface_self_param(&env).clone();
+                        let self_param = env.interface_param_parts().0.clone();
                         body_bounds.insert(self_param, vec![bound.clone()]);
                     }
                     let ctx = crate::lower_type_expr::ScopeCtx {
@@ -2156,7 +2101,8 @@ pub fn infer_scope_types<'db>(
                                         });
 
                                     let parent_env = enclosing_function_generic_env_from_let(
-                                        GenericLookupContext { db, index, file },
+                                        db,
+                                        index,
                                         ancestor_scope,
                                     )
                                     .unwrap_or_default();
@@ -2228,8 +2174,7 @@ pub fn infer_scope_types<'db>(
             {
                 let iface_data = baml_compiler2_ppir::item_data::interface_data(db, iface_loc);
                 let iface_env = crate::generic_env::interface_generic_env(db, iface_loc);
-                let iface_generic_params =
-                    crate::generic_env::interface_declared_params(&iface_env);
+                let (_, iface_generic_params) = iface_env.interface_param_parts();
                 let iface_sm = baml_compiler2_ppir::item_data::interface_source_map(db, iface_loc);
                 let iface_span = iface_sm.span;
                 report_duplicate_generic_params(&builder, &iface_data.generic_params, iface_span);
@@ -2379,7 +2324,7 @@ pub fn infer_scope_types<'db>(
                     .collect();
                 let iface_env = crate::generic_env::interface_generic_env(db, iface_loc).clone();
                 let self_ty = crate::self_type::self_type_for_interface_default(
-                    crate::generic_env::interface_self_param(&iface_env),
+                    iface_env.interface_param_parts().0,
                 );
                 apply_generic_env(
                     db,
