@@ -147,6 +147,21 @@ test "prompt_interpolates_ctx_output_format" {
     assert.contains(pt_ctx_output_format_fn(), "age")
 }
 
+function PtRenderPerson() -> Person {
+    client "openai/gpt-4o-mini"
+    prompt `Make a person.${ctx.output_format}`
+}
+
+function pt_render_prompt_companion_output_format_fn() -> string {
+    PtRenderPerson$render_prompt().text()
+}
+
+test "render_prompt_companion_interpolates_ctx_output_format" {
+    assert.contains(pt_render_prompt_companion_output_format_fn(), "Make a person.")
+    assert.contains(pt_render_prompt_companion_output_format_fn(), "name")
+    assert.contains(pt_render_prompt_companion_output_format_fn(), "age")
+}
+
 // BEP-049 M5b.2: `${ctx.output_format_with(prefix=..., ...)}` re-renders the
 // return type's schema with caller options. `Context._output_format` carries
 // the prebuilt schema handle; a non-default `prefix` must appear in the

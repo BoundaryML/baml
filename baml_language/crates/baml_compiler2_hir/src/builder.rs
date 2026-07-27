@@ -26,8 +26,9 @@ use crate::{
     },
     scope::{FileScopeId, ItemScopeOwner, Scope, ScopeId, ScopeKind},
     semantic_index::{
-        BindingId, DefinitionSite, FileSemanticIndex, LocalBinding, PathResolution, ScopeBindings,
-        SemanticIndexExtra, visible_binding_at_in_scopes,
+        BindingId, DefinitionSite, ExprMetadataKey, ExprMetadataScope, FileSemanticIndex,
+        LocalBinding, PathResolution, ScopeBindings, SemanticIndexExtra,
+        visible_binding_at_in_scopes,
     },
 };
 
@@ -74,12 +75,13 @@ pub struct SemanticIndexBuilder<'db> {
     /// contribute to top-level symbols — they belong to the class scope).
     class_depth: u32,
 
-    /// Expression → scope mappings, sorted by `ExprId` at the end.
-    expr_scopes: Vec<(ast::ExprId, FileScopeId)>,
+    /// Expression to lexical scope mappings, sorted by arena-safe key at the end.
+    expr_scopes: Vec<(ExprMetadataKey, FileScopeId)>,
 
-    /// Path root resolutions for multi-segment `Path` expressions.
-    /// Collected during `walk_expr_body`, sorted by `ExprId` at the end.
-    path_resolutions: Vec<(ast::ExprId, PathResolution)>,
+    /// Path root resolutions, sorted by arena-safe expression key at the end.
+    path_resolutions: Vec<(ExprMetadataKey, PathResolution)>,
+    /// Arena namespace active while walking an expression body or defaults.
+    expr_metadata_scope_stack: Vec<ExprMetadataScope>,
     /// Path-root references collected while walking source order. Unlike
     /// `expr_scopes`, this carries the scope and innermost lambda context at
     /// collection time so capture analysis does not rely on arena-local `ExprId`s.
@@ -108,6 +110,7 @@ impl<'db> SemanticIndexBuilder<'db> {
             class_depth: 0,
             expr_scopes: Vec::new(),
             path_resolutions: Vec::new(),
+            expr_metadata_scope_stack: Vec::new(),
             path_root_references: Vec::new(),
             lambda_stack: Vec::new(),
             item_tree: crate::item_tree::builder::ItemTreeBuilder::new(),
@@ -174,10 +177,10 @@ impl<'db> SemanticIndexBuilder<'db> {
         self.pop_scope(); // Project
 
         // Sort expr_scopes for binary search
-        self.expr_scopes.sort_by_key(|(id, _)| *id);
+        self.expr_scopes.sort_by_key(|(key, _)| *key);
 
         // Sort path_resolutions for binary search
-        self.path_resolutions.sort_by_key(|(id, _)| *id);
+        self.path_resolutions.sort_by_key(|(key, _)| *key);
 
         // Pre-intern ScopeIds for each FileScopeId
         let scope_ids: Vec<ScopeId<'db>> = (0..self.scopes.len())
@@ -264,8 +267,17 @@ impl<'db> SemanticIndexBuilder<'db> {
     // ── Expression recording ─────────────────────────────────────────────────
 
     /// Record that an expression belongs to the current scope.
+    fn current_expr_metadata_key(&self, expr_id: ast::ExprId) -> ExprMetadataKey {
+        let scope = *self
+            .expr_metadata_scope_stack
+            .last()
+            .expect("expression walked without an arena namespace");
+        ExprMetadataKey::new(scope, expr_id)
+    }
+
     fn record_expr_scope(&mut self, expr_id: ast::ExprId) {
-        self.expr_scopes.push((expr_id, self.current_scope_id()));
+        let key = self.current_expr_metadata_key(expr_id);
+        self.expr_scopes.push((key, self.current_scope_id()));
     }
 
     /// Build a dotted scope path from the current scope stack, e.g. `Foo.Bar`.
@@ -327,9 +339,30 @@ impl<'db> SemanticIndexBuilder<'db> {
     /// Walk an `ExprBody` arena in source order, recording expression ownership
     /// and local bindings in the lexical scope that owns each expression.
     fn walk_expr_body(&mut self, body: &ast::ExprBody, source_map: &ast::AstSourceMap) {
+        let metadata_scope = ExprMetadataScope::Body(self.current_scope_id());
+        self.expr_metadata_scope_stack.push(metadata_scope);
         if let Some(root_expr) = body.root_expr {
             self.walk_expr(root_expr, body, source_map, false);
         }
+        let popped = self.expr_metadata_scope_stack.pop();
+        debug_assert_eq!(popped, Some(metadata_scope));
+    }
+
+    fn walk_parameter_defaults(&mut self, function: &ast::FunctionDef) {
+        let metadata_scope = ExprMetadataScope::ParameterDefault(self.current_scope_id());
+        self.expr_metadata_scope_stack.push(metadata_scope);
+        for param in &function.params {
+            if let Some(default) = param.default {
+                self.walk_expr(
+                    default.expr(),
+                    &function.defaults.exprs,
+                    &function.defaults.source_map,
+                    true,
+                );
+            }
+        }
+        let popped = self.expr_metadata_scope_stack.pop();
+        debug_assert_eq!(popped, Some(metadata_scope));
     }
 
     /// Walk an expression, recording its `FileScopeId` and (for `Block`s)
@@ -684,9 +717,7 @@ impl<'db> SemanticIndexBuilder<'db> {
                     let use_scope = self.current_scope_id();
                     let use_offset = source_map.expr_span(expr_id).start();
                     self.record_path_root_reference(root, use_scope, use_offset);
-                    if segments.len() >= 2 {
-                        self.classify_path_expr(expr_id, segments, use_scope, use_offset);
-                    }
+                    self.resolve_path_expr(expr_id, root, use_scope, use_offset);
                 }
             }
             ast::Expr::GenericApply { base, .. } => {
@@ -1094,16 +1125,7 @@ impl<'db> SemanticIndexBuilder<'db> {
         }
         self.emit_duplicate_param_diagnostics(&func_def.params);
         self.lambda_stack.push(scope_id);
-        for param in &func_def.params {
-            if let Some(default) = param.default {
-                self.walk_expr(
-                    default.expr(),
-                    &func_def.defaults.exprs,
-                    &func_def.defaults.source_map,
-                    true,
-                );
-            }
-        }
+        self.walk_parameter_defaults(func_def);
         if let Some(ast::FunctionBodyDef::Expr(lambda_body, lambda_source_map)) = &func_def.body {
             self.walk_expr_body(lambda_body, lambda_source_map);
             self.analyze_lambda_captures(scope_id, lambda_body, lambda_source_map);
@@ -1170,26 +1192,18 @@ impl<'db> SemanticIndexBuilder<'db> {
         false
     }
 
-    fn classify_path_expr(
+    fn resolve_path_expr(
         &mut self,
         expr_id: ast::ExprId,
-        segments: &[Name],
+        root: &Name,
         use_scope: FileScopeId,
         use_offset: TextSize,
     ) {
-        if segments.len() < 2 {
-            return;
-        }
-        let root = &segments[0];
-        let resolution = if self
+        let resolution = self
             .visible_binding_at(use_scope, use_offset, root)
-            .is_some()
-        {
-            PathResolution::Local { name: root.clone() }
-        } else {
-            PathResolution::Unknown
-        };
-        self.path_resolutions.push((expr_id, resolution));
+            .map_or(PathResolution::Unknown, PathResolution::Local);
+        let key = self.current_expr_metadata_key(expr_id);
+        self.path_resolutions.push((key, resolution));
     }
 
     fn record_path_root_reference(
@@ -1252,16 +1266,7 @@ impl<'db> SemanticIndexBuilder<'db> {
                 .push((param.name.clone(), idx));
         }
         self.emit_duplicate_param_diagnostics(&f.params);
-        for param in &f.params {
-            if let Some(default) = param.default {
-                self.walk_expr(
-                    default.expr(),
-                    &f.defaults.exprs,
-                    &f.defaults.source_map,
-                    true,
-                );
-            }
-        }
+        self.walk_parameter_defaults(f);
 
         if let Some(ast::FunctionBodyDef::Expr(ref body, ref source_map)) = f.body {
             self.walk_expr_body(body, source_map);

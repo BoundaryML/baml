@@ -8,9 +8,9 @@
 //!   CSTs for `WORD` tokens that match the target name, confirm each via
 //!   `resolve_name_at`, and collect as `Location`s.
 //!
-//! - **Locals** (let bindings, parameters): search only within the enclosing
-//!   function's `ExprBody` for `Expr::Path` nodes that use the same name and
-//!   resolve to the same local binding.
+//! - **Locals** (let bindings, parameters): search the enclosing function and
+//!   nested lambda arenas for `Expr::Path` nodes that resolve to the same local
+//!   binding.
 //!
 //! ## Optimization
 //!
@@ -21,7 +21,13 @@
 use baml_base::{Name, SourceFile};
 use baml_compiler_syntax::SyntaxKind;
 use baml_compiler2_ast::{Expr, ExprBody};
-use baml_compiler2_hir::{body::FunctionBody, scope::ScopeKind, semantic_index::BindingId};
+use baml_compiler2_hir::{
+    body::FunctionBody,
+    scope::{FileScopeId, ScopeKind},
+    semantic_index::{
+        BindingId, ExprMetadataKey, ExprMetadataScope, FileSemanticIndex, PathResolution,
+    },
+};
 use baml_compiler2_tir::resolve::{ResolvedName, resolve_name_at};
 use rowan::NodeOrToken;
 use text_size::{TextRange, TextSize};
@@ -150,12 +156,11 @@ fn same_item_definition(a: &ResolvedName<'_>, b: &ResolvedName<'_>) -> bool {
 
 // ── local usages ──────────────────────────────────────────────────────────────
 
-/// Search for references to a local variable within the enclosing function's
-/// expression body.
+/// Search for references to a local variable within the enclosing function.
 ///
 /// We walk the `ExprBody` (span-free) and use the source map for positions.
-/// For each `Expr::Path([name])` that resolves to the same local, we emit a
-/// `Location` using the expression's span from the source map.
+/// For each path whose root resolves to the same local, we emit a `Location`
+/// using the root segment's span from the source map.
 fn find_local_usages(
     db: &dyn Db,
     file: SourceFile,
@@ -200,59 +205,95 @@ fn find_local_usages(
         return Vec::new();
     };
 
-    let name = Name::new(name_text);
-    let mut results = Vec::new();
-
-    collect_local_path_usages(
-        db,
+    let mut collector = LocalUsageCollector {
         file,
-        expr_body,
-        &name,
+        index,
+        name: Name::new(name_text),
         target_binding,
+        results: Vec::new(),
+    };
+    collector.collect(
+        enclosing_func_scope,
+        expr_body,
+        ExprMetadataScope::Body(enclosing_func_scope),
         &source_map,
-        &mut results,
     );
 
-    results
+    let defaults = baml_compiler2_ppir::function_parameter_defaults(db, func_loc);
+    collector.collect(
+        enclosing_func_scope,
+        &defaults.defaults.exprs,
+        ExprMetadataScope::ParameterDefault(enclosing_func_scope),
+        &defaults.defaults.source_map,
+    );
+
+    collector.results
 }
 
-/// Walk an `ExprBody` and collect `Expr::Path([name])` occurrences that
-/// resolve to the same local as `target_resolved`.
-fn collect_local_path_usages(
-    db: &dyn Db,
+struct LocalUsageCollector<'index, 'db> {
     file: SourceFile,
-    expr_body: &ExprBody,
-    name: &Name,
+    index: &'index FileSemanticIndex<'db>,
+    name: Name,
     target_binding: BindingId,
-    source_map: &baml_compiler2_ast::AstSourceMap,
-    results: &mut Vec<Location>,
-) {
-    let index = baml_compiler2_hir::file_semantic_index(db, file);
+    results: Vec<Location>,
+}
 
-    for (expr_id, expr) in expr_body.exprs.iter() {
-        let Expr::Path(segments) = expr else {
-            continue;
-        };
+impl LocalUsageCollector<'_, '_> {
+    /// Walk one expression arena and recurse into nested lambda arenas.
+    fn collect(
+        &mut self,
+        owner_scope: FileScopeId,
+        expr_body: &ExprBody,
+        metadata_scope: ExprMetadataScope,
+        source_map: &baml_compiler2_ast::AstSourceMap,
+    ) {
+        for (expr_id, expr) in expr_body.exprs.iter() {
+            match expr {
+                Expr::Path(segments) if segments.first() == Some(&self.name) => {
+                    let segment_range = source_map.path_segment_span(expr_id, 0);
+                    let range =
+                        TextRange::at(segment_range.start(), TextSize::of(segments[0].as_str()));
+                    if range.is_empty() {
+                        continue;
+                    }
 
-        // Only single-segment paths can refer to locals.
-        if segments.len() != 1 || &segments[0] != name {
-            continue;
-        }
+                    let key = ExprMetadataKey::new(metadata_scope, expr_id);
+                    if self.index.path_resolution(key)
+                        == Some(PathResolution::Local(self.target_binding))
+                    {
+                        self.results.push(Location {
+                            file: self.file,
+                            range,
+                        });
+                    }
+                }
+                Expr::Lambda(func_def) => {
+                    let span = source_map.expr_span(expr_id);
+                    let Some(lambda_scope) = self.index.lambda_scope_for_within(owner_scope, span)
+                    else {
+                        continue;
+                    };
 
-        // Get the span of this expression from the source map.
-        let range = source_map.expr_span(expr_id);
-        if range.is_empty() {
-            continue;
-        }
+                    self.collect(
+                        lambda_scope,
+                        &func_def.defaults.exprs,
+                        ExprMetadataScope::ParameterDefault(lambda_scope),
+                        &func_def.defaults.source_map,
+                    );
 
-        // Confirm that this usage resolves to the exact same visible binding.
-        let use_offset = range.start();
-        let Some(use_scope) = index.expression_scope(expr_id) else {
-            continue;
-        };
-
-        if index.visible_binding_at(use_scope, use_offset, name) == Some(target_binding) {
-            results.push(Location { file, range });
+                    if let Some(baml_compiler2_ast::FunctionBodyDef::Expr(body, body_source_map)) =
+                        &func_def.body
+                    {
+                        self.collect(
+                            lambda_scope,
+                            body,
+                            ExprMetadataScope::Body(lambda_scope),
+                            body_source_map,
+                        );
+                    }
+                }
+                _ => {}
+            }
         }
     }
 }
