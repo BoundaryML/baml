@@ -58,7 +58,7 @@ pub(crate) fn render_enum(enum_: &Enum, key: &Name) -> String {
         .map(render_docstring)
         .unwrap_or_default();
     let mut out = format!(
-        "{doc}public enum {name}: Swift.String, Equatable, Hashable, Sendable, CaseIterable, \
+        "{doc}public nonisolated enum {name}: Swift.String, Equatable, Hashable, Sendable, CaseIterable, \
          BamlEncodable, BamlDecodable {{\n"
     );
     for variant in &enum_.variants {
@@ -134,7 +134,7 @@ pub(crate) fn render_class(
     };
 
     let mut out = format!(
-        "{doc}public struct {name}{generics}: Equatable, Sendable, BamlEncodable, BamlDecodable {{\n"
+        "{doc}public nonisolated struct {name}{generics}: Equatable, Sendable, BamlEncodable, BamlDecodable {{\n"
     );
     for field in fields {
         if let Some(fdoc) = &field.doc {
@@ -535,7 +535,7 @@ pub(crate) fn render_recursive_union_alias(
     let mut out = format!(
         "/// Recursive union alias — nominal stand-in for BamlUnion{n} (a\n\
          /// `typealias` can't self-reference); same surface, same codec.\n\
-         public indirect enum {name}: Equatable, Sendable, BamlEncodable, BamlDecodable {{\n"
+         public nonisolated indirect enum {name}: Equatable, Sendable, BamlEncodable, BamlDecodable {{\n"
     );
     for (i, ty) in arm_tys.iter().enumerate() {
         let _ = writeln!(out, "\tcase t{i}({ty})");
