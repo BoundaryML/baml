@@ -910,6 +910,67 @@ class WorkflowGraphTests(unittest.TestCase):
             CFFI_BUILDER.read_text(encoding="utf-8"),
         )
 
+    def test_expected_nightly_skips_do_not_poison_release_tail(self) -> None:
+        workflow = RELEASE_WORKFLOW.read_text(encoding="utf-8")
+        prerequisites = job_block(workflow, "release-prerequisites-complete")
+        manifest = job_block(workflow, "publish-pkg-boundaryml-com")
+        go_publisher = job_block(workflow, "publish-go-sdk")
+        go_smoke = job_block(workflow, "smoke-go-release")
+        channel = job_block(workflow, "publish-pkg-channel")
+        nightly = job_block(workflow, "dispatch-nightly-after-canary")
+
+        self.assertIn(
+            'require_skipped Gradle-Plugin-Portal "$GRADLE_PLUGIN"',
+            prerequisites,
+        )
+        guarded_tail = (
+            (
+                manifest,
+                (
+                    "needs.plan.result == 'success'",
+                    "needs.release-prerequisites-complete.result == 'success'",
+                ),
+            ),
+            (
+                go_publisher,
+                (
+                    "needs.plan.result == 'success'",
+                    "needs.build-go-sdk.result == 'success'",
+                    "needs.all-builds.result == 'success'",
+                    "needs.publish-pkg-boundaryml-com.result == 'success'",
+                ),
+            ),
+            (
+                go_smoke,
+                (
+                    "needs.plan.result == 'success'",
+                    "needs.publish-go-sdk.result == 'success'",
+                    "needs.publish-pkg-boundaryml-com.result == 'success'",
+                ),
+            ),
+            (
+                channel,
+                (
+                    "needs.plan.result == 'success'",
+                    "needs.publish-pkg-boundaryml-com.result == 'success'",
+                    "needs.release-complete.result == 'success'",
+                    "needs.smoke-go-release.result == 'success'",
+                    "needs.smoke-swift-release.result == 'success'",
+                ),
+            ),
+            (
+                nightly,
+                (
+                    "needs.plan.result == 'success'",
+                    "needs.publish-pkg-channel.result == 'success'",
+                ),
+            ),
+        )
+        for block, required_results in guarded_tail:
+            self.assertIn("!cancelled()", block)
+            for result in required_results:
+                self.assertIn(result, block)
+
     def test_nuget_repair_and_nightly_pack_contracts_are_fail_closed(self) -> None:
         publisher = NUGET_PUBLISHER.read_text(encoding="utf-8")
         preparer = CSHARP_PREPARER.read_text(encoding="utf-8")
