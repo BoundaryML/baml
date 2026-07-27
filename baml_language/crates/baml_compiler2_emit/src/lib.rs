@@ -95,16 +95,44 @@ fn build_interface_def(
     let ns = &pkg_info.namespace_path;
     let generics = &interface.generic_params;
     let interface_frame_params = baml_compiler2_tir::interface_generic_params(db, iface_loc);
+    // `Self` is the interface frame's own first parameter, and it is in scope
+    // throughout the declaration — a method signature or `requires` clause may
+    // project through it (`Self.Item`). Bounding it by this very interface is what
+    // lets such a projection resolve. No receiver substitutes it here, because a
+    // declaration describes every implementor rather than one.
+    let self_ty = interface_frame_params
+        .first()
+        .map(|p| ty::Ty::TypeVar(p.clone(), TyAttr::default()));
+    let mut decl_bounds =
+        baml_compiler2_tir::lower_type_expr::interface_generic_param_bounds(db, iface_loc).clone();
+    if let Some(self_param) = interface_frame_params.first() {
+        decl_bounds.insert(
+            self_param.clone(),
+            vec![baml_type::Interface::new(
+                iface_tn.clone(),
+                baml_compiler2_tir::interface_declared_generic_params(db, iface_loc)
+                    .into_iter()
+                    .map(|p| ty::Ty::TypeVar(p, TyAttr::default()))
+                    .collect(),
+                Vec::new(),
+            )],
+        );
+    }
 
-    // Lower a type expr in `scope` (diagnostics discarded — the declaration was
-    // validated upstream) and narrow to a runtime type. This can legitimately fail
-    // for a *valid* program: an interface method signature may mention `Self` or an
-    // associated type (`Self.Item`), which this isolated scope does not substitute
-    // (unlike the MIR's `lower_signature_runtime_ty`), so they lower to `Unknown`
-    // and are dropped. (Faithfully lowering them is future work, tracked for when a
-    // consumer actually reads the method signatures — see the interface reflection
-    // follow-up.)
-    let lower_rt = |store: &TypeRefStore, id: TypeRefId, scope: &[ParamTy]| -> Option<RuntimeTy> {
+    // Lower a type expr in `scope` and narrow to a runtime type. Diagnostics are
+    // discarded: emit only runs on a checked program, so the declaration is already
+    // validated and any diagnostic here would be a duplicate.
+    //
+    // `lower_to_runtime` rejects only the error-recovery sentinels (`Unknown`,
+    // `Error`, `Infer`), which a checked program cannot contain — type variables and
+    // associated projections lower faithfully. So a failure means a compiler bug, not
+    // user error, and callers must not paper over it by dropping the entry: dropping
+    // a method parameter would silently renumber the positional arguments after it.
+    let lower_rt = |store: &TypeRefStore,
+                    id: TypeRefId,
+                    scope: &[ParamTy],
+                    bounds: &TypeVarBoundsMap|
+     -> RuntimeTy {
         let mut diags = Vec::new();
         let ty = lower_type_ref(
             store,
@@ -114,20 +142,27 @@ fn build_interface_def(
                 package_items: pkg_items,
                 ns_context: ns,
                 generic_params: scope,
-                bounds: &TypeVarBoundsMap::default(),
-                self_ty: None,
+                bounds,
+                self_ty: self_ty.clone(),
             },
             &mut diags,
         );
-        baml_type::lower_to_runtime(&ty, resolved).ok()
+        baml_type::lower_to_runtime(&ty, resolved).unwrap_or_else(|e| {
+            unreachable!("interface `{iface_tn}` declares a non-runtime type: {e:?}")
+        })
     };
-    // Lower an interface bound / `requires` target to its runtime form. A
-    // non-interface bound (rejected upstream) yields `None` and is skipped, as does
-    // a bound that mentions an unsubstituted `Self`/associated type (see `lower_rt`).
-    let lower_iface =
-        |store: &TypeRefStore, id: TypeRefId, scope: &[ParamTy]| -> Option<RuntimeInterface> {
-            let mut diags = Vec::new();
-            let ty::Ty::Interface(qtn, args, assoc, _) = lower_type_ref(
+    // Lower an interface bound / `requires` target / associated-type bound. These are
+    // constraint heads, not existentials: they pin only the members they write. A
+    // target that is not an interface was rejected upstream (E0145 / E0133) and yields
+    // `None`.
+    let lower_iface = |store: &TypeRefStore,
+                       id: TypeRefId,
+                       scope: &[ParamTy],
+                       bounds: &TypeVarBoundsMap|
+     -> Option<RuntimeInterface> {
+        let mut diags = Vec::new();
+        let ty::Ty::Interface(qtn, args, assoc, _) =
+            baml_compiler2_tir::lower_type_expr::lower_constraint_head_type_ref(
                 store,
                 id,
                 &ScopeCtx {
@@ -135,35 +170,42 @@ fn build_interface_def(
                     package_items: pkg_items,
                     ns_context: ns,
                     generic_params: scope,
-                    bounds: &TypeVarBoundsMap::default(),
-                    self_ty: None,
+                    bounds,
+                    self_ty: self_ty.clone(),
                 },
                 &mut diags,
-            ) else {
-                return None;
-            };
-            let generics = args
-                .iter()
-                .map(|a| baml_type::lower_to_runtime(a, resolved))
-                .collect::<Result<Vec<_>, _>>()
-                .ok()?;
-            let associated_types = assoc
-                .iter()
-                .map(|(n, t)| baml_type::lower_to_runtime(t, resolved).map(|rt| (n.clone(), rt)))
-                .collect::<Result<Vec<_>, _>>()
-                .ok()?;
-            Some(RuntimeInterface::new(qtn, generics, associated_types))
+            )
+        else {
+            return None;
         };
+        let to_runtime = |t: &ty::Ty| {
+            baml_type::lower_to_runtime(t, resolved).unwrap_or_else(|e| {
+                unreachable!("interface `{iface_tn}` declares a non-runtime constraint: {e:?}")
+            })
+        };
+        let generics = args.iter().map(&to_runtime).collect();
+        let associated_types = assoc
+            .iter()
+            .map(|(n, t)| (n.clone(), to_runtime(t)))
+            .collect();
+        Some(RuntimeInterface::new(qtn, generics, associated_types))
+    };
     // A method's runtime signature: Required params → positional `args`, optional
     // (defaulted) params → `kwargs`; the `self` receiver is dropped; absent
     // return/throws lower to `Void`. The method's own generics extend the scope.
     let build_method = |store: &TypeRefStore,
                         name: &Name,
                         scope: &[ParamTy],
+                        bounds: &TypeVarBoundsMap,
                         params: &[FunctionParamData],
                         return_type: Option<TypeRefId>,
                         throws: Option<TypeRefId>|
      -> InterfaceMethodDef {
+        // An untyped parameter is a syntax-level error, so it cannot reach emit; the
+        // top type keeps the positional layout intact if one ever did.
+        let unannotated = || RuntimeTy::BuiltinUnknown {
+            attr: TyAttr::default(),
+        };
         let void = || RuntimeTy::Void {
             attr: TyAttr::default(),
         };
@@ -173,9 +215,9 @@ fn build_interface_def(
             if p.name.as_str() == "self" {
                 continue;
             }
-            let Some(ty) = p.type_ref.and_then(|id| lower_rt(store, id, scope)) else {
-                continue;
-            };
+            let ty = p
+                .type_ref
+                .map_or_else(unannotated, |id| lower_rt(store, id, scope, bounds));
             if p.has_default {
                 kwargs.push((p.name.clone(), ty));
             } else {
@@ -186,12 +228,8 @@ fn build_interface_def(
             name: name.clone(),
             args,
             kwargs,
-            returns: return_type
-                .and_then(|id| lower_rt(store, id, scope))
-                .unwrap_or_else(void),
-            errors: throws
-                .and_then(|id| lower_rt(store, id, scope))
-                .unwrap_or_else(void),
+            returns: return_type.map_or_else(void, |id| lower_rt(store, id, scope, bounds)),
+            errors: throws.map_or_else(void, |id| lower_rt(store, id, scope, bounds)),
         }
     };
 
@@ -205,31 +243,36 @@ fn build_interface_def(
                 .generic_param_bounds
                 .get(i)
                 .and_then(|o| *o)
-                .and_then(|id| lower_iface(store, id, &interface_frame_params));
+                .and_then(|id| lower_iface(store, id, &interface_frame_params, &decl_bounds));
             (param.clone(), bound.into_iter().collect())
         })
         .collect();
     let requires = interface
         .requires
         .iter()
-        .filter_map(|&id| lower_iface(store, id, &interface_frame_params))
+        .filter_map(|&id| lower_iface(store, id, &interface_frame_params, &decl_bounds))
         .collect();
     let assoc = interface
         .associated_types
         .iter()
         .filter_map(|at| {
             at.bound
-                .and_then(|id| lower_iface(store, id, &interface_frame_params))
+                .and_then(|id| lower_iface(store, id, &interface_frame_params, &decl_bounds))
                 .map(|ri| (at.name.clone(), ri))
         })
         .collect();
+    // A field always carries a type — an untyped one is a syntax-level error that
+    // cannot reach emit — so every field appears here.
     let fields = interface
         .fields
         .iter()
         .filter_map(|f| {
-            f.type_ref
-                .and_then(|id| lower_rt(store, id, &interface_frame_params))
-                .map(|rt| (f.name.clone(), rt))
+            f.type_ref.map(|id| {
+                (
+                    f.name.clone(),
+                    lower_rt(store, id, &interface_frame_params, &decl_bounds),
+                )
+            })
         })
         .collect();
     let mut methods: Vec<InterfaceMethodDef> = interface
@@ -238,16 +281,33 @@ fn build_interface_def(
         .map(|m| {
             let mut scope = interface_frame_params.clone();
             ParamTy::extend_frame(&mut scope, &m.generic_params);
-            build_method(store, &m.name, &scope, &m.params, m.return_type, m.throws)
+            build_method(
+                store,
+                &m.name,
+                &scope,
+                &decl_bounds,
+                &m.params,
+                m.return_type,
+                m.throws,
+            )
         })
         .collect();
     methods.extend(interface.default_methods.iter().map(|&loc| {
         let f = function_data(db, loc);
         let scope = baml_compiler2_tir::function_generic_params(db, loc);
+        // A default method may project through its own type variables (`T.Item`), so
+        // their bounds join the interface's for this signature.
+        let mut bounds = decl_bounds.clone();
+        bounds.extend(
+            baml_compiler2_tir::lower_type_expr::function_in_scope_generic_param_bounds(db, loc)
+                .iter()
+                .map(|(k, v)| (k.clone(), v.clone())),
+        );
         build_method(
             &f.type_refs,
             &f.name,
             &scope,
+            &bounds,
             &f.params,
             f.return_type,
             f.throws,
@@ -5487,6 +5547,115 @@ mod tests {
         let metadata = compute_function_metadata(&db, func_loc, &parameter_defaults, &cache);
 
         assert_eq!(metadata.param_has_default, vec![false, true, false]);
+    }
+
+    // ── build_interface_def ─────────────────────────────────────────────
+
+    /// Build the runtime signature for the single interface declared in `source`.
+    fn interface_def_for(source: &str, name: &str) -> bex_vm_types::types::InterfaceDef {
+        let mut db = TestDb::default();
+        let file = db.add_file("test.baml", source);
+        db.project = Some(Project::new(&db, PathBuf::from("."), vec![file]));
+
+        let iface_loc = baml_compiler2_ppir::item_data::file_interfaces(&db, file)
+            .iter()
+            .copied()
+            .find(|&loc| {
+                baml_compiler2_ppir::item_data::interface_data(&db, loc)
+                    .name
+                    .as_str()
+                    == name
+            })
+            .expect("test file declares the interface");
+        let cache = ResolvedAliases {
+            aliases: HashMap::new(),
+            recursive: HashSet::new(),
+        };
+        build_interface_def(
+            &db,
+            iface_loc,
+            baml_type::TypeName::local(baml_base::Name::new(name)),
+            &cache,
+        )
+    }
+
+    /// A declaration is described symbolically — `Self.Item` stays an associated
+    /// projection rather than being dropped for want of a receiver to substitute.
+    #[test]
+    fn interface_def_keeps_self_projections() {
+        let def = interface_def_for(
+            concat!(
+                "interface Src {\n",
+                "  type Item\n",
+                "  function next(self) -> Self.Item throws never\n",
+                "}\n",
+            ),
+            "Src",
+        );
+        let next = def
+            .methods
+            .iter()
+            .find(|m| m.name.as_str() == "next")
+            .expect("`next` is declared");
+        assert!(
+            matches!(
+                next.returns,
+                baml_type::RuntimeTy::AssociatedTypeProjection { .. }
+            ),
+            "expected a projection return, got {:?}",
+            next.returns
+        );
+    }
+
+    /// Every declared parameter occupies its position: a signature's positional
+    /// layout is only meaningful if no parameter can silently vanish from it.
+    #[test]
+    fn interface_def_keeps_every_parameter_position() {
+        let def = interface_def_for(
+            concat!(
+                "interface Sink<T> {\n",
+                "  type Item\n",
+                "  function put(self, first: Self.Item, second: T, third: int) -> int throws never\n",
+                "}\n",
+            ),
+            "Sink",
+        );
+        let put = def
+            .methods
+            .iter()
+            .find(|m| m.name.as_str() == "put")
+            .expect("`put` is declared");
+        assert_eq!(
+            put.args.len(),
+            3,
+            "the `self` receiver drops, the other three stay: {:?}",
+            put.args
+        );
+        assert!(matches!(put.args[2], baml_type::RuntimeTy::Int { .. }));
+    }
+
+    /// A `requires` clause is recorded even when it projects through `Self`.
+    #[test]
+    fn interface_def_keeps_self_projecting_requires() {
+        let def = interface_def_for(
+            concat!(
+                "interface Base {\n",
+                "  type Item\n",
+                "  function b(self) -> int throws never\n",
+                "}\n",
+                "interface Derived requires Base<Item = Self.Item> {\n",
+                "  type Item\n",
+                "  function d(self) -> int throws never\n",
+                "}\n",
+            ),
+            "Derived",
+        );
+        assert_eq!(
+            def.requires.len(),
+            1,
+            "the `requires` clause must survive lowering: {:?}",
+            def.requires
+        );
     }
 
     // ── extract_schema_attrs ────────────────────────────────────────────

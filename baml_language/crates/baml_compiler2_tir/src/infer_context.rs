@@ -748,11 +748,13 @@ pub enum TirTypeError {
         interface: crate::ty::QualifiedTypeName,
         associated_type: Name,
     },
-    /// An interface's `requires` clause names a type that is not an interface (a class, enum, or
-    /// alias). Only interfaces can be required. Interface-declaration well-formedness (E0133).
+    /// An interface's `requires` clause names a type that is not an interface (a class, enum,
+    /// alias, or any structural type — the clause parses a full type expression). Only
+    /// interfaces can be required, exactly as only interfaces can be generic bounds (see
+    /// [`Self::GenericBoundNotInterface`]). Interface-declaration well-formedness (E0133).
     InterfaceRequiresNonInterface {
         interface: crate::ty::QualifiedTypeName,
-        target: Name,
+        target: Ty,
     },
     /// An interface's transitive `requires` graph cycles back to itself. Interface-declaration well-formedness (E0118).
     /// `chain` is the witnessing name path `[root, …, root]`.
@@ -1825,8 +1827,9 @@ impl fmt::Display for TirTypeError {
             TirTypeError::InterfaceRequiresNonInterface { interface, target } => {
                 write!(
                     f,
-                    "interface `{}` cannot require `{target}`, which is not an interface",
-                    interface.render_user_facing()
+                    "interface `{}` cannot require `{}`, which is not an interface",
+                    interface.render_user_facing(),
+                    target.render_user_facing()
                 )
             }
             TirTypeError::InterfaceRequiresCycle { chain } => {
