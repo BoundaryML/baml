@@ -49,6 +49,9 @@ pub(crate) struct Api {
     pub(crate) register_callback: unsafe extern "C" fn(CallbackFn),
     pub(crate) new_function_call: unsafe extern "C" fn() -> u64,
     pub(crate) call_function: unsafe extern "C" fn(*const c_char, *const u8, usize, u32),
+    pub(crate) call_handle: unsafe extern "C" fn(u64, *const u8, usize, u32),
+    pub(crate) handle_clone: unsafe extern "C" fn(u64, *mut u64) -> u32,
+    pub(crate) handle_release: unsafe extern "C" fn(u64) -> u32,
     pub(crate) free_buffer: unsafe extern "C" fn(Buffer),
     pub(crate) register_host_dispatch_callback: unsafe extern "C" fn(HostDispatchFn),
     pub(crate) register_host_release_callback: unsafe extern "C" fn(HostReleaseFn),
@@ -147,6 +150,23 @@ struct BamlApiV1 {
     register_host_dispatch_callback: unsafe extern "C" fn(HostDispatchFn),
     register_host_release_callback: unsafe extern "C" fn(HostReleaseFn),
     complete_host_call: unsafe extern "C" fn(u32, i32, *const c_char, usize),
+    handle_clone: unsafe extern "C" fn(u64, *mut u64) -> u32,
+    handle_release: unsafe extern "C" fn(u64) -> u32,
+    media_from_url:
+        unsafe extern "C" fn(i32, *const c_char, *const c_char, *mut u64, *mut i32) -> u32,
+    media_from_file:
+        unsafe extern "C" fn(i32, *const c_char, *const c_char, *mut u64, *mut i32) -> u32,
+    media_from_base64:
+        unsafe extern "C" fn(i32, *const c_char, *const c_char, *mut u64, *mut i32) -> u32,
+    media_url: unsafe extern "C" fn(u64, i32, *mut Buffer) -> u32,
+    media_file: unsafe extern "C" fn(u64, i32, *mut Buffer) -> u32,
+    media_base64: unsafe extern "C" fn(u64, i32, *mut Buffer) -> u32,
+    media_mime_type: unsafe extern "C" fn(u64, i32, *mut Buffer) -> u32,
+    register_bridge: unsafe extern "C" fn(*const c_void) -> Buffer,
+    register_unhandled_spawn_error_callback:
+        unsafe extern "C" fn(extern "C" fn(*const c_char, usize, i32)),
+    shutdown_runtime: unsafe extern "C" fn() -> Buffer,
+    call_handle: unsafe extern "C" fn(u64, *const u8, usize, u32),
 }
 
 fn load_inner(env: &loader::LoaderEnv) -> Result<Api, LoaderError> {
@@ -204,6 +224,9 @@ fn load_inner(env: &loader::LoaderEnv) -> Result<Api, LoaderError> {
         register_callback: table.register_callback,
         new_function_call: table.new_function_call,
         call_function: table.call_function,
+        call_handle: table.call_handle,
+        handle_clone: table.handle_clone,
+        handle_release: table.handle_release,
         free_buffer: table.free_buffer,
         register_host_dispatch_callback: table.register_host_dispatch_callback,
         register_host_release_callback: table.register_host_release_callback,

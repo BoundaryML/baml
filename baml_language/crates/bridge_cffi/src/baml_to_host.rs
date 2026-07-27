@@ -24,7 +24,7 @@ use bex_project::{
     UnhandledSpawnError,
 };
 use bridge_ctypes::{
-    CffiHandleTableOptions,
+    CffiHandleTableEntry, CffiHandleTableOptions, HANDLE_TABLE,
     baml_bridge::cffi::{
         BamlOutboundError, BamlOutboundPanic, BamlOutboundResult, baml_outbound_result,
     },
@@ -339,5 +339,46 @@ pub async fn call_and_encode(
         },
     };
 
+    result.encode_to_vec()
+}
+
+/// Invoke an engine-owned callable referenced by an ordinary handle-table key
+/// and encode the result through the same envelope path as a named call.
+pub async fn call_handle_and_encode(
+    runtime: Arc<dyn Bex>,
+    handle_key: u64,
+    args: BexArgs,
+    call_ctx: FunctionCallContext,
+) -> Vec<u8> {
+    let handle = match HANDLE_TABLE.resolve(handle_key) {
+        Some(entry) => match &*entry {
+            CffiHandleTableEntry::Adt(bex_project::BexExternalAdt::TaggedHeapHandle {
+                ty: bex_project::RuntimeTy::Function { .. },
+                heap_handle,
+            }) => heap_handle.clone(),
+            _ => {
+                return error_to_outbound(BridgeError::Internal(
+                    "handle does not reference a BAML callable".to_string(),
+                ));
+            }
+        },
+        None => {
+            return error_to_outbound(BridgeError::Internal(
+                "callable handle is no longer live".to_string(),
+            ));
+        }
+    };
+
+    let options = CffiHandleTableOptions::for_in_process();
+    let _route = crate::register_active_call_runtime(call_ctx.host_call_id.0, &runtime);
+    let caught = AssertUnwindSafe(runtime.call_callable(handle, args, call_ctx))
+        .catch_unwind()
+        .await;
+    let result = match caught {
+        Ok(call_result) => result_to_outbound(call_result, &options),
+        Err(panic_info) => BamlOutboundResult {
+            result: Some(sdk_panic_arm(panic_message(panic_info.as_ref()), &options)),
+        },
+    };
     result.encode_to_vec()
 }

@@ -111,6 +111,8 @@ export declare class BamlRuntime {
   static initializeRuntimeFromBytecode(bytecode: Buffer): BamlRuntime
   /** Call a BAML function synchronously (blocking). */
   callFunctionSync(functionName: string, argsProto: Buffer, ctx?: HostSpanManager | undefined | null, collectors?: Array<Collector> | undefined | null): Buffer
+  /** Invoke an engine-owned BAML callable without consuming its handle. */
+  callHandleSync(handle: BamlHandle, argsProto: Buffer): Buffer
   /** Call a BAML function asynchronously. */
   callFunction(functionName: string, argsProto: Buffer, ctx?: HostSpanManager | undefined | null, collectors?: Array<Collector> | undefined | null): Promise<Buffer>
 }

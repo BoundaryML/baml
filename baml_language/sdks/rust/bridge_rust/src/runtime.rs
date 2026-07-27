@@ -98,6 +98,25 @@ pub async fn invoke<R: BamlValue, E: BamlValue>(
     decode::decode_result(&bytes)
 }
 
+pub fn invoke_handle_sync<R: BamlValue, E: BamlValue>(
+    handle_key: u64,
+    kwargs: Vec<wire::InboundMapEntry>,
+) -> Result<R, Error<E>> {
+    if tokio::runtime::Handle::try_current().is_ok() {
+        return Err(Error::CalledSyncFromAsync);
+    }
+    let receiver = dispatch_handle(handle_key, kwargs).map_err(Error::Sdk)?;
+    decode::decode_result(&receiver.wait_blocking())
+}
+
+pub async fn invoke_handle<R: BamlValue, E: BamlValue>(
+    handle_key: u64,
+    kwargs: Vec<wire::InboundMapEntry>,
+) -> Result<R, Error<E>> {
+    let receiver = dispatch_handle(handle_key, kwargs).map_err(Error::Sdk)?;
+    decode::decode_result(&receiver.wait().await)
+}
+
 /// Encode the call and fire it through the C ABI. The registered
 /// completion is returned to be waited on; pre-call failures inside the
 /// engine also arrive through it as error envelopes (one result channel).
@@ -129,6 +148,36 @@ fn dispatch(
     unsafe {
         (api.call_function)(
             name.as_ptr(),
+            args.as_ptr(),
+            args.len(),
+            receiver.dispatch_id(),
+        );
+    }
+    Ok(receiver)
+}
+
+fn dispatch_handle(
+    handle_key: u64,
+    kwargs: Vec<wire::InboundMapEntry>,
+) -> Result<completion::Receiver, SdkError> {
+    if handle_key == 0 {
+        return Err(SdkError::new("cannot invoke a zero BAML function handle"));
+    }
+    let api = capi::api()?;
+    let receiver = completion::register(api);
+    crate::host_value::ensure_callbacks_registered(api);
+    #[expect(unsafe_code)]
+    let call_id = unsafe { (api.new_function_call)() };
+    let args = wire::CallFunctionArgs {
+        kwargs,
+        call_id,
+        type_args: Vec::new(),
+    }
+    .encode_to_vec();
+    #[expect(unsafe_code)]
+    unsafe {
+        (api.call_handle)(
+            handle_key,
             args.as_ptr(),
             args.len(),
             receiver.dispatch_id(),

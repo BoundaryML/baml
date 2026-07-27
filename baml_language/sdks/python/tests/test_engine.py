@@ -74,6 +74,18 @@ function ClassifyAmbiguousEmptyList(value: int[] | string[]) -> string {
         let strings: string[] => "strings",
     }
 }
+
+function MakeAdder(offset: int) -> (value: int) -> int throws never {
+    return (value: int) -> int { offset + value }
+}
+
+function MakeCounter(start: int) -> () -> int throws never {
+    let current = start;
+    return () -> int {
+        current += 1;
+        current
+    }
+}
 """
 
 
@@ -226,6 +238,19 @@ class TestCallFunctionSync:
         rt = make_runtime(EXPR_FUNCS_BAML)
         result = call_function_sync(rt, "ClassifyAmbiguousEmptyList", {"value": []})
         assert result.result() == "ints"
+
+    def test_returned_closure_accepts_args_and_decodes_results(self):
+        rt = make_runtime(EXPR_FUNCS_BAML)
+        add_ten = call_function_sync(rt, "MakeAdder", {"offset": 10}).result()
+        assert callable(add_ten)
+        assert add_ten(5) == 15
+        assert add_ten(value=7) == 17
+
+    def test_returned_closure_is_reusable_and_retains_captures(self):
+        rt = make_runtime(EXPR_FUNCS_BAML)
+        next_value = call_function_sync(rt, "MakeCounter", {"start": 40}).result()
+        assert next_value() == 41
+        assert next_value() == 42
 
     def test_missing_argument_raises(self):
         """Missing required argument raises an error.

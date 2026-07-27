@@ -25,6 +25,8 @@ from .baml_py import (
     BamlPdf,
     BamlPyHandle,
     BamlVideo,
+    get_runtime as _get_runtime,
+    new_function_call,
     register_host_callable,
     release_host_callable,
 )
@@ -775,6 +777,12 @@ def _decode_handle(handle, type_map: BamlTypeMap) -> Any:
         class_fqn = handle.ty.class_ty.name
         cls = type_map.get_class(class_fqn)
         return cls._from_pyhandle(pyhandle)
+    if ht == HT.FUNCTION_REF:
+        ty = getattr(handle, "ty", None)
+        function_ty = (
+            ty.function if ty is not None else baml_type_pb2.BamlTyFunction()
+        )
+        return BamlClosure(pyhandle, function_ty)
     if ht == HT.HANDLE_UNSPECIFIED:
         raise BamlError("BEX emitted HANDLE_UNSPECIFIED (Rust-side bug)")
 
@@ -783,6 +791,48 @@ def _decode_handle(handle, type_map: BamlTypeMap) -> Any:
     # BamlPyHandle. The outer codegen class (if any) wraps it via
     # `_decode_class` → private-attr injection.
     return pyhandle
+
+
+class BamlClosure:
+    """A reusable, engine-owned BAML callable."""
+
+    __slots__ = ("_handle", "_required_names", "_optional_names")
+
+    def __init__(self, handle: BamlPyHandle, function_ty: Any):
+        mode = baml_type_pb2.BamlTyFunctionParamMode
+        self._handle = handle
+        self._required_names = [
+            param.name if param.HasField("name") else f"arg{index}"
+            for index, param in enumerate(function_ty.params)
+            if param.mode != mode.BAML_TY_FUNCTION_PARAM_MODE_OPTIONAL
+        ]
+        self._optional_names = [
+            param.name if param.HasField("name") else f"arg{index}"
+            for index, param in enumerate(function_ty.params)
+            if param.mode == mode.BAML_TY_FUNCTION_PARAM_MODE_OPTIONAL
+        ]
+
+    def __call__(self, *args: Any, **kwargs: Any) -> Any:
+        if len(args) > len(self._required_names):
+            raise TypeError(
+                f"got {len(args)} positional arguments but this BAML closure "
+                f"accepts {len(self._required_names)}"
+            )
+        values = dict(zip(self._required_names, args))
+        allowed = set(self._required_names) | set(self._optional_names)
+        for name, value in kwargs.items():
+            if name not in allowed:
+                raise TypeError(f"unexpected keyword argument {name!r}")
+            if name in values:
+                raise TypeError(f"multiple values for argument {name!r}")
+            values[name] = value
+        call_id = new_function_call()
+        args_proto = encode_call_args(values, call_id)
+        result_bytes = _get_runtime().call_handle_sync(self._handle, args_proto)
+        return decode_call_result(result_bytes)
+
+    def __repr__(self) -> str:
+        return "<BamlClosure>"
 
 
 # Workspace bigint cap = 2^28 bits ⇒ at most (2^28)/4 hex digits (plus a

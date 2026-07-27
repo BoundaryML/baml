@@ -96,6 +96,33 @@ fn call_sync_to_bytes(function_name: String, args_proto: &[u8]) -> Vec<u8> {
     ))
 }
 
+fn call_handle_sync_to_bytes(handle_key: u64, args_proto: &[u8]) -> Vec<u8> {
+    let prepared = (|| -> Result<_, bridge_cffi::BridgeError> {
+        let runtime = bridge_cffi::get_runtime()?;
+        let decoded = decode_args(args_proto)?;
+        if !decoded.type_args.is_empty() {
+            return Err(bridge_cffi::BridgeError::Internal(
+                "type arguments are not supported when invoking a BAML function handle".to_string(),
+            ));
+        }
+        let rt = bridge_cffi::get_tokio_runtime()?;
+        Ok((runtime, decoded, rt))
+    })();
+
+    let (runtime, decoded, rt) = match prepared {
+        Ok(value) => value,
+        Err(error) => return bridge_cffi::error_to_outbound(error),
+    };
+
+    let call_ctx = bridge_cffi::function_call_context_builder(decoded.call_id).build();
+    rt.block_on(bridge_cffi::call_handle_and_encode(
+        runtime,
+        handle_key,
+        decoded.kwargs,
+        call_ctx,
+    ))
+}
+
 /// `baml_bridge.BamlFfi.nativeInitFromBytecode(byte[] bytecode)`.
 ///
 /// Initialize the process-global runtime from serialized BAML bytecode
@@ -206,6 +233,41 @@ pub extern "system" fn Java_baml_1bridge_BamlFfi_nativeCallSync<'local>(
         Ok(arr) => arr,
         Err(e) => {
             throw_runtime_exception(&mut env, &format!("failed to allocate result array: {e}"));
+            JByteArray::default()
+        }
+    }
+}
+
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_baml_1bridge_BamlFfi_nativeCallHandleSync<'local>(
+    mut env: JNIEnv<'local>,
+    _class: JClass<'local>,
+    handle_key: jlong,
+    encoded_args: JByteArray<'local>,
+) -> JByteArray<'local> {
+    if handle_key <= 0 {
+        throw_runtime_exception(&mut env, "function handle key must be positive");
+        return JByteArray::default();
+    }
+
+    let args_proto = match env.convert_byte_array(&encoded_args) {
+        Ok(bytes) => bytes,
+        Err(error) => {
+            throw_runtime_exception(
+                &mut env,
+                &format!("failed to read function handle args array: {error}"),
+            );
+            return JByteArray::default();
+        }
+    };
+    let out = call_handle_sync_to_bytes(handle_key as u64, &args_proto);
+    match env.byte_array_from_slice(&out) {
+        Ok(array) => array,
+        Err(error) => {
+            throw_runtime_exception(
+                &mut env,
+                &format!("failed to allocate function handle result array: {error}"),
+            );
             JByteArray::default()
         }
     }

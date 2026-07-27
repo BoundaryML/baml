@@ -71,6 +71,30 @@ final class TestHostCallables: XCTestCase {
         XCTAssertEqual(result, 42)
     }
 
+    func test_baml_closure_is_a_native_callable_with_host_language_arguments() async throws {
+        let addTen = try Baml.host_callable_tests.make_adder(offset: 10)
+        let first = try await addTen(5)
+        let second = try await addTen(7)
+        XCTAssertEqual(first, 15)
+        XCTAssertEqual(second, 17)
+    }
+
+    func test_baml_closure_decodes_multiple_args_and_structured_return_values() async throws {
+        let build = try Baml.host_callable_tests.make_pair_builder(base: 30)
+        let ada = try await build(12, "Ada")
+        let grace = try await build(5, "Grace")
+        XCTAssertEqual(ada, Baml.host_callable_tests.Person(name: "Ada", age: 42))
+        XCTAssertEqual(grace, Baml.host_callable_tests.Person(name: "Grace", age: 35))
+    }
+
+    func test_baml_closure_is_reusable_and_retains_mutable_captures() async throws {
+        let nextValue = try Baml.host_callable_tests.make_counter(start: 40)
+        let first = try await nextValue()
+        let second = try await nextValue()
+        XCTAssertEqual(first, 41)
+        XCTAssertEqual(second, 42)
+    }
+
     func test_host_callables_throwing_callable_round_trips_original_host_exception() throws {
         let raised = TestError(tag: "nope")
         do {

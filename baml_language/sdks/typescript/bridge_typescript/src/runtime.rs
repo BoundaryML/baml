@@ -98,6 +98,45 @@ impl BamlRuntime {
         Ok(Buffer::from(bytes))
     }
 
+    /// Invoke an engine-owned BAML callable without consuming its handle.
+    #[napi(js_name = "callHandleSync")]
+    pub fn call_handle_sync(
+        &self,
+        handle: &crate::handle::BamlHandle,
+        args_proto: Buffer,
+    ) -> napi::Result<Buffer> {
+        use bridge_ctypes::baml_bridge::cffi::BamlHandleType;
+
+        if handle.handle_type() != BamlHandleType::FunctionRef as i32 {
+            return Ok(Buffer::from(bridge_cffi::error_to_outbound(
+                bridge_cffi::BridgeError::Internal(
+                    "handle does not reference a BAML callable".to_string(),
+                ),
+            )));
+        }
+        let prepared = (|| -> std::result::Result<_, bridge_cffi::BridgeError> {
+            let runtime = bridge_cffi::get_runtime()?;
+            let decoded = decode_args(args_proto.as_ref(), "<callable>")?;
+            let rt = bridge_cffi::get_tokio_runtime()?;
+            Ok((runtime, decoded, rt))
+        })();
+        let (runtime, decoded, rt) = match prepared {
+            Ok(value) => value,
+            Err(error) => return Ok(Buffer::from(bridge_cffi::error_to_outbound(error))),
+        };
+        let call_ctx = bridge_cffi::function_call_context_builder(decoded.call_id)
+            .with_type_args(decoded.type_args)
+            .build();
+        Ok(Buffer::from(rt.block_on(
+            bridge_cffi::call_handle_and_encode(
+                runtime,
+                handle.key_u64(),
+                decoded.kwargs,
+                call_ctx,
+            ),
+        )))
+    }
+
     /// Call a BAML function asynchronously.
     #[napi(ts_return_type = "Promise<Buffer>")]
     pub fn call_function<'e>(

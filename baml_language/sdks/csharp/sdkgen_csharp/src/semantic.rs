@@ -3596,8 +3596,60 @@ fn render_function_codec(
         "            return context.HostCallable(\n                value,\n                new global::Baml.Generated.V1.BamlGeneratedHostParameter[] {{ {descriptors} }},\n                {result},\n                static (callback, arguments, cancellationToken) =>\n                    global::Baml.Generated.V1.BamlGeneratedHostCallableRuntime.Await(\n                        (({delegate_type})callback)({invocation})));\n",
         invocation = invocation_arguments.join(", "),
     );
+    let parameter_declarations = params
+        .iter()
+        .enumerate()
+        .map(|(index, parameter)| {
+            let source = render.type_source(&parameter.ty);
+            let source = if parameter.mode == CodegenFunctionParamMode::Optional {
+                format!("global::Baml.BamlOptional<{source}>")
+            } else {
+                source
+            };
+            format!("{source} argument{index}")
+        })
+        .chain(std::iter::once(
+            "global::System.Threading.CancellationToken cancellationToken".to_string(),
+        ))
+        .collect::<Vec<_>>()
+        .join(", ");
+    let argument_encoding = params
+        .iter()
+        .enumerate()
+        .map(|(index, parameter)| {
+            let wire_name = csharp_string(
+                parameter
+                    .name
+                    .as_ref()
+                    .map_or_else(|| format!("arg{index}"), |name| name.as_str().to_string())
+                    .as_str(),
+            );
+            let encoded = format!(
+                "context.EncodeFresh({}, argument{index})",
+                render.type_field(&parameter.ty)
+            );
+            match parameter.mode {
+                CodegenFunctionParamMode::Required => format!(
+                    "                arguments.Add(new global::System.Collections.Generic.KeyValuePair<string, global::Baml.Generated.V1.BamlGeneratedValue>({wire_name}, {encoded}));\n"
+                ),
+                CodegenFunctionParamMode::Optional => format!(
+                    "                if (argument{index}.TryGetValue(out var value{index}))\n                {{\n                    arguments.Add(new global::System.Collections.Generic.KeyValuePair<string, global::Baml.Generated.V1.BamlGeneratedValue>({wire_name}, context.EncodeFresh({}, value{index})));\n                }}\n",
+                    render.type_field(&parameter.ty)
+                ),
+            }
+        })
+        .collect::<String>();
+    let decode_result = if matches!(ret, Ty::Void { .. }) {
+        "                _ = await nativeFunction(arguments, cancellationToken).ConfigureAwait(false);\n".to_string()
+    } else {
+        format!(
+            "                var result = await nativeFunction(arguments, cancellationToken).ConfigureAwait(false);\n                return context.Decode({}, result);\n",
+            render.type_field(ret)
+        )
+    };
     let decode = format!(
-        "            return context.Fail<{delegate_type}>(\n                \"Native BAML closures cannot be decoded as managed delegates.\",\n                \"The C# v1 bridge supports host callables only in the managed-to-BAML direction.\");\n"
+        "            var nativeFunction = context.NativeFunction(value);\n            return async ({parameter_declarations}) =>\n            {{\n                var arguments = new global::System.Collections.Generic.List<global::System.Collections.Generic.KeyValuePair<string, global::Baml.Generated.V1.BamlGeneratedValue>>({});\n{argument_encoding}{decode_result}            }};\n",
+        params.len()
     );
     (encode, decode)
 }

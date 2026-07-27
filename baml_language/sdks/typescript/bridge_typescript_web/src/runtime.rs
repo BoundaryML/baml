@@ -40,3 +40,8 @@ pub fn call_function_sync(function_name: &str, encoded_args: &[u8]) -> Vec<u8> {
 pub async fn call_function(function_name: &str, encoded_args: &[u8]) -> Vec<u8> {
     bridge_cffi::call_function_in_wasm(function_name, encoded_args).await
 }
+
+#[wasm_bindgen(js_name = callHandleSync)]
+pub fn call_handle_sync(handle_key: u64, encoded_args: &[u8]) -> Vec<u8> {
+    sys_wasm::with_web_sync_mode(|| bridge_cffi::call_handle_in_wasm_sync(handle_key, encoded_args))
+}

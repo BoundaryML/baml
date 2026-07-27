@@ -70,3 +70,29 @@ class CallbackHost {
 function ping() -> int {
     42
 }
+
+class ReturnedPerson {
+    name string
+    age int
+}
+
+function make_adder(offset: int) -> (value: int) -> int throws never {
+    return (value: int) -> int { offset + value }
+}
+
+function make_pair_builder(base: int) -> (delta: int, label: string) -> ReturnedPerson throws never {
+    return (delta: int, label: string) -> ReturnedPerson {
+        ReturnedPerson {
+            name: label,
+            age: base + delta,
+        }
+    }
+}
+
+function make_counter(start: int) -> () -> int throws never {
+    let current = start
+    return () -> int {
+        current += 1
+        current
+    }
+}

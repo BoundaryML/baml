@@ -40,6 +40,7 @@ public final class BamlHandle implements AutoCloseable {
     // bridge needs to reason about are named here.
     /** {@code HANDLE_UNSPECIFIED} — skips handle-type validation on accessors. */
     public static final int HANDLE_UNSPECIFIED = 0;
+    public static final int FUNCTION_REF = 5;
     public static final int ADT_MEDIA_IMAGE = 6;
     public static final int ADT_MEDIA_AUDIO = 7;
     public static final int ADT_MEDIA_VIDEO = 8;

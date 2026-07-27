@@ -343,9 +343,16 @@ impl BexEngine {
                 })
             }
 
-            Object::Function(_) => Err(EngineError::CannotConvert {
-                type_name: "function".to_string(),
-            }),
+            Object::Function(_)
+            | Object::Closure(_)
+            | Object::BoundMethod(_)
+            | Object::GenericFunction(_) => {
+                let handle = self.heap.create_handle(ptr);
+                Ok(BexExternalValue::Adt(BexExternalAdt::TaggedHeapHandle {
+                    ty: effective_type.clone(),
+                    heap_handle: handle,
+                }))
+            }
             Object::Interface(_) => Err(EngineError::CannotConvert {
                 type_name: "interface".to_string(),
             }),
@@ -375,15 +382,6 @@ impl BexEngine {
             Object::Uint8Array(bytes) => Ok(BexExternalValue::Uint8Array(bytes.to_vec())),
             Object::RustData(arc) => Ok(bex_external_types::try_convert_rust_data(arc)
                 .unwrap_or_else(|| BexExternalValue::RustData(arc.clone()))),
-            Object::Closure(_) => Err(EngineError::CannotConvert {
-                type_name: "closure".to_string(),
-            }),
-            Object::BoundMethod(_) => Err(EngineError::CannotConvert {
-                type_name: "bound_method".to_string(),
-            }),
-            Object::GenericFunction(_) => Err(EngineError::CannotConvert {
-                type_name: "generic_function".to_string(),
-            }),
             Object::HostClosure(_) => Err(EngineError::CannotConvert {
                 type_name: "host_closure".to_string(),
             }),
