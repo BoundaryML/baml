@@ -616,6 +616,36 @@ def job_block(text: str, job: str) -> str:
     return "".join(lines[:next_job])
 
 
+def step_block(job: str, step: str) -> str:
+    marker = f"      - name: {step}\n"
+    start = job.index(marker)
+    remainder = job[start + len(marker) :]
+    lines = remainder.splitlines(keepends=True)
+    next_step = next(
+        (
+            index
+            for index, line in enumerate(lines)
+            if line.startswith("      - ")
+        ),
+        None,
+    )
+    if next_step is None:
+        return remainder
+    return "".join(lines[:next_step])
+
+
+def step_inputs(step: str) -> dict[str, str]:
+    marker = "        with:\n"
+    start = step.index(marker)
+    inputs: dict[str, str] = {}
+    for line in step[start + len(marker) :].splitlines():
+        if not line.startswith("          "):
+            break
+        key, value = line.strip().split(":", maxsplit=1)
+        inputs[key] = value.strip().strip("\"'")
+    return inputs
+
+
 class WorkflowGraphTests(unittest.TestCase):
     def test_cffi_hygiene_is_enforced_at_production_and_package_boundaries(
         self,
@@ -935,10 +965,16 @@ class WorkflowGraphTests(unittest.TestCase):
         for path in (NODE_NPM_PUBLISHER, WEB_NPM_PUBLISHER):
             with self.subTest(workflow=path.name):
                 publisher = path.read_text(encoding="utf-8")
-                self.assertIn("uses: actions/setup-node@v6", publisher)
-                self.assertIn('registry-url: "https://registry.npmjs.org"', publisher)
-                self.assertNotIn("uses: ./.github/actions/setup-node", publisher)
-                self.assertNotIn("cache: pnpm", publisher)
+                publish_job = job_block(publisher, "publish-npm")
+                setup = step_block(publish_job, "Setup Node.js")
+                inputs = step_inputs(setup)
+                self.assertIn("        uses: actions/setup-node@v6", setup)
+                self.assertNotIn("./.github/actions/setup-node", setup)
+                self.assertEqual(
+                    inputs["registry-url"],
+                    "https://registry.npmjs.org",
+                )
+                self.assertNotEqual(inputs.get("cache"), "pnpm")
 
     def test_csharp_consumer_repository_path_scan_requires_a_separator(self) -> None:
         primitive_consumer = PRIMITIVE_CONSUMER.read_text(encoding="utf-8")
