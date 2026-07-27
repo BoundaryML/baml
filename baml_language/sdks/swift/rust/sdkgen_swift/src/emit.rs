@@ -58,7 +58,7 @@ pub(crate) fn render_enum(enum_: &Enum, key: &Name) -> String {
         .map(render_docstring)
         .unwrap_or_default();
     let mut out = format!(
-        "{doc}public enum {name}: Swift.String, Equatable, Hashable, Sendable, CaseIterable, \
+        "{doc}public nonisolated enum {name}: Swift.String, Equatable, Hashable, Sendable, CaseIterable, \
          BamlEncodable, BamlDecodable {{\n"
     );
     for variant in &enum_.variants {
@@ -151,7 +151,7 @@ pub(crate) fn render_class(
         .map(|f| format!("{}: {}", f.name, f.ty))
         .collect::<Vec<_>>()
         .join(", ");
-    let _ = writeln!(out, "\n\tpublic init({params}) {{");
+    let _ = writeln!(out, "\n\tpublic nonisolated init({params}) {{");
     for field in fields {
         let fname = &field.name;
         if field.boxed {
@@ -187,11 +187,11 @@ pub(crate) fn render_class(
     };
     let _ = write!(
         out,
-        "\n\tpublic static var _bamlArmIdentity: Swift.String? {{ \"{fqn}\" }}\n\n\
-         \tpublic static var _bamlType: BamlTypeDescriptor? {{\n\
+        "\n\tpublic nonisolated static var _bamlArmIdentity: Swift.String? {{ \"{fqn}\" }}\n\n\
+         \tpublic nonisolated static var _bamlType: BamlTypeDescriptor? {{\n\
          \t\t.classType(\"{fqn}\", typeArguments: {type_arguments})\n\
          \t}}\n\n\
-         \tpublic func _bamlEncode() -> BamlInboundValue {{\n\
+         \tpublic nonisolated func _bamlEncode() -> BamlInboundValue {{\n\
          \t\t.baml_class(\"{fqn}\", typeArguments: {type_arguments}, [{field_pairs}])\n\
          \t}}\n"
     );
@@ -225,7 +225,7 @@ pub(crate) fn render_class(
     if fields.is_empty() {
         let _ = write!(
             out,
-            "\n\tpublic static func _bamlDecode(_ v: BamlOutboundValue) throws -> {name} {{\n\
+            "\n\tpublic nonisolated static func _bamlDecode(_ v: BamlOutboundValue) throws -> {name} {{\n\
              \t\t_ = try v.classFields()\n\
              \t\treturn {name}()\n\
              \t}}\n"
@@ -233,7 +233,7 @@ pub(crate) fn render_class(
     } else {
         let _ = write!(
             out,
-            "\n\tpublic static func _bamlDecode(_ v: BamlOutboundValue) throws -> {name} {{\n\
+            "\n\tpublic nonisolated static func _bamlDecode(_ v: BamlOutboundValue) throws -> {name} {{\n\
              {media_fallback}\t\tlet fields = try v.classFields()\n\
              \t\treturn {name}(\n{decode_args}\n\t\t)\n\
              \t}}\n"
@@ -535,7 +535,7 @@ pub(crate) fn render_recursive_union_alias(
     let mut out = format!(
         "/// Recursive union alias — nominal stand-in for BamlUnion{n} (a\n\
          /// `typealias` can't self-reference); same surface, same codec.\n\
-         public indirect enum {name}: Equatable, Sendable, BamlEncodable, BamlDecodable {{\n"
+         public nonisolated indirect enum {name}: Equatable, Sendable, BamlEncodable, BamlDecodable {{\n"
     );
     for (i, ty) in arm_tys.iter().enumerate() {
         let _ = writeln!(out, "\tcase t{i}({ty})");
