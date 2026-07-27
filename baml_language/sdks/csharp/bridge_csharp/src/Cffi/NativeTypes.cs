@@ -35,10 +35,10 @@ internal unsafe struct BamlApiV1
     internal uint AbiVersion;
     internal nuint StructSize;
     internal delegate* unmanaged[Cdecl]<BamlBuffer> Version;
-    internal delegate* unmanaged[Cdecl]<byte*, nuint, BamlBuffer> InitializeRuntimeFromBytecode;
+    internal delegate* unmanaged[Cdecl]<byte*, nuint, uint, uint*, BamlBuffer> InitializeRuntimeFromBytecode;
     internal delegate* unmanaged[Cdecl]<BamlBuffer, void> FreeBuffer;
     internal delegate* unmanaged[Cdecl]<delegate* unmanaged[Cdecl]<uint, byte*, nuint, void>, void> RegisterCallback;
-    internal delegate* unmanaged[Cdecl]<byte*, byte*, nuint, uint, void> CallFunction;
+    internal delegate* unmanaged[Cdecl]<uint, byte*, byte*, nuint, uint, void> CallFunction;
     internal delegate* unmanaged[Cdecl]<ulong> NewFunctionCall;
     internal delegate* unmanaged[Cdecl]<ulong, int> CancelFunctionCall;
     internal delegate* unmanaged[Cdecl]<delegate* unmanaged[Cdecl]<ulong, uint, byte*, nuint, void>, void> RegisterHostDispatchCallback;

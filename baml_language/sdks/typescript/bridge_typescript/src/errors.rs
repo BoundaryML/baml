@@ -14,7 +14,7 @@ pub fn bridge_error_to_napi(err: bridge_cffi::error::BridgeError) -> napi::Error
         // always constructed at init). bridge_python has the same message/classification.
         // Leaving as-is: this code path is unreachable via BamlRuntime (uses self.bex directly,
         // not global RUNTIME_INSTANCE). Fix in bridge_cffi if it ever becomes reachable.
-        BridgeError::NotInitialized => napi::Error::new(
+        BridgeError::NotInitialized | BridgeError::RuntimeNotFound(_) => napi::Error::new(
             Status::InvalidArg,
             "BamlError: BamlInvalidArgumentError: Engine not initialized. Call create_baml_runtime first.",
         ),

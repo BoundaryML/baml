@@ -10,6 +10,9 @@ pub enum BridgeError {
     #[error("Engine not initialized. Call create_baml_runtime first.")]
     NotInitialized,
 
+    #[error("BAML runtime key {0} is not initialized")]
+    RuntimeNotFound(u32),
+
     #[error("Project not initialized")]
     ProjectNotInitialized,
 

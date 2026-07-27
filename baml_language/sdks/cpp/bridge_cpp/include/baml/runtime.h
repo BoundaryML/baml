@@ -90,8 +90,9 @@ inline void initialize_runtime_from_bytecode(const uint8_t* bytecode,
       }
     });
   });
-  detail::owned_buffer failure{
-      detail::api().initialize_runtime_from_bytecode(bytecode, length)};
+  uint32_t runtime_key = 0;
+  detail::owned_buffer failure{detail::api().initialize_runtime_from_bytecode(
+      bytecode, length, 0, &runtime_key)};
   if (!failure.empty()) {
     throw error("BAML_RUNTIME_INITIALIZATION_FAILED: " + failure.to_string());
   }

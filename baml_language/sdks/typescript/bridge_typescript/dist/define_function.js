@@ -160,6 +160,7 @@ function buildArgs(args, requiredParamNames, optionalParamNames) {
 export function defineFunction(bamlFqn, mode, requiredParamNames, optionalParamNames, generics) {
     const requiredNames = [...requiredParamNames];
     const optionNames = [...(optionalParamNames ?? [])];
+    const runtimeKey = generics?.runtimeKey ?? 0;
     // A free function / static method binds only its OWN generic params (a
     // generic receiver is never in play here), so `classTypeParams` is unused.
     const typeParams = generics?.typeParams ?? [];
@@ -171,7 +172,7 @@ export function defineFunction(bamlFqn, mode, requiredParamNames, optionalParamN
         return (...args) => {
             const built = buildArgs(args, requiredNames, optionNames);
             const typeArgs = typeArgsFor(built);
-            const rt = getRuntime();
+            const rt = getRuntime(runtimeKey);
             const callId = newFunctionCall();
             const argsProto = encodeCallArgs(built.kwargs, { syncMode: true, callId, typeArgs });
             const callCtxBinding = attachCallContext(built.ctx, callId);
@@ -188,7 +189,7 @@ export function defineFunction(bamlFqn, mode, requiredParamNames, optionalParamN
         return async (...args) => {
             const built = buildArgs(args, requiredNames, optionNames);
             const typeArgs = typeArgsFor(built);
-            const rt = getRuntime();
+            const rt = getRuntime(runtimeKey);
             const callId = newFunctionCall();
             const argsProto = encodeCallArgs(built.kwargs, { callId, typeArgs });
             const callCtxBinding = attachCallContext(built.ctx, callId);
@@ -213,6 +214,7 @@ export function defineFunction(bamlFqn, mode, requiredParamNames, optionalParamN
 export function defineInstanceFunction(bamlFqn, mode, requiredParamNames, optionalParamNames, generics) {
     const requiredNames = [...requiredParamNames];
     const optionNames = [...(optionalParamNames ?? [])];
+    const runtimeKey = generics?.runtimeKey ?? 0;
     const selfName = requiredNames[0] ?? 'self';
     const rest = requiredNames.slice(1);
     // An instance method binds its own `<...>` params (caller's `$types`) AND
@@ -233,7 +235,7 @@ export function defineInstanceFunction(bamlFqn, mode, requiredParamNames, option
                 return (...args) => {
                     const built = makeArgs(self, args);
                     const typeArgs = typeArgsFor(built);
-                    const rt = getRuntime();
+                    const rt = getRuntime(runtimeKey);
                     const callId = newFunctionCall();
                     const argsProto = encodeCallArgs(built.kwargs, { syncMode: true, callId, typeArgs });
                     const callCtxBinding = attachCallContext(built.ctx, callId);
@@ -250,7 +252,7 @@ export function defineInstanceFunction(bamlFqn, mode, requiredParamNames, option
                 return async (...args) => {
                     const built = makeArgs(self, args);
                     const typeArgs = typeArgsFor(built);
-                    const rt = getRuntime();
+                    const rt = getRuntime(runtimeKey);
                     const callId = newFunctionCall();
                     const argsProto = encodeCallArgs(built.kwargs, { callId, typeArgs });
                     const callCtxBinding = attachCallContext(built.ctx, callId);

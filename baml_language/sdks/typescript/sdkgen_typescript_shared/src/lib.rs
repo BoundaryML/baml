@@ -318,7 +318,7 @@ mod tests {
         assert!(!out.keys().any(|p| p.to_string_lossy().ends_with(".d.ts")));
         let root = &out[&PathBuf::from("index.ts")];
         assert!(root.contains(HEADER_LEN_MARKER));
-        assert!(root.contains("initializeRuntimeFromBytecode(_inlinedbaml.BYTECODE);"));
+        assert!(root.contains("initializeRuntimeFromBytecode(_inlinedbaml.BYTECODE, 0);"));
         assert!(root.contains("setTypeMap(_TYPE_MAP);"));
         assert!(root.contains("export * as baml from \"./baml/index.js\";"));
         assert!(!root.contains("export const b"));
@@ -355,10 +355,10 @@ mod tests {
         let out = emit_sdk(&pool);
         let leaf = &out[&PathBuf::from("lorem/index.ts")];
         assert!(leaf.contains(
-            "export const extract_resume = defineFunction(\"user.lorem.extract_resume\", \"sync\", [\"x\"])"
+            "export const extract_resume = defineFunction(\"user.lorem.extract_resume\", \"sync\", [\"x\"], undefined, { runtimeKey: 0 })"
         ));
         assert!(leaf.contains(
-            "export const extract_resume_async = defineFunction(\"user.lorem.extract_resume\", \"async\", [\"x\"])"
+            "export const extract_resume_async = defineFunction(\"user.lorem.extract_resume\", \"async\", [\"x\"], undefined, { runtimeKey: 0 })"
         ));
     }
 

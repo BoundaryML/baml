@@ -378,10 +378,10 @@ fn render_root_init(top_children: &BTreeSet<String>, use_bytecode: bool) -> Stri
     out.push_str("from . import _inlinedbaml\n");
     out.push_str("from ._typemap import _TYPE_MAP\n\n");
     if use_bytecode {
-        out.push_str("BamlRuntime.initialize_runtime_from_bytecode(_inlinedbaml.BYTECODE)\n\n");
+        out.push_str("BamlRuntime.initialize_runtime_from_bytecode(_inlinedbaml.BYTECODE, runtime_key=0)\n\n");
     } else {
         out.push_str("BamlRuntime.initialize_runtime(\n");
-        out.push_str("    \"baml_src\", _inlinedbaml.FILES\n");
+        out.push_str("    \"baml_src\", _inlinedbaml.FILES, runtime_key=0\n");
         out.push_str(")\n\n");
     }
     out.push_str("set_type_map(_TYPE_MAP)\n");
@@ -1248,8 +1248,8 @@ mod tests {
 
         let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
         let leaf = &out[&PathBuf::from("lorem/__init__.py")];
-        let sync_line = "extract_resume       = _define_function(\"user.lorem.extract_resume\", \"sync\",  [\"x\"])\n";
-        let async_line = "extract_resume_async = _define_function(\"user.lorem.extract_resume\", \"async\", [\"x\"])\n";
+        let sync_line = "extract_resume       = _define_function(\"user.lorem.extract_resume\", \"sync\",  [\"x\"], runtime_key=0)\n";
+        let async_line = "extract_resume_async = _define_function(\"user.lorem.extract_resume\", \"async\", [\"x\"], runtime_key=0)\n";
         assert!(leaf.contains(sync_line), "missing sync line in:\n{leaf}");
         assert!(leaf.contains(async_line), "missing async line in:\n{leaf}");
         assert!(!leaf.contains("extract_resume_stream"));
@@ -1279,13 +1279,13 @@ mod tests {
         let leaf = &out[&PathBuf::from("lorem/__init__.py")];
         assert!(
             leaf.contains(
-                "extract_resume_stream       = _define_function(\"user.lorem.extract_resume$stream\", \"sync\",  [\"x\"])\n",
+                "extract_resume_stream       = _define_function(\"user.lorem.extract_resume$stream\", \"sync\",  [\"x\"], runtime_key=0)\n",
             ),
             "missing stream sync companion in:\n{leaf}"
         );
         assert!(
             leaf.contains(
-                "extract_resume_stream_async = _define_function(\"user.lorem.extract_resume$stream\", \"async\", [\"x\"])\n",
+                "extract_resume_stream_async = _define_function(\"user.lorem.extract_resume$stream\", \"async\", [\"x\"], runtime_key=0)\n",
             ),
             "missing stream async companion in:\n{leaf}"
         );
@@ -1309,13 +1309,13 @@ mod tests {
         let leaf = &out[&PathBuf::from("lorem/__init__.py")];
         assert!(
             leaf.contains(
-                "extract_resume__build_request       = _define_function(\"user.lorem.extract_resume$build_request\", \"sync\",  [\"x\"])\n",
+                "extract_resume__build_request       = _define_function(\"user.lorem.extract_resume$build_request\", \"sync\",  [\"x\"], runtime_key=0)\n",
             ),
             "missing build_request sync companion in:\n{leaf}"
         );
         assert!(
             leaf.contains(
-                "extract_resume__build_request_async = _define_function(\"user.lorem.extract_resume$build_request\", \"async\", [\"x\"])\n",
+                "extract_resume__build_request_async = _define_function(\"user.lorem.extract_resume$build_request\", \"async\", [\"x\"], runtime_key=0)\n",
             ),
             "missing build_request async companion in:\n{leaf}"
         );
@@ -1547,9 +1547,9 @@ mod tests {
         let out = to_source_code_with_bytecode(&pool, bytecode, NamingConvention::PreserveCase);
 
         let root = &out[&PathBuf::from("__init__.py")];
-        assert!(
-            root.contains("BamlRuntime.initialize_runtime_from_bytecode(_inlinedbaml.BYTECODE)")
-        );
+        assert!(root.contains(
+            "BamlRuntime.initialize_runtime_from_bytecode(_inlinedbaml.BYTECODE, runtime_key=0)"
+        ));
         assert!(!root.contains("BamlRuntime.initialize_runtime("));
         assert!(!root.contains("_inlinedbaml.FILES"));
 
@@ -1992,12 +1992,12 @@ mod tests {
         insert_parent_only(&mut pool, "user", &["lorem"], "ping", &[], "x.baml", 0);
         let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
         let leaf = &out[&PathBuf::from("lorem/__init__.py")];
-        assert!(
-            leaf.contains("ping       = _define_function(\"user.lorem.ping\", \"sync\",  [])\n")
-        );
-        assert!(
-            leaf.contains("ping_async = _define_function(\"user.lorem.ping\", \"async\", [])\n")
-        );
+        assert!(leaf.contains(
+            "ping       = _define_function(\"user.lorem.ping\", \"sync\",  [], runtime_key=0)\n"
+        ));
+        assert!(leaf.contains(
+            "ping_async = _define_function(\"user.lorem.ping\", \"async\", [], runtime_key=0)\n"
+        ));
     }
 
     #[test]
@@ -2015,10 +2015,10 @@ mod tests {
         let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
         let leaf = &out[&PathBuf::from("lorem/__init__.py")];
         assert!(leaf.contains(
-            "make       = _define_function(\"user.lorem.make\", \"sync\",  [\"a\", \"b\", \"c\"])\n"
+            "make       = _define_function(\"user.lorem.make\", \"sync\",  [\"a\", \"b\", \"c\"], runtime_key=0)\n"
         ));
         assert!(leaf.contains(
-            "make_async = _define_function(\"user.lorem.make\", \"async\", [\"a\", \"b\", \"c\"])\n"
+            "make_async = _define_function(\"user.lorem.make\", \"async\", [\"a\", \"b\", \"c\"], runtime_key=0)\n"
         ));
     }
 
@@ -2109,10 +2109,10 @@ mod tests {
         let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
         let py = &out[&PathBuf::from("lorem/__init__.py")];
         assert!(py.contains(
-            "search       = _define_function(\"user.lorem.search\", \"sync\",  [\"query\"], [\"max_results\", \"filter\", \"tags\", \"metadata\", \"fallback\"])\n"
+            "search       = _define_function(\"user.lorem.search\", \"sync\",  [\"query\"], [\"max_results\", \"filter\", \"tags\", \"metadata\", \"fallback\"], runtime_key=0)\n"
         ));
         assert!(py.contains(
-            "search_async = _define_function(\"user.lorem.search\", \"async\", [\"query\"], [\"max_results\", \"filter\", \"tags\", \"metadata\", \"fallback\"])\n"
+            "search_async = _define_function(\"user.lorem.search\", \"async\", [\"query\"], [\"max_results\", \"filter\", \"tags\", \"metadata\", \"fallback\"], runtime_key=0)\n"
         ));
 
         let pyi = &out[&PathBuf::from("lorem/__init__.pyi")];
@@ -2194,10 +2194,10 @@ mod tests {
         let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
         let py = &out[&PathBuf::from("lorem/__init__.py")];
         assert!(py.contains(
-            "extract_resume       = _define_function(\"user.lorem.extract_resume\", \"sync\",  [\"resume\"], [\"client\"])\n"
+            "extract_resume       = _define_function(\"user.lorem.extract_resume\", \"sync\",  [\"resume\"], [\"client\"], runtime_key=0)\n"
         ));
         assert!(py.contains(
-            "extract_resume__build_request       = _define_function(\"user.lorem.extract_resume$build_request\", \"sync\",  [\"resume\"], [\"client\"])\n"
+            "extract_resume__build_request       = _define_function(\"user.lorem.extract_resume$build_request\", \"sync\",  [\"resume\"], [\"client\"], runtime_key=0)\n"
         ));
 
         let pyi = &out[&PathBuf::from("lorem/__init__.pyi")];
@@ -2294,14 +2294,14 @@ mod tests {
         let leaf = &out[&PathBuf::from("lorem/__init__.py")];
         // Parent uses parent params.
         assert!(leaf.contains(
-            "extract       = _define_function(\"user.lorem.extract\", \"sync\",  [\"a\", \"b\"])\n"
+            "extract       = _define_function(\"user.lorem.extract\", \"sync\",  [\"a\", \"b\"], runtime_key=0)\n"
         ));
         // Companion uses inner params, not parent's.
         assert!(leaf.contains(
-            "extract__build_request       = _define_function(\"user.lorem.extract$build_request\", \"sync\",  [\"text\"])\n"
+            "extract__build_request       = _define_function(\"user.lorem.extract$build_request\", \"sync\",  [\"text\"], runtime_key=0)\n"
         ));
         assert!(leaf.contains(
-            "extract__build_request_async = _define_function(\"user.lorem.extract$build_request\", \"async\", [\"text\"])\n"
+            "extract__build_request_async = _define_function(\"user.lorem.extract$build_request\", \"async\", [\"text\"], runtime_key=0)\n"
         ));
     }
 
@@ -2376,7 +2376,7 @@ mod tests {
         let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
         let leaf = &out[&PathBuf::from("vendor/aws/s3/__init__.py")];
         assert!(leaf.contains(
-            "create_bucket       = _define_function(\"aws.s3.create_bucket\", \"sync\",  [])\n"
+            "create_bucket       = _define_function(\"aws.s3.create_bucket\", \"sync\",  [], runtime_key=0)\n"
         ));
     }
 
@@ -2387,7 +2387,7 @@ mod tests {
         let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
         let leaf = &out[&PathBuf::from("baml/http/__init__.py")];
         assert!(leaf.contains(
-            "fetch       = _define_function(\"baml.http.fetch\", \"sync\",  [\"url\"])\n"
+            "fetch       = _define_function(\"baml.http.fetch\", \"sync\",  [\"url\"], runtime_key=0)\n"
         ));
     }
 
@@ -2398,7 +2398,9 @@ mod tests {
         let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
         let root = &out[&PathBuf::from("__init__.py")];
         assert!(
-            root.contains("ping       = _define_function(\"user.ping\", \"sync\",  [])\n"),
+            root.contains(
+                "ping       = _define_function(\"user.ping\", \"sync\",  [], runtime_key=0)\n"
+            ),
             "missing root binding in:\n{root}"
         );
     }
@@ -2515,13 +2517,13 @@ mod tests {
         );
         assert!(
             leaf.contains(
-                "    zero       = staticmethod(_define_function(\"user.lorem.Counter.zero\", \"sync\",  []))\n"
+                "    zero       = staticmethod(_define_function(\"user.lorem.Counter.zero\", \"sync\",  [], runtime_key=0))\n"
             ),
             "missing static method sync line in:\n{leaf}"
         );
         assert!(
             leaf.contains(
-                "    zero_async = staticmethod(_define_function(\"user.lorem.Counter.zero\", \"async\", []))\n"
+                "    zero_async = staticmethod(_define_function(\"user.lorem.Counter.zero\", \"async\", [], runtime_key=0))\n"
             ),
             "missing static method async line in:\n{leaf}"
         );
@@ -2554,13 +2556,13 @@ mod tests {
         );
         assert!(
             leaf.contains(
-                "    bump       = _define_function(\"user.lorem.Counter.bump\", \"sync\",  [\"self\", \"by\"])\n"
+                "    bump       = _define_function(\"user.lorem.Counter.bump\", \"sync\",  [\"self\", \"by\"], runtime_key=0)\n"
             ),
             "missing instance method sync line in:\n{leaf}"
         );
         assert!(
             leaf.contains(
-                "    bump_async = _define_function(\"user.lorem.Counter.bump\", \"async\", [\"self\", \"by\"])\n"
+                "    bump_async = _define_function(\"user.lorem.Counter.bump\", \"async\", [\"self\", \"by\"], runtime_key=0)\n"
             ),
             "missing instance method async line in:\n{leaf}"
         );
@@ -3671,7 +3673,7 @@ mod tests {
         assert!(
             root.contains(
                 "BamlRuntime.initialize_runtime(\n    \
-                 \"baml_src\", _inlinedbaml.FILES\n)"
+                 \"baml_src\", _inlinedbaml.FILES, runtime_key=0\n)"
             ),
             "root was:\n{root}"
         );

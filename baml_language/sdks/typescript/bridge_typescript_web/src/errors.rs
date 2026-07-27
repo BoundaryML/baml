@@ -26,7 +26,9 @@ pub(crate) fn bridge_error(error: &bridge_cffi::BridgeError) -> JsValue {
     use bridge_cffi::BridgeError;
 
     let code = match &error {
-        BridgeError::NotInitialized | BridgeError::ProjectNotInitialized => NOT_INITIALIZED,
+        BridgeError::NotInitialized
+        | BridgeError::RuntimeNotFound(_)
+        | BridgeError::ProjectNotInitialized => NOT_INITIALIZED,
         BridgeError::Ctypes(_)
         | BridgeError::NullFunctionName
         | BridgeError::InvalidFunctionName(_)

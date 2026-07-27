@@ -89,19 +89,18 @@ export declare class BamlPdf {
   _toHandle(): BamlHandle
 }
 
-/** The main BAML runtime. A zero-sized handle (see module docs). */
+/** The main BAML runtime. Its engine is stored in bridge_cffi's registry. */
 export declare class BamlRuntime {
   /**
-   * Initialize the process-global runtime from in-memory BAML source
-   * files. `bridge_cffi::initialize_runtime` is a single-slot singleton, so
-   * a second call replaces the prior runtime; the result is also reachable
-   * via the module-level `getRuntime()`. Renamed from `fromFiles` for
-   * parity with `bridge_python`'s sole `initialize_runtime` constructor and
-   * the `initializeRuntime(...)` import the spec docs use.
+   * Initialize a registered runtime from in-memory BAML source files.
+   * An explicit key replaces that registry entry; without a key, a new
+   * nonzero, non-`u32::MAX` key is allocated. Renamed from `fromFiles` for parity with
+   * `bridge_python`'s `initialize_runtime` constructor.
    */
-  static initializeRuntime(rootPath: string, files: Record<string, string>): BamlRuntime
-  /** Initialize the process-global runtime from precompiled BAML bytecode. */
-  static initializeRuntimeFromBytecode(bytecode: Buffer): BamlRuntime
+  static initializeRuntime(rootPath: string, files: Record<string, string>, runtimeKey?: number | undefined | null): BamlRuntime
+  /** Initialize a registered runtime from precompiled BAML bytecode. */
+  static initializeRuntimeFromBytecode(bytecode: Buffer, runtimeKey?: number | undefined | null): BamlRuntime
+  get runtimeKey(): number
   /** Call a BAML function synchronously (blocking). */
   callFunctionSync(functionName: string, argsProto: Buffer, ctx?: HostSpanManager | undefined | null, collectors?: Array<Collector> | undefined | null): Buffer
   /** Call a BAML function asynchronously. */
@@ -208,12 +207,10 @@ export declare function completeHostCall(callId: number, isError: number, conten
 export declare function flushEvents(): void
 
 /**
- * Return the process-global `BamlRuntime`, or a `BamlError`-shaped
- * `napi::Error` if `initializeRuntime` has not run yet. The handle is
- * zero-sized; the `Arc<dyn Bex>` lives in `bridge_cffi`. Mirrors
- * `bridge_python`'s module-level `get_runtime()`.
+ * Return the `BamlRuntime` registered under `runtime_key`, or a
+ * `BamlError`-shaped `napi::Error` if that key has not been initialized.
  */
-export declare function getRuntime(): BamlRuntime
+export declare function getRuntime(runtimeKey?: number | undefined | null): BamlRuntime
 
 export declare function getVersion(): string
 

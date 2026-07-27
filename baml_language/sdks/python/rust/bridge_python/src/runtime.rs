@@ -29,42 +29,42 @@ struct DecodedCallArgs {
     type_args: indexmap::IndexMap<String, bex_project::RuntimeTy>,
 }
 
-/// The main BAML runtime. A zero-sized handle: the single source of truth for
-/// the `Arc<dyn Bex>` singleton is `bridge_cffi`, fetched via
-/// `bridge_cffi::get_runtime()` at each call site (31e-phase4), so this
-/// no longer caches its own clone.
+/// The main BAML runtime. The engine lives in bridge_cffi's registry and this
+/// object carries the u32 key used to retrieve it.
 #[gen_stub_pyclass]
 #[pyclass]
-pub struct BamlRuntime;
+pub struct BamlRuntime {
+    #[pyo3(get)]
+    pub runtime_key: u32,
+}
 
 #[gen_stub_pymethods]
 #[pymethods]
 impl BamlRuntime {
-    /// Initialize the process-global runtime from in-memory BAML source files.
+    /// Initialize a registered runtime from in-memory BAML source files.
     ///
-    /// Mirrors `bridge_cffi::initialize_runtime`: the same
-    /// single-slot singleton is used, so a second call replaces the prior
-    /// runtime.
+    /// An explicit key replaces that registry entry. Without a key, a new
+    /// nonzero, non-`u32::MAX` key is allocated.
     ///
     /// # Arguments
     /// * `root_path` - Root path for BAML files
     /// * `files` - Map of filename to file content
     #[staticmethod]
+    #[pyo3(signature = (root_path, files, runtime_key=None))]
     fn initialize_runtime(
         root_path: String,
         files: std::collections::HashMap<String, String>,
+        runtime_key: Option<u32>,
     ) -> PyResult<Self> {
-        // `initialize_runtime` stores the `Arc<dyn Bex>` in bridge_cffi's
-        // singleton; we don't keep our own copy.
-        match bridge_cffi::initialize_runtime(&root_path, files) {
-            Ok(_bex) => Ok(BamlRuntime),
+        match bridge_cffi::initialize_runtime(&root_path, files, runtime_key) {
+            Ok(runtime_key) => Ok(BamlRuntime { runtime_key }),
             // Handle-returning site: can't hand back envelope bytes, so an
             // SDK setup failure surfaces as BamlPanic(SdkPanic) (32c).
             Err(e) => Err(bridge_error_to_sdk_panic(e)),
         }
     }
 
-    /// Initialize the process-global runtime from serialized BAML bytecode.
+    /// Initialize a registered runtime from serialized BAML bytecode.
     ///
     /// Generated SDKs use this path so importing `baml_sdk` can skip parsing
     /// and compiling the inlined BAML source files.
@@ -72,9 +72,13 @@ impl BamlRuntime {
     /// # Arguments
     /// * `bytecode` - borsh-encoded BAML bytecode program
     #[staticmethod]
-    fn initialize_runtime_from_bytecode(bytecode: Vec<u8>) -> PyResult<Self> {
-        match bridge_cffi::initialize_runtime_from_bytecode(&bytecode) {
-            Ok(_bex) => Ok(BamlRuntime),
+    #[pyo3(signature = (bytecode, runtime_key=None))]
+    fn initialize_runtime_from_bytecode(
+        bytecode: Vec<u8>,
+        runtime_key: Option<u32>,
+    ) -> PyResult<Self> {
+        match bridge_cffi::initialize_runtime_from_bytecode(&bytecode, runtime_key) {
+            Ok(runtime_key) => Ok(BamlRuntime { runtime_key }),
             // Handle-returning site: can't hand back envelope bytes, so an
             // SDK setup failure surfaces as BamlPanic(SdkPanic) (32c).
             Err(e) => Err(bridge_error_to_sdk_panic(e)),
@@ -122,7 +126,7 @@ impl BamlRuntime {
         // future yields bytes that decode_call_result raises uniformly (same
         // BamlError(baml.errors.*) as an engine failure).
         let prepared = (|| -> Result<_, bridge_cffi::BridgeError> {
-            let runtime = bridge_cffi::get_runtime()?;
+            let runtime = bridge_cffi::get_runtime(self.runtime_key)?;
             let decoded = decode_args(&args_proto, &function_name)?;
             Ok((runtime, decoded))
         })();
@@ -171,7 +175,7 @@ impl BamlRuntime {
         // raise — they become a structured BamlOutboundResult envelope so the
         // returned bytes decode + raise uniformly via decode_call_result.
         let prepared = (|| -> Result<_, bridge_cffi::BridgeError> {
-            let runtime = bridge_cffi::get_runtime()?;
+            let runtime = bridge_cffi::get_runtime(self.runtime_key)?;
             let decoded = decode_args(&args_proto, &function_name)?;
             let rt = bridge_cffi::get_tokio_runtime()?;
             Ok((runtime, decoded, rt))
@@ -231,25 +235,26 @@ fn decode_args(
     })
 }
 
-/// Return the process-global `BamlRuntime`, or raise `BamlError` if
-/// `BamlRuntime.initialize_runtime(...)` has not been called yet.
+/// Return the `BamlRuntime` registered under `runtime_key`, or raise
+/// `BamlError` if that key has not been initialized.
 ///
 /// Used by the pure-Python factories in `baml_bridge` so generated
 /// leaves don't have to thread a runtime reference through every call
 /// site.
 #[gen_stub_pyfunction]
-#[pyfunction]
-pub fn get_runtime() -> PyResult<BamlRuntime> {
-    // Validate the singleton is initialized so callers get a helpful error
-    // here rather than a confusing one deep in a later call; the handle itself
-    // is zero-sized (the Arc lives in bridge_cffi).
+#[pyfunction(signature = (runtime_key=0))]
+pub fn get_runtime(runtime_key: u32) -> PyResult<BamlRuntime> {
+    // Validate the registry entry so callers get a helpful error here rather
+    // than a confusing one deep in a later call.
     // Handle-returning site: an uninitialized/failed runtime is an SDK setup
     // failure, surfaced as BamlPanic(SdkPanic) (32c).
-    bridge_cffi::get_runtime().map_err(|e| match e {
-        bridge_cffi::BridgeError::NotInitialized => py_sdk_panic(
-            "BAML runtime has not been initialized — did baml_sdk/__init__.py fail to import?",
-        ),
+    bridge_cffi::get_runtime(runtime_key).map_err(|e| match e {
+        bridge_cffi::BridgeError::NotInitialized | bridge_cffi::BridgeError::RuntimeNotFound(_) => {
+            py_sdk_panic(
+                "BAML runtime has not been initialized — did baml_sdk/__init__.py fail to import?",
+            )
+        }
         other => bridge_error_to_sdk_panic(other),
     })?;
-    Ok(BamlRuntime)
+    Ok(BamlRuntime { runtime_key })
 }

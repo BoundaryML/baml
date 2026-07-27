@@ -33,9 +33,10 @@ async fn unhandled_spawn_error_reaches_registered_bridge_callback() {
             "#
             .to_string(),
         )]),
+        Some(0),
     )
     .unwrap();
-    let runtime = bridge_cffi::get_runtime().unwrap();
+    let runtime = bridge_cffi::get_runtime(0).unwrap();
     runtime
         .call_function(
             "main",

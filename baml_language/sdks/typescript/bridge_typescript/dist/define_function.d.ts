@@ -16,6 +16,7 @@ export declare const UNSET: unique symbol;
  * `class_type_params` kwargs in the Python SDK. Omitted/empty ⇒ non-generic.
  */
 export interface GenericParams {
+    runtimeKey?: number;
     typeParams?: readonly string[];
     classTypeParams?: readonly string[];
 }

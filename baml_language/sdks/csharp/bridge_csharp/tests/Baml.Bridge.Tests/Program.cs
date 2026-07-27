@@ -2573,7 +2573,18 @@ internal static unsafe class Program
     private static BamlBuffer Version() => Allocate("0.15.0"u8);
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
-    private static BamlBuffer Initialize(byte* bytes, nuint length) => default;
+    private static BamlBuffer Initialize(
+        byte* bytes,
+        nuint length,
+        uint requestedRuntimeKey,
+        uint* outRuntimeKey)
+    {
+        if (outRuntimeKey is not null)
+        {
+            *outRuntimeKey = requestedRuntimeKey;
+        }
+        return default;
+    }
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
     private static void FreeBuffer(BamlBuffer buffer)
@@ -2591,7 +2602,7 @@ internal static unsafe class Program
     }
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
-    private static void Call(byte* name, byte* args, nuint length, uint callbackId)
+    private static void Call(uint runtimeKey, byte* name, byte* args, nuint length, uint callbackId)
     {
         if (length > int.MaxValue || (length != 0 && args is null))
         {

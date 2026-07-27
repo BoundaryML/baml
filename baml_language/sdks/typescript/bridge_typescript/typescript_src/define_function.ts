@@ -34,6 +34,7 @@ export const UNSET: unique symbol = Symbol('baml.UNSET');
  * `class_type_params` kwargs in the Python SDK. Omitted/empty ⇒ non-generic.
  */
 export interface GenericParams {
+    runtimeKey?: number;
     typeParams?: readonly string[];
     classTypeParams?: readonly string[];
 }
@@ -217,6 +218,7 @@ export function defineFunction(
 ): (...args: unknown[]) => unknown {
     const requiredNames = [...requiredParamNames];
     const optionNames = [...(optionalParamNames ?? [])];
+    const runtimeKey = generics?.runtimeKey ?? 0;
     // A free function / static method binds only its OWN generic params (a
     // generic receiver is never in play here), so `classTypeParams` is unused.
     const typeParams = generics?.typeParams ?? [];
@@ -229,7 +231,7 @@ export function defineFunction(
         return (...args: unknown[]): unknown => {
             const built = buildArgs(args, requiredNames, optionNames);
             const typeArgs = typeArgsFor(built);
-            const rt = getRuntime();
+            const rt = getRuntime(runtimeKey);
             const callId = newFunctionCall();
             const argsProto = encodeCallArgs(built.kwargs, { syncMode: true, callId, typeArgs });
             const callCtxBinding = attachCallContext(built.ctx, callId);
@@ -245,7 +247,7 @@ export function defineFunction(
         return async (...args: unknown[]): Promise<unknown> => {
             const built = buildArgs(args, requiredNames, optionNames);
             const typeArgs = typeArgsFor(built);
-            const rt = getRuntime();
+            const rt = getRuntime(runtimeKey);
             const callId = newFunctionCall();
             const argsProto = encodeCallArgs(built.kwargs, { callId, typeArgs });
             const callCtxBinding = attachCallContext(built.ctx, callId);
@@ -276,6 +278,7 @@ export function defineInstanceFunction(
 ): { bind(self: unknown): (...args: unknown[]) => unknown } {
     const requiredNames = [...requiredParamNames];
     const optionNames = [...(optionalParamNames ?? [])];
+    const runtimeKey = generics?.runtimeKey ?? 0;
     const selfName = requiredNames[0] ?? 'self';
     const rest = requiredNames.slice(1);
     // An instance method binds its own `<...>` params (caller's `$types`) AND
@@ -299,7 +302,7 @@ export function defineInstanceFunction(
                 return (...args: unknown[]): unknown => {
                     const built = makeArgs(self, args);
                     const typeArgs = typeArgsFor(built);
-                    const rt = getRuntime();
+                    const rt = getRuntime(runtimeKey);
                     const callId = newFunctionCall();
                     const argsProto = encodeCallArgs(built.kwargs, { syncMode: true, callId, typeArgs });
                     const callCtxBinding = attachCallContext(built.ctx, callId);
@@ -315,7 +318,7 @@ export function defineInstanceFunction(
                 return async (...args: unknown[]): Promise<unknown> => {
                     const built = makeArgs(self, args);
                     const typeArgs = typeArgsFor(built);
-                    const rt = getRuntime();
+                    const rt = getRuntime(runtimeKey);
                     const callId = newFunctionCall();
                     const argsProto = encodeCallArgs(built.kwargs, { callId, typeArgs });
                     const callCtxBinding = attachCallContext(built.ctx, callId);

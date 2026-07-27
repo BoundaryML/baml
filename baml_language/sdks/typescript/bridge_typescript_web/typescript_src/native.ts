@@ -384,47 +384,56 @@ export class Collector {
 }
 
 export class BamlRuntime {
-  static initializeRuntimeFromBytecode(bytecode: Uint8Array): BamlRuntime {
+  readonly runtimeKey: number;
+  private constructor(runtimeKey: number) {
+    this.runtimeKey = runtimeKey;
+  }
+  static initializeRuntimeFromBytecode(bytecode: Uint8Array, requestedRuntimeKey?: number): BamlRuntime {
     ensureWebSysopsConfigured();
+    let runtimeKey: number;
     try {
-      stageRuntimeBytecode(bytecode);
+      runtimeKey = stageRuntimeBytecode(bytecode, requestedRuntimeKey);
     } catch (error) {
       throw wrapNativeError(error);
     }
-    runtime = new BamlRuntime();
+    const runtime = new BamlRuntime(runtimeKey);
+    runtimes.set(runtimeKey, runtime);
     return runtime;
   }
-  static initializeRuntime(rootPath: string, files: Record<string, string>): BamlRuntime {
+  static initializeRuntime(rootPath: string, files: Record<string, string>, requestedRuntimeKey?: number): BamlRuntime {
     ensureWebSysopsConfigured();
+    let runtimeKey: number;
     try {
-      stageRuntimeSources(rootPath, files);
+      runtimeKey = stageRuntimeSources(rootPath, files, requestedRuntimeKey);
     } catch (error) {
       throw wrapNativeError(error);
     }
-    runtime = new BamlRuntime();
+    const runtime = new BamlRuntime(runtimeKey);
+    runtimes.set(runtimeKey, runtime);
     return runtime;
   }
   callFunctionSync(functionName: string, encodedArgs: Uint8Array, _ctx?: HostSpanManager | null, _collectors?: Collector[] | null): Uint8Array {
     try {
-      return callWasmFunctionSync(functionName, encodedArgs);
+      return callWasmFunctionSync(this.runtimeKey, functionName, encodedArgs);
     } catch (error) {
       throw wrapNativeError(error);
     }
   }
   async callFunction(functionName: string, encodedArgs: Uint8Array, _ctx?: HostSpanManager | null, _collectors?: Collector[] | null): Promise<Uint8Array> {
     try {
-      return await callWasmFunction(functionName, encodedArgs);
+      return await callWasmFunction(this.runtimeKey, functionName, encodedArgs);
     } catch (error) {
       throw wrapNativeError(error);
     }
   }
 }
 
-let runtime: BamlRuntime | undefined;
+const runtimes = new Map<number, BamlRuntime>();
 let hostRelease: ((key: HandleKey) => void) | undefined;
 
-export function getRuntime(): BamlRuntime {
-  if (!runtime) throw new BamlClientError("BAML runtime has not been initialized");
+export function getRuntime(runtimeKey = 0): BamlRuntime {
+  const runtime = runtimes.get(runtimeKey);
+  if (!runtime) throw new BamlClientError(`BAML runtime key ${runtimeKey} has not been initialized`);
   return runtime;
 }
 export function newFunctionCall(): bigint { return newWasmFunctionCall(); }

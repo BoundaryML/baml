@@ -1208,7 +1208,7 @@ fn optional_param_list_arg(names: &[String]) -> String {
 /// `class_type_params` (the enclosing generic class's params, recovered from
 /// the `self` receiver). Empty string when the callee binds nothing.
 fn render_generic_kwargs(type_params: &[String], class_type_params: &[String]) -> String {
-    let mut s = String::new();
+    let mut s = String::from(", runtime_key=0");
     if !type_params.is_empty() {
         write!(s, ", type_params={}", render_param_list(type_params)).unwrap();
     }

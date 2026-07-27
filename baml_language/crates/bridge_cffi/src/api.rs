@@ -89,11 +89,16 @@ pub type BamlUnhandledSpawnErrorCallback =
     extern "C" fn(content: *const i8, length: usize, cancelled: i32);
 
 pub type BamlVersionFn = extern "C" fn() -> Buffer;
-pub type BamlInitializeRuntimeFromBytecodeFn =
-    extern "C" fn(bytecode: *const u8, length: usize) -> Buffer;
+pub type BamlInitializeRuntimeFromBytecodeFn = unsafe extern "C" fn(
+    bytecode: *const u8,
+    length: usize,
+    requested_runtime_key: u32,
+    out_runtime_key: *mut u32,
+) -> Buffer;
 pub type BamlFreeBufferFn = extern "C" fn(buffer: Buffer);
 pub type BamlRegisterCallbackFn = extern "C" fn(callback: BamlResultCallback);
 pub type BamlCallFunctionFn = extern "C" fn(
+    runtime_key: u32,
     function_name: *const libc::c_char,
     encoded_args: *const u8,
     length: usize,
@@ -156,13 +161,16 @@ pub struct BamlApiV1 {
     /// Return the canonical BAML product version as owned UTF-8 bytes.
     /// Release the result exactly once with this table's `free_buffer`.
     pub version: BamlVersionFn,
-    /// Replace the process-wide runtime from borrowed serialized bytecode.
+    /// Initialize a registered runtime from borrowed serialized bytecode.
     ///
     /// The input is read only during the call; zero length permits null. The
+    /// requested key selects the registry slot; `UINT32_MAX` allocates a new
+    /// nonzero, non-`UINT32_MAX` key. On success the selected key is written to
+    /// `out_runtime_key`, which must be non-null. The
     /// returned owned buffer is empty on success or a UTF-8 diagnostic on
     /// failure and must always be passed once to `free_buffer`. Concurrent
-    /// calls are serialized only while replacing the global runtime; calls
-    /// already in progress retain their previous runtime instance.
+    /// calls are serialized only while updating the registry; calls already in
+    /// progress retain their runtime instance.
     pub initialize_runtime_from_bytecode: BamlInitializeRuntimeFromBytecodeFn,
     /// Release exactly one runtime-owned buffer returned through this table.
     ///
@@ -177,7 +185,8 @@ pub struct BamlApiV1 {
     pub register_callback: BamlRegisterCallbackFn,
     /// Enqueue a BAML function call and return immediately.
     ///
-    /// `function_name` is a borrowed NUL-terminated UTF-8 string. `encoded_args`
+    /// `runtime_key` selects the registered runtime. `function_name` is a
+    /// borrowed NUL-terminated UTF-8 string. `encoded_args`
     /// is borrowed for `length` bytes; zero length permits null. Both inputs
     /// need remain valid only for this call. Completion is delivered later to
     /// the registered result callback using `callback_id`.

@@ -144,12 +144,12 @@ pub use buffer::{Buffer, free_buffer};
 pub use error::BridgeError;
 pub use platform::*;
 
-/// Get a clone of the target's global runtime, or error if not initialized.
-pub fn get_runtime() -> Result<Arc<dyn Bex>, BridgeError> {
-    platform::get_runtime()
+/// Get a clone of a registered runtime, or error if the key is not initialized.
+pub fn get_runtime(runtime_key: u32) -> Result<Arc<dyn Bex>, BridgeError> {
+    platform::get_runtime(runtime_key)
 }
 
-/// Initialize the global runtime from serialized BAML bytecode.
+/// Initialize a registered runtime from serialized BAML bytecode.
 ///
 /// The payload is the same borsh-encoded `bex_vm_types::Program` that
 /// `baml pack` embeds in its pack envelope. Decoding and engine construction
@@ -158,24 +158,25 @@ pub fn get_runtime() -> Result<Arc<dyn Bex>, BridgeError> {
 pub fn initialize_runtime_from_bytecode_with_sys_ops(
     bytecode: &[u8],
     sys_ops: sys_ops::SysOps,
-) -> Result<Arc<dyn Bex>, BridgeError> {
+    runtime_key: Option<u32>,
+) -> Result<u32, BridgeError> {
     let runtime: Arc<dyn Bex> = bex_project::new_from_bytecode(bytecode, sys_ops)?;
     install_unhandled_spawn_error_handler(&runtime);
-    platform::replace_runtime(runtime.clone())?;
-    Ok(runtime)
+    platform::insert_runtime(runtime_key, runtime)
 }
 
-/// Initialize the global runtime from an in-memory BAML source map.
+/// Initialize a registered runtime from an in-memory BAML source map.
 ///
-/// The candidate runtime is fully compiled before the process-global slot is
-/// replaced, so a path or compilation failure leaves the previous runtime
+/// The candidate runtime is fully compiled before the requested registry slot
+/// is replaced, so a path or compilation failure leaves the previous runtime
 /// usable. The memory filesystem supplies a platform-neutral project root;
 /// source contents continue to enter through `bex_project::new`'s source map.
 pub fn initialize_runtime_from_files_with_sys_ops(
     root_path: &str,
     src_files: HashMap<String, String>,
     sys_ops: sys_ops::SysOps,
-) -> Result<Arc<dyn Bex>, BridgeError> {
+    runtime_key: Option<u32>,
+) -> Result<u32, BridgeError> {
     // `vfs::MemoryFS` timestamps its root with `SystemTime::now()`, which is
     // unavailable on wasm32-unknown-unknown. WASM therefore uses an equivalent
     // timestamp-free root marker; source contents are supplied separately.
@@ -220,8 +221,7 @@ pub fn initialize_runtime_from_files_with_sys_ops(
 
     let runtime: Arc<dyn Bex> = bex_project::new(project_root, sys_ops, files)?;
     install_unhandled_spawn_error_handler(&runtime);
-    platform::replace_runtime(runtime.clone())?;
-    Ok(runtime)
+    platform::insert_runtime(runtime_key, runtime)
 }
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -239,18 +239,21 @@ fn install_unhandled_spawn_error_handler(runtime: &Arc<dyn Bex>) {
 fn install_unhandled_spawn_error_handler(_: &Arc<dyn Bex>) {}
 
 pub async fn shutdown_runtime() -> Result<(), BridgeError> {
-    if let Some(runtime) = platform::take_runtime()? {
+    for runtime in platform::take_all_runtimes()? {
         runtime.shutdown().await;
     }
     Ok(())
 }
 
-/// Initialize the native process-global runtime from serialized BAML bytecode.
+/// Initialize a registered native runtime from serialized BAML bytecode.
 #[cfg(not(target_arch = "wasm32"))]
-pub fn initialize_runtime_from_bytecode(bytecode: &[u8]) -> Result<Arc<dyn Bex>, BridgeError> {
+pub fn initialize_runtime_from_bytecode(
+    bytecode: &[u8],
+    runtime_key: Option<u32>,
+) -> Result<u32, BridgeError> {
     use sys_native::SysOpsExt as _;
 
-    initialize_runtime_from_bytecode_with_sys_ops(bytecode, sys_ops::SysOps::native())
+    initialize_runtime_from_bytecode_with_sys_ops(bytecode, sys_ops::SysOps::native(), runtime_key)
 }
 
 /// Allocate a new process-unique function-call ID.
@@ -277,7 +280,7 @@ pub fn cancel_function_call_by_id(id: u64) -> bool {
         .and_then(|route| route.runtime.upgrade());
     originating_runtime
         .map(Ok)
-        .unwrap_or_else(get_runtime)
+        .unwrap_or_else(|| get_runtime(0))
         .and_then(|runtime| {
             runtime
                 .cancel_function_call(bex_project::CallId(id))

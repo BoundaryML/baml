@@ -287,25 +287,42 @@ pub extern "C" fn create_baml_runtime(
         let src_files: HashMap<String, String> = serde_json::from_str(src_files_str)
             .map_err(|e| format!("Failed to parse src_files JSON: {e}"))?;
 
-        // Initialize global runtime
-        initialize_runtime(root_path_str, src_files)
+        // Initialize the legacy runtime at the generated-SDK key.
+        initialize_runtime(root_path_str, src_files, Some(0))
             .map_err(|e| format!("Failed to initialize runtime: {e}"))?;
 
         // Return non-null pointer to indicate success
-        // The actual value doesn't matter since we use global engine
+        // The actual value does not matter because legacy calls use key zero.
         Ok(std::ptr::dangling::<libc::c_void>())
     })
 }
 
-/// Initialize the process-global BAML runtime from serialized bytecode.
+/// Initialize a registered BAML runtime from serialized bytecode.
 ///
-/// An empty returned buffer means success. On failure, the buffer contains a
-/// UTF-8 error message. The caller owns every returned buffer and must release
-/// it with [`crate::free_buffer`].
+/// `requested_runtime_key == UINT32_MAX` allocates a new nonzero,
+/// non-`UINT32_MAX` key; any other value selects the registry entry to replace.
+/// On success the selected key is written to the non-null `out_runtime_key`
+/// pointer. An empty returned buffer means success. On failure, the buffer
+/// contains a UTF-8 error message. The caller owns every returned buffer and
+/// must release it with [`crate::free_buffer`].
+///
+/// # Safety
+///
+/// When `length` is nonzero, `bytecode` must point to `length` readable bytes
+/// for the duration of this call. `out_runtime_key` must be non-null, properly
+/// aligned, and writable for one `u32`.
 #[allow(clippy::not_unsafe_ptr_arg_deref)]
 #[unsafe(no_mangle)]
-pub extern "C" fn initialize_runtime_from_bytecode(bytecode: *const u8, length: usize) -> Buffer {
+pub unsafe extern "C" fn initialize_runtime_from_bytecode(
+    bytecode: *const u8,
+    length: usize,
+    requested_runtime_key: u32,
+    out_runtime_key: *mut u32,
+) -> Buffer {
     let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        if out_runtime_key.is_null() {
+            return Err("runtime key output pointer is null".to_string());
+        }
         if bytecode.is_null() && length != 0 {
             return Err("bytecode pointer is null but length is nonzero".to_string());
         }
@@ -315,9 +332,12 @@ pub extern "C" fn initialize_runtime_from_bytecode(bytecode: *const u8, length: 
         } else {
             unsafe { std::slice::from_raw_parts(bytecode, length) }
         };
-        initialize_runtime_from_bytecode_impl(bytecode)
-            .map(|_| ())
-            .map_err(|error| error.to_string())
+        let requested_runtime_key =
+            (requested_runtime_key != u32::MAX).then_some(requested_runtime_key);
+        let runtime_key = initialize_runtime_from_bytecode_impl(bytecode, requested_runtime_key)
+            .map_err(|error| error.to_string())?;
+        unsafe { out_runtime_key.write(runtime_key) };
+        Ok(())
     }));
 
     match result {
@@ -530,7 +550,9 @@ mod tests {
 
     #[test]
     fn bytecode_initializer_rejects_null_pointer_with_nonzero_length() {
-        let buffer = initialize_runtime_from_bytecode(std::ptr::null(), 1);
+        let mut runtime_key = 0;
+        let buffer =
+            unsafe { initialize_runtime_from_bytecode(std::ptr::null(), 1, 0, &mut runtime_key) };
         let message = unsafe { std::slice::from_raw_parts(buffer.ptr.cast::<u8>(), buffer.len) };
         assert_eq!(
             std::str::from_utf8(message).unwrap(),

@@ -113,10 +113,13 @@ public final class BamlRuntime: @unchecked Sendable {
 
         BamlApi.registerUnhandledSpawnErrorCallback(bamlGlobalUnhandledSpawnError)
 
+        var runtimeKey: UInt32 = 0
         let errorBuffer = bytecode.withUnsafeBytes { buf -> BamlBuffer in
             BamlApi.initializeRuntimeFromBytecode(
                 buf.baseAddress?.assumingMemoryBound(to: UInt8.self),
-                buf.count
+                buf.count,
+                0,
+                &runtimeKey
             )
         }
         let initError = String(decoding: BamlApi.takeBuffer(errorBuffer), as: UTF8.self)
@@ -283,6 +286,7 @@ public final class BamlRuntime: @unchecked Sendable {
         payload.withUnsafeBytes { buf in
             fqn.withCString { name in
                 BamlApi.callFunction(
+                    0,
                     name,
                     buf.baseAddress?.assumingMemoryBound(to: UInt8.self),
                     buf.count,

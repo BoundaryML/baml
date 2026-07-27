@@ -14,12 +14,12 @@ export type { BamlClassCtor, BamlPrimitiveToken, BamlType } from "./shared/wire_
 export { BamlAbortError, BamlCancelledError, BamlClientError, BamlError, BamlInvalidArgumentError, BamlPanic, wrapNativeError } from "./shared/errors.js";
 export { decodeCallResult, encodeCallArgs } from "./shared/proto.js";
 
-export function initializeRuntimeFromBytecode(bytecode: Uint8Array): void {
-  BamlRuntime.initializeRuntimeFromBytecode(bytecode);
+export function initializeRuntimeFromBytecode(bytecode: Uint8Array, runtimeKey = 0): void {
+  BamlRuntime.initializeRuntimeFromBytecode(bytecode, runtimeKey);
 }
 
-export function initializeRuntime(srcDir: string, files: Record<string, string>): void {
-  BamlRuntime.initializeRuntime(srcDir, files);
+export function initializeRuntime(srcDir: string, files: Record<string, string>, runtimeKey = 0): void {
+  BamlRuntime.initializeRuntime(srcDir, files, runtimeKey);
 }
 
 export class FunctionResult {

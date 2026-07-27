@@ -73,10 +73,13 @@ internal sealed unsafe partial class NativeBytecodeInitializer : IDisposable
         Interlocked.Increment(ref calls);
         fixed (byte* pointer = bytes)
         {
+            uint runtimeKey = 0;
             return Consume(
                 api->InitializeRuntimeFromBytecode(
                     pointer,
-                    (nuint)bytes.Length));
+                    (nuint)bytes.Length,
+                    0,
+                    &runtimeKey));
         }
     }
 
@@ -132,6 +135,8 @@ internal sealed unsafe partial class NativeBytecodeInitializer : IDisposable
         public readonly delegate* unmanaged[Cdecl]<
             byte*,
             nuint,
+            uint,
+            uint*,
             BamlBuffer> InitializeRuntimeFromBytecode;
         public readonly delegate* unmanaged[Cdecl]<BamlBuffer, void> FreeBuffer;
     }

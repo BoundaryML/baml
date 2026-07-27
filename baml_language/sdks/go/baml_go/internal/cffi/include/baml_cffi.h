@@ -173,7 +173,9 @@ typedef struct BamlBuffer {
 typedef struct BamlBuffer (*BamlVersionFn)(void);
 
 typedef struct BamlBuffer (*BamlInitializeRuntimeFromBytecodeFn)(const uint8_t *bytecode,
-                                                                 size_t length);
+                                                                 size_t length,
+                                                                 uint32_t requested_runtime_key,
+                                                                 uint32_t *out_runtime_key);
 
 typedef void (*BamlFreeBufferFn)(struct BamlBuffer buffer);
 
@@ -190,7 +192,8 @@ typedef void (*BamlResultCallback)(uint32_t call_id, const int8_t *content, size
 
 typedef void (*BamlRegisterCallbackFn)(BamlResultCallback callback);
 
-typedef void (*BamlCallFunctionFn)(const char *function_name,
+typedef void (*BamlCallFunctionFn)(uint32_t runtime_key,
+                                   const char *function_name,
                                    const uint8_t *encoded_args,
                                    size_t length,
                                    uint32_t callback_id);
@@ -330,13 +333,16 @@ typedef struct BamlApiV1 {
    */
   BamlVersionFn version;
   /**
-   * Replace the process-wide runtime from borrowed serialized bytecode.
+   * Initialize a registered runtime from borrowed serialized bytecode.
    *
    * The input is read only during the call; zero length permits null. The
+   * requested key selects the registry slot; `UINT32_MAX` allocates a new
+   * nonzero, non-`UINT32_MAX` key. On success the selected key is written to
+   * `out_runtime_key`, which must be non-null. The
    * returned owned buffer is empty on success or a UTF-8 diagnostic on
    * failure and must always be passed once to `free_buffer`. Concurrent
-   * calls are serialized only while replacing the global runtime; calls
-   * already in progress retain their previous runtime instance.
+   * calls are serialized only while updating the registry; calls already in
+   * progress retain their runtime instance.
    */
   BamlInitializeRuntimeFromBytecodeFn initialize_runtime_from_bytecode;
   /**
@@ -357,7 +363,8 @@ typedef struct BamlApiV1 {
   /**
    * Enqueue a BAML function call and return immediately.
    *
-   * `function_name` is a borrowed NUL-terminated UTF-8 string. `encoded_args`
+   * `runtime_key` selects the registered runtime. `function_name` is a
+   * borrowed NUL-terminated UTF-8 string. `encoded_args`
    * is borrowed for `length` bytes; zero length permits null. Both inputs
    * need remain valid only for this call. Completion is delivered later to
    * the registered result callback using `callback_id`.

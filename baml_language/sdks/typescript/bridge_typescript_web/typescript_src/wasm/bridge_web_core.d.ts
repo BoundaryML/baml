@@ -15,9 +15,9 @@ export function _testWebMissingHostCallableError(key: bigint): Promise<string>;
 
 export function _testWebSyncPendingHostCallableError(key: bigint): string;
 
-export function callFunction(function_name: string, encoded_args: Uint8Array): Promise<Uint8Array>;
+export function callFunction(runtime_key: number, function_name: string, encoded_args: Uint8Array): Promise<Uint8Array>;
 
-export function callFunctionSync(function_name: string, encoded_args: Uint8Array): Uint8Array;
+export function callFunctionSync(runtime_key: number, function_name: string, encoded_args: Uint8Array): Uint8Array;
 
 export function cancelFunctionCall(call_id: bigint): boolean;
 
@@ -114,14 +114,18 @@ export function seedFunctionRefHandle(global_index: number): bigint;
 
 export function seedGenericMediaHandle(): bigint;
 
-export function stageRuntimeBytecode(bytecode: Uint8Array): void;
+export function stageRuntimeBytecode(bytecode: Uint8Array, runtime_key?: number | null): number;
 
-export function stageRuntimeSources(root_path: string, files: any): void;
+export function stageRuntimeSources(root_path: string, files: any, runtime_key?: number | null): number;
 
 export type InitInput = RequestInfo | URL | Response | BufferSource | WebAssembly.Module;
 
 export interface InitOutput {
     readonly memory: WebAssembly.Memory;
+    readonly callFunction: (a: number, b: number, c: number, d: number, e: number) => any;
+    readonly callFunctionSync: (a: number, b: number, c: number, d: number, e: number) => [number, number];
+    readonly stageRuntimeBytecode: (a: number, b: number, c: number) => [number, number, number];
+    readonly stageRuntimeSources: (a: number, b: number, c: any, d: number) => [number, number, number];
     readonly mediaBase64: (a: bigint, b: number) => [number, number, number, number];
     readonly mediaFile: (a: bigint, b: number) => [number, number, number, number];
     readonly mediaFromBase64: (a: number, b: number, c: number, d: number, e: number) => [bigint, number, number];
@@ -138,10 +142,6 @@ export interface InitOutput {
     readonly flushEvents: () => void;
     readonly getVersion: () => [number, number];
     readonly newFunctionCall: () => bigint;
-    readonly callFunction: (a: number, b: number, c: number, d: number) => any;
-    readonly callFunctionSync: (a: number, b: number, c: number, d: number) => [number, number];
-    readonly stageRuntimeBytecode: (a: number, b: number) => [number, number];
-    readonly stageRuntimeSources: (a: number, b: number, c: any) => [number, number];
     readonly _testWebFireHostRelease: (a: bigint) => void;
     readonly _testWebHostCallableCount: () => number;
     readonly _testWebHostReleaseCallbackInstalled: () => number;
@@ -159,9 +159,9 @@ export interface InitOutput {
     readonly registerHostCallable: (a: any) => bigint;
     readonly registerHostValueReleaseCallback: (a: any) => number;
     readonly releaseHostCallable: (a: bigint) => void;
-    readonly free_buffer: (a: number) => void;
     readonly cancel_function_call: (a: bigint) => number;
     readonly new_function_call: () => bigint;
+    readonly free_buffer: (a: number) => void;
     readonly wasm_bindgen__convert__closures_____invoke__h06cf218e7899498c: (a: number, b: number, c: any) => [number, number];
     readonly wasm_bindgen__convert__closures_____invoke__hc1aeb8686748a7da: (a: number, b: number, c: any, d: any) => void;
     readonly wasm_bindgen__convert__closures_____invoke__h5b34bf2d90ad8f2b: (a: number, b: number) => number;

@@ -160,25 +160,27 @@ class BamlPyHandle:
 @typing.final
 class BamlRuntime:
     r"""
-    The main BAML runtime, wrapping a `dyn Bex` instance.
+    The main BAML runtime. The engine lives in bridge_cffi's registry and this
+    object carries the u32 key used to retrieve it.
     """
+    @property
+    def runtime_key(self) -> builtins.int: ...
     @staticmethod
-    def initialize_runtime(root_path: builtins.str, files: typing.Mapping[builtins.str, builtins.str]) -> BamlRuntime:
+    def initialize_runtime(root_path: builtins.str, files: typing.Mapping[builtins.str, builtins.str], runtime_key: typing.Optional[builtins.int] = None) -> BamlRuntime:
         r"""
-        Initialize the process-global runtime from in-memory BAML source files.
+        Initialize a registered runtime from in-memory BAML source files.
 
-        Mirrors `bridge_cffi::initialize_runtime`: the same
-        single-slot singleton is used, so a second call replaces the prior
-        runtime.
+        An explicit key replaces that registry entry. Without a key, a new
+        nonzero, non-`u32::MAX` key is allocated.
 
         # Arguments
         * `root_path` - Root path for BAML files
         * `files` - Map of filename to file content
         """
     @staticmethod
-    def initialize_runtime_from_bytecode(bytecode: bytes) -> BamlRuntime:
+    def initialize_runtime_from_bytecode(bytecode: bytes, runtime_key: typing.Optional[builtins.int] = None) -> BamlRuntime:
         r"""
-        Initialize the process-global runtime from serialized BAML bytecode.
+        Initialize a registered runtime from serialized BAML bytecode.
         """
     def call_function(self, function_name: str, args_proto: bytes, ctx: typing.Optional["HostSpanManager"] = None, collectors: typing.Optional[typing.Sequence["Collector"]] = None) -> typing.Any:
         r"""
@@ -437,10 +439,10 @@ def flush_events() -> None:
     Flush all buffered trace events to the JSONL file (if BAML_TRACE_FILE is set).
     """
 
-def get_runtime() -> BamlRuntime:
+def get_runtime(runtime_key: builtins.int = ...) -> BamlRuntime:
     r"""
-    Return the process-global `BamlRuntime`, or raise `BamlError` if
-    `BamlRuntime.initialize_runtime(...)` has not been called yet.
+    Return the `BamlRuntime` registered under `runtime_key`, or raise
+    `BamlError` if that key has not been initialized.
 
     Used by the pure-Python factories in `baml_bridge` so generated
     leaves don't have to thread a runtime reference through every call

@@ -68,9 +68,10 @@ internal sealed unsafe partial class NativeApi
 
         fixed (byte* pointer = bytecode)
         {
+            uint runtimeKey = 0;
             string diagnostic = NativeBuffer.ReadUtf8AndFree(
                 table,
-                table->InitializeRuntimeFromBytecode(pointer, (nuint)bytecode.Length));
+                table->InitializeRuntimeFromBytecode(pointer, (nuint)bytecode.Length, 0, &runtimeKey));
             if (diagnostic.Length != 0)
             {
                 throw new BamlProgramIntegrityException(
@@ -302,6 +303,7 @@ internal sealed unsafe partial class NativeApi
 
                 started = true;
                 api.table->CallFunction(
+                    0,
                     name,
                     arguments,
                     argumentsLength,

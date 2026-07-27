@@ -159,10 +159,9 @@ class Collector(_RustCollector):
 # ---------------------------------------------------------------------------
 
 
-def get_runtime() -> BamlRuntime:
-    """Return the process-global `BamlRuntime` singleton, or raise
-    `BamlError` if `BamlRuntime.initialize_runtime(...)` has not run yet."""
-    return _rust_get_runtime()
+def get_runtime(runtime_key: int = 0) -> BamlRuntime:
+    """Return a registered `BamlRuntime`, defaulting to the generated SDK runtime."""
+    return _rust_get_runtime(runtime_key)
 
 
 _CANCELLED_PANIC_CLASS = "baml.panics.Cancelled"
@@ -438,6 +437,7 @@ def define_function(
     required_param_names: List[str],
     optional_param_names: Optional[List[str]] = None,
     *,
+    runtime_key: int = 0,
     type_params: Optional[List[str]] = None,
     class_type_params: Optional[List[str]] = None,
 ) -> Callable[..., Any]:
@@ -480,7 +480,7 @@ def define_function(
                 if is_generic
                 else None
             )
-            rt = get_runtime()
+            rt = get_runtime(runtime_key)
             call_id = new_function_call()
             args_proto = encode_call_args(merged, call_id, type_args)
             _attach_call_ctx(call_ctx, call_id)
@@ -502,7 +502,7 @@ def define_function(
                 if is_generic
                 else None
             )
-            rt = get_runtime()
+            rt = get_runtime(runtime_key)
             call_id = new_function_call()
             args_proto = encode_call_args(merged, call_id, type_args)
             _attach_call_ctx(call_ctx, call_id)

@@ -143,10 +143,10 @@ internal static unsafe partial class Program
         public readonly uint AbiVersion;
         public readonly nuint StructSize;
         public readonly delegate* unmanaged[Cdecl]<BamlBuffer> Version;
-        public readonly delegate* unmanaged[Cdecl]<byte*, nuint, BamlBuffer> InitializeRuntimeFromBytecode;
+        public readonly delegate* unmanaged[Cdecl]<byte*, nuint, uint, uint*, BamlBuffer> InitializeRuntimeFromBytecode;
         public readonly delegate* unmanaged[Cdecl]<BamlBuffer, void> FreeBuffer;
         public readonly delegate* unmanaged[Cdecl]<delegate* unmanaged[Cdecl]<uint, byte*, nuint, void>, void> RegisterCallback;
-        public readonly delegate* unmanaged[Cdecl]<byte*, byte*, nuint, uint, void> CallFunction;
+        public readonly delegate* unmanaged[Cdecl]<uint, byte*, byte*, nuint, uint, void> CallFunction;
         public readonly delegate* unmanaged[Cdecl]<ulong> NewFunctionCall;
         public readonly delegate* unmanaged[Cdecl]<ulong, int> CancelFunctionCall;
         public readonly delegate* unmanaged[Cdecl]<delegate* unmanaged[Cdecl]<ulong, uint, byte*, nuint, void>, void> RegisterHostDispatchCallback;

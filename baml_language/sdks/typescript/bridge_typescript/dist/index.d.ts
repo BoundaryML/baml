@@ -21,15 +21,14 @@ export type { BamlType, BamlPrimitiveToken, BamlClassCtor } from './wire_ty.js';
 /**
  * Free-function runtime initializer used by generated `baml_sdk/index.ts`:
  * `initializeRuntime("baml_src", _inlinedbaml.FILES)`. Thin wrapper over the
- * `BamlRuntime.initializeRuntime` factory (which sets the process-global
- * singleton reachable via `getRuntime()`).
+ * `BamlRuntime.initializeRuntime` factory. Generated SDKs reserve key zero.
  */
-export declare function initializeRuntime(srcDir: string, files: Record<string, string>): void;
+export declare function initializeRuntime(srcDir: string, files: Record<string, string>, runtimeKey?: number): void;
 /**
  * Free-function runtime initializer used by generated `baml_sdk/index.ts` when
  * codegen embeds precompiled BAML bytecode.
  */
-export declare function initializeRuntimeFromBytecode(bytecode: Buffer | Uint8Array): void;
+export declare function initializeRuntimeFromBytecode(bytecode: Buffer | Uint8Array, runtimeKey?: number): void;
 export { BamlAbortError, BamlError, BamlInvalidArgumentError, BamlClientError, BamlCancelledError, BamlPanic, wrapNativeError, } from './errors.js';
 export declare function newFunctionCall(): bigint;
 export declare function cancelFunctionCall(callId: bigint): boolean;

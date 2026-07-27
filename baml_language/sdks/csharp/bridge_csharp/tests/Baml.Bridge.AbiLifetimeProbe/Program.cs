@@ -101,9 +101,10 @@ internal static unsafe partial class Program
             RegisterBridge(api, BamlBridgeLanguageRust, args[1]).Length > 0,
             "conflicting bridge language registration was accepted");
 
+        uint runtimeKey = 0;
         string emptyBytecodeDiagnostic = ConsumeUtf8Buffer(
             api,
-            api->InitializeRuntimeFromBytecode(null, 0));
+            api->InitializeRuntimeFromBytecode(null, 0, 0, &runtimeKey));
         Require(
             emptyBytecodeDiagnostic.Length > 0,
             "empty bytecode unexpectedly initialized the runtime");
@@ -115,7 +116,9 @@ internal static unsafe partial class Program
                 api,
                 api->InitializeRuntimeFromBytecode(
                     invalid,
-                    (nuint)invalidBytecode.Length));
+                    (nuint)invalidBytecode.Length,
+                    0,
+                    &runtimeKey));
             Require(
                 diagnostic.Length > 0,
                 "invalid bytecode unexpectedly initialized the runtime");
@@ -128,7 +131,9 @@ internal static unsafe partial class Program
                 api,
                 api->InitializeRuntimeFromBytecode(
                     bytes,
-                    (nuint)bytecode.Length));
+                    (nuint)bytecode.Length,
+                    0,
+                    &runtimeKey));
             Require(
                 diagnostic.Length == 0,
                 $"valid bytecode initialization failed: {diagnostic}");
@@ -365,6 +370,7 @@ internal static unsafe partial class Program
         fixed (byte* arguments = encodedArguments)
         {
             api->CallFunction(
+                0,
                 name,
                 arguments,
                 (nuint)encodedArguments.Length,
@@ -1032,12 +1038,15 @@ internal static unsafe partial class Program
         public readonly delegate* unmanaged[Cdecl]<
             byte*,
             nuint,
+            uint,
+            uint*,
             BamlBuffer> InitializeRuntimeFromBytecode;
         public readonly delegate* unmanaged[Cdecl]<BamlBuffer, void> FreeBuffer;
         public readonly delegate* unmanaged[Cdecl]<
             delegate* unmanaged[Cdecl]<uint, byte*, nuint, void>,
             void> RegisterCallback;
         public readonly delegate* unmanaged[Cdecl]<
+            uint,
             byte*,
             byte*,
             nuint,

@@ -71,7 +71,7 @@ fn decode_args(args_proto: &[u8]) -> Result<DecodedCallArgs, bridge_cffi::Bridge
 /// error handling already lives in `bridge_cffi::call_and_encode`.
 fn call_sync_to_bytes(function_name: String, args_proto: &[u8]) -> Vec<u8> {
     let prepared = (|| -> Result<_, bridge_cffi::BridgeError> {
-        let runtime = bridge_cffi::get_runtime()?;
+        let runtime = bridge_cffi::get_runtime(0)?;
         let decoded = decode_args(args_proto)?;
         let rt = bridge_cffi::get_tokio_runtime()?;
         Ok((runtime, decoded, rt))
@@ -152,7 +152,7 @@ pub extern "system" fn Java_baml_1bridge_BamlFfi_nativeInitFromBytecode(
         }
     };
 
-    if let Err(e) = bridge_cffi::initialize_runtime_from_bytecode(&bytes) {
+    if let Err(e) = bridge_cffi::initialize_runtime_from_bytecode(&bytes, Some(0)) {
         throw_runtime_exception(&mut env, &format!("runtime initialization failed: {e}"));
     }
 }
@@ -326,7 +326,7 @@ pub extern "system" fn Java_baml_1bridge_BamlFfi_nativeCallAsync<'local>(
 /// raise identically to a sync pre-call failure.
 fn spawn_async_call(call_id: u64, function_name: String, args_proto: Vec<u8>) {
     let prepared = (|| -> Result<_, bridge_cffi::BridgeError> {
-        let runtime = bridge_cffi::get_runtime()?;
+        let runtime = bridge_cffi::get_runtime(0)?;
         let decoded = decode_args(&args_proto)?;
         let rt = bridge_cffi::get_tokio_runtime()?;
         Ok((runtime, decoded, rt))

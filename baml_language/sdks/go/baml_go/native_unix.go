@@ -130,7 +130,8 @@ static BamlBuffer baml_register_go_bridge(const uint8_t *sdk_version, size_t len
 	return baml_api->register_bridge(&info);
 }
 static BamlBuffer baml_initialize(const uint8_t *bytecode, size_t length) {
-	return baml_api->initialize_runtime_from_bytecode(bytecode, length);
+	uint32_t runtime_key = 0;
+	return baml_api->initialize_runtime_from_bytecode(bytecode, length, 0, &runtime_key);
 }
 static void baml_free_buffer(BamlBuffer buffer) { baml_api->free_buffer(buffer); }
 static void baml_register_go_callback(void) {
@@ -142,7 +143,7 @@ static void baml_register_go_unhandled_spawn_error_callback(void) { baml_api->re
 static BamlBuffer baml_shutdown(void) { return baml_api->shutdown_runtime(); }
 static uint64_t baml_new_function_call(void) { return baml_api->new_function_call(); }
 static void baml_call_function(const char *name, const uint8_t *args, size_t length, uint32_t callback_id) {
-	baml_api->call_function(name, args, length, callback_id);
+	baml_api->call_function(0, name, args, length, callback_id);
 }
 static int32_t baml_cancel_function_call(uint64_t call_id) { return baml_api->cancel_function_call(call_id); }
 static void baml_complete_host_call_go(uint32_t call_id, int32_t is_error, const uint8_t *content, size_t length) {

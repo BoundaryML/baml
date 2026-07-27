@@ -28,7 +28,7 @@ future<Ret, ThrownU> start_call(const std::string& fqn, args_encoder&& args) {
   call_registry::started started = call_registry::instance().begin();
   const uint64_t engine_call_id = api().new_function_call();
   const std::string encoded = args.finish(engine_call_id);
-  api().call_function(fqn.c_str(),
+  api().call_function(0, fqn.c_str(),
                       reinterpret_cast<const uint8_t*>(encoded.data()),
                       encoded.size(), started.correlation_id);
   return future<Ret, ThrownU>(std::move(started.state), engine_call_id);

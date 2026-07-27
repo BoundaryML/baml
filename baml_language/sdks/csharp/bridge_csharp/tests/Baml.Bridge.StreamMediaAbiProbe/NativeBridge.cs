@@ -88,10 +88,13 @@ internal sealed unsafe partial class NativeBridge : IDisposable
         byte[] bytes = File.ReadAllBytes(bytecode);
         fixed (byte* pointer = bytes)
         {
+            uint runtimeKey = 0;
             string diagnostic = ConsumeUtf8(
                 api->InitializeRuntimeFromBytecode(
                     pointer,
-                    (nuint)bytes.Length));
+                    (nuint)bytes.Length,
+                    0,
+                    &runtimeKey));
             Require(
                 diagnostic.Length == 0,
                 $"bytecode initialization failed: {diagnostic}");
@@ -156,6 +159,7 @@ internal sealed unsafe partial class NativeBridge : IDisposable
         fixed (byte* argumentBytes = encodedArguments)
         {
             s_api->CallFunction(
+                0,
                 name,
                 argumentBytes,
                 (nuint)encodedArguments.Length,
@@ -542,12 +546,15 @@ internal sealed unsafe partial class NativeBridge : IDisposable
         public readonly delegate* unmanaged[Cdecl]<
             byte*,
             nuint,
+            uint,
+            uint*,
             BamlBuffer> InitializeRuntimeFromBytecode;
         public readonly delegate* unmanaged[Cdecl]<BamlBuffer, void> FreeBuffer;
         public readonly delegate* unmanaged[Cdecl]<
             delegate* unmanaged[Cdecl]<uint, byte*, nuint, void>,
             void> RegisterCallback;
         public readonly delegate* unmanaged[Cdecl]<
+            uint,
             byte*,
             byte*,
             nuint,

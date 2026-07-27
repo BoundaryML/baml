@@ -12,9 +12,16 @@ static BamlBuffer probe_version(void) {
   return buffer;
 }
 
-static BamlBuffer probe_initialize(const uint8_t *bytecode, size_t length) {
+static BamlBuffer probe_initialize(
+    const uint8_t *bytecode,
+    size_t length,
+    uint32_t requested_runtime_key,
+    uint32_t *out_runtime_key) {
   (void)bytecode;
   (void)length;
+  if (out_runtime_key != NULL) {
+    *out_runtime_key = requested_runtime_key;
+  }
   BamlBuffer buffer = {NULL, 0};
   return buffer;
 }
@@ -28,10 +35,12 @@ static void probe_register_result(BamlResultCallback callback) {
 }
 
 static void probe_call(
+    uint32_t runtime_key,
     const char *function_name,
     const uint8_t *encoded_args,
     size_t length,
     uint32_t callback_id) {
+  (void)runtime_key;
   (void)function_name;
   (void)encoded_args;
   (void)length;

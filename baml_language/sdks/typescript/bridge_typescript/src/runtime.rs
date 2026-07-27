@@ -1,9 +1,7 @@
 //! BamlRuntime napi class.
 //!
-//! A zero-sized handle: the single source of truth for the `Arc<dyn Bex>`
-//! singleton is `bridge_cffi`, fetched via `bridge_cffi::get_runtime()`
-//! at each call site (mirrors `bridge_python` after 31e-phase4), so this no
-//! longer caches its own clone.
+//! The handle carries a u32 key. The corresponding `Arc<dyn Bex>` lives in
+//! bridge_cffi's registry and is fetched at each call site.
 
 use bridge_ctypes::{HANDLE_TABLE, kwargs_to_bex_values};
 use napi::bindgen_prelude::*;
@@ -25,38 +23,45 @@ struct DecodedCallArgs {
     type_args: indexmap::IndexMap<String, bex_project::RuntimeTy>,
 }
 
-/// The main BAML runtime. A zero-sized handle (see module docs).
+/// The main BAML runtime. Its engine is stored in bridge_cffi's registry.
 #[napi]
-pub struct BamlRuntime {}
+pub struct BamlRuntime {
+    runtime_key: u32,
+}
 
 #[napi]
 impl BamlRuntime {
-    /// Initialize the process-global runtime from in-memory BAML source
-    /// files. `bridge_cffi::initialize_runtime` is a single-slot singleton, so
-    /// a second call replaces the prior runtime; the result is also reachable
-    /// via the module-level `getRuntime()`. Renamed from `fromFiles` for
-    /// parity with `bridge_python`'s sole `initialize_runtime` constructor and
-    /// the `initializeRuntime(...)` import the spec docs use.
+    /// Initialize a registered runtime from in-memory BAML source files.
+    /// An explicit key replaces that registry entry; without a key, a new
+    /// nonzero, non-`u32::MAX` key is allocated. Renamed from `fromFiles` for parity with
+    /// `bridge_python`'s `initialize_runtime` constructor.
     #[napi(factory, js_name = "initializeRuntime")]
     pub fn initialize_runtime(
         root_path: String,
         files: std::collections::HashMap<String, String>,
+        runtime_key: Option<u32>,
     ) -> napi::Result<Self> {
-        // `initialize_runtime` stores the `Arc<dyn Bex>` in bridge_cffi's
-        // singleton; we don't keep our own copy.
-        match bridge_cffi::initialize_runtime(&root_path, files) {
-            Ok(_bex) => Ok(BamlRuntime {}),
+        match bridge_cffi::initialize_runtime(&root_path, files, runtime_key) {
+            Ok(runtime_key) => Ok(BamlRuntime { runtime_key }),
             Err(e) => Err(bridge_error_to_napi(e)),
         }
     }
 
-    /// Initialize the process-global runtime from precompiled BAML bytecode.
+    /// Initialize a registered runtime from precompiled BAML bytecode.
     #[napi(factory, js_name = "initializeRuntimeFromBytecode")]
-    pub fn initialize_runtime_from_bytecode(bytecode: Buffer) -> napi::Result<Self> {
-        match bridge_cffi::initialize_runtime_from_bytecode(bytecode.as_ref()) {
-            Ok(_bex) => Ok(BamlRuntime {}),
+    pub fn initialize_runtime_from_bytecode(
+        bytecode: Buffer,
+        runtime_key: Option<u32>,
+    ) -> napi::Result<Self> {
+        match bridge_cffi::initialize_runtime_from_bytecode(bytecode.as_ref(), runtime_key) {
+            Ok(runtime_key) => Ok(BamlRuntime { runtime_key }),
             Err(e) => Err(bridge_error_to_napi(e)),
         }
+    }
+
+    #[napi(getter)]
+    pub fn runtime_key(&self) -> u32 {
+        self.runtime_key
     }
 
     /// Call a BAML function synchronously (blocking).
@@ -69,7 +74,7 @@ impl BamlRuntime {
         collectors: Option<Vec<&Collector>>,
     ) -> napi::Result<Buffer> {
         let prepared = (|| -> std::result::Result<_, bridge_cffi::BridgeError> {
-            let runtime = bridge_cffi::get_runtime()?;
+            let runtime = bridge_cffi::get_runtime(self.runtime_key)?;
             let decoded = decode_args(args_proto.as_ref(), &function_name)?;
             let rt = bridge_cffi::get_tokio_runtime()?;
             Ok((runtime, decoded, rt))
@@ -109,7 +114,7 @@ impl BamlRuntime {
         collectors: Option<Vec<&Collector>>,
     ) -> napi::Result<PromiseRaw<'e, Buffer>> {
         let prepared = (|| -> std::result::Result<_, bridge_cffi::BridgeError> {
-            let runtime = bridge_cffi::get_runtime()?;
+            let runtime = bridge_cffi::get_runtime(self.runtime_key)?;
             let decoded = decode_args(args_proto.as_ref(), &function_name)?;
             Ok((runtime, decoded))
         })();
@@ -133,20 +138,20 @@ impl BamlRuntime {
     }
 }
 
-/// Return the process-global `BamlRuntime`, or a `BamlError`-shaped
-/// `napi::Error` if `initializeRuntime` has not run yet. The handle is
-/// zero-sized; the `Arc<dyn Bex>` lives in `bridge_cffi`. Mirrors
-/// `bridge_python`'s module-level `get_runtime()`.
+/// Return the `BamlRuntime` registered under `runtime_key`, or a
+/// `BamlError`-shaped `napi::Error` if that key has not been initialized.
 #[napi(js_name = "getRuntime")]
-pub fn get_runtime() -> napi::Result<BamlRuntime> {
-    bridge_cffi::get_runtime().map_err(|e| match e {
-        bridge_cffi::BridgeError::NotInitialized => napi::Error::new(
+pub fn get_runtime(runtime_key: Option<u32>) -> napi::Result<BamlRuntime> {
+    let runtime_key = runtime_key.unwrap_or(0);
+    bridge_cffi::get_runtime(runtime_key).map_err(|e| match e {
+        bridge_cffi::BridgeError::NotInitialized
+        | bridge_cffi::BridgeError::RuntimeNotFound(_) => napi::Error::new(
             napi::Status::GenericFailure,
             "BamlError: BAML runtime has not been initialized — call BamlRuntime.initializeRuntime first.",
         ),
         other => bridge_error_to_napi(other),
     })?;
-    Ok(BamlRuntime {})
+    Ok(BamlRuntime { runtime_key })
 }
 
 /// Decode protobuf-encoded function arguments into `BexArgs`.

@@ -23,9 +23,16 @@ pub fn initialize_from_bytecode(bytecode: &[u8]) -> Result<(), SdkError> {
     // SAFETY: the bytecode slice is valid for the duration of the call;
     // the engine copies what it keeps, and returns an owned status buffer
     // that `take_status` reads and frees.
+    let mut runtime_key = 0;
     #[expect(unsafe_code)]
-    let status =
-        unsafe { (api.initialize_runtime_from_bytecode)(bytecode.as_ptr(), bytecode.len()) };
+    let status = unsafe {
+        (api.initialize_runtime_from_bytecode)(
+            bytecode.as_ptr(),
+            bytecode.len(),
+            0,
+            &raw mut runtime_key,
+        )
+    };
     api.take_status(status).map_err(|message| {
         SdkError::new(format!(
             "failed to initialize the BAML runtime from embedded bytecode: {message}"
@@ -128,6 +135,7 @@ fn dispatch(
     #[expect(unsafe_code)]
     unsafe {
         (api.call_function)(
+            0,
             name.as_ptr(),
             args.as_ptr(),
             args.len(),

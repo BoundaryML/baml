@@ -4,7 +4,10 @@ use std::{
     collections::HashMap,
     ffi::CStr,
     panic::AssertUnwindSafe,
-    sync::{Arc, RwLock},
+    sync::{
+        Arc, LazyLock, RwLock,
+        atomic::{AtomicU32, Ordering},
+    },
 };
 
 use bex_project::Bex;
@@ -57,8 +60,10 @@ pub use ffi::{
     unhandled_spawn::register_unhandled_spawn_error_callback,
 };
 
-/// Global Bex runtime. Uses RwLock to allow replacing the runtime.
-static RUNTIME_INSTANCE: RwLock<Option<Arc<dyn Bex>>> = RwLock::new(None);
+/// Process-wide registry of Bex runtimes. Key zero is reserved for generated SDKs.
+static RUNTIME_INSTANCES: LazyLock<RwLock<HashMap<u32, Arc<dyn Bex>>>> =
+    LazyLock::new(|| RwLock::new(HashMap::new()));
+static NEXT_RUNTIME_KEY: AtomicU32 = AtomicU32::new(1);
 
 /// Global Tokio runtime for async execution.
 static TOKIO_RUNTIME: OnceCell<Arc<Runtime>> = OnceCell::new();
@@ -73,17 +78,19 @@ pub fn get_tokio_runtime() -> Result<Arc<Runtime>, BridgeError> {
     result.cloned()
 }
 
-pub(crate) fn get_runtime() -> Result<Arc<dyn Bex>, BridgeError> {
-    RUNTIME_INSTANCE
+pub(crate) fn get_runtime(runtime_key: u32) -> Result<Arc<dyn Bex>, BridgeError> {
+    RUNTIME_INSTANCES
         .read()
         .map_err(|_| BridgeError::LockPoisoned)?
-        .clone()
-        .ok_or(BridgeError::NotInitialized)
+        .get(&runtime_key)
+        .cloned()
+        .ok_or(BridgeError::RuntimeNotFound(runtime_key))
 }
 
-/// Initialize the global runtime from BAML source files.
+/// Initialize a registered runtime from BAML source files.
 ///
-/// If a runtime is already initialized, it will be replaced with the new one.
+/// An explicit key replaces that registry entry. Without a key, a new nonzero,
+/// non-`u32::MAX` key is allocated.
 ///
 /// # Arguments
 /// * `root_path` - Root path for BAML files
@@ -91,7 +98,8 @@ pub(crate) fn get_runtime() -> Result<Arc<dyn Bex>, BridgeError> {
 pub fn initialize_runtime(
     root_path: &str,
     src_files: HashMap<String, String>,
-) -> Result<Arc<dyn Bex>, BridgeError> {
+    runtime_key: Option<u32>,
+) -> Result<u32, BridgeError> {
     let physical_fs = vfs::PhysicalFS::new("/");
     let vfs_root = vfs::VfsPath::new(physical_fs);
     let vfs_path = vfs_root
@@ -105,27 +113,38 @@ pub fn initialize_runtime(
 
     let rt: Arc<dyn Bex> = bex_project::new(vfs_path, bex_project::SysOps::native(), files)?;
     crate::install_unhandled_spawn_error_handler(&rt);
-    replace_runtime(rt.clone())?;
-    Ok(rt)
+    insert_runtime(runtime_key, rt)
 }
 
-pub(crate) fn replace_runtime(rt: Arc<dyn Bex>) -> Result<(), BridgeError> {
-    let mut guard = RUNTIME_INSTANCE
+pub(crate) fn insert_runtime(
+    requested_key: Option<u32>,
+    runtime: Arc<dyn Bex>,
+) -> Result<u32, BridgeError> {
+    let mut guard = RUNTIME_INSTANCES
         .write()
         .map_err(|_| BridgeError::LockPoisoned)?;
-    let previous = guard.replace(rt);
+    let runtime_key = match requested_key {
+        Some(runtime_key) => runtime_key,
+        None => loop {
+            let candidate = NEXT_RUNTIME_KEY.fetch_add(1, Ordering::Relaxed);
+            if candidate != 0 && candidate != u32::MAX && !guard.contains_key(&candidate) {
+                break candidate;
+            }
+        },
+    };
+    let previous = guard.insert(runtime_key, runtime);
     drop(guard);
     if let Some(previous) = previous {
         get_tokio_runtime()?.spawn(previous.shutdown());
     }
-    Ok(())
+    Ok(runtime_key)
 }
 
-pub(crate) fn take_runtime() -> Result<Option<Arc<dyn Bex>>, BridgeError> {
-    RUNTIME_INSTANCE
+pub(crate) fn take_all_runtimes() -> Result<Vec<Arc<dyn Bex>>, BridgeError> {
+    RUNTIME_INSTANCES
         .write()
         .map_err(|_| BridgeError::LockPoisoned)
-        .map(|mut runtime| runtime.take())
+        .map(|mut runtimes| runtimes.drain().map(|(_, runtime)| runtime).collect())
 }
 
 pub(crate) fn dispatch_unhandled_spawn_error(content: Vec<u8>, cancelled: bool) {
@@ -138,17 +157,19 @@ pub(crate) fn dispatch_unhandled_spawn_error(content: Vec<u8>, cancelled: bool) 
 /// via the registered callback as a `BamlOutboundResult` envelope.
 #[unsafe(no_mangle)]
 pub extern "C" fn call_function(
+    runtime_key: u32,
     function_name: *const libc::c_char,
     encoded_args: *const u8,
     length: usize,
     id: u32,
 ) {
-    if let Err(e) = call_function_inner(function_name, encoded_args, length, id) {
+    if let Err(e) = call_function_inner(runtime_key, function_name, encoded_args, length, id) {
         send_outbound_result_to_callback(id, &error_to_outbound(e));
     }
 }
 
 fn call_function_inner(
+    runtime_key: u32,
     function_name: *const libc::c_char,
     encoded_args: *const u8,
     length: usize,
@@ -156,7 +177,7 @@ fn call_function_inner(
 ) -> Result<(), BridgeError> {
     use bridge_ctypes::baml_bridge::cffi::CallFunctionArgs;
 
-    let runtime = get_runtime()?;
+    let runtime = get_runtime(runtime_key)?;
 
     if function_name.is_null() {
         return Err(BridgeError::NullFunctionName);

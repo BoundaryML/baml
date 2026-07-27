@@ -45,10 +45,11 @@ pub(crate) struct Api {
         unsafe extern "C" fn(*const c_char, *const c_char) -> *const c_void,
     /// Returns a status buffer: empty on success, otherwise a UTF-8 error
     /// message. Read it with [`Api::take_status`].
-    pub(crate) initialize_runtime_from_bytecode: unsafe extern "C" fn(*const u8, usize) -> Buffer,
+    pub(crate) initialize_runtime_from_bytecode:
+        unsafe extern "C" fn(*const u8, usize, u32, *mut u32) -> Buffer,
     pub(crate) register_callback: unsafe extern "C" fn(CallbackFn),
     pub(crate) new_function_call: unsafe extern "C" fn() -> u64,
-    pub(crate) call_function: unsafe extern "C" fn(*const c_char, *const u8, usize, u32),
+    pub(crate) call_function: unsafe extern "C" fn(u32, *const c_char, *const u8, usize, u32),
     pub(crate) free_buffer: unsafe extern "C" fn(Buffer),
     pub(crate) register_host_dispatch_callback: unsafe extern "C" fn(HostDispatchFn),
     pub(crate) register_host_release_callback: unsafe extern "C" fn(HostReleaseFn),
@@ -136,10 +137,11 @@ struct BamlApiV1 {
     abi_version: u32,
     struct_size: usize,
     version: unsafe extern "C" fn() -> Buffer,
-    initialize_runtime_from_bytecode: unsafe extern "C" fn(*const u8, usize) -> Buffer,
+    initialize_runtime_from_bytecode:
+        unsafe extern "C" fn(*const u8, usize, u32, *mut u32) -> Buffer,
     free_buffer: unsafe extern "C" fn(Buffer),
     register_callback: unsafe extern "C" fn(CallbackFn),
-    call_function: unsafe extern "C" fn(*const c_char, *const u8, usize, u32),
+    call_function: unsafe extern "C" fn(u32, *const c_char, *const u8, usize, u32),
     new_function_call: unsafe extern "C" fn() -> u64,
     /// Layout placeholder: sits between `new_function_call` and the
     /// host-value entries in ABI order. Unused until cancellation lands.

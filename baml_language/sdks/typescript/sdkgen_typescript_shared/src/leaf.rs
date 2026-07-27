@@ -585,7 +585,7 @@ fn write_preamble_ts(
         out.push_str("import { _TYPE_MAP } from \"./_typemap.js\";\n");
         out.push_str(&cross_leaf_imports(state, &body.leaf));
         out.push('\n');
-        out.push_str("initializeRuntimeFromBytecode(_inlinedbaml.BYTECODE);\n");
+        out.push_str("initializeRuntimeFromBytecode(_inlinedbaml.BYTECODE, 0);\n");
         out.push_str("setTypeMap(_TYPE_MAP);\n");
         if !kids.is_empty() {
             out.push('\n');
@@ -929,11 +929,8 @@ fn optional_param_names_arg(names: &[String]) -> String {
 /// are the enclosing generic class's params (bound from the `self` receiver).
 /// `None` when the callee binds nothing (the non-generic fast path). Mirrors
 /// the Python SDK's `render_generic_kwargs`.
-fn generics_object_literal(type_params: &[String], class_type_params: &[String]) -> Option<String> {
-    if type_params.is_empty() && class_type_params.is_empty() {
-        return None;
-    }
-    let mut parts = Vec::new();
+fn generics_object_literal(type_params: &[String], class_type_params: &[String]) -> String {
+    let mut parts = vec!["runtimeKey: 0".to_string()];
     if !type_params.is_empty() {
         parts.push(format!("typeParams: {}", param_names_literal(type_params)));
     }
@@ -943,7 +940,7 @@ fn generics_object_literal(type_params: &[String], class_type_params: &[String])
             param_names_literal(class_type_params)
         ));
     }
-    Some(format!("{{ {} }}", parts.join(", ")))
+    format!("{{ {} }}", parts.join(", "))
 }
 
 /// The trailing factory arguments after the required-param-names list: the
@@ -956,17 +953,13 @@ fn factory_tail(
     type_params: &[String],
     class_type_params: &[String],
 ) -> String {
-    match generics_object_literal(type_params, class_type_params) {
-        None => optional_arg.to_string(),
-        Some(generics) => {
-            let optional = if optional_arg.is_empty() {
-                ", undefined"
-            } else {
-                optional_arg
-            };
-            format!("{optional}, {generics}")
-        }
-    }
+    let generics = generics_object_literal(type_params, class_type_params);
+    let optional = if optional_arg.is_empty() {
+        ", undefined"
+    } else {
+        optional_arg
+    };
+    format!("{optional}, {generics}")
 }
 
 fn required_positional_count(defaults: &[Option<FunctionArgumentDefault>]) -> usize {
@@ -1178,8 +1171,8 @@ mod tests {
         assert!(ts.contains(
             "import { defineFunction, type BamlCallContext } from \"@boundaryml/baml-bridge\";"
         ));
-        assert!(ts.contains("export const extract = defineFunction(\"user.lorem.extract\", \"sync\", [\"text\"]) as (text: string, $opts?: { $ctx?: BamlCallContext | undefined } | undefined) => number;"));
-        assert!(ts.contains("export const extract_async = defineFunction(\"user.lorem.extract\", \"async\", [\"text\"]) as (text: string, $opts?: { $ctx?: BamlCallContext | undefined } | undefined) => Promise<number>;"));
+        assert!(ts.contains("export const extract = defineFunction(\"user.lorem.extract\", \"sync\", [\"text\"], undefined, { runtimeKey: 0 }) as (text: string, $opts?: { $ctx?: BamlCallContext | undefined } | undefined) => number;"));
+        assert!(ts.contains("export const extract_async = defineFunction(\"user.lorem.extract\", \"async\", [\"text\"], undefined, { runtimeKey: 0 }) as (text: string, $opts?: { $ctx?: BamlCallContext | undefined } | undefined) => Promise<number>;"));
     }
 
     #[test]
@@ -1276,7 +1269,7 @@ mod tests {
         );
         let ts = render_index_ts(&b, &BTreeSet::new(), false, TEST_RUNTIME_PACKAGE);
         assert!(ts.contains(
-            "defineFunction(\"user.lorem.extract\", \"sync\", [\"arguments\", \"arguments_\", \"$opts\"], [\"eval\"])"
+            "defineFunction(\"user.lorem.extract\", \"sync\", [\"arguments\", \"arguments_\", \"$opts\"], [\"eval\"], { runtimeKey: 0 })"
         ));
         assert!(ts.contains(
             "as (arguments_: string, arguments__: string, $opts_: string, $opts?: { eval?: string | undefined; $ctx?: BamlCallContext | undefined } | undefined) => string;"
@@ -1390,11 +1383,11 @@ mod tests {
         assert!(ts.contains("import * as __ns_id from \"./id/index.js\";"));
         assert!(!ts.contains("export * as id from \"./id/index.js\";"));
         assert!(ts.contains(
-            "export const id = Object.assign(defineFunction(\"boundary.id\", \"sync\", []) as ($opts?: { $ctx?: BamlCallContext | undefined } | undefined) => LocalId, __ns_id);"
+            "export const id = Object.assign(defineFunction(\"boundary.id\", \"sync\", [], undefined, { runtimeKey: 0 }) as ($opts?: { $ctx?: BamlCallContext | undefined } | undefined) => LocalId, __ns_id);"
         ));
         assert!(
             ts.contains(
-                "export const id_async = defineFunction(\"boundary.id\", \"async\", []) as ($opts?: { $ctx?: BamlCallContext | undefined } | undefined) => Promise<LocalId>;"
+                "export const id_async = defineFunction(\"boundary.id\", \"async\", [], undefined, { runtimeKey: 0 }) as ($opts?: { $ctx?: BamlCallContext | undefined } | undefined) => Promise<LocalId>;"
             )
         );
     }
@@ -1416,7 +1409,7 @@ mod tests {
         let mut kids = BTreeSet::new();
         kids.insert("lorem".to_string());
         let ts = render_index_ts(&b, &kids, true, TEST_RUNTIME_PACKAGE);
-        assert!(ts.contains("initializeRuntimeFromBytecode(_inlinedbaml.BYTECODE);"));
+        assert!(ts.contains("initializeRuntimeFromBytecode(_inlinedbaml.BYTECODE, 0);"));
         assert!(ts.contains("setTypeMap(_TYPE_MAP);"));
         assert!(ts.contains("export * as lorem from \"./lorem/index.js\";"));
         assert!(ts.contains("export const make_foo = defineFunction("));
