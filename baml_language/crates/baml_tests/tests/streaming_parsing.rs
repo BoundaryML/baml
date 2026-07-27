@@ -45,7 +45,7 @@ fn streaming_llm_source(base_url: &str) -> String {
 
         function TestFunc(input: string) -> string {{
             client TestClient
-            prompt #"Say hello to {{{{ input }}}}"#
+            prompt `Say hello to ${{input}}`
         }}
     "##
     )
@@ -153,7 +153,7 @@ async fn stream_class_in_namespace_final_value() {
 
         function TestFunc(input: string) -> Doc {{
             client TestClient
-            prompt #"Say hello to {{{{ input }}}}"#
+            prompt `Say hello to ${{input}}`
         }}
 
         function main() -> string {{

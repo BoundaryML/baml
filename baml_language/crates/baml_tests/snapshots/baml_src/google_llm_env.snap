@@ -50,6 +50,9 @@ function google_llm_env.GoogleEnvEnterpriseOptionsClient$new(lenient: bool) -> n
 }
 
 function google_llm_env.GoogleEnvEnterprisePrompt(input: string, client: baml.llm.Client) -> string {
+    load_var ?1
+    make_cell
+    store_var ?1
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -58,20 +61,27 @@ function google_llm_env.GoogleEnvEnterprisePrompt(input: string, client: baml.ll
     store_var client
 
   L0:
+    load_var input
+    make_closure .<tagged(GoogleEnvEnterprisePrompt, 0)>, 1
+    call baml.llm.prompt
+    store_var _5
     load_type string
     load_var client
     load_const "GoogleEnvEnterprisePrompt"
-    load_var input
+    load_deref ?1
     load_const "input"
     load_type string
     load_type unknown
     alloc_map 1
-    load_const <omitted>
+    load_var _5
     call baml.llm.call_llm_function
     return
 }
 
 function google_llm_env.GoogleEnvEnterprisePrompt$build_request(input: string, client: baml.llm.Client) -> baml.http.Request {
+    load_var ?1
+    make_cell
+    store_var ?1
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -80,19 +90,26 @@ function google_llm_env.GoogleEnvEnterprisePrompt$build_request(input: string, c
     store_var client
 
   L0:
+    load_var input
+    make_closure .<tagged(GoogleEnvEnterprisePrompt$build_request, 0)>, 1
+    call baml.llm.prompt
+    store_var _5
     load_var client
     load_const "GoogleEnvEnterprisePrompt"
-    load_var input
+    load_deref ?1
     load_const "input"
     load_type string
     load_type unknown
     alloc_map 1
-    load_const <omitted>
+    load_var _5
     call baml.llm.build_request
     return
 }
 
 function google_llm_env.GoogleEnvEnterprisePrompt$build_request_stream(input: string, client: baml.llm.Client) -> baml.http.Request {
+    load_var ?1
+    make_cell
+    store_var ?1
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -101,14 +118,18 @@ function google_llm_env.GoogleEnvEnterprisePrompt$build_request_stream(input: st
     store_var client
 
   L0:
+    load_var input
+    make_closure .<tagged(GoogleEnvEnterprisePrompt$build_request_stream, 0)>, 1
+    call baml.llm.prompt
+    store_var _5
     load_var client
     load_const "GoogleEnvEnterprisePrompt"
-    load_var input
+    load_deref ?1
     load_const "input"
     load_type string
     load_type unknown
     alloc_map 1
-    load_const <omitted>
+    load_var _5
     call baml.llm.build_request_stream
     return
 }
@@ -146,6 +167,9 @@ function google_llm_env.GoogleEnvEnterprisePrompt$parse_stream(sse: baml.http.Ss
 }
 
 function google_llm_env.GoogleEnvEnterprisePrompt$render_prompt(input: string, client: baml.llm.Client) -> baml.llm.PromptAst {
+    load_var ?1
+    make_cell
+    store_var ?1
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -154,19 +178,26 @@ function google_llm_env.GoogleEnvEnterprisePrompt$render_prompt(input: string, c
     store_var client
 
   L0:
+    load_var input
+    make_closure .<tagged(GoogleEnvEnterprisePrompt$render_prompt, 0)>, 1
+    call baml.llm.prompt
+    store_var _5
     load_var client
     load_const "GoogleEnvEnterprisePrompt"
-    load_var input
+    load_deref ?1
     load_const "input"
     load_type string
     load_type unknown
     alloc_map 1
-    load_const <omitted>
+    load_var _5
     call baml.llm.render_prompt
     return
 }
 
 function google_llm_env.GoogleEnvEnterprisePrompt$stream(input: string, client: baml.llm.Client) -> baml.llm.Stream<string | null, string> {
+    load_var ?1
+    make_cell
+    store_var ?1
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -175,16 +206,20 @@ function google_llm_env.GoogleEnvEnterprisePrompt$stream(input: string, client: 
     store_var client
 
   L0:
+    load_var input
+    make_closure .<tagged(GoogleEnvEnterprisePrompt$stream, 0)>, 1
+    call baml.llm.prompt
+    store_var _5
     load_type string | null
     load_type string
     load_var client
     load_const "GoogleEnvEnterprisePrompt"
-    load_var input
+    load_deref ?1
     load_const "input"
     load_type string
     load_type unknown
     alloc_map 1
-    load_const <omitted>
+    load_var _5
     call baml.llm.stream_llm_function
     return
 }

@@ -5,14 +5,14 @@
 // in customizable/test_main.py.
 function ClassifySentiment(text: string) -> Sentiment {
   client "anthropic/claude-3-5-sonnet-20241022"
-  prompt #"
+  prompt `
     Classify the sentiment of the following text.
 
     Respond in JSON with one of: POSITIVE, NEGATIVE, NEUTRAL.
 
     Text:
-    {{ text }}
+    ${text}
 
     JSON:
-  "#
+  `
 }

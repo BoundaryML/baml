@@ -21,7 +21,7 @@ async fn parse_companion_allows_missing_optional_class_field() {
 
             function ParsePayload() -> Payload {
                 client TestClient
-                prompt #"{{ ctx.output_format }}"#
+                prompt `${ctx.output_format}`
             }
 
             function main() -> Payload {
@@ -63,7 +63,7 @@ async fn parse_companion_allows_missing_nullable_alias_field() {
 
             function ParsePayload() -> Payload {
                 client TestClient
-                prompt #"{{ ctx.output_format }}"#
+                prompt `${ctx.output_format}`
             }
 
             function main() -> Payload {
@@ -102,7 +102,7 @@ async fn sap_parse_decodes_a_complete_top_level_json_string() {
 
         function ParseString() -> string {
             client TestClient
-            prompt #"{{ ctx.output_format }}"#
+            prompt `${ctx.output_format}`
         }
 
         function main() -> string {
@@ -129,7 +129,7 @@ async fn sap_parse_preserves_plain_llm_text() {
 
         function ParseString() -> string {
             client TestClient
-            prompt #"{{ ctx.output_format }}"#
+            prompt `${ctx.output_format}`
         }
 
         function main() -> string {

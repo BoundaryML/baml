@@ -29,13 +29,16 @@ function parse_companions.ParseCompanionsParseAliasPayload(client: baml.llm.Clie
     store_var client
 
   L0:
+    make_closure .<tagged(ParseCompanionsParseAliasPayload, 0)>, 0
+    call baml.llm.prompt
+    store_var _4
     load_type parse_companions.ParseCompanionsAliasPayload
     load_var client
     load_const "ParseCompanionsParseAliasPayload"
     load_type string
     load_type unknown
     alloc_map 0
-    load_const <omitted>
+    load_var _4
     call baml.llm.call_llm_function
     return
 }
@@ -49,12 +52,15 @@ function parse_companions.ParseCompanionsParseAliasPayload$build_request(client:
     store_var client
 
   L0:
+    make_closure .<tagged(ParseCompanionsParseAliasPayload$build_request, 0)>, 0
+    call baml.llm.prompt
+    store_var _4
     load_var client
     load_const "ParseCompanionsParseAliasPayload"
     load_type string
     load_type unknown
     alloc_map 0
-    load_const <omitted>
+    load_var _4
     call baml.llm.build_request
     return
 }
@@ -68,12 +74,15 @@ function parse_companions.ParseCompanionsParseAliasPayload$build_request_stream(
     store_var client
 
   L0:
+    make_closure .<tagged(ParseCompanionsParseAliasPayload$build_request_stream, 0)>, 0
+    call baml.llm.prompt
+    store_var _4
     load_var client
     load_const "ParseCompanionsParseAliasPayload"
     load_type string
     load_type unknown
     alloc_map 0
-    load_const <omitted>
+    load_var _4
     call baml.llm.build_request_stream
     return
 }
@@ -119,12 +128,15 @@ function parse_companions.ParseCompanionsParseAliasPayload$render_prompt(client:
     store_var client
 
   L0:
+    make_closure .<tagged(ParseCompanionsParseAliasPayload$render_prompt, 0)>, 0
+    call baml.llm.prompt
+    store_var _4
     load_var client
     load_const "ParseCompanionsParseAliasPayload"
     load_type string
     load_type unknown
     alloc_map 0
-    load_const <omitted>
+    load_var _4
     call baml.llm.render_prompt
     return
 }
@@ -138,6 +150,9 @@ function parse_companions.ParseCompanionsParseAliasPayload$stream(client: baml.l
     store_var client
 
   L0:
+    make_closure .<tagged(ParseCompanionsParseAliasPayload$stream, 0)>, 0
+    call baml.llm.prompt
+    store_var _4
     load_type parse_companions.ParseCompanionsAliasPayload$stream | null
     load_type parse_companions.ParseCompanionsAliasPayload
     load_var client
@@ -145,7 +160,7 @@ function parse_companions.ParseCompanionsParseAliasPayload$stream(client: baml.l
     load_type string
     load_type unknown
     alloc_map 0
-    load_const <omitted>
+    load_var _4
     call baml.llm.stream_llm_function
     return
 }
@@ -159,13 +174,16 @@ function parse_companions.ParseCompanionsParseOptPayload(client: baml.llm.Client
     store_var client
 
   L0:
+    make_closure .<tagged(ParseCompanionsParseOptPayload, 0)>, 0
+    call baml.llm.prompt
+    store_var _4
     load_type parse_companions.ParseCompanionsOptPayload
     load_var client
     load_const "ParseCompanionsParseOptPayload"
     load_type string
     load_type unknown
     alloc_map 0
-    load_const <omitted>
+    load_var _4
     call baml.llm.call_llm_function
     return
 }
@@ -179,12 +197,15 @@ function parse_companions.ParseCompanionsParseOptPayload$build_request(client: b
     store_var client
 
   L0:
+    make_closure .<tagged(ParseCompanionsParseOptPayload$build_request, 0)>, 0
+    call baml.llm.prompt
+    store_var _4
     load_var client
     load_const "ParseCompanionsParseOptPayload"
     load_type string
     load_type unknown
     alloc_map 0
-    load_const <omitted>
+    load_var _4
     call baml.llm.build_request
     return
 }
@@ -198,12 +219,15 @@ function parse_companions.ParseCompanionsParseOptPayload$build_request_stream(cl
     store_var client
 
   L0:
+    make_closure .<tagged(ParseCompanionsParseOptPayload$build_request_stream, 0)>, 0
+    call baml.llm.prompt
+    store_var _4
     load_var client
     load_const "ParseCompanionsParseOptPayload"
     load_type string
     load_type unknown
     alloc_map 0
-    load_const <omitted>
+    load_var _4
     call baml.llm.build_request_stream
     return
 }
@@ -249,12 +273,15 @@ function parse_companions.ParseCompanionsParseOptPayload$render_prompt(client: b
     store_var client
 
   L0:
+    make_closure .<tagged(ParseCompanionsParseOptPayload$render_prompt, 0)>, 0
+    call baml.llm.prompt
+    store_var _4
     load_var client
     load_const "ParseCompanionsParseOptPayload"
     load_type string
     load_type unknown
     alloc_map 0
-    load_const <omitted>
+    load_var _4
     call baml.llm.render_prompt
     return
 }
@@ -268,6 +295,9 @@ function parse_companions.ParseCompanionsParseOptPayload$stream(client: baml.llm
     store_var client
 
   L0:
+    make_closure .<tagged(ParseCompanionsParseOptPayload$stream, 0)>, 0
+    call baml.llm.prompt
+    store_var _4
     load_type parse_companions.ParseCompanionsOptPayload$stream | null
     load_type parse_companions.ParseCompanionsOptPayload
     load_var client
@@ -275,7 +305,7 @@ function parse_companions.ParseCompanionsParseOptPayload$stream(client: baml.llm
     load_type string
     load_type unknown
     alloc_map 0
-    load_const <omitted>
+    load_var _4
     call baml.llm.stream_llm_function
     return
 }

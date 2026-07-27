@@ -1,9 +1,10 @@
 //! Integration tests for `baml.llm.build_request` (`OpenAI` + Anthropic).
 //!
 //! These tests exercise the full pipeline: BAML source -> compile -> engine ->
-//! `baml.llm.build_request(...)`. They cover behaviors that require the full
-//! compilation + specialization pipeline (template strings, struct args,
-//! o-series model restrictions, media passed through BAML args).
+//! the generated `F$build_request` companion (the playground path, which
+//! carries the compiled prompt closure). They cover behaviors that require the
+//! full compilation + specialization pipeline (prompt helper expansion, struct
+//! args, o-series model restrictions, media passed through BAML args).
 //!
 //! Unit-level tests for JSON body shapes, URL building, media conversion, and
 //! option forwarding live in `sys_llm::build_request::openai::tests` and
@@ -118,21 +119,24 @@ client C {
 "#;
 
 // ============================================================================
-// Template strings — verify they expand before request building
+// Prompt helper functions (template_string replacement) — verify they
+// expand before request building
 // ============================================================================
 
 #[tokio::test]
-async fn test_openai_template_string_expansion() {
+async fn test_openai_prompt_helper_expansion() {
     let source = [
         OPENAI_CLIENT,
         r##"
-template_string Greet(name: string) #"Hello, {{ name }}!"#
+function Greet(name: string) -> string {
+    `Hello, ${name}!`
+}
 function F(name: string) -> string {
     client C
-    prompt #"{{ Greet(name) }}"#
+    prompt `${Greet(name)}`
 }
 function get_body() -> string {
-    baml.llm.build_request(C, "F", { "name": "Alice" }).body
+    F$build_request("Alice").body
 }
 "##,
     ]
@@ -176,10 +180,10 @@ async fn openai_authorization_header(source: &str) -> String {
         r##"
 function F(name: string) -> string {
     client C
-    prompt #"Hello, {{ name }}!"#
+    prompt `Hello, ${name}!`
 }
 function get_auth() -> string {
-    baml.llm.build_request(C, "F", { "name": "Alice" }).headers.get("authorization") ?? "MISSING"
+    F$build_request("Alice").headers.get("authorization") ?? "MISSING"
 }
 "##,
     ]
@@ -313,10 +317,11 @@ class Person {
 }
 function F(p: Person) -> string {
     client C
-    prompt #"{{ p.name }} is {{ p.age }}"#
+    prompt `${p.name} is ${p.age}`
 }
 function get_body() -> string {
-    baml.llm.build_request(C, "F", { "p": { "name": "Bob", "age": 42 } }).body
+    let p = Person { name: "Bob", age: 42 };
+    F$build_request(p).body
 }
 "##,
     ]
@@ -350,15 +355,10 @@ async fn test_o1_converts_system_to_user() {
         r##"
 function F() -> string {
     client C
-    prompt #"
-        {{ _.role("system") }}
-        You are a helpful assistant.
-        {{ _.role("user") }}
-        Hello
-    "#
+    prompt `${role("system")}You are a helpful assistant.${role("user")}Hello`
 }
 function get_body() -> string {
-    baml.llm.build_request(C, "F", {}).body
+    F$build_request().body
 }
 "##,
     ]
@@ -389,15 +389,10 @@ async fn test_non_o_series_keeps_system() {
         r##"
 function F() -> string {
     client C
-    prompt #"
-        {{ _.role("system") }}
-        You are helpful.
-        {{ _.role("user") }}
-        Hi
-    "#
+    prompt `${role("system")}You are helpful.${role("user")}Hi`
 }
 function get_body() -> string {
-    baml.llm.build_request(C, "F", {}).body
+    F$build_request().body
 }
 "##,
     ]
@@ -433,17 +428,10 @@ async fn test_openai_three_role_conversation() {
         r##"
 function F() -> string {
     client C
-    prompt #"
-        {{ _.role("system") }}
-        You are a helpful assistant.
-        {{ _.role("user") }}
-        What is 2+2?
-        {{ _.role("assistant") }}
-        4
-    "#
+    prompt `${role("system")}You are a helpful assistant.${role("user")}What is 2+2?${role("assistant")}4`
 }
 function get_body() -> string {
-    baml.llm.build_request(C, "F", {}).body
+    F$build_request().body
 }
 "##,
     ]
@@ -479,23 +467,10 @@ async fn test_openai_multi_turn_conversation() {
         r##"
 function F() -> string {
     client C
-    prompt #"
-        {{ _.role("system") }}
-        Be concise.
-        {{ _.role("user") }}
-        Hello
-        {{ _.role("assistant") }}
-        Hi!
-        {{ _.role("user") }}
-        How are you?
-        {{ _.role("assistant") }}
-        Good, thanks!
-        {{ _.role("user") }}
-        Goodbye
-    "#
+    prompt `${role("system")}Be concise.${role("user")}Hello${role("assistant")}Hi!${role("user")}How are you?${role("assistant")}Good, thanks!${role("user")}Goodbye`
 }
 function get_body() -> string {
-    baml.llm.build_request(C, "F", {}).body
+    F$build_request().body
 }
 "##,
     ]
@@ -543,19 +518,10 @@ async fn test_responses_api_multi_turn() {
         r##"
 function F() -> string {
     client C
-    prompt #"
-        {{ _.role("system") }}
-        You are helpful.
-        {{ _.role("user") }}
-        Hi
-        {{ _.role("assistant") }}
-        Hello!
-        {{ _.role("user") }}
-        Bye
-    "#
+    prompt `${role("system")}You are helpful.${role("user")}Hi${role("assistant")}Hello!${role("user")}Bye`
 }
 function get_body() -> string {
-    baml.llm.build_request(C, "F", {}).body
+    F$build_request().body
 }
 "##,
     ]
@@ -591,6 +557,11 @@ function get_body() -> string {
 // ============================================================================
 // Media passed through BAML function args (smoke tests — detailed coverage
 // in sys_llm unit tests)
+//
+// Still on legacy Jinja prompt syntax: the BEP-049 structural assembler
+// renders media interpolations as empty text (`prompt_value_text` in
+// `sys_ops` handles scalars only; media is deferred per its M5d comment),
+// so `${img}` cannot express what `{{ img }}` renders here yet.
 // ============================================================================
 
 #[tokio::test]
@@ -646,10 +617,10 @@ async fn test_responses_api_basic() {
         r##"
 function F(name: string) -> string {
     client C
-    prompt #"Hello, {{ name }}!"#
+    prompt `Hello, ${name}!`
 }
 function get_body() -> string {
-    baml.llm.build_request(C, "F", { "name": "World" }).body
+    F$build_request("World").body
 }
 "##,
     ]
@@ -677,10 +648,10 @@ async fn test_ai_gateway_images_builds_image_model_body() {
         r##"
 function F() -> image {
     client C
-    prompt #"Draw a brass desk lamp on a walnut table."#
+    prompt `Draw a brass desk lamp on a walnut table.`
 }
 function get_body() -> string {
-    baml.llm.build_request(C, "F", {}).body
+    F$build_request().body
 }
 "##,
     ]
@@ -708,10 +679,10 @@ async fn test_ai_gateway_images_uses_vercel_gateway_image_model_endpoint() {
         r##"
 function F() -> image {
     client C
-    prompt #"Draw a brass desk lamp."#
+    prompt `Draw a brass desk lamp.`
 }
 function get_url() -> string {
-    baml.llm.build_request(C, "F", {}).url
+    F$build_request().url
 }
 "##,
     ]
@@ -731,10 +702,10 @@ async fn test_responses_api_image_output_enables_image_generation_tool() {
         r##"
 function F() -> image {
     client C
-    prompt #"Generate a square logo of a brass desk lamp."#
+    prompt `Generate a square logo of a brass desk lamp.`
 }
 function get_body() -> string {
-    baml.llm.build_request(C, "F", {}).body
+    F$build_request().body
 }
 "##,
     ]
@@ -758,10 +729,10 @@ async fn test_responses_api_image_array_output_enables_image_generation_tool() {
         r##"
 function F() -> image[] {
     client C
-    prompt #"Generate two product photos of a brass desk lamp."#
+    prompt `Generate two product photos of a brass desk lamp.`
 }
 function get_body() -> string {
-    baml.llm.build_request(C, "F", {}).body
+    F$build_request().body
 }
 "##,
     ]
@@ -785,10 +756,10 @@ async fn test_responses_api_mixed_text_image_output_enables_tool_and_choice() {
         r##"
 function F() -> (string | image)[] {
     client C
-    prompt #"Return a caption, then generate an illustration of a brass desk lamp."#
+    prompt `Return a caption, then generate an illustration of a brass desk lamp.`
 }
 function get_body() -> string {
-    baml.llm.build_request(C, "F", {}).body
+    F$build_request().body
 }
 "##,
     ]
@@ -817,17 +788,10 @@ async fn test_openai_multiple_system_messages() {
         r##"
 function F() -> string {
     client C
-    prompt #"
-        {{ _.role("system") }}
-        You are helpful.
-        {{ _.role("system") }}
-        You are concise.
-        {{ _.role("user") }}
-        Hello
-    "#
+    prompt `${role("system")}You are helpful.${role("system")}You are concise.${role("user")}Hello`
 }
 function get_body() -> string {
-    baml.llm.build_request(C, "F", {}).body
+    F$build_request().body
 }
 "##,
     ]
@@ -872,22 +836,25 @@ client C {
 "#;
 
 // ============================================================================
-// Template strings — verify they expand before request building
+// Prompt helper functions (template_string replacement) — verify they
+// expand before request building
 // ============================================================================
 
 #[tokio::test]
 #[ignore = "anthropic build_request missing max_tokens"]
-async fn test_anthropic_template_string_expansion() {
+async fn test_anthropic_prompt_helper_expansion() {
     let source = [
         ANTHROPIC_CLIENT,
         r##"
-template_string Greet(name: string) #"Hello, {{ name }}!"#
+function Greet(name: string) -> string {
+    `Hello, ${name}!`
+}
 function F(name: string) -> string {
     client C
-    prompt #"{{ Greet(name) }}"#
+    prompt `${Greet(name)}`
 }
 function get_body() -> string {
-    baml.llm.build_request(C, "F", { "name": "Alice" }).body
+    F$build_request("Alice").body
 }
 "##,
     ]
@@ -925,10 +892,11 @@ class Person {
 }
 function F(p: Person) -> string {
     client C
-    prompt #"{{ p.name }} is {{ p.age }}"#
+    prompt `${p.name} is ${p.age}`
 }
 function get_body() -> string {
-    baml.llm.build_request(C, "F", { "p": { "name": "Bob", "age": 42 } }).body
+    let p = Person { name: "Bob", age: 42 };
+    F$build_request(p).body
 }
 "##,
     ]
@@ -962,17 +930,10 @@ async fn test_anthropic_three_role_conversation() {
         r##"
 function F() -> string {
     client C
-    prompt #"
-        {{ _.role("system") }}
-        You are a helpful assistant.
-        {{ _.role("user") }}
-        What is 2+2?
-        {{ _.role("assistant") }}
-        4
-    "#
+    prompt `${role("system")}You are a helpful assistant.${role("user")}What is 2+2?${role("assistant")}4`
 }
 function get_body() -> string {
-    baml.llm.build_request(C, "F", {}).body
+    F$build_request().body
 }
 "##,
     ]
@@ -1009,23 +970,10 @@ async fn test_anthropic_multi_turn_conversation() {
         r##"
 function F() -> string {
     client C
-    prompt #"
-        {{ _.role("system") }}
-        Be concise.
-        {{ _.role("user") }}
-        Hello
-        {{ _.role("assistant") }}
-        Hi!
-        {{ _.role("user") }}
-        How are you?
-        {{ _.role("assistant") }}
-        Good, thanks!
-        {{ _.role("user") }}
-        Goodbye
-    "#
+    prompt `${role("system")}Be concise.${role("user")}Hello${role("assistant")}Hi!${role("user")}How are you?${role("assistant")}Good, thanks!${role("user")}Goodbye`
 }
 function get_body() -> string {
-    baml.llm.build_request(C, "F", {}).body
+    F$build_request().body
 }
 "##,
     ]
@@ -1068,6 +1016,10 @@ function get_body() -> string {
 
 // ============================================================================
 // Media passed through BAML function args
+//
+// Still on legacy Jinja prompt syntax: the BEP-049 structural assembler
+// renders media interpolations as empty text (`prompt_value_text` in
+// `sys_ops` handles scalars only; media is deferred per its M5d comment).
 // ============================================================================
 
 #[tokio::test]
@@ -1168,17 +1120,10 @@ async fn test_anthropic_multiple_system_messages() {
         r##"
 function F() -> string {
     client C
-    prompt #"
-        {{ _.role("system") }}
-        You are helpful.
-        {{ _.role("system") }}
-        You are concise.
-        {{ _.role("user") }}
-        Hello
-    "#
+    prompt `${role("system")}You are helpful.${role("system")}You are concise.${role("user")}Hello`
 }
 function get_body() -> string {
-    baml.llm.build_request(C, "F", {}).body
+    F$build_request().body
 }
 "##,
     ]
@@ -1222,21 +1167,23 @@ client C {
 "#;
 
 // ============================================================================
-// Template strings
+// Prompt helper functions (template_string replacement)
 // ============================================================================
 
 #[tokio::test]
-async fn test_bedrock_template_string_expansion() {
+async fn test_bedrock_prompt_helper_expansion() {
     let source = [
         BEDROCK_CLIENT,
         r##"
-template_string Greet(name: string) #"Hello, {{ name }}!"#
+function Greet(name: string) -> string {
+    `Hello, ${name}!`
+}
 function F(name: string) -> string {
     client C
-    prompt #"{{ Greet(name) }}"#
+    prompt `${Greet(name)}`
 }
 function get_body() -> string {
-    baml.llm.build_request(C, "F", { "name": "Alice" }).body
+    F$build_request("Alice").body
 }
 "##,
     ]
@@ -1268,10 +1215,11 @@ class Person {
 }
 function F(p: Person) -> string {
     client C
-    prompt #"{{ p.name }} is {{ p.age }}"#
+    prompt `${p.name} is ${p.age}`
 }
 function get_body() -> string {
-    baml.llm.build_request(C, "F", { "p": { "name": "Bob", "age": 42 } }).body
+    let p = Person { name: "Bob", age: 42 };
+    F$build_request(p).body
 }
 "##,
     ]
@@ -1299,15 +1247,10 @@ async fn test_bedrock_system_and_user() {
         r##"
 function F() -> string {
     client C
-    prompt #"
-        {{ _.role("system") }}
-        You are helpful.
-        {{ _.role("user") }}
-        Hi
-    "#
+    prompt `${role("system")}You are helpful.${role("user")}Hi`
 }
 function get_body() -> string {
-    baml.llm.build_request(C, "F", {}).body
+    F$build_request().body
 }
 "##,
     ]
@@ -1336,17 +1279,10 @@ async fn test_bedrock_three_role_conversation() {
         r##"
 function F() -> string {
     client C
-    prompt #"
-        {{ _.role("system") }}
-        You are a helpful assistant.
-        {{ _.role("user") }}
-        What is 2+2?
-        {{ _.role("assistant") }}
-        4
-    "#
+    prompt `${role("system")}You are a helpful assistant.${role("user")}What is 2+2?${role("assistant")}4`
 }
 function get_body() -> string {
-    baml.llm.build_request(C, "F", {}).body
+    F$build_request().body
 }
 "##,
     ]
@@ -1372,23 +1308,10 @@ async fn test_bedrock_multi_turn_conversation() {
         r##"
 function F() -> string {
     client C
-    prompt #"
-        {{ _.role("system") }}
-        Be concise.
-        {{ _.role("user") }}
-        Hello
-        {{ _.role("assistant") }}
-        Hi!
-        {{ _.role("user") }}
-        How are you?
-        {{ _.role("assistant") }}
-        Good, thanks!
-        {{ _.role("user") }}
-        Goodbye
-    "#
+    prompt `${role("system")}Be concise.${role("user")}Hello${role("assistant")}Hi!${role("user")}How are you?${role("assistant")}Good, thanks!${role("user")}Goodbye`
 }
 function get_body() -> string {
-    baml.llm.build_request(C, "F", {}).body
+    F$build_request().body
 }
 "##,
     ]
@@ -1431,13 +1354,10 @@ client C {
 }
 function F() -> string {
     client C
-    prompt #"
-        {{ _.role("user") }}
-        Hi
-    "#
+    prompt `${role("user")}Hi`
 }
 function get_body() -> string {
-    baml.llm.build_request(C, "F", {}).body
+    F$build_request().body
 }
 "##;
 
@@ -1468,13 +1388,10 @@ async fn test_bedrock_user_only_no_system() {
         r##"
 function F() -> string {
     client C
-    prompt #"
-        {{ _.role("user") }}
-        Hello there
-    "#
+    prompt `${role("user")}Hello there`
 }
 function get_body() -> string {
-    baml.llm.build_request(C, "F", {}).body
+    F$build_request().body
 }
 "##,
     ]
@@ -1523,17 +1440,19 @@ macro_rules! gemini_body_tests {
             use super::*;
 
             #[tokio::test]
-            async fn template_string_expansion() {
+            async fn prompt_helper_expansion() {
                 let source = [
                     $client,
                     r##"
-template_string Greet(name: string) #"Hello, {{ name }}!"#
+function Greet(name: string) -> string {
+    `Hello, ${name}!`
+}
 function F(name: string) -> string {
     client C
-    prompt #"{{ Greet(name) }}"#
+    prompt `${Greet(name)}`
 }
 function get_body() -> string {
-    baml.llm.build_request(C, "F", { "name": "Alice" }).body
+    F$build_request("Alice").body
 }
 "##,
                 ]
@@ -1561,10 +1480,11 @@ class Person {
 }
 function F(p: Person) -> string {
     client C
-    prompt #"{{ p.name }} is {{ p.age }}"#
+    prompt `${p.name} is ${p.age}`
 }
 function get_body() -> string {
-    baml.llm.build_request(C, "F", { "p": { "name": "Bob", "age": 42 } }).body
+    let p = Person { name: "Bob", age: 42 };
+    F$build_request(p).body
 }
 "##,
                 ]
@@ -1588,15 +1508,10 @@ function get_body() -> string {
                     r##"
 function F() -> string {
     client C
-    prompt #"
-        {{ _.role("system") }}
-        You are helpful.
-        {{ _.role("user") }}
-        Hi
-    "#
+    prompt `${role("system")}You are helpful.${role("user")}Hi`
 }
 function get_body() -> string {
-    baml.llm.build_request(C, "F", {}).body
+    F$build_request().body
 }
 "##,
                 ]
@@ -1623,17 +1538,10 @@ function get_body() -> string {
                     r##"
 function F() -> string {
     client C
-    prompt #"
-        {{ _.role("system") }}
-        You are a helpful assistant.
-        {{ _.role("user") }}
-        What is 2+2?
-        {{ _.role("assistant") }}
-        4
-    "#
+    prompt `${role("system")}You are a helpful assistant.${role("user")}What is 2+2?${role("assistant")}4`
 }
 function get_body() -> string {
-    baml.llm.build_request(C, "F", {}).body
+    F$build_request().body
 }
 "##,
                 ]
@@ -1661,23 +1569,10 @@ function get_body() -> string {
                     r##"
 function F() -> string {
     client C
-    prompt #"
-        {{ _.role("system") }}
-        Be concise.
-        {{ _.role("user") }}
-        Hello
-        {{ _.role("assistant") }}
-        Hi!
-        {{ _.role("user") }}
-        How are you?
-        {{ _.role("assistant") }}
-        Good, thanks!
-        {{ _.role("user") }}
-        Goodbye
-    "#
+    prompt `${role("system")}Be concise.${role("user")}Hello${role("assistant")}Hi!${role("user")}How are you?${role("assistant")}Good, thanks!${role("user")}Goodbye`
 }
 function get_body() -> string {
-    baml.llm.build_request(C, "F", {}).body
+    F$build_request().body
 }
 "##,
                 ]
@@ -1708,13 +1603,10 @@ function get_body() -> string {
                     r##"
 function F() -> string {
     client C
-    prompt #"
-        {{ _.role("user") }}
-        Hello there
-    "#
+    prompt `${role("user")}Hello there`
 }
 function get_body() -> string {
-    baml.llm.build_request(C, "F", {}).body
+    F$build_request().body
 }
 "##,
                 ]
@@ -1738,15 +1630,10 @@ function get_body() -> string {
                     r##"
 function F() -> string {
     client C
-    prompt #"
-        {{ _.role("user") }}
-        Hi
-        {{ _.role("assistant") }}
-        Hello!
-    "#
+    prompt `${role("user")}Hi${role("assistant")}Hello!`
 }
 function get_body() -> string {
-    baml.llm.build_request(C, "F", {}).body
+    F$build_request().body
 }
 "##,
                 ]
@@ -1792,10 +1679,10 @@ async fn vertex_claude_uses_raw_predict_url() {
         r##"
 function F() -> string {
     client C
-    prompt #"{{ _.role("user") }}Hi"#
+    prompt `${role("user")}Hi`
 }
 function get_url() -> string {
-    baml.llm.build_request(C, "F", {}).url
+    F$build_request().url
 }
 "##,
     ]
@@ -1820,17 +1707,10 @@ async fn vertex_claude_keeps_assistant_role() {
         r##"
 function F() -> string {
     client C
-    prompt #"
-        {{ _.role("user") }}
-        Hi
-        {{ _.role("assistant") }}
-        Hello!
-        {{ _.role("user") }}
-        How are you?
-    "#
+    prompt `${role("user")}Hi${role("assistant")}Hello!${role("user")}How are you?`
 }
 function get_body() -> string {
-    baml.llm.build_request(C, "F", {}).body
+    F$build_request().body
 }
 "##,
     ]
@@ -1859,15 +1739,10 @@ async fn vertex_claude_system_extracted() {
         r##"
 function F() -> string {
     client C
-    prompt #"
-        {{ _.role("system") }}
-        You are helpful.
-        {{ _.role("user") }}
-        Hi
-    "#
+    prompt `${role("system")}You are helpful.${role("user")}Hi`
 }
 function get_body() -> string {
-    baml.llm.build_request(C, "F", {}).body
+    F$build_request().body
 }
 "##,
     ]
@@ -1904,13 +1779,10 @@ client C {
 }
 function F() -> string {
     client C
-    prompt #"
-        {{ _.role("user") }}
-        Hi
-    "#
+    prompt `${role("user")}Hi`
 }
 function get_body() -> string {
-    baml.llm.build_request(C, "F", {}).body
+    F$build_request().body
 }
 "##;
 

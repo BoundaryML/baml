@@ -43,7 +43,7 @@ client<llm> TestClient {
 
 function Summarize(input: string) -> string {
   client TestClient
-  prompt #"{{ input }}"#
+  prompt `${input}`
 }
 
 test BasicTest {

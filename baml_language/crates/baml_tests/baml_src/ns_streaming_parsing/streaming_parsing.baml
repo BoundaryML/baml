@@ -43,12 +43,12 @@ class Doc {
 
 function ExtractDoc(input: string) -> Doc {
     client StreamParseClient
-    prompt #"Say hello to {{ input }}"#
+    prompt `Say hello to ${input}`
 }
 
 function SayHello(input: string) -> string {
     client StreamParseClient
-    prompt #"Say hello to {{ input }}"#
+    prompt `Say hello to ${input}`
 }
 
 // Builds an OpenAI-format SSE body from content chunks plus a finish_reason

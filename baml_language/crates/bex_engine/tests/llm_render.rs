@@ -1,154 +1,108 @@
 //! Integration tests for the LLM `render_prompt` flow.
 //!
 //! These tests verify that:
-//! 1. `get_jinja_template` returns the correct template for LLM functions
-//! 2. `get_client` returns the correct client chain
-//! 3. `render_prompt` correctly renders templates with arguments
+//! 1. backtick `prompt` closures render correctly against a hand-built `Context`
+//!    (variable substitution, chat-role splitting)
+//! 2. the `<Fn>$render_prompt` / `<Fn>$build_request` companions render new-mode
+//!    (backtick) prompts, including `ctx.output_format`
+//! 3. the orchestration entry points fail cleanly without a valid API key
 
 use baml_builtins2::{PromptAst as BuiltinPromptAst, PromptAstSimple};
 use baml_type::TyAttr;
 use bex_engine::{FunctionCallContextBuilder, RuntimeTy};
 use bex_heap::BexExternalValue;
 
+/// A backtick `prompt` closure applied to a hand-built `Context` substitutes
+/// string and int variables; a role-less prompt renders as plain text.
 #[tokio::test]
 async fn test_render_prompt_directly() {
-    use indexmap::IndexMap;
+    use bex_engine::BexEngine;
+    use sys_native::SysOpsExt;
 
-    // Test the Jinja rendering directly
-    let template = "Hello, {{ name }}! You are {{ age }} years old.";
-    let mut args = IndexMap::new();
-    args.insert(
-        "name".to_string(),
-        BexExternalValue::String("Alice".to_string().into()),
+    let source = r##"
+function render_text(name: string, age: int) -> string {
+    let cc = baml.llm.ContextClient { name: "test", provider: "openai", default_role: "user", allowed_roles: ["user", "assistant", "system"] }
+    let ctx = baml.llm.Context { client: cc, tags: {} }
+    let render = prompt`Hello, ${name}! You are ${age} years old.`
+    render(ctx).text()
+}
+"##;
+
+    let snapshot = common::compile_for_engine(source);
+    let engine = std::sync::Arc::new(
+        BexEngine::new(snapshot, sys_native::SysOps::native().into(), Vec::new())
+            .expect("Failed to create engine"),
     );
-    args.insert("age".to_string(), BexExternalValue::Int(30));
 
-    let client =
-        sys_llm::baml_std::PrimitiveClient::new("test".to_string(), "openai".to_string(), {
-            sys_llm::baml_std::PrimitiveClientOptions {
-                model: Some("gpt-4o".to_string()),
-                default_role: Some("user".to_string()),
-                allowed_roles: Some(vec![
-                    "user".to_string(),
-                    "assistant".to_string(),
-                    "system".to_string(),
-                ]),
-                ..Default::default()
-            }
-        })
-        .unwrap();
+    let result = engine
+        .call_function(
+            "render_text",
+            vec![
+                BexExternalValue::String("Alice".to_string().into()),
+                BexExternalValue::Int(30),
+            ],
+            FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+            true,
+        )
+        .await
+        .expect("prompt closure render failed");
 
-    let ctx = sys_llm::RenderContext {
-        client: sys_llm::RenderContextClient {
-            name: client.name.clone(),
-            provider: client.provider.clone(),
-            default_role: client.default_role.clone(),
-            allowed_roles: client.allowed_roles,
-        },
-        output_format: sys_llm::OutputFormatContent::new(RuntimeTy::String {
-            attr: TyAttr::default(),
-        }),
-        tags: IndexMap::new(),
-        enums: std::collections::HashMap::new(),
-    };
-
-    let result = sys_llm::render_prompt(template, &args, &ctx).unwrap();
-
-    match result {
-        BuiltinPromptAst::Simple(s) => {
-            assert_eq!(
-                s,
-                std::sync::Arc::new("Hello, Alice! You are 30 years old.".to_string().into())
-            );
-        }
-        _ => panic!("Expected string result"),
-    }
+    assert_eq!(
+        result,
+        BexExternalValue::String("Hello, Alice! You are 30 years old.".to_string().into())
+    );
 }
 
+/// `${role(...)}` markers split a backtick prompt into chat messages. Fold the
+/// structured `.messages()` back into `role=content;` pairs so the assertion
+/// pins both the split and the substituted content.
 #[tokio::test]
 async fn test_render_prompt_with_chat_roles() {
-    use indexmap::IndexMap;
+    use bex_engine::BexEngine;
+    use sys_native::SysOpsExt;
 
-    let template = r#"
-{{ _.role("system") }}
-You are a helpful assistant.
-{{ _.role("user") }}
-{{ question }}
-"#;
-    let mut args = IndexMap::new();
-    args.insert(
-        "question".to_string(),
-        BexExternalValue::String("What is 2+2?".to_string().into()),
+    let source = r##"
+function render_messages(question: string) -> string {
+    let cc = baml.llm.ContextClient { name: "test", provider: "openai", default_role: "user", allowed_roles: ["user", "assistant", "system"] }
+    let ctx = baml.llm.Context { client: cc, tags: {} }
+    let render = prompt`${role("system")}You are a helpful assistant.${role("user")}${question}`
+    let out = ""
+    for (let m in render(ctx).messages()) {
+        out += m.role + "=" + m.content + ";"
+    }
+    out
+}
+"##;
+
+    let snapshot = common::compile_for_engine(source);
+    let engine = std::sync::Arc::new(
+        BexEngine::new(snapshot, sys_native::SysOps::native().into(), Vec::new())
+            .expect("Failed to create engine"),
     );
 
-    let client =
-        sys_llm::baml_std::PrimitiveClient::new("test".to_string(), "openai".to_string(), {
-            sys_llm::baml_std::PrimitiveClientOptions {
-                model: Some("gpt-4o".to_string()),
-                default_role: Some("user".to_string()),
-                allowed_roles: Some(vec![
-                    "user".to_string(),
-                    "assistant".to_string(),
-                    "system".to_string(),
-                ]),
-                ..Default::default()
-            }
-        })
-        .unwrap();
+    let result = engine
+        .call_function(
+            "render_messages",
+            vec![BexExternalValue::String("What is 2+2?".to_string().into())],
+            FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+            true,
+        )
+        .await
+        .expect("prompt closure render failed");
 
-    let ctx = sys_llm::RenderContext {
-        client: sys_llm::RenderContextClient {
-            name: client.name.clone(),
-            provider: client.provider.clone(),
-            default_role: client.default_role.clone(),
-            allowed_roles: client.allowed_roles,
-        },
-        output_format: sys_llm::OutputFormatContent::new(RuntimeTy::String {
-            attr: TyAttr::default(),
-        }),
-        tags: IndexMap::new(),
-        enums: std::collections::HashMap::new(),
-    };
-
-    let result = sys_llm::render_prompt(template, &args, &ctx).unwrap();
-
-    // Result should be a Vec of messages
-    match result {
-        BuiltinPromptAst::Vec(messages) => {
-            assert_eq!(messages.len(), 2);
-
-            // Check first message (system)
-            match messages[0].as_ref() {
-                BuiltinPromptAst::Message { role, content, .. } => {
-                    assert_eq!(role, "system");
-                    match content.as_ref() {
-                        PromptAstSimple::String(s) => {
-                            assert!(s.contains("helpful assistant"));
-                        }
-                        _ => panic!("Expected string content"),
-                    }
-                }
-                _ => panic!("Expected message"),
-            }
-
-            // Check second message (user)
-            match messages[1].as_ref() {
-                BuiltinPromptAst::Message { role, content, .. } => {
-                    assert_eq!(role, "user");
-                    match content.as_ref() {
-                        PromptAstSimple::String(s) => {
-                            assert!(s.contains("What is 2+2?"));
-                        }
-                        _ => panic!("Expected string content"),
-                    }
-                }
-                _ => panic!("Expected message"),
-            }
-        }
-        _ => panic!("Expected Vec of messages, got {result:?}"),
-    }
+    assert_eq!(
+        result,
+        BexExternalValue::String(
+            "system=You are a helpful assistant.;user=What is 2+2?;"
+                .to_string()
+                .into()
+        )
+    );
 }
 
+/// Enum rendering via `ctx.enums.<Enum>.<Variant>` has no backtick-prompt
+/// equivalent (the new `baml.llm.Context` carries no enums), so this test stays
+/// on the legacy Rust-level `sys_llm::render_prompt` API until one exists.
 #[tokio::test]
 async fn test_render_prompt_with_enums() {
     use indexmap::IndexMap;
@@ -241,7 +195,7 @@ class Person {
 }
 "#,
         "Person",
-        "render_null_as='omit'",
+        r#"render_null_as = "omit""#,
     )
     .await;
 
@@ -259,7 +213,7 @@ class Person {
 ///
 /// This test:
 /// 1. Compiles BAML source with an LLM function
-/// 2. Calls a BAML function that internally calls `baml.llm.render_prompt`
+/// 2. Calls a BAML function that internally calls the `Greet$render_prompt` companion
 /// 3. Verifies the call succeeds (`PromptAst` is an internal type, can't return it directly)
 #[tokio::test]
 async fn test_render_prompt_e2e() {
@@ -276,18 +230,16 @@ client TestClient {
 
 function Greet(name: string) -> string {
     client TestClient
-    prompt #"
-        Hello, {{ name }}!
-    "#
+    prompt `
+        Hello, ${name}!
+    `
 }
 
-// Test wrapper that calls render_prompt and returns something we can check
-// Since PromptAst isn't a user-facing type, we just verify the call succeeds
+// Test wrapper that calls the render_prompt companion and returns something we
+// can check. Since PromptAst isn't a user-facing type, we just verify the call
+// succeeds.
 function test_render() -> int {
-    // Pass an empty map for args - the Greet function expects a 'name' param
-    // but for this test we just want to verify the render_prompt flow works
-    let args = {};
-    let result = baml.llm.render_prompt(TestClient, "Greet", args);
+    let result = Greet$render_prompt("World");
     // If we got here without crashing, the call worked
     42
 }
@@ -326,9 +278,9 @@ async fn test_render_prompt_with_inline_client_shorthand() {
     let source = r##"
 function Greet(name: string) -> string {
     client "openai/gpt-4o-mini"
-    prompt #"
-        Hello, {{ name }}!
-    "#
+    prompt `
+        Hello, ${name}!
+    `
 }
 
 function get_prompt() -> baml.llm.PromptAst {
@@ -382,10 +334,10 @@ client Fast {
 
 function Extract(raw: string) -> C {
     client Fast
-    prompt #"
-        Extract from {{ raw }}.
-        {{ ctx.output_format }}
-    "#
+    prompt `
+        Extract from ${raw}.
+        ${ctx.output_format}
+    `
 }
 
 function get_prompt() -> baml.llm.PromptAst {
@@ -443,10 +395,10 @@ client Fast {
 
 function Extract(raw: string) -> C {
     client Fast
-    prompt #"
-        Extract from {{ raw }}.
-        {{ ctx.output_format }}
-    "#
+    prompt `
+        Extract from ${raw}.
+        ${ctx.output_format}
+    `
 }
 
 function get_request() -> int {
@@ -496,16 +448,15 @@ client TestClient {
 
 function Greet(name: string) -> string {
     client TestClient
-    prompt #"
-        Hello, {{ name }}!
-    "#
+    prompt `
+        Hello, ${name}!
+    `
 }
 
 // Function that returns the PromptAst type - this should work since
 // PromptAst is now a visible builtin type
 function get_prompt() -> baml.llm.PromptAst {
-    let args: map<string, unknown> = { "name": "World" };
-    baml.llm.render_prompt(TestClient, "Greet", args)
+    Greet$render_prompt("World")
 }
 "##;
 
@@ -536,7 +487,7 @@ function get_prompt() -> baml.llm.PromptAst {
                         "Expected class name 'baml.llm.PromptAst', got {class_name}"
                     );
                     assert!(fields.len() == 1, "Expected 1 field, got {}", fields.len());
-                    // The template "Hello, {{ name }}!" with name="World" should render to PromptAst::String
+                    // The template "Hello, ${name}!" with name="World" should render to PromptAst::String
                     // match ast.as_ref() {
                     //     BuiltinPromptAst::Simple(s) => {
                     //         let PromptAstSimple::String(s) = s.as_ref() else {
@@ -560,7 +511,7 @@ function get_prompt() -> baml.llm.PromptAst {
 
 /// Test that `build_request` succeeds and returns an `int` result.
 ///
-/// This test verifies the `baml.llm.build_request` entry point is callable
+/// This test verifies the `Greet$build_request` companion is callable
 /// and the underlying `LlmBuildRequest` `SysOp` is implemented.
 #[tokio::test]
 async fn test_build_request_returns() {
@@ -577,14 +528,13 @@ client TestClient {
 
 function Greet(name: string) -> string {
     client TestClient
-    prompt #"
-        Hello, {{ name }}!
-    "#
+    prompt `
+        Hello, ${name}!
+    `
 }
 
 function test_build_request() -> int {
-    let args: map<string, unknown> = { "name": "World" };
-    let request = baml.llm.build_request(TestClient, "Greet", args);
+    let request = Greet$build_request("World");
     42
 }
 "##;
@@ -621,14 +571,20 @@ client TestClient {
 
 function Greet(name: string) -> string {
     client TestClient
-    prompt #"
-        Hello, {{ name }}!
-    "#
+    prompt `
+        Hello, ${name}!
+    `
 }
 
-function test_call_llm() -> unknown {
-    let args: map<string, unknown> = { "name": "World" };
-    baml.llm.call_llm_function(TestClient, "Greet", args)
+// Returns Greet's concrete type: the closure path renders ${ctx.output_format}
+// context from T, so T must be a data type (the generated companion passes the
+// parent function's return type the same way).
+function test_call_llm() -> string {
+    let name = "World";
+    let args: map<string, unknown> = { "name": name };
+    // New-mode functions render through their prompt closure; pass one
+    // explicitly, the same shape the generated companion body threads through.
+    baml.llm.call_llm_function(TestClient, "Greet", args, prompt_closure = prompt`Hello, ${name}!`)
 }
 "##;
 
@@ -664,9 +620,9 @@ async fn test_call_llm_function_inline_client_shorthand_gets_past_constructor_lo
     let source = r##"
 function Greet(name: string) -> string {
     client "openai/gpt-4o-mini"
-    prompt #"
-        Hello, {{ name }}!
-    "#
+    prompt `
+        Hello, ${name}!
+    `
 }
 "##;
 
@@ -708,9 +664,9 @@ client TestClient {
 
 function Greet(name: string) -> string {
     client TestClient
-    prompt #"
-        Hello, {{ name }}!
-    "#
+    prompt `
+        Hello, ${name}!
+    `
 }
 
 function test_call_llm() -> string {
@@ -757,14 +713,20 @@ client TestClient {
 
 function Greet(name: string) -> map<string, int> {
     client TestClient
-    prompt #"
-        Hello, {{ name }}!
-    "#
+    prompt `
+        Hello, ${name}!
+    `
 }
 
-function test_call_llm() -> unknown {
-    let args: map<string, unknown> = { "name": "World" };
-    baml.llm.call_llm_function(TestClient, "Greet", args)
+// Returns Greet's concrete type: the closure path renders ${ctx.output_format}
+// context from T, so T must be a data type (the generated companion passes the
+// parent function's return type the same way).
+function test_call_llm() -> map<string, int> {
+    let name = "World";
+    let args: map<string, unknown> = { "name": name };
+    // New-mode functions render through their prompt closure; pass one
+    // explicitly, the same shape the generated companion body threads through.
+    baml.llm.call_llm_function(TestClient, "Greet", args, prompt_closure = prompt`Hello, ${name}!`)
 }
 "##;
 
@@ -793,13 +755,13 @@ function test_call_llm() -> unknown {
 }
 
 // ============================================================================
-// Template String Tests
+// Expression functions in prompts (formerly template_string Jinja macros)
 // ============================================================================
 
 /// Build a `BexExternalValue` wrapping a single-message `PromptAst`.
 ///
-/// The engine renders a prompt without explicit `_.role()` calls as a single
-/// `Message` with the client's default role ("system" for openai).
+/// The engine renders a prompt without explicit `${role(...)}` markers as a
+/// single `Message` with the client's default role ("system" for openai).
 fn prompt_ast_message(role: &str, content: &str) -> BexExternalValue {
     use bex_external_types::BexExternalAdt;
     BexExternalValue::Instance {
@@ -817,7 +779,8 @@ fn prompt_ast_message(role: &str, content: &str) -> BexExternalValue {
     }
 }
 
-/// Test that a `template_string` is expanded as a Jinja macro in `render_prompt`.
+/// Test that a regular expression function (the new-mode replacement for
+/// `template_string` Jinja macros) is callable from a backtick prompt.
 #[tokio::test]
 async fn test_template_string_in_prompt() {
     use bex_engine::BexEngine;
@@ -831,18 +794,19 @@ client TestClient {
     }
 }
 
-template_string Greet(name: string) #"Hello, {{ name }}!"#
+function Greet(name: string) -> string {
+    `Hello, ${name}!`
+}
 
 function TestFunc(name: string) -> string {
     client TestClient
-    prompt #"
-        {{ Greet(name) }}
-    "#
+    prompt `
+        ${Greet(name)}
+    `
 }
 
 function get_prompt() -> baml.llm.PromptAst {
-    let args: map<string, unknown> = { "name": "Alice" };
-    baml.llm.render_prompt(TestClient, "TestFunc", args)
+    TestFunc$render_prompt("Alice")
 }
 "##;
 
@@ -860,11 +824,11 @@ function get_prompt() -> baml.llm.PromptAst {
             true,
         )
         .await
-        .expect("failed to render prompt that calls template_string Greet(name)");
+        .expect("failed to render prompt that calls expression function Greet(name)");
     assert_eq!(result, prompt_ast_message("system", "Hello, Alice!"));
 }
 
-/// Test that nested `template_strings` expand correctly.
+/// Test that nested expression-function calls expand correctly.
 #[tokio::test]
 async fn test_nested_template_strings() {
     use bex_engine::BexEngine;
@@ -878,17 +842,20 @@ client TestClient {
     }
 }
 
-template_string Inner() #"INNER"#
-template_string Outer() #"before {{ Inner() }} after"#
+function Inner() -> string {
+    `INNER`
+}
+function Outer() -> string {
+    `before ${Inner()} after`
+}
 
 function TestFunc() -> string {
     client TestClient
-    prompt #"{{ Outer() }}"#
+    prompt `${Outer()}`
 }
 
 function get_prompt() -> baml.llm.PromptAst {
-    let args = {};
-    baml.llm.render_prompt(TestClient, "TestFunc", args)
+    TestFunc$render_prompt()
 }
 "##;
 
@@ -906,11 +873,11 @@ function get_prompt() -> baml.llm.PromptAst {
             true,
         )
         .await
-        .expect("failed to render prompt with nested template_strings Outer() -> Inner()");
+        .expect("failed to render prompt with nested expression functions Outer() -> Inner()");
     assert_eq!(result, prompt_ast_message("system", "before INNER after"));
 }
 
-/// Test a `template_string` with two args, one of which is a class (struct).
+/// Test an expression function with two args, one of which is a class (struct).
 #[tokio::test]
 async fn test_template_string_with_struct_arg() {
     use bex_engine::BexEngine;
@@ -929,18 +896,19 @@ class Person {
     age int
 }
 
-template_string Describe(label: string, person: Person) #"{{ label }}: {{ person.name }} (age {{ person.age }})"#
+function Describe(label: string, person: Person) -> string {
+    `${label}: ${person.name} (age ${person.age})`
+}
 
 function TestFunc(label: string, person: Person) -> string {
     client TestClient
-    prompt #"
-        {{ Describe(label, person) }}
-    "#
+    prompt `
+        ${Describe(label, person)}
+    `
 }
 
 function get_prompt() -> baml.llm.PromptAst {
-    let args: map<string, unknown> = { "label": "User", "person": { "name": "Bob", "age": 42 } };
-    baml.llm.render_prompt(TestClient, "TestFunc", args)
+    TestFunc$render_prompt("User", Person { name: "Bob", age: 42 })
 }
 "##;
 
@@ -958,11 +926,11 @@ function get_prompt() -> baml.llm.PromptAst {
             true,
         )
         .await
-        .expect("failed to render prompt with 2-arg template_string Describe(label, person)");
+        .expect("failed to render prompt with 2-arg expression function Describe(label, person)");
     assert_eq!(result, prompt_ast_message("system", "User: Bob (age 42)"));
 }
 
-/// Test that parameterless `template_strings` work.
+/// Test that parameterless expression functions work.
 #[tokio::test]
 async fn test_parameterless_template_string() {
     use bex_engine::BexEngine;
@@ -976,17 +944,18 @@ client TestClient {
     }
 }
 
-template_string Header() #"=== HEADER ==="#
+function Header() -> string {
+    `=== HEADER ===`
+}
 
 function TestFunc() -> string {
     client TestClient
-    prompt #"{{ Header() }}
-Content here"#
+    prompt `${Header()}
+Content here`
 }
 
 function get_prompt() -> baml.llm.PromptAst {
-    let args = {};
-    baml.llm.render_prompt(TestClient, "TestFunc", args)
+    TestFunc$render_prompt()
 }
 "##;
 
@@ -1004,7 +973,7 @@ function get_prompt() -> baml.llm.PromptAst {
             true,
         )
         .await
-        .expect("failed to render prompt that calls parameterless template_string Header()");
+        .expect("failed to render prompt that calls parameterless expression function Header()");
     assert_eq!(
         result,
         prompt_ast_message("system", "=== HEADER ===\nContent here")
@@ -1015,9 +984,9 @@ function get_prompt() -> baml.llm.PromptAst {
 // Phase 3: json alias LLM-path sentinel
 // ============================================================================
 
-/// Verify that `function F() -> json { ... prompt #"{{ ctx.output_format }}"# }`
-/// renders a prompt containing "Respond with valid JSON." — the static literal
-/// required by BEP-038 Phase 3 — and does NOT contain the union-arm enumeration
+/// Verify that a `function F() -> json` whose prompt renders `${ctx.output_format}`
+/// produces a prompt containing "Respond with valid JSON." - the static literal
+/// required by BEP-038 Phase 3 - and does NOT contain the union-arm enumeration
 /// (`null or bool or int ...`).
 #[tokio::test]
 async fn test_json_return_type_renders_valid_json_literal() {
@@ -1034,15 +1003,15 @@ client TestClient {
 
 function ExtractAny() -> json {
     client TestClient
-    prompt #"
+    prompt `
         Return whatever JSON you like.
 
-        {{ ctx.output_format }}
-    "#
+        ${ctx.output_format}
+    `
 }
 
 function get_prompt() -> baml.llm.PromptAst {
-    baml.llm.render_prompt(TestClient, "ExtractAny", {})
+    ExtractAny$render_prompt()
 }
 "##;
 

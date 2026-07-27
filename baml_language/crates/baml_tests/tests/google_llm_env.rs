@@ -61,7 +61,7 @@ async fn google_and_vertex_env_scenarios() {
         }
         function F1(input: string) -> string {
             client G1
-            prompt #"Say hello to ${input}"#
+            prompt `Say hello to ${input}`
         }
         function main() -> string {
             F1$build_request("world").url
@@ -86,7 +86,7 @@ async fn google_and_vertex_env_scenarios() {
         }
         function F2(input: string) -> string {
             client G2
-            prompt #"Say hello to ${input}"#
+            prompt `Say hello to ${input}`
         }
         function main() -> string {
             F2$build_request("world").url
@@ -127,7 +127,7 @@ async fn google_and_vertex_env_scenarios() {
         }
         function F3(input: string) -> string {
             client G3
-            prompt #"Say hello to ${input}"#
+            prompt `Say hello to ${input}`
         }
         function main() -> string {
             F3$build_request("world").url
@@ -160,7 +160,7 @@ async fn google_and_vertex_env_scenarios() {
         }
         function F4(input: string) -> string {
             client V1
-            prompt #"Say hello to ${input}"#
+            prompt `Say hello to ${input}`
         }
         function main() -> string {
             F4$build_request("world").url
@@ -212,7 +212,7 @@ async fn google_and_vertex_env_scenarios() {
         }
         function F5(input: string) -> string {
             client G4
-            prompt #"Say hello to ${input}"#
+            prompt `Say hello to ${input}`
         }
         function main() -> string {
             F5$build_request("world").url

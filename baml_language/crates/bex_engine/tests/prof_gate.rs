@@ -110,7 +110,7 @@ fn llm_function_capture_defaults_auto_inputs_outputs_errors() {
 
         function capture_phase6_llm(name: string) -> string {
             client C
-            prompt #"Hello, {{ name }}"#
+            prompt `Hello, ${name}`
         }
 
         function capture_phase6_plain(name: string) -> string {

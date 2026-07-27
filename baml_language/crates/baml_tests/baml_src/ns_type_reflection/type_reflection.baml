@@ -24,12 +24,12 @@ class Bar { y string }
 
 function GetFoo() -> Foo {
     client TestClient
-    prompt #"hi"#
+    prompt `hi`
 }
 
 function GetBar() -> Bar {
     client TestClient
-    prompt #"hi"#
+    prompt `hi`
 }
 
 // ─── Equality / inequality tests ─────────────────────────────────────────────

@@ -858,7 +858,7 @@ async fn collect_tests_testset_with_function_call_and_field_access() {
 
         function ClassifySentiment(text: string) -> Sentiment {
             client GPT4o
-            prompt #"classify {{ text }}"#
+            prompt `classify ${text}`
         }
 
         client<llm> GPT4o {
@@ -916,13 +916,13 @@ async fn collect_tests_user_exact_file_full_lifecycle() {
 
         function ClassifySentiment(text: string) -> Sentiment {
             client GPT4o
-            prompt #"
-                {{ _.role('system') }}
+            prompt `
+                ${role("system")}
                 Classify the sentiment of the following text.
-                {{ ctx.output_format }}
-                {{ _.role('assistant') }}
-                Text: {{ text }}
-            "#
+                ${ctx.output_format}
+                ${role("assistant")}
+                Text: ${text}
+            `
         }
 
         testset "test" {
@@ -968,12 +968,12 @@ async fn collect_tests_user_exact_file_full_lifecycle() {
 
         function ClassifySentiment2(text: string) -> string {
             client GPT4o
-            prompt #"classify {{ text }}"#
+            prompt `classify ${text}`
         }
 
         function GenerateTests(count: int, topic: string) -> string[] {
             client GPT4o
-            prompt #"generate {{ count }} tests about {{ topic }}"#
+            prompt `generate ${count} tests about ${topic}`
         }
     "##;
 
