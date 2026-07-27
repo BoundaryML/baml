@@ -14,10 +14,12 @@ WRAPPER_VARIANTS = frozenset({"self-update", "no-self-update"})
 
 
 def fail(message: str) -> None:
+    """Exit with a platform contract validation error."""
     raise SystemExit(message)
 
 
 def require_string(value: Any, field: str) -> str:
+    """Require a nonempty string field in the platform contract."""
     if not isinstance(value, str) or not value:
         fail(f"{field} must be a non-empty string")
     return value
@@ -25,6 +27,8 @@ def require_string(value: Any, field: str) -> str:
 
 @dataclass(frozen=True)
 class WrapperTarget:
+    """Validated wrapper release metadata for one Rust target triple."""
+
     triple: str
     os: str
     arch: str
@@ -35,18 +39,22 @@ class WrapperTarget:
 
     @property
     def executable_suffix(self) -> str:
+        """Return the target platform's executable suffix."""
         return ".exe" if self.os == "windows" else ""
 
     def supports(self, variant: str) -> bool:
+        """Return whether this target publishes the requested wrapper variant."""
         return variant in self.variants
 
     def asset_name(self, version: str, variant: str) -> str:
+        """Return the canonical release asset name for a supported variant."""
         if not self.supports(variant):
             fail(f"{self.triple}: wrapper variant {variant!r} is not supported")
         infix = "" if variant == "self-update" else f"-{variant}"
         return f"baml-wrapper{infix}-{version}-{self.triple}{self.archive_suffix}"
 
     def matrix_entry(self) -> dict[str, Any]:
+        """Return this target's GitHub Actions wrapper matrix entry."""
         return {
             "target": self.triple,
             "os": self.runner,
@@ -60,6 +68,7 @@ class WrapperTarget:
 def load_wrapper_targets(
     platforms: Path = DEFAULT_PLATFORMS,
 ) -> tuple[WrapperTarget, ...]:
+    """Load and validate wrapper targets from the shared platform contract."""
     try:
         contract = json.loads(platforms.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
@@ -146,6 +155,7 @@ def load_wrapper_targets(
 def expected_wrapper_assets(
     version: str, platforms: Path = DEFAULT_PLATFORMS
 ) -> tuple[str, ...]:
+    """Return every wrapper archive required for a release version."""
     return tuple(
         target.asset_name(version, variant)
         for target in load_wrapper_targets(platforms)
@@ -156,6 +166,7 @@ def expected_wrapper_assets(
 def verify_wrapper_artifacts(
     wrapper_dir: Path, version: str, platforms: Path = DEFAULT_PLATFORMS
 ) -> None:
+    """Require the directory to contain exactly the contracted wrapper archives."""
     if not wrapper_dir.is_dir():
         fail(f"wrapper artifact directory does not exist: {wrapper_dir}")
     expected = set(expected_wrapper_assets(version, platforms))
