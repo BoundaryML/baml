@@ -58,11 +58,12 @@ pub struct RuntimeGenericLayout {
 }
 
 impl RuntimeGenericLayout {
-    pub fn new(params: impl IntoIterator<Item = ParamTy>) -> Self {
+    pub fn new(params: &[ParamTy]) -> Self {
         Self {
             params: params
-                .into_iter()
+                .iter()
                 .filter(|param| !is_synthetic_effect_param(param.name()))
+                .cloned()
                 .collect(),
         }
     }
@@ -81,7 +82,7 @@ impl RuntimeGenericLayout {
     pub fn slot_by_name(&self, name: &Name) -> Option<u32> {
         self.params
             .iter()
-            .position(|param| param.name() == name)
+            .rposition(|param| param.name() == name)
             .map(Self::slot_index)
     }
 
@@ -102,8 +103,10 @@ mod tests {
     fn frame_index_distinguishes_same_named_parameters() {
         let outer = ParamTy::new(0, Name::new("E"));
         let inner = ParamTy::new(1, Name::new("E"));
+        let layout = RuntimeGenericLayout::new(&[outer.clone(), inner.clone()]);
 
         assert_ne!(outer, inner);
+        assert_eq!(layout.slot_by_name(&Name::new("E")), Some(1));
     }
 
     #[test]
@@ -111,7 +114,7 @@ mod tests {
         let first = ParamTy::new(0, Name::new("T"));
         let effect = ParamTy::new(1, Name::new("__effect_param_0"));
         let last = ParamTy::new(2, Name::new("U"));
-        let layout = RuntimeGenericLayout::new([first.clone(), effect.clone(), last.clone()]);
+        let layout = RuntimeGenericLayout::new(&[first.clone(), effect.clone(), last.clone()]);
 
         assert_eq!(layout.params(), &[first.clone(), last.clone()]);
         assert_eq!(layout.slot(&first), Some(0));

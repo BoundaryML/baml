@@ -102,6 +102,12 @@ use crate::{
 /// Max call stack size.
 pub const MAX_FRAMES: usize = 256;
 
+#[derive(Clone, Copy)]
+struct CallOptions<'a> {
+    runtime_id: Option<Value>,
+    type_args: &'a [baml_type::RealizedTy],
+}
+
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct VmCaptureMask {
     pub inputs: bool,
@@ -1290,6 +1296,51 @@ impl BexVm {
     /// any call dispatch context.
     pub fn current_call_type_args(&self) -> &[baml_type::RealizedTy] {
         &self.pending_call_type_args
+    }
+
+    fn take_type_args(
+        &mut self,
+        start: usize,
+        count: usize,
+    ) -> Result<Vec<baml_type::RealizedTy>, VmError> {
+        let end = start
+            .checked_add(count)
+            .filter(|end| *end <= self.stack.len())
+            .ok_or(VmInternalError::NotEnoughItemsOnStack(count))?;
+        let mut type_args = Vec::with_capacity(count);
+        for slot in start..end {
+            let value = self.stack[StackIndex::from_raw(slot)];
+            let ptr = self.as_object_ptr(value, ObjectType::Type)?;
+            let Object::Type(ty) = self.get_object(ptr) else {
+                unreachable!("as_object_ptr guarantees Type variant");
+            };
+            type_args.push(*ty.clone());
+        }
+        drop(
+            self.stack
+                .drain(StackIndex::from_raw(start)..StackIndex::from_raw(end)),
+        );
+        Ok(type_args)
+    }
+
+    fn take_type_args_below_values(
+        &mut self,
+        type_arg_count: usize,
+        value_count: usize,
+    ) -> Result<Vec<baml_type::RealizedTy>, VmError> {
+        let input_count = type_arg_count
+            .checked_add(value_count)
+            .expect("VM operand count fits in usize");
+        let start = self
+            .stack
+            .len()
+            .checked_sub(input_count)
+            .ok_or(VmInternalError::NotEnoughItemsOnStack(input_count))?;
+        self.take_type_args(start, type_arg_count)
+    }
+
+    fn pop_type_args(&mut self, count: usize) -> Result<Vec<baml_type::RealizedTy>, VmError> {
+        self.take_type_args_below_values(count, 0)
     }
 
     pub fn set_value_capture_auto_enabled(&mut self, enabled: bool) {
@@ -4665,37 +4716,17 @@ impl BexVm {
                         let cb_locals = StackIndex::from_raw(self.stack.len());
                         self.stack.extend(callback_args);
 
-                        // Mirror the Call-instruction's type-arg plumbing
-                        // (see vm.rs:3757) so a native helper that yields with
-                        // explicit `type_args` (e.g. `baml.json.from_json`
-                        // dispatching a generic class' `from_json`) seeds the
-                        // callee's frame correctly.  Save/restore around the
-                        // dispatch matches the Call-instruction handler.
-                        let prev_pending = std::mem::replace(
-                            &mut self.pending_call_type_args,
-                            callback_type_args.clone(),
-                        );
-                        let frames_before = self.frames.len();
-
-                        let result = self.execute_call_from_locals_offset(
+                        let result = self.execute_call_from_locals_offset_with_type_args(
                             real_callee,
                             cb_locals,
                             arg_count,
-                            None,
+                            CallOptions {
+                                runtime_id: None,
+                                type_args: &callback_type_args,
+                            },
                             frame_idx,
                             function,
                         );
-
-                        self.pending_call_type_args = prev_pending;
-
-                        // Append explicit type-args to the newly-pushed
-                        // bytecode frame's `type_args` (after class-args from
-                        // BoundMethod / Closure seeding).
-                        if !callback_type_args.is_empty() && self.frames.len() > frames_before {
-                            if let Some(Frame::Bytecode(bf)) = self.frames.get_mut(*frame_idx) {
-                                bf.type_args.extend(callback_type_args);
-                            }
-                        }
 
                         // Update *frame_idx to point at the new topmost frame.
                         // Required so the caller's tight inner-dispatch loop
@@ -4847,6 +4878,36 @@ impl BexVm {
         }
     }
 
+    fn execute_call_from_locals_offset_with_type_args(
+        &mut self,
+        callee_ptr: HeapPtr,
+        locals_offset: StackIndex,
+        arg_count: usize,
+        options: CallOptions<'_>,
+        frame_idx: &mut usize,
+        function: &mut &'static Function,
+    ) -> Result<Option<VmExecState>, VmError> {
+        let previous_type_args =
+            std::mem::replace(&mut self.pending_call_type_args, options.type_args.to_vec());
+        let frames_before = self.frames.len();
+        let result = self.execute_call_from_locals_offset(
+            callee_ptr,
+            locals_offset,
+            arg_count,
+            options.runtime_id,
+            frame_idx,
+            function,
+        );
+        self.pending_call_type_args = previous_type_args;
+        if !options.type_args.is_empty()
+            && self.frames.len() > frames_before
+            && let Some(Frame::Bytecode(frame)) = self.frames.get_mut(*frame_idx)
+        {
+            frame.type_args.extend_from_slice(options.type_args);
+        }
+        result
+    }
+
     fn init_spread(
         &mut self,
         dest_value: Value,
@@ -4936,16 +4997,7 @@ impl BexVm {
             .checked_sub(total_inputs)
             .ok_or(VmInternalError::NotEnoughItemsOnStack(total_inputs))?;
 
-        let mut class_type_args = Vec::with_capacity(ntypeargs);
-        for offset in 0..ntypeargs {
-            let slot = base + field_value_count + offset;
-            let value = self.stack[StackIndex::from_raw(slot)];
-            let ptr = self.as_object_ptr(value, ObjectType::Type)?;
-            let Object::Type(ty) = self.get_object(ptr) else {
-                unreachable!("as_object_ptr guarantees Type variant");
-            };
-            class_type_args.push(*ty.clone());
-        }
+        let class_type_args = self.take_type_args(base + field_value_count, ntypeargs)?;
 
         let fields = if field_value_count == class_field_count
             && plan
@@ -4955,14 +5007,9 @@ impl BexVm {
                 .enumerate()
                 .all(|(idx, field_idx)| idx == field_idx)
         {
-            let fields = self
-                .stack
+            self.stack
                 .drain(StackIndex::from_raw(base)..StackIndex::from_raw(base + field_value_count))
-                .collect();
-            if ntypeargs > 0 {
-                drop(self.stack.drain(StackIndex::from_raw(base)..));
-            }
-            fields
+                .collect()
         } else {
             let mut fields = vec![Value::NULL; class_field_count];
             let mut inputs = self.stack.drain(StackIndex::from_raw(base)..);
@@ -5435,30 +5482,17 @@ impl BexVm {
                         let cb_locals = StackIndex::from_raw(self.stack.len());
                         self.stack.extend(callback_args);
 
-                        // Mirror the Call-instruction's type-arg plumbing for
-                        // continuation-driven YieldToCall.
-                        let prev_pending = std::mem::replace(
-                            &mut self.pending_call_type_args,
-                            callback_type_args.clone(),
-                        );
-                        let frames_before = self.frames.len();
-
-                        let ecflo_outcome = self.execute_call_from_locals_offset(
+                        let ecflo_outcome = self.execute_call_from_locals_offset_with_type_args(
                             real_callee,
                             cb_locals,
                             arg_count,
-                            None,
+                            CallOptions {
+                                runtime_id: None,
+                                type_args: &callback_type_args,
+                            },
                             &mut frame_idx,
                             &mut function,
                         );
-
-                        self.pending_call_type_args = prev_pending;
-
-                        if !callback_type_args.is_empty() && self.frames.len() > frames_before {
-                            if let Some(Frame::Bytecode(bf)) = self.frames.get_mut(frame_idx) {
-                                bf.type_args.extend(callback_type_args);
-                            }
-                        }
 
                         let ecflo_result = match ecflo_outcome {
                             Ok(result) => result,
@@ -5977,30 +6011,7 @@ impl BexVm {
                     let ntypeargs = { read_u16_unchecked(code, pc) } as usize;
                     let class_ptr = self.idx_to_ptr(ObjectIndex::from_raw(raw as usize));
 
-                    // Pop class-level type args from the stack (sitting below any
-                    // field init instructions that follow).
-                    let class_type_args: Vec<baml_type::RealizedTy> = if ntypeargs > 0 {
-                        let base = self
-                            .stack
-                            .len()
-                            .checked_sub(ntypeargs)
-                            .ok_or(VmInternalError::NotEnoughItemsOnStack(ntypeargs))?;
-                        let mut collected = Vec::with_capacity(ntypeargs);
-                        for slot in base..(base + ntypeargs) {
-                            let v = self.stack[StackIndex::from_raw(slot)];
-                            let ptr = self.as_object_ptr(v, ObjectType::Type)?;
-                            let Object::Type(ty) = self.get_object(ptr) else {
-                                unreachable!("as_object_ptr guarantees Type variant");
-                            };
-                            collected.push(*ty.clone());
-                        }
-                        for _ in 0..ntypeargs {
-                            self.stack.remove(base);
-                        }
-                        collected
-                    } else {
-                        vec![]
-                    };
+                    let class_type_args = self.pop_type_args(ntypeargs)?;
 
                     let Object::Class(class) = self.get_object(class_ptr) else {
                         return Err(VmInternalError::TypeError {
@@ -6152,31 +6163,7 @@ impl BexVm {
                     let callee_value = self.globals.get(self.proof(), callee_global);
                     let (callee_ptr, arg_count) = self.resolve_callable_target(callee_value)?;
 
-                    // Pop `ntypeargs` Object::Type values from the stack into a Vec<RuntimeTy>.
-                    // These sit below the regular value args on the stack.
-                    let type_args: Vec<baml_type::RealizedTy> = if ntypeargs > 0 {
-                        let total_needed = arg_count + ntypeargs;
-                        let base = self
-                            .stack
-                            .len()
-                            .checked_sub(total_needed)
-                            .ok_or(VmInternalError::NotEnoughItemsOnStack(total_needed))?;
-                        let mut collected = Vec::with_capacity(ntypeargs);
-                        for slot in base..(base + ntypeargs) {
-                            let v = self.stack[StackIndex::from_raw(slot)];
-                            let ptr = self.as_object_ptr(v, ObjectType::Type)?;
-                            let Object::Type(ty) = self.get_object(ptr) else {
-                                unreachable!("as_object_ptr guarantees Type variant");
-                            };
-                            collected.push(*ty.clone());
-                        }
-                        for _ in 0..ntypeargs {
-                            self.stack.remove(base);
-                        }
-                        collected
-                    } else {
-                        vec![]
-                    };
+                    let type_args = self.take_type_args_below_values(ntypeargs, arg_count)?;
 
                     let args_offset = self
                         .stack
@@ -6191,27 +6178,17 @@ impl BexVm {
                     };
                     bf.instruction_ptr = *pc;
 
-                    let frames_before = self.frames.len();
-                    // Mirror the native YieldToCall plumbing: stash type_args
-                    // into `pending_call_type_args` so a native callee can
-                    // read them via `current_call_type_args()` (e.g.
-                    // `baml.json.from_json<T>` reads its `T` from there).
-                    let prev_pending =
-                        std::mem::replace(&mut self.pending_call_type_args, type_args.clone());
-                    let result = self.execute_call_from_locals_offset(
+                    let result = self.execute_call_from_locals_offset_with_type_args(
                         callee_ptr,
                         locals_offset,
                         arg_count,
-                        runtime_id,
+                        CallOptions {
+                            runtime_id,
+                            type_args: &type_args,
+                        },
                         frame_idx,
                         function,
                     );
-                    self.pending_call_type_args = prev_pending;
-                    if !type_args.is_empty() && self.frames.len() > frames_before {
-                        if let Some(Frame::Bytecode(bf)) = self.frames.get_mut(*frame_idx) {
-                            bf.type_args.extend(type_args);
-                        }
-                    }
                     return result;
                 }
 
@@ -6256,32 +6233,7 @@ impl BexVm {
                         }
                     };
 
-                    // Extract the `ntypeargs` method-level type args (sitting below
-                    // the value args, as in `Call`) and remove them, leaving the
-                    // `nargs` value args (receiver first).
-                    let method_type_args: Vec<baml_type::RealizedTy> = if ntypeargs > 0 {
-                        let total_needed = nargs + ntypeargs;
-                        let base = self
-                            .stack
-                            .len()
-                            .checked_sub(total_needed)
-                            .ok_or(VmInternalError::NotEnoughItemsOnStack(total_needed))?;
-                        let mut collected = Vec::with_capacity(ntypeargs);
-                        for slot in base..(base + ntypeargs) {
-                            let v = self.stack[StackIndex::from_raw(slot)];
-                            let ptr = self.as_object_ptr(v, ObjectType::Type)?;
-                            let Object::Type(ty) = self.get_object(ptr) else {
-                                unreachable!("as_object_ptr guarantees Type variant");
-                            };
-                            collected.push(*ty.clone());
-                        }
-                        for _ in 0..ntypeargs {
-                            self.stack.remove(base);
-                        }
-                        collected
-                    } else {
-                        vec![]
-                    };
+                    let method_type_args = self.take_type_args_below_values(ntypeargs, nargs)?;
 
                     let args_offset = self
                         .stack
@@ -6337,27 +6289,17 @@ impl BexVm {
                     };
                     bf.instruction_ptr = *pc;
 
-                    // Seed the callee frame's `type_args` with the impl's type args
-                    // (e.g. `Box<int>` → `[int]`), exactly as `Call` does. Stash them
-                    // into `pending_call_type_args` first so a native callee can read
-                    // them via `current_call_type_args()`.
-                    let frames_before = self.frames.len();
-                    let prev_pending =
-                        std::mem::replace(&mut self.pending_call_type_args, type_args.clone());
-                    let result = self.execute_call_from_locals_offset(
+                    let result = self.execute_call_from_locals_offset_with_type_args(
                         callee_ptr,
                         locals_offset,
                         nargs,
-                        runtime_id,
+                        CallOptions {
+                            runtime_id,
+                            type_args: &type_args,
+                        },
                         frame_idx,
                         function,
                     );
-                    self.pending_call_type_args = prev_pending;
-                    if !type_args.is_empty() && self.frames.len() > frames_before {
-                        if let Some(Frame::Bytecode(bf)) = self.frames.get_mut(*frame_idx) {
-                            bf.type_args.extend(type_args);
-                        }
-                    }
                     return result;
                 }
 
@@ -6868,22 +6810,7 @@ impl BexVm {
                     }
                     captures.reverse();
 
-                    // Pop type args (pushed before the captures).
-                    let captured_type_args: Vec<baml_type::RealizedTy> = if ntypeargs > 0 {
-                        let mut type_args = Vec::with_capacity(ntypeargs);
-                        for _ in 0..ntypeargs {
-                            let v = self.stack.ensure_pop();
-                            let ptr = self.as_object_ptr(v, ObjectType::Type)?;
-                            let Object::Type(ty) = self.get_object(ptr) else {
-                                unreachable!("as_object_ptr guarantees Type variant");
-                            };
-                            type_args.push(*ty.clone());
-                        }
-                        type_args.reverse();
-                        type_args
-                    } else {
-                        vec![]
-                    };
+                    let captured_type_args = self.pop_type_args(ntypeargs)?;
 
                     let function_ptr = self.idx_to_ptr(ObjectIndex::from_raw(obj_idx_raw));
                     let closure = Object::Closure(Closure {
@@ -6991,17 +6918,7 @@ impl BexVm {
                     // The method-level type args (a generic interface method's own
                     // generics, specialized at the reference site) sit below the
                     // interface type; they append to the resolved impl frame.
-                    let mut method_type_args: Vec<baml_type::RealizedTy> =
-                        Vec::with_capacity(ntypeargs);
-                    for _ in 0..ntypeargs {
-                        let v = self.stack.ensure_pop();
-                        let ptr = self.as_object_ptr(v, ObjectType::Type)?;
-                        let Object::Type(ty) = self.get_object(ptr) else {
-                            unreachable!("as_object_ptr guarantees Type variant");
-                        };
-                        method_type_args.push(*ty.clone());
-                    }
-                    method_type_args.reverse();
+                    let method_type_args = self.pop_type_args(ntypeargs)?;
                     let receiver = self.stack.ensure_pop();
                     // `Self` is the receiver value's realized concrete type.
                     let self_ty = baml_type::RealizedTy::from(
@@ -7042,18 +6959,7 @@ impl BexVm {
                     let raw = { read_u32_unchecked(code, pc) };
                     let function = bex_vm_types::GlobalIndex::from_raw(raw as usize);
                     let ntypeargs = { read_u16_unchecked(code, pc) as usize };
-                    // Pop the `ntypeargs` `Object::Type` values (resolved against
-                    // the current frame by the preceding LoadType instructions).
-                    let mut type_args: Vec<baml_type::RealizedTy> = Vec::with_capacity(ntypeargs);
-                    for _ in 0..ntypeargs {
-                        let v = self.stack.ensure_pop();
-                        let ptr = self.as_object_ptr(v, ObjectType::Type)?;
-                        let Object::Type(ty) = self.get_object(ptr) else {
-                            unreachable!("as_object_ptr guarantees Type variant");
-                        };
-                        type_args.push(*ty.clone());
-                    }
-                    type_args.reverse();
+                    let type_args = self.pop_type_args(ntypeargs)?;
                     let gf = Object::GenericFunction(bex_vm_types::GenericFunction {
                         function,
                         type_args: type_args.into_boxed_slice(),
@@ -7073,16 +6979,7 @@ impl BexVm {
                     // The callable value was pushed last (top of stack); the
                     // resolved `Object::Type` args sit beneath it.
                     let callable = self.stack.ensure_pop();
-                    let mut type_args: Vec<baml_type::RealizedTy> = Vec::with_capacity(ntypeargs);
-                    for _ in 0..ntypeargs {
-                        let v = self.stack.ensure_pop();
-                        let ptr = self.as_object_ptr(v, ObjectType::Type)?;
-                        let Object::Type(ty) = self.get_object(ptr) else {
-                            unreachable!("as_object_ptr guarantees Type variant");
-                        };
-                        type_args.push(*ty.clone());
-                    }
-                    type_args.reverse();
+                    let type_args = self.pop_type_args(ntypeargs)?;
                     // Resolve the callable to its inner Function pointer (and any
                     // captures, if it is already a closure).
                     let callable_ptr =

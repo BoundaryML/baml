@@ -2799,18 +2799,18 @@ impl<'db> TypeInferenceBuilder<'db> {
         })
     }
 
-    fn callee_frame_generic_params(
+    fn callee_runtime_generic_layout(
         &self,
         func_loc: baml_compiler2_hir::loc::FunctionLoc<'db>,
-    ) -> (Vec<crate::ty::ParamTy>, Vec<crate::ty::ParamTy>) {
-        let db = self.context.db();
-        let env = crate::generic_env::function_generic_env(db, func_loc);
-        let owner_params = env
-            .parent()
-            .map(|parent| parent.params().to_vec())
-            .unwrap_or_default();
-        let fn_params = env.own_params().to_vec();
-        (owner_params, fn_params)
+        include_owner: bool,
+    ) -> crate::ty::RuntimeGenericLayout {
+        let env = crate::generic_env::function_generic_env(self.context.db(), func_loc);
+        let params = if include_owner {
+            env.params()
+        } else {
+            env.own_params()
+        };
+        crate::ty::RuntimeGenericLayout::new(params)
     }
 
     fn runtime_generic_layout_for_call(
@@ -2820,8 +2820,8 @@ impl<'db> TypeInferenceBuilder<'db> {
         _is_method_call: bool,
         is_value_call: bool,
     ) -> crate::ty::RuntimeGenericLayout {
-        let params = if is_value_call {
-            callee_generic_params.to_vec()
+        if is_value_call {
+            crate::ty::RuntimeGenericLayout::new(callee_generic_params)
         } else if let Some(resolution) = self.callee_member_resolution(callee_id) {
             // Interface methods carry no callee-frame `func_loc`; their declared generic params
             // are recorded in the `interface_method_generic_params` side table during interface
@@ -2829,28 +2829,26 @@ impl<'db> TypeInferenceBuilder<'db> {
             match resolution {
                 MemberResolution::Free { func_loc }
                 | MemberResolution::UnboundMethod { func_loc, .. } => {
-                    let (owner_params, fn_params) = self.callee_frame_generic_params(func_loc);
-                    owner_params.into_iter().chain(fn_params).collect()
+                    self.callee_runtime_generic_layout(func_loc, true)
                 }
                 MemberResolution::BoundMethod { func_loc, .. } => {
-                    let (_, fn_params) = self.callee_frame_generic_params(func_loc);
-                    fn_params
+                    self.callee_runtime_generic_layout(func_loc, false)
                 }
                 MemberResolution::InterfaceVirtualMethod { .. }
                 | MemberResolution::InterfaceConcreteMethod { .. } => self
                     .interface_method_generic_params
                     .get(&callee_id)
-                    .map(|(_, params, _)| params.clone())
-                    .unwrap_or_else(|| callee_generic_params.to_vec()),
+                    .map(|(_, params, _)| crate::ty::RuntimeGenericLayout::new(params))
+                    .unwrap_or_else(|| crate::ty::RuntimeGenericLayout::new(callee_generic_params)),
                 MemberResolution::Field { .. }
                 | MemberResolution::Variant { .. }
-                | MemberResolution::InterfaceVirtualField { .. } => callee_generic_params.to_vec(),
+                | MemberResolution::InterfaceVirtualField { .. } => {
+                    crate::ty::RuntimeGenericLayout::new(callee_generic_params)
+                }
             }
         } else {
-            callee_generic_params.to_vec()
-        };
-
-        crate::ty::RuntimeGenericLayout::new(params)
+            crate::ty::RuntimeGenericLayout::new(callee_generic_params)
+        }
     }
 
     fn record_call_type_args(&mut self, expr_id: ExprId, type_args: Vec<Ty>) {

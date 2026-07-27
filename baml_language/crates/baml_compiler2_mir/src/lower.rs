@@ -977,7 +977,7 @@ pub fn tir2_to_template(
     let ty = baml_compiler2_tir::generics::erase_typevars_matching(ty, &|param| {
         baml_compiler2_tir::ty::is_synthetic_effect_param(param.name())
     });
-    let generic_layout = RuntimeGenericLayout::new(generic_params.iter().cloned());
+    let generic_layout = RuntimeGenericLayout::new(generic_params);
     lower_tir_template(&ty, resolved, &generic_layout, TemplateMode::Value)
         .unwrap_or_else(|| unreachable!("value template lowering is infallible"))
 }
@@ -1001,7 +1001,7 @@ fn tir2_to_pattern_template(
     resolved: &ResolvedAliases,
     generic_params: &[ParamTy],
 ) -> Option<TyTemplate> {
-    let generic_layout = RuntimeGenericLayout::new(generic_params.iter().cloned());
+    let generic_layout = RuntimeGenericLayout::new(generic_params);
     lower_tir_template(ty, resolved, &generic_layout, TemplateMode::Pattern)
 }
 
@@ -9256,7 +9256,7 @@ impl LoweringContext<'_> {
         if segments.len() != 1 || !generic_args.is_empty() || !associated_type_bindings.is_empty() {
             return None;
         }
-        RuntimeGenericLayout::new(generic_params.iter().cloned())
+        RuntimeGenericLayout::new(generic_params)
             .slot_by_name(&segments[0])
             .map(TyTemplate::TypeArgRef)
     }
@@ -9297,7 +9297,7 @@ impl LoweringContext<'_> {
     }
 
     fn enclosing_runtime_type_arg_templates(&self) -> Vec<TyTemplate> {
-        RuntimeGenericLayout::new(self.enclosing_generic_params())
+        RuntimeGenericLayout::new(&self.enclosing_generic_params())
             .slots()
             .map(TyTemplate::TypeArgRef)
             .collect()
