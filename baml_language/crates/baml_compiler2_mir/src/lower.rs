@@ -2,7 +2,7 @@ use std::collections::{HashMap, HashSet};
 
 use baml_base::{Name, TypePath};
 use baml_type::{
-    RealizedTy, ResolvedAliases, RuntimeTy, TyAttr, TyTemplate, TypeName,
+    PrimitiveType, RealizedTy, ResolvedAliases, RuntimeTy, TyAttr, TyTemplate, TypeName,
     normalize::TypeContext as _,
 };
 use indexmap::IndexMap;
@@ -6929,36 +6929,29 @@ impl LoweringContext<'_> {
     /// would let emit pick a single-kind opcode for a value of the other kind —
     /// UB in the specialized handlers — so it goes through the `__union_*`
     /// interface driver, as does anything else (a user type, or a union /
-    /// existential / type variable involving one). Must stay aligned with TIR's
-    /// `infer_arithmetic` union rule, which types those operands via the
-    /// interface path.
+    /// existential / type variable involving one). TIR has already validated
+    /// the operation through the interface registry; this only chooses the
+    /// lowering route.
     fn arith_primitive(ty: &RuntimeTy, include_string: bool) -> bool {
-        use baml_base::Literal;
         /// The primitive kind of a non-union member, literal widened to base.
-        /// The builtin wrapper classes (`baml.Float` …) count as their
+        /// The builtin wrapper classes (`baml.Float`, etc.) count as their
         /// primitive — `self` inside their method bodies is class-typed but
-        /// primitive-valued (mirrors TIR's `infer_arithmetic`).
-        fn kind(ty: &RuntimeTy, include_string: bool) -> Option<u8> {
-            match ty {
-                RuntimeTy::Int { .. } | RuntimeTy::Literal(Literal::Int(_), _, _) => Some(0),
-                RuntimeTy::Bigint { .. } | RuntimeTy::Literal(Literal::Bigint(_), _, _) => Some(1),
-                RuntimeTy::Float { .. } | RuntimeTy::Literal(Literal::Float(_), _, _) => Some(2),
-                RuntimeTy::String { .. } | RuntimeTy::Literal(Literal::String(_), _, _) => {
-                    include_string.then_some(3)
+        /// primitive-valued.
+        fn kind(ty: &RuntimeTy, include_string: bool) -> Option<PrimitiveType> {
+            let primitive = match ty {
+                RuntimeTy::Int { .. } => PrimitiveType::Int,
+                RuntimeTy::Bigint { .. } => PrimitiveType::Bigint,
+                RuntimeTy::Float { .. } => PrimitiveType::Float,
+                RuntimeTy::String { .. } => PrimitiveType::String,
+                RuntimeTy::Literal(literal, _, _) => PrimitiveType::from_literal(literal),
+                RuntimeTy::Class(name, args, _) if args.is_empty() => name.builtin_primitive()?,
+                _ => return None,
+            };
+            match primitive {
+                PrimitiveType::Int | PrimitiveType::Bigint | PrimitiveType::Float => {
+                    Some(primitive)
                 }
-                RuntimeTy::Class(name, args, _)
-                    if args.is_empty()
-                        && name.package().as_str() == "baml"
-                        && name.namespace().is_empty() =>
-                {
-                    match name.name().as_str() {
-                        "Int" => Some(0),
-                        "Bigint" => Some(1),
-                        "Float" => Some(2),
-                        "String" => include_string.then_some(3),
-                        _ => None,
-                    }
-                }
+                PrimitiveType::String if include_string => Some(primitive),
                 _ => None,
             }
         }
@@ -6974,7 +6967,7 @@ impl LoweringContext<'_> {
                     .iter()
                     .filter(|m| !matches!(m, RuntimeTy::Null { .. }))
                     .all(|m| match kind(m, include_string) {
-                        Some(k) => *first.get_or_insert(k) == k,
+                        Some(kind) => first.get_or_insert(kind.clone()) == &kind,
                         None => false,
                     })
                     && first.is_some()

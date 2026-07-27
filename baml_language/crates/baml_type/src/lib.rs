@@ -276,6 +276,23 @@ impl Ty {
 
     // --- Primitive constructors (default TyAttr) ---
 
+    /// Construct a primitive type with the given attributes.
+    pub fn from_primitive(primitive: PrimitiveType, attr: TyAttr) -> Self {
+        match primitive {
+            PrimitiveType::Int => Ty::Int { attr },
+            PrimitiveType::Bigint => Ty::Bigint { attr },
+            PrimitiveType::Float => Ty::Float { attr },
+            PrimitiveType::String => Ty::String { attr },
+            PrimitiveType::Bool => Ty::Bool { attr },
+            PrimitiveType::Null => Ty::Null { attr },
+            PrimitiveType::Uint8Array => Ty::Uint8Array { attr },
+            PrimitiveType::Image => Ty::Media(MediaKind::Image, attr),
+            PrimitiveType::Audio => Ty::Media(MediaKind::Audio, attr),
+            PrimitiveType::Video => Ty::Media(MediaKind::Video, attr),
+            PrimitiveType::Pdf => Ty::Media(MediaKind::Pdf, attr),
+        }
+    }
+
     /// `int` with default attributes.
     pub fn int() -> Self {
         Ty::Int {
@@ -378,19 +395,9 @@ impl Ty {
     #[must_use]
     pub fn widen_fresh(self) -> Ty {
         match self {
-            Ty::Literal(lit, Freshness::Fresh, attr) => match PrimitiveType::from_literal(&lit) {
-                PrimitiveType::Int => Ty::Int { attr },
-                PrimitiveType::Bigint => Ty::Bigint { attr },
-                PrimitiveType::Float => Ty::Float { attr },
-                PrimitiveType::String => Ty::String { attr },
-                PrimitiveType::Bool => Ty::Bool { attr },
-                PrimitiveType::Null => Ty::Null { attr },
-                PrimitiveType::Uint8Array => Ty::Uint8Array { attr },
-                PrimitiveType::Image => Ty::Media(MediaKind::Image, attr),
-                PrimitiveType::Audio => Ty::Media(MediaKind::Audio, attr),
-                PrimitiveType::Video => Ty::Media(MediaKind::Video, attr),
-                PrimitiveType::Pdf => Ty::Media(MediaKind::Pdf, attr),
-            },
+            Ty::Literal(lit, Freshness::Fresh, attr) => {
+                Ty::from_primitive(PrimitiveType::from_literal(&lit), attr)
+            }
             Ty::Union(members, attr) => {
                 let widened: Vec<Ty> = members.into_iter().map(Ty::widen_fresh).collect();
                 dedup_and_collapse(widened, attr)
@@ -1052,6 +1059,28 @@ mod tests {
     fn ty_bool() -> Ty {
         Ty::Bool {
             attr: TyAttr::default(),
+        }
+    }
+
+    #[test]
+    fn from_primitive_preserves_primitive_kind() {
+        for primitive in [
+            PrimitiveType::Int,
+            PrimitiveType::Bigint,
+            PrimitiveType::Float,
+            PrimitiveType::String,
+            PrimitiveType::Bool,
+            PrimitiveType::Null,
+            PrimitiveType::Uint8Array,
+            PrimitiveType::Image,
+            PrimitiveType::Audio,
+            PrimitiveType::Video,
+            PrimitiveType::Pdf,
+        ] {
+            assert_eq!(
+                Ty::from_primitive(primitive.clone(), TyAttr::default()).to_string(),
+                primitive.alias()
+            );
         }
     }
 
