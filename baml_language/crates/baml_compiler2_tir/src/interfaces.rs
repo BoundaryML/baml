@@ -15,16 +15,16 @@ use baml_compiler2_hir::{contributions::Definition, package::PackageId};
 use baml_type::normalize::TypeContext as _;
 pub use coherence::*;
 pub use impl_rules::*;
-use rustc_hash::{FxHashMap, FxHashSet};
+use rustc_hash::FxHashSet;
 
 use crate::{
     generics,
     lower_type_expr::qualify_def,
-    ty::{FunctionParamTy, QualifiedTypeName, Ty, TyAttr},
+    ty::{QualifiedTypeName, Ty, TyAttr},
     type_context::AliasEquivCtx,
+    unify::{TypeBindings, contains_bound_typevar},
 };
 
-pub type TypeBindings = FxHashMap<Name, Ty>;
 pub type AssociatedBindings = Vec<(Name, Ty)>;
 pub type InterfaceClosureEntry<'db> = (
     baml_compiler2_hir::loc::InterfaceLoc<'db>,
@@ -312,7 +312,7 @@ fn complete_interface_associated_bindings_from_tys<'db>(
 // trips `needless_pass_by_value`, so an expectation would read as unfulfilled.
 #[allow(clippy::needless_pass_by_value)]
 #[salsa::tracked]
-pub(crate) fn interface_associated_type_default<'db>(
+pub fn interface_associated_type_default<'db>(
     db: &'db dyn crate::Db,
     iface_loc: baml_compiler2_hir::loc::InterfaceLoc<'db>,
     name: Name,
@@ -721,48 +721,11 @@ fn bind_type_var(
     }
 }
 
-fn contains_bound_typevar(ty: &Ty, generic_params: &[Name]) -> bool {
-    match ty {
-        Ty::TypeVar(name, _) => generic_params.contains(name),
-        Ty::Class(_, args, _) | Ty::Union(args, _) => args
-            .iter()
-            .any(|arg| contains_bound_typevar(arg, generic_params)),
-        Ty::Interface(_, args, associated_bindings, _) => {
-            args.iter()
-                .any(|arg| contains_bound_typevar(arg, generic_params))
-                || associated_bindings
-                    .iter()
-                    .any(|(_, ty)| contains_bound_typevar(ty, generic_params))
-        }
-        Ty::List(inner, _) | Ty::EvolvingList(inner, _) => {
-            contains_bound_typevar(inner, generic_params)
-        }
-        Ty::Map {
-            key: k, value: v, ..
-        }
-        | Ty::EvolvingMap(k, v, _)
-        | Ty::Future(k, v, _) => {
-            contains_bound_typevar(k, generic_params) || contains_bound_typevar(v, generic_params)
-        }
-        Ty::Function {
-            params,
-            ret,
-            throws,
-            ..
-        } => {
-            params
-                .iter()
-                .any(|FunctionParamTy { ty, .. }| contains_bound_typevar(ty, generic_params))
-                || contains_bound_typevar(ret, generic_params)
-                || contains_bound_typevar(throws, generic_params)
-        }
-        _ => false,
-    }
-}
-
 /// Resolve a `TypeExprKind::Path` to an interface declaration and its fully
 /// qualified identity. Returns `None` when the path doesn't resolve to an
-/// interface.
+/// interface. The paths resolved here are `requires` / `implements` targets —
+/// constraint heads — and only the identity is consumed, so the lowering
+/// neither fills nor demands associated members.
 pub fn resolve_path_to_interface_identity<'db>(
     db: &'db dyn crate::Db,
     target: &baml_compiler2_ast::TypeExpr,
@@ -770,7 +733,7 @@ pub fn resolve_path_to_interface_identity<'db>(
     current_ns: &[Name],
 ) -> Option<ResolvedInterface<'db>> {
     let mut diagnostics = Vec::new();
-    let ty = crate::lower_type_expr::lower_type_expr(
+    let ty = crate::lower_type_expr::lower_constraint_head_type_expr(
         target,
         &crate::lower_type_expr::ScopeCtx {
             db,
@@ -787,9 +750,8 @@ pub fn resolve_path_to_interface_identity<'db>(
 
 /// The `TypeRef`-arena twin of [`resolve_path_to_interface_identity`], for
 /// callers holding firewall data (`class_data(…).type_refs` + a `TypeRefId`)
-/// rather than an AST node. Identical resolution — it lowers through
-/// [`lower_type_ref`](crate::lower_type_expr::lower_type_ref) instead of
-/// `lower_type_expr`.
+/// rather than an AST node. Identical resolution through the arena form of
+/// the same constraint-head lowering.
 pub fn resolve_ref_to_interface_identity<'db>(
     db: &'db dyn crate::Db,
     store: &baml_compiler2_hir::type_ref::TypeRefStore,
@@ -798,7 +760,7 @@ pub fn resolve_ref_to_interface_identity<'db>(
     current_ns: &[Name],
 ) -> Option<ResolvedInterface<'db>> {
     let mut diagnostics = Vec::new();
-    let ty = crate::lower_type_expr::lower_type_ref(
+    let ty = crate::lower_type_expr::lower_constraint_head_type_ref(
         store,
         target,
         &crate::lower_type_expr::ScopeCtx {
@@ -1237,22 +1199,6 @@ mod tests {
         )
         .expect("nested list arg should bind T");
         assert_eq!(bindings.get(&Name::new("T")), Some(&int()));
-    }
-
-    #[test]
-    fn contains_bound_typevar_checks_interface_associated_bindings() {
-        let ty = Ty::Interface(
-            qtn(&[], "Source"),
-            vec![],
-            vec![(
-                Name::new("Item"),
-                Ty::List(Box::new(type_var("T")), TyAttr::default()),
-            )],
-            TyAttr::default(),
-        );
-
-        assert!(contains_bound_typevar(&ty, &[Name::new("T")]));
-        assert!(!contains_bound_typevar(&ty, &[Name::new("U")]));
     }
 
     #[test]

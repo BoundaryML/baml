@@ -75,6 +75,14 @@ lambda user.lambda_param {
 }
 lambda user.lambda_param {
 }
+function user.match_pattern(cb: (value: int) -> int throws never) -> int throws never {
+  { : int
+    match (cb : (value: int) -> int throws __effect_param_0) : int
+      f: (value: int) -> int =>
+        f(1) : int
+  }
+  !! 745..764: function type must declare an explicit `throws` clause; add `throws never` if calling it cannot throw
+}
 type user.Alias$stream = unknown
 class user.Holder$stream {
   cb: unknown

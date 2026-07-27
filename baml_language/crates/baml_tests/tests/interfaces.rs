@@ -11061,13 +11061,16 @@ async fn wf3_concrete_field_shadows_interface_views_pins() {
     assert_eq!(output.result.unwrap(), BexExternalValue::String("N".into()));
 }
 
-/// wf3 pin: a bare generic interface in reflection (`reflect.type_of<Box>()`,
-/// no type args) currently acts as an undocumented wildcard matching every
-/// instantiation's implementors. Pinned to flag the behavior.
+/// wf3: a bare generic interface in a type-argument position
+/// (`reflect.type_of<Box>()`, no type args) is an arity error like any other
+/// type position — a generic head is written fully explicit or inferred
+/// wholesale, never a partial wildcard. (This replaces the old undocumented
+/// wildcard-matching behavior; a deliberate every-instantiation reflection
+/// query would need its own designed spelling.)
 /// `_plan/wf3/generics-reflection/gen_bare_impl_both.baml`
 #[tokio::test]
-async fn wf3_bare_generic_interface_reflection_is_wildcard_pins() {
-    let output = baml_test!(
+async fn wf3_bare_generic_interface_reflection_is_arity_error() {
+    assert_compile_error_contains(
         r#"
         interface Box<T> {
             function get(self) -> T throws never
@@ -11077,20 +11080,13 @@ async fn wf3_bare_generic_interface_reflection_is_wildcard_pins() {
                 function get(self) -> int { return 1 }
             }
         }
-        class StringBox {
-            implements Box<string> {
-                function get(self) -> string { return "hi" }
-            }
-        }
         function main() -> bool {
             let bare = reflect.type_of<Box>()
             return bare.implemented_by(reflect.type_of<IntBox>())
-                && bare.implemented_by(reflect.type_of<StringBox>())
-                && bare.implementors().length() == 2
         }
-        "#
+        "#,
+        "type `Box` expects 1 type argument(s), got 0",
     );
-    assert_eq!(output.result.unwrap(), BexExternalValue::Bool(true));
 }
 
 /// wf3 pin: a blanket impl's implementor is reported by reflection as the bare

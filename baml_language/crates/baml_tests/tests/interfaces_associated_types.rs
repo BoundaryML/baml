@@ -3696,7 +3696,7 @@ fn unknown_projection_on_interface_errors() {
 
         type Missing = Iterator.Element
         "#,
-        "unknown associated type `Element`",
+        "cannot project `Element` directly off interface `Iterator`",
     );
 }
 
@@ -3711,7 +3711,7 @@ fn unknown_projection_on_interface_alias_errors() {
         type IntIterator = Iterator<Item = int>
         type Missing = IntIterator.Element
         "#,
-        "unknown associated type `Element`",
+        "cannot project `Element` directly off interface `Iterator`",
     );
 }
 
@@ -3781,6 +3781,11 @@ fn interface_destructure_head_associated_binding_controls_field_type() {
 
 #[test]
 fn associated_interface_alias_projection_compiles() {
+    // The one interface-headed base the projection shorthand accepts: an
+    // alias whose written spelling pins the projected member — the
+    // projection collapses to the pin, no implementor needed. (A bare
+    // interface base is rejected — see
+    // `unknown_projection_on_interface_errors`.)
     assert_zero_compile_errors(
         r#"
         interface Source {

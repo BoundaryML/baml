@@ -1078,7 +1078,7 @@ function interfaces.$init_test_ns_interfaces_interfaces_3(registry: testing.Test
     pop 1
     load_var registry
     load_const "root.interfaces"
-    load_const "wf3_bare_generic_interface_reflection_is_wildcard_pins"
+    load_const "wf3_generic_interface_reflection_is_per_instantiation"
     make_closure .<lambda($init_test_ns_interfaces_interfaces_3, 13)>, 0
     load_const null
     call testing.TestCollector.register_test_at
@@ -1313,6 +1313,7 @@ function interfaces.DcfoLogger.log(self: interfaces.DcfoLogger, msg: string) -> 
 }
 
 function interfaces.DcfoTimestampLogger.DcfoLogger.log(self: interfaces.DcfoTimestampLogger, msg: string) -> string {
+    load_type interfaces.DcfoTimestampLogger
     load_var2 1 2
     call user.interfaces.DcfoLogger.log
     store_var _5
@@ -1329,6 +1330,7 @@ function interfaces.DcgoLogger$for$DcgoBox<T>.log(self: interfaces.DcgoBox<T>, m
     load_var self
     load_field .prefix
     store_var _3
+    load_type interfaces.DcgoBox<#0>
     load_var2 1 2
     call user.interfaces.DcgoLogger.log
     store_var _4
@@ -1365,6 +1367,7 @@ function interfaces.DcobPrefixLogger.DcobLogger.log(self: interfaces.DcobPrefixL
     load_var self
     load_field .prefix
     store_var _3
+    load_type interfaces.DcobPrefixLogger
     load_var2 1 2
     call user.interfaces.DcobLogger.log
     store_var _4
@@ -1397,18 +1400,20 @@ function interfaces.DctioDoubleLogger.DctioLogger.log(self: interfaces.DctioDoub
     load_var self
     load_field .prefix
     store_var _5
+    load_type interfaces.DctioDoubleLogger
     load_var2 1 2
     call user.interfaces.DctioLogger.log
     store_var _6
+    load_type interfaces.DctioDoubleLogger
     load_var self
     load_const "END"
     call user.interfaces.DctioLogger.log
-    store_var _7
+    store_var _8
     load_var2 3 4
     bin_op +
     load_const " "
     bin_op +
-    load_var _7
+    load_var _8
     bin_op +
     return
 }
@@ -1421,6 +1426,7 @@ function interfaces.DctioLogger.log(self: interfaces.DctioLogger, msg: string) -
 }
 
 function interfaces.DcwcStamp.DcwcWrapper.decorate(self: interfaces.DcwcStamp, body: string) -> string {
+    load_type interfaces.DcwcStamp
     load_var2 1 1
     load_field .mark
     load_const ":"
@@ -1517,6 +1523,7 @@ function interfaces.DrtcB.tag(self: interfaces.DrtcB) -> string {
 }
 
 function interfaces.DrtcX.DrtcA.tag(self: interfaces.DrtcX) -> string {
+    load_type interfaces.DrtcX
     load_var self
     call user.interfaces.DrtcA.tag
     load_const "!"
@@ -1768,7 +1775,7 @@ function interfaces.Fz10IntBox.Fz10Box<int>.get(self: interfaces.Fz10IntBox) -> 
 
 function interfaces.Fz15Container.describe_with_self_call(self: interfaces.Fz15Container<T>) -> string {
     load_var self
-    load_type interfaces.Fz15Container<#0>
+    load_type interfaces.Fz15Container<#1>
     load_const "size"
     virtual_call nargs=1 ntypeargs=0
     store_var n
@@ -1785,7 +1792,7 @@ function interfaces.Fz15IntBox.Fz15Container<int>.size(self: interfaces.Fz15IntB
 
 function interfaces.Fz16Container.get_or(self: interfaces.Fz16Container<T>, fallback: T) -> T {
     load_var self
-    load_type interfaces.Fz16Container<#0>
+    load_type interfaces.Fz16Container<#1>
     load_const "get"
     virtual_call nargs=1 ntypeargs=0
     store_var _0
@@ -2419,7 +2426,7 @@ function interfaces.W301IntThing.W301Base<int>.base_get(self: interfaces.W301Int
 
 function interfaces.W301Sub.sub_get(self: interfaces.W301Sub<T>) -> T {
     load_var self
-    load_type interfaces.W301Base<#0>
+    load_type interfaces.W301Base<#1>
     load_const "base_get"
     virtual_call nargs=1 ntypeargs=0
     store_var _0
@@ -5479,13 +5486,13 @@ function interfaces.uf09_main() -> string {
     alloc_instance user.interfaces.Uf09Cat
     store_var _2
     load_var _2
-    narrow_bind interfaces.Uf09Dog, slot=1
+    narrow_bind interfaces.Uf09Cat, slot=1
     pop_jump_if_false L0
     jump L2
 
   L0:
     load_var _2
-    narrow_bind interfaces.Uf09Cat, slot=1
+    narrow_bind interfaces.Uf09Dog, slot=1
     pop_jump_if_false L1
     jump L2
 
@@ -5496,21 +5503,21 @@ function interfaces.uf09_main() -> string {
   L2:
     load_var _2
     store_var_load_var a
-    is_type interfaces.Uf09Dog
+    is_type interfaces.Uf09Cat
     pop_jump_if_false L3
     jump L4
 
   L3:
     load_var a
-    is_type interfaces.Uf09Cat
+    is_type interfaces.Uf09Dog
     pop_jump_if_false L6
     load_var a
-    call user.interfaces.Uf09Cat.Uf09Animal.speak
+    call user.interfaces.Uf09Dog.Uf09Animal.speak
     jump L5
 
   L4:
     load_var a
-    call user.interfaces.Uf09Dog.Uf09Animal.speak
+    call user.interfaces.Uf09Cat.Uf09Animal.speak
 
   L5:
     return
@@ -5960,26 +5967,27 @@ function interfaces.w315_main() -> int {
 }
 
 function interfaces.w3bg_main() -> bool {
-    load_type interfaces.W3bgBox
-    store_var bare
-    load_var bare
+    load_type interfaces.W3bgBox<int>
+    store_var int_box
+    load_var int_box
     load_type interfaces.W3bgIntBox
     call baml.TypeValue.implemented_by
     jump_if_false L0
     pop 1
-    load_var bare
+    load_var int_box
     load_type interfaces.W3bgStringBox
     call baml.TypeValue.implemented_by
+    unary_op !
 
   L0:
     jump_if_false L1
     pop 1
-    load_var bare
+    load_var int_box
     call baml.TypeValue.implementors
     container_len
-    store_var _6
-    load_var _6
-    load_const 2
+    store_var _7
+    load_var _7
+    load_const 1
     cmp_int_op ==
 
   L1:

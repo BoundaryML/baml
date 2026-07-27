@@ -564,6 +564,19 @@ pub enum TirTypeError {
         interface: crate::ty::QualifiedTypeName,
         missing: Vec<Name>,
     },
+    /// The dotted projection shorthand (`Base.Member`) was written with the
+    /// interface itself as the base (`Iterator.Element`). The base of a
+    /// projection is an *implementor* — a concrete type
+    /// (`ArrayIterator.Element`), a bounded type variable (`T.Element`), or
+    /// `Self` inside a body — never the interface: an associated type is
+    /// defined per `(interface, implementor, member)` triple, so the
+    /// interface alone does not determine it (Rust's E0223). Naming the
+    /// interface explicitly takes a qualified projection
+    /// (`(Base as Iterator).Element`).
+    InterfaceProjectionBase {
+        interface: crate::ty::QualifiedTypeName,
+        member: Name,
+    },
     /// A *bare* interface destructure pattern (`Source { value }`, no written generic
     /// args or associated bindings) adopts its associated-type bindings from the
     /// scrutinee — so the scrutinee must determine them uniquely. A scrutinee admitting
@@ -760,6 +773,18 @@ pub enum TirTypeError {
     /// parameters have no generic binder to open an effect parameter on, so they must declare it
     /// explicitly.
     FunctionTypeMissingThrows,
+    /// A pattern claiming function-typed values sits in a position that emits a runtime value
+    /// test. Every callable value is fully realized (it curries its complete type arguments at
+    /// creation), but the runtime cannot yet faithfully reconstruct every callable's
+    /// signature: the stored `Function` signature erases generic positions instead of
+    /// referencing the frame slots the value's curried arguments would fill, so a bound
+    /// method reconstructs no type (its test is constant-false) and a closure created in a
+    /// generic frame reconstructs a coarsened one. Such a test silently misroutes those
+    /// callables, so fail closed: the one sound position is the final arm of an exhaustive,
+    /// guardless, non-Or `match`, whose test is elided because coverage already proved every
+    /// reaching value matches. (Fixing reconstruction — signature templates substituted with
+    /// the value's curried args — is the path to relaxing this error.)
+    FunctionTypedPatternNotTestable { ty: crate::ty::Ty },
 }
 
 impl fmt::Display for TirTypeError {
@@ -1538,6 +1563,16 @@ impl fmt::Display for TirTypeError {
                     interface.render_user_facing(),
                 )
             }
+            TirTypeError::InterfaceProjectionBase { interface, member } => {
+                write!(
+                    f,
+                    "cannot project `{member}` directly off interface `{0}`: a projection's \
+                     base is an implementor type, a bounded type variable, or `Self` — to name \
+                     the interface explicitly, write a qualified projection \
+                     (`(Base as {0}).{member}`)",
+                    interface.render_user_facing(),
+                )
+            }
             TirTypeError::AmbiguousInterfacePatternBindings {
                 interface,
                 candidates,
@@ -1808,6 +1843,17 @@ impl fmt::Display for TirTypeError {
                     f,
                     "function type must declare an explicit `throws` clause; add `throws never` \
                      if calling it cannot throw"
+                )
+            }
+            TirTypeError::FunctionTypedPatternNotTestable { ty } => {
+                write!(
+                    f,
+                    "cannot test a value against function type `{}` at runtime: callable \
+                     signatures cannot yet be faithfully reconstructed for every value (bound \
+                     methods, closures from generic frames), so this test would silently \
+                     misroute them; make it the final arm of an exhaustive `match` (which \
+                     needs no test) or match on a non-function discriminant",
+                    ty.render_user_facing()
                 )
             }
         }

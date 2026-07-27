@@ -1001,9 +1001,19 @@ fn realized_arg(ty: &baml_type::RuntimeTy) -> Option<baml_type::RealizedTy> {
 /// generic that does not narrow to a `RealizedTy` (a bug — see [`realized_arg`]).
 ///
 /// Used to reconstruct the concrete type of a callable value (closure / generic
-/// function). The signature erases unresolved generics to `unknown`
-/// (`Function::param_types` / `return_type`), so a generic callable reconstructs
-/// coarsely — but faithfully to what the runtime object carries.
+/// function).
+///
+/// BUG(erased-signature-reconstruction): every callable VALUE is fully
+/// realized — a `Closure` carries `captured_type_args`, a `BoundMethod` its
+/// complete curried `type_args` — but this reconstruction reads only the
+/// `Function`'s stored signature, which erases generic positions to `unknown`
+/// (`Function::param_types` / `return_type`) instead of referencing the frame
+/// slots those curried args fill. So a callable minted in a generic frame
+/// reconstructs coarsely, faithful only to the erased storage, not to the
+/// value. The fix is to store the signature as a template over the frame's
+/// type-arg slots and substitute the value's curried args here — which would
+/// also let `BoundMethod` reconstruct (its arm currently returns no type) and
+/// unlock relaxing E0155 (function-typed patterns).
 ///
 /// [`ConcreteRealizedTy::Function`]: baml_type::ConcreteRealizedTy::Function
 fn function_object_ty(f: &bex_vm_types::types::Function) -> Option<baml_type::ConcreteRealizedTy> {
@@ -1770,12 +1780,17 @@ impl BexVm {
         value: Value,
         raw_const: &ConstValue,
         resolved_const: Value,
-    ) -> bool {
+    ) -> Result<bool, VmInternalError> {
         let frame_type_args = match &self.frames[frame_idx] {
             Frame::Bytecode(frame) => frame.type_args.as_slice(),
             Frame::Native(_) => &[],
         };
         match raw_const {
+            // Structural type test against a complete `TyTemplate` (a
+            // container element type, a bare frame ref, …), matched with the
+            // canonical type algebra — emitted for element-discriminating
+            // containers, unions, and frame refs (see the emitter's
+            // `is_type`).
             ConstValue::Type(template) => {
                 crate::type_match::value_matches_template(self, value, template, frame_type_args)
             }
@@ -1786,39 +1801,63 @@ impl BexVm {
                 let class_ptr = self.idx_to_ptr(*class_obj);
                 match value.as_object_ptr() {
                     Some(val_ptr) => match self.get_object(val_ptr) {
+                        // Class-pointer identity (above) fixes the class; each
+                        // type arg is then related *invariantly* through the
+                        // canonical algebra (BAML generics are invariant). No
+                        // covariance is needed for a reified frame type-param
+                        // that inference widened to a union (`T = Shape | Sq`
+                        // vs a value's narrower `Shape`): the algebra knows
+                        // `Sq <: Shape` and absorbs `Shape | Sq == Shape`, so
+                        // the invariant relation already holds — the retired
+                        // guard needed a covariant band-aid only because it
+                        // could not see that membership.
                         Object::Instance(inst) if inst.class == class_ptr => {
-                            type_args_templates.len() == inst.class_type_args.len()
-                                && type_args_templates.iter().zip(&inst.class_type_args).all(
-                                    |(template, actual)| {
-                                        crate::type_match::template_relates(
-                                            self,
-                                            template,
-                                            frame_type_args,
-                                            actual.as_ty(),
-                                            crate::type_match::Variance::Invariant,
-                                        )
-                                    },
-                                )
+                            debug_assert_eq!(
+                                type_args_templates.len(),
+                                inst.class_type_args.len(),
+                                "Class should have consistent number of generic parameters",
+                            );
+                            if type_args_templates.len() != inst.class_type_args.len() {
+                                return Ok(false);
+                            }
+                            for (template, actual) in
+                                type_args_templates.iter().zip(&inst.class_type_args)
+                            {
+                                if !crate::type_match::class_type_arg_matches(
+                                    self,
+                                    template,
+                                    frame_type_args,
+                                    actual.as_ty(),
+                                )? {
+                                    return Ok(false);
+                                }
+                            }
+                            Ok(true)
                         }
-                        _ => false,
+                        _ => Ok(false),
                     },
-                    None => false,
+                    None => Ok(false),
                 }
             }
             _ => {
                 if let Some(expected_ptr) = resolved_const.as_object_ptr() {
-                    match value.as_object_ptr() {
+                    // Class- or enum-pointer identity: `is Foo` checks the
+                    // instance's class object; `is Color` checks the variant's
+                    // enum object. Enum-type tests dispatch on enum identity
+                    // because the shared `ENUM` type tag cannot tell `Color`
+                    // from `Status`.
+                    Ok(match value.as_object_ptr() {
                         Some(val_ptr) => match self.get_object(val_ptr) {
                             Object::Instance(instance) => instance.class == expected_ptr,
                             Object::Variant(variant) => variant.enm == expected_ptr,
                             _ => false,
                         },
                         None => false,
-                    }
+                    })
                 } else if let Some(tag) = resolved_const.as_int() {
-                    value_type_tag(value) == tag
+                    Ok(value_type_tag(value) == tag)
                 } else {
-                    false
+                    Ok(false)
                 }
             }
         }
@@ -2009,11 +2048,15 @@ impl BexVm {
                 throws: Box::new((*hc.throws_ty).clone()),
                 attr: TyAttr::default(),
             },
-            // BUG: a `BoundMethod` is a callable value and *should* reconstruct
-            // to its underlying function's type with the bound `self` parameter
-            // dropped, but the receiver-relative generic realization needed to do
-            // that faithfully isn't threaded onto the object — so it reports no
-            // type for now rather than a wrong one.
+            // BUG(erased-signature-reconstruction): a `BoundMethod` is a fully
+            // realized callable value — its complete curried frame IS on the
+            // object (`BoundMethod::type_args`) — and *should* reconstruct to
+            // its underlying function's type with the bound `self` parameter
+            // dropped. What's missing is a stored signature that references
+            // the frame's type-arg slots to substitute those curried args
+            // into (the `Function` signature erases generic positions — see
+            // `function_object_ty`); until then it reports no type rather
+            // than a wrong one.
             Object::BoundMethod(_) => return None,
 
             // `Object::Function` is NOT a function-pointer value — it is the
@@ -6713,7 +6756,7 @@ impl BexVm {
                         value,
                         raw_const,
                         resolved_const,
-                    );
+                    )?;
                     self.stack.push(Value::bool(result));
                 }
 
@@ -6728,7 +6771,7 @@ impl BexVm {
                         value,
                         raw_const,
                         resolved_const,
-                    );
+                    )?;
                     if matched {
                         let Frame::Bytecode(bf) = &self.frames[*frame_idx] else {
                             unreachable!()

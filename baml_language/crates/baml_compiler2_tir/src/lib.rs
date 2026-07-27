@@ -36,6 +36,7 @@ pub mod narrowing;
 pub mod normalize;
 pub mod package_interface;
 pub mod pattern_lowering;
+pub mod pattern_overlap;
 pub mod resolve;
 pub mod self_type;
 pub mod signature;
@@ -43,6 +44,7 @@ pub mod throw_inference;
 pub mod throws_analysis;
 pub mod ty;
 pub mod type_context;
+pub mod unify;
 pub mod user_facing;
 
 // ── Db trait ──────────────────────────────────────────────────────────────────

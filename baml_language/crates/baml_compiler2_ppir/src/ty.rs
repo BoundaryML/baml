@@ -50,6 +50,12 @@ pub enum PpirTy {
         /// Generic args passed at the use site (e.g. `Box<int>` → `[int]`).
         /// Empty for non-generic types and references that omit args.
         generic_args: Vec<PpirTy>,
+        /// Associated-type bindings written at the use site
+        /// (e.g. `Iterator<Item = int>` → `[("Item", int)]`). Carried through
+        /// the round-trip verbatim — dropping them would materialize
+        /// synthesized `$stream` fields at a *different* (under-pinned) type
+        /// than the source spelled.
+        associated_type_bindings: Vec<(Name, PpirTy)>,
         attrs: PpirTypeAttrs,
     },
     Int {
@@ -148,10 +154,14 @@ impl PpirTy {
         let d = PpirTypeAttrs::default();
         match self {
             Self::Named {
-                path, generic_args, ..
+                path,
+                generic_args,
+                associated_type_bindings,
+                ..
             } => Self::Named {
                 path: path.clone(),
                 generic_args: generic_args.clone(),
+                associated_type_bindings: associated_type_bindings.clone(),
                 attrs: d,
             },
             Self::Int { .. } => Self::Int { attrs: d },
@@ -228,10 +238,15 @@ impl PpirTy {
             TypeExprKind::Path {
                 segments,
                 generic_args,
+                associated_type_bindings,
                 ..
             } => PpirTy::Named {
                 path: segments.clone(),
                 generic_args: generic_args.iter().map(Self::convert_type_expr).collect(),
+                associated_type_bindings: associated_type_bindings
+                    .iter()
+                    .map(|binding| (binding.name.clone(), Self::convert_type_expr(&binding.ty)))
+                    .collect(),
                 attrs,
             },
             TypeExprKind::Optional { inner, .. } => PpirTy::Optional {
@@ -296,11 +311,20 @@ impl PpirTy {
     pub fn to_type_expr(&self) -> TypeExpr {
         let kind = match self {
             PpirTy::Named {
-                path, generic_args, ..
+                path,
+                generic_args,
+                associated_type_bindings,
+                ..
             } => TypeExprKind::Path {
                 segments: path.clone(),
                 generic_args: generic_args.iter().map(PpirTy::to_type_expr).collect(),
-                associated_type_bindings: vec![],
+                associated_type_bindings: associated_type_bindings
+                    .iter()
+                    .map(|(name, value)| baml_compiler2_ast::AssociatedTypeBinding {
+                        name: name.clone(),
+                        ty: Box::new(value.to_type_expr()),
+                    })
+                    .collect(),
                 attrs: vec![],
             },
             PpirTy::Int { .. } => TypeExprKind::Int { attrs: vec![] },

@@ -266,8 +266,8 @@ pub enum VmInternalError {
 
     /// A `LoadType` (or other materialization) could not fully realize a
     /// `TyTemplate` against the frame's realized type arguments — a frame
-    /// reference out of range, a `Wildcard` hole reaching a materialization
-    /// position, or an associated-type projection that did not reduce. Runtime
+    /// reference out of range, or an associated-type projection that did not
+    /// reduce. Runtime
     /// type arguments are realized, so the compiler guarantees such templates
     /// realize; a failure here is a compiler/VM inconsistency, surfaced loudly
     /// rather than erased to `unknown`.

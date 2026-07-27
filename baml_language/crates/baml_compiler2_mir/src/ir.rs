@@ -736,10 +736,28 @@ pub enum Rvalue {
     /// correctly at runtime via `TypeArgRef` substitution.  A fully-realized
     /// template narrows to a `RealizedTy`, which the emitter handles on the
     /// same tag / class-identity fast path as before.
+    ///
+    /// The template is *complete* by type — `TyTemplate` has no match-any
+    /// holes — so the test always denotes exactly one type per frame. The
+    /// deliberately-coarse container test carries its own rvalue instead
+    /// ([`Rvalue::IsTypeTag`], a proven-sufficient tag).
     IsType {
         operand: Operand,
         ty_template: TyTemplate,
     },
+
+    /// Coarse runtime type-tag test: `is_type_tag(_1, LIST)`.
+    ///
+    /// Used when MIR lowering has *proven* the coarse tag equivalent to the
+    /// element-precise structural test for this scrutinee (the container
+    /// tag-sufficiency analysis) — the tag is the whole check, deliberately
+    /// blind to generic arguments. Carrying the decision explicitly keeps
+    /// `IsType`'s template a complete type: previously the same intent was
+    /// smuggled as a container template with `Wildcard` elements for the
+    /// emitter to sniff out. `tag` is a `baml_type::typetag` constant; the
+    /// emitter lowers this to the same `IsType`-against-`Int` bytecode as the
+    /// other coarse tag checks.
+    IsTypeTag { operand: Operand, tag: i64 },
 
     /// Allocate a closure object from a child lambda function.
     ///

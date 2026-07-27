@@ -118,9 +118,10 @@ function assert.equal(actual: unknown, expected: unknown) -> null {
 }
 
 function assert.format_operand(value: unknown) -> string {
-  32   0   load_var 1             (value)
-       1   call 138 ntypeargs=0   (baml.String.from)
-       2   return                 
+  32   0   load_type 0            
+       1   load_var 1             (value)
+       2   call 138 ntypeargs=1   (baml.String.from)
+       3   return                 
 }
 
 function assert.is_true(condition: bool) -> null {

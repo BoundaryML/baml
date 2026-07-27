@@ -214,7 +214,7 @@ fn determine_interface(
         Ty::Interface(qtn, args, assoc, _) => {
             let root = baml_type::Interface::new(qtn.clone(), args.clone(), assoc.clone());
             let undeclared = AssocContainer::Interface(root.name.clone());
-            resolve_via_roots(ctx, vec![root], explicit, member, undeclared, &base)
+            resolve_via_roots(ctx, vec![root], explicit, member, undeclared, &base, true)
         }
         // A type variable searches the closure of *every* interface in its bound
         // conjunction (`T extends A & B`). No bound at all means it cannot be proven
@@ -243,7 +243,15 @@ fn determine_interface(
             Some(bounds) => {
                 // Report against the first bound if none declares `member`.
                 let undeclared = AssocContainer::Interface(bounds[0].name.clone());
-                resolve_via_roots(ctx, bounds.into_vec(), explicit, member, undeclared, &base)
+                resolve_via_roots(
+                    ctx,
+                    bounds.into_vec(),
+                    explicit,
+                    member,
+                    undeclared,
+                    &base,
+                    false,
+                )
             }
         },
         // Concrete receivers resolve through their own impls: an associated type
@@ -331,16 +339,25 @@ fn resolve_via_roots(
     member: &Name,
     undeclared: AssocContainer,
     subject: &Ty,
+    // Whether the closure walk fills unpinned defaulted members. An
+    // existential root denotes one complete instantiation (defaults filled at
+    // type lowering), so its closure view fills too; a RIGID root (a type
+    // variable's bound, a chained projection's declared bound) leaves them
+    // unpinned — the eventual implementor may override a default, so the
+    // projection must stay symbolic and realize per-receiver.
+    fill_defaults: bool,
 ) -> Determination {
     match explicit {
-        None => resolve_through_roots(ctx.db(), roots, member, undeclared),
-        Some(qualifier) => match realize_qualifier_through_roots(ctx, &roots, &qualifier) {
-            Some(realized) => Determination::Determined(realized),
-            None => Determination::SubjectDoesNotImplementQualifier {
-                subject: subject.clone(),
-                qualifier,
-            },
-        },
+        None => resolve_through_roots(ctx.db(), roots, member, undeclared, fill_defaults),
+        Some(qualifier) => {
+            match realize_qualifier_through_roots(ctx, &roots, &qualifier, fill_defaults) {
+                Some(realized) => Determination::Determined(realized),
+                None => Determination::SubjectDoesNotImplementQualifier {
+                    subject: subject.clone(),
+                    qualifier,
+                },
+            }
+        }
     }
 }
 
@@ -355,6 +372,7 @@ fn realize_qualifier_through_roots(
     ctx: &dyn TypeExprContext<'_>,
     roots: &[baml_type::Interface],
     qualifier: &baml_type::Interface,
+    fill_defaults: bool,
 ) -> Option<baml_type::Interface> {
     let db = ctx.db();
     for root in roots {
@@ -366,7 +384,7 @@ fn realize_qualifier_through_roots(
             root_loc,
             &root.generics,
             &root.associated_types,
-            true,
+            fill_defaults,
         ) {
             if let Some(qtn) = crate::interfaces::interface_loc_qtn(db, loc)
                 && qtn == qualifier.name
@@ -474,6 +492,7 @@ fn resolve_through_roots(
     roots: Vec<baml_type::Interface>,
     member: &Name,
     undeclared: AssocContainer,
+    fill_defaults: bool,
 ) -> Determination {
     let mut declarers: Vec<baml_type::Interface> = Vec::new();
     let mut push = |interface: baml_type::Interface| {
@@ -485,7 +504,7 @@ fn resolve_through_roots(
         if interface_declares_member(db, &root.name, member) {
             push(root);
         } else {
-            for declarer in closure_declarers(db, &root, member) {
+            for declarer in closure_declarers(db, &root, member, fill_defaults) {
                 push(declarer);
             }
         }
@@ -545,7 +564,15 @@ fn determine_chained(
         };
     };
     let container = AssocContainer::Interface(root.name.clone());
-    resolve_via_roots(ctx, vec![root], explicit, member, container, projection)
+    resolve_via_roots(
+        ctx,
+        vec![root],
+        explicit,
+        member,
+        container,
+        projection,
+        false,
+    )
 }
 
 /// The interface bound declared on associated type `member` of the interface at
@@ -633,7 +660,12 @@ fn associated_type_bound_interface(
     // The bound is checked at the interface's declaration; diagnostics are discarded here.
     let mut diags = Vec::new();
     let lowered = crate::generics::substitute_ty(
-        &crate::lower_type_expr::lower_type_ref(&iface.type_refs, bound_ref, &scope, &mut diags),
+        &crate::lower_type_expr::lower_constraint_head_type_ref(
+            &iface.type_refs,
+            bound_ref,
+            &scope,
+            &mut diags,
+        ),
         &bindings,
     );
     lowered.as_interface()
@@ -719,6 +751,7 @@ fn closure_declarers(
     db: &dyn crate::Db,
     root: &baml_type::Interface,
     member: &Name,
+    fill_defaults: bool,
 ) -> Vec<baml_type::Interface> {
     let Some(root_loc) = resolve_interface_loc(db, &root.name) else {
         return Vec::new();
@@ -728,7 +761,7 @@ fn closure_declarers(
         root_loc,
         &root.generics,
         &root.associated_types,
-        true,
+        fill_defaults,
     );
 
     let mut declarers: Vec<baml_type::Interface> = Vec::new();

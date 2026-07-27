@@ -2158,6 +2158,7 @@ fn tir_type_error_to_diagnostic_id(
         TirTypeError::BoundedTypeArgNotConcrete { .. }
         | TirTypeError::MissingAssociatedTypeBindings { .. }
         | TirTypeError::AmbiguousInterfacePatternBindings { .. } => DiagnosticId::TypeMismatch,
+        TirTypeError::InterfaceProjectionBase { .. } => DiagnosticId::InterfaceProjectionBase,
         // Interface impl conformance (BEP-044, E0113–E0139): tir2 owns these and
         // check.rs surfaces them via `check_interfaces`.
         TirTypeError::MissingInterfaceMethod { .. } => DiagnosticId::MissingInterfaceMethod,
@@ -2204,6 +2205,9 @@ fn tir_type_error_to_diagnostic_id(
         | TirTypeError::CyclicImplHeader
         | TirTypeError::InterfaceMethodMissingThrows { .. } => DiagnosticId::TypeMismatch,
         TirTypeError::FunctionTypeMissingThrows => DiagnosticId::FunctionTypeMissingThrows,
+        TirTypeError::FunctionTypedPatternNotTestable { .. } => {
+            DiagnosticId::FunctionTypedPatternNotTestable
+        }
     }
 }
 

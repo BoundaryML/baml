@@ -804,9 +804,11 @@ fn baml.ToString.to_string(self: baml.ToString) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: baml.ToString // self // param
+    let _2: type
 
     bb0: {
-        _0 = call const fn baml._to_string_default(copy _1) -> [bb1];
+        _2 = load_type(#0);
+        _0 = call const fn baml._to_string_default<copy _2>(copy _1) -> [bb1];
     }
 
     bb1: {
@@ -824,9 +826,11 @@ fn baml.ToJson.to_json(self: baml.ToJson) -> int | float | string | bool | null 
     // Locals:
     let _0: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json> // _0 // return
     let _1: baml.ToJson // self // param
+    let _2: type
 
     bb0: {
-        _0 = call const fn baml._to_json_default(copy _1) -> [bb1];
+        _2 = load_type(#0);
+        _0 = call const fn baml._to_json_default<copy _2>(copy _1) -> [bb1];
     }
 
     bb1: {
@@ -3757,7 +3761,7 @@ fn baml.iter.Iterator.map(self: baml.iter.Iterator, fn: (Item) -> R throws E2) -
     let _2: (Item) -> R throws E2 // fn // param
 
     bb0: {
-        _0 = baml.iter.Map<#0, #2, #1, #3> { copy _1, copy _2 };
+        _0 = baml.iter.Map<#1, #3, #2, #4> { copy _1, copy _2 };
         goto -> bb1;
     }
 
@@ -3773,7 +3777,7 @@ fn baml.iter.Iterator.filter(self: baml.iter.Iterator, predicate: (Item) -> bool
     let _2: (Item) -> bool throws E2 // predicate // param
 
     bb0: {
-        _0 = baml.iter.Filter<#0, #1, #2> { copy _1, copy _2 };
+        _0 = baml.iter.Filter<#1, #2, #3> { copy _1, copy _2 };
         goto -> bb1;
     }
 
@@ -3789,7 +3793,7 @@ fn baml.iter.Iterator.filter_map(self: baml.iter.Iterator, fn: (Item) -> null | 
     let _2: (Item) -> null | R throws E2 // fn // param
 
     bb0: {
-        _0 = baml.iter.FilterMap<#0, #2, #1, #3> { copy _1, copy _2 };
+        _0 = baml.iter.FilterMap<#1, #3, #2, #4> { copy _1, copy _2 };
         goto -> bb1;
     }
 
@@ -3807,7 +3811,7 @@ fn baml.iter.Iterator.flat_map(self: baml.iter.Iterator, fn: (Item) -> baml.iter
 
     bb0: {
         _3 = baml.iter.Done {  };
-        _0 = baml.iter.FlatMap<#0, #2, #1, #3, #4> { copy _1, copy _2, copy _3 };
+        _0 = baml.iter.FlatMap<#1, #3, #2, #4, #5> { copy _1, copy _2, copy _3 };
         goto -> bb1;
     }
 
@@ -3823,7 +3827,7 @@ fn baml.iter.Iterator.step_by(self: baml.iter.Iterator, n: int) -> baml.iter.Ite
     let _2: int // n // param
 
     bb0: {
-        _0 = baml.iter.StepBy<#0, #1> { copy _1, copy _2, const true };
+        _0 = baml.iter.StepBy<#1, #2> { copy _1, copy _2, const true };
         goto -> bb1;
     }
 
@@ -3840,11 +3844,11 @@ fn baml.iter.Iterator.chain(self: baml.iter.Iterator, other: baml.iter.Iterable<
     let _3: baml.iter.Iterator<Error = E2, Item = Item>
 
     bb0: {
-        _3 = virtual_call iter as baml.iter.Iterable<Item = #0, Error = #2>(copy _2) -> [bb1];
+        _3 = virtual_call iter as baml.iter.Iterable<Item = #1, Error = #3>(copy _2) -> [bb1];
     }
 
     bb1: {
-        _0 = baml.iter.Chain<#0, #1, #2> { copy _1, copy _3, const false };
+        _0 = baml.iter.Chain<#1, #2, #3> { copy _1, copy _3, const false };
         goto -> bb2;
     }
 
@@ -3861,7 +3865,7 @@ fn baml.iter.Iterator.peekable(self: baml.iter.Iterator) -> baml.iter.Peekable<I
 
     bb0: {
         _2 = baml.iter.Done {  };
-        _0 = baml.iter.Peekable<#0, #1> { copy _1, copy _2, const false };
+        _0 = baml.iter.Peekable<#1, #2> { copy _1, copy _2, const false };
         goto -> bb1;
     }
 
@@ -3882,7 +3886,7 @@ fn baml.iter.Iterator.collect(self: baml.iter.Iterator) -> Item[] {
     let _7: Item
 
     bb0: {
-        _2 = []: #0[];
+        _2 = []: #1[];
         goto -> bb1;
     }
 
@@ -3891,7 +3895,7 @@ fn baml.iter.Iterator.collect(self: baml.iter.Iterator) -> Item[] {
     }
 
     bb2: {
-        _4 = virtual_call next as baml.iter.Iterator<Item = #0, Error = #1>(copy _1) -> [bb3];
+        _4 = virtual_call next as baml.iter.Iterator<Item = #1, Error = #2>(copy _1) -> [bb3];
     }
 
     bb3: {
@@ -3938,7 +3942,7 @@ fn baml.iter.Iterator.reduce(self: baml.iter.Iterator, fn: (A, Item) -> A throws
     }
 
     bb2: {
-        _5 = virtual_call next as baml.iter.Iterator<Item = #0, Error = #1>(copy _1) -> [bb3];
+        _5 = virtual_call next as baml.iter.Iterator<Item = #1, Error = #2>(copy _1) -> [bb3];
     }
 
     bb3: {
@@ -3981,7 +3985,7 @@ fn baml.iter.Iterator.count(self: baml.iter.Iterator) -> int {
     }
 
     bb2: {
-        _3 = virtual_call next as baml.iter.Iterator<Item = #0, Error = #1>(copy _1) -> [bb3];
+        _3 = virtual_call next as baml.iter.Iterator<Item = #1, Error = #2>(copy _1) -> [bb3];
     }
 
     bb3: {
@@ -4024,7 +4028,7 @@ fn baml.iter.Iterator.for_each(self: baml.iter.Iterator, fn: (Item) -> void thro
     }
 
     bb2: {
-        _3 = virtual_call next as baml.iter.Iterator<Item = #0, Error = #1>(copy _1) -> [bb3];
+        _3 = virtual_call next as baml.iter.Iterator<Item = #1, Error = #2>(copy _1) -> [bb3];
     }
 
     bb3: {
@@ -4068,7 +4072,7 @@ fn baml.iter.Iterator.some(self: baml.iter.Iterator, predicate: (Item) -> bool t
     }
 
     bb2: {
-        _3 = virtual_call next as baml.iter.Iterator<Item = #0, Error = #1>(copy _1) -> [bb3];
+        _3 = virtual_call next as baml.iter.Iterator<Item = #1, Error = #2>(copy _1) -> [bb3];
     }
 
     bb3: {
@@ -4122,7 +4126,7 @@ fn baml.iter.Iterator.every(self: baml.iter.Iterator, predicate: (Item) -> bool 
     }
 
     bb2: {
-        _3 = virtual_call next as baml.iter.Iterator<Item = #0, Error = #1>(copy _1) -> [bb3];
+        _3 = virtual_call next as baml.iter.Iterator<Item = #1, Error = #2>(copy _1) -> [bb3];
     }
 
     bb3: {
@@ -4176,7 +4180,7 @@ fn baml.iter.Iterator.find(self: baml.iter.Iterator, predicate: (Item) -> bool t
     }
 
     bb2: {
-        _3 = virtual_call next as baml.iter.Iterator<Item = #0, Error = #1>(copy _1) -> [bb3];
+        _3 = virtual_call next as baml.iter.Iterator<Item = #1, Error = #2>(copy _1) -> [bb3];
     }
 
     bb3: {
@@ -4264,11 +4268,9 @@ fn baml.iter.ArrayIterator.Iterator.next(self: baml.iter.ArrayIterator) -> baml.
     let _3: int
     let _4: int
     let _5: (T[]) -> int throws never
-    let _6: null | T // item
-    let _7: (T[], int) -> null | T throws never
+    let _6: T // item
+    let _7: T[]
     let _8: int
-    let _9: type
-    let _10: T // value
 
     bb0: {
         _3 = copy _1.1;
@@ -4279,29 +4281,24 @@ fn baml.iter.ArrayIterator.Iterator.next(self: baml.iter.ArrayIterator) -> baml.
 
     bb1: {
         _2 = copy _3 >= copy _4;
-        branch copy _2 -> [bb4, bb2];
+        branch copy _2 -> [bb3, bb2];
     }
 
     bb2: {
         _7 = copy _1.0;
         _8 = copy _1.1;
-        _9 = load_type(#0);
-        _6 = call const fn baml.Array.at<copy _9>(copy _7, copy _8) -> [bb3];
+        _6 = copy _7[_8];
+        _1.1 = copy _1.1 + const 1_i64;
+        _0 = copy _6;
+        goto -> bb4;
     }
 
     bb3: {
-        _1.1 = copy _1.1 + const 1_i64;
-        _10 = copy _6;
-        _0 = copy _10;
-        goto -> bb5;
+        _0 = baml.iter.Done {  };
+        goto -> bb4;
     }
 
     bb4: {
-        _0 = baml.iter.Done {  };
-        goto -> bb5;
-    }
-
-    bb5: {
         return;
     }
 }
@@ -4728,7 +4725,7 @@ fn baml.iter.FlatMap.Iterator.next(self: baml.iter.FlatMap) -> baml.iter.Done | 
     bb3: {
         _2 = copy _1.2;
         _3 = copy _2;
-        _3 = narrow_bind copy _3 as Interface(QualifiedTypeName { pkg: Dep("baml"), namespace: ["iter"], name: "Iterator" }, [], [("Item", TypeArgRef(1)), ("Error", TypeArgRef(4))], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb12, bb4];
+        _3 = narrow_bind copy _3 as Interface(QualifiedTypeName { pkg: Dep("baml"), namespace: ["iter"], name: "Iterator" }, [], [("Error", TypeArgRef(4)), ("Item", TypeArgRef(1))], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb12, bb4];
     }
 
     bb4: {
@@ -4773,7 +4770,7 @@ fn baml.iter.FlatMap.Iterator.next(self: baml.iter.FlatMap) -> baml.iter.Done | 
 
     bb12: {
         _4 = copy _3;
-        _5 = virtual_call next as baml.iter.Iterator<Item = #1, Error = #4>(copy _4) -> [bb13];
+        _5 = virtual_call next as baml.iter.Iterator<Error = #4, Item = #1>(copy _4) -> [bb13];
     }
 
     bb13: {
@@ -4845,7 +4842,7 @@ fn baml.iter.Flatten.Iterator.next(self: baml.iter.Flatten) -> baml.iter.Done | 
     bb3: {
         _2 = copy _1.1;
         _3 = copy _2;
-        _3 = narrow_bind copy _3 as Interface(QualifiedTypeName { pkg: Dep("baml"), namespace: ["iter"], name: "Iterator" }, [], [("Item", TypeArgRef(1)), ("Error", TypeArgRef(3))], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb11, bb4];
+        _3 = narrow_bind copy _3 as Interface(QualifiedTypeName { pkg: Dep("baml"), namespace: ["iter"], name: "Iterator" }, [], [("Error", TypeArgRef(3)), ("Item", TypeArgRef(1))], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb11, bb4];
     }
 
     bb4: {
@@ -4884,7 +4881,7 @@ fn baml.iter.Flatten.Iterator.next(self: baml.iter.Flatten) -> baml.iter.Done | 
 
     bb11: {
         _4 = copy _3;
-        _5 = virtual_call next as baml.iter.Iterator<Item = #1, Error = #3>(copy _4) -> [bb12];
+        _5 = virtual_call next as baml.iter.Iterator<Error = #3, Item = #1>(copy _4) -> [bb12];
     }
 
     bb12: {
@@ -8112,6 +8109,7 @@ fn baml.llm.render_prompt_values(values: unknown[]) -> unknown[] {
     let _9: string | baml.llm.Role
     let _10: bool
     let _11: unknown
+    let _12: type
 
     bb0: {
         _2 = []: unknown[];
@@ -8137,7 +8135,8 @@ fn baml.llm.render_prompt_values(values: unknown[]) -> unknown[] {
 
     bb4: {
         _11 = copy _7;
-        _9 = call const fn baml.String.from(copy _11) -> [bb6];
+        _12 = load_type(unknown);
+        _9 = call const fn baml.String.from<copy _12>(copy _11) -> [bb6];
     }
 
     bb5: {
@@ -12030,7 +12029,7 @@ fn baml.toml.table_from_json(j: int | float | string | bool | null | baml.json.j
     let _21: baml.json.JsonDecodeError
 
     bb0: {
-        _2 = is_type(copy _1, map<_, _>);
+        _2 = is_type_tag(copy _1, MAP);
         branch copy _2 -> [bb2, bb1];
     }
 

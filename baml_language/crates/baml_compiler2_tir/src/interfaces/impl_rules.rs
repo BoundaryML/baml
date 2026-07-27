@@ -7,11 +7,12 @@ use baml_type::{QualifiedTypeName, Ty, normalize::TypeContext};
 use crate::{
     generics::{contains_typevar, substitute_ty},
     interfaces::{
-        InterfaceImplOrigin, TypeBindings, lower_interface_associated_bindings, match_ty_patterns,
+        InterfaceImplOrigin, lower_interface_associated_bindings, match_ty_patterns,
         normalized_arg_implements_bound, resolve_ref_to_interface,
     },
     lower_type_expr::qualify_def,
     type_context::AliasEquivCtx,
+    unify::TypeBindings,
 };
 
 /// Fully-resolved data for one `implements` block, keyed by its stable
@@ -200,7 +201,7 @@ fn lower_generic_param_interface_bounds(
 ) -> Vec<baml_type::Interface> {
     let mut ifaces = Vec::new();
     for &bound in bounds {
-        let ty = crate::lower_type_expr::lower_type_ref(
+        let ty = crate::lower_type_expr::lower_constraint_head_type_ref(
             store,
             bound,
             &crate::lower_type_expr::ScopeCtx {
@@ -225,20 +226,6 @@ fn lower_generic_param_interface_bounds(
                 );
             }
             Ty::Interface(qtn, generics, assoc, _) => {
-                // A generic interface used as a bare bound under-instantiates it —
-                // a bound cannot infer the missing argument (mirrors the decl-env
-                // check in `install_generic_param_bounds`).
-                if generics.is_empty()
-                    && let Some(arity) =
-                        crate::inference::interface_declared_generic_arity(db, &qtn)
-                    && arity > 0
-                {
-                    diags.push(crate::infer_context::TirTypeError::WrongNumberOfTypeArgs {
-                        type_name: qtn.name().clone(),
-                        expected: arity,
-                        got: 0,
-                    });
-                }
                 ifaces.push(baml_type::Interface {
                     name: qtn,
                     generics,
@@ -434,7 +421,10 @@ pub fn impl_data<'db>(
     };
 
     let mut interface_target_diags = Vec::new();
-    let lowered_interface = crate::lower_type_expr::lower_type_ref(
+    // The target is a constraint head: it pins only its written inline
+    // bindings (the block's `type X = …` bindings are folded in separately),
+    // so neither defaults nor completeness apply here.
+    let lowered_interface = crate::lower_type_expr::lower_constraint_head_type_ref(
         &block.type_refs,
         block.interface_target,
         &crate::lower_type_expr::ScopeCtx {
@@ -1370,6 +1360,8 @@ pub fn validate_impl_signatures<'db>(
         for &required_ref in &iface_data.requires {
             // A `requires` clause may project `Self.member` (`requires I<Item = Self.Item>`), so
             // realize it with `Self` bound to the implemented interface and `Self -> for_ty` last.
+            // It is a constraint head: the obligation pins only what the clause writes — an
+            // unwritten member is the implementor's to choose.
             let required = realize_with_symbolic_self(
                 db,
                 iface_pkg_items,
@@ -1380,7 +1372,7 @@ pub fn validate_impl_signatures<'db>(
                 &for_ty,
                 &iface_bindings,
                 |scope| {
-                    crate::lower_type_expr::lower_type_ref(
+                    crate::lower_type_expr::lower_constraint_head_type_ref(
                         &iface_data.type_refs,
                         required_ref,
                         scope,
