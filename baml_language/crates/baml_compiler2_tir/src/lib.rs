@@ -68,7 +68,8 @@ pub fn interface_declared_generic_params(
     db: &dyn Db,
     interface: baml_compiler2_hir::loc::InterfaceLoc<'_>,
 ) -> Vec<ty::ParamTy> {
-    generic_env::interface_declared_params(db, interface)
+    let env = generic_env::interface_generic_env(db, interface);
+    generic_env::interface_declared_params(&env).to_vec()
 }
 
 pub fn impl_generic_params(

@@ -62,20 +62,6 @@ use baml_compiler2_tir::ty::{
     FunctionParamMode, FunctionParamTy as Tir2FunctionParamTy, QualifiedTypeName, Ty as Tir2Ty,
 };
 
-fn append_indexed_params(params: &mut Vec<ParamTy>, names: &[Name]) {
-    let first_index = params
-        .iter()
-        .map(ParamTy::index)
-        .max()
-        .map_or(0, |index| index + 1);
-    params.extend(names.iter().enumerate().map(|(offset, name)| {
-        ParamTy::new(
-            first_index + u32::try_from(offset).expect("generic parameter index fits in u32"),
-            name.clone(),
-        )
-    }));
-}
-
 /// Build the [`ResolvedAliases`] type-alias environment for a package,
 /// including dependency packages. The pure erasure that consumes it lives in
 /// `baml_type` ([`ResolvedAliases::convert`]), wrapped compiler-side by
@@ -4640,7 +4626,7 @@ impl<'db> LoweringContext<'db> {
         let saved_lambda_generic_params = self.lambda_generic_params.clone();
         let mut all_generic_params = self.enclosing_generic_params();
         let inherited_count = all_generic_params.len();
-        append_indexed_params(&mut all_generic_params, &func_def.generic_params);
+        ParamTy::extend_frame(&mut all_generic_params, &func_def.generic_params);
         self.lambda_generic_params
             .extend_from_slice(&all_generic_params[inherited_count..]);
         // NOTE: synthetic_name_counts is intentionally NOT saved — its counter

@@ -894,11 +894,9 @@ fn lower_path(
                     if position == TypePosition::Existential {
                         let iface_env = crate::generic_env::interface_generic_env(db, iface_loc);
                         let iface_generic_params =
-                            crate::generic_env::interface_declared_params(db, iface_loc);
-                        let self_param = iface_env
-                            .resolve_param(&baml_base::Name::new("Self"))
-                            .expect("interface Self parameter is in its environment")
-                            .clone();
+                            crate::generic_env::interface_declared_params(&iface_env);
+                        let self_param =
+                            crate::generic_env::interface_self_param(&iface_env).clone();
                         let iface_assoc_names: Vec<_> = iface_data
                             .associated_types
                             .iter()
@@ -923,7 +921,7 @@ fn lower_path(
                                 );
                                 let filled = crate::interfaces::realize_associated_default(
                                     &default,
-                                    &iface_generic_params,
+                                    iface_generic_params,
                                     &lowered_args,
                                     &self_param,
                                     &self_ty,

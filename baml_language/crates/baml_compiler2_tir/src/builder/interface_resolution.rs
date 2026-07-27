@@ -1058,11 +1058,8 @@ impl<'db> TypeInferenceBuilder<'db> {
         let db = self.context.db();
         let data = baml_compiler2_ppir::item_data::interface_data(db, view.loc);
         let interface_env = crate::generic_env::interface_generic_env(db, view.loc);
-        let interface_params = crate::generic_env::interface_declared_params(db, view.loc);
-        let self_param = interface_env
-            .resolve_param(&Name::new("Self"))
-            .expect("interface Self parameter is in its environment")
-            .clone();
+        let interface_params = crate::generic_env::interface_declared_params(&interface_env);
+        let self_param = crate::generic_env::interface_self_param(&interface_env).clone();
         let method_params = extra_generic_names
             .iter()
             .enumerate()
@@ -1088,7 +1085,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         } else {
             view.realized.generics.clone()
         };
-        let mut base_bindings = crate::generics::bind_type_vars(&interface_params, &iface_args);
+        let mut base_bindings = crate::generics::bind_type_vars(interface_params, &iface_args);
         for generic_param in interface_params.iter().chain(&method_params) {
             base_bindings
                 .entry(generic_param.clone())
@@ -1256,10 +1253,8 @@ impl<'db> TypeInferenceBuilder<'db> {
         // reduces against them. The default was lowered once (symbolic `Self`) by the shared
         // query; realize substitutes this receiver for `Self` and the realized generic args.
         let interface_env = crate::generic_env::interface_generic_env(db, view.loc);
-        let iface_generic_params = crate::generic_env::interface_declared_params(db, view.loc);
-        let self_param = interface_env
-            .resolve_param(&Name::new("Self"))
-            .expect("interface Self parameter is in its environment");
+        let iface_generic_params = crate::generic_env::interface_declared_params(&interface_env);
+        let self_param = crate::generic_env::interface_self_param(&interface_env);
         let self_ty = Ty::Interface(
             view.realized.name.clone(),
             view.realized.generics.clone(),
@@ -1268,7 +1263,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         );
         let realized = crate::interfaces::realize_associated_default(
             &default,
-            &iface_generic_params,
+            iface_generic_params,
             &view.realized.generics,
             self_param,
             &self_ty,
@@ -1303,12 +1298,8 @@ impl<'db> TypeInferenceBuilder<'db> {
         let symbolic_receiver =
             !access.bound && !matches!(recv, SelfReceiver::ExactTy(_) | SelfReceiver::Union(_));
         let interface_env = crate::generic_env::interface_generic_env(db, view.loc);
-        let receiver_generic = symbolic_receiver.then(|| {
-            interface_env
-                .resolve_param(&Name::new("Self"))
-                .expect("interface Self parameter is in its environment")
-                .clone()
-        });
+        let receiver_generic = symbolic_receiver
+            .then(|| crate::generic_env::interface_self_param(&interface_env).clone());
 
         let MemberLoweringEnv {
             all_generic_params,

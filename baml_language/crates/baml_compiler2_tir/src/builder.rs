@@ -2795,11 +2795,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             .parent()
             .map(|parent| parent.params().to_vec())
             .unwrap_or_default();
-        let fn_params = env
-            .own_params()
-            .iter()
-            .map(|param| param.param().clone())
-            .collect();
+        let fn_params = env.own_params().to_vec();
         (owner_params, fn_params)
     }
 
@@ -12419,15 +12415,15 @@ impl<'db> TypeInferenceBuilder<'db> {
             "ConcreteFieldSource.iface_loc and .interface must name the same interface",
         );
         let iface_data = baml_compiler2_ppir::item_data::interface_data(db, source.iface_loc);
-        let iface_generic_params =
-            crate::generic_env::interface_declared_params(db, source.iface_loc);
+        let iface_env = crate::generic_env::interface_generic_env(db, source.iface_loc);
+        let iface_generic_params = crate::generic_env::interface_declared_params(&iface_env);
         let field = iface_data.fields.iter().find(|f| f.name == *field_name)?;
         let iface_pkg_items = self.resolve_class_pkg_items(source.interface.name.package())?;
         let iface_ns =
             baml_compiler2_hir::file_package::file_package(db, source.iface_loc.file(db))
                 .namespace_path;
         let bindings =
-            crate::generics::bind_type_vars(&iface_generic_params, &source.interface.generics);
+            crate::generics::bind_type_vars(iface_generic_params, &source.interface.generics);
         // The declaring interface's parameter bounds, so a `T.member` projection
         // in the field type resolves `T`'s declaring interface.
         let iface_bounds =
@@ -12444,7 +12440,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                             db,
                             package_items: iface_pkg_items,
                             ns_context: &iface_ns,
-                            generic_params: &iface_generic_params,
+                            generic_params: iface_generic_params,
                             bounds: iface_bounds,
                             self_ty: None,
                         },
@@ -12671,7 +12667,6 @@ impl<'db> TypeInferenceBuilder<'db> {
                 // lowering and can be resolved by call-site inference.
                 let function_generic_env = crate::generic_env::function_generic_env(db, func_loc);
                 for gp in function_generic_env.own_params() {
-                    let gp = gp.param();
                     bindings
                         .entry(gp.clone())
                         .or_insert_with(|| Ty::TypeVar(gp.clone(), TyAttr::default()));
@@ -12730,11 +12725,9 @@ impl<'db> TypeInferenceBuilder<'db> {
                 {
                     let iface_data = baml_compiler2_ppir::item_data::interface_data(db, iface_loc);
                     let iface_env = crate::generic_env::interface_generic_env(db, iface_loc);
-                    let iface_params = crate::generic_env::interface_declared_params(db, iface_loc);
-                    let iface_self_param = iface_env
-                        .resolve_param(&Name::new("Self"))
-                        .expect("interface Self parameter is in its environment")
-                        .clone();
+                    let iface_params = crate::generic_env::interface_declared_params(&iface_env);
+                    let iface_self_param =
+                        crate::generic_env::interface_self_param(&iface_env).clone();
                     {
                         if let baml_compiler2_hir::type_ref::TypeRefKind::Path {
                             generic_args,
@@ -12798,7 +12791,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                                 // then the accumulated generic / associated-type bindings.
                                 let realized = crate::interfaces::realize_associated_default(
                                     &default,
-                                    &iface_params,
+                                    iface_params,
                                     &realized_iface_args,
                                     &iface_self_param,
                                     &class_ty,
@@ -13035,7 +13028,6 @@ impl<'db> TypeInferenceBuilder<'db> {
                 // lowering and can be resolved by call-site inference.
                 let function_generic_env = crate::generic_env::function_generic_env(db, func_loc);
                 for gp in function_generic_env.own_params() {
-                    let gp = gp.param();
                     bindings
                         .entry(gp.clone())
                         .or_insert_with(|| Ty::TypeVar(gp.clone(), TyAttr::default()));
@@ -13826,9 +13818,10 @@ impl<'db> TypeInferenceBuilder<'db> {
         };
         let db = self.context.db();
         let interface_data = baml_compiler2_ppir::item_data::interface_data(db, interface_loc);
-        let generic_params = crate::generic_env::interface_declared_params(db, interface_loc);
+        let generic_env = crate::generic_env::interface_generic_env(db, interface_loc);
+        let generic_params = crate::generic_env::interface_declared_params(&generic_env);
         self.collect_named_generic_bound_errors(
-            &generic_params,
+            generic_params,
             &interface_data.type_refs,
             &interface_data.generic_param_bounds,
             interface_loc.file(db),

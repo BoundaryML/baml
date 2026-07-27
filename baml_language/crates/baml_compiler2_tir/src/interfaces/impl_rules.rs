@@ -1078,11 +1078,8 @@ pub fn validate_impl_signatures<'db>(
 
     let iface_data = interface_data(db, data.interface);
     let iface_env = crate::generic_env::interface_generic_env(db, data.interface);
-    let iface_generic_params = crate::generic_env::interface_declared_params(db, data.interface);
-    let iface_self_param = iface_env
-        .resolve_param(&Name::new("Self"))
-        .expect("interface Self parameter is in its environment")
-        .clone();
+    let iface_generic_params = crate::generic_env::interface_declared_params(&iface_env);
+    let iface_self_param = crate::generic_env::interface_self_param(&iface_env).clone();
     let iface_pkg_info =
         baml_compiler2_hir::file_package::file_package(db, data.interface.file(db));
     let iface_pkg_items =
@@ -1098,7 +1095,7 @@ pub fn validate_impl_signatures<'db>(
             crate::lower_type_expr::interface_generic_param_bounds(db, data.interface);
         // Realize the interface's declared field types at the impl's interface args.
         let iface_bindings =
-            crate::generics::bind_type_vars(&iface_generic_params, &data.interface_args);
+            crate::generics::bind_type_vars(iface_generic_params, &data.interface_args);
         // A field type may name `Self.Item` (an associated-type field); realize it symbolically
         // and substitute `Self -> for-type` last, so `(for-type as I).Item` reduces to the impl's
         // binding — exactly as the method-signature conformance below does.
@@ -1126,7 +1123,7 @@ pub fn validate_impl_signatures<'db>(
                 db,
                 iface_pkg_items,
                 &iface_pkg_info.namespace_path,
-                &iface_generic_params,
+                iface_generic_params,
                 &iface_self_param,
                 iface_field_bounds,
                 &self_bound,
@@ -1218,7 +1215,7 @@ pub fn validate_impl_signatures<'db>(
     let impl_generic_names: Vec<ParamTy> =
         data.generic_params.iter().map(|(n, _)| n.clone()).collect();
     let iface_bindings =
-        crate::generics::bind_type_vars(&iface_generic_params, &data.interface_args);
+        crate::generics::bind_type_vars(iface_generic_params, &data.interface_args);
     let iface_bounds = crate::lower_type_expr::interface_generic_param_bounds(db, data.interface);
     // In the interface's own declared signatures (and `requires` clauses), `Self` is a rigid
     // type variable bound to the interface being implemented, realized at the impl's args. Both
@@ -1299,7 +1296,7 @@ pub fn validate_impl_signatures<'db>(
 
         // The interface method's function type, realized at `interface_args`.
         let iface_scope_generics = crate::generic_env::append_params(
-            &iface_generic_params,
+            iface_generic_params,
             &iface_spec.generic_param_names(),
         );
         let iface_fn = realize_with_symbolic_self(
@@ -1387,7 +1384,7 @@ pub fn validate_impl_signatures<'db>(
                 db,
                 iface_pkg_items,
                 &iface_pkg_info.namespace_path,
-                &iface_generic_params,
+                iface_generic_params,
                 &iface_self_param,
                 iface_bounds,
                 &self_bound,

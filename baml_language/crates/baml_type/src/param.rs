@@ -29,6 +29,20 @@ impl ParamTy {
     pub fn as_str(&self) -> &str {
         self.name.as_str()
     }
+
+    pub fn extend_frame(frame: &mut Vec<Self>, names: &[Name]) {
+        let first_index = frame
+            .iter()
+            .map(Self::index)
+            .max()
+            .map_or(0, |index| index + 1);
+        frame.extend(names.iter().enumerate().map(|(offset, name)| {
+            Self::new(
+                first_index + u32::try_from(offset).expect("generic parameter index fits in u32"),
+                name.clone(),
+            )
+        }));
+    }
 }
 
 impl fmt::Display for ParamTy {

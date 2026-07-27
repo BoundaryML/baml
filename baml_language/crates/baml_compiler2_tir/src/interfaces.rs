@@ -162,23 +162,16 @@ fn lower_interface_associated_bindings<'db>(
     // lowering time — never consulting the impl set (this runs inside `impl_data`; a
     // concrete-base projection here would re-enter it). A residual symbolic `Self`
     // substitutes to the for-type afterwards.
-    let self_name = Name::new("Self");
     let iface_env = crate::generic_env::interface_generic_env(db, iface_loc);
-    let iface_params = crate::generic_env::interface_declared_params(db, iface_loc);
-    let self_param = iface_env
-        .resolve_param(&self_name)
-        .expect("interface Self parameter is in its environment")
-        .clone();
+    let iface_params = crate::generic_env::interface_declared_params(&iface_env);
+    let self_param = crate::generic_env::interface_self_param(&iface_env).clone();
     let iface_qtn = interface_loc_qtn(db, iface_loc);
     let mut value_scope = generic_params.to_vec();
     value_scope.push(self_param.clone());
-    let mut value_bindings: TypeBindings = generic_params
-        .iter()
-        .map(|param| (param.clone(), Ty::TypeVar(param.clone(), TyAttr::default())))
-        .collect();
+    let mut value_bindings: TypeBindings = generics::identity_bindings(generic_params);
     value_bindings.insert(self_param.clone(), self_ty.clone());
     let mut resolved_pins: Vec<(Name, Ty)> = Vec::new();
-    let mut default_bindings = generics::bind_type_vars(&iface_params, interface_args);
+    let mut default_bindings = generics::bind_type_vars(iface_params, interface_args);
 
     iface
         .associated_types
@@ -223,7 +216,7 @@ fn lower_interface_associated_bindings<'db>(
                     interface_associated_type_default(db, iface_loc, assoc.name.clone())?;
                 let realized = realize_associated_default(
                     &default,
-                    &iface_params,
+                    iface_params,
                     interface_args,
                     &self_param,
                     self_ty,
@@ -254,12 +247,9 @@ fn complete_interface_associated_bindings_from_tys<'db>(
     fill_defaults: bool,
 ) -> Vec<(Name, Ty)> {
     let iface_env = crate::generic_env::interface_generic_env(db, iface_loc);
-    let iface_params = crate::generic_env::interface_declared_params(db, iface_loc);
-    let self_param = iface_env
-        .resolve_param(&Name::new("Self"))
-        .expect("interface Self parameter is in its environment")
-        .clone();
-    let mut bindings = generics::bind_type_vars(&iface_params, interface_args);
+    let iface_params = crate::generic_env::interface_declared_params(&iface_env);
+    let self_param = crate::generic_env::interface_self_param(&iface_env).clone();
+    let mut bindings = generics::bind_type_vars(iface_params, interface_args);
     for (name, ty) in associated_bindings {
         let param = iface_env
             .resolve_any_param(name)
@@ -311,7 +301,7 @@ fn complete_interface_associated_bindings_from_tys<'db>(
             );
             let realized = realize_associated_default(
                 &default,
-                &iface_params,
+                iface_params,
                 interface_args,
                 &self_param,
                 &self_ty,
@@ -362,13 +352,9 @@ pub fn interface_associated_type_default<'db>(
 
     // A symbolic `Self`: a rigid type variable bounded by this interface at its own generic
     // parameters, so a `Self.Other` projection in the default resolves through the bound.
-    let self_name = Name::new("Self");
     let generic_env = crate::generic_env::interface_generic_env(db, iface_loc);
-    let generic_params = crate::generic_env::interface_declared_params(db, iface_loc);
-    let self_param = generic_env
-        .resolve_param(&self_name)
-        .expect("interface Self parameter is in its environment")
-        .clone();
+    let generic_params = crate::generic_env::interface_declared_params(&generic_env);
+    let self_param = crate::generic_env::interface_self_param(&generic_env).clone();
     let self_constraint = baml_type::Interface::new(
         crate::lower_type_expr::qualify_def(db, Definition::Interface(iface_loc), &iface.name),
         generic_params
@@ -438,13 +424,11 @@ pub(crate) fn existential_associated_default(
     };
     let (default, _diagnostics) = interface_associated_type_default(db, iface_loc, member.clone())?;
     let iface_env = crate::generic_env::interface_generic_env(db, iface_loc);
-    let iface_params = crate::generic_env::interface_declared_params(db, iface_loc);
-    let self_param = iface_env
-        .resolve_param(&Name::new("Self"))
-        .expect("interface Self parameter is in its environment");
+    let iface_params = crate::generic_env::interface_declared_params(&iface_env);
+    let self_param = crate::generic_env::interface_self_param(&iface_env);
     Some(realize_associated_default(
         &default,
-        &iface_params,
+        iface_params,
         args,
         self_param,
         self_ty,
@@ -456,12 +440,9 @@ fn lower_interface_type_associated_bindings(
     diagnostics: &mut Vec<crate::infer_context::TirTypeError>,
 ) -> Vec<(Name, Ty)> {
     let iface_env = crate::generic_env::interface_generic_env(ctx.db, ctx.iface_loc);
-    let iface_params = crate::generic_env::interface_declared_params(ctx.db, ctx.iface_loc);
-    let self_param = iface_env
-        .resolve_param(&Name::new("Self"))
-        .expect("interface Self parameter is in its environment")
-        .clone();
-    let mut bindings = generics::bind_type_vars(&iface_params, ctx.interface_args);
+    let iface_params = crate::generic_env::interface_declared_params(&iface_env);
+    let self_param = crate::generic_env::interface_self_param(&iface_env).clone();
+    let mut bindings = generics::bind_type_vars(iface_params, ctx.interface_args);
     for (param, ty) in ctx.outer_bindings {
         bindings.entry(param.clone()).or_insert_with(|| ty.clone());
     }
@@ -557,7 +538,7 @@ fn lower_interface_type_associated_bindings(
             );
             let realized = realize_associated_default(
                 &default,
-                &iface_params,
+                iface_params,
                 ctx.interface_args,
                 &self_param,
                 &self_ty,
@@ -1009,8 +990,8 @@ pub fn interface_closure_locs_with_args_and_assoc<'db>(
         child_ancestors.insert(loc);
 
         let iface_env = crate::generic_env::interface_generic_env(db, loc);
-        let iface_params = crate::generic_env::interface_declared_params(db, loc);
-        let mut bindings = generics::bind_type_vars(&iface_params, &args);
+        let iface_params = crate::generic_env::interface_declared_params(&iface_env);
+        let mut bindings = generics::bind_type_vars(iface_params, &args);
         for (name, ty) in &associated_bindings {
             let param = iface_env
                 .resolve_any_param(name)

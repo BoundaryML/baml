@@ -589,10 +589,7 @@ fn associated_type_bound_interface(
     // interface's generics are the realized ones, and each sibling associated type is
     // its inner pin.
     let generic_env = crate::generic_env::interface_generic_env(db, iface_loc);
-    let self_param = generic_env
-        .resolve_param(&Name::new("Self"))
-        .expect("interface Self parameter is in its environment")
-        .clone();
+    let self_param = crate::generic_env::interface_self_param(&generic_env).clone();
     let mut bindings: FxHashMap<crate::ty::ParamTy, Ty> = FxHashMap::default();
     bindings.insert(self_param.clone(), self_ty.clone());
     // `realized` should carry exactly one argument per declared generic parameter; a mismatch
@@ -703,10 +700,7 @@ pub(crate) fn associated_type_declared_bound(
         return Vec::new();
     }
     let generic_env = crate::generic_env::interface_generic_env(db, iface_loc);
-    let self_param = generic_env
-        .resolve_param(&Name::new("Self"))
-        .expect("interface Self parameter is in its environment")
-        .clone();
+    let self_param = crate::generic_env::interface_self_param(&generic_env).clone();
     let symbolic_self = Ty::TypeVar(self_param, TyAttr::default());
     associated_type_bound_interface(db, iface_loc, interface, &symbolic_self, member)
         .into_iter()

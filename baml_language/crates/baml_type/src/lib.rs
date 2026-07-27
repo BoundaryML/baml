@@ -477,10 +477,6 @@ impl Ty {
         Ty::TypeVar(ParamTy::new(0, Name::new(name)), TyAttr::default())
     }
 
-    pub fn type_var_at(index: u32, name: &str) -> Self {
-        Ty::TypeVar(ParamTy::new(index, Name::new(name)), TyAttr::default())
-    }
-
     /// View this type as an [`Interface`] constraint when it is an interface
     /// existential ([`Ty::Interface`]); `None` for any other type. Attributes
     /// are dropped — the constraint is identity data (name, generic arguments,

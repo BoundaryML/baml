@@ -18,7 +18,7 @@
 
 use rustc_hash::FxHashMap;
 
-use crate::ty::{FunctionParamTy, ParamTy, Ty};
+use crate::ty::{FunctionParamTy, ParamTy, Ty, TyAttr};
 
 // ── Type variable binding ─────────────────────────────────────────────────────
 
@@ -34,6 +34,13 @@ pub fn bind_type_vars(generic_params: &[ParamTy], concrete_args: &[Ty]) -> FxHas
         bindings.insert(param.clone(), arg.clone());
     }
     bindings
+}
+
+pub(crate) fn identity_bindings(generic_params: &[ParamTy]) -> FxHashMap<ParamTy, Ty> {
+    generic_params
+        .iter()
+        .map(|param| (param.clone(), Ty::TypeVar(param.clone(), TyAttr::default())))
+        .collect()
 }
 
 // ── Type substitution ─────────────────────────────────────────────────────────

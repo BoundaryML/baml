@@ -46,20 +46,6 @@ use bex_vm_types::{
     },
 };
 
-fn append_param_names(params: &mut Vec<ParamTy>, names: &[Name]) {
-    let first_index = params
-        .iter()
-        .map(ParamTy::index)
-        .max()
-        .map_or(0, |index| index + 1);
-    params.extend(names.iter().enumerate().map(|(offset, name)| {
-        ParamTy::new(
-            first_index + u32::try_from(offset).expect("generic parameter index fits in u32"),
-            name.clone(),
-        )
-    }));
-}
-
 /// Build a per-package `ResolvedAliases` cache, keyed by package name.
 fn build_alias_caches(
     db: &dyn baml_compiler2_mir::Db,
@@ -251,7 +237,7 @@ fn build_interface_def(
         .iter()
         .map(|m| {
             let mut scope = interface_frame_params.clone();
-            append_param_names(&mut scope, &m.generic_params);
+            ParamTy::extend_frame(&mut scope, &m.generic_params);
             build_method(store, &m.name, &scope, &m.params, m.return_type, m.throws)
         })
         .collect();
