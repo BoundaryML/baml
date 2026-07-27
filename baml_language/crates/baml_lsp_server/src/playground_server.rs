@@ -60,6 +60,10 @@ use crate::{
     playground_ws::{RunListFilter, RunListKind, RunListVisibility, WsInMessage, WsOutMessage},
 };
 
+#[derive(Debug, thiserror::Error)]
+#[error("Playground server requires either BAML_PLAYGROUND_DEV_PORT or BAML_PLAYGROUND_DIR")]
+pub(crate) struct PlaygroundNotConfigured;
+
 fn to_ws_text(msg: &WsOutMessage) -> Option<AxumWsMsg> {
     match serde_json::to_string(msg) {
         Ok(json) => Some(AxumWsMsg::Text(json.into())),
@@ -1034,9 +1038,7 @@ fn build_router(
         tracing::info!("Playground: serving static files from {dir}");
         static_router(dir)
     } else {
-        anyhow::bail!(
-            "Playground server requires either BAML_PLAYGROUND_DEV_PORT or BAML_PLAYGROUND_DIR"
-        )
+        return Err(PlaygroundNotConfigured.into());
     };
 
     Ok(api.fallback_service(fallback))

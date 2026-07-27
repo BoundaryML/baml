@@ -701,7 +701,9 @@ name = "baml_builtins2"
 version = "0.0.0-beta"
 dependencies = [
  "baml_base",
+ "serde",
  "serde_json",
+ "yaml_serde",
 ]
 
 [[package]]
@@ -779,7 +781,6 @@ dependencies = [
  "toml_edit 0.22.27",
  "uuid",
  "webbrowser",
- "yaml_serde",
 ]
 
 [[package]]
