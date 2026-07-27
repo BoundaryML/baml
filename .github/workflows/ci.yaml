@@ -87,7 +87,9 @@ jobs:
             ':scripts/baml-wrapper-version' \
             ':scripts/baml-release-manifests' \
             ':scripts/baml-package-manager-artifacts' \
+            ':scripts/baml_release_platforms.py' \
             ':scripts/baml-bridge-cffi-hygiene' \
+            ':release/platforms.json' \
             ':scripts/install.sh' \
             ':scripts/install.ps1' \
             ':packaging/aur/**' \
