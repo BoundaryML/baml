@@ -583,7 +583,7 @@ mod tests {
         pm.new_permit(()).await.acquire().await
     }
 
-    /// Register a future typed as `Future<int, null>` — the shape a
+    /// Register a future typed as `Future<int, never>` — the shape a
     /// non-throwing `spawn { 1 }` produces. These tests exercise registry
     /// bookkeeping, so the types are inert here; a concrete pair is used
     /// anyway so nothing reads as "type unknown by design".
@@ -591,7 +591,7 @@ mod tests {
         guard: &mut FutureManagerGuard<'_>,
         cancel: CancellationToken,
     ) -> (FutureId, HeapPtr) {
-        guard.new_future(RealizedTy::int(), RealizedTy::null(), cancel)
+        guard.new_future(RealizedTy::int(), RealizedTy::never(), cancel)
     }
 
     #[tokio::test]

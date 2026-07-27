@@ -220,7 +220,7 @@ function task_group.queues_excess_and_all_complete() -> int {
     make_closure .<lambda(queues_excess_and_all_complete, 0)>, 0
     store_var _3
     load_type int
-    load_type null
+    load_type never
     load_var g
     load_const <omitted>
     load_const <omitted>
@@ -239,13 +239,13 @@ function task_group.queues_excess_and_all_complete() -> int {
     load_const null
     load_var _9
     load_type int
-    load_type null
+    load_type never
     spawn
     store_var _10
     make_closure .<lambda(queues_excess_and_all_complete, 1)>, 0
     store_var _12
     load_type int
-    load_type null
+    load_type never
     load_var g
     load_const <omitted>
     load_const <omitted>
@@ -264,13 +264,13 @@ function task_group.queues_excess_and_all_complete() -> int {
     load_const null
     load_var _18
     load_type int
-    load_type null
+    load_type never
     spawn
     store_var _19
     make_closure .<lambda(queues_excess_and_all_complete, 2)>, 0
     store_var _21
     load_type int
-    load_type null
+    load_type never
     load_var g
     load_const <omitted>
     load_const <omitted>
@@ -289,13 +289,13 @@ function task_group.queues_excess_and_all_complete() -> int {
     load_const null
     load_var _27
     load_type int
-    load_type null
+    load_type never
     spawn
     store_var _28
     make_closure .<lambda(queues_excess_and_all_complete, 3)>, 0
     store_var _30
     load_type int
-    load_type null
+    load_type never
     load_var g
     load_const <omitted>
     load_const <omitted>
@@ -314,13 +314,13 @@ function task_group.queues_excess_and_all_complete() -> int {
     load_const null
     load_var _36
     load_type int
-    load_type null
+    load_type never
     spawn
     store_var _37
     make_closure .<lambda(queues_excess_and_all_complete, 4)>, 0
     store_var _39
     load_type int
-    load_type null
+    load_type never
     load_var g
     load_const <omitted>
     load_const <omitted>
@@ -339,7 +339,7 @@ function task_group.queues_excess_and_all_complete() -> int {
     load_const null
     load_var _45
     load_type int
-    load_type null
+    load_type never
     spawn
     store_var _46
     load_var _10

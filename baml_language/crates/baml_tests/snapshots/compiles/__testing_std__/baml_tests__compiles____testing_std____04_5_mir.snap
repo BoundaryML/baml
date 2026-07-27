@@ -1991,26 +1991,25 @@ fn testing.run_children_parallel(children: testing.TestSetChild[]) -> testing.Te
     // Locals:
     let _0: testing.TestSetReport // _0 // return
     let _1: testing.TestSetChild[] // children // param
-    let _2: future<testing.NamedChildReport, null>[] // futures
+    let _2: future<testing.NamedChildReport, never>[] // futures
     let _3: baml.iter.Iterator<Error = never, Item = testing.TestSetChild>
     let _4: unknown
     let _5: bool
     let _6: testing.TestSetChild
     let _7: testing.TestSetChild // child [captured]
     let _8: void
-    let _9: future<testing.NamedChildReport, null>
+    let _9: future<testing.NamedChildReport, never>
     let _10: null
-    let _11: future<testing.NamedChildReport, null>
+    let _11: future<testing.NamedChildReport, never>
     let _12: testing.NamedChildReport[] // named_results
-    let _13: unknown // e
-    let _14: null
-    let _15: future<testing.NamedChildReport, null>[]
+    let _13: null
+    let _14: future<testing.NamedChildReport, never>[]
+    let _15: type
     let _16: type
-    let _17: type
-    let _18: testing.NamedChildReport[]
+    let _17: testing.NamedChildReport[]
 
     bb0: {
-        _2 = []: future<testing.NamedChildReport, null>[];
+        _2 = []: future<testing.NamedChildReport, never>[];
         _3 = virtual_call iter as baml.iter.Iterable<Item = testing.TestSetChild, Error = never>(copy _1) -> [bb1];
     }
 
@@ -2028,7 +2027,7 @@ fn testing.run_children_parallel(children: testing.TestSetChild[]) -> testing.Te
         fresh_cell(_7);
         _7 = copy _6;
         _10 = make_closure lambda[0](copy _7);
-        _11 = spawn<testing.NamedChildReport, null> copy _10 name=const null -> bb4;
+        _11 = spawn<testing.NamedChildReport, never> copy _10 name=const null -> bb4;
     }
 
     bb4: {
@@ -2037,30 +2036,22 @@ fn testing.run_children_parallel(children: testing.TestSetChild[]) -> testing.Te
     }
 
     bb5: {
-        _15 = copy _2;
-        _16 = load_type(testing.NamedChildReport);
-        _17 = load_type(null);
-        _14 = call const fn baml.future.all_complete<copy _16, copy _17>(copy _15) -> [bb6, unwind: bb7];
+        _14 = copy _2;
+        _15 = load_type(testing.NamedChildReport);
+        _16 = load_type(never);
+        _13 = call const fn baml.future.all_complete<copy _15, copy _16>(copy _14) -> [bb6];
     }
 
     bb6: {
-        _12 = await _14 -> [bb9, unwind: bb7];
+        _12 = await _13 -> [bb7];
     }
 
     bb7: {
-        throw_if_panic copy _13 -> bb8;
+        _17 = copy _12;
+        _0 = call const fn testing.aggregate_reports(copy _17) -> [bb8];
     }
 
     bb8: {
-        _12 = call const fn baml.sys.panic(const "unexpected test child failure") -> [bb9];
-    }
-
-    bb9: {
-        _18 = copy _12;
-        _0 = call const fn testing.aggregate_reports(copy _18) -> [bb10];
-    }
-
-    bb10: {
         return;
     }
 }

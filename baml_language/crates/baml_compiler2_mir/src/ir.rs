@@ -576,9 +576,8 @@ pub enum Terminator {
 pub struct SpawnFutureTy {
     /// The `T` of `Future<T, E>` — the value the spawned body returns.
     pub returns: TyTemplate,
-    /// The `E` of `Future<T, E>` — what the spawned body may throw. A body
-    /// that statically cannot throw spells this `null`, per the BEP's
-    /// `Future<T, never> ≈ Future<T, null>` approximation.
+    /// The `E` of `Future<T, E>` — what the spawned body may throw. A body that
+    /// statically cannot throw spells this `never`.
     pub throws: TyTemplate,
 }
 

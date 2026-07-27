@@ -48,7 +48,7 @@ function spawn_semantics.mid() -> int {
     load_const null
     load_const null
     load_type int
-    load_type null
+    load_type never
     spawn
     store_var _3
     load_var _3
@@ -63,7 +63,7 @@ function spawn_semantics.multiple_awaits_on_same_future_return_cached_value_fn()
     load_const null
     load_const null
     load_type int
-    load_type null
+    load_type never
     spawn
     store_var _3
     load_var _3
@@ -83,12 +83,12 @@ function spawn_semantics.multiple_awaits_on_same_future_return_cached_value_fn()
     return
 }
 
-function spawn_semantics.spawn_child() -> future<int, null> {
+function spawn_semantics.spawn_child() -> future<int, never> {
     make_closure .<lambda(spawn_child, 0)>, 0
     load_const null
     load_const null
     load_type int
-    load_type null
+    load_type never
     spawn
     store_var _2
     load_var _2
@@ -100,7 +100,7 @@ function spawn_semantics.three_level_nested_spawn_sum_fn() -> int {
     load_const null
     load_const null
     load_type int
-    load_type null
+    load_type never
     spawn
     store_var _3
     load_var _3
@@ -113,7 +113,7 @@ function spawn_semantics.top() -> int {
     load_const null
     load_const null
     load_type int
-    load_type null
+    load_type never
     spawn
     store_var _3
     load_var _3

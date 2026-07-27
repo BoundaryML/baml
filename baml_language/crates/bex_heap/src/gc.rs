@@ -2230,7 +2230,7 @@ mod tests {
             name: Some(name),
             config: None,
             returns: RealizedTy::int(),
-            throws: RealizedTy::null(),
+            throws: RealizedTy::never(),
         })));
 
         let roots = vec![future_ptr];
@@ -2784,7 +2784,7 @@ mod tests {
             name: None,
             config: None,
             returns: RealizedTy::int(),
-            throws: RealizedTy::null(),
+            throws: RealizedTy::never(),
         })));
 
         // --- Container: Object::Instance ---

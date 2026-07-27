@@ -88,7 +88,7 @@ function cancel_token.detached_spawn_completes() -> int {
     make_closure .<lambda(detached_spawn_completes, 0)>, 0
     store_var _2
     load_type int
-    load_type null
+    load_type never
     load_const <omitted>
     load_const <omitted>
     load_const true
@@ -107,7 +107,7 @@ function cancel_token.detached_spawn_completes() -> int {
     load_const null
     load_var _7
     load_type int
-    load_type null
+    load_type never
     spawn
     store_var _8
     load_var _8
@@ -139,7 +139,7 @@ function cancel_token.uncancelled_token_completes() -> int {
     make_closure .<lambda(uncancelled_token_completes, 0)>, 0
     store_var _3
     load_type int
-    load_type null
+    load_type never
     load_const <omitted>
     load_var tok
     load_const <omitted>
@@ -158,7 +158,7 @@ function cancel_token.uncancelled_token_completes() -> int {
     load_const null
     load_var _9
     load_type int
-    load_type null
+    load_type never
     spawn
     store_var _10
     load_var _10

@@ -40,6 +40,14 @@ impl RealizedTy {
         }
     }
 
+    /// `never` (the bottom type) with default attributes. The error type of a
+    /// future whose body statically cannot throw.
+    pub fn never() -> Self {
+        RealizedTy::Never {
+            attr: TyAttr::default(),
+        }
+    }
+
     // --- Compound constructors (default TyAttr) ---
 
     /// `T[]` (list) with default attributes.

@@ -200,7 +200,7 @@ function spawn_throws.racing_successful_spawn_returns_cleanly_fn() -> int {
     load_const null
     load_const null
     load_type int
-    load_type null
+    load_type never
     spawn
     pop 1
     load_const 7

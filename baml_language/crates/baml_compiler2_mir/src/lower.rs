@@ -1275,7 +1275,7 @@ fn tag_conflated_shape(ty: &RuntimeTy) -> Option<TagConflatedShape> {
 ///
 /// Generic-argument positions are invariant (`TYPE_SYSTEM.md` "Variance"): `int[]`,
 /// `string[]`, and `json[]` are mutually unrelated types, as are
-/// `Future<int, null>` and `Future<string, null>`. So the coarse "any list" /
+/// `Future<int, never>` and `Future<string, never>`. So the coarse "any list" /
 /// "any map" / "any future" tag is sound only when no value the scrutinee admits
 /// could carry that tag with different type arguments than the arm. That holds
 /// when every same-shape member of the scrutinee shares the arm's constructor
