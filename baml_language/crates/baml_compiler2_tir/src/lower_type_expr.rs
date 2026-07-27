@@ -3756,6 +3756,24 @@ function needs<T extends Marker>(x: T) -> int throws never {
     }
 
     #[test]
+    fn alpha_equivalent_method_generics_and_bounds_are_accepted() {
+        let diags = impl_diagnostics(
+            "interface Eq<T> {}\n\
+             interface Echo<T> {\n  function echo<U, V extends Eq<U>>(self, value: V) -> U throws never\n}\n\
+             class Echoer {\n  implements Echo<int> {\n    \
+             function echo<A, B extends Eq<A>>(self, value: B) -> A { $rust_function }\n  }\n}\n",
+        );
+        assert!(
+            !diags.iter().any(|e| matches!(
+                e,
+                TirTypeError::InterfaceMethodSignatureMismatch { method, .. }
+                    if method.as_str() == "echo"
+            )),
+            "alpha-equivalent method generics and bounds should conform, got {diags:?}"
+        );
+    }
+
+    #[test]
     fn widened_override_param_is_accepted() {
         // Args are contravariant: an override may accept a *supertype* (`int | string` ⊇ `int`).
         let diags = impl_diagnostics(

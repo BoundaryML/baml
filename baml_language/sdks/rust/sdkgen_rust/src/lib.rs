@@ -851,9 +851,9 @@ mod tests {
         assert_eq!(lib.matches(note_head).count(), 2, "{lib}");
     }
 
-    fn typevar(name: &str) -> Ty {
+    fn typevar(index: u32, name: &str) -> Ty {
         Ty::TypeVar(
-            baml_codegen_types::ParamTy::new(0, baml_base::Name::new(name)),
+            baml_codegen_types::ParamTy::new(index, baml_base::Name::new(name)),
             baml_base::TyAttr::EMPTY,
         )
     }
@@ -904,8 +904,8 @@ mod tests {
         let n = name("user", &[], "identity");
         let mut f = nullary_string_fn(&n);
         f.generic_params = vec![baml_base::Name::new("T")];
-        f.arguments = vec![arg("x", typevar("T"))];
-        f.return_type = typevar("T");
+        f.arguments = vec![arg("x", typevar(0, "T"))];
+        f.return_type = typevar(0, "T");
         let pool = SymbolPool::from([(n, Symbol::Function(f))]);
 
         let generated = to_source_code_with_bytecode(&pool, &[], &options());
@@ -978,7 +978,7 @@ mod tests {
             "x",
             Ty::Union(
                 vec![
-                    typevar("T"),
+                    typevar(0, "T"),
                     Ty::String {
                         attr: baml_base::TyAttr::EMPTY,
                     },
@@ -1027,7 +1027,7 @@ mod tests {
         let c = name("user", &[], "ContainerShapes");
         let mixed = Ty::Union(
             vec![
-                typevar("T"),
+                typevar(0, "T"),
                 Ty::String {
                     attr: baml_base::TyAttr::EMPTY,
                 },
@@ -1069,8 +1069,8 @@ mod tests {
             "x",
             Ty::Union(
                 vec![
-                    typevar("T"),
-                    typevar("U"),
+                    typevar(0, "T"),
+                    typevar(1, "U"),
                     Ty::Int {
                         attr: baml_base::TyAttr::EMPTY,
                     },
@@ -1107,7 +1107,7 @@ mod tests {
         let b = name("user", &[], "GenericBox");
         let pool = SymbolPool::from([(
             b.clone(),
-            generic_class(&b, &["T"], vec![("value", typevar("T"))]),
+            generic_class(&b, &["T"], vec![("value", typevar(0, "T"))]),
         )]);
 
         let generated = to_source_code_with_bytecode(&pool, &[], &options());
@@ -1146,7 +1146,7 @@ mod tests {
         let r = name("user", &[], "GenericRecursive");
         let next_ty = Ty::Union(
             vec![
-                Ty::Class(r.clone(), vec![typevar("T")], baml_base::TyAttr::EMPTY),
+                Ty::Class(r.clone(), vec![typevar(0, "T")], baml_base::TyAttr::EMPTY),
                 Ty::Null {
                     attr: baml_base::TyAttr::EMPTY,
                 },
@@ -1155,7 +1155,11 @@ mod tests {
         );
         let pool = SymbolPool::from([(
             r.clone(),
-            generic_class(&r, &["T"], vec![("value", typevar("T")), ("next", next_ty)]),
+            generic_class(
+                &r,
+                &["T"],
+                vec![("value", typevar(0, "T")), ("next", next_ty)],
+            ),
         )]);
 
         let generated = to_source_code_with_bytecode(&pool, &[], &options());
@@ -1181,8 +1185,8 @@ mod tests {
         let b = name("user", &[], "GenericBox");
         let mut wrap = nullary_string_fn(&name("user", &[], "wrap"));
         wrap.generic_params = vec![baml_base::Name::new("T")];
-        wrap.arguments = vec![arg("x", typevar("T"))];
-        wrap.return_type = Ty::Class(b.clone(), vec![typevar("T")], baml_base::TyAttr::EMPTY);
+        wrap.arguments = vec![arg("x", typevar(0, "T"))];
+        wrap.return_type = Ty::Class(b.clone(), vec![typevar(0, "T")], baml_base::TyAttr::EMPTY);
         let mut consume = nullary_string_fn(&name("user", &[], "consume"));
         consume.arguments = vec![arg(
             "x",
@@ -1200,7 +1204,7 @@ mod tests {
         let pool = SymbolPool::from([
             (
                 b.clone(),
-                generic_class(&b, &["T"], vec![("value", typevar("T"))]),
+                generic_class(&b, &["T"], vec![("value", typevar(0, "T"))]),
             ),
             (name("user", &[], "wrap"), Symbol::Function(wrap)),
             (name("user", &[], "consume"), Symbol::Function(consume)),
@@ -1231,7 +1235,7 @@ mod tests {
         // generic `impl` block; the wire bindings send the class params
         // ahead of the method's own (De Bruijn order).
         let b = name("user", &[], "GenericBox");
-        let Symbol::Class(mut class) = generic_class(&b, &["T"], vec![("value", typevar("T"))])
+        let Symbol::Class(mut class) = generic_class(&b, &["T"], vec![("value", typevar(0, "T"))])
         else {
             unreachable!("generic_class builds a class")
         };
@@ -1241,7 +1245,7 @@ mod tests {
         class.instance_methods.push({
             let mut m = nullary_string_fn(&name("user", &[], "pair_with"));
             m.generic_params = vec![baml_base::Name::new("U")];
-            m.arguments = vec![arg("other", typevar("U"))];
+            m.arguments = vec![arg("other", typevar(1, "U"))];
             m
         });
         let pool = SymbolPool::from([(b, Symbol::Class(class))]);
@@ -1280,15 +1284,15 @@ mod tests {
         // no receiver exists, so no class TypeVars ride the call — the wire
         // carries only the static's own `V` ("no phantom class params").
         let b = name("user", &[], "GenericBox");
-        let Symbol::Class(mut class) = generic_class(&b, &["T"], vec![("value", typevar("T"))])
+        let Symbol::Class(mut class) = generic_class(&b, &["T"], vec![("value", typevar(0, "T"))])
         else {
             unreachable!("generic_class builds a class")
         };
         class.static_methods.push({
             let mut m = nullary_string_fn(&name("user", &[], "make_box"));
             m.generic_params = vec![baml_base::Name::new("V")];
-            m.arguments = vec![arg("value", typevar("V"))];
-            m.return_type = Ty::Class(b.clone(), vec![typevar("V")], baml_base::TyAttr::EMPTY);
+            m.arguments = vec![arg("value", typevar(0, "V"))];
+            m.return_type = Ty::Class(b.clone(), vec![typevar(0, "V")], baml_base::TyAttr::EMPTY);
             m
         });
         let pool = SymbolPool::from([(b, Symbol::Class(class))]);
@@ -1353,7 +1357,7 @@ mod tests {
         let children = Ty::List(
             Box::new(Ty::Class(
                 g.clone(),
-                vec![typevar("T")],
+                vec![typevar(0, "T")],
                 baml_base::TyAttr::EMPTY,
             )),
             baml_base::TyAttr::EMPTY,

@@ -1784,6 +1784,22 @@ impl<'db> TypeInferenceBuilder<'db> {
         Self::ty_from_concrete_facts(&facts)
     }
 
+    fn callback_throws_for_generic_inference(&self, expr_id: ExprId) -> Option<Ty> {
+        if let Some(throws) = self.lambda_effective_throws.get(&expr_id) {
+            let facts = crate::throw_inference::flatten_ty_to_facts(throws);
+            let all_rigid = facts.iter().all(|fact| {
+                !matches!(
+                    fact,
+                    Ty::Unknown { .. } | Ty::BuiltinUnknown { .. } | Ty::Error { .. }
+                ) && !crate::generics::contains_non_rigid_typevar(fact, &self.generic_params)
+            });
+            if all_rigid {
+                return Some(throws.clone());
+            }
+        }
+        self.callback_concrete_throws_from_expr(expr_id)
+    }
+
     fn replace_callable_throws(ty: Ty, concrete_throws: &Ty) -> Ty {
         match ty {
             Ty::Function {
@@ -1806,7 +1822,7 @@ impl<'db> TypeInferenceBuilder<'db> {
     }
 
     fn call_arg_ty_for_generic_inference(&self, expr_id: ExprId, ty: Ty) -> Ty {
-        self.callback_concrete_throws_from_expr(expr_id)
+        self.callback_throws_for_generic_inference(expr_id)
             .map(|throws| Self::replace_callable_throws(ty.clone(), &throws))
             .unwrap_or(ty)
     }
@@ -6805,11 +6821,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                         expected_ret.as_ref().clone()
                     }
                 });
-                let surface_throws_ty = if func_def.throws.is_some() {
-                    throws_ty.clone()
-                } else {
-                    lambda_effective_throws.clone()
-                };
+                let surface_throws_ty = throws_ty;
 
                 let result = Ty::Function {
                     params: param_tys,

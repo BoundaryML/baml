@@ -1137,53 +1137,43 @@ pub(crate) mod support {
                     // — otherwise `T` erases to `unknown`. (Interfaces share the
                     // `Class` scope kind; both must be handled, or an interface
                     // method's unannotated `self` would erase to `unknown`.)
-                    let enclosing: Option<(baml_compiler2_tir::ty::Ty, Vec<baml_base::Name>)> =
-                        scope.parent.and_then(|parent_idx| {
-                            let parent = &index.scopes[parent_idx.index() as usize];
-                            if !matches!(parent.kind, ScopeKind::Class) {
-                                return None;
+                    let enclosing_class_ty = scope.parent.and_then(|parent_idx| {
+                        let parent = &index.scopes[parent_idx.index() as usize];
+                        if !matches!(parent.kind, ScopeKind::Class) {
+                            return None;
+                        }
+                        let cn = parent.name.as_ref()?;
+                        let def = pkg_items.lookup_type(ns, cn)?;
+                        let generic_params = match def {
+                            Definition::Class(class_loc) => {
+                                baml_compiler2_tir::class_generic_params(db, class_loc)
                             }
-                            let cn = parent.name.as_ref()?;
-                            let def = pkg_items.lookup_type(ns, cn)?;
-                            let generics = match def {
-                                Definition::Class(class_loc) => {
-                                    baml_compiler2_ppir::item_data::class_data(db, class_loc)
-                                        .generic_params
-                                        .clone()
-                                }
-                                Definition::Interface(iface_loc) => {
-                                    baml_compiler2_ppir::item_data::interface_data(db, iface_loc)
-                                        .generic_params
-                                        .clone()
-                                }
-                                _ => return None,
-                            };
-                            let class_ty = baml_compiler2_tir::ty::Ty::Class(
-                                baml_compiler2_tir::lower_type_expr::qualify_def(db, def, cn),
-                                generics
-                                    .iter()
-                                    .map(|n| {
-                                        baml_compiler2_tir::ty::Ty::TypeVar(
-                                            n.clone(),
-                                            Default::default(),
-                                        )
-                                    })
-                                    .collect(),
-                                Default::default(),
-                            );
-                            Some((class_ty, generics))
-                        });
-                    let (enclosing_class_ty, enclosing_class_generics) = match enclosing {
-                        Some((ty, generics)) => (Some(ty), generics),
-                        None => (None, Vec::new()),
-                    };
+                            Definition::Interface(iface_loc) => {
+                                baml_compiler2_tir::interface_declared_generic_params(db, iface_loc)
+                            }
+                            _ => return None,
+                        };
+                        let class_ty = baml_compiler2_tir::ty::Ty::Class(
+                            baml_compiler2_tir::lower_type_expr::qualify_def(db, def, cn),
+                            generic_params
+                                .iter()
+                                .map(|param| {
+                                    baml_compiler2_tir::ty::Ty::TypeVar(
+                                        param.clone(),
+                                        Default::default(),
+                                    )
+                                })
+                                .collect(),
+                            Default::default(),
+                        );
+                        Some(class_ty)
+                    });
 
                     let gp = &func_data.generic_params;
                     // Type-lowering scope for the signature: the enclosing
                     // class's generics plus the function's own. (The displayed
                     // `<...>` below still shows only the function's own.)
-                    let mut sig_generics: Vec<baml_base::Name> = enclosing_class_generics;
-                    sig_generics.extend(gp.iter().cloned());
+                    let sig_generics = baml_compiler2_tir::function_generic_params(db, func_loc);
                     // One lowering scope shared by the param/return/throws sites
                     // below (a display helper — no type-var bounds threaded).
                     let sig_bounds = TypeVarBoundsMap::default();

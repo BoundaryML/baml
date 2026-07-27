@@ -1278,6 +1278,7 @@ pub fn validate_impl_signatures<'db>(
             &impl_generic_names,
             &impl_spec.generic_param_names(),
         );
+        let impl_method_params = &impl_scope_generics[impl_generic_names.len()..];
         let mut impl_fn = realize_with_symbolic_self(
             db,
             &res_ctx.own_items,
@@ -1299,6 +1300,19 @@ pub fn validate_impl_signatures<'db>(
             iface_generic_params,
             &iface_spec.generic_param_names(),
         );
+        let iface_method_params = &iface_scope_generics[iface_generic_params.len()..];
+        let method_generic_arity_matches = impl_method_params.len() == iface_method_params.len();
+        let mut iface_method_bindings = iface_bindings.clone();
+        if method_generic_arity_matches {
+            iface_method_bindings.extend(iface_method_params.iter().zip(impl_method_params).map(
+                |(iface_param, impl_param)| {
+                    (
+                        iface_param.clone(),
+                        Ty::TypeVar(impl_param.clone(), TyAttr::default()),
+                    )
+                },
+            ));
+        }
         let iface_fn = realize_with_symbolic_self(
             db,
             iface_pkg_items,
@@ -1308,11 +1322,13 @@ pub fn validate_impl_signatures<'db>(
             iface_bounds,
             &self_bound,
             &for_ty,
-            &iface_bindings,
+            &iface_method_bindings,
             |scope| iface_spec.to_function_ty(scope, &mut d),
         );
 
-        if !baml_type::normalize::is_subtype(&impl_fn, &iface_fn, &ctx) {
+        if !method_generic_arity_matches
+            || !baml_type::normalize::is_subtype(&impl_fn, &iface_fn, &ctx)
+        {
             diags.push((
                 crate::infer_context::TirTypeError::InterfaceMethodSignatureMismatch {
                     interface: iface_qtn.clone(),
@@ -1342,7 +1358,18 @@ pub fn validate_impl_signatures<'db>(
             &iface_pkg_info.namespace_path,
             &iface_scope_generics,
             &iface_spec,
-        );
+        )
+        .into_iter()
+        .map(|(name, bounds)| {
+            let bounds: Vec<_> = bounds
+                .into_iter()
+                .map(|bound| {
+                    bound.map_tys(|ty| crate::generics::substitute_ty(ty, &iface_method_bindings))
+                })
+                .collect();
+            (name, bounds)
+        })
+        .collect::<Vec<_>>();
         for (i, (param, impl_conjunction)) in impl_bounds.iter().enumerate() {
             let iface_conjunction = iface_method_bounds
                 .get(i)

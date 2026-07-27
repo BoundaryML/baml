@@ -1342,6 +1342,31 @@ function f() -> null {
 }
 
 #[test]
+fn contextual_lambda_preserves_omitted_throws_surface() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+function takes(cb: (x: int) -> int throws int | string) -> null {
+    return null
+}
+
+function f() -> null {
+    takes((x: int) -> int {
+        throw "boom"
+    })
+}
+"#,
+    );
+
+    let tir = render_tir(&db, file);
+    assert!(
+        tir.contains("(x: int) -> int { ... } : (x: int) -> int throws int | string"),
+        "expected omitted throws to preserve the contextual function surface, got:\n{tir}"
+    );
+}
+
+#[test]
 fn returned_triple_nested_lambda_reads_cleanly() {
     let mut db = make_db();
     let file = db.add_file(
