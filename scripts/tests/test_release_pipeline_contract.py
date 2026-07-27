@@ -997,7 +997,7 @@ class WorkflowGraphTests(unittest.TestCase):
 
         self.assertIn('["go", "mod", "tidy"]', smoke)
         self.assertNotIn(
-            '["go", "mod", "download", f"{GO_MODULE}@{module_version}"]',
+            '["go", "mod", "download",',
             smoke,
         )
 
