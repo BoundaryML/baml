@@ -1136,12 +1136,6 @@ impl<'db> TypeInferenceBuilder<'db> {
             SelfReceiver::Existential(existential_ty) => (existential_ty.clone(), None),
         };
 
-        if let Some(param) = &self_bound_name
-            && !all_generic_params.contains(param)
-        {
-            all_generic_params.push(param.clone());
-        }
-
         // The lowering scope's bounds, innermost binding wins:
         //   1. the *enclosing* scope's — the receiver type may carry the caller's rigid type
         //      variables (`us: U[]` with `U extends HasErr`), whose bounds must be visible to

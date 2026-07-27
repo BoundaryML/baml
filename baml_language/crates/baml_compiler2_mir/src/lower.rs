@@ -815,9 +815,13 @@ fn lower_tir_template(
             ..
         } => {
             if matches!(&**base, Tir2Ty::TypeVar(param, _) if param.as_str() == "Self")
-                && let Some(param) = generic_params.iter().find(|param| param.name() == member)
+                && let Some(index) = generic_params
+                    .iter()
+                    .position(|param| param.name() == member)
             {
-                return Some(TyTemplate::TypeArgRef(param.index()));
+                return Some(TyTemplate::TypeArgRef(
+                    u32::try_from(index).expect("runtime type argument index fits in u32"),
+                ));
             }
             Some(TyTemplate::AssociatedTypeProjection {
                 base: Box::new(lower_tir_template(base, resolved, generic_params, mode)?),
@@ -844,8 +848,13 @@ fn lower_tir_template(
             })
         }
         Tir2Ty::TypeVar(param, _) => {
-            if generic_params.get(param.index() as usize) == Some(param) {
-                Some(TyTemplate::TypeArgRef(param.index()))
+            if let Some(index) = generic_params
+                .iter()
+                .position(|candidate| candidate == param)
+            {
+                Some(TyTemplate::TypeArgRef(
+                    u32::try_from(index).expect("runtime type argument index fits in u32"),
+                ))
             } else if mode == TemplateMode::Value {
                 unreachable!("type variable not found in type args: {param}")
             } else {
@@ -974,7 +983,15 @@ pub fn tir2_to_template(
     resolved: &ResolvedAliases,
     generic_params: &[ParamTy],
 ) -> TyTemplate {
-    lower_tir_template(ty, resolved, generic_params, TemplateMode::Value)
+    let ty = baml_compiler2_tir::generics::erase_typevars_matching(ty, &|param| {
+        baml_compiler2_tir::ty::is_synthetic_effect_param(param.name())
+    });
+    let generic_params: Vec<_> = generic_params
+        .iter()
+        .filter(|param| !baml_compiler2_tir::ty::is_synthetic_effect_param(param.name()))
+        .cloned()
+        .collect();
+    lower_tir_template(&ty, resolved, &generic_params, TemplateMode::Value)
         .unwrap_or_else(|| unreachable!("value template lowering is infallible"))
 }
 
@@ -3295,6 +3312,11 @@ impl<'db> LoweringContext<'db> {
     fn erase_compiler_only_ty(ty: Tir2Ty) -> Tir2Ty {
         match ty {
             Tir2Ty::Unknown { attr } | Tir2Ty::Error { attr } => Tir2Ty::BuiltinUnknown { attr },
+            Tir2Ty::TypeVar(param, attr)
+                if baml_compiler2_tir::ty::is_synthetic_effect_param(param.name()) =>
+            {
+                Tir2Ty::BuiltinUnknown { attr }
+            }
             Tir2Ty::EvolvingList(inner, attr) => {
                 Tir2Ty::List(Box::new(Self::erase_compiler_only_ty(*inner)), attr)
             }
@@ -4814,7 +4836,11 @@ impl<'db> LoweringContext<'db> {
         // Build TyTemplate entries for each enclosing generic type param so
         // the closure can materialise them at runtime.  These resolve in the
         // **outer** frame (TypeArgRef(N) → outer frame.type_args[N]).
-        let enclosing_params = self.enclosing_generic_params();
+        let enclosing_params: Vec<_> = self
+            .enclosing_generic_params()
+            .into_iter()
+            .filter(|param| !baml_compiler2_tir::ty::is_synthetic_effect_param(param.name()))
+            .collect();
         let type_arg_templates: Vec<TyTemplate> = enclosing_params
             .iter()
             .enumerate()
@@ -5325,7 +5351,11 @@ impl LoweringContext<'_> {
         let lambda_pending_idx = self.pending_lambdas.len();
         self.pending_lambdas.push(lambda_mir);
 
-        let enclosing_params = self.enclosing_generic_params();
+        let enclosing_params: Vec<_> = self
+            .enclosing_generic_params()
+            .into_iter()
+            .filter(|param| !baml_compiler2_tir::ty::is_synthetic_effect_param(param.name()))
+            .collect();
         let type_arg_templates: Vec<TyTemplate> = enclosing_params
             .iter()
             .enumerate()
@@ -9258,8 +9288,13 @@ impl LoweringContext<'_> {
         }
         generic_params
             .iter()
-            .find(|param| param.name() == &segments[0])
-            .map(|param| TyTemplate::TypeArgRef(param.index()))
+            .filter(|param| !baml_compiler2_tir::ty::is_synthetic_effect_param(param.name()))
+            .position(|param| param.name() == &segments[0])
+            .map(|index| {
+                TyTemplate::TypeArgRef(
+                    u32::try_from(index).expect("runtime type argument index fits in u32"),
+                )
+            })
     }
 
     /// Recursively convert a `Tir2Ty` to a `TyTemplate`.
@@ -9391,9 +9426,6 @@ impl LoweringContext<'_> {
             .unwrap_or_default();
         let caller_generic_params = self.enclosing_generic_params();
         for ty in &mut inferred_type_args {
-            *ty = baml_compiler2_tir::generics::erase_typevars_matching(ty, &|param| {
-                baml_compiler2_tir::ty::is_synthetic_effect_param(param.name())
-            });
             if baml_compiler2_tir::generics::contains_typevar_where(ty, &|name| {
                 !caller_generic_params.iter().any(|param| param == name)
             }) {

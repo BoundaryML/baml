@@ -2820,37 +2820,40 @@ impl<'db> TypeInferenceBuilder<'db> {
         _is_method_call: bool,
         is_value_call: bool,
     ) -> Vec<crate::ty::ParamTy> {
-        if is_value_call {
-            return callee_generic_params.to_vec();
-        }
-
-        let Some(resolution) = self.callee_member_resolution(callee_id) else {
-            return callee_generic_params.to_vec();
+        let params = if is_value_call {
+            callee_generic_params.to_vec()
+        } else if let Some(resolution) = self.callee_member_resolution(callee_id) {
+            // Interface methods carry no callee-frame `func_loc`; their declared generic params
+            // are recorded in the `interface_method_generic_params` side table during interface
+            // checking. Everything else derives its frame from the function loc.
+            match resolution {
+                MemberResolution::Free { func_loc }
+                | MemberResolution::UnboundMethod { func_loc, .. } => {
+                    let (owner_params, fn_params) = self.callee_frame_generic_params(func_loc);
+                    owner_params.into_iter().chain(fn_params).collect()
+                }
+                MemberResolution::BoundMethod { func_loc, .. } => {
+                    let (_, fn_params) = self.callee_frame_generic_params(func_loc);
+                    fn_params
+                }
+                MemberResolution::InterfaceVirtualMethod { .. }
+                | MemberResolution::InterfaceConcreteMethod { .. } => self
+                    .interface_method_generic_params
+                    .get(&callee_id)
+                    .map(|(_, params, _)| params.clone())
+                    .unwrap_or_else(|| callee_generic_params.to_vec()),
+                MemberResolution::Field { .. }
+                | MemberResolution::Variant { .. }
+                | MemberResolution::InterfaceVirtualField { .. } => callee_generic_params.to_vec(),
+            }
+        } else {
+            callee_generic_params.to_vec()
         };
 
-        // Interface methods carry no callee-frame `func_loc`; their declared generic params
-        // are recorded in the `interface_method_generic_params` side table during interface
-        // checking. Everything else derives its frame from the function loc.
-        match resolution {
-            MemberResolution::Free { func_loc }
-            | MemberResolution::UnboundMethod { func_loc, .. } => {
-                let (owner_params, fn_params) = self.callee_frame_generic_params(func_loc);
-                owner_params.into_iter().chain(fn_params).collect()
-            }
-            MemberResolution::BoundMethod { func_loc, .. } => {
-                let (_, fn_params) = self.callee_frame_generic_params(func_loc);
-                fn_params
-            }
-            MemberResolution::InterfaceVirtualMethod { .. }
-            | MemberResolution::InterfaceConcreteMethod { .. } => self
-                .interface_method_generic_params
-                .get(&callee_id)
-                .map(|(_, params, _)| params.clone())
-                .unwrap_or_else(|| callee_generic_params.to_vec()),
-            MemberResolution::Field { .. }
-            | MemberResolution::Variant { .. }
-            | MemberResolution::InterfaceVirtualField { .. } => callee_generic_params.to_vec(),
-        }
+        params
+            .into_iter()
+            .filter(|param| !crate::ty::is_synthetic_effect_param(param.name()))
+            .collect()
     }
 
     fn record_call_type_args(&mut self, expr_id: ExprId, type_args: Vec<Ty>) {
@@ -6851,28 +6854,30 @@ impl<'db> TypeInferenceBuilder<'db> {
                 let result = Ty::Function {
                     params: param_tys,
                     ret: Box::new(surface_ret_ty),
-                    throws: Box::new(surface_throws_ty.clone()),
+                    throws: Box::new(surface_throws_ty),
                     attr: TyAttr::default(),
                 };
                 self.lambda_effective_throws
-                    .insert(expr_id, lambda_effective_throws);
+                    .insert(expr_id, lambda_effective_throws.clone());
                 if parameter_mismatch {
                     // Callback effect generics are inferred after lambda checking.
                     // Resolve them for this diagnostic while keeping outer generics rigid.
                     let mut diagnostic_bindings = FxHashMap::default();
                     crate::generics::infer_bindings(
                         expected_throws,
-                        &surface_throws_ty,
+                        &lambda_effective_throws,
                         &mut diagnostic_bindings,
                     );
                     diagnostic_bindings
                         .retain(|name, _| !self.generic_params.iter().any(|param| param == name));
                     let diagnostic_expected =
                         crate::generics::substitute_ty(expected_fn_ty, &diagnostic_bindings);
+                    let diagnostic_got =
+                        crate::generics::substitute_ty(&result, &diagnostic_bindings);
                     self.context.report(
                         TirTypeError::TypeMismatch {
                             expected: diagnostic_expected,
-                            got: result.clone(),
+                            got: diagnostic_got,
                         },
                         expr_id,
                         Vec::new(),
