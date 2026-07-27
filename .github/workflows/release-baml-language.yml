@@ -2279,9 +2279,18 @@ jobs:
       - publish-aur
       - dry-run-artifacts
       - dry-run-summary
+      - build-swift-sdk
+      - verify-swift-sdk
+      - prepare-csharp-sdk
+      - verify-csharp-sdk
+      - publish-csharp-sdk
+      - release-prerequisites-complete
+      - release-complete
+      - publish-pkg-channel
+      - smoke-swift-release
     # Use the dispatch input so a failure in plan itself is still reportable.
     # This job must run after failed dependencies; the script posts only when the run contains failures.
-    if: ${{ always() && inputs.dry_run == false && github.ref_name == 'canary' }}
+    if: ${{ always() && inputs.dry_run == false && needs.plan.outputs.source_branch == 'canary' }}
     runs-on: ubuntu-latest
     environment: boundary-tools-dev
     permissions:
