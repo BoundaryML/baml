@@ -1,4 +1,5 @@
 using CsharpPhase12;
+using System.Diagnostics;
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
@@ -476,7 +477,11 @@ Require(
 using Baml.Spawn.CancelToken token = Baml.Spawn.CancelToken.New();
 using Baml.Spawn.CancelToken combined = Baml.Spawn.CancelToken.Any(new[] { token });
 Require(!token.IsCancelled() && !combined.IsCancelled(), "CancelToken started cancelled");
-Require(token.Cancel() == 1 && combined.IsCancelled(), "CancelToken.any did not preserve native state");
+Require(token.Cancel() == 1, "CancelToken.cancel did not transition native state");
+await RequireEventuallyAsync(
+    () => combined.IsCancelled(),
+    TimeSpan.FromSeconds(1),
+    "CancelToken.any did not propagate native cancellation");
 
 using Boundary.LocalId localId = Boundary.Functions.Id();
 using Boundary.LocalId capturedId = localId.Capture(inputs: true, output: false, error: true);
@@ -534,6 +539,36 @@ static void Require(bool condition, string message)
     if (!condition)
     {
         throw new InvalidOperationException(message);
+    }
+}
+
+static async Task RequireEventuallyAsync(
+    Func<bool> condition,
+    TimeSpan timeout,
+    string message)
+{
+    Stopwatch stopwatch = Stopwatch.StartNew();
+    TimeSpan pollInterval = TimeSpan.FromMilliseconds(10);
+    while (true)
+    {
+        TimeSpan remaining = timeout - stopwatch.Elapsed;
+        if (remaining <= TimeSpan.Zero)
+        {
+            throw new InvalidOperationException(message);
+        }
+
+        if (condition())
+        {
+            return;
+        }
+
+        remaining = timeout - stopwatch.Elapsed;
+        if (remaining <= TimeSpan.Zero)
+        {
+            throw new InvalidOperationException(message);
+        }
+
+        await Task.Delay(remaining < pollInterval ? remaining : pollInterval);
     }
 }
 
