@@ -107,7 +107,7 @@ class AemEchoer {
 }
 
 function aem_accept_echo(value: AemEcho<int>) -> int {
-    42
+    return value.echo(AemValue<int> { value: 42 })
 }
 
 test "alpha_equivalent_method_generics_and_bounds_run" {

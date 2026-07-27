@@ -107,7 +107,17 @@ function interfaces_class_generics.McapTask.drive(self: interfaces_class_generic
 }
 
 function interfaces_class_generics.aem_accept_echo(value: interfaces_class_generics.AemEcho<int>) -> int {
+    load_type int
+    load_type interfaces_class_generics.AemValue<int>
+    load_var value
     load_const 42
+    load_type int
+    init_instance<1> user.interfaces_class_generics.AemValue .value
+    load_type interfaces_class_generics.AemEcho<int>
+    load_const "echo"
+    virtual_call nargs=2 ntypeargs=2
+    store_var _0
+    load_var _0
     return
 }
 
