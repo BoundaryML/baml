@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 17627
 ---
 === PPIR ===
 function user.test_annotated() -> int  [expr] {
@@ -17,6 +16,9 @@ function user.test_mixed() -> int  [expr] {
 }
 function user.test_multi_param() -> int  [expr] {
   { let add = (a: int, b: int) -> int { {  } a Add b } } add(20, 22)
+}
+function user.test_top_level_fat_arrow(x: int) -> int  [expr] {
+  {  } x Add 1
 }
 function user.test_zero_param() -> int  [expr] {
   { let constant = () -> int { {  } 42 } } constant()

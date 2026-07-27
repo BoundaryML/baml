@@ -12,6 +12,9 @@ use baml_project::ProjectDatabase;
 use printer::{Printer, Shape};
 pub use trivia_classifier::{EmittableTrivia, TriviaInfo};
 
+#[cfg(test)]
+mod formatter_scenario_tests;
+
 /// Runs the formatter on the given source code.
 ///
 /// Also see [`format_salsa`] if you already have a [`salsa::Database`] with the source files in it.
@@ -33,11 +36,22 @@ pub fn format_salsa(
 ) -> Result<String, FormatterError> {
     let tokens = baml_compiler_lexer::lex_file(db, file);
     let (parsed, errors) = baml_compiler_parser::parse_file(&tokens);
+    let cst = SyntaxNode::new_root(parsed);
+
+    // Honor the documented escape hatch at the shared library boundary so
+    // CLI and LSP behavior cannot diverge. Inspect parser-classified comment
+    // tokens rather than the raw source: directive-like text inside a string
+    // must not disable formatting. This check intentionally precedes the parse
+    // error gate so the directive can protect an incomplete or intentionally
+    // non-canonical file.
+    if has_ignore_directive(&cst) {
+        return Ok(file.text(db).clone());
+    }
+
     if !errors.is_empty() {
         return Err(FormatterError::ParseErrors(errors));
     }
 
-    let cst = SyntaxNode::new_root(parsed);
     let trivia = TriviaInfo::classify_trivia(&cst);
     let strong_ast = ast::SourceFile::from_cst(SyntaxElement::Node(cst))?;
 
@@ -53,6 +67,30 @@ pub fn format_salsa(
     Ok(printer.output)
 }
 
+fn has_ignore_directive(cst: &SyntaxNode) -> bool {
+    cst.descendants_with_tokens().any(|element| {
+        let SyntaxElement::Token(token) = element else {
+            return false;
+        };
+        matches!(
+            token.kind(),
+            baml_db::baml_compiler_syntax::SyntaxKind::LINE_COMMENT
+                | baml_db::baml_compiler_syntax::SyntaxKind::BLOCK_COMMENT
+        ) && comment_contains_ignore_directive(token.text())
+    })
+}
+
+fn comment_contains_ignore_directive(comment: &str) -> bool {
+    const PREFIX: &str = "baml-format";
+    let lowercase = comment.to_ascii_lowercase();
+    lowercase.match_indices(PREFIX).any(|(start, _)| {
+        lowercase[start + PREFIX.len()..]
+            .trim_start()
+            .strip_prefix(':')
+            .is_some_and(|rest| rest.trim_start().starts_with("ignore"))
+    })
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct FormatOptions {
     /// Maximum line width before wrapping kicks in. Default: `100`
@@ -64,10 +102,13 @@ impl Default for FormatOptions {
     fn default() -> Self {
         Self {
             line_width: 100,
-            indent_width: 4,
+            indent_width: CANONICAL_INDENT_WIDTH,
         }
     }
 }
+
+/// Canonical indentation used by the CLI, LSP, and default library formatter.
+pub const CANONICAL_INDENT_WIDTH: usize = 4;
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum FormatterError {
@@ -75,6 +116,21 @@ pub enum FormatterError {
     ParseErrors(Vec<ParseError>),
     #[error("{0}")]
     StrongAstError(#[from] ast::StrongAstError),
+}
+
+#[cfg(test)]
+mod format_options_tests {
+    use super::*;
+
+    #[test]
+    fn default_options_use_the_canonical_four_space_indent() {
+        let options = FormatOptions::default();
+        assert_eq!(CANONICAL_INDENT_WIDTH, 4);
+        assert_eq!(options.indent_width, CANONICAL_INDENT_WIDTH);
+        let formatted = format("function value() -> int {\n  result\n}\n", &options)
+            .expect("default formatter options should format a function body");
+        assert_eq!(formatted, "function value() -> int {\n    result\n}\n");
+    }
 }
 
 #[cfg(test)]
@@ -139,6 +195,47 @@ mod lambda_format_tests {
         assert_eq!(formatted, second, "formatter should be idempotent");
     }
 
+    /// A JS/TS-style fat arrow is an unambiguous punctuation slip in a
+    /// function signature. The shared parser accepts it and the formatter
+    /// repairs it to canonical BAML `->` rather than rejecting the file.
+    #[test]
+    fn test_top_level_fat_arrow_is_repaired() {
+        let source = "function add(a: int, b: int) => int {\n    a + b\n}\n";
+        let options = FormatOptions::default();
+        let formatted = format(source, &options).expect("formatter should repair a fat arrow");
+        assert_eq!(
+            formatted,
+            "function add(a: int, b: int) -> int {\n    a + b\n}\n"
+        );
+        let second = format(&formatted, &options).expect("formatter should be idempotent");
+        assert_eq!(formatted, second, "formatter should be idempotent");
+    }
+
+    #[test]
+    fn test_expression_bodied_lambda_is_rejected() {
+        let options = FormatOptions::default();
+        for arrow in ["->", "=>"] {
+            let source = format!(
+                "function apply() -> int {{\n    let add_one = (x: int) {arrow} x + 1\n    add_one(41)\n}}\n"
+            );
+            assert!(
+                format(&source, &options).is_err(),
+                "formatter must reject a lambda body without braces for {arrow}"
+            );
+        }
+    }
+
+    #[test]
+    fn test_arrow_comments_survive_annotated_and_block_bodies() {
+        let source = "function top() => /* result */ int { 1 }\n\nfunction apply() -> int {\n    let identity = (x: int) => /* body */ { x }\n    identity(1)\n}\n";
+        let options = FormatOptions::default();
+        let formatted = format(source, &options).expect("formatter should preserve comments");
+        assert!(formatted.contains("-> /* result */ int"));
+        assert!(formatted.contains("-> /* body */ {"));
+        let second = format(&formatted, &options).expect("formatter should be idempotent");
+        assert_eq!(formatted, second, "formatter should be idempotent");
+    }
+
     #[test]
     fn test_top_level_interface_spacing_is_idempotent() {
         let source = r#"interface Named {
@@ -199,6 +296,28 @@ implements<T extends Named> Printable for Box<T> {
                 "formatter should be idempotent for:\n{source}"
             );
         }
+    }
+}
+
+#[cfg(test)]
+mod ignore_directive_tests {
+    use super::*;
+
+    #[test]
+    fn line_comment_directive_preserves_invalid_source_verbatim() {
+        let source = "// BAML-FORMAT : ignore\nfunction unfinished(\n";
+        let formatted = format(source, &FormatOptions::default())
+            .expect("the ignore directive should bypass parse errors");
+        assert_eq!(formatted, source);
+    }
+
+    #[test]
+    fn directive_text_inside_a_string_does_not_disable_formatting() {
+        let source = "function main() -> string {\n  let marker = \"// baml-format: ignore\";\n  marker\n}\n";
+        let formatted = format(source, &FormatOptions::default())
+            .expect("directive-like string content is ordinary source text");
+        assert_ne!(formatted, source);
+        assert!(formatted.contains("    let marker = \"// baml-format: ignore\";"));
     }
 }
 
