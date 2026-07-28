@@ -32,6 +32,11 @@ import {
   type FunctionInfo,
   type TestInfo,
 } from './worker-protocol';
+import {
+  getSidebarLeafPaddingLeft,
+  SIDEBAR_LEAF_ICON_CLASS,
+  SIDEBAR_LEAF_ROW_CLASS,
+} from './function-sidebar-row-styles';
 
 // ---------------------------------------------------------------------------
 // TestTreeNode — recursive tree renderer for SerializedTestDef items
@@ -58,24 +63,22 @@ function TestTreeNode({
   onRetryExpand,
 }: TestTreeNodeProps) {
   const [expanded, setExpanded] = useState(true);
-  const indent = 8 + depth * 12;
+  const branchIndent = 8 + depth * 12;
+  const leafIndent = getSidebarLeafPaddingLeft(depth);
 
   if ('type' in def && def.type === 'lazyTestSet') {
     const isFailed = failedExpands?.has(def.name);
     return (
       <div
-        className="flex items-center gap-1.5 pr-2 py-0.5 text-[10px] font-vsc-mono text-vsc-text-muted"
-        style={{ paddingLeft: indent }}
+        className={cn(SIDEBAR_LEAF_ROW_CLASS, 'text-vsc-text-muted')}
+        style={{ paddingLeft: leafIndent }}
       >
         {isFailed ? (
-          <FlaskConical size={12} className="text-red-500 shrink-0" />
+          <FlaskConical className={cn(SIDEBAR_LEAF_ICON_CLASS, 'text-red-500')} />
         ) : (
-          <Loader2
-            size={12}
-            className="animate-spin text-vsc-text-faint shrink-0"
-          />
+          <Loader2 className={cn(SIDEBAR_LEAF_ICON_CLASS, 'animate-spin')} />
         )}
-        <span className="truncate text-[11px] font-medium italic text-vsc-text-faint">
+        <span className="truncate font-medium italic text-vsc-text-faint">
           {def.name.split('/').pop()}
         </span>
         <span
@@ -113,13 +116,11 @@ function TestTreeNode({
       typeof reportObj?.outcome === 'string' ? reportObj.outcome : undefined;
     return (
       <div
-        className="flex items-center gap-1.5 pr-2 py-0.5 text-[10px] font-vsc-mono text-vsc-text-muted"
-        style={{ paddingLeft: indent }}
+        className={cn(SIDEBAR_LEAF_ROW_CLASS, 'text-vsc-text-muted')}
+        style={{ paddingLeft: leafIndent }}
       >
-        <FlaskConical size={12} className="text-vsc-text-faint shrink-0" />
-        <span className="truncate text-[11px]">
-          {def.name.split('/').pop()}
-        </span>
+        <FlaskConical className={SIDEBAR_LEAF_ICON_CLASS} />
+        <span className="truncate">{def.name.split('/').pop()}</span>
         {onRunTest && (
           <button
             className="ml-auto text-[9px] text-vsc-text-faint hover:text-vsc-text px-1 shrink-0 disabled:cursor-not-allowed disabled:opacity-50"
@@ -153,7 +154,7 @@ function TestTreeNode({
     <Collapsible open={expanded} onOpenChange={setExpanded}>
       <CollapsibleTrigger
         className="flex items-center gap-1 w-full pr-2 py-0.5 cursor-pointer text-[10px] font-vsc-mono text-vsc-text-muted hover:bg-vsc-hover"
-        style={{ paddingLeft: indent }}
+        style={{ paddingLeft: branchIndent }}
       >
         <ChevronRight
           className={cn(
@@ -318,16 +319,17 @@ function FunctionTreeNode({
     <button
       type="button"
       className={cn(
-        'flex items-center gap-1 w-full pr-2 py-1 cursor-pointer text-[11px] font-vsc-mono text-left',
+        SIDEBAR_LEAF_ROW_CLASS,
+        'cursor-pointer',
         isSelected
           ? 'bg-vsc-accent/15 text-vsc-text font-semibold'
           : 'text-vsc-text-muted hover:bg-vsc-hover',
       )}
-      style={{ paddingLeft: 20 + depth * 12 }}
+      style={{ paddingLeft: getSidebarLeafPaddingLeft(depth) }}
       title={node.fullName}
       onClick={() => onSelectFn(isSelected ? null : node.fullName)}
     >
-      <Icon className="h-3.5 w-3.5 shrink-0 text-vsc-text-faint" />
+      <Icon className={SIDEBAR_LEAF_ICON_CLASS} />
       <span className="truncate">{node.label}</span>
       {isInternal && (
         <span className="ml-auto shrink-0 rounded border border-vsc-border px-1 py-0 text-[9px] text-vsc-text-faint">
@@ -523,17 +525,18 @@ export const FunctionSidebar: FC<FunctionSidebarProps> = ({
                     type="button"
                     key={key}
                     className={cn(
-                      'flex items-center gap-1.5 w-full pr-2 py-0.5 text-[10px] font-vsc-mono text-left',
+                      SIDEBAR_LEAF_ROW_CLASS,
+                      'cursor-pointer',
                       selectedPreviewTestKey === key
                         ? 'bg-vsc-accent/15 text-vsc-text font-semibold'
                         : 'text-vsc-text-muted hover:bg-vsc-hover',
                     )}
-                    style={{ paddingLeft: 8 }}
+                    style={{ paddingLeft: getSidebarLeafPaddingLeft() }}
                     onClick={() => onSelectPreviewTest?.(test)}
                     title={`Use ${test.name} args for ${test.functionName}`}
                   >
-                    <FlaskConical size={12} className="text-vsc-text-faint shrink-0" />
-                    <span className="truncate text-[11px]">
+                    <FlaskConical className={SIDEBAR_LEAF_ICON_CLASS} />
+                    <span className="truncate">
                       {test.name}
                       {duplicateName ? ` → ${test.functionName}` : ''}
                     </span>
