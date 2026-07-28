@@ -25,9 +25,11 @@ describe('findLatestGraphRunSnapshot', () => {
     });
 
     expect(
-      findLatestGraphRunSnapshot([newest, oldest], 'throws.main', 'project')
-        ?.boundaryId,
-    ).toBe('newest');
+      findLatestGraphRunSnapshot([newest, oldest], 'throws.main', 'project'),
+    ).toMatchObject({
+      run: { boundaryId: 'newest' },
+      match: 'target',
+    });
   });
 
   it('does not depend on run array ordering', () => {
@@ -48,8 +50,11 @@ describe('findLatestGraphRunSnapshot', () => {
         [older, middleOtherProject, newer],
         'throws.main',
         'project',
-      )?.boundaryId,
-    ).toBe('newer');
+      ),
+    ).toMatchObject({
+      run: { boundaryId: 'newer' },
+      match: 'target',
+    });
   });
 
   it('can select a workflow run that contains the displayed function', () => {
@@ -62,8 +67,26 @@ describe('findLatestGraphRunSnapshot', () => {
     });
 
     expect(
-      findLatestGraphRunSnapshot([run], 'throws.main', 'project')?.boundaryId,
-    ).toBe('workflow');
+      findLatestGraphRunSnapshot([run], 'throws.main', 'project'),
+    ).toMatchObject({
+      run: { boundaryId: 'workflow' },
+      match: 'viaCalls',
+    });
+  });
+
+  it('prefers a newer containing workflow over an older direct run', () => {
+    const direct = runFixture('direct', 100);
+    const workflow = runFixture('workflow', 200, {
+      target: { kind: 'function', functionName: 'throws.workflow' },
+      calls: [callFixture('child', 'throws.main')],
+    });
+
+    expect(
+      findLatestGraphRunSnapshot([direct, workflow], 'throws.main', 'project'),
+    ).toMatchObject({
+      run: { boundaryId: 'workflow' },
+      match: 'viaCalls',
+    });
   });
 });
 

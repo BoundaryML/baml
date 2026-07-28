@@ -361,6 +361,26 @@ function GraphViewInner({
 
   const effectiveRunStatus = runStatus ?? run?.status;
   const effectiveRunError = runError ?? run?.error?.message ?? null;
+  const graphRuntimeNotices = useMemo(() => {
+    if (
+      !graphRuntimeOverlay ||
+      (run && graphRuntimeOverlay.boundaryId !== run.boundaryId)
+    ) {
+      return null;
+    }
+    const diagnostics = [
+      ...new Map(
+        graphRuntimeOverlay.diagnostics.map((diagnostic) => [
+          `${diagnostic.code ?? ''}:${diagnostic.message}`,
+          diagnostic,
+        ]),
+      ).values(),
+    ];
+    const unattachedCount = graphRuntimeOverlay.unattachedCallNodeIds.length;
+    return unattachedCount > 0 || diagnostics.length > 0
+      ? { diagnostics, unattachedCount }
+      : null;
+  }, [graphRuntimeOverlay, run]);
   const rootGraphNodeId =
     graphModel.graphNodes.find((node) => node.type === 'function')?.id ?? null;
   const graphNodeValues = useMemo(
@@ -739,6 +759,12 @@ function GraphViewInner({
           to { transform: rotate(360deg); }
         }
         .react-flow__attribution { display: none !important; }
+        .baml-graph-notices > summary {
+          list-style: none;
+        }
+        .baml-graph-notices > summary::-webkit-details-marker {
+          display: none;
+        }
         /* Level-of-detail transitions: when expand/collapse re-layouts, nodes
            glide to their new spot and containers grow/shrink, and freshly
            revealed nodes fade in. Armed only after the first layout so the
@@ -798,6 +824,110 @@ function GraphViewInner({
         />
         <ColorfulMarkerDefinitions />
       </ReactFlow>
+      {graphRuntimeNotices ? (
+        <details
+          className="baml-graph-notices"
+          style={{
+            position: 'absolute',
+            top: 10,
+            left: 10,
+            zIndex: 11,
+            fontFamily:
+              'ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif',
+          }}
+        >
+          <summary
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 5,
+              width: 'fit-content',
+              padding: '5px 9px',
+              borderRadius: 999,
+              border: `1px solid ${chrome.button.border}`,
+              background: chrome.button.bg,
+              backdropFilter: 'blur(8px)',
+              WebkitBackdropFilter: 'blur(8px)',
+              boxShadow: chrome.button.shadow,
+              color: chrome.button.text,
+              cursor: 'pointer',
+              fontSize: 11,
+              fontWeight: 600,
+            }}
+          >
+            <span
+              aria-hidden="true"
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                width: 14,
+                height: 14,
+                borderRadius: '50%',
+                border: `1px solid ${chrome.button.borderHover}`,
+                fontSize: 9,
+                fontWeight: 800,
+              }}
+            >
+              i
+            </span>
+            {graphRuntimeNotices.unattachedCount > 0
+              ? `${graphRuntimeNotices.unattachedCount} ${
+                  graphRuntimeNotices.unattachedCount === 1 ? 'call' : 'calls'
+                } unattached`
+              : `${graphRuntimeNotices.diagnostics.length} graph ${
+                  graphRuntimeNotices.diagnostics.length === 1
+                    ? 'notice'
+                    : 'notices'
+                }`}
+          </summary>
+          <div
+            role="status"
+            style={{
+              width: 340,
+              maxWidth: 'calc(100vw - 32px)',
+              maxHeight: 220,
+              overflow: 'auto',
+              marginTop: 6,
+              padding: 10,
+              borderRadius: 10,
+              border: `1px solid ${chrome.button.border}`,
+              background: chrome.button.bg,
+              backdropFilter: 'blur(12px)',
+              WebkitBackdropFilter: 'blur(12px)',
+              boxShadow: chrome.button.shadow,
+              color: chrome.button.text,
+              fontSize: 11,
+              lineHeight: 1.45,
+            }}
+          >
+            <div style={{ fontWeight: 700, marginBottom: 5 }}>
+              Some runtime calls could not be placed on this graph.
+            </div>
+            {graphRuntimeNotices.diagnostics.length > 0 ? (
+              <ul
+                style={{
+                  margin: 0,
+                  paddingLeft: 16,
+                  display: 'grid',
+                  gap: 5,
+                  opacity: 0.82,
+                }}
+              >
+                {graphRuntimeNotices.diagnostics.map((diagnostic) => (
+                  <li key={`${diagnostic.code ?? ''}:${diagnostic.message}`}>
+                    {diagnostic.message}
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <div style={{ opacity: 0.72 }}>
+                Runtime data remains available in the trace view.
+              </div>
+            )}
+          </div>
+        </details>
+      ) : null}
       <button
         onClick={() => {
           refitAfterLayoutRef.current = true;

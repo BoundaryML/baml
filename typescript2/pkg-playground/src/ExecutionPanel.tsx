@@ -52,6 +52,7 @@ import {
   type ProjectUpdate,
   type TestInfo,
   type Run,
+  type RunTarget,
   type BoundaryId,
   type RunStatus,
   type SourceNavigationTarget,
@@ -123,6 +124,43 @@ const RUN_SHORTCUT_HINT = IS_MAC ? '⌘↵' : 'Ctrl+↵';
 
 // ---------------------------------------------------------------------------
 // Helpers
+
+function runTargetLabel(target: RunTarget): string {
+  switch (target.kind) {
+    case 'function':
+    case 'companion':
+      return `${target.functionName}()`;
+    case 'preview':
+      return `${target.parentFunctionName}() prompt preview`;
+    case 'test':
+      return `test ${target.testName}`;
+    case 'internal':
+      return target.name;
+    default:
+      target satisfies never;
+      return 'run';
+  }
+}
+
+function runTargetFunctionName(target: RunTarget): string | null {
+  switch (target.kind) {
+    case 'function':
+    case 'companion':
+      return target.functionName;
+    case 'preview':
+      return target.parentFunctionName;
+    case 'test':
+    case 'internal':
+      return null;
+    default:
+      target satisfies never;
+      return null;
+  }
+}
+
+function runStatusLabel(status: RunStatus): string {
+  return status.replace(/([A-Z])/g, ' $1').toLowerCase();
+}
 // ---------------------------------------------------------------------------
 
 function tryFormatJson(str: string): string {
@@ -2261,7 +2299,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
   const llmFunctionNames = new Set(
     functions.filter((f) => f.kind === 'llm').map((f) => f.name),
   );
-  const latestGraphRunSnapshot = useMemo(
+  const latestGraphRunSelection = useMemo(
     () =>
       findLatestGraphRunSnapshot(
         executionSnapshot.runs,
@@ -2270,6 +2308,14 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
       ),
     [executionSnapshot.runs, selectedFn, selectedProject],
   );
+  const latestGraphRunSnapshot = latestGraphRunSelection?.run;
+  // A run that merely contains this function has an overlay keyed to the
+  // target function's CFG today. Keep the trace/profile context available,
+  // but do not paint that overlay onto a different graph.
+  const graphRuntimeRunSnapshot =
+    latestGraphRunSelection?.match === 'target'
+      ? latestGraphRunSelection.run
+      : undefined;
   // The run-history/logs strip is lifted out of the sidebar+content row so it
   // spans the panel's full width; the row gets bottom padding to make room.
   const runLogsVisible =
@@ -2536,6 +2582,42 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
       ))}
     </div>
   );
+
+  const containingRunTarget =
+    latestGraphRunSelection?.match === 'viaCalls'
+      ? runTargetFunctionName(latestGraphRunSelection.run.target)
+      : null;
+  const graphRunContextBanner =
+    latestGraphRunSelection?.match === 'viaCalls' && selectedFn ? (
+      <div className="flex items-center gap-2 px-2.5 py-1.5 text-[10px] bg-vsc-accent/5 border-b border-vsc-border shrink-0">
+        <span className="min-w-0 truncate text-vsc-text-muted">
+          <span className="font-vsc-mono font-semibold text-vsc-text">
+            {selectedFn}()
+          </span>{' '}
+          last ran inside{' '}
+          <span className="font-vsc-mono font-semibold text-vsc-text">
+            {runTargetLabel(latestGraphRunSelection.run.target)}
+          </span>{' '}
+          <span className="text-vsc-text-faint">
+            · {runStatusLabel(latestGraphRunSelection.run.status)}
+          </span>
+        </span>
+        {containingRunTarget && functionNames.includes(containingRunTarget) ? (
+          <button
+            type="button"
+            className="ml-auto shrink-0 text-vsc-accent hover:underline font-medium"
+            onClick={() => {
+              setWorkflowContext(null);
+              setSelectedPreviewTestKey(null);
+              setSelectedFn(containingRunTarget);
+              setHighlightedNodeId(null);
+            }}
+          >
+            View that run →
+          </button>
+        ) : null}
+      </div>
+    ) : null;
 
   // ── Render ─────────────────────────────────────────────────────────────
 
@@ -3153,19 +3235,20 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
                   style={{ minHeight: 300 }}
                 >
                   {workflowSwitcherBar}
+                  {graphRunContextBanner}
                   {controlFlowGraph ? (
                     <GraphView
                       graph={controlFlowGraph}
                       functionName={selectedFn}
                       graphRuntimeOverlay={
-                        latestGraphRunSnapshot?.graphRuntimeOverlay
+                        graphRuntimeRunSnapshot?.graphRuntimeOverlay
                       }
-                      calls={latestGraphRunSnapshot?.calls}
-                      run={latestGraphRunSnapshot ?? null}
+                      calls={graphRuntimeRunSnapshot?.calls}
+                      run={graphRuntimeRunSnapshot ?? null}
                       valueBodyCache={valueBodyCache}
                       valueBodyCacheVersion={valueBodyCacheVersion}
-                      runStatus={latestGraphRunSnapshot?.status}
-                      runError={latestGraphRunSnapshot?.error?.message ?? null}
+                      runStatus={graphRuntimeRunSnapshot?.status}
+                      runError={graphRuntimeRunSnapshot?.error?.message ?? null}
                       customRenderers={resultRenderers}
                       selectedNodeId={highlightedNodeId}
                       onNodeClick={handleGraphNodeClick}
@@ -3353,20 +3436,21 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
                     style={{ minHeight: 180 }}
                   >
                     {workflowSwitcherBar}
+                    {graphRunContextBanner}
                     {controlFlowGraph ? (
                       <GraphView
                         graph={controlFlowGraph}
                         functionName={selectedFn}
                         graphRuntimeOverlay={
-                          latestGraphRunSnapshot?.graphRuntimeOverlay
+                          graphRuntimeRunSnapshot?.graphRuntimeOverlay
                         }
-                        calls={latestGraphRunSnapshot?.calls}
-                        run={latestGraphRunSnapshot ?? null}
+                        calls={graphRuntimeRunSnapshot?.calls}
+                        run={graphRuntimeRunSnapshot ?? null}
                         valueBodyCache={valueBodyCache}
                         valueBodyCacheVersion={valueBodyCacheVersion}
-                        runStatus={latestGraphRunSnapshot?.status}
+                        runStatus={graphRuntimeRunSnapshot?.status}
                         runError={
-                          latestGraphRunSnapshot?.error?.message ?? null
+                          graphRuntimeRunSnapshot?.error?.message ?? null
                         }
                         customRenderers={resultRenderers}
                         selectedNodeId={highlightedNodeId}

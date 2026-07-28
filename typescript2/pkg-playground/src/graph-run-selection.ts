@@ -1,44 +1,52 @@
 import type { Run } from './worker-protocol';
 
+export type GraphRunMatch = {
+  run: Run;
+  match: 'target' | 'viaCalls';
+};
+
 export function findLatestGraphRunSnapshot(
   runs: Run[],
   selectedFn: string | null,
   selectedProject: string | null,
-): Run | undefined {
+): GraphRunMatch | undefined {
   if (!selectedFn) return undefined;
 
-  let latest: Run | undefined;
+  let latest: GraphRunMatch | undefined;
   for (const run of runs) {
-    if (!isGraphRunCandidate(run, selectedFn, selectedProject)) continue;
-    if (!latest || compareRunRecency(run, latest) > 0) {
-      latest = run;
+    const match = graphRunMatch(run, selectedFn, selectedProject);
+    if (!match) continue;
+    if (!latest || compareRunRecency(run, latest.run) > 0) {
+      latest = { run, match };
     }
   }
 
   return latest;
 }
 
-function isGraphRunCandidate(
+function graphRunMatch(
   run: Run,
   selectedFn: string,
   selectedProject: string | null,
-): boolean {
-  if (selectedProject && run.request.projectId !== selectedProject) return false;
+): GraphRunMatch['match'] | null {
+  if (selectedProject && run.request.projectId !== selectedProject) return null;
 
   if (
     (run.target.kind === 'function' || run.target.kind === 'companion') &&
     run.target.functionName === selectedFn
   ) {
-    return true;
+    return 'target';
   }
   if (
     run.target.kind === 'preview' &&
     run.target.parentFunctionName === selectedFn
   ) {
-    return true;
+    return 'target';
   }
 
-  return run.calls.some((call) => call.functionName === selectedFn);
+  return run.calls.some((call) => call.functionName === selectedFn)
+    ? 'viaCalls'
+    : null;
 }
 
 function compareRunRecency(left: Run, right: Run): number {
