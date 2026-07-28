@@ -3392,26 +3392,15 @@ impl PullSink for StackifyCodegen<'_, '_> {
             | TyTemplate::Union(..) => emit_structural(self, ty_template),
 
             // ── Function signatures ──────────────────────────────────────────
-            // Every function template — realized, frame-referencing, or holey —
-            // keeps the legacy coarse FUNCTION-tag check ("is it a callable").
-            //
-            // TODO(function-type-matching): the empty-`throws` convention
-            // mismatch that used to block signature-precise matching is gone —
-            // a function value's reconstructed signature now spells "never
-            // throws" as `never`, the same as a function *type*, because
-            // `bex_vm`'s `function_object_ty` materializes the stored
-            // signature templates and `TyTemplate::Never` is the sole spelling
-            // of "cannot throw". The canonical covariant throws relation
-            // therefore lines up. What remains is to route hole-free
-            // signatures through the value matcher (which already applies
-            // contravariant params / covariant return correctly) and relax
-            // E0155, which today rejects refutable function-typed patterns
-            // outright.
-            TyTemplate::Function { .. } => {
-                let c = self.add_constant(ConstValue::Int(baml_type::typetag::FUNCTION));
-                let inst = self.emit(Instruction::IsType(c));
-                self.set_operand(inst, OperandMeta::Const(ty_template.to_string()));
-            }
+            // Signature-precise, via the same value matcher every other
+            // structural template uses: it applies the canonical function
+            // relation (contravariant parameters, covariant return and
+            // throws), and every callable value now reconstructs a faithful
+            // function type to compare against — a closure, generic function,
+            // or bound method materializes its stored signature templates
+            // against the frame it carries. A coarse "is it callable" tag test
+            // would answer `true` for a callable of the wrong signature.
+            TyTemplate::Function { .. } => emit_structural(self, ty_template),
 
             // `unknown` is the top type: every value inhabits it, so the test is
             // constant-true. It is a realized *leaf* with no type tag, so without

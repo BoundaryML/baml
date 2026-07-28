@@ -12935,8 +12935,7 @@ impl LoweringContext<'_> {
     ///
     /// Over-approximation is safe — it costs one extra final test plus a dead
     /// trap block; under-approximation would silently bind a value to a
-    /// pattern it does not match. (Function-typed patterns themselves never
-    /// appear in non-final arms — TIR rejects them, E0155.)
+    /// pattern it does not match.
     fn pattern_test_can_reject_covered_values(&self, pat_id: AstPatId) -> bool {
         match &self.body.patterns[pat_id] {
             AstPattern::Or(parts) => parts

@@ -37,11 +37,9 @@ function bare_type_arm(v: int | string) -> int {
 // ============================================================================
 // Function-type patterns
 // ============================================================================
-// The runtime cannot yet faithfully reconstruct every callable's signature
-// (bound methods reconstruct none; closures from generic frames reconstruct
-// coarsened ones), so a function-typed pattern is legal only where its test
-// is never emitted: the final arm of an exhaustive match (E0155 everywhere
-// else — see the fn_typed_patterns diagnostic project). Matching follows function-type variance: `throws` is
+// A function-typed pattern is a real test in any position: every callable
+// value reconstructs a faithful signature, so the value matcher can compare
+// it. Matching follows function-type variance: `throws` is
 // covariant, so a pattern that does not care about the scrutinee's effect
 // (here the implicit effect parameter of `cb`'s omitted `throws`) coarsens it
 // with `throws unknown` — and the binding still adopts the scrutinee's
@@ -54,9 +52,9 @@ function call_int_callback(cb: (int) -> int) -> int {
     }
 }
 
-// A union scrutinee still admits a function-typed arm when every *other*
-// member is consumed by earlier (non-function) arms: the function arm is the
-// final arm of an exhaustive match, so its test is elided.
+// A union scrutinee with a function-typed member. The arm order here is not
+// forced — the function arm carries a real test wherever it sits; this shape
+// simply pins that the arm still works as the final, test-elided one.
 function call_optional_callback(cb: ((int) -> int throws never)?) -> int {
     match (cb) {
         null => 0,

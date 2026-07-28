@@ -7433,13 +7433,6 @@ impl<'db> TypeInferenceBuilder<'db> {
                         irrefutable_ctx,
                         &flow_ty,
                     );
-                    // A `let … else` pattern is runtime-tested (failure takes
-                    // the else branch), so it may not claim function values.
-                    // A plain `let` emits no test — refutable plain-let
-                    // patterns are already rejected above.
-                    if else_branch.is_some() {
-                        self.check_no_fn_typed_runtime_test(*pattern, body, initializer.unwrap());
-                    }
                     if else_branch.is_some() && !pattern_had_error {
                         let scrut_for_matrix = self.matrix_normalize_scrut(&flow_ty);
                         let report = crate::pattern_lowering::compute_match_usefulness(
@@ -7582,10 +7575,6 @@ impl<'db> TypeInferenceBuilder<'db> {
                         }
                     }
                 }
-
-                // A while-let pattern is tested every iteration, so it may
-                // not claim function values.
-                self.check_no_fn_typed_runtime_test(*pattern, body, *while_body);
 
                 false
             }
@@ -8206,24 +8195,6 @@ impl<'db> TypeInferenceBuilder<'db> {
             );
         }
 
-        // Function-typed patterns cannot be value-tested at runtime, so they
-        // are only legal where no test is emitted: the final arm of an
-        // exhaustive, guardless, non-Or match (MIR's exhaustive-last-arm
-        // elision — coverage already proved every reaching value matches).
-        // Everywhere else, a pattern claiming function values would compile
-        // into a constant-false test that silently rejects the very values it
-        // names — reject it here instead.
-        for (idx, arm_id) in arms.iter().enumerate() {
-            let arm = &body.match_arms[*arm_id];
-            let elided = exhaustive
-                && idx + 1 == arms.len()
-                && arm.guard.is_none()
-                && !matches!(body.patterns[arm.pattern], ast::Pattern::Or(_));
-            if !elided {
-                self.check_no_fn_typed_runtime_test(arm.pattern, body, arm.body);
-            }
-        }
-
         for arm in report.unreachable_arms {
             if let Some(&body_expr) = matrix_arm_ids.get(arm.0) {
                 self.context
@@ -8384,10 +8355,6 @@ impl<'db> TypeInferenceBuilder<'db> {
             }
         }
 
-        // An if-let pattern is always runtime-tested (that's the construct's
-        // point), so it may not claim function values.
-        self.check_no_fn_typed_runtime_test(pattern_id, body, then_branch);
-
         match else_ty {
             Some(else_ty) => Self::join_types(&then_ty, &else_ty),
             None => Ty::Void {
@@ -8428,11 +8395,6 @@ impl<'db> TypeInferenceBuilder<'db> {
         );
         self.finalize_pattern_lowering(pattern_id, &result, None, None, &scrutinee_ty);
         self.restore_scoped_locals(&snapshot);
-
-        // `is` always evaluates its test, so a function-claiming pattern
-        // would be constant-false even for values that ARE members of the
-        // written type — reject rather than mis-answer.
-        self.check_no_fn_typed_runtime_test(pattern_id, body, scrutinee_expr_id);
 
         Ty::Bool {
             attr: TyAttr::default(),
@@ -8613,11 +8575,6 @@ impl<'db> TypeInferenceBuilder<'db> {
                 let arm_result =
                     self.analyze_and_lower_no_subtype_check(arm.pattern, &arm_flow, body, arm.body);
                 self.finalize_pattern_lowering(arm.pattern, &arm_result, None, None, &arm_flow);
-
-                // Catch arms are always runtime-tested (an unmatched error
-                // rethrows — there is no elided final arm), so they may not
-                // claim function values.
-                self.check_no_fn_typed_runtime_test(arm.pattern, body, arm.body);
 
                 // In a checking position, adopt the expected type into the
                 // handler body too (not just the catch base) — so e.g. an empty
@@ -15710,95 +15667,6 @@ impl TypeInferenceBuilder<'_> {
                 .flat_map(|m| self.flatten_union_optional_members(m))
                 .collect(),
             other => vec![other],
-        }
-    }
-
-    /// Whether `ty` — a pattern's recorded matched type — claims
-    /// function-typed *values* at a value-tested level: a `Ty::Function` at
-    /// the top level or as a union member (after alias expansion). Every
-    /// callable value is fully realized (it curries its complete type
-    /// arguments at creation), but the runtime cannot yet faithfully
-    /// reconstruct every callable's signature (the VM's `value_concrete_ty`:
-    /// the stored `Function` signature erases generic positions, so bound
-    /// methods reconstruct no type and closures from generic frames
-    /// reconstruct coarsened ones) — so an emitted `is_type` test against
-    /// such a type silently misroutes those callables. Fail closed: reject
-    /// the test outright. A function type nested under a class/list
-    /// constructor is fine: there the runtime compares realized type
-    /// *arguments*, a type-level comparison.
-    fn ty_claims_function_values(&self, ty: &Ty) -> bool {
-        self.flatten_union_optional_members(ty)
-            .iter()
-            .any(|m| matches!(m, Ty::Function { .. }))
-    }
-
-    /// Report [`TirTypeError::FunctionTypedPatternNotTestable`] for every
-    /// component of `pat_id` that would receive a runtime *value* test whose
-    /// type claims function values ([`Self::ty_claims_function_values`]).
-    ///
-    /// Callers invoke this only for patterns in tested positions: every match
-    /// arm except the final arm of an exhaustive, guardless, non-Or match
-    /// (whose test MIR elides — the one position where a function-typed
-    /// pattern is sound, because coverage already proved every reaching value
-    /// matches), plus `is` / `if let` / `while let` / `let … else` / `catch`
-    /// patterns, which are always tested. Bare binds and wildcards emit no
-    /// test, and a class-head or array-shape test compares type arguments and
-    /// shape rather than function values, so only their *sub*-patterns
-    /// recurse.
-    fn check_no_fn_typed_runtime_test(&mut self, pat_id: PatId, body: &ExprBody, at_expr: ExprId) {
-        match &body.patterns[pat_id].clone() {
-            ast::Pattern::Wildcard | ast::Pattern::Bind { subpat: None, .. } => {}
-            ast::Pattern::Bind {
-                subpat: Some(sp), ..
-            } => self.check_no_fn_typed_runtime_test(*sp, body, at_expr),
-            ast::Pattern::Or(parts) => {
-                for &p in parts {
-                    self.check_no_fn_typed_runtime_test(p, body, at_expr);
-                }
-            }
-            ast::Pattern::Type(_) => {
-                let Some(ty) = self.pattern_types.get(&pat_id).cloned() else {
-                    return;
-                };
-                if self.ty_claims_function_values(&ty) {
-                    self.report_at_pat_or_expr(
-                        TirTypeError::FunctionTypedPatternNotTestable { ty },
-                        pat_id,
-                        at_expr,
-                    );
-                }
-            }
-            ast::Pattern::Class { fields, .. } => {
-                for fp in fields {
-                    self.check_no_fn_typed_runtime_test(fp.pat, body, at_expr);
-                }
-            }
-            ast::Pattern::Array {
-                prefix,
-                rest,
-                suffix,
-                ascription,
-            } => {
-                // A `: T` ascription is a value test on the array itself.
-                if ascription.is_some()
-                    && let Some(ty) = self.pattern_types.get(&pat_id).cloned()
-                    && self.ty_claims_function_values(&ty)
-                {
-                    self.report_at_pat_or_expr(
-                        TirTypeError::FunctionTypedPatternNotTestable { ty },
-                        pat_id,
-                        at_expr,
-                    );
-                }
-                for &p in prefix.iter().chain(suffix.iter()) {
-                    self.check_no_fn_typed_runtime_test(p, body, at_expr);
-                }
-                if let Some(rp) = rest
-                    && let Some(rest_pat) = rp.pat
-                {
-                    self.check_no_fn_typed_runtime_test(rest_pat, body, at_expr);
-                }
-            }
         }
     }
 
