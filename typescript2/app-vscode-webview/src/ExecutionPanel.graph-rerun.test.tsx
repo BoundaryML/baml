@@ -111,6 +111,39 @@ describe('ExecutionPanel graph reruns', () => {
       false,
     );
   });
+
+  it('clears argument validation errors when switching tabs', async () => {
+    const port = new FakeRuntimePort();
+    render(
+      <ExecutionPanel port={port} initialTab="run" initialArgsJson="{}" />,
+    );
+
+    announceProject(port);
+    await selectPlanTrip();
+
+    const runArgsEditor = await screen.findByTestId('run-args-editor');
+    fireEvent.change(
+      within(runArgsEditor).getByRole('textbox', { name: 'Arguments JSON' }),
+      { target: { value: '{"destination":' } },
+    );
+    fireEvent.click(
+      within(runArgsEditor).getByRole('button', { name: 'Run' }),
+    );
+    expect(
+      await screen.findByText(/Unexpected end of JSON input/),
+    ).toBeVisible();
+
+    fireEvent.mouseDown(screen.getByRole('tab', { name: 'Graph' }), {
+      button: 0,
+      ctrlKey: false,
+    });
+
+    await waitFor(() => {
+      expect(
+        screen.queryByText(/Unexpected end of JSON input/),
+      ).not.toBeInTheDocument();
+    });
+  });
 });
 
 class FakeRuntimePort implements RuntimePort {

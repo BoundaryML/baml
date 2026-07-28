@@ -2537,6 +2537,10 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
     </div>
   );
 
+  useEffect(() => {
+    setRunValidationError(null);
+  }, [activeTab, selectedFn]);
+
   const renderArgsEditor = (surface: 'graph' | 'run') => (
     <div
       className="nokey flex flex-col border-b border-vsc-border shrink-0"
