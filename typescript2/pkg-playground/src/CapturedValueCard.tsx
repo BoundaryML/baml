@@ -13,6 +13,10 @@ export const CAPTURED_VALUE_CARD_TILE_IMAGE_HEIGHT = 126;
 export const CAPTURED_VALUE_CARD_TEXT_HEIGHT = 96;
 export const CAPTURED_VALUE_CARD_HEADER_HEIGHT = 21;
 export const CAPTURED_VALUE_CARD_PADDING_Y = 16;
+export const CAPTURED_VALUE_CARD_FIXED_HEIGHT =
+  CAPTURED_VALUE_CARD_HEADER_HEIGHT +
+  CAPTURED_VALUE_CARD_PADDING_Y +
+  CAPTURED_VALUE_CARD_TEXT_HEIGHT;
 
 const ROLE_LABELS: Record<RunTraceCallValue['role'], string> = {
   callInput: 'Input',
@@ -40,33 +44,25 @@ const STATE_LABELS: Partial<Record<RunTraceCallValue['state'], string>> = {
 interface CapturedValueCardProps {
   value: RunTraceCallValue;
   compact?: boolean;
+  fixedHeight?: boolean;
   customRenderers?: Record<string, FC<ResultRendererProps>>;
-}
-
-export function capturedValueCardContentHeight(value: RunTraceCallValue): number {
-  const images = valueToImagePreviews(value.value);
-  if (images.length > 0) {
-    const visibleCount = Math.min(images.length, CAPTURED_VALUE_CARD_MAX_IMAGES);
-    if (visibleCount === 1) return CAPTURED_VALUE_CARD_SINGLE_IMAGE_HEIGHT;
-    const rows = Math.ceil(visibleCount / 2);
-    return (
-      rows * CAPTURED_VALUE_CARD_TILE_IMAGE_HEIGHT +
-      (rows - 1) * CAPTURED_VALUE_CARD_IMAGE_GAP
-    );
-  }
-  if (value.value !== null) return CAPTURED_VALUE_CARD_TEXT_HEIGHT;
-  return 0;
 }
 
 export function CapturedValueCard({
   value,
   compact = false,
+  fixedHeight = false,
   customRenderers,
 }: CapturedValueCardProps) {
   const images = valueToImagePreviews(value.value);
   const visibleImages = images.slice(0, CAPTURED_VALUE_CARD_MAX_IMAGES);
   const remainingImages = images.length - visibleImages.length;
-  const stateLabel = value.state === 'available' ? null : STATE_LABELS[value.state];
+  const fixedImageHeight =
+    visibleImages.length <= 2
+      ? CAPTURED_VALUE_CARD_TEXT_HEIGHT
+      : (CAPTURED_VALUE_CARD_TEXT_HEIGHT - CAPTURED_VALUE_CARD_IMAGE_GAP) / 2;
+  const stateLabel =
+    value.state === 'available' ? null : STATE_LABELS[value.state];
   const roleColor = ROLE_COLORS[value.role];
   const isError = value.role === 'callError' || value.state === 'error';
 
@@ -80,6 +76,8 @@ export function CapturedValueCard({
         }`,
         background: isError ? 'rgba(64,21,30,0.72)' : 'rgba(15,23,42,0.72)',
         padding: compact ? 7 : 8,
+        boxSizing: 'border-box',
+        height: fixedHeight ? CAPTURED_VALUE_CARD_FIXED_HEIGHT : undefined,
         overflow: 'hidden',
       }}
       title={value.diagnostic ?? undefined}
@@ -146,9 +144,7 @@ export function CapturedValueCard({
           style={{
             display: 'grid',
             gridTemplateColumns:
-              visibleImages.length === 1
-                ? '1fr'
-                : 'repeat(2, minmax(0, 1fr))',
+              visibleImages.length === 1 ? '1fr' : 'repeat(2, minmax(0, 1fr))',
             gap: CAPTURED_VALUE_CARD_IMAGE_GAP,
             marginTop: 6,
           }}
@@ -163,8 +159,9 @@ export function CapturedValueCard({
                 style={{
                   position: 'relative',
                   width: '100%',
-                  height:
-                    visibleImages.length === 1
+                  height: fixedHeight
+                    ? fixedImageHeight
+                    : visibleImages.length === 1
                       ? CAPTURED_VALUE_CARD_SINGLE_IMAGE_HEIGHT
                       : CAPTURED_VALUE_CARD_TILE_IMAGE_HEIGHT,
                   borderRadius: 6,

@@ -1,11 +1,6 @@
 import ELK from 'elkjs/lib/elk.bundled.js';
 import type { ElkNode, ElkExtendedEdge } from 'elkjs/lib/elk-api';
-import {
-  capturedValueCardContentHeight,
-  CAPTURED_VALUE_CARD_HEADER_HEIGHT,
-  CAPTURED_VALUE_CARD_PADDING_Y,
-  CAPTURED_VALUE_CARD_TEXT_HEIGHT,
-} from '../CapturedValueCard';
+import { CAPTURED_VALUE_CARD_FIXED_HEIGHT } from '../CapturedValueCard';
 import { depthScale } from './lod';
 import type { WorkflowNode, WorkflowEdge } from './types';
 import {
@@ -85,10 +80,7 @@ function nodeSize(node: WorkflowNode): { w: number; h: number } {
         NODE_VALUE_PREVIEW_MAX,
       );
       const previewHeight =
-        visibleValues.reduce(
-          (height, value) => height + capturedValueCardHeight(value),
-          0,
-        ) +
+        visibleValues.length * CAPTURED_VALUE_CARD_FIXED_HEIGHT +
         Math.max(0, visibleValues.length - 1) * NODE_VALUE_PREVIEW_GAP;
       return {
         w: Math.max(base.w, NODE_VALUE_PREVIEW_WIDTH),
@@ -99,17 +91,14 @@ function nodeSize(node: WorkflowNode): { w: number; h: number } {
     if (node.data.errorMessage) {
       return {
         w: Math.max(base.w, NODE_VALUE_PREVIEW_WIDTH),
-        h: base.h + capturedValueCardHeightForContent(0, true) + 14,
+        h: base.h + CAPTURED_VALUE_CARD_FIXED_HEIGHT + 14,
       };
     }
 
     if (node.data.hasResult) {
       return {
         w: Math.max(base.w, NODE_VALUE_PREVIEW_WIDTH),
-        h:
-          base.h +
-          capturedValueCardHeightForContent(CAPTURED_VALUE_CARD_TEXT_HEIGHT, false) +
-          14,
+        h: base.h + CAPTURED_VALUE_CARD_FIXED_HEIGHT + 14,
       };
     }
 
@@ -128,28 +117,6 @@ function nodeSize(node: WorkflowNode): { w: number; h: number } {
     w: visualSize.w * s + 2 * NODE_BUFFER,
     h: visualSize.h * s + 2 * NODE_BUFFER,
   };
-}
-
-function capturedValueCardHeight(
-  value: NonNullable<WorkflowNode['data']['valuePreviews']>[number],
-): number {
-  return capturedValueCardHeightForContent(
-    capturedValueCardContentHeight(value),
-    value.diagnostic != null,
-  );
-}
-
-function capturedValueCardHeightForContent(
-  contentHeight: number,
-  hasDiagnostic: boolean,
-): number {
-  return (
-    CAPTURED_VALUE_CARD_HEADER_HEIGHT +
-    CAPTURED_VALUE_CARD_PADDING_Y +
-    contentHeight +
-    (contentHeight > 0 ? 6 : 0) +
-    (hasDiagnostic ? 18 : 0)
-  );
 }
 
 function buildElkNodes(
@@ -240,10 +207,13 @@ function buildElkNodes(
 }
 
 function graphValuePreviewHeight(node: WorkflowNode): number {
-  const values = (node.data.valuePreviews ?? []).slice(0, NODE_VALUE_PREVIEW_MAX);
+  const values = (node.data.valuePreviews ?? []).slice(
+    0,
+    NODE_VALUE_PREVIEW_MAX,
+  );
   if (values.length === 0) return 0;
   return (
-    values.reduce((height, value) => height + capturedValueCardHeight(value), 0) +
+    values.length * CAPTURED_VALUE_CARD_FIXED_HEIGHT +
     Math.max(0, values.length - 1) * NODE_VALUE_PREVIEW_GAP
   );
 }

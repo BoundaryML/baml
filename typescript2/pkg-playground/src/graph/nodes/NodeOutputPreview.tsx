@@ -26,7 +26,12 @@ export function NodeOutputPreview({
   errorMessage,
   customRenderers,
 }: NodeOutputPreviewProps) {
-  const values = graphPreviewValues(valuePreviews, result, hasResult, errorMessage);
+  const values = graphPreviewValues(
+    valuePreviews,
+    result,
+    hasResult,
+    errorMessage,
+  );
   if (values.length === 0) return null;
 
   const visible = values.slice(0, NODE_VALUE_PREVIEW_MAX);
@@ -49,6 +54,7 @@ export function NodeOutputPreview({
           key={value.id}
           value={value}
           compact
+          fixedHeight
           customRenderers={customRenderers}
         />
       ))}
