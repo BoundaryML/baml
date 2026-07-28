@@ -4137,6 +4137,108 @@ function needs<T extends Marker>(x: T) -> int throws never {
     }
 
     #[test]
+    fn bare_self_in_associated_type_default_is_reported() {
+        // `Self` is universal — it names each implementor — so it cannot be resolved at
+        // an interface-existential type, where the implementor is hidden.
+        let db = compile("interface HasDefault {\n  type Out = Self\n}\n");
+        let errs = decl_scope_type_errors(&db, "HasDefault");
+        assert!(
+            errs.iter().any(|e| matches!(
+                e,
+                TirTypeError::SelfInAssociatedTypeDefault { associated_type, .. }
+                    if associated_type.as_str() == "Out"
+            )),
+            "expected SelfInAssociatedTypeDefault for `Out`, got {errs:?}"
+        );
+    }
+
+    #[test]
+    fn nested_self_in_associated_type_default_is_reported() {
+        // Nesting does not rescue it: `Self[]` still has no implementor to resolve.
+        let db = compile("interface HasDefault {\n  type Out = Self[]\n}\n");
+        let errs = decl_scope_type_errors(&db, "HasDefault");
+        assert!(
+            errs.iter()
+                .any(|e| matches!(e, TirTypeError::SelfInAssociatedTypeDefault { .. })),
+            "expected SelfInAssociatedTypeDefault for a nested `Self`, got {errs:?}"
+        );
+    }
+
+    #[test]
+    fn self_projection_in_associated_type_default_is_accepted() {
+        // A `Self.Assoc` projection is not bare `Self`: the existential's own pins
+        // already fix it, so it denotes one type for every member.
+        let db = compile("interface HasDefault {\n  type Item\n  type Items = Self.Item[]\n}\n");
+        let errs = decl_scope_type_errors(&db, "HasDefault");
+        assert!(
+            !errs
+                .iter()
+                .any(|e| matches!(e, TirTypeError::SelfInAssociatedTypeDefault { .. })),
+            "a `Self.Assoc` projection default should be accepted, got {errs:?}"
+        );
+    }
+
+    #[test]
+    fn closed_associated_type_default_is_accepted() {
+        let db = compile("interface HasDefault {\n  type Out = string\n}\n");
+        let errs = decl_scope_type_errors(&db, "HasDefault");
+        assert!(
+            !errs
+                .iter()
+                .any(|e| matches!(e, TirTypeError::SelfInAssociatedTypeDefault { .. })),
+            "a closed default should be accepted, got {errs:?}"
+        );
+    }
+
+    #[test]
+    fn self_inside_a_projection_base_in_associated_type_default_is_reported() {
+        // The `Self.Assoc` exemption is justified by the existential's pins, so it covers
+        // only an exact `Self` base. `(Self[] as I).Item` wraps `Self` in a fresh
+        // constructor the pins say nothing about and reduces straight back to `Self`.
+        let db = compile(
+            "interface Holder {\n  type Item\n}\n\
+             interface HasDefault {\n  type Out = (Self[] as Holder).Item\n}\n",
+        );
+        let errs = decl_scope_type_errors(&db, "HasDefault");
+        assert!(
+            errs.iter()
+                .any(|e| matches!(e, TirTypeError::SelfInAssociatedTypeDefault { .. })),
+            "expected SelfInAssociatedTypeDefault for a `Self`-bearing projection base, got {errs:?}"
+        );
+    }
+
+    #[test]
+    fn chained_self_projection_in_associated_type_default_is_accepted() {
+        // A chain rooted at an exact `Self` stays exempt — every link is pinned.
+        let db = compile(
+            "interface Holder {\n  type Item\n}\n\
+             interface HasDefault {\n  type Item extends Holder\n  type Out = Self.Item.Item\n}\n",
+        );
+        let errs = decl_scope_type_errors(&db, "HasDefault");
+        assert!(
+            !errs
+                .iter()
+                .any(|e| matches!(e, TirTypeError::SelfInAssociatedTypeDefault { .. })),
+            "a projection chain rooted at `Self` should be accepted, got {errs:?}"
+        );
+    }
+
+    #[test]
+    fn self_in_associated_type_binding_of_default_is_reported() {
+        // `I<Item = Self>` pins a member to bare `Self`, so the binding is inspected too.
+        let db = compile(
+            "interface Holder {\n  type Item\n}\n\
+             interface HasDefault {\n  type Out = Holder<Item = Self>\n}\n",
+        );
+        let errs = decl_scope_type_errors(&db, "HasDefault");
+        assert!(
+            errs.iter()
+                .any(|e| matches!(e, TirTypeError::SelfInAssociatedTypeDefault { .. })),
+            "expected SelfInAssociatedTypeDefault for a `Self` associated-type binding, got {errs:?}"
+        );
+    }
+
+    #[test]
     fn requires_non_interface_is_reported() {
         let db = compile("class NotIface {}\ninterface I requires NotIface {}\n");
         let errs = decl_scope_type_errors(&db, "I");

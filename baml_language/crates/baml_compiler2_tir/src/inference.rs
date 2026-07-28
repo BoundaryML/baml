@@ -2190,6 +2190,35 @@ pub fn infer_scope_types<'db>(
                             name_span,
                         );
                     }
+                    // E0157: a default may not name the *bare* `Self` type. `Self` is
+                    // universal (TYPE_SYSTEM.md: it denotes each concrete implementor,
+                    // not the existential), so at an interface-existential type — where
+                    // the implementor is hidden — such a default resolves against nothing.
+                    // Filling it with the existential itself pins the member to a type
+                    // no impl ever binds, leaving the existential uninhabited: every
+                    // membership query against it silently answers false. A `Self.Assoc`
+                    // projection is not bare and stays legal — the existential's own
+                    // pins already fix it (mirrors the E0136 field ban below).
+                    if let Some(default) = assoc.default
+                        && crate::builder::TypeInferenceBuilder::type_ref_contains_bare_self(
+                            &iface_data.type_refs,
+                            default,
+                        )
+                    {
+                        builder.report_at_span(
+                            crate::infer_context::TirTypeError::SelfInAssociatedTypeDefault {
+                                interface: crate::lower_type_expr::qualify_def(
+                                    db,
+                                    baml_compiler2_hir::contributions::Definition::Interface(
+                                        iface_loc,
+                                    ),
+                                    &iface_data.name,
+                                ),
+                                associated_type: assoc.name.clone(),
+                            },
+                            iface_sm.type_refs.span(default),
+                        );
+                    }
                 }
                 // Interface-declaration well-formedness (BEP-044). `iface_qtn` names the
                 // interface for each diagnostic.

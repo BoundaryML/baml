@@ -86,8 +86,9 @@ fn reserve_package_slots(
 ///
 /// The two are built together and kept together because the second is a *view*
 /// over the first — pairing an index with any other package set would answer
-/// membership for the wrong program. Both fields are private and only
-/// [`fill_package_slots`] constructs a populated value, so they cannot diverge.
+/// membership for the wrong program. Both fields are private and only the load
+/// pass ([`build_heap_with_packages`]) constructs a populated value, so they
+/// cannot diverge.
 ///
 /// # Why the impl-rule index is program-wide
 ///

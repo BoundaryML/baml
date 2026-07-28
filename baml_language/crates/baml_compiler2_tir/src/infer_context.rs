@@ -737,6 +737,17 @@ pub enum TirTypeError {
         interface: crate::ty::QualifiedTypeName,
         field: Name,
     },
+    /// Bare `Self` appears in an associated type's *default*. `Self` is universal — it
+    /// denotes each implementor, not the existential — so at an interface-existential
+    /// type (`I<…>`, where the implementor is hidden) such a default has nothing to
+    /// resolve against. Defaulting it to the existential itself would pin the member to
+    /// a type no impl ever binds, making the existential uninhabited. A `Self.Assoc`
+    /// projection is fine: the existential's own pins already fix it.
+    /// Interface-declaration well-formedness (E0157).
+    SelfInAssociatedTypeDefault {
+        interface: crate::ty::QualifiedTypeName,
+        associated_type: Name,
+    },
     /// An interface's `requires` clause names a type that is not an interface (a class, enum, or
     /// alias). Only interfaces can be required. Interface-declaration well-formedness (E0133).
     InterfaceRequiresNonInterface {
@@ -1793,6 +1804,21 @@ impl fmt::Display for TirTypeError {
                     f,
                     "`Self` is not allowed in the type of interface field `{field}` on `{}`; name \
                      the interface itself for recursion",
+                    interface.render_user_facing()
+                )
+            }
+            TirTypeError::SelfInAssociatedTypeDefault {
+                interface,
+                associated_type,
+            } => {
+                write!(
+                    f,
+                    "`Self` is not allowed in the default for associated type `{associated_type}` \
+                     on `{}`: `Self` names each implementor, so it has no meaning where `{0}` is \
+                     used as an interface-existential type and the implementor is hidden. Drop the \
+                     default and let each `implements` block bind `{associated_type}` (uses as a \
+                     bound are unaffected; uses as an interface-existential type then write \
+                     `{0}<…, {associated_type} = …>`). A `Self.Assoc` projection is allowed",
                     interface.render_user_facing()
                 )
             }

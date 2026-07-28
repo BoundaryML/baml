@@ -12176,6 +12176,20 @@ impl<'db> TypeInferenceBuilder<'db> {
         false
     }
 
+    /// Whether `id` is *exactly* the bare `Self` path — the sole shape the
+    /// `Self.Assoc` exemption in [`Self::type_ref_contains_bare_self`] keys on.
+    fn type_ref_is_bare_self(
+        store: &baml_compiler2_hir::type_ref::TypeRefStore,
+        id: baml_compiler2_hir::type_ref::TypeRefId,
+    ) -> bool {
+        use baml_compiler2_hir::type_ref::TypeRefKind;
+        matches!(
+            &store[id].kind,
+            TypeRefKind::Path { segments, .. }
+                if segments.len() == 1 && segments[0].as_str() == "Self"
+        )
+    }
+
     /// Whether `id` references the *bare* `Self` type anywhere — a path of exactly
     /// `[Self]`, recursing structurally. A `Self.Assoc` projection is NOT bare `Self`:
     /// on an existential receiver every associated type is pinned (or defaulted), so the
@@ -12183,6 +12197,13 @@ impl<'db> TypeInferenceBuilder<'db> {
     /// the `Self`-identity problems apply. Both object safety and the interface-field
     /// ban (E0136) key on this: a `value: Self.Item` field is legal (it denotes the
     /// implementor's bound associated type), a `value: Self` field is not.
+    ///
+    /// That exemption is justified by the *pins*, so it extends only to a base of exactly
+    /// `Self` (or a chain rooted at one, `Self.Item.Sub`). Any other base wraps `Self` in
+    /// a fresh constructor the pins say nothing about — `(Self[] as I).Item` reduces
+    /// straight back to `Self` — so such a base is inspected like any other type. The
+    /// qualifying interface and any associated-type *bindings* are inspected for the same
+    /// reason: `I<Item = Self>` pins a member to bare `Self`.
     pub(crate) fn type_ref_contains_bare_self(
         store: &baml_compiler2_hir::type_ref::TypeRefStore,
         id: baml_compiler2_hir::type_ref::TypeRefId,
@@ -12190,14 +12211,25 @@ impl<'db> TypeInferenceBuilder<'db> {
         use baml_compiler2_hir::type_ref::TypeRefKind;
         match &store[id].kind {
             TypeRefKind::Path {
-                segments,
                 generic_args,
+                associated_type_bindings,
                 ..
             } => {
-                (segments.len() == 1 && segments[0].as_str() == "Self")
+                Self::type_ref_is_bare_self(store, id)
                     || generic_args
                         .iter()
                         .any(|&arg| Self::type_ref_contains_bare_self(store, arg))
+                    || associated_type_bindings
+                        .iter()
+                        .any(|binding| Self::type_ref_contains_bare_self(store, binding.ty))
+            }
+            TypeRefKind::AssociatedTypeProjection {
+                base, interface, ..
+            } => {
+                (!Self::type_ref_is_bare_self(store, *base)
+                    && Self::type_ref_contains_bare_self(store, *base))
+                    || (*interface)
+                        .is_some_and(|iface| Self::type_ref_contains_bare_self(store, iface))
             }
             TypeRefKind::List { inner } | TypeRefKind::Optional { inner } => {
                 Self::type_ref_contains_bare_self(store, *inner)

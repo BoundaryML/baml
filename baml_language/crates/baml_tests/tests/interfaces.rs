@@ -12270,6 +12270,7 @@ fn negate_on_user_type_implementing_negate_is_ok() {
         class Vec2 {
             x: int
             implements baml.ops.Negate {
+                type Output = Vec2
                 function neg(self) -> Vec2 throws never { Vec2 { x: -self.x } }
             }
         }
@@ -12475,6 +12476,7 @@ fn compound_assign_on_user_type_with_self_output_is_ok() {
         class Vec2 {
             x: int
             implements baml.ops.Add<Vec2> {
+                type Output = Vec2
                 function add(self, rhs: Vec2) -> Vec2 throws never {
                     Vec2 { x: self.x + rhs.x }
                 }
