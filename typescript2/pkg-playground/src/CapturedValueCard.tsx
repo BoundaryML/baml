@@ -13,6 +13,7 @@ export const CAPTURED_VALUE_CARD_TILE_IMAGE_HEIGHT = 126;
 export const CAPTURED_VALUE_CARD_TEXT_HEIGHT = 96;
 export const CAPTURED_VALUE_CARD_HEADER_HEIGHT = 21;
 export const CAPTURED_VALUE_CARD_PADDING_Y = 16;
+export const CAPTURED_VALUE_CARD_DIAGNOSTIC_HEIGHT = 20;
 export const CAPTURED_VALUE_CARD_FIXED_HEIGHT =
   CAPTURED_VALUE_CARD_HEADER_HEIGHT +
   CAPTURED_VALUE_CARD_PADDING_Y +
@@ -57,10 +58,13 @@ export function CapturedValueCard({
   const images = valueToImagePreviews(value.value);
   const visibleImages = images.slice(0, CAPTURED_VALUE_CARD_MAX_IMAGES);
   const remainingImages = images.length - visibleImages.length;
+  const fixedContentHeight =
+    CAPTURED_VALUE_CARD_TEXT_HEIGHT -
+    (value.diagnostic ? CAPTURED_VALUE_CARD_DIAGNOSTIC_HEIGHT : 0);
   const fixedImageHeight =
     visibleImages.length <= 2
-      ? CAPTURED_VALUE_CARD_TEXT_HEIGHT
-      : (CAPTURED_VALUE_CARD_TEXT_HEIGHT - CAPTURED_VALUE_CARD_IMAGE_GAP) / 2;
+      ? fixedContentHeight
+      : (fixedContentHeight - CAPTURED_VALUE_CARD_IMAGE_GAP) / 2;
   const stateLabel =
     value.state === 'available' ? null : STATE_LABELS[value.state];
   const roleColor = ROLE_COLORS[value.role];
@@ -222,7 +226,11 @@ export function CapturedValueCard({
         <div
           style={{
             marginTop: 6,
-            maxHeight: compact ? CAPTURED_VALUE_CARD_TEXT_HEIGHT : 180,
+            maxHeight: fixedHeight
+              ? fixedContentHeight
+              : compact
+                ? CAPTURED_VALUE_CARD_TEXT_HEIGHT
+                : 180,
             overflow: 'auto',
             color: isError ? '#fecdd3' : '#e5e7eb',
             fontSize: 10,
@@ -242,6 +250,14 @@ export function CapturedValueCard({
             color: '#a1a1aa',
             fontSize: 10,
             lineHeight: 1.35,
+            ...(fixedHeight
+              ? {
+                  height: CAPTURED_VALUE_CARD_DIAGNOSTIC_HEIGHT,
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                }
+              : {}),
           }}
         >
           {value.diagnostic}
