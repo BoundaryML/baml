@@ -2079,12 +2079,19 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
     ? projectUpdates[selectedProject]
     : undefined;
   const isLoadingProject = selectedProject != null && currentUpdate == null;
-  const functions: FunctionInfo[] = currentUpdate?.functions ?? [];
+  const functions: FunctionInfo[] = useMemo(
+    () => currentUpdate?.functions ?? [],
+    [currentUpdate],
+  );
   const previewTests = currentUpdate?.tests ?? [];
   const internalFunctionCount = functions.filter(isInternalFunction).length;
-  const visibleFunctions = showInternalFunctions
-    ? functions
-    : functions.filter((fn) => !isInternalFunction(fn));
+  const visibleFunctions = useMemo(
+    () =>
+      showInternalFunctions
+        ? functions
+        : functions.filter((fn) => !isInternalFunction(fn)),
+    [functions, showInternalFunctions],
+  );
   // Wait for every visible function's CFG response before applying the
   // explorer ranking so asynchronous responses do not make rows jump around.
   // Missing graphs are valid responses and contribute zero reachable callees.

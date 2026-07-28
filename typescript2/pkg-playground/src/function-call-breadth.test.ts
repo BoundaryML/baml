@@ -98,6 +98,35 @@ describe('function call breadth', () => {
     ]);
   });
 
+  it('ignores unresolved and ambiguous bare callees', () => {
+    const functions = [
+      functionInfo('Caller'),
+      functionInfo('MissingCaller'),
+      functionInfo('first.Helper'),
+      functionInfo('second.Helper'),
+    ];
+    const graphs = new Map<string, ControlFlowGraph>([
+      ['Caller', graph(['Helper'])],
+      ['MissingCaller', graph(['DoesNotExist'])],
+      ['first.Helper', graph()],
+      ['second.Helper', graph()],
+    ]);
+
+    expect(
+      functionCallBreadths(
+        functions.map((fn) => fn.name),
+        graphs,
+      ),
+    ).toEqual(
+      new Map([
+        ['Caller', 0],
+        ['MissingCaller', 0],
+        ['first.Helper', 0],
+        ['second.Helper', 0],
+      ]),
+    );
+  });
+
   it('keeps source order until every graph response has arrived', () => {
     const functions = [functionInfo('Leaf'), functionInfo('Root')];
     const graphs = new Map<string, ControlFlowGraph>([

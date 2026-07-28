@@ -14,16 +14,17 @@ function calleeNames(graph: ControlFlowGraph): string[] {
 
 function resolveFunctionName(
   functionNames: readonly string[],
+  functionNameSet: ReadonlySet<string>,
   callerName: string,
   rawName: string,
 ): string | null {
   const namespaceEnd = callerName.lastIndexOf('.');
   if (namespaceEnd >= 0) {
     const sameNamespaceName = `${callerName.slice(0, namespaceEnd)}.${rawName}`;
-    if (functionNames.includes(sameNamespaceName)) return sameNamespaceName;
+    if (functionNameSet.has(sameNamespaceName)) return sameNamespaceName;
   }
 
-  if (functionNames.includes(rawName)) return rawName;
+  if (functionNameSet.has(rawName)) return rawName;
 
   const matches = functionNames.filter(
     (name) => name.endsWith(`.${rawName}`) || rawName.endsWith(`.${name}`),
@@ -36,6 +37,7 @@ export function functionCallBreadths(
   graphsByFunction: ReadonlyMap<string, ControlFlowGraph>,
 ): ReadonlyMap<string, number> {
   const calleesByFunction = new Map<string, Set<string>>();
+  const functionNameSet = new Set(functionNames);
   for (const functionName of functionNames) {
     const graph = graphsByFunction.get(functionName);
     const callees = new Set<string>();
@@ -43,6 +45,7 @@ export function functionCallBreadths(
       for (const rawName of calleeNames(graph)) {
         const callee = resolveFunctionName(
           functionNames,
+          functionNameSet,
           functionName,
           rawName,
         );
