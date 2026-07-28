@@ -274,7 +274,7 @@ fn interactive_prompt_anonymous_choice() {
         Some("1\n"),
     );
     assert!(ok, "{out}");
-    assert!(out.contains("Report it to Boundary?"), "{out}");
+    assert!(out.contains("How should I report it?"), "{out}");
     assert!(out.contains("Feedback sent anonymously"), "{out}");
     assert_eq!(feedback_events(&state).len(), 1);
 
@@ -287,7 +287,7 @@ fn interactive_prompt_anonymous_choice() {
         None,
     );
     assert!(ok, "{out}");
-    assert!(!out.contains("Report it to Boundary?"), "{out}");
+    assert!(!out.contains("How should I report it?"), "{out}");
     assert!(out.contains("Feedback sent anonymously"), "{out}");
     assert_eq!(feedback_events(&state).len(), 2);
 }
@@ -298,34 +298,65 @@ fn interactive_prompt_decline_sends_nothing() {
     let base = spawn_mock(state.clone());
     let home = tempfile::tempdir().unwrap();
 
-    // Choosing 3 declines: nothing sent, nothing persisted, and the next
-    // run prompts again (declining is not sticky).
+    // The prompt is preceded by a preview of exactly what would be sent.
+    // Choosing 3 declines: nothing sent, and the decline is remembered.
     let (ok, out) = run_baml(
         home.path(),
         &base,
-        &["feedback", "--issue", "never mind"],
+        &["feedback", "--issue", "never mind", "--repro", "class A {}"],
         Some("3\n"),
     );
     assert!(ok, "{out}");
+    assert!(out.contains("Here's what will be sent:"), "{out}");
+    assert!(out.contains("Issue: never mind"), "{out}");
+    assert!(out.contains("Repro: class A {}"), "{out}");
     assert!(out.contains("Nothing sent"), "{out}");
     assert_eq!(feedback_events(&state).len(), 0);
-    assert!(
-        !home.path().join("creds.json").exists(),
-        "nothing persisted"
-    );
+    let creds = std::fs::read_to_string(home.path().join("creds.json")).unwrap();
+    assert!(creds.contains("feedback_declined_at"), "{creds}");
 
+    // Within the day-long cooldown: no prompt, nothing sent, still exit 0.
     let (ok, out) = run_baml(
         home.path(),
         &base,
-        &["feedback", "--issue", "ok fine"],
-        Some("1\n"),
+        &["feedback", "--issue", "still nothing"],
+        None,
+    );
+    assert!(ok, "{out}");
+    assert!(!out.contains("How should I report it?"), "{out}");
+    assert!(out.contains("declined recently"), "{out}");
+    assert_eq!(feedback_events(&state).len(), 0);
+
+    // Explicit --anonymous overrides the cooldown and clears it.
+    let (ok, out) = run_baml(
+        home.path(),
+        &base,
+        &["feedback", "--anonymous", "--issue", "ok fine"],
+        None,
+    );
+    assert!(ok, "{out}");
+    assert_eq!(feedback_events(&state).len(), 1);
+    let creds = std::fs::read_to_string(home.path().join("creds.json")).unwrap();
+    assert!(!creds.contains("feedback_declined_at"), "{creds}");
+
+    // An expired cooldown prompts again: write stale state directly (a
+    // 1970 decline, no sticky-anonymous flag) and expect the prompt.
+    std::fs::write(
+        home.path().join("creds.json"),
+        r#"{"feedback_declined_at":1}"#,
+    )
+    .unwrap();
+    let (ok, out) = run_baml(
+        home.path(),
+        &base,
+        &["feedback", "--issue", "after cooldown"],
+        Some("3\n"),
     );
     assert!(ok, "{out}");
     assert!(
-        out.contains("Report it to Boundary?"),
-        "prompts again: {out}"
+        out.contains("How should I report it?"),
+        "prompts again after expiry: {out}"
     );
-    assert_eq!(feedback_events(&state).len(), 1);
 }
 
 #[test]
