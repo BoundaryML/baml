@@ -126,21 +126,21 @@ export const ValueRenderer: FC<{
       );
     }
 
-    const showToggle = value.length > 3;
     return (
       <div className="group/node">
         <div className="flex items-center gap-0.5">
-          {showToggle && (
-            <button
-              onClick={() => setCollapsed(!collapsed)}
-              className="p-0 text-vsc-text-muted hover:text-vsc-text"
-            >
-              <ChevronRight
-                size={12}
-                className={`transition-transform ${collapsed ? '' : 'rotate-90'}`}
-              />
-            </button>
-          )}
+          <button
+            type="button"
+            aria-expanded={!collapsed}
+            aria-label={`${collapsed ? 'Expand' : 'Collapse'} array`}
+            onClick={() => setCollapsed((current) => !current)}
+            className="p-0 text-vsc-text-muted hover:text-vsc-text"
+          >
+            <ChevronRight
+              size={12}
+              className={`transition-transform ${collapsed ? '' : 'rotate-90'}`}
+            />
+          </button>
           <span className="font-vsc-mono text-xs text-vsc-text-faint">
             [{value.length}]
           </span>
@@ -206,23 +206,23 @@ export const ValueRenderer: FC<{
     );
   }
 
-  const showToggle = entries.length > 3;
   return (
     <div className="group/node">
       <div className="flex items-center gap-0.5">
-        {showToggle && (
-          <button
-            onClick={() => setCollapsed(!collapsed)}
-            className="p-0 text-vsc-text-muted hover:text-vsc-text"
-          >
-            <ChevronRight
-              size={12}
-              className={`transition-transform ${collapsed ? '' : 'rotate-90'}`}
-            />
-          </button>
-        )}
+        <button
+          type="button"
+          aria-expanded={!collapsed}
+          aria-label={`${collapsed ? 'Expand' : 'Collapse'} object`}
+          onClick={() => setCollapsed((current) => !current)}
+          className="p-0 text-vsc-text-muted hover:text-vsc-text"
+        >
+          <ChevronRight
+            size={12}
+            className={`transition-transform ${collapsed ? '' : 'rotate-90'}`}
+          />
+        </button>
         <span className="font-vsc-mono text-xs text-vsc-text-faint">
-          {'{'}…{'}'} {entries.length} keys
+          {collapsed ? '{…}' : '{'}
         </span>
         <CopyButton
           text={stringifyValue(value, 2)}
@@ -252,11 +252,12 @@ export const ValueRenderer: FC<{
               );
             }
             return (
-              <div key={key} className="space-y-0.5">
-                <div className="font-vsc-mono text-xs text-vsc-text-muted">
-                  {key}:
-                </div>
-                <div className="pl-2">
+              <div
+                key={key}
+                className="flex items-start gap-1.5 font-vsc-mono text-xs"
+              >
+                <span className="shrink-0 text-vsc-text-muted">{key}:</span>
+                <div className="min-w-0 flex-1">
                   <ValueRenderer
                     value={val}
                     customRenderers={customRenderers}
