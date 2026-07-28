@@ -785,6 +785,8 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
   const [selectedFn, setSelectedFn] = useState<string | null>(null);
   const [selectedTestName, setSelectedTestName] = useState<string | null>(null);
   const graphTargetName = selectedTestName ?? selectedFn;
+  const [selectedGraphRunId, setSelectedGraphRunId] =
+    useState<BoundaryId | null>(null);
   const [selectedPreviewTestKey, setSelectedPreviewTestKey] = useState<
     string | null
   >(null);
@@ -2247,6 +2249,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
 
     // Don't force the 'run' tab — running keeps the user on whatever tab
     // they're viewing (graph, trace, prompt, etc.).
+    setSelectedGraphRunId(null);
     setExpandedLogId(null);
     setRunValidationError(null);
 
@@ -2317,8 +2320,28 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
         executionSnapshot.runs,
         selectedFn,
         selectedProject,
+        selectedGraphRunId,
       ),
-    [executionSnapshot.runs, selectedFn, selectedProject],
+    [
+      executionSnapshot.runs,
+      selectedFn,
+      selectedProject,
+      selectedGraphRunId,
+    ],
+  );
+  const handleSelectHistoryRun = useCallback(
+    (run: RunStoreDisplayRun) => {
+      if (!functionNames.includes(run.functionName)) return;
+      setWorkflowContext(null);
+      setSelectedPreviewTestKey(null);
+      setViewingCollection(false);
+      setViewingTestRun(false);
+      setSelectedFn(run.functionName);
+      setSelectedGraphRunId(run.id);
+      setHighlightedNodeId(null);
+      setActiveTab('graph');
+    },
+    [functionNames],
   );
   // The run-history/logs strip is lifted out of the sidebar+content row so it
   // spans the panel's full width; the row gets bottom padding to make room.
@@ -3507,16 +3530,29 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
                           }
                         >
                           {/* Run header */}
-                          <div className="flex items-center gap-1.5 px-2.5 py-1.5 bg-vsc-surface border-b border-vsc-border-subtle">
-                            <span
-                              className={`w-1.5 h-1.5 rounded-full shrink-0 ${statusCls}`}
-                            />
-                            <span className="text-vsc-accent font-semibold text-[11px]">
-                              {run.functionName}()
-                            </span>
-                            <span className="text-vsc-text-faint text-[10px] flex-1 overflow-hidden text-ellipsis whitespace-nowrap">
-                              {run.argsJson}
-                            </span>
+                          <div className="flex items-center bg-vsc-surface border-b border-vsc-border-subtle">
+                            <button
+                              type="button"
+                              aria-label={`View ${run.functionName} run in graph`}
+                              title={
+                                functionNames.includes(run.functionName)
+                                  ? 'View this run in the graph'
+                                  : 'This function is not available in the current build'
+                              }
+                              disabled={!functionNames.includes(run.functionName)}
+                              onClick={() => handleSelectHistoryRun(run)}
+                              className="flex flex-1 min-w-0 items-center gap-1.5 px-2.5 py-1.5 text-left hover:bg-vsc-accent/10 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-vsc-accent disabled:cursor-default disabled:hover:bg-transparent"
+                            >
+                              <span
+                                className={`w-1.5 h-1.5 rounded-full shrink-0 ${statusCls}`}
+                              />
+                              <span className="text-vsc-accent font-semibold text-[11px]">
+                                {run.functionName}()
+                              </span>
+                              <span className="text-vsc-text-faint text-[10px] flex-1 overflow-hidden text-ellipsis whitespace-nowrap">
+                                {run.argsJson}
+                              </span>
+                            </button>
                             {run.status === 'running' && (
                               <>
                                 <span className="text-vsc-text-muted text-[10px]">
@@ -3528,7 +3564,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
                                       <Button
                                         variant="ghost"
                                         size="icon"
-                                        className="h-5 w-5 text-vsc-text-muted hover:text-vsc-error"
+                                        className="mr-1 h-5 w-5 text-vsc-text-muted hover:text-vsc-error"
                                         onClick={() =>
                                           onCancelFunctionRun(run.id)
                                         }
@@ -3544,7 +3580,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
                               </>
                             )}
                             {run.durationMs != null && (
-                              <span className="text-vsc-text-faint text-[10px] shrink-0">
+                              <span className="px-2.5 text-vsc-text-faint text-[10px] shrink-0">
                                 {run.durationMs}ms
                               </span>
                             )}

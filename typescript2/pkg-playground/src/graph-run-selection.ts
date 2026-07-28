@@ -4,12 +4,16 @@ export function findLatestGraphRunSnapshot(
   runs: Run[],
   selectedFn: string | null,
   selectedProject: string | null,
+  preferredBoundaryId?: string | null,
 ): Run | undefined {
   if (!selectedFn) return undefined;
 
   let latest: Run | undefined;
   for (const run of runs) {
     if (!isGraphRunCandidate(run, selectedFn, selectedProject)) continue;
+    if (preferredBoundaryId && run.boundaryId === preferredBoundaryId) {
+      return run;
+    }
     if (!latest || compareRunRecency(run, latest) > 0) {
       latest = run;
     }

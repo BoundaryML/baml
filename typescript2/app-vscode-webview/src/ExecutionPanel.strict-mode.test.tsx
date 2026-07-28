@@ -177,6 +177,95 @@ describe('ExecutionPanel StrictMode lifecycle', () => {
   });
 });
 
+describe('ExecutionPanel run history', () => {
+  it('opens the selected historical run in the graph tab', async () => {
+    const port = new FakeRuntimePort();
+
+    render(<ExecutionPanel port={port} />);
+
+    act(() => {
+      port.emit({
+        type: 'playgroundNotification',
+        notification: { type: 'listProjects', projects: ['project'] },
+      });
+      port.emit({
+        type: 'playgroundNotification',
+        notification: {
+          type: 'updateProject',
+          project: 'project',
+          update: {
+            isBexCurrent: true,
+            functions: [
+              { name: 'ReadNote', kind: 'expr', origin: 'userDefined' },
+            ],
+            diagnostics: [],
+          },
+        },
+      });
+    });
+
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Functions (1)' }),
+    );
+    fireEvent.click(await screen.findByRole('button', { name: 'ReadNote' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Run' }));
+
+    const startRun = await waitFor(() => {
+      const message = port.sent.find(
+        (candidate): candidate is Extract<
+          WorkerInMessage,
+          { type: 'startRun' }
+        > => candidate.type === 'startRun',
+      );
+      expect(message).toBeDefined();
+      return message!;
+    });
+    const run = runFixture(startRun.project, startRun.functionName);
+    act(() => {
+      port.emit({
+        type: 'runStarted',
+        requestId: startRun.requestId,
+        run,
+      });
+    });
+    const snapshot = await waitFor(() => {
+      const message = port.sent.find(
+        (candidate): candidate is Extract<
+          WorkerInMessage,
+          { type: 'snapshot' }
+        > => candidate.type === 'snapshot',
+      );
+      expect(message).toBeDefined();
+      return message!;
+    });
+    act(() => {
+      port.emit({
+        type: 'runSnapshot',
+        requestId: snapshot.requestId,
+        boundaryId: run.boundaryId,
+        snapshot: { ...run, status: 'succeeded', cursor: 1 },
+      });
+    });
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole('button', {
+          name: 'View ReadNote run in graph',
+        }),
+      ).toBeInTheDocument();
+    });
+    fireEvent.click(
+      screen.getByRole('button', { name: 'View ReadNote run in graph' }),
+    );
+
+    expect(screen.getByRole('tab', { name: 'Graph' })).toHaveAttribute(
+      'data-state',
+      'active',
+    );
+    expect(screen.getByText('Loading graph...')).toBeInTheDocument();
+  });
+});
+
 describe('ExecutionPanel test previews', () => {
   it('hydrates legacy test args without running and releases selection on navigation', async () => {
     const port = new FakeRuntimePort();

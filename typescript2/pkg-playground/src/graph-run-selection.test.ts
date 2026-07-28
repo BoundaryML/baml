@@ -52,6 +52,34 @@ describe('findLatestGraphRunSnapshot', () => {
     ).toBe('newer');
   });
 
+  it('selects a requested historical run instead of the newest snapshot', () => {
+    const older = runFixture('older', 100);
+    const newer = runFixture('newer', 300);
+
+    expect(
+      findLatestGraphRunSnapshot(
+        [newer, older],
+        'throws.main',
+        'project',
+        'older',
+      )?.boundaryId,
+    ).toBe('older');
+  });
+
+  it('falls back to the newest matching snapshot when a requested run is unavailable', () => {
+    const older = runFixture('older', 100);
+    const newer = runFixture('newer', 300);
+
+    expect(
+      findLatestGraphRunSnapshot(
+        [older, newer],
+        'throws.main',
+        'project',
+        'missing',
+      )?.boundaryId,
+    ).toBe('newer');
+  });
+
   it('can select a workflow run that contains the displayed function', () => {
     const run = runFixture('workflow', 100, {
       target: { kind: 'function', functionName: 'throws.workflow' },
