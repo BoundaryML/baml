@@ -379,12 +379,7 @@ impl DescribeArgs {
                     baml_lsp2_actions::describe_by_definition(&db, &describe_files, def)
                 {
                     if self.json {
-                        let json = crate::grep_command::description_to_json(
-                            &db,
-                            &desc,
-                            self.budget,
-                            &from,
-                        );
+                        let json = description_to_json(&db, &desc, self.budget, &from);
                         println!(
                             "{}",
                             serde_json::to_string_pretty(&[json])
@@ -412,12 +407,7 @@ impl DescribeArgs {
                     member_name.as_str(),
                 ) {
                     if self.json {
-                        let json = crate::grep_command::description_to_json(
-                            &db,
-                            &desc,
-                            self.budget,
-                            &from,
-                        );
+                        let json = description_to_json(&db, &desc, self.budget, &from);
                         println!(
                             "{}",
                             serde_json::to_string_pretty(&[json])
@@ -448,7 +438,7 @@ impl DescribeArgs {
                     let budget = self.budget;
                     let json_output: Vec<serde_json::Value> = descriptions
                         .iter()
-                        .map(|d| crate::grep_command::description_to_json(&db, d, budget, &from))
+                        .map(|d| description_to_json(&db, d, budget, &from))
                         .collect();
                     println!(
                         "{}",
@@ -1211,4 +1201,86 @@ pub fn truncate_body(body_lines: &[&str], available_lines: usize) -> Vec<String>
     }
 
     result
+}
+
+fn budget_body(desc: &SymbolDescription, budget: usize) -> String {
+    let body_lines: Vec<&str> = desc.full_body.lines().collect();
+
+    if body_lines.len() <= budget {
+        desc.full_body.clone()
+    } else if budget >= 5 {
+        truncate_body(&body_lines, budget).join("\n")
+    } else {
+        shape_with_elision(&desc.shape, &desc.full_body)
+    }
+}
+
+fn method_json(
+    db: &ProjectDatabase,
+    project_root: &std::path::Path,
+    methods: &[baml_lsp2_actions::describe::MethodRef],
+) -> Vec<serde_json::Value> {
+    methods
+        .iter()
+        .map(|method| {
+            let path = relative_path(&method.file.path(db), project_root);
+            let text = method.file.text(db);
+            serde_json::json!({
+                "name": method.name,
+                "signature": method.signature,
+                "docstring": method.docstring,
+                "file": path.to_string_lossy(),
+                "line_start": line_number_at_offset(text, method.item_range.start().into()),
+                "line_end": line_number_at_offset(text, method.item_range.end().into()),
+            })
+        })
+        .collect()
+}
+
+fn description_to_json(
+    db: &ProjectDatabase,
+    desc: &SymbolDescription,
+    budget: usize,
+    project_root: &std::path::Path,
+) -> serde_json::Value {
+    let file_path = relative_path(&desc.file.path(db), project_root);
+    let body = budget_body(desc, budget);
+    serde_json::json!({
+        "name": desc.name,
+        "kind": desc.kind.as_str(),
+        "file": file_path.to_string_lossy(),
+        "line": line_number_at_offset(desc.file.text(db), desc.name_span.start().into()),
+        "shape": desc.shape,
+        "body": body,
+        "docstring": desc.docstring,
+        "resolved_type": desc.resolved_type,
+        "dependencies": desc.dependencies.iter().map(|dep| {
+            let dep_path = relative_path(&dep.file.path(db), project_root);
+            serde_json::json!({
+                "name": dep.name,
+                "kind": dep.kind.as_str(),
+                "file": dep_path.to_string_lossy(),
+                "line": line_number_at_offset(dep.file.text(db), dep.name_span.start().into()),
+            })
+        }).collect::<Vec<_>>(),
+        "references": desc.references.iter().map(|reference| {
+            let ref_path = relative_path(&reference.file.path(db), project_root);
+            serde_json::json!({
+                "file": ref_path.to_string_lossy(),
+                "line": reference.line_number,
+                "text": reference.line_text.trim(),
+            })
+        }).collect::<Vec<_>>(),
+        "instance_methods": method_json(db, project_root, &desc.instance_methods),
+        "static_methods": method_json(db, project_root, &desc.static_methods),
+        "container": desc.container.as_ref().map(|container| {
+            let path = relative_path(&container.file.path(db), project_root);
+            serde_json::json!({
+                "name": container.name,
+                "kind": container.kind.as_str(),
+                "file": path.to_string_lossy(),
+                "line": line_number_at_offset(container.file.text(db), container.name_span.start().into()),
+            })
+        }),
+    })
 }
