@@ -1,4 +1,4 @@
-// Wires up the BAML CLI subcommands: Run, Describe, Generate, Grep, Test,
+// Wires up the BAML CLI subcommands: Run, Describe, Generate, Test,
 // Format, and LanguageServer. `baml run` is the top-level entry for
 // standalone execution.
 
@@ -89,9 +89,6 @@ pub(crate) enum Commands {
 
     #[command(about = "Generate client code from BAML definitions")]
     Generate(crate::generate::GenerateArgs),
-
-    #[command(about = "Semantic code search for BAML files", name = "grep")]
-    Grep(crate::grep_command::GrepArgs),
 
     #[command(about = "Run BAML tests")]
     Test(crate::test_command::TestArgs),
@@ -264,7 +261,6 @@ impl RuntimeCli {
             Commands::Agent(args) => args.run(),
             Commands::Describe(args) => args.run(),
             Commands::Generate(args) => args.run(),
-            Commands::Grep(args) => args.run(),
             Commands::Test(args) => args.run(),
             Commands::LanguageServer(args) => match args.run() {
                 Ok(()) => Ok(crate::ExitCode::Success),

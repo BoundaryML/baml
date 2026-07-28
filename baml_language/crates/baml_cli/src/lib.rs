@@ -26,7 +26,6 @@ pub(crate) mod feedback_command;
 pub(crate) mod file_signature;
 pub(crate) mod format;
 pub(crate) mod generate;
-pub(crate) mod grep_command;
 pub(crate) mod ide_command;
 pub(crate) mod init_command;
 pub(crate) mod lsp;
@@ -117,7 +116,7 @@ impl From<ExitCode> for u32 {
 
 /// Run the CLI with the given arguments.
 ///
-/// Dispatches to one of: `run`, `describe`, `generate`, `grep`, `test`,
+/// Dispatches to one of: `run`, `describe`, `generate`, `test`,
 /// `format`, or `language-server`. `baml run` is the top-level entry for
 /// standalone execution.
 pub fn run_cli(argv: Vec<String>) -> Result<ExitCode> {

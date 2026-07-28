@@ -126,7 +126,7 @@ pub(crate) fn load_project_from_reporting(
 /// sessions: `Ok(None)` when no project root is found (instead of an error),
 /// and a present `baml.toml` is read **raw, unvalidated** — its bytes still
 /// key the bytecode cache identically to the strict path, but a broken
-/// manifest must not lock an agent out of `describe`/`grep`.
+/// manifest must not lock an agent out of `describe`.
 pub(crate) fn resolve_project_sources_lenient(
     from: Option<&Path>,
 ) -> Result<Option<ResolvedProject>> {
@@ -166,8 +166,8 @@ pub(crate) fn projectless_search_dir(from: Option<&Path>) -> Result<PathBuf> {
 
 /// Read-only/introspection loader: like [`load_project_from`] but **never
 /// fails on a missing `baml.toml`**. This is for the commands an agent
-/// reaches for first (`describe`, `grep`) — the most expensive thing they
-/// can do is fail fast and burn a turn, so they always have something to
+/// reaches for first (`describe`) - the most expensive thing it can
+/// do is fail fast and burn a turn, so it always has something to
 /// work with.
 ///
 /// 1. Walk the ancestors of `from` (Cargo-style, stopping at the
