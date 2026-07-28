@@ -16,8 +16,7 @@ pub(crate) const fn release_version() -> &'static str {
     author,
     version = release_version(),
     about = "A CLI tool for working with BAML. Learn more at https://docs.boundaryml.com.",
-    long_about = None,
-    after_help = "Manage installed BAML toolchains:\n  baml toolchain --help"
+    long_about = None
 )]
 #[command(styles = crate::reporter::CLAP_STYLING)]
 #[command(propagate_version = true)]
@@ -290,6 +289,124 @@ fn baml_internal_env_is_truthy() -> bool {
         .unwrap_or(false)
 }
 
+pub(crate) fn root_help_v1() -> baml_shell::RootHelpV1 {
+    let mut command = RuntimeCli::command();
+    command.build();
+    let mut usage_command = command
+        .clone()
+        .styles(clap::builder::styling::Styles::plain());
+    let usage = usage_command.render_usage().to_string();
+    let usage = usage
+        .trim()
+        .strip_prefix("Usage:")
+        .unwrap_or(usage.trim())
+        .trim()
+        .to_string();
+    let commands = command
+        .get_subcommands()
+        .filter(|subcommand| !subcommand.is_hide_set())
+        .map(|subcommand| baml_shell::HelpRow {
+            syntax: subcommand.get_name().to_string(),
+            summary: subcommand
+                .get_long_about()
+                .or_else(|| subcommand.get_about())
+                .map(ToString::to_string)
+                .unwrap_or_default(),
+        })
+        .collect();
+    let options = command
+        .get_arguments()
+        .filter(|arg| !arg.is_hide_set() && !arg.is_positional())
+        .map(|arg| baml_shell::HelpRow {
+            syntax: help_option_syntax(arg),
+            summary: help_option_summary(arg),
+        })
+        .collect();
+    baml_shell::RootHelpV1 {
+        schema_version: baml_shell::ROOT_HELP_SCHEMA_V1.to_string(),
+        name: command
+            .get_bin_name()
+            .unwrap_or_else(|| command.get_name())
+            .to_string(),
+        version: command.get_version().unwrap_or_default().to_string(),
+        about: command
+            .get_long_about()
+            .or_else(|| command.get_about())
+            .map(ToString::to_string)
+            .unwrap_or_default(),
+        usage,
+        commands,
+        options,
+    }
+}
+
+fn help_option_syntax(arg: &clap::Arg) -> String {
+    let mut syntax = match (arg.get_short(), arg.get_long()) {
+        (Some(short), Some(long)) => format!("-{short}, --{long}"),
+        (Some(short), None) => format!("-{short}"),
+        (None, Some(long)) => format!("--{long}"),
+        (None, None) => arg.get_id().to_string(),
+    };
+    if arg.get_action().takes_values() {
+        let names = arg
+            .get_value_names()
+            .map(|names| names.iter().map(ToString::to_string).collect::<Vec<_>>())
+            .unwrap_or_else(|| vec![arg.get_id().to_string().to_ascii_uppercase()]);
+        for name in names {
+            syntax.push_str(&format!(" <{name}>"));
+        }
+        if arg
+            .get_num_args()
+            .is_some_and(|range| range.max_values() > 1)
+        {
+            syntax.push_str("...");
+        }
+    }
+    syntax
+}
+
+fn help_option_summary(arg: &clap::Arg) -> String {
+    let mut summary = arg
+        .get_long_help()
+        .or_else(|| arg.get_help())
+        .map(ToString::to_string)
+        .unwrap_or_default();
+    if let Some(env) = arg.get_env() {
+        append_help_detail(&mut summary, format!("env: {}", env.to_string_lossy()));
+    }
+    if !arg.get_default_values().is_empty() {
+        let values = arg
+            .get_default_values()
+            .iter()
+            .map(|value| value.to_string_lossy())
+            .collect::<Vec<_>>()
+            .join(", ");
+        append_help_detail(&mut summary, format!("default: {values}"));
+    }
+    let possible = arg
+        .get_possible_values()
+        .into_iter()
+        .filter(|value| !value.is_hide_set())
+        .map(|value| value.get_name().to_string())
+        .collect::<Vec<_>>();
+    if !possible.is_empty() {
+        append_help_detail(
+            &mut summary,
+            format!("possible values: {}", possible.join(", ")),
+        );
+    }
+    summary
+}
+
+fn append_help_detail(summary: &mut String, detail: String) {
+    if !summary.is_empty() {
+        summary.push(' ');
+    }
+    summary.push('[');
+    summary.push_str(&detail);
+    summary.push(']');
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -387,6 +504,21 @@ mod tests {
         let help = help_for(&["baml-cli", "--help"]);
         assert!(help.contains("playground"), "{help}");
         assert!(help.contains("Open the BAML playground"), "{help}");
+    }
+
+    #[test]
+    fn serialized_root_help_contains_public_commands_and_options() {
+        let help = root_help_v1();
+        assert_eq!(help.schema_version, baml_shell::ROOT_HELP_SCHEMA_V1);
+        assert_eq!(help.name, "baml");
+        assert_eq!(help.usage, "baml [OPTIONS] <COMMAND>");
+        assert!(help.commands.iter().any(|row| row.syntax == "check"));
+        assert!(
+            help.options
+                .iter()
+                .any(|row| row.syntax.contains("--color"))
+        );
+        assert!(!help.commands.iter().any(|row| row.syntax == "telemetry"));
     }
 
     #[test]

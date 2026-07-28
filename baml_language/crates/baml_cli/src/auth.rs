@@ -296,7 +296,7 @@ impl TokenArgs {
         let mut creds = match Credentials::read()? {
             Some(creds) => creds,
             None => {
-                eprintln!("Not logged in. Run `baml login`.");
+                crate::reporter::print_error("Not logged in. Run `baml login`.");
                 return Ok(crate::ExitCode::Other);
             }
         };

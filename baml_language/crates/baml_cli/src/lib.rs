@@ -57,6 +57,10 @@ pub(crate) mod util;
 
 use anyhow::{Result, anyhow};
 
+pub fn root_help_v1() -> baml_shell::RootHelpV1 {
+    commands::root_help_v1()
+}
+
 #[derive(Debug, Clone)]
 pub enum ExitCode {
     Success,

@@ -1,0 +1,27 @@
+[package]
+name = "baml_shell"
+version = { workspace = true }
+publish = false
+authors = { workspace = true }
+edition = { workspace = true }
+rust-version = { workspace = true }
+homepage = { workspace = true }
+documentation = { workspace = true }
+repository = { workspace = true }
+license = { workspace = true }
+description = "Shared terminal output and help protocol for BAML CLIs"
+
+[lib]
+doctest = false
+
+[lints]
+workspace = true
+
+[features]
+clap = [ "dep:clap" ]
+
+[dependencies]
+anstream = { workspace = true }
+anstyle = { workspace = true }
+clap = { workspace = true, optional = true }
+serde = { workspace = true, features = [ "derive" ] }

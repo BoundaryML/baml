@@ -99,9 +99,9 @@ impl FeedbackArgs {
             // Non-interactive email mode without a session: instruct and
             // exit rather than trying to run an interactive login under a
             // flag that suggests automation.
-            eprintln!(
+            crate::reporter::print_error(
                 "Reporting via email requires a login. Run `baml login`, then \
-                 re-run this command."
+                 re-run this command.",
             );
             return Ok(crate::ExitCode::Other);
         } else if creds.feedback_anonymous {

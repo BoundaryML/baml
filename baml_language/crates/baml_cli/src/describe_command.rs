@@ -161,7 +161,7 @@ fn print_did_you_mean(db: &ProjectDatabase, name: &str) {
     let suggestions = suggest_similar_kinded(db, name, 5);
     if !suggestions.is_empty() {
         eprintln!();
-        eprintln!("did you mean:");
+        crate::reporter::print_note("did you mean:");
         // did-you-mean writes to stderr, so use a stderr-bound painter (gets the
         // stderr color decision, never stdout's).
         let painter = crate::paint::Painter::stderr();
@@ -298,8 +298,8 @@ impl DescribeArgs {
 
         // ── --symbols deprecation ───────────────────────────────────────────
         if self.symbols {
-            eprintln!(
-                "warning: `--symbols` is deprecated. Use `baml describe` with no arguments instead."
+            crate::reporter::print_warning(
+                "`--symbols` is deprecated. Use `baml describe` with no arguments instead.",
             );
         }
 
@@ -323,7 +323,7 @@ impl DescribeArgs {
             Some(ResolvedTarget::Package(pkg)) => {
                 let entries = baml_lsp2_actions::list_package_items(&db, pkg);
                 if entries.is_empty() {
-                    eprintln!("no symbols found");
+                    crate::reporter::print_error("no symbols found");
                     return Ok(crate::ExitCode::Other);
                 }
                 if self.json {
@@ -347,10 +347,10 @@ impl DescribeArgs {
                     );
                     if baml_lsp2_actions::resolve_target(&db, user_pkg, pkg_name).is_some() {
                         eprintln!();
-                        eprintln!(
-                            "note: your project also defines `{pkg_name}`. \
+                        crate::reporter::print_note(format_args!(
+                            "your project also defines `{pkg_name}`. \
                              Use `baml describe root.{pkg_name}` to see your definition."
-                        );
+                        ));
                     }
                 }
                 Ok(crate::ExitCode::Success)
@@ -359,7 +359,7 @@ impl DescribeArgs {
                 let entries = baml_lsp2_actions::list_namespace_items(&db, package, &ns_path)
                     .unwrap_or_default();
                 if entries.is_empty() {
-                    eprintln!("no symbols found in namespace");
+                    crate::reporter::print_error("no symbols found in namespace");
                     return Ok(crate::ExitCode::Other);
                 }
                 if self.json {
@@ -395,7 +395,7 @@ impl DescribeArgs {
                     }
                     Ok(crate::ExitCode::Success)
                 } else {
-                    eprintln!("no symbol found: {name}");
+                    crate::reporter::print_error(format_args!("no symbol found: {name}"));
                     print_did_you_mean(&db, name);
                     Ok(crate::ExitCode::Other)
                 }
@@ -428,7 +428,7 @@ impl DescribeArgs {
                     }
                     Ok(crate::ExitCode::Success)
                 } else {
-                    eprintln!("no symbol found: {name}");
+                    crate::reporter::print_error(format_args!("no symbol found: {name}"));
                     print_did_you_mean(&db, name);
                     Ok(crate::ExitCode::Other)
                 }
@@ -439,7 +439,7 @@ impl DescribeArgs {
                 let descriptions = describe(&db, &describe_files, name);
 
                 if descriptions.is_empty() {
-                    eprintln!("no symbol found: {name}");
+                    crate::reporter::print_error(format_args!("no symbol found: {name}"));
                     print_did_you_mean(&db, name);
                     return Ok(crate::ExitCode::Other);
                 }

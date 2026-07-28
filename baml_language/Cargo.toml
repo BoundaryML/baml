@@ -118,6 +118,7 @@ baml_lsp2_actions_tests = { path = "crates/baml_lsp2_actions_tests" }
 baml_lsp_server = { path = "crates/baml_lsp_server", default-features = false }
 baml_project = { path = "crates/baml_project" }
 baml_release = { path = "crates/baml_release" }
+baml_shell = { path = "crates/baml_shell" }
 baml_tests = { path = "crates/baml_tests" }
 baml_version = { path = "crates/baml_version" }
 bex_vm = { path = "crates/bex_vm" }
@@ -148,6 +149,8 @@ baml_workspace = { path = "crates/baml_workspace" }
 
 #  External dependencies
 anyhow = { version = "1" }
+anstream = "1"
+anstyle = "1"
 async-trait = "0.1"
 askama = { version = "0.14.0" }
 # Slim, reqwest/serde-based replacements for the AWS SDK + Google Cloud auth

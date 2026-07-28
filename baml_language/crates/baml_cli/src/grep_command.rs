@@ -85,7 +85,7 @@ impl GrepArgs {
         if self.symbols {
             let symbols = list_symbols(&db, &source_files, &kind_filter);
             if symbols.is_empty() {
-                eprintln!("no symbols found");
+                crate::reporter::print_error("no symbols found");
                 return Ok(crate::ExitCode::Other);
             }
             if self.json {
@@ -128,7 +128,9 @@ impl GrepArgs {
         let pattern = match &self.pattern {
             Some(p) => p.as_str(),
             None => {
-                eprintln!("no pattern provided; use `--symbols` to list all symbols");
+                crate::reporter::print_error(
+                    "no pattern provided; use `--symbols` to list all symbols",
+                );
                 return Ok(crate::ExitCode::InvalidArgs);
             }
         };
@@ -137,7 +139,7 @@ impl GrepArgs {
         if self.def {
             let descriptions = describe(&db, &source_files, pattern);
             if descriptions.is_empty() {
-                eprintln!("no symbol found: {pattern}");
+                crate::reporter::print_error(format_args!("no symbol found: {pattern}"));
                 return Ok(crate::ExitCode::Other);
             }
             if self.json {
@@ -169,7 +171,7 @@ impl GrepArgs {
         if self.refs {
             let descriptions = describe(&db, &source_files, pattern);
             if descriptions.is_empty() {
-                eprintln!("no symbol found: {pattern}");
+                crate::reporter::print_error(format_args!("no symbol found: {pattern}"));
                 return Ok(crate::ExitCode::Other);
             }
             if self.json {
@@ -252,7 +254,9 @@ impl GrepArgs {
             GrepMode::Semantic => {
                 if result.descriptions.is_empty() {
                     // Symbol exists but was filtered out by --kind.
-                    eprintln!("no symbol found matching pattern and kind filter: {pattern}");
+                    crate::reporter::print_error(format_args!(
+                        "no symbol found matching pattern and kind filter: {pattern}"
+                    ));
                     return Ok(crate::ExitCode::Other);
                 }
                 let history: std::collections::HashSet<&str> =
@@ -267,7 +271,7 @@ impl GrepArgs {
             }
             GrepMode::TextSearch => {
                 if result.text_matches.is_empty() {
-                    eprintln!("no matches found for: {pattern}");
+                    crate::reporter::print_error(format_args!("no matches found for: {pattern}"));
                     return Ok(crate::ExitCode::Other);
                 }
                 render_text_matches(&db, &result.text_matches, &from);

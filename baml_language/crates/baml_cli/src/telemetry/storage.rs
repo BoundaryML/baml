@@ -30,7 +30,7 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 
-use console::style;
+use baml_shell::{Shell, ThemeStyle};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
@@ -391,12 +391,19 @@ impl Drop for InvocationGuard {
 /// team like ours decides what to build next," which is more honest for
 /// a team our size.
 fn print_first_run_notice() {
-    let attention = style("Attention:").magenta().bold();
-    let url = style(TELEMETRY_URL).cyan();
-    eprintln!("\n{attention} BAML now collects completely anonymous CLI usage telemetry.");
-    eprintln!("This is how a small team like ours decides what to build next.");
-    eprintln!("Learn more, including how to opt out, at:");
-    eprintln!("{url}\n");
+    let mut shell = Shell::new();
+    drop(writeln!(shell.err()));
+    drop(shell.warn("BAML now collects completely anonymous CLI usage telemetry."));
+    drop(writeln!(
+        shell.err(),
+        "This is how a small team like ours decides what to build next."
+    ));
+    drop(writeln!(
+        shell.err(),
+        "Learn more, including how to opt out, at:"
+    ));
+    drop(shell.writeln_err_styled(ThemeStyle::Note, TELEMETRY_URL));
+    drop(writeln!(shell.err()));
 }
 
 // ── Config file I/O ──────────────────────────────────────────────────────────

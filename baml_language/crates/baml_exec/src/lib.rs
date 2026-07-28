@@ -22,8 +22,9 @@ pub mod json_coerce;
 pub mod output;
 
 pub use auto_cli::{is_auto_cli_primitive, parse_cli_value};
-pub use clap_target::{CLAP_STYLING, ParsedTargetArgs, parse_multi_target_argv, parse_target_argv};
-pub use diag_print::{print_anyhow_error, print_error, print_warning};
+pub use baml_shell::{CLAP_STYLING, Shell};
+pub use clap_target::{ParsedTargetArgs, parse_multi_target_argv, parse_target_argv};
+pub use diag_print::{print_anyhow_error, print_error, print_note, print_warning};
 
 /// Subset of `clap` re-exported so downstream binaries (pack-host) can
 /// classify [`parse_target_argv`] errors without taking a direct clap

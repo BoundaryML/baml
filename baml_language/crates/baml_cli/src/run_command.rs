@@ -1251,7 +1251,7 @@ impl RunArgs {
 
         match output {
             OutputFormat::Debug => {
-                Self::print_list_debug(&functions, scripts, namespaces, self.verbose);
+                Self::print_list_debug(&functions, scripts, namespaces, self.verbose)?;
             }
             OutputFormat::Json => Self::print_list_json(&functions, scripts, namespaces),
         }
@@ -1269,15 +1269,10 @@ impl RunArgs {
         scripts: &HashMap<String, Vec<String>>,
         namespaces: &HashSet<String>,
         verbose: bool,
-    ) {
+    ) -> Result<()> {
+        use baml_shell::{Shell, ThemeStyle};
         use bex_vm_types::FunctionOrigin;
-        use console::Style;
-
-        let header_style = Style::new()
-            .fg(console::Color::TrueColor(0xA8, 0x55, 0xF7))
-            .bold();
-        let dim = Style::new().color256(244);
-        let header = |s: &str| println!("{}", header_style.apply_to(s));
+        let mut shell = Shell::new();
 
         // Visible by default: user-authored entries only. Pass
         // `--verbose` to expose compiler-synthesized helpers
@@ -1308,25 +1303,25 @@ impl RunArgs {
         namespace_mains.dedup();
 
         if !scripts.is_empty() {
-            header("Scripts");
+            shell.writeln_out_styled(ThemeStyle::Heading, "Scripts")?;
             let mut names: Vec<&String> = scripts.keys().collect();
             names.sort();
             for name in names {
-                println!("  {name}");
+                writeln!(shell.out(), "  {name}")?;
             }
-            println!();
+            writeln!(shell.out())?;
         }
 
         if !namespace_mains.is_empty() {
-            header("Namespaces");
+            shell.writeln_out_styled(ThemeStyle::Heading, "Namespaces")?;
             for ns in &namespace_mains {
-                println!("  {ns}");
+                writeln!(shell.out(), "  {ns}")?;
             }
-            println!();
+            writeln!(shell.out())?;
         }
 
         if !visible.is_empty() {
-            header("Functions");
+            shell.writeln_out_styled(ThemeStyle::Heading, "Functions")?;
             for func in &visible {
                 let params: Vec<String> = func
                     .param_names
@@ -1347,33 +1342,35 @@ impl RunArgs {
                 } else {
                     format!("<{}>", func.display_type_params.join(", "))
                 };
-                let suffix = if func.is_llm {
-                    format!("  {}", dim.apply_to("[llm]"))
-                } else {
-                    String::new()
-                };
-                println!(
-                    "  {}{}({}) -> {}{suffix}",
+                write!(
+                    shell.out(),
+                    "  {}{}({}) -> {}",
                     func.display_name,
                     generic_suffix,
                     params.join(", "),
                     func.display_return_type,
-                );
+                )?;
+                if func.is_llm {
+                    write!(shell.out(), "  ")?;
+                    shell.write_out_styled(ThemeStyle::Dim, "[llm]")?;
+                }
+                writeln!(shell.out())?;
             }
-            println!();
+            writeln!(shell.out())?;
         }
 
         // When the default filter hid everything, surface that fact
         // rather than leaving the user staring at an empty section.
         if !verbose && visible.is_empty() && !functions.is_empty() {
-            println!(
-                "{}",
-                dim.apply_to(format!(
+            shell.writeln_out_styled(
+                ThemeStyle::Dim,
+                format_args!(
                     "(hiding {} compiler-synthesized function(s); pass --verbose to show them)",
                     functions.len()
-                ))
-            );
+                ),
+            )?;
         }
+        Ok(())
     }
 
     fn print_list_json(

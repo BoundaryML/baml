@@ -1,5 +1,4 @@
-//! End-to-end tests for the wrapper's toolchain freshness warning: run the real `baml`
-//! binary against a temp `BAML_HOME` and assert on stderr.
+//! End-to-end tests for wrapper output and delegation.
 //!
 //! Unix-only: the tests install a fake shell-script `baml-cli` for
 //! `pass_through` to exec.
@@ -49,6 +48,16 @@ impl TestHome {
         home
     }
 
+    fn write_cli(&self, script: &str) {
+        let cli = self.root.join("toolchains/0.11.0/bin/baml-cli");
+        fs::write(&cli, script).unwrap();
+        #[allow(clippy::permissions_set_readonly_false)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            fs::set_permissions(&cli, fs::Permissions::from_mode(0o755)).unwrap();
+        }
+    }
+
     /// Write `state.toml` with the canary channel active at 0.11.0.
     fn write_state(&self) {
         fs::write(
@@ -73,17 +82,7 @@ impl TestHome {
     /// Run `baml hello` with this home, from `cwd`. `$HOME` is pointed at the
     /// cwd's parent so the project-skills walk stays inside the temp tree.
     fn run_from(&self, cwd: &Path, extra_env: &[(&str, &str)]) -> Output {
-        let mut command = Command::new(env!("CARGO_BIN_EXE_baml"));
-        command
-            .arg("hello")
-            .current_dir(cwd)
-            .env("BAML_HOME", &self.root)
-            .env("HOME", cwd.parent().unwrap_or(cwd))
-            .env_remove("BAML_VERSION");
-        for (key, value) in extra_env {
-            command.env(key, value);
-        }
-        let output = command.output().unwrap();
+        let output = self.run_args_from(cwd, &["hello"], extra_env);
         assert!(
             output.status.success(),
             "wrapper failed: {}",
@@ -94,6 +93,25 @@ impl TestHome {
             "fake baml-cli did not run"
         );
         output
+    }
+
+    fn run_args(&self, args: &[&str]) -> Output {
+        let cwd = tempfile::tempdir().unwrap();
+        self.run_args_from(cwd.path(), args, &[])
+    }
+
+    fn run_args_from(&self, cwd: &Path, args: &[&str], extra_env: &[(&str, &str)]) -> Output {
+        let mut command = Command::new(env!("CARGO_BIN_EXE_baml"));
+        command
+            .args(args)
+            .current_dir(cwd)
+            .env("BAML_HOME", &self.root)
+            .env("HOME", cwd.parent().unwrap_or(cwd))
+            .env_remove("BAML_VERSION");
+        for (key, value) in extra_env {
+            command.env(key, value);
+        }
+        command.output().unwrap()
     }
 
     fn run(&self) -> Output {
@@ -119,4 +137,105 @@ fn silent_when_toolchain_matches_cached_manifest() {
     let home = TestHome::new();
     let stderr = stderr_of(&home.run());
     assert!(!stderr.contains("outdated"), "{stderr}");
+}
+
+#[test]
+fn root_help_merges_toolchain_metadata_with_wrapper_commands() {
+    let home = TestHome::new();
+    home.write_cli(
+        r#"#!/bin/sh
+if [ "$1" = "__baml-root-help-v1" ]; then
+  [ "$BAML_WRAPPER_EXEC" = "1" ] || exit 8
+  [ "$BAML_WRAPPER_RESOLVED_TOOLCHAIN" = "0.11.0" ] || exit 8
+  printf '%s\n' '{"schema_version":"baml.root-help.v1","name":"baml","version":"0.11.0","about":"BAML CLI","usage":"baml [OPTIONS] <COMMAND>","commands":[{"syntax":"check","summary":"Check BAML"},{"syntax":"help","summary":"Print help"}],"options":[{"syntax":"-h, --help","summary":"Print help"}]}'
+  exit 0
+fi
+exit 9
+"#,
+    );
+    let output = home.run_args(&["--help"]);
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    for expected in [
+        "check",
+        "Check BAML",
+        "toolchain",
+        "Manage installed BAML toolchains",
+        "self-update",
+        "Update the BAML wrapper",
+    ] {
+        assert!(stdout.contains(expected), "{stdout}");
+    }
+    assert_eq!(stdout.matches("Usage:").count(), 1, "{stdout}");
+}
+
+#[test]
+fn root_help_falls_back_to_old_toolchain_help() {
+    let home = TestHome::new();
+    home.write_cli("#!/bin/sh\nif [ \"$1\" = \"__baml-root-help-v1\" ]; then exit 2; fi\nif [ \"$1\" = \"--help\" ]; then printf '%s\\n' 'legacy baml-cli help'; exit 0; fi\nexit 9\n");
+    let output = home.run_args(&["--help"]);
+    assert!(output.status.success());
+    assert_eq!(
+        String::from_utf8_lossy(&output.stdout),
+        "legacy baml-cli help\n"
+    );
+}
+
+#[test]
+fn root_help_falls_back_from_an_unsupported_schema() {
+    let home = TestHome::new();
+    home.write_cli(
+        r#"#!/bin/sh
+if [ "$1" = "__baml-root-help-v1" ]; then
+  printf '%s\n' '{"schema_version":"baml.root-help.v2","name":"baml","version":"2","about":"BAML","usage":"baml <COMMAND>","commands":[],"options":[]}'
+  exit 0
+fi
+if [ "$1" = "--help" ]; then printf '%s\n' 'newer baml-cli help'; exit 0; fi
+exit 9
+"#,
+    );
+    let output = home.run_args(&["--help"]);
+    assert!(output.status.success());
+    assert_eq!(
+        String::from_utf8_lossy(&output.stdout),
+        "newer baml-cli help\n"
+    );
+}
+
+#[test]
+fn root_help_falls_back_from_malformed_metadata() {
+    let home = TestHome::new();
+    home.write_cli(
+        "#!/bin/sh\nif [ \"$1\" = \"__baml-root-help-v1\" ]; then printf '%s\\n' 'not json'; exit 0; fi\nif [ \"$1\" = \"--help\" ]; then printf '%s\\n' 'fallback help'; exit 0; fi\nexit 9\n",
+    );
+    let output = home.run_args(&["--help"]);
+    assert!(output.status.success());
+    assert_eq!(String::from_utf8_lossy(&output.stdout), "fallback help\n");
+}
+
+#[test]
+fn subcommand_help_is_forwarded_unchanged() {
+    let home = TestHome::new();
+    home.write_cli("#!/bin/sh\nprintf '%s\\n' \"$*\"\n");
+    let output = home.run_args(&["check", "--help"]);
+    assert!(output.status.success());
+    assert_eq!(String::from_utf8_lossy(&output.stdout), "check --help\n");
+}
+
+#[test]
+fn root_help_works_before_a_toolchain_is_installed() {
+    let home = tempfile::tempdir().unwrap();
+    let output = Command::new(env!("CARGO_BIN_EXE_baml"))
+        .arg("--help")
+        .env("BAML_HOME", home.path())
+        .env("HOME", home.path())
+        .env_remove("BAML_VERSION")
+        .output()
+        .unwrap();
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("Install or select a toolchain"), "{stdout}");
+    assert!(stdout.contains("toolchain"), "{stdout}");
+    assert!(stdout.contains("self-update"), "{stdout}");
+    assert!(!stdout.contains("check"), "{stdout}");
 }

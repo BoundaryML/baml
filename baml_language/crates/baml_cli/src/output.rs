@@ -140,9 +140,21 @@ pub(crate) fn init(args: OutputArgs) {
     let policy = resolve(args, output_signals());
     console::set_colors_enabled(policy.stdout.color);
     console::set_colors_enabled_stderr(policy.stderr.color);
+    baml_shell::set_default_color_choices(
+        shell_color(policy.stdout.color),
+        shell_color(policy.stderr.color),
+    );
     *OUTPUT_POLICY
         .write()
         .unwrap_or_else(std::sync::PoisonError::into_inner) = policy;
+}
+
+fn shell_color(enabled: bool) -> baml_shell::ColorChoice {
+    if enabled {
+        baml_shell::ColorChoice::Always
+    } else {
+        baml_shell::ColorChoice::Never
+    }
 }
 
 pub(crate) fn policy() -> OutputPolicy {

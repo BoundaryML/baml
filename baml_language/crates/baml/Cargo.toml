@@ -27,8 +27,8 @@ no-self-update = [ "baml_release/no-self-update" ]
 
 [dependencies]
 baml_release = { workspace = true }
+baml_shell = { workspace = true }
 anyhow = { workspace = true }
-console = { workspace = true }
 reqwest = { workspace = true, features = [ "blocking", "rustls" ] }
 serde = { workspace = true, features = [ "derive" ] }
 serde_json = { workspace = true }

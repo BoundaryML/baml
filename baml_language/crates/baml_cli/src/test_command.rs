@@ -330,7 +330,10 @@ impl RunCtx<'_> {
             }
         }
         for failure in report.failures {
-            eprintln!("WARN test log capture failed: {}", failure.diagnostic);
+            crate::reporter::print_warning(format_args!(
+                "test log capture failed: {}",
+                failure.diagnostic
+            ));
         }
 
         // Redirected stdout is block-buffered. Flush every drained batch so
@@ -518,7 +521,9 @@ impl TestArgs {
             let cancelled = report.cancelled;
             let error = report.into_engine_error();
             if cancelled {
-                eprintln!("WARN cancelled spawned task failed: {error}");
+                crate::reporter::print_warning(format_args!(
+                    "cancelled spawned task failed: {error}"
+                ));
             } else {
                 eprintln!("FAIL testing::unhandled_spawn_error");
                 eprintln!("  => {error}");
@@ -705,7 +710,7 @@ impl TestArgs {
         };
         if command_failed {
             // `reporter.finish` styles success — print as an error so the
-            // bold-red `Error:` carries the visual weight of "tests failed".
+            // bold-red `error:` carries the visual weight of "tests failed".
             crate::reporter::print_error(format_args!("test failures — {summary}"));
             Ok(crate::ExitCode::TestFailure)
         } else {

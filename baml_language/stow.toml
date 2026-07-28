@@ -85,7 +85,7 @@ reason = "Use thiserror for proper error types in library crates."
 # baml namespace configuration
 [[namespaces]]
 name = "baml"
-approved_prefixes = ["compiler", "builtins", "builtins2", "compiler2", "lsp2", "type"]
+approved_prefixes = ["compiler", "builtins", "builtins2", "compiler2", "lsp2", "shell", "type"]
 test_crate_exceptions = ["baml_tests"]
 embed_crates = ["bex_project"]
 # The Rust SDK runtime crate keeps the `bridge_rust` folder (mirroring

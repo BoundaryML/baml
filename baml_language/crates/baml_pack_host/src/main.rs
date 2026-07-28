@@ -266,7 +266,7 @@ fn finalize_dispatch(
     for report in engine.take_unhandled_spawn_errors() {
         if report.cancelled {
             let error = report.into_engine_error();
-            eprintln!("Warning: cancelled spawned task failed: {error}");
+            baml_exec::print_warning(format_args!("cancelled spawned task failed: {error}"));
         } else {
             let error = report.into_engine_error();
             print_error(format_args!("unhandled spawned task failed: {error}"));

@@ -4,15 +4,9 @@
 //! palette (green for Enabled, red for Disabled, cyan for the docs URL),
 //! same output structure.
 
-// `println!` here is the primary UX of the subcommand: printing the current
-// status and confirmation of a state change. The workspace-wide ban on
-// `print*!` exists to catch stray debug prints, not to break intentional
-// user-facing output.
-#![allow(clippy::print_stdout)]
-
 use anyhow::Result;
+use baml_shell::{Shell, ThemeStyle};
 use clap::{Args, ValueEnum};
-use console::style;
 
 use crate::{ExitCode, telemetry};
 
@@ -62,6 +56,7 @@ pub(crate) enum TelemetryAction {
 
 impl TelemetryArgs {
     pub(crate) fn run(&self) -> Result<ExitCode> {
+        let mut shell = Shell::new();
         let t = telemetry::Telemetry::load();
         // Snapshot the pre-change state so `disable` can distinguish
         // "already off" from "just turned off" (matches Next's UX).
@@ -71,35 +66,37 @@ impl TelemetryArgs {
             TelemetryAction::Status => {}
             TelemetryAction::Enable => {
                 let path = t.set_enabled(true);
-                println!("{}", style("Success!").cyan());
+                shell.writeln_out_styled(ThemeStyle::Good, "Success!")?;
                 if let Some(path) = &path {
-                    println!("Your preference has been saved to {}.", path.display());
+                    writeln!(
+                        shell.out(),
+                        "Your preference has been saved to {}.",
+                        path.display()
+                    )?;
                 }
             }
             TelemetryAction::Disable => {
                 let path = t.set_enabled(false);
                 if was_enabled {
+                    shell.write_out_styled(ThemeStyle::Good, "Success!")?;
                     if let Some(path) = &path {
-                        println!(
-                            "{} Your preference has been saved to {}.",
-                            style("Success!").cyan(),
+                        writeln!(
+                            shell.out(),
+                            " Your preference has been saved to {}.",
                             path.display()
-                        );
+                        )?;
                     } else {
-                        println!("{}", style("Success!").cyan());
+                        writeln!(shell.out())?;
                     }
                 } else {
-                    println!(
-                        "{}",
-                        style("BAML CLI telemetry is already disabled.").yellow()
-                    );
+                    shell.warn("BAML CLI telemetry is already disabled.")?;
                 }
             }
         }
 
         // Re-load so the printed status reflects the post-change value.
         let t = telemetry::Telemetry::load();
-        print_status(&t);
+        print_status(&mut shell, &t)?;
         Ok(ExitCode::Success)
     }
 }
@@ -107,28 +104,35 @@ impl TelemetryArgs {
 /// Print the "Status: Enabled/Disabled" block plus a link to the docs page.
 /// Format matches Next.js's `nextTelemetry`: bold header, colored status,
 /// short body, cyan "Learn more" URL.
-fn print_status(t: &telemetry::Telemetry) {
+fn print_status(shell: &mut Shell, t: &telemetry::Telemetry) -> Result<()> {
     let is_enabled = t.is_enabled();
-    println!();
-    println!("{}", style("BAML CLI Telemetry").bold());
-    let status_word = if is_enabled {
-        style("Enabled").green().bold().to_string()
+    writeln!(shell.out())?;
+    shell.writeln_out_styled(ThemeStyle::Heading, "BAML CLI Telemetry")?;
+    write!(shell.out(), "\nStatus: ")?;
+    if is_enabled {
+        shell.writeln_out_styled(ThemeStyle::Good, "Enabled")?;
     } else {
-        style("Disabled").red().bold().to_string()
-    };
-    println!("\nStatus: {status_word}");
-    println!("Config: {}", style(t.config_path().display()).dim());
+        shell.writeln_out_styled(ThemeStyle::Bad, "Disabled")?;
+    }
+    write!(shell.out(), "Config: ")?;
+    shell.writeln_out_styled(ThemeStyle::Dim, t.config_path().display())?;
 
     if is_enabled {
-        println!("\nBAML telemetry is completely anonymous. Thank you for participating!");
+        writeln!(
+            shell.out(),
+            "\nBAML telemetry is completely anonymous. Thank you for participating!"
+        )?;
     } else {
-        println!(
+        writeln!(
+            shell.out(),
             "\nYou have opted out of BAML's anonymous telemetry program.\n\
              No data will be collected from your machine."
-        );
+        )?;
     }
 
-    println!("\nLearn more: {}", style(telemetry::TELEMETRY_URL).cyan());
+    write!(shell.out(), "\nLearn more: ")?;
+    shell.writeln_out_styled(ThemeStyle::Note, telemetry::TELEMETRY_URL)?;
+    Ok(())
 }
 
 #[cfg(test)]

@@ -662,7 +662,7 @@ version = "0.2.3"
 dependencies = [
  "anyhow",
  "baml_release",
- "console",
+ "baml_shell",
  "reqwest",
  "serde",
  "serde_json",
@@ -735,6 +735,7 @@ dependencies = [
  "baml_lsp_server",
  "baml_project",
  "baml_release",
+ "baml_shell",
  "baml_tests",
  "baml_type",
  "baml_version",
@@ -981,13 +982,13 @@ name = "baml_exec"
 version = "0.0.0-beta"
 dependencies = [
  "anyhow",
+ "baml_shell",
  "baml_tests",
  "baml_type",
  "bex_engine",
  "bex_vm_types",
  "borsh",
  "clap",
- "console",
  "indexmap",
  "serde_json",
  "sys_native",
@@ -1145,6 +1146,16 @@ dependencies = [
  "thiserror 2.0.18",
  "toml 0.8.23",
  "zip",
+]
+
+[[package]]
+name = "baml_shell"
+version = "0.0.0-beta"
+dependencies = [
+ "anstream",
+ "anstyle",
+ "clap",
+ "serde",
 ]
 
 [[package]]
