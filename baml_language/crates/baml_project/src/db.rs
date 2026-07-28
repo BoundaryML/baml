@@ -792,7 +792,10 @@ impl ProjectDatabase {
             build_control_flow_graph_from_ast, build_llm_control_flow_graph,
         };
 
-        if !ctx.expanding.insert(function_name.to_string()) {
+        let expansion_name = self
+            .canonical_function_name(function_name)
+            .unwrap_or_else(|| function_name.to_string());
+        if !ctx.expanding.insert(expansion_name.clone()) {
             return None;
         }
 
@@ -858,7 +861,12 @@ impl ProjectDatabase {
                                     root.source_span.get_or_insert(root_span);
                                 }
                             }
-                            self.expand_user_function_calls_in_graph(&mut graph, expr_body, ctx);
+                            self.expand_user_function_calls_in_graph(
+                                &mut graph,
+                                expr_body,
+                                source_file,
+                                ctx,
+                            );
                             Some(graph)
                         }
                         baml_compiler2_hir::body::FunctionBody::Builtin(_)
@@ -872,19 +880,47 @@ impl ProjectDatabase {
             }
         }
 
-        ctx.expanding.remove(function_name);
+        ctx.expanding.remove(&expansion_name);
         result
+    }
+
+    fn canonical_function_name(&self, function_name: &str) -> Option<String> {
+        for source_file in self.file_map.values().copied() {
+            for &func_loc in baml_compiler2_ppir::item_data::file_functions(self, source_file) {
+                let func_data = baml_compiler2_ppir::item_data::function_data(self, func_loc);
+                if self.function_name_matches_source_name(
+                    source_file,
+                    &func_data.name,
+                    function_name,
+                ) {
+                    return Some(
+                        self.playground_function_name_for_source_file(source_file, &func_data.name),
+                    );
+                }
+            }
+        }
+        None
     }
 
     fn expand_user_function_calls_in_graph(
         &self,
         graph: &mut baml_compiler2_visualization::control_flow::ControlFlowGraph,
         body: &baml_compiler2_ast::ExprBody,
+        caller_file: SourceFile,
         ctx: &mut CfgExpansionCtx,
     ) {
         use baml_compiler2_visualization::control_flow::NodeType;
 
-        for (call_expr, callee_name) in Self::call_sites_by_source_expr(body) {
+        for (call_expr, callee_path) in Self::call_sites_by_source_expr(body) {
+            let callee_name = self
+                .resolve_function_call_name(caller_file, &callee_path)
+                .unwrap_or_else(|| {
+                    callee_path
+                        .iter()
+                        .map(AsRef::<str>::as_ref)
+                        .collect::<Vec<_>>()
+                        .join(".")
+                });
             let Some((call_node_id, is_return_node)) = graph
                 .nodes
                 .values()
@@ -962,6 +998,27 @@ impl ProjectDatabase {
         }
     }
 
+    fn resolve_function_call_name(
+        &self,
+        caller_file: SourceFile,
+        callee_path: &[baml_db::Name],
+    ) -> Option<String> {
+        use baml_compiler2_hir::{contributions::Definition, file_package, package::PackageId};
+
+        let caller_package = file_package::file_package(self, caller_file);
+        let package_id = PackageId::new(self, caller_package.package.clone());
+        let resolution =
+            baml_compiler2_tir::package_interface::package_resolution_context(self, package_id);
+        let (_, Definition::Function(function)) =
+            resolution.resolve_value(self, callee_path, &caller_package.namespace_path)?
+        else {
+            return None;
+        };
+        let callee_file = function.file(self);
+        let function_data = baml_compiler2_ppir::item_data::function_data(self, function);
+        Some(self.playground_function_name_for_source_file(callee_file, &function_data.name))
+    }
+
     /// Find the `//#` header comment immediately above a function declaration,
     /// if any. Blank lines and regular `//` comments between the header and
     /// the declaration are skipped; any other code stops the search. If multiple
@@ -995,7 +1052,9 @@ impl ProjectDatabase {
         unique_title
     }
 
-    fn call_sites_by_source_expr(body: &baml_compiler2_ast::ExprBody) -> Vec<(u32, String)> {
+    fn call_sites_by_source_expr(
+        body: &baml_compiler2_ast::ExprBody,
+    ) -> Vec<(u32, Vec<baml_db::Name>)> {
         use baml_compiler2_ast::Expr;
 
         let mut calls = Vec::new();
@@ -1008,12 +1067,7 @@ impl ProjectDatabase {
                 continue;
             };
 
-            let callee_name = segments
-                .iter()
-                .map(AsRef::<str>::as_ref)
-                .collect::<Vec<_>>()
-                .join(".");
-            calls.push((expr_id.into_raw().into_u32(), callee_name));
+            calls.push((expr_id.into_raw().into_u32(), segments.clone()));
         }
         calls
     }
@@ -2330,6 +2384,54 @@ function Workflow(input: string) -> string {
         assert!(
             prepared.nodes.contains_key(&call_node.id),
             "LLM call must always render"
+        );
+    }
+
+    #[test]
+    fn test_cross_namespace_llm_call_node_is_marked_and_rendered() {
+        use baml_compiler2_visualization::control_flow::{
+            NodeType, prepare_control_flow_graph_for_visualization,
+        };
+
+        let mut db = ProjectDatabase::new();
+        db.set_project_root(std::path::Path::new("/tmp"));
+        db.add_or_update_file(
+            std::path::Path::new("/tmp/ns_workflows/ns_prompts/summarize.baml"),
+            r##"
+function Summarize(input: string) -> string {
+    client GPT4
+    prompt #"Summarize {{ input }}"#
+}
+"##,
+        );
+        db.add_or_update_file(
+            std::path::Path::new("/tmp/ns_workflows/workflow.baml"),
+            r#"
+function Workflow(input: string) -> string {
+    prompts.Summarize(input)
+}
+"#,
+        );
+
+        let graph = db
+            .ast_control_flow_graph("workflows.Workflow")
+            .expect("expected graph for workflows.Workflow");
+        let call_node = graph
+            .nodes
+            .values()
+            .find(|node| node.label == "prompts.Summarize(input)")
+            .expect("caller graph should contain the cross-namespace LLM call node");
+        assert!(
+            matches!(call_node.node_type, NodeType::LlmFunction),
+            "cross-namespace LLM call node should be marked as LlmFunction, got {:?}",
+            call_node.node_type
+        );
+        assert_eq!(call_node.llm_client.as_deref(), Some("GPT4"));
+
+        let prepared = prepare_control_flow_graph_for_visualization(&graph);
+        assert!(
+            prepared.nodes.contains_key(&call_node.id),
+            "cross-namespace LLM call must survive visualization preparation"
         );
     }
 
