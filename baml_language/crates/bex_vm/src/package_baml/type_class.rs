@@ -24,14 +24,15 @@ impl BamlClassTypeValue for PackageBamlImpl {
 
     /// BEP-044: `class_t.implements(iface_t)`.
     ///
-    /// Selects over the per-package `interface_impls` registry: an impl applies
-    /// when its `for_ty_pattern` matches `class_t` (with bounds satisfied) and its
+    /// Selects over the program-wide impl-rule index: an impl applies when its
+    /// `for_ty_pattern` matches `class_t` (with bounds satisfied) and its
     /// implemented-interface args / associated bindings match the requested
-    /// instantiation. The orphan rule localizes the candidates to `class_t`'s
-    /// package and the interface's package; bound obligations recurse the same
-    /// way. Because the compiler (E0125) forces a class to implement every
-    /// interface in its `requires` closure, "direct impl" already covers
-    /// transitive satisfaction.
+    /// instantiation. Candidates are every impl of the interface in the program —
+    /// the orphan rule does *not* localize them to `class_t`'s or the interface's
+    /// package (see [`crate::package_load::PackageIndex`]); bound obligations
+    /// recurse the same way. Because the compiler (E0125) forces a class to
+    /// implement every interface in its `requires` closure, "direct impl" already
+    /// covers transitive satisfaction.
     fn implements(vm: &BexVm, self_value: &Value, other: &Value) -> bool {
         let Some(self_ty) = type_value_ty(vm, *self_value) else {
             return false;

@@ -337,7 +337,7 @@ pub(crate) mod tests {
             id_overrides: Vec::new(),
             argv: Arc::from([]),
             pending_call_type_args: Vec::new(),
-            packages: Arc::new(indexmap::IndexMap::new()),
+            packages: Arc::new(crate::package_load::PackageIndex::default()),
         }
     }
 
@@ -649,11 +649,10 @@ pub struct BexVm {
     /// shared view is a `VmInternalError`.
     pub globals: VmGlobals,
 
-    /// All loaded packages, indexed by their name; each value is an
-    /// `Object::Package` pointer. Shared (`Arc`) across spawned VMs so workers
-    /// resolve types, interfaces, and impls against the same index without
-    /// rebuilding it.
-    pub packages: Arc<IndexMap<Name, HeapPtr>>,
+    /// All loaded packages plus the program-wide interface → impl-rules index
+    /// derived from them. Shared (`Arc`) across spawned VMs so workers resolve
+    /// types, interfaces, and impls against the same index without rebuilding it.
+    pub packages: Arc<crate::package_load::PackageIndex>,
 
     /// Pre-resolved heap pointers for `baml.errors.*` classes, indexed by
     /// `ErrorClass` discriminant. Shared (`Arc`) across spawned VMs — resolved
@@ -955,7 +954,7 @@ pub fn convert_program(program: bex_vm_types::Program) -> Result<BytecodeProgram
 /// [`ErrorClass`] discriminant. The result is identical for every VM sharing a
 /// `packages` index, so it is resolved once and shared (`Arc`) across spawns
 /// rather than re-resolved per [`BexVm::new`].
-pub fn resolve_error_class_ptrs(packages: &IndexMap<Name, HeapPtr>) -> Arc<[HeapPtr]> {
+pub fn resolve_error_class_ptrs(packages: &crate::package_load::PackageIndex) -> Arc<[HeapPtr]> {
     ErrorClass::ALL
         .iter()
         .map(|ec| {
@@ -968,7 +967,7 @@ pub fn resolve_error_class_ptrs(packages: &IndexMap<Name, HeapPtr>) -> Arc<[Heap
 /// Resolve the heap pointers for the builtin `baml.panics.*` classes, indexed by
 /// [`PanicClass`] discriminant. Shared across spawns like
 /// [`resolve_error_class_ptrs`].
-pub fn resolve_panic_class_ptrs(packages: &IndexMap<Name, HeapPtr>) -> Arc<[HeapPtr]> {
+pub fn resolve_panic_class_ptrs(packages: &crate::package_load::PackageIndex) -> Arc<[HeapPtr]> {
     PanicClass::ALL
         .iter()
         .map(|pc| {
@@ -1234,7 +1233,7 @@ impl BexVm {
         globals: VmGlobals,
         #[cfg(not(target_arch = "wasm32"))] park_requested: Arc<AtomicBool>,
         argv: Arc<[String]>,
-        packages: Arc<IndexMap<Name, HeapPtr>>,
+        packages: Arc<crate::package_load::PackageIndex>,
         error_class_ptrs: Arc<[HeapPtr]>,
         panic_class_ptrs: Arc<[HeapPtr]>,
     ) -> Self {
@@ -1648,7 +1647,8 @@ impl BexVm {
 
     /// The `Object::Package` for `pkg`, if loaded.
     fn package(&self, pkg: &Name) -> Option<&bex_vm_types::types::Package> {
-        self.get_object(*self.packages.get(pkg)?).as_package()
+        self.get_object(self.packages.package_ptr(pkg)?)
+            .as_package()
     }
 
     /// Look up a class or enum object by its qualified type name. Classes and
@@ -1701,8 +1701,8 @@ impl BexVm {
     /// Every class and enum object across all loaded packages.
     pub fn all_class_and_enum_ptrs(&self) -> impl Iterator<Item = HeapPtr> + '_ {
         self.packages
-            .values()
-            .filter_map(move |&p| self.get_object(p).as_package())
+            .package_ptrs()
+            .filter_map(move |p| self.get_object(p).as_package())
             .flat_map(|package| {
                 package
                     .classes
@@ -2281,7 +2281,7 @@ impl BexVm {
 
         // Create heap with compile-time objects, additionally allocating the
         // per-package `Object::Package` / `Object::ImplRule` objects.
-        let (heap, vm_packages) =
+        let (heap, package_index) =
             crate::package_load::build_heap_with_packages(compile_time_objects, &bytecode.packages);
 
         // Convert compile-time globals (ConstValue) to runtime globals (Value).
@@ -2301,15 +2301,15 @@ impl BexVm {
             .collect();
         let globals = VmGlobals::Owned(bex_vm_types::GlobalPool::from_vec(globals_vec));
 
-        let error_class_ptrs = resolve_error_class_ptrs(&vm_packages);
-        let panic_class_ptrs = resolve_panic_class_ptrs(&vm_packages);
+        let error_class_ptrs = resolve_error_class_ptrs(&package_index);
+        let panic_class_ptrs = resolve_panic_class_ptrs(&package_index);
         Ok(Self::new(
             heap,
             globals,
             #[cfg(not(target_arch = "wasm32"))]
             park_requested,
             Arc::from(Vec::<String>::new()),
-            Arc::new(vm_packages),
+            Arc::new(package_index),
             error_class_ptrs,
             panic_class_ptrs,
         ))
