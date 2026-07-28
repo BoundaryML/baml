@@ -525,6 +525,8 @@ fn render_keyword_json(name: &str) -> serde_json::Value {
     }
 }
 
+// The full-output hint is computed before sections are rendered, so fixed
+// layout groups have explicit costs shared by the planner and renderer.
 const ITEM_HEADER_COST: usize = 1;
 const SECTION_HEADER_COST: usize = 2;
 const CONTAINER_SECTION_COST: usize = 3;
@@ -936,7 +938,7 @@ fn write_elision_marker(
     if elided > 0 {
         writeln!(
             w,
-            "  \u{2026} {elided} more lines (re-run with `--budget {full_output_budget}`)"
+            "  \u{2026} {elided} more lines (re-run with a higher `--budget` to see more; use `--budget {full_output_budget}` for full output)"
         )?;
     }
     Ok(())

@@ -988,7 +988,7 @@ fn render_describe_methods_respect_budget() {
     for needle in [
         "methods:",
         "static_methods:",
-        "more lines (re-run with `--budget ",
+        "more lines (re-run with a higher `--budget` to see more; use `--budget ",
     ] {
         assert!(
             tight.contains(needle),
@@ -1018,7 +1018,7 @@ fn render_describe_methods_respect_budget() {
         );
     }
     assert!(
-        !full.contains("re-run with `--budget "),
+        !full.contains("re-run with a higher `--budget`"),
         "no elision marker expected at budget 1000:\n{full}"
     );
     assert!(
@@ -1069,7 +1069,7 @@ fn render_describe_fields_only_body_fits_tight_budget() {
     let body_part = |s: &str| s[..s.find("\nmethods:").expect("methods section")].to_string();
     assert_eq!(body_part(&tight), body_part(&full));
     assert!(
-        tight.contains("more lines (re-run with `--budget "),
+        tight.contains("more lines (re-run with a higher `--budget` to see more; use `--budget "),
         "methods exceeding the tight budget must be elided with a marker:\n{tight}"
     );
     for needle in ["class User {", "    name: string,", "    age: int,", "}"] {
