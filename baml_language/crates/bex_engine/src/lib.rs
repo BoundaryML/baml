@@ -827,10 +827,10 @@ pub struct BexEngine {
     unhandled_spawn_state: Mutex<UnhandledSpawnState>,
     unhandled_spawn_delivery: tokio::sync::Mutex<()>,
 
-    /// Loaded packages (name → `Object::Package` pointer), shared with every VM
-    /// so spawned workers see the same index. The source of truth for interface
-    /// dispatch, recursive aliases, and named-item lookup.
-    packages: Arc<indexmap::IndexMap<baml_type::Name, bex_vm_types::HeapPtr>>,
+    /// Loaded packages plus the program-wide interface → impl-rules index, shared
+    /// with every VM so spawned workers see the same index. The source of truth
+    /// for interface dispatch, recursive aliases, and named-item lookup.
+    packages: Arc<bex_vm::package_load::PackageIndex>,
 
     /// Builtin `baml.errors.*` / `baml.panics.*` class pointers, resolved once
     /// from `packages` and shared with every spawned VM (each `BexVm` would
@@ -1595,13 +1595,13 @@ impl BexEngine {
         // Create the unified heap with compile-time objects, additionally
         // allocating the per-package `Object::Package` / `Object::ImplRule`
         // objects and the `vm.packages` index.
-        let (heap, vm_packages) = bex_vm::package_load::build_heap_with_packages(
+        let (heap, package_index) = bex_vm::package_load::build_heap_with_packages(
             compile_time_objects,
             &bytecode.packages,
         );
         // Shared with every VM so spawned workers see the same package index
         // without re-resolving it.
-        let packages = Arc::new(vm_packages);
+        let packages = Arc::new(package_index);
         // Resolve the builtin error/panic class pointers once; shared with every
         // spawned VM rather than re-resolved per `BexVm::new`.
         let error_class_ptrs = bex_vm::vm::resolve_error_class_ptrs(&packages);
