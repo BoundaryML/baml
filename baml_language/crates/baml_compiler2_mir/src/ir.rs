@@ -116,6 +116,11 @@ pub enum MirFunctionKind {
 /// runtime reflection (BEP-062 `reflect.signature` / `reflect.call_any`),
 /// function-value type reconstruction, and display surfaces
 /// (`baml run --list`, bytecode listings).
+///
+/// Every type here is the one the declaration actually has, not the one it
+/// spells: an unwritten position takes TIR's inferred type, so a lambda's
+/// reconstructed signature is as precise as an annotated declaration's. Both
+/// producers reconstruct the same value type for the same callable.
 #[derive(Debug, Clone)]
 pub struct RuntimeSignature {
     /// Parameter names, in declaration order.
@@ -125,14 +130,12 @@ pub struct RuntimeSignature {
     pub param_types: Vec<baml_type::TyTemplate>,
     /// Whether each parameter has a default, parallel to `param_names`.
     pub param_has_default: Vec<bool>,
-    /// The declared return type; `unknown` when unannotated. A template over
-    /// the callee frame's type-arg slots (see [`Self::param_types`]).
+    /// The return type. A template over the callee frame's type-arg slots (see
+    /// [`Self::param_types`]).
     pub return_type: baml_type::TyTemplate,
     /// The throws type, as a template over the callee frame's type-arg slots.
     /// `never` == cannot throw (the same spelling a function type uses), so a
-    /// reconstructed value signature and a written type agree. Top-level
-    /// declarations carry TIR's inferred transitive throw set; a lambda carries
-    /// its declared clause (unannotated == `unknown`, i.e. no claim).
+    /// reconstructed value signature and a written type agree.
     pub throws_type: baml_type::TyTemplate,
     /// The declaration's joined `///` doc-comment lines, if any.
     pub docstring: Option<String>,

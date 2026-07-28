@@ -21,9 +21,9 @@ fn user.test_captured_field_access(obj: Outer) -> string {
 }
 
 // lambda[0]
-fn .<lambda(test_captured_field_access, 0)>() -> null {
+fn .<lambda(test_captured_field_access, 0)>() -> string {
     // Locals:
-    let _0: null // _0 // return
+    let _0: string // _0 // return
 
     bb0: {
         _0 = copy capture[0].1;
@@ -54,9 +54,9 @@ fn user.test_captured_nested_field(obj: Outer) -> int {
 }
 
 // lambda[0]
-fn .<lambda(test_captured_nested_field, 0)>() -> null {
+fn .<lambda(test_captured_nested_field, 0)>() -> int {
     // Locals:
-    let _0: null // _0 // return
+    let _0: int // _0 // return
 
     bb0: {
         _0 = copy capture[0].0.0;
@@ -95,9 +95,9 @@ fn user.test_no_leak_after_lambda(obj: Outer) -> string {
 }
 
 // lambda[0]
-fn .<lambda(test_no_leak_after_lambda, 0)>() -> null {
+fn .<lambda(test_no_leak_after_lambda, 0)>() -> int {
     // Locals:
-    let _0: null // _0 // return
+    let _0: int // _0 // return
 
     bb0: {
         _0 = copy capture[0].0.0;
@@ -128,9 +128,9 @@ fn user.test_nested_lambda_capture(obj: Outer) -> string {
 }
 
 // lambda[0]
-fn .<lambda(test_nested_lambda_capture, 0)>() -> null {
+fn .<lambda(test_nested_lambda_capture, 0)>() -> string {
     // Locals:
-    let _0: null // _0 // return
+    let _0: string // _0 // return
     let _1: () -> string throws never // inner_fn
     let _2: () -> string throws never
 
@@ -146,9 +146,9 @@ fn .<lambda(test_nested_lambda_capture, 0)>() -> null {
 }
 
 // lambda[0]
-fn .<lambda(<lambda(test_nested_lambda_capture, 0)>, 1)>() -> null {
+fn .<lambda(<lambda(test_nested_lambda_capture, 0)>, 1)>() -> string {
     // Locals:
-    let _0: null // _0 // return
+    let _0: string // _0 // return
 
     bb0: {
         _0 = copy capture[0].1;
@@ -188,9 +188,9 @@ fn user.test_sequential_lambdas(obj: Outer) -> int {
 }
 
 // lambda[0]
-fn .<lambda(test_sequential_lambdas, 0)>() -> null {
+fn .<lambda(test_sequential_lambdas, 0)>() -> string {
     // Locals:
-    let _0: null // _0 // return
+    let _0: string // _0 // return
 
     bb0: {
         _0 = copy capture[0].1;
@@ -203,9 +203,9 @@ fn .<lambda(test_sequential_lambdas, 0)>() -> null {
 }
 
 // lambda[1]
-fn .<lambda(test_sequential_lambdas, 1)>() -> null {
+fn .<lambda(test_sequential_lambdas, 1)>() -> int {
     // Locals:
-    let _0: null // _0 // return
+    let _0: int // _0 // return
 
     bb0: {
         _0 = copy capture[0].0.0;
@@ -236,9 +236,9 @@ fn user.test_lambda_param_and_capture(obj: Outer) -> int {
 }
 
 // lambda[0]
-fn .<lambda(test_lambda_param_and_capture, 0)>(x: int) -> null {
+fn .<lambda(test_lambda_param_and_capture, 0)>(x: int) -> int {
     // Locals:
-    let _0: null // _0 // return
+    let _0: int // _0 // return
     let _1: int // x // param
     let _2: int
 

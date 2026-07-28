@@ -1482,9 +1482,9 @@ fn testing.test_child(name: string, body: () -> void throws unknown, runner: nul
 }
 
 // lambda[0]
-fn .<lambda(test_child, 0)>() -> null {
+fn .<lambda(test_child, 0)>() -> testing.TestReport | testing.TestSetReport {
     // Locals:
-    let _0: null // _0 // return
+    let _0: testing.TestReport | testing.TestSetReport // _0 // return
     let _1: () -> void throws unknown
     let _2: null | ((() -> testing.TestReport throws never) -> (() -> testing.TestReport throws never) throws never)
 
@@ -1520,9 +1520,9 @@ fn testing.testset_child(registry: testing.TestRegistry, ts: testing.TestSetRegi
 }
 
 // lambda[0]
-fn .<lambda(testset_child, 0)>() -> null {
+fn .<lambda(testset_child, 0)>() -> testing.TestReport | testing.TestSetReport {
     // Locals:
-    let _0: null // _0 // return
+    let _0: testing.TestReport | testing.TestSetReport // _0 // return
     let _1: unknown // e
     let _2: testing.TestSetChild[]
     let _3: testing.TestRegistry
@@ -1592,9 +1592,9 @@ fn testing.testset_child_selected(registry: testing.TestRegistry, ts: testing.Te
 }
 
 // lambda[0]
-fn .<lambda(testset_child_selected, 0)>() -> null {
+fn .<lambda(testset_child_selected, 0)>() -> testing.TestReport | testing.TestSetReport {
     // Locals:
-    let _0: null // _0 // return
+    let _0: testing.TestReport | testing.TestSetReport // _0 // return
     let _1: unknown // e
     let _2: testing.TestSetChild[]
     let _3: testing.TestRegistry
@@ -2057,9 +2057,9 @@ fn testing.run_children_parallel(children: testing.TestSetChild[]) -> testing.Te
 }
 
 // lambda[0]
-fn .<lambda(run_children_parallel, 0)>() -> null {
+fn .<lambda(run_children_parallel, 0)>() -> testing.NamedChildReport {
     // Locals:
-    let _0: null // _0 // return
+    let _0: testing.NamedChildReport // _0 // return
     let _1: string
     let _2: testing.TestReport | testing.TestSetReport
     let _3: () -> testing.TestReport | testing.TestSetReport throws never
@@ -2123,9 +2123,9 @@ fn testing.run_test(body: () -> void throws unknown, runner: null | ((() -> test
 }
 
 // lambda[0]
-fn .<lambda(run_test, 0)>() -> null {
+fn .<lambda(run_test, 0)>() -> testing.TestReport {
     // Locals:
-    let _0: null // _0 // return
+    let _0: testing.TestReport // _0 // return
     let _1: int // start
     let _2: testing.RunReport // result
     let _3: unknown // e
@@ -4761,10 +4761,10 @@ fn testing.Quorum(n: int, m: int) -> (() -> testing.TestReport throws never) -> 
 }
 
 // lambda[0]
-fn .<lambda(Quorum, 0)>(run_once: null) -> null {
+fn .<lambda(Quorum, 0)>(run_once: () -> testing.TestReport throws never) -> () -> testing.TestReport throws never {
     // Locals:
-    let _0: null // _0 // return
-    let _1: null // run_once // param [captured]
+    let _0: () -> testing.TestReport throws never // _0 // return
+    let _1: () -> testing.TestReport throws never // run_once // param [captured]
 
     bb0: {
         _0 = make_closure lambda[0](copy capture[0], copy _1, copy capture[1]);
@@ -4777,9 +4777,9 @@ fn .<lambda(Quorum, 0)>(run_once: null) -> null {
 }
 
 // lambda[0]
-fn .<lambda(<lambda(Quorum, 0)>, 1)>() -> null {
+fn .<lambda(<lambda(Quorum, 0)>, 1)>() -> testing.TestReport {
     // Locals:
-    let _0: null // _0 // return
+    let _0: testing.TestReport // _0 // return
     let _1: testing.RunReport[] // runs
     let _2: int // passes
     let _3: int // i
@@ -4926,10 +4926,10 @@ fn testing.Retry(max_attempts: int) -> (() -> testing.TestReport throws never) -
 }
 
 // lambda[0]
-fn .<lambda(Retry, 0)>(run_once: null) -> null {
+fn .<lambda(Retry, 0)>(run_once: () -> testing.TestReport throws never) -> () -> testing.TestReport throws never {
     // Locals:
-    let _0: null // _0 // return
-    let _1: null // run_once // param [captured]
+    let _0: () -> testing.TestReport throws never // _0 // return
+    let _1: () -> testing.TestReport throws never // run_once // param [captured]
 
     bb0: {
         _0 = make_closure lambda[0](copy capture[0], copy _1);
@@ -4942,9 +4942,9 @@ fn .<lambda(Retry, 0)>(run_once: null) -> null {
 }
 
 // lambda[0]
-fn .<lambda(<lambda(Retry, 0)>, 1)>() -> null {
+fn .<lambda(<lambda(Retry, 0)>, 1)>() -> testing.TestReport {
     // Locals:
-    let _0: null // _0 // return
+    let _0: testing.TestReport // _0 // return
     let _1: testing.RunReport[] // runs
     let _2: bool // passed
     let _3: int // attempts
@@ -5105,10 +5105,10 @@ fn testing.PassRate(threshold: float) -> (testing.TestSetChild[]) -> testing.Tes
 }
 
 // lambda[0]
-fn .<lambda(PassRate, 0)>(children: null) -> null {
+fn .<lambda(PassRate, 0)>(children: testing.TestSetChild[]) -> testing.TestSetReport {
     // Locals:
-    let _0: null // _0 // return
-    let _1: null // children // param
+    let _0: testing.TestSetReport // _0 // return
+    let _1: testing.TestSetChild[] // children // param
     let _2: testing.TestSetReport // report
     let _3: "error" | "fail" | "pass" // outcome
     let _4: bool
@@ -5202,10 +5202,10 @@ fn testing.Sequential() -> (testing.TestSetChild[]) -> testing.TestSetReport thr
 }
 
 // lambda[0]
-fn .<lambda(Sequential, 0)>(children: null) -> null {
+fn .<lambda(Sequential, 0)>(children: testing.TestSetChild[]) -> testing.TestSetReport {
     // Locals:
-    let _0: null // _0 // return
-    let _1: null // children // param
+    let _0: testing.TestSetReport // _0 // return
+    let _1: testing.TestSetChild[] // children // param
 
     bb0: {
         _0 = call const fn testing.run_children_sequential(copy _1, const false) -> [bb1];
@@ -5231,10 +5231,10 @@ fn testing.FailFast() -> (testing.TestSetChild[]) -> testing.TestSetReport throw
 }
 
 // lambda[0]
-fn .<lambda(FailFast, 0)>(children: null) -> null {
+fn .<lambda(FailFast, 0)>(children: testing.TestSetChild[]) -> testing.TestSetReport {
     // Locals:
-    let _0: null // _0 // return
-    let _1: null // children // param
+    let _0: testing.TestSetReport // _0 // return
+    let _1: testing.TestSetChild[] // children // param
 
     bb0: {
         _0 = call const fn testing.run_children_sequential(copy _1, const true) -> [bb1];

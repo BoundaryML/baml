@@ -174,9 +174,9 @@ fn baml.Sortable$for$T[].sort(self: T[]) -> Self {
 }
 
 // lambda[0]
-fn .<lambda(sort, 0)>(a: T, b: T) -> null {
+fn .<lambda(sort, 0)>(a: T, b: T) -> int {
     // Locals:
-    let _0: null // _0 // return
+    let _0: int // _0 // return
     let _1: T // a // param
     let _2: T // b // param
     let _3: type
@@ -623,9 +623,9 @@ fn baml.Array.sort_by_key(self: baml.Array, key: (T) -> U throws E) -> T[] {
 }
 
 // lambda[0]
-fn .<lambda(Array.sort_by_key, 0)>(i: int, j: int) -> null {
+fn .<lambda(Array.sort_by_key, 0)>(i: int, j: int) -> int {
     // Locals:
-    let _0: null // _0 // return
+    let _0: int // _0 // return
     let _1: int // i // param
     let _2: int // j // param
     let _3: null | U
@@ -2894,9 +2894,9 @@ fn baml.future.all_complete(futures: future<T, E>[]) -> future<T[], E> {
 }
 
 // lambda[0]
-fn .<lambda(all_complete, 0)>() -> null {
+fn .<lambda(all_complete, 0)>() -> T[] {
     // Locals:
-    let _0: null // _0 // return
+    let _0: T[] // _0 // return
     let _1: (future<T, E>) -> T throws E
     let _2: type
     let _3: type
@@ -2916,10 +2916,10 @@ fn .<lambda(all_complete, 0)>() -> null {
 }
 
 // lambda[0]
-fn .<lambda(<lambda(all_complete, 0)>, 1)>(f: null) -> null {
+fn .<lambda(<lambda(all_complete, 0)>, 1)>(f: future<T, E>) -> T {
     // Locals:
-    let _0: null // _0 // return
-    let _1: null // f // param
+    let _0: T // _0 // return
+    let _1: future<T, E> // f // param
 
     bb0: {
         _0 = await _1 -> [bb1];
@@ -2953,9 +2953,9 @@ fn baml.future.all(futures: future<T, E>[]) -> future<T[], E> {
 }
 
 // lambda[0]
-fn .<lambda(all, 0)>() -> null {
+fn .<lambda(all, 0)>() -> T[] {
     // Locals:
-    let _0: null // _0 // return
+    let _0: T[] // _0 // return
     let _1: (future<T, E>) -> T throws E
     let _2: type
     let _3: type
@@ -2975,10 +2975,10 @@ fn .<lambda(all, 0)>() -> null {
 }
 
 // lambda[0]
-fn .<lambda(<lambda(all, 0)>, 1)>(f: null) -> null {
+fn .<lambda(<lambda(all, 0)>, 1)>(f: future<T, E>) -> T {
     // Locals:
-    let _0: null // _0 // return
-    let _1: null // f // param
+    let _0: T // _0 // return
+    let _1: future<T, E> // f // param
     let _2: unknown // e
     let _3: E // e
     let _4: bool[]
@@ -3073,10 +3073,10 @@ fn .<lambda(<lambda(all, 0)>, 1)>(f: null) -> null {
 }
 
 // lambda[0]
-fn .<lambda(<lambda(<lambda(all, 0)>, 1)>, 2)>(g: null) -> null {
+fn .<lambda(<lambda(<lambda(all, 0)>, 1)>, 2)>(g: future<T, E>) -> bool {
     // Locals:
-    let _0: null // _0 // return
-    let _1: null // g // param
+    let _0: bool // _0 // return
+    let _1: future<T, E> // g // param
 
     bb0: {
         _0 = call const fn baml.future.Future.cancel(copy _1) -> [bb1];
@@ -3112,9 +3112,9 @@ fn baml.future.race(futures: future<T, E>[]) -> future<T, E> {
 }
 
 // lambda[0]
-fn .<lambda(race, 0)>() -> null {
+fn .<lambda(race, 0)>() -> T {
     // Locals:
-    let _0: null // _0 // return
+    let _0: T // _0 // return
     let _1: int // i
     let _2: future<T, E>[]
     let _3: bool[]
@@ -3152,10 +3152,10 @@ fn .<lambda(race, 0)>() -> null {
 }
 
 // lambda[0]
-fn .<lambda(<lambda(race, 0)>, 1)>(f: null) -> null {
+fn .<lambda(<lambda(race, 0)>, 1)>(f: future<T, E>) -> bool {
     // Locals:
-    let _0: null // _0 // return
-    let _1: null // f // param
+    let _0: bool // _0 // return
+    let _1: future<T, E> // f // param
 
     bb0: {
         _0 = call const fn baml.future.Future.cancel(copy _1) -> [bb1];
@@ -3189,9 +3189,9 @@ fn baml.future.any(futures: future<T, Err>[]) -> future<T, baml.future.AllFailed
 }
 
 // lambda[0]
-fn .<lambda(any, 0)>() -> null {
+fn .<lambda(any, 0)>() -> T {
     // Locals:
-    let _0: null // _0 // return
+    let _0: T // _0 // return
     let _1: T[] // winners
     let _2: future<T, Err>[] // remaining
     let _3: bool
@@ -3440,10 +3440,10 @@ fn .<lambda(any, 0)>() -> null {
 }
 
 // lambda[0]
-fn .<lambda(<lambda(any, 0)>, 1)>(g: null) -> null {
+fn .<lambda(<lambda(any, 0)>, 1)>(g: future<T, Err>) -> bool {
     // Locals:
-    let _0: null // _0 // return
-    let _1: null // g // param
+    let _0: bool // _0 // return
+    let _1: future<T, Err> // g // param
 
     bb0: {
         _0 = call const fn baml.future.Future.cancel(copy _1) -> [bb1];
@@ -8261,9 +8261,9 @@ fn baml.llm.prompt(body: ((string) -> baml.llm.Role throws never, baml.llm.Conte
 }
 
 // lambda[0]
-fn .<lambda(prompt, 0)>(ctx: baml.llm.Context) -> null {
+fn .<lambda(prompt, 0)>(ctx: baml.llm.Context) -> baml.llm.PromptAst {
     // Locals:
-    let _0: null // _0 // return
+    let _0: baml.llm.PromptAst // _0 // return
     let _1: baml.llm.Context // ctx // param
     let _2: baml.TaggedString // t
     let _3: ((string) -> baml.llm.Role throws never, baml.llm.Context) -> baml.TaggedString throws never
@@ -9214,9 +9214,9 @@ fn baml.spawn.options(group: null | baml.spawn.TaskGroup, cancel: null | baml.sp
 }
 
 // lambda[0]
-fn .<lambda(options, 0)>(params: baml.spawn.SpawnParams<T, E>) -> null {
+fn .<lambda(options, 0)>(params: baml.spawn.SpawnParams<T, E>) -> baml.spawn.SpawnParams<T, E> {
     // Locals:
-    let _0: null // _0 // return
+    let _0: baml.spawn.SpawnParams<T, E> // _0 // return
     let _1: baml.spawn.SpawnParams<T, E> // params // param
     let _2: () -> T throws E
     let _3: string | null

@@ -982,6 +982,37 @@ pub fn tir2_to_template(
         .unwrap_or_else(|| unreachable!("value template lowering is infallible"))
 }
 
+/// [`tir2_to_template`] for a type MIR reads back from TIR rather than lowers
+/// itself.
+///
+/// Value-mode lowering treats a type variable with no slot in this frame as a
+/// compiler invariant violation, which is right for a type MIR just lowered
+/// against that same frame. A type recorded by inference has a wider
+/// provenance — it can name a variable belonging to a scope this frame does
+/// not carry, and it can still hold a recovery sentinel where inference had no
+/// answer — so answering `None` lets the caller fall back to what it can derive
+/// itself instead of tripping that invariant, or the realizedness one, on user
+/// code.
+fn tir2_to_template_in_frame(
+    ty: &Tir2Ty,
+    resolved: &ResolvedAliases,
+    generic_params: &[ParamTy],
+) -> Option<TyTemplate> {
+    if baml_compiler2_tir::generics::contains_error_recovery(ty) {
+        return None;
+    }
+    let ty = baml_compiler2_tir::generics::erase_typevars_matching(ty, &|param| {
+        baml_compiler2_tir::ty::is_synthetic_effect_param(param.name())
+    });
+    let generic_layout = RuntimeGenericLayout::new(generic_params);
+    if baml_compiler2_tir::generics::contains_typevar_where(&ty, &|param| {
+        generic_layout.slot(param).is_none()
+    }) {
+        return None;
+    }
+    lower_tir_template(&ty, resolved, &generic_layout, TemplateMode::Value)
+}
+
 /// A resolved `RuntimeTy` with no residual type variables, as a leaf template:
 /// it narrows to a [`RealizedTy`] (proving realizedness) and widens into a
 /// `Concrete`-equivalent `TyTemplate`. Panics if the type still contains a type
@@ -4641,26 +4672,17 @@ impl<'db> LoweringContext<'db> {
         let arity = func_def.params.len();
         self.builder = MirBuilder::new(Name::new(&lambda_name), arity);
 
-        // Declare return place _0.
         let pkg_info = file_package(self.db, self.file);
         let pkg_id = PackageId::new(self.db, pkg_info.package.clone());
         let pkg_items = package_items(self.db, pkg_id);
-        let ret = self.builder.declare_local(
-            Some(Name::new("_0")),
-            baml_type::RuntimeTy::Null {
-                attr: baml_type::TyAttr::default(),
-            },
-            None,
-        );
 
-        // Declare parameter locals _1..=_n. A lambda param annotation may
-        // reference the enclosing function's generics or the lambda's own, so
-        // lower with both in scope; otherwise a `(x: T) => …` would resolve `T`
-        // to an unresolved `Unknown`. Record the lowered TIR type so interface
-        // dispatch on the parameter can recover its (possibly bounded) static
-        // type — TIR does not surface it via `path_segment_types` for lambda
-        // receivers. Restored after the body (`saved_lambda_param_tir_types`
-        // below).
+        // A lambda param annotation may reference the enclosing function's
+        // generics or the lambda's own, so lower with both in scope; otherwise
+        // a `(x: T) => …` would resolve `T` to an unresolved `Unknown`. Record
+        // the lowered TIR type so interface dispatch on the parameter can
+        // recover its (possibly bounded) static type — TIR does not surface it
+        // via `path_segment_types` for lambda receivers. Restored after the
+        // body (`saved_lambda_param_tir_types` below).
         let saved_lambda_param_tir_types = self.lambda_param_tir_types.clone();
         let lambda_param_generics = self.enclosing_generic_params();
         // Lower a lambda-scope type annotation (a param, the return, the
@@ -4694,6 +4716,73 @@ impl<'db> LoweringContext<'db> {
         let sig_template = |this: &Self, tir_ty: &Tir2Ty| {
             tir2_to_template(tir_ty, this.resolved_aliases, &sig_frame_params)
         };
+        // TIR infers the lambda's whole function type: every parameter type,
+        // the return type, and — for an unannotated clause — the throws
+        // surface recovered from the body. The written annotations are only a
+        // subset of that, so each unwritten position is read off the inference
+        // rather than filled with a placeholder. A closure value's
+        // reconstructed signature is what `is`/`match` and `reflect` see, and
+        // `(x) => x + 1` is `(int) -> int throws never` — not the
+        // `(null) -> unknown throws unknown` its syntax alone spells.
+        //
+        // The lambda *expression* is recorded in the body that contains it, so
+        // this reads the enclosing metadata scope — `current_metadata_scope` has
+        // already switched to the lambda's own body, whose table holds the
+        // expressions *inside* the lambda and not the lambda itself.
+        let inferred_sig =
+            match self.tir_expr_type(ExprMetadataKey::new(saved_metadata_scope, expr_id)) {
+                Some(Tir2Ty::Function {
+                    params,
+                    ret,
+                    throws,
+                    ..
+                }) => Some((params.as_slice(), &**ret, &**throws)),
+                // No recorded type: the lambda failed to type-check and is already
+                // diagnosed. Keep the syntactic shape rather than invent one.
+                _ => None,
+            };
+        let inferred_template = |this: &Self, tir_ty: &Tir2Ty| {
+            tir2_to_template_in_frame(tir_ty, this.resolved_aliases, &sig_frame_params)
+        };
+        // The return type, written or inferred. This types the return place as
+        // well as the signature: `_0` holds the lambda's result, so declaring
+        // it `null` would describe a slot the body never puts a null in.
+        let (sig_return_type, sig_display_return_type, ret_local_ty) = match &func_def.return_type {
+            Some(te) => {
+                let tir_ty = lower_sig_ty(self, te);
+                (
+                    sig_template(self, &tir_ty),
+                    tir_ty.render_user_facing(),
+                    self.convert_tir_ty_for_runtime(&tir_ty),
+                )
+            }
+            None => match inferred_sig
+                .and_then(|(_, ret, _)| inferred_template(self, ret).map(|t| (ret, t)))
+            {
+                Some((tir_ty, template)) => (
+                    template,
+                    tir_ty.render_user_facing(),
+                    self.convert_tir_ty_for_runtime(tir_ty),
+                ),
+                // Inference has no answer to give (an already-diagnosed
+                // lambda): keep the placeholder rather than invent a type.
+                None => (
+                    baml_type::TyTemplate::BuiltinUnknown {
+                        attr: baml_type::TyAttr::default(),
+                    },
+                    "unknown".to_string(),
+                    baml_type::RuntimeTy::Null {
+                        attr: baml_type::TyAttr::default(),
+                    },
+                ),
+            },
+        };
+
+        // Declare return place _0, then parameter locals _1..=_n.
+        let ret = self
+            .builder
+            .declare_local(Some(Name::new("_0")), ret_local_ty, None);
+
         let mut sig_param_types = Vec::with_capacity(func_def.params.len());
         let mut sig_display_param_types = Vec::with_capacity(func_def.params.len());
         for (param_idx, param) in func_def.params.iter().enumerate() {
@@ -4708,15 +4797,25 @@ impl<'db> LoweringContext<'db> {
                         tir_ty.render_user_facing(),
                     )
                 }
-                None => (
-                    baml_type::RuntimeTy::Null {
-                        attr: baml_type::TyAttr::default(),
-                    },
-                    baml_type::TyTemplate::Null {
-                        attr: baml_type::TyAttr::default(),
-                    },
-                    "null".to_string(),
-                ),
+                None => match inferred_sig
+                    .and_then(|(params, _, _)| params.get(param_idx))
+                    .and_then(|p| inferred_template(self, &p.ty).map(|t| (&p.ty, t)))
+                {
+                    Some((tir_ty, template)) => (
+                        self.convert_tir_ty_for_runtime(tir_ty),
+                        template,
+                        tir_ty.render_user_facing(),
+                    ),
+                    None => (
+                        baml_type::RuntimeTy::Null {
+                            attr: baml_type::TyAttr::default(),
+                        },
+                        baml_type::TyTemplate::Null {
+                            attr: baml_type::TyAttr::default(),
+                        },
+                        "null".to_string(),
+                    ),
+                },
             };
             sig_param_types.push(param_template);
             sig_display_param_types.push(param_display);
@@ -4727,29 +4826,21 @@ impl<'db> LoweringContext<'db> {
             self.binding_locals
                 .insert(BindingId::parameter(self.current_scope, param_idx), local);
         }
-        // The declared return/throws. An unannotated slot makes no claim
-        // (`unknown`); an explicit `throws never` stays `never` — the empty
-        // error set, spelled the same way a function type spells it.
-        let (sig_return_type, sig_display_return_type) = match &func_def.return_type {
-            Some(te) => {
-                let tir_ty = lower_sig_ty(self, te);
-                (sig_template(self, &tir_ty), tir_ty.render_user_facing())
-            }
-            None => (
-                baml_type::TyTemplate::BuiltinUnknown {
-                    attr: baml_type::TyAttr::default(),
-                },
-                "unknown".to_string(),
-            ),
-        };
+        // The throws surface, written or inferred. An explicit `throws never`
+        // stays `never` — the empty error set, spelled the same way a function
+        // type spells it — and an omitted clause takes the set TIR recovered
+        // from the body, which is the claim the lambda actually makes.
+        // `unknown` survives only where inference has no answer to give.
         let sig_throws_type = match &func_def.throws {
             Some(te) => {
                 let tir_ty = lower_sig_ty(self, te);
                 sig_template(self, &tir_ty)
             }
-            None => baml_type::TyTemplate::BuiltinUnknown {
-                attr: baml_type::TyAttr::default(),
-            },
+            None => inferred_sig
+                .and_then(|(_, _, throws)| inferred_template(self, throws))
+                .unwrap_or_else(|| baml_type::TyTemplate::BuiltinUnknown {
+                    attr: baml_type::TyAttr::default(),
+                }),
         };
 
         // Create entry and exit blocks.
