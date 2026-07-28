@@ -12,8 +12,26 @@ pub struct InterfaceDef {
 
     // Member Types
     pub assoc: Vec<(baml_type::Name, baml_type::RuntimeInterface)>,
-    pub fields: Vec<(baml_type::Name, baml_type::RuntimeTy)>,
+    /// The interface's declared fields, in declaration order. **Position is
+    /// identity**: a field's index here is the index every implementation's
+    /// [`RuntimeImplRule::field_links`] is baked against, and the index a
+    /// `VirtualLoadField` / `VirtualStoreField` carries. Entries are therefore never
+    /// dropped, reordered, or deduplicated.
+    pub fields: Vec<InterfaceFieldDef>,
     pub methods: Vec<InterfaceMethodDef>,
+}
+
+/// One field an interface declares, at its dispatch index (its position in
+/// [`InterfaceDef::fields`]).
+#[derive(Debug, Clone, BorshSerialize, BorshDeserialize)]
+pub struct InterfaceFieldDef {
+    pub name: baml_type::Name,
+    /// The field's declared type, exactly as written. An interface field's type may
+    /// depend on the implementor (`key: Self.Key`); such a type stays a structural
+    /// `TypeVar`/`AssociatedTypeProjection` here — the `RuntimeTy` family carries
+    /// both — and is resolved dynamically against the receiver's impl, never
+    /// pre-collapsed to a frame slot (an interface *declaration* has no frame).
+    pub ty: baml_type::RuntimeTy,
 }
 
 #[derive(Debug, Clone, BorshSerialize, BorshDeserialize)]

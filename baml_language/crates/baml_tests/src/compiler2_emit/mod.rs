@@ -494,3 +494,72 @@ fn multiple_let_bindings_with_valid_dependencies() {
         "expected '$init' in function_indices"
     );
 }
+
+/// `InterfaceDef::fields` is the interface's field *index space*: every
+/// implementation's `RuntimeImplRule::field_links` is baked parallel to it, and a
+/// virtual field access carries a position into it. So the list must hold every
+/// declared field, in declaration order, with nothing dropped.
+///
+/// The regression this pins: a field whose type mentions `Self` or an associated
+/// type (`key: Self.Key`) used to fail runtime lowering and be silently filtered
+/// out, shifting every later field's index.
+#[test]
+fn interface_field_index_space_keeps_every_declared_field() {
+    let mut db = make_db();
+    db.add_file(
+        "test.baml",
+        r#"
+interface Shelf {
+  type Key
+
+  label: string
+  key: Self.Key
+  count: int
+}
+
+class Book {
+  label: string
+  key: string
+  count: int
+
+  implements Shelf {
+    type Key = string
+  }
+}
+
+function main() -> int { 0 }
+"#,
+    );
+    let program = compile(&db);
+
+    let iface = (*program.objects)
+        .iter()
+        .find_map(|obj| match obj {
+            bex_vm_types::Object::Interface(i) if i.name.name().as_str() == "Shelf" => Some(i),
+            _ => None,
+        })
+        .expect("Shelf interface object should be emitted");
+
+    let names: Vec<&str> = iface.fields.iter().map(|f| f.name.as_str()).collect();
+    assert_eq!(
+        names,
+        ["label", "key", "count"],
+        "every declared field must keep its declared position",
+    );
+
+    // The `Self.Key` field stays symbolic — a declaration has no implementor, so it
+    // is resolved against the receiver's impl at run time rather than erased here.
+    assert!(
+        matches!(
+            iface.fields[1].ty,
+            baml_type::RuntimeTy::AssociatedTypeProjection { .. }
+        ),
+        "`key: Self.Key` should stay an associated-type projection, got {:?}",
+        iface.fields[1].ty,
+    );
+    assert!(
+        matches!(iface.fields[2].ty, baml_type::RuntimeTy::Int { .. }),
+        "field after the projection must keep its own type, got {:?}",
+        iface.fields[2].ty,
+    );
+}

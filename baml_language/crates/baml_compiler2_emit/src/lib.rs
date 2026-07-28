@@ -85,7 +85,7 @@ fn build_interface_def(
         ty,
     };
     use baml_type::RuntimeInterface;
-    use bex_vm_types::types::{InterfaceDef, InterfaceMethodDef};
+    use bex_vm_types::types::{InterfaceDef, InterfaceFieldDef, InterfaceMethodDef};
 
     let file = iface_loc.file(db);
     let interface = interface_data(db, iface_loc);
@@ -261,18 +261,15 @@ fn build_interface_def(
                 .map(|ri| (at.name.clone(), ri))
         })
         .collect();
-    // A field always carries a type — an untyped one is a syntax-level error that
-    // cannot reach emit — so every field appears here.
+    // This list is the interface's field *index space*: `RuntimeImplRule::field_links`
+    // is baked parallel to it, so every declared field keeps its slot. A field always
+    // carries a type — an untyped one is a syntax-level error that cannot reach emit.
     let fields = interface
         .fields
         .iter()
-        .filter_map(|f| {
-            f.type_ref.map(|id| {
-                (
-                    f.name.clone(),
-                    lower_rt(store, id, &interface_frame_params, &decl_bounds),
-                )
-            })
+        .map(|f| InterfaceFieldDef {
+            name: f.name.clone(),
+            ty: lower_rt(store, f.type_ref, &interface_frame_params, &decl_bounds),
         })
         .collect();
     let mut methods: Vec<InterfaceMethodDef> = interface
@@ -1151,7 +1148,7 @@ pub use bex_vm_types::Program as ProgramAlias;
 /// `TypeRefId` into the owning class's `TypeRefStore` (carried alongside).
 type MergedFieldEntry = (
     String,
-    Option<baml_compiler2_hir::type_ref::TypeRefId>,
+    baml_compiler2_hir::type_ref::TypeRefId,
     Vec<baml_compiler2_hir::item_tree::Attribute>,
     Vec<Name>,
     Vec<Name>,
@@ -2901,8 +2898,9 @@ fn emit_file_group(
             for (idx, (name, type_ref, attrs, _gen_params, ns)) in merged_fields.iter().enumerate()
             {
                 field_indices.insert(name.clone(), idx);
-                let (field_type, field_template) = match type_ref {
-                    Some(id) => {
+                let (field_type, field_template) = {
+                    let id = type_ref;
+                    {
                         let mut diags = Vec::new();
                         // Pass `class_generic_params` as the binding context so
                         // `T`-references inside `class Container<T> { item: T }`
@@ -2933,17 +2931,6 @@ fn emit_file_group(
                             &class_generic_params,
                         );
                         (resolved_ty, template)
-                    }
-                    None => {
-                        let null_ty = baml_type::RuntimeTy::Null {
-                            attr: baml_type::TyAttr::default(),
-                        };
-                        (
-                            null_ty.clone(),
-                            baml_type::TyTemplate::from(baml_type::RealizedTy::Null {
-                                attr: baml_type::TyAttr::default(),
-                            }),
-                        )
                     }
                 };
                 let (field_desc, field_alias, field_skip) = extract_schema_attrs(attrs.as_slice());

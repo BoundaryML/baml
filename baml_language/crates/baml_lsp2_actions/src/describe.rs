@@ -1384,9 +1384,14 @@ fn find_dependencies(
         baml_compiler2_hir::contributions::Definition::Interface(iface_loc) => {
             let iface = baml_compiler2_ppir::item_data::interface_data(db, iface_loc);
             for field in &iface.fields {
-                if let Some(id) = field.type_ref {
-                    collect_type_ref_deps(db, file, &iface.type_refs, id, &mut deps, &mut seen);
-                }
+                collect_type_ref_deps(
+                    db,
+                    file,
+                    &iface.type_refs,
+                    field.type_ref,
+                    &mut deps,
+                    &mut seen,
+                );
             }
             for &parent in &iface.requires {
                 collect_type_ref_deps(db, file, &iface.type_refs, parent, &mut deps, &mut seen);

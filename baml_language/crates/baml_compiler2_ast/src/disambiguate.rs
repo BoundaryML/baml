@@ -44,11 +44,9 @@ pub(crate) fn validate_field_attrs(items: &[Item]) -> Vec<(String, text_size::Te
 
 fn validate_class(class: &ClassDef, diagnostics: &mut Vec<(String, text_size::TextRange)>) {
     for field in &class.fields {
-        if let Some(ref spanned_type) = field.type_expr {
-            // After hoisting, the outermost TypeExpr should have no field attrs left.
-            // Any remaining field attrs are in invalid positions.
-            validate_type_expr_tree(spanned_type, diagnostics);
-        }
+        // After hoisting, the outermost TypeExpr should have no field attrs left.
+        // Any remaining field attrs are in invalid positions.
+        validate_type_expr_tree(&field.type_expr, diagnostics);
     }
     // Also validate method signatures
     for method in &class.methods {

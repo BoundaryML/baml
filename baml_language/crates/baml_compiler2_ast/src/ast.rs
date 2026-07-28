@@ -1771,7 +1771,10 @@ pub struct AssociatedTypeBindingDef {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FieldDef {
     pub name: Name,
-    pub type_expr: Option<TypeExpr>,
+    /// Always present. A field written without a type is reported by the parser and
+    /// recovers as [`TypeExprKind::Error`] — "no type" is not a kind of type, so it is
+    /// not representable here.
+    pub type_expr: TypeExpr,
     pub attributes: Vec<RawAttribute>,
     /// Joined `///` doc-comment lines preceding this declaration.
     pub docstring: Option<std::string::String>,

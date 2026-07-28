@@ -2383,7 +2383,7 @@ impl<'db> LoweringContext<'db> {
                         let mut idx_counter = 0usize;
                         let mut insert_field =
                             |name: &str,
-                             type_ref: Option<baml_compiler2_hir::type_ref::TypeRefId>,
+                             type_ref: baml_compiler2_hir::type_ref::TypeRefId,
                              generic_params: &[ParamTy],
                              ns: &[Name],
                              fields: &mut IndexMap<String, usize>,
@@ -2396,26 +2396,20 @@ impl<'db> LoweringContext<'db> {
                                 let idx = idx_counter;
                                 fields.insert(name.to_string(), idx);
                                 idx_counter += 1;
-                                let field_ty = type_ref
-                                    .map(|id| {
-                                        let tir_ty = baml_compiler2_tir::lower_type_expr::lower_type_ref(
-                                            &class_data.type_refs,
-                                            id,
-                                            &baml_compiler2_tir::lower_type_expr::ScopeCtx {
-                                                db,
-                                                package_items: pkg_items,
-                                                ns_context: ns,
-                                                generic_params,
-                                                bounds: baml_compiler2_tir::lower_type_expr::class_generic_param_bounds(db, *class_loc),
-                                                self_ty: None,
-                                            },
-                                            diags,
-                                        );
-                                        resolved_aliases.convert(&tir_ty)
-                                    })
-                                    .unwrap_or(RuntimeTy::Null {
-                                        attr: TyAttr::default(),
-                                    });
+                                let tir_ty = baml_compiler2_tir::lower_type_expr::lower_type_ref(
+                                    &class_data.type_refs,
+                                    type_ref,
+                                    &baml_compiler2_tir::lower_type_expr::ScopeCtx {
+                                        db,
+                                        package_items: pkg_items,
+                                        ns_context: ns,
+                                        generic_params,
+                                        bounds: baml_compiler2_tir::lower_type_expr::class_generic_param_bounds(db, *class_loc),
+                                        self_ty: None,
+                                    },
+                                    diags,
+                                );
+                                let field_ty = resolved_aliases.convert(&tir_ty);
                                 field_types.insert(name.to_string(), field_ty.clone());
                                 Some((idx, field_ty))
                             };
@@ -6679,11 +6673,7 @@ impl<'db> LoweringContext<'db> {
                 attr: TyAttr::default(),
             };
         };
-        let Some(type_ref) = field.type_ref else {
-            return RuntimeTy::Null {
-                attr: TyAttr::default(),
-            };
-        };
+        let type_ref = field.type_ref;
 
         let pkg_ns =
             baml_compiler2_hir::file_package::file_package(db, class_loc.file(db)).namespace_path;
@@ -13267,44 +13257,36 @@ impl LoweringContext<'_> {
         let mut result = IndexMap::new();
         for field in &class_data.fields {
             let mut diags = Vec::new();
-            let field_ty = field
-                .type_ref
-                .map(|id| {
-                    if bindings.is_empty() {
-                        baml_compiler2_tir::lower_type_expr::lower_type_ref(
-                            &class_data.type_refs,
-                            id,
-                            &baml_compiler2_tir::lower_type_expr::ScopeCtx {
-                                db: self.db,
-                                package_items: pkg_items_for_class,
-                                ns_context: &ns_context,
-                                generic_params: &class_generic_params,
-                                bounds:
-                                    baml_compiler2_tir::lower_type_expr::class_generic_param_bounds(
-                                        self.db, class_loc,
-                                    ),
-                                self_ty: None,
-                            },
-                            &mut diags,
-                        )
-                    } else {
-                        lower_ref_with_bindings(
-                            self.db,
-                            &class_data.type_refs,
-                            id,
-                            pkg_items_for_class,
-                            &ns_context,
-                            &bindings,
-                            baml_compiler2_tir::lower_type_expr::class_generic_param_bounds(
-                                self.db, class_loc,
-                            ),
-                            &mut diags,
-                        )
-                    }
-                })
-                .unwrap_or(Tir2Ty::Unknown {
-                    attr: baml_compiler2_tir::ty::TyAttr::default(),
-                });
+            let field_ty = if bindings.is_empty() {
+                baml_compiler2_tir::lower_type_expr::lower_type_ref(
+                    &class_data.type_refs,
+                    field.type_ref,
+                    &baml_compiler2_tir::lower_type_expr::ScopeCtx {
+                        db: self.db,
+                        package_items: pkg_items_for_class,
+                        ns_context: &ns_context,
+                        generic_params: &class_generic_params,
+                        bounds: baml_compiler2_tir::lower_type_expr::class_generic_param_bounds(
+                            self.db, class_loc,
+                        ),
+                        self_ty: None,
+                    },
+                    &mut diags,
+                )
+            } else {
+                lower_ref_with_bindings(
+                    self.db,
+                    &class_data.type_refs,
+                    field.type_ref,
+                    pkg_items_for_class,
+                    &ns_context,
+                    &bindings,
+                    baml_compiler2_tir::lower_type_expr::class_generic_param_bounds(
+                        self.db, class_loc,
+                    ),
+                    &mut diags,
+                )
+            };
             result.insert(field.name.clone(), field_ty);
         }
         result

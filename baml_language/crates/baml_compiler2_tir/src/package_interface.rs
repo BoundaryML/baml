@@ -404,22 +404,13 @@ fn lower_class_export<'db>(
     let mut fields = Vec::new();
     let mut diags = Vec::new();
     for field in &class_data.fields {
-        if let Some(type_ref) = field.type_ref {
-            let field_ty = crate::lower_type_expr::lower_type_ref(
-                &class_data.type_refs,
-                type_ref,
-                &field_scope,
-                &mut diags,
-            );
-            fields.push((field.name.clone(), field_ty));
-        } else {
-            fields.push((
-                field.name.clone(),
-                Ty::Unknown {
-                    attr: TyAttr::default(),
-                },
-            ));
-        }
+        let field_ty = crate::lower_type_expr::lower_type_ref(
+            &class_data.type_refs,
+            field.type_ref,
+            &field_scope,
+            &mut diags,
+        );
+        fields.push((field.name.clone(), field_ty));
     }
 
     // Lower methods

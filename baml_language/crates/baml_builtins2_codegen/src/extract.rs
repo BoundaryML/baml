@@ -400,11 +400,7 @@ fn extract_class_fields(
         .iter()
         .enumerate()
         .map(|(index, field)| {
-            let field_type = field
-                .type_expr
-                .as_ref()
-                .map(|te| type_expr_to_baml_type(te, &generic_params))
-                .unwrap_or(BamlType::Named("unknown".to_string()));
+            let field_type = type_expr_to_baml_type(&field.type_expr, &generic_params);
             NativeClassField {
                 name: field.name.as_str().to_string(),
                 field_type,

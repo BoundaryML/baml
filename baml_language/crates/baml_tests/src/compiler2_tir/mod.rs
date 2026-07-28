@@ -2145,10 +2145,12 @@ pub(crate) mod support {
             let class = class_data(db, loc);
             writeln!(output, "class {prefix}{} {{", class.name).ok();
             for field in &class.fields {
-                let ty = field
-                    .type_ref
-                    .map(|id| type_ref_to_string(&class.type_refs, id, &prefix, &local_type_names))
-                    .unwrap_or_else(|| "?".into());
+                let ty = type_ref_to_string(
+                    &class.type_refs,
+                    field.type_ref,
+                    &prefix,
+                    &local_type_names,
+                );
                 writeln!(output, "  {}: {}", field.name, ty).ok();
             }
             writeln!(output, "}}").ok();

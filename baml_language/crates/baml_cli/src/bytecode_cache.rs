@@ -927,7 +927,7 @@ fn syntactic_type_names(db: &ProjectDatabase, file: SourceFile) -> HashSet<Strin
     }
     for &loc in file_classes(db, file) {
         let class = class_data(db, loc);
-        for id in class.fields.iter().filter_map(|f| f.type_ref) {
+        for id in class.fields.iter().map(|f| f.type_ref) {
             add_type_ref_display(&class.type_refs, id, &mut names);
         }
         for id in class.generic_param_bounds.iter().flatten() {
@@ -939,7 +939,7 @@ fn syntactic_type_names(db: &ProjectDatabase, file: SourceFile) -> HashSet<Strin
     }
     for &loc in file_interfaces(db, file) {
         let iface = interface_data(db, loc);
-        for id in iface.fields.iter().filter_map(|f| f.type_ref) {
+        for id in iface.fields.iter().map(|f| f.type_ref) {
             add_type_ref_display(&iface.type_refs, id, &mut names);
         }
         for id in &iface.requires {
