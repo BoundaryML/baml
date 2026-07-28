@@ -32,6 +32,15 @@ const types: Record<string, TypeSchema> = {
       { name: 'nested', schema: { type: 'ref', name: 'user.Nested' } },
     ],
   },
+  'user.RawHolder': {
+    kind: 'class',
+    fields: [
+      {
+        name: 'payload',
+        schema: { type: 'unsupported', display: 'unknown callback' },
+      },
+    ],
+  },
   'user.Tree': {
     kind: 'class',
     fields: [
@@ -373,6 +382,51 @@ describe('castArgsToKnownTypes', () => {
     ).toEqual({
       value: { $baml: { enum: 'user.Color', value: 'Blue' } },
     });
+  });
+
+  it('keeps a known parent class cast when a raw child cannot be cast', () => {
+    expect(
+      castArgsToKnownTypes(
+        { value: { payload: { arbitrary: true } } },
+        [
+          {
+            name: 'value',
+            hasDefault: false,
+            schema: { type: 'ref', name: 'user.RawHolder' },
+          },
+        ],
+        lookup,
+      ),
+    ).toEqual({
+      value: {
+        $baml: { type: 'user.RawHolder' },
+        payload: { arbitrary: true },
+      },
+    });
+  });
+
+  it('preserves own __proto__ map entries while casting their values', () => {
+    const value = JSON.parse('{"__proto__":"Red"}') as Record<string, unknown>;
+    const result = castArgsToKnownTypes(
+      { value },
+      [
+        {
+          name: 'value',
+          hasDefault: false,
+          schema: {
+            type: 'map',
+            key: { type: 'string' },
+            value: colorRef,
+          },
+        },
+      ],
+      lookup,
+    );
+    const castMap = result.value as Record<string, unknown>;
+    expect(Object.prototype.hasOwnProperty.call(castMap, '__proto__')).toBe(
+      true,
+    );
+    expect(castMap['__proto__']).toEqual(enumValue('user.Color', 'Red'));
   });
 
   it('leaves ambiguous, invalid, and unsupported JSON unannotated', () => {

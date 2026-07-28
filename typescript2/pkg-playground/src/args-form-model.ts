@@ -464,11 +464,15 @@ function tryCastValue(
       if (strictObject && entries.some(([key]) => !fields.has(key))) {
         return CAST_FAILED;
       }
-      const cast: Record<string, unknown> = classMarkerValue(resolved.name);
+      const castEntries: [string, unknown][] = [
+        ['$baml', { type: resolved.name }],
+      ];
+      const presentFields = new Set<string>();
       for (const [key, fieldValue] of entries) {
+        presentFields.add(key);
         const fieldSchema = fields.get(key);
         if (fieldSchema === undefined) {
-          cast[key] = fieldValue;
+          castEntries.push([key, fieldValue]);
           continue;
         }
         const fieldCast = tryCastValue(
@@ -478,18 +482,22 @@ function tryCastValue(
           new Set(),
           strictObject,
         );
-        if (fieldCast === CAST_FAILED) return CAST_FAILED;
-        cast[key] = fieldCast;
+        if (fieldCast === CAST_FAILED) {
+          if (strictObject) return CAST_FAILED;
+          castEntries.push([key, fieldValue]);
+          continue;
+        }
+        castEntries.push([key, fieldCast]);
       }
       for (const field of resolved.fields) {
-        if (!(field.name in cast)) {
+        if (!presentFields.has(field.name)) {
           if (!schemaAllowsOmission(field.schema, lookup, new Set())) {
             return CAST_FAILED;
           }
-          cast[field.name] = null;
+          castEntries.push([field.name, null]);
         }
       }
-      return cast;
+      return Object.fromEntries(castEntries);
     }
     case 'list': {
       if (!Array.isArray(value)) return CAST_FAILED;
@@ -506,7 +514,7 @@ function tryCastValue(
       ) {
         return CAST_FAILED;
       }
-      const cast: Record<string, unknown> = {};
+      const castEntries: [string, unknown][] = [];
       for (const [key, entry] of Object.entries(value)) {
         const entryCast = tryCastValue(
           entry,
@@ -516,9 +524,9 @@ function tryCastValue(
           strictObject,
         );
         if (entryCast === CAST_FAILED) return CAST_FAILED;
-        cast[key] = entryCast;
+        castEntries.push([key, entryCast]);
       }
-      return cast;
+      return Object.fromEntries(castEntries);
     }
     case 'optional':
       return value === null
@@ -721,11 +729,11 @@ function mapObject(
   map: (key: string, value: unknown) => unknown,
 ): Record<string, unknown> {
   let changed = false;
-  const out: Record<string, unknown> = {};
+  const entries: [string, unknown][] = [];
   for (const [key, value] of Object.entries(obj)) {
     const next = map(key, value);
     if (next !== value) changed = true;
-    out[key] = next;
+    entries.push([key, next]);
   }
-  return changed ? out : obj;
+  return changed ? Object.fromEntries(entries) : obj;
 }
