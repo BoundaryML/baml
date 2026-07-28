@@ -17,6 +17,8 @@
 
 #include <cstdint>
 #include <cstdlib>
+#include <functional>
+#include <memory>
 #include <optional>
 #include <string>
 #include <type_traits>
@@ -31,6 +33,9 @@ template <typename T>
 struct codec;  // primary template intentionally undefined
 
 namespace detail {
+
+template <typename Ret, typename ThrownU = void>
+Ret call_handle_sync(uint64_t handle_key, args_encoder&& args);
 
 [[noreturn]] inline void kind_mismatch(const char* expected,
                                        const pb::BamlOutboundValue& got) {
@@ -63,6 +68,69 @@ inline bool selected_type_matches(const pb::BamlTy& expected,
 }
 
 }  // namespace detail
+
+namespace detail {
+
+struct function_handle_state {
+  explicit function_handle_state(uint64_t value) : key(value) {}
+  ~function_handle_state() noexcept {
+    if (key == 0) return;
+    try {
+      (void)api().handle_release(key);
+    } catch (...) {
+    }
+  }
+
+  uint64_t key;
+};
+
+}  // namespace detail
+
+template <typename R, typename... Args>
+struct codec<std::function<R(Args...)>> {
+  static std::function<R(Args...)> decode(
+      const detail::pb::BamlOutboundValue& raw) {
+    const auto& value = detail::unwrap(raw);
+    if (value.value_case() != detail::pb::BamlOutboundValue::kHandleValue ||
+        value.handle_value().handle_type() != detail::pb::FUNCTION_REF ||
+        value.handle_value().key() == 0) {
+      detail::kind_mismatch("function", value);
+    }
+    auto state = std::make_shared<detail::function_handle_state>(
+        value.handle_value().key());
+    if (!value.handle_value().has_ty() ||
+        value.handle_value().ty().ty_case() != detail::pb::BamlTy::kFunction) {
+      throw error("BAML decode error: returned function has no function type");
+    }
+    const auto& function_ty = value.handle_value().ty().function();
+    if (function_ty.params_size() != sizeof...(Args)) {
+      throw error("BAML decode error: returned function arity mismatch");
+    }
+    auto names = std::make_shared<std::vector<std::string>>();
+    names->reserve(function_ty.params_size());
+    for (const auto& param : function_ty.params()) {
+      if (!param.has_name() || param.name().empty()) {
+        throw error(
+            "BAML decode error: returned function parameter has no name");
+      }
+      names->push_back(param.name());
+    }
+    return [state, names](Args... args) -> R {
+      detail::args_encoder encoded;
+      std::size_t index = 0;
+      (encoded.add_arg((*names)[index++],
+                       [&args](detail::pb::InboundValue& target) {
+                         codec<std::decay_t<Args>>::encode(target, args);
+                       }),
+       ...);
+      if constexpr (std::is_void<R>::value) {
+        detail::call_handle_sync<void>(state->key, std::move(encoded));
+      } else {
+        return detail::call_handle_sync<R>(state->key, std::move(encoded));
+      }
+    };
+  }
+};
 
 template <>
 struct codec<int64_t> {

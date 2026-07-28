@@ -68,3 +68,36 @@ pub async fn call_function_in_wasm(function_name: &str, encoded_args: &[u8]) -> 
 pub fn call_function_in_wasm_sync(function_name: &str, encoded_args: &[u8]) -> Vec<u8> {
     futures::executor::block_on(call_function_in_wasm(function_name, encoded_args))
 }
+
+pub async fn call_handle_in_wasm(handle_key: u64, encoded_args: &[u8]) -> Vec<u8> {
+    use bridge_ctypes::baml_bridge::cffi::CallFunctionArgs;
+
+    let call =
+        match CallFunctionArgs::decode(encoded_args).map_err(bridge_ctypes::CtypesError::from) {
+            Ok(call) => call,
+            Err(error) => return error_to_outbound(error.into()),
+        };
+    if call.call_id == 0 {
+        return error_to_outbound(BridgeError::InvalidCallId);
+    }
+    let type_args = match bridge_ctypes::proto_ty_args_to_named(&call.type_args) {
+        Ok(type_args) => type_args,
+        Err(error) => return error_to_outbound(error.into()),
+    };
+    let args = match kwargs_to_bex_values(call.kwargs, &HANDLE_TABLE) {
+        Ok(args) => args,
+        Err(error) => return error_to_outbound(error.into()),
+    };
+    let context = function_call_context_builder(bex_project::CallId(call.call_id))
+        .with_type_args(type_args)
+        .build();
+    let runtime = match crate::get_runtime() {
+        Ok(runtime) => runtime,
+        Err(error) => return error_to_outbound(error),
+    };
+    crate::call_handle_and_encode(runtime, handle_key, args.into(), context).await
+}
+
+pub fn call_handle_in_wasm_sync(handle_key: u64, encoded_args: &[u8]) -> Vec<u8> {
+    futures::executor::block_on(call_handle_in_wasm(handle_key, encoded_args))
+}

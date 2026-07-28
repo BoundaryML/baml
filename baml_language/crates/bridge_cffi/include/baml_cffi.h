@@ -290,6 +290,11 @@ typedef void (*BamlRegisterUnhandledSpawnErrorCallbackFn)(BamlUnhandledSpawnErro
 
 typedef struct BamlBuffer (*BamlShutdownRuntimeFn)(void);
 
+typedef void (*BamlCallHandleFn)(uint64_t handle_key,
+                                 const uint8_t *encoded_args,
+                                 size_t length,
+                                 uint32_t callback_id);
+
 /**
  * First version of the shared BAML C API.
  *
@@ -463,6 +468,14 @@ typedef struct BamlApiV1 {
    * Wait for spawned work, report unreachable errors, and release the runtime.
    */
   BamlShutdownRuntimeFn shutdown_runtime;
+  /**
+   * Enqueue a call through an owned BAML function handle and return immediately.
+   *
+   * `handle_key` must identify a live `FUNCTION_REF`. `encoded_args` follows
+   * the same borrowed `CallFunctionArgs` contract as `call_function`.
+   * Completion is delivered through the registered result callback.
+   */
+  BamlCallHandleFn call_handle;
 } BamlApiV1;
 
 typedef const struct BamlApiV1 *(*BamlGetApiV1Fn)(void);

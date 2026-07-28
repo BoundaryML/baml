@@ -5,8 +5,11 @@ import baml_bridge.internal.NativeLibraryLoader;
 import baml_bridge.internal.ProtoReader;
 import baml_bridge.internal.ProtoWriter;
 
+import java.lang.reflect.InvocationHandler;
+import java.lang.reflect.Proxy;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
@@ -193,6 +196,8 @@ public final class BamlFfi {
      */
     static native byte[] nativeCallSync(String fqn, byte[] encodedCallFunctionArgs);
 
+    static native byte[] nativeCallHandleSync(long handleKey, byte[] encodedCallFunctionArgs);
+
     /**
      * Run a BAML function asynchronously. Encodes the identical
      * {@code CallFunctionArgs} payload as {@link #nativeCallSync} but returns
@@ -288,6 +293,90 @@ public final class BamlFfi {
      */
     public static Object callSync(String fqn, String[] names, Object[] args) {
         return callSync(fqn, names, args, null, null);
+    }
+
+    public static Object callHandleSync(
+            BamlHandle handle, String[] names, Object[] args, BamlType returnDesc) {
+        Objects.requireNonNull(handle, "handle");
+        Objects.requireNonNull(names, "names");
+        Objects.requireNonNull(args, "args");
+        if (handle.handleType() != BamlHandle.FUNCTION_REF) {
+            throw new IllegalArgumentException(
+                    "expected a FUNCTION_REF handle, received " + handle.handleType());
+        }
+        if (names.length != args.length) {
+            throw new IllegalArgumentException("function handle argument names and values differ in length");
+        }
+        long callId = newCallId();
+        byte[] request = ProtoWriter.encodeCallFunctionArgs(names, args, callId, null);
+        return decodeResult(nativeCallHandleSync(handle.key(), request), returnDesc);
+    }
+
+    public static <T> T returnedClosure(
+            Class<T> callableType,
+            Object value,
+            String[] names,
+            BamlType returnDesc) {
+        Objects.requireNonNull(callableType, "callableType");
+        if (!(value instanceof BamlHandle handle)) {
+            throw new IllegalStateException(
+                    "Expected a returned BAML function handle, received "
+                            + (value == null ? "null" : value.getClass().getName()));
+        }
+        InvocationHandler handler =
+                (proxy, method, arguments) -> {
+                    if (method.getDeclaringClass() == Object.class) {
+                        return switch (method.getName()) {
+                            case "toString" -> "BAML closure " + handle.key();
+                            case "hashCode" -> System.identityHashCode(proxy);
+                            case "equals" -> proxy == arguments[0];
+                            default -> throw new UnsupportedOperationException(method.toString());
+                        };
+                    }
+                    Object[] supplied = arguments == null ? new Object[0] : arguments;
+                    if (supplied.length != names.length) {
+                        throw new IllegalArgumentException(
+                                "BAML closure expected "
+                                        + names.length
+                                        + " arguments, received "
+                                        + supplied.length);
+                    }
+                    return callHandleSync(handle, names, supplied, returnDesc);
+                };
+        Object proxy =
+                Proxy.newProxyInstance(
+                        callableType.getClassLoader(),
+                        new Class<?>[] {callableType},
+                        handler);
+        return callableType.cast(proxy);
+    }
+
+    public static <T> CompletableFuture<T> returnedClosureAsync(
+            CompletableFuture<Object> source,
+            Class<T> callableType,
+            String[] names,
+            BamlType returnDesc) {
+        Objects.requireNonNull(source, "source");
+        CompletableFuture<T> mapped = new CompletableFuture<>();
+        source.whenComplete(
+                (value, error) -> {
+                    if (error != null) {
+                        mapped.completeExceptionally(error);
+                    } else {
+                        try {
+                            mapped.complete(returnedClosure(callableType, value, names, returnDesc));
+                        } catch (Throwable failure) {
+                            mapped.completeExceptionally(failure);
+                        }
+                    }
+                });
+        mapped.whenComplete(
+                (ignored, error) -> {
+                    if (mapped.isCancelled()) {
+                        source.cancel(true);
+                    }
+                });
+        return mapped;
     }
 
     /**

@@ -772,11 +772,51 @@ public readonly partial struct BamlGeneratedCodecContext
     public BamlGeneratedValue Encode<T>(BamlGeneratedType<T> type, T value) =>
         registry.Encode(type, value, encodeBudget);
 
+    public BamlGeneratedValue EncodeFresh<T>(BamlGeneratedType<T> type, T value) =>
+        registry.Encode(type, value);
+
     public BamlGeneratedValue ForwardEncode<T>(BamlGeneratedType<T> type, T value) =>
         registry.EncodeForwarded(type, value, encodeBudget);
 
     public T Decode<T>(BamlGeneratedType<T> type, BamlGeneratedValue value) =>
         registry.Decode(type, value);
+
+    public Func<
+        IReadOnlyList<KeyValuePair<string, BamlGeneratedValue>>,
+        CancellationToken,
+        Task<BamlGeneratedValue>> NativeFunction(BamlGeneratedValue value)
+    {
+        global::Baml.BamlHandle handle = ReadHandle(value);
+        if (handle.HandleType != BamlHandleType.FunctionRef)
+        {
+            throw new BamlProtocolException(
+                "The native bridge returned an incompatible BAML handle.",
+                $"Expected a function handle, received {handle.HandleType}.");
+        }
+
+        return async (arguments, cancellationToken) =>
+        {
+            ArgumentNullException.ThrowIfNull(arguments);
+            Baml.Cffi.NativeApi api = Baml.Cffi.NativeApi.Instance;
+            Task<byte[]> completion;
+            using (Baml.Cffi.BamlSafeHandleLease lease = handle.Lease())
+            {
+                completion = api.InvokeOwnedHandleAsync(
+                    lease.Key,
+                    callId => Baml.Proto.PrimitiveProtocol.EncodeOwnedHandleArguments(
+                        arguments,
+                        callId,
+                        api),
+                    cancellationToken);
+            }
+
+            byte[] bytes = await completion.ConfigureAwait(false);
+            return Baml.Proto.PrimitiveProtocol.DecodeCallResult(
+                bytes,
+                "<returned BAML closure>",
+                api);
+        };
+    }
 
     private static IReadOnlyList<BamlGeneratedValue> SnapshotValues(
         IEnumerable<BamlGeneratedValue> values,

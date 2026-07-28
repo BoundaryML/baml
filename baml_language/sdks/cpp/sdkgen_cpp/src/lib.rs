@@ -1031,19 +1031,17 @@ fn emit_callable(
             });
         }
     }
-    let ret = if matches!(function.return_type, Ty::Void { .. }) {
-        "void".to_string()
-    } else {
-        match translate_ty(
-            pool,
-            names,
-            &function.return_type,
-            emitted_types,
-            &BTreeSet::new(),
-        ) {
-            Translated::Cpp(ty) => ty,
-            Translated::NotYet | Translated::Unsupported(_) => {
-                return Err(format!("unsupported return type {}", function.return_type));
+    let ret = match &function.return_type {
+        Ty::Void { .. } => "void".to_string(),
+        Ty::Function { params, ret, .. } => {
+            translate_callable_ty(pool, names, params, ret, emitted_types)?.0
+        }
+        return_type => {
+            match translate_ty(pool, names, return_type, emitted_types, &BTreeSet::new()) {
+                Translated::Cpp(ty) => ty,
+                Translated::NotYet | Translated::Unsupported(_) => {
+                    return Err(format!("unsupported return type {}", function.return_type));
+                }
             }
         }
     };
@@ -1433,6 +1431,7 @@ fn translate_ty(
                 other => return other,
             }
         }
+        Ty::Function { .. } => return Translated::NotYet,
         Ty::Union(items, _) => {
             // Null-normalization (spec D-unions v2): strip the null member,
             // dedup alternatives that map to the same C++ type, emit a

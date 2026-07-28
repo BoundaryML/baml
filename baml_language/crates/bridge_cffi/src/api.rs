@@ -99,6 +99,8 @@ pub type BamlCallFunctionFn = extern "C" fn(
     length: usize,
     callback_id: u32,
 );
+pub type BamlCallHandleFn =
+    extern "C" fn(handle_key: u64, encoded_args: *const u8, length: usize, callback_id: u32);
 pub type BamlNewFunctionCallFn = extern "C" fn() -> u64;
 pub type BamlCancelFunctionCallFn = extern "C" fn(id: u64) -> i32;
 pub type BamlRegisterHostDispatchCallbackFn = extern "C" fn(callback: BamlHostDispatchCallback);
@@ -248,6 +250,12 @@ pub struct BamlApiV1 {
     pub register_unhandled_spawn_error_callback: BamlRegisterUnhandledSpawnErrorCallbackFn,
     /// Wait for spawned work, report unreachable errors, and release the runtime.
     pub shutdown_runtime: BamlShutdownRuntimeFn,
+    /// Enqueue a call through an owned BAML function handle and return immediately.
+    ///
+    /// `handle_key` must identify a live `FUNCTION_REF`. `encoded_args` follows
+    /// the same borrowed `CallFunctionArgs` contract as `call_function`.
+    /// Completion is delivered through the registered result callback.
+    pub call_handle: BamlCallHandleFn,
 }
 
 static BAML_API_V1: BamlApiV1 = BamlApiV1 {
@@ -275,6 +283,7 @@ static BAML_API_V1: BamlApiV1 = BamlApiV1 {
     register_bridge: crate::register_bridge_ffi,
     register_unhandled_spawn_error_callback: crate::register_unhandled_spawn_error_callback,
     shutdown_runtime: crate::shutdown_runtime_ffi,
+    call_handle: crate::call_handle,
 };
 
 /// Return the immutable version-1 BAML C API function table.
@@ -341,6 +350,7 @@ mod tests {
             crate::register_unhandled_spawn_error_callback
         );
         assert_same_function!(api.shutdown_runtime, crate::shutdown_runtime_ffi);
+        assert_same_function!(api.call_handle, crate::call_handle);
     }
 
     #[test]
@@ -369,6 +379,7 @@ mod tests {
         let _: BamlRegisterUnhandledSpawnErrorCallbackFn =
             api.register_unhandled_spawn_error_callback;
         let _: BamlShutdownRuntimeFn = api.shutdown_runtime;
+        let _: BamlCallHandleFn = api.call_handle;
         let _: BamlGetApiV1Fn = baml_get_api_v1;
     }
 

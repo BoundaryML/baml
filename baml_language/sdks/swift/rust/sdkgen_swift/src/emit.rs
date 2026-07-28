@@ -353,11 +353,22 @@ pub(crate) fn render_callable(
         }
     }
 
+    let returned_callable = if let Ty::Function {
+        params: callable_params,
+        ret,
+        ..
+    } = &function.return_type
+    {
+        Some(render_returned_callable(callable_params, ret, ctx)?)
+    } else {
+        None
+    };
     let ret = match &function.return_type {
         // `never` (diverging: panic/exit) spells as a void function —
         // the call only ever returns by throwing (Python maps both
         // void and never to `None` the same way).
         Ty::Void { .. } | Ty::Never { .. } => None,
+        Ty::Function { .. } => Some(returned_callable.as_ref()?.0.clone()),
         other => Some(translate_ty(other, ctx)?),
     };
 
@@ -446,17 +457,35 @@ pub(crate) fn render_callable(
     };
     match &ret {
         Some(ret_ty) => {
-            let _ = write!(
-                out,
-                "{doc}public {static_kw}func {fn_name}{generic_sig}({param_list}) throws -> {ret_ty} {{\n\
-                 \t_ = Baml._initialized\n\
-                 {args_setup}\treturn try BamlRuntime.shared.callSync(\"{fqn}\", args: {args_expr})\n\
-                 }}\n\n\
-                 {doc}public {static_kw}func {async_name}{generic_sig}({param_list}) async throws -> {ret_ty} {{\n\
-                 \t_ = Baml._initialized\n\
-                 {args_setup}\treturn try await BamlRuntime.shared.call(\"{fqn}\", args: {args_expr})\n\
-                 }}\n"
-            );
+            if let Some((_, closure)) = &returned_callable {
+                let _ = write!(
+                    out,
+                    "{doc}public {static_kw}func {fn_name}{generic_sig}({param_list}) throws -> {ret_ty} {{\n\
+                     \t_ = Baml._initialized\n\
+                     {args_setup}\tlet _raw = try BamlRuntime.shared.callRawSync(\"{fqn}\", args: {args_expr})\n\
+                     \tlet _function = try BamlFunctionHandle.decode(_raw)\n\
+                     {closure}\n\
+                     }}\n\n\
+                     {doc}public {static_kw}func {async_name}{generic_sig}({param_list}) async throws -> {ret_ty} {{\n\
+                     \t_ = Baml._initialized\n\
+                     {args_setup}\tlet _raw = try await BamlRuntime.shared.callRaw(\"{fqn}\", args: {args_expr})\n\
+                     \tlet _function = try BamlFunctionHandle.decode(_raw)\n\
+                     {closure}\n\
+                     }}\n"
+                );
+            } else {
+                let _ = write!(
+                    out,
+                    "{doc}public {static_kw}func {fn_name}{generic_sig}({param_list}) throws -> {ret_ty} {{\n\
+                     \t_ = Baml._initialized\n\
+                     {args_setup}\treturn try BamlRuntime.shared.callSync(\"{fqn}\", args: {args_expr})\n\
+                     }}\n\n\
+                     {doc}public {static_kw}func {async_name}{generic_sig}({param_list}) async throws -> {ret_ty} {{\n\
+                     \t_ = Baml._initialized\n\
+                     {args_setup}\treturn try await BamlRuntime.shared.call(\"{fqn}\", args: {args_expr})\n\
+                     }}\n"
+                );
+            }
         }
         None => {
             let _ = write!(
@@ -689,4 +718,75 @@ fn render_callable_param(
     let wrapper =
         format!("\tlet _baml_{bare} = BamlHostCallable {{ _args in\n\t\t{wrapper_body}\n\t}}\n");
     Some((closure_ty, wrapper))
+}
+
+fn render_returned_callable(
+    params: &[baml_codegen_types::CallableParam],
+    ret: &Ty,
+    ctx: &TranslateCtx,
+) -> Option<(String, String)> {
+    let mut signature = Vec::with_capacity(params.len());
+    let mut required_args = Vec::new();
+    let mut optional_args = Vec::new();
+    for (index, param) in params.iter().enumerate() {
+        let local = format!("_arg{index}");
+        let name = param.name.as_ref()?.as_str();
+        match param.mode {
+            baml_codegen_types::CodegenFunctionParamMode::Required => {
+                let ty = translate_ty(&param.ty, ctx)?;
+                signature.push(format!("{local}: {ty}"));
+                required_args.push(format!("(\"{name}\", {local})"));
+            }
+            baml_codegen_types::CodegenFunctionParamMode::Optional => {
+                let ty = translate_optional_arg_inner(&param.ty, ctx)?;
+                signature.push(format!("{local}: BamlOptional<{ty}>"));
+                optional_args.push((local, name.to_string()));
+            }
+        }
+    }
+    let ret_ty = match ret {
+        Ty::Void { .. } | Ty::Never { .. } => "Swift.Void".to_string(),
+        other => translate_ty(other, ctx)?,
+    };
+    let closure_ty = format!(
+        "@Sendable ({}) async throws -> {ret_ty}",
+        signature
+            .iter()
+            .map(|entry| entry
+                .split_once(':')
+                .map_or(entry.as_str(), |(_, ty)| ty.trim()))
+            .collect::<Vec<_>>()
+            .join(", ")
+    );
+    let closure_signature = if signature.is_empty() {
+        format!("() async throws -> {ret_ty}")
+    } else {
+        format!("({}) async throws -> {ret_ty}", signature.join(", "))
+    };
+    let mut body = format!("\treturn {{ {closure_signature} in\n");
+    if optional_args.is_empty() {
+        let _ = writeln!(
+            body,
+            "\t\tlet _result = try await _function.callRaw(args: [{}])",
+            required_args.join(", ")
+        );
+    } else {
+        let _ = writeln!(
+            body,
+            "\t\tvar _args: [(Swift.String, (any BamlEncodable)?)] = [{}]",
+            required_args.join(", ")
+        );
+        for (local, name) in optional_args {
+            let _ = writeln!(body, "\t\t{local}._appendIfSet(\"{name}\", to: &_args)");
+        }
+        body.push_str("\t\tlet _result = try await _function.callRaw(args: _args)\n");
+    }
+    match ret {
+        Ty::Void { .. } | Ty::Never { .. } => body.push_str("\t\t_ = _result\n\t\treturn ()\n"),
+        _ => {
+            let _ = writeln!(body, "\t\treturn try {ret_ty}._bamlDecode(_result)");
+        }
+    }
+    body.push_str("\t}");
+    Some((closure_ty, body))
 }

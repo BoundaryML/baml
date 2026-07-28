@@ -178,6 +178,17 @@ public final class BamlRuntime: @unchecked Sendable {
         }
     }
 
+    public func callHandleRaw(
+        _ handleKey: UInt64,
+        args: [(String, (any BamlEncodable)?)]
+    ) async throws -> BamlOutboundValue {
+        do {
+            return try unwrapEnvelope(await invokeHandleAsync(handleKey, args: args))
+        } catch let panic as BamlPanic where panic.className == "baml.panics.Cancelled" {
+            throw CancellationError()
+        }
+    }
+
     public func callSyncVoid(
         _ fqn: String,
         args: [(String, (any BamlEncodable)?)]
@@ -254,6 +265,26 @@ public final class BamlRuntime: @unchecked Sendable {
         }
     }
 
+    private func invokeHandleAsync(
+        _ handleKey: UInt64,
+        args: [(String, (any BamlEncodable)?)]
+    ) async throws -> Data {
+        precondition(handleKey != 0, "cannot invoke a zero BAML function handle")
+        let protoCallId = BamlApi.newFunctionCall()
+        let payload = try encodeCallArgs(args, callId: protoCallId)
+
+        return try await withTaskCancellationHandler {
+            try await withCheckedThrowingContinuation { continuation in
+                let callbackId = registerPending { result in
+                    continuation.resume(with: result)
+                }
+                dispatchHandle(handleKey, payload: payload, callbackId: callbackId)
+            }
+        } onCancel: {
+            _ = BamlApi.cancelFunctionCall(protoCallId)
+        }
+    }
+
     private func registerPending(
         _ completion: @escaping @Sendable (Result<Data, Error>) -> Void
     ) -> UInt32 {
@@ -289,6 +320,17 @@ public final class BamlRuntime: @unchecked Sendable {
                     callbackId
                 )
             }
+        }
+    }
+
+    private func dispatchHandle(_ handleKey: UInt64, payload: Data, callbackId: UInt32) {
+        payload.withUnsafeBytes { buf in
+            BamlApi.callHandle(
+                handleKey,
+                buf.baseAddress?.assumingMemoryBound(to: UInt8.self),
+                buf.count,
+                callbackId
+            )
         }
     }
 

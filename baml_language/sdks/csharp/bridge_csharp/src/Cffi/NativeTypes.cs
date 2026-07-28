@@ -54,11 +54,14 @@ internal unsafe struct BamlApiV1
     internal delegate* unmanaged[Cdecl]<ulong, int, BamlBuffer*, BamlCffiStatus> MediaBase64;
     internal delegate* unmanaged[Cdecl]<ulong, int, BamlBuffer*, BamlCffiStatus> MediaMimeType;
     internal delegate* unmanaged[Cdecl]<BamlBridgeInfoV1*, BamlBuffer> RegisterBridge;
+    internal delegate* unmanaged[Cdecl]<delegate* unmanaged[Cdecl]<sbyte*, nuint, int, void>, void> RegisterUnhandledSpawnErrorCallback;
+    internal delegate* unmanaged[Cdecl]<BamlBuffer> ShutdownRuntime;
+    internal delegate* unmanaged[Cdecl]<ulong, byte*, nuint, uint, void> CallHandle;
 }
 
 internal static unsafe class BamlApiV1Layout
 {
-    internal static readonly nuint RequiredPrefixSize = EndOf(nameof(BamlApiV1.RegisterBridge));
+    internal static readonly nuint RequiredPrefixSize = EndOf(nameof(BamlApiV1.CallHandle));
 
     private static nuint EndOf(string field) =>
         checked((nuint)Marshal.OffsetOf<BamlApiV1>(field) + (nuint)IntPtr.Size);

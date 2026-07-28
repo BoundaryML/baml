@@ -95,6 +95,9 @@ submit! {
 
             def call_function_sync(self, function_name: str, args_proto: bytes, ctx: typing.Optional["HostSpanManager"] = None, collectors: typing.Optional[typing.Sequence["Collector"]] = None) -> bytes:
                 """Call a BAML function synchronously (blocking)."""
+
+            def call_handle_sync(self, handle: "BamlPyHandle", args_proto: bytes) -> bytes:
+                """Call an engine-owned BAML callable synchronously."""
         "#
     }
 }
@@ -200,6 +203,46 @@ impl BamlRuntime {
             ))
         });
 
+        Ok(bytes)
+    }
+
+    /// Invoke an engine-owned BAML callable without consuming its handle.
+    fn call_handle_sync(
+        &self,
+        py: Python<'_>,
+        handle: &crate::py_handle::BamlPyHandle,
+        args_proto: Vec<u8>,
+    ) -> PyResult<Vec<u8>> {
+        use bridge_ctypes::baml_bridge::cffi::BamlHandleType;
+
+        if handle.handle_type != BamlHandleType::FunctionRef as u64 {
+            return Ok(bridge_cffi::error_to_outbound(
+                bridge_cffi::BridgeError::Internal(
+                    "handle does not reference a BAML callable".to_string(),
+                ),
+            ));
+        }
+        let prepared = (|| -> Result<_, bridge_cffi::BridgeError> {
+            let runtime = bridge_cffi::get_runtime()?;
+            let decoded = decode_args(&args_proto, "<callable>")?;
+            let rt = bridge_cffi::get_tokio_runtime()?;
+            Ok((runtime, decoded, rt))
+        })();
+        let (runtime, decoded, rt) = match prepared {
+            Ok(value) => value,
+            Err(error) => return Ok(bridge_cffi::error_to_outbound(error)),
+        };
+        let call_ctx = bridge_cffi::function_call_context_builder(decoded.call_id)
+            .with_type_args(decoded.type_args)
+            .build();
+        let bytes = py.detach(|| {
+            rt.block_on(bridge_cffi::call_handle_and_encode(
+                runtime,
+                handle.handle_key,
+                decoded.kwargs,
+                call_ctx,
+            ))
+        });
         Ok(bytes)
     }
 }

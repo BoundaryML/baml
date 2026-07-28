@@ -15,7 +15,8 @@ use sys_native::SysOpsExt;
 use tokio::runtime::Runtime;
 
 use crate::{
-    BridgeError, baml_to_host, call_and_encode, error_to_outbound, function_call_context_builder,
+    BridgeError, baml_to_host, call_and_encode, call_handle_and_encode, error_to_outbound,
+    function_call_context_builder,
 };
 
 #[path = "api.rs"]
@@ -182,6 +183,60 @@ fn call_function_inner(
             func_name,
             kwargs.into(),
             call_ctx.build(),
+        ))
+        .catch_unwind()
+        .await;
+
+        let bytes = match encoded {
+            Ok(bytes) => bytes,
+            Err(panic_info) => baml_to_host::panic_to_outbound(panic_info.as_ref()),
+        };
+        send_outbound_result_to_callback(id, &bytes);
+    });
+
+    Ok(())
+}
+
+/// Call an owned BAML function handle asynchronously.
+///
+/// Returns immediately after spawning the async task. Result/error is delivered
+/// through the same callback used by `call_function`.
+#[unsafe(no_mangle)]
+pub extern "C" fn call_handle(handle_key: u64, encoded_args: *const u8, length: usize, id: u32) {
+    if let Err(e) = call_handle_inner(handle_key, encoded_args, length, id) {
+        send_outbound_result_to_callback(id, &error_to_outbound(e));
+    }
+}
+
+fn call_handle_inner(
+    handle_key: u64,
+    encoded_args: *const u8,
+    length: usize,
+    id: u32,
+) -> Result<(), BridgeError> {
+    use bridge_ctypes::baml_bridge::cffi::CallFunctionArgs;
+
+    let runtime = get_runtime()?;
+    let args = if encoded_args.is_null() || length == 0 {
+        CallFunctionArgs::default()
+    } else {
+        unsafe { CallFunctionArgs::from_c_buffer(encoded_args, length) }?
+    };
+    let call_id = decoded_call_id(args.call_id)?;
+    if !args.type_args.is_empty() {
+        return Err(BridgeError::Internal(
+            "type arguments are not supported when invoking a BAML function handle".to_string(),
+        ));
+    }
+    let kwargs = kwargs_to_bex_values(args.kwargs, &HANDLE_TABLE)?;
+    let call_ctx = function_call_context_builder(call_id).build();
+
+    get_tokio_runtime()?.spawn(async move {
+        let encoded = AssertUnwindSafe(call_handle_and_encode(
+            runtime,
+            handle_key,
+            kwargs.into(),
+            call_ctx,
         ))
         .catch_unwind()
         .await;

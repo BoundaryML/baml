@@ -196,6 +196,10 @@ class BamlRuntime:
         r"""
         Call a BAML function synchronously (blocking).
         """
+    def call_handle_sync(self, handle: BamlPyHandle, args_proto: bytes) -> bytes:
+        r"""
+        Call an engine-owned BAML callable synchronously.
+        """
 
 @typing.final
 class BamlVideo:
