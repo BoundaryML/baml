@@ -100,6 +100,12 @@ struct CfgExpansionCtx {
     >,
 }
 
+enum CfgCallTarget {
+    UserFunction(String),
+    NonUserFunction,
+    Unresolved,
+}
+
 impl CfgExpansionCtx {
     fn cache_key(&self, callee_name: String) -> CfgExpansionCacheKey {
         // The recursion guard depends on membership in `expanding`, not call
@@ -912,15 +918,15 @@ impl ProjectDatabase {
         use baml_compiler2_visualization::control_flow::NodeType;
 
         for (call_expr, callee_path) in Self::call_sites_by_source_expr(body) {
-            let callee_name = self
-                .resolve_function_call_name(caller_file, &callee_path)
-                .unwrap_or_else(|| {
-                    callee_path
-                        .iter()
-                        .map(AsRef::<str>::as_ref)
-                        .collect::<Vec<_>>()
-                        .join(".")
-                });
+            let callee_name = match self.resolve_function_call_name(caller_file, &callee_path) {
+                CfgCallTarget::UserFunction(name) => name,
+                CfgCallTarget::NonUserFunction => continue,
+                CfgCallTarget::Unresolved => callee_path
+                    .iter()
+                    .map(AsRef::<str>::as_ref)
+                    .collect::<Vec<_>>()
+                    .join("."),
+            };
             let Some((call_node_id, is_return_node)) = graph
                 .nodes
                 .values()
@@ -1002,21 +1008,27 @@ impl ProjectDatabase {
         &self,
         caller_file: SourceFile,
         callee_path: &[baml_db::Name],
-    ) -> Option<String> {
+    ) -> CfgCallTarget {
         use baml_compiler2_hir::{contributions::Definition, file_package, package::PackageId};
+        use baml_compiler2_tir::package_interface::ResolvedSource;
 
         let caller_package = file_package::file_package(self, caller_file);
         let package_id = PackageId::new(self, caller_package.package.clone());
         let resolution =
             baml_compiler2_tir::package_interface::package_resolution_context(self, package_id);
-        let (_, Definition::Function(function)) =
-            resolution.resolve_value(self, callee_path, &caller_package.namespace_path)?
+        let Some((source, definition)) =
+            resolution.resolve_value(self, callee_path, &caller_package.namespace_path)
         else {
-            return None;
+            return CfgCallTarget::Unresolved;
+        };
+        let (ResolvedSource::Item, Definition::Function(function)) = (source, definition) else {
+            return CfgCallTarget::NonUserFunction;
         };
         let callee_file = function.file(self);
         let function_data = baml_compiler2_ppir::item_data::function_data(self, function);
-        Some(self.playground_function_name_for_source_file(callee_file, &function_data.name))
+        CfgCallTarget::UserFunction(
+            self.playground_function_name_for_source_file(callee_file, &function_data.name),
+        )
     }
 
     /// Find the `//#` header comment immediately above a function declaration,
@@ -2433,6 +2445,47 @@ function Workflow(input: string) -> string {
             prepared.nodes.contains_key(&call_node.id),
             "cross-namespace LLM call must survive visualization preparation"
         );
+    }
+
+    #[test]
+    fn test_dependency_call_does_not_expand_same_named_user_function() {
+        use baml_compiler2_visualization::control_flow::NodeType;
+
+        let mut db = ProjectDatabase::new();
+        db.set_project_root(std::path::Path::new("/tmp"));
+        db.add_or_update_file(
+            std::path::Path::new("/tmp/ns_http/fetch.baml"),
+            r##"
+function fetch(input: string) -> string {
+    client UserClient
+    prompt #"User fetch {{ input }}"#
+}
+"##,
+        );
+        db.add_or_update_file(
+            std::path::Path::new("/tmp/workflow.baml"),
+            r#"
+function Workflow() -> int {
+    let response = baml.http.fetch("https://example.com");
+    response.status
+}
+"#,
+        );
+
+        let graph = db
+            .ast_control_flow_graph("Workflow")
+            .expect("expected graph for Workflow");
+        let call_node = graph
+            .nodes
+            .values()
+            .find(|node| node.label.contains("baml.http.fetch"))
+            .expect("caller graph should contain the dependency call node");
+        assert!(
+            matches!(call_node.node_type, NodeType::OtherScope),
+            "dependency call must not be marked from the same-named user function, got {:?}",
+            call_node.node_type
+        );
+        assert_eq!(call_node.llm_client, None);
     }
 
     #[test]
