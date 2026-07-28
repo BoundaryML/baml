@@ -24,6 +24,9 @@ const MAX_PAYLOAD_BYTES: usize = 256 * 1024;
 
 const FEEDBACK_EVENT: &str = "baml_feedback";
 
+/// How long a "Don't send" choice suppresses the prompt.
+const DECLINE_COOLDOWN_SECS: u64 = 24 * 60 * 60;
+
 /// PostHog ingestion host, overridable for tests and self-hosted setups.
 fn posthog_host() -> String {
     std::env::var("BAML_POSTHOG_HOST")
@@ -105,7 +108,22 @@ impl FeedbackArgs {
             // A prior report was sent anonymously; honor that choice without
             // re-prompting until a login replaces it.
             false
+        } else if creds
+            .feedback_declined_at
+            .is_some_and(|at| auth::now_unix() < at.saturating_add(DECLINE_COOLDOWN_SECS))
+        {
+            // "Don't send" was chosen within the last day: decline quietly
+            // instead of re-asking. Explicit --anonymous/--email (handled
+            // above) still send.
+            println!(
+                "Nothing sent (you declined recently). Pass --anonymous or \
+                 --email to send anyway."
+            );
+            return Ok(crate::ExitCode::Success);
         } else {
+            println!("I found an issue with BAML. I can report it to Boundary.");
+            println!();
+            self.print_preview(&payload);
             match self.prompt_for_mode()? {
                 ReportMode::Anonymous => false,
                 ReportMode::Email => {
@@ -113,6 +131,8 @@ impl FeedbackArgs {
                     true
                 }
                 ReportMode::DontSend => {
+                    creds.feedback_declined_at = Some(auth::now_unix());
+                    creds.write()?;
                     println!("Nothing sent.");
                     return Ok(crate::ExitCode::Success);
                 }
@@ -138,6 +158,8 @@ impl FeedbackArgs {
                 // (until a login resets it).
                 creds.feedback_anonymous = true;
             }
+            // A sent report supersedes any earlier "Don't send" cooldown.
+            creds.feedback_declined_at = None;
             creds.write()?;
             creds.posthog_distinct_id.clone().expect("set above")
         };
@@ -234,10 +256,33 @@ impl FeedbackArgs {
         Ok(from_json)
     }
 
+    /// Shows exactly what a report will contain before the user decides.
+    #[allow(clippy::print_stdout)]
+    fn print_preview(&self, payload: &Value) {
+        println!("Here's what will be sent:");
+        println!();
+        for (label, key) in [
+            ("Issue", "issue"),
+            ("Repro", "repro"),
+            ("Context", "context"),
+        ] {
+            if let Some(text) = payload.get(key).and_then(Value::as_str) {
+                println!("  {label}: {text}");
+            }
+        }
+        println!(
+            "  (plus: cli version {}, {}/{})",
+            baml_version::CANONICAL_VERSION,
+            std::env::consts::OS,
+            std::env::consts::ARCH
+        );
+        println!();
+    }
+
     /// The interactive choice.
     #[allow(clippy::print_stdout)]
     fn prompt_for_mode(&self) -> Result<ReportMode> {
-        println!("I found a way to improve the BAML language. Report it to Boundary?");
+        println!("How should I report it?");
         println!("  1) Anonymously");
         println!(
             "  2) Via your email (requires `baml login`; you'll be notified when a fix ships)"

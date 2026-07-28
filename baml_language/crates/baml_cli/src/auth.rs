@@ -223,6 +223,7 @@ pub(crate) fn device_login(no_open: bool, existing: Credentials) -> Result<Crede
             .clone()
             .or_else(|| Some(uuid::Uuid::new_v4().to_string())),
         feedback_anonymous: false,
+        feedback_declined_at: None,
         user_id: user.and_then(|u| u.id.clone()),
         user_email: user.and_then(|u| u.email.clone()),
         access_token: Some(tokens.access_token),
@@ -486,6 +487,11 @@ pub(crate) struct Credentials {
     /// login replaces these credentials.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub feedback_anonymous: bool,
+    /// Unix seconds of the last "Don't send" choice at the prompt. For a
+    /// day afterwards, `baml feedback` declines quietly instead of
+    /// re-asking; explicit `--anonymous`/`--email` still send.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub feedback_declined_at: Option<u64>,
     /// Cached WorkOS access token (absent while anonymous).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     access_token: Option<String>,
@@ -500,7 +506,7 @@ fn creds_path() -> Result<PathBuf> {
     Ok(baml_release::baml_home().join("creds.json"))
 }
 
-fn now_unix() -> u64 {
+pub(crate) fn now_unix() -> u64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map(|d| d.as_secs())
