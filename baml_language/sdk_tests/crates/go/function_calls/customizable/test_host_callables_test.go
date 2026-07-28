@@ -88,40 +88,43 @@ func Test_host_callable_primitive_and_multiple_arguments(t *testing.T) {
 }
 
 func Test_baml_closure_is_a_native_callable_with_host_language_arguments(t *testing.T) {
-	addTen, err := baml_sdk.HostCallableTestsMakeAdder(context.Background(), 10)
+	ctx := context.Background()
+	addTen, err := baml_sdk.HostCallableTestsMakeAdder(ctx, 10)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := addTen(5); got != 15 {
+	if got := addTen(ctx, 5); got != 15 {
 		t.Fatalf("addTen(5) = %d, want 15", got)
 	}
-	if got := addTen(7); got != 17 {
+	if got := addTen(ctx, 7); got != 17 {
 		t.Fatalf("addTen(7) = %d, want 17", got)
 	}
 }
 
 func Test_baml_closure_decodes_multiple_args_and_structured_return_values(t *testing.T) {
-	build, err := baml_sdk.HostCallableTestsMakePairBuilder(context.Background(), 30)
+	ctx := context.Background()
+	build, err := baml_sdk.HostCallableTestsMakePairBuilder(ctx, 30)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := build(12, "Ada"); got != (baml_sdk.HostCallableTestsPerson{Name: "Ada", Age: 42}) {
+	if got := build(ctx, 12, "Ada"); got != (baml_sdk.HostCallableTestsPerson{Name: "Ada", Age: 42}) {
 		t.Fatalf("build(12, Ada) = %#v", got)
 	}
-	if got := build(5, "Grace"); got != (baml_sdk.HostCallableTestsPerson{Name: "Grace", Age: 35}) {
+	if got := build(ctx, 5, "Grace"); got != (baml_sdk.HostCallableTestsPerson{Name: "Grace", Age: 35}) {
 		t.Fatalf("build(5, Grace) = %#v", got)
 	}
 }
 
 func Test_baml_closure_is_reusable_and_retains_mutable_captures(t *testing.T) {
-	nextValue, err := baml_sdk.HostCallableTestsMakeCounter(context.Background(), 40)
+	ctx := context.Background()
+	nextValue, err := baml_sdk.HostCallableTestsMakeCounter(ctx, 40)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := nextValue(); got != 41 {
+	if got := nextValue(ctx); got != 41 {
 		t.Fatalf("first counter value = %d, want 41", got)
 	}
-	if got := nextValue(); got != 42 {
+	if got := nextValue(ctx); got != 42 {
 		t.Fatalf("second counter value = %d, want 42", got)
 	}
 }

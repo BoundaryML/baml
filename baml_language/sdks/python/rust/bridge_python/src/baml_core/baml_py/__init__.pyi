@@ -156,6 +156,7 @@ class BamlPyHandle:
     def __copy__(self) -> BamlPyHandle: ...
     def __deepcopy__(self, _memo: typing.Any) -> BamlPyHandle: ...
     def _clone_key_for_wire(self) -> tuple[builtins.int, builtins.int]: ...
+    def _key_for_call(self) -> builtins.int: ...
 
 @typing.final
 class BamlRuntime:
@@ -180,19 +181,14 @@ class BamlRuntime:
         r"""
         Initialize the process-global runtime from serialized BAML bytecode.
         """
-    def call_function(self, function_name: str, args_proto: bytes, ctx: typing.Optional["HostSpanManager"] = None, collectors: typing.Optional[typing.Sequence["Collector"]] = None) -> typing.Any:
+    def call_function(self, args_proto: bytes, ctx: typing.Optional["HostSpanManager"] = None, collectors: typing.Optional[typing.Sequence["Collector"]] = None) -> typing.Any:
         r"""
         Call a BAML function asynchronously.
         """
-    def call_function_sync(self, function_name: str, args_proto: bytes, ctx: typing.Optional["HostSpanManager"] = None, collectors: typing.Optional[typing.Sequence["Collector"]] = None) -> bytes:
+    def call_function_sync(self, args_proto: bytes, ctx: typing.Optional["HostSpanManager"] = None, collectors: typing.Optional[typing.Sequence["Collector"]] = None) -> bytes:
         r"""
         Call a BAML function synchronously (blocking).
         """
-    def call_handle_sync(self, handle: BamlPyHandle, args_proto: bytes) -> bytes:
-        r"""
-        Call an engine-owned BAML callable synchronously.
-        """
-
 @typing.final
 class BamlVideo:
     @staticmethod

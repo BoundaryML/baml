@@ -77,7 +77,6 @@ include = [
   "BamlFreeBufferFn",
   "BamlRegisterCallbackFn",
   "BamlCallFunctionFn",
-  "BamlCallHandleFn",
   "BamlNewFunctionCallFn",
   "BamlCancelFunctionCallFn",
   "BamlRegisterHostDispatchCallbackFn",
@@ -96,7 +95,6 @@ include = [
 ]
 exclude = [
   "call_function",
-  "call_handle",
   "new_function_call",
   "cancel_function_call",
   "register_callback",

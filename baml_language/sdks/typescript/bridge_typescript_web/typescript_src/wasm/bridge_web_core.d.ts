@@ -15,11 +15,9 @@ export function _testWebMissingHostCallableError(key: bigint): Promise<string>;
 
 export function _testWebSyncPendingHostCallableError(key: bigint): string;
 
-export function callFunction(function_name: string, encoded_args: Uint8Array): Promise<Uint8Array>;
+export function callFunction(encoded_args: Uint8Array): Promise<Uint8Array>;
 
-export function callFunctionSync(function_name: string, encoded_args: Uint8Array): Uint8Array;
-
-export function callHandleSync(handle_key: bigint, encoded_args: Uint8Array): Uint8Array;
+export function callFunctionSync(encoded_args: Uint8Array): Uint8Array;
 
 export function cancelFunctionCall(call_id: bigint): boolean;
 
@@ -124,9 +122,8 @@ export type InitInput = RequestInfo | URL | Response | BufferSource | WebAssembl
 
 export interface InitOutput {
     readonly memory: WebAssembly.Memory;
-    readonly callFunction: (a: number, b: number, c: number, d: number) => any;
-    readonly callFunctionSync: (a: number, b: number, c: number, d: number) => [number, number];
-    readonly callHandleSync: (a: bigint, b: number, c: number) => [number, number];
+    readonly callFunction: (a: number, b: number) => any;
+    readonly callFunctionSync: (a: number, b: number) => [number, number];
     readonly stageRuntimeBytecode: (a: number, b: number) => [number, number];
     readonly stageRuntimeSources: (a: number, b: number, c: any) => [number, number];
     readonly mediaBase64: (a: bigint, b: number) => [number, number, number, number];

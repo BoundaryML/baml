@@ -846,6 +846,17 @@ fn render_callable_pair(
         arg_exprs.push(encoded);
     }
 
+    if let Ty::Function { params, .. } = &function.return_type {
+        if params
+            .iter()
+            .any(|parameter| parameter.mode == CodegenFunctionParamMode::Optional)
+        {
+            panic!(
+                "Java generation does not yet support optional parameters on returned callable `{fqn}`"
+            );
+        }
+    }
+
     let mut ret_top = translate_ty(&function.return_type, TyPosition::TopLevel, ctx, sink);
     let mut ret_boxed = translate_ty(&function.return_type, TyPosition::Boxed, ctx, sink);
     // A nullable return (`-> T?`) carries `@Nullable` on both the sync signature
@@ -858,11 +869,7 @@ fn render_callable_pair(
     }
 
     let returned_callable = match &function.return_type {
-        Ty::Function { params, ret, .. }
-            if params.iter().all(|parameter| {
-                parameter.mode == CodegenFunctionParamMode::Required && parameter.name.is_some()
-            }) =>
-        {
+        Ty::Function { params, ret, .. } => {
             let raw_type = ret_boxed
                 .split_once('<')
                 .map_or_else(|| ret_boxed.clone(), |(raw, _)| raw.to_string());
@@ -870,14 +877,16 @@ fn render_callable_pair(
                 "new java.lang.String[] {{{}}}",
                 params
                     .iter()
-                    .map(|parameter| format!(
-                        "{:?}",
-                        parameter
-                            .name
-                            .as_ref()
-                            .expect("returned callable parameters have wire names")
-                            .as_str()
-                    ))
+                    .enumerate()
+                    .map(|(index, parameter)| {
+                        format!(
+                            "{:?}",
+                            parameter
+                                .name
+                                .as_ref()
+                                .map_or_else(|| format!("arg{index}"), ToString::to_string)
+                        )
+                    })
                     .collect::<Vec<_>>()
                     .join(", ")
             );

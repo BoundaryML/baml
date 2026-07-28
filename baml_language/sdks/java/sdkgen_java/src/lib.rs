@@ -1330,6 +1330,77 @@ mod tests {
     }
 
     #[test]
+    #[should_panic(
+        expected = "Java generation does not yet support optional parameters on returned callable"
+    )]
+    fn optional_returned_callable_fails_generation_instead_of_emitting_an_unsafe_cast() {
+        use baml_codegen_types::{CallableParam, CodegenFunctionParamMode};
+
+        let returned = Ty::Function {
+            params: vec![CallableParam {
+                name: Some(BaseName::new("value")),
+                ty: t_int(),
+                mode: CodegenFunctionParamMode::Optional,
+            }],
+            ret: Box::new(t_int()),
+            throws: Box::new(Ty::Never { attr: a() }),
+            attr: a(),
+        };
+        let mut pool = SymbolPool::new();
+        pool.insert(
+            name("user", &[], "make_optional"),
+            Symbol::Function(Function {
+                name: BaseName::new("make_optional"),
+                generic_params: Vec::new(),
+                docstring: None,
+                arguments: Vec::new(),
+                return_type: returned,
+                throws: None,
+                watchers: Vec::new(),
+                origin: origin(0),
+            }),
+        );
+        let _ = emit_sdk(&pool);
+    }
+
+    #[test]
+    fn unnamed_returned_callable_uses_its_canonical_positional_wire_name() {
+        use baml_codegen_types::{CallableParam, CodegenFunctionParamMode};
+
+        let returned = Ty::Function {
+            params: vec![CallableParam {
+                name: None,
+                ty: t_int(),
+                mode: CodegenFunctionParamMode::Required,
+            }],
+            ret: Box::new(t_int()),
+            throws: Box::new(Ty::Never { attr: a() }),
+            attr: a(),
+        };
+        let mut pool = SymbolPool::new();
+        pool.insert(
+            name("user", &[], "make_unnamed"),
+            Symbol::Function(Function {
+                name: BaseName::new("make_unnamed"),
+                generic_params: Vec::new(),
+                docstring: None,
+                arguments: Vec::new(),
+                return_type: returned,
+                throws: None,
+                watchers: Vec::new(),
+                origin: origin(0),
+            }),
+        );
+        let out = emit_sdk(&pool);
+        let fns = &out[&PathBuf::from("Fns.java")];
+        assert!(fns.contains("new java.lang.String[] {\"arg0\"}"), "{fns}");
+        assert!(
+            fns.contains("baml_bridge.BamlFfi.returnedClosure("),
+            "{fns}"
+        );
+    }
+
+    #[test]
     fn fns_holder_escapes_on_user_class_collision() {
         let mut pool = SymbolPool::new();
         let cls = name("user", &["lorem"], "Fns");

@@ -4,7 +4,7 @@ namespace Baml.Cffi;
 
 internal sealed unsafe partial class NativeApi
 {
-    private const uint AbiVersion = 1;
+    private const uint AbiVersion = 2;
     private const uint CSharpBridgeLanguage = 5;
 
     private static readonly Lazy<NativeApi> Current = new(
@@ -12,10 +12,6 @@ internal sealed unsafe partial class NativeApi
         LazyThreadSafetyMode.ExecutionAndPublication);
 
     private readonly BamlApiV1* table;
-
-    private static readonly UTF8Encoding StrictUtf8 = new(
-        encoderShouldEmitUTF8Identifier: false,
-        throwOnInvalidBytes: true);
 
     internal NativeApi(BamlApiV1* table, string productVersion)
     {
@@ -128,23 +124,12 @@ internal sealed unsafe partial class NativeApi
                 "The function identity contained an interior NUL byte.");
         }
 
-        byte[] name;
-        try
-        {
-            name = StrictUtf8.GetBytes(functionIdentity + "\0");
-        }
-        catch (EncoderFallbackException error)
-        {
-            throw new BamlProtocolException(
-                "A generated BAML function identity is not valid Unicode.",
-                error.Message);
-        }
-
         ulong callId = NewFunctionCall();
         HostValueRegistry.Shared.BeginFunctionCall(callId, cancellationToken);
         try
         {
             using EncodedCallArguments arguments = encodeArguments(callId);
+            arguments.SetCallTarget(functionIdentity);
             (uint callbackId, Task<byte[]> completion) = NativeCallbacks.AddPending();
             var cancellation = new CallCancellation(
                 this,
@@ -158,11 +143,9 @@ internal sealed unsafe partial class NativeApi
                 registration = cancellationToken.Register(
                     static state => ((CallCancellation)state!).Cancel(),
                     cancellation);
-                fixed (byte* namePointer = name)
                 fixed (byte* argumentPointer = arguments.Bytes)
                 {
                     if (cancellation.Dispatch(
-                        namePointer,
                         argumentPointer,
                         (nuint)arguments.Bytes.Length))
                     {
@@ -212,6 +195,7 @@ internal sealed unsafe partial class NativeApi
         try
         {
             using EncodedCallArguments arguments = encodeArguments(callId);
+            arguments.SetCallTarget(handleKey);
             (uint callbackId, Task<byte[]> completion) = NativeCallbacks.AddPending();
             var cancellation = new CallCancellation(
                 this,
@@ -227,8 +211,7 @@ internal sealed unsafe partial class NativeApi
                     cancellation);
                 fixed (byte* argumentPointer = arguments.Bytes)
                 {
-                    if (cancellation.DispatchHandle(
-                        handleKey,
+                    if (cancellation.Dispatch(
                         argumentPointer,
                         (nuint)arguments.Bytes.Length))
                     {
@@ -295,7 +278,6 @@ internal sealed unsafe partial class NativeApi
         Require(api->RegisterBridge is not null, "register_bridge");
         Require(api->RegisterUnhandledSpawnErrorCallback is not null, "register_unhandled_spawn_error_callback");
         Require(api->ShutdownRuntime is not null, "shutdown_runtime");
-        Require(api->CallHandle is not null, "call_handle");
     }
 
     private static NativeApi Load()
@@ -369,7 +351,7 @@ internal sealed unsafe partial class NativeApi
         private readonly Lock gate = new();
         private bool started;
 
-        internal bool Dispatch(byte* name, byte* arguments, nuint argumentsLength)
+        internal bool Dispatch(byte* arguments, nuint argumentsLength)
         {
             lock (gate)
             {
@@ -380,29 +362,6 @@ internal sealed unsafe partial class NativeApi
 
                 started = true;
                 api.table->CallFunction(
-                    name,
-                    arguments,
-                    argumentsLength,
-                    callbackId);
-                return true;
-            }
-        }
-
-        internal bool DispatchHandle(
-            ulong handleKey,
-            byte* arguments,
-            nuint argumentsLength)
-        {
-            lock (gate)
-            {
-                if (!NativeCallbacks.IsPending(callbackId))
-                {
-                    return false;
-                }
-
-                started = true;
-                api.table->CallHandle(
-                    handleKey,
                     arguments,
                     argumentsLength,
                     callbackId);

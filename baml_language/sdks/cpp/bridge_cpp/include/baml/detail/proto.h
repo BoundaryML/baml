@@ -85,8 +85,15 @@ class args_encoder {
     write_value(*entry->mutable_value());
   }
 
-  std::string finish(uint64_t call_id) {
+  std::string finish(uint64_t call_id, const std::string& function_name) {
     args_.set_call_id(call_id);
+    args_.set_function_name(function_name);
+    return args_.SerializeAsString();
+  }
+
+  std::string finish(uint64_t call_id, uint64_t function_handle) {
+    args_.set_call_id(call_id);
+    args_.set_function_handle(function_handle);
     return args_.SerializeAsString();
   }
 

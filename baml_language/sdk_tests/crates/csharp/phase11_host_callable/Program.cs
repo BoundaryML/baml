@@ -13,6 +13,8 @@ Console.WriteLine("baml_closure_is_a_native_callable_with_host_language_argument
 Func<long, string, CancellationToken, Task<ReturnedPerson>> buildPair = Functions.MakePairBuilder(30L);
 ReturnedPerson ada = await buildPair(12L, "Ada", CancellationToken.None);
 Require(ada.Name == "Ada" && ada.Age == 42L, "returned closure structured result changed");
+ReturnedPerson grace = await buildPair(5L, "Grace", CancellationToken.None);
+Require(grace.Name == "Grace" && grace.Age == 35L, "reused returned closure structured result changed");
 Console.WriteLine("baml_closure_decodes_multiple_args_and_structured_return_values=ok");
 Func<CancellationToken, Task<long>> nextValue = Functions.MakeCounter(40L);
 Require(

@@ -39,7 +39,10 @@ async fn unhandled_spawn_error_reaches_registered_bridge_callback() {
     runtime
         .call_function(
             "main",
-            BexArgs(HashMap::new()),
+            BexArgs {
+                required: indexmap::IndexMap::new(),
+                optional: indexmap::IndexMap::new(),
+            },
             FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
         )
         .await

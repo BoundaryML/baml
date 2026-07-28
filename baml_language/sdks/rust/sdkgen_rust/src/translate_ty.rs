@@ -251,7 +251,7 @@ fn translate_inner(ty: &Ty, ctx: &TyCtx<'_>, under_heap: bool) -> Result<TokenSt
                 let translated = translate_inner(&parameter.ty, ctx, true)?;
                 argument_types.push(
                     if matches!(parameter.mode, CodegenFunctionParamMode::Optional) {
-                        quote! { ::std::option::Option<#translated> }
+                        quote! { ::baml_bridge::OptionalArg<#translated> }
                     } else {
                         translated
                     },

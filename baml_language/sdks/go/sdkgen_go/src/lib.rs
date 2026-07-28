@@ -1663,7 +1663,7 @@ fn render_functions(
                 out,
                 "func {receiver}{go_name}{type_parameter_clause}({}) ({}, {error_type}) {{",
                 params.join(", "),
-                function_go_type(
+                function_return_go_type(
                     &function.return_type,
                     current_baml_package,
                     current_package,
@@ -1683,7 +1683,7 @@ fn render_functions(
             let _ = writeln!(
                 out,
                 "\t\tvar {zero_local} {}",
-                function_go_type(
+                function_return_go_type(
                     &function.return_type,
                     current_baml_package,
                     current_package,
@@ -1873,7 +1873,7 @@ fn render_functions(
             let _ = writeln!(
                 out,
                 "\t\tvar {zero_local} {}",
-                function_go_type(
+                function_return_go_type(
                     &function.return_type,
                     current_baml_package,
                     current_package,
@@ -2229,6 +2229,28 @@ fn function_go_type(
     )
 }
 
+fn function_return_go_type(
+    ty: &Ty,
+    current_baml_package: &BaseName,
+    current_package: &GoPackageName,
+    names: &GoNames,
+    projection: &GoTypeProjection<'_>,
+    type_vars: TypeVarScope<'_>,
+) -> String {
+    match projection.project(ty) {
+        GoTy::Function(key) => {
+            render_returned_callback_go_type(&key, current_baml_package, current_package, names)
+        }
+        projected => render_projected_go_type(
+            &projected,
+            current_baml_package,
+            current_package,
+            names,
+            type_vars,
+        ),
+    }
+}
+
 #[derive(Clone, Copy, Default)]
 struct TypeVarScope<'a> {
     helper: Option<&'a BamlFqn>,
@@ -2452,6 +2474,22 @@ fn render_callback_go_type(
         (None, false) => format!("func({params})"),
         (None, true) => format!("func({params}) {}", GeneratorIdent::ErrorType),
     }
+}
+
+fn render_returned_callback_go_type(
+    key: &GoFunctionKey,
+    current_baml_package: &BaseName,
+    current_package: &GoPackageName,
+    names: &GoNames,
+) -> String {
+    let rendered = render_callback_go_type(key, current_baml_package, current_package, names);
+    rendered
+        .replacen(
+            "func(",
+            &format!("func({}.Context, ", GeneratorIdent::ContextPackage),
+            1,
+        )
+        .replace("Context, )", "Context)")
 }
 
 fn media_go_type(kind: MediaKind) -> &'static str {
@@ -3371,6 +3409,8 @@ fn render_callback_codecs(
         }
         let encoder = codecs.callback_ident(package, key);
         let go_type = render_callback_go_type(key, package, current_package, names);
+        let returned_go_type =
+            render_returned_callback_go_type(key, package, current_package, names);
         if key.has_optional_params() {
             let option_names = names.callback_options(package, key);
             let option_type = option_names.type_name().identifier(current_package);
@@ -3555,23 +3595,24 @@ fn render_callback_codecs(
         out.push_str("\t})\n}\n\n");
 
         let decoder = callback_decoder_ident(codecs, package, key);
-        let mut closure_parameters = key
-            .required_params()
-            .enumerate()
-            .map(|(index, param)| {
-                format!(
-                    "{} {}",
-                    CallbackArgumentIdent::new(index),
-                    render_projected_go_type(
-                        param.ty(),
-                        package,
-                        current_package,
-                        names,
-                        TypeVarScope::default(),
-                    )
+        let mut closure_parameters = vec![format!(
+            "{} {}.Context",
+            GeneratorIdent::ContextParameter,
+            GeneratorIdent::ContextPackage
+        )];
+        closure_parameters.extend(key.required_params().enumerate().map(|(index, param)| {
+            format!(
+                "{} {}",
+                CallbackArgumentIdent::new(index),
+                render_projected_go_type(
+                    param.ty(),
+                    package,
+                    current_package,
+                    names,
+                    TypeVarScope::default(),
                 )
-            })
-            .collect::<Vec<_>>();
+            )
+        }));
         if key.has_optional_params() {
             closure_parameters.push(format!(
                 "{options} {}",
@@ -3583,7 +3624,7 @@ fn render_callback_codecs(
         }
         let _ = writeln!(
             out,
-            "func {decoder}({value} {runtime}.Value) ({go_type}, error) {{"
+            "func {decoder}({value} {runtime}.Value) ({returned_go_type}, error) {{"
         );
         let _ = writeln!(out, "\tfunction, {error} := {value}.Function()");
         let _ = writeln!(out, "\tif {error} != nil {{ return nil, {error} }}");
@@ -3663,7 +3704,8 @@ fn render_callback_codecs(
         };
         let _ = writeln!(
             out,
-            "\t\t{result_binding}, {error} := function.CallPositional(context.Background(), requiredArgs_, optionalArgs_)"
+            "\t\t{result_binding}, {error} := function.CallPositional({}, requiredArgs_, optionalArgs_)",
+            GeneratorIdent::ContextParameter
         );
         if key.throws() {
             match key.ret() {
@@ -3704,9 +3746,12 @@ fn render_callback_codecs(
                     codecs,
                     TypeVarScope::default(),
                 );
-                let _ = writeln!(out, "\t\tdecoded, {error} := {output_decoder}({result})");
+                let _ = writeln!(
+                    out,
+                    "\t\t{decoded_local}, {error} := {output_decoder}({result})"
+                );
                 let _ = writeln!(out, "\t\tif {error} != nil {{ panic({error}) }}");
-                out.push_str("\t\treturn decoded\n");
+                let _ = writeln!(out, "\t\treturn {decoded_local}");
             }
         }
         out.push_str("\t}, nil\n}\n\n");
@@ -5752,9 +5797,17 @@ mod tests {
         );
         let root = &files[&PathBuf::from("functions.go")];
         let models = &files[&PathBuf::from("packages/models/functions.go")];
-        assert_eq!(root.matches("func _bamlEncodeCallback").count(), 2);
-        assert_eq!(models.matches("func _bamlEncodeCallback").count(), 2);
+        assert_eq!(root.matches("func _bamlEncodeCallback0(").count(), 1);
+        assert_eq!(models.matches("func _bamlEncodeCallback0(").count(), 1);
         assert!(root.contains("_decode(value_ baml_go.Value)"));
+        assert!(root.contains(
+            "_decode(value_ baml_go.Value) (func(context.Context, int64) string, error)"
+        ));
+        assert!(
+            root.contains("return func(ctx_ context.Context, _bamlCallbackArg0_ int64) string")
+        );
+        assert!(root.contains("function.CallPositional(ctx_, requiredArgs_, optionalArgs_)"));
+        assert!(!root.contains("function.CallPositional(context.Background()"));
         assert!(root.contains("if value_ == nil"));
         assert!(root.contains("InvalidInput(\"BAML host callable is nil\")"));
         assert!(

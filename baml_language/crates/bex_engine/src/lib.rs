@@ -381,7 +381,10 @@ pub enum BexCallArg {
 
 enum CallableArgs {
     Positional(Vec<BexExternalValue>),
-    Named(HashMap<String, BexExternalValue>),
+    Named {
+        required: indexmap::IndexMap<String, BexExternalValue>,
+        optional: indexmap::IndexMap<String, BexExternalValue>,
+    },
 }
 
 // ============================================================================
@@ -3135,16 +3138,19 @@ impl BexEngine {
         .await
     }
 
+    /// Invoke a host-returned callable using ordered required arguments and
+    /// named supplied optionals, matching the cross-SDK callable convention.
     pub async fn call_callable_named(
         self: &Arc<Self>,
         handle: bex_external_types::Handle,
-        args: HashMap<String, BexExternalValue>,
+        required: indexmap::IndexMap<String, BexExternalValue>,
+        optional: indexmap::IndexMap<String, BexExternalValue>,
         call_ctx: FunctionCallContext,
         copy_objects: bool,
     ) -> Result<BexExternalValue, EngineError> {
         self.call_callable_with_trace_impl(
             handle,
-            CallableArgs::Named(args),
+            CallableArgs::Named { required, optional },
             call_ctx,
             copy_objects,
         )
@@ -3369,26 +3375,45 @@ impl BexEngine {
                     .map(|arg| BexCallArg::Provided(Box::new(arg)))
                     .collect()
             }
-            CallableArgs::Named(mut args) => {
+            CallableArgs::Named {
+                required,
+                mut optional,
+            } => {
+                let required_arity = (self_offset..arity)
+                    .filter(|idx| !param_has_default.get(*idx).copied().unwrap_or(false))
+                    .count();
+                if required.len() != required_arity {
+                    return Err(EngineError::TypeMismatch {
+                        message: format!(
+                            "callable expects {required_arity} required argument(s), got {}",
+                            required.len()
+                        ),
+                    });
+                }
+                let mut required = required.into_values();
                 let mut ordered = Vec::with_capacity(user_arity);
                 for idx in self_offset..arity {
+                    if !param_has_default.get(idx).copied().unwrap_or(false) {
+                        ordered.push(BexCallArg::Provided(Box::new(
+                            required
+                                .next()
+                                .expect("required callable arity was validated"),
+                        )));
+                        continue;
+                    }
                     let name = param_names
                         .get(idx)
                         .ok_or_else(|| EngineError::TypeMismatch {
                             message: format!("callable parameter {idx} has no name"),
                         })?;
-                    if let Some(value) = args.remove(name) {
+                    if let Some(value) = optional.shift_remove(name) {
                         ordered.push(BexCallArg::Provided(Box::new(value)));
-                    } else if param_has_default.get(idx).copied().unwrap_or(false) {
-                        ordered.push(BexCallArg::OmittedDefault);
                     } else {
-                        return Err(EngineError::TypeMismatch {
-                            message: format!("callable is missing required argument `{name}`"),
-                        });
+                        ordered.push(BexCallArg::OmittedDefault);
                     }
                 }
-                if !args.is_empty() {
-                    let mut extra = args.keys().cloned().collect::<Vec<_>>();
+                if !optional.is_empty() {
+                    let mut extra = optional.keys().cloned().collect::<Vec<_>>();
                     extra.sort();
                     return Err(EngineError::TypeMismatch {
                         message: format!(

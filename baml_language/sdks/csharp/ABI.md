@@ -9,6 +9,8 @@ release, and free operations. Tests cover truncated prefixes, missing entries,
 callback and cancellation lifetimes, buffer ownership, media ownership, and
 exact handle release.
 
+The unified `call_function(encoded_args, length, callback_id)` signature is function-table ABI revision 2. Revision-1 hosts and runtimes reject revision-2 counterparts before reading the changed function-pointer slot, preventing mixed-revision calls from invoking incompatible layouts.
+
 The canonical protobuf schemas live in
 `crates/bridge_ctypes/types/baml_bridge/cffi/v1`. Schema evolution is additive:
 field numbers are stable, new metadata is optional on the wire, and decoders

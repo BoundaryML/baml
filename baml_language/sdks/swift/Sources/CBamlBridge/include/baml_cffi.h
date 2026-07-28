@@ -35,11 +35,16 @@
  */
 
 /**
- * ABI version represented by `BamlApiV1`.
+ * ABI revision represented by `BamlApiV1`.
  *
  * This identifies the function-table contract, not the BAML product release.
+ *
+ * Revision 2 changes the `call_function` slot from the legacy four-argument
+ * name-plus-payload signature to the unified three-argument payload signature.
+ * Hosts and runtimes built against different revisions must reject one another
+ * before reading that slot.
  */
-#define BAML_API_V1_ABI_VERSION 1
+#define BAML_API_V1_ABI_VERSION 2
 
 /**
  * Handle-type values returned by media constructors and carried on the wire.
@@ -190,10 +195,7 @@ typedef void (*BamlResultCallback)(uint32_t call_id, const int8_t *content, size
 
 typedef void (*BamlRegisterCallbackFn)(BamlResultCallback callback);
 
-typedef void (*BamlCallFunctionFn)(const char *function_name,
-                                   const uint8_t *encoded_args,
-                                   size_t length,
-                                   uint32_t callback_id);
+typedef void (*BamlCallFunctionFn)(const uint8_t *encoded_args, size_t length, uint32_t callback_id);
 
 typedef uint64_t (*BamlNewFunctionCallFn)(void);
 
@@ -290,11 +292,6 @@ typedef void (*BamlRegisterUnhandledSpawnErrorCallbackFn)(BamlUnhandledSpawnErro
 
 typedef struct BamlBuffer (*BamlShutdownRuntimeFn)(void);
 
-typedef void (*BamlCallHandleFn)(uint64_t handle_key,
-                                 const uint8_t *encoded_args,
-                                 size_t length,
-                                 uint32_t callback_id);
-
 /**
  * First version of the shared BAML C API.
  *
@@ -362,10 +359,11 @@ typedef struct BamlApiV1 {
   /**
    * Enqueue a BAML function call and return immediately.
    *
-   * `function_name` is a borrowed NUL-terminated UTF-8 string. `encoded_args`
-   * is borrowed for `length` bytes; zero length permits null. Both inputs
-   * need remain valid only for this call. Completion is delivered later to
-   * the registered result callback using `callback_id`.
+   * `encoded_args` is a borrowed protobuf-encoded `CallFunctionArgs` whose
+   * `call_target` selects either a function name or an owned function handle.
+   * It is borrowed for `length` bytes and need remain valid only for this
+   * call. Completion is delivered later to the registered result callback
+   * using `callback_id`.
    */
   BamlCallFunctionFn call_function;
   /**
@@ -468,14 +466,6 @@ typedef struct BamlApiV1 {
    * Wait for spawned work, report unreachable errors, and release the runtime.
    */
   BamlShutdownRuntimeFn shutdown_runtime;
-  /**
-   * Enqueue a call through an owned BAML function handle and return immediately.
-   *
-   * `handle_key` must identify a live `FUNCTION_REF`. `encoded_args` follows
-   * the same borrowed `CallFunctionArgs` contract as `call_function`.
-   * Completion is delivered through the registered result callback.
-   */
-  BamlCallHandleFn call_handle;
 } BamlApiV1;
 
 typedef const struct BamlApiV1 *(*BamlGetApiV1Fn)(void);

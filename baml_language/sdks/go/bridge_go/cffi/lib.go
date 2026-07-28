@@ -143,16 +143,13 @@ func RegisterCallback(cb unsafe.Pointer) {
 
 // CallFunction dispatches an async function call to Rust.
 // Results and errors are delivered via the registered callback.
-func CallFunction(functionName string, encodedArgs []byte, id uint32) {
-	cName := C.CString(functionName)
-	defer C.free(unsafe.Pointer(cName))
-
+func CallFunction(encodedArgs []byte, id uint32) {
 	var cArgs *C.uint8_t
 	if len(encodedArgs) > 0 {
 		cArgs = (*C.uint8_t)(unsafe.Pointer(&encodedArgs[0]))
 	}
 
-	C.wrapCallFunction((*C.char)(unsafe.Pointer(cName)), cArgs, C.size_t(len(encodedArgs)), C.uint32_t(id))
+	C.wrapCallFunction(cArgs, C.size_t(len(encodedArgs)), C.uint32_t(id))
 }
 
 // CancelFunctionCall deliberately does not return an error. It's a bridge_go

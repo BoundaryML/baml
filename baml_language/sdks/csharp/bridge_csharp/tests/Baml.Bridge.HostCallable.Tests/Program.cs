@@ -793,7 +793,7 @@ internal static class Program
             table = (BamlApiV1*)NativeMemory.AllocZeroed((nuint)sizeof(BamlApiV1));
             *table = new BamlApiV1
             {
-                AbiVersion = 1,
+                AbiVersion = 2,
                 StructSize = (nuint)sizeof(BamlApiV1),
                 RegisterCallback = &RegisterResult,
                 RegisterHostDispatchCallback = &RegisterHostDispatch,

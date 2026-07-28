@@ -194,9 +194,7 @@ public final class BamlFfi {
      * {@code BamlOutboundResult} bytes (engine errors/panics ride inside those
      * bytes; a thrown {@code RuntimeException} means a JNI-glue failure).
      */
-    static native byte[] nativeCallSync(String fqn, byte[] encodedCallFunctionArgs);
-
-    static native byte[] nativeCallHandleSync(long handleKey, byte[] encodedCallFunctionArgs);
+    static native byte[] nativeCallSync(byte[] encodedCallFunctionArgs);
 
     /**
      * Run a BAML function asynchronously. Encodes the identical
@@ -208,7 +206,7 @@ public final class BamlFfi {
      * completion is routed even if the args fail to decode. A thrown
      * {@code RuntimeException} means a JNI-glue failure before hand-off.
      */
-    static native void nativeCallAsync(long callId, String fqn, byte[] encodedCallFunctionArgs);
+    static native void nativeCallAsync(long callId, byte[] encodedCallFunctionArgs);
 
     /** Mint a process-unique, nonzero function-call id from the engine counter. */
     static native long nativeNewCallId();
@@ -308,8 +306,9 @@ public final class BamlFfi {
             throw new IllegalArgumentException("function handle argument names and values differ in length");
         }
         long callId = newCallId();
-        byte[] request = ProtoWriter.encodeCallFunctionArgs(names, args, callId, null);
-        return decodeResult(nativeCallHandleSync(handle.key(), request), returnDesc);
+        byte[] request =
+                ProtoWriter.encodeHandleCallFunctionArgs(handle.key(), names, args, callId);
+        return decodeResult(nativeCallSync(request), returnDesc);
     }
 
     public static <T> T returnedClosure(
@@ -429,8 +428,10 @@ public final class BamlFfi {
             ctx.attach(callId);
         }
         try {
-            byte[] request = ProtoWriter.encodeCallFunctionArgs(names, args, callId, typeArgs);
-            byte[] response = nativeCallSync(fqn, request);
+            byte[] request =
+                    ProtoWriter.encodeNamedCallFunctionArgs(
+                            fqn, names, args, callId, typeArgs);
+            byte[] response = nativeCallSync(request);
             return decodeResult(response, returnDesc);
         } finally {
             if (ctx != null) {
@@ -510,8 +511,10 @@ public final class BamlFfi {
             ctx.attach(callId);
         }
         try {
-            byte[] request = ProtoWriter.encodeCallFunctionArgs(names, args, callId, typeArgs);
-            nativeCallAsync(callId, fqn, request);
+            byte[] request =
+                    ProtoWriter.encodeNamedCallFunctionArgs(
+                            fqn, names, args, callId, typeArgs);
+            nativeCallAsync(callId, request);
         } catch (Throwable t) {
             // Arg-encode / JNI-glue failure before the engine took ownership of
             // the call: it will never call completeCall for this id, so

@@ -5,7 +5,7 @@ using System.Text;
 internal static unsafe partial class Program
 {
     private const string NativeLibraryName = "bridge_cffi";
-    private const uint BamlApiV1AbiVersion = 1;
+    private const uint BamlApiV1AbiVersion = 2;
     private const uint BamlBridgeLanguageCSharp = 5;
 
     public static int Main(string[] args)
@@ -146,7 +146,7 @@ internal static unsafe partial class Program
         public readonly delegate* unmanaged[Cdecl]<byte*, nuint, BamlBuffer> InitializeRuntimeFromBytecode;
         public readonly delegate* unmanaged[Cdecl]<BamlBuffer, void> FreeBuffer;
         public readonly delegate* unmanaged[Cdecl]<delegate* unmanaged[Cdecl]<uint, byte*, nuint, void>, void> RegisterCallback;
-        public readonly delegate* unmanaged[Cdecl]<byte*, byte*, nuint, uint, void> CallFunction;
+        public readonly delegate* unmanaged[Cdecl]<byte*, nuint, uint, void> CallFunction;
         public readonly delegate* unmanaged[Cdecl]<ulong> NewFunctionCall;
         public readonly delegate* unmanaged[Cdecl]<ulong, int> CancelFunctionCall;
         public readonly delegate* unmanaged[Cdecl]<delegate* unmanaged[Cdecl]<ulong, uint, byte*, nuint, void>, void> RegisterHostDispatchCallback;
