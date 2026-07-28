@@ -17,13 +17,13 @@ function resolveFunctionName(
   callerName: string,
   rawName: string,
 ): string | null {
-  if (functionNames.includes(rawName)) return rawName;
-
   const namespaceEnd = callerName.lastIndexOf('.');
   if (namespaceEnd >= 0) {
     const sameNamespaceName = `${callerName.slice(0, namespaceEnd)}.${rawName}`;
     if (functionNames.includes(sameNamespaceName)) return sameNamespaceName;
   }
+
+  if (functionNames.includes(rawName)) return rawName;
 
   const matches = functionNames.filter(
     (name) => name.endsWith(`.${rawName}`) || rawName.endsWith(`.${name}`),

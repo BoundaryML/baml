@@ -59,6 +59,7 @@ describe('function call breadth', () => {
 
   it('resolves bare calls in the caller namespace and handles cycles', () => {
     const functions = [
+      functionInfo('Helper'),
       functionInfo('other.Helper'),
       functionInfo('demo.Second'),
       functionInfo('demo.Helper'),
@@ -66,6 +67,7 @@ describe('function call breadth', () => {
     ];
     const graphs = new Map<string, ControlFlowGraph>([
       ['other.Helper', graph()],
+      ['Helper', graph(['other.Helper'])],
       ['demo.First', graph(['Second'])],
       ['demo.Second', graph(['Helper', 'First'])],
       ['demo.Helper', graph()],
@@ -78,6 +80,7 @@ describe('function call breadth', () => {
       ),
     ).toEqual(
       new Map([
+        ['Helper', 1],
         ['other.Helper', 0],
         ['demo.Second', 2],
         ['demo.Helper', 0],
@@ -89,6 +92,7 @@ describe('function call breadth', () => {
     ).toEqual([
       'demo.First',
       'demo.Second',
+      'Helper',
       'demo.Helper',
       'other.Helper',
     ]);
