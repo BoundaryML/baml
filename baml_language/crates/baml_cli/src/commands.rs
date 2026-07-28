@@ -193,10 +193,6 @@ impl RuntimeCli {
             Err(err) => err.exit(),
         };
 
-        if let Err(err) = RuntimeCli::update_from_arg_matches(&mut cli, &matches) {
-            err.exit();
-        }
-
         // Record the invoked subcommand's clap name for telemetry, straight
         // from the parsed matches so it always matches what clap registered.
         cli.invoked_subcommand = matches.subcommand_name().map(str::to_string);
@@ -375,6 +371,48 @@ mod tests {
         assert!(
             help.contains("Project search starting point. Defaults to the current directory"),
             "{help}"
+        );
+    }
+
+    #[test]
+    fn generate_add_help_lists_every_output_type() {
+        let help = help_for(&["baml-cli", "generate", "add", "--help"]);
+        for &output_type in baml_codegen_types::OutputType::all() {
+            assert!(
+                help.contains(output_type.add_name()),
+                "missing {output_type:?} in:\n{help}"
+            );
+        }
+    }
+
+    #[test]
+    fn generate_accepts_bare_and_add_forms() {
+        let cli = RuntimeCli::parse_from_smart(vec![
+            "baml-cli".into(),
+            "generate".into(),
+            "--from".into(),
+            ".".into(),
+        ]);
+        let Commands::Generate(args) = cli.command else {
+            panic!("expected generate command");
+        };
+        assert!(args.command.is_none());
+
+        let cli = RuntimeCli::parse_from_smart(vec![
+            "baml-cli".into(),
+            "generate".into(),
+            "add".into(),
+            "python/pydantic2".into(),
+        ]);
+        let Commands::Generate(args) = cli.command else {
+            panic!("expected generate command");
+        };
+        let Some(crate::generate::GenerateCommand::Add(args)) = args.command else {
+            panic!("expected generate add command");
+        };
+        assert_eq!(
+            args.output_type,
+            baml_codegen_types::OutputType::PythonPydantic
         );
     }
 
