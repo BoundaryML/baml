@@ -121,7 +121,7 @@ pub fn file_annotations(db: &dyn Db, file: SourceFile) -> Vec<InlineAnnotation> 
         // never surface their synthetic `client` / `function_name` / `args`
         // calls, and since we don't recurse into skipped functions, their
         // internals stay hidden.
-        let is_user = func_data.origin == FunctionOrigin::UserDefined;
+        let is_user = func_data.metadata.origin == FunctionOrigin::UserDefined;
         let is_test_init = func_data.name.as_str().starts_with("$init_test");
         if (!is_user && !is_test_init)
             || baml_compiler2_ppir::item_data::function_llm_meta(db, func_loc).is_some()

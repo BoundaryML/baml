@@ -952,7 +952,9 @@ impl LoweringContext {
                         throws: None,
                         body: Some(FunctionBodyDef::Expr(lbody, source_map)),
                         declarative_meta: None,
-                        origin: crate::ast::FunctionOrigin::Internal,
+                        metadata: crate::ast::FunctionMetadata::language_internal(
+                            crate::ast::FunctionOrigin::Internal,
+                        ),
                         attributes: Vec::new(),
                         docstring: None,
                         is_tagged_template_tag: false,
@@ -4412,7 +4414,9 @@ impl LoweringContext {
             throws,
             body,
             declarative_meta: None,
-            origin: crate::ast::FunctionOrigin::Internal,
+            metadata: crate::ast::FunctionMetadata::language_internal(
+                crate::ast::FunctionOrigin::Internal,
+            ),
             attributes: Vec::new(),
             docstring: None,
             is_tagged_template_tag: false,
@@ -4937,7 +4941,9 @@ impl LoweringContext {
             throws: None,
             body: Some(FunctionBodyDef::Expr(lambda_body, lambda_source_map)),
             declarative_meta: None,
-            origin: crate::ast::FunctionOrigin::Internal,
+            metadata: crate::ast::FunctionMetadata::language_internal(
+                crate::ast::FunctionOrigin::Internal,
+            ),
             attributes: vec![],
             docstring: None,
             is_tagged_template_tag: false,
@@ -5036,7 +5042,9 @@ impl LoweringContext {
             throws: None,
             body: Some(FunctionBodyDef::Expr(sub_body, sub_source_map)),
             declarative_meta: None,
-            origin: crate::ast::FunctionOrigin::Internal,
+            metadata: crate::ast::FunctionMetadata::language_internal(
+                crate::ast::FunctionOrigin::Internal,
+            ),
             attributes: vec![],
             docstring: None,
             is_tagged_template_tag: false,

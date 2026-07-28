@@ -102,7 +102,7 @@ pub fn resolve_target<'db>(
         let def = pkg
             .lookup_type(&ns_path, &item_name)
             .or_else(|| pkg.lookup_value(&ns_path, &item_name));
-        if let Some(def) = def {
+        if let Some(def) = def.filter(|def| !def.is_language_internal(db)) {
             return Some(ResolvedTarget::Item(def));
         }
     }
@@ -115,7 +115,7 @@ pub fn resolve_target<'db>(
         let def = pkg
             .lookup_type(&ns_path, &item_name)
             .or_else(|| pkg.lookup_value(&ns_path, &item_name));
-        if let Some(def) = def {
+        if let Some(def) = def.filter(|def| !def.is_language_internal(db)) {
             return Some(ResolvedTarget::Member {
                 parent: def,
                 member_name,
@@ -340,6 +340,9 @@ fn make_entry(
     item_name: Name,
     def: Definition<'_>,
 ) -> Option<ListingEntry> {
+    if def.is_language_internal(db) {
+        return None;
+    }
     let (file, name_span) = crate::utils::definition_span(db, def)?;
     let file_path = file.path(db).display().to_string();
     let text = file.text(db);

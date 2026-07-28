@@ -538,12 +538,15 @@ pub(crate) fn function_at_scope_range(
         .iter()
         .copied()
         .filter(|&loc| baml_compiler2_ppir::item_data::function_source_map(db, loc).span == range)
-        .min_by_key(
-            |&loc| match baml_compiler2_ppir::item_data::function_data(db, loc).origin {
+        .min_by_key(|&loc| {
+            match baml_compiler2_ppir::item_data::function_data(db, loc)
+                .metadata
+                .origin
+            {
                 FunctionOrigin::UserDefined => 0u8,
                 FunctionOrigin::Companion => 1,
                 FunctionOrigin::Internal => 2,
                 FunctionOrigin::AutoDerive => 3,
-            },
-        )
+            }
+        })
 }

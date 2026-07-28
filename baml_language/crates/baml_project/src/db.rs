@@ -1315,7 +1315,11 @@ impl ProjectDatabase {
                     == func_scope_range
             })
             .min_by_key(|&loc| {
-                func_origin_rank(baml_compiler2_ppir::item_data::function_data(self, loc).origin)
+                func_origin_rank(
+                    baml_compiler2_ppir::item_data::function_data(self, loc)
+                        .metadata
+                        .origin,
+                )
             })?;
         let sig = baml_compiler2_ppir::function_signature(self, func_loc);
         let body = baml_compiler2_ppir::function_body(self, func_loc);
@@ -1431,7 +1435,11 @@ impl ProjectDatabase {
                     == func_scope_range
             })
             .min_by_key(|&loc| {
-                func_origin_rank(baml_compiler2_ppir::item_data::function_data(self, loc).origin)
+                func_origin_rank(
+                    baml_compiler2_ppir::item_data::function_data(self, loc)
+                        .metadata
+                        .origin,
+                )
             })
         {
             let Some(source_map) = baml_compiler2_ppir::function_body_source_map(self, func_loc)

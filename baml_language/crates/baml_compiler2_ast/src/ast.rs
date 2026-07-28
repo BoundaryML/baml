@@ -1355,6 +1355,34 @@ pub enum FunctionOrigin {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct FunctionMetadata {
+    pub origin: FunctionOrigin,
+    /// Marks compiler/runtime implementation details that are outside BAML's
+    /// user-facing language surface.
+    ///
+    /// Language-internal functions are omitted from `baml describe` and other
+    /// language-surface visibility views. This is independent of any future
+    /// user-declared `pub`/`priv` access-control semantics.
+    pub is_language_internal: bool,
+}
+
+impl FunctionMetadata {
+    pub const fn user_facing(origin: FunctionOrigin) -> Self {
+        Self {
+            origin,
+            is_language_internal: false,
+        }
+    }
+
+    pub const fn language_internal(origin: FunctionOrigin) -> Self {
+        Self {
+            origin,
+            is_language_internal: true,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LoopOrigin {
     While,
     For,
@@ -1486,7 +1514,7 @@ pub struct FunctionDef {
     pub throws: Option<TypeExpr>,
     pub body: Option<FunctionBodyDef>,
     pub declarative_meta: Option<DeclarativeMeta>,
-    pub origin: FunctionOrigin,
+    pub metadata: FunctionMetadata,
     pub attributes: Vec<RawAttribute>,
     /// Joined `///` doc-comment lines preceding this declaration.
     pub docstring: Option<std::string::String>,
