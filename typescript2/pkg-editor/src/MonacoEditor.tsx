@@ -927,28 +927,56 @@ export const MonacoEditor: FC<MonacoEditorProps> = ({ files, onFilesChange, back
 
         setRuntimePort(conn.runtimePort, { connectionVersion: connectionVersionRef.current });
         setReloadCallback(() => restartRef.current?.());
-        setNavigateToSource((source) => {
-          // Find a visible BAML editor to navigate to. promptfiddle typically
-          // has a single .baml file open; this also covers multi-file projects
-          // where the target file is currently visible.
-          const bamlEditor = vscode.window.visibleTextEditors.find(
-            (ed) => ed.document.uri.path.endsWith('.baml') || ed.document.languageId === 'baml'
-          );
-          const editor = bamlEditor ?? vscode.window.activeTextEditor;
-          if (editor) {
-            // line/column/endLine/endColumn are 0-indexed LSP positions, and
-            // the backend expands end_* so the whole node span can be selected
-            // directly (see SourceSpan in baml_compiler2_visualization).
-            const start = new vscode.Position(source.line, source.column);
-            const end =
-              source.endLine != null && source.endColumn != null
-                ? new vscode.Position(source.endLine, source.endColumn)
-                : start;
-            // anchor=start, active=end → the span is selected with the caret
-            // at its end (kept inside the span for the graph round-trip check).
-            editor.selection = new vscode.Selection(start, end);
-            editor.revealRange(new vscode.Range(start, end), vscode.TextEditorRevealType.InCenter);
+        setNavigateToSource(async (source) => {
+          if (!source.filePath) {
+            return;
           }
+
+          // `source.filePath` comes from the language server's
+          // `controlFlowGraphResult.graph.nodes[nodeId].sourceSpan`. Do not infer the
+          // target from the active editor: an inlined graph node may live in another
+          // BAML file.
+          const targetUri = vscode.Uri.file(source.filePath);
+          const visibleEditor = vscode.window.visibleTextEditors.find(
+            (editor) => editor.document.uri.toString() === targetUri.toString(),
+          );
+          const sourceViewColumn =
+            visibleEditor?.viewColumn ??
+            vscode.window.visibleTextEditors.find(
+              (editor) =>
+                editor.document.uri.path.endsWith('.baml') ||
+                editor.document.languageId === 'baml',
+            )?.viewColumn ??
+            vscode.ViewColumn.One;
+          const document =
+            visibleEditor?.document ??
+            (await vscode.workspace.openTextDocument(targetUri));
+          const editor = await vscode.window.showTextDocument(document, {
+            viewColumn: sourceViewColumn,
+            preserveFocus: false,
+            preview: false,
+          });
+
+          // The language server also sends line/column/endLine/endColumn unchanged in
+          // `sourceSpan`. All four are zero-indexed LSP positions, and the end is
+          // exclusive. For example, given this source as displayed to a human:
+          //
+          //   1 | function demo() {
+          //   2 |   call()
+          //   3 | }
+          //
+          // the `call()` node arrives as:
+          // `{ line: 1, column: 2, endLine: 1, endColumn: 8 }`.
+          // VS Code's Position uses that same zero-indexed convention, so no +/- 1
+          // conversion belongs here.
+          const start = new vscode.Position(source.line, source.column);
+          const end =
+            source.endLine != null && source.endColumn != null
+              ? new vscode.Position(source.endLine, source.endColumn)
+              : start;
+          const range = new vscode.Range(start, end);
+          editor.selection = new vscode.Selection(start, end);
+          editor.revealRange(range, vscode.TextEditorRevealType.InCenter);
         });
 
         connectionVersionRef.current += 1;
