@@ -145,13 +145,10 @@ pub(crate) enum Commands {
     #[command(
         subcommand,
         about = "Manage authentication",
-        long_about = "Manage the identity used by BAML services.\n\nUse `baml login` to authenticate, `baml auth whoami` to inspect the current identity, and `baml auth logout` to remove the authenticated session.",
-        after_long_help = "Examples:\n  Show the current identity:\n    baml auth whoami\n\n  Log out:\n    baml auth logout"
+        long_about = "Manage the identity used by BAML services.\n\nUse `baml auth login` to authenticate, `baml auth whoami` to inspect the current identity, and `baml auth logout` to remove the authenticated session.",
+        after_long_help = "Examples:\n  Log in:\n    baml auth login\n\n  Show the current identity:\n    baml auth whoami\n\n  Log out:\n    baml auth logout"
     )]
     Auth(crate::auth::AuthCommands),
-
-    #[command(about = "Log in to Boundary with your email")]
-    Login(crate::auth::LoginArgs),
 
     #[command(about = "Report an issue or improvement to Boundary")]
     Feedback(crate::feedback_command::FeedbackArgs),
@@ -389,7 +386,6 @@ impl RuntimeCli {
                 }
             },
             Commands::Auth(args) => args.run(),
-            Commands::Login(args) => args.run(),
             Commands::Feedback(args) => args.run(),
             // Handled before telemetry and command-side effects above.
             Commands::Help(args) => args.run(crate::output::policy().stdout.color),
@@ -480,9 +476,9 @@ mod tests {
         &[],
         &["check"],
         &["auth"],
+        &["auth", "login"],
         &["auth", "whoami"],
         &["auth", "logout"],
-        &["login"],
         &["feedback"],
         &["fmt"],
         &["describe"],
@@ -805,8 +801,8 @@ mod tests {
             &["baml", "check", "--project", "./my-project"],
             &["baml", "auth", "whoami"],
             &["baml", "auth", "logout"],
-            &["baml", "login"],
-            &["baml", "login", "--no-open"],
+            &["baml", "auth", "login"],
+            &["baml", "auth", "login", "--no-open"],
             &["baml", "describe"],
             &["baml", "describe", "baml"],
             &["baml", "describe", "baml.json"],
@@ -846,19 +842,30 @@ mod tests {
             &[
                 "baml",
                 "feedback",
-                "--issue",
-                "parser panics on nested unions",
+                "--title",
+                "Issue (parser): panics on nested unions",
             ],
             &[
                 "baml",
                 "feedback",
-                "--anonymous",
-                "--issue",
+                "--title",
                 "...",
-                "--repro",
-                "class A { ... }",
+                "--description",
+                "Minimum repro: class A { ... }",
             ],
-            &["baml", "feedback", "--anonymous", "-"],
+            &["baml", "feedback", "-"],
+            &[
+                "baml",
+                "feedback",
+                "--title",
+                "...",
+                "--files",
+                "screenshot.png",
+                "--files",
+                "repro.baml",
+            ],
+            &["baml", "feedback", "list", "--status", "open"],
+            &["baml", "feedback", "view", "a1b2c3d4"],
             &["baml", "fmt"],
             &["baml", "fmt", "baml_src/main.baml"],
             &["baml", "fmt", "--dry-run"],
