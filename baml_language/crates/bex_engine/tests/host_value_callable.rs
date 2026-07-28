@@ -429,6 +429,44 @@ async fn host_callable_handle_can_be_invoked_as_engine_entry_point() {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn returned_closure_required_arguments_bind_by_position_not_source_name() {
+    let source = r#"
+        function make_adder(offset: int) -> (value: int) -> int throws never {
+            return (x: int) -> int { offset + x }
+        }
+    "#;
+    let snapshot = compile_for_engine(source);
+    let engine = Arc::new(
+        BexEngine::new(snapshot, Arc::new(sys_native::SysOps::native()), Vec::new())
+            .expect("engine construction"),
+    );
+    let returned = engine
+        .call_function(
+            "make_adder",
+            vec![BexExternalValue::Int(10)],
+            FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+            false,
+        )
+        .await
+        .expect("returning the closure should succeed");
+    let BexExternalValue::Handle(handle) = returned else {
+        panic!("returned closure should cross the boundary as a handle");
+    };
+
+    let result = engine
+        .call_callable_named(
+            handle,
+            indexmap::IndexMap::from([("value".to_string(), BexExternalValue::Int(5))]),
+            indexmap::IndexMap::new(),
+            FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+            true,
+        )
+        .await
+        .expect("declared and implementation parameter names may differ");
+    assert_eq!(result, BexExternalValue::Int(15));
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn host_callable_arguments_preserve_closed_union_selected_arm_on_wire() {
     let source = r#"
         function round_trip(

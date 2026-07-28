@@ -1383,6 +1383,7 @@ dependencies = [
  "bex_vm_types",
  "borsh",
  "ignore",
+ "indexmap",
  "log",
  "lsp-server",
  "lsp-types",

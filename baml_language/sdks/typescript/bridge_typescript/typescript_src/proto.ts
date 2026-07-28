@@ -80,6 +80,8 @@ function rollbackHostCallables(keys: HandleKey[]): void {
 export interface EncodeCallArgsOptions {
     callId: bigint;
     syncMode?: boolean;
+    functionName?: string;
+    functionHandle?: HandleKey;
     /**
      * Call-level TypeVar bindings for a generic function/method, as
      * `[typeVarName, wireTy]` pairs in De Bruijn order (enclosing class params
@@ -303,6 +305,9 @@ export function encodeCallArgs(kwargs: Record<string, unknown>, options: EncodeC
     if (callId === 0n) {
         throw new TypeError('callId must be a nonzero uint64');
     }
+    if (options.functionName !== undefined && options.functionHandle !== undefined) {
+        throw new TypeError('exactly one BAML call target may be set');
+    }
     const ctx: EncodeCtx = { syncMode: options.syncMode ?? false, registered: [] };
     try {
         const entries: baml_bridge.cffi.v1.IInboundMapEntry[] = [];
@@ -321,6 +326,8 @@ export function encodeCallArgs(kwargs: Record<string, unknown>, options: EncodeC
             kwargs: entries,
             callId: callId.toString(),
             typeArgs,
+            functionName: options.functionName,
+            functionHandle: options.functionHandle,
         });
         return Buffer.from(CallFunctionArgs.encode(msg).finish());
     } catch (err) {
@@ -505,8 +512,12 @@ function decodeBamlClosure(
         }
         const runtime = getRuntime();
         const callId = BigInt(newFunctionCall());
-        const encodedArgs = encodeCallArgs(kwargs, { syncMode: true, callId });
-        return decodeCallResult(runtime.callHandleSync(handle, encodedArgs));
+        const encodedArgs = encodeCallArgs(kwargs, {
+            syncMode: true,
+            callId,
+            functionHandle: handle.key,
+        });
+        return decodeCallResult(runtime.callFunctionSync(encodedArgs));
     };
 }
 

@@ -86,6 +86,5 @@ int main(void) {
   PRINT_OFFSET(BamlApiV1, register_bridge);
   PRINT_OFFSET(BamlApiV1, register_unhandled_spawn_error_callback);
   PRINT_OFFSET(BamlApiV1, shutdown_runtime);
-  PRINT_OFFSET(BamlApiV1, call_handle);
   return 0;
 }

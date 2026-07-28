@@ -30,10 +30,10 @@ export class FunctionResult {
 
 export function callFunctionSync(rt: BamlRuntime, functionName: string, kwargs: Record<string, unknown>, ctx?: HostSpanManager, collectors?: Collector[], callCtx?: BamlCallContext): FunctionResult {
   const callId = nativeNewFunctionCall();
-  const args = encodeCallArgs(kwargs, { syncMode: true, callId });
+  const args = encodeCallArgs(kwargs, { syncMode: true, callId, functionName });
   const callCtxBinding = attachCallContext(callCtx, callId);
   try {
-    return new FunctionResult(decodeCallResult(rt.callFunctionSync(functionName, args, ctx ?? null, collectors ?? null)));
+    return new FunctionResult(decodeCallResult(rt.callFunctionSync(args, ctx ?? null, collectors ?? null)));
   } finally {
     callCtxBinding.detach();
   }
@@ -41,10 +41,10 @@ export function callFunctionSync(rt: BamlRuntime, functionName: string, kwargs: 
 
 export async function callFunction(rt: BamlRuntime, functionName: string, kwargs: Record<string, unknown>, ctx?: HostSpanManager, collectors?: Collector[], callCtx?: BamlCallContext): Promise<FunctionResult> {
   const callId = nativeNewFunctionCall();
-  const args = encodeCallArgs(kwargs, { callId });
+  const args = encodeCallArgs(kwargs, { callId, functionName });
   const callCtxBinding = attachCallContext(callCtx, callId);
   try {
-    return new FunctionResult(decodeCallResult(await rt.callFunction(functionName, args, ctx ?? null, collectors ?? null)));
+    return new FunctionResult(decodeCallResult(await rt.callFunction(args, ctx ?? null, collectors ?? null)));
   } finally {
     callCtxBinding.detach();
   }

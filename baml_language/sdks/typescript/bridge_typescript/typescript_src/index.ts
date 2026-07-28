@@ -152,7 +152,7 @@ export function callFunctionSync(
     // the sync path blocks the Node main thread on a tokio `block_on`,
     // starving libuv so the dispatch could never run.
     const callId = newFunctionCall();
-    const argsProto = encodeCallArgs(kwargs, { syncMode: true, callId });
+    const argsProto = encodeCallArgs(kwargs, { syncMode: true, callId, functionName });
     const callCtxBinding = attachCallContext(callCtx, callId);
     const nativeCollectors = collectors?.map(c => c._native()) ?? null;
     // Only the napi call gets `wrapNativeError`'d — its `napi::Error`
@@ -163,7 +163,7 @@ export function callFunctionSync(
     try {
         let resultBytes: Buffer;
         try {
-            resultBytes = rt.callFunctionSync(functionName, argsProto, ctx ?? null, nativeCollectors);
+            resultBytes = rt.callFunctionSync(argsProto, ctx ?? null, nativeCollectors);
         } catch (err) {
             throw wrapNativeError(err);
         }
@@ -182,7 +182,7 @@ export async function callFunction(
     callCtx?: BamlCallContext,
 ): Promise<FunctionResult> {
     const callId = newFunctionCall();
-    const argsProto = encodeCallArgs(kwargs, { callId });
+    const argsProto = encodeCallArgs(kwargs, { callId, functionName });
     const callCtxBinding = attachCallContext(callCtx, callId);
     const nativeCollectors = collectors?.map(c => c._native()) ?? null;
     // Only the napi call gets `wrapNativeError`'d — its `napi::Error`
@@ -193,7 +193,7 @@ export async function callFunction(
     try {
         let resultBytes: Buffer;
         try {
-            resultBytes = await rt.callFunction(functionName, argsProto, ctx ?? null, nativeCollectors);
+            resultBytes = await rt.callFunction(argsProto, ctx ?? null, nativeCollectors);
         } catch (err) {
             throw wrapNativeError(err);
         }

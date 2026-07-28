@@ -49,7 +49,6 @@ enum BamlApi {
     static let registerBridge = v1.register_bridge!
     static let registerUnhandledSpawnErrorCallback = v1.register_unhandled_spawn_error_callback!
     static let shutdownRuntime = v1.shutdown_runtime!
-    static let callHandle = v1.call_handle!
 
     /// Copy a runtime-owned buffer to a `Data` and release it exactly
     /// once via the table's `free_buffer`. A zero-length buffer may have

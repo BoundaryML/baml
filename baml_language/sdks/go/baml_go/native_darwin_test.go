@@ -49,7 +49,7 @@ typedef struct {
     size_t struct_size;
 } TruncatedBamlApi;
 
-static const TruncatedBamlApi truncated_api = { 1, sizeof(TruncatedBamlApi) };
+static const TruncatedBamlApi truncated_api = { 2, sizeof(TruncatedBamlApi) };
 
 __attribute__((visibility("default")))
 const TruncatedBamlApi *baml_get_api_v1(void) { return &truncated_api; }

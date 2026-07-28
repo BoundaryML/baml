@@ -2324,6 +2324,8 @@ export const baml_bridge = $root.baml_bridge = (() => {
                  * @property {Array.<baml_bridge.cffi.v1.IInboundMapEntry>|null} [kwargs] CallFunctionArgs kwargs
                  * @property {number|Long|null} [callId] CallFunctionArgs callId
                  * @property {Array.<baml_bridge.cffi.v1.IBamlTyArg>|null} [typeArgs] CallFunctionArgs typeArgs
+                 * @property {string|null} [functionName] CallFunctionArgs functionName
+                 * @property {number|Long|null} [functionHandle] CallFunctionArgs functionHandle
                  */
 
                 /**
@@ -2368,6 +2370,36 @@ export const baml_bridge = $root.baml_bridge = (() => {
                 CallFunctionArgs.prototype.typeArgs = $util.emptyArray;
 
                 /**
+                 * CallFunctionArgs functionName.
+                 * @member {string|null|undefined} functionName
+                 * @memberof baml_bridge.cffi.v1.CallFunctionArgs
+                 * @instance
+                 */
+                CallFunctionArgs.prototype.functionName = null;
+
+                /**
+                 * CallFunctionArgs functionHandle.
+                 * @member {number|Long|null|undefined} functionHandle
+                 * @memberof baml_bridge.cffi.v1.CallFunctionArgs
+                 * @instance
+                 */
+                CallFunctionArgs.prototype.functionHandle = null;
+
+                // OneOf field names bound to virtual getters and setters
+                let $oneOfFields;
+
+                /**
+                 * CallFunctionArgs callTarget.
+                 * @member {"functionName"|"functionHandle"|undefined} callTarget
+                 * @memberof baml_bridge.cffi.v1.CallFunctionArgs
+                 * @instance
+                 */
+                Object.defineProperty(CallFunctionArgs.prototype, "callTarget", {
+                    get: $util.oneOfGetter($oneOfFields = ["functionName", "functionHandle"]),
+                    set: $util.oneOfSetter($oneOfFields)
+                });
+
+                /**
                  * Creates a new CallFunctionArgs instance using the specified properties.
                  * @function create
                  * @memberof baml_bridge.cffi.v1.CallFunctionArgs
@@ -2403,6 +2435,10 @@ export const baml_bridge = $root.baml_bridge = (() => {
                     if (message.typeArgs != null && message.typeArgs.length)
                         for (let i = 0; i < message.typeArgs.length; ++i)
                             $root.baml_bridge.cffi.v1.BamlTyArg.encode(message.typeArgs[i], writer.uint32(/* id 3, wireType 2 =*/26).fork(), q + 1).ldelim();
+                    if (message.functionName != null && Object.hasOwnProperty.call(message, "functionName"))
+                        writer.uint32(/* id 4, wireType 2 =*/34).string(message.functionName);
+                    if (message.functionHandle != null && Object.hasOwnProperty.call(message, "functionHandle"))
+                        writer.uint32(/* id 5, wireType 0 =*/40).uint64(message.functionHandle);
                     return writer;
                 };
 
@@ -2459,6 +2495,14 @@ export const baml_bridge = $root.baml_bridge = (() => {
                                 message.typeArgs.push($root.baml_bridge.cffi.v1.BamlTyArg.decode(reader, reader.uint32(), undefined, long + 1));
                                 break;
                             }
+                        case 4: {
+                                message.functionName = reader.string();
+                                break;
+                            }
+                        case 5: {
+                                message.functionHandle = reader.uint64();
+                                break;
+                            }
                         default:
                             reader.skipType(tag & 7, long);
                             break;
@@ -2498,6 +2542,7 @@ export const baml_bridge = $root.baml_bridge = (() => {
                         long = 0;
                     if (long > $util.recursionLimit)
                         return "maximum nesting depth exceeded";
+                    let properties = {};
                     if (message.kwargs != null && message.hasOwnProperty("kwargs")) {
                         if (!Array.isArray(message.kwargs))
                             return "kwargs: array expected";
@@ -2518,6 +2563,18 @@ export const baml_bridge = $root.baml_bridge = (() => {
                             if (error)
                                 return "typeArgs." + error;
                         }
+                    }
+                    if (message.functionName != null && message.hasOwnProperty("functionName")) {
+                        properties.callTarget = 1;
+                        if (!$util.isString(message.functionName))
+                            return "functionName: string expected";
+                    }
+                    if (message.functionHandle != null && message.hasOwnProperty("functionHandle")) {
+                        if (properties.callTarget === 1)
+                            return "callTarget: multiple values";
+                        properties.callTarget = 1;
+                        if (!$util.isInteger(message.functionHandle) && !(message.functionHandle && $util.isInteger(message.functionHandle.low) && $util.isInteger(message.functionHandle.high)))
+                            return "functionHandle: integer|Long expected";
                     }
                     return null;
                 };
@@ -2569,6 +2626,17 @@ export const baml_bridge = $root.baml_bridge = (() => {
                             message.typeArgs[i] = $root.baml_bridge.cffi.v1.BamlTyArg.fromObject(object.typeArgs[i], long + 1);
                         }
                     }
+                    if (object.functionName != null)
+                        message.functionName = String(object.functionName);
+                    if (object.functionHandle != null)
+                        if ($util.Long)
+                            message.functionHandle = $util.Long.fromValue(object.functionHandle, true);
+                        else if (typeof object.functionHandle === "string")
+                            message.functionHandle = parseInt(object.functionHandle, 10);
+                        else if (typeof object.functionHandle === "number")
+                            message.functionHandle = object.functionHandle;
+                        else if (typeof object.functionHandle === "object")
+                            message.functionHandle = new $util.LongBits(object.functionHandle.low >>> 0, object.functionHandle.high >>> 0).toNumber(true);
                     return message;
                 };
 
@@ -2615,6 +2683,21 @@ export const baml_bridge = $root.baml_bridge = (() => {
                         object.typeArgs = [];
                         for (let j = 0; j < message.typeArgs.length; ++j)
                             object.typeArgs[j] = $root.baml_bridge.cffi.v1.BamlTyArg.toObject(message.typeArgs[j], options, q + 1);
+                    }
+                    if (message.functionName != null && message.hasOwnProperty("functionName")) {
+                        object.functionName = message.functionName;
+                        if (options.oneofs)
+                            object.callTarget = "functionName";
+                    }
+                    if (message.functionHandle != null && message.hasOwnProperty("functionHandle")) {
+                        if (typeof BigInt !== "undefined" && options.longs === BigInt)
+                            object.functionHandle = typeof message.functionHandle === "number" ? BigInt(message.functionHandle) : $util.Long.fromBits(message.functionHandle.low >>> 0, message.functionHandle.high >>> 0, true).toBigInt();
+                        else if (typeof message.functionHandle === "number")
+                            object.functionHandle = options.longs === String ? String(message.functionHandle) : message.functionHandle;
+                        else
+                            object.functionHandle = options.longs === String ? $util.Long.prototype.toString.call(message.functionHandle) : options.longs === Number ? new $util.LongBits(message.functionHandle.low >>> 0, message.functionHandle.high >>> 0).toNumber(true) : message.functionHandle;
+                        if (options.oneofs)
+                            object.callTarget = "functionHandle";
                     }
                     return object;
                 };

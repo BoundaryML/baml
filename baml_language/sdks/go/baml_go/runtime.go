@@ -334,13 +334,18 @@ func callWithTypeArgs(ctx context.Context, function string, args map[string]Inpu
 	call := &pendingCall{result: make(chan []byte, 1)}
 	callbackID := reservePendingCall(call)
 
-	encoded, transaction, err := encodeCallForDispatchWithTypeArgs(engineCallID, args, typeArgs)
+	encoded, transaction, err := encodeCallForDispatchWithTargetAndTypeArgs(
+		engineCallID,
+		args,
+		typeArgs,
+		namedCallTarget(function),
+	)
 	if err != nil {
 		pendingCalls.Delete(callbackID)
 		return Value{}, err
 	}
 	defer transaction.rollback()
-	nativeCall(function, encoded, callbackID)
+	nativeCall(encoded, callbackID)
 	transaction.commitHostValues()
 
 	payload, err := waitForCallResult(ctx, call.result)
@@ -373,13 +378,18 @@ func callHandle(ctx context.Context, handleKey uint64, args map[string]Input) (V
 	}
 	call := &pendingCall{result: make(chan []byte, 1)}
 	callbackID := reservePendingCall(call)
-	encoded, transaction, err := encodeCallForDispatch(engineCallID, args)
+	encoded, transaction, err := encodeCallForDispatchWithTargetAndTypeArgs(
+		engineCallID,
+		args,
+		nil,
+		handleCallTarget(handleKey),
+	)
 	if err != nil {
 		pendingCalls.Delete(callbackID)
 		return Value{}, err
 	}
 	defer transaction.rollback()
-	nativeCallHandle(handleKey, encoded, callbackID)
+	nativeCall(encoded, callbackID)
 	transaction.commitHostValues()
 
 	payload, err := waitForCallResult(ctx, call.result)
@@ -438,6 +448,28 @@ func encodeCallForDispatch(callID uint64, args map[string]Input) ([]byte, *input
 }
 
 func encodeCallForDispatchWithTypeArgs(callID uint64, args map[string]Input, typeArgs []TypeArgument) ([]byte, *inputTransaction, error) {
+	return encodeCallForDispatchWithTargetAndTypeArgs(callID, args, typeArgs, nil)
+}
+
+type callTarget struct {
+	functionName   *string
+	functionHandle *uint64
+}
+
+func namedCallTarget(name string) *callTarget {
+	return &callTarget{functionName: &name}
+}
+
+func handleCallTarget(handle uint64) *callTarget {
+	return &callTarget{functionHandle: &handle}
+}
+
+func encodeCallForDispatchWithTargetAndTypeArgs(
+	callID uint64,
+	args map[string]Input,
+	typeArgs []TypeArgument,
+	target *callTarget,
+) ([]byte, *inputTransaction, error) {
 	transaction := &inputTransaction{}
 	failed := true
 	defer func() {
@@ -484,7 +516,17 @@ func encodeCallForDispatchWithTypeArgs(callID uint64, args map[string]Input, typ
 		})
 	}
 
-	payload, err := proto.Marshal(&cffi.CallFunctionArgs{CallId: callID, Kwargs: kwargs, TypeArgs: encodedTypeArgs})
+	callArgs := &cffi.CallFunctionArgs{
+		CallId:   callID,
+		Kwargs:   kwargs,
+		TypeArgs: encodedTypeArgs,
+	}
+	if target != nil && target.functionName != nil {
+		callArgs.CallTarget = &cffi.CallFunctionArgs_FunctionName{FunctionName: *target.functionName}
+	} else if target != nil && target.functionHandle != nil {
+		callArgs.CallTarget = &cffi.CallFunctionArgs_FunctionHandle{FunctionHandle: *target.functionHandle}
+	}
+	payload, err := proto.Marshal(callArgs)
 	if err != nil {
 		return nil, nil, fmt.Errorf("encode BAML call: %w", err)
 	}

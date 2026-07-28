@@ -229,7 +229,11 @@ public final class BamlRuntime: @unchecked Sendable {
     ) throws -> Data {
         assertNotBlockingMainThreadInDebug(fqn)
         let protoCallId = BamlApi.newFunctionCall()
-        let payload = try encodeCallArgs(args, callId: protoCallId)
+        let payload = try encodeCallArgs(
+            args,
+            callId: protoCallId,
+            callTarget: .functionName(fqn)
+        )
 
         let box = ResultBox()
         let semaphore = DispatchSemaphore(value: 0)
@@ -237,7 +241,7 @@ public final class BamlRuntime: @unchecked Sendable {
             box.store(result)
             semaphore.signal()
         }
-        dispatch(fqn, payload: payload, callbackId: callbackId)
+        dispatch(payload: payload, callbackId: callbackId)
         semaphore.wait()
         return try box.take().get()
     }
@@ -247,14 +251,18 @@ public final class BamlRuntime: @unchecked Sendable {
         args: [(String, (any BamlEncodable)?)]
     ) async throws -> Data {
         let protoCallId = BamlApi.newFunctionCall()
-        let payload = try encodeCallArgs(args, callId: protoCallId)
+        let payload = try encodeCallArgs(
+            args,
+            callId: protoCallId,
+            callTarget: .functionName(fqn)
+        )
 
         return try await withTaskCancellationHandler {
             try await withCheckedThrowingContinuation { continuation in
                 let callbackId = registerPending { result in
                     continuation.resume(with: result)
                 }
-                dispatch(fqn, payload: payload, callbackId: callbackId)
+                dispatch(payload: payload, callbackId: callbackId)
             }
         } onCancel: {
             // Reserve-based cancel: the engine delivers a Cancelled
@@ -271,14 +279,18 @@ public final class BamlRuntime: @unchecked Sendable {
     ) async throws -> Data {
         precondition(handleKey != 0, "cannot invoke a zero BAML function handle")
         let protoCallId = BamlApi.newFunctionCall()
-        let payload = try encodeCallArgs(args, callId: protoCallId)
+        let payload = try encodeCallArgs(
+            args,
+            callId: protoCallId,
+            callTarget: .functionHandle(handleKey)
+        )
 
         return try await withTaskCancellationHandler {
             try await withCheckedThrowingContinuation { continuation in
                 let callbackId = registerPending { result in
                     continuation.resume(with: result)
                 }
-                dispatchHandle(handleKey, payload: payload, callbackId: callbackId)
+                dispatch(payload: payload, callbackId: callbackId)
             }
         } onCancel: {
             _ = BamlApi.cancelFunctionCall(protoCallId)
@@ -307,26 +319,12 @@ public final class BamlRuntime: @unchecked Sendable {
         completion?(.success(payload))
     }
 
-    private func dispatch(_ fqn: String, payload: Data, callbackId: UInt32) {
+    private func dispatch(payload: Data, callbackId: UInt32) {
         // `call_function` fully decodes the args buffer before it
         // returns (verified in bridge_cffi::call_function_inner), so
         // scoping the pointers to this call is sound.
         payload.withUnsafeBytes { buf in
-            fqn.withCString { name in
-                BamlApi.callFunction(
-                    name,
-                    buf.baseAddress?.assumingMemoryBound(to: UInt8.self),
-                    buf.count,
-                    callbackId
-                )
-            }
-        }
-    }
-
-    private func dispatchHandle(_ handleKey: UInt64, payload: Data, callbackId: UInt32) {
-        payload.withUnsafeBytes { buf in
-            BamlApi.callHandle(
-                handleKey,
+            BamlApi.callFunction(
                 buf.baseAddress?.assumingMemoryBound(to: UInt8.self),
                 buf.count,
                 callbackId

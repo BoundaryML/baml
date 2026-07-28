@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"runtime"
 
 	"github.com/boundaryml/baml-go/internal/cffi"
 )
@@ -50,7 +51,9 @@ func (function Function) Call(ctx context.Context, args map[string]Input) (Value
 	if function.key == 0 || function.owner == nil {
 		return Value{}, errors.New("call BAML function: invalid or released function handle")
 	}
-	return callHandle(ctx, function.key, args)
+	value, err := callHandle(ctx, function.key, args)
+	runtime.KeepAlive(function.owner)
+	return value, err
 }
 
 // CallPositional invokes the closure with required arguments in declaration

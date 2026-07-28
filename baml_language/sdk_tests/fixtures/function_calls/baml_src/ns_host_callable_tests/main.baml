@@ -183,7 +183,10 @@ function ignore_callback(callback: (int) -> string) -> string {
 // ─── BAML closures returned to the host ─────────────────────────────────────
 
 function make_adder(offset: int) -> (value: int) -> int throws never {
-    return (value: int) -> int { offset + value }
+    // Required callable parameter names are type-insignificant. The returned
+    // implementation deliberately uses a different name so every SDK exercises
+    // positional binding through the handle-dispatch path.
+    return (x: int) -> int { offset + x }
 }
 
 function make_pair_builder(base: int) -> (delta: int, label: string) -> Person throws never {

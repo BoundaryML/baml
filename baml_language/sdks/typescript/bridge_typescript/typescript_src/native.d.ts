@@ -103,11 +103,9 @@ export declare class BamlRuntime {
   /** Initialize the process-global runtime from precompiled BAML bytecode. */
   static initializeRuntimeFromBytecode(bytecode: Buffer): BamlRuntime
   /** Call a BAML function synchronously (blocking). */
-  callFunctionSync(functionName: string, argsProto: Buffer, ctx?: HostSpanManager | undefined | null, collectors?: Array<Collector> | undefined | null): Buffer
-  /** Invoke an engine-owned BAML callable without consuming its handle. */
-  callHandleSync(handle: BamlHandle, argsProto: Buffer): Buffer
+  callFunctionSync(argsProto: Buffer, ctx?: HostSpanManager | undefined | null, collectors?: Array<Collector> | undefined | null): Buffer
   /** Call a BAML function asynchronously. */
-  callFunction(functionName: string, argsProto: Buffer, ctx?: HostSpanManager | undefined | null, collectors?: Array<Collector> | undefined | null): Promise<Buffer>
+  callFunction(argsProto: Buffer, ctx?: HostSpanManager | undefined | null, collectors?: Array<Collector> | undefined | null): Promise<Buffer>
 }
 
 export declare class BamlVideo {

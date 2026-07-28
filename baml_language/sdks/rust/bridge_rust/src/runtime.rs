@@ -126,8 +126,6 @@ fn dispatch(
     type_args: Vec<wire::BamlTyArg>,
 ) -> Result<completion::Receiver, SdkError> {
     let api = capi::api()?;
-    let name = CString::new(fqn)
-        .map_err(|_| SdkError::new("function name contains an interior NUL byte"))?;
     let receiver = completion::register(api);
     // Host-callable dispatch must be installed before the engine can hold
     // a callable handle; every handle rides a call that passes through
@@ -140,18 +138,15 @@ fn dispatch(
         kwargs,
         call_id,
         type_args,
+        call_target: Some(wire::call_function_args::CallTarget::FunctionName(
+            fqn.to_string(),
+        )),
     }
     .encode_to_vec();
-    // SAFETY: `name` and `args` outlive the call; the engine copies both
-    // before returning.
+    // SAFETY: `args` outlives the call; the engine copies it before returning.
     #[expect(unsafe_code)]
     unsafe {
-        (api.call_function)(
-            name.as_ptr(),
-            args.as_ptr(),
-            args.len(),
-            receiver.dispatch_id(),
-        );
+        (api.call_function)(args.as_ptr(), args.len(), receiver.dispatch_id());
     }
     Ok(receiver)
 }
@@ -166,22 +161,38 @@ fn dispatch_handle(
     let api = capi::api()?;
     let receiver = completion::register(api);
     crate::host_value::ensure_callbacks_registered(api);
+    // SAFETY: this ABI function takes no arguments and returns a fresh engine
+    // call id; the loaded API table was layout-checked during initialization.
     #[expect(unsafe_code)]
     let call_id = unsafe { (api.new_function_call)() };
     let args = wire::CallFunctionArgs {
         kwargs,
         call_id,
         type_args: Vec::new(),
+        call_target: Some(wire::call_function_args::CallTarget::FunctionHandle(
+            handle_key,
+        )),
     }
     .encode_to_vec();
+    // SAFETY: `args` remains alive for the synchronous ABI call, which copies
+    // the protobuf bytes before returning; `receiver` owns the dispatch id.
     #[expect(unsafe_code)]
     unsafe {
-        (api.call_handle)(
-            handle_key,
-            args.as_ptr(),
-            args.len(),
-            receiver.dispatch_id(),
-        );
+        (api.call_function)(args.as_ptr(), args.len(), receiver.dispatch_id());
     }
     Ok(receiver)
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn zero_function_handle_fails_before_loading_the_c_api() {
+        let Err(error) = super::dispatch_handle(0, Vec::new()) else {
+            panic!("a zero function handle must fail before dispatch")
+        };
+        assert_eq!(
+            error.to_string(),
+            "cannot invoke a zero BAML function handle"
+        );
+    }
 }

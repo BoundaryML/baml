@@ -203,10 +203,10 @@ def _decode_call_result_async(result_bytes: bytes) -> Any:
 
 def call_function_sync(rt, function_name, kwargs, ctx=None, collectors=None, _ctx=None):
     call_id = new_function_call()
-    args_proto = encode_call_args(kwargs, call_id)
+    args_proto = encode_call_args(kwargs, call_id, function_name=function_name)
     _attach_call_ctx(_ctx, call_id)
     try:
-        result_bytes = rt.call_function_sync(function_name, args_proto, ctx, collectors)
+        result_bytes = rt.call_function_sync(args_proto, ctx, collectors)
     finally:
         _detach_call_ctx(_ctx, call_id)
     return FunctionResult(decode_call_result(result_bytes))
@@ -214,11 +214,11 @@ def call_function_sync(rt, function_name, kwargs, ctx=None, collectors=None, _ct
 
 async def call_function(rt, function_name, kwargs, ctx=None, collectors=None, _ctx=None):
     call_id = new_function_call()
-    args_proto = encode_call_args(kwargs, call_id)
+    args_proto = encode_call_args(kwargs, call_id, function_name=function_name)
     _attach_call_ctx(_ctx, call_id)
     try:
         try:
-            result_bytes = await rt.call_function(function_name, args_proto, ctx, collectors)
+            result_bytes = await rt.call_function(args_proto, ctx, collectors)
         except asyncio.CancelledError:
             cancel_function_call(call_id)
             raise
@@ -482,10 +482,15 @@ def define_function(
             )
             rt = get_runtime()
             call_id = new_function_call()
-            args_proto = encode_call_args(merged, call_id, type_args)
+            args_proto = encode_call_args(
+                merged,
+                call_id,
+                type_args,
+                function_name=baml_fqn,
+            )
             _attach_call_ctx(call_ctx, call_id)
             try:
-                result_bytes = rt.call_function_sync(baml_fqn, args_proto, None, None)
+                result_bytes = rt.call_function_sync(args_proto, None, None)
             finally:
                 _detach_call_ctx(call_ctx, call_id)
             return decode_call_result(result_bytes)
@@ -504,11 +509,16 @@ def define_function(
             )
             rt = get_runtime()
             call_id = new_function_call()
-            args_proto = encode_call_args(merged, call_id, type_args)
+            args_proto = encode_call_args(
+                merged,
+                call_id,
+                type_args,
+                function_name=baml_fqn,
+            )
             _attach_call_ctx(call_ctx, call_id)
             try:
                 try:
-                    result_bytes = await rt.call_function(baml_fqn, args_proto, None, None)
+                    result_bytes = await rt.call_function(args_proto, None, None)
                 except asyncio.CancelledError:
                     cancel_function_call(call_id)
                     raise

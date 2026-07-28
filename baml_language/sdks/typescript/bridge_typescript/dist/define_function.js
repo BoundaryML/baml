@@ -173,10 +173,10 @@ export function defineFunction(bamlFqn, mode, requiredParamNames, optionalParamN
             const typeArgs = typeArgsFor(built);
             const rt = getRuntime();
             const callId = newFunctionCall();
-            const argsProto = encodeCallArgs(built.kwargs, { syncMode: true, callId, typeArgs });
+            const argsProto = encodeCallArgs(built.kwargs, { syncMode: true, callId, typeArgs, functionName: bamlFqn });
             const callCtxBinding = attachCallContext(built.ctx, callId);
             try {
-                const resultBytes = rt.callFunctionSync(bamlFqn, argsProto, null, null);
+                const resultBytes = rt.callFunctionSync(argsProto, null, null);
                 return decodeCallResult(resultBytes);
             }
             finally {
@@ -190,10 +190,10 @@ export function defineFunction(bamlFqn, mode, requiredParamNames, optionalParamN
             const typeArgs = typeArgsFor(built);
             const rt = getRuntime();
             const callId = newFunctionCall();
-            const argsProto = encodeCallArgs(built.kwargs, { callId, typeArgs });
+            const argsProto = encodeCallArgs(built.kwargs, { callId, typeArgs, functionName: bamlFqn });
             const callCtxBinding = attachCallContext(built.ctx, callId);
             try {
-                const resultBytes = await rt.callFunction(bamlFqn, argsProto, null, null);
+                const resultBytes = await rt.callFunction(argsProto, null, null);
                 return decodeCallResult(resultBytes);
             }
             finally {
@@ -235,10 +235,10 @@ export function defineInstanceFunction(bamlFqn, mode, requiredParamNames, option
                     const typeArgs = typeArgsFor(built);
                     const rt = getRuntime();
                     const callId = newFunctionCall();
-                    const argsProto = encodeCallArgs(built.kwargs, { syncMode: true, callId, typeArgs });
+                    const argsProto = encodeCallArgs(built.kwargs, { syncMode: true, callId, typeArgs, functionName: bamlFqn });
                     const callCtxBinding = attachCallContext(built.ctx, callId);
                     try {
-                        const resultBytes = rt.callFunctionSync(bamlFqn, argsProto, null, null);
+                        const resultBytes = rt.callFunctionSync(argsProto, null, null);
                         return decodeCallResult(resultBytes);
                     }
                     finally {
@@ -252,10 +252,10 @@ export function defineInstanceFunction(bamlFqn, mode, requiredParamNames, option
                     const typeArgs = typeArgsFor(built);
                     const rt = getRuntime();
                     const callId = newFunctionCall();
-                    const argsProto = encodeCallArgs(built.kwargs, { callId, typeArgs });
+                    const argsProto = encodeCallArgs(built.kwargs, { callId, typeArgs, functionName: bamlFqn });
                     const callCtxBinding = attachCallContext(built.ctx, callId);
                     try {
-                        const resultBytes = await rt.callFunction(bamlFqn, argsProto, null, null);
+                        const resultBytes = await rt.callFunction(argsProto, null, null);
                         return decodeCallResult(resultBytes);
                     }
                     finally {

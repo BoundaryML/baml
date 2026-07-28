@@ -4967,6 +4967,92 @@ mod tests {
             .join("\n")
     }
 
+    fn returned_callable_codec_source() -> String {
+        let namespace = vec![BaseName::new("returned_callable_codec")];
+        let make_function = |name: &str, ret: Ty| {
+            let callable = Ty::Function {
+                params: vec![
+                    CallableParam {
+                        name: Some(BaseName::new("value")),
+                        ty: primitive_int(),
+                        mode: CodegenFunctionParamMode::Required,
+                    },
+                    CallableParam {
+                        name: Some(BaseName::new("label")),
+                        ty: primitive_string(),
+                        mode: CodegenFunctionParamMode::Optional,
+                    },
+                ],
+                ret: Box::new(ret),
+                throws: Box::new(Ty::Never {
+                    attr: TyAttr::EMPTY,
+                }),
+                attr: TyAttr::EMPTY,
+            };
+            baml_codegen_types::Function {
+                name: BaseName::new(name),
+                generic_params: vec![],
+                docstring: None,
+                arguments: vec![],
+                return_type: callable,
+                throws: None,
+                watchers: vec![],
+                origin: baml_codegen_types::Origin {
+                    source_file_path: "returned_callable_codec.baml".to_string(),
+                    span_start: 0,
+                },
+            }
+        };
+        let int_name = Name::new(
+            BaseName::new("user"),
+            namespace.clone(),
+            BaseName::new("MakeInt"),
+        );
+        let void_name = Name::new(BaseName::new("user"), namespace, BaseName::new("MakeVoid"));
+        let mut symbols = HashMap::new();
+        symbols.insert(
+            int_name.clone(),
+            Symbol::Function(make_function("MakeInt", primitive_int())),
+        );
+        symbols.insert(
+            void_name.clone(),
+            Symbol::Function(make_function(
+                "MakeVoid",
+                Ty::Void {
+                    attr: TyAttr::EMPTY,
+                },
+            )),
+        );
+        let mut callables = HashMap::new();
+        for (name, wire) in [
+            (int_name, BaseName::new("MakeInt")),
+            (void_name, BaseName::new("MakeVoid")),
+        ] {
+            callables.insert(
+                CallableKey::Free(name),
+                CallableIdentity {
+                    family_name: wire.clone(),
+                    wire_name: wire,
+                    variant: CallableVariant::Execute,
+                    receiver: None,
+                },
+            );
+        }
+        let tree = generate_program(
+            &CodegenModel { symbols, callables },
+            &[1, 2, 3],
+            "0.0.0-test",
+            "0.0.0-test",
+            "returned-callable-codec",
+        )
+        .expect("returned callable codecs should generate");
+        tree.files
+            .iter()
+            .map(|file| String::from_utf8_lossy(&file.contents))
+            .collect::<Vec<_>>()
+            .join("\n")
+    }
+
     fn mixed_closed_generic_source() -> String {
         let namespace = vec![BaseName::new("mixed_closed")];
         let color_name = Name::new(
@@ -6333,6 +6419,27 @@ mod tests {
         assert!(!source.contains("context.StreamState("));
         assert!(!source.contains("context.ReadStreamState("));
         assert!(!source.contains("BamlOptional<long?>"));
+    }
+
+    #[test]
+    fn returned_callable_decode_lambdas_preserve_task_shapes_and_optional_presence() {
+        let source = returned_callable_codec_source();
+        assert!(source.contains(
+            "global::System.Func<long, global::Baml.BamlOptional<string>, global::System.Threading.CancellationToken, global::System.Threading.Tasks.Task<long>>"
+        ));
+        assert!(source.contains(
+            "global::System.Func<long, global::Baml.BamlOptional<string>, global::System.Threading.CancellationToken, global::System.Threading.Tasks.Task>"
+        ));
+        assert!(source.contains(
+            "return async (long argument0, global::Baml.BamlOptional<string> argument1, global::System.Threading.CancellationToken cancellationToken) =>"
+        ));
+        assert!(source.contains("if (argument1.TryGetValue(out var value1))"));
+        assert!(source.contains(
+            "var result = await nativeFunction(arguments, cancellationToken).ConfigureAwait(false);"
+        ));
+        assert!(source.contains(
+            "_ = await nativeFunction(arguments, cancellationToken).ConfigureAwait(false);"
+        ));
     }
 
     #[test]

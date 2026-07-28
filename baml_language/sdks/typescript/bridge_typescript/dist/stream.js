@@ -58,14 +58,14 @@ export class BamlStream {
             throw new Error('synchronous stream pulls are unavailable in Web runtimes; use nextAsync() or finalAsync() instead');
         }
         const rt = getRuntime();
-        const argsProto = encodeCallArgs({ self: this }, { syncMode: true, callId: newFunctionCall() });
-        const resultBytes = rt.callFunctionSync(fqn, argsProto, null, null);
+        const argsProto = encodeCallArgs({ self: this }, { syncMode: true, callId: newFunctionCall(), functionName: fqn });
+        const resultBytes = rt.callFunctionSync(argsProto, null, null);
         return decodeCallResult(resultBytes);
     }
     async _callAsync(fqn) {
         const rt = getRuntime();
-        const argsProto = encodeCallArgs({ self: this }, { callId: newFunctionCall() });
-        const resultBytes = await rt.callFunction(fqn, argsProto, null, null);
+        const argsProto = encodeCallArgs({ self: this }, { callId: newFunctionCall(), functionName: fqn });
+        const resultBytes = await rt.callFunction(argsProto, null, null);
         return decodeCallResult(resultBytes);
     }
 }

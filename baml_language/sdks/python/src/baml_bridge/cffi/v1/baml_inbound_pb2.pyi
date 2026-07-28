@@ -87,14 +87,18 @@ class BamlTyArg(_message.Message):
     def __init__(self, type_var: _Optional[str] = ..., type_value: _Optional[_Union[_baml_type_pb2.BamlTy, _Mapping]] = ...) -> None: ...
 
 class CallFunctionArgs(_message.Message):
-    __slots__ = ("kwargs", "call_id", "type_args")
+    __slots__ = ("kwargs", "call_id", "type_args", "function_name", "function_handle")
     KWARGS_FIELD_NUMBER: _ClassVar[int]
     CALL_ID_FIELD_NUMBER: _ClassVar[int]
     TYPE_ARGS_FIELD_NUMBER: _ClassVar[int]
+    FUNCTION_NAME_FIELD_NUMBER: _ClassVar[int]
+    FUNCTION_HANDLE_FIELD_NUMBER: _ClassVar[int]
     kwargs: _containers.RepeatedCompositeFieldContainer[InboundMapEntry]
     call_id: int
     type_args: _containers.RepeatedCompositeFieldContainer[BamlTyArg]
-    def __init__(self, kwargs: _Optional[_Iterable[_Union[InboundMapEntry, _Mapping]]] = ..., call_id: _Optional[int] = ..., type_args: _Optional[_Iterable[_Union[BamlTyArg, _Mapping]]] = ...) -> None: ...
+    function_name: str
+    function_handle: int
+    def __init__(self, kwargs: _Optional[_Iterable[_Union[InboundMapEntry, _Mapping]]] = ..., call_id: _Optional[int] = ..., type_args: _Optional[_Iterable[_Union[BamlTyArg, _Mapping]]] = ..., function_name: _Optional[str] = ..., function_handle: _Optional[int] = ...) -> None: ...
 
 class CallAck(_message.Message):
     __slots__ = ("error",)

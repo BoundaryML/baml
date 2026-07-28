@@ -316,11 +316,13 @@ extension BamlIndirect: BamlEncodable where Value: BamlEncodable {
 /// omission sentinel is a later phase alongside optional args).
 func encodeCallArgs(
     _ args: [(String, (any BamlEncodable)?)],
-    callId: UInt64
+    callId: UInt64,
+    callTarget: BamlBridge_Cffi_V1_CallFunctionArgs.OneOf_CallTarget
 ) throws -> Data {
     precondition(callId != 0, "call_id must be nonzero")
     var msg = BamlBridge_Cffi_V1_CallFunctionArgs()
     msg.callID = callId
+    msg.callTarget = callTarget
     msg.kwargs = args.map { name, value in
         var entry = BamlBridge_Cffi_V1_InboundMapEntry()
         entry.stringKey = name

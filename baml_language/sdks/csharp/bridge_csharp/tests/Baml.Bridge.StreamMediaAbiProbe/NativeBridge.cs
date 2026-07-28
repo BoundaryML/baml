@@ -9,7 +9,7 @@ using Google.Protobuf;
 internal sealed unsafe partial class NativeBridge : IDisposable
 {
     private const string NativeLibraryName = "bridge_cffi";
-    private const uint ApiVersion = 1;
+    private const uint ApiVersion = 2;
     private const uint BridgeLanguageCSharp = 5;
     private const uint StatusOk = 0;
     private const uint StatusInvalidHandle = 1;
@@ -149,14 +149,11 @@ internal sealed unsafe partial class NativeBridge : IDisposable
             ref s_maxPendingCalls,
             PendingCalls.Count);
 
-        byte[] encodedName = Encoding.UTF8.GetBytes(
-            functionName + "\0");
+        arguments.FunctionName = functionName;
         byte[] encodedArguments = arguments.ToByteArray();
-        fixed (byte* name = encodedName)
         fixed (byte* argumentBytes = encodedArguments)
         {
             s_api->CallFunction(
-                name,
                 argumentBytes,
                 (nuint)encodedArguments.Length,
                 callbackId);
@@ -548,7 +545,6 @@ internal sealed unsafe partial class NativeBridge : IDisposable
             delegate* unmanaged[Cdecl]<uint, byte*, nuint, void>,
             void> RegisterCallback;
         public readonly delegate* unmanaged[Cdecl]<
-            byte*,
             byte*,
             nuint,
             uint,

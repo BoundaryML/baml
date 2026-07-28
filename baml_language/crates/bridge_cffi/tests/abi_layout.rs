@@ -212,7 +212,6 @@ fn rust_c_and_cpp_agree_on_the_complete_v1_abi() {
         register_unhandled_spawn_error_callback
     );
     field!("BamlApiV1", BamlApiV1, shutdown_runtime);
-    field!("BamlApiV1", BamlApiV1, call_handle);
 
     assert_eq!(actual, expected, "C and Rust ABI layouts differ");
     assert_eq!(BamlCffiStatus::Ok as u32, 0);

@@ -268,6 +268,9 @@ export function encodeCallArgs(kwargs, options) {
     if (callId === 0n) {
         throw new TypeError('callId must be a nonzero uint64');
     }
+    if (options.functionName !== undefined && options.functionHandle !== undefined) {
+        throw new TypeError('exactly one BAML call target may be set');
+    }
     const ctx = { syncMode: options.syncMode ?? false, registered: [] };
     try {
         const entries = [];
@@ -286,6 +289,8 @@ export function encodeCallArgs(kwargs, options) {
             kwargs: entries,
             callId: callId.toString(),
             typeArgs,
+            functionName: options.functionName,
+            functionHandle: options.functionHandle,
         });
         return Buffer.from(CallFunctionArgs.encode(msg).finish());
     }
@@ -459,8 +464,12 @@ function decodeBamlClosure(handle, functionTy) {
         }
         const runtime = getRuntime();
         const callId = BigInt(newFunctionCall());
-        const encodedArgs = encodeCallArgs(kwargs, { syncMode: true, callId });
-        return decodeCallResult(runtime.callHandleSync(handle, encodedArgs));
+        const encodedArgs = encodeCallArgs(kwargs, {
+            syncMode: true,
+            callId,
+            functionHandle: handle.key,
+        });
+        return decodeCallResult(runtime.callFunctionSync(encodedArgs));
     };
 }
 /**
