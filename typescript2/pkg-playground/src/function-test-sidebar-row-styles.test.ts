@@ -3,9 +3,9 @@ import {
   getSidebarLeafPaddingLeft,
   SIDEBAR_LEAF_ICON_CLASS,
   SIDEBAR_LEAF_ROW_CLASS,
-} from './function-sidebar-row-styles';
+} from './function-test-sidebar-row-styles';
 
-describe('function sidebar leaf row styles', () => {
+describe('function/test sidebar leaf row styles', () => {
   it('defines one row geometry for function and test leaves', () => {
     expect(SIDEBAR_LEAF_ROW_CLASS).toContain('gap-1');
     expect(SIDEBAR_LEAF_ROW_CLASS).toContain('py-1');

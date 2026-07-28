@@ -36,7 +36,7 @@ import {
   getSidebarLeafPaddingLeft,
   SIDEBAR_LEAF_ICON_CLASS,
   SIDEBAR_LEAF_ROW_CLASS,
-} from './function-sidebar-row-styles';
+} from './function-test-sidebar-row-styles';
 
 // ---------------------------------------------------------------------------
 // TestTreeNode — recursive tree renderer for SerializedTestDef items
