@@ -2,7 +2,10 @@
 // expose a native tool-calling wire protocol. Each provider turn asks for
 // either the final T or ToolCalls and SAP parses that union.
 class PromptToolProvider {
-  inner: Provider,
+    // A prompt adapter is deliberately backed by the one-turn generation
+    // capability, never CompletionProvider. This keeps an internal agent loop
+    // from re-entering provider-owned completion.
+    inner: GenerationProvider,
 }
 
 implements Provider for PromptToolProvider {
@@ -15,95 +18,108 @@ implements Provider for PromptToolProvider {
 }
 
 class PromptToolConversation {
-  owner: PromptToolProvider,
-  history: MessageHistory,
-  recipe: PromptRenderRecipe,
-  identity: TaskIdentity?,
-  arguments: map<string, unknown>,
-  tags: map<string, string>,
+    owner: PromptToolProvider,
+    history: MessageHistory,
+    recipe: PromptRenderRecipe,
+    identity: TaskIdentity?,
+    arguments: map<string, unknown>,
+    tags: map<string, string>,
 
-  implements Conversation {
-    function provider(self) -> Provider throws never { self.owner }
-    function messages(self) -> Messages throws never { self.history }
-  }
+    implements Conversation {
+        function provider(self) -> Provider throws never {
+            self.owner
+        }
+        function messages(self) -> Messages throws never {
+            self.history
+        }
+    }
 }
 
-function prompt_tool_schema(tool: Tool) -> json throws never {
-  {
-    "name": tool.name,
-    "description": tool.description,
-    "parameters": tool.input_schema,
-  }
+function _prompt_tool_schema(tool: Tool) -> json throws never {
+    { "name": tool.name, "description": tool.description, "parameters": tool.input_schema }
 }
 
-function prompt_tool_output_suffix(tools: Tool[]) -> string throws never {
-  let schemas = tools.map((tool: Tool) -> json { prompt_tool_schema(tool) });
-  "\n\n" + `The output contract above permits either the final result or a ToolCalls value.
-To use tools, return ToolCalls with one or more calls. Each call must have a
-unique id, an exact tool name from the catalog, and args matching that tool's
-parameters JSON Schema. Do not invent tool names. After tool results are
-provided, choose tools again or return the final result.
+function _prompt_tool_output_suffix(tools: Tool[]) -> string throws never {
+    let schemas = tools.map((tool: Tool) -> json {
+        _prompt_tool_schema(tool)
+    });
+    "\n\n"
+        + `
+            The output contract above permits either the final result or a ToolCalls value.
+            To use tools, return ToolCalls with one or more calls. Each call must have a
+            unique id, an exact tool name from the catalog, and args matching that tool's
+            parameters JSON Schema. Do not invent tool names. After tool results are
+            provided, choose tools again or return the final result.
 
-Available tools:
-${baml.json.stringify(schemas)}`
+            Available tools:
+            ${baml.json.stringify(schemas)}
+        `
 }
 
-function prompt_tool_message_text(message: Message) -> string throws never {
-  message.parts().map((part: MessagePart) -> string { part.text() ?? "" }).join("")
+function _prompt_tool_message_text(message: Message) -> string throws never {
+    message
+        .parts()
+        .map((part: MessagePart) -> string {
+            part.text() ?? ""
+        })
+        .join("")
 }
 
-function prompt_tool_role(role: MessageRole) -> string throws never {
-  match (role) {
-    MessageRole.System => "system",
-    MessageRole.User => "user",
-    MessageRole.Assistant => "assistant",
-    MessageRole.Tool => "tool",
-  }
+function _prompt_tool_role(role: MessageRole) -> string throws never {
+    match (role) {
+        MessageRole.System => "system",
+        MessageRole.User => "user",
+        MessageRole.Assistant => "assistant",
+        MessageRole.Tool => "tool",
+    }
 }
 
-function prompt_tool_history(history: MessageHistory) -> string throws never {
-  if (history.entries.length() <= 1) { return ""; }
-  history.entries.slice(1, history.entries.length()).map(
-    (message: Message) -> string {
-      prompt_tool_role(message.role()) + ": " + prompt_tool_message_text(message)
-    },
-  ).join("\n")
+function _prompt_tool_history(history: MessageHistory) -> string throws never {
+    if (history.entries.length() <= 1) {
+        return "";
+    }
+    history
+        .entries
+        .slice(1, history.entries.length())
+        .map((message: Message) -> string {
+            _prompt_tool_role(message.role()) + ": " + _prompt_tool_message_text(message)
+        })
+        .join("\n")
 }
 
-function prompt_tool_turn<T>(
-  provider: PromptToolProvider,
-  state: PromptToolConversation,
-  tools: Tool[],
-  output_suffix: string,
+function _prompt_tool_turn<T>(
+    provider: PromptToolProvider,
+    state: PromptToolConversation,
+    tools: Tool[],
+    output_suffix: string,
 ) -> Task<T> throws never {
-  //# Render the task with its output contract
-  let rendered = state.recipe.render_with_output_format(
-    provider.inner,
-    reflect.type_of<T>(),
-    output_suffix,
-  );
-  //# Reattach prior tool-loop conversation
-  let prior = prompt_tool_history(state.history);
-  let prompt = if (prior.length() == 0) {
-    rendered
-  } else {
-    baml.llm.assemble_prompt_ast(
-      ["", "\n\nConversation so far:\n", ""],
-      [root.ai.prompt_text_content(rendered), prior],
-    )
-  };
-  let recipe = PromptRenderRecipe {
-    template: (ctx: baml.llm.Context) -> baml.llm.PromptAst { prompt },
-  };
-  Task<T> {
-    provider: provider.inner,
-    prompt: prompt,
-    identity: state.identity,
-    arguments: state.arguments,
-    tools: tools,
-    tags: state.tags,
-    _render: recipe,
-  }
+    //# Render the task with its output contract
+    let rendered = state.recipe.render_with_output_format(provider.inner, reflect.type_of<T>(), output_suffix);
+    //# Reattach prior tool-loop conversation
+    let prior = _prompt_tool_history(state.history);
+    let prompt = if (prior.length() == 0) {
+        rendered
+    } else {
+        baml.llm
+            .assemble_prompt_ast(
+                ["", "\n\nConversation so far:\n", ""],
+                [root.ai._prompt_text_content(rendered), prior],
+            )
+    };
+    let recipe = PromptRenderRecipe {
+        template: (ctx: baml.llm.Context) -> baml.llm.PromptAst {
+            prompt
+        },
+    };
+    Task<T> {
+        provider: provider.inner,
+        prompt: prompt,
+        identity: state.identity,
+        arguments: state.arguments,
+        tools: tools,
+        tags: state.tags,
+        _render: recipe,
+    }
 }
 
 implements ToolCallingProvider for PromptToolProvider {
@@ -129,16 +145,9 @@ implements ToolCallingProvider for PromptToolProvider {
       },
     };
     //# Resolve the backing generation provider
-    let generation = match (self.inner) {
-      let value: GenerationProvider => value,
-      _ => throw baml.errors.UnknownError {
-        data: null,
-        message: ["prompt tool adapter requires GenerationProvider"],
-      },
-    };
     //# Use plain generation when no tools are active
     if (tools.length() == 0) {
-      let response = generation.generate<T>(prompt_tool_turn<T>(self, state, [], "")) catch (e) {
+      let response = self.inner.generate<T>(_prompt_tool_turn<T>(self, state, [], "")) catch (e) {
         _ => throw baml.errors.UnknownError {
           data: e,
           message: ["prompt tool generation failed"],
@@ -147,9 +156,9 @@ implements ToolCallingProvider for PromptToolProvider {
       return ModelStep<T> { outcome: response.value, meta: response.meta };
     }
     //# Ask for tool calls or the final value
-    let suffix = prompt_tool_output_suffix(tools);
-    let response = generation.generate<T | ToolCalls>(
-      prompt_tool_turn<T | ToolCalls>(self, state, tools, suffix),
+    let suffix = _prompt_tool_output_suffix(tools);
+    let response = self.inner.generate<T | ToolCalls>(
+      _prompt_tool_turn<T | ToolCalls>(self, state, tools, suffix),
     ) catch (e) {
       _ => throw baml.errors.UnknownError {
         data: e,
@@ -199,14 +208,17 @@ implements ToolCallingProvider for PromptToolProvider {
   }
 }
 
-function tool_calling_provider(provider: Provider) -> ToolCallingProvider
-    throws baml.errors.Unsupported {
-  //# Prefer native tools and adapt generation-only providers
-  match (provider) {
-    let native: ToolCallingProvider => native,
-    let generated: GenerationProvider => PromptToolProvider { inner: provider },
-    _ => throw baml.errors.Unsupported {
+function _adapt_tool_calling_provider(
+    provider: Provider,
+) -> ToolCallingProvider throws baml.errors.Unsupported {
+    //# Prefer native tools and adapt generation-only providers
+    match (provider) {
+        let native: ToolCallingProvider => native,
+        let generated: GenerationProvider => PromptToolProvider { inner: generated },
+        _ => {
+            throw baml.errors.Unsupported {
       message: "provider cannot run a tool loop: " + provider.name(),
-    },
-  }
+    }
+        },
+    }
 }

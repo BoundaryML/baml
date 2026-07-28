@@ -57,7 +57,7 @@ class RealtimeSession {
         self.pending_tool_calls = [];
         self.response_finished = false;
         self.send_frame(
-            openai_realtime_response_create(self.tools, self.output_audio, self.voice),
+            _openai_realtime_response_create(self.tools, self.output_audio, self.voice),
             "realtime response.create failed",
         )
     }
@@ -457,7 +457,7 @@ class RealtimeSession {
                 },
             };
             let received_audio_bytes = self.assistant_audio_bytes_by_item_id.get(item_id) ?? 0;
-            let audio_end_ms = realtime_audio_end_ms(played_ms, received_audio_bytes);
+            let audio_end_ms = _realtime_audio_end_ms(played_ms, received_audio_bytes);
             //# Rewrite provider memory to exactly what the caller played
             self.send_frame(
                 baml.json

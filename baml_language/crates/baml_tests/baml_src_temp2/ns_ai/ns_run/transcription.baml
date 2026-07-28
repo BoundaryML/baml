@@ -2,10 +2,11 @@
 // provider and finite audio argument; the runner owns only transcription
 // policy.
 
-function transcription_options(
+function _transcription_options(
     task: root.ai.TranscriptionTask,
     configured: root.ai.TranscriptionOptions,
 ) -> root.ai.TranscriptionOptions throws never {
+    //# Merge runner overrides with the task's transcription prompt
     root.ai.TranscriptionOptions {
         language: configured.language,
         prompt: configured.prompt ?? task.prompt,
@@ -25,18 +26,21 @@ class TranscribeWithMeta {
     }
 
     implements root.ai.Runner<root.ai.TranscriptionTask> {
-        type Output = root.ai.Response<string>
+        type Output = root.ai.ResponseWithMetadata<string>
         type Error = root.ai.CallError | baml.errors.UnknownError
 
         function run(
             self,
             task: root.ai.TranscriptionTask,
-        ) -> root.ai.Response<string> throws root.ai.CallError | baml.errors.UnknownError {
+        ) -> root.ai.ResponseWithMetadata<string> throws root.ai.CallError | baml.errors.UnknownError {
+            //# Select bounded-audio transcription and retain provider metadata
             match (task.provider) {
                 let capability: root.ai.TranscriptionProvider => {
-                    capability.transcribe(task.audio, transcription_options(task, self.options))
+                    //## Transcribe the finite audio stream
+                    capability.transcribe(task.audio, _transcription_options(task, self.options))
                 },
                 _ => {
+                    //## Reject providers without transcription support
                     throw baml.errors.Unsupported {
                         message: "provider cannot transcribe audio",
                     }
@@ -61,11 +65,16 @@ class Transcribe {
             self,
             task: root.ai.TranscriptionTask,
         ) -> string throws root.ai.CallError | baml.errors.UnknownError {
+            //# Select bounded-audio transcription and project only the text
             match (task.provider) {
                 let capability: root.ai.TranscriptionProvider => {
-                    capability.transcribe(task.audio, transcription_options(task, self.options)).value
+                    //## Transcribe the finite audio stream
+                    capability
+                        .transcribe(task.audio, _transcription_options(task, self.options))
+                        .value
                 },
                 _ => {
+                    //## Reject providers without transcription support
                     throw baml.errors.Unsupported {
                         message: "provider cannot transcribe audio",
                     }

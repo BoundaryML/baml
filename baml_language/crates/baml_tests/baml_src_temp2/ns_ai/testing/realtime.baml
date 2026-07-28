@@ -131,7 +131,7 @@ class FakeRealtimeProvider {
             "fake-realtime"
         }
         function render_shorthand(self) -> string throws never {
-            fake_render_shorthand()
+            _fake_render_shorthand()
         }
     }
 

@@ -20,7 +20,7 @@ class AudioTranscription {
             self,
             stream: root.ai.AudioStream,
             options: root.ai.TranscriptionOptions,
-        ) -> root.ai.Response<string> throws baml.errors.UnknownError {
+        ) -> root.ai.ResponseWithMetadata<string> throws baml.errors.UnknownError {
             let chunks = stream.collect();
             if (chunks.length() != 1) {
                 throw baml.errors.UnknownError {
@@ -128,9 +128,9 @@ class AudioTranscription {
           message: ["OpenAI transcription returned no text"],
         };
             }
-            root.ai.Response<string> {
+            root.ai.ResponseWithMetadata<string> {
                 value: transcript,
-                meta: root.ai.Meta {
+                meta: root.ai.ResponseMetadata {
                     provider: self.name(),
                     model: self.inner.model,
                     request_id: baml.json.path_or<string?>(raw, ".id", null),

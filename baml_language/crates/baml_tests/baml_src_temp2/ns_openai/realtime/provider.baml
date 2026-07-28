@@ -16,8 +16,8 @@ implements root.ai.RealtimeProvider for Realtime {
       },
     };
     //## Configure the persistent voice session before adding conversation items
-    let session_update = openai_realtime_session_update(
-      self.instructions ?? "",
+    let session_update = _openai_realtime_session_update(
+      _openai_realtime_task_instructions(task.prompt),
       self.voice,
       self.input_transcription_model,
       self.server_vad,
@@ -32,6 +32,7 @@ implements root.ai.RealtimeProvider for Realtime {
       },
     };
     channel.send(session_update) catch (e) { _ => null };
+    let initial_text = _openai_realtime_task_input(task.prompt);
     let initial_item = baml.json.stringify({
       "type": "conversation.item.create",
       "item": {
@@ -39,7 +40,7 @@ implements root.ai.RealtimeProvider for Realtime {
         "role": "user",
         "content": [{
           "type": "input_text",
-          "text": root.ai.prompt_text_content(task.prompt),
+          "text": initial_text,
         }],
       },
     });
@@ -55,7 +56,7 @@ implements root.ai.RealtimeProvider for Realtime {
     };
     channel.send(initial_item) catch (e) { _ => null };
     let output_audio = self.output_audio ?? false;
-    let response_create = openai_realtime_response_create(task.tools, output_audio, self.voice);
+    let response_create = _openai_realtime_response_create(task.tools, output_audio, self.voice);
     //## Start inference without draining or closing the resource
     ws.send(response_create) catch (e) {
       _ => {

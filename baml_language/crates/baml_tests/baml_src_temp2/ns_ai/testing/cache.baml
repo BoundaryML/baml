@@ -8,10 +8,16 @@ class FakeCache {
             self.cache_key
         }
 
-        function run<T>(self, task: Task<T>) -> Response<T> throws baml.errors.UnknownError {
+        function run<T>(
+            self,
+            task: Task<T>,
+        ) -> ResponseWithMetadata<T> throws baml.errors.UnknownError {
+            //# Record one execution through this cache resource
             self.runs = self.runs + 1;
+            //# Resolve the task's generation capability
             match (task.provider) {
                 let provider: GenerationProvider => {
+                    //## Generate while the cache resource is active
                     provider.generate<T>(task) catch (e) {
                         let unknown: baml.errors.UnknownError => throw unknown,
                         _ => {
@@ -23,6 +29,7 @@ class FakeCache {
                     }
                 },
                 _ => {
+                    //## Reject tasks whose providers cannot generate
                     throw baml.errors.UnknownError {
           data: task.provider_name(),
           message: ["fake cache task provider cannot generate"],
@@ -32,6 +39,7 @@ class FakeCache {
         }
 
         function delete(self) -> null throws never {
+            //# Mark the cache resource deleted
             self.deleted = true;
             null
         }
@@ -41,12 +49,23 @@ class FakeCache {
 }
 
 class FakeCacheProvider {
+    inner: GenerationProvider,
+
     implements Provider {
         function name(self) -> string throws never {
             "fake-cache"
         }
         function render_shorthand(self) -> string throws never {
-            fake_render_shorthand()
+            self.inner.render_shorthand()
+        }
+    }
+
+    implements GenerationProvider {
+        function generate<T>(
+            self,
+            task: Task<T>,
+        ) -> ResponseWithMetadata<T> throws root.ai.CallError | baml.errors.UnknownError {
+            self.inner.generate<T>(task.with_provider(self.inner))
         }
     }
 
@@ -56,6 +75,7 @@ class FakeCacheProvider {
             messages: Messages,
             options: CacheOptions,
         ) -> Cache throws never {
+            //# Allocate a provider-owned cache resource
             FakeCache { cache_key: "fake-cache-key", deleted: false, runs: 0 }
         }
     }

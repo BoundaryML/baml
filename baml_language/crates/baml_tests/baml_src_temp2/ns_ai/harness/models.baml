@@ -57,7 +57,7 @@ class HarnessRun<T> {
     history: MessageHistory,
 }
 
-function emit_harness_event(
+function _emit_harness_event(
     event: AgentEvent,
     events: AgentEvent[],
     on_event: ((AgentEvent) -> null throws never)?,

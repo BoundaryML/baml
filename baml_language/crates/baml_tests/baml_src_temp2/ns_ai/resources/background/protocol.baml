@@ -17,7 +17,7 @@ enum JobStatus {
 
 interface Job<T> requires Resource {
   function status(self) -> JobStatus throws never
-  function poll(self) -> Response<T>? throws baml.errors.UnknownError
+  function poll(self) -> ResponseWithMetadata<T>? throws baml.errors.UnknownError
   function cancel(self) -> null throws baml.errors.UnknownError
   function token(self) -> JobToken throws never
 }

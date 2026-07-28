@@ -6,7 +6,7 @@ class FakeTranscriptionProvider {
 
 implements Provider for FakeTranscriptionProvider {
   function name(self) -> string throws never { "fake-transcription" }
-  function render_shorthand(self) -> string throws never { fake_render_shorthand() }
+  function render_shorthand(self) -> string throws never { _fake_render_shorthand() }
 }
 
 implements TranscriptionProvider for FakeTranscriptionProvider {
@@ -14,12 +14,15 @@ implements TranscriptionProvider for FakeTranscriptionProvider {
     self,
     stream: AudioStream,
     options: TranscriptionOptions,
-  ) -> Response<string> throws never {
+  ) -> ResponseWithMetadata<string> throws never {
+    //# Drain the finite audio stream
     self.received_chunks = stream.collect();
+    //# Retain the effective transcription options
     self.received_options = options;
-    Response<string> {
+    //# Return transcript text with audio metadata
+    ResponseWithMetadata<string> {
       value: self.output,
-      meta: Meta {
+      meta: ResponseMetadata {
         provider: self.name(),
         model: "fake",
         request_id: null,

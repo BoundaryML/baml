@@ -22,9 +22,14 @@ class Batch<T> {
             self,
             tasks: root.ai.Task<T>[],
         ) -> root.ai.Batch<T> throws baml.errors.UnknownError | baml.errors.Unsupported {
+            //# Select a batch-capable provider for the task collection
             match (self.provider) {
-                let batch: root.ai.BatchProvider => batch.submit_batch<T>(tasks, self.options),
+                let batch: root.ai.BatchProvider => {
+                    //## Submit all tasks as one provider-owned batch resource
+                    batch.submit_batch<T>(tasks, self.options)
+                },
                 _ => {
+                    //## Reject providers that cannot submit batches
                     throw baml.errors.Unsupported {
           message: "provider cannot submit batches",
         }

@@ -10,9 +10,14 @@ function open_live(
     task: Task<null>,
     channel: Channel,
 ) -> LiveSession throws baml.errors.UnknownError | baml.errors.Unsupported {
+    //# Select a provider that can open a persistent realtime session
     match (task.provider) {
-        let provider: RealtimeProvider => provider.open_live<null>(task, channel),
+        let provider: RealtimeProvider => {
+            //## Open the raw provider session without taking over its event loop
+            provider.open_live<null>(task, channel)
+        },
         _ => {
+            //## Reject providers without realtime support
             throw baml.errors.Unsupported {
       message: "provider cannot open a realtime channel: " + task.provider_name(),
     }
@@ -27,5 +32,6 @@ function with_automatic_tools(
     session: LiveSession,
     tools: ToolInput[],
 ) -> LiveSession throws never {
+    //# Wrap a raw live session with application-tool dispatch
     AutomaticToolLiveSession { inner: session, tools: normalize_tools(tools) }
 }

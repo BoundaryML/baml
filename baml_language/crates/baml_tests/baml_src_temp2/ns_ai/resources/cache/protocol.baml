@@ -4,7 +4,7 @@ class CacheOptions {
 
 interface Cache requires Resource {
   function key(self) -> string throws never
-  function run<T>(self, task: Task<T>) -> Response<T> throws baml.errors.UnknownError
+  function run<T>(self, task: Task<T>) -> ResponseWithMetadata<T> throws baml.errors.UnknownError
   function delete(self) -> null throws baml.errors.UnknownError
 }
 

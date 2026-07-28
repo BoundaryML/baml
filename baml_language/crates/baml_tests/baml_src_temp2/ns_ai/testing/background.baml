@@ -1,6 +1,6 @@
 class FakeJob<T> {
     job_token: JobToken,
-    response: Response<T>,
+    response: ResponseWithMetadata<T>,
     cancelled: bool,
 
     // function cleanup(self) -> void throws never { self.cancel(); }
@@ -14,7 +14,7 @@ class FakeJob<T> {
             }
         }
 
-        function poll(self) -> Response<T>? throws never {
+        function poll(self) -> ResponseWithMetadata<T>? throws never {
             if (self.cancelled) {
                 null
             } else {
@@ -50,6 +50,7 @@ implements BackgroundProvider for FakeBackgroundProvider {
     task: Task<T>,
     options: BackgroundOptions,
   ) -> Job<T> throws baml.errors.UnknownError {
+    //# Execute immediately but expose the result through a durable job resource
     FakeJob<T> {
       job_token: JobToken {
         provider: self.name(),
@@ -70,12 +71,14 @@ implements BackgroundProvider for FakeBackgroundProvider {
     self,
     token: JobToken,
   ) -> Job<T> throws baml.errors.UnknownError {
+    //# Reconstruct a task from the saved job token
     let task = root.ai.task<T>(
       self.inner,
       (ctx: baml.llm.Context) -> baml.llm.PromptAst {
         baml.llm.assemble_prompt_ast(["resume"], [])
       },
     );
+    //# Resubmit with the original durable job identity
     self.submit<T>(
       task,
       BackgroundOptions { idempotency_key: token.id },

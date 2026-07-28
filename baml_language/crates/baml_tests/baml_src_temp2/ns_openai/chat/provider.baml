@@ -12,10 +12,10 @@ implements root.ai.Provider for Chat {
 }
 
 implements root.ai.GenerationProvider for Chat {
-  function generate<T>(self, task: root.ai.Task<T>) -> root.ai.Response<T>
+  function generate<T>(self, task: root.ai.Task<T>) -> root.ai.ResponseWithMetadata<T>
       throws baml.errors.UnknownError {
-    primitive_generate<T>(
-      configured_primitive(
+    _primitive_generate<T>(
+      _configured_primitive(
         self.render_shorthand(),
         self.model,
         self.api_key,
@@ -30,7 +30,7 @@ implements root.ai.GenerationProvider for Chat {
 }
 
 implements root.ai.CompletionProvider for Chat {
-  function complete<T>(self, task: root.ai.Task<T>) -> root.ai.Response<T>
+  function complete<T>(self, task: root.ai.Task<T>) -> root.ai.ResponseWithMetadata<T>
       throws baml.errors.UnknownError {
     self.generate<T>(task)
   }
@@ -48,8 +48,8 @@ implements root.ai.StreamingProvider for Chat {
     self,
     task: root.ai.Task<T>,
   ) -> baml.llm.Stream<TPartial, T> throws baml.errors.UnknownError {
-    primitive_stream<TPartial, T>(
-      configured_primitive(
+    _primitive_stream<TPartial, T>(
+      _configured_primitive(
         self.render_shorthand(),
         self.model,
         self.api_key,

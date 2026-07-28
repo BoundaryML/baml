@@ -305,6 +305,9 @@ namespace baml.stream:
   class StreamFinished { methods: [] }
   class StreamNoYield { methods: [] }
 namespace baml.sys:
+  class Process { methods: [write_stdin, close_stdin, wait, kill, close] }
+  class ProcessExit { methods: [ok] }
+  class ProcessLineStream { methods: [_next, close, iter, next] }
   class ProcessOptions { methods: [] }
   class ShellOutput { methods: [ok] }
   function argv
@@ -315,6 +318,7 @@ namespace baml.sys:
   function panic
   function shell
   function sleep
+  function start_process
 namespace baml.time:
   class AmbiguousTimeError { methods: [] }
   type Disambiguation

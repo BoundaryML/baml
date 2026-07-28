@@ -13,7 +13,7 @@ class SessionToken {
 interface Session requires Resource {
   function provider(self) -> Provider throws never
   function id(self) -> string throws never
-  function run<T>(self, task: Task<T>) -> Response<T>
+  function _execute<T>(self, task: Task<T>) -> ResponseWithMetadata<T>
     throws root.ai.CallError | baml.errors.UnknownError
   function token(self) -> SessionToken throws never
 }

@@ -7,7 +7,7 @@ enum FakeFailureMode {
 // A recognized strategy shorthand gives deterministic providers a prompt
 // rendering context without coupling the portable ai namespace to a model
 // vendor.
-function fake_render_shorthand() -> string throws never {
+function _fake_render_shorthand() -> string throws never {
     "baml-fallback/fake"
 }
 
@@ -40,13 +40,15 @@ class FakeProvider {
 
 implements Provider for FakeProvider {
   function name(self) -> string throws never { self.provider_name }
-  function render_shorthand(self) -> string throws never { fake_render_shorthand() }
+  function render_shorthand(self) -> string throws never { _fake_render_shorthand() }
 }
 
 implements GenerationProvider for FakeProvider {
-  function generate<T>(self, task: Task<T>) -> Response<T>
+  function generate<T>(self, task: Task<T>) -> ResponseWithMetadata<T>
       throws root.ai.CallError | baml.errors.UnknownError {
+    //# Count this provider attempt
     self.calls = self.calls + 1;
+    //# Inject the configured retryable, terminal, or unknown failure
     if (self.failures_remaining > 0) {
       self.failures_remaining = self.failures_remaining - 1;
       match (self.failure_mode) {
@@ -64,12 +66,14 @@ implements GenerationProvider for FakeProvider {
         },
       }
     }
+    //# Parse the deterministic fixture as the task's declared output type
     let value = baml.sap.parse<T>(self.output) catch (e) {
       _ => throw baml.errors.UnknownError { data: e, message: ["fake output parse failed"] },
     };
-    Response<T> {
+    //# Return the typed value with deterministic response metadata
+    ResponseWithMetadata<T> {
       value: value,
-      meta: Meta {
+      meta: ResponseMetadata {
         provider: self.provider_name,
         model: "fake",
         request_id: "fake-" + self.calls.to_string(),
@@ -90,7 +94,7 @@ implements GenerationProvider for FakeProvider {
 }
 
 implements CompletionProvider for FakeProvider {
-  function complete<T>(self, task: Task<T>) -> Response<T>
+  function complete<T>(self, task: Task<T>) -> ResponseWithMetadata<T>
       throws root.ai.CallError | baml.errors.UnknownError {
     self.generate<T>(task)
   }

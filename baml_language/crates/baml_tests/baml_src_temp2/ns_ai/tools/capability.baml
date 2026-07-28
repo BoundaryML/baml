@@ -1,6 +1,6 @@
 class ModelStep<T> {
   outcome: T | ToolCalls,
-  meta: Meta,
+  meta: ResponseMetadata,
 }
 
 interface ToolCallingProvider requires Provider {

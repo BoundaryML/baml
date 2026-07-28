@@ -4,8 +4,10 @@ class AutomaticToolLiveSession {
 
     implements LiveSession {
         function receive(self) -> LiveEvent[] throws baml.errors.UnknownError {
+            //# Receive one provider event batch
             let events = self.inner.receive();
             let calls: ToolCall[] = [];
+            //# Collect every tool call proposed in this batch
             for (let event in events) {
                 match (event) {
                     let requested: LiveToolCalls => {
@@ -17,6 +19,7 @@ class AutomaticToolLiveSession {
                 }
             }
             if (calls.length() == 0) {
+                //## Return immediately when no application tools are requested
                 return events;
             }
             //# Execute the task's concrete tools, preserving provider call IDs

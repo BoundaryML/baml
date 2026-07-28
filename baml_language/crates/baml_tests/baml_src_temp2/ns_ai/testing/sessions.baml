@@ -13,10 +13,10 @@ class FakeSession {
             self.session_id
         }
 
-        function run<T>(
+        function _execute<T>(
             self,
             task: Task<T>,
-        ) -> Response<T> throws root.ai.CallError | baml.errors.UnknownError {
+        ) -> ResponseWithMetadata<T> throws root.ai.CallError | baml.errors.UnknownError {
             //# Reject runs after a provider closes the session
             if (self.is_cleaned) {
                 throw baml.errors.UnknownError {

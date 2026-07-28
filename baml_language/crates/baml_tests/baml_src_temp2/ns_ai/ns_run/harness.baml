@@ -33,6 +33,7 @@ class Harness<T> {
             self,
             task: root.ai.Task<T>,
         ) -> root.ai.HarnessRun<T> throws baml.errors.UnknownError {
+            //# Open an isolated harness session with workspace policy
             let session = self.harness.open(self.options);
             //# Run the harness while forwarding normalized events to this invocation
             self.harness.run<T>(session, task, on_event = self.on_event)

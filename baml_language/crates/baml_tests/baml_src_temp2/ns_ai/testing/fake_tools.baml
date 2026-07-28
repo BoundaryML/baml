@@ -24,17 +24,17 @@ class FakeToolProvider {
 
 implements Provider for FakeToolProvider {
   function name(self) -> string throws never { self.provider_name }
-  function render_shorthand(self) -> string throws never { fake_render_shorthand() }
+  function render_shorthand(self) -> string throws never { _fake_render_shorthand() }
 }
 
 implements GenerationProvider for FakeToolProvider {
-  function generate<T>(self, task: Task<T>) -> Response<T> throws baml.errors.UnknownError {
+  function generate<T>(self, task: Task<T>) -> ResponseWithMetadata<T> throws baml.errors.UnknownError {
     let value = baml.sap.parse<T>(self.final_output) catch (e) {
       _ => throw baml.errors.UnknownError { data: e, message: ["fake tool final parse failed"] },
     };
-    Response<T> {
+    ResponseWithMetadata<T> {
       value: value,
-      meta: Meta {
+      meta: ResponseMetadata {
         provider: self.provider_name, model: "fake", request_id: null,
         finish_reason: "stop", usage: null, attributes: {}, raw: null,
       },
@@ -66,7 +66,7 @@ implements ToolCallingProvider for FakeToolProvider {
       state.turn = 1;
       return ModelStep<T> {
         outcome: ToolCalls { calls: self.tool_calls },
-        meta: fake_tool_step_meta(self.name(), state.turn),
+        meta: _fake_tool_step_meta(self.name(), state.turn),
       };
     }
     let value = baml.sap.parse<T>(self.final_output) catch (e) {
@@ -74,7 +74,7 @@ implements ToolCallingProvider for FakeToolProvider {
     };
     ModelStep<T> {
       outcome: value,
-      meta: fake_tool_step_meta(self.name(), state.turn + 1),
+      meta: _fake_tool_step_meta(self.name(), state.turn + 1),
     }
   }
 
@@ -124,7 +124,7 @@ class ScriptedToolProvider {
 
 implements Provider for ScriptedToolProvider {
   function name(self) -> string throws never { "scripted-tools" }
-  function render_shorthand(self) -> string throws never { fake_render_shorthand() }
+  function render_shorthand(self) -> string throws never { _fake_render_shorthand() }
 }
 
 implements ToolCallingProvider for ScriptedToolProvider {
@@ -155,7 +155,7 @@ implements ToolCallingProvider for ScriptedToolProvider {
       state.turn = state.turn + 1;
       return ModelStep<T> {
         outcome: calls,
-        meta: scripted_tool_step_meta(self, state.turn),
+        meta: _scripted_tool_step_meta(self, state.turn),
       };
     }
     let value = baml.sap.parse<T>(self.final_output) catch (e) {
@@ -166,7 +166,7 @@ implements ToolCallingProvider for ScriptedToolProvider {
     };
     ModelStep<T> {
       outcome: value,
-      meta: scripted_tool_step_meta(self, state.turn + 1),
+      meta: _scripted_tool_step_meta(self, state.turn + 1),
     }
   }
 
@@ -184,8 +184,8 @@ implements ToolCallingProvider for ScriptedToolProvider {
   }
 }
 
-function fake_tool_step_meta(provider: string, turn: int) -> Meta throws never {
-    Meta {
+function _fake_tool_step_meta(provider: string, turn: int) -> ResponseMetadata throws never {
+    ResponseMetadata {
         provider: provider,
         model: "fake",
         request_id: "fake-tool-" + turn.to_string(),
@@ -202,8 +202,11 @@ function fake_tool_step_meta(provider: string, turn: int) -> Meta throws never {
     }
 }
 
-function scripted_tool_step_meta(provider: ScriptedToolProvider, turn: int) -> Meta throws never {
-    Meta {
+function _scripted_tool_step_meta(
+    provider: ScriptedToolProvider,
+    turn: int,
+) -> ResponseMetadata throws never {
+    ResponseMetadata {
         provider: provider.name(),
         model: "fake",
         request_id: "scripted-tool-" + turn.to_string(),

@@ -1,4 +1,4 @@
-function cache_messages_text(messages: root.ai.Messages) -> string throws never {
+function _cache_messages_text(messages: root.ai.Messages) -> string throws never {
     messages
         .items()
         .map((message: root.ai.Message) -> string {
@@ -99,7 +99,7 @@ class ManagedCache {
         function run<T>(
             self,
             task: root.ai.Task<T>,
-        ) -> root.ai.Response<T> throws baml.errors.UnknownError {
+        ) -> root.ai.ResponseWithMetadata<T> throws baml.errors.UnknownError {
             if (self.deleted) {
                 throw baml.errors.UnknownError {
           data: self.cache_key,
@@ -125,7 +125,7 @@ class ManagedCache {
                                     "cachedContent": self.cache_key,
                                     "contents": task.prompt.messages().map((message: baml.llm.PromptMessage) -> json {
                                         {
-                                            "role": root.ai.prompt_role_or_user(message.role),
+                                            "role": root.ai._prompt_role_or_user(message.role),
                                             "parts": [{ "text": message.content }],
                                         }
                                     }),
@@ -172,9 +172,9 @@ class ManagedCache {
                 },
             };
             self.runs = self.runs + 1;
-            root.ai.Response<T> {
+            root.ai.ResponseWithMetadata<T> {
                 value: value,
-                meta: root.ai.Meta {
+                meta: root.ai.ResponseMetadata {
                     provider: self.owner.name(),
                     model: self.owner.model,
                     request_id: baml.json.path_or<string?>(raw, ".responseId", null),
@@ -247,7 +247,7 @@ implements root.ai.ManagedCacheProvider for Gemini {
     messages: root.ai.Messages,
     options: root.ai.CacheOptions,
   ) -> root.ai.Cache throws baml.errors.UnknownError {
-    let source = cache_messages_text(messages);
+    let source = _cache_messages_text(messages);
     //# Create a remote cache with explicit model ownership and TTL
     let response = baml.http.send(baml.http.Request {
       method: "POST",

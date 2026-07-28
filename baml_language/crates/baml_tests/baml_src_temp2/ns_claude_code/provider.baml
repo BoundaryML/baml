@@ -62,7 +62,7 @@ class ClaudeCodeCli {
         defer {
             process.close()
         }
-        let run: ClaudeCodeCliRun<T> = parse_claude_code_cli_lines<T, baml.errors.Io
+        let run: ClaudeCodeCliRun<T> = _parse_claude_code_cli_lines<T, baml.errors.Io
                 | baml.errors.Timeout>(self, process.stdout, on_event) catch (e) {
             let unknown: baml.errors.UnknownError => throw unknown,
             _ => {
@@ -132,7 +132,7 @@ class ClaudeCodeCli {
 }
 
 class ClaudeCodeCliRun<T> {
-    response: root.ai.Response<T>,
+    response: root.ai.ResponseWithMetadata<T>,
     events: root.ai.AgentEvent[],
     raw_events: json[],
     session_id: string,
@@ -180,12 +180,12 @@ function parse_claude_code_cli_output<T>(
     provider: ClaudeCodeCli,
     stdout: string,
 ) -> ClaudeCodeCliRun<T> throws baml.errors.UnknownError {
-    parse_claude_code_cli_lines<T, never>(provider, stdout.lines(), null) catch (e) {
+    _parse_claude_code_cli_lines<T, never>(provider, stdout.lines(), null) catch (e) {
         let unknown: baml.errors.UnknownError => throw unknown,
     }
 }
 
-function parse_claude_code_cli_lines<T, E>(
+function _parse_claude_code_cli_lines<T, E>(
     provider: ClaudeCodeCli,
     lines: baml.iter.Iterable<Item = string, Error = E>,
     on_event: ((root.ai.AgentEvent) -> null throws never)?,
@@ -220,7 +220,7 @@ function parse_claude_code_cli_lines<T, E>(
 
         if (kind == "system" && baml.json.path_or<string>(raw, ".subtype", "") == "init") {
             actual_model = baml.json.path_or<string?>(raw, ".model", provider.model);
-            root.ai.emit_harness_event(
+            root.ai._emit_harness_event(
                 root.ai.ModelStartedEvent {
                     id: if (session_id.length() > 0) {
                         session_id
@@ -240,7 +240,7 @@ function parse_claude_code_cli_lines<T, E>(
         ) {
             let delta_kind = baml.json.path_or<string>(raw, ".event.delta.type", "");
             if (delta_kind == "text_delta") {
-                root.ai.emit_harness_event(
+                root.ai._emit_harness_event(
                     root.ai.TextDeltaEvent {
                         id: if (session_id.length() > 0) {
                             session_id
@@ -255,7 +255,7 @@ function parse_claude_code_cli_lines<T, E>(
                 );
             }
             if (delta_kind == "input_json_delta") {
-                root.ai.emit_harness_event(
+                root.ai._emit_harness_event(
                     root.ai.TextDeltaEvent {
                         id: if (session_id.length() > 0) {
                             session_id
@@ -281,7 +281,7 @@ function parse_claude_code_cli_lines<T, E>(
                 name: baml.json.path_or<string>(raw, ".event.content_block.name", ""),
                 args: baml.json.path_or<json>(raw, ".event.content_block.input", {}),
             };
-            root.ai.emit_harness_event(
+            root.ai._emit_harness_event(
                 root.ai.ToolCallEvent {
                     id: if (session_id.length() > 0) {
                         session_id
@@ -346,7 +346,7 @@ function parse_claude_code_cli_lines<T, E>(
         reasoning_tokens: null,
         cost_usd: baml.json.path_or<float?>(result, ".total_cost_usd", null),
     };
-    root.ai.emit_harness_event(
+    root.ai._emit_harness_event(
         root.ai.UsageEvent {
             id: if (session_id.length() > 0) {
                 session_id
@@ -358,7 +358,7 @@ function parse_claude_code_cli_lines<T, E>(
         events,
         on_event,
     );
-    root.ai.emit_harness_event(
+    root.ai._emit_harness_event(
         root.ai.RunFinishedEvent {
             id: if (session_id.length() > 0) {
                 session_id
@@ -372,9 +372,9 @@ function parse_claude_code_cli_lines<T, E>(
     );
 
     ClaudeCodeCliRun<T> {
-        response: root.ai.Response<T> {
+        response: root.ai.ResponseWithMetadata<T> {
             value: value,
-            meta: root.ai.Meta {
+            meta: root.ai.ResponseMetadata {
                 provider: "claude-code-cli",
                 model: actual_model ?? provider.model,
                 request_id: baml.json.path_or<string?>(result, ".uuid", null),
@@ -403,7 +403,7 @@ class ClaudeCodeCompletionTurn {
     outcome: json,
 }
 
-function claude_code_completion_turn_schema<T>() -> json throws baml.errors.UnknownError {
+function _claude_code_completion_turn_schema<T>() -> json throws baml.errors.UnknownError {
     let final_schema = baml.schema.json_schema(reflect.type_of<T>()) catch (e) {
         _ => {
             throw baml.errors.UnknownError {
@@ -462,7 +462,7 @@ function claude_code_completion_turn_schema<T>() -> json throws baml.errors.Unkn
     }
 }
 
-function claude_code_completion_suffix<T>(
+function _claude_code_completion_suffix<T>(
     tools: root.ai.Tool[],
 ) -> string throws baml.errors.UnknownError {
     let final_schema = baml.schema.json_schema(reflect.type_of<T>()) catch (e) {
@@ -474,7 +474,7 @@ function claude_code_completion_suffix<T>(
         },
     };
     let schemas = tools.map((tool: root.ai.Tool) -> json {
-        root.ai.prompt_tool_schema(tool)
+        root.ai._prompt_tool_schema(tool)
     });
     "\n\n"
         + `
@@ -497,10 +497,10 @@ function claude_code_completion_suffix<T>(
         `
 }
 
-function claude_code_complete_with_application_tools<T>(
+function _claude_code_complete_with_application_tools<T>(
     provider: ClaudeCodeCli,
     task: root.ai.Task<T>,
-) -> root.ai.Response<T> throws baml.errors.UnknownError {
+) -> root.ai.ResponseWithMetadata<T> throws baml.errors.UnknownError {
     let tools = task.tools;
     let adapter = root.ai.PromptToolProvider { inner: provider };
     let conversation = adapter.begin<T>(task);
@@ -513,14 +513,14 @@ function claude_code_complete_with_application_tools<T>(
             }
         },
     };
-    let schema = claude_code_completion_turn_schema<T>();
-    let suffix = claude_code_completion_suffix<T>(tools);
+    let schema = _claude_code_completion_turn_schema<T>();
+    let suffix = _claude_code_completion_suffix<T>(tools);
     let step = 0;
     //# Fulfill complete<T> through an explicitly bounded application-tool loop
     while (step < provider.max_application_tool_steps) {
         let run = provider
             .complete_with_events<ClaudeCodeCompletionTurn>(
-                root.ai.prompt_tool_turn<ClaudeCodeCompletionTurn>(
+                root.ai._prompt_tool_turn<ClaudeCodeCompletionTurn>(
                     adapter,
                     state,
                     tools,
@@ -563,7 +563,7 @@ function claude_code_complete_with_application_tools<T>(
                             ),
                     );
                 //## Dispatch BAML functions and submit correlated results
-                let results = root.ai.run_tool_calls(
+                let results = root.ai._run_tool_calls(
                     calls.calls,
                     tools,
                     null,
@@ -591,7 +591,7 @@ function claude_code_complete_with_application_tools<T>(
                 };
             },
             let value: T => {
-                return root.ai.Response<T> {
+                return root.ai.ResponseWithMetadata<T> {
                     value: value,
                     meta: run.response.meta,
                     conversation: state,
@@ -615,7 +615,7 @@ implements root.ai.GenerationProvider for ClaudeCodeCli {
   function generate<T>(
     self,
     task: root.ai.Task<T>,
-  ) -> root.ai.Response<T> throws baml.errors.UnknownError {
+  ) -> root.ai.ResponseWithMetadata<T> throws baml.errors.UnknownError {
     self.complete_with_events<T>(task).response
   }
 }
@@ -624,12 +624,12 @@ implements root.ai.CompletionProvider for ClaudeCodeCli {
   function complete<T>(
     self,
     task: root.ai.Task<T>,
-  ) -> root.ai.Response<T> throws baml.errors.UnknownError {
+  ) -> root.ai.ResponseWithMetadata<T> throws baml.errors.UnknownError {
     //# Completion owns the strategy; direct callers never choose by capability
     if (task.tools.length() == 0) {
       return self.complete_with_events<T>(task.with_provider(self)).response;
     }
-    claude_code_complete_with_application_tools<T>(
+    _claude_code_complete_with_application_tools<T>(
       self,
       task.with_provider(self),
     )
@@ -645,7 +645,7 @@ implements root.ai.CompletionProvider for ClaudeCodeCli {
   }
 }
 
-function claude_code_harness_provider(
+function _claude_code_harness_provider(
     provider: ClaudeCodeCli,
     session: ClaudeCodeHarnessSession,
 ) -> ClaudeCodeCli throws never {
@@ -670,7 +670,7 @@ function claude_code_harness_provider(
     }
 }
 
-function claude_code_harness_task<T>(
+function _claude_code_harness_task<T>(
     provider: ClaudeCodeCli,
     session: ClaudeCodeHarnessSession,
     task: root.ai.Task<T>,
@@ -684,7 +684,7 @@ function claude_code_harness_task<T>(
         prompt: baml.llm.assemble_prompt_ast(
             ["", "\nHarness steering (follow exactly):\n", ""],
             [
-                root.ai.prompt_text_content(rebound.prompt),
+                root.ai._prompt_text_content(rebound.prompt),
                 session.steering.join("\n"),
             ],
         ),
@@ -731,8 +731,8 @@ implements root.ai.Harness for ClaudeCodeCli {
             };
         }
         //# Apply per-session isolation and steering before launching Claude Code
-        let configured = claude_code_harness_provider(self, local);
-        let effective_task = claude_code_harness_task<T>(configured, local, task);
+        let configured = _claude_code_harness_provider(self, local);
+        let effective_task = _claude_code_harness_task<T>(configured, local, task);
         //# Normalize Claude Code JSONL into the shared harness event callback
         let cli_run = configured.complete_with_events<T>(effective_task, on_event = on_event);
         if (cli_run.session_id.length() > 0) {

@@ -13,7 +13,7 @@ implements Provider for Fallback {
 }
 
 implements GenerationProvider for Fallback {
-  function generate<T>(self, task: Task<T>) -> Response<T>
+  function generate<T>(self, task: Task<T>) -> ResponseWithMetadata<T>
       throws root.ai.CallError | baml.errors.UnknownError {
     let policy = ReplayPolicy { kind: ReplayKind.Safe, idempotency_key: null };
     //# Try generation providers in order
@@ -25,7 +25,7 @@ implements GenerationProvider for Fallback {
           let response = provider.generate<T>(task.with_provider(member)) catch (e) {
             let failure: root.ai.Failure => {
               //#### Continue only after a replay-safe failure
-              if (may_replay(policy, failure)) { continue; }
+              if (_may_replay(policy, failure)) { continue; }
               throw e;
             },
             _ => throw e,
@@ -40,7 +40,7 @@ implements GenerationProvider for Fallback {
 }
 
 implements CompletionProvider for Fallback {
-  function complete<T>(self, task: Task<T>) -> Response<T>
+  function complete<T>(self, task: Task<T>) -> ResponseWithMetadata<T>
       throws root.ai.CallError | baml.errors.UnknownError {
     //# Try drive providers in order
     for (let member in self.providers()) {
@@ -52,7 +52,7 @@ implements CompletionProvider for Fallback {
           let response = provider.complete<T>(task.with_provider(member)) catch (e) {
             let failure: root.ai.Failure => {
               //#### Continue only after a replay-safe failure
-              if (may_replay(policy, failure)) { continue; }
+              if (_may_replay(policy, failure)) { continue; }
               if (failure.is_retryable()) {
                 throw root.ai.CannotRetry {
                   message: "fallback refused to replay " + member.name(),

@@ -16,11 +16,14 @@ class CreateCache {
             self,
             provider: root.ai.Provider,
         ) -> root.ai.Cache throws baml.errors.UnknownError | baml.errors.Unsupported {
+            //# Select a provider that can own a remote cache
             match (provider) {
                 let managed: root.ai.ManagedCacheProvider => {
+                    //## Create the cache resource from reusable messages
                     managed.create_cache(self.messages, self.options)
                 },
                 _ => {
+                    //## Reject providers without managed-cache support
                     throw baml.errors.Unsupported {
           message: "provider cannot create managed caches",
         }

@@ -9,7 +9,7 @@ function estimated_cost(usage: Usage, price: TokenPrice) -> float throws never {
   (input * price.input_per_million + output * price.output_per_million) / 1000000.0
 }
 
-function aggregate_usage(responses: Meta[]) -> Usage throws never {
+function aggregate_usage(responses: ResponseMetadata[]) -> Usage throws never {
   let input = 0;
   let output = 0;
   let cached = 0;

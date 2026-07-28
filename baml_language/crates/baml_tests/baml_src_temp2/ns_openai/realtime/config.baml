@@ -4,8 +4,6 @@ class Realtime {
     api_key: string,
     // null/false is text-only. true requests audio plus its provider transcript.
     output_audio: bool?,
-    // Realtime session instructions, separate from the task's first user turn.
-    instructions: string?,
     // Optional asynchronous input ASR. For example: gpt-4o-mini-transcribe.
     input_transcription_model: string?,
     // null means caller-delimited turns. A value enables provider-side speech
@@ -41,7 +39,7 @@ function realtime_audio_format() -> root.ai.RealtimeAudioFormat throws never {
     root.ai.RealtimeAudioFormat { encoding: "pcm_s16le", sample_rate_hz: 24_000, channels: 1 }
 }
 
-function openai_realtime_turn_detection(vad: RealtimeServerVad?) -> json throws never {
+function _openai_realtime_turn_detection(vad: RealtimeServerVad?) -> json throws never {
     match (vad) {
         let config: RealtimeServerVad => {
             {
@@ -57,7 +55,7 @@ function openai_realtime_turn_detection(vad: RealtimeServerVad?) -> json throws 
     }
 }
 
-function openai_realtime_tool_schemas(tools: root.ai.Tool[]) -> json[] throws never {
+function _openai_realtime_tool_schemas(tools: root.ai.Tool[]) -> json[] throws never {
     tools.map((tool: root.ai.Tool) -> json {
         {
             "type": "function",
@@ -68,12 +66,41 @@ function openai_realtime_tool_schemas(tools: root.ai.Tool[]) -> json[] throws ne
     })
 }
 
-function openai_realtime_response_create(
+// OpenAI carries the task's system messages in session.instructions and its
+// remaining prompt messages as the initial conversation item. Prompt ownership
+// stays with Task; Realtime owns only this provider-specific wire mapping.
+function _openai_realtime_task_instructions(
+    rendered_prompt: baml.llm.PromptAst,
+) -> string throws never {
+    rendered_prompt
+        .messages()
+        .filter((message: baml.llm.PromptMessage) -> bool {
+            message.role == "system"
+        })
+        .map((message: baml.llm.PromptMessage) -> string {
+            message.content
+        })
+        .join("\n")
+}
+
+function _openai_realtime_task_input(rendered_prompt: baml.llm.PromptAst) -> string throws never {
+    rendered_prompt
+        .messages()
+        .filter((message: baml.llm.PromptMessage) -> bool {
+            message.role != "system"
+        })
+        .map((message: baml.llm.PromptMessage) -> string {
+            message.content
+        })
+        .join("\n")
+}
+
+function _openai_realtime_response_create(
     tools: root.ai.Tool[],
     output_audio: bool,
     voice: string,
 ) -> string throws never {
-    let schemas = openai_realtime_tool_schemas(tools);
+    let schemas = _openai_realtime_tool_schemas(tools);
     if (output_audio) {
         if (schemas.length() > 0) {
             baml.json
@@ -118,13 +145,13 @@ function openai_realtime_response_create(
     }
 }
 
-function openai_realtime_session_update(
+function _openai_realtime_session_update(
     instructions: string,
     voice: string,
     transcription_model: string?,
     server_vad: RealtimeServerVad?,
 ) -> string throws never {
-    let turn_detection = openai_realtime_turn_detection(server_vad);
+    let turn_detection = _openai_realtime_turn_detection(server_vad);
     let audio_format = realtime_audio_format();
     match (transcription_model) {
         let model: string => {

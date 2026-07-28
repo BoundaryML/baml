@@ -1,4 +1,4 @@
-function tool_schemas(tools: root.ai.Tool[]) -> json[] throws never {
+function _tool_schemas(tools: root.ai.Tool[]) -> json[] throws never {
     tools.map((tool: root.ai.Tool) -> json {
         {
             "type": "function",
@@ -19,10 +19,10 @@ implements root.ai.ToolCallingProvider for Chat {
     Conversation {
       owner: self,
       history: history,
-      tools_json: tool_schemas(task.tools),
+      tools_json: _tool_schemas(task.tools),
       wire_messages: task.prompt.messages().map((message: baml.llm.PromptMessage) -> json {
         {
-          "role": root.ai.prompt_role_or_user(message.role),
+          "role": root.ai._prompt_role_or_user(message.role),
           "content": message.content,
         }
       }),
@@ -42,7 +42,7 @@ implements root.ai.ToolCallingProvider for Chat {
       },
     };
     //# Build the request from the active tool roster
-    state.tools_json = tool_schemas(tools);
+    state.tools_json = _tool_schemas(tools);
     let key = match (self.api_key) {
       let value: string => value,
       null => throw baml.errors.UnknownError {
@@ -108,7 +108,7 @@ implements root.ai.ToolCallingProvider for Chat {
       },
     };
     let message = choice.message;
-    let meta = root.ai.Meta {
+    let meta = root.ai.ResponseMetadata {
       provider: self.name(),
       model: wire.model ?? self.model,
       request_id: wire.id,

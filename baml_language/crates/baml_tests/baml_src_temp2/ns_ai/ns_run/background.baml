@@ -16,9 +16,14 @@ class Background<T> {
             self,
             task: root.ai.Task<T>,
         ) -> root.ai.Job<T> throws baml.errors.UnknownError | baml.errors.Unsupported {
+            //# Select a background-capable provider
             match (task.provider) {
-                let provider: root.ai.BackgroundProvider => provider.submit<T>(task, self.options),
+                let provider: root.ai.BackgroundProvider => {
+                    //## Submit remote work and return its durable job resource
+                    provider.submit<T>(task, self.options)
+                },
                 _ => {
+                    //## Reject providers that cannot submit background work
                     throw baml.errors.Unsupported {
           message: "provider cannot submit background work: " + task.provider_name(),
         }

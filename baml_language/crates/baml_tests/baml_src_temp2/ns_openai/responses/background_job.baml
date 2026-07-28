@@ -33,7 +33,7 @@ class BackgroundJob<T> {
             self.last_status
         }
 
-        function poll(self) -> root.ai.Response<T>? throws baml.errors.UnknownError {
+        function poll(self) -> root.ai.ResponseWithMetadata<T>? throws baml.errors.UnknownError {
             if (self.last_status == root.ai.JobStatus.Cancelled) {
                 return null;
             }
@@ -100,7 +100,7 @@ class BackgroundJob<T> {
                 return null;
             }
             //## Parse the same T that was captured by Job<T> at submission
-            let primitive = configured_primitive(
+            let primitive = _configured_primitive(
                 self.owner.render_shorthand(),
                 self.owner.model,
                 self.owner.api_key,
@@ -117,9 +117,9 @@ class BackgroundJob<T> {
                 },
             };
             self.last_status = root.ai.JobStatus.Complete;
-            root.ai.Response<T> {
+            root.ai.ResponseWithMetadata<T> {
                 value: value,
-                meta: root.ai.Meta {
+                meta: root.ai.ResponseMetadata {
                     provider: self.owner.name(),
                     model: baml.json.path_or<string?>(raw, ".model", self.owner.model),
                     request_id: self.id,
@@ -201,7 +201,7 @@ implements root.ai.BackgroundProvider for Responses {
     task: root.ai.Task<T>,
     options: root.ai.BackgroundOptions,
   ) -> root.ai.Job<T> throws baml.errors.UnknownError {
-    let primitive = configured_primitive(
+    let primitive = _configured_primitive(
       self.render_shorthand(),
       self.model,
       self.api_key,

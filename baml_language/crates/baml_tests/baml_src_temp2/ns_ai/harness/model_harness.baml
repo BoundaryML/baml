@@ -6,7 +6,7 @@ class ModelHarness {
   sessions: LocalHarnessSession[],
 }
 
-function model_harness_task<T>(
+function _model_harness_task<T>(
   inner: Provider,
   session: LocalHarnessSession,
   task: Task<T>,
@@ -22,7 +22,7 @@ function model_harness_task<T>(
     ...rebound,
     prompt: baml.llm.assemble_prompt_ast(
       ["", "\nHarness steering (follow exactly):\n", ""],
-      [root.ai.prompt_text_content(rebound.prompt), guidance],
+      [root.ai._prompt_text_content(rebound.prompt), guidance],
     ),
   }
 }
@@ -33,7 +33,7 @@ implements Provider for ModelHarness {
 }
 
 implements CompletionProvider for ModelHarness {
-  function complete<T>(self, task: Task<T>) -> Response<T> throws baml.errors.UnknownError {
+  function complete<T>(self, task: Task<T>) -> ResponseWithMetadata<T> throws baml.errors.UnknownError {
     //# Open an isolated harness session
     let session = self.open(HarnessOptions {
       cwd: null,
@@ -44,9 +44,9 @@ implements CompletionProvider for ModelHarness {
     //# Run the task inside the session
     let run = self.run<T>(session, task, null);
     //# Return harness output as a provider response
-    Response<T> {
+    ResponseWithMetadata<T> {
       value: run.value,
-      meta: Meta {
+      meta: ResponseMetadata {
         provider: self.name(),
         model: null,
         request_id: session.id(),
@@ -100,7 +100,7 @@ implements Harness for ModelHarness {
     };
     let events: AgentEvent[] = [];
     //# Announce the harness run before starting blocking provider work
-    emit_harness_event(
+    _emit_harness_event(
       ModelStartedEvent {
         id: local.session_id,
         provider: self.inner.name(),
@@ -109,21 +109,21 @@ implements Harness for ModelHarness {
       on_event,
     );
     //# Run the model through the harness
-    let effective_task = model_harness_task<T>(self.inner, local, task);
+    let effective_task = _model_harness_task<T>(self.inner, local, task);
     let response = provider.complete<T>(effective_task) catch (e) {
       _ => throw baml.errors.UnknownError { data: e, message: ["harness model run failed"] },
     };
     //# Save conversation and resumable coordinates
     local.history = effective_task.messages().to_history();
     match (response.meta.usage) {
-      let usage: Usage => emit_harness_event(
+      let usage: Usage => _emit_harness_event(
         UsageEvent { id: local.session_id, usage: usage },
         events,
         on_event,
       ),
       null => null,
     };
-    emit_harness_event(
+    _emit_harness_event(
       RunFinishedEvent { id: local.session_id, outcome: "done" },
       events,
       on_event,

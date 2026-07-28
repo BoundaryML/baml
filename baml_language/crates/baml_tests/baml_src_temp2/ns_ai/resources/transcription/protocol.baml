@@ -4,7 +4,7 @@ class TranscriptionOptions {
 }
 
 interface TranscriptionProvider requires Provider {
-  function transcribe(self, stream: AudioStream, options: TranscriptionOptions) -> Response<string>
+  function transcribe(self, stream: AudioStream, options: TranscriptionOptions) -> ResponseWithMetadata<string>
     throws root.ai.CallError | baml.errors.UnknownError
 }
 
@@ -21,6 +21,7 @@ class TranscriptionTask {
         self,
         runner: R,
     ) -> Output throws Error {
+        //# Dispatch this finite-audio task to the selected transcription policy
         runner.run(self)
     }
 }

@@ -1,5 +1,5 @@
 class FakeBatch<T> {
-    responses: Response<T>[],
+    responses: ResponseWithMetadata<T>[],
     cancelled: bool,
 
     implements Batch<T> {
@@ -11,7 +11,7 @@ class FakeBatch<T> {
             }
         }
 
-        function results(self) -> Response<T>[] throws never {
+        function results(self) -> ResponseWithMetadata<T>[] throws never {
             self.responses
         }
 
@@ -42,7 +42,7 @@ class FakeBatchProvider {
             tasks: Task<T>[],
             options: BatchOptions,
         ) -> Batch<T> throws baml.errors.UnknownError {
-            let responses: Response<T>[] = [];
+            let responses: ResponseWithMetadata<T>[] = [];
             //# Execute every task in the batch
             for (let task in tasks) {
                 //## Generate one batch result

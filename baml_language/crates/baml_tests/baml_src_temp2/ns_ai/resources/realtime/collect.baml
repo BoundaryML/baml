@@ -42,11 +42,14 @@ function collect_live_turn(live_session: LiveSession) -> LiveTurn throws baml.er
     let tool_results: ToolResult[] = [];
     let is_closed = false;
     let done = false;
+    //# Collect one logical turn across as many event batches as required
     while (!done) {
+        //## Receive the next live event batch
         let batch = live_session.receive();
         if (batch.length() == 0) {
             done = true;
         }
+        //## Fold transcript, audio, tools, and terminal events into the turn
         for (let event in batch) {
             events.push(event);
             match (event) {
@@ -60,12 +63,14 @@ function collect_live_turn(live_session: LiveSession) -> LiveTurn throws baml.er
                     assistant_audio.push(audio.audio);
                 },
                 let calls: LiveToolCalls => {
+                    //### Return control when raw tool calls require application handling
                     for (let call in calls.calls) {
                         tool_calls.push(call);
                     }
                     done = true;
                 },
                 let results: LiveToolResults => {
+                    //### Keep collecting after automatically executed tool results
                     for (let result in results.results) {
                         tool_results.push(result);
                     }
@@ -74,9 +79,11 @@ function collect_live_turn(live_session: LiveSession) -> LiveTurn throws baml.er
                     done = false;
                 },
                 let completed: LiveTurnCompleted => {
+                    //### Stop at the provider's completed-turn boundary
                     done = true;
                 },
                 let closed: LiveClosed => {
+                    //### Record provider closure as a terminal turn
                     is_closed = true;
                     done = true;
                 },

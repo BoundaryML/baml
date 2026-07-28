@@ -4,7 +4,7 @@ class BatchOptions {
 
 interface Batch<T> requires Resource {
   function status(self) -> JobStatus throws never
-  function results(self) -> Response<T>[] throws baml.errors.UnknownError
+  function results(self) -> ResponseWithMetadata<T>[] throws baml.errors.UnknownError
   function cancel(self) -> null throws baml.errors.UnknownError
 }
 

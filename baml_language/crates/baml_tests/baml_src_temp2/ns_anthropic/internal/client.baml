@@ -1,4 +1,4 @@
-function configured_primitive(
+function _configured_primitive(
   shorthand: string,
   model: string,
   api_key: string?,
@@ -25,11 +25,11 @@ function configured_primitive(
   }
 }
 
-function primitive_generate<T>(
+function _primitive_generate<T>(
   primitive: baml.llm.PrimitiveClient,
   task: root.ai.Task<T>,
   model: string,
-) -> root.ai.Response<T> throws baml.errors.UnknownError {
+) -> root.ai.ResponseWithMetadata<T> throws baml.errors.UnknownError {
   let specialized = primitive.specialize_prompt(task.prompt) catch (e) {
     _ => throw baml.errors.UnknownError {
       data: e,
@@ -80,9 +80,9 @@ function primitive_generate<T>(
     },
   };
   let raw: json = baml.json.parse(body) catch (e) { _ => null };
-  root.ai.Response<T> {
+  root.ai.ResponseWithMetadata<T> {
     value: value,
-    meta: root.ai.Meta {
+    meta: root.ai.ResponseMetadata {
       provider: "anthropic",
       model: model,
       request_id: baml.json.path_or<string?>(raw, ".id", null),
@@ -101,7 +101,7 @@ function primitive_generate<T>(
   }
 }
 
-function primitive_stream<TPartial, T>(
+function _primitive_stream<TPartial, T>(
   primitive: baml.llm.PrimitiveClient,
   task: root.ai.Task<T>,
 ) -> baml.llm.Stream<TPartial, T> throws baml.errors.UnknownError {

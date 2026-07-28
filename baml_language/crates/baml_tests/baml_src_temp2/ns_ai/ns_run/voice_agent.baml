@@ -36,7 +36,7 @@ class VoiceAgent {
                 root.ai
                     .with_automatic_tools(
                         raw_live_session,
-                        root.ai.tool_inputs_from_tools(task.tools),
+                        root.ai._tool_inputs_from_tools(task.tools),
                     )
             } else {
                 raw_live_session
@@ -60,7 +60,8 @@ class VoiceAgent {
                     message: `voice output format mismatch: device=${device_output.describe()}, session=${session_output.describe()}`,
                 };
             }
-            let microphone_pump = spawn { pump_voice_input(self.audio, live_session) };
+            //# Pump microphone audio concurrently with provider event handling
+            let microphone_pump = spawn { _pump_voice_input(self.audio, live_session) };
 
             let closed = false;
             let state = VoiceAgentState {
@@ -74,26 +75,33 @@ class VoiceAgent {
             };
             let barge_in_timers: baml.future.Future<null, null>[] = [];
             let completion_call_ids: string[] = [];
+            //# Always stop spawned work and close audio and provider resources
             defer {
                 state.closed = true;
                 state.user_speaking = false;
+                //## Cancel the microphone and pending barge-in timers
                 microphone_pump.cancel();
                 for (let timer in barge_in_timers) {
                     timer.cancel();
                 }
+                //## Close the realtime session and local audio device
                 live_session.close();
                 self.audio.close();
             }
+            //# Process realtime event batches until the call closes
             while (!closed) {
+                //## Receive the next provider event batch
                 let events = live_session.receive();
                 if (events.length() == 0) {
                     self.audio.finish_output();
                     closed = true;
                 }
+                //## Apply every event to the voice-agent state machine
                 for (let event in events) {
                     log.info(event);
                     match (event) {
                         let started: root.ai.UserSpeechStarted => {
+                            //### Arm delayed interruption when the caller begins speaking
                             // Provider-side VAD is the source of truth for whether the
                             // microphone contains speech. Brief detections do not barge
                             // in: speech_stopped invalidates this timer before it fires.
@@ -102,7 +110,7 @@ class VoiceAgent {
                             state.speech_generation = state.speech_generation + 1;
                             let speech_generation = state.speech_generation;
                             barge_in_timers.push(spawn {
-                                interrupt_after_sustained_user_speech(
+                                _interrupt_after_sustained_user_speech(
                                     state,
                                     speech_generation,
                                     self.barge_in_after_ms,
@@ -112,6 +120,7 @@ class VoiceAgent {
                             });
                         },
                         let stopped: root.ai.UserSpeechStopped => {
+                            //### Request a response when the caller finishes a turn
                             if (state.user_speech_item_id == stopped.item_id) {
                                 state.user_speaking = false;
                                 state.user_speech_item_id = null;
@@ -126,6 +135,7 @@ class VoiceAgent {
                             }
                         },
                         let started: root.ai.AssistantAudioStarted => {
+                            //### Replace queued playback with the newest assistant response
                             // Assistant audio is latest-wins. A newly-started
                             // assistant item replaces any older queued playback.
                             if (state.assistant_audio_active) {
@@ -135,6 +145,7 @@ class VoiceAgent {
                             state.assistant_response_active = true;
                         },
                         let delta: root.ai.AssistantAudioDelta => {
+                            //### Play the next assistant audio frame
                             self.audio.play_output(delta.audio);
                         },
                         let transcript: root.ai.UserTranscript => {
@@ -144,6 +155,7 @@ class VoiceAgent {
                             baml.io.print(delta.text);
                         },
                         let calls: root.ai.LiveToolCalls => {
+                            //### Remember calls that explicitly complete the voice workflow
                             match (self.completion_tool) {
                                 let completion_tool: string => {
                                     for (let call in calls.calls) {
@@ -156,6 +168,7 @@ class VoiceAgent {
                             }
                         },
                         let results: root.ai.LiveToolResults => {
+                            //### Close after a successful completion-tool result
                             if (
                                 results.results.some((result: root.ai.ToolResult) -> bool {
                                     completion_call_ids.includes(result.id) && !result.is_error
@@ -168,6 +181,7 @@ class VoiceAgent {
                             }
                         },
                         let completed: root.ai.LiveTurnCompleted => {
+                            //### Finish playback and release any queued caller turn
                             self.audio.finish_output();
                             state.assistant_response_active = false;
                             if (state.user_turn_pending && !state.user_speaking) {
@@ -176,6 +190,7 @@ class VoiceAgent {
                             }
                         },
                         let ended: root.ai.LiveClosed => {
+                            //### Stop when the provider closes the live session
                             self.audio.finish_output();
                             closed = true;
                         },
@@ -199,13 +214,14 @@ class VoiceAgentState {
     closed: bool,
 }
 
-function interrupt_after_sustained_user_speech(
+function _interrupt_after_sustained_user_speech(
     state: VoiceAgentState,
     speech_generation: int,
     delay_ms: int,
     audio: root.ai.RealtimeAudioDevice,
     live_session: root.ai.LiveSession,
 ) -> null throws never {
+    //# Wait until caller speech has lasted long enough to count as barge-in
     baml.sys.sleep(baml.time.Duration.from_milliseconds(delay_ms)) catch (e) {
         _ => {
             return null;
@@ -217,9 +233,10 @@ function interrupt_after_sustained_user_speech(
             || state.speech_generation != speech_generation
             || !state.assistant_audio_active
     ) {
+        //## Ignore stale timers and speech that ended before the threshold
         return null;
     }
-
+    //# Stop local playback before cancelling and truncating remote generation
     // A remote session cannot know how much locally-buffered audio was heard.
     // Stop it first, then cancel generation and truncate the assistant item to
     // the exact local playback position.
@@ -251,12 +268,14 @@ function interrupt_after_sustained_user_speech(
     null
 }
 
-function pump_voice_input(
+function _pump_voice_input(
     audio: root.ai.RealtimeAudioDevice,
     live_session: root.ai.LiveSession,
 ) -> null throws never {
     let listening = true;
+    //# Forward microphone frames until input ends or the live session closes
     while (listening) {
+        //## Read the next frame from the audio device
         let next_input = audio.next_input() catch_all (e) {
             _ => {
                 log.debug({ "voice_agent_microphone_stopped": e });
@@ -265,6 +284,7 @@ function pump_voice_input(
         };
         match (next_input) {
             let audio_frame: uint8array => {
+                //## Send captured audio into the provider session
                 live_session.send_audio(audio_frame) catch_all (e) {
                     _ => {
                         // The receive loop owns session errors. If it closes the
@@ -276,6 +296,7 @@ function pump_voice_input(
                 };
             },
             null => {
+                //## Stop when the audio device reaches end-of-input
                 listening = false;
             },
         }

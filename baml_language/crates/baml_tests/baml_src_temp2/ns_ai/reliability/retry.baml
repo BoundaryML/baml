@@ -1,6 +1,6 @@
 class Retry {
-  inner: Provider,
-  max_attempts: int,
+    inner: Provider,
+    max_attempts: int,
 }
 
 implements Provider for Retry {
@@ -9,7 +9,7 @@ implements Provider for Retry {
 }
 
 implements GenerationProvider for Retry {
-  function generate<T>(self, task: Task<T>) -> Response<T>
+  function generate<T>(self, task: Task<T>) -> ResponseWithMetadata<T>
       throws root.ai.CallError | baml.errors.UnknownError {
     //# Resolve the generation capability
     let provider = match (self.inner) {
@@ -24,7 +24,7 @@ implements GenerationProvider for Retry {
       let result = provider.generate<T>(task.with_provider(self.inner)) catch (e) {
         let failure: root.ai.Failure => {
           //### Decide whether this failure may replay
-          if (attempt >= self.max_attempts || !may_replay(policy, failure)) { throw e; }
+          if (attempt >= self.max_attempts || !_may_replay(policy, failure)) { throw e; }
           attempt = attempt + 1;
           continue;
         },
@@ -37,7 +37,7 @@ implements GenerationProvider for Retry {
 }
 
 implements CompletionProvider for Retry {
-  function complete<T>(self, task: Task<T>) -> Response<T>
+  function complete<T>(self, task: Task<T>) -> ResponseWithMetadata<T>
       throws root.ai.CallError | baml.errors.UnknownError {
     //# Resolve the drive capability
     let provider = match (self.inner) {
@@ -54,7 +54,7 @@ implements CompletionProvider for Retry {
         let failure: root.ai.Failure => {
           //### Decide whether this failure may replay
           if (attempt >= self.max_attempts) { throw e; }
-          if (!may_replay(policy, failure)) {
+          if (!_may_replay(policy, failure)) {
             if (failure.is_retryable()) {
               throw root.ai.CannotRetry {
                 message: "retry refused to replay " + self.inner.name(),
@@ -81,8 +81,12 @@ implements CompletionProvider for Retry {
 }
 
 function retry(provider: Provider, max_attempts: int) -> Retry throws never {
-  Retry {
-    inner: provider,
-    max_attempts: if (max_attempts < 1) { 1 } else { max_attempts },
-  }
+    Retry {
+        inner: provider,
+        max_attempts: if (max_attempts < 1) {
+            1
+        } else {
+            max_attempts
+        },
+    }
 }

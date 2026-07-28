@@ -14,7 +14,7 @@ class Conversation {
     }
 }
 
-function message_role_name(role: root.ai.MessageRole) -> string throws never {
+function _message_role_name(role: root.ai.MessageRole) -> string throws never {
     match (role) {
         root.ai.MessageRole.System => "system",
         root.ai.MessageRole.User => "user",
@@ -23,7 +23,7 @@ function message_role_name(role: root.ai.MessageRole) -> string throws never {
     }
 }
 
-function message_text(message: root.ai.Message) -> string throws never {
+function _message_text(message: root.ai.Message) -> string throws never {
     message
         .parts()
         .map((part: root.ai.MessagePart) -> string {
@@ -32,7 +32,7 @@ function message_text(message: root.ai.Message) -> string throws never {
         .join("")
 }
 
-function message_provider_data(message: root.ai.Message) -> json? throws never {
+function _message_provider_data(message: root.ai.Message) -> json? throws never {
     for (let part in message.parts()) {
         match (part) {
             let data: root.ai.ProviderDataPart => {
@@ -54,7 +54,7 @@ implements root.ai.ConversationImportProvider for Chat {
     let history = messages.to_history();
     let wire: json[] = [];
     for (let message in history.entries) {
-      let provider_data = message_provider_data(message);
+      let provider_data = _message_provider_data(message);
       match (message.role()) {
         root.ai.MessageRole.Assistant => {
           let tool_calls = baml.json.path_or<json[]?>(provider_data, ".tool_calls", null);
@@ -64,7 +64,7 @@ implements root.ai.ConversationImportProvider for Chat {
               wire.push(frame);
             },
             null => {
-              let frame: json = { "role": "assistant", "content": message_text(message) };
+              let frame: json = { "role": "assistant", "content": _message_text(message) };
               wire.push(frame);
             },
           };
@@ -94,8 +94,8 @@ implements root.ai.ConversationImportProvider for Chat {
         },
         _ => {
           let frame: json = {
-            "role": message_role_name(message.role()),
-            "content": message_text(message),
+            "role": _message_role_name(message.role()),
+            "content": _message_text(message),
           };
           wire.push(frame);
         },
