@@ -14,6 +14,7 @@ export const CAPTURED_VALUE_CARD_TEXT_HEIGHT = 96;
 export const CAPTURED_VALUE_CARD_HEADER_HEIGHT = 21;
 export const CAPTURED_VALUE_CARD_PADDING_Y = 16;
 export const CAPTURED_VALUE_CARD_DIAGNOSTIC_HEIGHT = 20;
+export const CAPTURED_VALUE_CARD_DIAGNOSTIC_GAP = 5;
 export const CAPTURED_VALUE_CARD_FIXED_HEIGHT =
   CAPTURED_VALUE_CARD_HEADER_HEIGHT +
   CAPTURED_VALUE_CARD_PADDING_Y +
@@ -60,7 +61,10 @@ export function CapturedValueCard({
   const remainingImages = images.length - visibleImages.length;
   const fixedContentHeight =
     CAPTURED_VALUE_CARD_TEXT_HEIGHT -
-    (value.diagnostic ? CAPTURED_VALUE_CARD_DIAGNOSTIC_HEIGHT : 0);
+    (value.diagnostic
+      ? CAPTURED_VALUE_CARD_DIAGNOSTIC_HEIGHT +
+        CAPTURED_VALUE_CARD_DIAGNOSTIC_GAP
+      : 0);
   const fixedImageHeight =
     visibleImages.length <= 2
       ? fixedContentHeight
@@ -246,7 +250,7 @@ export function CapturedValueCard({
       {value.diagnostic ? (
         <div
           style={{
-            marginTop: 5,
+            marginTop: CAPTURED_VALUE_CARD_DIAGNOSTIC_GAP,
             color: '#a1a1aa',
             fontSize: 10,
             lineHeight: 1.35,
