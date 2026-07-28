@@ -20,6 +20,9 @@ import {
   call_with_typed_throws_async,
   call_with_typed_throws_propagating_async,
   call_with_two_args_async,
+  make_adder,
+  make_counter,
+  make_pair_builder,
 } from "./baml_sdk/host_callable_tests/index.js";
 import { isTestRuntime } from "./test_runtime.js";
 
@@ -42,6 +45,25 @@ describe("function_calls — generated SDK host callables", () => {
     const cb = (x: number) => x * 2;
 
     await expect(call_int_callback_async(cb, 21)).resolves.toBe(42);
+  });
+
+  it("baml_closure_is_a_native_callable_with_host_language_arguments", () => {
+    const addTen = make_adder(10);
+    expect(typeof addTen).toBe("function");
+    expect(addTen(5)).toBe(15);
+    expect(addTen(7)).toBe(17);
+  });
+
+  it("baml_closure_decodes_multiple_args_and_structured_return_values", () => {
+    const build = make_pair_builder(30);
+    expect(build(12, "Ada")).toEqual(new Person({ name: "Ada", age: 42 }));
+    expect(build(5, "Grace")).toEqual(new Person({ name: "Grace", age: 35 }));
+  });
+
+  it("baml_closure_is_reusable_and_retains_mutable_captures", () => {
+    const nextValue = make_counter(40);
+    expect(nextValue()).toBe(41);
+    expect(nextValue()).toBe(42);
   });
 
   it("host_callables_surfaces_a_throwing_callback_as_a_baml_error", async () => {

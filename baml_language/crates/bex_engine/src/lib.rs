@@ -379,6 +379,11 @@ pub enum BexCallArg {
     OmittedDefault,
 }
 
+enum CallableArgs {
+    Positional(Vec<BexExternalValue>),
+    Named(HashMap<String, BexExternalValue>),
+}
+
 // ============================================================================
 // Span Tracking (per-invocation, NOT on Arc<BexEngine>)
 // ============================================================================
@@ -3104,15 +3109,53 @@ impl BexEngine {
         call_ctx: FunctionCallContext,
         copy_objects: bool,
     ) -> Result<BexExternalValue, EngineError> {
-        self.call_callable_with_trace(handle, args, call_ctx, copy_objects)
-            .await
-            .and_then(|result| result.value)
+        self.call_callable_with_trace_impl(
+            handle,
+            CallableArgs::Positional(args),
+            call_ctx,
+            copy_objects,
+        )
+        .await
+        .and_then(|result| result.value)
     }
 
     pub async fn call_callable_with_trace(
         self: &Arc<Self>,
         handle: bex_external_types::Handle,
         args: Vec<BexExternalValue>,
+        call_ctx: FunctionCallContext,
+        copy_objects: bool,
+    ) -> Result<BexCallResult, EngineError> {
+        self.call_callable_with_trace_impl(
+            handle,
+            CallableArgs::Positional(args),
+            call_ctx,
+            copy_objects,
+        )
+        .await
+    }
+
+    pub async fn call_callable_named(
+        self: &Arc<Self>,
+        handle: bex_external_types::Handle,
+        args: HashMap<String, BexExternalValue>,
+        call_ctx: FunctionCallContext,
+        copy_objects: bool,
+    ) -> Result<BexExternalValue, EngineError> {
+        self.call_callable_with_trace_impl(
+            handle,
+            CallableArgs::Named(args),
+            call_ctx,
+            copy_objects,
+        )
+        .await
+        .and_then(|result| result.value)
+    }
+
+    async fn call_callable_with_trace_impl(
+        self: &Arc<Self>,
+        handle: bex_external_types::Handle,
+        args: CallableArgs,
         FunctionCallContext {
             host_call_id,
             boundary,
@@ -3193,6 +3236,22 @@ impl BexEngine {
                         .params
                         .iter()
                         .map(|param| RuntimeTy::from(param.ty.clone()))
+                        .collect::<Vec<_>>();
+                    let param_names = host
+                        .params
+                        .iter()
+                        .enumerate()
+                        .map(|(index, param)| {
+                            param
+                                .name
+                                .as_ref()
+                                .map_or_else(|| format!("arg{index}"), ToString::to_string)
+                        })
+                        .collect();
+                    let param_has_default = host
+                        .params
+                        .iter()
+                        .map(baml_type::RealizedFunctionParamTy::is_optional)
                         .collect();
                     (
                         entry_ptr,
@@ -3204,6 +3263,8 @@ impl BexEngine {
                             throws_type,
                             host.arity,
                             param_types,
+                            param_names,
+                            param_has_default,
                             Vec::new(),
                         )),
                     )
@@ -3219,47 +3280,56 @@ impl BexEngine {
         // parameter types (including `self` for methods) for type-directed
         // coercion; lambdas leave it empty (types inferred, not stored), so the
         // real arity comes from `arity` and coercion is best-effort.
-        let (mut return_type, throws_type, arity, param_types, generic_param_names) =
-            if let Some(signature) = host_signature {
-                signature
-            } else {
-                match thread
-                    .vm
-                    .get_object(func_ptr.expect("non-host callable must resolve to a function"))
-                {
-                    Object::Function(func) => {
-                        // A value referencing an unresolved native builtin can't be an
-                        // entry point (parity with `call_function_bound_args`).
-                        if matches!(func.kind, bex_vm_types::FunctionKind::NativeUnresolved) {
-                            return Err(EngineError::NotInvokableAsEntry {
-                                name: func.name.clone(),
-                                kind: format!("{:?}", func.kind),
-                            });
-                        }
-                        // De Bruijn-ordered generic-param names (enclosing class
-                        // params first, then the function's own), bounds stripped to
-                        // the bare TypeVar — used to lower the positional `seed_type_args`
-                        // onto the named `type_args` channel below.
-                        let generic_param_names: Vec<String> = func
-                            .display_type_params
-                            .iter()
-                            .map(|p| p.split_whitespace().next().unwrap_or(p).to_string())
-                            .collect();
-                        (
-                            func.return_type.clone(),
-                            func.throws_type.clone(),
-                            func.arity,
-                            func.param_types.clone(),
-                            generic_param_names,
-                        )
-                    }
-                    _ => {
-                        return Err(EngineError::TypeMismatch {
-                            message: "call_callable: value does not wrap a function".to_string(),
+        let (
+            mut return_type,
+            throws_type,
+            arity,
+            param_types,
+            param_names,
+            param_has_default,
+            generic_param_names,
+        ) = if let Some(signature) = host_signature {
+            signature
+        } else {
+            match thread
+                .vm
+                .get_object(func_ptr.expect("non-host callable must resolve to a function"))
+            {
+                Object::Function(func) => {
+                    // A value referencing an unresolved native builtin can't be an
+                    // entry point (parity with `call_function_bound_args`).
+                    if matches!(func.kind, bex_vm_types::FunctionKind::NativeUnresolved) {
+                        return Err(EngineError::NotInvokableAsEntry {
+                            name: func.name.clone(),
+                            kind: format!("{:?}", func.kind),
                         });
                     }
+                    // De Bruijn-ordered generic-param names (enclosing class
+                    // params first, then the function's own), bounds stripped to
+                    // the bare TypeVar — used to lower the positional `seed_type_args`
+                    // onto the named `type_args` channel below.
+                    let generic_param_names: Vec<String> = func
+                        .display_type_params
+                        .iter()
+                        .map(|p| p.split_whitespace().next().unwrap_or(p).to_string())
+                        .collect();
+                    (
+                        func.return_type.clone(),
+                        func.throws_type.clone(),
+                        func.arity,
+                        func.param_types.clone(),
+                        func.param_names.clone(),
+                        func.param_has_default.clone(),
+                        generic_param_names,
+                    )
                 }
-            };
+                _ => {
+                    return Err(EngineError::TypeMismatch {
+                        message: "call_callable: value does not wrap a function".to_string(),
+                    });
+                }
+            }
+        };
 
         // For a bound method on a generic class, substitute the declared return
         // type's class type vars from the receiver's concrete type args (seeded
@@ -3285,22 +3355,64 @@ impl BexEngine {
         // it (the receiver is injected below), so the visible arity drops by one.
         let self_offset = usize::from(receiver.is_some());
         let user_arity = arity.saturating_sub(self_offset);
-        if args.len() != user_arity {
-            return Err(EngineError::TypeMismatch {
-                message: format!(
-                    "callable expects {user_arity} argument(s), got {}",
-                    args.len()
-                ),
-            });
-        }
+        let args = match args {
+            CallableArgs::Positional(args) => {
+                if args.len() != user_arity {
+                    return Err(EngineError::TypeMismatch {
+                        message: format!(
+                            "callable expects {user_arity} argument(s), got {}",
+                            args.len()
+                        ),
+                    });
+                }
+                args.into_iter()
+                    .map(|arg| BexCallArg::Provided(Box::new(arg)))
+                    .collect()
+            }
+            CallableArgs::Named(mut args) => {
+                let mut ordered = Vec::with_capacity(user_arity);
+                for idx in self_offset..arity {
+                    let name = param_names
+                        .get(idx)
+                        .ok_or_else(|| EngineError::TypeMismatch {
+                            message: format!("callable parameter {idx} has no name"),
+                        })?;
+                    if let Some(value) = args.remove(name) {
+                        ordered.push(BexCallArg::Provided(Box::new(value)));
+                    } else if param_has_default.get(idx).copied().unwrap_or(false) {
+                        ordered.push(BexCallArg::OmittedDefault);
+                    } else {
+                        return Err(EngineError::TypeMismatch {
+                            message: format!("callable is missing required argument `{name}`"),
+                        });
+                    }
+                }
+                if !args.is_empty() {
+                    let mut extra = args.keys().cloned().collect::<Vec<_>>();
+                    extra.sort();
+                    return Err(EngineError::TypeMismatch {
+                        message: format!(
+                            "callable got unexpected argument(s): {}",
+                            extra.join(", ")
+                        ),
+                    });
+                }
+                ordered
+            }
+        };
 
         // Coerce each provided arg to its declared param type (offset by `self`
         // for bound methods).
-        let coerced: Vec<BexExternalValue> = args
+        let coerced: Vec<BexCallArg> = args
             .into_iter()
             .enumerate()
             .map(|(idx, arg)| match param_types.get(idx + self_offset) {
-                Some(ty) => self.coerce_inbound_arg(arg, ty),
+                Some(ty) => match arg {
+                    BexCallArg::Provided(value) => self
+                        .coerce_inbound_arg(*value, ty)
+                        .map(|value| BexCallArg::Provided(Box::new(value))),
+                    BexCallArg::OmittedDefault => Ok(BexCallArg::OmittedDefault),
+                },
                 None => Ok(arg),
             })
             .collect::<Result<_, _>>()?;
@@ -3312,11 +3424,14 @@ impl BexEngine {
             vm_args.push(receiver);
         }
         for (idx, arg) in coerced.into_iter().enumerate() {
-            vm_args.push(self.convert_external_to_vm_value_with_ty(
-                &mut thread,
-                arg,
-                param_types.get(idx + self_offset),
-            )?);
+            vm_args.push(match arg {
+                BexCallArg::Provided(arg) => self.convert_external_to_vm_value_with_ty(
+                    &mut thread,
+                    *arg,
+                    param_types.get(idx + self_offset),
+                )?,
+                BexCallArg::OmittedDefault => Value::OMITTED_ARG,
+            });
         }
 
         // The legacy span label stays "<callable>" (host-facing name for a

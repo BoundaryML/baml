@@ -8,11 +8,14 @@ ruby = "3.2.2"
 node = "22"         # For pnpm
 java = "temurin-23"
 gradle = "8.14"     # sdk_tests/crates/java fixtures (compiled with --release 17)
+dotnet = "10.0.301"
 
 uv = "0.11.3"
 direnv = "2.37.1"
 sccache = "0.10.0"
 clang = "22.1.7" # LLVM tools for CI, including llvm-strip
+cmake = "latest"
+ninja = "latest"
 
 # Rust tools
 "cargo:bacon" = "latest"

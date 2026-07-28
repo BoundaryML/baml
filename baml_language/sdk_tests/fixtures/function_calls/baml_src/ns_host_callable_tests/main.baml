@@ -180,6 +180,29 @@ function ignore_callback(callback: (int) -> string) -> string {
     "ignored"
 }
 
+// ─── BAML closures returned to the host ─────────────────────────────────────
+
+function make_adder(offset: int) -> (value: int) -> int throws never {
+    return (value: int) -> int { offset + value }
+}
+
+function make_pair_builder(base: int) -> (delta: int, label: string) -> Person throws never {
+    return (delta: int, label: string) -> Person {
+        Person {
+            name: label,
+            age: base + delta,
+        }
+    }
+}
+
+function make_counter(start: int) -> () -> int throws never {
+    let current = start;
+    return () -> int {
+        current += 1;
+        current
+    }
+}
+
 // ─── Optional args × host callables (the combination) ───────────────────────
 //
 // These exercise the intersection of two surfaces that were each covered

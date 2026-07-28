@@ -964,12 +964,14 @@ function rootResultToGraphValue(
   run: Run,
   valueBodyCache?: ValueBodyCache,
 ): GraphNodeValuePreview | null {
-  if (run.error?.valueRef) {
-    const projected = projectValueRef(
-      run.boundaryId,
-      run.error.valueRef,
-      valueBodyCache,
-    );
+  if (run.error) {
+    const projected = run.error.valueRef
+      ? projectValueRef(run.boundaryId, run.error.valueRef, valueBodyCache)
+      : {
+          state: 'error' as const,
+          value: null,
+          diagnostic: run.error.message,
+        };
     return {
       id: 'root-error',
       timestampMs: run.completedAtMs ?? run.startedAtMs ?? run.createdAtMs,

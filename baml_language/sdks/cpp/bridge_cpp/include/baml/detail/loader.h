@@ -307,9 +307,10 @@ inline const loaded_api& load_api() {
                               " bytes from " + chosen);
     }
     if (table->register_unhandled_spawn_error_callback == nullptr ||
-        table->shutdown_runtime == nullptr) {
-      throw runtime_error("BAML_RUNTIME_ABI_MISMATCH",
-                          "runtime has no unhandled-spawn lifecycle support");
+        table->shutdown_runtime == nullptr || table->call_handle == nullptr) {
+      throw runtime_error(
+          "BAML_RUNTIME_ABI_MISMATCH",
+          "runtime is missing required appended ABI operations");
     }
 
     api_loaded_flag() = true;

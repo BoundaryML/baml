@@ -380,12 +380,7 @@ impl DescribeArgs {
                     baml_lsp2_actions::describe_by_definition(&db, &describe_files, def)
                 {
                     if self.json {
-                        let json = crate::grep_command::description_to_json(
-                            &db,
-                            &desc,
-                            self.budget,
-                            &from,
-                        );
+                        let json = description_to_json(&db, &desc, self.budget, &from);
                         println!(
                             "{}",
                             serde_json::to_string_pretty(&[json])
@@ -413,12 +408,7 @@ impl DescribeArgs {
                     member_name.as_str(),
                 ) {
                     if self.json {
-                        let json = crate::grep_command::description_to_json(
-                            &db,
-                            &desc,
-                            self.budget,
-                            &from,
-                        );
+                        let json = description_to_json(&db, &desc, self.budget, &from);
                         println!(
                             "{}",
                             serde_json::to_string_pretty(&[json])
@@ -449,7 +439,7 @@ impl DescribeArgs {
                     let budget = self.budget;
                     let json_output: Vec<serde_json::Value> = descriptions
                         .iter()
-                        .map(|d| crate::grep_command::description_to_json(&db, d, budget, &from))
+                        .map(|d| description_to_json(&db, d, budget, &from))
                         .collect();
                     println!(
                         "{}",
@@ -526,6 +516,13 @@ fn render_keyword_json(name: &str) -> serde_json::Value {
     }
 }
 
+// The full-output hint is computed before sections are rendered, so fixed
+// layout groups have explicit costs shared by the planner and renderer.
+const ITEM_HEADER_COST: usize = 1;
+const SECTION_HEADER_COST: usize = 2;
+const CONTAINER_SECTION_COST: usize = 3;
+const LIST_ENTRY_COST: usize = 1;
+
 /// Render a SymbolDescription to stdout with budget-based output.
 pub fn render_description(
     db: &ProjectDatabase,
@@ -579,7 +576,7 @@ pub fn write_description(
         painter.keyword(kind_str)
     )?;
 
-    let mut lines_used = 1;
+    let mut lines_used = ITEM_HEADER_COST;
 
     // ── Body ─────────────────────────────────────────────────────────────────
     // The body slice already includes any leading `///` doc-comments
@@ -593,6 +590,12 @@ pub fn write_description(
         baml_lsp2_actions::DefinitionKind::Parameter | baml_lsp2_actions::DefinitionKind::Binding
     );
     let body_lines: Vec<&str> = desc.full_body.lines().collect();
+    let highlighted_body = colors.then(|| hl.range(desc.file, desc.item_range));
+    let highlighted_body_lines = highlighted_body.as_deref().map(trim_blank_edge_lines);
+    let body_line_count = highlighted_body_lines
+        .as_ref()
+        .map_or(body_lines.len(), Vec::len);
+    let full_output_budget = minimum_full_output_budget(desc, body_line_count, is_local);
 
     if !is_local {
         // The separator blank line is deliberately not counted against the
@@ -603,10 +606,10 @@ pub fn write_description(
         let available_for_body = budget.saturating_sub(lines_used);
 
         // Colored TTY output renders the verbatim definition slice through the
-        // compiler's semantic tokens. Plain output (pipes, JSON, tests) keeps
-        // the existing cleaned/truncated behavior byte-for-byte.
-        if colors {
-            lines_used += write_highlighted_body(w, &hl, desc, available_for_body)?;
+        // compiler's semantic tokens. Plain output (pipes, JSON, tests) uses
+        // the cleaned body representation.
+        if let Some(lines) = highlighted_body_lines.as_deref() {
+            lines_used += write_highlighted_body(w, lines, available_for_body, full_output_budget)?;
         } else {
             let was_truncated = body_lines.len() > available_for_body;
             let shown_body_lines;
@@ -639,7 +642,7 @@ pub fn write_description(
                     "[INFO] showing {shown} of {total} lines; use `--budget {needed}` for full output",
                     shown = shown_body_lines,
                     total = body_lines.len(),
-                    needed = body_lines.len() + 1,
+                    needed = full_output_budget,
                 )?;
                 lines_used += 2;
             }
@@ -651,28 +654,29 @@ pub fn write_description(
     // budget is soft: section headers are always emitted (so the symbol's
     // surface stays discoverable), entries are never split mid-unit, and
     // anything elided is replaced by an explicit "… <n> more lines" marker.
-    let mut remaining = budget.saturating_sub(lines_used);
+    let mut render_budget =
+        RenderBudget::new(budget.saturating_sub(lines_used), full_output_budget);
 
     // ── Methods (instance) ───────────────────────────────────────────────────
-    remaining = write_method_section(
+    write_method_section(
         w,
         db,
         &painter,
         project_root,
         "methods",
         &desc.instance_methods,
-        remaining,
+        &mut render_budget,
     )?;
 
     // ── Static methods ───────────────────────────────────────────────────────
-    remaining = write_method_section(
+    write_method_section(
         w,
         db,
         &painter,
         project_root,
         "static_methods",
         &desc.static_methods,
-        remaining,
+        &mut render_budget,
     )?;
 
     // ── Container ────────────────────────────────────────────────────────────
@@ -693,17 +697,17 @@ pub fn write_description(
             &c_path.display().to_string(),
             c_line,
         )?;
-        remaining = remaining.saturating_sub(3);
+        render_budget.consume(CONTAINER_SECTION_COST);
     }
 
     // ── Dependencies ─────────────────────────────────────────────────────────
     if !desc.dependencies.is_empty() {
         writeln!(w)?;
         writeln!(w, "dependencies:")?;
-        remaining = remaining.saturating_sub(2);
+        render_budget.consume(SECTION_HEADER_COST);
         let mut elided = 0usize;
         for dep in &desc.dependencies {
-            if remaining == 0 {
+            if !render_budget.can_start_atomic() {
                 elided += 1;
                 continue;
             }
@@ -719,9 +723,9 @@ pub fn write_description(
                 &dep_path.display().to_string(),
                 dep_line,
             )?;
-            remaining -= 1;
+            render_budget.consume(LIST_ENTRY_COST);
         }
-        write_elision_marker(w, elided)?;
+        write_elision_marker(w, elided, render_budget.full_output)?;
     }
 
     // ── References ───────────────────────────────────────────────────────────
@@ -729,10 +733,10 @@ pub fn write_description(
     // tight budget. The header always shows the total count.
     writeln!(w)?;
     writeln!(w, "references ({}):", desc.references.len())?;
-    remaining = remaining.saturating_sub(2);
+    render_budget.consume(SECTION_HEADER_COST);
     let mut elided = 0usize;
     for r in &desc.references {
-        if remaining == 0 {
+        if !render_budget.can_start_atomic() {
             elided += 1;
             continue;
         }
@@ -754,9 +758,9 @@ pub fn write_description(
             &r.line_number.to_string(),
         );
         writeln!(w, "  {loc}  {preview}")?;
-        remaining -= 1;
+        render_budget.consume(LIST_ENTRY_COST);
     }
-    write_elision_marker(w, elided)?;
+    write_elision_marker(w, elided, render_budget.full_output)?;
 
     Ok(())
 }
@@ -768,21 +772,10 @@ pub fn write_description(
 /// run is never split). Returns the number of output lines consumed.
 fn write_highlighted_body(
     w: &mut impl std::io::Write,
-    hl: &crate::paint::Highlighter,
-    desc: &SymbolDescription,
+    lines: &[&str],
     available_for_body: usize,
+    full_output_budget: usize,
 ) -> std::io::Result<usize> {
-    let colored = hl.range(desc.file, desc.item_range);
-    let all: Vec<&str> = colored.lines().collect();
-    // `item_range` can swallow leading doc-comments/blank lines and trailing
-    // whitespace; trim blank edges so the block starts at the declaration.
-    let first = all.iter().position(|l| !l.trim().is_empty()).unwrap_or(0);
-    let last = all
-        .iter()
-        .rposition(|l| !l.trim().is_empty())
-        .map_or(first, |e| e + 1);
-    let lines = &all[first..last];
-
     if lines.len() <= available_for_body {
         for line in lines {
             writeln!(w, "{line}")?;
@@ -810,16 +803,134 @@ fn write_highlighted_body(
         "[INFO] showing {} of {} lines; use `--budget {}` for full output",
         head + tail + 1,
         lines.len(),
-        lines.len() + 1,
+        full_output_budget,
     )?;
     Ok(head + tail + 3)
 }
 
+fn trim_blank_edge_lines(text: &str) -> Vec<&str> {
+    let all: Vec<&str> = text.lines().collect();
+    let first = all
+        .iter()
+        .position(|line| !line.trim().is_empty())
+        .unwrap_or(0);
+    let last = all
+        .iter()
+        .rposition(|line| !line.trim().is_empty())
+        .map_or(first, |end| end + 1);
+    all[first..last].to_vec()
+}
+
+/// Tracks the minimum starting budget needed to render every guarded unit.
+///
+/// Soft overhead is always printed, even after the budget is exhausted, so it
+/// only advances `consumed`. A required block must fit in full. An atomic unit
+/// may start whenever one line remains, even when its full cost is larger.
+#[derive(Default)]
+struct BudgetRequirement {
+    consumed: usize,
+    minimum: usize,
+}
+
+struct RenderBudget {
+    remaining: usize,
+    full_output: usize,
+}
+
+impl RenderBudget {
+    fn new(remaining: usize, full_output: usize) -> Self {
+        Self {
+            remaining,
+            full_output,
+        }
+    }
+
+    fn consume(&mut self, cost: usize) {
+        self.remaining = self.remaining.saturating_sub(cost);
+    }
+
+    fn can_start_atomic(&self) -> bool {
+        self.remaining > 0
+    }
+}
+
+impl BudgetRequirement {
+    fn add_soft_overhead(&mut self, cost: usize) {
+        self.consumed = self.consumed.saturating_add(cost);
+    }
+
+    fn add_required(&mut self, cost: usize) {
+        self.add_soft_overhead(cost);
+        self.minimum = self.minimum.max(self.consumed);
+    }
+
+    fn add_atomic(&mut self, cost: usize) {
+        debug_assert!(cost > 0);
+        self.minimum = self.minimum.max(self.consumed.saturating_add(1));
+        self.add_soft_overhead(cost);
+    }
+}
+
+fn minimum_full_output_budget(
+    desc: &SymbolDescription,
+    body_line_count: usize,
+    is_local: bool,
+) -> usize {
+    let mut required = BudgetRequirement::default();
+
+    if is_local {
+        required.add_soft_overhead(ITEM_HEADER_COST);
+    } else {
+        required.add_required(ITEM_HEADER_COST.saturating_add(body_line_count));
+    }
+
+    add_method_budget(&mut required, &desc.instance_methods);
+    add_method_budget(&mut required, &desc.static_methods);
+
+    if desc.container.is_some() {
+        required.add_soft_overhead(CONTAINER_SECTION_COST);
+    }
+
+    if !desc.dependencies.is_empty() {
+        required.add_soft_overhead(SECTION_HEADER_COST);
+        for _ in &desc.dependencies {
+            required.add_atomic(LIST_ENTRY_COST);
+        }
+    }
+
+    required.add_soft_overhead(SECTION_HEADER_COST);
+    for _ in &desc.references {
+        required.add_atomic(LIST_ENTRY_COST);
+    }
+
+    required.minimum
+}
+
+fn add_method_budget(required: &mut BudgetRequirement, methods: &[describe::MethodRef]) {
+    if !methods.is_empty() {
+        required.add_soft_overhead(SECTION_HEADER_COST);
+        for method in methods {
+            required.add_atomic(method_line_cost(method));
+        }
+    }
+}
+
+fn method_line_cost(method: &describe::MethodRef) -> usize {
+    1 + usize::from(method.docstring.is_some())
+}
+
 /// Write the soft-budget elision marker for `elided` hidden lines (no-op when
 /// nothing was elided).
-fn write_elision_marker(w: &mut impl std::io::Write, elided: usize) -> std::io::Result<()> {
+fn write_elision_marker(
+    w: &mut impl std::io::Write,
+    elided: usize,
+    full_output_budget: usize,
+) -> std::io::Result<()> {
     if elided > 0 {
-        writeln!(w, "  … {elided} more lines (re-run with a higher --budget)")?;
+        writeln!(
+            w,
+            "  \u{2026} {elided} more lines (re-run with a higher `--budget` to see more; use `--budget {full_output_budget}` for full output)"
+        )?;
     }
     Ok(())
 }
@@ -874,10 +985,10 @@ pub(crate) fn definition_line_range(
 ///
 /// Each method shows its first-line docstring (when present) followed by its
 /// canonical signature and full definition line range. The section consumes
-/// from the soft line `budget` and returns what's left: the header is always
-/// emitted, each method is an atomic unit (docstring + signature are never
-/// split, even if the last one runs slightly over), and methods that don't
-/// fit are summarized by an elision marker.
+/// from the shared soft line `budget`: the header is always emitted, each
+/// method is an atomic unit (docstring + signature are never split, even if
+/// the last one runs slightly over), and methods that don't fit are summarized
+/// by an elision marker.
 fn write_method_section(
     w: &mut impl std::io::Write,
     db: &ProjectDatabase,
@@ -885,18 +996,18 @@ fn write_method_section(
     project_root: &std::path::Path,
     label: &str,
     methods: &[describe::MethodRef],
-    budget: usize,
-) -> std::io::Result<usize> {
+    budget: &mut RenderBudget,
+) -> std::io::Result<()> {
     if methods.is_empty() {
-        return Ok(budget);
+        return Ok(());
     }
     writeln!(w)?;
     writeln!(w, "{label}:")?;
-    let mut remaining = budget.saturating_sub(2);
+    budget.consume(SECTION_HEADER_COST);
     let mut elided_lines = 0usize;
     for m in methods {
-        let unit_cost = 1 + usize::from(m.docstring.is_some());
-        if remaining == 0 {
+        let unit_cost = method_line_cost(m);
+        if !budget.can_start_atomic() {
             elided_lines += unit_cost;
             continue;
         }
@@ -917,10 +1028,10 @@ fn write_method_section(
         );
         let sig = painter.fragment(&m.signature);
         writeln!(w, "  {sig}  {loc}")?;
-        remaining = remaining.saturating_sub(unit_cost);
+        budget.consume(unit_cost);
     }
-    write_elision_marker(w, elided_lines)?;
-    Ok(remaining)
+    write_elision_marker(w, elided_lines, budget.full_output)?;
+    Ok(())
 }
 
 /// Render a flat listing of entries to stdout.
@@ -1212,4 +1323,86 @@ pub fn truncate_body(body_lines: &[&str], available_lines: usize) -> Vec<String>
     }
 
     result
+}
+
+fn budget_body(desc: &SymbolDescription, budget: usize) -> String {
+    let body_lines: Vec<&str> = desc.full_body.lines().collect();
+
+    if body_lines.len() <= budget {
+        desc.full_body.clone()
+    } else if budget >= 5 {
+        truncate_body(&body_lines, budget).join("\n")
+    } else {
+        shape_with_elision(&desc.shape, &desc.full_body)
+    }
+}
+
+fn method_json(
+    db: &ProjectDatabase,
+    project_root: &std::path::Path,
+    methods: &[baml_lsp2_actions::describe::MethodRef],
+) -> Vec<serde_json::Value> {
+    methods
+        .iter()
+        .map(|method| {
+            let path = relative_path(&method.file.path(db), project_root);
+            let text = method.file.text(db);
+            serde_json::json!({
+                "name": method.name,
+                "signature": method.signature,
+                "docstring": method.docstring,
+                "file": path.to_string_lossy(),
+                "line_start": line_number_at_offset(text, method.item_range.start().into()),
+                "line_end": line_number_at_offset(text, method.item_range.end().into()),
+            })
+        })
+        .collect()
+}
+
+fn description_to_json(
+    db: &ProjectDatabase,
+    desc: &SymbolDescription,
+    budget: usize,
+    project_root: &std::path::Path,
+) -> serde_json::Value {
+    let file_path = relative_path(&desc.file.path(db), project_root);
+    let body = budget_body(desc, budget);
+    serde_json::json!({
+        "name": desc.name,
+        "kind": desc.kind.as_str(),
+        "file": file_path.to_string_lossy(),
+        "line": line_number_at_offset(desc.file.text(db), desc.name_span.start().into()),
+        "shape": desc.shape,
+        "body": body,
+        "docstring": desc.docstring,
+        "resolved_type": desc.resolved_type,
+        "dependencies": desc.dependencies.iter().map(|dep| {
+            let dep_path = relative_path(&dep.file.path(db), project_root);
+            serde_json::json!({
+                "name": dep.name,
+                "kind": dep.kind.as_str(),
+                "file": dep_path.to_string_lossy(),
+                "line": line_number_at_offset(dep.file.text(db), dep.name_span.start().into()),
+            })
+        }).collect::<Vec<_>>(),
+        "references": desc.references.iter().map(|reference| {
+            let ref_path = relative_path(&reference.file.path(db), project_root);
+            serde_json::json!({
+                "file": ref_path.to_string_lossy(),
+                "line": reference.line_number,
+                "text": reference.line_text.trim(),
+            })
+        }).collect::<Vec<_>>(),
+        "instance_methods": method_json(db, project_root, &desc.instance_methods),
+        "static_methods": method_json(db, project_root, &desc.static_methods),
+        "container": desc.container.as_ref().map(|container| {
+            let path = relative_path(&container.file.path(db), project_root);
+            serde_json::json!({
+                "name": container.name,
+                "kind": container.kind.as_str(),
+                "file": path.to_string_lossy(),
+                "line": line_number_at_offset(container.file.text(db), container.name_span.start().into()),
+            })
+        }),
+    })
 }

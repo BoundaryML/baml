@@ -97,6 +97,15 @@ internal sealed unsafe partial class NativeApi
             encodeArguments,
             cancellationToken));
 
+    internal Task<byte[]> InvokeOwnedHandleAsync(
+        ulong handleKey,
+        Func<ulong, EncodedCallArguments> encodeArguments,
+        CancellationToken cancellationToken) =>
+        NativeCallCompletion.CompleteManagedOperationAsync(StartOwnedHandle(
+            handleKey,
+            encodeArguments,
+            cancellationToken));
+
     internal NativeFunctionCall StartOwnedFunction(
         string functionIdentity,
         Func<ulong, EncodedCallArguments> encodeArguments,
@@ -179,6 +188,72 @@ internal sealed unsafe partial class NativeApi
         }
     }
 
+    internal NativeFunctionCall StartOwnedHandle(
+        ulong handleKey,
+        Func<ulong, EncodedCallArguments> encodeArguments,
+        CancellationToken cancellationToken)
+    {
+        if (handleKey == 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(handleKey));
+        }
+
+        ArgumentNullException.ThrowIfNull(encodeArguments);
+        if (cancellationToken.IsCancellationRequested)
+        {
+            return new NativeFunctionCall(
+                FunctionCallId: 0,
+                Task.FromCanceled<byte[]>(cancellationToken));
+        }
+
+        NativeCallbacks.ThrowIfCallbackFailed();
+        ulong callId = NewFunctionCall();
+        HostValueRegistry.Shared.BeginFunctionCall(callId, cancellationToken);
+        try
+        {
+            using EncodedCallArguments arguments = encodeArguments(callId);
+            (uint callbackId, Task<byte[]> completion) = NativeCallbacks.AddPending();
+            var cancellation = new CallCancellation(
+                this,
+                callId,
+                callbackId,
+                cancellationToken);
+            CancellationTokenRegistration registration = default;
+
+            try
+            {
+                registration = cancellationToken.Register(
+                    static state => ((CallCancellation)state!).Cancel(),
+                    cancellation);
+                fixed (byte* argumentPointer = arguments.Bytes)
+                {
+                    if (cancellation.DispatchHandle(
+                        handleKey,
+                        argumentPointer,
+                        (nuint)arguments.Bytes.Length))
+                    {
+                        arguments.Commit();
+                    }
+                }
+            }
+            catch
+            {
+                _ = NativeCallbacks.TryDiscard(callbackId);
+                registration.Dispose();
+                throw;
+            }
+
+            return new NativeFunctionCall(
+                callId,
+                NativeCallCompletion.CompleteAsync(completion, registration));
+        }
+        catch
+        {
+            HostValueRegistry.Shared.CompleteFunctionCall(callId);
+            throw;
+        }
+    }
+
     internal static void ValidateTable(BamlApiV1* api)
     {
         if (api is null)
@@ -218,6 +293,9 @@ internal sealed unsafe partial class NativeApi
         Require(api->MediaBase64 is not null, "media_base64");
         Require(api->MediaMimeType is not null, "media_mime_type");
         Require(api->RegisterBridge is not null, "register_bridge");
+        Require(api->RegisterUnhandledSpawnErrorCallback is not null, "register_unhandled_spawn_error_callback");
+        Require(api->ShutdownRuntime is not null, "shutdown_runtime");
+        Require(api->CallHandle is not null, "call_handle");
     }
 
     private static NativeApi Load()
@@ -303,6 +381,28 @@ internal sealed unsafe partial class NativeApi
                 started = true;
                 api.table->CallFunction(
                     name,
+                    arguments,
+                    argumentsLength,
+                    callbackId);
+                return true;
+            }
+        }
+
+        internal bool DispatchHandle(
+            ulong handleKey,
+            byte* arguments,
+            nuint argumentsLength)
+        {
+            lock (gate)
+            {
+                if (!NativeCallbacks.IsPending(callbackId))
+                {
+                    return false;
+                }
+
+                started = true;
+                api.table->CallHandle(
+                    handleKey,
                     arguments,
                     argumentsLength,
                     callbackId);

@@ -1,6 +1,7 @@
 import initWasm, {
   callFunction as callWasmFunction,
   callFunctionSync as callWasmFunctionSync,
+  callHandleSync as callWasmHandleSync,
   cancelFunctionCall as cancelWasmFunctionCall,
   cloneHandle as cloneWasmHandle,
   completeWebHostCall,
@@ -407,6 +408,13 @@ export class BamlRuntime {
   callFunctionSync(functionName: string, encodedArgs: Uint8Array, _ctx?: HostSpanManager | null, _collectors?: Collector[] | null): Uint8Array {
     try {
       return callWasmFunctionSync(functionName, encodedArgs);
+    } catch (error) {
+      throw wrapNativeError(error);
+    }
+  }
+  callHandleSync(handle: BamlHandle, encodedArgs: Uint8Array): Uint8Array {
+    try {
+      return callWasmHandleSync(handle._keyForBridge(), encodedArgs);
     } catch (error) {
       throw wrapNativeError(error);
     }

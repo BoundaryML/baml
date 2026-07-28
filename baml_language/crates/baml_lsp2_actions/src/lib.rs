@@ -48,7 +48,6 @@ pub mod definition;
 pub mod describe;
 pub mod env_vars;
 pub mod fixes;
-pub mod grep;
 pub mod listing;
 pub mod outline;
 pub mod search;
@@ -63,8 +62,6 @@ mod completions_tests;
 mod definition_at_tests;
 #[cfg(test)]
 mod describe_tests;
-#[cfg(test)]
-mod grep_tests;
 #[cfg(test)]
 mod listing_tests;
 #[cfg(test)]
@@ -100,7 +97,6 @@ pub use describe::{
 };
 pub use env_vars::all_env_var_names;
 pub use fixes::{Fix, FixKind, fixes_at};
-pub use grep::{GrepMode, GrepOptions, GrepResult, MatchAnnotation, TextMatch, grep, list_symbols};
 pub use listing::{
     ListingEntry, ResolvedTarget, list_namespace_items, list_package_items, non_user_package_names,
     resolve_target,

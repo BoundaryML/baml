@@ -113,6 +113,7 @@ BAML_ASSERT_AFTER(media_base64, media_mime_type);
 BAML_ASSERT_AFTER(media_mime_type, register_bridge);
 BAML_ASSERT_AFTER(register_bridge, register_unhandled_spawn_error_callback);
 BAML_ASSERT_AFTER(register_unhandled_spawn_error_callback, shutdown_runtime);
+BAML_ASSERT_AFTER(shutdown_runtime, call_handle);
 BAML_STATIC_ASSERT(
     BAML_API_V1_MIN_SIZE == offsetof(BamlApiV1, register_unhandled_spawn_error_callback),
     "the appended lifecycle fields must follow the original V1 prefix");
@@ -140,5 +141,6 @@ BAML_ASSERT_FIELD_TYPE(register_bridge, BamlRegisterBridgeFn)
 BAML_ASSERT_FIELD_TYPE(register_unhandled_spawn_error_callback,
                        BamlRegisterUnhandledSpawnErrorCallbackFn)
 BAML_ASSERT_FIELD_TYPE(shutdown_runtime, BamlShutdownRuntimeFn)
+BAML_ASSERT_FIELD_TYPE(call_handle, BamlCallHandleFn)
 
 #endif /* BAML_CFFI_TEST_ABI_ASSERTIONS_H */

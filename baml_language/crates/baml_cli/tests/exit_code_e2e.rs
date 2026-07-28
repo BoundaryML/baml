@@ -1221,8 +1221,8 @@ testset "suite" with FirstOnlyWithoutNames {
 }
 
 // ============================================================================
-// Tests for project-less introspection (`baml describe` / `baml grep` /
-// `baml fmt` without a `baml.toml`). The most expensive thing an agent can
+// Tests for project-less introspection (`baml describe` / `baml fmt` without
+// a `baml.toml`). The most expensive thing an agent can
 // do is fail fast and burn a turn, so these read-only commands fall back to
 // a stdlib-only "default state" instead of erroring.
 // ============================================================================
@@ -1305,30 +1305,6 @@ fn fmt_without_from_or_project_is_noop_success() {
         "Expected exit 0 for `baml fmt` with no project, got: {:?}\nstderr: {}",
         output.status.code(),
         String::from_utf8_lossy(&output.stderr),
-    );
-}
-
-/// `baml grep` with no `baml.toml` must not hard-fail on the missing
-/// manifest. The user-file set is empty in the default state (grep only
-/// searches user files, not the stdlib), so a "no match" result is correct
-/// — what matters is that the old "doesn't look like a BAML project" bail
-/// is gone and the process doesn't crash.
-#[test]
-fn grep_without_baml_toml_does_not_fail_on_missing_manifest() {
-    let built = &common::baml_cli();
-    let tmp = tempfile::tempdir().unwrap();
-
-    let output = run_baml_cli(built, tmp.path(), &["grep", "Foo", "--from", "."]);
-
-    let stderr = String::from_utf8_lossy(&output.stderr);
-    assert!(
-        !stderr.contains("doesn't look like a BAML project"),
-        "grep should not emit the no-project error in the default state, got:\n{stderr}",
-    );
-    // Exited normally (Some(code)) rather than crashing on a signal (None).
-    assert!(
-        output.status.code().is_some(),
-        "grep should exit cleanly in the default state, not crash",
     );
 }
 

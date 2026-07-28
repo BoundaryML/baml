@@ -6,6 +6,21 @@ using CsharpPhase11;
 
 RequireRegistryIdle("startup");
 
+Func<long, CancellationToken, Task<long>> addTen = Functions.MakeAdder(10L);
+Require(await addTen(5L, CancellationToken.None) == 15L, "returned closure argument or result changed");
+Require(await addTen(7L, CancellationToken.None) == 17L, "returned closure was not reusable");
+Console.WriteLine("baml_closure_is_a_native_callable_with_host_language_arguments=ok");
+Func<long, string, CancellationToken, Task<ReturnedPerson>> buildPair = Functions.MakePairBuilder(30L);
+ReturnedPerson ada = await buildPair(12L, "Ada", CancellationToken.None);
+Require(ada.Name == "Ada" && ada.Age == 42L, "returned closure structured result changed");
+Console.WriteLine("baml_closure_decodes_multiple_args_and_structured_return_values=ok");
+Func<CancellationToken, Task<long>> nextValue = Functions.MakeCounter(40L);
+Require(
+    await nextValue(CancellationToken.None) == 41L
+        && await nextValue(CancellationToken.None) == 42L,
+    "returned closure mutable capture changed");
+Console.WriteLine("baml_closure_is_reusable_and_retains_mutable_captures=ok");
+
 long synchronousLambda = Functions.InvokeDeferred(
     BamlCallback.FromSync<long, long>(value => value * 2L),
     5L);

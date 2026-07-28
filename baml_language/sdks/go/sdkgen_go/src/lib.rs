@@ -1243,8 +1243,21 @@ fn supported_function(
                     !matches!(projection.project(&argument.ty), GoTy::Function(_))
                 })))
         && !projected_contains_type_var_dynamic_union(&projection.project(&function.return_type))
-        && (supported_wire_type(&function.return_type, wireable_classes, projection)
-            || function_returns_only_error(&function.return_type))
+        && match &function.return_type {
+            Ty::Function { params, .. } => params.iter().all(|param| param.name.is_some()),
+            _ => true,
+        }
+        && (match projection.project(&function.return_type) {
+            GoTy::Function(key) => {
+                key.params()
+                    .iter()
+                    .all(|param| supported_go_type(param.ty(), wireable_classes))
+                    && key
+                        .ret()
+                        .is_none_or(|ret| supported_go_type(ret, wireable_classes))
+            }
+            _ => supported_wire_type(&function.return_type, wireable_classes, projection),
+        } || function_returns_only_error(&function.return_type))
 }
 
 fn supported_function_argument(
@@ -2699,9 +2712,13 @@ fn projected_output_decoder(
         GoTy::TypedUnion(key) | GoTy::DynamicUnion { key, .. } => codecs
             .union_ident(current_baml_package, key, UnionCodecDirection::Decode)
             .to_string(),
-        GoTy::Function(_) => unreachable!("function values are input-only in the Go SDK"),
+        GoTy::Function(key) => callback_decoder_ident(codecs, current_baml_package, key),
         GoTy::Unsupported => unreachable!("unsupported Go type reached output codec"),
     }
+}
+
+fn callback_decoder_ident(codecs: &WireCodecs, package: &BaseName, key: &GoFunctionKey) -> String {
+    format!("{}_decode", codecs.callback_ident(package, key))
 }
 
 fn projected_generic_output_decoder(
@@ -3536,6 +3553,163 @@ fn render_callback_codecs(
             }
         }
         out.push_str("\t})\n}\n\n");
+
+        let decoder = callback_decoder_ident(codecs, package, key);
+        let mut closure_parameters = key
+            .required_params()
+            .enumerate()
+            .map(|(index, param)| {
+                format!(
+                    "{} {}",
+                    CallbackArgumentIdent::new(index),
+                    render_projected_go_type(
+                        param.ty(),
+                        package,
+                        current_package,
+                        names,
+                        TypeVarScope::default(),
+                    )
+                )
+            })
+            .collect::<Vec<_>>();
+        if key.has_optional_params() {
+            closure_parameters.push(format!(
+                "{options} {}",
+                names
+                    .callback_options(package, key)
+                    .type_name()
+                    .identifier(current_package)
+            ));
+        }
+        let _ = writeln!(
+            out,
+            "func {decoder}({value} {runtime}.Value) ({go_type}, error) {{"
+        );
+        let _ = writeln!(out, "\tfunction, {error} := {value}.Function()");
+        let _ = writeln!(out, "\tif {error} != nil {{ return nil, {error} }}");
+        let _ = writeln!(
+            out,
+            "\treturn func({}){} {{",
+            closure_parameters.join(", "),
+            match (key.ret(), key.throws()) {
+                (Some(ret), false) => format!(
+                    " {}",
+                    render_projected_go_type(
+                        ret,
+                        package,
+                        current_package,
+                        names,
+                        TypeVarScope::default(),
+                    )
+                ),
+                (Some(ret), true) => format!(
+                    " ({}, error)",
+                    render_projected_go_type(
+                        ret,
+                        package,
+                        current_package,
+                        names,
+                        TypeVarScope::default(),
+                    )
+                ),
+                (None, false) => String::new(),
+                (None, true) => " error".to_string(),
+            }
+        );
+        let _ = writeln!(out, "\t\trequiredArgs_ := []{runtime}.Input{{");
+        for (index, param) in key.required_params().enumerate() {
+            let argument = CallbackArgumentIdent::new(index);
+            let _ = writeln!(
+                out,
+                "\t\t\t{}({argument}),",
+                projected_input_encoder(
+                    param.ty(),
+                    package,
+                    current_package,
+                    names,
+                    codecs,
+                    TypeVarScope::default(),
+                )
+            );
+        }
+        out.push_str("\t\t}\n");
+        let _ = writeln!(out, "\t\toptionalArgs_ := map[string]{runtime}.Input{{}}");
+        if key.has_optional_params() {
+            let option_names = names.callback_options(package, key);
+            for param in key.optional_params() {
+                let wire_name = param
+                    .name()
+                    .expect("optional callback parameter must have a wire name");
+                let field = option_names.field(wire_name).identifier(current_package);
+                let encoder = projected_input_encoder(
+                    param.ty(),
+                    package,
+                    current_package,
+                    names,
+                    codecs,
+                    TypeVarScope::default(),
+                );
+                let _ = writeln!(
+                    out,
+                    "\t\tif optionalValue_, ok_ := {options}.{field}.Get(); ok_ {{ optionalArgs_[{:?}] = {encoder}(optionalValue_) }}",
+                    wire_name.as_str()
+                );
+            }
+        }
+        let result_binding = if key.ret().is_some() {
+            result.to_string()
+        } else {
+            "_".to_string()
+        };
+        let _ = writeln!(
+            out,
+            "\t\t{result_binding}, {error} := function.CallPositional(context.Background(), requiredArgs_, optionalArgs_)"
+        );
+        if key.throws() {
+            match key.ret() {
+                Some(ret) => {
+                    let ret_ty = render_projected_go_type(
+                        ret,
+                        package,
+                        current_package,
+                        names,
+                        TypeVarScope::default(),
+                    );
+                    let _ = writeln!(
+                        out,
+                        "\t\tif {error} != nil {{ var zero {ret_ty}; return zero, {error} }}"
+                    );
+                    let output_decoder = projected_output_decoder(
+                        ret,
+                        package,
+                        current_package,
+                        names,
+                        codecs,
+                        TypeVarScope::default(),
+                    );
+                    let _ = writeln!(out, "\t\treturn {output_decoder}({result})");
+                }
+                None => {
+                    let _ = writeln!(out, "\t\treturn {error}");
+                }
+            }
+        } else {
+            let _ = writeln!(out, "\t\tif {error} != nil {{ panic({error}) }}");
+            if let Some(ret) = key.ret() {
+                let output_decoder = projected_output_decoder(
+                    ret,
+                    package,
+                    current_package,
+                    names,
+                    codecs,
+                    TypeVarScope::default(),
+                );
+                let _ = writeln!(out, "\t\tdecoded, {error} := {output_decoder}({result})");
+                let _ = writeln!(out, "\t\tif {error} != nil {{ panic({error}) }}");
+                out.push_str("\t\treturn decoded\n");
+            }
+        }
+        out.push_str("\t}, nil\n}\n\n");
     }
 }
 
@@ -5578,8 +5752,9 @@ mod tests {
         );
         let root = &files[&PathBuf::from("functions.go")];
         let models = &files[&PathBuf::from("packages/models/functions.go")];
-        assert_eq!(root.matches("func _bamlEncodeCallback").count(), 1);
-        assert_eq!(models.matches("func _bamlEncodeCallback").count(), 1);
+        assert_eq!(root.matches("func _bamlEncodeCallback").count(), 2);
+        assert_eq!(models.matches("func _bamlEncodeCallback").count(), 2);
+        assert!(root.contains("_decode(value_ baml_go.Value)"));
         assert!(root.contains("if value_ == nil"));
         assert!(root.contains("InvalidInput(\"BAML host callable is nil\")"));
         assert!(

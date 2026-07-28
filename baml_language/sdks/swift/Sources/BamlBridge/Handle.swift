@@ -74,3 +74,46 @@ extension Optional where Wrapped == BamlHandle {
     /// Optional conformance; nothing extra needed — this extension
     /// exists only for documentation symmetry.
 }
+
+/// An owned BAML closure returned to Swift.
+public final class BamlFunctionHandle: @unchecked Sendable {
+    private let handle: BamlHandle
+    public let parameterNames: [String]
+
+    private init(handle: BamlHandle, parameterNames: [String]) {
+        self.handle = handle
+        self.parameterNames = parameterNames
+    }
+
+    public static func decode(_ value: BamlOutboundValue) throws -> BamlFunctionHandle {
+        let raw = value.normalized
+        guard case .handleValue(let outbound) = raw.value,
+              outbound.handleType == .functionRef,
+              outbound.key != 0
+        else {
+            throw BamlDecodeError.typeMismatch(expected: "function", got: wireArmName(raw))
+        }
+        let handle = BamlHandle(key: outbound.key, handleType: outbound.handleType)
+        guard outbound.hasTy,
+              case .function(let functionType)? = outbound.ty.ty
+        else {
+            throw BamlDecodeError.typeMismatch(expected: "function", got: wireArmName(raw))
+        }
+        let names = try functionType.params.enumerated().map { index, parameter in
+            guard parameter.hasName, !parameter.name.isEmpty else {
+                throw BamlDecodeError.unsupported("returned function parameter \(index) has no name")
+            }
+            return parameter.name
+        }
+        return BamlFunctionHandle(
+            handle: handle,
+            parameterNames: names
+        )
+    }
+
+    public func callRaw(
+        args: [(String, (any BamlEncodable)?)]
+    ) async throws -> BamlOutboundValue {
+        try await BamlRuntime.shared.callHandleRaw(handle.key, args: args)
+    }
+}

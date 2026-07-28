@@ -137,7 +137,8 @@ pub mod error;
 pub mod handle;
 
 pub use baml_to_host::{
-    call_and_encode, error_to_outbound, result_to_outbound, unhandled_spawn_error_to_outbound,
+    call_and_encode, call_handle_and_encode, error_to_outbound, result_to_outbound,
+    unhandled_spawn_error_to_outbound,
 };
 pub use bridge_ctypes::baml_bridge;
 pub use buffer::{Buffer, free_buffer};

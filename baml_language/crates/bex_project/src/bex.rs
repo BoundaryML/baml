@@ -23,6 +23,14 @@ pub trait Bex: Send + Sync {
         call_ctx: FunctionCallContext,
     ) -> Result<BexExternalValue, RuntimeError>;
 
+    /// Execute an engine-owned callable by heap handle.
+    async fn call_callable(
+        self: Arc<Self>,
+        handle: bex_external_types::Handle,
+        args: BexArgs,
+        call_ctx: FunctionCallContext,
+    ) -> Result<BexExternalValue, RuntimeError>;
+
     /// Execute a function by name and surface the BEX entry trace identity once
     /// the VM has actually started. Pre-entry failures return `Err`; runtime
     /// success/failure returns `Ok` with the traced outcome.
@@ -81,6 +89,16 @@ impl Bex for BexProject {
         Bex::call_function_with_trace(bex, function_name, args, call_ctx).await
     }
 
+    async fn call_callable(
+        self: Arc<Self>,
+        handle: bex_external_types::Handle,
+        args: BexArgs,
+        call_ctx: FunctionCallContext,
+    ) -> Result<BexExternalValue, RuntimeError> {
+        let bex = self.get_bex()?;
+        Bex::call_callable(bex, handle, args, call_ctx).await
+    }
+
     fn cancel_function_call(&self, call_id: CallId) -> Result<(), RuntimeError> {
         let bex = self.get_bex()?;
         bex.cancel_function_call(call_id)
@@ -113,6 +131,17 @@ impl Bex for BexEngine {
         let result =
             Bex::call_function_with_trace(self, function_name, BexArgs(args), call_ctx).await?;
         result.value
+    }
+
+    async fn call_callable(
+        self: Arc<Self>,
+        handle: bex_external_types::Handle,
+        BexArgs(args): BexArgs,
+        call_ctx: FunctionCallContext,
+    ) -> Result<BexExternalValue, RuntimeError> {
+        BexEngine::call_callable_named(&self, handle, args, call_ctx, true)
+            .await
+            .map_err(RuntimeError::from)
     }
 
     /// Resolve named `BexArgs` into the positional `Vec<BexExternalValue>` that

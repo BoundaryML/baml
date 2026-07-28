@@ -56,7 +56,7 @@ impl GenerateArgs {
         );
         // Codegen reads types across the whole project, so take the shared
         // read-only session: warm seeds where they are provably faithful and
-        // the parallel index prime, same as describe/grep.
+        // the parallel index prime, same as describe.
         let mut session = crate::project_session::ProjectSession::open(
             self.from.as_deref(),
             crate::project_session::CacheUse::ReadOnly,

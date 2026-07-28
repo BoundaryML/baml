@@ -11,6 +11,7 @@ baml_media_from_url
 baml_media_mime_type
 baml_media_url
 call_function
+call_handle
 cancel_function_call
 complete_host_call
 create_baml_runtime

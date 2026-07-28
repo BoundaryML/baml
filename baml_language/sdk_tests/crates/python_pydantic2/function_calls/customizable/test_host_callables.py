@@ -33,6 +33,9 @@ from baml_sdk.host_callable_tests import (
     call_with_two_args,
     call_with_typed_throws,
     call_with_typed_throws_propagating,
+    make_adder,
+    make_counter,
+    make_pair_builder,
 )
 
 
@@ -58,6 +61,28 @@ def test_host_callables_int_return_callable_round_trip():
 
     result = call_int_callback(callback=cb, x=21)
     assert result == 42
+
+
+# SDK_PARITY_LINT(skip): C# covers this canonical behavior in its native integration harness
+def test_baml_closure_is_a_native_callable_with_host_language_arguments():
+    add_ten = make_adder(offset=10)
+    assert callable(add_ten)
+    assert add_ten(5) == 15
+    assert add_ten(value=7) == 17
+
+
+# SDK_PARITY_LINT(skip): C# covers this canonical behavior in its native integration harness
+def test_baml_closure_decodes_multiple_args_and_structured_return_values():
+    build = make_pair_builder(base=30)
+    assert build(12, "Ada") == Person(name="Ada", age=42)
+    assert build(delta=5, label="Grace") == Person(name="Grace", age=35)
+
+
+# SDK_PARITY_LINT(skip): C# covers this canonical behavior in its native integration harness
+def test_baml_closure_is_reusable_and_retains_mutable_captures():
+    next_value = make_counter(start=40)
+    assert next_value() == 41
+    assert next_value() == 42
 
 
 def test_host_callables_throwing_callable_round_trips_original_python_exception():

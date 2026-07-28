@@ -8,7 +8,7 @@
 //! caller skips the enclosing symbol and reports it — never erasing to a
 //! catch-all type.
 
-use baml_codegen_types::{Name, Ty};
+use baml_codegen_types::{CodegenFunctionParamMode, Name, Ty};
 use proc_macro2::TokenStream;
 use quote::quote;
 
@@ -240,7 +240,34 @@ fn translate_inner(ty: &Ty, ctx: &TyCtx<'_>, under_heap: bool) -> Result<TokenSt
             }
         }
         Ty::BuiltinUnknown { .. } => Err(unsupported("unknown")),
-        Ty::Function { .. } => Err(unsupported("function")),
+        Ty::Function {
+            params,
+            ret,
+            throws,
+            ..
+        } => {
+            let mut argument_types = Vec::with_capacity(params.len());
+            for parameter in params {
+                let translated = translate_inner(&parameter.ty, ctx, true)?;
+                argument_types.push(
+                    if matches!(parameter.mode, CodegenFunctionParamMode::Optional) {
+                        quote! { ::std::option::Option<#translated> }
+                    } else {
+                        translated
+                    },
+                );
+            }
+            let arguments = match argument_types.as_slice() {
+                [] => quote! { () },
+                values => quote! { (#(#values,)*) },
+            };
+            let ret = translate_inner(ret, ctx, true)?;
+            let throws = match throws.as_ref() {
+                Ty::Never { .. } => quote! { ::core::convert::Infallible },
+                ty => translate_inner(ty, ctx, true)?,
+            };
+            Ok(quote! { ::baml_bridge::BamlFunction<#arguments, #ret, #throws> })
+        }
         Ty::Future(..) => Err(unsupported("future handle")),
         Ty::Interface(..) => Err(unsupported("interface")),
         Ty::Type { .. } => Err(unsupported("type metatype")),

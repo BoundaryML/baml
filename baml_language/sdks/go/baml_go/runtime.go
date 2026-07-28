@@ -352,6 +352,45 @@ func callWithTypeArgs(ctx context.Context, function string, args map[string]Inpu
 	return decodeResult(payload)
 }
 
+func callHandle(ctx context.Context, handleKey uint64, args map[string]Input) (Value, error) {
+	if ctx == nil {
+		return Value{}, errors.New("baml_go.Function.Call: nil context")
+	}
+	if err := ctx.Err(); err != nil {
+		return Value{}, err
+	}
+	if handleKey == 0 {
+		return Value{}, errors.New("baml_go.Function.Call: zero handle")
+	}
+	if err := ensureNativeRuntime(ctx); err != nil {
+		return Value{}, err
+	}
+	registerCallbackOnce.Do(nativeRegisterCallback)
+
+	engineCallID := nativeNewFunctionCall()
+	if engineCallID == 0 {
+		return Value{}, errors.New("BAML returned an invalid zero call ID")
+	}
+	call := &pendingCall{result: make(chan []byte, 1)}
+	callbackID := reservePendingCall(call)
+	encoded, transaction, err := encodeCallForDispatch(engineCallID, args)
+	if err != nil {
+		pendingCalls.Delete(callbackID)
+		return Value{}, err
+	}
+	defer transaction.rollback()
+	nativeCallHandle(handleKey, encoded, callbackID)
+	transaction.commitHostValues()
+
+	payload, err := waitForCallResult(ctx, call.result)
+	if err != nil {
+		pendingCalls.Delete(callbackID)
+		nativeCancel(engineCallID)
+		return Value{}, err
+	}
+	return decodeResult(payload)
+}
+
 func waitForCallResult(ctx context.Context, result <-chan []byte) ([]byte, error) {
 	select {
 	case payload := <-result:
