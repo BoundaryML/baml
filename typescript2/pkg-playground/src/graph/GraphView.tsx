@@ -902,7 +902,9 @@ function GraphViewInner({
             }}
           >
             <div style={{ fontWeight: 700, marginBottom: 5 }}>
-              Some runtime calls could not be placed on this graph.
+              {graphRuntimeNotices.unattachedCount > 0
+                ? 'Some runtime calls could not be placed on this graph.'
+                : 'Graph runtime diagnostics.'}
             </div>
             {graphRuntimeNotices.diagnostics.length > 0 ? (
               <ul
