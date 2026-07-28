@@ -4414,8 +4414,8 @@ impl LoweringContext {
             throws,
             body,
             declarative_meta: None,
-            metadata: crate::ast::FunctionMetadata::language_internal(
-                crate::ast::FunctionOrigin::Internal,
+            metadata: crate::ast::FunctionMetadata::user_facing(
+                crate::ast::FunctionOrigin::UserDefined,
             ),
             attributes: Vec::new(),
             docstring: None,
