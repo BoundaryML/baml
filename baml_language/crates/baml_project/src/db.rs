@@ -1877,6 +1877,39 @@ function Workflow(input: string) -> string {
     }
 
     #[test]
+    fn graph_source_spans_use_vscode_utf16_columns() {
+        use baml_compiler2_visualization::control_flow::NodeType;
+
+        let mut db = ProjectDatabase::new();
+        db.set_project_root(std::path::Path::new("/tmp"));
+        let src = r#"function Workflow() -> string { let rocket = "🚀"; Summarize(rocket) }"#;
+        db.add_or_update_file(std::path::Path::new("/tmp/workflow.baml"), src);
+
+        let graph = db.ast_control_flow_graph("Workflow").unwrap();
+        let call_span = graph
+            .nodes
+            .values()
+            .find(|node| {
+                matches!(node.node_type, NodeType::OtherScope) && node.label == "Summarize(rocket)"
+            })
+            .and_then(|node| node.source_span.as_ref())
+            .expect("call graph node should have a source span");
+
+        let byte_start = src.find("Summarize(rocket)").unwrap();
+        let byte_end = byte_start + "Summarize(rocket)".len();
+        assert_eq!(call_span.start_offset, u32::try_from(byte_start).unwrap());
+        assert_eq!(call_span.end_offset, u32::try_from(byte_end).unwrap());
+        assert_eq!(
+            call_span.column,
+            u32::try_from(src[..byte_start].encode_utf16().count()).unwrap()
+        );
+        assert_eq!(
+            call_span.end_column,
+            u32::try_from(src[..byte_end].encode_utf16().count()).unwrap()
+        );
+    }
+
+    #[test]
     #[allow(clippy::cast_possible_truncation)] // tiny test fixtures fit in u32
     fn cursor_in_header_region_selects_governing_header() {
         use baml_compiler2_visualization::control_flow::{NodeType, STMT_SOURCE_EXPR_TAG};
