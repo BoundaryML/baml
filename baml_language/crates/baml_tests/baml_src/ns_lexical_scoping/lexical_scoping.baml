@@ -295,3 +295,27 @@ function multi_clause_catch_main() -> int {
 test "multi_clause_catch_uses_clause_local_binding" {
     assert.is_true(baml.deep_equals(multi_clause_catch_main(), 7))
 }
+
+function closure_parameter_in_for_iterable() -> int {
+    let sum = 0
+    for (let n in [1, 2, 3, 4].filter((x: int) -> bool { x > 2 })) {
+        sum += n
+    }
+    sum
+}
+
+test "closure_parameter_resolves_in_for_iterable" {
+    assert.equal(closure_parameter_in_for_iterable(), 7)
+}
+
+function closure_parameter_in_while_condition() -> int {
+    let i = 0
+    while (((x: int) -> bool { x < 3 })(i)) {
+        i += 1
+    }
+    i
+}
+
+test "closure_parameter_resolves_in_while_condition" {
+    assert.equal(closure_parameter_in_while_condition(), 3)
+}

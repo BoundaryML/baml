@@ -1511,7 +1511,10 @@ use baml_compiler2_hir::{
     loc::{FunctionLoc, LetLoc},
     package::{PackageId, package_items},
     scope::FileScopeId,
-    semantic_index::{BindingId, DefinitionSite},
+    semantic_index::{
+        BindingId, DefinitionSite, ExprMetadataKey, ExprMetadataScope as MetadataScope,
+        PathResolution,
+    },
 };
 use baml_compiler2_ppir::file_semantic_index;
 use baml_compiler2_tir::{
@@ -1866,13 +1869,6 @@ struct InterfaceFieldCandidate {
     field_idx: usize,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-enum MetadataScope {
-    Body(FileScopeId),
-    ParameterDefault(FileScopeId),
-}
-
-type ExprMetadataKey = (MetadataScope, AstExprId);
 type PatMetadataKey = (MetadataScope, AstPatId);
 
 struct LoweringContext<'db> {
@@ -3071,38 +3067,62 @@ impl<'db> LoweringContext<'db> {
         self.any_pattern_binding_is_captured(pattern, DefinitionSite::CatchBinding(pattern))
     }
 
-    fn binding_id_for_name_at(&self, expr_id: AstExprId, name: &Name) -> Option<BindingId> {
+    fn path_resolution(&self, expr_id: AstExprId) -> Option<PathResolution> {
         let index = file_semantic_index(self.db, self.file);
-        let (scope_id, offset) = if let Some(source_map) = self.source_map.as_ref() {
-            let offset = source_map.expr_span(expr_id).start();
-            (
-                index.scope_at_offset(offset, self.scope_func_name.as_ref()),
-                offset,
-            )
-        } else {
-            // The source-map-less branch is only valid for **synthesized**
-            // expressions emitted by the lowering itself (e.g. for-loop index
-            // increments, capture forwarding, init function bodies). The
-            // fallback uses `current_scope` and the scope's end offset, which
-            // is correct for synthesized refs at the end of the current scope
-            // but would silently pick the post-shadow binding for a
-            // user-written name lowered without a source map.
-            //
-            // If you find yourself adding a user-visible expression that
-            // hits this path: the right fix is to thread a `BindingId`
-            // through to the call site, not to widen this fallback.
-            let scope_id = self.current_scope;
-            let offset = index.scopes[scope_id.index() as usize].range.end();
-            (scope_id, offset)
-        };
-        index.visible_binding_at(scope_id, offset, name)
+        index.path_resolution(self.expr_metadata_key(expr_id))
     }
 
-    fn capture_index_for_name_at(&self, expr_id: AstExprId, name: &Name) -> Option<usize> {
-        let binding_id = self.binding_id_for_name_at(expr_id, name)?;
-        self.capture_indices
+    fn hir_binding_id_for_path(&self, expr_id: AstExprId) -> Option<BindingId> {
+        match self.path_resolution(expr_id)? {
+            PathResolution::Local(binding_id) => Some(binding_id),
+            PathResolution::Unknown => None,
+        }
+    }
+
+    fn binding_id_for_path(&self, expr_id: AstExprId, name: &Name) -> Option<BindingId> {
+        let hir_binding = self.hir_binding_id_for_path(expr_id);
+        let Some(&tagged_binding) = self.tagged_body_param_bindings.get(name) else {
+            return hir_binding;
+        };
+        let Some(hir_binding) = hir_binding else {
+            return Some(tagged_binding);
+        };
+
+        // Tagged-template body parameters are synthetic MIR bindings. Prefer a
+        // HIR binding only when it is inside the tagged body scope, where it
+        // represents a real lexical shadow.
+        let index = file_semantic_index(self.db, self.file);
+        if index
+            .ancestor_scopes(hir_binding.scope)
+            .contains(&tagged_binding.scope)
+        {
+            Some(hir_binding)
+        } else {
+            Some(tagged_binding)
+        }
+    }
+
+    fn local_for_path(&self, expr_id: AstExprId, name: &Name) -> Option<Local> {
+        let binding_id = self.binding_id_for_path(expr_id, name)?;
+        self.binding_locals.get(&binding_id).copied()
+    }
+
+    fn place_for_path(&mut self, expr_id: AstExprId, name: &Name) -> Option<Place> {
+        let binding_id = self.binding_id_for_path(expr_id, name)?;
+        if let Some(&local) = self.binding_locals.get(&binding_id) {
+            return Some(Place::Local(local));
+        }
+        if let Some(capture) = self
+            .capture_indices
             .as_ref()
             .and_then(|captures| captures.get(&binding_id).copied())
+        {
+            return Some(Place::Capture(capture));
+        }
+        if self.tagged_body_param_bindings.get(name) == Some(&binding_id) {
+            return Some(Place::Capture(self.ensure_transitive_capture(binding_id)));
+        }
+        None
     }
 
     /// Return the current lambda's capture index for `binding_id`, allocating a
@@ -3191,7 +3211,7 @@ impl<'db> LoweringContext<'db> {
     /// Get the `baml_type::RuntimeTy` for an expression by looking up in the aggregated map
     /// and converting from TIR `Ty`. Uses `current_metadata_scope` as the arena namespace.
     fn expr_metadata_key(&self, expr_id: AstExprId) -> ExprMetadataKey {
-        (self.current_metadata_scope, expr_id)
+        ExprMetadataKey::new(self.current_metadata_scope, expr_id)
     }
 
     fn pat_metadata_key(&self, pat_id: AstPatId) -> PatMetadataKey {
@@ -3217,10 +3237,10 @@ impl<'db> LoweringContext<'db> {
     }
 
     fn tir_expr_type(&self, key: ExprMetadataKey) -> Option<&'db Tir2Ty> {
-        match key.0 {
-            MetadataScope::Body(fsi) => self.inference_for(fsi)?.expression_type(key.1),
+        match key.scope {
+            MetadataScope::Body(fsi) => self.inference_for(fsi)?.expression_type(key.expr),
             MetadataScope::ParameterDefault(fsi) => {
-                self.inference_for(fsi)?.default_expression_type(key.1)
+                self.inference_for(fsi)?.default_expression_type(key.expr)
             }
         }
     }
@@ -3238,30 +3258,30 @@ impl<'db> LoweringContext<'db> {
         &self,
         key: ExprMetadataKey,
     ) -> Option<&'db baml_compiler2_tir::inference::MemberResolution<'db>> {
-        match key.0 {
-            MetadataScope::Body(fsi) => self.inference_for(fsi)?.resolution(key.1),
+        match key.scope {
+            MetadataScope::Body(fsi) => self.inference_for(fsi)?.resolution(key.expr),
             MetadataScope::ParameterDefault(fsi) => {
-                self.inference_for(fsi)?.default_resolution(key.1)
+                self.inference_for(fsi)?.default_resolution(key.expr)
             }
         }
     }
 
     fn tir_is_exhaustive_match(&self, key: ExprMetadataKey) -> bool {
-        match key.0 {
+        match key.scope {
             MetadataScope::Body(fsi) => self
                 .inference_for(fsi)
-                .is_some_and(|inf| inf.is_exhaustive_match(key.1)),
+                .is_some_and(|inf| inf.is_exhaustive_match(key.expr)),
             MetadataScope::ParameterDefault(fsi) => self
                 .inference_for(fsi)
-                .is_some_and(|inf| inf.default_is_exhaustive_match(key.1)),
+                .is_some_and(|inf| inf.default_is_exhaustive_match(key.expr)),
         }
     }
 
     fn tir_path_root_type(&self, key: ExprMetadataKey) -> Option<&'db Tir2Ty> {
-        match key.0 {
-            MetadataScope::Body(fsi) => self.inference_for(fsi)?.path_root_type(key.1),
+        match key.scope {
+            MetadataScope::Body(fsi) => self.inference_for(fsi)?.path_root_type(key.expr),
             MetadataScope::ParameterDefault(fsi) => {
-                self.inference_for(fsi)?.default_path_root_type(key.1)
+                self.inference_for(fsi)?.default_path_root_type(key.expr)
             }
         }
     }
@@ -3279,11 +3299,11 @@ impl<'db> LoweringContext<'db> {
         &self,
         key: ExprMetadataKey,
     ) -> Option<&'db [baml_compiler2_tir::inference::MemberResolution<'db>]> {
-        match key.0 {
-            MetadataScope::Body(fsi) => self.inference_for(fsi)?.path_member_resolution(key.1),
+        match key.scope {
+            MetadataScope::Body(fsi) => self.inference_for(fsi)?.path_member_resolution(key.expr),
             MetadataScope::ParameterDefault(fsi) => self
                 .inference_for(fsi)?
-                .default_path_member_resolution(key.1),
+                .default_path_member_resolution(key.expr),
         }
     }
 
@@ -3291,10 +3311,10 @@ impl<'db> LoweringContext<'db> {
         &self,
         key: ExprMetadataKey,
     ) -> Option<&'db baml_compiler2_tir::inference::CallPlan> {
-        match key.0 {
-            MetadataScope::Body(fsi) => self.inference_for(fsi)?.call_plan(key.1),
+        match key.scope {
+            MetadataScope::Body(fsi) => self.inference_for(fsi)?.call_plan(key.expr),
             MetadataScope::ParameterDefault(fsi) => {
-                self.inference_for(fsi)?.default_call_plan(key.1)
+                self.inference_for(fsi)?.default_call_plan(key.expr)
             }
         }
     }
@@ -3303,10 +3323,10 @@ impl<'db> LoweringContext<'db> {
         &self,
         key: ExprMetadataKey,
     ) -> Option<&'db baml_compiler2_tir::inference::FunctionCoercion> {
-        match key.0 {
-            MetadataScope::Body(fsi) => self.inference_for(fsi)?.function_coercion(key.1),
+        match key.scope {
+            MetadataScope::Body(fsi) => self.inference_for(fsi)?.function_coercion(key.expr),
             MetadataScope::ParameterDefault(fsi) => {
-                self.inference_for(fsi)?.default_function_coercion(key.1)
+                self.inference_for(fsi)?.default_function_coercion(key.expr)
             }
         }
     }
@@ -3516,7 +3536,7 @@ impl<'db> LoweringContext<'db> {
         expr_id: AstExprId,
         name: &Name,
     ) -> Option<InterfaceTypeView> {
-        let binding_id = self.binding_id_for_name_at(expr_id, name)?;
+        let binding_id = self.binding_id_for_path(expr_id, name)?;
         self.source_param_interface_view_for_binding(name, binding_id)
     }
 
@@ -5104,31 +5124,9 @@ impl LoweringContext<'_> {
             // function's captures. Disambiguate by preferring the lambda scope
             // nested within the function currently being lowered; fall back to
             // the first range match.
-            let current_descendants = index
-                .scopes
-                .get(self.current_scope.index() as usize)
-                .map(|s| s.descendants.clone());
-            let is_in_current_fn = |id: FileScopeId| {
-                current_descendants
-                    .as_ref()
-                    .is_some_and(|d| id.index() >= d.start.index() && id.index() < d.end.index())
-            };
-            let mut first = None;
-            let mut scoped = None;
-            for (i, scope) in index.scopes.iter().enumerate() {
-                if scope.kind == baml_compiler2_hir::scope::ScopeKind::Lambda && scope.range == span
-                {
-                    let id = FileScopeId::new(i as u32);
-                    if first.is_none() {
-                        first = Some(id);
-                    }
-                    if is_in_current_fn(id) {
-                        scoped = Some(id);
-                        break;
-                    }
-                }
-            }
-            let found = scoped.or(first);
+            let found = index
+                .lambda_scope_for_within(self.current_scope, span)
+                .or_else(|| index.lambda_scope_for(span));
             debug_assert!(
                 found.is_some(),
                 "no HIR Lambda scope for tagged template at {span:?}"
@@ -6005,11 +6003,11 @@ impl LoweringContext<'_> {
     /// Whether `segments` is rooted at the BEP-044 `default` receiver keyword
     /// and that keyword is not shadowed by a local of the same name. See
     /// [`baml_compiler2_ast::DEFAULT_RECEIVER_KEYWORD`].
-    fn is_default_receiver_root(&self, segments: &[Name]) -> bool {
+    fn is_default_receiver_root(&self, expr_id: AstExprId, segments: &[Name]) -> bool {
         segments
             .first()
             .is_some_and(|s| s.as_str() == baml_compiler2_ast::DEFAULT_RECEIVER_KEYWORD)
-            && !self.locals.contains_key(&segments[0])
+            && self.binding_id_for_path(expr_id, &segments[0]).is_none()
     }
 
     fn lower_literal(lit: &AstLiteral) -> Constant {
@@ -6057,16 +6055,10 @@ impl<'db> LoweringContext<'db> {
                         if let Some(item) = resolution_to_item_ref(self.db, &resolution) {
                             let receiver_segments = &segments[..segments.len() - 1];
                             let receiver_op = if receiver_segments.len() == 1 {
-                                if let Some(&recv_local) = self.locals.get(&receiver_segments[0]) {
-                                    Operand::Copy(Place::Local(recv_local))
-                                } else if let Some(cap_idx) =
-                                    self.capture_index_for_name_at(expr_id, &receiver_segments[0])
-                                {
-                                    // Receiver is a captured variable — use capture slot.
-                                    Operand::Copy(Place::Capture(cap_idx))
-                                } else {
-                                    Operand::Constant(Constant::Null)
-                                }
+                                self.place_for_path(expr_id, &segments[0]).map_or_else(
+                                    || Operand::Constant(Constant::Null),
+                                    Operand::Copy,
+                                )
                             } else {
                                 // Multi-segment receiver (e.g. `cfg.encoder`): lower as field chain.
                                 let recv_ty = self.expr_ty(expr_id);
@@ -6096,7 +6088,7 @@ impl<'db> LoweringContext<'db> {
                     Some(
                         MemberResolution::InterfaceVirtualMethod { .. }
                         | MemberResolution::InterfaceConcreteMethod { .. },
-                    ) if self.locals.contains_key(&segments[0]) => {}
+                    ) if self.binding_id_for_path(expr_id, &segments[0]).is_some() => {}
                     Some(
                         MemberResolution::UnboundMethod { .. }
                         | MemberResolution::Free { .. }
@@ -6142,16 +6134,10 @@ impl<'db> LoweringContext<'db> {
                         if let Some(item) = resolution_to_item_ref(self.db, &resolution) {
                             let receiver_segments = &segments[..segments.len() - 1];
                             let receiver_op = if receiver_segments.len() == 1 {
-                                if let Some(&recv_local) = self.locals.get(&receiver_segments[0]) {
-                                    Operand::Copy(Place::Local(recv_local))
-                                } else if let Some(cap_idx) =
-                                    self.capture_index_for_name_at(expr_id, &receiver_segments[0])
-                                {
-                                    // Receiver is a captured variable — use capture slot.
-                                    Operand::Copy(Place::Capture(cap_idx))
-                                } else {
-                                    Operand::Constant(Constant::Null)
-                                }
+                                self.place_for_path(expr_id, &segments[0]).map_or_else(
+                                    || Operand::Constant(Constant::Null),
+                                    Operand::Copy,
+                                )
                             } else {
                                 let recv_ty = self.expr_ty(expr_id);
                                 let recv_local = self.builder.temp(recv_ty);
@@ -6177,7 +6163,7 @@ impl<'db> LoweringContext<'db> {
                     // below captures the receiver and binds its impl at runtime.
                     MemberResolution::InterfaceVirtualMethod { .. }
                     | MemberResolution::InterfaceConcreteMethod { .. }
-                        if self.locals.contains_key(&segments[0]) => {}
+                        if self.binding_id_for_path(expr_id, &segments[0]).is_some() => {}
                     MemberResolution::UnboundMethod { .. }
                     | MemberResolution::Free { .. }
                     | MemberResolution::InterfaceVirtualMethod { .. }
@@ -6217,7 +6203,7 @@ impl<'db> LoweringContext<'db> {
             // `resolutions` above and returns before reaching here, so the
             // receiver is always `segments[..len-1]`.
             if segments.len() >= 2
-                && let Some(&recv_root_local) = self.locals.get(&segments[0])
+                && let Some(recv_root_local) = self.local_for_path(expr_id, &segments[0])
             {
                 let method_name = segments.last().unwrap().clone();
                 let recv_seg_idx = if segments.len() == 2 {
@@ -6248,15 +6234,14 @@ impl<'db> LoweringContext<'db> {
                     return;
                 }
             }
-            if self.locals.contains_key(&segments[0])
-                || self
-                    .capture_index_for_name_at(expr_id, &segments[0])
-                    .is_some()
+            if self
+                .binding_id_for_path(expr_id, &segments[0])
+                .is_some()
                 // BEP-044 wf3 #4: `default.<field>` as a value — the field-chain
                 // lowerer maps the `default` root to `self`-viewed-as-interface.
                 // (The `default.method(...)` call form is intercepted earlier in
                 // `lower_call`, so this only catches the value/field form.)
-                || self.is_default_receiver_root(segments)
+                || self.is_default_receiver_root(expr_id, segments)
             {
                 self.lower_multi_segment_path_as_field_chain(expr_id, segments, dest);
                 return;
@@ -6293,6 +6278,15 @@ impl<'db> LoweringContext<'db> {
             return;
         }
 
+        if let Some(place) = self.place_for_path(expr_id, name) {
+            self.builder.assign(dest, Rvalue::Use(Operand::Copy(place)));
+            return;
+        }
+        if self.binding_id_for_path(expr_id, name).is_some() {
+            self.emit_panic_call(&format!("unresolved local: {name}"), expr_id);
+            return;
+        }
+
         let span_start = self
             .source_map
             .as_ref()
@@ -6307,22 +6301,6 @@ impl<'db> LoweringContext<'db> {
             self.scope_func_name.as_ref(),
         );
         match resolved {
-            ResolvedName::Local {
-                name: local_name, ..
-            } => {
-                if let Some(&local) = self.locals.get(&local_name) {
-                    self.builder
-                        .assign(dest, Rvalue::Use(Operand::Copy(Place::Local(local))));
-                } else if let Some(cap_idx) = self.capture_index_for_name_at(expr_id, &local_name) {
-                    // This variable is captured from an enclosing scope.
-                    // Emit a LoadCapture via Place::Capture.
-                    self.builder
-                        .assign(dest, Rvalue::Use(Operand::Copy(Place::Capture(cap_idx))));
-                } else {
-                    let msg = format!("unresolved local: {local_name}");
-                    self.emit_panic_call(&msg, expr_id);
-                }
-            }
             ResolvedName::Item(def) => {
                 self.lower_item_ref(expr_id, def, dest);
             }
@@ -6333,27 +6311,7 @@ impl<'db> LoweringContext<'db> {
                     Rvalue::Use(Operand::Constant(Constant::Function(item))),
                 );
             }
-            ResolvedName::Unknown if self.tagged_body_param_bindings.contains_key(name) => {
-                // A tagged-template body-lambda parameter (BEP-049 §10 / M4e.1):
-                // a MIR-only local that `build_tagged_body_closure` injects. It has
-                // no HIR binding (the tag can't be resolved during the HIR walk),
-                // so `resolve_name_at_in_scope` returns `Unknown`.
-                if let Some(&local) = self.locals.get(name) {
-                    // The reference sits directly in the body closure: a plain local.
-                    self.builder
-                        .assign(dest, Rvalue::Use(Operand::Copy(Place::Local(local))));
-                } else {
-                    // Referenced from a nested lambda inside the interpolations —
-                    // the param lives in an enclosing frame. HIR can't list it as a
-                    // capture (no binding), so capture it transitively by its stored
-                    // synthetic BindingId, the same way grandparent locals thread up.
-                    let binding_id = self.tagged_body_param_bindings[name];
-                    let cap_idx = self.ensure_transitive_capture(binding_id);
-                    self.builder
-                        .assign(dest, Rvalue::Use(Operand::Copy(Place::Capture(cap_idx))));
-                }
-            }
-            ResolvedName::Unknown => {
+            ResolvedName::Local { .. } | ResolvedName::Unknown => {
                 if self
                     .tir_expr_type(self.expr_metadata_key(expr_id))
                     .is_some()
@@ -6382,55 +6340,57 @@ impl<'db> LoweringContext<'db> {
         segments: &[Name],
         dest: Place,
     ) {
-        let (mut current_place, mut current_ty) =
-            if let Some(&root_local) = self.locals.get(&segments[0]) {
-                let place = Place::Local(root_local);
-                let ty = if let Some(tir_root) = self.path_root_ty(expr_id) {
-                    // If TIR inferred a more specific type for the root local,
-                    // update the MIR local's declared type so the emitter can
-                    // resolve field names for display (e.g. `load_field .index`).
-                    if matches!(
-                        self.builder.local_ty(root_local),
-                        RuntimeTy::BuiltinUnknown { .. }
-                    ) && !matches!(
-                        tir_root,
-                        RuntimeTy::BuiltinUnknown { .. } | RuntimeTy::Void { .. }
-                    ) {
-                        self.builder.local_decl_mut(root_local).ty = tir_root.clone();
+        let root_place = self.place_for_path(expr_id, &segments[0]);
+        let (mut current_place, mut current_ty) = if let Some(place) = root_place {
+            let ty = match place {
+                Place::Local(root_local) => {
+                    if let Some(tir_root) = self.path_root_ty(expr_id) {
+                        // If TIR inferred a more specific type for the root local,
+                        // update the MIR local's declared type so the emitter can
+                        // resolve field names for display (e.g. `load_field .index`).
+                        if matches!(
+                            self.builder.local_ty(root_local),
+                            RuntimeTy::BuiltinUnknown { .. }
+                        ) && !matches!(
+                            tir_root,
+                            RuntimeTy::BuiltinUnknown { .. } | RuntimeTy::Void { .. }
+                        ) {
+                            self.builder.local_decl_mut(root_local).ty = tir_root.clone();
+                        }
+                        tir_root
+                    } else {
+                        self.builder.local_ty(root_local)
                     }
-                    tir_root
-                } else {
-                    self.builder.local_ty(root_local)
-                };
-                (place, ty)
-            } else if let Some(cap_idx) = self.capture_index_for_name_at(expr_id, &segments[0]) {
-                let place = Place::Capture(cap_idx);
-                let ty = self
-                    .path_root_ty(expr_id)
-                    .unwrap_or_else(|| RuntimeTy::BuiltinUnknown {
-                        attr: TyAttr::default(),
-                    });
-                (place, ty)
-            } else if self.is_default_receiver_root(segments)
-                && let Some(&self_local) = self.locals.get(&Name::new("self"))
-            {
-                // BEP-044 wf3 #4: `default.<field>` denotes the enclosing `self`
-                // viewed at the declaring interface. TIR typed the root as
-                // `RuntimeTy::Interface`, so reuse that and let the interface-prefix
-                // routing below resolve the field view (same path as
-                // `self.as<I>.field`). Without this the `default` root is not a
-                // local → null → `string + null` VM crash.
-                let place = Place::Local(self_local);
-                let ty = self
-                    .path_root_ty(expr_id)
-                    .unwrap_or_else(|| self.builder.local_ty(self_local));
-                (place, ty)
-            } else {
-                // Root not found as a local or capture — emit null.
-                self.builder
-                    .assign(dest, Rvalue::Use(Operand::Constant(Constant::Null)));
-                return;
+                }
+                Place::Capture(_) => {
+                    self.path_root_ty(expr_id)
+                        .unwrap_or_else(|| RuntimeTy::BuiltinUnknown {
+                            attr: TyAttr::default(),
+                        })
+                }
+                _ => unreachable!("path roots are locals or captures"),
             };
+            (place, ty)
+        } else if self.is_default_receiver_root(expr_id, segments)
+            && let Some(&self_local) = self.locals.get(&Name::new("self"))
+        {
+            // BEP-044 wf3 #4: `default.<field>` denotes the enclosing `self`
+            // viewed at the declaring interface. TIR typed the root as
+            // `RuntimeTy::Interface`, so reuse that and let the interface-prefix
+            // routing below resolve the field view (same path as
+            // `self.as<I>.field`). Without this the `default` root is not a
+            // local -> null -> `string + null` VM crash.
+            let place = Place::Local(self_local);
+            let ty = self
+                .path_root_ty(expr_id)
+                .unwrap_or_else(|| self.builder.local_ty(self_local));
+            (place, ty)
+        } else {
+            // Root not found as a local or capture; emit null.
+            self.builder
+                .assign(dest, Rvalue::Use(Operand::Constant(Constant::Null)));
+            return;
+        };
 
         let mut skip_next_segment = false;
         for (offset, seg) in segments[1..].iter().enumerate() {
@@ -7566,15 +7526,10 @@ impl<'db> LoweringContext<'db> {
                 // (Can't reuse `lower_path_receiver_to_local`: it assumes a local
                 // root and `expr_ty(callee)` would ICE on the Unknown callee.)
                 let recv_op = if receiver_segments.len() == 1 {
-                    if let Some(&recv_local) = self.locals.get(&receiver_segments[0]) {
-                        Operand::Copy(Place::Local(recv_local))
-                    } else if let Some(cap_idx) =
-                        self.capture_index_for_name_at(callee, &receiver_segments[0])
-                    {
-                        Operand::Copy(Place::Capture(cap_idx))
-                    } else {
+                    let Some(place) = self.place_for_path(callee, &receiver_segments[0]) else {
                         return false;
-                    }
+                    };
+                    Operand::Copy(place)
                 } else {
                     let recv_ty = self
                         .tir_path_segment_type((
@@ -7708,15 +7663,10 @@ impl<'db> LoweringContext<'db> {
             AstExpr::Path(segments) => {
                 let receiver_segments = &segments[..segments.len() - 1];
                 let recv_op = if receiver_segments.len() == 1 {
-                    if let Some(&recv_local) = self.locals.get(&receiver_segments[0]) {
-                        Operand::Copy(Place::Local(recv_local))
-                    } else if let Some(cap_idx) =
-                        self.capture_index_for_name_at(callee, &receiver_segments[0])
-                    {
-                        Operand::Copy(Place::Capture(cap_idx))
-                    } else {
+                    let Some(place) = self.place_for_path(callee, &receiver_segments[0]) else {
                         return false;
-                    }
+                    };
+                    Operand::Copy(place)
                 } else {
                     let recv_ty = self
                         .tir_path_segment_type((
@@ -7826,14 +7776,12 @@ impl<'db> LoweringContext<'db> {
         let static_receiver = match &callee_expr {
             AstExpr::MemberAccess { base, .. } => match &self.body.exprs[*base] {
                 AstExpr::Path(segs) if !segs.is_empty() => {
-                    !self.locals.contains_key(&segs[0])
-                        && self.capture_index_for_name_at(*base, &segs[0]).is_none()
+                    self.binding_id_for_path(*base, &segs[0]).is_none()
                 }
                 _ => false,
             },
             AstExpr::Path(segs) if segs.len() >= 2 => {
-                !self.locals.contains_key(&segs[0])
-                    && self.capture_index_for_name_at(callee, &segs[0]).is_none()
+                self.binding_id_for_path(callee, &segs[0]).is_none()
             }
             _ => false,
         };
@@ -7967,7 +7915,7 @@ impl<'db> LoweringContext<'db> {
         // the override is being deliberately bypassed.
         if let AstExpr::Path(segments) = &callee_expr
             && segments.len() == 2
-            && self.is_default_receiver_root(segments)
+            && self.is_default_receiver_root(callee, segments)
             && let Some(target) = self.implements_block_iface_target()
             && matches!(
                 target.type_refs[target.target].kind,
@@ -8154,7 +8102,7 @@ impl<'db> LoweringContext<'db> {
             // The segment just before the method name may be a real field
             // access (`r.a.b.c.d.e.speak()`) whose static type is an interface.
             if segments.len() >= 2
-                && let Some(&recv_root_local) = self.locals.get(&segments[0])
+                && let Some(recv_root_local) = self.local_for_path(callee, &segments[0])
             {
                 let method_name = segments.last().unwrap().clone();
                 let prefix_idx = segments.len() - 2;
@@ -8195,7 +8143,7 @@ impl<'db> LoweringContext<'db> {
                     // so the dispatch below routes it to a virtual call.
                     .or_else(|| {
                         if segments.len() == 2 {
-                            self.binding_id_for_name_at(callee, &segments[0])
+                            self.binding_id_for_path(callee, &segments[0])
                                 .and_then(|bid| {
                                     self.source_param_tir_ty_for_binding(&segments[0], bid)
                                 })
@@ -8357,10 +8305,7 @@ impl<'db> LoweringContext<'db> {
                 // TIR types (`Interface`, `Class`) but are not runtime values.
                 let base_is_value = match &self.body.exprs[*base] {
                     AstExpr::Path(segments) if !segments.is_empty() => {
-                        self.locals.contains_key(&segments[0])
-                            || self
-                                .capture_index_for_name_at(*base, &segments[0])
-                                .is_some()
+                        self.binding_id_for_path(*base, &segments[0]).is_some()
                     }
                     _ => self
                         .tir_expr_type(self.expr_metadata_key(*base))
@@ -8508,15 +8453,8 @@ impl<'db> LoweringContext<'db> {
                 } else {
                     let receiver_op = if receiver_segments.len() == 1 {
                         // Simple local variable receiver (e.g. `self`).
-                        if let Some(&recv_local) = self.locals.get(&receiver_segments[0]) {
-                            Operand::Copy(Place::Local(recv_local))
-                        } else if let Some(cap_idx) =
-                            self.capture_index_for_name_at(callee, &receiver_segments[0])
-                        {
-                            Operand::Copy(Place::Capture(cap_idx))
-                        } else {
-                            Operand::Constant(Constant::Null)
-                        }
+                        self.place_for_path(callee, &receiver_segments[0])
+                            .map_or_else(|| Operand::Constant(Constant::Null), Operand::Copy)
                     } else {
                         // Multi-segment receiver (e.g. `user.profile.items`): lower as field chain.
                         let recv_ty = self.expr_ty(callee); // approximation; actual type not critical here
@@ -8548,13 +8486,7 @@ impl<'db> LoweringContext<'db> {
                     Some(item) => Operand::Constant(Constant::Function(item)),
                     None => self.lower_to_operand(callee),
                 };
-                let first_seg = &segments[0];
-                let receiver_op = if let Some(&receiver_local) = self.locals.get(first_seg) {
-                    Some(Operand::Copy(Place::Local(receiver_local)))
-                } else {
-                    self.capture_index_for_name_at(callee, first_seg)
-                        .map(|cap_idx| Operand::Copy(Place::Capture(cap_idx)))
-                };
+                let receiver_op = self.place_for_path(callee, &segments[0]).map(Operand::Copy);
                 if let Some(receiver_op) = receiver_op {
                     let prefix_idx = segments.len() - 2;
                     receiver_path_tir_ty = self
@@ -10445,7 +10377,7 @@ impl<'db> LoweringContext<'db> {
         let expr = &self.body.exprs[expr_id];
         if let AstExpr::Path(segments) = expr {
             if segments.len() == 1 {
-                if let Some(&local) = self.locals.get(&segments[0]) {
+                if let Some(local) = self.local_for_path(expr_id, &segments[0]) {
                     return Some(local);
                 }
             }
@@ -11982,12 +11914,8 @@ impl LoweringContext<'_> {
         let expr = self.body.exprs[expr_id].clone();
         match &expr {
             AstExpr::Path(segments) if segments.len() == 1 => {
-                if let Some(&local) = self.locals.get(&segments[0]) {
-                    Place::Local(local)
-                } else if let Some(cap_idx) = self.capture_index_for_name_at(expr_id, &segments[0])
-                {
-                    // Assignment to a captured variable in a closure body.
-                    Place::Capture(cap_idx)
+                if let Some(place) = self.place_for_path(expr_id, &segments[0]) {
+                    place
                 } else {
                     // Unresolved single-segment assignment target. This is
                     // only reachable for programs TIR already rejected (an
@@ -12013,32 +11941,31 @@ impl LoweringContext<'_> {
             AstExpr::Path(segments) if segments.len() >= 2 => {
                 // Multi-segment path lvalue: `a.b` or `a.b.c`.
                 // Chain field projections from the root local or capture.
-                let (mut current_place, mut current_ty) = if let Some(&l) =
-                    self.locals.get(&segments[0])
-                {
-                    let ty = self
-                        .path_root_ty(expr_id)
-                        .unwrap_or_else(|| self.builder.local_ty(l));
-                    (Place::Local(l), ty)
-                } else if let Some(cap_idx) = self.capture_index_for_name_at(expr_id, &segments[0])
-                {
-                    let ty =
-                        self.path_root_ty(expr_id)
-                            .unwrap_or_else(|| RuntimeTy::BuiltinUnknown {
-                                attr: TyAttr::default(),
-                            });
-                    (Place::Capture(cap_idx), ty)
-                } else {
-                    let tmp = self.builder.temp(RuntimeTy::Null {
-                        attr: TyAttr::default(),
-                    });
-                    (
-                        Place::Local(tmp),
-                        RuntimeTy::Null {
+                let (mut current_place, mut current_ty) =
+                    if let Some(place) = self.place_for_path(expr_id, &segments[0]) {
+                        let ty = match place {
+                            Place::Local(local) => self
+                                .path_root_ty(expr_id)
+                                .unwrap_or_else(|| self.builder.local_ty(local)),
+                            Place::Capture(_) => self.path_root_ty(expr_id).unwrap_or_else(|| {
+                                RuntimeTy::BuiltinUnknown {
+                                    attr: TyAttr::default(),
+                                }
+                            }),
+                            _ => unreachable!("path roots are locals or captures"),
+                        };
+                        (place, ty)
+                    } else {
+                        let tmp = self.builder.temp(RuntimeTy::Null {
                             attr: TyAttr::default(),
-                        },
-                    )
-                };
+                        });
+                        (
+                            Place::Local(tmp),
+                            RuntimeTy::Null {
+                                attr: TyAttr::default(),
+                            },
+                        )
+                    };
 
                 for (offset, seg) in segments[1..].iter().enumerate() {
                     let seg_idx = offset + 1;
@@ -12837,7 +12764,7 @@ impl LoweringContext<'_> {
 
                 self.builder.set_current_block(bb_body);
                 let saved_locals = self.locals.clone();
-                self.bind_pattern(scrutinee, part);
+                self.bind_pattern_inner(scrutinee, part, arm.pattern, part, false);
                 if let Some(guard) = arm.guard {
                     let guard_op = self.lower_to_operand(guard);
                     let bb_guarded = self.builder.create_block();

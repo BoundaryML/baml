@@ -24,6 +24,7 @@ use baml_compiler2_hir::{
     loc::{ClassLoc, FunctionLoc},
     package::{PackageId, PackageItems},
     scope::{FileScopeId, ScopeId},
+    semantic_index::{ExprMetadataKey, ExprMetadataScope, PathResolution},
 };
 // The trait must be in scope so the builder (which implements it) can call the
 // defaulted type-algebra methods on itself — `self.is_subtype(a, b)`.
@@ -825,6 +826,8 @@ pub struct TypeInferenceBuilder<'db> {
     /// The scope being analyzed (kept for future use).
     #[allow(dead_code)]
     scope: ScopeId<'db>,
+    /// Arena namespace for the expressions currently being inferred.
+    expr_metadata_scope: ExprMetadataScope,
     /// Declared return type for the function (used to check return statements).
     declared_return_ty: Option<Ty>,
     /// Resolved type alias map: alias qualified name → expanded Ty.
@@ -1165,6 +1168,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         let package_items = &res_ctx.own_items;
         let pkg_info = baml_compiler2_hir::file_package::file_package(db, scope.file(db));
         let ns_context = pkg_info.namespace_path;
+        let expr_metadata_scope = ExprMetadataScope::Body(scope.file_scope_id(db));
         Self {
             context,
             expressions: FxHashMap::default(),
@@ -1179,6 +1183,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             package_items,
             package_id,
             scope,
+            expr_metadata_scope,
             declared_return_ty: None,
             aliases,
             normalized_overlap_aliases: std::cell::OnceCell::new(),
@@ -1460,15 +1465,11 @@ impl<'db> TypeInferenceBuilder<'db> {
         if !self.locals.contains_key(name) {
             return false;
         }
-        let Some(source_map) = self.body_source_map.as_ref() else {
-            return false;
-        };
         let db = self.context.db();
         let file = self.context.scope().file(db);
         let index = baml_compiler2_ppir::file_semantic_index(db, file);
-        let offset = source_map.expr_span(subject).start();
-        let use_scope = index.scope_at_offset(offset, None);
-        let Some(binding_id) = index.visible_binding_at(use_scope, offset, name) else {
+        let key = ExprMetadataKey::new(self.expr_metadata_scope, subject);
+        let Some(PathResolution::Local(binding_id)) = index.path_resolution(key) else {
             return false;
         };
         index
@@ -2905,6 +2906,11 @@ impl<'db> TypeInferenceBuilder<'db> {
         let saved_call_type_instantiations = std::mem::take(&mut self.call_type_instantiations);
         let saved_function_coercions = std::mem::take(&mut self.function_coercions);
         let saved_lambda_effective_throws = std::mem::take(&mut self.lambda_effective_throws);
+        let saved_expr_metadata_scope = self.expr_metadata_scope;
+        let owner_scope = match saved_expr_metadata_scope {
+            ExprMetadataScope::Body(scope) | ExprMetadataScope::ParameterDefault(scope) => scope,
+        };
+        self.expr_metadata_scope = ExprMetadataScope::ParameterDefault(owner_scope);
         let defaults = &parameter_defaults.defaults;
         let saved_body_source_map = self.body_source_map.replace(defaults.source_map.clone());
         let saved_locals = self.locals.clone();
@@ -3027,6 +3033,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         self.call_type_instantiations = saved_call_type_instantiations;
         self.function_coercions = saved_function_coercions;
         self.lambda_effective_throws = saved_lambda_effective_throws;
+        self.expr_metadata_scope = saved_expr_metadata_scope;
         // Resolve all default-checking diagnostics against the defaults source
         // map before restoring the function body's map (otherwise their
         // defaults-arena `ExprId`s render at the wrong offsets).
@@ -14935,6 +14942,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         let saved_call_plans = std::mem::take(&mut self.call_plans);
         let saved_call_type_instantiations = std::mem::take(&mut self.call_type_instantiations);
         let saved_function_coercions = std::mem::take(&mut self.function_coercions);
+        let saved_expr_metadata_scope = self.expr_metadata_scope;
         // BEP-042: a lambda body is its own control-flow region — `return`
         // targets the lambda, and the parent's defer/loop nesting must not leak
         // in. Reset the counters for the body and restore them afterwards.
@@ -14985,7 +14993,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         //
         // Also captures the lambda's `FileScopeId` for use as a position-independent
         // key in `nested_lambda_types` (avoids TextRange in Salsa-cached output).
-        let lambda_file_scope_id = {
+        let (lambda_file_scope_id, lambda_metadata_scope) = {
             let db = self.context.db();
             let file = self.context.scope().file(db);
             let index = baml_compiler2_ppir::file_semantic_index(db, file);
@@ -15028,8 +15036,11 @@ impl<'db> TypeInferenceBuilder<'db> {
                     self.seed_capture(capture_name, ty);
                 }
             }
-            key_fsi
+            (key_fsi, seed_fsi)
         };
+        if let Some(scope) = lambda_metadata_scope {
+            self.expr_metadata_scope = ExprMetadataScope::Body(scope);
+        }
 
         // Set return type context for return statement checking inside lambda
         if let Some(ret) = expected_ret {
@@ -15176,6 +15187,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         self.implements_block_interface = saved_implements_block_interface;
         self.loop_depth = saved_loop_depth;
         self.defer_loop_floors = saved_defer_loop_floors;
+        self.expr_metadata_scope = saved_expr_metadata_scope;
         // Freeze this lambda's diagnostic spans against its own source map
         // before restoring the enclosing map (otherwise they render at `0..0`).
         self.context
