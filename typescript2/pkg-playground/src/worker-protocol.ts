@@ -82,7 +82,7 @@ export interface FieldSchemaField {
 /** Recursive type schema for the args form (mirrors
  *  `baml_project::FieldSchema`). Named types are `ref`s into
  *  `ProjectUpdate.types`; `name`s are the canonical dotted FQN the engine
- *  registers (`user.shapes.Foo`), usable verbatim in `$baml` markers. */
+ *  registers (`user.shapes.Foo`), used for schema-directed argument casts. */
 export type FieldSchema =
   | { type: 'string' }
   | { type: 'int' }
@@ -96,7 +96,7 @@ export type FieldSchema =
    *  (mid-edit inconsistency) degrades to the raw-JSON fallback. */
   | { type: 'ref'; name: string }
   /** A specific-variant param type (`s: Status.Active`) — self-contained so
-   *  the form can emit the enum wire marker without a table entry. */
+   *  the execution-boundary cast does not need a table entry. */
   | { type: 'enumVariant'; name: string; value: string }
   | { type: 'list'; item: FieldSchema }
   | { type: 'map'; key: FieldSchema; value: FieldSchema }

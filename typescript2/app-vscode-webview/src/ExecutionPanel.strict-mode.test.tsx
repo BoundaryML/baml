@@ -335,14 +335,14 @@ describe('ExecutionPanel args form', () => {
     fireEvent.change(nameInput, { target: { value: 'Ada' } });
     fireEvent.click(await screen.findByRole('button', { name: 'Green' }));
 
-    // Raw view shows the same argsJson the form writes — including the enum
-    // wire marker — proving the form and raw input share one state.
+    // Raw view shows the same marker-free JSON the form writes. Type
+    // annotations are added only to the transient execution payload.
     fireEvent.click(await screen.findByRole('button', { name: 'raw' }));
     const rawInput = await screen.findByPlaceholderText('{"key": "value"}');
     const parsed = JSON.parse((rawInput as HTMLInputElement).value);
     expect(parsed).toEqual({
       name: 'Ada',
-      color: { $baml: { enum: 'user.Color', value: 'Green' } },
+      color: 'Green',
     });
 
     fireEvent.click(await screen.findByRole('button', { name: 'Run' }));
@@ -414,9 +414,7 @@ describe('ExecutionPanel args form', () => {
     );
     fireEvent.click(await screen.findByRole('button', { name: 'Greet' }));
     // Wait for the seed effect, then bounce to Zero and back.
-    const seeded = {
-      color: { $baml: { enum: 'user.Color', value: 'Red' } },
-    };
+    const seeded = { color: 'Red' };
     fireEvent.click(await screen.findByRole('button', { name: 'raw' }));
     const rawInput = await screen.findByPlaceholderText('{"key": "value"}');
     await waitFor(() => {
@@ -539,7 +537,6 @@ describe('ExecutionPanel args form', () => {
     await waitFor(() => {
       expect(JSON.parse((rawInput as HTMLInputElement).value)).toEqual({
         person: {
-          $baml: { type: 'user.Person' },
           name: 'Ada Lovelace',
           active: false,
           age: 0,
@@ -615,9 +612,7 @@ describe('ExecutionPanel args form', () => {
     await waitFor(() => {
       expect(JSON.parse((rawInput as HTMLInputElement).value)).toEqual({
         envelope: {
-          $baml: { type: 'user.Envelope' },
           flag: {
-            $baml: { type: 'user.Flag' },
             active: false,
           },
         },
@@ -770,10 +765,9 @@ describe('ExecutionPanel args form', () => {
     const rawInput = await screen.findByPlaceholderText('{"key": "value"}');
     expect(JSON.parse((rawInput as HTMLInputElement).value)).toEqual({
       t: {
-        $baml: { type: 'user.Tree' },
         value: 0,
         children: [
-          { $baml: { type: 'user.Tree' }, value: 7, children: [] },
+          { value: 7, children: [] },
         ],
       },
     });
@@ -845,7 +839,7 @@ describe('ExecutionPanel args form', () => {
     ).toBeInTheDocument();
   });
 
-  it('normalizes a bare-enum host seed into the wire marker', async () => {
+  it('keeps a bare-enum host seed marker-free in raw state', async () => {
     const port = new FakeRuntimePort();
 
     render(<ExecutionPanel port={port} initialArgsJson='{"c":"Red"}' />);
@@ -893,14 +887,13 @@ describe('ExecutionPanel args form', () => {
     );
     fireEvent.click(await screen.findByRole('button', { name: 'IsRed' }));
 
-    // The bare string would encode untyped (no String→Enum coercion exists);
-    // hydration must rewrite it to the marker even though the host seed is
-    // non-empty (so the seeding effect correctly stays away).
+    // Hydration keeps the user's JSON clean. The execution-boundary cast uses
+    // the known parameter schema without rewriting editor state.
     fireEvent.click(await screen.findByRole('button', { name: 'raw' }));
     const rawInput = await screen.findByPlaceholderText('{"key": "value"}');
     await waitFor(() => {
       expect(JSON.parse((rawInput as HTMLInputElement).value)).toEqual({
-        c: { $baml: { enum: 'user.Color', value: 'Red' } },
+        c: 'Red',
       });
     });
   });

@@ -60,6 +60,7 @@ import {
 import type { ResultRendererProps } from './result-renderers';
 import { ArgsForm } from './ArgsForm';
 import {
+  castArgsToKnownTypes,
   isPlainObject,
   reconcileArgs,
   typeLookupFrom,
@@ -1682,7 +1683,19 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
 
       try {
         const previewFunctionName = companionFunctionName(selectedFn, subFn);
-        const argsBytes = encodeRunArgs(parsed as Record<string, unknown>);
+        const update = projectUpdates[selectedProject];
+        const params = update?.functions.find(
+          (fn) => fn.name === selectedFn,
+        )?.params;
+        const previewArgs =
+          params === undefined
+            ? (parsed as Record<string, unknown>)
+            : castArgsToKnownTypes(
+                parsed as Record<string, unknown>,
+                params,
+                typeLookupFrom(update.types),
+              );
+        const argsBytes = encodeRunArgs(previewArgs);
         const boundaryId = await executionStore.startPreviewRun({
           project: selectedProject,
           parentFunctionName: selectedFn,
@@ -2221,7 +2234,11 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
       const runArgsJson =
         runArgs === parsed ? argsJson : JSON.stringify(runArgs);
       if (runArgs !== parsed) updateArgsJson(runArgsJson);
-      const argsBytes = encodeRunArgs(runArgs);
+      const encodedArgs =
+        paramSchemas === undefined
+          ? runArgs
+          : castArgsToKnownTypes(runArgs, paramSchemas, typeLookup);
+      const argsBytes = encodeRunArgs(encodedArgs);
 
       const boundaryId = await executionStore.startRun({
         project: selectedProject,

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   activeUnionVariant,
+  castArgsToKnownTypes,
   defaultValueForSchema,
   enumValue,
   enumVariantOf,
@@ -17,6 +18,7 @@ import type { FieldSchema, ParamSchema, TypeSchema } from './worker-protocol';
 
 const types: Record<string, TypeSchema> = {
   'user.Color': { kind: 'enum', values: ['Red', 'Green', 'Blue'] },
+  'user.OtherColor': { kind: 'enum', values: ['Red', 'Amber'] },
   'user.Nested': {
     kind: 'class',
     fields: [{ name: 'x', schema: { type: 'int' } }],
@@ -133,18 +135,15 @@ describe('defaultValueForSchema', () => {
 
   it('seeds required nested classes with every displayed field default', () => {
     expect(defaultValueForSchema(personRef, lookup)).toEqual({
-      $baml: { type: 'user.Person' },
       name: '',
       age: null,
-      color: { $baml: { enum: 'user.Color', value: 'Red' } },
-      nested: { $baml: { type: 'user.Nested' }, x: 0 },
+      color: 'Red',
+      nested: { x: 0 },
     });
   });
 
-  it('seeds enums with their first variant as a marker', () => {
-    expect(defaultValueForSchema(colorRef, lookup)).toEqual(
-      enumValue('user.Color', 'Red'),
-    );
+  it('seeds enums with their first variant as plain JSON', () => {
+    expect(defaultValueForSchema(colorRef, lookup)).toBe('Red');
   });
 
   it('seeds enum-variant params with their fixed variant', () => {
@@ -153,13 +152,12 @@ describe('defaultValueForSchema', () => {
         { type: 'enumVariant', name: 'user.Status', value: 'Active' },
         lookup,
       ),
-    ).toEqual(enumValue('user.Status', 'Active'));
+    ).toBe('Active');
   });
 
   it('seeds recursive types without blowing up', () => {
     expect(defaultValueForSchema({ type: 'ref', name: 'user.Tree' }, lookup))
       .toEqual({
-        $baml: { type: 'user.Tree' },
         value: 0,
         children: [],
       });
@@ -318,6 +316,123 @@ describe('isRawJsonSchema', () => {
   });
 });
 
+describe('castArgsToKnownTypes', () => {
+  it('casts uniquely known classes and enums only for wire encoding', () => {
+    const args = {
+      p: {
+        name: 'Ada',
+        age: null,
+        color: 'Green',
+        nested: { x: 7 },
+      },
+    };
+    expect(
+      castArgsToKnownTypes(
+        args,
+        [{ name: 'p', hasDefault: false, schema: personRef }],
+        lookup,
+      ),
+    ).toEqual({
+      p: {
+        $baml: { type: 'user.Person' },
+        name: 'Ada',
+        age: null,
+        color: { $baml: { enum: 'user.Color', value: 'Green' } },
+        nested: {
+          $baml: { type: 'user.Nested' },
+          x: 7,
+        },
+      },
+    });
+    expect(args).toEqual({
+      p: {
+        name: 'Ada',
+        age: null,
+        color: 'Green',
+        nested: { x: 7 },
+      },
+    });
+  });
+
+  it('casts the sole matching union member', () => {
+    expect(
+      castArgsToKnownTypes(
+        { value: 'Blue' },
+        [
+          {
+            name: 'value',
+            hasDefault: false,
+            schema: {
+              type: 'union',
+              variants: [colorRef, { type: 'int' }],
+            },
+          },
+        ],
+        lookup,
+      ),
+    ).toEqual({
+      value: { $baml: { enum: 'user.Color', value: 'Blue' } },
+    });
+  });
+
+  it('leaves ambiguous, invalid, and unsupported JSON unannotated', () => {
+    const ambiguous: ParamSchema = {
+      name: 'value',
+      hasDefault: false,
+      schema: {
+        type: 'union',
+        variants: [
+          colorRef,
+          { type: 'ref', name: 'user.OtherColor' },
+        ],
+      },
+    };
+    expect(
+      castArgsToKnownTypes({ value: 'Red' }, [ambiguous], lookup),
+    ).toEqual({ value: 'Red' });
+    expect(
+      castArgsToKnownTypes(
+        { value: 'Magenta' },
+        [{ name: 'value', hasDefault: false, schema: colorRef }],
+        lookup,
+      ),
+    ).toEqual({ value: 'Magenta' });
+    expect(
+      castArgsToKnownTypes(
+        { value: { arbitrary: true } },
+        [
+          {
+            name: 'value',
+            hasDefault: false,
+            schema: { type: 'unsupported', display: 'callback' },
+          },
+        ],
+        lookup,
+      ),
+    ).toEqual({ value: { arbitrary: true } });
+  });
+
+  it('accepts legacy markers but does not trust a mismatched type name', () => {
+    expect(
+      castArgsToKnownTypes(
+        { value: enumValue('user.Color', 'Red') },
+        [{ name: 'value', hasDefault: false, schema: colorRef }],
+        lookup,
+      ),
+    ).toEqual({
+      value: enumValue('user.Color', 'Red'),
+    });
+    const mismatched = enumValue('user.OtherColor', 'Red');
+    expect(
+      castArgsToKnownTypes(
+        { value: mismatched },
+        [{ name: 'value', hasDefault: false, schema: colorRef }],
+        lookup,
+      ),
+    ).toEqual({ value: mismatched });
+  });
+});
+
 describe('reconcileArgs', () => {
   const params: ParamSchema[] = [
     { name: 'c', hasDefault: false, schema: colorRef },
@@ -329,22 +444,19 @@ describe('reconcileArgs', () => {
     },
   ];
 
-  it('rewrites bare enum strings that name a valid variant', () => {
-    expect(reconcileArgs({ c: 'Red' }, [params[0]], lookup)).toEqual({
-      c: enumValue('user.Color', 'Red'),
-    });
+  it('keeps valid enum selections as plain JSON strings', () => {
+    const direct = { c: 'Red' };
+    expect(reconcileArgs(direct, [params[0]], lookup)).toBe(direct);
     // Inside containers too.
-    expect(reconcileArgs({ list: ['Red', 'Blue'] }, [params[2]], lookup))
-      .toEqual({
-        list: [enumValue('user.Color', 'Red'), enumValue('user.Color', 'Blue')],
-      });
+    const nested = { list: ['Red', 'Blue'] };
+    expect(reconcileArgs(nested, [params[2]], lookup)).toBe(nested);
     // An incompatible stale value resets to the schema default.
     expect(reconcileArgs({ c: 'Magenta' }, [params[0]], lookup)).toEqual({
-      c: enumValue('user.Color', 'Red'),
+      c: 'Red',
     });
   });
 
-  it('injects marker and missing-field defaults into markerless class objects', () => {
+  it('fills missing class fields without adding wire markers', () => {
     expect(
       reconcileArgs(
         { p: { name: 'Ada', color: 'Green' } },
@@ -353,57 +465,56 @@ describe('reconcileArgs', () => {
       ),
     ).toEqual({
       p: {
-        $baml: { type: 'user.Person' },
         name: 'Ada',
-        color: enumValue('user.Color', 'Green'),
+        color: 'Green',
         age: null,
-        nested: { $baml: { type: 'user.Nested' }, x: 0 },
+        nested: { x: 0 },
       },
     });
   });
 
-  it('overwrites a junk non-marker $baml key with the injected marker', () => {
-    // Raw editing can leave `$baml: 5` behind; spreading it over the marker
-    // would silently keep the value untyped while widgets render it typed.
+  it('removes a junk non-marker $baml key', () => {
     expect(
       reconcileArgs(
         { p: { $baml: 5, name: 'x' } },
         [params[1]],
         lookup,
       ),
-    ).toMatchObject({
-      p: { $baml: { type: 'user.Person' }, name: 'x' },
+    ).toEqual({
+      p: {
+        name: 'x',
+        age: null,
+        color: 'Red',
+        nested: { x: 0 },
+      },
     });
   });
 
-  it('fills marker-carrying objects and is idempotent once complete', () => {
+  it('migrates legacy markers to plain JSON and is then idempotent', () => {
     const args = {
       p: { $baml: { type: 'user.Person' }, color: 'Blue' },
     };
     expect(reconcileArgs(args, [params[1]], lookup)).toEqual({
       p: {
-        $baml: { type: 'user.Person' },
         name: '',
         age: null,
-        color: enumValue('user.Color', 'Blue'),
-        nested: { $baml: { type: 'user.Nested' }, x: 0 },
+        color: 'Blue',
+        nested: { x: 0 },
       },
     });
-    // Idempotent: already-typed input comes back by reference.
-    const typed = {
+    const plain = {
       p: {
-        $baml: { type: 'user.Person' },
         name: 'Ada',
         age: null,
-        color: enumValue('user.Color', 'Red'),
-        nested: { $baml: { type: 'user.Nested' }, x: 0 },
+        color: 'Red',
+        nested: { x: 0 },
       },
     };
-    expect(reconcileArgs(typed, [params[1]], lookup)).toBe(typed);
+    expect(reconcileArgs(plain, [params[1]], lookup)).toBe(plain);
   });
 
   it('preserves surplus keys and values without schemas', () => {
-    const args = { c: enumValue('user.Color', 'Red'), extra: { a: 1 } };
+    const args = { c: 'Red', extra: { a: 1 } };
     expect(reconcileArgs(args, [params[0]], lookup)).toBe(args);
   });
 
@@ -442,7 +553,6 @@ describe('reconcileArgs', () => {
       ),
     ).toEqual({
       p: {
-        $baml: { type: 'user.Person' },
         name: 'Ada',
         active: false,
         age: 0,

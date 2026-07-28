@@ -9,7 +9,8 @@
  * `CollapsibleContent`), which is what makes recursive types fully typed at
  * every depth the user opens. Fully controlled: the single source of truth is
  * the `value` record, which the host serializes into the existing `argsJson`
- * pipeline on every edit. Value/marker semantics live in args-form-model.ts.
+ * pipeline on every edit. Schema-directed execution casting lives in
+ * args-form-model.ts and does not leak wire annotations into this state.
  *
  * Nodes the form can't render typed (unsupported types, media, dangling refs)
  * degrade to a per-field raw-JSON textarea.
@@ -28,7 +29,6 @@ import { ChevronRight, Plus, Trash2 } from 'lucide-react';
 import {
   activeUnionVariant,
   defaultValueForSchema,
-  enumValue,
   enumVariantOf,
   isPlainObject,
   isRawJsonSchema,
@@ -335,7 +335,7 @@ const EnumField: FC<
         size="sm"
         value={current ?? ''}
         options={values.map((v) => ({ value: v, label: v }))}
-        onValueChange={(v) => onChange(enumValue(enumName, v))}
+        onValueChange={onChange}
       />
     );
   }
@@ -346,7 +346,7 @@ const EnumField: FC<
         onChange={(e) => {
           // The empty value is the "select…" placeholder, not a variant.
           if (e.target.value === '') return;
-          onChange(enumValue(enumName, e.target.value));
+          onChange(e.target.value);
         }}
       >
         {current === undefined && <option value="">select…</option>}
@@ -362,11 +362,11 @@ const EnumField: FC<
 
 const ClassSection: FC<
   FieldInputProps & { typeName: string; fields: FieldSchemaField[] }
-> = ({ typeName, fields, schema, value, onChange, depth }) => {
+> = ({ fields, schema, value, onChange, depth }) => {
   const [open, setOpen] = useState(depth < AUTO_COLLAPSE_DEPTH);
   const obj = isPlainObject(value) ? value : {};
   const setField = (name: string, v: unknown) =>
-    onChange({ ...obj, $baml: { type: typeName }, [name]: v });
+    onChange({ ...obj, [name]: v });
   return (
     <Collapsible open={open} onOpenChange={setOpen}>
       <CollapsibleTrigger className="flex items-center gap-1 cursor-pointer text-xs text-vsc-description hover:text-foreground">
