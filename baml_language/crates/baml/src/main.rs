@@ -87,6 +87,9 @@ struct ProjectConfig {
 struct ProjectToolchain {
     version: Option<String>,
     channel: Option<String>,
+    /// Path to a `baml-cli` binary, relative to this `baml.toml` unless
+    /// absolute. Mutually exclusive with `version` and `channel`.
+    path: Option<String>,
 }
 
 enum SelectorSource {
@@ -113,16 +116,26 @@ Usage:
   baml toolchain <command>
 
 Commands:
-  use <canary|nightly|version>       Install if needed and select as default
+  use <canary|nightly|version|path>  Install if needed and select as default
   install <canary|nightly|version>   Download without selecting
   update                             Advance the active channel
   status                             Check latest remote version without installing
   list                               Show installed toolchains, local only
   uninstall <version>                Remove an installed concrete version
 
+Local toolchains:
+  A selector containing a path separator is a baml-cli binary the wrapper does
+  not manage, for running a local build. It is accepted anywhere a selector is,
+  including $BAML_VERSION and [toolchain] path in baml.toml (resolved relative
+  to that file). install, update, and uninstall do not apply to it.
+
+    baml toolchain use ~/repos/baml/target/debug/baml-cli
+    BAML_VERSION=./target/debug/baml-cli baml check
+
 Network behavior:
   list is local-only.
   status checks remote metadata but does not install or change selection.
+  status is local-only for a path toolchain, which has nothing remote to check.
   use, install, and update may download toolchains or change local state.
 
 Wrapper updates:
@@ -191,6 +204,20 @@ fn print_version() {
             return;
         }
     };
+    if let Some(cli) = path_selector(&selector.selector) {
+        match verify_path_toolchain(cli, "") {
+            Ok(()) => println!(
+                "baml toolchain {}{}",
+                cli.display(),
+                selector_annotation(&selector)
+            ),
+            Err(err) => {
+                println!("baml toolchain not usable");
+                println!("{err:#}");
+            }
+        }
+        return;
+    }
     let version = match concrete_version_for_selector(&selector) {
         Ok(version) => version,
         Err(_) if is_channel(&selector.selector) => {
@@ -328,9 +355,9 @@ fn toolchain(args: Vec<String>) -> Result<()> {
             install_toolchain(selector, false, manifest_base_url.as_deref(), force)
         }
         Some("use") => {
-            let selector = args
-                .get(1)
-                .ok_or_else(|| anyhow!("usage: baml toolchain use <canary|nightly|version>"))?;
+            let selector = args.get(1).ok_or_else(|| {
+                anyhow!("usage: baml toolchain use <canary|nightly|version|path>")
+            })?;
             use_toolchain(selector, manifest_base_url.as_deref())
         }
         Some("update") => update_toolchain(manifest_base_url.as_deref()),
@@ -376,6 +403,9 @@ fn parse_manifest_base_url(mut args: Vec<String>) -> Result<(Vec<String>, Option
 
 fn pass_through(args: Vec<String>) -> Result<i32> {
     let selector = active_selector()?;
+    if let Some(cli) = path_selector(&selector.selector) {
+        return exec_path_toolchain(cli, &selector, args);
+    }
     let version = concrete_version_for_selector(&selector)?;
     let cli = toolchain_cli_path(&version);
     if !cli.exists() {
@@ -424,11 +454,38 @@ fn pass_through(args: Vec<String>) -> Result<i32> {
     Ok(status.code().unwrap_or(1))
 }
 
+/// Run a path toolchain. None of the version bookkeeping applies to a binary
+/// the wrapper did not install: no VERSION file, no channel freshness warning,
+/// and no background manifest refresh. That also keeps the exec fast path
+/// unconditional, so a local build costs nothing extra to launch.
+fn exec_path_toolchain(cli: &Path, selector: &ResolvedSelector, args: Vec<String>) -> Result<i32> {
+    verify_path_toolchain(cli, &path_selector_origin(&selector.source))?;
+
+    let mut command = Command::new(cli);
+    command.args(args);
+    command.env("BAML_WRAPPER_EXEC", "1");
+    command.env("BAML_WRAPPER_RESOLVED_TOOLCHAIN", cli);
+
+    #[cfg(unix)]
+    {
+        use std::os::unix::process::CommandExt;
+        let err = command.exec();
+        Err(anyhow!("failed to exec {}: {err}", cli.display()))
+    }
+    #[cfg(not(unix))]
+    {
+        let status = command
+            .status()
+            .with_context(|| format!("failed to run {}", cli.display()))?;
+        Ok(status.code().unwrap_or(1))
+    }
+}
+
 fn active_selector() -> Result<ResolvedSelector> {
     if let Ok(value) = env::var("BAML_VERSION") {
         if !value.trim().is_empty() {
             return Ok(ResolvedSelector {
-                selector: value,
+                selector: normalize_selector(value.trim(), &env::current_dir()?),
                 source: SelectorSource::Env,
             });
         }
@@ -442,7 +499,7 @@ fn active_selector() -> Result<ResolvedSelector> {
     let config = read_config();
     if !config.default.selector.trim().is_empty() {
         return Ok(ResolvedSelector {
-            selector: config.default.selector,
+            selector: normalize_selector(config.default.selector.trim(), &env::current_dir()?),
             source: SelectorSource::Config,
         });
     }
@@ -462,6 +519,25 @@ fn project_toolchain_selector() -> Result<Option<(PathBuf, String)>> {
             let config = toml::from_str::<ProjectConfig>(&text)
                 .with_context(|| format!("failed to parse {}", candidate.display()))?;
             if let Some(toolchain) = config.toolchain {
+                let declared: Vec<&str> = [
+                    ("path", toolchain.path.is_some()),
+                    ("version", toolchain.version.is_some()),
+                    ("channel", toolchain.channel.is_some()),
+                ]
+                .into_iter()
+                .filter_map(|(key, set)| set.then_some(key))
+                .collect();
+                if declared.len() > 1 {
+                    return Err(anyhow!(
+                        "{} [toolchain] sets {}, which are mutually exclusive",
+                        candidate.display(),
+                        declared.join(" and ")
+                    ));
+                }
+                if let Some(path) = toolchain.path {
+                    let selector = resolve_selector_path(&path, &dir).display().to_string();
+                    return Ok(Some((candidate, selector)));
+                }
                 if let Some(version) = toolchain.version {
                     return Ok(Some((candidate, version)));
                 }
@@ -485,6 +561,12 @@ fn concrete_version_for_selector_with_base(
     selector: &ResolvedSelector,
     current_base: &str,
 ) -> Result<String> {
+    if is_path_selector(&selector.selector) {
+        return Err(anyhow!(
+            "active toolchain is a local path and has no version: {}",
+            selector.selector
+        ));
+    }
     if is_channel(&selector.selector) {
         let state = read_state();
         if let Some(channel) = state.channels.get(&selector.selector) {
@@ -539,13 +621,19 @@ fn missing_toolchain_error(selector: &ResolvedSelector, version: &str) -> anyhow
     }
 }
 
-fn toolchain_cli_path(version: &str) -> PathBuf {
-    let exe = if cfg!(windows) {
+fn cli_exe_name() -> &'static str {
+    if cfg!(windows) {
         "baml-cli.exe"
     } else {
         "baml-cli"
-    };
-    toolchains_dir().join(version).join("bin").join(exe)
+    }
+}
+
+fn toolchain_cli_path(version: &str) -> PathBuf {
+    toolchains_dir()
+        .join(version)
+        .join("bin")
+        .join(cli_exe_name())
 }
 
 fn verify_toolchain_version_file(version: &str) -> Result<()> {
@@ -567,6 +655,120 @@ fn verify_toolchain_version_file(version: &str) -> Result<()> {
 
 fn is_channel(selector: &str) -> bool {
     selector == "canary" || selector == "nightly"
+}
+
+/// Whether a selector names a local `baml-cli` binary rather than a channel or
+/// a version. Channels and versions never contain a path separator, so a bare
+/// path is unambiguous and needs no prefix or flag to mark it.
+fn is_path_selector(selector: &str) -> bool {
+    is_path_selector_on(selector, cfg!(windows))
+}
+
+/// Split out so the Windows rule is exercised by tests on every platform,
+/// rather than only where `cfg(windows)` holds.
+fn is_path_selector_on(selector: &str, windows: bool) -> bool {
+    selector.starts_with('~')
+        || selector.starts_with('.')
+        || selector.contains('/')
+        || (windows && selector.contains('\\'))
+}
+
+/// The binary a selector points at, if it is a path selector.
+fn path_selector(selector: &str) -> Option<&Path> {
+    is_path_selector(selector).then(|| Path::new(selector))
+}
+
+/// Expand a leading `~` and absolutize against `base`, the directory that
+/// declared the path (the containing `baml.toml` for project config, the cwd
+/// otherwise). Relative paths are what make a committed `[toolchain] path`
+/// usable by everyone on a team.
+fn resolve_selector_path(raw: &str, base: &Path) -> PathBuf {
+    let home = env::var_os("HOME")
+        .or_else(|| env::var_os("USERPROFILE"))
+        .map(PathBuf::from);
+    resolve_selector_path_with_home(raw, base, home.as_deref())
+}
+
+fn resolve_selector_path_with_home(raw: &str, base: &Path, home: Option<&Path>) -> PathBuf {
+    let joined = join_selector_path(raw, base, home);
+    // Collapse the `..` segments a relative selector leaves behind, so the path
+    // reads cleanly everywhere it is echoed back. Done through the filesystem
+    // rather than lexically so it stays correct across symlinks; a path that
+    // does not exist yet keeps its joined form for the error message.
+    joined.canonicalize().unwrap_or(joined)
+}
+
+fn join_selector_path(raw: &str, base: &Path, home: Option<&Path>) -> PathBuf {
+    let raw = raw.trim();
+    if raw == "~" || raw.starts_with("~/") {
+        if let Some(home) = home {
+            return home.join(raw.trim_start_matches('~').trim_start_matches('/'));
+        }
+    }
+    let path = PathBuf::from(raw);
+    if path.is_absolute() {
+        path
+    } else {
+        base.join(path)
+    }
+}
+
+/// Absolutize a path selector, so every later consumer (exec, error text,
+/// status output) sees the same path regardless of cwd. Channels and versions
+/// pass through untouched. Absolutizing is idempotent: the result still reads
+/// as a path selector.
+fn normalize_selector(selector: &str, base: &Path) -> String {
+    if is_path_selector(selector) {
+        return resolve_selector_path(selector, base).display().to_string();
+    }
+    selector.to_string()
+}
+
+/// The `set by ...` line appended to path-toolchain errors, so a stale
+/// override is traceable to whatever set it.
+fn path_selector_origin(source: &SelectorSource) -> String {
+    match source {
+        SelectorSource::Env => "\n  set by $BAML_VERSION".to_string(),
+        SelectorSource::Project(path) => format!("\n  set by path in {}", path.display()),
+        SelectorSource::Config | SelectorSource::Fallback => {
+            format!("\n  set by default.selector in {}", config_path().display())
+        }
+    }
+}
+
+/// Check that a path selector points at something runnable. `origin` is a
+/// pre-formatted `set by ...` line, or empty when the path came straight from
+/// the command line and needs no attribution.
+fn verify_path_toolchain(cli: &Path, origin: &str) -> Result<()> {
+    if cli.is_dir() {
+        return Err(anyhow!(
+            "toolchain path is a directory: {}{origin}\nPoint at the {} binary, e.g. {}",
+            cli.display(),
+            cli_exe_name(),
+            cli.join("bin").join(cli_exe_name()).display()
+        ));
+    }
+    if !cli.exists() {
+        return Err(anyhow!(
+            "toolchain binary not found: {}{origin}",
+            cli.display()
+        ));
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let mode = fs::metadata(cli)
+            .with_context(|| format!("failed to read {}", cli.display()))?
+            .permissions()
+            .mode();
+        if mode & 0o111 == 0 {
+            return Err(anyhow!(
+                "toolchain binary is not executable: {}{origin}",
+                cli.display()
+            ));
+        }
+    }
+    Ok(())
 }
 
 /// Bold-yellow lowercase `warning` prefix, matching the styled diagnostics the
@@ -796,6 +998,11 @@ fn install_toolchain(
     override_url: Option<&str>,
     force: bool,
 ) -> Result<()> {
+    if is_path_selector(selector) {
+        return Err(anyhow!(
+            "{selector} is a local path; there is nothing to install.\nRun: baml toolchain use {selector}"
+        ));
+    }
     install_toolchain_with_policy(
         selector,
         activate_channel,
@@ -865,6 +1072,15 @@ fn install_manifest_artifact(
 }
 
 fn use_toolchain(selector: &str, override_url: Option<&str>) -> Result<()> {
+    if is_path_selector(selector) {
+        let cli = resolve_selector_path(selector, &env::current_dir()?);
+        verify_path_toolchain(&cli, "")?;
+        let mut config = read_config();
+        config.default.selector = cli.display().to_string();
+        write_config(&config)?;
+        println!("selected BAML toolchain {}", cli.display());
+        return Ok(());
+    }
     if is_channel(selector) {
         install_toolchain(selector, true, override_url, false)?;
     } else {
@@ -885,6 +1101,13 @@ fn use_toolchain(selector: &str, override_url: Option<&str>) -> Result<()> {
 
 fn update_toolchain(override_url: Option<&str>) -> Result<()> {
     let config = read_config();
+    if is_path_selector(&config.default.selector) {
+        println!(
+            "active selector {} is a local path and is not managed by the wrapper.\nRun: baml toolchain use canary",
+            config.default.selector
+        );
+        return Ok(());
+    }
     if !is_channel(&config.default.selector) {
         println!(
             "active selector {} is an exact version and does not advance automatically.\nRun: baml toolchain use canary\nOr:  baml toolchain use nightly",
@@ -912,6 +1135,18 @@ fn status_toolchain(override_url: Option<&str>) -> Result<()> {
     let selector = active_selector()?;
     let base = manifest_base_url(override_url);
     println!("active selector: {}", selector.selector);
+
+    if let Some(cli) = path_selector(&selector.selector) {
+        if let Some(origin) = selector_origin(&selector.source) {
+            println!("source: {origin}");
+        }
+        match verify_path_toolchain(cli, "") {
+            Ok(()) => println!("status: local toolchain binary, not managed by the wrapper"),
+            Err(err) => println!("status: local toolchain binary is unusable\n{err:#}"),
+        }
+        println!("Remote versions were not checked.");
+        return Ok(());
+    }
 
     if is_channel(&selector.selector) {
         match concrete_version_for_selector_with_base(&selector, &base) {
@@ -991,6 +1226,15 @@ fn list_toolchains() {
     let config = read_config();
     let state = read_state();
     println!("default selector: {}", config.default.selector);
+    if let Ok(active) = active_selector() {
+        if active.selector != config.default.selector {
+            println!(
+                "active selector: {}{}",
+                active.selector,
+                selector_annotation(&active)
+            );
+        }
+    }
     for (channel, state) in state.channels {
         println!("{channel}: {}", state.active_version);
     }
@@ -1009,6 +1253,11 @@ fn list_toolchains() {
 }
 
 fn uninstall_toolchain(version: &str) -> Result<()> {
+    if is_path_selector(version) {
+        return Err(anyhow!(
+            "{version} is a local path; the wrapper does not manage it.\nRun: baml toolchain use canary to stop using it"
+        ));
+    }
     let dir = toolchains_dir().join(version);
     if !dir.exists() {
         return Err(anyhow!("BAML toolchain {version} is not installed"));
@@ -1227,6 +1476,188 @@ mod tests {
             selector_annotation(&resolved("nightly", SelectorSource::Env)),
             " (nightly, from $BAML_VERSION)"
         );
+    }
+
+    #[test]
+    fn channels_and_versions_are_not_path_selectors() {
+        for selector in ["canary", "nightly", "0.412.0", "5.0.0-pre.20210317.1"] {
+            assert!(!is_path_selector(selector), "{selector}");
+        }
+    }
+
+    #[test]
+    fn anything_with_a_path_shape_is_a_path_selector() {
+        for selector in [
+            "~/repos/baml/target/debug/baml-cli",
+            "./target/debug/baml-cli",
+            "../baml/target/debug/baml-cli",
+            "/usr/local/bin/baml-cli",
+            "target/debug/baml-cli",
+            // Forward slashes are a path on Windows too, so a drive-letter
+            // path in this form is detected on every platform.
+            "C:/repos/baml/target/debug/baml-cli.exe",
+        ] {
+            assert!(is_path_selector(selector), "{selector}");
+        }
+    }
+
+    /// Backslash counts as a separator only on Windows, where a channel or
+    /// version can never contain one.
+    #[test]
+    fn windows_backslash_paths_are_path_selectors() {
+        for selector in [
+            r"C:\repos\baml\target\debug\baml-cli.exe",
+            r".\target\debug\baml-cli.exe",
+            r"..\baml\target\debug\baml-cli.exe",
+            r"\\server\share\baml-cli.exe",
+        ] {
+            assert!(is_path_selector_on(selector, true), "{selector}");
+        }
+    }
+
+    #[test]
+    fn backslash_alone_is_not_a_separator_off_windows() {
+        assert!(!is_path_selector_on(r"weird\name", false));
+    }
+
+    /// Channels and versions stay non-paths under the Windows rule too.
+    #[test]
+    fn windows_rule_still_admits_channels_and_versions() {
+        for selector in ["canary", "nightly", "0.412.0"] {
+            assert!(!is_path_selector_on(selector, true), "{selector}");
+        }
+    }
+
+    // Absoluteness is platform-defined (`/opt` has a root but no prefix on
+    // Windows, so it is not absolute there), so the resolution tests build
+    // their paths from platform-appropriate roots.
+    #[cfg(not(windows))]
+    const TEST_BASE: &str = "/work/demo";
+    #[cfg(not(windows))]
+    const TEST_ABSOLUTE: &str = "/opt/baml-cli";
+    #[cfg(not(windows))]
+    const TEST_HOME: &str = "/home/tester";
+
+    #[cfg(windows)]
+    const TEST_BASE: &str = r"C:\work\demo";
+    #[cfg(windows)]
+    const TEST_ABSOLUTE: &str = r"C:\opt\baml-cli.exe";
+    #[cfg(windows)]
+    const TEST_HOME: &str = r"C:\Users\tester";
+
+    #[test]
+    fn relative_path_resolves_against_the_declaring_directory() {
+        assert_eq!(
+            resolve_selector_path("../baml/target/debug/baml-cli", Path::new(TEST_BASE)),
+            Path::new(TEST_BASE).join("../baml/target/debug/baml-cli")
+        );
+    }
+
+    #[test]
+    fn absolute_path_ignores_the_declaring_directory() {
+        assert_eq!(
+            resolve_selector_path(TEST_ABSOLUTE, Path::new(TEST_BASE)),
+            PathBuf::from(TEST_ABSOLUTE)
+        );
+    }
+
+    #[test]
+    fn tilde_expands_to_home() {
+        assert_eq!(
+            resolve_selector_path_with_home(
+                "~/builds/baml-cli",
+                Path::new(TEST_BASE),
+                Some(Path::new(TEST_HOME))
+            ),
+            Path::new(TEST_HOME).join("builds/baml-cli")
+        );
+    }
+
+    /// An existing target loses its `..` segments, so the path reads cleanly in
+    /// `--version`, `status`, and the config file it gets written to.
+    #[test]
+    fn existing_path_is_canonicalized() {
+        let tmp = tempfile::tempdir().unwrap();
+        let build = tmp.path().join("build");
+        let proj = tmp.path().join("proj");
+        fs::create_dir_all(&build).unwrap();
+        fs::create_dir_all(&proj).unwrap();
+        let cli = build.join(cli_exe_name());
+        fs::write(&cli, "").unwrap();
+
+        let resolved = resolve_selector_path(&format!("../build/{}", cli_exe_name()), &proj);
+        assert_eq!(resolved, cli.canonicalize().unwrap());
+        assert!(!resolved.to_string_lossy().contains(".."), "{resolved:?}");
+    }
+
+    /// A path that does not exist yet keeps its joined form, so the error names
+    /// what the developer actually asked for.
+    #[test]
+    fn missing_path_keeps_its_joined_form() {
+        let tmp = tempfile::tempdir().unwrap();
+        let resolved = resolve_selector_path("../build/baml-cli", tmp.path());
+        assert_eq!(resolved, tmp.path().join("../build/baml-cli"));
+    }
+
+    /// Without a home directory the `~` stays literal rather than silently
+    /// resolving somewhere unintended.
+    #[test]
+    fn tilde_without_home_is_left_relative() {
+        assert_eq!(
+            resolve_selector_path_with_home("~/builds/baml-cli", Path::new(TEST_BASE), None),
+            Path::new(TEST_BASE).join("~/builds/baml-cli")
+        );
+    }
+
+    #[test]
+    fn normalizing_an_absolute_path_selector_is_idempotent() {
+        let once = normalize_selector("./target/debug/baml-cli", Path::new(TEST_BASE));
+        assert!(Path::new(&once).is_absolute(), "{once}");
+        assert!(is_path_selector(&once), "{once}");
+        assert_eq!(normalize_selector(&once, Path::new("/elsewhere")), once);
+    }
+
+    #[test]
+    fn normalizing_leaves_channels_and_versions_alone() {
+        assert_eq!(normalize_selector("canary", Path::new(TEST_BASE)), "canary");
+        assert_eq!(
+            normalize_selector("0.412.0", Path::new(TEST_BASE)),
+            "0.412.0"
+        );
+    }
+
+    #[test]
+    fn path_toolchain_pointing_at_a_directory_is_rejected() {
+        let dir = tempfile::tempdir().unwrap();
+        let err = verify_path_toolchain(dir.path(), "")
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("is a directory"), "{err}");
+        assert!(err.contains("baml-cli"), "{err}");
+    }
+
+    #[test]
+    fn missing_path_toolchain_reports_its_origin() {
+        let missing = Path::new(TEST_BASE).join("missing").join(cli_exe_name());
+        let manifest = Path::new(TEST_BASE).join("baml.toml");
+        let origin = path_selector_origin(&SelectorSource::Project(manifest.clone()));
+        let err = verify_path_toolchain(&missing, &origin)
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("toolchain binary not found"), "{err}");
+        assert!(
+            err.contains(&format!("set by path in {}", manifest.display())),
+            "{err}"
+        );
+    }
+
+    #[test]
+    fn path_selector_has_no_version_to_resolve() {
+        let selector = resolved(TEST_ABSOLUTE, SelectorSource::Config);
+        let err = concrete_version_for_selector_with_base(&selector, "https://example.test")
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("has no version"), "{err}");
     }
 
     fn write_cached_manifest(version: &str) -> tempfile::NamedTempFile {
