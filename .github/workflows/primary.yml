@@ -166,20 +166,13 @@ jobs:
     strategy:
       matrix:
         check:
-          [typescript-lint, rust-format, rust-lint, rust-lint-wasm, python-lint]
+          [rust-format, rust-lint, rust-lint-wasm, python-lint]
     steps:
       - name: Checkout
         uses: actions/checkout@v6
 
       - name: Setup Tools
         uses: ./.github/actions/setup-tools
-
-      # Setup Node.js for TypeScript lint
-      - name: Setup Node.js
-        if: matrix.check == 'typescript-lint'
-        uses: ./.github/actions/setup-node
-        with:
-          node-action-version: "v6"
 
       # Setup Rust for Rust checks
       - name: Setup Rust
@@ -198,10 +191,6 @@ jobs:
         uses: ./.github/actions/setup-python
         with:
           cache: "false"
-
-      - name: Run TypeScript lint
-        if: matrix.check == 'typescript-lint'
-        run: pnpm format:ci
 
       - name: Run Rust format check
         if: matrix.check == 'rust-format'

@@ -97,7 +97,7 @@
   },
   "vcs": {
     "clientKind": "git",
-    "defaultBranch": "main",
+    "defaultBranch": "canary",
     "enabled": true,
     "useIgnoreFile": true
   }
