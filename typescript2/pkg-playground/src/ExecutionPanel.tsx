@@ -2249,7 +2249,6 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
 
     // Don't force the 'run' tab — running keeps the user on whatever tab
     // they're viewing (graph, trace, prompt, etc.).
-    setSelectedGraphRunId(null);
     setExpandedLogId(null);
     setRunValidationError(null);
 
@@ -2281,6 +2280,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
         functionName: selectedFn,
         argsBytes: new Uint8Array(argsBytes),
       });
+      setSelectedGraphRunId(null);
       setArgsJsonByBoundaryId((prev) => ({
         ...prev,
         [boundaryId]: runArgsJson,
@@ -2320,28 +2320,37 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
         executionSnapshot.runs,
         selectedFn,
         selectedProject,
+        currentUpdate?.generation ?? null,
         selectedGraphRunId,
       ),
     [
       executionSnapshot.runs,
       selectedFn,
       selectedProject,
+      currentUpdate?.generation,
       selectedGraphRunId,
     ],
   );
   const handleSelectHistoryRun = useCallback(
     (run: RunStoreDisplayRun) => {
-      if (!functionNames.includes(run.functionName)) return;
+      if (
+        !functionNames.includes(run.functionName) ||
+        currentUpdate?.generation == null ||
+        run.projectGeneration !== currentUpdate.generation
+      ) {
+        return;
+      }
       setWorkflowContext(null);
       setSelectedPreviewTestKey(null);
       setViewingCollection(false);
       setViewingTestRun(false);
+      setSelectedTestName(null);
       setSelectedFn(run.functionName);
       setSelectedGraphRunId(run.id);
       setHighlightedNodeId(null);
       setActiveTab('graph');
     },
-    [functionNames],
+    [currentUpdate?.generation, functionNames],
   );
   // The run-history/logs strip is lifted out of the sidebar+content row so it
   // spans the panel's full width; the row gets bottom padding to make room.
@@ -3510,6 +3519,12 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
 
                     {functionRuns.map((run, boundaryIdx) => {
                       const isLatest = boundaryIdx === 0;
+                      const isCurrentGeneration =
+                        currentUpdate?.generation != null &&
+                        run.projectGeneration === currentUpdate.generation;
+                      const canViewRunInGraph =
+                        functionNames.includes(run.functionName) &&
+                        isCurrentGeneration;
                       const isLlmFunctionRun = llmFunctionNames.has(
                         run.functionName,
                       );
@@ -3535,11 +3550,13 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
                               type="button"
                               aria-label={`View ${run.functionName} run in graph`}
                               title={
-                                functionNames.includes(run.functionName)
+                                !functionNames.includes(run.functionName)
+                                  ? 'This function is not available in the current build'
+                                  : isCurrentGeneration
                                   ? 'View this run in the graph'
-                                  : 'This function is not available in the current build'
+                                  : 'This run belongs to an older build'
                               }
-                              disabled={!functionNames.includes(run.functionName)}
+                              disabled={!canViewRunInGraph}
                               onClick={() => handleSelectHistoryRun(run)}
                               className="flex flex-1 min-w-0 items-center gap-1.5 px-2.5 py-1.5 text-left hover:bg-vsc-accent/10 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-vsc-accent disabled:cursor-default disabled:hover:bg-transparent"
                             >

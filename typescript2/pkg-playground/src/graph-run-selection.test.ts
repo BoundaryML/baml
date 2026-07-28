@@ -25,7 +25,12 @@ describe('findLatestGraphRunSnapshot', () => {
     });
 
     expect(
-      findLatestGraphRunSnapshot([newest, oldest], 'throws.main', 'project')
+      findLatestGraphRunSnapshot(
+        [newest, oldest],
+        'throws.main',
+        'project',
+        1,
+      )
         ?.boundaryId,
     ).toBe('newest');
   });
@@ -48,6 +53,7 @@ describe('findLatestGraphRunSnapshot', () => {
         [older, middleOtherProject, newer],
         'throws.main',
         'project',
+        1,
       )?.boundaryId,
     ).toBe('newer');
   });
@@ -61,6 +67,7 @@ describe('findLatestGraphRunSnapshot', () => {
         [newer, older],
         'throws.main',
         'project',
+        1,
         'older',
       )?.boundaryId,
     ).toBe('older');
@@ -75,6 +82,7 @@ describe('findLatestGraphRunSnapshot', () => {
         [older, newer],
         'throws.main',
         'project',
+        1,
         'missing',
       )?.boundaryId,
     ).toBe('newer');
@@ -90,8 +98,16 @@ describe('findLatestGraphRunSnapshot', () => {
     });
 
     expect(
-      findLatestGraphRunSnapshot([run], 'throws.main', 'project')?.boundaryId,
+      findLatestGraphRunSnapshot([run], 'throws.main', 'project', 1)?.boundaryId,
     ).toBe('workflow');
+  });
+
+  it('does not pair an obsolete run generation with the current graph', () => {
+    const obsolete = runFixture('obsolete', 100);
+
+    expect(
+      findLatestGraphRunSnapshot([obsolete], 'throws.main', 'project', 2),
+    ).toBeUndefined();
   });
 });
 

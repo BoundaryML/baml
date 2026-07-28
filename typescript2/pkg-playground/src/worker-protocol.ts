@@ -146,6 +146,8 @@ export function previewTestKey(
 
 export interface ProjectUpdate {
   isBexCurrent: boolean;
+  /** Generation of the installed engine backing this update. Omitted by older runtimes. */
+  generation?: number;
   functions: FunctionInfo[];
   /** Omitted by older runtimes; the UI treats that as no previewable tests. */
   tests?: TestInfo[];

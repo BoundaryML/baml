@@ -40,6 +40,7 @@ describe('ExecutionPanel StrictMode lifecycle', () => {
           project: 'project',
           update: {
             isBexCurrent: true,
+            generation: 1,
             functions: [
               { name: 'ReadNote', kind: 'expr', origin: 'userDefined' },
             ],
@@ -195,6 +196,7 @@ describe('ExecutionPanel run history', () => {
           project: 'project',
           update: {
             isBexCurrent: true,
+            generation: 1,
             functions: [
               { name: 'ReadNote', kind: 'expr', origin: 'userDefined' },
             ],
@@ -253,6 +255,44 @@ describe('ExecutionPanel run history', () => {
           name: 'View ReadNote run in graph',
         }),
       ).toBeInTheDocument();
+    });
+    act(() => {
+      port.emit({
+        type: 'playgroundNotification',
+        notification: {
+          type: 'updateProject',
+          project: 'project',
+          update: {
+            isBexCurrent: true,
+            generation: 2,
+            functions: [
+              { name: 'ReadNote', kind: 'expr', origin: 'userDefined' },
+            ],
+            diagnostics: [],
+          },
+        },
+      });
+    });
+    expect(
+      screen.getByRole('button', { name: 'View ReadNote run in graph' }),
+    ).toBeDisabled();
+
+    act(() => {
+      port.emit({
+        type: 'playgroundNotification',
+        notification: {
+          type: 'updateProject',
+          project: 'project',
+          update: {
+            isBexCurrent: true,
+            generation: 1,
+            functions: [
+              { name: 'ReadNote', kind: 'expr', origin: 'userDefined' },
+            ],
+            diagnostics: [],
+          },
+        },
+      });
     });
     fireEvent.click(
       screen.getByRole('button', { name: 'View ReadNote run in graph' }),
