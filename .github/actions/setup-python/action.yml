@@ -52,7 +52,7 @@ runs:
           uv sync --dev
 
           # Install ruff as a global tool so it's available in PATH
-          uv tool install ruff
+          uv tool install ruff==0.15.22
 
           cd - > /dev/null
           echo "Python dependencies installed successfully"
