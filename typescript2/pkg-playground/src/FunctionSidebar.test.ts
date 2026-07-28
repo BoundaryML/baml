@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   buildFunctionSidebarTree,
+  buildPreviewTestGroups,
   type FunctionSidebarFolderNode,
   type FunctionSidebarTreeNode,
 } from './function-sidebar-tree';
@@ -66,12 +67,42 @@ describe('function sidebar tree', () => {
   });
 });
 
+describe('preview test groups', () => {
+  it('keeps each detached legacy test attached to its target function', () => {
+    const groups = buildPreviewTestGroups([
+      testInfo('HappyPath', 'ClassifySentiment'),
+      testInfo('SharedCase', 'ClassifySentiment'),
+      testInfo('SharedCase', 'ExtractResume'),
+    ]);
+
+    expect(
+      groups.map((group) => ({
+        functionName: group.functionName,
+        tests: group.tests.map((test) => test.name),
+      })),
+    ).toEqual([
+      {
+        functionName: 'ClassifySentiment',
+        tests: ['HappyPath', 'SharedCase'],
+      },
+      {
+        functionName: 'ExtractResume',
+        tests: ['SharedCase'],
+      },
+    ]);
+  });
+});
+
 function functionInfo(name: string): FunctionInfo {
   return {
     name,
     kind: 'expr',
     origin: 'userDefined',
   };
+}
+
+function testInfo(name: string, functionName: string) {
+  return { name, functionName, argsJson: '{}' };
 }
 
 function folder(

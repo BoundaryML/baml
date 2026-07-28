@@ -21,7 +21,9 @@ import {
 } from 'lucide-react';
 import {
   buildFunctionSidebarTree,
+  buildPreviewTestGroups,
   type FunctionSidebarTreeNode,
+  type PreviewTestGroup,
 } from './function-sidebar-tree';
 import type {
   SerializedTestDef,
@@ -46,6 +48,72 @@ interface TestTreeNodeProps {
   testRunResults?: Map<string, unknown>;
   failedExpands?: Set<string>;
   onRetryExpand?: (name: string) => void;
+}
+
+interface PreviewTestGroupNodeProps {
+  group: PreviewTestGroup;
+  selectedPreviewTestKey?: string | null;
+  onSelectPreviewTest?: (test: TestInfo) => void;
+}
+
+function PreviewTestGroupNode({
+  group,
+  selectedPreviewTestKey,
+  onSelectPreviewTest,
+}: PreviewTestGroupNodeProps) {
+  const [expanded, setExpanded] = useState(true);
+  return (
+    <Collapsible open={expanded} onOpenChange={setExpanded}>
+      <CollapsibleTrigger
+        className="flex items-center gap-1 w-full pr-2 py-0.5 cursor-pointer text-[10px] font-vsc-mono text-vsc-text-muted hover:bg-vsc-hover"
+        style={{ paddingLeft: 8 }}
+        title={group.functionName}
+      >
+        <ChevronRight
+          className={cn(
+            'h-3 w-3 text-vsc-text-faint transition-transform',
+            expanded && 'rotate-90',
+          )}
+        />
+        <FunctionSquare className="h-3.5 w-3.5 shrink-0 text-vsc-text-faint" />
+        <span className="truncate text-[11px] font-medium">
+          {group.functionName}
+        </span>
+        <span className="text-vsc-text-faint ml-1">
+          ({group.tests.length})
+        </span>
+      </CollapsibleTrigger>
+      <CollapsibleContent>
+        {group.tests.map((test) => {
+          const key = previewTestKey(test);
+          return (
+            <button
+              type="button"
+              key={key}
+              className={cn(
+                'flex items-center gap-1.5 w-full pr-2 py-0.5 text-[10px] font-vsc-mono text-left',
+                selectedPreviewTestKey === key
+                  ? 'bg-vsc-accent/15 text-vsc-text font-semibold'
+                  : 'text-vsc-text-muted hover:bg-vsc-hover',
+              )}
+              style={{ paddingLeft: 32 }}
+              onClick={() => onSelectPreviewTest?.(test)}
+              title={`Use ${test.name} args for ${test.functionName}`}
+            >
+              <FlaskConical
+                size={12}
+                className="text-vsc-text-faint shrink-0"
+              />
+              <span className="truncate text-[11px]">{test.name}</span>
+              <span className="ml-auto text-[9px] text-vsc-text-faint shrink-0">
+                preview
+              </span>
+            </button>
+          );
+        })}
+      </CollapsibleContent>
+    </Collapsible>
+  );
 }
 
 function TestTreeNode({
@@ -384,13 +452,10 @@ export const FunctionSidebar: FC<FunctionSidebarProps> = ({
   };
 
   const treeItems = testTree ?? [];
-  const previewNameCounts = useMemo(() => {
-    const counts = new Map<string, number>();
-    for (const test of previewTests) {
-      counts.set(test.name, (counts.get(test.name) ?? 0) + 1);
-    }
-    return counts;
-  }, [previewTests]);
+  const previewTestGroups = useMemo(
+    () => buildPreviewTestGroups(previewTests),
+    [previewTests],
+  );
   let emptyFunctionMessage = 'No matches';
   if (isLoadingProject) {
     emptyFunctionMessage = 'Loading project...';
@@ -515,34 +580,14 @@ export const FunctionSidebar: FC<FunctionSidebarProps> = ({
                 </div>
               )}
 
-              {previewTests.map((test) => {
-                const key = previewTestKey(test);
-                const duplicateName = (previewNameCounts.get(test.name) ?? 0) > 1;
-                return (
-                  <button
-                    type="button"
-                    key={key}
-                    className={cn(
-                      'flex items-center gap-1.5 w-full pr-2 py-0.5 text-[10px] font-vsc-mono text-left',
-                      selectedPreviewTestKey === key
-                        ? 'bg-vsc-accent/15 text-vsc-text font-semibold'
-                        : 'text-vsc-text-muted hover:bg-vsc-hover',
-                    )}
-                    style={{ paddingLeft: 8 }}
-                    onClick={() => onSelectPreviewTest?.(test)}
-                    title={`Use ${test.name} args for ${test.functionName}`}
-                  >
-                    <FlaskConical size={12} className="text-vsc-text-faint shrink-0" />
-                    <span className="truncate text-[11px]">
-                      {test.name}
-                      {duplicateName ? ` → ${test.functionName}` : ''}
-                    </span>
-                    <span className="ml-auto text-[9px] text-vsc-text-faint shrink-0">
-                      preview
-                    </span>
-                  </button>
-                );
-              })}
+              {previewTestGroups.map((group) => (
+                <PreviewTestGroupNode
+                  key={group.functionName}
+                  group={group}
+                  selectedPreviewTestKey={selectedPreviewTestKey}
+                  onSelectPreviewTest={onSelectPreviewTest}
+                />
+              ))}
 
               {treeItems.map((def, i) => (
                 <TestTreeNode

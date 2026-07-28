@@ -229,6 +229,9 @@ describe('ExecutionPanel test previews', () => {
       });
     });
 
+    expect(
+      await screen.findByRole('button', { name: 'ClassifySentiment (1)' }),
+    ).toBeInTheDocument();
     fireEvent.click(
       await screen.findByTitle(
         'Use HappySentiment args for ClassifySentiment',

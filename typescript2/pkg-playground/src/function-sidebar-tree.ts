@@ -1,4 +1,4 @@
-import type { FunctionInfo } from './worker-protocol';
+import type { FunctionInfo, TestInfo } from './worker-protocol';
 
 export type FunctionSidebarFunctionNode = {
   type: 'function';
@@ -25,6 +25,11 @@ export type FunctionSidebarTree = {
   nodes: FunctionSidebarTreeNode[];
   functionCount: number;
   forcedOpenFolderKeys: Set<string>;
+};
+
+export type PreviewTestGroup = {
+  functionName: string;
+  tests: TestInfo[];
 };
 
 type MutableFolderNode = Omit<FunctionSidebarFolderNode, 'children'> & {
@@ -95,6 +100,25 @@ export function buildFunctionSidebarTree(
     functionCount,
     forcedOpenFolderKeys,
   };
+}
+
+export function buildPreviewTestGroups(
+  tests: readonly TestInfo[],
+): PreviewTestGroup[] {
+  const groups: PreviewTestGroup[] = [];
+  const groupsByFunction = new Map<string, PreviewTestGroup>();
+
+  for (const test of tests) {
+    let group = groupsByFunction.get(test.functionName);
+    if (!group) {
+      group = { functionName: test.functionName, tests: [] };
+      groupsByFunction.set(test.functionName, group);
+      groups.push(group);
+    }
+    group.tests.push(test);
+  }
+
+  return groups;
 }
 
 function createFolder(name: string, path: string[]): MutableFolderNode {
