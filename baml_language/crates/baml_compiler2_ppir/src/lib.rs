@@ -488,7 +488,9 @@ pub fn ppir_expansion_items(db: &dyn Db, file: SourceFile) -> PpirExpansionItems
                         throws: None,
                         body: Some(ast::FunctionBodyDef::Expr(body, source_map)),
                         declarative_meta: None,
-                        origin: ast::FunctionOrigin::Companion,
+                        metadata: ast::FunctionMetadata::user_facing(
+                            ast::FunctionOrigin::Companion,
+                        ),
                         is_tagged_template_tag: func.is_tagged_template_tag,
                         attributes: vec![],
                         docstring: func.docstring.clone(),
@@ -549,7 +551,9 @@ pub fn ppir_expansion_items(db: &dyn Db, file: SourceFile) -> PpirExpansionItems
                         throws: None,
                         body: Some(ast::FunctionBodyDef::Expr(body, source_map)),
                         declarative_meta: None,
-                        origin: ast::FunctionOrigin::Companion,
+                        metadata: ast::FunctionMetadata::user_facing(
+                            ast::FunctionOrigin::Companion,
+                        ),
                         is_tagged_template_tag: func.is_tagged_template_tag,
                         attributes: vec![],
                         docstring: func.docstring.clone(),

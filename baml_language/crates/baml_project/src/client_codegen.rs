@@ -197,7 +197,9 @@ pub fn build_symbol_pool(db: &ProjectDatabase) -> SymbolPool {
                 // by `auto_derive_json`) are language-level plumbing, not
                 // user-facing API. Skip them so client SDKs don't surface
                 // them as static / instance methods on every class.
-                if matches!(method.origin, FunctionOrigin::AutoDerive) {
+                if method.metadata.is_language_internal
+                    || matches!(method.metadata.origin, FunctionOrigin::AutoDerive)
+                {
                     continue;
                 }
 
@@ -408,7 +410,9 @@ pub fn build_symbol_pool(db: &ProjectDatabase) -> SymbolPool {
             // Internal-origin functions (e.g. `<Client>$new` synthesized for
             // primitive clients) are runtime plumbing, not user-callable —
             // skip them so they don't end up as Python factory bindings.
-            if matches!(func.origin, FunctionOrigin::Internal) {
+            if func.metadata.is_language_internal
+                || matches!(func.metadata.origin, FunctionOrigin::Internal)
+            {
                 continue;
             }
 

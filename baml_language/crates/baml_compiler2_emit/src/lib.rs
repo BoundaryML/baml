@@ -4926,7 +4926,7 @@ fn attach_function_metadata<'db>(
     let parameter_defaults = baml_compiler2_ppir::function_parameter_defaults(db, func_loc);
     let signature_metadata = compute_function_metadata(db, func_loc, &parameter_defaults, cache);
     apply_signature_metadata(compiled_fn, &signature_metadata);
-    compiled_fn.origin = emitted_function_origin(fq_name, is_builtin_file, func.origin);
+    compiled_fn.origin = emitted_function_origin(fq_name, is_builtin_file, func.metadata.origin);
 
     // Set LLM-specific body_meta if this is an LLM function with a client.
     //

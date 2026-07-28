@@ -79,7 +79,9 @@ pub fn file_actions(db: &dyn Db, file: SourceFile) -> Vec<FileAction> {
         match contrib.definition {
             Definition::Function(loc) => {
                 let func = baml_compiler2_ppir::item_data::function_data(db, loc);
-                if !matches!(func.origin, FunctionOrigin::UserDefined) {
+                if !matches!(func.metadata.origin, FunctionOrigin::UserDefined)
+                    || func.metadata.is_language_internal
+                {
                     continue;
                 }
 

@@ -93,16 +93,9 @@ pub fn file_outline(db: &dyn Db, file: SourceFile) -> Vec<OutlineItem> {
                 }
 
                 // Methods — resolve each `FunctionLoc` via the firewall.
-                // Skip auto-derived methods (e.g. synthesized `to_json` /
-                // `from_json`): they have no source-level span, so attempting
-                // to describe them via `describe_item_member` would fail when
-                // it tries to slice the source text.
                 for method_loc in &class.methods {
                     let method = function_data(db, *method_loc);
-                    if matches!(
-                        method.origin,
-                        baml_compiler2_ast::ast::FunctionOrigin::AutoDerive
-                    ) {
+                    if method.metadata.is_language_internal {
                         continue;
                     }
                     child_items.push(OutlineItem {
@@ -152,6 +145,9 @@ pub fn file_outline(db: &dyn Db, file: SourceFile) -> Vec<OutlineItem> {
 
     // ── Values: functions, template strings, clients, generators, tests, retry policies ──
     for (name, contrib) in &contribs.values {
+        if contrib.definition.is_language_internal(db) {
+            continue;
+        }
         // Value-namespace items have no children in the outline for Phase 2.
         // (Function params/return type could be added in a future phase.)
         //

@@ -1423,8 +1423,10 @@ pub fn infer_scope_types<'db>(
                 if let Some(sm) = baml_compiler2_ppir::function_body_source_map(db, func_loc) {
                     builder.set_body_source_map(sm);
                 }
-                builder
-                    .set_auto_derived(matches!(func_data.origin, ast::FunctionOrigin::AutoDerive));
+                builder.set_auto_derived(matches!(
+                    func_data.metadata.origin,
+                    ast::FunctionOrigin::AutoDerive
+                ));
                 // BEP-044: if this function lives inside an
                 // `implements I { ... }` block, attach `I`'s QTN so
                 // `default.<method>(...)` resolves against I's
@@ -1810,7 +1812,7 @@ pub fn infer_scope_types<'db>(
                     // The user can't fix the synthesized contract, so
                     // skip the entire check for auto-derive bodies.
                     let is_auto_derive =
-                        matches!(func_data.origin, ast::FunctionOrigin::AutoDerive);
+                        matches!(func_data.metadata.origin, ast::FunctionOrigin::AutoDerive);
                     if !is_auto_derive {
                         builder.check_throws_contract(
                             expr_body,

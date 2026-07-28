@@ -81,7 +81,7 @@ impl ItemTreeBuilder {
                 throws: f.throws.clone(),
                 body: f.body.clone(),
                 declarative_meta: f.declarative_meta.clone(),
-                origin: f.origin,
+                metadata: f.metadata,
                 docstring: f.docstring.clone(),
                 is_tagged_template_tag: f.is_tagged_template_tag,
                 span: f.span,

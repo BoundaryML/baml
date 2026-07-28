@@ -626,7 +626,9 @@ fn function_scope_index_agrees_with_the_span_join_it_replaces() {
         .iter()
         .filter(|&&loc| {
             !matches!(
-                baml_compiler2_ppir::item_data::function_data(db, loc).origin,
+                baml_compiler2_ppir::item_data::function_data(db, loc)
+                    .metadata
+                    .origin,
                 baml_compiler2_ast::FunctionOrigin::UserDefined
             )
         })
