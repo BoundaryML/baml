@@ -2537,6 +2537,87 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
     </div>
   );
 
+  const renderArgsEditor = (surface: 'graph' | 'run') => (
+    <div
+      className="nokey flex flex-col border-b border-vsc-border shrink-0"
+      data-testid={`${surface}-args-editor`}
+    >
+      <div className="flex items-center min-h-7">
+        <span className="px-2 py-1 text-[10px] text-vsc-text-faint font-vsc-mono bg-vsc-surface border-r border-vsc-border self-stretch flex items-center">
+          args
+        </span>
+        {showArgsForm ? (
+          <div className="flex-1" />
+        ) : (
+          <div className="flex-1 flex items-center min-w-0">
+            <Input
+              aria-label="Arguments JSON"
+              spellCheck={false}
+              value={argsJson}
+              onChange={onArgsJsonChange}
+              className="flex-1 h-7 rounded-none border-none font-vsc-mono text-xs"
+              placeholder='{"key": "value"}'
+            />
+            {argsFormUnavailable && (
+              <span className="px-2 text-[10px] text-vsc-text-faint whitespace-nowrap">
+                not a JSON object — form off
+              </span>
+            )}
+          </div>
+        )}
+        {paramSchemas !== undefined && (
+          <ToggleGroup
+            size="sm"
+            className="px-1.5 shrink-0"
+            value={argsMode}
+            options={[
+              { value: 'form', label: 'form' },
+              { value: 'raw', label: 'raw' },
+            ]}
+            onValueChange={setArgsMode}
+          />
+        )}
+        <Button
+          variant="success"
+          size="xs"
+          className="mx-1 my-0.5 shrink-0 text-[11px] font-semibold"
+          aria-label={isRunning ? 'Running' : 'Run'}
+          disabled={runtimeControlsDisabled || isRunning || !selectedProject}
+          onClick={onRunFunction}
+        >
+          {isRunning ? (
+            'Running...'
+          ) : (
+            <>
+              Run
+              <span className="font-normal opacity-70">
+                {RUN_SHORTCUT_HINT}
+              </span>
+            </>
+          )}
+        </Button>
+      </div>
+      {showArgsForm && paramSchemas && reconciledFormArgs && (
+        <div className="max-h-56 overflow-y-auto px-2 py-1.5 border-t border-vsc-border">
+          {/* Remount on function, schema, or surface changes so local widget
+              drafts cannot outlive the editor that owns them. */}
+          <ArgsForm
+            key={`${surface}:${selectedProject ?? ''}:${selectedFn ?? ''}:${argsSchemaKey}`}
+            params={paramSchemas}
+            types={projectTypes}
+            value={reconciledFormArgs}
+            onChange={onArgsFormChange}
+          />
+        </div>
+      )}
+      {surface === 'graph' && runValidationError && (
+        <div className="px-2 py-1.5 border-t border-vsc-border bg-vsc-error/10">
+          <ErrorDisplay error={runValidationError} />
+        </div>
+      )}
+    </div>
+  );
+
   // ── Render ─────────────────────────────────────────────────────────────
 
   return (
@@ -2651,7 +2732,8 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
           {selectedFn &&
             !viewingCollection &&
             !viewingTestRun &&
-            activeTab !== 'run' && (
+            activeTab !== 'run' &&
+            activeTab !== 'graph' && (
               <TooltipProvider>
                 <Tooltip>
                   <TooltipTrigger asChild>
@@ -3152,6 +3234,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
                   className="flex-1 min-h-0 mt-0 flex flex-col"
                   style={{ minHeight: 300 }}
                 >
+                  {renderArgsEditor('graph')}
                   {workflowSwitcherBar}
                   {controlFlowGraph ? (
                     <GraphView
@@ -3270,82 +3353,9 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
                   value="run"
                   className="flex-1 flex flex-col min-h-0 mt-0"
                 >
-                  {/* Args */}
-                  {/* `nokey`: keep React Flow's global key capture (Space,
-                      Backspace, ...) out of the args inputs */}
-                  <div className="nokey flex flex-col border-b border-vsc-border shrink-0">
-                    <div className="flex items-center min-h-7">
-                      <span className="px-2 py-1 text-[10px] text-vsc-text-faint font-vsc-mono bg-vsc-surface border-r border-vsc-border self-stretch flex items-center">
-                        args
-                      </span>
-                      {showArgsForm ? (
-                        <div className="flex-1" />
-                      ) : (
-                        <div className="flex-1 flex items-center min-w-0">
-                          <Input
-                            spellCheck={false}
-                            value={argsJson}
-                            onChange={onArgsJsonChange}
-                            className="flex-1 h-7 rounded-none border-none font-vsc-mono text-xs"
-                            placeholder='{"key": "value"}'
-                          />
-                          {argsFormUnavailable && (
-                            <span className="px-2 text-[10px] text-vsc-text-faint whitespace-nowrap">
-                              not a JSON object — form off
-                            </span>
-                          )}
-                        </div>
-                      )}
-                      {paramSchemas !== undefined && (
-                        <ToggleGroup
-                          size="sm"
-                          className="px-1.5 shrink-0"
-                          value={argsMode}
-                          options={[
-                            { value: 'form', label: 'form' },
-                            { value: 'raw', label: 'raw' },
-                          ]}
-                          onValueChange={setArgsMode}
-                        />
-                      )}
-                      <Button
-                        variant="success"
-                        size="xs"
-                        className="mx-1 my-0.5 shrink-0 text-[11px] font-semibold"
-                        aria-label={isRunning ? 'Running' : 'Run'}
-                        disabled={
-                          runtimeControlsDisabled ||
-                          isRunning ||
-                          !selectedProject
-                        }
-                        onClick={onRunFunction}
-                      >
-                        {isRunning ? (
-                          'Running...'
-                        ) : (
-                          <>
-                            Run
-                            <span className="font-normal opacity-70">
-                              {RUN_SHORTCUT_HINT}
-                            </span>
-                          </>
-                        )}
-                      </Button>
-                    </div>
-                    {showArgsForm && paramSchemas && reconciledFormArgs && (
-                      <div className="max-h-56 overflow-y-auto px-2 py-1.5 border-t border-vsc-border">
-                        {/* Remount on function or schema changes so local widget
-                            drafts cannot outlive the schema they represent. */}
-                        <ArgsForm
-                          key={`${selectedProject ?? ''}:${selectedFn ?? ''}:${argsSchemaKey}`}
-                          params={paramSchemas}
-                          types={projectTypes}
-                          value={reconciledFormArgs}
-                          onChange={onArgsFormChange}
-                        />
-                      </div>
-                    )}
-                  </div>
+                  {/* Keep React Flow's global key capture (Space, Backspace,
+                      ...) out of the shared args editor. */}
+                  {renderArgsEditor('run')}
 
                   {/* Live graph */}
                   <div
