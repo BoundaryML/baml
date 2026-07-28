@@ -482,6 +482,9 @@ pub enum Terminator {
         /// Boxed to keep `Terminator`'s footprint down (clippy
         /// `large_enum_variant`): `Spawn` is rare relative to `Call`/`Goto`.
         config: Option<Box<Operand>>,
+        /// The `T`/`E` of the `Future<T, E>` this spawn yields. Boxed for the
+        /// same footprint reason as `config`.
+        future_ty: Box<SpawnFutureTy>,
         /// Where to store the resulting Future handle.
         future: Place,
         /// Block to resume after the spawn schedules.
@@ -560,6 +563,22 @@ pub enum Terminator {
         eval_rhs: BlockId,
         join: BlockId,
     },
+}
+
+/// The type arguments of the `Future<T, E>` a [`Terminator::Spawn`] yields.
+///
+/// Held as [`TyTemplate`]s rather than resolved types so a spawn inside a
+/// generic function (`fn f<T>(x: T) { spawn { x } }`) resolves against the
+/// frame's type arguments at runtime, exactly as an array literal's element
+/// type does. The runtime stores the resolved pair on the heap `Future` so
+/// reflection and `is`/`match` can see the future's generic parameters.
+#[derive(Debug, Clone, PartialEq)]
+pub struct SpawnFutureTy {
+    /// The `T` of `Future<T, E>` — the value the spawned body returns.
+    pub returns: TyTemplate,
+    /// The `E` of `Future<T, E>` — what the spawned body may throw. A body that
+    /// statically cannot throw spells this `never`.
+    pub throws: TyTemplate,
 }
 
 impl Terminator {
@@ -736,10 +755,28 @@ pub enum Rvalue {
     /// correctly at runtime via `TypeArgRef` substitution.  A fully-realized
     /// template narrows to a `RealizedTy`, which the emitter handles on the
     /// same tag / class-identity fast path as before.
+    ///
+    /// The template is *complete* by type — `TyTemplate` has no match-any
+    /// holes — so the test always denotes exactly one type per frame. The
+    /// deliberately-coarse container test carries its own rvalue instead
+    /// ([`Rvalue::IsTypeTag`], a proven-sufficient tag).
     IsType {
         operand: Operand,
         ty_template: TyTemplate,
     },
+
+    /// Coarse runtime type-tag test: `is_type_tag(_1, LIST)`.
+    ///
+    /// Used when MIR lowering has *proven* the coarse tag equivalent to the
+    /// element-precise structural test for this scrutinee (the container
+    /// tag-sufficiency analysis) — the tag is the whole check, deliberately
+    /// blind to generic arguments. Carrying the decision explicitly keeps
+    /// `IsType`'s template a complete type: previously the same intent was
+    /// smuggled as a container template with `Wildcard` elements for the
+    /// emitter to sniff out. `tag` is a `baml_type::typetag` constant; the
+    /// emitter lowers this to the same `IsType`-against-`Int` bytecode as the
+    /// other coarse tag checks.
+    IsTypeTag { operand: Operand, tag: i64 },
 
     /// Allocate a closure object from a child lambda function.
     ///

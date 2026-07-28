@@ -30,7 +30,7 @@ use baml_compiler2_hir::{file_semantic_index, scope::ScopeKind};
 use baml_compiler2_tir::{
     infer_context::{DiagnosticLocation, TirTypeError},
     inference::render_scope_diagnostics,
-    ty::{QualifiedTypeName, Ty, TyAttr},
+    ty::{ParamTy, QualifiedTypeName, Ty, TyAttr},
 };
 use indexmap::IndexMap;
 use text_size::{TextRange, TextSize};
@@ -238,19 +238,11 @@ pub fn check_file(db: &dyn Db, file: SourceFile) -> Vec<Diagnostic> {
         let mut type_errors = Vec::new();
         let mut param_types = Vec::new();
 
-        // Compute the effective generic params: method params + enclosing class params.
-        let mut generic_params = func_data.generic_params.clone();
+        let generic_params = baml_compiler2_tir::function_generic_params(db, func_loc);
         let enclosing_class = method_to_class
             .iter()
             .find(|(mid, _)| *mid == func_loc)
             .map(|(_, class_loc)| *class_loc);
-        if let Some(class_loc) = enclosing_class {
-            let class_data = baml_compiler2_ppir::item_data::class_data(db, class_loc);
-            // Prepend class generic params (class params come first, method params after)
-            let mut merged = class_data.generic_params.clone();
-            merged.extend(generic_params);
-            generic_params = merged;
-        }
         // BEP-044: inside an out-of-body `implement Interface for Type` block,
         // `Self` is the `for` target and the block's generic params are in scope.
         let enclosing_impl = method_to_impl
@@ -259,14 +251,6 @@ pub fn check_file(db: &dyn Db, file: SourceFile) -> Vec<Diagnostic> {
             .map(|(_, imp)| *imp);
         let enclosing_impl_data =
             enclosing_impl.map(|imp| baml_compiler2_ppir::item_data::impl_block_data(db, imp));
-        if let Some(block) = enclosing_impl_data
-            && let baml_compiler2_ppir::item_data::ImplSubjectData::Free { generics, .. } =
-                &block.subject
-        {
-            let mut merged: Vec<Name> = generics.iter().map(|g| g.name.clone()).collect();
-            merged.extend(generic_params);
-            generic_params = merged;
-        }
         // Pre-resolve `Self` to the enclosing impl's `for` target before lowering
         // signature types, mirroring the body path in `tir::inference`. The
         // for-target lives in the impl block's own type-ref arena.
@@ -298,7 +282,7 @@ pub fn check_file(db: &dyn Db, file: SourceFile) -> Vec<Diagnostic> {
             )
         });
         let lower_sig_ref = |id: baml_compiler2_hir::type_ref::TypeRefId,
-                             generic_params: &[Name],
+                             generic_params: &[ParamTy],
                              diags: &mut Vec<baml_compiler2_tir::infer_context::TirTypeError>|
          -> Ty {
             baml_compiler2_tir::lower_type_expr::lower_type_ref(
@@ -354,11 +338,11 @@ pub fn check_file(db: &dyn Db, file: SourceFile) -> Vec<Diagnostic> {
                             // unparameterized receiver into generic-class method
                             // bodies (e.g. the auto-derived `to_json`'s
                             // `to_string<Self>(self)`).
-                            let class_args: Vec<Ty> = class_data
-                                .generic_params
-                                .iter()
-                                .map(|p| Ty::TypeVar(p.clone(), TyAttr::default()))
-                                .collect();
+                            let class_args: Vec<Ty> =
+                                baml_compiler2_tir::class_generic_params(db, class_loc)
+                                    .into_iter()
+                                    .map(|param| Ty::TypeVar(param, TyAttr::default()))
+                                    .collect();
                             Ty::Class(
                                 baml_compiler2_tir::lower_type_expr::qualify_def(
                                     db,
@@ -2158,6 +2142,7 @@ fn tir_type_error_to_diagnostic_id(
         TirTypeError::BoundedTypeArgNotConcrete { .. }
         | TirTypeError::MissingAssociatedTypeBindings { .. }
         | TirTypeError::AmbiguousInterfacePatternBindings { .. } => DiagnosticId::TypeMismatch,
+        TirTypeError::InterfaceProjectionBase { .. } => DiagnosticId::InterfaceProjectionBase,
         // Interface impl conformance (BEP-044, E0113–E0139): tir2 owns these and
         // check.rs surfaces them via `check_interfaces`.
         TirTypeError::MissingInterfaceMethod { .. } => DiagnosticId::MissingInterfaceMethod,
@@ -2204,6 +2189,9 @@ fn tir_type_error_to_diagnostic_id(
         | TirTypeError::CyclicImplHeader
         | TirTypeError::InterfaceMethodMissingThrows { .. } => DiagnosticId::TypeMismatch,
         TirTypeError::FunctionTypeMissingThrows => DiagnosticId::FunctionTypeMissingThrows,
+        TirTypeError::FunctionTypedPatternNotTestable { .. } => {
+            DiagnosticId::FunctionTypedPatternNotTestable
+        }
     }
 }
 
@@ -2586,14 +2574,14 @@ function main(value: WrongId) -> int {
 
     #[test]
     fn parse_error_in_body_taints_scope_and_descendants() {
-        // A braceless lambda is a syntax error; parser recovery leaves a
-        // malformed lambda that would otherwise emit cascading type errors. The
-        // function-body scope containing the parse error — and its descendant
-        // lambda scope — must be tainted so those type errors are suppressed.
+        // A missing right-hand operand is a syntax error in the function body.
+        // The function-body scope containing the parse error — and its
+        // descendant lambda scope — must be tainted so cascading type errors
+        // are suppressed.
         let mut builder = ProjectTest::builder();
         builder.source(
             "test.baml",
-            "function Braceless() -> int {\n  let f = (x: int) => x + 1;\n  f(2)\n}\n",
+            "function Broken() -> int {\n  let broken = 1 + ;\n  let f = (x: int) -> { x + 1 };\n  f(2)\n}\n",
         );
         let test = builder.build();
         let file = test.files[0];
@@ -2602,7 +2590,7 @@ function main(value: WrongId) -> int {
         let parse_errors = baml_compiler_parser::parse_errors(&test.db, file);
         assert!(
             !parse_errors.is_empty(),
-            "braceless lambda should produce a parse error"
+            "missing right-hand operand should produce a parse error"
         );
 
         let tainted = parse_error_tainted_scopes(index, &parse_errors);
@@ -2617,7 +2605,7 @@ function main(value: WrongId) -> int {
             .scopes
             .iter()
             .position(|s| s.kind == ScopeKind::Lambda)
-            .expect("a lambda scope should exist for the braceless lambda");
+            .expect("a descendant lambda scope should exist");
         assert!(
             tainted.contains(&lambda_idx),
             "descendant lambda scope (index {lambda_idx}) must be tainted, got {tainted:?}"

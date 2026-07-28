@@ -4,30 +4,19 @@ source: crates/baml_tests/src/generated_tests.rs
 === COMPILER2 DIAGNOSTICS ===
   [type] E0001
 
-  × mismatched types
+  × type `Box` expects 1 type argument(s), got 0
    ╭─[main.baml:3:9]
  3 │         root.llm.openai.Box => 1
-   ·         ─────────┬─────────
-   ·                  ╰── expected `root.llm.openai.Box<int>`, found `root.llm.openai.Box`
+   ·         ───────────────────
    ╰────
 
   [type] E0001
 
-  × mismatched types
+  × type `Box` expects 1 type argument(s), got 0
    ╭─[main.baml:9:9]
  9 │         llm.openai.Box => 1
-   ·         ───────┬──────
-   ·                ╰── expected `root.llm.openai.Box<int>`, found `root.llm.openai.Box`
+   ·         ──────────────
    ╰────
-
-  [type] E0001
-
-  × mismatched types
-    ╭─[main.baml:15:9]
- 15 │         root.llm.openai.Box<int, string> => 1,
-    ·         ────────────────┬───────────────
-    ·                         ╰── expected `root.llm.openai.Box<int>`, found `root.llm.openai.Box<int, string>`
-    ╰────
 
   [type] E0001
 
@@ -35,15 +24,6 @@ source: crates/baml_tests/src/generated_tests.rs
     ╭─[main.baml:15:9]
  15 │         root.llm.openai.Box<int, string> => 1,
     ·         ────────────────────────────────
-    ╰────
-
-  [type] E0001
-
-  × mismatched types
-    ╭─[main.baml:22:9]
- 22 │         root.llm.openai.Response<int> => 1
-    ·         ──────────────┬──────────────
-    ·                       ╰── expected `root.llm.openai.Response`, found `root.llm.openai.Response<int>`
     ╰────
 
   [type] E0001

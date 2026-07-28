@@ -40,6 +40,14 @@ impl RealizedTy {
         }
     }
 
+    /// `never` (the bottom type) with default attributes. The error type of a
+    /// future whose body statically cannot throw.
+    pub fn never() -> Self {
+        RealizedTy::Never {
+            attr: TyAttr::default(),
+        }
+    }
+
     // --- Compound constructors (default TyAttr) ---
 
     /// `T[]` (list) with default attributes.
@@ -172,7 +180,7 @@ mod tests {
         // `AssociatedTypeProjection` is a type variable (the `typevar` axis), so
         // it has no realized form — the conversion rejects it at the top level.
         let ty = Ty::AssociatedTypeProjection {
-            base: Box::new(Ty::TypeVar(Name::new("T"), def())),
+            base: Box::new(Ty::type_var("T")),
             interface: Box::new(Interface {
                 name: qtn("Iterator"),
                 generics: vec![],

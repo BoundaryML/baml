@@ -9,12 +9,11 @@ import hashlib
 import json
 from pathlib import Path
 
+from baml_release_platforms import load_wrapper_targets, verify_wrapper_artifacts
+
 
 def _toolchain_required_targets() -> list[str]:
-    """Target triples the toolchain (and wrapper) release must ship, read from
-    the repository's platform contract (`release/platforms.json`) so the target
-    set lives in one machine-readable place instead of a hand-copied list.
-    Required = the `toolchain` artifact is present and not experimental."""
+    """Required toolchain target triples from the platform contract."""
     contract = json.loads(
         (Path(__file__).resolve().parent.parent / "release" / "platforms.json").read_text()
     )
@@ -26,7 +25,10 @@ def _toolchain_required_targets() -> list[str]:
     return targets
 
 
-TARGETS = _toolchain_required_targets()
+TOOLCHAIN_TARGETS = _toolchain_required_targets()
+WRAPPER_TARGETS = [
+    target.triple for target in load_wrapper_targets() if target.supports("self-update")
+]
 
 
 def sha256(path: Path) -> str:
@@ -42,7 +44,11 @@ def artifact_url(tag: str, path: Path) -> str:
 
 
 def collect_artifacts(
-    root: Path, product: str, version: str, tag: str | None = None
+    root: Path,
+    product: str,
+    version: str,
+    required_targets: list[str],
+    tag: str | None = None,
 ) -> dict[str, dict[str, str]]:
     artifacts = {}
     prefix = f"{product}-{version}-"
@@ -60,10 +66,12 @@ def collect_artifacts(
             "url": artifact_url(tag or f"{product}-{version}", path),
             "sha256": sha256(path),
         }
-    missing = sorted(set(TARGETS) - set(artifacts))
-    extra = sorted(set(artifacts) - set(TARGETS))
+    missing = sorted(set(required_targets) - set(artifacts))
+    extra = sorted(set(artifacts) - set(required_targets))
     if missing or extra:
-        raise SystemExit(f"{product} artifact target mismatch missing={missing} extra={extra}")
+        raise SystemExit(
+            f"{product} artifact target mismatch missing={missing} extra={extra}"
+        )
     return artifacts
 
 
@@ -152,6 +160,8 @@ def main() -> None:
         raise SystemExit("--released-at must be an ISO-8601 timestamp") from exc
     if released_at.tzinfo is None or not args.released_at.endswith("Z"):
         raise SystemExit("--released-at must be a UTC timestamp ending in Z")
+    if args.wrapper_changed:
+        verify_wrapper_artifacts(args.wrapper_dir, args.wrapper_version)
 
     args.out.mkdir(parents=True, exist_ok=True)
     (args.out / "version").mkdir(parents=True, exist_ok=True)
@@ -165,7 +175,12 @@ def main() -> None:
         "version": args.version,
         "channel": args.channel,
         "released_at": released_at,
-        "artifacts": collect_artifacts(args.toolchain_dir, "baml-language", args.version),
+        "artifacts": collect_artifacts(
+            args.toolchain_dir,
+            "baml-language",
+            args.version,
+            TOOLCHAIN_TARGETS,
+        ),
         "vsix": {
             "url": artifact_url(f"baml-language-{args.version}", vsix),
             "sha256": sha256(vsix),
@@ -214,9 +229,16 @@ def main() -> None:
             "schema": 1,
             "version": args.wrapper_version,
             "released_at": released_at,
-            "artifacts": collect_artifacts(args.wrapper_dir, "baml-wrapper", args.wrapper_version),
+            "artifacts": collect_artifacts(
+                args.wrapper_dir,
+                "baml-wrapper",
+                args.wrapper_version,
+                WRAPPER_TARGETS,
+            ),
         }
-        (args.out / "wrapper.json").write_text(json.dumps(wrapper, indent=2, sort_keys=True) + "\n")
+        (args.out / "wrapper.json").write_text(
+            json.dumps(wrapper, indent=2, sort_keys=True) + "\n"
+        )
 
 
 if __name__ == "__main__":

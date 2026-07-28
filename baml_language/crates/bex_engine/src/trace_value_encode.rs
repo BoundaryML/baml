@@ -346,6 +346,8 @@ struct BamlTyFuture {
 struct BamlTyTypeVar {
     #[prost(string, tag = "1")]
     name: String,
+    #[prost(uint32, tag = "2")]
+    index: u32,
 }
 
 #[derive(Clone, PartialEq, Message)]
@@ -652,8 +654,9 @@ fn runtime_ty_to_variant(ty: &RuntimeTy) -> BamlTyVariant {
         RuntimeTy::Resource { .. } => BamlTyVariant::Resource(BamlTyResource {}),
         RuntimeTy::PromptAst { .. } => BamlTyVariant::PromptAst(BamlTyPromptAst {}),
         RuntimeTy::Void { .. } => BamlTyVariant::Void(BamlTyVoid {}),
-        RuntimeTy::TypeVar(name, _) => BamlTyVariant::TypeVar(BamlTyTypeVar {
-            name: name.as_str().to_string(),
+        RuntimeTy::TypeVar(param, _) => BamlTyVariant::TypeVar(BamlTyTypeVar {
+            name: param.as_str().to_string(),
+            index: param.index(),
         }),
         RuntimeTy::AssociatedTypeProjection {
             base,

@@ -466,7 +466,13 @@ fn function_type_throws_package_interface_exports_effect_params() {
         .lookup_function(&[], &Name::new("direct"))
         .expect("exported function");
 
-    assert_eq!(exported.generic_params, vec![Name::new("__effect_param_0")]);
+    assert_eq!(
+        exported.generic_params,
+        vec![baml_compiler2_tir::ty::ParamTy::new(
+            0,
+            Name::new("__effect_param_0")
+        )]
+    );
     assert_eq!(
         exported.params[0].ty.render_canonical(),
         "(value: int) -> string throws __effect_param_0"

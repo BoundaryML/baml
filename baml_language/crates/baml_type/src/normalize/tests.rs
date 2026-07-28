@@ -18,7 +18,7 @@ struct Ctx {
     /// `(interface head, required interface head)` direct requirements.
     requires: Vec<(QualifiedTypeName, QualifiedTypeName)>,
     /// Conjunction (`T: A + B`) bounds per type variable.
-    var_bounds: HashMap<Name, Vec<Ty>>,
+    var_bounds: HashMap<ParamTy, Vec<Ty>>,
     enums: HashMap<QualifiedTypeName, Vec<Name>>,
     /// Declared `extends` bounds per `(interface head, associated-type name)`.
     assoc_bounds: HashMap<(QualifiedTypeName, Name), Vec<Ty>>,
@@ -66,9 +66,9 @@ impl TypeContext for Ctx {
         false
     }
 
-    fn type_var_bound(&self, name: &Name) -> Vec<Interface> {
+    fn type_var_bound(&self, param: &ParamTy) -> Vec<Interface> {
         self.var_bounds
-            .get(name)
+            .get(param)
             .into_iter()
             .flatten()
             .filter_map(Ty::as_interface)
@@ -135,8 +135,11 @@ fn lit_int(n: i64) -> Ty {
 fn union(v: Vec<Ty>) -> Ty {
     Ty::Union(v, TyAttr::default())
 }
-fn typevar(s: &str) -> Ty {
-    Ty::TypeVar(Name::new(s), TyAttr::default())
+fn param(index: u32, name: &str) -> ParamTy {
+    ParamTy::new(index, Name::new(name))
+}
+fn typevar(index: u32, name: &str) -> Ty {
+    Ty::TypeVar(param(index, name), TyAttr::default())
 }
 fn projection(base: Ty, iface_name: &str, member: &str) -> Ty {
     Ty::AssociatedTypeProjection {
@@ -406,17 +409,26 @@ fn interface_requires_absorption() {
 #[test]
 fn type_var_bound_absorption() {
     let mut ctx = Ctx::default();
-    ctx.var_bounds.insert(Name::new("T"), vec![iface("Animal")]);
+    ctx.var_bounds.insert(param(0, "T"), vec![iface("Animal")]);
 
-    assert!(is_subtype(&typevar("T"), &iface("Animal"), &ctx));
+    assert!(is_subtype(&typevar(0, "T"), &iface("Animal"), &ctx));
     // `T | Animal == Animal` when `T: Animal`.
     assert!(equivalent(
-        &union(vec![typevar("T"), iface("Animal")]),
+        &union(vec![typevar(0, "T"), iface("Animal")]),
         &iface("Animal"),
         &ctx,
     ));
     // A different type variable is not absorbed and not equivalent.
-    assert!(!equivalent(&typevar("T"), &typevar("U"), &ctx));
+    assert!(!equivalent(&typevar(0, "T"), &typevar(1, "U"), &ctx));
+}
+
+#[test]
+fn type_var_bounds_use_full_param_identity() {
+    let mut ctx = Ctx::default();
+    ctx.var_bounds.insert(param(1, "T"), vec![iface("Animal")]);
+
+    assert!(!is_subtype(&typevar(0, "T"), &iface("Animal"), &ctx));
+    assert!(is_subtype(&typevar(1, "T"), &iface("Animal"), &ctx));
 }
 
 #[test]
@@ -425,25 +437,25 @@ fn type_var_conjunction_bound() {
     // transitively requires `Equals`.
     let mut ctx = Ctx::default();
     ctx.var_bounds
-        .insert(Name::new("T"), vec![iface("Animal"), iface("Compare")]);
+        .insert(param(0, "T"), vec![iface("Animal"), iface("Compare")]);
     ctx.requires.push((qtn("Compare"), qtn("Equals")));
 
     // Each conjunct is provable on its own…
-    assert!(is_subtype(&typevar("T"), &iface("Animal"), &ctx));
-    assert!(is_subtype(&typevar("T"), &iface("Compare"), &ctx));
+    assert!(is_subtype(&typevar(0, "T"), &iface("Animal"), &ctx));
+    assert!(is_subtype(&typevar(0, "T"), &iface("Compare"), &ctx));
     // …including transitively through a conjunct's `requires`.
-    assert!(is_subtype(&typevar("T"), &iface("Equals"), &ctx));
+    assert!(is_subtype(&typevar(0, "T"), &iface("Equals"), &ctx));
     // An interface that no conjunct provides is not a supertype.
-    assert!(!is_subtype(&typevar("T"), &iface("Serialize"), &ctx));
+    assert!(!is_subtype(&typevar(0, "T"), &iface("Serialize"), &ctx));
 
     // Union absorption follows the same per-conjunct rule.
     assert!(equivalent(
-        &union(vec![typevar("T"), iface("Equals")]),
+        &union(vec![typevar(0, "T"), iface("Equals")]),
         &iface("Equals"),
         &ctx,
     ));
     assert!(!equivalent(
-        &union(vec![typevar("T"), iface("Serialize")]),
+        &union(vec![typevar(0, "T"), iface("Serialize")]),
         &iface("Serialize"),
         &ctx,
     ));
@@ -715,15 +727,19 @@ fn type_var_is_reflexive_independent_of_its_bound() {
     // special-cased this before bound expansion; the canonical algebra gets it
     // from reflexivity + the right-union rule.)
     let ctx = Ctx::default();
-    assert!(is_subtype(&typevar("T"), &typevar("T"), &ctx));
+    assert!(is_subtype(&typevar(0, "T"), &typevar(0, "T"), &ctx));
     assert!(is_subtype(
-        &typevar("T"),
-        &union(vec![typevar("T"), typevar("U")]),
+        &typevar(0, "T"),
+        &union(vec![typevar(0, "T"), typevar(1, "U")]),
         &ctx,
     ));
-    assert!(is_subtype(&typevar("T"), &Ty::optional(typevar("T")), &ctx));
+    assert!(is_subtype(
+        &typevar(0, "T"),
+        &Ty::optional(typevar(0, "T")),
+        &ctx
+    ));
     // An unbounded `T` is not a subtype of an unrelated concrete type.
-    assert!(!is_subtype(&typevar("T"), &Ty::int(), &ctx));
+    assert!(!is_subtype(&typevar(0, "T"), &Ty::int(), &ctx));
 }
 
 #[test]
@@ -741,7 +757,7 @@ fn symbolic_associated_type_projection_subtypes_via_its_bound() {
     ctx.requires.push((qtn("Summarizable"), qtn("Displayable")));
 
     let proj = |interface: Interface| Ty::AssociatedTypeProjection {
-        base: Box::new(typevar("T")),
+        base: Box::new(typevar(0, "T")),
         interface: Box::new(interface),
         member: Name::new("Item"),
         attr: TyAttr::default(),
@@ -876,7 +892,7 @@ fn disjoint_invariant_generic_classes() {
     ));
     // A not-yet-resolved generic argument could realize to match → not provable.
     assert!(!definitely_disjoint(
-        &class1("Box", typevar("T")),
+        &class1("Box", typevar(0, "T")),
         &class1("Box", Ty::int()),
         &ctx
     ));
@@ -970,7 +986,7 @@ fn disjoint_containers_are_invariant() {
     ));
     // A not-yet-resolved generic element → not provably disjoint.
     assert!(!definitely_disjoint(
-        &Ty::list(typevar("T")),
+        &Ty::list(typevar(0, "T")),
         &Ty::list(Ty::int()),
         &ctx
     ));
@@ -1017,7 +1033,7 @@ fn non_ground_types_are_never_disjoint() {
         attr: TyAttr::default(),
     };
     assert!(!definitely_disjoint(&Ty::int(), &unknown, &ctx));
-    assert!(!definitely_disjoint(&Ty::int(), &typevar("T"), &ctx));
+    assert!(!definitely_disjoint(&Ty::int(), &typevar(0, "T"), &ctx));
     assert!(!definitely_disjoint(&Ty::int(), &iface("Animal"), &ctx));
     // A concrete vs an interface it might implement: not provably disjoint.
     assert!(!definitely_disjoint(&class("Dog"), &iface("Animal"), &ctx));

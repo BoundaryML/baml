@@ -240,3 +240,18 @@ fn .<lambda(test_mixed, 1)>(x: int) -> null {
         return;
     }
 }
+
+fn user.test_top_level_fat_arrow(x: int) -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: int // x // param
+
+    bb0: {
+        _0 = copy _1 + const 1_i64;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}

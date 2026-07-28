@@ -11,7 +11,7 @@
 //!     (decoded into a `type`-valued `BexExternalAdt::Type`).
 
 use baml_type::{
-    Freshness, FunctionParamMode, Literal, MediaKind, Name, RuntimeFunctionParamTy,
+    Freshness, FunctionParamMode, Literal, MediaKind, Name, ParamTy, RuntimeFunctionParamTy,
     RuntimeInterface, RuntimeTy, TyAttr, TypeName,
 };
 use bex_project::{BexExternalAdt, BexExternalValue};
@@ -141,7 +141,9 @@ pub fn proto_ty_to_runtime_ty(ty: &BamlTy) -> Result<RuntimeTy, CtypesError> {
         TyVariant::Void(_) => RuntimeTy::Void {
             attr: TyAttr::default(),
         },
-        TyVariant::TypeVar(v) => RuntimeTy::TypeVar(Name::new(&v.name), TyAttr::default()),
+        TyVariant::TypeVar(v) => {
+            RuntimeTy::TypeVar(ParamTy::new(v.index, Name::new(&v.name)), TyAttr::default())
+        }
         TyVariant::AssociatedTypeProjection(p) => RuntimeTy::AssociatedTypeProjection {
             base: Box::new(opt_to_runtime_ty(p.base.as_deref())?),
             // The projection's interface constraint is wired as a `Ty` and must

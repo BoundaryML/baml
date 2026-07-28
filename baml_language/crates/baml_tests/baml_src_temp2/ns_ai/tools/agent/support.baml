@@ -20,8 +20,8 @@ function _emit_agent_event(
     recorders: AgentRecorder[],
 ) -> null throws never {
     match (on_event) {
-        let callback: ((AgentEvent) -> null throws never) => callback(event),
         null => null,
+        let callback: ((AgentEvent) -> null throws never) => callback(event),
     };
     _publish_agent_event(event, observers, recorders)
 }
@@ -74,10 +74,10 @@ function _run_tool_calls(
         }
         //## Apply the before-tool callback
         let decision = match (before_tool_call) {
+            null => ToolDecision.allow(original),
             let callback: ((BeforeToolCall) -> ToolDecision throws root.ai.ToolError) => {
                 callback(BeforeToolCall { run_id: run_id, step: step, call: original })
             },
-            null => ToolDecision.allow(original),
         };
         //## Approve, rewrite, or block the call
         match (decision.call) {
@@ -135,10 +135,10 @@ function _run_tool_calls(
         results.push(result);
         //## Apply the after-tool callback
         match (after_tool_call) {
+            null => {},
             let callback: ((AfterToolCall) -> null throws root.ai.ToolError) => {
                 callback(AfterToolCall { run_id: run_id, step: step, call: call, result: result })
             },
-            null => {},
         }
         _emit_agent_event(
             ToolCallEvent { id: run_id, phase: "finished", call: call, result: result },

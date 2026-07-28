@@ -3609,6 +3609,9 @@ export namespace baml_bridge {
 
                 /** BamlTyTypeVar name */
                 name?: (string|null);
+
+                /** BamlTyTypeVar index */
+                index?: (number|null);
             }
 
             /** Represents a BamlTyTypeVar. */
@@ -3622,6 +3625,9 @@ export namespace baml_bridge {
 
                 /** BamlTyTypeVar name. */
                 public name: string;
+
+                /** BamlTyTypeVar index. */
+                public index: number;
 
                 /**
                  * Creates a new BamlTyTypeVar instance using the specified properties.

@@ -88,6 +88,21 @@ pub enum Ctor {
     Missing,
 }
 
+/// Type-argument identity for [`Ctor::Class`]: generics are invariant, so
+/// `Box<T>` and `Box<int>` are distinct ctors (a rigid-arg row is a
+/// possible-but-not-covering row in a `Box<int>` column, never a cover).
+/// Compared per-arg via [`ty_ctor_identity`] — never raw `Ty` equality, whose
+/// `TyAttr`/`Freshness` baggage would split identical ctors. Builders
+/// canonicalize the args via the canonical type algebra
+/// (`TypeContext::normalize`), whose guarantee makes identical spellings here
+/// exactly `equivalent` on both the pattern and column sides.
+fn class_args_identity_eq(a: &[Ty], b: &[Ty]) -> bool {
+    a.len() == b.len()
+        && a.iter()
+            .zip(b.iter())
+            .all(|(x, y)| ty_ctor_identity(x) == ty_ctor_identity(y))
+}
+
 impl PartialEq for Ctor {
     fn eq(&self, other: &Self) -> bool {
         use Ctor::{
@@ -96,7 +111,7 @@ impl PartialEq for Ctor {
         match (self, other) {
             (Single(a), Single(b)) => ty_ctor_identity(a) == ty_ctor_identity(b),
             (Slice(a), Slice(b)) => a == b,
-            (Class(a, _), Class(b, _)) => a == b,
+            (Class(a, aa), Class(b, ba)) => a == b && class_args_identity_eq(aa, ba),
             (Interface(a), Interface(b)) => ty_ctor_identity(a) == ty_ctor_identity(b),
             (UnionMember(a), UnionMember(b)) => ty_ctor_identity(a) == ty_ctor_identity(b),
             (Or, Or)
@@ -118,8 +133,11 @@ impl std::hash::Hash for Ctor {
         match self {
             Single(ty) => ty_ctor_identity(ty).hash(state),
             Slice(s) => s.hash(state),
-            Class(qtn, _) => {
+            Class(qtn, args) => {
                 qtn.hash(state);
+                for arg in args {
+                    ty_ctor_identity(arg).hash(state);
+                }
             }
             Interface(ty) => ty_ctor_identity(ty).hash(state),
             UnionMember(ty) => ty_ctor_identity(ty).hash(state),
@@ -177,7 +195,14 @@ impl Ctor {
             (Wildcard, _) => true,
             (_, Wildcard) => false,
             (Single(a), Single(b)) => ty_ctor_identity(a) == ty_ctor_identity(b),
-            (Class(a, _), Class(b, _)) => a == b,
+            // Arg-sensitive, but only where decidable: a ctor pair is
+            // non-covering only when the args *provably* differ. An arity
+            // mismatch (a bare `Box` pattern missing its required type args)
+            // or an `Unknown`/`Error` recovery arg means the pattern already
+            // failed resolution at its own site — such a ctor covers like the
+            // old qtn-only identity did, so coverage does not stack a
+            // non-exhaustive error on top of the resolution error.
+            (Class(a, aa), Class(b, ba)) => a == b && !class_args_definitely_distinct(aa, ba),
             (Interface(a), Interface(b)) => ty_ctor_identity(a) == ty_ctor_identity(b),
             (Slice(a), Slice(b)) => slice_covers(a, b),
             (UnionMember(a), UnionMember(b)) => ty_ctor_identity(a) == ty_ctor_identity(b),
@@ -187,6 +212,26 @@ impl Ctor {
             _ => false,
         }
     }
+}
+
+/// Whether two `Ctor::Class` arg lists are *provably* distinct instantiations:
+/// same arity, no error-recovery arg on either side, and some position's
+/// identities differ. Anything undecidable (arity mismatch, recovery arg —
+/// both mean the pattern already failed resolution and carries its own
+/// diagnostic) is treated as not-distinct, so `covers` stays lenient there.
+fn class_args_definitely_distinct(a: &[Ty], b: &[Ty]) -> bool {
+    a.len() == b.len()
+        && !class_args_have_recovery(a)
+        && !class_args_have_recovery(b)
+        && a.iter()
+            .zip(b.iter())
+            .any(|(x, y)| ty_ctor_identity(x) != ty_ctor_identity(y))
+}
+
+/// Whether any of a `Ctor::Class`'s type args carries an error-recovery
+/// sentinel anywhere in its structure — see the `covers` leniency above.
+fn class_args_have_recovery(args: &[Ty]) -> bool {
+    args.iter().any(crate::generics::contains_error_recovery)
 }
 
 fn class_ty_for_ctor(qtn: &QualifiedTypeName, args: &[Ty], fallback: &Ty) -> Ty {
@@ -990,8 +1035,20 @@ pub fn compute_match_usefulness(cx: &dyn PatCtx, arms: &[DPat], scrut_ty: Ty) ->
     unreachable_arms.sort();
     unreachable_arms.dedup();
 
+    // De-duplicate witnesses by rendered form. Distinct split branches can
+    // reach the same missing case — a possible-but-not-covering row's own
+    // branch (a rigid `Class(Box,[T])` present-extra) and the column's `all`
+    // ctor both emit `Box { v: _ }` when the row's field is refutable — and a
+    // diagnostic listing the same witness twice reads as a bug.
+    let mut seen_witnesses: FxHashSet<String> = FxHashSet::default();
+    let missing: Vec<WitnessPat> = witness_matrix
+        .into_single_column()
+        .into_iter()
+        .filter(|w| seen_witnesses.insert(w.to_string()))
+        .collect();
+
     UsefulnessReport {
-        missing: witness_matrix.into_single_column(),
+        missing,
         unreachable_arms,
     }
 }
@@ -1267,13 +1324,26 @@ fn split_ctors(cx: &dyn PatCtx, col_ty: &Ty, matrix: &Matrix<'_>) -> (Vec<Ctor>,
         // can produce duplicates (e.g. `Optional<Optional<T>>` pushes a
         // `Single(null)` per Optional layer).
         let all = dedup_ctors(all);
-        let present_set: FxHashSet<Ctor> = present_no_wild.iter().cloned().collect();
+        // Membership by `covers`, not equality: a present ctor with
+        // error-recovery args (`Box` with unresolved type args) covers its
+        // column ctor without being identity-equal to it, and must not
+        // resurface the ctor as missing.
         let missing: Vec<Ctor> = all
             .iter()
-            .filter(|c| !present_set.contains(c))
+            .filter(|c| !present_no_wild.iter().any(|p| p.covers(c)))
             .cloned()
             .collect();
-        (all, missing)
+        // Possible-but-not-covering rows — a rigid `Single` (`let t: T` in a
+        // `bool` column) or an arg-mismatched `Class` (`Box<T>` in a `Box<int>`
+        // column) — are outside the column's alphabet, so they need their own
+        // split branch: without one they are never specialized and would be
+        // falsely flagged unreachable. Each such branch specializes only its
+        // own rows (plus wildcards), so it cannot manufacture coverage, and
+        // `missing` above stays computed against `all` alone.
+        let all_set: FxHashSet<Ctor> = all.iter().cloned().collect();
+        let mut split = all;
+        split.extend(present_no_wild.into_iter().filter(|c| !all_set.contains(c)));
+        (split, missing)
     }
 }
 
@@ -1355,6 +1425,19 @@ fn split_slice_ctors(present: &[Ctor], _has_wildcard: bool) -> (Vec<Ctor>, Vec<C
     } else {
         missing.push(tail);
     }
+
+    // Non-slice heads in a list column — a rigid-carrying `Single` type-pattern
+    // row like `let t: T[]` in a `string[]` column — cover no length class, but
+    // still need a split branch of their own: without one they are never
+    // specialized and would be falsely flagged unreachable. The branch
+    // specializes only its own rows (plus wildcards), so it contributes no
+    // length-class coverage and no witnesses.
+    split.extend(
+        present
+            .iter()
+            .filter(|c| !matches!(c, Ctor::Slice(_)))
+            .cloned(),
+    );
 
     if !missing.is_empty() {
         split.push(Ctor::Missing);
@@ -1552,7 +1635,7 @@ mod tests {
 
     #[test]
     fn typevar_requires_wildcard() {
-        let tv = Ty::TypeVar(Name::new("T"), Default::default());
+        let tv = Ty::type_var("T");
         let arms = vec![DPat::wildcard(tv.clone())];
         let report = compute_match_usefulness(&StubCtx, &arms, tv);
         assert!(report.missing.is_empty());
@@ -4477,5 +4560,173 @@ mod tests {
             "expected `false, false` in missing, got {:?}",
             missing_strings
         );
+    }
+
+    // ── Rigid (typevar/projection) rows: possible but never covering ─────────
+
+    fn type_var_ty(name: &str) -> Ty {
+        Ty::type_var(name)
+    }
+
+    fn projection_ty(base: Ty, iface: &str, member: &str) -> Ty {
+        Ty::AssociatedTypeProjection {
+            base: Box::new(base),
+            interface: Box::new(baml_type::Interface::new(
+                baml_type::TypeName::local(Name::new(iface)),
+                vec![],
+                vec![],
+            )),
+            member: Name::new(member),
+            attr: Default::default(),
+        }
+    }
+
+    #[test]
+    fn ty_ctor_identity_is_stable_for_projections_and_typevars() {
+        // Two independent constructions of the same projection agree; a
+        // different member (or a different var) is a distinct identity. This
+        // stability is what lets a rigid `Single` row round-trip through the
+        // matrix's hash-based ctor sets.
+        let a = projection_ty(type_var_ty("Self"), "Iterator", "Item");
+        let b = projection_ty(type_var_ty("Self"), "Iterator", "Item");
+        let other = projection_ty(type_var_ty("Self"), "Iterator", "Error");
+        assert_eq!(ty_ctor_identity(&a), ty_ctor_identity(&b));
+        assert_ne!(ty_ctor_identity(&a), ty_ctor_identity(&other));
+        assert_eq!(
+            ty_ctor_identity(&type_var_ty("T")),
+            ty_ctor_identity(&type_var_ty("T"))
+        );
+        assert_ne!(
+            ty_ctor_identity(&type_var_ty("T")),
+            ty_ctor_identity(&type_var_ty("U"))
+        );
+    }
+
+    #[test]
+    fn rigid_single_row_in_finite_column_is_possible_not_covering() {
+        // `match (x: bool) { let t: T if …, _ }`-shaped matrix: the rigid row
+        // is outside the column's alphabet, so it covers nothing (the wildcard
+        // is required) — but it must still get its own split branch so it is
+        // specialized and not falsely flagged unreachable.
+        let cx = TestingCtx::new();
+        let rigid = DPat::single(type_var_ty("T"), bool_ty());
+        let report =
+            compute_match_usefulness(&cx, &[rigid.clone(), DPat::wildcard(bool_ty())], bool_ty());
+        assert!(report.missing.is_empty(), "wildcard completes the match");
+        assert!(
+            report.unreachable_arms.is_empty(),
+            "neither the rigid row nor the wildcard is unreachable: {:?}",
+            report.unreachable_arms
+        );
+
+        // Without the wildcard the rigid row proves no coverage at all.
+        let report = compute_match_usefulness(&cx, &[rigid], bool_ty());
+        assert!(
+            !report.missing.is_empty(),
+            "a rigid row alone never covers a concrete column"
+        );
+        assert!(report.unreachable_arms.is_empty());
+    }
+
+    #[test]
+    fn rigid_single_row_among_full_concrete_cover_is_not_unreachable() {
+        // `let t: T` alongside a complete concrete cover: the concrete arms
+        // decide exhaustiveness; the rigid row stays a live possible row.
+        let cx = TestingCtx::new();
+        let arms = vec![
+            DPat::single(type_var_ty("T"), bool_ty()),
+            DPat::single(bool_lit(true), bool_ty()),
+            DPat::single(bool_lit(false), bool_ty()),
+        ];
+        let report = compute_match_usefulness(&cx, &arms, bool_ty());
+        assert!(report.missing.is_empty());
+        assert!(
+            report.unreachable_arms.is_empty(),
+            "unexpected unreachable arms: {:?}",
+            report.unreachable_arms
+        );
+    }
+
+    #[test]
+    fn rigid_single_row_in_list_column_is_possible_not_covering() {
+        // A `let t: T[]` type-pattern row in a `string[]` column: no length
+        // class is covered (the wildcard is required), but the row gets its
+        // own split branch and stays reachable.
+        let cx = TestingCtx::new();
+        let col = list_of(Ty::String {
+            attr: Default::default(),
+        });
+        let rigid = DPat::single(list_of(type_var_ty("T")), col.clone());
+        let report = compute_match_usefulness(
+            &cx,
+            &[rigid.clone(), DPat::wildcard(col.clone())],
+            col.clone(),
+        );
+        assert!(report.missing.is_empty());
+        assert!(
+            report.unreachable_arms.is_empty(),
+            "unexpected unreachable arms: {:?}",
+            report.unreachable_arms
+        );
+
+        let report = compute_match_usefulness(&cx, &[rigid], col);
+        assert!(!report.missing.is_empty());
+        assert!(report.unreachable_arms.is_empty());
+    }
+
+    #[test]
+    fn class_ctor_args_are_identity_relevant() {
+        // Generics are invariant: `Box<T>` in a `Box<int>` column is a
+        // possible-but-not-covering row (wildcard required, row reachable),
+        // while `Box<T>` in a `Box<T>` column covers reflexively.
+        let mut cx = TestingCtx::new();
+        let box_q = qtn("Box");
+        cx.register(box_q.clone(), vec![int_ty()]);
+        let box_int = Ty::Class(box_q.clone(), vec![int_ty()], Default::default());
+        let box_t = Ty::Class(box_q.clone(), vec![type_var_ty("T")], Default::default());
+
+        let rigid_row = DPat::class_inst(
+            box_q.clone(),
+            vec![type_var_ty("T")],
+            vec![DPat::wildcard(int_ty())],
+            box_int.clone(),
+        );
+        let report = compute_match_usefulness(
+            &cx,
+            &[rigid_row.clone(), DPat::wildcard(box_int.clone())],
+            box_int.clone(),
+        );
+        assert!(report.missing.is_empty());
+        assert!(
+            report.unreachable_arms.is_empty(),
+            "unexpected unreachable arms: {:?}",
+            report.unreachable_arms
+        );
+
+        let report = compute_match_usefulness(&cx, &[rigid_row], box_int);
+        assert!(
+            !report.missing.is_empty(),
+            "an arg-mismatched class row never covers a concrete column"
+        );
+        assert!(report.unreachable_arms.is_empty());
+
+        // Reflexive: same rigid args on both sides — a definite cover.
+        let reflexive_row = DPat::class_inst(
+            box_q.clone(),
+            vec![type_var_ty("T")],
+            vec![DPat::wildcard(int_ty())],
+            box_t.clone(),
+        );
+        let report = compute_match_usefulness(&cx, &[reflexive_row], box_t);
+        assert!(
+            report.missing.is_empty(),
+            "identical rigid args cover reflexively: {:?}",
+            report
+                .missing
+                .iter()
+                .map(|w| w.to_string())
+                .collect::<Vec<_>>()
+        );
+        assert!(report.unreachable_arms.is_empty());
     }
 }

@@ -633,12 +633,8 @@ impl BexEngine {
         let mut args: Vec<RuntimeTy> = (0..arity).map(|_| unknown()).collect();
         self.with_resolved_class(class_name, |class| {
             for field in &class.fields {
-                // `TypeArgRefOrWildcard` is a deprecated type-erasure bandaid in
-                // `baml_type`; it's still a live template variant we must match.
-                #[allow(deprecated)]
                 let slot = match &field.field_template {
-                    baml_type::TyTemplate::TypeArgRef(n)
-                    | baml_type::TyTemplate::TypeArgRefOrWildcard(n) => *n as usize,
+                    baml_type::TyTemplate::TypeArgRef(n) => *n as usize,
                     _ => continue,
                 };
                 if let Some(value) = fields.get(&field.name) {
@@ -1589,7 +1585,8 @@ pub(crate) fn infer_bindings_runtime(
     actual: &RuntimeTy,
     out: &mut indexmap::IndexMap<String, RuntimeTy>,
 ) {
-    let mut bindings: rustc_hash::FxHashMap<baml_type::Name, Ty> = rustc_hash::FxHashMap::default();
+    let mut bindings: rustc_hash::FxHashMap<baml_type::ParamTy, Ty> =
+        rustc_hash::FxHashMap::default();
     baml_type_runtime::infer_value_bindings(&Ty::from(formal), &Ty::from(actual), &mut bindings);
     for (name, ty) in bindings {
         // A binding is always a subterm/union of a runtime-derived actual, so the
@@ -1667,13 +1664,10 @@ pub(crate) struct ParamVarPositions {
 /// The highest `TypeArgRef(N)` index appearing anywhere in a field template, or
 /// `None` if the template references no class type-arg. Used to compute a
 /// generic class's arity from its fields.
-// `TypeArgRefOrWildcard` is a deprecated type-erasure bandaid in `baml_type`;
-// it's still a live template variant this walk must account for.
-#[allow(deprecated)]
 fn template_max_type_arg_ref(t: &baml_type::TyTemplate) -> Option<u32> {
     use baml_type::TyTemplate as T;
     match t {
-        T::TypeArgRef(n) | T::TypeArgRefOrWildcard(n) => Some(*n),
+        T::TypeArgRef(n) => Some(*n),
         T::List(inner, _) => template_max_type_arg_ref(inner),
         T::Map { key, value, .. } | T::Future(key, value, _) => template_max_type_arg_ref(key)
             .into_iter()
@@ -1709,7 +1703,7 @@ fn template_max_type_arg_ref(t: &baml_type::TyTemplate) -> Option<u32> {
                     .filter_map(template_max_type_arg_ref),
             )
             .max(),
-        // Realized leaves and `Wildcard` carry no frame ref.
+        // Realized leaves carry no frame ref.
         _ => None,
     }
 }
@@ -5132,7 +5126,10 @@ mod inference_unifier_tests {
     use super::*;
 
     fn tv(name: &str) -> RuntimeTy {
-        RuntimeTy::TypeVar(Name::new(name), TyAttr::default())
+        RuntimeTy::TypeVar(
+            baml_type::ParamTy::new(0, Name::new(name)),
+            TyAttr::default(),
+        )
     }
     fn int() -> RuntimeTy {
         RuntimeTy::int()

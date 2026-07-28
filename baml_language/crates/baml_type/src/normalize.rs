@@ -33,8 +33,8 @@
 use std::collections::HashSet;
 
 use crate::{
-    FunctionParamMode, FunctionParamTy, Interface, Literal, MediaKind, Name, QualifiedTypeName, Ty,
-    TyAttr,
+    FunctionParamMode, FunctionParamTy, Interface, Literal, MediaKind, Name, ParamTy,
+    QualifiedTypeName, Ty, TyAttr,
 };
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -105,7 +105,7 @@ pub trait TypeContext {
     ///
     /// Powers `T <: I` (and the `T | I == I` absorption) when `T`'s bound
     /// is — or transitively requires — `I`.
-    fn type_var_bound(&self, name: &Name) -> Vec<Interface>;
+    fn type_var_bound(&self, param: &ParamTy) -> Vec<Interface>;
 
     /// Whether interface `sub` *properly* (transitively, not reflexively)
     /// requires interface `sup`, accounting for generic arguments.
@@ -396,7 +396,7 @@ impl TypeContext for NoFacts {
         false
     }
 
-    fn type_var_bound(&self, _name: &Name) -> Vec<Interface> {
+    fn type_var_bound(&self, _param: &ParamTy) -> Vec<Interface> {
         Vec::new()
     }
 
@@ -778,7 +778,7 @@ enum NormalTy {
     RecVar(QualifiedTypeName),
     /// A generic type parameter — opaque, compatible only with itself, its
     /// bound's supertypes, and the top type.
-    TypeVar(Name),
+    TypeVar(ParamTy),
     /// An alias the context could not resolve — opaque, equal only to the same
     /// unresolved alias (fail-safe; never equated to an expansion).
     OpaqueAlias(QualifiedTypeName),
@@ -1139,7 +1139,7 @@ impl NormalTy {
     /// qualifier don't disqualify: a qualifier narrows which interface view is meant, it
     /// never changes the member's value.
     fn pin_is_tautological<C: TypeContext>(
-        var: &Name,
+        var: &ParamTy,
         qn: &QualifiedTypeName,
         args: &[NormalTy],
         pin: &(Name, NormalTy),

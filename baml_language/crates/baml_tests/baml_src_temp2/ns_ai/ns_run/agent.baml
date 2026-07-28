@@ -131,6 +131,7 @@ class Agent<T> {
                 let roster_version = registry.version;
                 //## Prepare the next model step
                 match (self.prepare_step) {
+                    null => {},
                     let callback: ((root.ai.StepContext) -> root.ai.StepPlan throws root.ai.ToolError) => {
                         let plan = callback(
                             root.ai.StepContext {
@@ -194,7 +195,6 @@ class Agent<T> {
                             null => {},
                         }
                     },
-                    null => {},
                 }
                 //## Publish changes to the active tool roster
                 if (registry.version != roster_version) {

@@ -55,7 +55,7 @@ struct MemberLoweringEnv {
     /// Type-variable names in scope for the lowering: the interface's params, the caller's
     /// extra names (method generics), `Self`'s bound name (when symbolic), and the
     /// associated-type names.
-    all_generic_params: Vec<Name>,
+    all_generic_params: Vec<crate::ty::ParamTy>,
     /// The lowering scope's bounds — the enclosing scope's (shadowed by this member's own
     /// names), the interface's declared param bounds, and `Self`'s interface bound.
     bounds: crate::lower_type_expr::TypeVarBoundsMap,
@@ -66,7 +66,7 @@ struct MemberLoweringEnv {
     iface_ty: Ty,
     /// Substitution applied to the lowered type: interface generics at their realized args,
     /// extra generics to themselves, each associated type to its pin or symbolic projection.
-    bindings: rustc_hash::FxHashMap<Name, Ty>,
+    bindings: rustc_hash::FxHashMap<crate::ty::ParamTy, Ty>,
     /// Diagnostics produced while resolving pins/projections; the caller reports them.
     diags: Vec<TirTypeError>,
 }
@@ -897,7 +897,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                     // `key: Self.Key` resolves through the receiver's pins/impls exactly
                     // as a `-> Self.Key` return would. Fields require a bound receiver
                     // (checked above), so no fresh receiver generic is ever needed.
-                    let env = self.interface_member_lowering_env(view, recv, &[], None);
+                    let env = self.interface_member_lowering_env(view, recv, &[], false);
                     let mut diags = env.diags;
                     let ns = view.namespace(db);
                     let ty = crate::generics::substitute_ty(
@@ -1005,7 +1005,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 &view,
                 SelfReceiver::Existential(iface_ty),
                 &[],
-                None,
+                false,
             );
             let ns = view.namespace(db);
             let mut diags = env.diags;
@@ -1053,25 +1053,32 @@ impl<'db> TypeInferenceBuilder<'db> {
         view: &InterfaceView<'db>,
         recv: SelfReceiver<'_>,
         extra_generic_names: &[Name],
-        receiver_generic: Option<&Name>,
+        symbolic_receiver: bool,
     ) -> MemberLoweringEnv {
         let db = self.context.db();
         let data = baml_compiler2_ppir::item_data::interface_data(db, view.loc);
+        let interface_env = crate::generic_env::interface_generic_env(db, view.loc);
+        let (self_param, interface_params) = interface_env.interface_param_parts();
+        let self_param = self_param.clone();
+        let mut all_generic_params = interface_env.params().to_vec();
+        let inherited_count = all_generic_params.len();
+        crate::ty::ParamTy::extend_frame(&mut all_generic_params, extra_generic_names);
+        let method_params = &all_generic_params[inherited_count..];
         let prefer_symbolic = matches!(recv, SelfReceiver::RigidVar(_));
         let mut diags = Vec::new();
 
         // Interface generic args bound to their params; an unbound param stays its own type
         // variable. Extra (method) generics likewise. Associated types are resolved below.
         let iface_args: Vec<Ty> = if view.realized.generics.is_empty() {
-            data.generic_params
+            interface_params
                 .iter()
                 .map(|gp| Ty::TypeVar(gp.clone(), TyAttr::default()))
                 .collect()
         } else {
             view.realized.generics.clone()
         };
-        let mut base_bindings = crate::generics::bind_type_vars(&data.generic_params, &iface_args);
-        for generic_param in data.generic_params.iter().chain(extra_generic_names) {
+        let mut base_bindings = crate::generics::bind_type_vars(interface_params, &iface_args);
+        for generic_param in interface_params.iter().chain(method_params) {
             base_bindings
                 .entry(generic_param.clone())
                 .or_insert_with(|| Ty::TypeVar(generic_param.clone(), TyAttr::default()));
@@ -1083,7 +1090,13 @@ impl<'db> TypeInferenceBuilder<'db> {
         let mut pins: Vec<(Name, Ty)> = Vec::new();
         for assoc in &data.associated_types {
             let mut prior = base_bindings.clone();
-            prior.extend(pins.iter().cloned());
+            for (name, ty) in &pins {
+                let param = interface_env
+                    .resolve_any_param(name)
+                    .expect("associated type parameter is in its interface environment")
+                    .clone();
+                prior.insert(param, ty.clone());
+            }
             if let Some(ty) = self.associated_type_pin(view, assoc, prefer_symbolic, &prior) {
                 pins.push((assoc.name.clone(), ty));
             }
@@ -1111,30 +1124,17 @@ impl<'db> TypeInferenceBuilder<'db> {
         // `Self.Assoc` through its bound; an exact or union `Self` is the receiver type itself;
         // a bound-existential `Self` is the receiver's own (complete) interface existential.
         let (self_ty, self_bound_name) = match recv {
-            SelfReceiver::RigidVar(name) => (
-                Ty::TypeVar(name.clone(), TyAttr::default()),
-                Some(name.clone()),
+            SelfReceiver::RigidVar(param) => (
+                Ty::TypeVar(param.clone(), TyAttr::default()),
+                Some(param.clone()),
             ),
             SelfReceiver::ExactTy(ty) | SelfReceiver::Union(ty) => (ty.clone(), None),
-            SelfReceiver::Existential(existential_ty) => match receiver_generic {
-                Some(fresh) => (
-                    Ty::TypeVar(fresh.clone(), TyAttr::default()),
-                    Some(fresh.clone()),
-                ),
-                None => (existential_ty.clone(), None),
-            },
+            SelfReceiver::Existential(_) if symbolic_receiver => (
+                Ty::TypeVar(self_param.clone(), TyAttr::default()),
+                Some(self_param),
+            ),
+            SelfReceiver::Existential(existential_ty) => (existential_ty.clone(), None),
         };
-
-        let mut all_generic_params = data.generic_params.clone();
-        all_generic_params.extend(extra_generic_names.iter().cloned());
-        if let Some(name) = &self_bound_name
-            && !all_generic_params.contains(name)
-        {
-            all_generic_params.push(name.clone());
-        }
-        // Associated type names are in-scope type variables: a bare `Assoc` reference lowers
-        // to `Ty::TypeVar(Assoc)` and is substituted to its pin / symbolic projection below.
-        all_generic_params.extend(data.associated_types.iter().map(|assoc| assoc.name.clone()));
 
         // The lowering scope's bounds, innermost binding wins:
         //   1. the *enclosing* scope's — the receiver type may carry the caller's rigid type
@@ -1145,17 +1145,16 @@ impl<'db> TypeInferenceBuilder<'db> {
         //      interface's scope — a caller variable sharing a name must not leak a bound in);
         //   3. the interface's own declared param bounds, and `Self`'s interface bound.
         let mut bounds = self.generic_param_bounds.clone();
-        bounds.remove(&Name::new("Self"));
-        for name in &all_generic_params {
-            bounds.remove(name);
+        for param in &all_generic_params {
+            bounds.remove(param);
         }
-        for (name, param_bounds) in
+        for (param, param_bounds) in
             crate::lower_type_expr::interface_generic_param_bounds(db, view.loc)
         {
-            bounds.insert(name.clone(), param_bounds.clone());
+            bounds.insert(param.clone(), param_bounds.clone());
         }
-        if let Some(name) = &self_bound_name {
-            bounds.insert(name.clone(), vec![iface_bound]);
+        if let Some(param) = &self_bound_name {
+            bounds.insert(param.clone(), vec![iface_bound]);
         }
 
         // Final substitution map: interface args, extra generics, and each associated type
@@ -1186,7 +1185,11 @@ impl<'db> TypeInferenceBuilder<'db> {
                     diags.extend(lowered.diagnostics);
                     lowered.ty
                 };
-                bindings.insert(assoc.name.clone(), value);
+                let param = interface_env
+                    .resolve_any_param(&assoc.name)
+                    .expect("associated type parameter is in its interface environment")
+                    .clone();
+                bindings.insert(param, value);
             }
         }
 
@@ -1211,7 +1214,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         view: &InterfaceView<'db>,
         assoc: &baml_compiler2_ppir::item_data::AssociatedTypeData,
         prefer_symbolic: bool,
-        prior: &rustc_hash::FxHashMap<Name, Ty>,
+        prior: &rustc_hash::FxHashMap<crate::ty::ParamTy, Ty>,
     ) -> Option<Ty> {
         if let Some((_, ty)) = view
             .realized
@@ -1233,8 +1236,8 @@ impl<'db> TypeInferenceBuilder<'db> {
         // pins resolved so far), so a Self-referencing default (`type Items = Self.Item[]`)
         // reduces against them. The default was lowered once (symbolic `Self`) by the shared
         // query; realize substitutes this receiver for `Self` and the realized generic args.
-        let iface_generic_params =
-            &baml_compiler2_ppir::item_data::interface_data(db, view.loc).generic_params;
+        let interface_env = crate::generic_env::interface_generic_env(db, view.loc);
+        let (self_param, iface_generic_params) = interface_env.interface_param_parts();
         let self_ty = Ty::Interface(
             view.realized.name.clone(),
             view.realized.generics.clone(),
@@ -1245,6 +1248,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             &default,
             iface_generic_params,
             &view.realized.generics,
+            self_param,
             &self_ty,
         );
         Some(crate::generics::substitute_ty(&realized, prior))
@@ -1268,17 +1272,17 @@ impl<'db> TypeInferenceBuilder<'db> {
         let ns = view.namespace(db);
         let pkg_items = view.pkg_items(db);
 
-        let rigid_pin: Option<Name> = match recv {
+        let rigid_pin: Option<crate::ty::ParamTy> = match recv {
             SelfReceiver::RigidVar(pin) => Some(pin.clone()),
             _ => None,
         };
         let generic_names: Vec<Name> = spec.generics.iter().map(|(name, _)| name.clone()).collect();
 
-        // An exact receiver pins `Self` to its own type, not to a fresh method generic,
-        // so suppress the unbound-reference generic there.
-        let receiver_generic = (!access.bound
-            && !matches!(recv, SelfReceiver::ExactTy(_) | SelfReceiver::Union(_)))
-        .then(|| self.fresh_interface_method_receiver_generic(data, &generic_names));
+        let symbolic_receiver =
+            !access.bound && !matches!(recv, SelfReceiver::ExactTy(_) | SelfReceiver::Union(_));
+        let interface_env = crate::generic_env::interface_generic_env(db, view.loc);
+        let receiver_generic =
+            symbolic_receiver.then(|| interface_env.interface_param_parts().0.clone());
 
         let MemberLoweringEnv {
             all_generic_params,
@@ -1287,12 +1291,18 @@ impl<'db> TypeInferenceBuilder<'db> {
             iface_ty,
             bindings,
             mut diags,
-        } = self.interface_member_lowering_env(
-            view,
-            recv,
-            &generic_names,
-            receiver_generic.as_ref(),
-        );
+        } = self.interface_member_lowering_env(view, recv, &generic_names, symbolic_receiver);
+        let method_generic_params = generic_names
+            .iter()
+            .map(|name| {
+                all_generic_params
+                    .iter()
+                    .rev()
+                    .find(|param| param.name() == name)
+                    .expect("method generic parameter is in its lowering environment")
+                    .clone()
+            })
+            .collect::<Vec<_>>();
 
         let ctx = crate::lower_type_expr::ScopeCtx {
             db,
@@ -1373,7 +1383,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 iface_ty.as_interface().into_iter().collect(),
             );
         }
-        function_generic_params.extend(generic_names.iter().cloned());
+        function_generic_params.extend(method_generic_params);
         // Call-site bound enforcement (`function_generic_param_bounds: Vec<Option<Ty>>`) is still
         // single-bound; take the first conjunct until that path is retyped to a conjunction
         // (currently a no-op — the parser surfaces at most one). Conformance (E0120) reads the
@@ -1427,7 +1437,10 @@ impl<'db> TypeInferenceBuilder<'db> {
         let owner_type_arg_bindings = data
             .generic_params
             .iter()
-            .filter_map(|param| bindings.get(param).cloned().map(|ty| (param.clone(), ty)))
+            .filter_map(|name| {
+                let param = interface_env.resolve_param(name)?;
+                bindings.get(param).cloned().map(|ty| (param.clone(), ty))
+            })
             .collect::<Vec<_>>();
         if !owner_type_arg_bindings.is_empty() {
             self.owner_type_arg_binding_seed

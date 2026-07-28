@@ -132,19 +132,26 @@ test "match_switch_prims_still_dispatch" {
 // Generic-argument positions are invariant (TYPE_SYSTEM.md "Variance"): a list
 // whose runtime element type is `int` is NOT a member of `(int | string)[]`,
 // while a list constructed *at* element type `int | string` (the literal adopts
-// the ascribed element type at construction) is.
-//
-// BUG(static-coverage): the unreachable-arm analysis uses a lax
-// (element-covariant) container relation, so *either* ordering of these two
-// arms flags the second as unreachable — even though the runtime relation is
-// invariant and each arm captures exactly one of the two list types. The
-// `if true` guard exists solely to keep the second arm statically reachable;
-// remove it when container coverage goes invariant.
+// the ascribed element type at construction) is. Static coverage agrees: each
+// arm covers exactly its own union member, so both arms are reachable and the
+// match is exhaustive without guards or a wildcard.
 
 function classify_union_element(u: (int | string)[] | int[]) -> string {
     match (u) {
-        let i: int[] if true => "ints",
+        let i: int[] => "ints",
         let m: (int | string)[] => "mixed",
+    }
+}
+
+// The same match with the wider arm FIRST: the `(int | string)[]` arm claims
+// (and tests) only its own union member, so an `int[]` value falls through to
+// the `int[]` arm instead of being captured — and bound writable — at the
+// wider element type (through which a later `push("x")` would corrupt the
+// original `int[]`).
+function classify_union_element_mixed_first(u: (int | string)[] | int[]) -> string {
+    match (u) {
+        let m: (int | string)[] => "mixed",
+        let i: int[] => "ints",
     }
 }
 
@@ -164,6 +171,24 @@ function union_element_constructed_matches_fn() -> string {
 
 test "match_invariance_union_element_constructed_list_matches" {
     assert.equal(union_element_constructed_matches_fn(), "mixed")
+}
+
+function mixed_first_int_list_fn() -> string {
+    let a: int[] = [1, 2];
+    classify_union_element_mixed_first(a)
+}
+
+test "match_invariance_mixed_first_arm_does_not_capture_int_list" {
+    assert.equal(mixed_first_int_list_fn(), "ints")
+}
+
+function mixed_first_union_list_fn() -> string {
+    let v: (int | string)[] = [1, 2];
+    classify_union_element_mixed_first(v)
+}
+
+test "match_invariance_mixed_first_arm_captures_union_list" {
+    assert.equal(mixed_first_union_list_fn(), "mixed")
 }
 
 // ─── 6. `unknown[]` is invariant, not "any list" ──────────────────────────────
@@ -200,13 +225,16 @@ test "is_unknown_constructed_list_is_unknown_list" {
 }
 
 // The same invariance through a match arm: an `unknown[]` arm does not capture
-// an `int[]` value. (The `if true` guard keeps the second arm statically
-// reachable — the lax coverage analysis treats `unknown[]` as covering it.)
+// an `int[]` value, and static coverage now agrees — user-written `unknown`
+// is the real top type (`BuiltinUnknown`), invariant in element position like
+// any other type, so the `unknown[]` arm covers only its own member and the
+// `int[]` arm stays reachable without a guard. (Coverage's recovery escape
+// counts only the `Unknown`/`Error` resolution-failure sentinels, not the
+// user-written top type.)
 function classify_unknown_vs_int(u: unknown[] | int[]) -> string {
     match (u) {
-        let a: unknown[] if true => "unknowns",
+        let a: unknown[] => "unknowns",
         let i: int[] => "ints",
-        _ => "other",
     }
 }
 

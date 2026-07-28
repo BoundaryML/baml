@@ -40,6 +40,7 @@
 //! re-executes `Await`, reads the terminal state directly from the heap,
 //! and proceeds.
 
+use ::baml_type::RealizedTy;
 use ::bex_heap::{
     HeapPermit, HeapPermitManager, InactiveHeapPermit, PermitProof, Tlab, TlabHolder,
 };
@@ -133,7 +134,16 @@ impl FutureManagerGuard<'_> {
 
     /// Registers a future with the future manager and returns a unique ID.
     ///
-    pub fn new_future(&mut self, cancel: CancellationToken) -> (FutureId, HeapPtr) {
+    /// `returns` / `throws` are the `Future<T, E>` type arguments the spawn
+    /// site was typed at, already resolved against the spawning frame. They are
+    /// stored on the heap `Future` so reflection and `is`/`match` can see the
+    /// future's generic parameters rather than only "some future".
+    pub fn new_future(
+        &mut self,
+        returns: RealizedTy,
+        throws: RealizedTy,
+        cancel: CancellationToken,
+    ) -> (FutureId, HeapPtr) {
         // The contract on `FutureId::from_usize` is "no two live ids share a
         // usize". We satisfy this by drawing the value from the manager's
         // monotonic `AtomicUsize`; uniqueness is preserved as long as the
@@ -146,7 +156,7 @@ impl FutureManagerGuard<'_> {
 
         let ptr = inner
             .tlab
-            .alloc_future(::bex_vm_types::Future::pending(id, cancel));
+            .alloc_future(::bex_vm_types::Future::pending(id, returns, throws, cancel));
 
         inner.active_futures.insert(id, FutureState { future: ptr });
         (id, ptr)
@@ -573,12 +583,23 @@ mod tests {
         pm.new_permit(()).await.acquire().await
     }
 
+    /// Register a future typed as `Future<int, never>` — the shape a
+    /// non-throwing `spawn { 1 }` produces. These tests exercise registry
+    /// bookkeeping, so the types are inert here; a concrete pair is used
+    /// anyway so nothing reads as "type unknown by design".
+    fn new_int_future(
+        guard: &mut FutureManagerGuard<'_>,
+        cancel: CancellationToken,
+    ) -> (FutureId, HeapPtr) {
+        guard.new_future(RealizedTy::int(), RealizedTy::never(), cancel)
+    }
+
     #[tokio::test]
     async fn fulfill_removes_entry() {
         let (mgr, pm) = make_manager().await;
         let temp = temp_permit(&pm).await;
         let mut guard = mgr.acquire(temp.proof()).await;
-        let (id, _ptr) = guard.new_future(CancellationToken::new());
+        let (id, _ptr) = new_int_future(&mut guard, CancellationToken::new());
         assert_eq!(guard.active_future_count(), 1);
         guard.fulfill_future(id, Value::int(42)).unwrap();
         assert_eq!(guard.active_future_count(), 0);
@@ -589,8 +610,8 @@ mod tests {
         let (mgr, pm) = make_manager().await;
         let temp = temp_permit(&pm).await;
         let mut guard = mgr.acquire(temp.proof()).await;
-        guard.new_future(CancellationToken::new());
-        guard.new_future(CancellationToken::new());
+        new_int_future(&mut guard, CancellationToken::new());
+        new_int_future(&mut guard, CancellationToken::new());
         assert_eq!(guard.pending_join_handles().len(), 2);
     }
 
@@ -600,7 +621,7 @@ mod tests {
         let temp = temp_permit(&pm).await;
         let mut guard = mgr.acquire(temp.proof()).await;
         let token = CancellationToken::new();
-        let (id, _ptr) = guard.new_future(token.clone());
+        let (id, _ptr) = new_int_future(&mut guard, token.clone());
         assert!(!token.is_cancelled());
         guard.cancel_future(id).unwrap();
         assert_eq!(guard.active_future_count(), 0);
@@ -616,8 +637,8 @@ mod tests {
         let (mgr, pm) = make_manager().await;
         let temp = temp_permit(&pm).await;
         let mut guard = mgr.acquire(temp.proof()).await;
-        let (id_a, _) = guard.new_future(CancellationToken::new());
-        let (id_b, _) = guard.new_future(CancellationToken::new());
+        let (id_a, _) = new_int_future(&mut guard, CancellationToken::new());
+        let (id_b, _) = new_int_future(&mut guard, CancellationToken::new());
         assert_eq!(guard.active_future_count(), 2);
         guard.err_future(id_a, Value::int(7), Vec::new()).unwrap();
         guard
@@ -642,7 +663,7 @@ mod tests {
         let (mgr, pm) = make_manager().await;
         let temp = temp_permit(&pm).await;
         let mut guard = mgr.acquire(temp.proof()).await;
-        let (id, _) = guard.new_future(CancellationToken::new());
+        let (id, _) = new_int_future(&mut guard, CancellationToken::new());
         let original = EngineError::TypeMismatch {
             message: "synthetic op error".into(),
         };
@@ -676,7 +697,7 @@ mod tests {
         let (mgr, pm) = make_manager().await;
         let temp = temp_permit(&pm).await;
         let mut guard = mgr.acquire(temp.proof()).await;
-        let (id, _) = guard.new_future(CancellationToken::new());
+        let (id, _) = new_int_future(&mut guard, CancellationToken::new());
         let original = EngineError::TypeMismatch {
             message: "stale".into(),
         };
@@ -718,7 +739,7 @@ mod tests {
         let (mgr, pm) = make_manager().await;
         let temp = temp_permit(&pm).await;
         let mut guard = mgr.acquire(temp.proof()).await;
-        let (id, _) = guard.new_future(CancellationToken::new());
+        let (id, _) = new_int_future(&mut guard, CancellationToken::new());
         guard.fulfill_future(id, Value::int(1)).unwrap();
         let again = guard.fulfill_future(id, Value::int(2));
         assert!(again.is_ok(), "second fulfill should be idempotent no-op");
@@ -729,7 +750,7 @@ mod tests {
         let (mgr, pm) = make_manager().await;
         let temp = temp_permit(&pm).await;
         let mut guard = mgr.acquire(temp.proof()).await;
-        let (id, _) = guard.new_future(CancellationToken::new());
+        let (id, _) = new_int_future(&mut guard, CancellationToken::new());
         guard.fulfill_future(id, Value::int(1)).unwrap();
         // Entry is gone; future_ready should treat it as already-resolved.
         let waiter = guard.future_ready(id).expect("expected immediate Ok");
@@ -760,7 +781,7 @@ mod tests {
         let (mgr, pm) = make_manager().await;
         let temp = temp_permit(&pm).await;
         let mut guard = mgr.acquire(temp.proof()).await;
-        let (id, _) = guard.new_future(CancellationToken::new());
+        let (id, _) = new_int_future(&mut guard, CancellationToken::new());
         let waiter = guard.future_ready(id).expect("waiter should be created");
         drop(guard);
 

@@ -907,8 +907,8 @@ class baml.iter.Chain {
   first_done: bool
 }
 class baml.iter.Chain$stream {
-  first: Iterator | null
-  other: Iterator | null
+  first: Iterator<Item = T, Error = E> | null
+  other: Iterator<Item = T, Error = E2> | null
   first_done: bool | null
 }
 class baml.iter.Done {
@@ -920,7 +920,7 @@ class baml.iter.Filter {
   predicate: (T) -> bool throws E2
 }
 class baml.iter.Filter$stream {
-  source: Iterator | null
+  source: Iterator<Item = T, Error = E> | null
   predicate: unknown
 }
 class baml.iter.FilterMap {
@@ -928,7 +928,7 @@ class baml.iter.FilterMap {
   func: (T) -> R? throws E2
 }
 class baml.iter.FilterMap$stream {
-  source: Iterator | null
+  source: Iterator<Item = T, Error = E> | null
   func: unknown
 }
 class baml.iter.FlatMap {
@@ -937,24 +937,24 @@ class baml.iter.FlatMap {
   inner: Iterator<Item = R, Error = E3> | baml.iter.Done
 }
 class baml.iter.FlatMap$stream {
-  source: Iterator | null
+  source: Iterator<Item = T, Error = E> | null
   func: unknown
-  inner: Iterator | baml.iter.Done$stream | null
+  inner: Iterator<Item = R, Error = E3> | baml.iter.Done$stream | null
 }
 class baml.iter.Flatten {
   source: Iterator<Item = I, Error = E>
   inner: Iterator<Item = R, Error = E3> | baml.iter.Done
 }
 class baml.iter.Flatten$stream {
-  source: Iterator | null
-  inner: Iterator | baml.iter.Done$stream | null
+  source: Iterator<Item = I, Error = E> | null
+  inner: Iterator<Item = R, Error = E3> | baml.iter.Done$stream | null
 }
 class baml.iter.Map {
   source: Iterator<Item = T, Error = E>
   func: (T) -> R throws E2
 }
 class baml.iter.Map$stream {
-  source: Iterator | null
+  source: Iterator<Item = T, Error = E> | null
   func: unknown
 }
 class baml.iter.Peekable {
@@ -963,7 +963,7 @@ class baml.iter.Peekable {
   has_buffer: bool
 }
 class baml.iter.Peekable$stream {
-  source: Iterator | null
+  source: Iterator<Item = T, Error = E> | null
   buffer: T | baml.iter.Done$stream | null
   has_buffer: bool | null
 }
@@ -991,7 +991,7 @@ class baml.iter.StepBy {
   first: bool
 }
 class baml.iter.StepBy$stream {
-  source: Iterator | null
+  source: Iterator<Item = T, Error = E> | null
   n: int | null
   first: bool | null
 }
@@ -1077,7 +1077,7 @@ function baml.iter.new(value: T, count: int = ...) -> baml.iter.Repeat<T>  [expr
   {  } baml.iter.Repeat { value: value, count: count }
 }
 function baml.iter.next(self: ?) -> T | baml.iter.Done  [expr] {
-  { if (self.idx Ge self.arr.length()) { return baml.iter.Done {  } }; let item = self.arr.at(self.idx); self.idx Add= 1 } match (item) { value: T => value }
+  { if (self.idx Ge self.arr.length()) { return baml.iter.Done {  } }; let item = self.arr[self.idx]; self.idx Add= 1; return item }
 }
 function baml.iter.next(self: ?) -> int | baml.iter.Done  [expr] {
   {  } if (self.i Lt self.max) { let cur = self.i; self.i Add= self.step } cur else {  } baml.iter.Done {  }
@@ -1747,6 +1747,7 @@ function baml.ops.add(self: ?, rhs: float) -> float  [builtin]
 function baml.ops.add(self: ?, rhs: bigint) -> bigint  [builtin]
 function baml.ops.add(self: ?, rhs: int) -> bigint  [builtin]
 function baml.ops.add(self: ?, rhs: bigint) -> bigint  [builtin]
+function baml.ops.add(self: ?, rhs: string) -> string  [builtin]
 function baml.ops.div(self: ?, rhs: int) -> int  [builtin]
 function baml.ops.div(self: ?, rhs: float) -> float  [builtin]
 function baml.ops.div(self: ?, rhs: int) -> float  [builtin]

@@ -73,7 +73,7 @@ class VoiceAgent {
                 speech_generation: 0,
                 closed: false,
             };
-            let barge_in_timers: baml.future.Future<null, null>[] = [];
+            let barge_in_timers: baml.future.Future<null, never>[] = [];
             let completion_call_ids: string[] = [];
             //# Always stop spawned work and close audio and provider resources
             defer {

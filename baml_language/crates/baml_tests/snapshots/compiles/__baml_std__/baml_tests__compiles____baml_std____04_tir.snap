@@ -1324,16 +1324,14 @@ function baml.iter.ArrayIterator.iter(self: baml.iter.ArrayIterator<T>) -> baml.
   }
 }
 function baml.iter.ArrayIterator.next(self: baml.iter.ArrayIterator<T>) -> T | baml.iter.Done throws never {
-  { : T
+  { : never
     if (self.idx >= self.arr.length() : bool) : void
       { : never
         return Done {  } : baml.iter.Done
       }
-    let item = self.arr.at<T>(self.idx) : T | null
+    let item = self.arr[self.idx] : T
     self.idx Add= 1 : int
-    match (item : T | null) : T
-      value: T =>
-        value : T
+    return item : T
   }
 }
 class baml.iter.Range {
@@ -1659,7 +1657,7 @@ function baml.iter.Chain.next(self: baml.iter.Chain<T, E, E2>) -> T | baml.iter.
     self.other.next<T, E2>() : T | baml.iter.Done
   }
 }
-function baml.iter.iter(self: unknown) -> baml.iter.Iterator<Item = !error, Error = never> throws never {
+function baml.iter.iter(self: unknown) -> baml.iter.Iterator<Item = T, Error = never> throws never {
   { : baml.iter.ArrayIterator<T>
     ArrayIterator.new<T>(self) : baml.iter.ArrayIterator<T>
   }
@@ -1685,39 +1683,39 @@ class baml.iter.Repeat$stream {
   count: int | null
 }
 class baml.iter.Map$stream {
-  source: baml.iter.Iterator<Error = never> | null
+  source: baml.iter.Iterator<Item = T, Error = E> | null
   func: unknown
 }
 class baml.iter.Filter$stream {
-  source: baml.iter.Iterator<Error = never> | null
+  source: baml.iter.Iterator<Item = T, Error = E> | null
   predicate: unknown
 }
 class baml.iter.FilterMap$stream {
-  source: baml.iter.Iterator<Error = never> | null
+  source: baml.iter.Iterator<Item = T, Error = E> | null
   func: unknown
 }
 class baml.iter.FlatMap$stream {
-  source: baml.iter.Iterator<Error = never> | null
+  source: baml.iter.Iterator<Item = T, Error = E> | null
   func: unknown
-  inner: baml.iter.Iterator<Error = never> | baml.iter.Done$stream | null
+  inner: baml.iter.Iterator<Item = R, Error = E3> | baml.iter.Done$stream | null
 }
 class baml.iter.Flatten$stream {
-  source: baml.iter.Iterator<Error = never> | null
-  inner: baml.iter.Iterator<Error = never> | baml.iter.Done$stream | null
+  source: baml.iter.Iterator<Item = I, Error = E> | null
+  inner: baml.iter.Iterator<Item = R, Error = E3> | baml.iter.Done$stream | null
 }
 class baml.iter.Peekable$stream {
-  source: baml.iter.Iterator<Error = never> | null
+  source: baml.iter.Iterator<Item = T, Error = E> | null
   buffer: T | baml.iter.Done$stream | null
   has_buffer: bool | null
 }
 class baml.iter.StepBy$stream {
-  source: baml.iter.Iterator<Error = never> | null
+  source: baml.iter.Iterator<Item = T, Error = E> | null
   n: int | null
   first: bool | null
 }
 class baml.iter.Chain$stream {
-  first: baml.iter.Iterator<Error = never> | null
-  other: baml.iter.Iterator<Error = never> | null
+  first: baml.iter.Iterator<Item = T, Error = E> | null
+  other: baml.iter.Iterator<Item = T, Error = E2> | null
   first_done: bool | null
 }
 
@@ -1785,7 +1783,7 @@ function baml.json.path<T>(j: baml.json.json, selector: string) -> T throws baml
       { : never
         throw JsonPathError { message: "selector must sta..." + selector + "'", selector: selector } : baml.json.JsonPathError
       }
-    let current: baml.json.json = j : baml.json.json -> bool | int | float | string | baml.json.json[] | map<string, baml.json.json> | null
+    let current: baml.json.json = j : baml.json.json -> int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>
     let i = 0 : 0 -> int
     while i < selector.length()
       { : void
@@ -2795,22 +2793,22 @@ class baml.net.Datagram$stream {
 }
 
 --- <builtin>/baml/ns_ops/comparison.baml ---
-function baml.ops.Equals.neq(self: baml.ops.Equals, other: !error) -> bool throws never {
+function baml.ops.Equals.neq(self: baml.ops.Equals, other: Self) -> bool throws never {
   { : bool
     Not self.eq(other) : bool
   }
 }
-function baml.ops.Compare.le(self: baml.ops.Compare, other: !error) -> bool throws never {
+function baml.ops.Compare.le(self: baml.ops.Compare, other: Self) -> bool throws never {
   { : bool
     self.lt(other) || self.eq(other) : bool
   }
 }
-function baml.ops.Compare.gt(self: baml.ops.Compare, other: !error) -> bool throws never {
+function baml.ops.Compare.gt(self: baml.ops.Compare, other: Self) -> bool throws never {
   { : bool
     Not self.le(other) : bool
   }
 }
-function baml.ops.Compare.ge(self: baml.ops.Compare, other: !error) -> bool throws never {
+function baml.ops.Compare.ge(self: baml.ops.Compare, other: Self) -> bool throws never {
   { : bool
     Not self.lt(other) : bool
   }

@@ -493,7 +493,7 @@ mod tests {
     #[test]
     fn round_trip_associated_type_projection() {
         let ty = Ty::AssociatedTypeProjection {
-            base: Box::new(Ty::TypeVar(Name::new("T"), def())),
+            base: Box::new(Ty::type_var("T")),
             interface: Box::new(Interface {
                 name: qtn("Iterator"),
                 generics: vec![],

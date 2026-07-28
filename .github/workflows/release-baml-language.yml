@@ -54,10 +54,9 @@ env:
   CARGO_TERM_COLOR: always
   RUSTUP_MAX_RETRIES: 10
   AWS_REGION: us-east-1
-  # WorkOS environment for `baml auth` (public identifiers, not secrets).
-  # Captured by option_env! in baml_cli at build time; the repo variables
-  # are configured in Settings -> Actions -> Variables.
-  BAML_WORKOS_AUTHKIT_DOMAIN: ${{ vars.BAML_WORKOS_AUTHKIT_DOMAIN }}
+  # WorkOS client id for `baml login` (a public identifier, not a secret).
+  # Captured by option_env! in baml_cli at build time; the repo variable is
+  # configured in Settings -> Actions -> Variables.
   BAML_WORKOS_CLIENT_ID: ${{ vars.BAML_WORKOS_CLIENT_ID }}
   AWS_ROLE_ARN: arn:aws:iam::277707123528:role/pkg-boundaryml-com-github-release
   PKG_BUCKET: pkgboundarymlcomstack-pkgboundarymlcomsitebucket4f-ybhvygkqittp
@@ -275,6 +274,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       toolchain: ${{ steps.gen.outputs.toolchain }}
+      wrapper: ${{ steps.gen.outputs.wrapper }}
       csharp: ${{ steps.gen.outputs.csharp }}
     steps:
       - uses: actions/checkout@v4
@@ -292,6 +292,9 @@ jobs:
             | {target: .triple, os: .artifacts.toolchain.runner, libc: .libc}]' release/platforms.json)"
           echo "toolchain=$toolchain" >> "$GITHUB_OUTPUT"
           jq . <<<"$toolchain"
+          wrapper="$(scripts/baml-release-platforms wrapper-matrix)"
+          echo "wrapper=$wrapper" >> "$GITHUB_OUTPUT"
+          jq . <<<"$wrapper"
           csharp="$(scripts/baml-csharp-release-contract matrix)"
           echo "csharp=$csharp" >> "$GITHUB_OUTPUT"
           jq . <<<"$csharp"
@@ -431,14 +434,12 @@ jobs:
 
   build-wrapper:
     name: Build wrapper (${{ matrix.target }})
-    # The wrapper is a native release build of the workspace, so it uses the
-    # same per-target runners as the toolchain and reuses that generated matrix.
     needs: [plan, build-matrix]
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
-        include: ${{ fromJson(needs.build-matrix.outputs.toolchain) }}
+        include: ${{ fromJson(needs.build-matrix.outputs.wrapper) }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -459,45 +460,55 @@ jobs:
         with:
           target: ${{ matrix.target }}
       - name: Build wrapper
+        env:
+          EXECUTABLE_SUFFIX: ${{ matrix.executable_suffix }}
+          TARGET: ${{ matrix.target }}
         run: |
           set -euo pipefail
-          target="${{ matrix.target }}"
-          cargo build --manifest-path baml_language/Cargo.toml --release --bin baml --target "$target"
-          suffix=""
-          if [[ "$target" == *windows-msvc ]]; then suffix=".exe"; fi
+          cargo build --manifest-path baml_language/Cargo.toml --release --bin baml --target "$TARGET"
           mkdir -p staging/bin
-          cp "baml_language/target/$target/release/baml$suffix" "staging/bin/baml$suffix"
-          if test -f "staging/bin/baml-cli$suffix"; then
+          cp "baml_language/target/$TARGET/release/baml$EXECUTABLE_SUFFIX" \
+            "staging/bin/baml$EXECUTABLE_SUFFIX"
+          if test -f "staging/bin/baml-cli$EXECUTABLE_SUFFIX"; then
             exit 1
           fi
-      - name: Build package-manager wrapper
-        if: ${{ matrix.target == 'aarch64-apple-darwin' || matrix.target == 'x86_64-apple-darwin' || matrix.target == 'aarch64-unknown-linux-gnu' || matrix.target == 'x86_64-unknown-linux-gnu' }}
+      - name: Build no-self-update wrapper
+        if: ${{ matrix.no_self_update }}
+        env:
+          EXECUTABLE_SUFFIX: ${{ matrix.executable_suffix }}
+          TARGET: ${{ matrix.target }}
         run: |
           set -euo pipefail
-          target="${{ matrix.target }}"
           cargo build \
             --manifest-path baml_language/Cargo.toml \
             --release \
             --bin baml \
             --features no-self-update \
-            --target "$target"
+            --target "$TARGET"
           mkdir -p staging-no-self-update/bin
-          cp "baml_language/target/$target/release/baml" \
-            "staging-no-self-update/bin/baml"
+          cp "baml_language/target/$TARGET/release/baml$EXECUTABLE_SUFFIX" \
+            "staging-no-self-update/bin/baml$EXECUTABLE_SUFFIX"
       - name: Archive wrapper
         env:
+          ARCHIVE_SUFFIX: ${{ matrix.archive_suffix }}
+          NO_SELF_UPDATE: ${{ matrix.no_self_update }}
           TARGET: ${{ matrix.target }}
           WRAPPER_VERSION: ${{ needs.plan.outputs.wrapper_version }}
         run: |
           set -euo pipefail
-          if [[ "$TARGET" == *windows-msvc ]]; then
-            (cd staging && 7z a "../baml-wrapper-$WRAPPER_VERSION-$TARGET.zip" .)
-          else
-            tar -C staging -czf "baml-wrapper-$WRAPPER_VERSION-$TARGET.tar.gz" .
-          fi
-          if [[ "$TARGET" == "aarch64-apple-darwin" || "$TARGET" == "x86_64-apple-darwin" || "$TARGET" == "aarch64-unknown-linux-gnu" || "$TARGET" == "x86_64-unknown-linux-gnu" ]]; then
-            tar -C staging-no-self-update -czf \
-              "baml-wrapper-no-self-update-$WRAPPER_VERSION-$TARGET.tar.gz" .
+          archive() {
+            local staging="$1"
+            local product="$2"
+            local destination="$product-$WRAPPER_VERSION-$TARGET$ARCHIVE_SUFFIX"
+            case "$ARCHIVE_SUFFIX" in
+              .zip) (cd "$staging" && 7z a "../$destination" .) ;;
+              .tar.gz) tar -C "$staging" -czf "$destination" . ;;
+              *) echo "unsupported archive suffix: $ARCHIVE_SUFFIX" >&2; exit 1 ;;
+            esac
+          }
+          archive staging baml-wrapper
+          if [[ "$NO_SELF_UPDATE" == "true" ]]; then
+            archive staging-no-self-update baml-wrapper-no-self-update
           fi
       - uses: actions/upload-artifact@v4
         with:
@@ -1218,11 +1229,22 @@ jobs:
     permissions:
       contents: write
     steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.plan.outputs.source_sha }}
+          persist-credentials: false
       - uses: actions/download-artifact@v4
         with:
           pattern: wrapper-*
           path: dist/wrapper
           merge-multiple: true
+      - name: Verify wrapper artifact set
+        env:
+          WRAPPER_VERSION: ${{ needs.plan.outputs.wrapper_version }}
+        run: |
+          scripts/baml-release-platforms verify-wrapper-artifacts \
+            --wrapper-dir dist/wrapper \
+            --version "$WRAPPER_VERSION"
       - name: Generate checksum sidecars
         run: |
           set -euo pipefail
@@ -1325,7 +1347,16 @@ jobs:
     # once a tag reaches proxy.golang.org it is immutable, while baml-go needs
     # that manifest to resolve its native runtime on first use.
     needs: [plan, build-go-sdk, all-builds, publish-pkg-boundaryml-com]
-    if: ${{ needs.plan.outputs.dry_run == 'false' && needs.plan.outputs.source_branch == 'canary' }}
+    if: >-
+      ${{
+        !cancelled() &&
+        needs.plan.result == 'success' &&
+        needs.build-go-sdk.result == 'success' &&
+        needs.all-builds.result == 'success' &&
+        needs.publish-pkg-boundaryml-com.result == 'success' &&
+        needs.plan.outputs.dry_run == 'false' &&
+        needs.plan.outputs.source_branch == 'canary'
+      }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v4
@@ -1702,7 +1733,14 @@ jobs:
     # complete before the manifest is made immutable; Go closes the final gate
     # afterward without creating a dependency cycle.
     needs: [plan, release-prerequisites-complete]
-    if: ${{ needs.plan.outputs.dry_run == 'false' && needs.plan.outputs.source_branch == 'canary' }}
+    if: >-
+      ${{
+        !cancelled() &&
+        needs.plan.result == 'success' &&
+        needs.release-prerequisites-complete.result == 'success' &&
+        needs.plan.outputs.dry_run == 'false' &&
+        needs.plan.outputs.source_branch == 'canary'
+      }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -1742,7 +1780,7 @@ jobs:
         with:
           name: swift-xcframework
           path: dist/swift
-      - uses: aws-actions/configure-aws-credentials@v4
+      - uses: aws-actions/configure-aws-credentials@v6
         with:
           role-to-assume: ${{ env.AWS_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
@@ -1854,7 +1892,15 @@ jobs:
   smoke-go-release:
     name: Smoke published Go SDK (${{ matrix.os }})
     needs: [plan, publish-go-sdk, publish-pkg-boundaryml-com]
-    if: ${{ needs.plan.outputs.dry_run == 'false' && needs.plan.outputs.source_branch == 'canary' }}
+    if: >-
+      ${{
+        !cancelled() &&
+        needs.plan.result == 'success' &&
+        needs.publish-go-sdk.result == 'success' &&
+        needs.publish-pkg-boundaryml-com.result == 'success' &&
+        needs.plan.outputs.dry_run == 'false' &&
+        needs.plan.outputs.source_branch == 'canary'
+      }}
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -1949,7 +1995,17 @@ jobs:
     # release until every publisher completes and the public Go and Swift
     # packages execute their native runtimes successfully.
     needs: [plan, publish-pkg-boundaryml-com, release-complete, smoke-go-release, smoke-swift-release]
-    if: ${{ needs.plan.outputs.dry_run == 'false' && needs.plan.outputs.source_branch == 'canary' }}
+    if: >-
+      ${{
+        !cancelled() &&
+        needs.plan.result == 'success' &&
+        needs.publish-pkg-boundaryml-com.result == 'success' &&
+        needs.release-complete.result == 'success' &&
+        needs.smoke-go-release.result == 'success' &&
+        needs.smoke-swift-release.result == 'success' &&
+        needs.plan.outputs.dry_run == 'false' &&
+        needs.plan.outputs.source_branch == 'canary'
+      }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -1959,7 +2015,7 @@ jobs:
         with:
           name: release-manifests
           path: manifests
-      - uses: aws-actions/configure-aws-credentials@v4
+      - uses: aws-actions/configure-aws-credentials@v6
         with:
           role-to-assume: ${{ env.AWS_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
@@ -1977,7 +2033,15 @@ jobs:
   dispatch-nightly-after-canary:
     name: Queue nightly after canary publish
     needs: [plan, publish-pkg-channel]
-    if: ${{ needs.plan.outputs.dispatch_nightly_after_canary == 'true' && needs.plan.outputs.dry_run == 'false' && needs.plan.outputs.source_branch == 'canary' }}
+    if: >-
+      ${{
+        !cancelled() &&
+        needs.plan.result == 'success' &&
+        needs.publish-pkg-channel.result == 'success' &&
+        needs.plan.outputs.dispatch_nightly_after_canary == 'true' &&
+        needs.plan.outputs.dry_run == 'false' &&
+        needs.plan.outputs.source_branch == 'canary'
+      }}
     runs-on: ubuntu-latest
     permissions:
       actions: write
@@ -2209,7 +2273,7 @@ jobs:
         with:
           name: dry-run-release-files
           path: dry-run
-      - uses: aws-actions/configure-aws-credentials@v4
+      - uses: aws-actions/configure-aws-credentials@v6
         if: ${{ needs.plan.outputs.source_branch == 'canary' }}
         with:
           role-to-assume: ${{ env.AWS_ROLE_ARN }}
@@ -2243,3 +2307,77 @@ jobs:
             echo "BAML_HOME=\"\$(mktemp -d)\" BAML_MANIFEST_BASE_URL=\"$base\" baml toolchain use ${{ needs.plan.outputs.channel }}"
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
+
+  notify-slack:
+    name: Notify Slack on failure
+    needs:
+      - plan
+      - build-matrix
+      - build-toolchain
+      - build-vsix
+      - build-wrapper
+      - build-python-sdk
+      - build-nodejs-sdk
+      - build-java-sdk
+      - build-web-sdk
+      - build-bridge-cffi
+      - build-go-sdk
+      - verify-cpp-sdk
+      - build-rust-sdk
+      - verify-rust-sdk
+      - all-builds
+      - publish-pypi
+      - publish-nodejs-sdk
+      - publish-web-sdk
+      - publish-maven
+      - publish-gradle-plugin
+      - publish-toolchain-release
+      - publish-wrapper-release
+      - publish-bridge-cffi-release
+      - publish-go-sdk
+      - publish-crates-io
+      - publish-pkg-boundaryml-com
+      - smoke-go-release
+      - dispatch-nightly-after-canary
+      - publish-homebrew
+      - publish-aur
+      - dry-run-artifacts
+      - dry-run-summary
+      - build-swift-sdk
+      - verify-swift-sdk
+      - prepare-csharp-sdk
+      - verify-csharp-sdk
+      - publish-csharp-sdk
+      - release-prerequisites-complete
+      - release-complete
+      - publish-pkg-channel
+      - smoke-swift-release
+    # Use the dispatch input so a failure in plan itself is still reportable.
+    # This job must run after failed dependencies; the script posts only when the run contains failures.
+    if: ${{ always() && inputs.dry_run == false && needs.plan.outputs.source_branch == 'canary' }}
+    runs-on: ubuntu-latest
+    environment: boundary-tools-dev
+    permissions:
+      actions: read
+      contents: read
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          ref: ${{ needs.plan.outputs.source_sha || github.sha }}
+          sparse-checkout: |
+            .github/actions/setup-mise
+            mise.toml
+            tools/notify-release-failure.py
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+      - uses: ./.github/actions/setup-mise
+        with:
+          install_args: uv
+      - name: Find failures and notify Slack
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SLACK_CHANNEL: "#general"
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOUNDARY_BOT_TOKEN }}
+          VERSION: ${{ needs.plan.outputs.version }}
+          CHANNEL: ${{ needs.plan.outputs.channel }}
+        run: uv run --script tools/notify-release-failure.py

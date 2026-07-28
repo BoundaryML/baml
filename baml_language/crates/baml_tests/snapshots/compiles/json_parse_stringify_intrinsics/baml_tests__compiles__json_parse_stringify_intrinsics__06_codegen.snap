@@ -23,7 +23,7 @@ function user.match_parsed(s: string) -> string {
     load_var j
     store_var _3
     load_var _3
-    narrow_bind baml.json.json[], slot=3
+    narrow_bind (int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>)[], slot=3
     pop_jump_if_false L0
     jump L11
 
@@ -31,7 +31,7 @@ function user.match_parsed(s: string) -> string {
     load_var j
     store_var _6
     load_var _6
-    narrow_bind map<string, baml.json.json>, slot=4
+    narrow_bind map<string, int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>>, slot=4
     pop_jump_if_false L1
     jump L10
 
@@ -68,10 +68,6 @@ function user.match_parsed(s: string) -> string {
     jump L6
 
   L5:
-    load_var j
-    load_const null
-    cmp_op ==
-    pop_jump_if_false L13
     load_const "null"
     jump L12
 
@@ -102,9 +98,6 @@ function user.match_parsed(s: string) -> string {
 
   L12:
     return
-
-  L13:
-    unreachable
 }
 
 function user.parse_and_roundtrip(s: string) -> string {

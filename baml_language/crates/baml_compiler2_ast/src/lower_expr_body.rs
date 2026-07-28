@@ -863,6 +863,13 @@ impl LoweringContext {
     /// which the MIR lowering then handles via `lower_lambda` to emit
     /// the proper `MakeClosure`. The name expression is parsed in the
     /// outer context (where it can reference outer bindings).
+    ///
+    /// That body-is-a-lambda invariant is upheld here rather than assumed
+    /// downstream: with no `BLOCK_EXPR` there is no lambda to build, so the
+    /// whole `spawn` lowers to [`Expr::Missing`] instead of a `Spawn` wrapping
+    /// a non-lambda body. Inference projects the body's return type and reads
+    /// its effective throws out of the lambda side table, neither of which
+    /// exists for a non-lambda.
     fn lower_spawn_expr(&mut self, node: &SyntaxNode) -> ExprId {
         use baml_compiler_syntax::ast as cst_ast;
 
@@ -964,7 +971,13 @@ impl LoweringContext {
             }
         }
 
-        let body = body_lambda.unwrap_or_else(|| self.alloc_expr(Expr::Missing, node.span_range()));
+        // No block — an incomplete `spawn` (an editor prefix typed before the
+        // body exists, or a syntax error the parser has already reported).
+        // There is no lambda to hang the spawn off, so the expression itself is
+        // what is missing.
+        let Some(body) = body_lambda else {
+            return self.alloc_expr(Expr::Missing, node.span_range());
+        };
         self.alloc_expr(
             Expr::Spawn {
                 name,

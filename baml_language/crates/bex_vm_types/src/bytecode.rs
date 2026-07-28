@@ -458,10 +458,17 @@ pub enum Instruction {
     SysOp(GlobalIndex),
     SysOpWithRuntimeId(GlobalIndex),
 
-    /// BEP-034 `spawn { body }`. Pops `[closure_value, name_value]` from
-    /// the stack, allocates an `UnscheduledFuture { closure, name }`
-    /// into the TLAB, and yields `VmExecState::Spawn(ptr)` so the
-    /// engine routes the closure to a fresh `BexThread`.
+    /// BEP-034 `spawn { body }`. Pops `[closure, name, config, returns,
+    /// throws]` from the stack (in reverse push order), allocates an
+    /// `UnscheduledFuture` into the TLAB, and yields
+    /// `VmExecState::Spawn(ptr)` so the engine routes the closure to a fresh
+    /// `BexThread`.
+    ///
+    /// `returns` / `throws` are the `Object::Type` values a preceding pair of
+    /// `LoadType`s pushed — the `Future<T, E>` this spawn is typed at, already
+    /// resolved against the frame's type args. They travel with the request so
+    /// the engine can type the heap `Future` it allocates, which is what makes
+    /// a future's generic parameters visible to reflection and `is`/`match`.
     Spawn,
 
     /// Awaits the future on top of the stack.

@@ -73,3 +73,11 @@ source: crates/baml_tests/src/generated_tests.rs
  30 │   let apply = (f: (value: int) -> int, x: int) -> int { f(x) };
     ·                   ───────────────────
     ╰────
+
+  [type] E0151
+
+  × function type must declare an explicit `throws` clause; add `throws never` if calling it cannot throw
+    ╭─[negative.baml:36:12]
+ 36 │     let f: (value: int) -> int => f(1)
+    ·            ───────────────────
+    ╰────

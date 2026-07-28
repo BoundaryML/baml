@@ -198,8 +198,8 @@ fn callee_fn_ty(sig: &CallableSignature) -> RealizedTy {
     }
 }
 
-/// A value's reconstructed type, `unknown` when it has none (a nested function
-/// value, a future, an opaque handle).
+/// A value's reconstructed type, `unknown` when it has none (a bound method, an
+/// opaque handle). A future reconstructs to the `Future<T, E>` it was spawned at.
 fn value_realized_ty(vm: &BexVm, value: Value) -> RealizedTy {
     vm.value_concrete_ty(value)
         .map_or_else(RealizedTy::unknown, RealizedTy::from)
@@ -207,7 +207,7 @@ fn value_realized_ty(vm: &BexVm, value: Value) -> RealizedTy {
 
 /// Whether `value` fits the parameter type `expected`, by the canonical
 /// algebra over the runtime context. Fails OPEN when the value's type cannot
-/// be reconstructed (futures, opaque handles, bound methods): the stored
+/// be reconstructed (opaque handles, bound methods): the stored
 /// signature may itself carry erased `unknown` slots, so refusing what we
 /// cannot check would reject working calls; the callee remains dynamically
 /// safe either way (values stay tagged).

@@ -107,7 +107,7 @@ use bex_vm::{
 };
 use bex_vm_types::{
     FunctionMeta, FunctionOrigin, GlobalPool, HeapPtr, Object, SharedGlobals, SysOp,
-    TaskGroupInner, Value, ValueKind, VmGlobals,
+    TaskGroupInner, UnscheduledFuture, Value, ValueKind, VmGlobals,
 };
 pub use conversion::test_arg_to_external;
 // Re-export CancellationToken for callers.
@@ -5062,14 +5062,18 @@ impl BexEngine {
                     // BEP-034: pull the closure + name off the
                     // `UnscheduledFuture` heap object and hand them to
                     // `spawn_thread`, which allocates the future and
-                    // dispatches the body on a fresh `BexThread`. The
-                    let (closure, name_ptr, config_ptr) = {
-                        let unscheduled = thread
-                            .vm
-                            .unscheduled_future(unscheduled)
-                            .map_err(EngineError::VmInternalError)?;
-                        (unscheduled.closure, unscheduled.name, unscheduled.config)
-                    };
+                    // dispatches the body on a fresh `BexThread`.
+                    let unscheduled = thread
+                        .vm
+                        .unscheduled_future(unscheduled)
+                        .map_err(EngineError::VmInternalError)?;
+                    let UnscheduledFuture {
+                        closure,
+                        name: name_ptr,
+                        config: config_ptr,
+                        returns,
+                        throws,
+                    } = unscheduled.clone();
                     let spawn_name: Option<String> =
                         name_ptr.and_then(|ptr| match unsafe { ptr.get() } {
                             Object::String(s) => Some(s.to_string()),
@@ -5135,7 +5139,8 @@ impl BexEngine {
 
                     let future_ptr = {
                         let mut guard = self.futures.acquire(thread.proof()).await;
-                        let (future_id, future_ptr) = guard.new_future(child_cancel.clone());
+                        let (future_id, future_ptr) =
+                            guard.new_future(returns, throws, child_cancel.clone());
                         drop(guard);
                         Arc::clone(self)
                             .spawn_thread(

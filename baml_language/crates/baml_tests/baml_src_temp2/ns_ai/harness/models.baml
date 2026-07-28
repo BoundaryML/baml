@@ -66,8 +66,8 @@ function _emit_harness_event(
     events.push(event);
     //# Notify the per-run listener immediately
     match (on_event) {
-        let callback: ((AgentEvent) -> null throws never) => callback(event),
         null => null,
+        let callback: ((AgentEvent) -> null throws never) => callback(event),
     };
     null
 }

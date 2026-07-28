@@ -27,7 +27,7 @@ use baml_codegen_types::{
     Class, ClassProperty, Enum, Function, FunctionArgument, Name, NamingConvention, Symbol,
     SymbolPool, Ty, TypeAlias,
 };
-use baml_type::{RESERVED_USER_PACKAGE, TyAttr};
+use baml_type::{ParamTy, RESERVED_USER_PACKAGE, TyAttr};
 
 mod names;
 mod packages;
@@ -1703,7 +1703,17 @@ fn render_functions(
                         .generic_params
                         .iter()
                         .cloned()
-                        .map(|name| Ty::TypeVar(name, TyAttr::default()))
+                        .enumerate()
+                        .map(|(index, name)| {
+                            Ty::TypeVar(
+                                ParamTy::new(
+                                    u32::try_from(index)
+                                        .expect("generic parameter index fits in u32"),
+                                    name,
+                                ),
+                                TyAttr::default(),
+                            )
+                        })
                         .collect(),
                     TyAttr::default(),
                 );
@@ -1771,7 +1781,17 @@ fn render_functions(
                             .generic_params
                             .iter()
                             .cloned()
-                            .map(|name| Ty::TypeVar(name, TyAttr::default()))
+                            .enumerate()
+                            .map(|(index, name)| {
+                                Ty::TypeVar(
+                                    ParamTy::new(
+                                        u32::try_from(index)
+                                            .expect("generic parameter index fits in u32"),
+                                        name,
+                                    ),
+                                    TyAttr::default(),
+                                )
+                            })
                             .collect(),
                         TyAttr::default(),
                     );
@@ -4460,7 +4480,7 @@ mod tests {
     }
 
     fn ty_type_var(name: BaseName) -> Ty {
-        Ty::TypeVar(name, TyAttr::default())
+        Ty::TypeVar(baml_codegen_types::ParamTy::new(0, name), TyAttr::default())
     }
 
     fn ty_media(kind: baml_base::MediaKind) -> Ty {

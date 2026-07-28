@@ -10,27 +10,40 @@ use baml_base::Name;
 use baml_compiler2_ast::{ExprId, LoweringDiagnostic, PatId, StmtId};
 use text_size::{TextRange, TextSize};
 
-// ── PathResolution ────────────────────────────────────────────────────────────
+// Expression identity and path resolution
 
-/// Scope-level resolution of a multi-segment `Path` expression's root segment.
+/// Namespace for arena-local expression IDs.
 ///
-/// Produced during HIR scope building for `Path` nodes with ≥ 2 segments.
-/// Only distinguishes whether the root is a locally-declared variable/param
-/// (in which case segments[1..] are field accesses on the local) or not
-/// (in which case the path is a package-qualified name, to be resolved by TIR).
+/// A function or lambda body and its parameter-default expressions use
+/// separate `ExprBody` arenas, and every nested lambda starts another pair of
+/// arenas. Pairing the arena owner with `ExprId` makes expression identity
+/// unique within a file.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub enum ExprMetadataScope {
+    Body(FileScopeId),
+    ParameterDefault(FileScopeId),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub struct ExprMetadataKey {
+    pub scope: ExprMetadataScope,
+    pub expr: ExprId,
+}
+
+impl ExprMetadataKey {
+    pub fn new(scope: ExprMetadataScope, expr: ExprId) -> Self {
+        Self { scope, expr }
+    }
+}
+
+/// HIR resolution of a value path's root segment.
 ///
-/// Note: Package-item resolution requires cross-file `package_items` queries
-/// that are not available during HIR building (would create a circular
-/// dependency: `file_semantic_index` → `package_items` → `file_semantic_index`).
-/// Full resolution (namespace vs package-item vs unknown) is done in TIR.
-#[derive(Debug, Clone, PartialEq, Eq)]
+/// Local roots are resolved to declaration identity while the lexical scope
+/// stack is active. Non-local roots are completed by TIR because package-item
+/// resolution would introduce a HIR query cycle.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PathResolution {
-    /// Root segment is a local variable, parameter, or capture in the current scope.
-    /// Segments[1..] are field/method accesses on the local, resolved by TIR type
-    /// checking.
-    Local { name: Name },
-    /// Root segment is not a known local. May be a package name, namespace
-    /// shorthand, or truly unresolved — TIR determines which.
+    Local(BindingId),
     Unknown,
 }
 
@@ -209,14 +222,14 @@ pub struct FileSemanticIndex<'db> {
     /// Scope tree — arena of `Scope` nodes indexed by `FileScopeId`.
     pub scopes: Vec<Scope>,
 
-    /// Expression → owning scope mapping.
+    /// Expression to owning lexical scope mapping.
     ///
     /// Every `ExprId` in the file's `ExprBody` arenas is mapped to the
     /// `FileScopeId` of its innermost containing scope. Built during the
     /// `SemanticIndexBuilder` walk.
     ///
-    /// Sorted by `ExprId` for binary search (more compact than `HashMap`).
-    pub expr_scopes: Vec<(ExprId, FileScopeId)>,
+    /// Sorted by arena-safe expression key for binary search.
+    pub expr_scopes: Vec<(ExprMetadataKey, FileScopeId)>,
 
     /// Per-scope local bindings, indexed by `FileScopeId`.
     /// Parallel to `scopes` — `scope_bindings[i]` holds bindings for `scopes[i]`.
@@ -253,15 +266,9 @@ pub struct FileSemanticIndex<'db> {
     /// following Ty's `Option<Box<Extra>>` pattern.
     pub extra: Option<Box<SemanticIndexExtra>>,
 
-    /// Root-segment resolution for multi-segment `Path` expressions.
-    ///
-    /// For each `Path` with ≥ 2 segments, records whether the root is a local
-    /// variable/parameter (`PathResolution::Local`) or not
-    /// (`PathResolution::Unknown`). Sorted by `ExprId` for binary-search lookup.
-    ///
-    /// Package-item resolution (namespace, split point) is deferred to TIR
-    /// since it requires cross-file `package_items` queries.
-    pub path_resolutions: Vec<(ExprId, PathResolution)>,
+    /// Root resolution for every value `Path` expression, sorted by its
+    /// arena-safe expression key for binary-search lookup.
+    pub path_resolutions: Vec<(ExprMetadataKey, PathResolution)>,
 
     /// Environment variable references (`env.X`) found in this file's expression bodies.
     pub env_var_refs: Vec<baml_compiler2_ast::EnvVarRef>,
@@ -308,6 +315,32 @@ impl FileSemanticIndex<'_> {
             .map(|(i, _)| {
                 #[allow(clippy::cast_possible_truncation)]
                 FileScopeId::new(i as u32)
+            })
+    }
+
+    /// Find a `Lambda` scope with `span` inside `owner_scope`.
+    ///
+    /// Restricting the search to the owner's DFS subtree disambiguates
+    /// synthesized companion functions that share source ranges.
+    pub fn lambda_scope_for_within(
+        &self,
+        owner_scope: FileScopeId,
+        span: text_size::TextRange,
+    ) -> Option<FileScopeId> {
+        let descendants = self
+            .scopes
+            .get(owner_scope.index() as usize)?
+            .descendants
+            .clone();
+        let start = descendants.start.index() as usize;
+        let end = descendants.end.index() as usize;
+        self.scopes[start..end]
+            .iter()
+            .enumerate()
+            .find(|(_, scope)| matches!(scope.kind, ScopeKind::Lambda) && scope.range == span)
+            .map(|(offset, _)| {
+                #[allow(clippy::cast_possible_truncation)]
+                FileScopeId::new((start + offset) as u32)
             })
     }
 
@@ -364,12 +397,19 @@ impl FileSemanticIndex<'_> {
         FileScopeId::ROOT
     }
 
-    /// Look up which scope owns an expression.
-    pub fn expression_scope(&self, expr_id: ExprId) -> Option<FileScopeId> {
+    /// Look up which lexical scope owns an expression.
+    pub fn expression_scope(&self, key: ExprMetadataKey) -> Option<FileScopeId> {
         self.expr_scopes
-            .binary_search_by_key(&expr_id, |(id, _)| *id)
+            .binary_search_by_key(&key, |(candidate, _)| *candidate)
             .ok()
             .map(|idx| self.expr_scopes[idx].1)
+    }
+
+    pub fn path_resolution(&self, key: ExprMetadataKey) -> Option<PathResolution> {
+        self.path_resolutions
+            .binary_search_by_key(&key, |(candidate, _)| *candidate)
+            .ok()
+            .map(|idx| self.path_resolutions[idx].1)
     }
 
     /// Walk ancestor scopes from `scope_id` upward to the root.

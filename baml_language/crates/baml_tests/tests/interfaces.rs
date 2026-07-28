@@ -11061,13 +11061,16 @@ async fn wf3_concrete_field_shadows_interface_views_pins() {
     assert_eq!(output.result.unwrap(), BexExternalValue::String("N".into()));
 }
 
-/// wf3 pin: a bare generic interface in reflection (`reflect.type_of<Box>()`,
-/// no type args) currently acts as an undocumented wildcard matching every
-/// instantiation's implementors. Pinned to flag the behavior.
+/// wf3: a bare generic interface in a type-argument position
+/// (`reflect.type_of<Box>()`, no type args) is an arity error like any other
+/// type position — a generic head is written fully explicit or inferred
+/// wholesale, never a partial wildcard. (This replaces the old undocumented
+/// wildcard-matching behavior; a deliberate every-instantiation reflection
+/// query would need its own designed spelling.)
 /// `_plan/wf3/generics-reflection/gen_bare_impl_both.baml`
 #[tokio::test]
-async fn wf3_bare_generic_interface_reflection_is_wildcard_pins() {
-    let output = baml_test!(
+async fn wf3_bare_generic_interface_reflection_is_arity_error() {
+    assert_compile_error_contains(
         r#"
         interface Box<T> {
             function get(self) -> T throws never
@@ -11077,20 +11080,13 @@ async fn wf3_bare_generic_interface_reflection_is_wildcard_pins() {
                 function get(self) -> int { return 1 }
             }
         }
-        class StringBox {
-            implements Box<string> {
-                function get(self) -> string { return "hi" }
-            }
-        }
         function main() -> bool {
             let bare = reflect.type_of<Box>()
             return bare.implemented_by(reflect.type_of<IntBox>())
-                && bare.implemented_by(reflect.type_of<StringBox>())
-                && bare.implementors().length() == 2
         }
-        "#
+        "#,
+        "type `Box` expects 1 type argument(s), got 0",
     );
-    assert_eq!(output.result.unwrap(), BexExternalValue::Bool(true));
 }
 
 /// wf3 pin: a blanket impl's implementor is reported by reflection as the bare
@@ -12124,6 +12120,95 @@ fn ordering_on_same_concrete_primitive_is_ok() {
 // matching `baml.ops` interface for the right operand; the result is the impl's
 // `Output`. Unions are valid iff every operand pair is, with the union of their
 // outputs.
+
+#[test]
+fn scalar_arithmetic_matches_builtin_impl_matrix() {
+    let types = [
+        ("int", "int"),
+        ("float", "float"),
+        ("bigint", "bigint"),
+        ("string", "string"),
+        ("bool", "bool"),
+        ("null", "null"),
+    ];
+    let operators = [
+        ("add", "+"),
+        ("sub", "-"),
+        ("mul", "*"),
+        ("div", "/"),
+        ("rem", "%"),
+    ];
+    let numeric_pair = |lhs: &str, rhs: &str| {
+        matches!(
+            (lhs, rhs),
+            ("int", "int")
+                | ("int", "float")
+                | ("float", "int")
+                | ("float", "float")
+                | ("int", "bigint")
+                | ("bigint", "int")
+                | ("bigint", "bigint")
+        )
+    };
+
+    let mut valid_source = String::new();
+    let mut invalid_source = String::new();
+    let mut invalid_count = 0;
+    for (lhs_name, lhs_ty) in types {
+        for (rhs_name, rhs_ty) in types {
+            for (op_name, symbol) in operators {
+                let is_valid = numeric_pair(lhs_name, rhs_name)
+                    || (lhs_name == "string" && rhs_name == "string" && op_name == "add");
+                let source = format!(
+                    "function {op_name}_{lhs_name}_{rhs_name}(lhs: {lhs_ty}, rhs: {rhs_ty}) -> int {{ lhs {symbol} rhs; 0 }}\n"
+                );
+                if is_valid {
+                    valid_source.push_str(&source);
+                } else {
+                    invalid_source.push_str(&source);
+                    invalid_count += 1;
+                }
+            }
+        }
+    }
+
+    assert_no_compile_errors(&valid_source);
+    let errors = collect_compile_errors(&invalid_source);
+    assert_eq!(
+        errors.len(),
+        invalid_count,
+        "each missing impl must produce one error:\n  {}",
+        errors.join("\n  ")
+    );
+    assert!(
+        errors
+            .iter()
+            .all(|error| error.contains("cannot be applied")),
+        "unexpected diagnostics:\n  {}",
+        errors.join("\n  ")
+    );
+}
+
+#[test]
+fn structural_arithmetic_without_impls_is_rejected() {
+    let errors = collect_compile_errors(
+        r#"
+        function f(xs: int[], values: map<string, int>, n: float) -> int {
+            xs + n;
+            n + xs;
+            values + n;
+            n + values;
+            0
+        }
+        "#,
+    );
+    assert_eq!(errors.len(), 4, "unexpected diagnostics: {errors:#?}");
+    assert!(
+        errors
+            .iter()
+            .all(|error| error.contains("cannot be applied"))
+    );
+}
 
 #[test]
 fn arithmetic_on_user_type_implementing_add_is_ok() {

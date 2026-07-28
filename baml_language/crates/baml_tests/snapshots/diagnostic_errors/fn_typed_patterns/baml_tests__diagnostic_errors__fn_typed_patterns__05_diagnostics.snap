@@ -1,0 +1,92 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [type] E0155
+
+  × cannot test a value against function type `(int) -> int throws never` at runtime: callable signatures cannot yet be faithfully reconstructed for every value (bound methods, closures from generic
+  │ frames), so this test would silently misroute them; make it the final arm of an exhaustive `match` (which needs no test) or match on a non-function discriminant
+    ╭─[main.baml:17:16]
+ 17 │         let f: (int) -> int throws never => f(0),
+    ·                ─────────────────────────
+    ╰────
+
+  [type] E0155
+
+  × cannot test a value against function type `(int) -> T throws never` at runtime: callable signatures cannot yet be faithfully reconstructed for every value (bound methods, closures from generic
+  │ frames), so this test would silently misroute them; make it the final arm of an exhaustive `match` (which needs no test) or match on a non-function discriminant
+    ╭─[main.baml:26:16]
+ 26 │         let f: (int) -> T throws never => f(0),
+    ·                ───────────────────────
+    ╰────
+
+  [type] E0155
+
+  × cannot test a value against function type `(int) -> int throws never` at runtime: callable signatures cannot yet be faithfully reconstructed for every value (bound methods, closures from generic
+  │ frames), so this test would silently misroute them; make it the final arm of an exhaustive `match` (which needs no test) or match on a non-function discriminant
+    ╭─[main.baml:35:9]
+ 35 │         (int) -> int throws never => 1,
+    ·         ─────────────────────────
+    ╰────
+
+  [type] E0155
+
+  × cannot test a value against function type `(int) -> int throws never` at runtime: callable signatures cannot yet be faithfully reconstructed for every value (bound methods, closures from generic
+  │ frames), so this test would silently misroute them; make it the final arm of an exhaustive `match` (which needs no test) or match on a non-function discriminant
+    ╭─[main.baml:44:16]
+ 44 │         let f: (int) -> int throws never => f(1),
+    ·                ─────────────────────────
+    ╰────
+
+  [type] E0062
+
+  × non-exhaustive match on type (int) -> int throws never; missing: _
+    ╭─[main.baml:52:5]
+ 52 │ ╭─▶     match (cb) {
+ 53 │ │           let f: (int) -> int throws never if true => f(1)
+ 54 │ ╰─▶     }
+    ╰────
+
+  [type] E0155
+
+  × cannot test a value against function type `(int) -> int throws never` at runtime: callable signatures cannot yet be faithfully reconstructed for every value (bound methods, closures from generic
+  │ frames), so this test would silently misroute them; make it the final arm of an exhaustive `match` (which needs no test) or match on a non-function discriminant
+    ╭─[main.baml:53:16]
+ 53 │         let f: (int) -> int throws never if true => f(1)
+    ·                ─────────────────────────
+    ╰────
+
+  [type] E0155
+
+  × cannot test a value against function type `(int) -> int throws never` at runtime: callable signatures cannot yet be faithfully reconstructed for every value (bound methods, closures from generic
+  │ frames), so this test would silently misroute them; make it the final arm of an exhaustive `match` (which needs no test) or match on a non-function discriminant
+    ╭─[main.baml:61:17]
+ 61 │         let x: ((int) -> int throws never) | int => "either",
+    ·                 ─────────────────────────
+    ╰────
+
+  [type] E0155
+
+  × cannot test a value against function type `(int) -> int throws never` at runtime: callable signatures cannot yet be faithfully reconstructed for every value (bound methods, closures from generic
+  │ frames), so this test would silently misroute them; make it the final arm of an exhaustive `match` (which needs no test) or match on a non-function discriminant
+    ╭─[main.baml:69:11]
+ 69 │     cb is (int) -> int throws unknown
+    ·           ───────────────────────────
+    ╰────
+
+  [type] E0112
+
+  ⚠ irrefutable `if let` pattern; the `else` branch is unreachable — use a plain `let` binding instead
+    ╭─[main.baml:74:8]
+ 74 │     if let f: (int) -> int throws unknown = cb { f(1) } else { 0 }
+    ·        ──────────────────────────────────
+    ╰────
+
+  [type] E0155
+
+  × cannot test a value against function type `(int) -> int throws never` at runtime: callable signatures cannot yet be faithfully reconstructed for every value (bound methods, closures from generic
+  │ frames), so this test would silently misroute them; make it the final arm of an exhaustive `match` (which needs no test) or match on a non-function discriminant
+    ╭─[main.baml:74:15]
+ 74 │     if let f: (int) -> int throws unknown = cb { f(1) } else { 0 }
+    ·               ───────────────────────────
+    ╰────

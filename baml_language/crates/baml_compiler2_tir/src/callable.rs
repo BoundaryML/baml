@@ -10,7 +10,7 @@ use crate::{
     package_interface::package_resolution_context,
     throw_inference::{function_throw_sets, throw_set_key},
     throws_analysis::ThrowsAnalysisContext,
-    ty::{Ty, TyAttr},
+    ty::{ParamTy, Ty, TyAttr},
 };
 
 fn join_throw_facts(facts: &BTreeSet<Ty>) -> Ty {
@@ -26,29 +26,6 @@ fn join_throw_facts(facts: &BTreeSet<Ty>) -> Ty {
     }
 }
 
-/// Generic parameters of the type declaration enclosing `function` — the
-/// class's for a class method, the interface's for a default method, empty for
-/// top-level functions and free-impl methods (whose generics live on the impl
-/// block). Firewall twin of `ItemTree::enclosing_type_generic_params`.
-fn enclosing_type_generic_params<'db>(
-    db: &'db dyn crate::Db,
-    function: FunctionLoc<'db>,
-) -> Vec<Name> {
-    match baml_compiler2_ppir::item_data::method_owner(db, function) {
-        Some(baml_compiler2_ppir::item_data::MethodOwner::Class(class_loc)) => {
-            baml_compiler2_ppir::item_data::class_data(db, class_loc)
-                .generic_params
-                .clone()
-        }
-        Some(baml_compiler2_ppir::item_data::MethodOwner::Interface(iface_loc)) => {
-            baml_compiler2_ppir::item_data::interface_data(db, iface_loc)
-                .generic_params
-                .clone()
-        }
-        Some(baml_compiler2_ppir::item_data::MethodOwner::FreeImpl(_)) | None => Vec::new(),
-    }
-}
-
 fn lowered_declared_callable_throws<'db>(
     db: &'db dyn crate::Db,
     function: FunctionLoc<'db>,
@@ -59,9 +36,9 @@ fn lowered_declared_callable_throws<'db>(
     let pkg_id = PackageId::new(db, pkg_info.package.clone());
     let pkg_items = baml_compiler2_ppir::package_items(db, pkg_id);
 
-    let mut generic_params = enclosing_type_generic_params(db, function);
-    generic_params.extend(sig.user_generic_params.iter().cloned());
-    generic_params.extend(sig.synthetic_effect_params.iter().cloned());
+    let generic_params = crate::generic_env::function_generic_env(db, function)
+        .source_params()
+        .to_vec();
 
     sig.throws.map(|declared_throws| {
         let mut diags = Vec::new();
@@ -93,9 +70,9 @@ fn signature_cycle_initial_callable_throws<'db>(
     let pkg_id = PackageId::new(db, pkg_info.package.clone());
     let pkg_items = baml_compiler2_ppir::package_items(db, pkg_id);
 
-    let mut generic_params = enclosing_type_generic_params(db, function);
-    generic_params.extend(sig.user_generic_params.iter().cloned());
-    generic_params.extend(sig.synthetic_effect_params.iter().cloned());
+    let generic_params = crate::generic_env::function_generic_env(db, function)
+        .source_params()
+        .to_vec();
 
     let param_scope = crate::lower_type_expr::ScopeCtx {
         db,
@@ -221,11 +198,12 @@ impl ThrowsAnalysisContext for CallableThrowsAnalysis<'_, '_> {
 
     fn instantiated_callee_throws(
         &self,
+        call_expr_id: baml_compiler2_ast::ExprId,
         callee_expr_id: baml_compiler2_ast::ExprId,
         args: &[baml_compiler2_ast::ExprId],
         unwrap_optional_callee: bool,
     ) -> Option<Ty> {
-        let call_plan = self.inference.call_plan_for_provided_args(args);
+        let call_plan = self.inference.call_plan(call_expr_id);
         instantiated_callee_throws(
             self.inference,
             self.aliases,
@@ -293,6 +271,9 @@ pub(crate) fn instantiated_callee_throws(
     unwrap_optional_callee: bool,
     call_plan: Option<&CallPlan>,
 ) -> Option<Ty> {
+    if let Some(throws) = call_plan.and_then(|plan| plan.instantiated_throws.clone()) {
+        return Some(throws);
+    }
     let callee_ty = inference.expression_type(callee_expr_id)?;
     let typed_callee = if unwrap_optional_callee {
         crate::narrowing::remove_null(callee_ty)
@@ -325,7 +306,7 @@ pub(crate) fn instantiated_callee_throws(
         } else {
             effective_params.iter().zip(args.iter().copied()).collect()
         };
-        let mut bindings: FxHashMap<Name, Ty> = FxHashMap::default();
+        let mut bindings: FxHashMap<ParamTy, Ty> = FxHashMap::default();
         for (param, arg_expr_id) in pairs {
             let arg_ty = inference
                 .expression_type(arg_expr_id)

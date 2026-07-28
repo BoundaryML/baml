@@ -298,7 +298,9 @@ def main() -> None:
     if "replace " in (consumer / "go.mod").read_text(encoding="utf-8"):
         fail("external consumer unexpectedly contains a Go replace directive")
     run(
-        ["go", "mod", "download", f"{GO_MODULE}@{module_version}"],
+        # Reconcile the generated imports into the consumer's go.mod and go.sum.
+        # A named download does not add transitive requirements to the main module.
+        ["go", "mod", "tidy"],
         cwd=consumer,
         env=env,
         attempts=6,

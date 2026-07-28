@@ -311,7 +311,7 @@ fn process_body(
             Expr::Lambda(func_def) => {
                 if let Some(FunctionBodyDef::Expr(lbody, lsmap)) = &func_def.body {
                     let lambda_scope = index
-                        .lambda_scope_for(source_map.expr_span(expr_id))
+                        .lambda_scope_for_within(owner_scope, source_map.expr_span(expr_id))
                         .unwrap_or(owner_scope);
                     process_body(db, file, index, lambda_scope, lbody, lsmap, out);
                 }

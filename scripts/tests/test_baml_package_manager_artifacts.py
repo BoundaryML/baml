@@ -34,6 +34,13 @@ class PackageManagerArtifactsTest(unittest.TestCase):
                 )
                 archive.write_bytes(content)
                 archive_shas[target] = hashlib.sha256(content).hexdigest()
+            for target in (
+                "aarch64-pc-windows-msvc",
+                "x86_64-pc-windows-msvc",
+            ):
+                (
+                    wrappers / f"baml-wrapper-no-self-update-{VERSION}-{target}.zip"
+                ).write_bytes(target.encode())
 
             subprocess.run(
                 [
@@ -81,6 +88,7 @@ class PackageManagerArtifactsTest(unittest.TestCase):
             self.assertNotIn(f'sha256 "{SOURCE_SHA256}"', formula)
             self.assertNotIn('depends_on "rust"', formula)
             self.assertNotIn('system "cargo"', formula)
+            self.assertNotIn("windows-msvc", formula)
             subprocess.run(
                 ["ruby", "-c", output / "homebrew/Formula/baml.rb"], check=True
             )
@@ -97,6 +105,7 @@ class PackageManagerArtifactsTest(unittest.TestCase):
             self.assertIn(
                 archive_shas["x86_64-unknown-linux-gnu"], aur_bin
             )
+            self.assertNotIn("windows-msvc", aur_bin)
 
 
 if __name__ == "__main__":

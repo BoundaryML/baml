@@ -116,7 +116,7 @@ function comparable_sort.$init_test_ns_comparable_sort_comparable_sort(registry:
     pop 1
     load_var registry
     load_const "root.comparable_sort"
-    load_const "is_primitive_on_generic_value_folds_to_false"
+    load_const "is_primitive_on_generic_value_tests_realized_type"
     make_closure .<lambda($init_test_ns_comparable_sort_comparable_sort, 16)>, 0
     load_const null
     call testing.TestCollector.register_test_at
@@ -1017,8 +1017,7 @@ function comparable_sort.phase5_resume_sort_main() -> int {
 
 function comparable_sort.probe(x: T) -> int {
     load_var x
-    pop 1
-    load_const false
+    is_type int
     pop_jump_if_false L0
     jump L1
 

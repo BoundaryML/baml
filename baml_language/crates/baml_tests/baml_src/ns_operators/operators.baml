@@ -432,6 +432,7 @@ function drv_float_div(a: float, b: float) -> float { drv_div(a, b) }
 function drv_float_neg(a: float) -> float { drv_neg(a) }
 function drv_bigint_add(a: bigint, b: bigint) -> bigint { drv_add(a, b) }
 function drv_bigint_div(a: bigint, b: bigint) -> bigint { drv_div(a, b) }
+function drv_string_add(a: string, b: string) -> string { drv_add(a, b) }
 function drv_float_add_int(a: float, b: int) -> float { drv_add_int_rhs(a, b) }
 function drv_bigint_add_int(a: bigint, b: int) -> bigint { drv_add_int_rhs(a, b) }
 
@@ -453,6 +454,10 @@ test "driver_float_arithmetic_matches_opcodes" {
 test "driver_bigint_arithmetic_matches_opcodes" {
     assert.is_true(baml.deep_equals(drv_bigint_add(10n, 3n), 10n + 3n))
     assert.is_true(baml.deep_equals(drv_bigint_div(10n, 3n), 10n / 3n))
+}
+
+test "driver_string_add_matches_opcode" {
+    assert.is_true(baml.deep_equals(drv_string_add("hello", " world"), "hello" + " world"))
 }
 
 test "driver_mixed_widening_matches_opcodes" {

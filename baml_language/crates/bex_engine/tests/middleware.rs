@@ -167,11 +167,11 @@ async fn custom_with_retry() {
 
 /// A TYPE-CHANGING transformer (the BEP's `withFallback`): wraps the body
 /// with a catch-all, so the error type is erased — the spawn types
-/// `Future<int, never≈null>` and the failing body resolves to the default.
+/// `Future<int, never>` and the failing body resolves to the default.
 #[tokio::test]
 async fn type_changing_fallback_transformer() {
     let source = r#"
-        function withFallback<T, E>(default_value: T) -> (baml.spawn.SpawnParams<T, E>) -> baml.spawn.SpawnParams<T, null> throws never {
+        function withFallback<T, E>(default_value: T) -> (baml.spawn.SpawnParams<T, E>) -> baml.spawn.SpawnParams<T, never> throws never {
             (params) -> {
                 let original = params.body;
                 baml.spawn.SpawnParams {
@@ -195,7 +195,7 @@ async fn type_changing_fallback_transformer() {
         }
         function main() -> int {
             let f = spawn with withFallback(99) { flaky(1) };
-            // `f: Future<int, null>` — awaiting needs no catch.
+            // `f: Future<int, never>` — awaiting needs no catch.
             await f
         }
     "#;
@@ -231,8 +231,8 @@ async fn throwing_transformer_throws_at_spawn_site() {
 
 /// A transformer bound to a VARIABLE first (not called inline). The `let`
 /// binding gives generic inference no context to solve `E`, so it is supplied
-/// explicitly (`withDouble<null>()` — the spawn body throws nothing, so its
-/// `SpawnParams` error type is `null`); the pipeline still runs from the
+/// explicitly (`withDouble<never>()` — the spawn body throws nothing, so its
+/// `SpawnParams` error type is `never`); the pipeline still runs from the
 /// variable.
 #[tokio::test]
 async fn variable_bound_transformer_still_applies() {
@@ -250,7 +250,7 @@ async fn variable_bound_transformer_still_applies() {
             }
         }
         function main() -> int {
-            let t = withDouble<null>();
+            let t = withDouble<never>();
             let f = spawn with t { 21 };
             await f
         }
