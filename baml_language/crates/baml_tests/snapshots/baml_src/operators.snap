@@ -488,13 +488,13 @@ function operators.Vec2.baml.ops.Negate.neg(self: operators.Vec2) -> operators.V
     return
 }
 
-function operators.drv_add(a: T, b: T) -> T {
+function operators.drv_add(a: #0, b: #0) -> #0 {
     load_var2 1 2
     call baml.ops.__union_add
     return
 }
 
-function operators.drv_add_int_rhs(a: T, b: int) -> T {
+function operators.drv_add_int_rhs(a: #0, b: int) -> #0 {
     load_var2 1 2
     call baml.ops.__union_add
     return
@@ -697,13 +697,13 @@ function operators.drv_catch_neg_overflow() -> int {
     return
 }
 
-function operators.drv_div(a: T, b: T) -> T {
+function operators.drv_div(a: #0, b: #0) -> #0 {
     load_var2 1 2
     call baml.ops.__union_div
     return
 }
 
-function operators.drv_div_int_rhs(a: T, b: int) -> T {
+function operators.drv_div_int_rhs(a: #0, b: int) -> #0 {
     load_var2 1 2
     call baml.ops.__union_div
     return
@@ -779,19 +779,19 @@ function operators.drv_int_sub(a: int, b: int) -> int {
     return
 }
 
-function operators.drv_mul(a: T, b: T) -> T {
+function operators.drv_mul(a: #0, b: #0) -> #0 {
     load_var2 1 2
     call baml.ops.__union_mul
     return
 }
 
-function operators.drv_neg(a: T) -> T {
+function operators.drv_neg(a: #0) -> #0 {
     load_var a
     call baml.ops.__union_neg
     return
 }
 
-function operators.drv_rem(a: T, b: T) -> T {
+function operators.drv_rem(a: #0, b: #0) -> #0 {
     load_var2 1 2
     call baml.ops.__union_rem
     return
@@ -804,7 +804,7 @@ function operators.drv_string_add(a: string, b: string) -> string {
     return
 }
 
-function operators.drv_sub(a: T, b: T) -> T {
+function operators.drv_sub(a: #0, b: #0) -> #0 {
     load_var2 1 2
     call baml.ops.__union_sub
     return

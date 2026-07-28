@@ -1,7 +1,6 @@
-// Iterating arrays whose elements are closures: `ArrayIterator.next` must
-// yield fn-typed elements without a runtime `T`-test — a closure's value is
-// not reliably type-testable (the reason refutable fn-typed patterns are
-// E0155), so `next` reads elements by index instead of matching. Previously
+// Iterating arrays whose elements are closures: `ArrayIterator.next` reads
+// elements by index rather than gating each on a runtime `T`-test, so a
+// fn-typed element is yielded without one. Previously
 // only the engine suite exercised these loop-closure shapes; the second test
 // pins the companion invariant the old match encoded by arm order: a stored
 // null in a nullable element type is yielded, not treated as end-of-iteration.

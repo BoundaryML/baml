@@ -157,10 +157,9 @@ class ArrayIterator<T> {
         return Done {};
       }
       // Index access yields the element at type `T` directly — in-bounds by
-      // the check above. No `at()`-plus-match: a runtime `let value: T` test
-      // is not reliable for every element type (a fn-typed element's value
-      // cannot be type-tested — the reason refutable fn patterns are E0155),
-      // so iteration must not gate elements on one.
+      // the check above. No `at()`-plus-match: gating every element on a
+      // runtime `let value: T` test would cost a type test per element for a
+      // read the bounds check has already proven safe.
       let item = self.arr[self.idx];
       self.idx += 1;
       return item;

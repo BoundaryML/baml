@@ -76,7 +76,7 @@ function closures.$init_test_ns_closures_closures(registry: testing.TestCollecto
     return
 }
 
-function closures.ClsBox.unwrap(self: closures.ClsBox<T>) -> T {
+function closures.ClsBox.unwrap(self: closures.ClsBox<#0>) -> #0 {
     load_var self
     load_field .value
     return

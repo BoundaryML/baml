@@ -36,14 +36,14 @@ pub(crate) fn value_matches_template(
     template: &TyTemplate,
     frame_type_args: &[RealizedTy],
 ) -> Result<bool, VmInternalError> {
-    // A value with no reconstructible concrete BAML type (a bound method, an
-    // opaque native handle — see `value_concrete_ty`) is a member of no
-    // structural type test. Closures DO reconstruct a function type — though
-    // ones created in a generic frame reconstruct coarsely today: the stored
-    // signature erases generic positions even though the closure carries the
-    // realized type args that would fill them (see `function_object_ty`).
-    // Futures DO reconstruct too, at the `Future<T, E>` their spawn site was
-    // typed at.
+    // A value with no reconstructible concrete BAML type (an opaque native
+    // handle, or a compile-time definition object — see `value_concrete_ty`) is
+    // a member of no structural type test. Every *data* value reconstructs
+    // faithfully, including the callables: a closure, generic function, or
+    // bound method materializes its stored signature templates against the
+    // realized frame the value carries (a bound method's drops the applied
+    // receiver), so one minted in a generic frame is as precise as any other;
+    // futures reconstruct at the `Future<T, E>` their spawn site was typed at.
     let Some(value_ty) = vm.value_concrete_ty(value) else {
         return Ok(false);
     };

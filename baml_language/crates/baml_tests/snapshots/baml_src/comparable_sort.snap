@@ -160,13 +160,13 @@ function comparable_sort.$init_test_ns_comparable_sort_comparable_sort(registry:
     return
 }
 
-function comparable_sort.Countable$for$T[].count(self: T[]) -> int {
+function comparable_sort.Countable$for$T[].count(self: #0[]) -> int {
     load_const 1
     unary_op -
     return
 }
 
-function comparable_sort.FirstNamed$for$T[].first_name(self: T[]) -> string {
+function comparable_sort.FirstNamed$for$T[].first_name(self: #0[]) -> string {
     load_var self
     container_len
     store_var _3
@@ -330,7 +330,7 @@ function comparable_sort.ScorePts.baml.Comparable.compare(self: comparable_sort.
     return
 }
 
-function comparable_sort.Wrap$for$T[].g(self: T[]) -> int {
+function comparable_sort.Wrap$for$T[].g(self: #0[]) -> int {
     load_var self
     container_len
     store_var _3
@@ -359,7 +359,7 @@ function comparable_sort.Wrap$for$T[].g(self: T[]) -> int {
     return
 }
 
-function comparable_sort.call_g(us: U[]) -> int {
+function comparable_sort.call_g(us: #0[]) -> int {
     load_var us
     load_type comparable_sort.Wrap<WE = (#0 as comparable_sort.HasErr).E>
     load_const "g"
@@ -369,7 +369,7 @@ function comparable_sort.call_g(us: U[]) -> int {
     return
 }
 
-function comparable_sort.check(xs: T[], ys: T[]) -> bool {
+function comparable_sort.check(xs: #0[], ys: #0[]) -> bool {
     load_var xs
     load_type baml.Sortable<SortError = (#0 as baml.Comparable).CompareError>
     load_const "sort"
@@ -388,7 +388,7 @@ function comparable_sort.check(xs: T[], ys: T[]) -> bool {
     return
 }
 
-function comparable_sort.cmp(a: T, b: T) -> int {
+function comparable_sort.cmp(a: #0, b: #0) -> int {
     load_var2 1 2
     load_type baml.Comparable
     load_const "compare"
@@ -398,7 +398,7 @@ function comparable_sort.cmp(a: T, b: T) -> int {
     return
 }
 
-function comparable_sort.dispatch_f(xs: T[]) -> T[] {
+function comparable_sort.dispatch_f(xs: #0[]) -> #0[] {
     load_type #0
     load_var xs
     call user.comparable_sort.is_fast
@@ -483,7 +483,7 @@ function comparable_sort.element_dispatch_main() -> int {
     return
 }
 
-function comparable_sort.fast_g(xs: T[]) -> T[] {
+function comparable_sort.fast_g(xs: #0[]) -> #0[] {
     load_var xs
     return
 }
@@ -574,7 +574,7 @@ function comparable_sort.float_nan_sort_main() -> bool {
     return
 }
 
-function comparable_sort.gsort(xs: T[]) -> T[] {
+function comparable_sort.gsort(xs: #0[]) -> #0[] {
     load_type #0
     load_type (#0 as baml.Comparable).CompareError
     load_var xs
@@ -584,7 +584,7 @@ function comparable_sort.gsort(xs: T[]) -> T[] {
     return
 }
 
-function comparable_sort.is_fast(xs: T[]) -> bool {
+function comparable_sort.is_fast(xs: #0[]) -> bool {
     load_var xs
     container_len
     store_var _2
@@ -611,7 +611,7 @@ function comparable_sort.is_primitive_probe_main() -> int {
     return
 }
 
-function comparable_sort.lt(a: T, b: T) -> bool {
+function comparable_sort.lt(a: #0, b: #0) -> bool {
     load_var2 1 2
     load_type comparable_sort.Cmp
     load_const "compare"
@@ -1015,7 +1015,7 @@ function comparable_sort.phase5_resume_sort_main() -> int {
     return
 }
 
-function comparable_sort.probe(x: T) -> int {
+function comparable_sort.probe(x: #0) -> int {
     load_var x
     is_type int
     pop_jump_if_false L0
@@ -1091,7 +1091,7 @@ function comparable_sort.ranked_sort_main() -> string {
     return
 }
 
-function comparable_sort.slow_g(xs: T[]) -> T[] {
+function comparable_sort.slow_g(xs: #0[]) -> #0[] {
     load_var xs
     return
 }

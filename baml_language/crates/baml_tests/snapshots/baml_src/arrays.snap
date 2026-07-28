@@ -1416,7 +1416,7 @@ function arrays.sort_floats(xs: float[]) -> float[] {
     return
 }
 
-function arrays.sort_generic(xs: U[]) -> U[] {
+function arrays.sort_generic(xs: #0[]) -> #0[] {
     load_var xs
     load_type baml.Sortable<SortError = (#0 as baml.Comparable).CompareError>
     load_const "sort"

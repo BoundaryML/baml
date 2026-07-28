@@ -300,9 +300,11 @@ async fn phase2_user_class_compare_direct_call_mir_optimized() {
 // `Sortable`-style blanket impl binding `SE = T.CE`, and user classes that
 // bind `CE` explicitly (to `never` or a concrete error).
 //
-// FINDING — a *defaulted* associated error breaks the fallible case: see
-// `phase3_defaulted_assoc_error_over_constrains_bound` below. That is why the
-// stdlib `Comparable.CompareError` is intentionally undefaulted.
+// Defaulting the associated error would work too — a bare bound pins nothing,
+// so an implementor that overrides the default still satisfies it (see
+// `phase3_defaulted_assoc_override_satisfies_bare_bound` below). The stdlib
+// leaves `Comparable.CompareError` undefaulted as a matter of style, not
+// necessity.
 
 const PHASE3_SCAFFOLD: &str = r#"
     interface Cmp2 {

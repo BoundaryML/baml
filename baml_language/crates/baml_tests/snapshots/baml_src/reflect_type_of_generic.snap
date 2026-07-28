@@ -139,13 +139,13 @@ function reflect_type_of_generic.$init_test_ns_reflect_type_of_generic_reflect_t
     return
 }
 
-function reflect_type_of_generic.Box.describe(self: reflect_type_of_generic.Box<T>) -> string {
+function reflect_type_of_generic.Box.describe(self: reflect_type_of_generic.Box<#0>) -> string {
     load_type #0
     call baml.TypeValue.baml.ToString.to_string
     return
 }
 
-function reflect_type_of_generic.HolderStr.delegate(self: reflect_type_of_generic.HolderStr<T>) -> string {
+function reflect_type_of_generic.HolderStr.delegate(self: reflect_type_of_generic.HolderStr<#0>) -> string {
     load_type #0
     load_var self
     load_field .inner
@@ -153,25 +153,25 @@ function reflect_type_of_generic.HolderStr.delegate(self: reflect_type_of_generi
     return
 }
 
-function reflect_type_of_generic.Inner.name(self: reflect_type_of_generic.Inner<U>) -> string {
+function reflect_type_of_generic.Inner.name(self: reflect_type_of_generic.Inner<#0>) -> string {
     load_type #0
     call baml.TypeValue.baml.ToString.to_string
     return
 }
 
-function reflect_type_of_generic.InnerShow.show(self: reflect_type_of_generic.InnerShow<U>) -> string {
+function reflect_type_of_generic.InnerShow.show(self: reflect_type_of_generic.InnerShow<#0>) -> string {
     load_type #0
     call baml.TypeValue.baml.ToString.to_string
     return
 }
 
-function reflect_type_of_generic.Leaf.describe(self: reflect_type_of_generic.Leaf<T>) -> string {
+function reflect_type_of_generic.Leaf.describe(self: reflect_type_of_generic.Leaf<#0>) -> string {
     load_type #0
     call baml.TypeValue.baml.ToString.to_string
     return
 }
 
-function reflect_type_of_generic.Outer.outer_describe(self: reflect_type_of_generic.Outer<T>) -> string {
+function reflect_type_of_generic.Outer.outer_describe(self: reflect_type_of_generic.Outer<#0>) -> string {
     load_type #0
     load_var self
     load_field .inner

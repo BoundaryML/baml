@@ -1055,7 +1055,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             local_names: self.slot_names,
             debug_locals,
             span: Span::fake(),
-            return_type: baml_type::RuntimeTy::Null {
+            return_type: baml_type::TyTemplate::Null {
                 attr: baml_type::TyAttr::default(),
             },
             param_names: Vec::new(),
@@ -1064,7 +1064,9 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             display_type_params: Vec::new(),
             display_param_types: Vec::new(),
             display_return_type: "null".to_string(),
-            throws_type: None,
+            throws_type: baml_type::TyTemplate::Never {
+                attr: baml_type::TyAttr::default(),
+            },
             origin: FunctionOrigin::Internal,
             body_meta: None,
             capture: FunctionCaptureProps::disabled(),
@@ -3325,6 +3327,12 @@ impl PullSink for StackifyCodegen<'_, '_> {
             let inst = this.emit(Instruction::LoadConst(idx));
             this.set_operand(inst, OperandMeta::Const("false".to_string()));
         };
+        let emit_true = |this: &mut Self| {
+            this.emit(Instruction::Pop(1));
+            let idx = this.add_constant(ConstValue::Bool(true));
+            let inst = this.emit(Instruction::LoadConst(idx));
+            this.set_operand(inst, OperandMeta::Const("true".to_string()));
+        };
         // Hand the whole template to the VM's value matcher
         // (`type_match::value_matches_template`) via a raw `ConstValue::Type`:
         // it resolves the template's frame refs against `frame.type_args` and
@@ -3384,24 +3392,23 @@ impl PullSink for StackifyCodegen<'_, '_> {
             | TyTemplate::Union(..) => emit_structural(self, ty_template),
 
             // ── Function signatures ──────────────────────────────────────────
-            // Every function template — realized, frame-referencing, or holey —
-            // keeps the legacy coarse FUNCTION-tag check ("is it a callable").
-            //
-            // FIXME(function-type-matching): signature-precise matching through
-            // the value matcher is blocked on the empty-`throws` convention
-            // mismatch: a function *type* writes "never throws" as `never`,
-            // while a function *value*'s reconstructed signature writes it as
-            // `void` (see `bex_vm`'s `function_object_ty`), and the canonical
-            // covariant throws relation has no bridge (`void <: never` is
-            // false) — so a structural test would constant-false every
-            // never-throwing closure. Unify the convention first, then route
-            // hole-free signatures through the matcher (which already applies
-            // contravariant params / covariant return correctly).
-            TyTemplate::Function { .. } => {
-                let c = self.add_constant(ConstValue::Int(baml_type::typetag::FUNCTION));
-                let inst = self.emit(Instruction::IsType(c));
-                self.set_operand(inst, OperandMeta::Const(ty_template.to_string()));
-            }
+            // Signature-precise, via the same value matcher every other
+            // structural template uses: it applies the canonical function
+            // relation (contravariant parameters, covariant return and
+            // throws), and every callable value now reconstructs a faithful
+            // function type to compare against — a closure, generic function,
+            // or bound method materializes its stored signature templates
+            // against the frame it carries. A coarse "is it callable" tag test
+            // would answer `true` for a callable of the wrong signature.
+            TyTemplate::Function { .. } => emit_structural(self, ty_template),
+
+            // `unknown` is the top type: every value inhabits it, so the test is
+            // constant-true. It is a realized *leaf* with no type tag, so without
+            // this arm it falls into the tagless-leaf fallback below and compiles
+            // to constant-FALSE — silently misrouting every value, not just the
+            // valueless ones. (Only refutable positions reach here at all: an
+            // exhaustive final `let v: unknown` arm has its test elided.)
+            TyTemplate::BuiltinUnknown { .. } => emit_true(self),
 
             // Everything else keeps its existing coarse check.
             other => {

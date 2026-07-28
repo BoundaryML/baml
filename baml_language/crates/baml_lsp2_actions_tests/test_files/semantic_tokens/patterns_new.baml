@@ -42,8 +42,7 @@ function call_int_callback(cb: (int) -> int) -> int {
     }
 }
 
-// A union of two distinct function types bound whole by the final arm —
-// signature *dispatch* between callables is not runtime-testable (E0155).
+// A union of two distinct function types bound whole by the final arm.
 function bind_callback_union(cb: ((int) -> int throws never) | ((string) -> string throws never)) -> int {
     match (cb) {
         let f: ((int) -> int throws never) | ((string) -> string throws never) => 0

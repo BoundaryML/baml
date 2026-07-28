@@ -1401,6 +1401,9 @@ pub fn validate_impl_signatures<'db>(
     // ── E0125: the for-type must implement each interface the implemented one `requires`.
     // Cycle-safe here — `implements_interface` re-enters `impl_data`, never this phase-5 query. ──
     {
+        // Diagnostics from re-lowering the clause are dropped on purpose: the interface's own
+        // declaration owns them (see the `requires` validation loop in `infer_scope_types`), so
+        // reporting here would duplicate one error per implementor.
         let mut d = Vec::new();
         for &required_ref in &iface_data.requires {
             // A `requires` clause may project `Self.member` (`requires I<Item = Self.Item>`), so
@@ -1433,6 +1436,13 @@ pub fn validate_impl_signatures<'db>(
             let Ty::Interface(qtn, generics, assoc, _) = &required else {
                 continue;
             };
+            // An ill-formed clause (`requires Parent<Nope>`) realizes to an obligation carrying
+            // a recovery sentinel. It can never be satisfied, so testing it would report every
+            // implementor as missing `Parent<!error>` — a cascade off an error already reported
+            // at the interface declaration, phrased in a sentinel no user wrote.
+            if crate::generics::contains_error_recovery(&required) {
+                continue;
+            }
             let required_iface = baml_type::Interface {
                 name: qtn.clone(),
                 generics: generics.clone(),

@@ -44,6 +44,12 @@ class user.Success {
 class user.Success$stream {
   data: string | null
 }
+class user.WitBox {
+  v: T
+}
+class user.WitBox$stream {
+  v: T | null
+}
 enum user.DispatchState {Alpha, Beta, Gamma, Delta}
 enum user.Status {Active, Inactive, Pending}
 type user.AlwaysFalse = false
@@ -93,6 +99,9 @@ function user.BoolWithCatchAll(b: bool) -> string  [expr] {
 }
 function user.DeeplyNestedLiterals(x: user.SuccessCode) -> string  [expr] {
   {  } match (x) { 200 | 201 | 204 => "all success codes" }
+}
+function user.DistinctInstantiationWitnesses(x: unknown) -> int  [expr] {
+  {  } match (x) { WitBox<int> { v: 1 } => 1, WitBox<string> { v: "a" } => 2 }
 }
 function user.DuplicateBoolLiteral(b: bool) -> string  [expr] {
   {  } match (b) { true => "first true", true => "second true", false => "false" }
