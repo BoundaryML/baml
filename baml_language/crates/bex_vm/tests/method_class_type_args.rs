@@ -12,7 +12,7 @@
 use std::sync::{Arc, atomic::AtomicBool};
 
 use baml_project::testing::compile_source;
-use baml_type::{Name, RealizedTy, RuntimeTy, TyAttr, TyTemplate, TypeName};
+use baml_type::{Name, RealizedTy, TyAttr, TyTemplate, TypeName};
 use bex_vm::{BexVm, VmExecState};
 use bex_vm_types::{
     ConstValue, FunctionCaptureProps, Instruction, Object, ObjectIndex, Value,
@@ -50,14 +50,18 @@ fn inject_function(
         local_names: vec![],
         debug_locals: vec![],
         span: baml_type::Span::fake(),
-        return_type: RuntimeTy::int(),
+        return_type: baml_type::TyTemplate::Int {
+            attr: baml_type::TyAttr::default(),
+        },
         param_names: vec![],
         param_types: vec![],
         param_has_default: vec![false; arity],
         display_type_params: vec![],
         display_param_types: vec![],
         display_return_type: "int".to_string(),
-        throws_type: None,
+        throws_type: baml_type::TyTemplate::Never {
+            attr: baml_type::TyAttr::default(),
+        },
         origin: FunctionOrigin::UserDefined,
         body_meta: None,
         capture: FunctionCaptureProps::disabled(),

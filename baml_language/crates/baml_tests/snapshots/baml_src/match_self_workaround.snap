@@ -69,7 +69,7 @@ function match_self_workaround.$init_test_ns_match_self_workaround_match_self_wo
     return
 }
 
-function match_self_workaround.BoxG.is_own_instantiation(self: match_self_workaround.BoxG<T>, other: unknown) -> bool {
+function match_self_workaround.BoxG.is_own_instantiation(self: match_self_workaround.BoxG<#0>, other: unknown) -> bool {
     load_var other
     is_type match_self_workaround.BoxG<...>
     pop_jump_if_false L0
@@ -86,7 +86,7 @@ function match_self_workaround.BoxG.is_own_instantiation(self: match_self_workar
     return
 }
 
-function match_self_workaround.BoxG.same_box(self: match_self_workaround.BoxG<T>, other: match_self_workaround.BoxG<T> | int) -> string {
+function match_self_workaround.BoxG.same_box(self: match_self_workaround.BoxG<#0>, other: match_self_workaround.BoxG<#0> | int) -> string {
     load_var other
     store_var _3
     load_var _3

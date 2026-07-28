@@ -90,7 +90,7 @@ function instantiation_expr.$init_test_ns_instantiation_expr_instantiation_expr(
     return
 }
 
-function instantiation_expr.GenBox.pick(self: instantiation_expr.GenBox, x: T) -> T {
+function instantiation_expr.GenBox.pick(self: instantiation_expr.GenBox, x: #0) -> #0 {
     load_var x
     return
 }
@@ -118,7 +118,7 @@ function instantiation_expr.describe_user_value_fn() -> string {
     return
 }
 
-function instantiation_expr.forward(x: T) -> T {
+function instantiation_expr.forward(x: #0) -> #0 {
     load_var x
     load_type #0
     make_generic_function user.instantiation_expr.identity ntypeargs=1
@@ -140,7 +140,7 @@ function instantiation_expr.from_string_value_fn() -> instantiation_expr.User {
     return
 }
 
-function instantiation_expr.identity(x: T) -> T {
+function instantiation_expr.identity(x: #0) -> #0 {
     load_var x
     return
 }
@@ -179,7 +179,7 @@ function instantiation_expr.lambda_reflects_enclosing_U() -> string {
     return
 }
 
-function instantiation_expr.pair(a: A, b: B) -> B {
+function instantiation_expr.pair(a: #0, b: #1) -> #1 {
     load_var b
     return
 }

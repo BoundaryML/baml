@@ -1218,7 +1218,7 @@ function interfaces.BsmvAcc.BsmvAdder.addOne(self: interfaces.BsmvAcc, other: in
     return
 }
 
-function interfaces.BtviPrintable$for$T.display(self: T) -> string {
+function interfaces.BtviPrintable$for$T.display(self: #0) -> string {
     load_var self
     is_type interfaces.BtviPerson
     pop_jump_if_false L0
@@ -1230,7 +1230,7 @@ function interfaces.BtviPrintable$for$T.display(self: T) -> string {
     unreachable
 }
 
-function interfaces.BtvsPrintable$for$T.display(self: T) -> string {
+function interfaces.BtvsPrintable$for$T.display(self: #0) -> string {
     load_var self
     is_type interfaces.BtvsPerson
     pop_jump_if_false L0
@@ -1265,7 +1265,7 @@ function interfaces.ComcServer.address(self: interfaces.ComcServer) -> string {
     return
 }
 
-function interfaces.CridEquals.neq(self: interfaces.CridEquals, other: Self) -> bool {
+function interfaces.CridEquals.neq(self: interfaces.CridEquals, other: #0) -> bool {
     load_var2 1 2
     load_type interfaces.CridEquals
     load_const "eq"
@@ -1326,7 +1326,7 @@ function interfaces.DcfoTimestampLogger.DcfoLogger.log(self: interfaces.DcfoTime
     return
 }
 
-function interfaces.DcgoLogger$for$DcgoBox<T>.log(self: interfaces.DcgoBox<T>, msg: string) -> string {
+function interfaces.DcgoLogger$for$DcgoBox<T>.log(self: interfaces.DcgoBox<#0>, msg: string) -> string {
     load_var self
     load_field .prefix
     store_var _3
@@ -1606,7 +1606,7 @@ function interfaces.DwoaTip.name(self: interfaces.DwoaTip) -> string {
     return
 }
 
-function interfaces.F1bgPrintable$for$F1bgWrapper<T>.display(self: interfaces.F1bgWrapper<T>) -> string {
+function interfaces.F1bgPrintable$for$F1bgWrapper<T>.display(self: interfaces.F1bgWrapper<#0>) -> string {
     load_var self
     load_field .inner
     store_var_load_var _2
@@ -1620,29 +1620,29 @@ function interfaces.F1bgPrintable$for$F1bgWrapper<T>.display(self: interfaces.F1
     unreachable
 }
 
-function interfaces.F1dPrintable$for$F1dBox<T>.display(self: interfaces.F1dBox<T>) -> string {
+function interfaces.F1dPrintable$for$F1dBox<T>.display(self: interfaces.F1dBox<#0>) -> string {
     load_const "a box"
     return
 }
 
-function interfaces.F1diPrintable$for$F1diBox<T>.display(self: interfaces.F1diBox<T>) -> string {
+function interfaces.F1diPrintable$for$F1diBox<T>.display(self: interfaces.F1diBox<#0>) -> string {
     load_const "a box"
     return
 }
 
-function interfaces.F1gContainer<T>$for$F1gWrapper<T>.get(self: interfaces.F1gWrapper<T>) -> T {
+function interfaces.F1gContainer<T>$for$F1gWrapper<T>.get(self: interfaces.F1gWrapper<#0>) -> #0 {
     load_var self
     load_field .value
     return
 }
 
-function interfaces.F1saDescribable$for$F1saPair<T>.describe(self: interfaces.F1saPair<T>) -> string {
+function interfaces.F1saDescribable$for$F1saPair<T>.describe(self: interfaces.F1saPair<#0>) -> string {
     load_var self
     load_field .label
     return
 }
 
-function interfaces.F2amPrintable$for$T.display(self: T) -> string {
+function interfaces.F2amPrintable$for$T.display(self: #0) -> string {
     load_var self
     is_type interfaces.F2amTeam
     pop_jump_if_false L0
@@ -1667,7 +1667,7 @@ function interfaces.F2amPrintable$for$T.display(self: T) -> string {
     unreachable
 }
 
-function interfaces.F2dPrintable$for$T.display(self: T) -> string {
+function interfaces.F2dPrintable$for$T.display(self: #0) -> string {
     load_var self
     is_type interfaces.F2dPerson
     pop_jump_if_false L0
@@ -1683,7 +1683,7 @@ function interfaces.F2dPrintable$for$T.display(self: T) -> string {
     unreachable
 }
 
-function interfaces.F2riPrintable$for$T.display(self: T) -> string {
+function interfaces.F2riPrintable$for$T.display(self: #0) -> string {
     load_var self
     is_type interfaces.F2riPerson
     pop_jump_if_false L0
@@ -1695,7 +1695,7 @@ function interfaces.F2riPrintable$for$T.display(self: T) -> string {
     unreachable
 }
 
-function interfaces.F2rsPrintable$for$T.display(self: T) -> string {
+function interfaces.F2rsPrintable$for$T.display(self: #0) -> string {
     load_var self
     is_type interfaces.F2rsPerson
     pop_jump_if_false L0
@@ -1720,7 +1720,7 @@ function interfaces.F2rsPrintable$for$T.display(self: T) -> string {
     unreachable
 }
 
-function interfaces.F2saLabeled$for$T.label(self: T) -> string {
+function interfaces.F2saLabeled$for$T.label(self: #0) -> string {
     load_var self
     is_type interfaces.F2saProject
     pop_jump_if_false L0
@@ -1762,7 +1762,7 @@ function interfaces.Fz05C.Fz05B.foo(self: interfaces.Fz05C) -> string {
     return
 }
 
-function interfaces.Fz07Echo.echo(self: interfaces.Fz07Echo<T>, x: T) -> T {
+function interfaces.Fz07Echo.echo(self: interfaces.Fz07Echo<#1>, x: #1) -> #1 {
     load_var x
     return
 }
@@ -1773,7 +1773,7 @@ function interfaces.Fz10IntBox.Fz10Box<int>.get(self: interfaces.Fz10IntBox) -> 
     return
 }
 
-function interfaces.Fz15Container.describe_with_self_call(self: interfaces.Fz15Container<T>) -> string {
+function interfaces.Fz15Container.describe_with_self_call(self: interfaces.Fz15Container<#1>) -> string {
     load_var self
     load_type interfaces.Fz15Container<#1>
     load_const "size"
@@ -1790,7 +1790,7 @@ function interfaces.Fz15IntBox.Fz15Container<int>.size(self: interfaces.Fz15IntB
     return
 }
 
-function interfaces.Fz16Container.get_or(self: interfaces.Fz16Container<T>, fallback: T) -> T {
+function interfaces.Fz16Container.get_or(self: interfaces.Fz16Container<#1>, fallback: #1) -> #1 {
     load_var self
     load_type interfaces.Fz16Container<#1>
     load_const "get"
@@ -1824,7 +1824,7 @@ function interfaces.Fz23Speaker.speak(self: interfaces.Fz23Speaker) -> string {
     return
 }
 
-function interfaces.Fz24Container.identity(self: interfaces.Fz24Container<T>, x: T) -> T {
+function interfaces.Fz24Container.identity(self: interfaces.Fz24Container<#1>, x: #1) -> #1 {
     load_var x
     return
 }
@@ -1944,7 +1944,7 @@ function interfaces.Fz43IntProducer.Fz43Producer<int>.produce(self: interfaces.F
     return
 }
 
-function interfaces.Fz44Wrapper.wrap(self: interfaces.Fz44Wrapper<T>, x: T) -> T {
+function interfaces.Fz44Wrapper.wrap(self: interfaces.Fz44Wrapper<#1>, x: #1) -> #1 {
     load_var x
     return
 }
@@ -2005,12 +2005,12 @@ function interfaces.GictIntStack.GictContainer<int>.size(self: interfaces.GictIn
     return
 }
 
-function interfaces.GimpEchoer.GimpEcho<int>.echo(self: interfaces.GimpEchoer, value: U) -> U {
+function interfaces.GimpEchoer.GimpEcho<int>.echo(self: interfaces.GimpEchoer, value: #0) -> #0 {
     load_var value
     return
 }
 
-function interfaces.GoopDescriber<T>$for$GoopBox<T>.describe(self: interfaces.GoopBox<T>, value: U) -> string {
+function interfaces.GoopDescriber<T>$for$GoopBox<T>.describe(self: interfaces.GoopBox<#0>, value: #1) -> string {
     load_type #0
     call baml.TypeValue.baml.ToString.to_string
     store_var _4
@@ -2025,12 +2025,12 @@ function interfaces.GoopDescriber<T>$for$GoopBox<T>.describe(self: interfaces.Go
     return
 }
 
-function interfaces.GrlrLabel$for$T[].label(self: T[]) -> string {
+function interfaces.GrlrLabel$for$T[].label(self: #0[]) -> string {
     load_const "list"
     return
 }
 
-function interfaces.GrmrLabel$for$map<string, T>.label(self: map<string, T>) -> string {
+function interfaces.GrmrLabel$for$map<string, T>.label(self: map<string, #0>) -> string {
     load_const "map"
     return
 }
@@ -2055,7 +2055,7 @@ function interfaces.HiadDog.HiadAnimal.speak(self: interfaces.HiadDog) -> string
     return
 }
 
-function interfaces.IdmcEquatable.neq(self: interfaces.IdmcEquatable, other: Self) -> bool {
+function interfaces.IdmcEquatable.neq(self: interfaces.IdmcEquatable, other: #0) -> bool {
     load_var2 1 2
     load_type interfaces.IdmcEquatable
     load_const "eq"
@@ -2178,7 +2178,7 @@ function interfaces.OobvDog.OobvAnimal.speak(self: interfaces.OobvDog) -> string
     return
 }
 
-function interfaces.PtuMulti.PtuPipe<E | E2>.run(self: interfaces.PtuMulti<E, E2>) -> string {
+function interfaces.PtuMulti.PtuPipe<E | E2>.run(self: interfaces.PtuMulti<#0, #1>) -> string {
     load_const "multi:"
     load_var self
     load_field .tag
@@ -2381,39 +2381,39 @@ function interfaces.UrdmPrintable.display(self: interfaces.UrdmPrintable) -> str
     return
 }
 
-function interfaces.UricPrintable$for$UricBox<T>.display(self: interfaces.UricBox<T>) -> string {
+function interfaces.UricPrintable$for$UricBox<T>.display(self: interfaces.UricBox<#0>) -> string {
     load_const "box"
     return
 }
 
-function interfaces.UriiPrintable$for$UriiBox<T>.display(self: interfaces.UriiBox<T>) -> string {
+function interfaces.UriiPrintable$for$UriiBox<T>.display(self: interfaces.UriiBox<#0>) -> string {
     load_const "box"
     return
 }
 
-function interfaces.UrisPrintable$for$UrisBox<T>.display(self: interfaces.UrisBox<T>) -> string {
+function interfaces.UrisPrintable$for$UrisBox<T>.display(self: interfaces.UrisBox<#0>) -> string {
     load_const "box"
     return
 }
 
-function interfaces.UrniContainer<T[]>$for$UrniWrapper<T>.get(self: interfaces.UrniWrapper<T>) -> T[] {
+function interfaces.UrniContainer<T[]>$for$UrniWrapper<T>.get(self: interfaces.UrniWrapper<#0>) -> #0[] {
     load_var self
     load_field .values
     return
 }
 
-function interfaces.UrrcParent<T>$for$UrrcWrapper<T>.get(self: interfaces.UrrcWrapper<T>) -> T {
+function interfaces.UrrcParent<T>$for$UrrcWrapper<T>.get(self: interfaces.UrrcWrapper<#0>) -> #0 {
     load_var self
     load_field .value
     return
 }
 
-function interfaces.UrrsPrintable$for$UrrsBox<T>.display(self: interfaces.UrrsBox<T>) -> string {
+function interfaces.UrrsPrintable$for$UrrsBox<T>.display(self: interfaces.UrrsBox<#0>) -> string {
     load_const "box"
     return
 }
 
-function interfaces.UrrtSame$for$UrrtPair<T, T>.tag(self: interfaces.UrrtPair<T, T>) -> string {
+function interfaces.UrrtSame$for$UrrtPair<T, T>.tag(self: interfaces.UrrtPair<#0, #0>) -> string {
     load_const "same"
     return
 }
@@ -2424,7 +2424,7 @@ function interfaces.W301IntThing.W301Base<int>.base_get(self: interfaces.W301Int
     return
 }
 
-function interfaces.W301Sub.sub_get(self: interfaces.W301Sub<T>) -> T {
+function interfaces.W301Sub.sub_get(self: interfaces.W301Sub<#1>) -> #1 {
     load_var self
     load_type interfaces.W301Base<#1>
     load_const "base_get"
@@ -2434,12 +2434,12 @@ function interfaces.W301Sub.sub_get(self: interfaces.W301Sub<T>) -> T {
     return
 }
 
-function interfaces.W302Loud$for$T.shout(self: T) -> string {
+function interfaces.W302Loud$for$T.shout(self: #0) -> string {
     load_const "loud"
     return
 }
 
-function interfaces.W302Printable$for$T.display(self: T) -> string {
+function interfaces.W302Printable$for$T.display(self: #0) -> string {
     load_var self
     is_type interfaces.W302Person
     pop_jump_if_false L0
@@ -2529,12 +2529,12 @@ function interfaces.W3bgStringBox.W3bgBox<string>.get(self: interfaces.W3bgStrin
     return
 }
 
-function interfaces.W3biPrintable$for$W3biBox<T>.display(self: interfaces.W3biBox<T>) -> string {
+function interfaces.W3biPrintable$for$W3biBox<T>.display(self: interfaces.W3biBox<#0>) -> string {
     load_const "box"
     return
 }
 
-function interfaces.W3bmPrintable$for$W3bmBox<T>.display(self: interfaces.W3bmBox<T>) -> string {
+function interfaces.W3bmPrintable$for$W3bmBox<T>.display(self: interfaces.W3bmBox<#0>) -> string {
     load_const "box"
     return
 }
@@ -2625,7 +2625,7 @@ function interfaces.ausi_main() -> bool {
     unreachable
 }
 
-function interfaces.bgfb_forward(x: V) -> bool {
+function interfaces.bgfb_forward(x: #0) -> bool {
     load_type #0
     load_var x
     call user.interfaces.bgfb_same
@@ -2640,7 +2640,7 @@ function interfaces.bgfb_main() -> bool {
     return
 }
 
-function interfaces.bgfb_same(x: T) -> bool {
+function interfaces.bgfb_same(x: #0) -> bool {
     load_var2 1 1
     load_type interfaces.BgfbEquatable
     load_const "eq"
@@ -2700,7 +2700,7 @@ function interfaces.birr_main() -> bool {
     return
 }
 
-function interfaces.bsmv_combine(x: T, y: T) -> int {
+function interfaces.bsmv_combine(x: #0, y: #0) -> int {
     load_var2 2 1
     load_type interfaces.BsmvAdder
     load_const "addOne"
@@ -2719,7 +2719,7 @@ function interfaces.bsmv_main() -> int {
     return
 }
 
-function interfaces.btvi_f(x: T) -> string {
+function interfaces.btvi_f(x: #0) -> string {
     load_var x
     load_type interfaces.BtviPrintable
     load_const "display"
@@ -2737,7 +2737,7 @@ function interfaces.btvi_main() -> string {
     return
 }
 
-function interfaces.btvs_f(x: T) -> string {
+function interfaces.btvs_f(x: #0) -> string {
     load_var x
     load_type interfaces.BtvsPrintable
     load_const "display"
@@ -3599,7 +3599,7 @@ function interfaces.fz10_main() -> int {
     return
 }
 
-function interfaces.fz10_read(b: interfaces.Fz10Box<T>) -> T {
+function interfaces.fz10_read(b: interfaces.Fz10Box<#0>) -> #0 {
     load_var b
     load_type interfaces.Fz10Box<#0>
     load_const "get"
@@ -4030,7 +4030,7 @@ function interfaces.fz42_main() -> string {
     return
 }
 
-function interfaces.fz43_get_value(p: interfaces.Fz43Producer<T>) -> T {
+function interfaces.fz43_get_value(p: interfaces.Fz43Producer<#0>) -> #0 {
     load_var p
     load_type interfaces.Fz43Producer<#0>
     load_const "produce"
@@ -4098,7 +4098,7 @@ function interfaces.gbap_main() -> int {
     return
 }
 
-function interfaces.gbap_read_int(m: T) -> int {
+function interfaces.gbap_read_int(m: #0) -> int {
     load_var m
     load_type interfaces.GbapConverter<int>
     load_const "convert"
@@ -4116,7 +4116,7 @@ function interfaces.gbdm_main() -> int {
     return
 }
 
-function interfaces.gbdm_read_int(m: T) -> int {
+function interfaces.gbdm_read_int(m: #0) -> int {
     load_var m
     load_type interfaces.GbdmConverter<int>
     load_const "convert"
@@ -4126,7 +4126,7 @@ function interfaces.gbdm_read_int(m: T) -> int {
     return
 }
 
-function interfaces.gben_first_name(items: T[]) -> string {
+function interfaces.gben_first_name(items: #0[]) -> string {
     load_var items
     load_const 0
     load_array_element
@@ -4153,7 +4153,7 @@ function interfaces.gben_main() -> string {
     return
 }
 
-function interfaces.gbr_first_name(items: T[]) -> string {
+function interfaces.gbr_first_name(items: #0[]) -> string {
     load_var items
     load_const 0
     load_array_element
@@ -4193,7 +4193,7 @@ function interfaces.gbsp_main() -> bool {
     return
 }
 
-function interfaces.gbsp_same(x: T, y: T) -> bool {
+function interfaces.gbsp_same(x: #0, y: #0) -> bool {
     load_var2 1 2
     load_type interfaces.GbspEquatable
     load_const "eq"
@@ -4203,7 +4203,7 @@ function interfaces.gbsp_same(x: T, y: T) -> bool {
     return
 }
 
-function interfaces.gbte_greet(p: T) -> string {
+function interfaces.gbte_greet(p: #0) -> string {
     load_var p
     is_type interfaces.GbteEmployee
     pop_jump_if_false L0
@@ -4418,7 +4418,7 @@ function interfaces.hiad_main() -> string {
     return
 }
 
-function interfaces.idmc_differ(x: T, y: T) -> bool {
+function interfaces.idmc_differ(x: #0, y: #0) -> bool {
     load_var2 1 2
     load_type interfaces.IdmcEquatable
     load_const "neq"
@@ -5104,7 +5104,7 @@ function interfaces.sgid_main() -> bool {
     return
 }
 
-function interfaces.sgid_read_float(m: T) -> float {
+function interfaces.sgid_read_float(m: #0) -> float {
     load_var m
     load_type interfaces.SgidConverter<float>
     load_const "convert"
@@ -5114,7 +5114,7 @@ function interfaces.sgid_read_float(m: T) -> float {
     return
 }
 
-function interfaces.sgid_read_int(m: T) -> int {
+function interfaces.sgid_read_int(m: #0) -> int {
     load_var m
     load_type interfaces.SgidConverter<int>
     load_const "convert"
@@ -5161,7 +5161,7 @@ function interfaces.sgif_main() -> bool {
     unreachable
 }
 
-function interfaces.spma_combine(x: T, ys: T[]) -> int {
+function interfaces.spma_combine(x: #0, ys: #0[]) -> int {
     load_var2 1 2
     load_type interfaces.SpmaAdder
     load_const "addAll"
@@ -5456,7 +5456,7 @@ function interfaces.uf06_main() -> int {
     return
 }
 
-function interfaces.uf08_identity(a: T) -> T {
+function interfaces.uf08_identity(a: #0) -> #0 {
     load_var a
     return
 }
@@ -5687,7 +5687,7 @@ function interfaces.urdm_main() -> string {
     return
 }
 
-function interfaces.uric_f(x: T) -> string {
+function interfaces.uric_f(x: #0) -> string {
     load_var x
     load_type interfaces.UricPrintable
     load_const "display"
@@ -5706,7 +5706,7 @@ function interfaces.uric_main() -> string {
     return
 }
 
-function interfaces.urii_f(x: T) -> string {
+function interfaces.urii_f(x: #0) -> string {
     load_var x
     load_type interfaces.UriiPrintable
     load_const "display"
@@ -5725,7 +5725,7 @@ function interfaces.urii_main() -> string {
     return
 }
 
-function interfaces.uris_f(x: T) -> string {
+function interfaces.uris_f(x: #0) -> string {
     load_var x
     load_type interfaces.UrisPrintable
     load_const "display"

@@ -4686,20 +4686,40 @@ impl<'db> LoweringContext<'db> {
         // theirs from TIR `func_data` during emit; lambdas have no `func_data`,
         // and without this a closure value carries no signature at all (which
         // `reflect.signature` / `reflect.call_any` consume).
+        // A lambda's signature is templated over the *enclosing* frame's slots:
+        // `MakeClosure` captures that frame's type args onto the closure, and
+        // the body's own `TypeArgRef`s index the same list, so substituting a
+        // closure value's captured args reconstructs its signature exactly.
+        let sig_frame_params = self.enclosing_generic_params();
+        let sig_template = |this: &Self, tir_ty: &Tir2Ty| {
+            tir2_to_template(tir_ty, this.resolved_aliases, &sig_frame_params)
+        };
         let mut sig_param_types = Vec::with_capacity(func_def.params.len());
+        let mut sig_display_param_types = Vec::with_capacity(func_def.params.len());
         for (param_idx, param) in func_def.params.iter().enumerate() {
-            let param_ty = match &param.type_expr {
+            let (param_ty, param_template, param_display) = match &param.type_expr {
                 Some(spanned_te) => {
                     let tir_ty = lower_sig_ty(self, spanned_te);
                     self.lambda_param_tir_types
                         .insert(param.name.clone(), tir_ty.clone());
-                    self.convert_tir_ty_for_runtime(&tir_ty)
+                    (
+                        self.convert_tir_ty_for_runtime(&tir_ty),
+                        sig_template(self, &tir_ty),
+                        tir_ty.render_user_facing(),
+                    )
                 }
-                None => baml_type::RuntimeTy::Null {
-                    attr: baml_type::TyAttr::default(),
-                },
+                None => (
+                    baml_type::RuntimeTy::Null {
+                        attr: baml_type::TyAttr::default(),
+                    },
+                    baml_type::TyTemplate::Null {
+                        attr: baml_type::TyAttr::default(),
+                    },
+                    "null".to_string(),
+                ),
             };
-            sig_param_types.push(param_ty.clone());
+            sig_param_types.push(param_template);
+            sig_display_param_types.push(param_display);
             let local = self
                 .builder
                 .declare_local(Some(param.name.clone()), param_ty, None);
@@ -4707,26 +4727,29 @@ impl<'db> LoweringContext<'db> {
             self.binding_locals
                 .insert(BindingId::parameter(self.current_scope, param_idx), local);
         }
-        // The declared return/throws. Unannotated slots make no claim
-        // (`unknown`); an explicit `throws never` becomes `None` (the
-        // runtime's "cannot throw").
-        let sig_return_type = match &func_def.return_type {
+        // The declared return/throws. An unannotated slot makes no claim
+        // (`unknown`); an explicit `throws never` stays `never` — the empty
+        // error set, spelled the same way a function type spells it.
+        let (sig_return_type, sig_display_return_type) = match &func_def.return_type {
             Some(te) => {
                 let tir_ty = lower_sig_ty(self, te);
-                self.convert_tir_ty_for_runtime(&tir_ty)
+                (sig_template(self, &tir_ty), tir_ty.render_user_facing())
             }
-            None => baml_type::RuntimeTy::unknown(),
+            None => (
+                baml_type::TyTemplate::BuiltinUnknown {
+                    attr: baml_type::TyAttr::default(),
+                },
+                "unknown".to_string(),
+            ),
         };
         let sig_throws_type = match &func_def.throws {
             Some(te) => {
                 let tir_ty = lower_sig_ty(self, te);
-                if matches!(tir_ty, baml_compiler2_tir::ty::Ty::Never { .. }) {
-                    None
-                } else {
-                    Some(self.convert_tir_ty_for_runtime(&tir_ty))
-                }
+                sig_template(self, &tir_ty)
             }
-            None => Some(baml_type::RuntimeTy::unknown()),
+            None => baml_type::TyTemplate::BuiltinUnknown {
+                attr: baml_type::TyAttr::default(),
+            },
         };
 
         // Create entry and exit blocks.
@@ -4785,11 +4808,8 @@ impl<'db> LoweringContext<'db> {
                 .iter()
                 .map(std::string::ToString::to_string)
                 .collect(),
-            display_param_types: sig_param_types
-                .iter()
-                .map(|ty| ty.as_ty().render_user_facing())
-                .collect(),
-            display_return_type: sig_return_type.as_ty().render_user_facing(),
+            display_param_types: sig_display_param_types,
+            display_return_type: sig_display_return_type,
             param_names: func_def.params.iter().map(|p| p.name.to_string()).collect(),
             param_has_default: func_def
                 .params
@@ -12815,15 +12835,12 @@ impl LoweringContext<'_> {
     /// coverage proof counted as matched*. TIR's coverage relation is the
     /// same canonical invariant subtype the emitted tests evaluate, so for
     /// values with a concrete runtime type the two always agree — with one
-    /// exception: a value whose concrete type the VM cannot yet faithfully
-    /// reconstruct (a bound method or future — `value_concrete_ty` is
-    /// `None`; a closure from a generic frame reconstructs a coarsened
-    /// signature — see the VM's BUG(erased-signature-reconstruction)) can
-    /// fail a structural test whose realized binding IS that value's type. A
-    /// non-final `let v: T` arm can therefore wrongly reject such a callable
-    /// when `T` realizes to a function type, so an exhaustive match
-    /// containing one cannot safely skip its final arm's test (see
-    /// `lower_match_chain`'s backstop).
+    /// exception: a value whose concrete type the VM cannot reconstruct
+    /// (`value_concrete_ty` is `None` — an opaque native handle) fails every
+    /// structural test, including one whose realized binding IS that value's
+    /// static type. A non-final `let v: T` arm can therefore wrongly reject
+    /// such a value, so an exhaustive match containing one cannot safely skip
+    /// its final arm's test (see `lower_match_chain`'s backstop).
     ///
     /// Over-approximation is safe — it costs one extra final test plus a dead
     /// trap block; under-approximation would silently bind a value to a

@@ -1055,7 +1055,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             local_names: self.slot_names,
             debug_locals,
             span: Span::fake(),
-            return_type: baml_type::RuntimeTy::Null {
+            return_type: baml_type::TyTemplate::Null {
                 attr: baml_type::TyAttr::default(),
             },
             param_names: Vec::new(),
@@ -1064,7 +1064,9 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             display_type_params: Vec::new(),
             display_param_types: Vec::new(),
             display_return_type: "null".to_string(),
-            throws_type: None,
+            throws_type: baml_type::TyTemplate::Never {
+                attr: baml_type::TyAttr::default(),
+            },
             origin: FunctionOrigin::Internal,
             body_meta: None,
             capture: FunctionCaptureProps::disabled(),
@@ -3393,16 +3395,18 @@ impl PullSink for StackifyCodegen<'_, '_> {
             // Every function template — realized, frame-referencing, or holey —
             // keeps the legacy coarse FUNCTION-tag check ("is it a callable").
             //
-            // FIXME(function-type-matching): signature-precise matching through
-            // the value matcher is blocked on the empty-`throws` convention
-            // mismatch: a function *type* writes "never throws" as `never`,
-            // while a function *value*'s reconstructed signature writes it as
-            // `void` (see `bex_vm`'s `function_object_ty`), and the canonical
-            // covariant throws relation has no bridge (`void <: never` is
-            // false) — so a structural test would constant-false every
-            // never-throwing closure. Unify the convention first, then route
-            // hole-free signatures through the matcher (which already applies
-            // contravariant params / covariant return correctly).
+            // TODO(function-type-matching): the empty-`throws` convention
+            // mismatch that used to block signature-precise matching is gone —
+            // a function value's reconstructed signature now spells "never
+            // throws" as `never`, the same as a function *type*, because
+            // `bex_vm`'s `function_object_ty` materializes the stored
+            // signature templates and `TyTemplate::Never` is the sole spelling
+            // of "cannot throw". The canonical covariant throws relation
+            // therefore lines up. What remains is to route hole-free
+            // signatures through the value matcher (which already applies
+            // contravariant params / covariant return correctly) and relax
+            // E0155, which today rejects refutable function-typed patterns
+            // outright.
             TyTemplate::Function { .. } => {
                 let c = self.add_constant(ConstValue::Int(baml_type::typetag::FUNCTION));
                 let inst = self.emit(Instruction::IsType(c));

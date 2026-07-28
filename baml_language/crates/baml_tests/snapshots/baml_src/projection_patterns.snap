@@ -285,7 +285,7 @@ function projection_patterns.bound_projection_rejects_fn() -> bool {
     return
 }
 
-function projection_patterns.classify_for(h: T, v: unknown) -> string {
+function projection_patterns.classify_for(h: #0, v: unknown) -> string {
     load_var v
     store_var _3
     load_var _3
@@ -336,7 +336,7 @@ function projection_patterns.default_label_rejects_fn() -> bool {
     return
 }
 
-function projection_patterns.is_item_of(h: T, v: unknown) -> bool {
+function projection_patterns.is_item_of(h: #0, v: unknown) -> bool {
     load_var v
     is_type (#0 as projection_patterns.Holder).Item
     pop_jump_if_false L0
@@ -353,7 +353,7 @@ function projection_patterns.is_item_of(h: T, v: unknown) -> bool {
     return
 }
 
-function projection_patterns.is_label_of(t: T, v: unknown) -> bool {
+function projection_patterns.is_label_of(t: #0, v: unknown) -> bool {
     load_var v
     is_type (#0 as projection_patterns.Labeled).Label
     pop_jump_if_false L0

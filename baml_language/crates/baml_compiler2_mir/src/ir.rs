@@ -120,17 +120,20 @@ pub enum MirFunctionKind {
 pub struct RuntimeSignature {
     /// Parameter names, in declaration order.
     pub param_names: Vec<String>,
-    /// Parameter types, parallel to `param_names`.
-    pub param_types: Vec<baml_type::RuntimeTy>,
+    /// Parameter types, parallel to `param_names`, as templates over the
+    /// callee frame's De Bruijn type-arg slots.
+    pub param_types: Vec<baml_type::TyTemplate>,
     /// Whether each parameter has a default, parallel to `param_names`.
     pub param_has_default: Vec<bool>,
-    /// The declared return type; `unknown` when unannotated.
-    pub return_type: baml_type::RuntimeTy,
-    /// The throws type. `None` == cannot throw. Top-level declarations carry
-    /// TIR's inferred transitive throw set; a lambda carries its declared
-    /// clause (`throws never` == `None`, unannotated == `Some(unknown)`, no
-    /// claim).
-    pub throws_type: Option<baml_type::RuntimeTy>,
+    /// The declared return type; `unknown` when unannotated. A template over
+    /// the callee frame's type-arg slots (see [`Self::param_types`]).
+    pub return_type: baml_type::TyTemplate,
+    /// The throws type, as a template over the callee frame's type-arg slots.
+    /// `never` == cannot throw (the same spelling a function type uses), so a
+    /// reconstructed value signature and a written type agree. Top-level
+    /// declarations carry TIR's inferred transitive throw set; a lambda carries
+    /// its declared clause (unannotated == `unknown`, i.e. no claim).
+    pub throws_type: baml_type::TyTemplate,
     /// The declaration's joined `///` doc-comment lines, if any.
     pub docstring: Option<String>,
     /// The name the declaration was written with; `None` for lambdas

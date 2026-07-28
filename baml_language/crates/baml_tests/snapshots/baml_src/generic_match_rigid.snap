@@ -181,7 +181,7 @@ function generic_match_rigid.$init_test_ns_generic_match_rigid_generic_match_rig
     return
 }
 
-function generic_match_rigid.RigidBox.is_own(self: generic_match_rigid.RigidBox<T>, other: generic_match_rigid.RigidBox<int> | int) -> bool {
+function generic_match_rigid.RigidBox.is_own(self: generic_match_rigid.RigidBox<#0>, other: generic_match_rigid.RigidBox<int> | int) -> bool {
     load_var other
     is_type generic_match_rigid.RigidBox<...>
     pop_jump_if_false L0
@@ -198,7 +198,7 @@ function generic_match_rigid.RigidBox.is_own(self: generic_match_rigid.RigidBox<
     return
 }
 
-function generic_match_rigid.RigidBox.match_own(self: generic_match_rigid.RigidBox<T>, other: generic_match_rigid.RigidBox<int> | int) -> string {
+function generic_match_rigid.RigidBox.match_own(self: generic_match_rigid.RigidBox<#0>, other: generic_match_rigid.RigidBox<int> | int) -> string {
     load_var other
     store_var _3
     load_var _3
@@ -342,7 +342,7 @@ function generic_match_rigid.pick_bounded_miss_fn() -> string {
     return
 }
 
-function generic_match_rigid.pick_concrete(x: T) -> string {
+function generic_match_rigid.pick_concrete(x: #0) -> string {
     load_var x
     store_var _2
     load_var _2
@@ -377,7 +377,7 @@ function generic_match_rigid.pick_concrete_miss_fn() -> string {
     return
 }
 
-function generic_match_rigid.pick_mixed_union(x: T | bool) -> string {
+function generic_match_rigid.pick_mixed_union(x: #0 | bool) -> string {
     load_var x
     store_var _2
     load_var _2
@@ -476,7 +476,7 @@ function generic_match_rigid.pick_rigid_other_member_fn() -> string {
     return
 }
 
-function generic_match_rigid.pick_written_union(x: T | int) -> string {
+function generic_match_rigid.pick_written_union(x: #0 | int) -> string {
     load_var x
     store_var _2
     load_var _2

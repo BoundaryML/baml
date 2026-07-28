@@ -244,7 +244,7 @@ function lambdas.lambda_effect_fail() -> int {
     throw
 }
 
-function lambdas.lambda_effect_forward(f: () -> int throws E) -> int {
+function lambdas.lambda_effect_forward(f: () -> int throws #0) -> int {
     load_var ?1
     make_cell
     store_var ?1
@@ -257,7 +257,7 @@ function lambdas.lambda_effect_forward(f: () -> int throws E) -> int {
     return
 }
 
-function lambdas.lambda_effect_invoke(f: () -> T throws E) -> T {
+function lambdas.lambda_effect_invoke(f: () -> #0 throws #1) -> #0 {
     load_var f
     call_indirect
     return

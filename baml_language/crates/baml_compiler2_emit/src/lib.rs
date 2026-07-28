@@ -1400,7 +1400,7 @@ pub fn reuse_throws_mismatches(
     prev_units: &[CompilationUnit],
     clean_files: &HashSet<String>,
 ) -> HashMap<String, String> {
-    let previous: HashMap<&str, &Option<baml_type::RuntimeTy>> = prev_units
+    let previous: HashMap<&str, &baml_type::TyTemplate> = prev_units
         .iter()
         .flat_map(|unit| &unit.code)
         .filter_map(|object| match object {
@@ -2725,7 +2725,7 @@ impl EmitTables {
 fn spliced_throws_match(
     db: &dyn baml_compiler2_mir::Db,
     file: baml_base::SourceFile,
-    previous: &HashMap<&str, &Option<baml_type::RuntimeTy>>,
+    previous: &HashMap<&str, &baml_type::TyTemplate>,
     cache: &ResolvedAliases,
 ) -> Result<(), String> {
     for &func_loc in file_functions(db, file) {
@@ -2742,8 +2742,13 @@ fn spliced_throws_match(
         let Some(previous_throws) = previous.get(fq.as_str()) else {
             return Err(format!("previous units have no function `{fq}`"));
         };
-        let current_throws =
-            compute_throws_type(db, file, &function_data(db, func_loc).name, cache);
+        let current_throws = compute_throws_type(
+            db,
+            file,
+            &function_data(db, func_loc).name,
+            cache,
+            &baml_compiler2_tir::function_generic_params(db, func_loc),
+        );
         if **previous_throws != current_throws {
             return Err(format!(
                 "function `{fq}` changed from {:?} to {current_throws:?}",
@@ -3406,16 +3411,20 @@ fn emit_file_group(
                 local_names: vec![String::new(), "registry".to_string()],
                 debug_locals: Vec::new(),
                 span: Span::fake(),
-                return_type: baml_type::RuntimeTy::Null {
+                return_type: baml_type::TyTemplate::Null {
                     attr: baml_type::TyAttr::default(),
                 },
                 param_names: vec!["registry".to_string()],
-                param_types: vec![baml_type::RuntimeTy::unknown()], // type not needed for chainer dispatch
+                param_types: vec![baml_type::TyTemplate::BuiltinUnknown {
+                    attr: baml_type::TyAttr::default(),
+                }], // type not needed for chainer dispatch
                 param_has_default: vec![false],
                 display_type_params: Vec::new(),
                 display_param_types: vec!["unknown".to_string()],
                 display_return_type: "null".to_string(),
-                throws_type: None,
+                throws_type: baml_type::TyTemplate::Never {
+                    attr: baml_type::TyAttr::default(),
+                },
                 origin: FunctionOrigin::Internal,
                 body_meta: None,
                 capture: FunctionCaptureProps::disabled(),
@@ -3496,7 +3505,12 @@ fn compute_throws_type(
     file: baml_base::SourceFile,
     func_name: &baml_base::Name,
     cache: &ResolvedAliases,
-) -> Option<baml_type::RuntimeTy> {
+    frame_params: &[baml_compiler2_tir::ty::ParamTy],
+) -> baml_type::TyTemplate {
+    // An empty throw set is `never` — the empty error set — not an absent one.
+    let never = || baml_type::TyTemplate::Never {
+        attr: baml_type::TyAttr::default(),
+    };
     let pkg_info = file_package(db, file);
     let pkg_id = PackageId::new(db, pkg_info.package);
     let throw_sets = baml_compiler2_tir::throw_inference::function_throw_sets(db, pkg_id);
@@ -3504,21 +3518,22 @@ fn compute_throws_type(
     let key =
         baml_compiler2_tir::throw_inference::throw_set_key(&pkg_info.namespace_path, func_name);
 
-    let facts = throw_sets.transitive_for(&key)?;
+    let Some(facts) = throw_sets.transitive_for(&key) else {
+        return never();
+    };
     if facts.is_empty() {
-        return None;
+        return never();
     }
 
-    let converted: Vec<baml_type::RuntimeTy> =
-        facts.iter().map(|tir_ty| cache.convert(tir_ty)).collect();
+    let converted: Vec<baml_type::TyTemplate> = facts
+        .iter()
+        .map(|tir_ty| baml_compiler2_mir::tir2_to_template(tir_ty, cache, frame_params))
+        .collect();
 
     if converted.len() == 1 {
-        Some(converted.into_iter().next().unwrap())
+        converted.into_iter().next().unwrap()
     } else {
-        Some(baml_type::RuntimeTy::Union(
-            converted,
-            baml_type::TyAttr::default(),
-        ))
+        baml_type::TyTemplate::Union(converted, baml_type::TyAttr::default())
     }
 }
 
@@ -3594,9 +3609,6 @@ fn compute_function_metadata<'db>(
     let pkg_info = file_package(db, file);
     let pkg_id = PackageId::new(db, pkg_info.package);
     let pkg_items = baml_compiler2_ppir::package_items(db, pkg_id);
-    let null_ty = || baml_type::RuntimeTy::Null {
-        attr: baml_type::TyAttr::default(),
-    };
 
     // The item this method belongs to, via the firewall (mirrors MIR's enclosing
     // lookups; replaces the removed `method_owners`/`implements_for` flat fields).
@@ -3972,6 +3984,18 @@ fn compute_function_metadata<'db>(
         }
     };
 
+    // The signature is templated over this function's own callee frame, so a
+    // *value* of it reconstructs precisely by substituting the realized args it
+    // carries. `frame_generic_params` is the same layout the body's `TypeArgRef`s
+    // and the frames callers seed use — templating against any other list would
+    // silently name the wrong types.
+    let frame_params = baml_compiler2_tir::function_generic_params(db, func_loc);
+    let to_template =
+        |tir_ty: &Ty| baml_compiler2_mir::tir2_to_template(tir_ty, cache, &frame_params);
+    let null_template = || baml_type::TyTemplate::Null {
+        attr: baml_type::TyAttr::default(),
+    };
+
     let mut param_types = Vec::with_capacity(func.params.len());
     let mut display_param_types = Vec::with_capacity(func.params.len());
     for param in &func.params {
@@ -3984,18 +4008,18 @@ fn compute_function_metadata<'db>(
         };
         if let Some(tir_ty) = resolved {
             display_param_types.push(tir_ty.render_user_facing());
-            param_types.push(cache.convert(&tir_ty));
+            param_types.push(to_template(&tir_ty));
         } else {
             display_param_types.push("null".to_string());
-            param_types.push(null_ty());
+            param_types.push(null_template());
         }
     }
 
     let (return_type, display_return_type) = if let Some(id) = func.return_type {
         let tir_ty = resolve_display_tir(func_store, id);
-        (cache.convert(&tir_ty), tir_ty.render_user_facing())
+        (to_template(&tir_ty), tir_ty.render_user_facing())
     } else {
-        (null_ty(), "null".to_string())
+        (null_template(), "null".to_string())
     };
 
     baml_compiler2_mir::RuntimeSignature {
@@ -4005,7 +4029,7 @@ fn compute_function_metadata<'db>(
         return_type,
         // TIR's inferred transitive throw set — richer than the declared
         // clause (a declared clause is a firewall the inference respects).
-        throws_type: compute_throws_type(db, file, &func.name, cache),
+        throws_type: compute_throws_type(db, file, &func.name, cache, &frame_params),
         docstring: func.docstring.clone(),
         name: Some(func.name.to_string()),
         display_type_params,
@@ -4951,7 +4975,7 @@ fn builtin_emit_function(kind: BuiltinKind, fq_name: &str, arity: usize) -> Opti
         local_names: Vec::new(),
         debug_locals: Vec::new(),
         span: Span::fake(),
-        return_type: baml_type::RuntimeTy::Null {
+        return_type: baml_type::TyTemplate::Null {
             attr: baml_type::TyAttr::default(),
         },
         param_names: Vec::new(),
@@ -4960,7 +4984,9 @@ fn builtin_emit_function(kind: BuiltinKind, fq_name: &str, arity: usize) -> Opti
         display_type_params: Vec::new(),
         display_param_types: Vec::new(),
         display_return_type: "null".to_string(),
-        throws_type: None,
+        throws_type: baml_type::TyTemplate::Never {
+            attr: baml_type::TyAttr::default(),
+        },
         origin: FunctionOrigin::Builtin,
         body_meta: None,
         capture: FunctionCaptureProps::disabled(),
@@ -5260,7 +5286,7 @@ fn compile_init_function<'db>(
                     local_names: Vec::new(),
                     debug_locals: Vec::new(),
                     span: baml_base::Span::fake(),
-                    return_type: baml_type::RuntimeTy::Null {
+                    return_type: baml_type::TyTemplate::Null {
                         attr: baml_type::TyAttr::default(),
                     },
                     param_names: Vec::new(),
@@ -5269,7 +5295,9 @@ fn compile_init_function<'db>(
                     display_type_params: Vec::new(),
                     display_param_types: Vec::new(),
                     display_return_type: "null".to_string(),
-                    throws_type: None,
+                    throws_type: baml_type::TyTemplate::Never {
+                        attr: baml_type::TyAttr::default(),
+                    },
                     origin: FunctionOrigin::Internal,
                     body_meta: None,
                     capture: FunctionCaptureProps::disabled(),
@@ -5335,7 +5363,7 @@ fn compile_init_function<'db>(
         local_names: Vec::new(),
         debug_locals: Vec::new(),
         span: baml_base::Span::fake(),
-        return_type: baml_type::RuntimeTy::Null {
+        return_type: baml_type::TyTemplate::Null {
             attr: baml_type::TyAttr::default(),
         },
         param_names: Vec::new(),
@@ -5344,7 +5372,9 @@ fn compile_init_function<'db>(
         display_type_params: Vec::new(),
         display_param_types: Vec::new(),
         display_return_type: "null".to_string(),
-        throws_type: None,
+        throws_type: baml_type::TyTemplate::Never {
+            attr: baml_type::TyAttr::default(),
+        },
         origin: FunctionOrigin::Internal,
         body_meta: None,
         capture: FunctionCaptureProps::disabled(),

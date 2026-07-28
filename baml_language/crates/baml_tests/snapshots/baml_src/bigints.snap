@@ -832,7 +832,7 @@ function bigints.$init_test_ns_bigints_bigints(registry: testing.TestCollector) 
     return
 }
 
-function bigints.BigintBox.set(self: bigints.BigintBox<T>, x: T) -> T {
+function bigints.BigintBox.set(self: bigints.BigintBox<#0>, x: #0) -> #0 {
     load_var2 1 2
     store_field .v
     load_var x
@@ -948,7 +948,7 @@ function bigints.bigint_fold_is_less() -> true {
     return
 }
 
-function bigints.bigint_identity(x: T) -> T {
+function bigints.bigint_identity(x: #0) -> #0 {
     load_var x
     return
 }
