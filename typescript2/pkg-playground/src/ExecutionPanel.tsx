@@ -2225,8 +2225,9 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
         );
       }
       // Effects normally keep form state canonical, but Run must also close
-      // the same-commit race after a project/schema update. Raw mode remains
-      // an exact escape hatch and is intentionally not reconciled here.
+      // the same-commit race after a project/schema update. Raw mode skips
+      // reconciliation, but known values are still cast transiently below
+      // before wire encoding.
       const runArgs =
         argsMode === 'form' && paramSchemas !== undefined
           ? reconcileArgs(parsed, paramSchemas, typeLookup)

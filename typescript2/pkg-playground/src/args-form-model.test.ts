@@ -384,6 +384,42 @@ describe('castArgsToKnownTypes', () => {
     });
   });
 
+  it('leaves surplus-key unions and classes missing required fields unannotated', () => {
+    const surplus = { x: 7, extra: true };
+    expect(
+      castArgsToKnownTypes(
+        { value: surplus },
+        [
+          {
+            name: 'value',
+            hasDefault: false,
+            schema: {
+              type: 'union',
+              variants: [
+                { type: 'ref', name: 'user.Nested' },
+                { type: 'int' },
+              ],
+            },
+          },
+        ],
+        lookup,
+      ),
+    ).toEqual({ value: surplus });
+
+    const missingRequired = {
+      age: null,
+      color: 'Red',
+      nested: { x: 7 },
+    };
+    expect(
+      castArgsToKnownTypes(
+        { value: missingRequired },
+        [{ name: 'value', hasDefault: false, schema: personRef }],
+        lookup,
+      ),
+    ).toEqual({ value: missingRequired });
+  });
+
   it('keeps a known parent class cast when a raw child cannot be cast', () => {
     expect(
       castArgsToKnownTypes(
