@@ -861,6 +861,49 @@ describe('run-store-projections', () => {
     ]);
   });
 
+  it('projects root errors without captured values onto the root graph node', () => {
+    const run = runFixture({
+      status: 'failed',
+      completedAtMs: 150,
+      rootCallNodeId: 'root-main',
+      error: {
+        class: 'Runtime',
+        message: 'plain runtime failure',
+        details: null,
+        valueRef: null,
+      },
+      calls: [
+        callFixture({
+          id: 'root-main',
+          functionName: 'throws.main',
+          payloadIds: [],
+          status: 'errored',
+        }),
+      ],
+    });
+
+    const valuesByNodeId = runToGraphNodeValues(
+      run,
+      {
+        ...graphOverlayFixture(12, []),
+        unattachedCallNodeIds: ['root-main'],
+      },
+      undefined,
+      { rootGraphNodeId: '1' },
+    );
+
+    expect(valuesByNodeId.get('1')).toEqual([
+      expect.objectContaining({
+        id: 'root-error',
+        role: 'callError',
+        label: 'error',
+        value: null,
+        state: 'error',
+        diagnostic: 'plain runtime failure',
+      }),
+    ]);
+  });
+
   it('projects explicit log body availability states', () => {
     const run = runFixture({
       calls: [
