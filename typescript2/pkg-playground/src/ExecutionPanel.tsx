@@ -74,6 +74,7 @@ import {
 } from './renderers/HttpRequestCurl';
 import { GraphView } from './graph/GraphView';
 import { FunctionSidebar } from './FunctionSidebar';
+import { orderFunctionsForExplorer } from './function-call-breadth';
 import { companionFunctionName } from './shared/companion-functions';
 import { createExecutionStore, type ExecutionStore } from './execution-store';
 import {
@@ -855,6 +856,10 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
   const workflowCfgResponsesRef = useRef<Map<string, ControlFlowGraph | null>>(
     new Map(),
   );
+  const prefetchedCfgRef = useRef<{ version: unknown; names: Set<string> }>({
+    version: undefined,
+    names: new Set(),
+  });
   const [workflowCacheVersion, setWorkflowCacheVersion] = useState(0);
   const [activeTab, setActiveTab] = useState<
     'run' | 'graph' | 'trace' | 'flame' | 'prompt' | 'curl'
@@ -2080,6 +2085,20 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
   const visibleFunctions = showInternalFunctions
     ? functions
     : functions.filter((fn) => !isInternalFunction(fn));
+  // Wait for every visible function's CFG response before applying the
+  // explorer ranking so asynchronous responses do not make rows jump around.
+  // Missing graphs are valid responses and contribute zero reachable callees.
+  const explorerFunctions = useMemo(() => {
+    void workflowCacheVersion;
+    if (prefetchedCfgRef.current.version !== projectUpdateVersion) {
+      return visibleFunctions;
+    }
+    return orderFunctionsForExplorer(
+      visibleFunctions,
+      workflowCfgResponsesRef.current,
+      workflowCfgCacheRef.current,
+    );
+  }, [visibleFunctions, workflowCacheVersion, projectUpdateVersion]);
   const functionNames = visibleFunctions.map((f) => f.name);
   const diags = currentUpdate?.diagnostics ?? [];
 
@@ -2287,10 +2306,6 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
   // Prefetch every visible function's CFG once per project build so the
   // workflow-root heuristic can see the whole call graph. The responses
   // land in workflowCfgCacheRef (display is guarded by selectedFn).
-  const prefetchedCfgRef = useRef<{ version: unknown; names: Set<string> }>({
-    version: undefined,
-    names: new Set(),
-  });
   useEffect(() => {
     if (!selectedProject) return;
     const slot = prefetchedCfgRef.current;
@@ -2878,7 +2893,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
                 style={{ width: sidebarWidth }}
               >
                 <FunctionSidebar
-                  functions={visibleFunctions}
+                  functions={explorerFunctions}
                   showInternalFunctions={showInternalFunctions}
                   internalFunctionCount={internalFunctionCount}
                   isLoadingProject={isLoadingProject}

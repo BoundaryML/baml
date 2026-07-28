@@ -175,6 +175,94 @@ describe('ExecutionPanel StrictMode lifecycle', () => {
       ).toBe(true);
     });
   });
+
+  it('orders explorer functions by call breadth after all graphs arrive', async () => {
+    const port = new FakeRuntimePort();
+
+    render(<ExecutionPanel port={port} />);
+
+    act(() => {
+      port.emit({
+        type: 'playgroundNotification',
+        notification: {
+          type: 'listProjects',
+          projects: ['project'],
+        },
+      });
+      port.emit({
+        type: 'playgroundNotification',
+        notification: {
+          type: 'updateProject',
+          project: 'project',
+          update: {
+            isBexCurrent: true,
+            functions: [
+              { name: 'Leaf', kind: 'expr', origin: 'userDefined' },
+              { name: 'Root', kind: 'expr', origin: 'userDefined' },
+              { name: 'Branch', kind: 'expr', origin: 'userDefined' },
+            ],
+            diagnostics: [],
+          },
+        },
+      });
+    });
+
+    await waitFor(() => {
+      expect(
+        port.sent.filter((msg) => msg.type === 'requestControlFlowGraph'),
+      ).toHaveLength(3);
+    });
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Functions (3)' }),
+    );
+    expect(visibleFunctionOrder(['Leaf', 'Root', 'Branch'])).toEqual([
+      'Leaf',
+      'Root',
+      'Branch',
+    ]);
+
+    act(() => {
+      port.emit({
+        type: 'playgroundNotification',
+        notification: {
+          type: 'controlFlowGraphResult',
+          functionName: 'Root',
+          graph: graphFixture('Root', ['Branch']),
+        },
+      });
+      port.emit({
+        type: 'playgroundNotification',
+        notification: {
+          type: 'controlFlowGraphResult',
+          functionName: 'Branch',
+          graph: graphFixture('Branch', ['Leaf']),
+        },
+      });
+    });
+    expect(visibleFunctionOrder(['Leaf', 'Root', 'Branch'])).toEqual([
+      'Leaf',
+      'Root',
+      'Branch',
+    ]);
+
+    act(() => {
+      port.emit({
+        type: 'playgroundNotification',
+        notification: {
+          type: 'controlFlowGraphResult',
+          functionName: 'Leaf',
+          graph: graphFixture('Leaf'),
+        },
+      });
+    });
+    await waitFor(() => {
+      expect(visibleFunctionOrder(['Leaf', 'Root', 'Branch'])).toEqual([
+        'Root',
+        'Branch',
+        'Leaf',
+      ]);
+    });
+  });
 });
 
 describe('ExecutionPanel test previews', () => {
@@ -1029,4 +1117,12 @@ function graphFixture(
     },
     edgesBySrc: {},
   };
+}
+
+function visibleFunctionOrder(names: string[]): string[] {
+  const expected = new Set(names);
+  return screen
+    .getAllByRole('button')
+    .map((button) => button.textContent ?? '')
+    .filter((name) => expected.has(name));
 }
