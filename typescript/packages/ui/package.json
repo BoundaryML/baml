@@ -94,7 +94,7 @@
     "dev": "tsc --watch",
     "clean": "git clean -xdf .turbo node_modules dist",
     "typecheck": "tsc --noEmit --emitDeclarationOnly false",
-    "ui-add": "pnpm dlx shadcn@latest add && biome check --write"
+    "ui-add": "pnpm dlx shadcn@latest add"
   },
   "type": "module",
   "version": "0.1.0"
