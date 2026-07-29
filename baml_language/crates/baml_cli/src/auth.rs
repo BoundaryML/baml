@@ -104,18 +104,31 @@ impl AuthCommands {
     }
 }
 
-/// `baml login` — device-code email login.
+/// Log in to Boundary with a device-code flow.
+///
+/// Opens a browser to complete authentication, then stores the resulting
+/// session locally. In headless environments, use `--no-open` to print the
+/// verification URL instead.
 #[derive(Args, Debug)]
+#[command(after_long_help = "\
+Examples:
+  Log in using a browser:
+    baml login
+
+  Print the verification URL instead:
+    baml login --no-open")]
 pub(crate) struct LoginArgs {
     /// Print the verification URL instead of opening a browser.
-    #[arg(long)]
+    #[arg(long, help_heading = "Login options")]
     pub no_open: bool,
 }
 
 #[derive(Args, Debug)]
+#[command(after_long_help = "Examples:\n  Show the current identity:\n    baml auth whoami")]
 pub(crate) struct WhoamiArgs {}
 
 #[derive(Args, Debug)]
+#[command(after_long_help = "Examples:\n  Log out:\n    baml auth logout")]
 pub(crate) struct LogoutArgs {}
 
 #[derive(Args, Debug)]

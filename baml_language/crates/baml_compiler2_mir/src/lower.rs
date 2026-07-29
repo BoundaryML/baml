@@ -982,6 +982,37 @@ pub fn tir2_to_template(
         .unwrap_or_else(|| unreachable!("value template lowering is infallible"))
 }
 
+/// [`tir2_to_template`] for a type MIR reads back from TIR rather than lowers
+/// itself.
+///
+/// Value-mode lowering treats a type variable with no slot in this frame as a
+/// compiler invariant violation, which is right for a type MIR just lowered
+/// against that same frame. A type recorded by inference has a wider
+/// provenance — it can name a variable belonging to a scope this frame does
+/// not carry, and it can still hold a recovery sentinel where inference had no
+/// answer — so answering `None` lets the caller fall back to what it can derive
+/// itself instead of tripping that invariant, or the realizedness one, on user
+/// code.
+fn tir2_to_template_in_frame(
+    ty: &Tir2Ty,
+    resolved: &ResolvedAliases,
+    generic_params: &[ParamTy],
+) -> Option<TyTemplate> {
+    if baml_compiler2_tir::generics::contains_error_recovery(ty) {
+        return None;
+    }
+    let ty = baml_compiler2_tir::generics::erase_typevars_matching(ty, &|param| {
+        baml_compiler2_tir::ty::is_synthetic_effect_param(param.name())
+    });
+    let generic_layout = RuntimeGenericLayout::new(generic_params);
+    if baml_compiler2_tir::generics::contains_typevar_where(&ty, &|param| {
+        generic_layout.slot(param).is_none()
+    }) {
+        return None;
+    }
+    lower_tir_template(&ty, resolved, &generic_layout, TemplateMode::Value)
+}
+
 /// A resolved `RuntimeTy` with no residual type variables, as a leaf template:
 /// it narrows to a [`RealizedTy`] (proving realizedness) and widens into a
 /// `Concrete`-equivalent `TyTemplate`. Panics if the type still contains a type
@@ -4641,26 +4672,17 @@ impl<'db> LoweringContext<'db> {
         let arity = func_def.params.len();
         self.builder = MirBuilder::new(Name::new(&lambda_name), arity);
 
-        // Declare return place _0.
         let pkg_info = file_package(self.db, self.file);
         let pkg_id = PackageId::new(self.db, pkg_info.package.clone());
         let pkg_items = package_items(self.db, pkg_id);
-        let ret = self.builder.declare_local(
-            Some(Name::new("_0")),
-            baml_type::RuntimeTy::Null {
-                attr: baml_type::TyAttr::default(),
-            },
-            None,
-        );
 
-        // Declare parameter locals _1..=_n. A lambda param annotation may
-        // reference the enclosing function's generics or the lambda's own, so
-        // lower with both in scope; otherwise a `(x: T) => …` would resolve `T`
-        // to an unresolved `Unknown`. Record the lowered TIR type so interface
-        // dispatch on the parameter can recover its (possibly bounded) static
-        // type — TIR does not surface it via `path_segment_types` for lambda
-        // receivers. Restored after the body (`saved_lambda_param_tir_types`
-        // below).
+        // A lambda param annotation may reference the enclosing function's
+        // generics or the lambda's own, so lower with both in scope; otherwise
+        // a `(x: T) => …` would resolve `T` to an unresolved `Unknown`. Record
+        // the lowered TIR type so interface dispatch on the parameter can
+        // recover its (possibly bounded) static type — TIR does not surface it
+        // via `path_segment_types` for lambda receivers. Restored after the
+        // body (`saved_lambda_param_tir_types` below).
         let saved_lambda_param_tir_types = self.lambda_param_tir_types.clone();
         let lambda_param_generics = self.enclosing_generic_params();
         // Lower a lambda-scope type annotation (a param, the return, the
@@ -4686,20 +4708,117 @@ impl<'db> LoweringContext<'db> {
         // theirs from TIR `func_data` during emit; lambdas have no `func_data`,
         // and without this a closure value carries no signature at all (which
         // `reflect.signature` / `reflect.call_any` consume).
+        // A lambda's signature is templated over the *enclosing* frame's slots:
+        // `MakeClosure` captures that frame's type args onto the closure, and
+        // the body's own `TypeArgRef`s index the same list, so substituting a
+        // closure value's captured args reconstructs its signature exactly.
+        let sig_frame_params = self.enclosing_generic_params();
+        let sig_template = |this: &Self, tir_ty: &Tir2Ty| {
+            tir2_to_template(tir_ty, this.resolved_aliases, &sig_frame_params)
+        };
+        // TIR infers the lambda's whole function type: every parameter type,
+        // the return type, and — for an unannotated clause — the throws
+        // surface recovered from the body. The written annotations are only a
+        // subset of that, so each unwritten position is read off the inference
+        // rather than filled with a placeholder. A closure value's
+        // reconstructed signature is what `is`/`match` and `reflect` see, and
+        // `(x) => x + 1` is `(int) -> int throws never` — not the
+        // `(null) -> unknown throws unknown` its syntax alone spells.
+        //
+        // The lambda *expression* is recorded in the body that contains it, so
+        // this reads the enclosing metadata scope — `current_metadata_scope` has
+        // already switched to the lambda's own body, whose table holds the
+        // expressions *inside* the lambda and not the lambda itself.
+        let inferred_sig =
+            match self.tir_expr_type(ExprMetadataKey::new(saved_metadata_scope, expr_id)) {
+                Some(Tir2Ty::Function {
+                    params,
+                    ret,
+                    throws,
+                    ..
+                }) => Some((params.as_slice(), &**ret, &**throws)),
+                // No recorded type: the lambda failed to type-check and is already
+                // diagnosed. Keep the syntactic shape rather than invent one.
+                _ => None,
+            };
+        let inferred_template = |this: &Self, tir_ty: &Tir2Ty| {
+            tir2_to_template_in_frame(tir_ty, this.resolved_aliases, &sig_frame_params)
+        };
+        // The return type, written or inferred. This types the return place as
+        // well as the signature: `_0` holds the lambda's result, so declaring
+        // it `null` would describe a slot the body never puts a null in.
+        let (sig_return_type, sig_display_return_type, ret_local_ty) = match &func_def.return_type {
+            Some(te) => {
+                let tir_ty = lower_sig_ty(self, te);
+                (
+                    sig_template(self, &tir_ty),
+                    tir_ty.render_user_facing(),
+                    self.convert_tir_ty_for_runtime(&tir_ty),
+                )
+            }
+            None => match inferred_sig
+                .and_then(|(_, ret, _)| inferred_template(self, ret).map(|t| (ret, t)))
+            {
+                Some((tir_ty, template)) => (
+                    template,
+                    tir_ty.render_user_facing(),
+                    self.convert_tir_ty_for_runtime(tir_ty),
+                ),
+                // Inference has no answer to give (an already-diagnosed
+                // lambda): keep the placeholder rather than invent a type.
+                None => (
+                    baml_type::TyTemplate::BuiltinUnknown {
+                        attr: baml_type::TyAttr::default(),
+                    },
+                    "unknown".to_string(),
+                    baml_type::RuntimeTy::Null {
+                        attr: baml_type::TyAttr::default(),
+                    },
+                ),
+            },
+        };
+
+        // Declare return place _0, then parameter locals _1..=_n.
+        let ret = self
+            .builder
+            .declare_local(Some(Name::new("_0")), ret_local_ty, None);
+
         let mut sig_param_types = Vec::with_capacity(func_def.params.len());
+        let mut sig_display_param_types = Vec::with_capacity(func_def.params.len());
         for (param_idx, param) in func_def.params.iter().enumerate() {
-            let param_ty = match &param.type_expr {
+            let (param_ty, param_template, param_display) = match &param.type_expr {
                 Some(spanned_te) => {
                     let tir_ty = lower_sig_ty(self, spanned_te);
                     self.lambda_param_tir_types
                         .insert(param.name.clone(), tir_ty.clone());
-                    self.convert_tir_ty_for_runtime(&tir_ty)
+                    (
+                        self.convert_tir_ty_for_runtime(&tir_ty),
+                        sig_template(self, &tir_ty),
+                        tir_ty.render_user_facing(),
+                    )
                 }
-                None => baml_type::RuntimeTy::Null {
-                    attr: baml_type::TyAttr::default(),
+                None => match inferred_sig
+                    .and_then(|(params, _, _)| params.get(param_idx))
+                    .and_then(|p| inferred_template(self, &p.ty).map(|t| (&p.ty, t)))
+                {
+                    Some((tir_ty, template)) => (
+                        self.convert_tir_ty_for_runtime(tir_ty),
+                        template,
+                        tir_ty.render_user_facing(),
+                    ),
+                    None => (
+                        baml_type::RuntimeTy::Null {
+                            attr: baml_type::TyAttr::default(),
+                        },
+                        baml_type::TyTemplate::Null {
+                            attr: baml_type::TyAttr::default(),
+                        },
+                        "null".to_string(),
+                    ),
                 },
             };
-            sig_param_types.push(param_ty.clone());
+            sig_param_types.push(param_template);
+            sig_display_param_types.push(param_display);
             let local = self
                 .builder
                 .declare_local(Some(param.name.clone()), param_ty, None);
@@ -4707,26 +4826,21 @@ impl<'db> LoweringContext<'db> {
             self.binding_locals
                 .insert(BindingId::parameter(self.current_scope, param_idx), local);
         }
-        // The declared return/throws. Unannotated slots make no claim
-        // (`unknown`); an explicit `throws never` becomes `None` (the
-        // runtime's "cannot throw").
-        let sig_return_type = match &func_def.return_type {
-            Some(te) => {
-                let tir_ty = lower_sig_ty(self, te);
-                self.convert_tir_ty_for_runtime(&tir_ty)
-            }
-            None => baml_type::RuntimeTy::unknown(),
-        };
+        // The throws surface, written or inferred. An explicit `throws never`
+        // stays `never` — the empty error set, spelled the same way a function
+        // type spells it — and an omitted clause takes the set TIR recovered
+        // from the body, which is the claim the lambda actually makes.
+        // `unknown` survives only where inference has no answer to give.
         let sig_throws_type = match &func_def.throws {
             Some(te) => {
                 let tir_ty = lower_sig_ty(self, te);
-                if matches!(tir_ty, baml_compiler2_tir::ty::Ty::Never { .. }) {
-                    None
-                } else {
-                    Some(self.convert_tir_ty_for_runtime(&tir_ty))
-                }
+                sig_template(self, &tir_ty)
             }
-            None => Some(baml_type::RuntimeTy::unknown()),
+            None => inferred_sig
+                .and_then(|(_, _, throws)| inferred_template(self, throws))
+                .unwrap_or_else(|| baml_type::TyTemplate::BuiltinUnknown {
+                    attr: baml_type::TyAttr::default(),
+                }),
         };
 
         // Create entry and exit blocks.
@@ -4785,11 +4899,8 @@ impl<'db> LoweringContext<'db> {
                 .iter()
                 .map(std::string::ToString::to_string)
                 .collect(),
-            display_param_types: sig_param_types
-                .iter()
-                .map(|ty| ty.as_ty().render_user_facing())
-                .collect(),
-            display_return_type: sig_return_type.as_ty().render_user_facing(),
+            display_param_types: sig_display_param_types,
+            display_return_type: sig_display_return_type,
             param_names: func_def.params.iter().map(|p| p.name.to_string()).collect(),
             param_has_default: func_def
                 .params
@@ -12815,20 +12926,16 @@ impl LoweringContext<'_> {
     /// coverage proof counted as matched*. TIR's coverage relation is the
     /// same canonical invariant subtype the emitted tests evaluate, so for
     /// values with a concrete runtime type the two always agree — with one
-    /// exception: a value whose concrete type the VM cannot yet faithfully
-    /// reconstruct (a bound method or future — `value_concrete_ty` is
-    /// `None`; a closure from a generic frame reconstructs a coarsened
-    /// signature — see the VM's BUG(erased-signature-reconstruction)) can
-    /// fail a structural test whose realized binding IS that value's type. A
-    /// non-final `let v: T` arm can therefore wrongly reject such a callable
-    /// when `T` realizes to a function type, so an exhaustive match
-    /// containing one cannot safely skip its final arm's test (see
-    /// `lower_match_chain`'s backstop).
+    /// exception: a value whose concrete type the VM cannot reconstruct
+    /// (`value_concrete_ty` is `None` — an opaque native handle) fails every
+    /// structural test, including one whose realized binding IS that value's
+    /// static type. A non-final `let v: T` arm can therefore wrongly reject
+    /// such a value, so an exhaustive match containing one cannot safely skip
+    /// its final arm's test (see `lower_match_chain`'s backstop).
     ///
     /// Over-approximation is safe — it costs one extra final test plus a dead
     /// trap block; under-approximation would silently bind a value to a
-    /// pattern it does not match. (Function-typed patterns themselves never
-    /// appear in non-final arms — TIR rejects them, E0155.)
+    /// pattern it does not match.
     fn pattern_test_can_reject_covered_values(&self, pat_id: AstPatId) -> bool {
         match &self.body.patterns[pat_id] {
             AstPattern::Or(parts) => parts
@@ -13008,17 +13115,6 @@ impl LoweringContext<'_> {
         }
     }
 
-    fn emit_is_tir_type_branch(
-        &mut self,
-        scrutinee: Local,
-        ty: &Tir2Ty,
-        success: BlockId,
-        failure: BlockId,
-    ) {
-        let mut visited = HashSet::new();
-        self.emit_is_tir_type_branch_inner(scrutinee, ty, success, failure, &mut visited);
-    }
-
     /// The members of a union receiver, transparently unwrapping `Optional`
     /// layers — `(Dog | Named)?` after a null check still dispatches the
     /// field/method on the underlying union. Returns `None` when `ty` isn't a
@@ -13046,98 +13142,46 @@ impl LoweringContext<'_> {
         }
     }
 
-    fn emit_is_tir_type_branch_inner(
+    fn emit_is_tir_type_branch(
         &mut self,
         scrutinee: Local,
         ty: &Tir2Ty,
         success: BlockId,
         failure: BlockId,
-        visited: &mut HashSet<String>,
     ) {
         match ty {
             Tir2Ty::Union(members, _) => {
                 let mut remaining = members.iter().peekable();
                 while let Some(member) = remaining.next() {
                     if remaining.peek().is_none() {
-                        self.emit_is_tir_type_branch_inner(
-                            scrutinee, member, success, failure, visited,
-                        );
+                        self.emit_is_tir_type_branch(scrutinee, member, success, failure);
                     } else {
                         let next_check = self.builder.create_block();
-                        self.emit_is_tir_type_branch_inner(
-                            scrutinee, member, success, next_check, visited,
-                        );
+                        self.emit_is_tir_type_branch(scrutinee, member, success, next_check);
                         self.builder.set_current_block(next_check);
                     }
                 }
             }
-            Tir2Ty::Class(qtn, type_args, _) if !type_args.is_empty() => {
-                // Build the header test TIR-side so the enclosing function's
-                // type variables (including an interface-owned body's `Self`)
-                // lower to `TypeArgRef` frame slots (an arg-precise, invariant
-                // instantiation test) instead of being erased by `convert`
-                // into unresolvable names. Residual symbolic args (projections,
-                // a slotless type variable) make the build `None`, failing the
-                // test closed.
+            Tir2Ty::Class(_, type_args, _) if !type_args.is_empty() => {
+                // One arg-precise instantiation test. Building it TIR-side lets
+                // the enclosing function's type variables (including an
+                // interface-owned body's `Self`) lower to `TypeArgRef` frame
+                // slots, so the VM compares the value's stored class type args
+                // against this frame's realizations invariantly, rather than
+                // `convert` erasing them into unresolvable names. Residual
+                // symbolic args (projections, a slotless type variable) make
+                // the build `None`, failing the test closed.
+                //
+                // This test is complete on its own — do not add a walk over the
+                // class's declared field types. A value's fields already
+                // inhabit its own instantiation, so testing them decides
+                // nothing the arg comparison hasn't; and under a rigid
+                // instantiation (`Cell<T>`) a declared field type is the bare
+                // type variable, which no value-level test can decide, so such
+                // a walk fails every such pattern closed.
                 let generic_params = self.enclosing_generic_params();
                 let header = tir2_to_pattern_template(ty, self.resolved_aliases, &generic_params);
-                let class_fields = self.lookup_tir_class_fields(qtn, type_args);
-                if class_fields.is_empty() {
-                    self.emit_pattern_template_test(scrutinee, header, success, failure);
-                    return;
-                }
-
-                let class_success = self.builder.create_block();
-                self.emit_pattern_template_test(scrutinee, header, class_success, failure);
-                self.builder.set_current_block(class_success);
-
-                let key = format!("{qtn:?}<{type_args:?}>");
-                if !visited.insert(key.clone()) {
-                    self.builder.goto(success);
-                    return;
-                }
-
-                let class_tn = qtn.clone();
-                let fields: Vec<_> = class_fields.into_iter().collect();
-                for (idx, (field_name, field_ty)) in fields.iter().enumerate() {
-                    let next = if idx + 1 == fields.len() {
-                        success
-                    } else {
-                        self.builder.create_block()
-                    };
-
-                    let Some(field_idx) = self
-                        .class_fields
-                        .get(&class_tn)
-                        .and_then(|fields| fields.get(field_name.as_str()))
-                        .copied()
-                    else {
-                        self.builder.goto(failure);
-                        visited.remove(&key);
-                        return;
-                    };
-
-                    let field_local = self.builder.temp(self.resolved_aliases.convert(field_ty));
-                    self.builder.assign(
-                        Place::local(field_local),
-                        Rvalue::Use(Operand::Copy(Place::Field {
-                            base: Box::new(Place::Local(scrutinee)),
-                            field: field_idx,
-                        })),
-                    );
-                    self.emit_is_tir_type_branch_inner(
-                        field_local,
-                        field_ty,
-                        next,
-                        failure,
-                        visited,
-                    );
-                    if idx + 1 < fields.len() {
-                        self.builder.set_current_block(next);
-                    }
-                }
-
-                visited.remove(&key);
+                self.emit_pattern_template_test(scrutinee, header, success, failure);
             }
             // An interface pattern (`Slot<int>`, `Source<Item = int>`, or a bare
             // `Named`) is a single membership test against the interface

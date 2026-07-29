@@ -12,6 +12,9 @@ importers:
 
   .:
     devDependencies:
+      '@biomejs/biome':
+        specifier: 2.1.2
+        version: 2.1.2
       nodemon:
         specifier: ^3.1.9
         version: 3.1.14
@@ -404,9 +407,6 @@ importers:
       '@b/pkg-proto':
         specifier: workspace:*
         version: link:../pkg-proto
-      '@biomejs/biome':
-        specifier: 2.1.2
-        version: 2.1.2
       '@boundaryml/baml':
         specifier: 0.202.1
         version: 0.202.1

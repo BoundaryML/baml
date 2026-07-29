@@ -18,11 +18,14 @@ pub(crate) enum SourceLocation {
     StandaloneFile { file: PathBuf, root: PathBuf },
 }
 
-/// `--file` and `--from` both name a source location.
-pub(crate) fn validate_file_from_flags(file: Option<&Path>, from: Option<&Path>) -> Result<()> {
-    if file.is_some() && from.is_some() {
+/// `--file` and `--project` both name a source location.
+pub(crate) fn validate_file_project_flags(
+    file: Option<&Path>,
+    project: Option<&Path>,
+) -> Result<()> {
+    if file.is_some() && project.is_some() {
         anyhow::bail!(
-            "`--file` and `--from` are mutually exclusive — `--file` already names \
+            "`--file` and `--project` are mutually exclusive; `--file` already names \
              the single source to load."
         );
     }
@@ -35,7 +38,7 @@ pub(crate) fn resolve_source_location(
     file: Option<&Path>,
     reporter: Option<&Reporter>,
 ) -> Result<SourceLocation> {
-    validate_file_from_flags(file, from)?;
+    validate_file_project_flags(file, from)?;
 
     if let Some(file) = file {
         let canonical = resolve_standalone_file(file)?;

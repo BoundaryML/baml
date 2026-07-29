@@ -748,11 +748,13 @@ pub enum TirTypeError {
         interface: crate::ty::QualifiedTypeName,
         associated_type: Name,
     },
-    /// An interface's `requires` clause names a type that is not an interface (a class, enum, or
-    /// alias). Only interfaces can be required. Interface-declaration well-formedness (E0133).
+    /// An interface's `requires` clause names a type that is not an interface (a class, enum,
+    /// alias, or any structural type — the clause parses a full type expression). Only
+    /// interfaces can be required, exactly as only interfaces can be generic bounds (see
+    /// [`Self::GenericBoundNotInterface`]). Interface-declaration well-formedness (E0133).
     InterfaceRequiresNonInterface {
         interface: crate::ty::QualifiedTypeName,
-        target: Name,
+        target: Ty,
     },
     /// An interface's transitive `requires` graph cycles back to itself. Interface-declaration well-formedness (E0118).
     /// `chain` is the witnessing name path `[root, …, root]`.
@@ -784,18 +786,6 @@ pub enum TirTypeError {
     /// parameters have no generic binder to open an effect parameter on, so they must declare it
     /// explicitly.
     FunctionTypeMissingThrows,
-    /// A pattern claiming function-typed values sits in a position that emits a runtime value
-    /// test. Every callable value is fully realized (it curries its complete type arguments at
-    /// creation), but the runtime cannot yet faithfully reconstruct every callable's
-    /// signature: the stored `Function` signature erases generic positions instead of
-    /// referencing the frame slots the value's curried arguments would fill, so a bound
-    /// method reconstructs no type (its test is constant-false) and a closure created in a
-    /// generic frame reconstructs a coarsened one. Such a test silently misroutes those
-    /// callables, so fail closed: the one sound position is the final arm of an exhaustive,
-    /// guardless, non-Or `match`, whose test is elided because coverage already proved every
-    /// reaching value matches. (Fixing reconstruction — signature templates substituted with
-    /// the value's curried args — is the path to relaxing this error.)
-    FunctionTypedPatternNotTestable { ty: crate::ty::Ty },
 }
 
 impl fmt::Display for TirTypeError {
@@ -1825,8 +1815,9 @@ impl fmt::Display for TirTypeError {
             TirTypeError::InterfaceRequiresNonInterface { interface, target } => {
                 write!(
                     f,
-                    "interface `{}` cannot require `{target}`, which is not an interface",
-                    interface.render_user_facing()
+                    "interface `{}` cannot require `{}`, which is not an interface",
+                    interface.render_user_facing(),
+                    target.render_user_facing()
                 )
             }
             TirTypeError::InterfaceRequiresCycle { chain } => {
@@ -1869,17 +1860,6 @@ impl fmt::Display for TirTypeError {
                     f,
                     "function type must declare an explicit `throws` clause; add `throws never` \
                      if calling it cannot throw"
-                )
-            }
-            TirTypeError::FunctionTypedPatternNotTestable { ty } => {
-                write!(
-                    f,
-                    "cannot test a value against function type `{}` at runtime: callable \
-                     signatures cannot yet be faithfully reconstructed for every value (bound \
-                     methods, closures from generic frames), so this test would silently \
-                     misroute them; make it the final arm of an exhaustive `match` (which \
-                     needs no test) or match on a non-function discriminant",
-                    ty.render_user_facing()
                 )
             }
         }

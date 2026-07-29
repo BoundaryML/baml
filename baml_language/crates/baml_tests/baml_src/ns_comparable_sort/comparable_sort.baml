@@ -20,7 +20,7 @@
 //   - phase3_error_binding_unhandled_is_compile_error
 //   - phase3_out_of_body_impl_on_builtin_normalizes_to_never
 //   - phase3_out_of_body_impl_on_builtin_with_error_throws_it
-//   - phase3_defaulted_assoc_error_over_constrains_bound
+//   - phase3_defaulted_assoc_override_satisfies_bare_bound
 //   - phase5_union_int_float_sort_is_compile_error
 //   - phase5_optional_element_sort_is_compile_error
 //   - phase5_sort_by_key_nullable_key_is_compile_error

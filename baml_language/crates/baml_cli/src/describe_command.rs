@@ -38,25 +38,53 @@ static TS_KEYWORDS: LazyLock<HashMap<String, TsKeywordDoc>> = LazyLock::new(|| {
         .expect("failed to parse ts_keywords.yaml")
 });
 
+/// Describe BAML symbols and language concepts.
+///
+/// With no name, lists symbols in the current project. A name can identify a
+/// project symbol, builtin package, namespace, type, member, or BAML keyword.
+/// Builtin documentation works outside a project, so `baml describe baml` is
+/// the entry point for exploring the complete standard library.
 #[derive(Args, Clone, Debug)]
+#[command(after_long_help = "\
+Examples:
+  List project symbols:
+    baml describe
+
+  Describe the standard library:
+    baml describe baml
+
+  Describe a namespace:
+    baml describe baml.json
+
+  Describe a class:
+    baml describe Array
+
+  Describe a method:
+    baml describe String.split
+
+  Describe a keyword:
+    baml describe match")]
 pub struct DescribeArgs {
-    /// Symbol name to describe (not required with --symbols)
+    #[command(flatten)]
+    pub compiler: crate::commands::CompilerArgs,
+
+    /// Symbol, namespace, package, or keyword. Omit to list project symbols.
     pub name: Option<String>,
 
-    /// List all symbols in the project
-    #[arg(long)]
+    /// Deprecated alias for invoking `baml describe` without a name.
+    #[arg(long, hide_short_help = true)]
     pub symbols: bool,
 
-    /// Project search starting point. Defaults to the current directory.
-    #[arg(long, value_name = "PATH")]
+    /// Deprecated alias for `--project`.
+    #[arg(long, value_name = "PATH", hide = true)]
     pub from: Option<PathBuf>,
 
-    /// Soft line budget for output (default 30)
-    #[arg(long, default_value_t = 30)]
+    /// Soft maximum number of output lines.
+    #[arg(long, default_value_t = 30, help_heading = "Output options")]
     pub budget: usize,
 
     /// Output results as JSON
-    #[arg(long)]
+    #[arg(long, help_heading = "Output options")]
     pub json: bool,
 }
 

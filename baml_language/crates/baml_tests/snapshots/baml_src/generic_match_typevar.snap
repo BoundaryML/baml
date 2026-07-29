@@ -76,7 +76,7 @@ function generic_match_typevar.$init_test_ns_generic_match_typevar_generic_match
     return
 }
 
-function generic_match_typevar.is_t(x: T | string) -> bool {
+function generic_match_typevar.is_t(x: #0 | string) -> bool {
     load_var x
     is_type #0
     pop_jump_if_false L0
@@ -107,7 +107,7 @@ function generic_match_typevar.is_t_non_member_fn() -> bool {
     return
 }
 
-function generic_match_typevar.pick(x: T | string) -> string {
+function generic_match_typevar.pick(x: #0 | string) -> string {
     load_var x
     store_var _2
     load_var _2
@@ -148,7 +148,7 @@ function generic_match_typevar.pick_int_value_fn() -> string {
     return
 }
 
-function generic_match_typevar.pick_list(x: T[] | string[]) -> string {
+function generic_match_typevar.pick_list(x: #0[] | string[]) -> string {
     load_var x
     store_var _2
     load_var _2
@@ -205,7 +205,7 @@ function generic_match_typevar.pick_list_string_fn() -> string {
     return
 }
 
-function generic_match_typevar.pick_map(x: map<string, T> | map<string, string>) -> string {
+function generic_match_typevar.pick_map(x: map<string, #0> | map<string, string>) -> string {
     load_var x
     store_var _2
     load_var _2

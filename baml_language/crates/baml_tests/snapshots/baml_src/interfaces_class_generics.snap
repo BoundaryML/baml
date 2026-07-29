@@ -34,7 +34,7 @@ function interfaces_class_generics.$init_test_ns_interfaces_class_generics_inter
     return
 }
 
-function interfaces_class_generics.AemEchoer.AemEcho<int>.echo(self: interfaces_class_generics.AemEchoer, value: B) -> A {
+function interfaces_class_generics.AemEchoer.AemEcho<int>.echo(self: interfaces_class_generics.AemEchoer, value: #1) -> #0 {
     load_var value
     load_type interfaces_class_generics.AemEq<#0>
     load_const "get"
@@ -44,13 +44,13 @@ function interfaces_class_generics.AemEchoer.AemEcho<int>.echo(self: interfaces_
     return
 }
 
-function interfaces_class_generics.AemValue.AemEq<T>.get(self: interfaces_class_generics.AemValue<T>) -> T {
+function interfaces_class_generics.AemValue.AemEq<T>.get(self: interfaces_class_generics.AemValue<#0>) -> #0 {
     load_var self
     load_field .value
     return
 }
 
-function interfaces_class_generics.Box.label(self: interfaces_class_generics.Box<T>) -> string {
+function interfaces_class_generics.Box.label(self: interfaces_class_generics.Box<#0>) -> string {
     load_var self
     load_field .value
     store_var_load_var _2
@@ -96,7 +96,7 @@ function interfaces_class_generics.McapIntDriver.McapDriver<McapTask<int>>.drive
     return
 }
 
-function interfaces_class_generics.McapTask.drive(self: interfaces_class_generics.McapTask<T>, driver: D) -> (D as interfaces_class_generics.McapDriver<interfaces_class_generics.McapTask<T>>).Output {
+function interfaces_class_generics.McapTask.drive(self: interfaces_class_generics.McapTask<#0>, driver: #1) -> (#1 as interfaces_class_generics.McapDriver<interfaces_class_generics.McapTask<#0>>).Output {
     load_var2 2 1
     load_type interfaces_class_generics.McapDriver<interfaces_class_generics.McapTask<#0>>
     load_const "drive"
@@ -139,7 +139,7 @@ function interfaces_class_generics.function_class_generic_bound_member_access_fn
     return
 }
 
-function interfaces_class_generics.get_name(value: T) -> string {
+function interfaces_class_generics.get_name(value: #0) -> string {
     load_var value
     is_type interfaces_class_generics.Person
     pop_jump_if_false L0

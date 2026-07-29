@@ -427,9 +427,9 @@ fn user.test_bound_in_lambda() -> string {
 }
 
 // lambda[0]
-fn .<lambda(test_bound_in_lambda, 0)>() -> null {
+fn .<lambda(test_bound_in_lambda, 0)>() -> (string) -> string throws never {
     // Locals:
-    let _0: null // _0 // return
+    let _0: (string) -> string throws never // _0 // return
 
     bb0: {
         _0 = make_bound_method user.Employee.greet(copy capture[0]);
