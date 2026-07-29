@@ -1,20 +1,18 @@
-# B-1056: monaco dropdown has bad spacing
+# B-1061: Hide argument placeholders when default args are enabled
 
-Linear: https://linear.app/boundaryml2/issue/B-1056/monaco-dropdown-has-bad-spacing
+Linear: https://linear.app/boundaryml2/issue/B-1061/default-arg-ui-when-default-args-are-checked-the-placeholder-in-the
 
 ## Status
 
-- 2026-07-28: Created isolated Git worktree from the latest `origin/canary` commit `3f82a26f8d5361f531e2e8e8fc56838fe3ba8d6b`.
-- 2026-07-28: Reviewed the bug report: Monaco Explorer tree twisties for `sdk-parity-lint` and `baml_src` overlap adjacent text instead of maintaining normal spacing.
-- 2026-07-28: Reproduced the bug in the unmodified Prompt Fiddle at `http://localhost:3000/`: every Explorer tree twistie overlaps its adjacent label by 3px. The root `workspace` twistie rendered with a 16px outer width despite its 16px declared width plus 6px right padding, and its transformed right edge landed at x=67 while the label began at x=64.
-- 2026-07-28: Captured the before image at `typescript2/pkg-editor/docs/B-1056-before.png`.
-- 2026-07-28: Identified the root cause: Prompt Fiddle globally applies `box-sizing: border-box`, while the upstream VS Code tree stylesheet relies on the default `content-box` sizing for `.monaco-tl-twistie`. This causes the 6px spacing padding to consume the declared width instead of extending it.
-- 2026-07-28: Implemented a scoped `content-box` override for Monaco tree twisties inside `#workbench-container`, restoring the upstream width and padding contract without changing the Prompt Fiddle shell.
-- 2026-07-28: Verified the fix in the running Prompt Fiddle: the twistie computed style is now `content-box`, the Explorer labels shift right to preserve the intended padding, and `workspace`/`baml_src` no longer visually collide with their expanded-state arrows.
-- 2026-07-28: Captured the identically framed after image at `typescript2/pkg-editor/docs/B-1056-after.png`; both before and after artifacts are genuine 300x210 PNG files.
-- 2026-07-28: Automated validation passed with `pnpm --dir typescript2 --filter app-promptfiddle typecheck`, `pnpm --dir typescript2 --filter app-promptfiddle build`, and `pnpm --dir typescript2 exec biome check pkg-editor/src/views-workbench.css` from the repository root.
-- 2026-07-28: The narrower `pnpm --filter @b/pkg-editor typecheck` entry point cannot run in the clean workspace because that package's TypeScript configuration requests the undeclared `@types/node`; the Prompt Fiddle typecheck and production build both compile the shared editor successfully.
-- 2026-07-28: Committed the fix as `ed08692198cae2c729d024477fab2d12cdfbae5e` and pushed branch `sam/b-1056`.
-- 2026-07-28: Opened ready-for-review PR https://github.com/BoundaryML/baml/pull/4272 against `canary`; its description embeds the durable before and after PNGs from the branch.
-- 2026-07-28: CodeRabbit requested consistent Explorer terminology and an explicit working directory for the Biome validation command; both documentation quick wins are addressed.
-- 2026-07-28: CI monitoring and CodeRabbit re-approval are pending.
+- 2026-07-29: Reviewed the bug report: when the playground's default-argument option is checked, argument inputs continue to show placeholder text even though the defaults are supplying the values.
+- 2026-07-29: Refreshed the source repository from `origin` and created the isolated Git worktree `/Users/sam/baml-worktrees/B-1061` from the latest `origin/canary` commit `52910c8fbb7b166967f199cb2bb2bc2f06e82f2b` on branch `agent/b-1061-default-arg-placeholder`.
+- 2026-07-29: Installed the TypeScript workspace dependencies, built the playground WASM bridge from this worktree, and launched the unmodified Prompt Fiddle at `http://localhost:3000/`.
+- 2026-07-29: Reproduced the bug with `function Defaults(name: string = "Ada Lovelace", count: int = 3, ratio: float = 0.5)`: after checking the explicit-value control for `name`, the enabled input had an empty value but retained the `"Ada Lovelace"` placeholder, making the default expression look like the value that would be sent.
+- 2026-07-29: Captured the checked-state before image at `typescript2/pkg-playground/docs/B-1061-before.jpg`.
+- 2026-07-29: Identified the root cause in `ArgsForm`: `ParamRow` forwards `param.defaultExpression` as the input placeholder in both modes instead of limiting it to the unchecked, use-default state.
+- 2026-07-29: Implemented mode-aware placeholders for default-capable parameters: unchecked use-default inputs retain the declared default expression, while checked explicit-value inputs receive an empty placeholder; required parameters continue to use their existing schema-specific placeholders.
+- 2026-07-29: Verified both modes in the running Prompt Fiddle: unchecked `name` is disabled by its fieldset and exposes the `"Ada Lovelace"` placeholder, while checked `name` is enabled with an empty value and empty placeholder.
+- 2026-07-29: Captured the identically framed after image at `typescript2/pkg-playground/docs/B-1061-after.jpg`; both before and after artifacts are genuine 696x256 JPEG files.
+- 2026-07-29: Automated validation passed with `pnpm exec biome check pkg-playground/src/ArgsForm.tsx`, `pnpm --filter @b/pkg-playground typecheck`, `pnpm --filter @b/pkg-playground test` (145 tests), `pnpm --filter app-vscode-webview typecheck`, `pnpm --filter app-promptfiddle typecheck`, `pnpm --filter app-vscode-webview test:unit:run -- ExecutionPanel.strict-mode.test.tsx` (22 tests), and `git diff --check`.
+- 2026-07-29: The first webview test run caught that required parameters had also lost their schema-specific placeholders; the condition was narrowed to default-capable parameters and the rerun passed.
+- 2026-07-29: PR publication, CI monitoring, and CodeRabbit approval are pending.
