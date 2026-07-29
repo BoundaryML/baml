@@ -50,6 +50,12 @@ import { Select } from './components/ui/select';
 import { Switch } from './components/ui/switch';
 import { Textarea } from './components/ui/textarea';
 import { ToggleGroup } from './components/ui/toggle-group';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from './components/ui/tooltip';
 import { cn } from './lib/utils';
 import type {
   FieldSchema,
@@ -175,29 +181,35 @@ const ParamRow: FC<{
       <FieldLabel
         extra={
           param.hasDefault && (
-            <Button
-              aria-label={
-                omitted
-                  ? `Set explicit value for ${param.name}`
-                  : `Use default value for ${param.name}`
-              }
-              aria-pressed={!omitted}
-              className="text-vsc-description aria-pressed:bg-accent aria-pressed:text-foreground"
-              onClick={() =>
-                omitted
-                  ? onChange(defaultValueForSchema(param.schema, lookup))
-                  : onOmit()
-              }
-              size="icon-xs"
-              title={
-                omitted
-                  ? `Set explicit value for ${param.name}`
-                  : `Use default value for ${param.name}`
-              }
-              variant="ghost"
-            >
-              <SquarePen aria-hidden="true" />
-            </Button>
+            <div className="ml-auto flex items-center gap-1.5">
+              <TooltipProvider delayDuration={300}>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <input
+                      aria-label={`Use an explicit value for ${param.name} instead of its default`}
+                      checked={!omitted}
+                      className="relative size-3.5 shrink-0 cursor-pointer appearance-none rounded-[3px] border border-vsc-description bg-background after:absolute after:inset-0 after:hidden after:place-items-center after:text-[10px] after:font-bold after:leading-none after:text-vsc-accent-fg after:content-['✓'] checked:border-vsc-accent checked:bg-vsc-accent checked:after:grid focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-vsc-accent/50"
+                      onChange={(event) =>
+                        event.currentTarget.checked
+                          ? onChange(
+                              defaultValueForSchema(param.schema, lookup),
+                            )
+                          : onOmit()
+                      }
+                      type="checkbox"
+                    />
+                  </TooltipTrigger>
+                  <TooltipContent className="max-w-72" side="top">
+                    Checked: send an explicitly provided value. Unchecked: use
+                    the argument&apos;s default value.
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+              <SquarePen
+                aria-hidden="true"
+                className="size-3.5 shrink-0 text-vsc-description"
+              />
+            </div>
           )
         }
         name={param.name}
