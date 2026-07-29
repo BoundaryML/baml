@@ -65,6 +65,39 @@ const AUTO_COLLAPSE_DEPTH = 2;
 
 const TypeLookupContext = createContext<TypeLookup>(() => undefined);
 
+/** Whether the rendered widget exposes a native text placeholder. */
+function rendersDefaultPlaceholder(
+  schema: FieldSchema,
+  lookup: TypeLookup,
+  refPath: readonly string[] = [],
+): boolean {
+  if (isRawJsonSchema(schema, lookup)) return true;
+  switch (schema.type) {
+    case 'string':
+    case 'int':
+    case 'bigint':
+    case 'float':
+      return true;
+    case 'ref': {
+      if (refPath.includes(schema.name)) return true;
+      const resolved = resolveRef(schema.name, lookup);
+      return resolved?.kind === 'schema'
+        ? rendersDefaultPlaceholder(resolved.schema, lookup, [
+            ...refPath,
+            schema.name,
+          ])
+        : false;
+    }
+    case 'union':
+      return (
+        schema.variants[0] !== undefined &&
+        rendersDefaultPlaceholder(schema.variants[0], lookup, refPath)
+      );
+    default:
+      return false;
+  }
+}
+
 export interface ArgsFormProps {
   params: ParamSchema[];
   /** Per-project named-type table the schemas' refs resolve against. */
@@ -133,6 +166,10 @@ const ParamRow: FC<{
 }> = ({ param, value, present, onChange, onOmit }) => {
   const lookup = useContext(TypeLookupContext);
   const omitted = param.hasDefault && !present;
+  const showDefaultHint =
+    omitted &&
+    param.defaultExpression !== undefined &&
+    !rendersDefaultPlaceholder(param.schema, lookup);
   return (
     <div className="flex flex-col gap-0.5">
       <FieldLabel
@@ -171,6 +208,11 @@ const ParamRow: FC<{
           schema={param.schema}
           value={value}
         />
+        {showDefaultHint && (
+          <div className="mt-0.5 font-vsc-mono text-[10px] text-vsc-description">
+            default: {param.defaultExpression}
+          </div>
+        )}
       </fieldset>
     </div>
   );
