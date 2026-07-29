@@ -1313,6 +1313,8 @@ fn resolve_type_for_item(db: &dyn Db, def: Option<Definition<'_>>) -> Option<Str
         TypeInfo::TypeAlias { expansion, .. } => Some(expansion),
         TypeInfo::TemplateString { .. } => Some("template_string".to_string()),
         TypeInfo::LocalVar { ty, .. } => Some(ty),
+        TypeInfo::Symbol { declaration } => Some(declaration),
+        TypeInfo::Documentation { label, .. } => Some(label),
         TypeInfo::OtherItem { kind, .. } => Some(kind.to_string()),
     }
 }

@@ -1937,7 +1937,10 @@ impl<'db> SemanticIndexBuilder<'db> {
         let mut occurrences: Vec<(&str, Vec<TextRange>)> = Vec::new();
         for attr in attributes {
             let name = attr.name.as_str();
-            if !matches!(name, "description" | "alias" | "skip") {
+            let Some(spec) = baml_base::schema_attribute_spec(name) else {
+                continue;
+            };
+            if spec.repeatable {
                 continue;
             }
             if let Some(entry) = occurrences.iter_mut().find(|(n, _)| *n == name) {
@@ -1956,9 +1959,13 @@ impl<'db> SemanticIndexBuilder<'db> {
         }
 
         for attr in attributes {
-            match attr.name.as_str() {
-                "description" | "alias" => {
-                    let attr_name = attr.name.as_str();
+            let Some(spec) = baml_base::schema_attribute_spec(attr.name.as_str()) else {
+                // Unknown attributes pass through (e.g. `@stream.*`).
+                continue;
+            };
+            match spec.arguments {
+                baml_base::SchemaAttributeArguments::String { .. } => {
+                    let attr_name = spec.name;
                     if attr.args.len() != 1 {
                         self.diagnostics.push(Hir2Diagnostic::DiagnosticMessage {
                             diagnostic_id: DiagnosticId::InvalidAttributeArg,
@@ -1978,17 +1985,14 @@ impl<'db> SemanticIndexBuilder<'db> {
                         });
                     }
                 }
-                "skip" if !attr.args.is_empty() => {
+                baml_base::SchemaAttributeArguments::None if !attr.args.is_empty() => {
                     self.diagnostics.push(Hir2Diagnostic::DiagnosticMessage {
                         diagnostic_id: DiagnosticId::UnexpectedAttributeArg,
-                        message: "`@skip` does not take any arguments".to_string(),
+                        message: format!("`@{}` does not take any arguments", spec.name),
                         span: attr.span,
                     });
                 }
-                "skip" => {}
-                _ => {
-                    // Unknown attributes passed through silently (e.g. @stream.*)
-                }
+                baml_base::SchemaAttributeArguments::None => {}
             }
         }
     }

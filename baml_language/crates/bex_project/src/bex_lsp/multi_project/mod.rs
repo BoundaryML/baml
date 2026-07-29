@@ -193,6 +193,11 @@ struct BexMulitProject {
     /// before negotiation never freezes a default.
     negotiated_encoding: std::sync::Arc<OnceLock<PositionEncoding>>,
 
+    /// Whether the client advertised completion-item snippet support during
+    /// `initialize`. Connection-scoped because capabilities belong to one
+    /// client session.
+    snippet_support: std::sync::Arc<OnceLock<bool>>,
+
     /// Workspace root directories provided by the LSP client during
     /// `initialize`. Used by `on_notification_initialized` to scope
     /// project discovery instead of walking the entire filesystem.
@@ -306,6 +311,7 @@ impl BexMulitProject {
             sender,
             playground_sender,
             negotiated_encoding: std::sync::Arc::new(OnceLock::new()),
+            snippet_support: std::sync::Arc::new(OnceLock::new()),
             workspace_roots: std::sync::Arc::new(std::sync::Mutex::new(Vec::new())),
             fs,
             spawner,
@@ -317,10 +323,10 @@ impl BexMulitProject {
     }
 
     /// Connection-scoped dispatcher: shares the process-owned project
-    /// registry (and everything hanging off it) but owns a fresh
-    /// position-encoding negotiation, fresh initialize workspace
-    /// roots, and a fresh semantic-token delta cache (encoding-dependent),
-    /// and writes only through the connection's revocable `sender`.
+    /// registry (and everything hanging off it) but owns fresh capability
+    /// negotiation, fresh initialize workspace roots, and a fresh
+    /// semantic-token delta cache (encoding-dependent), and writes only
+    /// through the connection's revocable `sender`.
     /// After browser takeover revokes that sender, a retained clone of
     /// this session fails `send_*` with `ClientClosed` instead of leaking
     /// into the replacement session.
@@ -331,6 +337,7 @@ impl BexMulitProject {
         let mut session = self.clone();
         session.sender = sender;
         session.negotiated_encoding = std::sync::Arc::new(OnceLock::new());
+        session.snippet_support = std::sync::Arc::new(OnceLock::new());
         session.workspace_roots = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
         session.semantic_tokens_cache =
             std::sync::Arc::new(std::sync::Mutex::new(std::collections::HashMap::new()));
@@ -375,6 +382,33 @@ impl BexMulitProject {
             .negotiated_encoding
             .get()
             .expect("negotiated encoding was just set")
+    }
+
+    fn negotiate_snippet_support(
+        &self,
+        client_capabilities: &lsp_types::ClientCapabilities,
+    ) -> bool {
+        let supported = client_capabilities
+            .text_document
+            .as_ref()
+            .and_then(|text_document| text_document.completion.as_ref())
+            .and_then(|completion| completion.completion_item.as_ref())
+            .and_then(|completion_item| completion_item.snippet_support)
+            .unwrap_or(false);
+        // First negotiation wins; a duplicate initialize cannot flip it.
+        let _ = self.snippet_support.set(supported);
+        *self
+            .snippet_support
+            .get()
+            .expect("snippet support was just set")
+    }
+
+    fn snippet_support_for_request(&self) -> Result<bool, LspError> {
+        self.snippet_support.get().copied().ok_or_else(|| {
+            LspError::ServerNotInitialized(
+                "completion capabilities have not been negotiated yet".to_string(),
+            )
+        })
     }
 
     fn get_path_from_uri(&self, uri: &lsp_types::Url) -> Result<vfs::VfsPath, LspError> {
@@ -2347,7 +2381,7 @@ mod tests {
     }
 
     /// A connection-scoped session shares the project registry but owns its
-    /// own encoding negotiation and workspace roots and routes output
+    /// own capability negotiation and workspace roots and routes output
     /// through its own sender.
     #[test]
     fn connection_scoped_session_is_fresh_but_shares_projects() {
@@ -2366,6 +2400,18 @@ mod tests {
         let _ = root
             .negotiated_encoding
             .set(crate::bex_lsp::position_codec::PositionEncoding::UTF8);
+        let snippet_capabilities = serde_json::from_value(serde_json::json!({
+            "textDocument": {
+                "completion": {
+                    "completionItem": {
+                        "snippetSupport": true
+                    }
+                }
+            }
+        }))
+        .expect("valid client capabilities");
+        assert!(root.negotiate_snippet_support(&snippet_capabilities));
+        assert!(root.snippet_support_for_request().unwrap());
         root.workspace_roots
             .lock()
             .unwrap()
@@ -2385,6 +2431,13 @@ mod tests {
         // entries are encoded per-connection); shared project registry and
         // result-id sequence.
         assert!(session.negotiated_encoding.get().is_none());
+        assert!(session.snippet_support.get().is_none());
+        assert!(matches!(
+            session.snippet_support_for_request(),
+            Err(LspError::ServerNotInitialized(_))
+        ));
+        assert!(!session.negotiate_snippet_support(&lsp_types::ClientCapabilities::default()));
+        assert!(!session.snippet_support_for_request().unwrap());
         assert!(session.workspace_roots.lock().unwrap().is_empty());
         assert!(session.semantic_tokens_cache.lock().unwrap().is_empty());
         assert!(Arc::ptr_eq(&session.projects, &root.projects));
