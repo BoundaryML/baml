@@ -1,6 +1,6 @@
-import { type NodeProps } from '@xyflow/react';
+import type { NodeProps } from '@xyflow/react';
 import { Repeat } from 'lucide-react';
-import { type ComponentType, memo } from 'react';
+import { type ComponentType, memo, useState } from 'react';
 import { getChrome, stateStyle } from '../constants';
 import { depthScale } from '../lod';
 import { useGraphThemeContext } from '../theme';
@@ -19,6 +19,13 @@ import { NodeOutputPreview } from './NodeOutputPreview';
  */
 export const GroupNode: ComponentType<NodeProps> = memo(({ data, id }) => {
   const d = data as WorkflowNodeData;
+  const label = d.label || id;
+  const iterationCount = d.iterationCount ?? 0;
+  const title =
+    iterationCount > 0
+      ? `${label} (${iterationCount} iteration${iterationCount === 1 ? '' : 's'})`
+      : label;
+  const [isLabelHovered, setIsLabelHovered] = useState(false);
   const isHighlighted = d.selected;
   // Set by the level-of-detail pass when the user expanded this container.
   const expandable = d.expanded === true;
@@ -41,130 +48,150 @@ export const GroupNode: ComponentType<NodeProps> = memo(({ data, id }) => {
   return (
     <div
       style={{
-        width: '100%',
-        height: '100%',
-        position: 'relative',
-        pointerEvents: 'none',
-        borderRadius: 12,
         // Frame-only: no fill, so the canvas reads through. Nested groups
         // never stack into a darker patch — they just compose hairline frames.
         background: 'transparent',
         border: `1.5px ${isStateful || isHighlighted ? 'solid' : 'dashed'} ${borderColor}`,
+        borderRadius: 12,
         boxShadow: isHighlighted
           ? `0 0 0 1px ${chrome.selectionRing.glow}`
           : undefined,
+        height: '100%',
+        pointerEvents: 'none',
+        position: 'relative',
         transition: 'border-color 150ms ease, box-shadow 150ms ease',
+        width: '100%',
       }}
     >
       <NodeHandles />
 
       {/* Floating label chip — sits on the top edge of the frame */}
       <div
+        className="baml-graph-group-label"
+        onMouseEnter={() => setIsLabelHovered(true)}
+        onMouseLeave={() => setIsLabelHovered(false)}
         style={{
-          position: 'absolute',
-          top: 0,
-          left: 14,
-          transform: 'translateY(-50%)',
-          zIndex: 5,
-          pointerEvents: 'auto',
-          // Manually-expanded containers collapse on click of this chip.
-          cursor: expandable ? 'zoom-out' : 'pointer',
-          display: 'inline-flex',
           alignItems: 'center',
-          gap: 6,
-          whiteSpace: 'nowrap',
-          padding: `${3 * s}px ${10 * s}px`,
-          borderRadius: 999,
-          fontWeight: 600,
-          fontSize: 11 * s,
-          letterSpacing: '-0.005em',
-          color: isHighlighted
-            ? chrome.groupLabelTextSelected
-            : chrome.groupLabelText,
+          backdropFilter: 'blur(8px)',
           background: isHighlighted
             ? chrome.groupLabelBgSelected
             : chrome.groupLabelBg,
           border: `1px solid ${isHighlighted ? chrome.selectionRing.color : chrome.groupLabelBorder}`,
-          backdropFilter: 'blur(8px)',
-          WebkitBackdropFilter: 'blur(8px)',
+          borderRadius: 999,
           boxShadow: isHighlighted
             ? `0 0 0 2px ${chrome.selectionRing.glow}, ${chrome.groupLabelShadow}`
             : chrome.groupLabelShadow,
-          transition: 'all 150ms ease',
+          boxSizing: 'border-box',
+          color: isHighlighted
+            ? chrome.groupLabelTextSelected
+            : chrome.groupLabelText,
+          // Manually-expanded containers collapse on click of this chip.
+          cursor: expandable ? 'zoom-out' : 'pointer',
+          display: 'inline-flex',
           fontFamily:
             'ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif',
+          fontSize: 11 * s,
+          fontWeight: 600,
+          gap: 6,
+          left: 14,
+          letterSpacing: '-0.005em',
+          maxWidth: isLabelHovered ? 'none' : 'calc(100% - 28px)',
+          overflow: isLabelHovered ? 'visible' : 'hidden',
+          padding: `${3 * s}px ${10 * s}px`,
+          pointerEvents: 'auto',
+          position: 'absolute',
+          top: 0,
+          transform: 'translateY(-50%)',
+          transition: 'all 150ms ease',
+          WebkitBackdropFilter: 'blur(8px)',
+          whiteSpace: 'nowrap',
+          width: 'max-content',
+          zIndex: 5,
         }}
+        title={title}
       >
         {/* State accent dot (only for stateful runs) */}
         {isStateful && (
           <span
             style={{
-              width: 6,
-              height: 6,
-              borderRadius: '50%',
               background: stateAccent,
+              borderRadius: '50%',
               boxShadow: `0 0 6px ${stateAccent}`,
               flexShrink: 0,
+              height: 6,
+              width: 6,
             }}
           />
         )}
-        <span>{d.label || id}</span>
+        <span
+          className="baml-graph-group-label__text"
+          style={{
+            flex: '1 1 auto',
+            minWidth: 0,
+            overflow: isLabelHovered ? 'visible' : 'hidden',
+            textOverflow: isLabelHovered ? 'clip' : 'ellipsis',
+          }}
+        >
+          {label}
+        </span>
         {expandable && (
           <span
             aria-hidden
-            title="Click to collapse"
             style={{
-              display: 'inline-flex',
               alignItems: 'center',
-              justifyContent: 'center',
-              width: 14,
-              height: 14,
-              borderRadius: '50%',
-              fontSize: 13,
-              lineHeight: 1,
-              fontWeight: 700,
-              color: chrome.groupLabelText,
               border: `1px solid ${chrome.groupLabelBorder}`,
+              borderRadius: '50%',
+              color: chrome.groupLabelText,
+              display: 'inline-flex',
+              flexShrink: 0,
+              fontSize: 13,
+              fontWeight: 700,
+              height: 14,
+              justifyContent: 'center',
+              lineHeight: 1,
+              width: 14,
             }}
+            title="Click to collapse"
           >
             {'−'}
           </span>
         )}
-        {(d.iterationCount ?? 0) > 0 && (
+        {iterationCount > 0 && (
           <span
             style={{
-              display: 'inline-flex',
               alignItems: 'center',
+              background: chrome.iterationBg,
+              border: `1px solid ${chrome.iterationBorder}`,
+              borderRadius: 999,
+              color: chrome.iterationText,
+              display: 'inline-flex',
+              flexShrink: 0,
+              fontSize: 10,
+              fontVariantNumeric: 'tabular-nums',
+              fontWeight: 600,
               gap: 3,
               marginLeft: 2,
               padding: '1px 6px',
-              borderRadius: 999,
-              background: chrome.iterationBg,
-              color: chrome.iterationText,
-              fontSize: 10,
-              fontWeight: 600,
-              fontVariantNumeric: 'tabular-nums',
-              border: `1px solid ${chrome.iterationBorder}`,
             }}
           >
             <Repeat size={9} strokeWidth={2.5} />
-            {d.iterationCount}
+            {iterationCount}
           </span>
         )}
       </div>
       {hasValuePreviews ? (
         <div
           style={{
+            left: 14,
+            pointerEvents: 'auto',
             position: 'absolute',
             top: 16,
-            left: 14,
             zIndex: 4,
-            pointerEvents: 'auto',
           }}
         >
           <NodeOutputPreview
-            valuePreviews={d.valuePreviews}
             customRenderers={d.customRenderers}
+            valuePreviews={d.valuePreviews}
           />
         </div>
       ) : null}
