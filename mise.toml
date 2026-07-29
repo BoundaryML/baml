@@ -40,7 +40,7 @@ protoc = "27.1"
 "spm:apple/swift-protobuf" = "1.38.1"
 
 # Python tools
-"pipx:ruff" = "latest"
+"pipx:ruff" = "0.15.22"
 "pipx:maturin" = "latest"
 
 # Node tools
