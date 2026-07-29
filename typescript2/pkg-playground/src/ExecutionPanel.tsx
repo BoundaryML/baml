@@ -782,6 +782,8 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
     useState<PendingTestTarget | null>(null);
 
   const [selectedFn, setSelectedFn] = useState<string | null>(null);
+  const [selectedTestName, setSelectedTestName] = useState<string | null>(null);
+  const graphTargetName = selectedTestName ?? selectedFn;
   const [selectedPreviewTestKey, setSelectedPreviewTestKey] = useState<
     string | null
   >(null);
@@ -946,6 +948,21 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
   useEffect(() => {
     selectedFnRef.current = selectedFn;
   }, [selectedFn]);
+  useEffect(() => {
+    if (selectedFn && selectedTestName) {
+      setSelectedTestName(null);
+    }
+  }, [selectedFn, selectedTestName]);
+  const selectedTestNameRef = useRef(selectedTestName);
+  useEffect(() => {
+    selectedTestNameRef.current = selectedTestName;
+  }, [selectedTestName]);
+  const graphTargetNameRef = useRef(graphTargetName);
+  useEffect(() => {
+    graphTargetNameRef.current = graphTargetName;
+  }, [graphTargetName]);
+  const testGraphRequestsRef = useRef(new Set<string>());
+  const pendingTestSourceNavigationRef = useRef<string | null>(null);
   const controlFlowGraphRef = useRef(controlFlowGraph);
   useEffect(() => {
     controlFlowGraphRef.current = controlFlowGraph;
@@ -1228,6 +1245,36 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
 
   // ── Port message handler ─────────────────────────────────────────────
 
+  function handleControlFlowGraphResult(
+    targetName: string,
+    graph: ControlFlowGraph | null,
+  ) {
+    const isTestGraph = testGraphRequestsRef.current.has(targetName);
+    if (!isTestGraph) {
+      workflowCfgResponsesRef.current.set(targetName, graph);
+      setWorkflowCacheVersion((version) => version + 1);
+      if (graph) {
+        workflowCfgCacheRef.current.set(targetName, graph);
+      }
+    }
+
+    if (!graph || targetName !== graphTargetNameRef.current) return;
+    setControlFlowGraph(graph);
+    const pendingHighlight = pendingHighlightRef.current;
+    if (pendingHighlight && pendingHighlight.fn === targetName) {
+      pendingHighlightRef.current = null;
+      setHighlightedNodeId(pendingHighlight.nodeId);
+    }
+
+    if (pendingTestSourceNavigationRef.current === targetName) {
+      pendingTestSourceNavigationRef.current = null;
+      const source = Object.values(graph.nodes).find(
+        (node) => node.nodeType === 'functionRoot',
+      )?.sourceSpan;
+      if (source) onNavigateToSource?.(source);
+    }
+  }
+
   useEffect(() => {
     const unsubscribe = port.onMessage((data: WorkerOutMessage) => {
       switch (data.type) {
@@ -1318,21 +1365,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
               }
               break;
             case 'controlFlowGraphResult':
-              workflowCfgResponsesRef.current.set(n.functionName, n.graph);
-              setWorkflowCacheVersion((v) => v + 1);
-              if (n.graph) {
-                workflowCfgCacheRef.current.set(n.functionName, n.graph);
-                // Only the selected function's graph drives the display —
-                // prefetched graphs for other functions just fill the cache.
-                if (n.functionName === selectedFnRef.current) {
-                  setControlFlowGraph(n.graph);
-                  const pending = pendingHighlightRef.current;
-                  if (pending && pending.fn === n.functionName) {
-                    pendingHighlightRef.current = null;
-                    setHighlightedNodeId(pending.nodeId);
-                  }
-                }
-              }
+              handleControlFlowGraphResult(n.functionName, n.graph);
               break;
           }
           break;
@@ -1463,19 +1496,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
           break;
 
         case 'controlFlowGraphResult':
-          workflowCfgResponsesRef.current.set(data.functionName, data.graph);
-          setWorkflowCacheVersion((v) => v + 1);
-          if (data.graph) {
-            workflowCfgCacheRef.current.set(data.functionName, data.graph);
-            if (data.functionName === selectedFnRef.current) {
-              setControlFlowGraph(data.graph);
-              const pending = pendingHighlightRef.current;
-              if (pending && pending.fn === data.functionName) {
-                pendingHighlightRef.current = null;
-                setHighlightedNodeId(pending.nodeId);
-              }
-            }
-          }
+          handleControlFlowGraphResult(data.functionName, data.graph);
           break;
 
         case 'cursorContext':
@@ -1504,32 +1525,41 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
     return unsubscribe;
   }, [port]);
 
-  // Request control flow graph when selected function changes OR code is edited.
-  // On function/project switch: clear the graph (shows loading state).
+  // Request a control flow graph when the selected function/test changes OR code is edited.
+  // On target/project switch: clear the graph (shows loading state).
   // On code edit (projectUpdateVersion): keep old graph visible, swap when new one arrives.
-  const prevGraphFnRef = useRef(selectedFn);
+  const prevGraphTargetRef = useRef(graphTargetName);
   const prevGraphProjectRef = useRef(selectedProject);
   const projectUpdateVersion = selectedProject
     ? projectUpdates[selectedProject]
     : undefined;
 
   useEffect(() => {
-    const fnChanged = prevGraphFnRef.current !== selectedFn;
+    const targetChanged = prevGraphTargetRef.current !== graphTargetName;
     const projChanged = prevGraphProjectRef.current !== selectedProject;
-    prevGraphFnRef.current = selectedFn;
+    prevGraphTargetRef.current = graphTargetName;
     prevGraphProjectRef.current = selectedProject;
 
-    if (fnChanged || projChanged) {
+    if (targetChanged || projChanged) {
       setControlFlowGraph(null);
       setHighlightedNodeId(null);
     }
-    if (!selectedFn || !selectedProject) return;
+    if (!graphTargetName || !selectedProject) return;
+    if (selectedTestName) {
+      testGraphRequestsRef.current.add(selectedTestName);
+    }
     port.postMessage({
       type: 'requestControlFlowGraph',
       project: selectedProject,
-      functionName: selectedFn,
+      functionName: graphTargetName,
     });
-  }, [port, selectedFn, selectedProject, projectUpdateVersion]);
+  }, [
+    port,
+    graphTargetName,
+    selectedProject,
+    selectedTestName,
+    projectUpdateVersion,
+  ]);
 
   // Clear preview results when selected function changes
   useEffect(() => {
@@ -2076,6 +2106,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
     const key = previewTestKey(test);
     typedArgsByFnRef.current[test.functionName] = test.argsJson;
     setArgsJson(test.argsJson);
+    setSelectedTestName(null);
     setSelectedPreviewTestKey(key);
     setSelectedFn(test.functionName);
     setViewingCollection(false);
@@ -2083,6 +2114,39 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
     setHighlightedNodeId(null);
     setWorkflowContext(null);
   }, []);
+
+  const handleSelectTest = useCallback(
+    (name: string) => {
+      const currentGraph =
+        graphTargetNameRef.current === name
+          ? controlFlowGraphRef.current
+          : null;
+      const currentSource = currentGraph
+        ? Object.values(currentGraph.nodes).find(
+            (node) => node.nodeType === 'functionRoot',
+          )?.sourceSpan
+        : null;
+      if (currentSource) {
+        pendingTestSourceNavigationRef.current = null;
+        onNavigateToSource?.(currentSource);
+      } else {
+        pendingTestSourceNavigationRef.current = name;
+      }
+
+      selectedTestNameRef.current = name;
+      graphTargetNameRef.current = name;
+      testGraphRequestsRef.current.add(name);
+      setSelectedPreviewTestKey(null);
+      setSelectedFn(null);
+      setSelectedTestName(name);
+      setViewingCollection(false);
+      setViewingTestRun(false);
+      setHighlightedNodeId(null);
+      setWorkflowContext(null);
+      setActiveTab('graph');
+    },
+    [onNavigateToSource],
+  );
 
   // Keep a selected preview case synchronized with source edits. If the test
   // is deleted, retain the current function/args as an ordinary manual draft.
@@ -2571,6 +2635,19 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
             </Tooltip>
           </TooltipProvider>
 
+          {selectedTestName && !viewingCollection && !viewingTestRun && (
+            <>
+              <span className="max-w-64 truncate text-[11px] font-vsc-mono text-vsc-accent font-semibold">
+                {selectedTestName}
+              </span>
+              <TabsList className="bg-transparent border-b-0 ml-1 h-7">
+                <TabsTrigger value="graph" className="py-1 h-7">
+                  Graph
+                </TabsTrigger>
+              </TabsList>
+            </>
+          )}
+
           {selectedFn && !viewingCollection && !viewingTestRun && (
             <>
               <span className="text-[11px] font-vsc-mono text-vsc-accent font-semibold whitespace-nowrap">
@@ -2872,8 +2949,11 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
                   previewTests={previewTests}
                   selectedPreviewTestKey={selectedPreviewTestKey}
                   onSelectPreviewTest={handleSelectPreviewTest}
+                  selectedTestName={selectedTestName}
+                  onSelectTest={handleSelectTest}
                   selectedFn={selectedFn}
                   onSelectFn={(fn) => {
+                    setSelectedTestName(null);
                     setSelectedPreviewTestKey(null);
                     setViewingCollection(false);
                     setViewingTestRun(false);
@@ -2891,6 +2971,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
                   onSelectCollectionView={() => {
                     setViewingCollection(true);
                     setViewingTestRun(false);
+                    setSelectedTestName(null);
                     setSelectedFn(null);
                   }}
                 />
@@ -3129,7 +3210,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
                   );
                 })}
               </div>
-            ) : selectedFn ? (
+            ) : graphTargetName ? (
               <>
                 {/* Graph view */}
                 <TabsContent
@@ -3141,7 +3222,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
                   {controlFlowGraph ? (
                     <GraphView
                       graph={controlFlowGraph}
-                      functionName={selectedFn}
+                      functionName={graphTargetName}
                       graphRuntimeOverlay={
                         latestGraphRunSnapshot?.graphRuntimeOverlay
                       }
@@ -3341,7 +3422,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
                     {controlFlowGraph ? (
                       <GraphView
                         graph={controlFlowGraph}
-                        functionName={selectedFn}
+                        functionName={graphTargetName}
                         graphRuntimeOverlay={
                           latestGraphRunSnapshot?.graphRuntimeOverlay
                         }
