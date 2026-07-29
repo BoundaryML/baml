@@ -1,6 +1,9 @@
+import { createElement } from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 
 import {
+  CapturedValueCard,
   capturedValueCardContentHeight,
   capturedValueCardDiagnosticHeight,
 } from './CapturedValueCard';
@@ -43,6 +46,17 @@ describe('captured value card graph sizing', () => {
         }),
       ),
     ).toBe(48);
+  });
+
+  it('left-aligns pretty-printed graph values inside centered React Flow groups', () => {
+    const markup = renderToStaticMarkup(
+      createElement(CapturedValueCard, {
+        prettyPrintValue: true,
+        value: preview({ message: 'invalid argument' }),
+      }),
+    );
+
+    expect(markup).toContain('text-align:left');
   });
 
   it('reserves a gap and footer row when five previews are truncated to four', () => {

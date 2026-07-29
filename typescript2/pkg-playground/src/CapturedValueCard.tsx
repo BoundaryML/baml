@@ -264,6 +264,7 @@ export function CapturedValueCard({
             marginTop: 6,
             maxHeight: compact ? CAPTURED_VALUE_CARD_TEXT_HEIGHT : 180,
             overflow: 'auto',
+            textAlign: prettyPrintValue ? 'left' : undefined,
           }}
         >
           <ValueRenderer
