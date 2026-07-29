@@ -1231,6 +1231,25 @@ fn dispatch_language_topic_resolves_to_keyword() {
 }
 
 #[test]
+fn dispatch_schema_attributes_and_intrinsic_types_resolve_to_topics() {
+    let db = simple_project();
+    for name in ["alias", "description", "skip", "void", "never", "unknown"] {
+        assert!(
+            matches!(dispatch(&db, name), Some(ResolvedTarget::Keyword(_))),
+            "`baml describe {name}` should resolve to a shared language topic"
+        );
+    }
+}
+
+#[test]
+fn render_schema_attribute_topic() {
+    let output = capture_keyword("alias");
+    assert!(output.contains("Overrides the serialized and parsed name"));
+    assert!(output.contains(r#"@alias("name")"#));
+    assert!(output.contains(r#"@@alias("name")"#));
+}
+
+#[test]
 fn render_keyword_interface() {
     let output = capture_keyword("interface");
     insta::assert_snapshot!(output);

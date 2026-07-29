@@ -1,6 +1,6 @@
 #![allow(clippy::print_stdout, clippy::print_stderr)]
 
-use std::{collections::HashMap, path::PathBuf, sync::LazyLock};
+use std::path::PathBuf;
 
 use anyhow::{Context, Result};
 use baml_db::baml_compiler2_hir;
@@ -9,34 +9,6 @@ use baml_project::ProjectDatabase;
 use clap::Args;
 
 use crate::util::{line_number_at_offset, relative_path};
-
-/// Parsed documentation entry for a BAML keyword topic.
-#[derive(serde::Deserialize)]
-struct BamlKeywordDoc {
-    summary: String,
-    #[serde(default)]
-    syntax: Option<String>,
-    #[serde(default)]
-    details: Option<String>,
-}
-
-/// Parsed documentation entry for a TypeScript/JavaScript keyword topic.
-#[derive(serde::Deserialize)]
-struct TsKeywordDoc {
-    message: String,
-    #[serde(default)]
-    see: Option<String>,
-}
-
-static BAML_KEYWORDS: LazyLock<HashMap<String, BamlKeywordDoc>> = LazyLock::new(|| {
-    serde_yaml::from_str(baml_builtins2::BAML_KEYWORDS_YAML)
-        .expect("failed to parse baml_keywords.yaml")
-});
-
-static TS_KEYWORDS: LazyLock<HashMap<String, TsKeywordDoc>> = LazyLock::new(|| {
-    serde_yaml::from_str(baml_builtins2::TS_KEYWORDS_YAML)
-        .expect("failed to parse ts_keywords.yaml")
-});
 
 /// Describe BAML symbols and language concepts.
 ///
@@ -220,19 +192,12 @@ pub fn dispatch<'db>(db: &'db ProjectDatabase, name: &str) -> Option<ResolvedTar
     // `string.length` → `baml.String.length`. Checked before the keyword
     // crosswalk so `baml describe string` shows the class (with its methods),
     // not keyword docs.
-    let (alias_head, alias_rest) = name.split_once('.').unwrap_or((name, ""));
-    if let Some(class_path) = builtin_alias_class_path(alias_head) {
-        let baml_pkg = baml_compiler2_hir::package::PackageId::new(db, baml_db::Name::new("baml"));
-        let target = if alias_rest.is_empty() {
-            class_path.to_string()
-        } else {
-            format!("{class_path}.{alias_rest}")
-        };
-        return baml_lsp2_actions::resolve_target(db, baml_pkg, &target);
+    if let Some(target) = baml_lsp2_actions::resolve_builtin_type_target(db, name) {
+        return Some(target);
     }
 
     // Check for keyword (BAML or TS/JS crosswalk) before package routing.
-    if BAML_KEYWORDS.contains_key(name) || TS_KEYWORDS.contains_key(name) {
+    if baml_builtins2::has_describe_topic(name) {
         return Some(ResolvedTarget::Keyword(name.to_string()));
     }
 
@@ -262,27 +227,6 @@ pub fn dispatch<'db>(db: &'db ProjectDatabase, name: &str) -> Option<ResolvedTar
     }
 
     resolve_unqualified_builtin_member(db, name)
-}
-
-/// Map a lowercase primitive/keyword alias to the path of its builtin `baml`
-/// companion class, relative to the `baml` package. Mirrors the alias set in
-/// `baml_compiler2_tir::ty::PrimitiveType::alias` plus the `json` type alias.
-fn builtin_alias_class_path(name: &str) -> Option<&'static str> {
-    Some(match name {
-        "string" => "String",
-        "int" => "Int",
-        "bigint" => "Bigint",
-        "float" => "Float",
-        "bool" => "Bool",
-        "null" => "Null",
-        "uint8array" => "Uint8Array",
-        "image" => "media.Image",
-        "audio" => "media.Audio",
-        "video" => "media.Video",
-        "pdf" => "media.Pdf",
-        "json" => "json.json",
-        _ => return None,
-    })
 }
 
 /// Resolve `Array.reduce`/`String.split`-style builtin class member lookups.
@@ -493,7 +437,7 @@ impl DescribeArgs {
 /// Render keyword documentation to a writer.
 pub fn write_keyword(w: &mut impl std::io::Write, name: &str) -> std::io::Result<()> {
     let painter = crate::paint::Painter::stdout();
-    if let Some(doc) = BAML_KEYWORDS.get(name) {
+    if let Some(doc) = baml_builtins2::language_topic(name) {
         writeln!(w, "{} — {}", painter.keyword(name), doc.summary)?;
         if let Some(ref syntax) = doc.syntax {
             writeln!(w)?;
@@ -506,7 +450,7 @@ pub fn write_keyword(w: &mut impl std::io::Write, name: &str) -> std::io::Result
             writeln!(w)?;
             writeln!(w, "{details}")?;
         }
-    } else if let Some(doc) = TS_KEYWORDS.get(name) {
+    } else if let Some(doc) = baml_builtins2::typescript_crosswalk_topic(name) {
         writeln!(w, "{} — {}", painter.keyword(name), doc.message)?;
         if let Some(ref see) = doc.see {
             writeln!(w)?;
@@ -523,7 +467,7 @@ fn render_keyword(name: &str) {
 
 /// Render keyword documentation as JSON.
 fn render_keyword_json(name: &str) -> serde_json::Value {
-    if let Some(doc) = BAML_KEYWORDS.get(name) {
+    if let Some(doc) = baml_builtins2::language_topic(name) {
         serde_json::json!({
             "type": "keyword",
             "name": name,
@@ -531,7 +475,7 @@ fn render_keyword_json(name: &str) -> serde_json::Value {
             "syntax": doc.syntax,
             "details": doc.details,
         })
-    } else if let Some(doc) = TS_KEYWORDS.get(name) {
+    } else if let Some(doc) = baml_builtins2::typescript_crosswalk_topic(name) {
         serde_json::json!({
             "type": "crosswalk",
             "name": name,

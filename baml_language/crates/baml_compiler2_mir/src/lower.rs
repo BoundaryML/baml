@@ -7009,7 +7009,7 @@ impl LoweringContext<'_> {
                     .iter()
                     .filter(|m| !matches!(m, RuntimeTy::Null { .. }))
                     .all(|m| match kind(m, include_string) {
-                        Some(kind) => first.get_or_insert(kind.clone()) == &kind,
+                        Some(kind) => first.get_or_insert(kind) == &kind,
                         None => false,
                     })
                     && first.is_some()
@@ -14877,7 +14877,7 @@ mod tests {
         )
     }
 
-    fn primitive(primitive: &PrimitiveType) -> Tir2Ty {
+    fn primitive(primitive: PrimitiveType) -> Tir2Ty {
         let attr = baml_compiler2_tir::ty::TyAttr::default();
         match primitive {
             PrimitiveType::Int => Tir2Ty::Int { attr },
@@ -14913,11 +14913,11 @@ mod tests {
     #[test]
     fn block_selection_checks_assoc_when_request_omits_generic_args() {
         let aliases = HashMap::new();
-        let impl_args = vec![primitive(&PrimitiveType::String)];
+        let impl_args = vec![primitive(PrimitiveType::String)];
         let requested_args = Vec::new();
-        let requested_assoc = vec![(Name::new("Value"), primitive(&PrimitiveType::Int))];
+        let requested_assoc = vec![(Name::new("Value"), primitive(PrimitiveType::Int))];
 
-        let int_impl_assoc = vec![(Name::new("Value"), primitive(&PrimitiveType::Int))];
+        let int_impl_assoc = vec![(Name::new("Value"), primitive(PrimitiveType::Int))];
         assert!(implements_block_matches_request(
             &impl_args,
             &int_impl_assoc,
@@ -14927,7 +14927,7 @@ mod tests {
             &aliases,
         ));
 
-        let string_impl_assoc = vec![(Name::new("Value"), primitive(&PrimitiveType::String))];
+        let string_impl_assoc = vec![(Name::new("Value"), primitive(PrimitiveType::String))];
         assert!(!implements_block_matches_request(
             &impl_args,
             &string_impl_assoc,

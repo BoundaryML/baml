@@ -1,6 +1,84 @@
 use crate::{testing::CursorTest, type_info::type_at};
 
 #[test]
+fn client_config_hover_only_documents_the_key_token() {
+    let key = CursorTest::new(
+        r#"client<llm> Example {
+  prov<[CURSOR]ider openai
+}"#,
+    );
+    let key_markdown = type_at(&key.db, key.cursor.file, key.cursor.offset)
+        .expect("config key hover info")
+        .to_hover_markdown();
+    assert!(key_markdown.contains("provider <name>"));
+
+    let value = CursorTest::new(
+        r#"client<llm> Example {
+  provider open<[CURSOR]ai
+}"#,
+    );
+    let value_markdown = type_at(&value.db, value.cursor.file, value.cursor.offset)
+        .map(|info| info.to_hover_markdown());
+    assert!(
+        value_markdown
+            .as_deref()
+            .is_none_or(|markdown| !markdown.contains("provider <name>"))
+    );
+}
+
+#[test]
+fn schema_attribute_hover_only_documents_the_attribute_name() {
+    let name = CursorTest::new(
+        r#"class Example {
+  value string @descrip<[CURSOR]tion("Displayed value")
+}"#,
+    );
+    let name_markdown = type_at(&name.db, name.cursor.file, name.cursor.offset)
+        .expect("attribute name hover info")
+        .to_hover_markdown();
+    assert!(name_markdown.contains(r#"@description("text")"#));
+
+    let argument = CursorTest::new(
+        r#"class Example {
+  value string @description("Displayed <[CURSOR]value")
+}"#,
+    );
+    let argument_markdown = type_at(&argument.db, argument.cursor.file, argument.cursor.offset)
+        .expect("string literal hover info")
+        .to_hover_markdown();
+    assert!(!argument_markdown.contains(r#"@description("text")"#));
+}
+
+#[test]
+fn builtin_type_hover_uses_stdlib_docstring() {
+    let test = CursorTest::new(
+        r#"class Example {
+  value i<[CURSOR]nt
+}"#,
+    );
+    let markdown = type_at(&test.db, test.cursor.file, test.cursor.offset)
+        .expect("builtin type hover info")
+        .to_hover_markdown();
+
+    assert!(markdown.contains("A 63-bit signed integer. Range: -2^62 to 2^62-1"));
+    assert!(!markdown.contains("with checked arithmetic"));
+}
+
+#[test]
+fn intrinsic_type_hover_uses_language_topic() {
+    let test = CursorTest::new(
+        r#"function stop() -> ne<[CURSOR]ver {
+  throw "stop"
+}"#,
+    );
+    let markdown = type_at(&test.db, test.cursor.file, test.cursor.offset)
+        .expect("intrinsic type hover info")
+        .to_hover_markdown();
+
+    assert!(markdown.contains("The bottom type of an expression that never returns normally."));
+}
+
+#[test]
 fn function_hover_uses_resolved_callback_surface() {
     let test = CursorTest::new(
         r#"function <[CURSOR]forward(cb: (x: int) -> int) -> int {

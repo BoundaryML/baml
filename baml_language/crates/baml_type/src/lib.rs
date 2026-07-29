@@ -1082,7 +1082,7 @@ mod tests {
             PrimitiveType::Pdf,
         ] {
             assert_eq!(
-                Ty::from_primitive(primitive.clone(), TyAttr::default()).to_string(),
+                Ty::from_primitive(primitive, TyAttr::default()).to_string(),
                 primitive.alias()
             );
         }

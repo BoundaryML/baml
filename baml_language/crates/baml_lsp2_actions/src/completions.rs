@@ -156,6 +156,16 @@ pub enum CompletionKind {
     Parameter,
 }
 
+/// How an editor should interpret [`Completion::insert_text`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum CompletionInsertTextFormat {
+    /// Insert the text literally.
+    #[default]
+    PlainText,
+    /// Interpret LSP snippet tabstops such as `$0` and `${1:Name}`.
+    Snippet,
+}
+
 // ── Completion ────────────────────────────────────────────────────────────────
 
 /// A single completion item returned by `completions_at`.
@@ -171,6 +181,8 @@ pub struct Completion {
     pub detail: Option<String>,
     /// Text inserted on acceptance (defaults to `label` if `None`).
     pub insert_text: Option<String>,
+    /// Whether `insert_text` is literal text or an LSP snippet.
+    pub insert_text_format: CompletionInsertTextFormat,
     /// Sort key (lower sorts first).
     pub sort_text: Option<String>,
 }
@@ -183,6 +195,7 @@ impl Completion {
             kind,
             detail: None,
             insert_text: None,
+            insert_text_format: CompletionInsertTextFormat::PlainText,
             sort_text: None,
         }
     }
@@ -199,6 +212,12 @@ impl Completion {
 
     fn with_insert_text(mut self, insert_text: impl Into<String>) -> Self {
         self.insert_text = Some(insert_text.into());
+        self
+    }
+
+    fn with_snippet(mut self, snippet: impl Into<String>) -> Self {
+        self.insert_text = Some(snippet.into());
+        self.insert_text_format = CompletionInsertTextFormat::Snippet;
         self
     }
 }
@@ -1011,7 +1030,7 @@ fn completions_for_class_methods(
 /// For a `Ty::Class`, looks up resolved class fields and returns the field's type.
 fn resolve_field_type(db: &dyn Db, ty: &Ty, field_name: &str) -> Option<Ty> {
     match ty {
-        Ty::Class(qn, _, _) => {
+        Ty::Class(qn, type_args, _) => {
             let pkg_info_name = qn.package().as_str();
             let pkg_id = PackageId::new(db, Name::new(pkg_info_name));
             let pkg = package_items(db, pkg_id);
@@ -1021,10 +1040,15 @@ fn resolve_field_type(db: &dyn Db, ty: &Ty, field_name: &str) -> Option<Ty> {
                 return None;
             };
 
+            let class_generic_params = baml_compiler2_tir::class_generic_params(db, class_loc);
+            let bindings =
+                baml_compiler2_tir::generics::bind_type_vars(&class_generic_params, type_args);
             let resolved = baml_compiler2_tir::inference::resolve_class_fields(db, class_loc);
             for (name, field_ty, _) in &resolved.fields {
                 if name.as_str() == field_name {
-                    return Some(field_ty.clone());
+                    return Some(baml_compiler2_tir::generics::substitute_ty(
+                        field_ty, &bindings,
+                    ));
                 }
             }
             None
@@ -1117,7 +1141,7 @@ fn find_path_segments_for_word_after_dot(token: &baml_compiler_syntax::SyntaxTok
 /// Returns completions for the members of `ty`.
 fn completions_for_ty_members(db: &dyn Db, file: SourceFile, ty: &Ty) -> Vec<Completion> {
     match ty {
-        Ty::Class(qn, _, _) => {
+        Ty::Class(qn, type_args, _) => {
             // Find the class definition and return its fields and methods.
             let pkg_info_name = qn.package().as_str();
             let pkg_id = PackageId::new(db, Name::new(pkg_info_name));
@@ -1130,18 +1154,24 @@ fn completions_for_ty_members(db: &dyn Db, file: SourceFile, ty: &Ty) -> Vec<Com
 
             let mut items = Vec::new();
 
-            // Fields from resolved class fields.
+            let class_data = baml_compiler2_ppir::item_data::class_data(db, class_loc);
+            let class_generic_params = baml_compiler2_tir::class_generic_params(db, class_loc);
+            let bindings =
+                baml_compiler2_tir::generics::bind_type_vars(&class_generic_params, type_args);
+
+            // Fields from resolved class fields, specialized for the receiver's
+            // concrete type arguments.
             let resolved = baml_compiler2_tir::inference::resolve_class_fields(db, class_loc);
             for (field_name, field_ty, _field_attrs) in &resolved.fields {
+                let field_ty = baml_compiler2_tir::generics::substitute_ty(field_ty, &bindings);
                 items.push(
                     Completion::new(field_name.as_str(), CompletionKind::Field)
-                        .with_detail(utils::display_ty_for_file(db, file, field_ty))
+                        .with_detail(utils::display_ty_for_file(db, file, &field_ty))
                         .with_sort(format!("0_{}", field_name.as_str())),
                 );
             }
 
             // Methods from the class's firewall data.
-            let class_data = baml_compiler2_ppir::item_data::class_data(db, class_loc);
             for &func_loc in &class_data.methods {
                 let method = baml_compiler2_ppir::item_data::function_data(db, func_loc);
                 items.push(
@@ -1586,33 +1616,45 @@ fn completions_for_top_level() -> Vec<Completion> {
     vec![
         Completion::new("class", CompletionKind::Keyword)
             .with_detail("class declaration")
+            .with_snippet("class ${1:Name} {\n  ${2:field} ${3:string}\n  $0\n}")
             .with_sort("00_class"),
         Completion::new("enum", CompletionKind::Keyword)
             .with_detail("enum declaration")
+            .with_snippet("enum ${1:Name} {\n  ${2:Value}\n  $0\n}")
             .with_sort("01_enum"),
         Completion::new("function", CompletionKind::Keyword)
             .with_detail("function declaration")
+            .with_snippet("function ${1:Name}(${2}) -> ${3:string} {\n  $0\n}")
             .with_sort("02_function"),
         Completion::new("client", CompletionKind::Keyword)
             .with_detail("LLM client declaration")
+            .with_snippet(
+                "client<llm> ${1:Name} {\n  provider ${2:openai}\n  options {\n    model ${3:gpt-4o}\n  }\n  $0\n}",
+            )
             .with_sort("03_client"),
         Completion::new("test", CompletionKind::Keyword)
             .with_detail("test case declaration")
+            .with_snippet("test \"${1:test name}\" {\n  $0\n}")
             .with_sort("05_test"),
         Completion::new("retry_policy", CompletionKind::Keyword)
             .with_detail("retry policy declaration")
+            .with_snippet("retry_policy ${1:Name} {\n  max_retries ${2:3}\n  $0\n}")
             .with_sort("06_retry_policy"),
         Completion::new("template_string", CompletionKind::Keyword)
             .with_detail("template string declaration")
+            .with_snippet("template_string ${1:Name}(${2}) #\"\n  $0\n\"#")
             .with_sort("07_template_string"),
         Completion::new("type", CompletionKind::Keyword)
             .with_detail("type alias declaration")
+            .with_snippet("type ${1:Name} = ${2:string}$0")
             .with_sort("08_type"),
         Completion::new("interface", CompletionKind::Keyword)
             .with_detail("interface declaration")
+            .with_snippet("interface ${1:Name} {\n  $0\n}")
             .with_sort("09_interface"),
         Completion::new("implements", CompletionKind::Keyword)
             .with_detail("out-of-body interface implementation")
+            .with_snippet("implements ${1:Interface} for ${2:Class} {\n  $0\n}")
             .with_sort("10_implements"),
     ]
 }
