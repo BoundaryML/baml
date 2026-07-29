@@ -1857,7 +1857,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                 let inst = self.emit(Instruction::LoadType(const_idx));
                 self.set_operand(inst, OperandMeta::Const(template.to_string()));
             }
-            let iface_const = self.add_constant(ConstValue::Type(iface.clone()));
+            let iface_const = self.add_constant(ConstValue::Type(iface.to_template()));
             let inst = self.emit(Instruction::LoadType(iface_const));
             self.set_operand(inst, OperandMeta::Const(iface.to_string()));
             self.emit_constant(&Constant::String(method.clone()));
@@ -2271,7 +2271,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                 // interface, then the `ntypeargs` method type args, then reads the
                 // receiver (first value arg) to resolve the impl at runtime.
                 unwrap_infallible(pull_semantics::walk_call_direct_args(self, args));
-                let iface_const = self.add_constant(ConstValue::Type(iface.clone()));
+                let iface_const = self.add_constant(ConstValue::Type(iface.to_template()));
                 let inst = self.emit(Instruction::LoadType(iface_const));
                 self.set_operand(inst, OperandMeta::Const(iface.to_string()));
                 self.emit_constant(&Constant::String(method.clone()));

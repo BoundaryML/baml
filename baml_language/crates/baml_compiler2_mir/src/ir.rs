@@ -7,7 +7,7 @@ use std::fmt;
 
 use baml_base::{Name, Span};
 pub use baml_compiler2_ast::BuiltinKind;
-use baml_type::{RealizedTy, RuntimeTy, TyTemplate};
+use baml_type::{RealizedTy, RuntimeTy, TyTemplate, TyTemplateInterface};
 
 // ============================================================================
 // Optimization Level
@@ -420,7 +420,7 @@ pub enum Terminator {
         /// The interface to resolve against, as a template the emitter pushes
         /// with `LoadType`. Non-generic today (`baml.ops.Equals`/`Compare`); a
         /// parameterized interface bakes its arguments into the template.
-        iface: TyTemplate,
+        iface: TyTemplateInterface,
         /// The interface method to dispatch (e.g. `"eq"`, `"lt"`, `"neq"`).
         method: String,
         /// `args[..ntypeargs]` are the method-level type-argument values
@@ -818,7 +818,7 @@ pub enum Rvalue {
     MakeVirtualBoundMethod {
         /// The interface to resolve against, as a template the emitter pushes
         /// with `LoadType` (like [`Terminator::VirtualCall`]'s `iface`).
-        iface: TyTemplate,
+        iface: TyTemplateInterface,
         /// The interface method's name.
         method: String,
         /// The receiver whose runtime concrete type is the `Self` to resolve on.

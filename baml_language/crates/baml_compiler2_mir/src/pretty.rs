@@ -696,7 +696,11 @@ mod tests {
     #[test]
     fn virtual_call_runtime_id_without_visible_args_has_no_leading_comma() {
         let terminator = Terminator::VirtualCall {
-            iface: baml_type::TyTemplate::TypeArgRef(0),
+            iface: baml_type::TyTemplateInterface::new(
+                baml_type::TypeName::from_dotted_path("baml.ops.Equals"),
+                Vec::new(),
+                Vec::new(),
+            ),
             method: "eq".to_string(),
             args: Vec::new(),
             ntypeargs: 0,
@@ -708,7 +712,7 @@ mod tests {
 
         assert_eq!(
             render_terminator(&terminator),
-            "_0 = virtual_call eq as #0($id = copy _9) -> [bb1];"
+            "_0 = virtual_call eq as baml.ops.Equals($id = copy _9) -> [bb1];"
         );
     }
 

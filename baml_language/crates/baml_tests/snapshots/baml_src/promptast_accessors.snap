@@ -39,14 +39,14 @@ function promptast_accessors.paa_fold_messages_fn() -> string {
     store_var out
     call user.promptast_accessors.paa_render_ast
     sys_op baml.llm.PromptAst.messages
-    load_type baml.iter.Iterable<Item = baml.llm.PromptMessage, Error = never>
+    load_type baml.iter.Iterable<Error = never, Item = baml.llm.PromptMessage>
     load_const "iter"
     virtual_call nargs=1 ntypeargs=0
     store_var _4
 
   L0:
     load_var _4
-    load_type baml.iter.Iterator<Item = baml.llm.PromptMessage, Error = never>
+    load_type baml.iter.Iterator<Error = never, Item = baml.llm.PromptMessage>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
     store_var _5

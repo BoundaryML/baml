@@ -235,7 +235,7 @@ function interfaces_associated_types.CaeIntDriver.CaeDriver<CaeTask<int>>.drive(
 
 function interfaces_associated_types.CaeTask.drive(self: interfaces_associated_types.CaeTask<#0>, driver: #3) -> #1 {
     load_var2 2 1
-    load_type interfaces_associated_types.CaeDriver<interfaces_associated_types.CaeTask<#0>, Output = #1, Error = #2>
+    load_type interfaces_associated_types.CaeDriver<interfaces_associated_types.CaeTask<#0>, Error = #2, Output = #1>
     load_const "drive"
     virtual_call nargs=2 ntypeargs=0
     store_var _0

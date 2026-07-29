@@ -385,7 +385,7 @@ impl MirBuilder {
     #[expect(clippy::too_many_arguments)]
     pub(crate) fn virtual_call(
         &mut self,
-        iface: baml_type::TyTemplate,
+        iface: baml_type::TyTemplateInterface,
         method: String,
         args: Vec<Operand>,
         ntypeargs: usize,
@@ -410,7 +410,7 @@ impl MirBuilder {
     #[expect(clippy::too_many_arguments)]
     pub(crate) fn virtual_call_with_runtime_id(
         &mut self,
-        iface: baml_type::TyTemplate,
+        iface: baml_type::TyTemplateInterface,
         method: String,
         args: Vec<Operand>,
         ntypeargs: usize,

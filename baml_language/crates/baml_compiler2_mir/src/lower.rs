@@ -3,7 +3,7 @@ use std::collections::{HashMap, HashSet};
 use baml_base::{Name, TypePath};
 use baml_type::{
     ParamTy, PrimitiveType, RealizedTy, ResolvedAliases, RuntimeGenericLayout, RuntimeTy, TyAttr,
-    TyTemplate, TypeName, normalize::TypeContext as _,
+    TyTemplate, TyTemplateInterface, TypeName, normalize::TypeContext as _,
 };
 use indexmap::IndexMap;
 
@@ -1011,6 +1011,36 @@ fn tir2_to_template_in_frame(
         return None;
     }
     lower_tir_template(&ty, resolved, &generic_layout, TemplateMode::Value)
+}
+
+/// Lower a realized interface **constraint** to its template form: each generic
+/// argument and associated binding lowered individually, so an argument that is an
+/// enclosing generic becomes a `TypeArgRef` and reaches the runtime resolver
+/// realized against the caller's frame.
+///
+/// Deliberately not `tir2_to_template` over a `Ty::Interface`. That lowers the
+/// interface as a *type*, and yields two different shapes for one meaning — a
+/// `TyTemplate::Interface` when some argument is symbolic, a `Concrete` leaf when
+/// none is. A dispatch site names the interface it resolves *through*, which is a
+/// constraint, not an existential; carrying it as one gives a single shape and
+/// makes a non-interface in that position unrepresentable.
+pub(crate) fn tir2_interface_to_template(
+    name: &baml_type::TypeName,
+    args: &[Tir2Ty],
+    assoc: &[(Name, Tir2Ty)],
+    resolved: &ResolvedAliases,
+    generic_params: &[ParamTy],
+) -> TyTemplateInterface {
+    TyTemplateInterface::new(
+        name.clone(),
+        args.iter()
+            .map(|a| tir2_to_template(a, resolved, generic_params))
+            .collect(),
+        assoc
+            .iter()
+            .map(|(n, t)| (n.clone(), tir2_to_template(t, resolved, generic_params)))
+            .collect(),
+    )
 }
 
 /// A resolved `RuntimeTy` with no residual type variables, as a leaf template:
@@ -10597,13 +10627,10 @@ impl<'db> LoweringContext<'db> {
         // slot and arrives at the resolver realized, disambiguating a type
         // implementing the same interface at several instantiations.
         let generic_params = self.enclosing_generic_params();
-        let iface_template = tir2_to_template(
-            &Tir2Ty::Interface(
-                iface_tn.clone(),
-                iface_type_args.to_vec(),
-                iface_assoc.to_vec(),
-                TyAttr::default(),
-            ),
+        let iface_template = tir2_interface_to_template(
+            iface_tn,
+            iface_type_args,
+            iface_assoc,
             self.resolved_aliases,
             &generic_params,
         );
@@ -10657,8 +10684,10 @@ impl<'db> LoweringContext<'db> {
         // that is an enclosing generic lowers to its `TypeArgRef` frame slot and
         // arrives at the bind-time resolver realized.
         let generic_params = self.enclosing_generic_params();
-        let iface_template = tir2_to_template(
-            &Tir2Ty::Interface(decl_tn, decl_args, decl_assoc, TyAttr::default()),
+        let iface_template = tir2_interface_to_template(
+            &decl_tn,
+            &decl_args,
+            &decl_assoc,
             self.resolved_aliases,
             &generic_params,
         );
