@@ -357,3 +357,13 @@ source: crates/baml_tests/src/generated_tests.rs
  906 │ │           Status.Active => "active only"
  907 │ ╰─▶     }
      ╰────
+
+  [type] E0062
+
+  × non-exhaustive match on type unknown; missing: WitBox<int> { v: _ }, WitBox<string> { v: _ }, _
+      ╭─[match_exhaustiveness.baml:1045:5]
+ 1045 │ ╭─▶     match (x) {
+ 1046 │ │           WitBox<int> { v: 1 } => 1,
+ 1047 │ │           WitBox<string> { v: "a" } => 2
+ 1048 │ ╰─▶     }
+      ╰────

@@ -175,7 +175,7 @@ function generic_match_subtype.generic_match_widened_default_fn() -> int {
     return
 }
 
-function generic_match_subtype.mk(v: T) -> generic_match_subtype.Opt<T> | generic_match_subtype.Non {
+function generic_match_subtype.mk(v: #0) -> generic_match_subtype.Opt<#0> | generic_match_subtype.Non {
     load_var v
     load_type #0
     init_instance<1> user.generic_match_subtype.Opt .value
@@ -256,7 +256,7 @@ function generic_match_subtype.pick_concrete_switch(x: generic_match_subtype.Foo
     return
 }
 
-function generic_match_subtype.unwrap_or(o: generic_match_subtype.Opt<T> | generic_match_subtype.Non, default: T) -> T {
+function generic_match_subtype.unwrap_or(o: generic_match_subtype.Opt<#0> | generic_match_subtype.Non, default: #0) -> #0 {
     load_var o
     store_var _3
     load_var _3

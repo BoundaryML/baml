@@ -32,7 +32,7 @@ pub struct FunctionData {
     pub params: Vec<FunctionParamData>,
     pub return_type: Option<TypeRefId>,
     pub throws: Option<TypeRefId>,
-    pub origin: ast::FunctionOrigin,
+    pub metadata: ast::FunctionMetadata,
     pub docstring: Option<String>,
     /// Set when the fn def had a `//baml:tagged_string` marker.
     pub is_tagged_template_tag: bool,
@@ -416,7 +416,7 @@ fn lower<'db>(
             params,
             return_type,
             throws,
-            origin: data.origin,
+            metadata: data.metadata,
             docstring: data.docstring.clone(),
             is_tagged_template_tag: data.is_tagged_template_tag,
         },

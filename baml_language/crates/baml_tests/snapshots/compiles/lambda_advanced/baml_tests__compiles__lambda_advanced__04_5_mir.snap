@@ -39,10 +39,10 @@ fn user.test_chained_map() -> int[] {
 }
 
 // lambda[0]
-fn .<lambda(test_chained_map, 0)>(x: null) -> null {
+fn .<lambda(test_chained_map, 0)>(x: int) -> int {
     // Locals:
-    let _0: null // _0 // return
-    let _1: null // x // param
+    let _0: int // _0 // return
+    let _1: int // x // param
 
     bb0: {
         _0 = copy _1 * const 10_i64;
@@ -55,10 +55,10 @@ fn .<lambda(test_chained_map, 0)>(x: null) -> null {
 }
 
 // lambda[1]
-fn .<lambda(test_chained_map, 1)>(x: null) -> null {
+fn .<lambda(test_chained_map, 1)>(x: int) -> int {
     // Locals:
-    let _0: null // _0 // return
-    let _1: null // x // param
+    let _0: int // _0 // return
+    let _1: int // x // param
 
     bb0: {
         _0 = copy _1 + const 1_i64;
@@ -94,9 +94,9 @@ fn user.test_map_string_to_int() -> int[] {
 }
 
 // lambda[0]
-fn .<lambda(test_map_string_to_int, 0)>(w: string) -> null {
+fn .<lambda(test_map_string_to_int, 0)>(w: string) -> int {
     // Locals:
-    let _0: null // _0 // return
+    let _0: int // _0 // return
     let _1: string // w // param
 
     bb0: {
@@ -133,9 +133,9 @@ fn user.test_higher_order_return() -> int {
 }
 
 // lambda[0]
-fn .<lambda(test_higher_order_return, 0)>(n: int) -> null {
+fn .<lambda(test_higher_order_return, 0)>(n: int) -> (int) -> int throws never {
     // Locals:
-    let _0: null // _0 // return
+    let _0: (int) -> int throws never // _0 // return
     let _1: int // n // param [captured]
     let _2: (int) -> int throws never // adder
 
@@ -151,9 +151,9 @@ fn .<lambda(test_higher_order_return, 0)>(n: int) -> null {
 }
 
 // lambda[0]
-fn .<lambda(<lambda(test_higher_order_return, 0)>, 1)>(x: int) -> null {
+fn .<lambda(<lambda(test_higher_order_return, 0)>, 1)>(x: int) -> int {
     // Locals:
-    let _0: null // _0 // return
+    let _0: int // _0 // return
     let _1: int // x // param
     let _2: int
 
@@ -190,9 +190,9 @@ fn user.test_lambda_calling_lambda() -> int {
 }
 
 // lambda[0]
-fn .<lambda(test_lambda_calling_lambda, 0)>(x: int) -> null {
+fn .<lambda(test_lambda_calling_lambda, 0)>(x: int) -> int {
     // Locals:
-    let _0: null // _0 // return
+    let _0: int // _0 // return
     let _1: int // x // param
 
     bb0: {
@@ -206,9 +206,9 @@ fn .<lambda(test_lambda_calling_lambda, 0)>(x: int) -> null {
 }
 
 // lambda[1]
-fn .<lambda(test_lambda_calling_lambda, 1)>(f: (int) -> int throws never, x: int) -> null {
+fn .<lambda(test_lambda_calling_lambda, 1)>(f: (int) -> int throws never, x: int) -> int {
     // Locals:
-    let _0: null // _0 // return
+    let _0: int // _0 // return
     let _1: (int) -> int throws never // f // param
     let _2: int // x // param
     let _3: int
@@ -246,9 +246,9 @@ fn user.test_deep_capture() -> int {
 }
 
 // lambda[0]
-fn .<lambda(test_deep_capture, 0)>(b: int) -> null {
+fn .<lambda(test_deep_capture, 0)>(b: int) -> int {
     // Locals:
-    let _0: null // _0 // return
+    let _0: int // _0 // return
     let _1: int // b // param [captured]
     let _2: (int) -> int throws never // g
     let _3: (int) -> int throws never
@@ -265,9 +265,9 @@ fn .<lambda(test_deep_capture, 0)>(b: int) -> null {
 }
 
 // lambda[0]
-fn .<lambda(<lambda(test_deep_capture, 0)>, 1)>(c: int) -> null {
+fn .<lambda(<lambda(test_deep_capture, 0)>, 1)>(c: int) -> int {
     // Locals:
-    let _0: null // _0 // return
+    let _0: int // _0 // return
     let _1: int // c // param
     let _2: int
     let _3: int
@@ -304,9 +304,9 @@ fn user.test_lambda_with_match() -> string {
 }
 
 // lambda[0]
-fn .<lambda(test_lambda_with_match, 0)>(n: int) -> null {
+fn .<lambda(test_lambda_with_match, 0)>(n: int) -> string {
     // Locals:
-    let _0: null // _0 // return
+    let _0: string // _0 // return
     let _1: int // n // param
 
     bb0: {
@@ -351,9 +351,9 @@ fn user.test_lambda_with_if() -> string {
 }
 
 // lambda[0]
-fn .<lambda(test_lambda_with_if, 0)>(n: int) -> null {
+fn .<lambda(test_lambda_with_if, 0)>(n: int) -> string {
     // Locals:
-    let _0: null // _0 // return
+    let _0: string // _0 // return
     let _1: int // n // param
     let _2: bool
     let _3: bool
@@ -414,10 +414,10 @@ fn user.test_map_with_capture() -> int[] {
 }
 
 // lambda[0]
-fn .<lambda(test_map_with_capture, 0)>(x: null) -> null {
+fn .<lambda(test_map_with_capture, 0)>(x: int) -> int {
     // Locals:
-    let _0: null // _0 // return
-    let _1: null // x // param
+    let _0: int // _0 // return
+    let _1: int // x // param
     let _2: int
 
     bb0: {
@@ -459,9 +459,9 @@ fn user.test_nested_map() -> int[][] {
 }
 
 // lambda[0]
-fn .<lambda(test_nested_map, 0)>(row: int[]) -> null {
+fn .<lambda(test_nested_map, 0)>(row: int[]) -> int[] {
     // Locals:
-    let _0: null // _0 // return
+    let _0: int[] // _0 // return
     let _1: int[] // row // param
     let _2: (int) -> int throws E
     let _3: type
@@ -482,10 +482,10 @@ fn .<lambda(test_nested_map, 0)>(row: int[]) -> null {
 }
 
 // lambda[0]
-fn .<lambda(<lambda(test_nested_map, 0)>, 1)>(x: null) -> null {
+fn .<lambda(<lambda(test_nested_map, 0)>, 1)>(x: int) -> int {
     // Locals:
-    let _0: null // _0 // return
-    let _1: null // x // param
+    let _0: int // _0 // return
+    let _1: int // x // param
 
     bb0: {
         _0 = copy _1 * copy _1;
@@ -521,10 +521,10 @@ fn user.test_map_multi_statement() -> int[] {
 }
 
 // lambda[0]
-fn .<lambda(test_map_multi_statement, 0)>(x: null) -> null {
+fn .<lambda(test_map_multi_statement, 0)>(x: int) -> int {
     // Locals:
-    let _0: null // _0 // return
-    let _1: null // x // param
+    let _0: int // _0 // return
+    let _1: int // x // param
     let _2: int // doubled
     let _3: int // offset
     let _4: int
@@ -570,9 +570,9 @@ fn user.test_lambda_variable_then_pass() -> int[] {
 }
 
 // lambda[0]
-fn .<lambda(test_lambda_variable_then_pass, 0)>(x: int) -> null {
+fn .<lambda(test_lambda_variable_then_pass, 0)>(x: int) -> int {
     // Locals:
-    let _0: null // _0 // return
+    let _0: int // _0 // return
     let _1: int // x // param
 
     bb0: {
@@ -662,10 +662,10 @@ fn user.test_shadowing() -> string {
 }
 
 // lambda[0]
-fn .<lambda(test_shadowing, 0)>(x: null) -> null {
+fn .<lambda(test_shadowing, 0)>(x: int) -> int {
     // Locals:
-    let _0: null // _0 // return
-    let _1: null // x // param
+    let _0: int // _0 // return
+    let _1: int // x // param
 
     bb0: {
         _0 = copy _1 + const 1_i64;
@@ -699,9 +699,9 @@ fn user.test_iife() -> int {
 }
 
 // lambda[0]
-fn .<lambda(test_iife, 0)>(x: int) -> null {
+fn .<lambda(test_iife, 0)>(x: int) -> int {
     // Locals:
-    let _0: null // _0 // return
+    let _0: int // _0 // return
     let _1: int // x // param
 
     bb0: {
@@ -732,9 +732,9 @@ fn user.test_optional_return() -> int | null {
 }
 
 // lambda[0]
-fn .<lambda(test_optional_return, 0)>(x: int) -> null {
+fn .<lambda(test_optional_return, 0)>(x: int) -> int | null {
     // Locals:
-    let _0: null // _0 // return
+    let _0: int | null // _0 // return
     let _1: int // x // param
     let _2: bool
 
@@ -782,10 +782,10 @@ fn user.test_fully_inferred_map() -> int[] {
 }
 
 // lambda[0]
-fn .<lambda(test_fully_inferred_map, 0)>(x: null) -> null {
+fn .<lambda(test_fully_inferred_map, 0)>(x: int) -> int {
     // Locals:
-    let _0: null // _0 // return
-    let _1: null // x // param
+    let _0: int // _0 // return
+    let _1: int // x // param
 
     bb0: {
         _0 = copy _1 * const 2_i64;
@@ -821,10 +821,10 @@ fn user.test_map_type_change_inferred() -> string[] {
 }
 
 // lambda[0]
-fn .<lambda(test_map_type_change_inferred, 0)>(n: null) -> null {
+fn .<lambda(test_map_type_change_inferred, 0)>(n: int) -> string {
     // Locals:
-    let _0: null // _0 // return
-    let _1: null // n // param
+    let _0: string // _0 // return
+    let _1: int // n // param
 
     bb0: {
         switch copy _1 [1: bb3, 2: bb2, otherwise: bb1];
@@ -874,10 +874,10 @@ fn user.test_literal_return_inference() -> int[] {
 }
 
 // lambda[0]
-fn .<lambda(test_literal_return_inference, 0)>(x: null) -> null {
+fn .<lambda(test_literal_return_inference, 0)>(x: int) -> int {
     // Locals:
-    let _0: null // _0 // return
-    let _1: null // x // param
+    let _0: int // _0 // return
+    let _1: int // x // param
 
     bb0: {
         _0 = const 0_i64;
@@ -926,10 +926,10 @@ fn user.test_compose_inferred() -> int[] {
 }
 
 // lambda[0]
-fn .<lambda(test_compose_inferred, 0)>(x: null) -> null {
+fn .<lambda(test_compose_inferred, 0)>(x: int) -> int {
     // Locals:
-    let _0: null // _0 // return
-    let _1: null // x // param
+    let _0: int // _0 // return
+    let _1: int // x // param
 
     bb0: {
         _0 = copy _1 * const 2_i64;
@@ -942,10 +942,10 @@ fn .<lambda(test_compose_inferred, 0)>(x: null) -> null {
 }
 
 // lambda[1]
-fn .<lambda(test_compose_inferred, 1)>(x: null) -> null {
+fn .<lambda(test_compose_inferred, 1)>(x: int) -> int {
     // Locals:
-    let _0: null // _0 // return
-    let _1: null // x // param
+    let _0: int // _0 // return
+    let _1: int // x // param
 
     bb0: {
         _0 = copy _1 + const 1_i64;
@@ -982,9 +982,9 @@ fn user.test_higher_order_inferred() -> int {
 }
 
 // lambda[0]
-fn .<lambda(test_higher_order_inferred, 0)>(n: int) -> null {
+fn .<lambda(test_higher_order_inferred, 0)>(n: int) -> (int) -> int throws never {
     // Locals:
-    let _0: null // _0 // return
+    let _0: (int) -> int throws never // _0 // return
     let _1: int // n // param [captured]
     let _2: (int) -> int throws never // adder
 
@@ -1000,9 +1000,9 @@ fn .<lambda(test_higher_order_inferred, 0)>(n: int) -> null {
 }
 
 // lambda[0]
-fn .<lambda(<lambda(test_higher_order_inferred, 0)>, 1)>(x: int) -> null {
+fn .<lambda(<lambda(test_higher_order_inferred, 0)>, 1)>(x: int) -> int {
     // Locals:
-    let _0: null // _0 // return
+    let _0: int // _0 // return
     let _1: int // x // param
     let _2: int
 
@@ -1039,9 +1039,9 @@ fn user.test_apply_twice_inferred() -> int {
 }
 
 // lambda[0]
-fn .<lambda(test_apply_twice_inferred, 0)>(x: int) -> null {
+fn .<lambda(test_apply_twice_inferred, 0)>(x: int) -> int {
     // Locals:
-    let _0: null // _0 // return
+    let _0: int // _0 // return
     let _1: int // x // param
 
     bb0: {
@@ -1055,9 +1055,9 @@ fn .<lambda(test_apply_twice_inferred, 0)>(x: int) -> null {
 }
 
 // lambda[1]
-fn .<lambda(test_apply_twice_inferred, 1)>(f: (int) -> int throws never, x: int) -> null {
+fn .<lambda(test_apply_twice_inferred, 1)>(f: (int) -> int throws never, x: int) -> int {
     // Locals:
-    let _0: null // _0 // return
+    let _0: int // _0 // return
     let _1: (int) -> int throws never // f // param
     let _2: int // x // param
     let _3: int
@@ -1095,9 +1095,9 @@ fn user.test_deep_capture_inferred() -> int {
 }
 
 // lambda[0]
-fn .<lambda(test_deep_capture_inferred, 0)>(b: int) -> null {
+fn .<lambda(test_deep_capture_inferred, 0)>(b: int) -> int {
     // Locals:
-    let _0: null // _0 // return
+    let _0: int // _0 // return
     let _1: int // b // param [captured]
     let _2: (int) -> int throws never // g
     let _3: (int) -> int throws never
@@ -1114,9 +1114,9 @@ fn .<lambda(test_deep_capture_inferred, 0)>(b: int) -> null {
 }
 
 // lambda[0]
-fn .<lambda(<lambda(test_deep_capture_inferred, 0)>, 1)>(c: int) -> null {
+fn .<lambda(<lambda(test_deep_capture_inferred, 0)>, 1)>(c: int) -> int {
     // Locals:
-    let _0: null // _0 // return
+    let _0: int // _0 // return
     let _1: int // c // param
     let _2: int
     let _3: int
@@ -1157,9 +1157,9 @@ fn user.test_two_transforms_inferred() -> int {
 }
 
 // lambda[0]
-fn .<lambda(test_two_transforms_inferred, 0)>(f: (int) -> int throws never, g: (int) -> int throws never, x: int) -> null {
+fn .<lambda(test_two_transforms_inferred, 0)>(f: (int) -> int throws never, g: (int) -> int throws never, x: int) -> int {
     // Locals:
-    let _0: null // _0 // return
+    let _0: int // _0 // return
     let _1: (int) -> int throws never // f // param
     let _2: (int) -> int throws never // g // param
     let _3: int // x // param
@@ -1179,9 +1179,9 @@ fn .<lambda(test_two_transforms_inferred, 0)>(f: (int) -> int throws never, g: (
 }
 
 // lambda[1]
-fn .<lambda(test_two_transforms_inferred, 1)>(x: int) -> null {
+fn .<lambda(test_two_transforms_inferred, 1)>(x: int) -> int {
     // Locals:
-    let _0: null // _0 // return
+    let _0: int // _0 // return
     let _1: int // x // param
 
     bb0: {
@@ -1195,9 +1195,9 @@ fn .<lambda(test_two_transforms_inferred, 1)>(x: int) -> null {
 }
 
 // lambda[2]
-fn .<lambda(test_two_transforms_inferred, 2)>(x: int) -> null {
+fn .<lambda(test_two_transforms_inferred, 2)>(x: int) -> int {
     // Locals:
-    let _0: null // _0 // return
+    let _0: int // _0 // return
     let _1: int // x // param
 
     bb0: {
@@ -1256,9 +1256,9 @@ fn user.test_lambda_in_match_inferred() -> int {
 }
 
 // lambda[0]
-fn .<lambda(test_lambda_in_match_inferred, 0)>(x: int) -> null {
+fn .<lambda(test_lambda_in_match_inferred, 0)>(x: int) -> int {
     // Locals:
-    let _0: null // _0 // return
+    let _0: int // _0 // return
     let _1: int // x // param
 
     bb0: {
@@ -1272,9 +1272,9 @@ fn .<lambda(test_lambda_in_match_inferred, 0)>(x: int) -> null {
 }
 
 // lambda[1]
-fn .<lambda(test_lambda_in_match_inferred, 1)>(x: int) -> null {
+fn .<lambda(test_lambda_in_match_inferred, 1)>(x: int) -> int {
     // Locals:
-    let _0: null // _0 // return
+    let _0: int // _0 // return
     let _1: int // x // param
 
     bb0: {
@@ -1288,9 +1288,9 @@ fn .<lambda(test_lambda_in_match_inferred, 1)>(x: int) -> null {
 }
 
 // lambda[2]
-fn .<lambda(test_lambda_in_match_inferred, 2)>(x: int) -> null {
+fn .<lambda(test_lambda_in_match_inferred, 2)>(x: int) -> int {
     // Locals:
-    let _0: null // _0 // return
+    let _0: int // _0 // return
     let _1: int // x // param
 
     bb0: {
@@ -1329,10 +1329,10 @@ fn user.test_capture_in_map_inferred() -> int[] {
 }
 
 // lambda[0]
-fn .<lambda(test_capture_in_map_inferred, 0)>(x: null) -> null {
+fn .<lambda(test_capture_in_map_inferred, 0)>(x: int) -> int {
     // Locals:
-    let _0: null // _0 // return
-    let _1: null // x // param
+    let _0: int // _0 // return
+    let _1: int // x // param
     let _2: int
 
     bb0: {
@@ -1379,9 +1379,9 @@ fn user.test_void_lambda_inferred() -> int {
 }
 
 // lambda[0]
-fn .<lambda(test_void_lambda_inferred, 0)>() -> null {
+fn .<lambda(test_void_lambda_inferred, 0)>() -> void {
     // Locals:
-    let _0: null // _0 // return
+    let _0: void // _0 // return
 
     bb0: {
         capture[0] = copy capture[0] + const 1_i64;
@@ -1431,9 +1431,9 @@ fn user.test_void_lambda_inferred_captures() -> int {
 }
 
 // lambda[0]
-fn .<lambda(test_void_lambda_inferred_captures, 0)>() -> null {
+fn .<lambda(test_void_lambda_inferred_captures, 0)>() -> () -> int throws never {
     // Locals:
-    let _0: null // _0 // return
+    let _0: () -> int throws never // _0 // return
     let _1: int // count [captured]
     let _2: () -> int throws never // inc
 
@@ -1450,9 +1450,9 @@ fn .<lambda(test_void_lambda_inferred_captures, 0)>() -> null {
 }
 
 // lambda[0]
-fn .<lambda(<lambda(test_void_lambda_inferred_captures, 0)>, 1)>() -> null {
+fn .<lambda(<lambda(test_void_lambda_inferred_captures, 0)>, 1)>() -> int {
     // Locals:
-    let _0: null // _0 // return
+    let _0: int // _0 // return
 
     bb0: {
         capture[0] = copy capture[0] + const 1_i64;
@@ -1485,9 +1485,9 @@ fn user.test_capture_lambda_inferred() -> int {
 }
 
 // lambda[0]
-fn .<lambda(test_capture_lambda_inferred, 0)>(a: int, b: int) -> null {
+fn .<lambda(test_capture_lambda_inferred, 0)>(a: int, b: int) -> int {
     // Locals:
-    let _0: null // _0 // return
+    let _0: int // _0 // return
     let _1: int // a // param
     let _2: int // b // param
 
@@ -1502,9 +1502,9 @@ fn .<lambda(test_capture_lambda_inferred, 0)>(a: int, b: int) -> null {
 }
 
 // lambda[1]
-fn .<lambda(test_capture_lambda_inferred, 1)>(x: int) -> null {
+fn .<lambda(test_capture_lambda_inferred, 1)>(x: int) -> int {
     // Locals:
-    let _0: null // _0 // return
+    let _0: int // _0 // return
     let _1: int // x // param
     let _2: (int, int) -> int throws never
 
@@ -1542,10 +1542,10 @@ fn user.test_map_optional_inferred() -> int[] {
 }
 
 // lambda[0]
-fn .<lambda(test_map_optional_inferred, 0)>(x: null) -> null {
+fn .<lambda(test_map_optional_inferred, 0)>(x: int | null) -> int {
     // Locals:
-    let _0: null // _0 // return
-    let _1: null // x // param
+    let _0: int // _0 // return
+    let _1: int | null // x // param
     let _2: bool
 
     bb0: {
@@ -1592,10 +1592,10 @@ fn user.test_shadowing_inferred() -> int[] {
 }
 
 // lambda[0]
-fn .<lambda(test_shadowing_inferred, 0)>(x: null) -> null {
+fn .<lambda(test_shadowing_inferred, 0)>(x: int) -> int {
     // Locals:
-    let _0: null // _0 // return
-    let _1: null // x // param
+    let _0: int // _0 // return
+    let _1: int // x // param
 
     bb0: {
         _0 = copy _1 + const 1_i64;
@@ -1623,9 +1623,9 @@ fn user.test_iife_inferred() -> int {
 }
 
 // lambda[0]
-fn .<lambda(test_iife_inferred, 0)>(x: int) -> null {
+fn .<lambda(test_iife_inferred, 0)>(x: int) -> int {
     // Locals:
-    let _0: null // _0 // return
+    let _0: int // _0 // return
     let _1: int // x // param
 
     bb0: {

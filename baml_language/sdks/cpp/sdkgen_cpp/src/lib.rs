@@ -1431,7 +1431,9 @@ fn translate_ty(
                 other => return other,
             }
         }
-        Ty::Function { .. } => return Translated::NotYet,
+        Ty::Function { .. } => {
+            return Translated::Unsupported("nested callable type".to_string());
+        }
         Ty::Union(items, _) => {
             // Null-normalization (spec D-unions v2): strip the null member,
             // dedup alternatives that map to the same C++ type, emit a

@@ -842,7 +842,7 @@ function array_rest_binding.arb_rest_with_no_suffix_takes_tail() -> int {
     return
 }
 
-function array_rest_binding.arb_tail_len(xs: T[]) -> int {
+function array_rest_binding.arb_tail_len(xs: #0[]) -> int {
     load_var xs
     is_type _[]
     pop_jump_if_false L0

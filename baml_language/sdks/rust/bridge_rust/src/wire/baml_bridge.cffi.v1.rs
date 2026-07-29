@@ -604,6 +604,18 @@ pub struct CallFunctionArgs {
     /// non-generic calls.
     #[prost(message, repeated, tag = "3")]
     pub type_args: ::prost::alloc::vec::Vec<BamlTyArg>,
+    #[prost(oneof = "call_function_args::CallTarget", tags = "4, 5")]
+    pub call_target: ::core::option::Option<call_function_args::CallTarget>,
+}
+/// Nested message and enum types in `CallFunctionArgs`.
+pub mod call_function_args {
+    #[derive(Clone, PartialEq, Eq, Hash, ::prost::Oneof)]
+    pub enum CallTarget {
+        #[prost(string, tag = "4")]
+        FunctionName(::prost::alloc::string::String),
+        #[prost(uint64, tag = "5")]
+        FunctionHandle(u64),
+    }
 }
 /// CallAck is the engine's acknowledgment of an inbound call. It flows
 /// engine->host, but is defined in the inbound proto because it completes

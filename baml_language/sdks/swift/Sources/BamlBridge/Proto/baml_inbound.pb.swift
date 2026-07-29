@@ -333,7 +333,31 @@ nonisolated struct BamlBridge_Cffi_V1_CallFunctionArgs: Sendable {
   /// non-generic calls.
   var typeArgs: [BamlBridge_Cffi_V1_BamlTyArg] = []
 
+  var callTarget: BamlBridge_Cffi_V1_CallFunctionArgs.OneOf_CallTarget? = nil
+
+  var functionName: String {
+    get {
+      if case .functionName(let v)? = callTarget {return v}
+      return String()
+    }
+    set {callTarget = .functionName(newValue)}
+  }
+
+  var functionHandle: UInt64 {
+    get {
+      if case .functionHandle(let v)? = callTarget {return v}
+      return 0
+    }
+    set {callTarget = .functionHandle(newValue)}
+  }
+
   var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  nonisolated enum OneOf_CallTarget: Equatable, Sendable {
+    case functionName(String)
+    case functionHandle(UInt64)
+
+  }
 
   init() {}
 }
@@ -839,7 +863,7 @@ nonisolated extension BamlBridge_Cffi_V1_BamlTyArg: SwiftProtobuf.Message, Swift
 
 nonisolated extension BamlBridge_Cffi_V1_CallFunctionArgs: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   static let protoMessageName: String = _protobuf_package + ".CallFunctionArgs"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}kwargs\0\u{3}call_id\0\u{3}type_args\0")
+  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}kwargs\0\u{3}call_id\0\u{3}type_args\0\u{3}function_name\0\u{3}function_handle\0")
 
   mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -850,12 +874,32 @@ nonisolated extension BamlBridge_Cffi_V1_CallFunctionArgs: SwiftProtobuf.Message
       case 1: try { try decoder.decodeRepeatedMessageField(value: &self.kwargs) }()
       case 2: try { try decoder.decodeSingularUInt64Field(value: &self.callID) }()
       case 3: try { try decoder.decodeRepeatedMessageField(value: &self.typeArgs) }()
+      case 4: try {
+        var v: String?
+        try decoder.decodeSingularStringField(value: &v)
+        if let v = v {
+          if self.callTarget != nil {try decoder.handleConflictingOneOf()}
+          self.callTarget = .functionName(v)
+        }
+      }()
+      case 5: try {
+        var v: UInt64?
+        try decoder.decodeSingularUInt64Field(value: &v)
+        if let v = v {
+          if self.callTarget != nil {try decoder.handleConflictingOneOf()}
+          self.callTarget = .functionHandle(v)
+        }
+      }()
       default: break
       }
     }
   }
 
   func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    // The use of inline closures is to circumvent an issue where the compiler
+    // allocates stack space for every if/case branch local when no optimizations
+    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+    // https://github.com/apple/swift-protobuf/issues/1182
     if !self.kwargs.isEmpty {
       try visitor.visitRepeatedMessageField(value: self.kwargs, fieldNumber: 1)
     }
@@ -865,6 +909,17 @@ nonisolated extension BamlBridge_Cffi_V1_CallFunctionArgs: SwiftProtobuf.Message
     if !self.typeArgs.isEmpty {
       try visitor.visitRepeatedMessageField(value: self.typeArgs, fieldNumber: 3)
     }
+    switch self.callTarget {
+    case .functionName?: try {
+      guard case .functionName(let v)? = self.callTarget else { preconditionFailure() }
+      try visitor.visitSingularStringField(value: v, fieldNumber: 4)
+    }()
+    case .functionHandle?: try {
+      guard case .functionHandle(let v)? = self.callTarget else { preconditionFailure() }
+      try visitor.visitSingularUInt64Field(value: v, fieldNumber: 5)
+    }()
+    case nil: break
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -872,6 +927,7 @@ nonisolated extension BamlBridge_Cffi_V1_CallFunctionArgs: SwiftProtobuf.Message
     if lhs.kwargs != rhs.kwargs {return false}
     if lhs.callID != rhs.callID {return false}
     if lhs.typeArgs != rhs.typeArgs {return false}
+    if lhs.callTarget != rhs.callTarget {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

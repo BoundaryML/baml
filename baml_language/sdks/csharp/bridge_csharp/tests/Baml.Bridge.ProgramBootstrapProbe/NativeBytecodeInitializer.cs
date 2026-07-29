@@ -5,7 +5,7 @@ using System.Text;
 internal sealed unsafe partial class NativeBytecodeInitializer : IDisposable
 {
     private const string NativeLibraryName = "bridge_cffi";
-    private const uint ApiVersion = 1;
+    private const uint ApiVersion = 2;
 
     private readonly BamlApiPrefix* api;
     private bool disposed;

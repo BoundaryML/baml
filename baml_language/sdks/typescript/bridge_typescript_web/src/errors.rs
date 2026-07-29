@@ -28,8 +28,8 @@ pub(crate) fn bridge_error(error: &bridge_cffi::BridgeError) -> JsValue {
     let code = match &error {
         BridgeError::NotInitialized | BridgeError::ProjectNotInitialized => NOT_INITIALIZED,
         BridgeError::Ctypes(_)
-        | BridgeError::NullFunctionName
-        | BridgeError::InvalidFunctionName(_)
+        | BridgeError::MissingCallTarget
+        | BridgeError::FunctionHandleTypeArgs
         | BridgeError::MissingArgument { .. }
         | BridgeError::InvalidCallId => INVALID_ARGUMENT,
         BridgeError::Runtime(RuntimeError::InvalidArgument { .. }) => INVALID_ARGUMENT,

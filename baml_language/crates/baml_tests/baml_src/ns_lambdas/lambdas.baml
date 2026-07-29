@@ -427,3 +427,36 @@ function lambdas_lambda_param_shadows_annotated_outer_local() -> int {
 test "lambda_param_shadows_annotated_outer_local" {
     assert.is_true(baml.deep_equals(lambdas_lambda_param_shadows_annotated_outer_local(), 12))
 }
+
+
+// ─── inferred_signature_is_reconstructed ─────────────────────────────────────
+
+// A lambda's runtime signature carries the types it actually HAS, not only the
+// ones it spells. An omitted return type and an omitted `throws` clause are
+// filled from inference, so a closure value reconstructs as precisely as an
+// annotated declaration would — `-> int throws never` here, not the
+// `-> unknown throws unknown` its syntax alone says.
+function lambdas_inferred_signature() -> string {
+    let inferred = (x: int) -> { x * 2 }
+    let sig = reflect.signature(inferred)
+    sig.returns.to_string() + "/" + sig.errors.to_string()
+}
+
+test "inferred_signature_is_reconstructed" {
+    assert.is_true(baml.deep_equals(lambdas_inferred_signature(), "int/never"))
+}
+
+// The same for a throwing body: the inferred `throws` surface is the error set
+// the body can actually raise, so it is testable rather than an open claim.
+function lambdas_inferred_throwing_signature() -> string {
+    let inferred = (x: int) -> {
+        if (x < 0) { throw "negative" }
+        x * 2
+    }
+    let sig = reflect.signature(inferred)
+    sig.returns.to_string() + "/" + sig.errors.to_string()
+}
+
+test "inferred_throwing_signature_is_reconstructed" {
+    assert.is_true(baml.deep_equals(lambdas_inferred_throwing_signature(), "int/string"))
+}

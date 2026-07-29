@@ -299,18 +299,33 @@ inline const loaded_api& load_api() {
               "runtime or predates the versioned ABI");
     }
     const BamlApiV1* table = get_api();
-    if (table == nullptr || table->abi_version != 1 ||
+    if (table == nullptr || table->abi_version != 2 ||
         table->struct_size < sizeof(BamlApiV1)) {
       throw runtime_error("BAML_RUNTIME_ABI_MISMATCH",
-                          "expected ABI v1 table of at least " +
+                          "expected ABI revision 2 table of at least " +
                               std::to_string(sizeof(BamlApiV1)) +
                               " bytes from " + chosen);
     }
-    if (table->register_unhandled_spawn_error_callback == nullptr ||
-        table->shutdown_runtime == nullptr || table->call_handle == nullptr) {
+    if (table->version == nullptr ||
+        table->initialize_runtime_from_bytecode == nullptr ||
+        table->free_buffer == nullptr || table->register_callback == nullptr ||
+        table->call_function == nullptr ||
+        table->new_function_call == nullptr ||
+        table->cancel_function_call == nullptr ||
+        table->register_host_dispatch_callback == nullptr ||
+        table->register_host_release_callback == nullptr ||
+        table->complete_host_call == nullptr ||
+        table->handle_clone == nullptr || table->handle_release == nullptr ||
+        table->media_from_url == nullptr || table->media_from_file == nullptr ||
+        table->media_from_base64 == nullptr || table->media_url == nullptr ||
+        table->media_file == nullptr || table->media_base64 == nullptr ||
+        table->media_mime_type == nullptr ||
+        table->register_bridge == nullptr ||
+        table->register_unhandled_spawn_error_callback == nullptr ||
+        table->shutdown_runtime == nullptr) {
       throw runtime_error(
           "BAML_RUNTIME_ABI_MISMATCH",
-          "runtime is missing required appended ABI operations");
+          "runtime ABI table contains a null required operation");
     }
 
     api_loaded_flag() = true;

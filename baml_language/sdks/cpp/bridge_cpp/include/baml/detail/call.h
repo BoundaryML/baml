@@ -27,9 +27,8 @@ template <typename Ret, typename ThrownU = void>
 future<Ret, ThrownU> start_call(const std::string& fqn, args_encoder&& args) {
   call_registry::started started = call_registry::instance().begin();
   const uint64_t engine_call_id = api().new_function_call();
-  const std::string encoded = args.finish(engine_call_id);
-  api().call_function(fqn.c_str(),
-                      reinterpret_cast<const uint8_t*>(encoded.data()),
+  const std::string encoded = args.finish(engine_call_id, fqn);
+  api().call_function(reinterpret_cast<const uint8_t*>(encoded.data()),
                       encoded.size(), started.correlation_id);
   return future<Ret, ThrownU>(std::move(started.state), engine_call_id);
 }
@@ -39,10 +38,9 @@ future<Ret, ThrownU> start_handle_call(uint64_t handle_key,
                                        args_encoder&& args) {
   call_registry::started started = call_registry::instance().begin();
   const uint64_t engine_call_id = api().new_function_call();
-  const std::string encoded = args.finish(engine_call_id);
-  api().call_handle(handle_key,
-                    reinterpret_cast<const uint8_t*>(encoded.data()),
-                    encoded.size(), started.correlation_id);
+  const std::string encoded = args.finish(engine_call_id, handle_key);
+  api().call_function(reinterpret_cast<const uint8_t*>(encoded.data()),
+                      encoded.size(), started.correlation_id);
   return future<Ret, ThrownU>(std::move(started.state), engine_call_id);
 }
 

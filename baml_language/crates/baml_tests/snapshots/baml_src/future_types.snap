@@ -377,7 +377,7 @@ function future_types.int_future_is_string_future_fn() -> bool {
     return
 }
 
-function future_types.spawn_is_int_future(v: T) -> bool {
+function future_types.spawn_is_int_future(v: #0) -> bool {
     load_var ?1
     make_cell
     store_var ?1

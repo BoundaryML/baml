@@ -4137,15 +4137,178 @@ function needs<T extends Marker>(x: T) -> int throws never {
     }
 
     #[test]
+    fn bare_self_in_associated_type_default_is_reported() {
+        // `Self` is universal — it names each implementor — so it cannot be resolved at
+        // an interface-existential type, where the implementor is hidden.
+        let db = compile("interface HasDefault {\n  type Out = Self\n}\n");
+        let errs = decl_scope_type_errors(&db, "HasDefault");
+        assert!(
+            errs.iter().any(|e| matches!(
+                e,
+                TirTypeError::SelfInAssociatedTypeDefault { associated_type, .. }
+                    if associated_type.as_str() == "Out"
+            )),
+            "expected SelfInAssociatedTypeDefault for `Out`, got {errs:?}"
+        );
+    }
+
+    #[test]
+    fn nested_self_in_associated_type_default_is_reported() {
+        // Nesting does not rescue it: `Self[]` still has no implementor to resolve.
+        let db = compile("interface HasDefault {\n  type Out = Self[]\n}\n");
+        let errs = decl_scope_type_errors(&db, "HasDefault");
+        assert!(
+            errs.iter()
+                .any(|e| matches!(e, TirTypeError::SelfInAssociatedTypeDefault { .. })),
+            "expected SelfInAssociatedTypeDefault for a nested `Self`, got {errs:?}"
+        );
+    }
+
+    #[test]
+    fn self_projection_in_associated_type_default_is_accepted() {
+        // A `Self.Assoc` projection is not bare `Self`: the existential's own pins
+        // already fix it, so it denotes one type for every member.
+        let db = compile("interface HasDefault {\n  type Item\n  type Items = Self.Item[]\n}\n");
+        let errs = decl_scope_type_errors(&db, "HasDefault");
+        assert!(
+            !errs
+                .iter()
+                .any(|e| matches!(e, TirTypeError::SelfInAssociatedTypeDefault { .. })),
+            "a `Self.Assoc` projection default should be accepted, got {errs:?}"
+        );
+    }
+
+    #[test]
+    fn closed_associated_type_default_is_accepted() {
+        let db = compile("interface HasDefault {\n  type Out = string\n}\n");
+        let errs = decl_scope_type_errors(&db, "HasDefault");
+        assert!(
+            !errs
+                .iter()
+                .any(|e| matches!(e, TirTypeError::SelfInAssociatedTypeDefault { .. })),
+            "a closed default should be accepted, got {errs:?}"
+        );
+    }
+
+    #[test]
+    fn self_inside_a_projection_base_in_associated_type_default_is_reported() {
+        // The `Self.Assoc` exemption is justified by the existential's pins, so it covers
+        // only an exact `Self` base. `(Self[] as I).Item` wraps `Self` in a fresh
+        // constructor the pins say nothing about and reduces straight back to `Self`.
+        let db = compile(
+            "interface Holder {\n  type Item\n}\n\
+             interface HasDefault {\n  type Out = (Self[] as Holder).Item\n}\n",
+        );
+        let errs = decl_scope_type_errors(&db, "HasDefault");
+        assert!(
+            errs.iter()
+                .any(|e| matches!(e, TirTypeError::SelfInAssociatedTypeDefault { .. })),
+            "expected SelfInAssociatedTypeDefault for a `Self`-bearing projection base, got {errs:?}"
+        );
+    }
+
+    #[test]
+    fn chained_self_projection_in_associated_type_default_is_accepted() {
+        // A chain rooted at an exact `Self` stays exempt — every link is pinned.
+        let db = compile(
+            "interface Holder {\n  type Item\n}\n\
+             interface HasDefault {\n  type Item extends Holder\n  type Out = Self.Item.Item\n}\n",
+        );
+        let errs = decl_scope_type_errors(&db, "HasDefault");
+        assert!(
+            !errs
+                .iter()
+                .any(|e| matches!(e, TirTypeError::SelfInAssociatedTypeDefault { .. })),
+            "a projection chain rooted at `Self` should be accepted, got {errs:?}"
+        );
+    }
+
+    #[test]
+    fn self_in_associated_type_binding_of_default_is_reported() {
+        // `I<Item = Self>` pins a member to bare `Self`, so the binding is inspected too.
+        let db = compile(
+            "interface Holder {\n  type Item\n}\n\
+             interface HasDefault {\n  type Out = Holder<Item = Self>\n}\n",
+        );
+        let errs = decl_scope_type_errors(&db, "HasDefault");
+        assert!(
+            errs.iter()
+                .any(|e| matches!(e, TirTypeError::SelfInAssociatedTypeDefault { .. })),
+            "expected SelfInAssociatedTypeDefault for a `Self` associated-type binding, got {errs:?}"
+        );
+    }
+
+    #[test]
     fn requires_non_interface_is_reported() {
         let db = compile("class NotIface {}\ninterface I requires NotIface {}\n");
         let errs = decl_scope_type_errors(&db, "I");
         assert!(
             errs.iter().any(|e| matches!(
                 e,
-                TirTypeError::InterfaceRequiresNonInterface { target, .. } if target.as_str() == "NotIface"
+                TirTypeError::InterfaceRequiresNonInterface { target, .. }
+                    if matches!(target, Ty::Class(qtn, ..) if qtn.name().as_str() == "NotIface")
             )),
             "expected InterfaceRequiresNonInterface for `NotIface`, got {errs:?}"
+        );
+    }
+
+    /// An alias denotes a *type*, never an interface — the same rule that makes an aliased
+    /// generic bound an error (`GenericBoundNotInterface`), applied to `requires`.
+    #[test]
+    fn requires_alias_of_interface_is_reported() {
+        let db = compile(concat!(
+            "interface Base {}\n",
+            "type BaseAlias = Base\n",
+            "interface I requires BaseAlias {}\n",
+        ));
+        let errs = decl_scope_type_errors(&db, "I");
+        assert!(
+            errs.iter()
+                .any(|e| matches!(e, TirTypeError::InterfaceRequiresNonInterface { .. })),
+            "an aliased `requires` target is not an interface, got {errs:?}"
+        );
+    }
+
+    /// A `requires` clause is a constraint head, so it is shape-validated at the interface
+    /// declaration exactly like a generic bound: a bare generic head is an arity error.
+    #[test]
+    fn requires_clause_arity_is_validated() {
+        let db = compile(concat!(
+            "interface Parent<T> {}\n",
+            "interface Bare requires Parent {}\n",
+        ));
+        let errs = decl_scope_type_errors(&db, "Bare");
+        assert!(
+            errs.iter()
+                .any(|e| matches!(e, TirTypeError::WrongNumberOfTypeArgs { .. })),
+            "expected an arity error on the `requires` head, got {errs:?}"
+        );
+    }
+
+    #[test]
+    fn requires_clause_over_application_is_reported() {
+        let db = compile(concat!(
+            "interface Parent<T> {}\n",
+            "interface Over requires Parent<int, string> {}\n",
+        ));
+        let errs = decl_scope_type_errors(&db, "Over");
+        assert!(
+            errs.iter()
+                .any(|e| matches!(e, TirTypeError::WrongNumberOfTypeArgs { .. })),
+            "an over-applied `requires` head must not truncate silently, got {errs:?}"
+        );
+    }
+
+    #[test]
+    fn requires_clause_unknown_associated_binding_is_reported() {
+        let db = compile(concat!(
+            "interface Parent { type Item }\n",
+            "interface Unknown requires Parent<Item = int, Nope = int> {}\n",
+        ));
+        let errs = decl_scope_type_errors(&db, "Unknown");
+        assert!(
+            !errs.is_empty(),
+            "an unknown associated binding on a `requires` head must be reported"
         );
     }
 

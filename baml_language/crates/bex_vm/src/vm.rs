@@ -276,7 +276,6 @@ pub(crate) mod tests {
     #[cfg(not(target_arch = "wasm32"))]
     use std::sync::atomic::AtomicBool;
 
-    use baml_type::{RuntimeTy, TyAttr};
     use bex_heap::{BexHeap, CollectionLevel, Tlab};
     use bex_vm_types::{
         EarlyYieldCheck, FunctionCaptureProps, FunctionKind, GlobalPool, HeapPtr, Object,
@@ -290,12 +289,6 @@ pub(crate) mod tests {
         indexable::EvalStack,
         package_baml::{NativeCallResult, NativeFunction},
     };
-
-    fn int_ty() -> RuntimeTy {
-        RuntimeTy::Int {
-            attr: TyAttr::default(),
-        }
-    }
 
     fn early_yield_for_test() -> EarlyYieldCheck {
         #[cfg(target_arch = "wasm32")]
@@ -337,7 +330,7 @@ pub(crate) mod tests {
             id_overrides: Vec::new(),
             argv: Arc::from([]),
             pending_call_type_args: Vec::new(),
-            packages: Arc::new(indexmap::IndexMap::new()),
+            packages: Arc::new(crate::package_load::PackageIndex::default()),
         }
     }
 
@@ -359,14 +352,18 @@ pub(crate) mod tests {
             local_names: Vec::new(),
             debug_locals: Vec::new(),
             span: baml_type::Span::fake(),
-            return_type: int_ty(),
+            return_type: baml_type::TyTemplate::Int {
+                attr: baml_type::TyAttr::default(),
+            },
             param_names: Vec::new(),
             param_types: Vec::new(),
             param_has_default: Vec::new(),
             display_type_params: Vec::new(),
             display_param_types: Vec::new(),
             display_return_type: "int".to_string(),
-            throws_type: None,
+            throws_type: baml_type::TyTemplate::Never {
+                attr: baml_type::TyAttr::default(),
+            },
             origin: FunctionOrigin::Internal,
             body_meta: None,
             capture: FunctionCaptureProps::disabled(),
@@ -649,11 +646,10 @@ pub struct BexVm {
     /// shared view is a `VmInternalError`.
     pub globals: VmGlobals,
 
-    /// All loaded packages, indexed by their name; each value is an
-    /// `Object::Package` pointer. Shared (`Arc`) across spawned VMs so workers
-    /// resolve types, interfaces, and impls against the same index without
-    /// rebuilding it.
-    pub packages: Arc<IndexMap<Name, HeapPtr>>,
+    /// All loaded packages plus the program-wide interface → impl-rules index
+    /// derived from them. Shared (`Arc`) across spawned VMs so workers resolve
+    /// types, interfaces, and impls against the same index without rebuilding it.
+    pub packages: Arc<crate::package_load::PackageIndex>,
 
     /// Pre-resolved heap pointers for `baml.errors.*` classes, indexed by
     /// `ErrorClass` discriminant. Shared (`Arc`) across spawned VMs — resolved
@@ -955,7 +951,7 @@ pub fn convert_program(program: bex_vm_types::Program) -> Result<BytecodeProgram
 /// [`ErrorClass`] discriminant. The result is identical for every VM sharing a
 /// `packages` index, so it is resolved once and shared (`Arc`) across spawns
 /// rather than re-resolved per [`BexVm::new`].
-pub fn resolve_error_class_ptrs(packages: &IndexMap<Name, HeapPtr>) -> Arc<[HeapPtr]> {
+pub fn resolve_error_class_ptrs(packages: &crate::package_load::PackageIndex) -> Arc<[HeapPtr]> {
     ErrorClass::ALL
         .iter()
         .map(|ec| {
@@ -968,7 +964,7 @@ pub fn resolve_error_class_ptrs(packages: &IndexMap<Name, HeapPtr>) -> Arc<[Heap
 /// Resolve the heap pointers for the builtin `baml.panics.*` classes, indexed by
 /// [`PanicClass`] discriminant. Shared across spawns like
 /// [`resolve_error_class_ptrs`].
-pub fn resolve_panic_class_ptrs(packages: &IndexMap<Name, HeapPtr>) -> Arc<[HeapPtr]> {
+pub fn resolve_panic_class_ptrs(packages: &crate::package_load::PackageIndex) -> Arc<[HeapPtr]> {
     PanicClass::ALL
         .iter()
         .map(|pc| {
@@ -993,52 +989,50 @@ fn value_as_float(value: Value) -> Option<f64> {
     }
 }
 
-/// Narrow a value's stored argument type (a `RuntimeTy`) to the `RealizedTy` a
-/// [`ConcreteRealizedTy`] holds. A value's arguments are realized by
-/// construction, so this returns `None` only if a residual type variable leaked
-/// in — a bug — which callers propagate up as "no concrete type".
+/// The [`ConcreteRealizedTy::Function`] a callable *value* denotes: the
+/// `Function`'s stored signature templates, materialized against the realized
+/// type arguments that value carries.
 ///
-/// [`ConcreteRealizedTy`]: baml_type::ConcreteRealizedTy
-fn realized_arg(ty: &baml_type::RuntimeTy) -> Option<baml_type::RealizedTy> {
-    baml_type::RealizedTy::try_from(ty).ok()
-}
-
-/// The [`ConcreteRealizedTy::Function`] denoted by a `Function` object's stored
-/// signature, or `None` if a param/return/throws type carries an unresolved
-/// generic that does not narrow to a `RealizedTy` (a bug — see [`realized_arg`]).
+/// Every callable value is fully realized — a `Closure` carries
+/// `captured_type_args`, a `BoundMethod` and a `GenericFunction` their complete
+/// curried `type_args` — and the stored signature is a template over exactly
+/// those frame slots, so substitution always yields a realized type. A failure
+/// means the frame does not supply a slot the signature references, i.e. a
+/// compiler/VM frame-layout bug, and is surfaced as an internal error rather
+/// than a silently coarse or absent type (the same contract
+/// `TyTemplate::substitute` states for every other materialization site).
 ///
-/// Used to reconstruct the concrete type of a callable value (closure / generic
-/// function).
-///
-/// BUG(erased-signature-reconstruction): every callable VALUE is fully
-/// realized — a `Closure` carries `captured_type_args`, a `BoundMethod` its
-/// complete curried `type_args` — but this reconstruction reads only the
-/// `Function`'s stored signature, which erases generic positions to `unknown`
-/// (`Function::param_types` / `return_type`) instead of referencing the frame
-/// slots those curried args fill. So a callable minted in a generic frame
-/// reconstructs coarsely, faithful only to the erased storage, not to the
-/// value. The fix is to store the signature as a template over the frame's
-/// type-arg slots and substitute the value's curried args here — which would
-/// also let `BoundMethod` reconstruct (its arm currently returns no type) and
-/// unlock relaxing E0155 (function-typed patterns).
+/// `drop_receiver` skips the leading `self` parameter: a bound method's type is
+/// its function's type with the receiver already applied.
 ///
 /// [`ConcreteRealizedTy::Function`]: baml_type::ConcreteRealizedTy::Function
-fn function_object_ty(f: &bex_vm_types::types::Function) -> Option<baml_type::ConcreteRealizedTy> {
-    use baml_type::{
-        ConcreteRealizedTy, FunctionParamMode, RealizedFunctionParamTy, RealizedTy, TyAttr,
-    };
+fn function_object_ty<C: baml_type::normalize::TypeContext>(
+    ctx: &C,
+    f: &bex_vm_types::types::Function,
+    type_args: &[baml_type::RealizedTy],
+    drop_receiver: bool,
+) -> Result<baml_type::ConcreteRealizedTy, VmInternalError> {
+    use baml_type::{ConcreteRealizedTy, FunctionParamMode, RealizedFunctionParamTy, TyAttr};
+    let materialize =
+        |t: &baml_type::TyTemplate| -> Result<baml_type::RealizedTy, VmInternalError> {
+            t.substitute(type_args, ctx)
+                .map_err(|e| VmInternalError::TypeSubstitution {
+                    message: e.to_string(),
+                })
+        };
     let params = f
         .param_types
         .iter()
         .enumerate()
+        .skip(usize::from(drop_receiver))
         .map(|(i, ty)| {
-            Some(RealizedFunctionParamTy {
+            Ok(RealizedFunctionParamTy {
                 name: f
                     .param_names
                     .get(i)
                     .filter(|n| !n.is_empty())
                     .map(|n| Name::new(n.as_str())),
-                ty: realized_arg(ty)?,
+                ty: materialize(ty)?,
                 mode: if f.param_has_default.get(i).copied().unwrap_or(false) {
                     FunctionParamMode::Optional
                 } else {
@@ -1046,18 +1040,11 @@ fn function_object_ty(f: &bex_vm_types::types::Function) -> Option<baml_type::Co
                 },
             })
         })
-        .collect::<Option<Vec<_>>>()?;
-    // `None` throws == "never throws" == the `void` error type.
-    let throws = match &f.throws_type {
-        Some(ty) => realized_arg(ty)?,
-        None => RealizedTy::Void {
-            attr: TyAttr::default(),
-        },
-    };
-    Some(ConcreteRealizedTy::Function {
+        .collect::<Result<Vec<_>, VmInternalError>>()?;
+    Ok(ConcreteRealizedTy::Function {
         params,
-        ret: Box::new(realized_arg(&f.return_type)?),
-        throws: Box::new(throws),
+        ret: Box::new(materialize(&f.return_type)?),
+        throws: Box::new(materialize(&f.throws_type)?),
         attr: TyAttr::default(),
     })
 }
@@ -1065,62 +1052,53 @@ fn function_object_ty(f: &bex_vm_types::types::Function) -> Option<baml_type::Co
 /// A callable value's reconstructed signature in the shape the `reflect`
 /// natives consume (BEP-062): parameters in declaration order (a bound
 /// method's receiver dropped), the return type, and the throws type.
-/// `throws: None` means "cannot throw"; its user-visible static spelling is
-/// `never` (deliberately not the `void` convention `function_object_ty`
-/// uses — see `FIXME(function-type-matching)` in emit).
+/// A callable that cannot throw reports `never` — the empty error set, and the
+/// same spelling the static type uses.
 pub(crate) struct CallableSignature {
     /// The declaration's fully qualified name; `None` for host closures and
     /// compiler-synthesized callables (lambda names are `<lambda(...)>`).
     pub(crate) name: Option<String>,
     pub(crate) params: Vec<baml_type::RealizedFunctionParamTy>,
     pub(crate) ret: baml_type::RealizedTy,
-    pub(crate) throws: Option<baml_type::RealizedTy>,
+    /// The error type; `never` when the callable cannot throw — the same
+    /// spelling a function *type* uses, so a value's reconstructed signature
+    /// and its written type agree.
+    pub(crate) throws: baml_type::RealizedTy,
     /// The declaration's joined `///` doc-comment lines, if any.
     pub(crate) docstring: Option<String>,
 }
 
-/// Reconstruct a [`CallableSignature`] from a raw `Function` object.
-/// `drop_receiver` skips the leading `self` parameter for bound methods.
+/// Reconstruct a [`CallableSignature`] from a raw `Function` object,
+/// materializing its signature templates against `type_args` — the realized
+/// frame the callable value carries. `drop_receiver` skips the leading `self`
+/// parameter for bound methods.
 ///
-/// A stored signature slot that does not realize — a generic function's
-/// unresolved `TypeVar`, a symbolic projection — erases to `unknown` for that
-/// slot rather than dropping the whole callable: `reflect.signature` /
-/// `reflect.call_any` prefer the coarse truth over refusing generic
-/// callables. (This is deliberately looser than [`function_object_ty`], whose
-/// `is`-matching consumers must never affirm a type they cannot prove.)
-fn function_callable_signature(
+/// Shares [`function_object_ty`]'s contract: substitution realizes fully or the
+/// frame layout is broken, so there is no coarse fallback. Reflection reports
+/// the same type the matcher tests against.
+fn function_callable_signature<C: baml_type::normalize::TypeContext>(
+    ctx: &C,
     f: &bex_vm_types::types::Function,
+    type_args: &[baml_type::RealizedTy],
     drop_receiver: bool,
-) -> CallableSignature {
-    use baml_type::{FunctionParamMode, RealizedFunctionParamTy, RealizedTy};
-    let realized_or_unknown =
-        |ty: &baml_type::RuntimeTy| realized_arg(ty).unwrap_or_else(RealizedTy::unknown);
-    let params = f
-        .param_types
-        .iter()
-        .enumerate()
-        .skip(usize::from(drop_receiver))
-        .map(|(i, ty)| RealizedFunctionParamTy {
-            name: f
-                .param_names
-                .get(i)
-                .filter(|n| !n.is_empty())
-                .map(|n| Name::new(n.as_str())),
-            ty: realized_or_unknown(ty),
-            mode: if f.param_has_default.get(i).copied().unwrap_or(false) {
-                FunctionParamMode::Optional
-            } else {
-                FunctionParamMode::Required
-            },
-        })
-        .collect();
-    CallableSignature {
+) -> Result<CallableSignature, VmInternalError> {
+    use baml_type::ConcreteRealizedTy;
+    let ConcreteRealizedTy::Function {
+        params,
+        ret,
+        throws,
+        ..
+    } = function_object_ty(ctx, f, type_args, drop_receiver)?
+    else {
+        unreachable!("function_object_ty always builds a Function type")
+    };
+    Ok(CallableSignature {
         name: f.declared_name.clone(),
         params,
-        ret: realized_or_unknown(&f.return_type),
-        throws: f.throws_type.as_ref().map(realized_or_unknown),
+        ret: *ret,
+        throws: *throws,
         docstring: f.docstring.clone(),
-    }
+    })
 }
 
 /// Get the type tag for any runtime value.
@@ -1234,7 +1212,7 @@ impl BexVm {
         globals: VmGlobals,
         #[cfg(not(target_arch = "wasm32"))] park_requested: Arc<AtomicBool>,
         argv: Arc<[String]>,
-        packages: Arc<IndexMap<Name, HeapPtr>>,
+        packages: Arc<crate::package_load::PackageIndex>,
         error_class_ptrs: Arc<[HeapPtr]>,
         panic_class_ptrs: Arc<[HeapPtr]>,
     ) -> Self {
@@ -1648,7 +1626,8 @@ impl BexVm {
 
     /// The `Object::Package` for `pkg`, if loaded.
     fn package(&self, pkg: &Name) -> Option<&bex_vm_types::types::Package> {
-        self.get_object(*self.packages.get(pkg)?).as_package()
+        self.get_object(self.packages.package_ptr(pkg)?)
+            .as_package()
     }
 
     /// Look up a class or enum object by its qualified type name. Classes and
@@ -1701,8 +1680,8 @@ impl BexVm {
     /// Every class and enum object across all loaded packages.
     pub fn all_class_and_enum_ptrs(&self) -> impl Iterator<Item = HeapPtr> + '_ {
         self.packages
-            .values()
-            .filter_map(move |&p| self.get_object(p).as_package())
+            .package_ptrs()
+            .filter_map(move |p| self.get_object(p).as_package())
             .flat_map(|package| {
                 package
                     .classes
@@ -1942,24 +1921,29 @@ impl BexVm {
     /// `emit_pooled_function_value`), so a raw `Object::Function` is never a
     /// data value and deliberately has no arm here.
     ///
-    /// Unlike [`Self::value_concrete_ty`], a `BoundMethod` IS reconstructed
-    /// (receiver dropped) and unresolved slots erase rather than refuse; see
-    /// [`function_callable_signature`] for the coarse-truth rationale.
+    /// This reports the same types [`Self::value_concrete_ty`] reconstructs for
+    /// the same value (a `BoundMethod`'s receiver drops in both), plus the
+    /// reflection-only metadata a structural type does not carry: the
+    /// function's name, docstring, and per-parameter modes.
     pub(crate) fn callable_signature(&self, value: Value) -> Option<CallableSignature> {
-        use baml_type::RealizedTy;
         match self.get_object(value.as_object_ptr()?) {
             Object::Closure(closure) => {
                 // SAFETY: `closure.function` points to a live `Function`, the
                 // same invariant `resolve_callable_target` relies on.
                 match unsafe { closure.function.get() } {
-                    Object::Function(f) => Some(function_callable_signature(f, false)),
+                    Object::Function(f) => {
+                        function_callable_signature(self, f, &closure.captured_type_args, false)
+                            .ok()
+                    }
                     _ => None,
                 }
             }
             Object::GenericFunction(gf) => {
                 let inner = self.globals.get(self.proof(), gf.function);
                 match inner.as_object_ptr().map(|p| self.get_object(p)) {
-                    Some(Object::Function(f)) => Some(function_callable_signature(f, false)),
+                    Some(Object::Function(f)) => {
+                        function_callable_signature(self, f, &gf.type_args, false).ok()
+                    }
                     _ => None,
                 }
             }
@@ -1967,7 +1951,9 @@ impl BexVm {
                 // SAFETY: `bm.function` points to a live `Function` (the bind
                 // site stored it), as at `CallIndirect`'s BoundMethod arm.
                 match unsafe { bm.function.get() } {
-                    Object::Function(f) => Some(function_callable_signature(f, true)),
+                    Object::Function(f) => {
+                        function_callable_signature(self, f, &bm.type_args, true).ok()
+                    }
                     _ => None,
                 }
             }
@@ -1975,13 +1961,12 @@ impl BexVm {
                 // Host closures are FFI-constructed; they carry no name.
                 name: None,
                 params: (*hc.params).clone(),
-                // Normalize the stored error type into the `None == never`
-                // convention (host closures store a realized `never`/`void`
-                // for a non-throwing callee rather than omitting it).
-                throws: match &*hc.throws_ty {
-                    RealizedTy::Never { .. } | RealizedTy::Void { .. } => None,
-                    ty => Some(ty.clone()),
-                },
+                // A host callable's declared bottom/unit throws is normalized to
+                // `unknown` when the closure is bound (see the engine's
+                // conversion): foreign code may surface a native exception no
+                // matter what it declares, so its error contract is opaque
+                // rather than empty. Nothing here can be `void`.
+                throws: (*hc.throws_ty).clone(),
                 ret: (*hc.ret_ty).clone(),
                 // Host closures are FFI-constructed; they carry no docs.
                 docstring: None,
@@ -2091,25 +2076,28 @@ impl BexVm {
 
             // ── Function-pointer values ──────────────────────────────────────
             // These are user-facing callables; their concrete type is the
-            // reconstructed function signature. (The signature stored on the
-            // underlying `Function` erases unresolved generics to `unknown`, so a
-            // generic closure reconstructs coarsely — but it is a real function
-            // type, not "no type".)
+            // function's signature templates materialized against the realized
+            // frame the value carries, so one minted in a generic frame is as
+            // precise as any other.
             Object::Closure(closure) => {
                 // SAFETY: `closure.function` points to a live `Function`, the
                 // same invariant `resolve_callable_target` relies on.
                 match unsafe { closure.function.get() } {
-                    Object::Function(f) => function_object_ty(f)?,
+                    Object::Function(f) => {
+                        function_object_ty(self, f, &closure.captured_type_args, false).ok()?
+                    }
                     _ => return None,
                 }
             }
             Object::GenericFunction(gf) => {
-                // Resolve the underlying function through the global table, as at
-                // call time; its `type_args` seed the frame but the stored
-                // signature is already generic-erased, so reuse it directly.
+                // Resolve the underlying function through the global table, as
+                // at call time; its `type_args` are the frame the signature
+                // templates materialize against.
                 let inner = self.globals.get(self.proof(), gf.function);
                 match inner.as_object_ptr().map(|p| self.get_object(p)) {
-                    Some(Object::Function(f)) => function_object_ty(f)?,
+                    Some(Object::Function(f)) => {
+                        function_object_ty(self, f, &gf.type_args, false).ok()?
+                    }
                     _ => return None,
                 }
             }
@@ -2120,16 +2108,18 @@ impl BexVm {
                 throws: Box::new((*hc.throws_ty).clone()),
                 attr: TyAttr::default(),
             },
-            // BUG(erased-signature-reconstruction): a `BoundMethod` is a fully
-            // realized callable value — its complete curried frame IS on the
-            // object (`BoundMethod::type_args`) — and *should* reconstruct to
-            // its underlying function's type with the bound `self` parameter
-            // dropped. What's missing is a stored signature that references
-            // the frame's type-arg slots to substitute those curried args
-            // into (the `Function` signature erases generic positions — see
-            // `function_object_ty`); until then it reports no type rather
-            // than a wrong one.
-            Object::BoundMethod(_) => return None,
+            // A bound method's type is its function's type with the receiver
+            // already applied, so the leading `self` parameter drops. Its
+            // complete curried frame is on the object, so a generic method
+            // reconstructs as precisely as any other callable.
+            Object::BoundMethod(bm) => {
+                // SAFETY: `bm.function` points to a live `Function`, the same
+                // invariant `resolve_callable_target` relies on.
+                match unsafe { bm.function.get() } {
+                    Object::Function(f) => function_object_ty(self, f, &bm.type_args, true).ok()?,
+                    _ => return None,
+                }
+            }
 
             // `Object::Function` is NOT a function-pointer value — it is the
             // internal function representation that acts as the type constructor
@@ -2281,7 +2271,7 @@ impl BexVm {
 
         // Create heap with compile-time objects, additionally allocating the
         // per-package `Object::Package` / `Object::ImplRule` objects.
-        let (heap, vm_packages) =
+        let (heap, package_index) =
             crate::package_load::build_heap_with_packages(compile_time_objects, &bytecode.packages);
 
         // Convert compile-time globals (ConstValue) to runtime globals (Value).
@@ -2301,15 +2291,15 @@ impl BexVm {
             .collect();
         let globals = VmGlobals::Owned(bex_vm_types::GlobalPool::from_vec(globals_vec));
 
-        let error_class_ptrs = resolve_error_class_ptrs(&vm_packages);
-        let panic_class_ptrs = resolve_panic_class_ptrs(&vm_packages);
+        let error_class_ptrs = resolve_error_class_ptrs(&package_index);
+        let panic_class_ptrs = resolve_panic_class_ptrs(&package_index);
         Ok(Self::new(
             heap,
             globals,
             #[cfg(not(target_arch = "wasm32"))]
             park_requested,
             Arc::from(Vec::<String>::new()),
-            Arc::new(vm_packages),
+            Arc::new(package_index),
             error_class_ptrs,
             panic_class_ptrs,
         ))
@@ -2614,16 +2604,13 @@ impl BexVm {
     fn push_host_closure_trampoline_frame(&mut self, closure: HeapPtr, args: &[Value]) {
         let (arity, return_type, throws_type) = match self.get_object(closure) {
             Object::HostClosure(hc) => {
-                let throws_type = match &*hc.throws_ty {
-                    baml_type::RealizedTy::Never { .. } | baml_type::RealizedTy::Void { .. } => {
-                        None
-                    }
-                    ty => Some(baml_type::RuntimeTy::from(ty.clone())),
-                };
+                // A host closure's signature is already realized, and a realized
+                // type is a valid template — the trampoline frame seeds no type
+                // args, so nothing is left to substitute.
                 (
                     hc.arity,
-                    baml_type::RuntimeTy::from((*hc.ret_ty).clone()),
-                    throws_type,
+                    baml_type::TyTemplate::from((*hc.ret_ty).clone()),
+                    baml_type::TyTemplate::from((*hc.throws_ty).clone()),
                 )
             }
             other => unreachable!("expect host closure as entry point, got {other:?}"),

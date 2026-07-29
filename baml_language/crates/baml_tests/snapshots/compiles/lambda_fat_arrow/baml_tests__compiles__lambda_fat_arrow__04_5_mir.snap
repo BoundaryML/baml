@@ -20,9 +20,9 @@ fn user.test_annotated() -> int {
 }
 
 // lambda[0]
-fn .<lambda(test_annotated, 0)>(x: int) -> null {
+fn .<lambda(test_annotated, 0)>(x: int) -> int {
     // Locals:
-    let _0: null // _0 // return
+    let _0: int // _0 // return
     let _1: int // x // param
 
     bb0: {
@@ -53,9 +53,9 @@ fn user.test_zero_param() -> int {
 }
 
 // lambda[0]
-fn .<lambda(test_zero_param, 0)>() -> null {
+fn .<lambda(test_zero_param, 0)>() -> int {
     // Locals:
-    let _0: null // _0 // return
+    let _0: int // _0 // return
 
     bb0: {
         _0 = const 42_i64;
@@ -85,9 +85,9 @@ fn user.test_inferred() -> int {
 }
 
 // lambda[0]
-fn .<lambda(test_inferred, 0)>(x: int) -> null {
+fn .<lambda(test_inferred, 0)>(x: int) -> int {
     // Locals:
-    let _0: null // _0 // return
+    let _0: int // _0 // return
     let _1: int // x // param
 
     bb0: {
@@ -118,9 +118,9 @@ fn user.test_multi_param() -> int {
 }
 
 // lambda[0]
-fn .<lambda(test_multi_param, 0)>(a: int, b: int) -> null {
+fn .<lambda(test_multi_param, 0)>(a: int, b: int) -> int {
     // Locals:
-    let _0: null // _0 // return
+    let _0: int // _0 // return
     let _1: int // a // param
     let _2: int // b // param
 
@@ -162,9 +162,9 @@ fn user.test_in_match(x: int) -> int {
 }
 
 // lambda[0]
-fn .<lambda(test_in_match, 0)>(y: int) -> null {
+fn .<lambda(test_in_match, 0)>(y: int) -> int {
     // Locals:
-    let _0: null // _0 // return
+    let _0: int // _0 // return
     let _1: int // y // param
 
     bb0: {
@@ -210,9 +210,9 @@ fn user.test_mixed() -> int {
 }
 
 // lambda[0]
-fn .<lambda(test_mixed, 0)>(x: int) -> null {
+fn .<lambda(test_mixed, 0)>(x: int) -> int {
     // Locals:
-    let _0: null // _0 // return
+    let _0: int // _0 // return
     let _1: int // x // param
 
     bb0: {
@@ -226,9 +226,9 @@ fn .<lambda(test_mixed, 0)>(x: int) -> null {
 }
 
 // lambda[1]
-fn .<lambda(test_mixed, 1)>(x: int) -> null {
+fn .<lambda(test_mixed, 1)>(x: int) -> int {
     // Locals:
-    let _0: null // _0 // return
+    let _0: int // _0 // return
     let _1: int // x // param
 
     bb0: {

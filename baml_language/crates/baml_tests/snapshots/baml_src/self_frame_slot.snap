@@ -174,7 +174,7 @@ function self_frame_slot.$init_test_ns_self_frame_slot_self_frame_slot(registry:
     return
 }
 
-function self_frame_slot.Crate.Marked.is_self(self: self_frame_slot.Crate<T>, other: unknown) -> bool {
+function self_frame_slot.Crate.Marked.is_self(self: self_frame_slot.Crate<#0>, other: unknown) -> bool {
     load_var other
     is_type self_frame_slot.Crate<...>
     pop_jump_if_false L0
@@ -191,12 +191,12 @@ function self_frame_slot.Crate.Marked.is_self(self: self_frame_slot.Crate<T>, ot
     return
 }
 
-function self_frame_slot.Crate.Marked.mark(self: self_frame_slot.Crate<T>) -> string {
+function self_frame_slot.Crate.Marked.mark(self: self_frame_slot.Crate<#0>) -> string {
     load_const "crate"
     return
 }
 
-function self_frame_slot.Crate.Marked.type_name(self: self_frame_slot.Crate<T>) -> string {
+function self_frame_slot.Crate.Marked.type_name(self: self_frame_slot.Crate<#0>) -> string {
     load_type self_frame_slot.Crate<#0>
     call baml.TypeValue.baml.ToString.to_string
     return
@@ -308,7 +308,7 @@ function self_frame_slot.Kinded.same_kind_of(self: self_frame_slot.Kinded, other
     return
 }
 
-function self_frame_slot.Marked$for$T[].is_self(self: T[], other: unknown) -> bool {
+function self_frame_slot.Marked$for$T[].is_self(self: #0[], other: unknown) -> bool {
     load_var other
     is_type #0[]
     pop_jump_if_false L0
@@ -325,12 +325,12 @@ function self_frame_slot.Marked$for$T[].is_self(self: T[], other: unknown) -> bo
     return
 }
 
-function self_frame_slot.Marked$for$T[].mark(self: T[]) -> string {
+function self_frame_slot.Marked$for$T[].mark(self: #0[]) -> string {
     load_const "list"
     return
 }
 
-function self_frame_slot.Marked$for$T[].type_name(self: T[]) -> string {
+function self_frame_slot.Marked$for$T[].type_name(self: #0[]) -> string {
     load_type #0[]
     call baml.TypeValue.baml.ToString.to_string
     return
@@ -364,7 +364,7 @@ function self_frame_slot.Marked$for$int.type_name(self: int) -> string {
     return
 }
 
-function self_frame_slot.Store.describe(self: self_frame_slot.Store<T>) -> string {
+function self_frame_slot.Store.describe(self: self_frame_slot.Store<#1>) -> string {
     load_type #0
     call baml.TypeValue.baml.ToString.to_string
     store_var _5

@@ -1557,7 +1557,7 @@ class Array<T> {
             let stub_methods: Vec<_> = c
                 .methods
                 .iter()
-                .filter(|m| m.origin != crate::ast::FunctionOrigin::AutoDerive)
+                .filter(|m| m.metadata.origin != crate::ast::FunctionOrigin::AutoDerive)
                 .collect();
             assert_eq!(stub_methods.len(), 4);
             for method in &stub_methods {

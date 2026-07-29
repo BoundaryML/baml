@@ -942,6 +942,19 @@ function user.JumpTableClassTypeTag(pet: user.Cat | user.Dog | user.Bird | user.
         "fish" : "fish"
   }
 }
+class user.WitBox {
+  v: T
+}
+function user.DistinctInstantiationWitnesses(x: unknown) -> int throws never {
+  { : 1 | 2
+    match (x : unknown) : 1 | 2
+      WitBox<int> { v: 1 } =>
+        1 : 1
+      WitBox<string> { v: "a" } =>
+        2 : 2
+  }
+  !! 31336..31427: non-exhaustive match on `unknown`; missing: WitBox<int> { v: _ }, WitBox<string> { v: _ }, _
+}
 class user.Success$stream {
   data: string | null
 }
@@ -980,4 +993,7 @@ class user.Bird$stream {
 }
 class user.Fish$stream {
   name: string | null
+}
+class user.WitBox$stream {
+  v: T | null
 }

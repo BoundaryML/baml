@@ -25,6 +25,7 @@ pub use bex_external_types::{
     HostValueKind, MediaKind, RuntimeTy, TyAttr, host_release_dispatch,
     runtime_ty_structurally_equal, selected_arm_equal, try_convert_rust_data, validate_host_return,
 };
+use indexmap::IndexMap;
 pub use sys_ops::SysOps;
 pub use sys_types::{CallId, CancellationToken};
 use thiserror::Error;
@@ -35,17 +36,37 @@ mod fs;
 mod project;
 mod seed;
 
-pub struct BexArgs(pub HashMap<String, BexExternalValue>);
+pub struct BexArgs {
+    /// Required values keyed by their type-level names and kept in declared order.
+    pub required: IndexMap<String, BexExternalValue>,
+    /// Supplied optional values keyed by their type-level parameter names.
+    pub optional: IndexMap<String, BexExternalValue>,
+}
 
 impl From<HashMap<&str, BexExternalValue>> for BexArgs {
     fn from(m: HashMap<&str, BexExternalValue>) -> Self {
-        BexArgs(m.into_iter().map(|(k, v)| (k.to_string(), v)).collect())
+        Self {
+            required: m.into_iter().map(|(k, v)| (k.to_string(), v)).collect(),
+            optional: IndexMap::new(),
+        }
     }
 }
 
 impl From<HashMap<String, BexExternalValue>> for BexArgs {
     fn from(m: HashMap<String, BexExternalValue>) -> Self {
-        BexArgs(m)
+        Self {
+            required: m.into_iter().collect(),
+            optional: IndexMap::new(),
+        }
+    }
+}
+
+impl From<IndexMap<String, BexExternalValue>> for BexArgs {
+    fn from(required: IndexMap<String, BexExternalValue>) -> Self {
+        Self {
+            required,
+            optional: IndexMap::new(),
+        }
     }
 }
 

@@ -14,8 +14,8 @@ uv = "0.11.3"
 direnv = "2.37.1"
 sccache = "0.10.0"
 clang = "22.1.7" # LLVM tools for CI, including llvm-strip
-cmake = "latest"
-ninja = "latest"
+cmake = "4.3.3"
+ninja = "1.13.2"
 
 # Rust tools
 "cargo:bacon" = "latest"
@@ -37,6 +37,7 @@ ninja = "latest"
 
 # Protobuf compiler — needed by sdks/go/bridge_go/build.sh (bridge_ctypes uses vendored protoc).
 protoc = "27.1"
+"spm:apple/swift-protobuf" = "1.38.1"
 
 # Python tools
 "pipx:ruff" = "latest"

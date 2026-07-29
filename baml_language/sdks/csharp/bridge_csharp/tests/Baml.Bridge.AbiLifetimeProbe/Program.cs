@@ -7,7 +7,7 @@ using System.Text;
 internal static unsafe partial class Program
 {
     private const string NativeLibraryName = "bridge_cffi";
-    private const uint BamlApiV1AbiVersion = 1;
+    private const uint BamlApiV1AbiVersion = 2;
     private const uint BamlBridgeLanguageCSharp = 5;
     private const uint BamlBridgeLanguageRust = 4;
     private const uint StatusOk = 0;
@@ -360,14 +360,17 @@ internal static unsafe partial class Program
             PendingCalls.TryAdd(callbackId, completion),
             $"duplicate managed callback ID {callbackId}");
 
-        byte[] encodedName = Encoding.UTF8.GetBytes(functionName + "\0");
-        fixed (byte* name = encodedName)
-        fixed (byte* arguments = encodedArguments)
+        var encodedCall = new List<byte>(encodedArguments);
+        WriteLengthDelimited(
+            encodedCall,
+            4,
+            Encoding.UTF8.GetBytes(functionName));
+        byte[] encodedCallBytes = [.. encodedCall];
+        fixed (byte* arguments = encodedCallBytes)
         {
             api->CallFunction(
-                name,
                 arguments,
-                (nuint)encodedArguments.Length,
+                (nuint)encodedCallBytes.Length,
                 callbackId);
         }
 
@@ -1038,7 +1041,6 @@ internal static unsafe partial class Program
             delegate* unmanaged[Cdecl]<uint, byte*, nuint, void>,
             void> RegisterCallback;
         public readonly delegate* unmanaged[Cdecl]<
-            byte*,
             byte*,
             nuint,
             uint,

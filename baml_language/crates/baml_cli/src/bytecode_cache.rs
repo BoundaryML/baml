@@ -3480,9 +3480,9 @@ mod tests {
                 _ => None,
             })
             .expect("stable function");
-        stable_fn.throws_type = Some(baml_type::RuntimeTy::String {
+        stable_fn.throws_type = baml_type::TyTemplate::String {
             attr: baml_type::TyAttr::default(),
-        });
+        };
 
         let prepared = prepare_reuse_plan(&mut db2, Some(plan))
             .expect("the unaffected clean unit remains reusable");

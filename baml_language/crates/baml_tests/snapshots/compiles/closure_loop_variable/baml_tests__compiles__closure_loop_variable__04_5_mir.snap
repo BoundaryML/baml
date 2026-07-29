@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 9156
 ---
 === MIR2 ===
 fn user.sum_array(arr: int[]) -> int {
@@ -81,9 +80,9 @@ fn user.sum_array(arr: int[]) -> int {
 }
 
 // lambda[0]
-fn .<lambda(sum_array, 0)>() -> null {
+fn .<lambda(sum_array, 0)>() -> void {
     // Locals:
-    let _0: null // _0 // return
+    let _0: void // _0 // return
     let _1: int
 
     bb0: {

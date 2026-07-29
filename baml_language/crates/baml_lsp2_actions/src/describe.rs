@@ -171,6 +171,9 @@ pub fn describe_by_definition(
     files: &[SourceFile],
     definition: Definition<'_>,
 ) -> Option<SymbolDescription> {
+    if definition.is_language_internal(db) {
+        return None;
+    }
     let (file, name_span) = crate::utils::definition_span(db, definition)?;
 
     // Extract the name text from the source.
@@ -890,10 +893,7 @@ fn collect_class_methods_impl(
     let mut out = Vec::new();
     for (idx, &method_loc) in class_data.methods.iter().enumerate() {
         let m = baml_compiler2_ppir::item_data::function_data(db, method_loc);
-        if matches!(
-            m.origin,
-            baml_compiler2_ast::ast::FunctionOrigin::AutoDerive
-        ) {
+        if m.metadata.is_language_internal {
             continue;
         }
         let is_instance = m.params.first().is_some_and(|p| p.name.as_str() == "self");
@@ -1054,11 +1054,7 @@ fn describe_class_method(
     // Locate the (non-auto-derived) method by name.
     let (idx, &method_loc) = class_data.methods.iter().enumerate().find(|(_, mid)| {
         let m = baml_compiler2_ppir::item_data::function_data(db, **mid);
-        m.name.as_str() == member_name
-            && !matches!(
-                m.origin,
-                baml_compiler2_ast::ast::FunctionOrigin::AutoDerive
-            )
+        m.name.as_str() == member_name && !m.metadata.is_language_internal
     })?;
     let m = baml_compiler2_ppir::item_data::function_data(db, method_loc);
     let method_span = baml_compiler2_ppir::item_data::function_source_map(db, method_loc).span;
@@ -1194,10 +1190,7 @@ fn collect_method_signature_deps(
 
     for (idx, method_loc) in class.methods.iter().enumerate() {
         let m = baml_compiler2_ppir::item_data::function_data(db, *method_loc);
-        if matches!(
-            m.origin,
-            baml_compiler2_ast::ast::FunctionOrigin::AutoDerive
-        ) {
+        if m.metadata.is_language_internal {
             continue;
         }
         let Some(ef) = exported_method(methods, idx, &m.name) else {

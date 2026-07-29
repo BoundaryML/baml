@@ -266,6 +266,10 @@ pub enum DiagnosticId {
     UnconstrainedImplTypeParam,
     /// `Self` used in an interface FIELD type (only valid in method signatures).
     SelfInInterfaceField,
+    /// Bare `Self` used in an associated type's DEFAULT. `Self` is universal, so it
+    /// cannot be resolved where the interface is used as an interface-existential
+    /// type (the implementor is hidden).
+    SelfInAssociatedTypeDefault,
     /// An `implements … for <target>` whose `for` target is not a single concrete
     /// type — a union, optional, interface ("dyn"), or `unknown`. Interfaces can
     /// only be implemented for a concrete type (or a concrete type constructor
@@ -355,16 +359,6 @@ pub enum DiagnosticId {
     /// interface (`baml.AnyFunction`) that is only legal as a value type
     /// (an existential), never as a bound.
     BuiltinInterfaceNotABound,
-
-    // Function-typed patterns (E0155)
-    /// A pattern claiming function-typed values sits in a position that emits
-    /// a runtime value test. Every callable value is fully realized, but the
-    /// runtime cannot yet faithfully reconstruct every callable's signature
-    /// (the stored signature erases generic positions; bound methods
-    /// reconstruct none), so such a test silently misroutes some callables
-    /// the pattern names. Only the final arm of an exhaustive, guardless,
-    /// non-Or `match` (whose test is elided) may be function-typed.
-    FunctionTypedPatternNotTestable,
 
     // Projection bases (E0156)
     /// The dotted projection shorthand (`Base.Member`) was written with the
@@ -568,6 +562,7 @@ impl DiagnosticId {
             DiagnosticId::ImplTargetNotConcrete => "E0138",
             DiagnosticId::ImplViolatesOrphanRule => "E0139",
             DiagnosticId::ToStringMustImplementInterface => "E0140",
+            DiagnosticId::SelfInAssociatedTypeDefault => "E0157",
             DiagnosticId::DeferControlFlowEscape => "E0141",
             DiagnosticId::ToJsonMustImplementInterface => "E0142",
             DiagnosticId::FromJsonMustImplementInterface => "E0143",
@@ -592,7 +587,6 @@ impl DiagnosticId {
             // deserves its own change.
             DiagnosticId::BuiltinInterfaceNotImplementable => "E0153",
             DiagnosticId::BuiltinInterfaceNotABound => "E0154",
-            DiagnosticId::FunctionTypedPatternNotTestable => "E0155",
             DiagnosticId::InterfaceProjectionBase => "E0156",
         }
     }

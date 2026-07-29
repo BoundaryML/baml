@@ -20,57 +20,88 @@ use bex_engine::{
     FunctionCallContext, FunctionCallContextBuilder, test_arg_to_external,
     value_capture::{TraceCaptureConfig, TraceCaptureProducer},
 };
-use clap::{Args, CommandFactory, FromArgMatches, ValueEnum};
+use clap::{Args, FromArgMatches, ValueEnum};
 use sys_native::{CallId, SysOpsExt};
 
 use crate::{bytecode_cache::CacheContext, reporter::Reporter, test_filter::TestFilter};
 
+/// Run BAML tests.
+///
+/// With no filters, runs every test selected by the active profile, or every
+/// project test when no profile is configured. Use `--list` to discover the
+/// canonical IDs accepted by `--include` and `--exclude`.
 #[derive(Args, Clone, Debug)]
-#[command(
-    after_help = "SELECTORS:\n  Test IDs are case-sensitive and canonical: `root[.namespace]::testset::test`.\n  A plain -i/--include or -x/--exclude value matches anywhere in the full ID. A\n  value containing `*` is instead an anchored full-ID glob; `*` also matches\n  `::`. Repeated includes are OR. Excludes always win. With no includes, every\n  non-excluded test is selected.\n\nPROFILES:\n  Profile names are case-sensitive. A profile is preset `baml test` argv, parsed\n  without shell expansion:\n\n    [test]\n    default = \"regular\"\n\n    [test.profiles.regular]\n    args = [\"-x\", \"::integration::\", \"--color\", \"never\"]\n\n  Profile includes establish the initial candidates; direct CLI includes narrow\n  them rather than reopening the set. Excludes accumulate and always win. Direct\n  scalar options override profile scalar options. Bootstrap options --profile,\n  --no-profile, --from, and --help are not allowed in profile args.\n  With no default profile, `baml test` runs all tests.\n\nRun `baml test --list` to discover IDs and `baml test --help` for this reference."
-)]
+#[command(after_long_help = r#"SELECTORS:
+  Test IDs are case-sensitive and canonical: `root[.namespace]::testset::test`.
+  Plain selectors match anywhere in the full ID. A selector containing `*` is
+  an anchored full-ID glob, and `*` also matches `::`. Repeated includes are OR.
+  Excludes always win. With no includes, every non-excluded test is selected.
+
+PROFILES:
+  Profile names are case-sensitive. A profile is preset `baml test` argv, parsed
+  without shell expansion:
+
+    [test]
+    default = "regular"
+
+    [test.profiles.regular]
+    args = ["-x", "::integration::", "--color", "never"]
+
+  Profile includes establish the initial candidates; direct CLI includes narrow
+  them. Excludes accumulate and always win. Direct scalar options override
+  profile scalar options. Profile args cannot contain --profile, --no-profile,
+  --project, --directory, --from, --features, or --help. With no default profile,
+  all tests are selected.
+
+Examples:
+  List available tests:
+    baml test --list
+
+  Run tests in the payments namespace:
+    baml test -i "root.payments::*"
+
+  Run integration tests except slow tests:
+    baml test -i "*::integration::*" -x "slow""#)]
 pub struct TestArgs {
-    /// Project or source directory. An explicit directory outside a discovered
-    /// project's `baml_src/` is loaded directly. Defaults to the current directory.
-    #[arg(long, value_name = "PATH")]
+    #[command(flatten)]
+    pub compiler: crate::commands::CompilerArgs,
+
+    #[arg(long, value_name = "PATH", hide = true)]
     pub from: Option<PathBuf>,
 
-    /// Use a named test profile from `[test.profiles.<name>]` in `baml.toml`.
+    /// Apply a named test profile from `baml.toml`.
+    ///
     /// Profile arguments establish the initial test set; command-line filters
     /// further narrow it.
-    #[arg(long, value_name = "NAME", conflicts_with = "no_profile")]
+    #[arg(
+        long,
+        value_name = "NAME",
+        conflicts_with = "no_profile",
+        help_heading = "Profile options"
+    )]
     profile: Option<String>,
 
     /// Do not apply the default profile configured in `baml.toml`.
-    #[arg(long, default_value_t = false, conflicts_with = "profile")]
+    #[arg(
+        long,
+        default_value_t = false,
+        conflicts_with = "profile",
+        help_heading = "Profile options"
+    )]
     no_profile: bool,
 
-    /// List the selected tests instead of running them. The
-    /// canonical id shown on each line is a valid -i / -x selector.
-    #[arg(long, default_value_t = false)]
+    /// List selected test IDs instead of running them.
+    ///
+    /// Each canonical ID is valid as an `--include` or `--exclude` selector.
+    #[arg(long, default_value_t = false, help_heading = "Selection options")]
     list: bool,
 
-    #[arg(long, short = 'i')]
-    /// Canonical test-id selectors to include. Plain values match anywhere in
-    /// the full id. Values containing `*` are anchored globs, where `*` matches
-    /// any sequence, including `::`.
-    ///
-    /// Test ids start with `root` (the current package), use `.` for BAML
-    /// namespaces/function ownership, and `::` for testset/test nesting.
-    ///
-    /// Examples:
-    ///
-    /// -i "root.payments::*"  every test in the payments namespace
-    ///
-    /// -i "*::integration::*"  every test nested under an integration testset
-    ///
-    /// -i "hello"  any canonical id containing hello
+    #[arg(long, short = 'i', help_heading = "Selection options")]
+    /// Include tests matching a canonical-ID selector. Repeatable.
     pub include: Vec<String>,
 
-    #[arg(long, short = 'x')]
-    /// Tests (or whole testsets) to exclude. Takes precedence over --include.
-    ///
-    /// Uses the same canonical-id selector syntax as --include.
+    #[arg(long, short = 'x', help_heading = "Selection options")]
+    /// Exclude tests matching a selector. Exclusions take precedence.
     pub exclude: Vec<String>,
 
     /// Explicit global output options, injected by the top-level parser so
@@ -78,16 +109,16 @@ pub struct TestArgs {
     #[arg(skip)]
     pub(crate) cli_output: TestOutputOverrides,
 
-    /// Print BAML `log.*` events to stdout at or above this level.
-    ///
-    /// Logs are off by default. Because logs use stdout, callers can retain
-    /// the raw stream with `baml test --logs INFO > baml-test.log`.
     #[arg(
         long,
         value_enum,
         default_value_t = TestLogLevel::Off,
         ignore_case = true,
-        value_name = "LEVEL"
+        value_name = "LEVEL",
+        help = "Set the BAML log level [default: off] [possible values: off, error, warn, info, debug]",
+        hide_default_value = true,
+        hide_possible_values = true,
+        help_heading = "Test output options"
     )]
     pub logs: TestLogLevel,
 
@@ -119,6 +150,7 @@ struct ParsedProfileArgs {
 pub(crate) struct TestOutputOverrides {
     pub(crate) preset: Option<crate::output::OutputPreset>,
     pub(crate) color: Option<crate::output::ColorChoice>,
+    pub(crate) no_progress: Option<bool>,
     pub(crate) hyperlinks: Option<crate::output::HyperlinkChoice>,
     pub(crate) diagnostic_format: Option<crate::output::DiagnosticFormatChoice>,
 }
@@ -136,6 +168,7 @@ impl TestOutputOverrides {
         Self {
             preset: explicitly_set("preset").then_some(output.preset),
             color: explicitly_set("color").then_some(output.color).flatten(),
+            no_progress: explicitly_set("no_progress").then_some(output.no_progress),
             hyperlinks: explicitly_set("hyperlinks")
                 .then_some(output.hyperlinks)
                 .flatten(),
@@ -151,6 +184,7 @@ impl TestOutputOverrides {
         Self {
             preset: supplied("preset").then_some(output.preset),
             color: supplied("color").then_some(output.color).flatten(),
+            no_progress: supplied("no_progress").then_some(output.no_progress),
             hyperlinks: supplied("hyperlinks")
                 .then_some(output.hyperlinks)
                 .flatten(),
@@ -166,6 +200,9 @@ impl TestOutputOverrides {
         }
         if let Some(color) = self.color {
             output.color = Some(color);
+        }
+        if let Some(no_progress) = self.no_progress {
+            output.no_progress = no_progress;
         }
         if let Some(hyperlinks) = self.hyperlinks {
             output.hyperlinks = Some(hyperlinks);
@@ -815,12 +852,22 @@ impl TestArgs {
         for token in tokens {
             let bootstrap = matches!(
                 token.as_str(),
-                "--profile" | "--no-profile" | "--from" | "--help" | "-h"
+                "--profile"
+                    | "--no-profile"
+                    | "--project"
+                    | "--directory"
+                    | "--from"
+                    | "--features"
+                    | "--help"
+                    | "-h"
             ) || token.starts_with("--profile=")
-                || token.starts_with("--from=");
+                || token.starts_with("--project=")
+                || token.starts_with("--directory=")
+                || token.starts_with("--from=")
+                || token.starts_with("--features=");
             if bootstrap {
                 anyhow::bail!(
-                    "invalid argument `{token}` in test profile `{name}`: profile args cannot contain --profile, --no-profile, --from, or --help"
+                    "invalid argument `{token}` in test profile `{name}`: profile args cannot contain --profile, --no-profile, --project, --directory, --from, --features, or --help"
                 );
             }
         }
@@ -1563,9 +1610,7 @@ mod tests {
             &[
                 "--color".to_string(),
                 "never".to_string(),
-                "--features".to_string(),
-                "beta".to_string(),
-                "--features=display_all_warnings".to_string(),
+                "--no-progress".to_string(),
             ],
         )
         .unwrap()
@@ -1573,6 +1618,15 @@ mod tests {
         assert_eq!(
             globals.output.color,
             Some(crate::output::ColorChoice::Never)
+        );
+        assert_eq!(globals.output.no_progress, Some(true));
+
+        let error = TestArgs::parse_profile_args("bad_features", &["--features=beta".to_string()])
+            .unwrap_err()
+            .to_string();
+        assert!(
+            error.contains("cannot contain") && error.contains("--features"),
+            "{error}"
         );
 
         let error = TestArgs::parse_profile_args("bad", &["--profile=other".to_string()])

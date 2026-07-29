@@ -127,7 +127,7 @@ pub fn list_functions_with_metadata(db: &ProjectDatabase) -> FunctionListing {
                 // Sub-functions have names with '$' (e.g. MyFunc$render_prompt)
                 let is_sub_function = name.as_str().contains('$');
 
-                let origin: FunctionOrigin = function_data(db, *func_loc).origin.into();
+                let origin: FunctionOrigin = function_data(db, *func_loc).metadata.origin.into();
                 // Companions clone parent params verbatim and non-userDefined
                 // functions are hidden by default — extracting schemas for
                 // them only duplicates payload. The UI degrades to raw mode.

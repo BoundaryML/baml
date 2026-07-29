@@ -495,6 +495,9 @@ def encode_call_args(
     kwargs: Dict[str, Any],
     call_id: int,
     type_args: Optional[List[Tuple[str, "baml_type_pb2.BamlTy"]]] = None,
+    *,
+    function_name: Optional[str] = None,
+    function_handle: Optional[int] = None,
 ) -> bytes:
     """Encode function keyword arguments as `CallFunctionArgs` protobuf.
 
@@ -511,10 +514,16 @@ def encode_call_args(
     """
     if call_id == 0:
         raise ValueError("call_id must be a nonzero uint64")
+    if function_name is not None and function_handle is not None:
+        raise ValueError("exactly one BAML call target may be set")
     registered: List[int] = []
     try:
         args = baml_inbound_pb2.CallFunctionArgs()
         args.call_id = call_id
+        if function_name is not None:
+            args.function_name = function_name
+        elif function_handle is not None:
+            args.function_handle = function_handle
         for key, value in kwargs.items():
             _set_inbound_map_entry(
                 args.kwargs.add(), key, value, kwarg_name=key, registered=registered
@@ -827,8 +836,12 @@ class BamlClosure:
                 raise TypeError(f"multiple values for argument {name!r}")
             values[name] = value
         call_id = new_function_call()
-        args_proto = encode_call_args(values, call_id)
-        result_bytes = _get_runtime().call_handle_sync(self._handle, args_proto)
+        args_proto = encode_call_args(
+            values,
+            call_id,
+            function_handle=self._handle._key_for_call(),
+        )
+        result_bytes = _get_runtime().call_function_sync(args_proto)
         return decode_call_result(result_bytes)
 
     def __repr__(self) -> str:

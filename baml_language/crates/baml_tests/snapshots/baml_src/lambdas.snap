@@ -198,6 +198,20 @@ function lambdas.$init_test_ns_lambdas_lambdas(registry: testing.TestCollector) 
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
+    load_var registry
+    load_const "root.lambdas"
+    load_const "inferred_signature_is_reconstructed"
+    make_closure .<lambda($init_test_ns_lambdas_lambdas, 28)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.lambdas"
+    load_const "inferred_throwing_signature_is_reconstructed"
+    make_closure .<lambda($init_test_ns_lambdas_lambdas, 29)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
     load_const null
     return
 }
@@ -244,7 +258,7 @@ function lambdas.lambda_effect_fail() -> int {
     throw
 }
 
-function lambdas.lambda_effect_forward(f: () -> int throws E) -> int {
+function lambdas.lambda_effect_forward(f: () -> int throws #0) -> int {
     load_var ?1
     make_cell
     store_var ?1
@@ -257,7 +271,7 @@ function lambdas.lambda_effect_forward(f: () -> int throws E) -> int {
     return
 }
 
-function lambdas.lambda_effect_invoke(f: () -> T throws E) -> T {
+function lambdas.lambda_effect_invoke(f: () -> #0 throws #1) -> #0 {
     load_var f
     call_indirect
     return
@@ -463,6 +477,46 @@ function lambdas.lambdas_inferred_return_type_lambda() -> int {
     load_const 21
     make_closure .<lambda(lambdas_inferred_return_type_lambda, 0)>, 0
     call_indirect
+    return
+}
+
+function lambdas.lambdas_inferred_signature() -> string {
+    make_closure .<lambda(lambdas_inferred_signature, 0)>, 0
+    call reflect.signature
+    store_var sig
+    load_var sig
+    load_field .returns
+    call baml.TypeValue.baml.ToString.to_string
+    store_var _5
+    load_var sig
+    load_field .errors
+    call baml.TypeValue.baml.ToString.to_string
+    store_var _7
+    load_var _5
+    load_const "/"
+    bin_op +
+    load_var _7
+    bin_op +
+    return
+}
+
+function lambdas.lambdas_inferred_throwing_signature() -> string {
+    make_closure .<lambda(lambdas_inferred_throwing_signature, 0)>, 0
+    call reflect.signature
+    store_var sig
+    load_var sig
+    load_field .returns
+    call baml.TypeValue.baml.ToString.to_string
+    store_var _5
+    load_var sig
+    load_field .errors
+    call baml.TypeValue.baml.ToString.to_string
+    store_var _7
+    load_var _5
+    load_const "/"
+    bin_op +
+    load_var _7
+    bin_op +
     return
 }
 

@@ -2172,6 +2172,9 @@ fn tir_type_error_to_diagnostic_id(
             DiagnosticId::DuplicateInterfaceFieldLink
         }
         TirTypeError::SelfInInterfaceField { .. } => DiagnosticId::SelfInInterfaceField,
+        TirTypeError::SelfInAssociatedTypeDefault { .. } => {
+            DiagnosticId::SelfInAssociatedTypeDefault
+        }
         TirTypeError::InterfaceRequiresNonInterface { .. } => {
             DiagnosticId::InterfaceRequiresNonInterface
         }
@@ -2189,9 +2192,6 @@ fn tir_type_error_to_diagnostic_id(
         | TirTypeError::CyclicImplHeader
         | TirTypeError::InterfaceMethodMissingThrows { .. } => DiagnosticId::TypeMismatch,
         TirTypeError::FunctionTypeMissingThrows => DiagnosticId::FunctionTypeMissingThrows,
-        TirTypeError::FunctionTypedPatternNotTestable { .. } => {
-            DiagnosticId::FunctionTypedPatternNotTestable
-        }
     }
 }
 

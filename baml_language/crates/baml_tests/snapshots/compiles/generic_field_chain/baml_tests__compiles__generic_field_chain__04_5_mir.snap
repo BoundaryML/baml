@@ -51,9 +51,9 @@ fn user.test_generic_capture(box: Box<User>) -> string {
 }
 
 // lambda[0]
-fn .<lambda(test_generic_capture, 0)>() -> null {
+fn .<lambda(test_generic_capture, 0)>() -> string {
     // Locals:
-    let _0: null // _0 // return
+    let _0: string // _0 // return
 
     bb0: {
         _0 = copy capture[0].0.0;

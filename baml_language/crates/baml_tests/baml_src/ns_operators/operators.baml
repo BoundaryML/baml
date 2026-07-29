@@ -235,6 +235,7 @@ class Vec2 {
         }
     }
     implements baml.ops.Negate {
+        type Output = Vec2
         function neg(self) -> Vec2 throws never {
             Vec2 { x: -self.x, y: -self.y }
         }
@@ -309,21 +310,25 @@ test "operator_compound_assign_user_class" {
 class Scaled {
     v int
     implements baml.ops.Subtract<Scaled> {
+        type Output = Scaled
         function sub(self, rhs: Scaled) -> Scaled throws never {
             Scaled { v: self.v - rhs.v }
         }
     }
     implements baml.ops.Multiply<Scaled> {
+        type Output = Scaled
         function mul(self, rhs: Scaled) -> Scaled throws never {
             Scaled { v: self.v * rhs.v }
         }
     }
     implements baml.ops.Divide<Scaled> {
+        type Output = Scaled
         function div(self, rhs: Scaled) -> Scaled throws never {
             Scaled { v: self.v / rhs.v }
         }
     }
     implements baml.ops.Remainder<Scaled> {
+        type Output = Scaled
         function rem(self, rhs: Scaled) -> Scaled throws never {
             Scaled { v: self.v % rhs.v }
         }

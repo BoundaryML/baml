@@ -39,9 +39,9 @@ fn user.$init_test_main(registry: testing.TestCollector) -> null {
 }
 
 // lambda[0]
-fn .<lambda($init_test_main, 0)>() -> null {
+fn .<lambda($init_test_main, 0)>() -> void {
     // Locals:
-    let _0: null // _0 // return
+    let _0: void // _0 // return
 
     bb0: {
         _0 = call const fn assert.is_true(const true) -> [bb1];
@@ -53,9 +53,9 @@ fn .<lambda($init_test_main, 0)>() -> null {
 }
 
 // lambda[1]
-fn .<lambda($init_test_main, 1)>() -> null {
+fn .<lambda($init_test_main, 1)>() -> void {
     // Locals:
-    let _0: null // _0 // return
+    let _0: void // _0 // return
 
     bb0: {
         _0 = call const fn assert.is_true(const true) -> [bb1];
@@ -67,9 +67,9 @@ fn .<lambda($init_test_main, 1)>() -> null {
 }
 
 // lambda[2]
-fn .<lambda($init_test_main, 2)>(testset: testing.TestCollector) -> null {
+fn .<lambda($init_test_main, 2)>(testset: testing.TestCollector) -> void {
     // Locals:
-    let _0: null // _0 // return
+    let _0: void // _0 // return
     let _1: testing.TestCollector // testset // param
     let _2: void
     let _3: () -> void throws unknown
@@ -90,9 +90,9 @@ fn .<lambda($init_test_main, 2)>(testset: testing.TestCollector) -> null {
 }
 
 // lambda[0]
-fn .<lambda(<lambda($init_test_main, 2)>, 3)>() -> null {
+fn .<lambda(<lambda($init_test_main, 2)>, 3)>() -> void {
     // Locals:
-    let _0: null // _0 // return
+    let _0: void // _0 // return
 
     bb0: {
         _0 = call const fn assert.is_true(const true) -> [bb1];

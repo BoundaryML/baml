@@ -1423,8 +1423,10 @@ pub fn infer_scope_types<'db>(
                 if let Some(sm) = baml_compiler2_ppir::function_body_source_map(db, func_loc) {
                     builder.set_body_source_map(sm);
                 }
-                builder
-                    .set_auto_derived(matches!(func_data.origin, ast::FunctionOrigin::AutoDerive));
+                builder.set_auto_derived(matches!(
+                    func_data.metadata.origin,
+                    ast::FunctionOrigin::AutoDerive
+                ));
                 // BEP-044: if this function lives inside an
                 // `implements I { ... }` block, attach `I`'s QTN so
                 // `default.<method>(...)` resolves against I's
@@ -1810,7 +1812,7 @@ pub fn infer_scope_types<'db>(
                     // The user can't fix the synthesized contract, so
                     // skip the entire check for auto-derive bodies.
                     let is_auto_derive =
-                        matches!(func_data.origin, ast::FunctionOrigin::AutoDerive);
+                        matches!(func_data.metadata.origin, ast::FunctionOrigin::AutoDerive);
                     if !is_auto_derive {
                         builder.check_throws_contract(
                             expr_body,
@@ -2190,6 +2192,35 @@ pub fn infer_scope_types<'db>(
                             name_span,
                         );
                     }
+                    // E0157: a default may not name the *bare* `Self` type. `Self` is
+                    // universal (TYPE_SYSTEM.md: it denotes each concrete implementor,
+                    // not the existential), so at an interface-existential type — where
+                    // the implementor is hidden — such a default resolves against nothing.
+                    // Filling it with the existential itself pins the member to a type
+                    // no impl ever binds, leaving the existential uninhabited: every
+                    // membership query against it silently answers false. A `Self.Assoc`
+                    // projection is not bare and stays legal — the existential's own
+                    // pins already fix it (mirrors the E0136 field ban below).
+                    if let Some(default) = assoc.default
+                        && crate::builder::TypeInferenceBuilder::type_ref_contains_bare_self(
+                            &iface_data.type_refs,
+                            default,
+                        )
+                    {
+                        builder.report_at_span(
+                            crate::infer_context::TirTypeError::SelfInAssociatedTypeDefault {
+                                interface: crate::lower_type_expr::qualify_def(
+                                    db,
+                                    baml_compiler2_hir::contributions::Definition::Interface(
+                                        iface_loc,
+                                    ),
+                                    &iface_data.name,
+                                ),
+                                associated_type: assoc.name.clone(),
+                            },
+                            iface_sm.type_refs.span(default),
+                        );
+                    }
                 }
                 // Interface-declaration well-formedness (BEP-044). `iface_qtn` names the
                 // interface for each diagnostic.
@@ -2225,49 +2256,68 @@ pub fn infer_scope_types<'db>(
                         );
                     }
                 }
-                // E0133: a `requires` clause may only name interfaces. A resolved non-interface
-                // type is rejected here; an unknown name forwards its own lowering error.
+                // E0133: a `requires` clause may only name interfaces. A clause may project
+                // `Self.member` (`requires Iterable<Item = Self.Item>`), which resolves
+                // because `Self` is the interface env's own first parameter, bounded by this
+                // very interface — the same symbolic-`Self` scope the impl side realizes
+                // obligations in (`realize_with_symbolic_self`), minus the receiver
+                // substitution, which only an implementor supplies.
+                let self_param = iface_env.interface_param_parts().0.clone();
+                let mut requires_bounds = crate::lower_type_expr::TypeVarBoundsMap::default();
+                requires_bounds.insert(
+                    self_param.clone(),
+                    vec![baml_type::Interface {
+                        name: iface_qtn.clone(),
+                        generics: iface_env
+                            .interface_param_parts()
+                            .1
+                            .iter()
+                            .map(|p| Ty::TypeVar(p.clone(), TyAttr::default()))
+                            .collect(),
+                        associated_types: Vec::new(),
+                    }],
+                );
                 let requires_scope = crate::lower_type_expr::ScopeCtx {
                     db,
                     package_items: pkg_items,
                     ns_context: &pkg_info.namespace_path,
                     generic_params: iface_env.source_params(),
-                    bounds: &crate::lower_type_expr::TypeVarBoundsMap::default(),
-                    self_ty: None,
+                    bounds: &requires_bounds,
+                    self_ty: Some(Ty::TypeVar(self_param, TyAttr::default())),
                 };
                 for &requires_ref in &iface_data.requires {
-                    if crate::interfaces::resolve_ref_to_interface(
-                        db,
-                        &iface_data.type_refs,
-                        requires_ref,
-                        pkg_items,
-                        &pkg_info.namespace_path,
-                    )
-                    .is_some()
-                    {
-                        continue;
-                    }
                     let requires_span = iface_sm.type_refs.span(requires_ref);
+                    // A `requires` clause is a constraint head, exactly like a generic bound:
+                    // it pins only the members it writes. Lowering it *here*, unconditionally,
+                    // is what validates its shape — arity, associated-binding hygiene, name
+                    // resolution. The impl-side obligation lowering re-lowers the same clause
+                    // and discards its diagnostics, because this declaration owns them.
                     let mut requires_diags = Vec::new();
-                    let lowered = crate::lower_type_expr::lower_type_ref(
+                    let lowered = crate::lower_type_expr::lower_constraint_head_type_ref(
                         &iface_data.type_refs,
                         requires_ref,
                         &requires_scope,
                         &mut requires_diags,
                     );
+                    for e in requires_diags {
+                        builder.report_at_span(e, requires_span);
+                    }
                     match &lowered {
-                        Ty::Class(qtn, ..) | Ty::Enum(qtn, ..) => builder.report_at_span(
+                        // Only an interface can be required. An alias is not one even when it
+                        // denotes an interface existential: like a bound, a `requires` clause
+                        // names the interface itself.
+                        Ty::Interface(..) => {}
+                        // Lowering already reported why this is not a usable type; a second
+                        // "not an interface" on the same span would be cascade noise. Mirrors
+                        // the generic-bound classification in `lower_declared_interface_bound`.
+                        Ty::Unknown { .. } | Ty::Error { .. } | Ty::BuiltinUnknown { .. } => {}
+                        other => builder.report_at_span(
                             crate::infer_context::TirTypeError::InterfaceRequiresNonInterface {
                                 interface: iface_qtn.clone(),
-                                target: qtn.name().clone(),
+                                target: other.clone(),
                             },
                             requires_span,
                         ),
-                        _ => {
-                            for e in requires_diags {
-                                builder.report_at_span(e, requires_span);
-                            }
-                        }
                     }
                 }
                 // Every interface method (required or default) must declare an explicit `throws`

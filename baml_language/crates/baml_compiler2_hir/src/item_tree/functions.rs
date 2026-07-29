@@ -29,7 +29,7 @@ pub struct Function {
     pub body: Option<ast::FunctionBodyDef>,
     /// Declarative metadata, if this function was declared with declarative syntax.
     pub declarative_meta: Option<ast::DeclarativeMeta>,
-    pub origin: ast::FunctionOrigin,
+    pub metadata: ast::FunctionMetadata,
     /// Joined `///` doc-comment lines preceding this declaration.
     pub docstring: Option<String>,
     /// BEP-049 §10: set when the fn def had a `//baml:tagged_string` marker.

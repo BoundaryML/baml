@@ -33,7 +33,7 @@ function _anthropic_pending_conversation(
     Conversation {
         owner: provider,
         history: root.ai.MessageHistory.empty(),
-        declared_output_type: reflect.type_of<AnthropicRequestFixture>().to_string(),
+        declared_output_type: root.ai.internal._output_type_fingerprint<AnthropicRequestFixture>(),
         system: [],
         messages: [
             {

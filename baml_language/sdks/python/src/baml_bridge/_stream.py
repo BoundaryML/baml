@@ -78,8 +78,12 @@ class BamlStream(Generic[TStream, TFinal]):
         from .proto import decode_call_result, encode_call_args
 
         rt = get_runtime()
-        args_proto = encode_call_args({"self": self}, new_function_call())
-        result_bytes = rt.call_function_sync(fqn, args_proto, None, None)
+        args_proto = encode_call_args(
+            {"self": self},
+            new_function_call(),
+            function_name=fqn,
+        )
+        result_bytes = rt.call_function_sync(args_proto, None, None)
         return decode_call_result(result_bytes)
 
     async def _call_async(self, fqn: str) -> Any:
@@ -88,8 +92,12 @@ class BamlStream(Generic[TStream, TFinal]):
         from .proto import decode_call_result, encode_call_args
 
         rt = get_runtime()
-        args_proto = encode_call_args({"self": self}, new_function_call())
-        result_bytes = await rt.call_function(fqn, args_proto, None, None)
+        args_proto = encode_call_args(
+            {"self": self},
+            new_function_call(),
+            function_name=fqn,
+        )
+        result_bytes = await rt.call_function(args_proto, None, None)
         return decode_call_result(result_bytes)
 
     @classmethod
