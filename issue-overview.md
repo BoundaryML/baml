@@ -18,4 +18,5 @@ Linear: https://linear.app/boundaryml2/issue/B-1055/error-nodes-in-graph-are-for
 - `pnpm --filter @b/pkg-playground test` passed: 16 files, 126 tests.
 - `pnpm --filter app-vscode-webview build` passed.
 - `pnpm --filter app-vscode-webview typecheck` remains blocked by the worktree's absent generated `@b/bridge_wasm` module and its resulting pre-existing implicit-any errors in `src/bridge_wasm.test.ts`.
-- PR, CI monitoring, and CodeRabbit approval are pending.
+- Opened ready-for-review PR https://github.com/BoundaryML/baml/pull/4271 against `canary` with before/after playground images in the description.
+- CI monitoring and CodeRabbit approval are in progress; Vercel checks are intentionally ignored.
