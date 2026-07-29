@@ -307,3 +307,126 @@ test "Google prompt mode requires pending results before another step" {
     };
     assert.is_true(rejected)
 }
+
+test "Google AI appends a fresh user message without losing thought signatures" {
+    let provider = root
+        .google
+        .ai
+        .gemini(model = "gemini-test", api_key = "unused", base_url = "https://example.test/v1beta");
+    let state = match (provider.begin<RequestFixture>(_request_fixture_task(provider))) {
+        let value: Conversation => value,
+        _ => baml.sys.panic("expected Google AI conversation"),
+    };
+    let output_type = state.declared_output_type;
+    state
+        .contents
+        .push(
+            {
+                "role": "model",
+                "parts": [{ "text": "first answer", "thoughtSignature": "opaque-signature" }],
+            },
+        );
+    let original_wire_length = state.contents.length();
+    let appended = provider.append_message(state, root.ai.ChatMessage.user("second turn"));
+    match (appended) {
+        let exact: Conversation => {
+            assert.equal(exact.declared_output_type, output_type);
+            assert.equal(exact.contents.length(), original_wire_length + 1);
+            assert
+                .equal(
+                    baml.json
+                        .path<string>(
+                            exact.contents[original_wire_length - 1],
+                            ".parts[0].thoughtSignature",
+                        ),
+                    "opaque-signature",
+                );
+            assert
+                .equal(
+                    baml.json.path<string>(exact.contents[original_wire_length], ".parts[0].text"),
+                    "second turn",
+                );
+            assert.equal(root.ai.message_text(exact.history.entries[1]), "second turn")
+        },
+        _ => assert.is_true(false),
+    }
+}
+
+test "Google Vertex append retains backend ownership and output type" {
+    let provider = root.google.vertex.gemini(model = "gemini-test", api_key = "unused");
+    let state = match (provider.begin<RequestFixture>(_request_fixture_task(provider))) {
+        let value: Conversation => value,
+        _ => baml.sys.panic("expected Vertex conversation"),
+    };
+    let output_type = state.declared_output_type;
+    let appended = provider.append_message(state, root.ai.ChatMessage.user("vertex follow up"));
+    match (appended) {
+        let exact: Conversation => {
+            assert.equal(exact.provider_name, "google-vertex");
+            assert.equal(exact.declared_output_type, output_type);
+            assert.equal(root.ai.message_text(exact.history.entries[1]), "vertex follow up")
+        },
+        _ => assert.is_true(false),
+    }
+}
+
+test "Google rejects append from another instance and while calls are pending" {
+    let owner = root
+        .google
+        .ai
+        .gemini(model = "gemini-test", api_key = "unused", base_url = "https://example.test/v1beta");
+    let other = root
+        .google
+        .ai
+        .gemini(model = "gemini-test", api_key = "unused", base_url = "https://example.test/v1beta");
+    let state = match (owner.begin<RequestFixture>(_request_fixture_task(owner))) {
+        let value: Conversation => value,
+        _ => baml.sys.panic("expected Google conversation"),
+    };
+    let wrong_owner_rejected = false;
+    let _wrong = other.append_message(state, root.ai.ChatMessage.user("wrong owner")) catch (e) {
+        let invalid: root.ai.InvalidRequest => {
+            wrong_owner_rejected = true;
+            state
+        },
+        _ => baml.sys.panic("unexpected Google append error"),
+    };
+    assert.is_true(wrong_owner_rejected);
+
+    state.last_calls = [{ "id": "pending", "name": "lookup", "args": {} }];
+    let pending_rejected = false;
+    let _pending = owner.append_message(state, root.ai.ChatMessage.user("too soon")) catch (e) {
+        let invalid: root.ai.InvalidRequest => {
+            pending_rejected = true;
+            state
+        },
+        _ => baml.sys.panic("unexpected Google pending append error"),
+    };
+    assert.is_true(pending_rejected);
+    assert.equal(state.history.entries.length(), 1)
+}
+
+test "Google prompt-tool conversations append locally after a completed turn" {
+    let provider = root
+        .google
+        .ai
+        .gemini(
+            model = "gemini-test",
+            api_key = "unused",
+            base_url = "https://example.test/v1beta",
+            output_mode = root.google.ai.OutputMode.Sap,
+            tool_mode = root.google.ai.ToolMode.Prompt,
+        );
+    let state = match (provider.begin<RequestFixture>(_request_fixture_task(provider))) {
+        let value: PromptConversation => value,
+        _ => baml.sys.panic("expected Google prompt conversation"),
+    };
+    let appended = provider.append_message(state, root.ai.ChatMessage.user("follow up"));
+    match (appended) {
+        let exact: PromptConversation => {
+            assert.equal(root.ai.message_text(exact.history.entries[1]), "follow up");
+            assert.equal(exact.last_calls.length(), 0)
+        },
+        _ => assert.is_true(false),
+    }
+}

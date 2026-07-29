@@ -54,6 +54,35 @@ interface ConversationImportProvider requires AgentProvider {
     throws baml.errors.UnknownError
 }
 
+// Adds a fresh application message to an exact provider continuation without
+// reconstructing it from the portable Messages projection. Implementations
+// retain opaque response IDs, thinking signatures, cache handles, and the
+// Conversation's original output-type fingerprint.
+//
+// Appending is local: it MUST NOT make a model request. Providers reject
+// conversations owned by another provider instance and conversations with
+// unresolved tool calls.
+interface ConversationAppendProvider requires AgentProvider {
+  function append_messages(
+    self,
+    conversation: Conversation,
+    messages: Messages,
+  ) -> Conversation
+    throws root.ai.Failure | baml.errors.UnknownError
+
+  function append_message(
+    self,
+    conversation: Conversation,
+    message: Message,
+  ) -> Conversation
+      throws root.ai.Failure | baml.errors.UnknownError {
+    self.append_messages(
+      conversation,
+      MessageHistory { entries: [message] },
+    )
+  }
+}
+
 interface StreamingProvider requires Provider {
   function stream<TPartial, T>(self, task: Task<T>) -> baml.llm.Stream<TPartial, T>
     throws root.ai.Failure | baml.errors.UnknownError | baml.errors.Unsupported

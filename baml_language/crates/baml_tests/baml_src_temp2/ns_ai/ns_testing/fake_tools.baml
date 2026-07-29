@@ -3,6 +3,7 @@ class FakeToolConversation {
     history: root.ai.MessageHistory,
     declared_output_type: string,
     turn: int,
+    pending_calls: bool,
     last_tools: root.ai.tools.Tool[],
     last_provider_tools: root.ai.tools.ProviderTool[],
 
@@ -38,6 +39,7 @@ implements root.ai.AgentProvider for FakeToolProvider {
       history: task.messages().to_history(),
       declared_output_type: root.ai.internal._output_type_fingerprint<T>(),
       turn: 0,
+      pending_calls: false,
       last_tools: task.tools,
       last_provider_tools: self.provider_tools,
     }
@@ -63,6 +65,7 @@ implements root.ai.AgentProvider for FakeToolProvider {
     state.last_provider_tools = self.provider_tools;
     if (state.turn == 0 && self.tool_calls.length() > 0) {
       state.turn = 1;
+      state.pending_calls = true;
       return root.ai.ModelStep<T> {
         outcome: root.ai.tools.ToolCalls { calls: self.tool_calls },
         metadata: _fake_tool_step_meta(self.name(), state.turn),
@@ -89,6 +92,7 @@ implements root.ai.AgentProvider for FakeToolProvider {
         "fake tool conversation belongs to another provider instance",
       )
     }
+    state.pending_calls = false;
     state
   }
 }
@@ -101,6 +105,7 @@ implements root.ai.ConversationImportProvider for FakeToolProvider {
         history: messages.to_history(),
         declared_output_type: root.ai.internal._output_type_fingerprint<T>(),
         turn: 0,
+        pending_calls: false,
         last_tools: [],
         last_provider_tools: self.provider_tools,
       },
@@ -110,11 +115,49 @@ implements root.ai.ConversationImportProvider for FakeToolProvider {
   }
 }
 
+implements root.ai.ConversationAppendProvider for FakeToolProvider {
+  function append_messages(
+    self,
+    conversation: root.ai.Conversation,
+    messages: root.ai.Messages,
+  ) -> root.ai.Conversation throws root.ai.Failure {
+    let _ = root.ai.internal._conversation_append_user_texts(messages, self.name());
+    let state = match (conversation) {
+      let value: FakeToolConversation => value,
+      _ => throw root.ai.InvalidRequest {
+        provider: self.name(),
+        status_code: null,
+        detail: "wrong fake tool conversation",
+      },
+    };
+    if (!root.ai.internal._same_provider_instance(state.owner, self)) {
+      throw root.ai.InvalidRequest {
+        provider: self.name(),
+        status_code: null,
+        detail: "fake tool conversation belongs to another provider instance",
+      }
+    }
+    if (state.pending_calls) {
+      throw root.ai.InvalidRequest {
+        provider: self.name(),
+        status_code: null,
+        detail: "submit fake tool results before appending a user message",
+      };
+    }
+    for (let message in messages.items()) {
+      state.history.entries.push(message);
+    }
+    state.turn = 0;
+    state
+  }
+}
+
 class ScriptedToolConversation {
     owner: ScriptedToolProvider,
     history: root.ai.MessageHistory,
     declared_output_type: string,
     turn: int,
+    pending_calls: bool,
     observed_tool_rosters: string[][],
     submitted_results: root.ai.tools.ToolResult[][],
 
@@ -149,6 +192,7 @@ implements root.ai.AgentProvider for ScriptedToolProvider {
       history: task.messages().to_history(),
       declared_output_type: root.ai.internal._output_type_fingerprint<T>(),
       turn: 0,
+      pending_calls: false,
       observed_tool_rosters: [],
       submitted_results: [],
     }
@@ -176,6 +220,7 @@ implements root.ai.AgentProvider for ScriptedToolProvider {
     if (state.turn < self.turns.length()) {
       let calls = self.turns[state.turn];
       state.turn = state.turn + 1;
+      state.pending_calls = true;
       return root.ai.ModelStep<T> {
         outcome: calls,
         metadata: _scripted_tool_step_meta(self, state.turn),
@@ -202,7 +247,45 @@ implements root.ai.AgentProvider for ScriptedToolProvider {
         "scripted tool conversation belongs to another provider instance",
       )
     }
+    state.pending_calls = false;
     state.submitted_results.push(results);
+    state
+  }
+}
+
+implements root.ai.ConversationAppendProvider for ScriptedToolProvider {
+  function append_messages(
+    self,
+    conversation: root.ai.Conversation,
+    messages: root.ai.Messages,
+  ) -> root.ai.Conversation throws root.ai.Failure {
+    let _ = root.ai.internal._conversation_append_user_texts(messages, self.name());
+    let state = match (conversation) {
+      let value: ScriptedToolConversation => value,
+      _ => throw root.ai.InvalidRequest {
+        provider: self.name(),
+        status_code: null,
+        detail: "wrong scripted tool conversation",
+      },
+    };
+    if (!root.ai.internal._same_provider_instance(state.owner, self)) {
+      throw root.ai.InvalidRequest {
+        provider: self.name(),
+        status_code: null,
+        detail: "scripted tool conversation belongs to another provider instance",
+      }
+    }
+    if (state.pending_calls) {
+      throw root.ai.InvalidRequest {
+        provider: self.name(),
+        status_code: null,
+        detail: "submit scripted tool results before appending a user message",
+      };
+    }
+    for (let message in messages.items()) {
+      state.history.entries.push(message);
+    }
+    state.turn = 0;
     state
   }
 }

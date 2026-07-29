@@ -157,6 +157,40 @@ implements AgentProvider for Fallback {
   }
 }
 
+implements ConversationAppendProvider for Fallback {
+  function append_messages(
+    self,
+    conversation: Conversation,
+    messages: Messages,
+  ) -> Conversation throws root.ai.Failure | baml.errors.UnknownError {
+    let state = match (conversation) {
+      let value: FallbackConversation => value,
+      _ => throw baml.errors.UnknownError.with_message<never>(
+        null,
+        "fallback received another provider's conversation",
+      ),
+    };
+    if (!root.ai.internal._same_provider_instance(state.owner, self)) {
+      throw baml.errors.UnknownError.with_message<never>(
+        null,
+        "fallback received a conversation owned by another fallback instance",
+      )
+    }
+    let member = self.providers()[state.member_index];
+    let provider = match (member) {
+      let capability: ConversationAppendProvider => capability,
+      _ => throw baml.errors.Unsupported {
+        message: "fallback member cannot append exact conversation messages: " + member.name(),
+      },
+    };
+    state.inner = provider.append_messages(state.inner, messages);
+    // A fallback cannot reconstruct appended exact state on another member.
+    // Pin the wrapper to this member after the first successful append.
+    state.progressed = true;
+    state
+  }
+}
+
 function fallback(providers: Provider[]) -> Fallback throws baml.errors.InvalidArgument {
     match (providers.at(0)) {
         let first: Provider => {

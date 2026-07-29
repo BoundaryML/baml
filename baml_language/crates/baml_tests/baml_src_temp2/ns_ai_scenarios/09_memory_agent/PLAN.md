@@ -19,8 +19,12 @@ scratch code and is not part of the running agent.
 
 ## Coding-agent loop
 
-- [x] Keep application-owned transcript state across user turns.
-- [x] Give the model exactly one tool action per provider step.
+- [x] Keep an application transcript and exact provider conversation across
+  user turns.
+- [x] Append each fresh user message without rebuilding provider state from
+  the portable message projection.
+- [x] Give the model exactly one tool action per provider step, enforced by
+  the runner in addition to each provider's serial-call request hint.
 - [x] Support a bounded 30-step Agent run.
 - [x] Preserve the original 4096-token main-agent output cap.
 - [x] Return a final typed answer.
@@ -47,7 +51,10 @@ scratch code and is not part of the running agent.
 - [x] Support `/queue`, `/q`, `/queue <task>`, `/q <task>`, and `/clear`.
 - [x] Run queued tasks in order while threading transcript state.
 - [x] Accept type-ahead while a turn runs and append it to the queue.
-- [x] Cancel an in-flight turn with ESC followed by Enter.
+- [x] Request cooperative cancellation with ESC followed by Enter.
+- [x] Return and retain an `Interrupted` checkpoint only after the current
+  model/tool transaction is fully committed.
+- [x] Resume after interruption without replaying completed tool effects.
 - [x] Keep queued work after direct-turn cancellation and stop a queued batch
   after cancellation.
 - [x] Provide `/memory`, `/mem`, and `/forget <name>`.
@@ -84,6 +91,10 @@ scratch code and is not part of the running agent.
   tests.
 - [x] Add framework tests proving both provider entrypoints construct the same
   task/tool contract with different providers.
+- [x] Add framework tests for exact message append, cooperative cancellation,
+  and runner-enforced per-step tool limits.
+- [x] Add scenario coverage proving a fresh memory-agent user turn resumes an
+  exact conversation without re-appending the Task prompt.
 - [x] Compile the complete `baml_src_temp2` tree.
 - [x] Run the complete offline temp2 test suite.
 - [x] Run live OpenAI and Google Agent smoke tests when both credentials are
@@ -91,9 +102,11 @@ scratch code and is not part of the running agent.
 
 ## Verification record
 
-- `baml check`: all 215 temp2 source files compile.
-- Scenario suite: 49 passed, 0 failed.
-- Broad offline suite (`-x integ-test`): 205 passed, 0 failed.
+- `baml check`: all 219 temp2 source files compile.
+- Memory-agent offline scenario suite: 52 passed, 0 failed.
+- Broad offline suite (`-x integ-test`): 235 passed, 0 failed.
+- Live exact-continuation suite: OpenAI Responses and Google AI both retained
+  a nonce across a fresh appended user turn (2 passed, 0 failed).
 - Live OpenAI Responses smoke: one native `list_dir` call followed by a typed
   answer.
 - Live Google AI Gemini smoke: the same Task, tool roster, and typed answer

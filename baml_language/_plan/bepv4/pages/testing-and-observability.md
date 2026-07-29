@@ -106,6 +106,11 @@ testset "live-provider" {
           message: "live test handed off to " + handoff.call.name,
         }
       },
+      let interrupted: ai.Interrupted => {
+        throw baml.errors.Unsupported {
+          message: "live test interrupted: " + interrupted.reason,
+        }
+      },
     }
   }
 }
@@ -141,7 +146,7 @@ class GuideObserver {
 
 function resolve_with_logs(
   ticket: SupportTicket,
-) -> ai.Done<Resolution> | ai.BudgetReached | ai.Handoff {
+) -> ai.Done<Resolution> | ai.BudgetReached | ai.Handoff | ai.Interrupted {
   let observer = GuideObserver { kinds: [] };
   let outcome = ResolveTicketWithTools@task(ticket).run(
     runner = ai.run.Agent<Resolution>.new(
@@ -185,6 +190,22 @@ flowchart TD
 
 Observers receive model, tool, provider, usage, and terminal events. They
 cannot block a tool or change the run; use an Agent callback for that.
+
+For a cooperative interruption, observers receive two terminal signals in a
+fixed order:
+
+```text
+run_interrupted
+run_finished (outcome = "interrupted")
+```
+
+`RunInterruptedEvent` includes the provider, committed step count, and reason.
+It is emitted only after the Agent has reached the same committed boundary
+returned in `Interrupted.conversation`. `RunFinishedEvent` follows so generic
+observers can close every run without special-casing interruption.
+
+No interruption event is emitted when a final value or handoff wins the race
+with a cancellation request. Those paths emit their normal terminal event.
 
 For a normal model run, inspect `Done.metadata.usage`. The Agent accumulates
 usage reported by each step. Provider fields that are absent remain absent;

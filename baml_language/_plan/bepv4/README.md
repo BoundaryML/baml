@@ -102,6 +102,14 @@ interface AgentProvider requires Provider {
     results: ai.tools.ToolResult[],
   ) -> ai.Conversation
 }
+
+interface ConversationAppendProvider requires AgentProvider {
+  function append_messages(
+    self,
+    conversation: ai.Conversation,
+    messages: ai.Messages,
+  ) -> ai.Conversation
+}
 ```
 
 The error clauses are omitted above for readability.
@@ -118,6 +126,13 @@ adds exactly one model-turn protocol:
 The provider owns authentication, request rendering, response parsing, wire
 IDs, and exact continuation state. It does not execute application tools and
 does not own a model/tool loop.
+
+`ConversationAppendProvider` is the local exact-continuation capability.
+Applications normally call `conversation.append_message(...)`; the
+conversation dynamically dispatches to its owning provider. This preserves
+opaque state and makes no model request. It is distinct from
+`ConversationImportProvider`, which reconstructs a destination conversation
+from portable messages and reports the resulting fidelity.
 
 The Agent owns:
 

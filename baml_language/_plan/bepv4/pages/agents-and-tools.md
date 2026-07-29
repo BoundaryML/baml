@@ -10,7 +10,7 @@ goes back to the model.
 | --- | --- |
 | `tools: [...]` | Declares the LLM function's default tools |
 | `ai.run.Agent` | Runs the provider and application tools in a loop |
-| `ai.Done<T> \| ai.BudgetReached \| ai.Handoff` | The explicit Agent outcome union |
+| `ai.Done<T> \| ai.BudgetReached \| ai.Handoff \| ai.Interrupted` | The explicit Agent outcome union |
 
 ## Example
 
@@ -151,16 +151,21 @@ application tools for that run.
 
 ## When you need the exact outcome
 
-An explicit Agent run returns one of three outcomes:
+An explicit Agent run returns one of four outcomes:
 
 | Outcome | Meaning |
 | --- | --- |
 | `ai.Done<T>` | The final typed value is ready |
 | `ai.BudgetReached` | The run stopped safely and can be continued |
 | `ai.Handoff` | The application should handle one exact tool call |
+| `ai.Interrupted` | Cooperative cancellation reached a committed, resumable boundary |
 
 ```baml
-let outcome: ai.Done<Resolution> | ai.BudgetReached | ai.Handoff =
+let outcome:
+    ai.Done<Resolution>
+    | ai.BudgetReached
+    | ai.Handoff
+    | ai.Interrupted =
   ResolveTicketWithTools@task(sample_ticket()).run(
     runner = ai.run.Agent<Resolution>.new(
       budget = ai.Budget { max_steps: 8, max_cost_usd: null },
@@ -171,12 +176,14 @@ match (outcome) {
   let done: ai.Done<Resolution> => log.info(done.value),
   let stopped: ai.BudgetReached => log.info(stopped.reason),
   let handoff: ai.Handoff => log.info(handoff.call.name),
+  let interrupted: ai.Interrupted => log.info(interrupted.reason),
 }
 ```
 
 Use the direct call when incomplete outcomes are exceptional. Use the explicit
 runner when stop, resume, or handoff is normal application control flow.
-A handoff retains the provider's call ID; submit a `ToolResult` for
+A cooperative interruption retains a fully committed conversation. A handoff
+retains the provider's call ID; submit a `ToolResult` for
 `handoff.call` before resuming its conversation.
 
 Runnable examples:

@@ -23,6 +23,55 @@ function _add_usage(total: root.ai.Usage, next: root.ai.Usage) -> null throws ne
     null
 }
 
+// A cooperative Agent cancellation is intentionally separate from cancelling
+// the Future running the Agent. Future.cancel() makes the Future terminal and
+// cannot return a resumable outcome. Call this helper only at boundaries where
+// the provider conversation has no unsubmitted application tool results.
+function _interrupted_if_requested(
+    cancel: baml.spawn.CancelToken?,
+    conversation: root.ai.Conversation,
+    steps_taken: int,
+    provider: root.ai.Provider,
+    run_id: string?,
+    on_event: ((root.ai.observe.AgentEvent) -> null throws never)?,
+    observers: root.ai.observe.AgentObserver[],
+    recorders: root.ai.observe.AgentRecorder[],
+) -> root.ai.Interrupted? throws never {
+    match (cancel) {
+        let token: baml.spawn.CancelToken if token.is_cancelled() => {
+            let reason = "cancelled";
+            _emit_agent_event(
+                root.ai.observe.RunInterruptedEvent {
+                    id: run_id,
+                    provider: provider.name(),
+                    steps_taken: steps_taken,
+                    reason: reason,
+                },
+                on_event,
+                observers,
+                recorders,
+            );
+            // Keep the generic terminal signal so observers that do not know
+            // about the dedicated interruption event still close the run.
+            _emit_agent_event(
+                root.ai.observe.RunFinishedEvent {
+                    id: run_id,
+                    outcome: "interrupted",
+                },
+                on_event,
+                observers,
+                recorders,
+            );
+            root.ai.Interrupted {
+                conversation: conversation,
+                steps_taken: steps_taken,
+                reason: reason,
+            }
+        },
+        _ => null,
+    }
+}
+
 function _run_tool_calls(
     calls: root.ai.tools.ToolCall[],
     active_tools: root.ai.tools.Tool[],
@@ -272,11 +321,20 @@ function _run_agent_to_response<T>(
                 message: ["default Agent reached a handoff; run the task with an explicit Agent"],
             }
         },
+        let interrupted: root.ai.Interrupted => {
+            throw baml.errors.UnknownError {
+                data: {
+                    "steps_taken": interrupted.steps_taken,
+                    "reason": interrupted.reason,
+                },
+                message: ["default Agent was interrupted before producing the task value"],
+            }
+        },
     }
 }
 
 function _require_done<T>(
-    outcome: root.ai.Done<T> | root.ai.BudgetReached | root.ai.Handoff,
+    outcome: root.ai.Done<T> | root.ai.BudgetReached | root.ai.Handoff | root.ai.Interrupted,
 ) -> root.ai.Done<T> throws baml.errors.UnknownError {
     match (outcome) {
         let done: root.ai.Done<T> => done,
@@ -298,6 +356,15 @@ function _require_done<T>(
                     "steps_taken": handoff.steps_taken,
                 },
                 message: ["Agent handed off before producing the expected value"],
+            }
+        },
+        let interrupted: root.ai.Interrupted => {
+            throw baml.errors.UnknownError {
+                data: {
+                    "steps_taken": interrupted.steps_taken,
+                    "reason": interrupted.reason,
+                },
+                message: ["Agent was interrupted before producing the expected value"],
             }
         },
     }

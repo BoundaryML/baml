@@ -39,6 +39,75 @@ implements root.ai.ConversationImportProvider for OpenAIProvider {
   }
 }
 
+implements root.ai.ConversationAppendProvider for OpenAIProvider {
+  function append_messages(
+    self,
+    conversation: root.ai.Conversation,
+    messages: root.ai.Messages,
+  ) -> root.ai.Conversation throws root.ai.Failure {
+    // Validate the entire portable batch before mutating either projection.
+    let _ = root.ai.internal._conversation_append_user_texts(
+      messages,
+      "openai-responses",
+    );
+    match (conversation) {
+      let state: root.openai.internal.Conversation => {
+        if (!root.ai.internal._same_provider_instance(state.owner, self)) {
+          throw root.ai.InvalidRequest {
+            provider: "openai-responses",
+            status_code: null,
+            detail: "OpenAI Responses cannot append to a conversation owned by another provider instance",
+          };
+        }
+        if (state.last_output.length() != 0) {
+          throw root.ai.InvalidRequest {
+            provider: "openai-responses",
+            status_code: null,
+            detail: "finish the pending OpenAI tool exchange before appending a user message",
+          };
+        }
+        for (let message in messages.items()) {
+          state.input.push({
+            "role": "user",
+            "content": root.openai.internal._message_text(message),
+          });
+          state.history.entries.push(message);
+        }
+        state
+      },
+      let state: root.openai.internal.PromptConversation => {
+        if (!root.ai.internal._same_provider_instance(state.owner, self)) {
+          throw root.ai.InvalidRequest {
+            provider: "openai-responses",
+            status_code: null,
+            detail: "OpenAI prompt tool mode cannot append to a conversation owned by another provider instance",
+          };
+        }
+        if (state.pending_call_ids.length() != 0) {
+          throw root.ai.InvalidRequest {
+            provider: "openai-responses",
+            status_code: null,
+            detail: "finish the pending OpenAI prompt-tool exchange before appending a user message",
+          };
+        }
+        for (let message in messages.items()) {
+          state.input.push({
+            "role": "user",
+            "content": root.openai.internal._message_text(message),
+          });
+          state.history.entries.push(message);
+        }
+        state
+      },
+      _ => throw root.ai.InvalidRequest {
+        provider: "openai-responses",
+        status_code: null,
+        detail: "OpenAI Responses received another provider's conversation",
+      },
+    }
+  }
+}
+
 implements root.ai.ResumableAgentProvider for OpenAIProvider {
   function save_conversation(
     self,

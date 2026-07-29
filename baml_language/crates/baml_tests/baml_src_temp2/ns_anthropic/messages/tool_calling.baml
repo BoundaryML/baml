@@ -199,6 +199,12 @@ implements root.ai.AgentProvider for AnthropicProvider {
       text,
       root.anthropic.internal._uses_sap(self),
     );
+    let content = root.anthropic.internal._response_content(raw);
+    state.last_assistant_content = content;
+    state.messages.push({
+      "role": "assistant",
+      "content": content,
+    });
     state.history.entries.push(
       root.ai.ChatMessage.assistant(
         root.anthropic.internal._response_text(raw) ?? "",

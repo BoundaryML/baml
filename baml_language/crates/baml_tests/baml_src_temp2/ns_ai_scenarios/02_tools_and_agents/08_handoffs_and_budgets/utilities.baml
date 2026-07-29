@@ -13,16 +13,20 @@ class LiveCostedToolProvider {
 }
 
 class LiveCostedConversation {
-  owner: LiveCostedToolProvider,
-  inner: root.ai.Conversation,
+    owner: LiveCostedToolProvider,
+    inner: root.ai.Conversation,
 
-  implements root.ai.Conversation {
-    function provider(self) -> root.ai.Provider throws never { self.owner }
-    function messages(self) -> root.ai.Messages throws never { self.inner.messages() }
-    function output_type_fingerprint(self) -> string? throws never {
-      self.inner.output_type_fingerprint()
+    implements root.ai.Conversation {
+        function provider(self) -> root.ai.Provider throws never {
+            self.owner
+        }
+        function messages(self) -> root.ai.Messages throws never {
+            self.inner.messages()
+        }
+        function output_type_fingerprint(self) -> string? throws never {
+            self.inner.output_type_fingerprint()
+        }
     }
-  }
 }
 
 implements root.ai.AgentProvider for LiveCostedToolProvider {

@@ -3,6 +3,13 @@
 // turn at a time plus its provider-specific conversation state.
 class Agent<T> {
     budget: root.ai.Budget?,
+    // A passive, cooperative signal. Do not also attach this token to the
+    // Future's spawn options when a resumable Interrupted outcome is needed.
+    cancel: baml.spawn.CancelToken?,
+    // Null preserves provider-supported parallel tool calling. A number bounds
+    // every provider ToolCalls batch before callbacks, handoffs, or handlers
+    // can observe it.
+    max_tool_calls_per_step: int?,
     tools: root.ai.tools.Tool[]?,
     tool_registry: root.ai.tools.ToolRegistry?,
     prepare_step: ((root.ai.tools.StepContext) -> root.ai.tools.StepPlan throws root.ai.Failure)?,
@@ -17,6 +24,8 @@ class Agent<T> {
 
     function new(
         budget: root.ai.Budget? = root.ai.Budget { max_steps: 32, max_cost_usd: null },
+        cancel: baml.spawn.CancelToken? = null,
+        max_tool_calls_per_step: int? = null,
         tools: root.ai.tools.ToolInput[]? = null,
         tool_registry: root.ai.tools.ToolRegistry? = null,
         prepare_step: (
@@ -35,6 +44,8 @@ class Agent<T> {
     ) -> Agent<T> throws never {
         Agent<T> {
             budget: budget,
+            cancel: cancel,
+            max_tool_calls_per_step: max_tool_calls_per_step,
             tools: match (tools) {
                 let inputs: root.ai.tools.ToolInput[] => root.ai.tools.normalize_tools(inputs),
                 null => null,
@@ -53,13 +64,13 @@ class Agent<T> {
     }
 
     implements root.ai.Runner<root.ai.Task<T>> {
-        type Output = root.ai.Done<T> | root.ai.BudgetReached | root.ai.Handoff
+        type Output = root.ai.Done<T> | root.ai.BudgetReached | root.ai.Handoff | root.ai.Interrupted
         type Error = root.ai.Failure | baml.errors.UnknownError
 
         function run(
             self,
             task: root.ai.Task<T>,
-        ) -> root.ai.Done<T> | root.ai.BudgetReached | root.ai.Handoff throws root.ai.Failure | baml.errors.UnknownError | baml.errors.Unsupported {
+        ) -> root.ai.Done<T> | root.ai.BudgetReached | root.ai.Handoff | root.ai.Interrupted throws root.ai.Failure | baml.errors.UnknownError | baml.errors.Unsupported {
             //# Select the conversation-owning provider
             // A provider conversation is authoritative continuation state. Switching its
             // owner requires explicit import; display names are not identity keys.
@@ -81,6 +92,13 @@ class Agent<T> {
                     }
                 },
             };
+            if ((self.max_tool_calls_per_step ?? 0) < 0) {
+                throw root.ai.InvalidRequest {
+                    provider: selected.name(),
+                    status_code: null,
+                    detail: "Agent.max_tool_calls_per_step must be null or non-negative",
+                };
+            }
             //# Resume or begin the provider conversation
             let conversation = match (self.conversation) {
                 let existing: root.ai.Conversation => existing,
@@ -111,6 +129,22 @@ class Agent<T> {
             let steps = 0;
             //# Run provider steps until the agent stops
             while (true) {
+                //## Stop only at a fully committed conversation boundary
+                match (
+                    root.ai.internal._interrupted_if_requested(
+                        self.cancel,
+                        conversation,
+                        steps,
+                        selected,
+                        self.run_id,
+                        self.on_event,
+                        self.observers,
+                        self.recorders,
+                    )
+                ) {
+                    let interrupted: root.ai.Interrupted => return interrupted,
+                    null => {},
+                }
                 //## Record the current agent state
                 log.info(
                     "Agent.run "
@@ -239,6 +273,23 @@ class Agent<T> {
                         );
                 }
                 tools = registry.snapshot();
+                //## Honor cancellation requested during step preparation
+                // No provider request or application tool effect has started.
+                match (
+                    root.ai.internal._interrupted_if_requested(
+                        self.cancel,
+                        conversation,
+                        steps,
+                        selected,
+                        self.run_id,
+                        self.on_event,
+                        self.observers,
+                        self.recorders,
+                    )
+                ) {
+                    let interrupted: root.ai.Interrupted => return interrupted,
+                    null => {},
+                }
                 root.ai
                     .internal
                     ._emit_agent_event(
@@ -273,6 +324,20 @@ class Agent<T> {
                     let calls: root.ai.tools.ToolCalls => {
                         //### Validate correlation IDs before any application effect
                         root.ai.internal._validate_tool_calls(calls, selected.name());
+                        //### Enforce the per-step tool-call policy before any effect
+                        match (self.max_tool_calls_per_step) {
+                            let max: int if calls.calls.length() > max => {
+                                throw root.ai.ToolCallLimitExceeded {
+                                    provider: selected.name(),
+                                    max_tool_calls_per_step: max,
+                                    actual_tool_calls: calls.calls.length(),
+                                    calls: calls,
+                                    conversation: conversation,
+                                    steps_taken: steps,
+                                };
+                            },
+                            _ => {},
+                        }
                         //### Stop only for one unambiguous handoff call
                         let handoffs = calls.calls.filter((call: root.ai.tools.ToolCall) -> bool {
                             tools
@@ -328,6 +393,24 @@ class Agent<T> {
                         let submitted = provider.submit(conversation, results);
                         root.ai.internal._require_conversation_invariants<T>(submitted, selected);
                         conversation = submitted;
+                        // The whole tool batch and every correlated result are
+                        // committed. It is now safe to return a resumable
+                        // checkpoint if cancellation raced this transaction.
+                        match (
+                            root.ai.internal._interrupted_if_requested(
+                                self.cancel,
+                                conversation,
+                                steps,
+                                selected,
+                                self.run_id,
+                                self.on_event,
+                                self.observers,
+                                self.recorders,
+                            )
+                        ) {
+                            let interrupted: root.ai.Interrupted => return interrupted,
+                            null => {},
+                        }
                     },
                     let value: T => {
                         //### Return the typed final value

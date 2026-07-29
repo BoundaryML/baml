@@ -4,6 +4,14 @@
 // memory store, recall injection, curator edit application, and provider
 // selection without making any model requests.
 
+function _memory_agent_test_task(
+    provider: root.ai.Provider,
+) -> root.ai.Task<string> throws never {
+    root.ai.task<string>(provider, (ctx: baml.llm.Context) -> baml.llm.PromptAst {
+        baml.llm.assemble_prompt_ast(["memory agent test\n", ""], [ctx.output_format])
+    })
+}
+
 testset "memory-agent-tools" {
     test "write then read round trips with line numbers" {
         let path = "/tmp/baml_memory_agent_test/tools/read.txt";
@@ -146,6 +154,75 @@ testset "memory-agent-transcript" {
                 "USER: hi\nASSISTANT: yo\n",
             );
         assert.equal(_memory_agent_turn_delta("OLD\n", "DIFFERENT\n"), "DIFFERENT\n")
+    }
+
+    test "continuation message places recalled memory before fresh user text" {
+        let text = _memory_agent_continuation_text(
+            "\n[RECALLED MEMORY]\n[memory:build] Run cargo nextest.\n",
+            "fix the failing test",
+        );
+        assert.is_true(text.starts_with("[RECALLED MEMORY]"));
+        assert.is_true(text.ends_with("fix the failing test"));
+        assert.equal(_memory_agent_continuation_text("", "plain follow-up"), "plain follow-up")
+    }
+}
+
+testset "memory-agent-exact-conversation" {
+    test "a fresh user turn preserves and resumes the exact provider conversation" {
+        let provider = root.ai.testing.FakeToolProvider {
+            provider_name: "memory-agent-exact",
+            tool_calls: [],
+            final_output: `"done"`,
+            provider_tools: [],
+        };
+        let task = _memory_agent_test_task(provider);
+        let first = root
+            .ai
+            .internal
+            ._require_done(
+                task
+                    .run(
+                        runner = root
+                            .ai
+                            .run
+                            .Agent<string>
+                            .new(max_tool_calls_per_step = 1),
+                    ),
+            );
+        let fingerprint = first.conversation.output_type_fingerprint();
+        let continued = _memory_agent_append_user_message(
+            first.conversation,
+            "inspect one more file",
+        );
+
+        assert.equal(continued.output_type_fingerprint(), fingerprint);
+        assert.equal(continued.provider().name(), "memory-agent-exact");
+        assert.equal(continued.messages().items().length(), 2);
+        assert.equal(
+            root.ai.message_text(continued.messages().items()[1]),
+            "inspect one more file",
+        );
+
+        let resumed = root
+            .ai
+            .internal
+            ._require_done(
+                task
+                    .run(
+                        runner = root
+                            .ai
+                            .run
+                            .Agent<string>
+                            .new(
+                                max_tool_calls_per_step = 1,
+                                conversation = continued,
+                            ),
+                    ),
+            );
+        assert.equal(resumed.value, "done");
+        // The Task's rendered prompt was not appended again. The exact
+        // continuation still contains only the original prompt and new user turn.
+        assert.equal(resumed.conversation.messages().items().length(), 2)
     }
 }
 
@@ -590,5 +667,28 @@ testset "memory-agent-framework" {
                 _memory_agent_curate_turn("   ", _memory_agent_fresh_store("empty-curator"), MemoryAgentBackend.OpenAI),
                 [],
             )
+    }
+
+    test "memory-agent runner rejects a parallel tool batch before dispatch" {
+        let provider = root.ai.testing.FakeToolProvider {
+            provider_name: "memory-agent-limit",
+            tool_calls: [
+                root.ai.tools.ToolCall { id: "one", name: "read_file", args: {} },
+                root.ai.tools.ToolCall { id: "two", name: "list_dir", args: {} },
+            ],
+            final_output: `"unreachable"`,
+            provider_tools: [],
+        };
+        let limited = false;
+        let _ = _memory_agent_test_task(provider)
+            .run(runner = _memory_agent_runner()) catch (e) {
+            let failure: root.ai.ToolCallLimitExceeded => {
+                limited = true;
+                assert.equal(failure.max_tool_calls_per_step, 1);
+                assert.equal(failure.actual_tool_calls, 2);
+                null
+            },
+        };
+        assert.is_true(limited)
     }
 }

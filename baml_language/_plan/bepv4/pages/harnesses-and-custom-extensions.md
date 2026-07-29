@@ -203,6 +203,9 @@ class CapabilityNegotiationRunner {
             let handoff: ai.Handoff => throw baml.errors.Unsupported {
               message: "negotiated run handed off to " + handoff.call.name,
             },
+            let interrupted: ai.Interrupted => throw baml.errors.Unsupported {
+              message: "negotiated run interrupted: " + interrupted.reason,
+            },
           }
         },
         _ => throw baml.errors.Unsupported {
@@ -245,7 +248,8 @@ or the type it returns.
 ai.Provider
 ├── ai.AgentProvider
 │   ├── ai.ResumableAgentProvider
-│   └── ai.ConversationImportProvider
+│   ├── ai.ConversationImportProvider
+│   └── ai.ConversationAppendProvider
 ├── ai.StreamingProvider
 ├── ai.jobs.BackgroundProvider
 ├── ai.jobs.BatchProvider

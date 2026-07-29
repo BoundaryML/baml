@@ -112,6 +112,21 @@ class RunFinishedEvent {
     }
 }
 
+class RunInterruptedEvent {
+    id: string?,
+    provider: string,
+    steps_taken: int,
+    reason: string,
+    implements AgentEvent {
+        function kind(self) -> string throws never {
+            "run_interrupted"
+        }
+        function run_id(self) -> string? throws never {
+            self.id
+        }
+    }
+}
+
 interface AgentObserver {
   function on_event(self, event: AgentEvent) -> null throws never
 }

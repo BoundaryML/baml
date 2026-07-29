@@ -18,21 +18,27 @@ test "guide 02.08: a handoff root.ai.tools.tool returns control to the applicati
             assert.equal(baml.json.path_or(handoff.call.args, ".customer_id", ""), "C-1");
             // The application completes the delegated work, preserves the
             // provider's call ID, and resumes the exact conversation.
-            let continued = provider.submit(
-                handoff.conversation,
-                [
-                    root.ai.tools.ToolResult.ok(
-                        handoff.call,
-                        { "customer_id": "C-1", "status": "handled externally" },
-                    ),
-                ],
-            );
-            let resumed = task.run(
-                runner = root.ai.run.Agent<Resolution>.new(
-                    tools = [handoff_tool],
-                    conversation = continued,
-                ),
-            );
+            let continued = provider
+                .submit(
+                    handoff.conversation,
+                    [
+                        root.ai
+                            .tools
+                            .ToolResult
+                            .ok(
+                                handoff.call,
+                                { "customer_id": "C-1", "status": "handled externally" },
+                            ),
+                    ],
+                );
+            let resumed = task
+                .run(
+                    runner = root
+                        .ai
+                        .run
+                        .Agent<Resolution>
+                        .new(tools = [handoff_tool], conversation = continued),
+                );
             match (resumed) {
                 let done: root.ai.Done<Resolution> => {
                     assert.equal(done.value.category, "billing")
@@ -42,6 +48,31 @@ test "guide 02.08: a handoff root.ai.tools.tool returns control to the applicati
         },
         _ => assert.is_true(false),
     }
+}
+
+test "guide 02.08: handoffs count toward max_tool_calls_per_step" {
+    let handoff_tool = root.ai.tools.tool(lookup_account).as_handoff();
+    let provider = fake_tool_provider(
+        [
+            root.ai.tools.ToolCall {
+                id: "limited-handoff",
+                name: "lookup_account",
+                args: { "customer_id": "C-1" },
+            },
+        ],
+    );
+    let task = ResolveTicketWithTools_task(sample_ticket(), provider, [handoff_tool]);
+    let rejected = false;
+    let _ = task
+        .run(
+            runner = root.ai.run.Agent<Resolution>.new(tools = [handoff_tool], max_tool_calls_per_step = 0),
+        ) catch (e) {
+        let limit: root.ai.ToolCallLimitExceeded => {
+            rejected = limit.actual_tool_calls == 1 && limit.max_tool_calls_per_step == 0;
+            null
+        },
+    };
+    assert.is_true(rejected)
 }
 
 function _ambiguous_handoff_is_rejected(

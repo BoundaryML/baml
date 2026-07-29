@@ -820,6 +820,24 @@ function _memory_agent_curator_budget() -> root.ai.Budget throws never {
     root.ai.Budget { max_steps: 1, max_cost_usd: null }
 }
 
+function _memory_agent_runner(
+    conversation: root.ai.Conversation? = null,
+    cancel: baml.spawn.CancelToken? = null,
+    observers: root.ai.observe.AgentObserver[] = [],
+) -> root.ai.run.Agent<string> throws never {
+    root
+        .ai
+        .run
+        .Agent<string>
+        .new(
+            budget = _memory_agent_main_budget(),
+            max_tool_calls_per_step = 1,
+            observers = observers,
+            conversation = conversation,
+            cancel = cancel,
+        )
+}
+
 // ---------------------------------------------------------------------------
 // One Agent run
 // ---------------------------------------------------------------------------
@@ -832,9 +850,15 @@ enum MemoryAgentBackend {
 class MemoryAgentTurn {
     answer: string,
     transcript: string,
+    conversation: root.ai.Conversation?,
     steps: int,
     interrupted: bool,
     queued: string[],
+}
+
+class MemoryAgentSession {
+    transcript: string,
+    conversation: root.ai.Conversation?,
 }
 
 class MemoryAgentInterrupt {
@@ -979,10 +1003,31 @@ function _memory_agent_turn_delta(history: string, transcript: string) -> string
     }
 }
 
+function _memory_agent_continuation_text(
+    recall_block: string,
+    user_msg: string,
+) -> string throws never {
+    if (recall_block.trim().length() == 0) {
+        user_msg
+    } else {
+        recall_block.trim() + "\n\n" + user_msg
+    }
+}
+
+function _memory_agent_append_user_message(
+    conversation: root.ai.Conversation,
+    text: string,
+) -> root.ai.Conversation throws root.ai.Failure | baml.errors.UnknownError | baml.errors.Unsupported {
+    //# Preserve opaque provider state while adding the next application turn
+    conversation.append_message(root.ai.ChatMessage.user(text))
+}
+
 function _memory_agent_run_turn(
     history: string,
+    conversation: root.ai.Conversation?,
     user_msg: string,
     backend: MemoryAgentBackend,
+    cancel: baml.spawn.CancelToken? = null,
 ) -> MemoryAgentTurn {
     //# Recall durable facts before creating the model Task
     let recall = if (_memory_agent_memory_enabled()) {
@@ -996,6 +1041,15 @@ function _memory_agent_run_turn(
     let opening = _memory_agent_opening_transcript(history, recall.block, user_msg);
     let trace = MemoryAgentTrace { transcript: opening, steps: 0 };
     let observer = MemoryAgentObserver { trace: trace, live: true };
+    let continued = match (conversation) {
+        let existing: root.ai.Conversation => {
+            _memory_agent_append_user_message(
+                existing,
+                _memory_agent_continuation_text(recall.block, user_msg),
+            )
+        },
+        null => null,
+    };
     let base_task = _memory_agent_task_from_transcript(opening);
     let task = match (backend) {
         MemoryAgentBackend.OpenAI => base_task,
@@ -1007,28 +1061,47 @@ function _memory_agent_run_turn(
     //# Run the standard Agent loop; no scenario-specific Runner is involved
     let outcome = task
         .run(
-            runner = root
-                .ai
-                .run
-                .Agent<string>
-                .new(budget = _memory_agent_main_budget(), observers = [observer]),
+            runner = _memory_agent_runner(
+                conversation = continued,
+                cancel = cancel,
+                observers = [observer],
+            ),
         );
-    let answer = match (outcome) {
-        let done: root.ai.Done<string> => done.value,
+    let answer = "";
+    let final_conversation: root.ai.Conversation? = null;
+    let interrupted = false;
+    match (outcome) {
+        let done: root.ai.Done<string> => {
+            answer = done.value;
+            final_conversation = done.conversation;
+        },
         let budget: root.ai.BudgetReached => {
-            `(stopped after ${budget.steps_taken} steps: ${budget.reason})`
+            answer = `(stopped after ${budget.steps_taken} steps: ${budget.reason})`;
+            final_conversation = budget.conversation;
         },
         let handoff: root.ai.Handoff => {
-            `(unexpected handoff to ${handoff.call.name})`
+            answer = `(unexpected handoff to ${handoff.call.name})`;
+            final_conversation = handoff.conversation;
         },
+        let stopped: root.ai.Interrupted => {
+            answer = "⨂ interrupted.";
+            final_conversation = stopped.conversation;
+            interrupted = true;
+        },
+    }
+    if (interrupted) {
+        _memory_agent_say("\n" + _memory_agent_yellow(answer) + "\n");
+        trace.transcript = trace.transcript + "[INTERRUPTED by user]\n";
+    } else {
+        _memory_agent_say("\n" + _memory_agent_style_assistant(answer) + "\n");
+        trace.transcript = trace.transcript + "ASSISTANT: " + answer + "\n";
     };
-    _memory_agent_say("\n" + _memory_agent_style_assistant(answer) + "\n");
-    trace.transcript = trace.transcript + "ASSISTANT: " + answer + "\n";
     MemoryAgentTurn {
         answer: answer,
         transcript: trace.transcript,
+        conversation: final_conversation,
         steps: trace.steps,
-        interrupted: false,
+        interrupted: interrupted,
         queued: [],
     }
 }
@@ -1053,7 +1126,14 @@ function _memory_agent_curate_turn_unchecked(
     };
     let outcome = task
         .run(
-            runner = root.ai.run.Agent<MemoryAgentEdit[]>.new(budget = _memory_agent_curator_budget()),
+            runner = root
+                .ai
+                .run
+                .Agent<MemoryAgentEdit[]>
+                .new(
+                    budget = _memory_agent_curator_budget(),
+                    max_tool_calls_per_step = 0,
+                ),
         );
     let edits: MemoryAgentEdit[] = match (outcome) {
         let done: root.ai.Done<MemoryAgentEdit[]> => done.value,
@@ -1062,6 +1142,10 @@ function _memory_agent_curate_turn_unchecked(
             empty
         },
         let handoff: root.ai.Handoff => {
+            let empty: MemoryAgentEdit[] = [];
+            empty
+        },
+        let stopped: root.ai.Interrupted => {
             let empty: MemoryAgentEdit[] = [];
             empty
         },
@@ -1097,21 +1181,6 @@ function _memory_agent_forget(
     }
 }
 
-function _memory_agent_interrupt_turn(
-    transcript: string,
-    steps: int,
-) -> MemoryAgentTurn throws never {
-    let note = "⨂ interrupted.";
-    _memory_agent_say("\n" + _memory_agent_yellow(note) + "\n");
-    MemoryAgentTurn {
-        answer: note,
-        transcript: transcript + "[INTERRUPTED by user]\n",
-        steps: steps,
-        interrupted: true,
-        queued: [],
-    }
-}
-
 function _memory_agent_poll_interrupt() -> MemoryAgentInterrupt throws never {
     let output = baml
         .sys
@@ -1140,12 +1209,16 @@ function _memory_agent_classify_interrupt(raw: string) -> MemoryAgentInterrupt t
 
 function _memory_agent_run_supervised(
     history: string,
+    conversation: root.ai.Conversation?,
     message: string,
     backend: MemoryAgentBackend,
 ) -> MemoryAgentTurn {
-    //# Run Task.run concurrently while the application watches terminal input
-    let future = spawn { _memory_agent_run_turn(history, message, backend) };
-    let cancelled = false;
+    //# Request a resumable checkpoint while the application watches terminal input
+    let cancel = baml.spawn.CancelToken.new();
+    let future = spawn {
+        _memory_agent_run_turn(history, conversation, message, backend, cancel = cancel)
+    };
+    let cancellation_requested = false;
     let queued: string[] = [];
     let watching = true;
     while (watching) {
@@ -1154,9 +1227,17 @@ function _memory_agent_run_supervised(
         } else {
             let probe = _memory_agent_poll_interrupt();
             if (probe.cancel) {
-                future.cancel();
-                cancelled = true;
-                watching = false;
+                if (!cancellation_requested) {
+                    let _ = cancel.cancel();
+                    cancellation_requested = true;
+                    _memory_agent_say(
+                        "\n"
+                            + _memory_agent_yellow(
+                                "⨂ stopping after the current model/tool checkpoint…",
+                            )
+                            + "\n",
+                    );
+                };
             } else if (probe.queued.length() > 0) {
                 queued.push(probe.queued);
                 _memory_agent_say(
@@ -1169,21 +1250,18 @@ function _memory_agent_run_supervised(
             };
         };
     }
-    let turn = if (cancelled) {
-        _memory_agent_interrupt_turn(history, 0)
-    } else {
-        (await future) catch_all (error) {
-            _ => {
-                _memory_agent_say("\n" + _memory_agent_red(`turn failed: ${error}`) + "\n");
-                MemoryAgentTurn {
-                    answer: "(the turn failed — see the error above)",
-                    transcript: history + "\n[turn errored]\n",
-                    steps: 0,
-                    interrupted: false,
-                    queued: [],
-                }
-            },
-        }
+    let turn = (await future) catch_all (error) {
+        _ => {
+            _memory_agent_say("\n" + _memory_agent_red(`turn failed: ${error}`) + "\n");
+            MemoryAgentTurn {
+                answer: "(the turn failed — see the error above)",
+                transcript: history + "\n[turn errored]\n",
+                conversation: conversation,
+                steps: 0,
+                interrupted: false,
+                queued: [],
+            }
+        },
     };
     //# Curate only completed turns in an isolated Task
     if (!turn.interrupted && _memory_agent_memory_enabled()) {
@@ -1195,6 +1273,7 @@ function _memory_agent_run_supervised(
     MemoryAgentTurn {
         answer: turn.answer,
         transcript: turn.transcript,
+        conversation: turn.conversation,
         steps: turn.steps,
         interrupted: turn.interrupted,
         queued: queued,
@@ -1202,18 +1281,20 @@ function _memory_agent_run_supervised(
 }
 
 function _memory_agent_run_queue(
-    history: string,
+    session: MemoryAgentSession,
     queue: string[],
     backend: MemoryAgentBackend,
-) -> string {
-    let transcript = history;
+) -> MemoryAgentSession {
+    let transcript = session.transcript;
+    let conversation = session.conversation;
     let index = 0;
     while (index < queue.length()) {
         let message = queue[index];
         index = index + 1;
         _memory_agent_say(_memory_agent_magenta(`\n◆ queued (${index}/${queue.length()}) › ${message}`) + "\n");
-        let turn = _memory_agent_run_supervised(transcript, message, backend);
+        let turn = _memory_agent_run_supervised(transcript, conversation, message, backend);
         transcript = turn.transcript;
+        conversation = turn.conversation;
         for (let typed in turn.queued) {
             queue.push(typed);
         }
@@ -1223,14 +1304,14 @@ function _memory_agent_run_queue(
                 _memory_agent_yellow(`⨂ cancelled — skipped ${remaining} queued message(s).`)
                     + "\n",
             );
-            return transcript;
+            return MemoryAgentSession { transcript: transcript, conversation: conversation };
         };
     }
-    transcript
+    MemoryAgentSession { transcript: transcript, conversation: conversation }
 }
 
 function _memory_agent_ask(task: string, backend: MemoryAgentBackend) -> string {
-    let turn = _memory_agent_run_turn("", task, backend);
+    let turn = _memory_agent_run_turn("", null, task, backend);
     if (_memory_agent_memory_enabled()) {
         let _ = _memory_agent_curate_turn(turn.transcript, _memory_agent_store(), backend);
     };
@@ -1239,7 +1320,7 @@ function _memory_agent_ask(task: string, backend: MemoryAgentBackend) -> string 
 
 function _memory_agent_repl(backend: MemoryAgentBackend) -> string {
     _memory_agent_say(_memory_agent_banner(backend));
-    let history = "";
+    let session = MemoryAgentSession { transcript: "", conversation: null };
     let queue: string[] = [];
     let running = true;
     while (running) {
@@ -1284,19 +1365,27 @@ function _memory_agent_repl(backend: MemoryAgentBackend) -> string {
                     if (queue.length() == 0) {
                         _memory_agent_say("  (nothing queued)\n");
                     } else {
-                        history = _memory_agent_run_queue(history, queue, backend);
+                        session = _memory_agent_run_queue(session, queue, backend);
                         queue = [];
                     };
                 },
                 let immediate => {
                     //# Run now, then drain type-ahead and staged work
-                    let turn = _memory_agent_run_supervised(history, immediate, backend);
-                    history = turn.transcript;
+                    let turn = _memory_agent_run_supervised(
+                        session.transcript,
+                        session.conversation,
+                        immediate,
+                        backend,
+                    );
+                    session = MemoryAgentSession {
+                        transcript: turn.transcript,
+                        conversation: turn.conversation,
+                    };
                     for (let typed in turn.queued) {
                         queue.push(typed);
                     }
                     if (!turn.interrupted && queue.length() > 0) {
-                        history = _memory_agent_run_queue(history, queue, backend);
+                        session = _memory_agent_run_queue(session, queue, backend);
                         queue = [];
                     };
                 },

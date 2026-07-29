@@ -239,3 +239,80 @@ test "Anthropic prompt submit correlates every pending call exactly once" {
     };
     assert.is_true(rejected)
 }
+
+test "Anthropic appends a fresh user message without losing exact assistant blocks" {
+    let provider = root
+        .anthropic
+        .messages(model = "claude-test", api_key = "unused", base_url = "https://example.test");
+    let state = match (provider.begin<AnthropicRequestFixture>(_anthropic_request_fixture_task(provider))) {
+        let value: Conversation => value,
+        _ => baml.sys.panic("expected Anthropic conversation"),
+    };
+    let output_type = state.declared_output_type;
+    let opaque: json = { "type": "thinking", "thinking": "sealed", "signature": "opaque-signature" };
+    state.last_assistant_content = [opaque];
+    state.messages.push({ "role": "assistant", "content": [opaque] });
+    let original_wire_length = state.messages.length();
+    let appended = provider.append_message(state, root.ai.ChatMessage.user("second turn"));
+    match (appended) {
+        let exact: Conversation => {
+            assert.equal(exact.declared_output_type, output_type);
+            assert.equal(exact.messages.length(), original_wire_length + 1);
+            assert
+                .equal(
+                    baml.json
+                        .path<string>(
+                            exact.messages[original_wire_length - 1],
+                            ".content[0].signature",
+                        ),
+                    "opaque-signature",
+                );
+            assert
+                .equal(
+                    baml.json.path<string>(exact.messages[original_wire_length], ".content[0].text"),
+                    "second turn",
+                );
+            assert.equal(root.ai.message_text(exact.history.entries[1]), "second turn")
+        },
+        _ => assert.is_true(false),
+    }
+}
+
+test "Anthropic rejects append while native or prompt tool calls are pending" {
+    let provider = root.anthropic.messages(api_key = "unused", base_url = "https://example.test");
+    let native = _anthropic_pending_conversation(provider);
+    let native_rejected = false;
+    let _native = provider.append_message(native, root.ai.ChatMessage.user("too soon")) catch (e) {
+        let invalid: root.ai.InvalidRequest => {
+            native_rejected = true;
+            native
+        },
+        _ => baml.sys.panic("unexpected Anthropic append error"),
+    };
+    assert.is_true(native_rejected);
+
+    let prompt_provider = root
+        .anthropic
+        .messages(
+            api_key = "unused",
+            output_mode = root.anthropic.OutputMode.Sap,
+            tool_mode = root.anthropic.ToolMode.Prompt,
+        );
+    let prompt = match (
+        prompt_provider
+            .begin<AnthropicRequestFixture>(_anthropic_request_fixture_task(prompt_provider))
+    ) {
+        let value: PromptConversation => value,
+        _ => baml.sys.panic("expected Anthropic prompt conversation"),
+    };
+    prompt.pending_calls = [root.ai.tools.ToolCall { id: "pending", name: "lookup", args: {} }];
+    let prompt_rejected = false;
+    let _prompt = prompt_provider.append_message(prompt, root.ai.ChatMessage.user("too soon")) catch (e) {
+        let invalid: root.ai.InvalidRequest => {
+            prompt_rejected = true;
+            prompt
+        },
+        _ => baml.sys.panic("unexpected Anthropic prompt append error"),
+    };
+    assert.is_true(prompt_rejected)
+}

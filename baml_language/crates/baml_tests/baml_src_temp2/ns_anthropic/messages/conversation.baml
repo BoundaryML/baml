@@ -46,6 +46,80 @@ implements root.ai.ConversationImportProvider for AnthropicProvider {
   }
 }
 
+implements root.ai.ConversationAppendProvider for AnthropicProvider {
+  function append_messages(
+    self,
+    conversation: root.ai.Conversation,
+    messages: root.ai.Messages,
+  ) -> root.ai.Conversation throws root.ai.Failure {
+    // Validate the entire portable batch before mutating either projection.
+    let _ = root.ai.internal._conversation_append_user_texts(
+      messages,
+      "anthropic",
+    );
+    match (conversation) {
+      let state: root.anthropic.internal.Conversation => {
+        if (!root.ai.internal._same_provider_instance(state.owner, self)) {
+          throw root.ai.InvalidRequest {
+            provider: "anthropic",
+            status_code: null,
+            detail: "Anthropic cannot append to a conversation owned by another provider instance",
+          };
+        }
+        if (
+          state.last_assistant_content.some((part: json) -> bool {
+            root.anthropic.internal._is_tool_use(part)
+          })
+        ) {
+          throw root.ai.InvalidRequest {
+            provider: "anthropic",
+            status_code: null,
+            detail: "finish the pending Anthropic tool exchange before appending a user message",
+          };
+        }
+        for (let message in messages.items()) {
+          state.messages.push({
+            "role": "user",
+            "content": [
+              {
+                "type": "text",
+                "text": root.anthropic.internal._message_text(message),
+              },
+            ],
+          });
+          state.history.entries.push(message);
+        }
+        state
+      },
+      let state: root.anthropic.internal.PromptConversation => {
+        if (!root.ai.internal._same_provider_instance(state.owner, self)) {
+          throw root.ai.InvalidRequest {
+            provider: "anthropic",
+            status_code: null,
+            detail: "Anthropic prompt mode cannot append to a conversation owned by another provider instance",
+          };
+        }
+        if (state.pending_calls.length() != 0) {
+          throw root.ai.InvalidRequest {
+            provider: "anthropic",
+            status_code: null,
+            detail: "finish the pending Anthropic prompt-tool exchange before appending a user message",
+          };
+        }
+        for (let message in messages.items()) {
+          state.history.entries.push(message);
+        }
+        state
+      },
+      _ => throw root.ai.InvalidRequest {
+        provider: "anthropic",
+        status_code: null,
+        detail: "Anthropic received another provider's conversation",
+      },
+    }
+  }
+}
+
 implements root.ai.ResumableAgentProvider for AnthropicProvider {
   function save_conversation(
     self,

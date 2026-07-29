@@ -17,3 +17,12 @@ class Handoff {
     conversation: Conversation,
     steps_taken: int,
 }
+
+// Cooperative cancellation returns the last fully committed provider
+// conversation. No application tool batch is left partially submitted, so the
+// caller may resume this checkpoint with a fresh Agent run.
+class Interrupted {
+    conversation: Conversation,
+    steps_taken: int,
+    reason: string,
+}

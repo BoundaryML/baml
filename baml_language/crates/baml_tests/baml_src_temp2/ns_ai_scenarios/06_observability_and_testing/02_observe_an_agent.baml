@@ -11,6 +11,7 @@ function observe_an_agent(
         let done: root.ai.Done<Resolution> => done.value.reply,
         let budget: root.ai.BudgetReached => `budget reached: ${budget.reason}`,
         let handoff: root.ai.Handoff => `handoff: ${handoff.call.name}`,
+        let interrupted: root.ai.Interrupted => `interrupted: ${interrupted.reason}`,
     };
     log.info({ "events": observer.kinds, "result": result });
     result

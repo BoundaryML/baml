@@ -62,6 +62,10 @@ Agent calls retry.step
 The wrapper never calls `Agent.run`. It cannot replay an application tool
 because tools execute outside the provider between `step` and `submit`.
 
+When the inner provider implements `ConversationAppendProvider`, `ai.retry`
+also preserves exact fresh-message append by delegating to that same inner
+conversation.
+
 The retry predicate is deliberately private and conservative:
 
 ```text
@@ -129,6 +133,11 @@ ai.fallback([
 
 This retries the first member's initial step before trying the second member.
 After either member makes progress, the chosen member remains authoritative.
+Appending a fresh user message to a fallback-owned conversation has the same
+effect: the wrapper delegates to the active member's
+`ConversationAppendProvider` and pins that member, even if no model step had
+previously succeeded. A later member cannot reconstruct the appended exact
+state.
 
 ## Switch after progress through import
 

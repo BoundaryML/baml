@@ -76,3 +76,26 @@ implements Failure for EffectCommitted {
   function is_transient(self) -> bool throws never { false }
   function effects(self) -> Effects throws never { Effects.Committed }
 }
+
+/// The model requested more tools in one step than the Agent policy permits.
+///
+/// This is raised before before_tool_call, handoff delivery, tool handlers, or
+/// after_tool_call. `calls` and `conversation` retain the provider-owned
+/// continuation so an application can reject/fulfill the pending calls,
+/// submit correlated results, and resume deliberately.
+///
+/// Handoff calls count toward the limit: they are part of the same provider
+/// ToolCalls batch, and a limit of zero therefore rejects every tool request.
+class ToolCallLimitExceeded {
+    provider: string,
+    max_tool_calls_per_step: int,
+    actual_tool_calls: int,
+    calls: root.ai.tools.ToolCalls,
+    conversation: root.ai.Conversation,
+    steps_taken: int,
+}
+
+implements Failure for ToolCallLimitExceeded {
+  function is_transient(self) -> bool throws never { false }
+  function effects(self) -> Effects throws never { Effects.None }
+}

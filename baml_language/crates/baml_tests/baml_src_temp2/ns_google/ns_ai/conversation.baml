@@ -40,3 +40,18 @@ implements root.ai.ConversationImportProvider for Gemini {
     root.google.ai.internal._import<T>(self, messages)
   }
 }
+
+implements root.ai.ConversationAppendProvider for Gemini {
+  function append_messages(
+    self,
+    conversation: root.ai.Conversation,
+    messages: root.ai.Messages,
+  ) -> root.ai.Conversation throws root.ai.Failure {
+    root.google.internal._append_messages(
+      self,
+      conversation,
+      messages,
+      self.name(),
+    )
+  }
+}

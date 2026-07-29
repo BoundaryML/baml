@@ -27,6 +27,7 @@ function save_and_resume(
     let done: root.ai.Done<Resolution> => done.conversation,
     let stopped: root.ai.BudgetReached => stopped.conversation,
     let handoff: root.ai.Handoff => handoff.conversation,
+    let interrupted: root.ai.Interrupted => interrupted.conversation,
   };
   let token = provider.save_conversation(conversation);
   let restored = provider.restore_conversation(token);
@@ -41,6 +42,7 @@ function save_and_resume(
     let done: root.ai.Done<Resolution> => done.conversation.provider().name(),
     let stopped: root.ai.BudgetReached => stopped.conversation.provider().name(),
     let handoff: root.ai.Handoff => handoff.conversation.provider().name(),
+    let interrupted: root.ai.Interrupted => interrupted.conversation.provider().name(),
   };
   log.info({
     "saved_provider": token.provider,

@@ -12,6 +12,7 @@ approval, authorization, argument rewriting, and blocking logic directly to
 | `prepare_step` callback | Changes the next provider, tool roster, or stop decision |
 | `ai.tools.ToolDecision` | Allows, replaces, or blocks one tool call |
 | `ai.Budget { max_steps, max_cost_usd }` | Stops work between provider steps |
+| `max_tool_calls_per_step` | Rejects an oversized provider tool batch before any tool effect |
 | `ai.tools.tool(...).as_handoff()` | Returns one exact call to the application before dispatch |
 
 ## Example
@@ -70,6 +71,7 @@ let outcome = ResolveTicketWithTools@task(sample_ticket()).run(
       }
     },
     budget = ai.Budget { max_steps: 8, max_cost_usd: 0.25 },
+    max_tool_calls_per_step = 1,
   ),
 )
 ```
@@ -82,7 +84,9 @@ flowchart TD
   budget -->|yes| model["Provider step"]
   model --> result{"Provider returned?"}
   result -->|final value| done["Done<Resolution>"]
-  result -->|tool call| transfer{"Handoff tool?"}
+  result -->|tool calls| callLimit{"Within per-step call limit?"}
+  callLimit -->|no| limitFailure["ToolCallLimitExceeded with pending calls + conversation"]
+  callLimit -->|yes| transfer{"Handoff tool?"}
   transfer -->|yes| handoff["Handoff with exact ToolCall"]
   transfer -->|no| callback["before_tool_call"]
   callback -->|approved| history["Run lookup_account_with_history"]
@@ -115,6 +119,86 @@ A handoff must be unambiguous. If one model step mixes a handoff with an
 application call, or returns several handoff calls, the Agent throws
 `ai.InvalidRequest` before executing anything.
 
+## Enforce the number of tool calls in one step
+
+Provider wire options such as `parallel_tool_calls = false` tell a model how
+it should respond. They are not an application policy boundary: a provider,
+model, proxy, or future adapter can still return an unexpected batch. Put the
+hard limit on the runner:
+
+```baml
+let outcome = ResolveTicketWithTools@task(sample_ticket()).run(
+  runner = ai.run.Agent<Resolution>.new(
+    max_tool_calls_per_step = 1,
+  ),
+)
+```
+
+`max_tool_calls_per_step` has these exact semantics:
+
+- `null` (the default) accepts any non-empty, valid batch and preserves the
+  existing parallel-tool behavior.
+- `0` rejects every tool request while still allowing a final `T`.
+- `N` accepts at most `N` calls from one provider `step`.
+- Handoff calls count. Therefore a limit of zero rejects a handoff, while a
+  limit of one permits one unambiguous handoff.
+- Negative values are invalid configuration and fail before `provider.begin`.
+
+The Agent first validates the provider's correlation envelope, then checks
+the count. On a count violation it has not emitted a tool-call event, invoked
+`before_tool_call`, delivered a handoff, run a handler, or invoked
+`after_tool_call`.
+
+The typed `ai.ToolCallLimitExceeded` failure carries:
+
+| Field | Meaning |
+| --- | --- |
+| `provider` | Provider that returned the batch |
+| `max_tool_calls_per_step` | Configured runner limit |
+| `actual_tool_calls` | Number returned by this step |
+| `calls` | Exact pending calls, including correlation IDs |
+| `conversation` | Provider-owned continuation at the pending-call boundary |
+| `steps_taken` | Number of completed provider steps |
+
+It is non-transient with `Effects.None`: retrying the same provider step does
+not fix a deterministic policy mismatch, and no application tool effect has
+occurred. It is a failure rather than `BudgetReached` because the provider
+conversation contains unresolved calls. The application must explicitly
+accept or reject every call before taking the next model step.
+
+For example, an application can reject the batch and resume without replaying
+the model step:
+
+```baml
+let outcome = ResolveTicketWithTools@task(sample_ticket()).run(
+  runner = ai.run.Agent<Resolution>.new(max_tool_calls_per_step = 1),
+) catch (e) {
+  let limited: ai.ToolCallLimitExceeded => {
+    let provider = match (limited.conversation.provider()) {
+      let agent: ai.AgentProvider => agent,
+      _ => throw baml.errors.Unsupported {
+        message: "conversation provider cannot resume an Agent",
+      },
+    };
+    let rejected = limited.calls.calls.map((call) -> {
+      ai.tools.ToolResult.error(call, "only one tool call is allowed per step")
+    });
+    let continued = provider.submit(limited.conversation, rejected);
+
+    ResolveTicketWithTools@task(sample_ticket()).run(
+      runner = ai.run.Agent<Resolution>.new(
+        max_tool_calls_per_step = 1,
+        conversation = continued,
+      ),
+    )
+  },
+}
+```
+
+Submitting correlated errors is one policy choice. An application may instead
+inspect and fulfill the pending calls externally, but it must preserve every
+call ID and acknowledge the complete batch before resuming.
+
 ## Handle every terminal outcome
 
 Each outcome carries what the caller needs to continue:
@@ -127,6 +211,9 @@ Each outcome carries what the caller needs to continue:
 - `ai.Handoff { call, conversation, steps_taken }` — a tool marked
   `.as_handoff()` fired; `call` is the exact `ai.tools.ToolCall` the
   application must resolve.
+- `ai.Interrupted { conversation, steps_taken, reason }` — cooperative
+  cancellation reached a committed boundary with no unsubmitted application
+  tool results.
 
 ```baml
 match (outcome) {
@@ -141,12 +228,17 @@ match (outcome) {
     // The application takes over the exact correlated call.
     log.info(`handoff requested: ${handoff.call.name} (${handoff.call.id})`)
   },
+
+  let interrupted: ai.Interrupted => {
+    // This conversation can resume directly with a fresh cancellation token.
+    log.info(`interrupted after ${interrupted.steps_taken} steps`)
+  },
 }
 ```
 
-Both incomplete outcomes retain the conversation. `BudgetReached` can resume
-that state directly. A `Handoff` still has a pending provider call, so the
-application must submit its result first.
+All incomplete outcomes retain the conversation. `BudgetReached` and
+`Interrupted` can resume that state directly. A `Handoff` still has a pending
+provider call, so the application must submit its result first.
 
 ## Complete a handoff and resume
 
@@ -157,7 +249,7 @@ The application performs the external work, creates one result correlated to
 function resume_after_handoff(
   handoff: ai.Handoff,
   external_output: json,
-) -> ai.Done<Resolution> | ai.BudgetReached | ai.Handoff
+) -> ai.Done<Resolution> | ai.BudgetReached | ai.Handoff | ai.Interrupted
     throws ai.Failure | baml.errors.UnknownError | baml.errors.Unsupported {
   let provider = match (handoff.conversation.provider()) {
     let agent: ai.AgentProvider => agent,

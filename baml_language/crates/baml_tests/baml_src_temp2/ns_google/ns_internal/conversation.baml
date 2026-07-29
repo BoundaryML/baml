@@ -393,6 +393,74 @@ function _owned_conversation(
     state
 }
 
+function _append_messages(
+    provider: root.ai.Provider,
+    conversation: root.ai.Conversation,
+    messages: root.ai.Messages,
+    provider_name: string,
+) -> root.ai.Conversation throws root.ai.Failure {
+    // Validate the complete portable batch before mutating either projection.
+    let _ = root.ai.internal._conversation_append_user_texts(messages, provider_name);
+    match (conversation) {
+        let state: Conversation => {
+            if (
+                state.provider_name != provider_name
+                    || !root.ai.internal._same_provider_instance(state.owner, provider)
+            ) {
+                throw root.ai.InvalidRequest {
+                    provider: provider_name,
+                    status_code: null,
+                    detail: provider_name + " cannot append to a conversation owned by another provider instance",
+                };
+            }
+            if (state.last_calls.length() != 0) {
+                throw root.ai.InvalidRequest {
+                    provider: provider_name,
+                    status_code: null,
+                    detail: "finish the pending Gemini tool exchange before appending a user message",
+                };
+            }
+            for (let message in messages.items()) {
+                state
+                    .contents
+                    .push({ "role": "user", "parts": [{ "text": _prompt_message_text(message) }] });
+                state.history.entries.push(message);
+            }
+            state
+        },
+        let state: PromptConversation => {
+            if (
+                state.provider_name != provider_name
+                    || !root.ai.internal._same_provider_instance(state.owner, provider)
+            ) {
+                throw root.ai.InvalidRequest {
+                    provider: provider_name,
+                    status_code: null,
+                    detail: provider_name + " prompt tools cannot append to a conversation owned by another provider instance",
+                };
+            }
+            if (state.last_calls.length() != 0) {
+                throw root.ai.InvalidRequest {
+                    provider: provider_name,
+                    status_code: null,
+                    detail: "finish the pending Google prompt-tool exchange before appending a user message",
+                };
+            }
+            for (let message in messages.items()) {
+                state.history.entries.push(message);
+            }
+            state
+        },
+        _ => {
+            throw root.ai.InvalidRequest {
+            provider: provider_name,
+            status_code: null,
+            detail: provider_name + " received another provider's conversation",
+        }
+        },
+    }
+}
+
 function _tool_body(
     state: Conversation,
     output_type: type,
@@ -625,11 +693,29 @@ function _step<T>(
                 raw_output: result.text,
             };
         }
+        let output_call = output_calls[0];
+        let value = _parse_output_call<T>(_normalized_call_raw(output_call), result.text, provider_name);
         state.last_calls = [];
-        return root.ai.ModelStep<T> {
-            outcome: _parse_output_call<T>(_normalized_call_raw(output_calls[0]), result.text, provider_name),
-            metadata: metadata,
-        };
+        // Close the reserved result function before a later fresh user turn.
+        // This remains provider-owned wire state and is not an application
+        // ToolResult exposed through the portable history.
+        state
+            .contents
+            .push(
+                {
+                    "role": "user",
+                    "parts": [
+                        {
+                            "functionResponse": {
+                                "id": _normalized_call_id(output_call),
+                                "name": _output_tool_name(),
+                                "response": { "result": _normalized_call_args(output_call) },
+                            },
+                        },
+                    ],
+                },
+            );
+        return root.ai.ModelStep<T> { outcome: value, metadata: metadata };
     }
     //# Yield application calls to the runner
     if (calls.length() > 0) {

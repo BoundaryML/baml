@@ -183,6 +183,13 @@ implements root.ai.AgentProvider for OpenAIProvider {
       baml.json.path_or(call, ".name", "") == root.openai.internal._output_tool_name()
     });
     let metadata = root.openai.internal._response_metadata(raw, self.model);
+    let response_id = baml.json.path_or(raw, ".id", "");
+    if (response_id.length() == 0) {
+      throw root.ai.ParseFailed {
+        provider: "openai-responses",
+        raw_output: text,
+      };
+    }
     // Commit turn-local request state only after the request and provider
     // envelope have succeeded. Retry may call step again after a safe failure.
     state.active_tools = encoded_tools;
@@ -195,6 +202,7 @@ implements root.ai.AgentProvider for OpenAIProvider {
           raw_output: text,
         };
       }
+      let output_call_ids = root.openai.internal._pending_call_ids(output_calls);
       let value = root.openai.internal._parse_output_call<T>(
         output_calls[0],
         text,
@@ -206,6 +214,18 @@ implements root.ai.AgentProvider for OpenAIProvider {
           ),
         ),
       );
+      state.previous_response_id = response_id;
+      // Close the reserved result-tool call before a later fresh user turn.
+      // This is provider-owned protocol state, not an application tool result.
+      state.input = [
+        {
+          "type": "function_call_output",
+          "call_id": output_call_ids[0],
+          "output": baml.json.stringify(
+            root.openai.internal._output_call_value(output_calls[0], text),
+          ),
+        },
+      ];
       return root.ai.ModelStep<T> {
         outcome: value,
         metadata: metadata,
@@ -216,13 +236,6 @@ implements root.ai.AgentProvider for OpenAIProvider {
       // Validate the provider's IDs before handing the calls to the runner.
       let _ = root.openai.internal._pending_call_ids(calls);
       state.last_output = calls;
-      let response_id = baml.json.path_or(raw, ".id", "");
-      if (response_id.length() == 0) {
-        throw root.ai.ParseFailed {
-          provider: "openai-responses",
-          raw_output: text,
-        };
-      }
       state.previous_response_id = response_id;
       state.input = [];
       state.history.entries.push(root.ai.ChatMessage {
@@ -262,6 +275,8 @@ implements root.ai.AgentProvider for OpenAIProvider {
         raw_output: content,
       },
     };
+    state.previous_response_id = response_id;
+    state.input = [];
     root.ai.ModelStep<T> {
       outcome: value,
       metadata: metadata,

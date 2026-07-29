@@ -3,18 +3,30 @@
 This file records semantic differences between the original handwritten agent
 loop and the BEPv4 Agent-framework port.
 
-## Provider conversations do not yet accept a new application message
+## A session has two kinds of state
 
-`ai.Conversation` can resume an interrupted provider/tool turn, but the
-current provider protocol has no public operation for appending a fresh user
-message to a completed conversation. The interactive session therefore keeps
-an application-owned transcript and creates a new `Task<string>` for each
-user turn. That preserves behavior and makes OpenAI/Google switching trivial,
-but it resends the retained transcript instead of continuing an opaque
-provider conversation. Rebuilding from `conversation.messages()` is not an
-equivalent workaround: a message-only projection can lose provider response
-IDs, encrypted reasoning, Google thought signatures, and provider data parts
-used for native tool calls.
+The REPL retains both:
+
+- an application transcript for display, memory search, and curator input;
+- the exact provider-owned `ai.Conversation` used for the next model turn.
+
+After the first turn, the scenario asks the conversation's
+`ConversationAppendProvider` to append one fresh user message. The provider
+updates its native continuation state locally, without making an HTTP request.
+The next `Task.run(Agent.new(conversation = ...))` keeps OpenAI response IDs or
+Google thought signatures instead of rebuilding a continuation from
+`conversation.messages()`.
+
+Exact append currently accepts fresh user text only. Tool results use
+`AgentProvider.submit`, while system and assistant history remain
+provider-owned. The capability rejects another provider instance's
+conversation and any conversation with unresolved tool calls.
+
+The selected provider is fixed once a session starts. The OpenAI and Google
+entrypoints demonstrate the same Task recipe with different initial providers;
+they do not switch an exact conversation between vendors. A deliberate vendor
+switch uses `ConversationImportProvider` and provides only messages-fidelity
+continuation.
 
 ## The Agent owns tool selection and dispatch
 
@@ -22,11 +34,13 @@ The original model returned a `Step` class containing an `action` string and
 nullable argument fields, after which a handwritten loop dispatched the
 action. The port exposes ordinary typed BAML functions as Agent tools. Native
 provider tool calling selects one of those functions, and `ai.run.Agent`
-validates, dispatches, correlates, and submits results. Both requested
-providers set `parallel_tool_calls = false`, which enforces or requests one
-call per step for these adapters. An arbitrary custom provider can still
-return a batch because `Agent` does not currently enforce a provider-neutral
-per-step call limit.
+validates, dispatches, correlates, and submits results.
+
+Both selected providers set `parallel_tool_calls = false` as a request hint.
+The scenario also constructs `Agent` with `max_tool_calls_per_step = 1`.
+That runner limit is the provider-independent safety boundary: it rejects an
+oversized call batch before tool events, approval callbacks, handlers, or
+handoffs can cause an application effect.
 
 ## Thought text is not a portable provider feature
 
@@ -37,14 +51,24 @@ therefore has an optional `summary` argument: the model supplies one short,
 user-visible explanation of the action, and the observer records it alongside
 tool lifecycle events.
 
-## Cancellation returns application state, not provider continuation state
+## Cancellation is cooperative and resumable
 
-ESC + Enter cancels the spawned `Task.run` future, including an in-flight HTTP
-request. As in the original implementation, the transcript records an
-interruption and the next user turn starts from application-owned history.
-There is no portable provider continuation to resume after cancellation.
-Cancellation also cannot roll back a shell command or file write that already
-started, so a cancelled effect may be partially committed.
+ESC + Enter calls the `CancelToken` passed to `Agent`; it does not cancel the
+spawned future. `Agent` stops only at a committed loop boundary and returns
+`Interrupted { conversation, steps_taken, reason }`.
+
+If cancellation arrives while a model request or tool batch is running, the
+runner finishes and submits the whole batch before returning the checkpoint.
+It never returns a conversation with unresolved calls and never abandons half
+of a parallel batch. A final typed value or handoff already produced by the
+model wins the race. The supervisor awaits the real outcome, stores its exact
+conversation, and the next user message continues from it without replaying
+completed tools.
+
+This is not hard cancellation: a slow HTTP request, shell command, or file
+write is allowed to finish. `Future.cancel()` or wiring the same token into
+`spawn` would terminate the future and discard the resumable `Interrupted`
+value.
 
 ## Terminal polling is POSIX-specific
 
@@ -73,37 +97,34 @@ model adapter. A custom Runner would duplicate the Agent loop and recreate the
 completion-provider/runner recursion problem this API split is intended to
 avoid.
 
-## Recommended framework follow-ups
+## Framework capabilities added for this port
 
-The scenario does not need these changes to match the source behavior, but a
-production framework should consider:
-
-1. A provider capability for appending fresh messages to an exact
-   `Conversation`, preserving provider response IDs, cache state, encrypted
-   reasoning, media, and thought signatures.
-2. Cooperative Agent cancellation with an `Interrupted` outcome containing
-   the last committed conversation and step count, plus a matching lifecycle
-   event.
-3. A runner-level `max_tool_calls_per_step` policy for providers that cannot
-   enforce serial tool calls. The OpenAI and Google adapters used here both set
-   `parallel_tool_calls = false`, so this scenario does not need it.
-4. A portable timed terminal-read primitive. Type-ahead currently uses the
-   same POSIX shell polling technique as the source agent.
-
-A minimal continuation capability would look roughly like:
+The three framework follow-ups exposed by the first port are now implemented:
 
 ```baml
 interface ConversationAppendProvider requires AgentProvider {
-  function append_messages<T>(
+  function append_messages(
     self,
     conversation: Conversation,
     messages: Messages,
   ) -> Conversation
 }
+
+let runner = ai.run.Agent<string>.new(
+  conversation = exact_continuation,
+  cancel = cancel_token,
+  max_tool_calls_per_step = 1,
+)
 ```
 
-The provider, rather than the application, must implement this so the returned
-conversation can retain exact provider state.
+OpenAI Responses, Anthropic Messages, Google AI, Google Vertex, Retry,
+Fallback, and the test providers implement exact append. `Agent` emits
+`RunInterruptedEvent`, then the generic `RunFinishedEvent` with outcome
+`"interrupted"`, before returning the checkpoint.
+
+One application-level limitation remains: timed terminal input is
+POSIX-specific. A portable timed terminal-read primitive would remove the
+scenario's `read -t` shell polling.
 
 ## Security boundary
 

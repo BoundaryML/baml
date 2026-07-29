@@ -8,6 +8,31 @@ interface Conversation {
   // for the Task<T> they were created for. Legacy/application conversations
   // may return null.
   function output_type_fingerprint(self) -> string? throws never { null }
+
+  // Continue this exact provider-owned state with fresh application messages.
+  // The append is local; the next Agent.run performs the model request.
+  function append_messages(
+    self,
+    messages: Messages,
+  ) -> Conversation
+      throws root.ai.Failure | baml.errors.UnknownError | baml.errors.Unsupported {
+    match (self.provider()) {
+      let capability: ConversationAppendProvider => {
+        capability.append_messages(self, messages)
+      },
+      let provider: Provider => throw baml.errors.Unsupported {
+        message: "provider cannot append exact conversation messages: " + provider.name(),
+      },
+    }
+  }
+
+  function append_message(
+    self,
+    message: Message,
+  ) -> Conversation
+      throws root.ai.Failure | baml.errors.UnknownError | baml.errors.Unsupported {
+    self.append_messages(MessageHistory { entries: [message] })
+  }
 }
 
 // A provider-controlled in-process conversation. `sealed_state` stands in for

@@ -120,6 +120,36 @@ implements AgentProvider for Retry {
   }
 }
 
+implements ConversationAppendProvider for Retry {
+  function append_messages(
+    self,
+    conversation: Conversation,
+    messages: Messages,
+  ) -> Conversation throws root.ai.Failure | baml.errors.UnknownError {
+    let state = match (conversation) {
+      let value: RetryConversation => value,
+      _ => throw baml.errors.UnknownError.with_message<never>(
+        null,
+        "retry received another provider's conversation",
+      ),
+    };
+    if (!root.ai.internal._same_provider_instance(state.owner, self)) {
+      throw baml.errors.UnknownError.with_message<never>(
+        null,
+        "retry received a conversation owned by another retry instance",
+      )
+    }
+    let provider = match (self.inner) {
+      let capability: ConversationAppendProvider => capability,
+      _ => throw baml.errors.Unsupported {
+        message: "retry inner cannot append exact conversation messages: " + self.inner.name(),
+      },
+    };
+    state.inner = provider.append_messages(state.inner, messages);
+    state
+  }
+}
+
 function retry(provider: Provider, max_attempts: int) -> Retry throws never {
     Retry {
         inner: provider,
