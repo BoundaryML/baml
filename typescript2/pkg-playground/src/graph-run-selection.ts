@@ -38,7 +38,8 @@ function isGraphRunCandidate(
   selectedProject: string | null,
   selectedProjectGeneration: number,
 ): boolean {
-  if (selectedProject && run.request.projectId !== selectedProject) return false;
+  if (selectedProject && run.request.projectId !== selectedProject)
+    return false;
   if (run.request.projectGeneration !== selectedProjectGeneration) return false;
 
   if (
