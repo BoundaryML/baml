@@ -295,6 +295,11 @@ fn payload_kind_to_wire(kind: &PayloadKind) -> Value {
             "source": log.source.as_ref().map(source_location_to_wire),
             "valueRef": log.value_ref.as_ref().map(value_ref_to_wire),
         }),
+        PayloadKind::Output(output) => json!({
+            "type": "output",
+            "stream": output.stream.as_wire_str(),
+            "text": &output.text,
+        }),
         PayloadKind::CapturedValue(captured) => json!({
             "type": "capturedValue",
             "role": captured_value_role_to_wire(captured.role),

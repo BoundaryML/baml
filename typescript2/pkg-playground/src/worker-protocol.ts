@@ -497,6 +497,14 @@ export interface PayloadEvent {
         valueRef: ValueRef | null;
       }
     | {
+        // A chunk written by baml.io.print/println/eprint/eprintln. `print`
+        // carries no trailing newline, so consecutive chunks on one stream
+        // must be concatenated rather than rendered one row each.
+        type: 'output';
+        stream: 'stdout' | 'stderr';
+        text: string;
+      }
+    | {
         type: 'capturedValue';
         role: 'rootInput' | 'callInput' | 'callOutput' | 'callError';
         label: string | null;

@@ -1543,6 +1543,14 @@ async fn update_source_file_handler(
         .playground_update_source_file(&request.project, &request.path, request.content)
     {
         Ok(()) => {
+            // The edit may have added or removed an `env.FOO` reference, and
+            // the declared set decides which keys are worth blocking a run to
+            // prompt for. Without this refresh a removed key keeps prompting
+            // and a newly added one resolves silently until the session
+            // reconnects.
+            state
+                .env_state
+                .set_declared_keys(&state.bex.all_env_var_names());
             state.bex.request_playground_state();
             json_response(StatusCode::OK, &UpdateSourceFileResponse { ok: true })
         }
@@ -1611,6 +1619,9 @@ async fn playground_ws_session(socket: WebSocket, state: WsState) {
     // round-trip (playground_env.rs).
     {
         let names = state.bex.all_env_var_names();
+        // Only these keys are worth blocking a run to prompt for; everything
+        // else resolves to unset without stalling. See `playground_env`.
+        state.env_state.set_declared_keys(&names);
         let vars = collect_referenced_env_vars(&names, |name| std::env::var(name).ok());
         if let Some(msg) = to_ws_text(&WsOutMessage::ProcessEnvVars { vars })
             && sink.send(msg).await.is_err()
