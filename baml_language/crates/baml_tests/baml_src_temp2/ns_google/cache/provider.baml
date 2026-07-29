@@ -38,7 +38,10 @@ class Gemini {
         }
     }
 
-    function cache_exists(self, key: string) -> bool throws root.ai.Failure | baml.errors.UnknownError {
+    function cache_exists(
+        self,
+        key: string,
+    ) -> bool throws root.ai.Failure | baml.errors.UnknownError {
         let response = baml
             .http
             .send(

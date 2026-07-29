@@ -11,7 +11,7 @@ provider. Use observers and response metadata to understand live runs.
 | `test` and `testset` | Define BAML tests |
 | `assert.*` | Checks typed values |
 | `ai.observe.AgentObserver` | Watches an Agent without changing it |
-| `ai.ResponseWithMetadata<T>.meta` | Keeps request, usage, and provider details |
+| `ai.Done<T>.metadata` | Keeps request, usage, and provider details |
 | `ai.testing.FakeProvider` | Deterministic provider double with failure injection |
 
 ## Example: test workflow code without a model
@@ -83,17 +83,30 @@ put them in a clearly named live testset:
 ```baml
 testset "live-provider" {
   test "ResolveTicket returns a useful reply" {
-    let response = ResolveTicket@task(sample_ticket()).run(
-      runner = ai.run.CompletionWithMeta<Resolution>.new(),
+    let outcome = ResolveTicket@task(sample_ticket()).run(
+      runner = ai.run.Agent<Resolution>.new(),
     );
 
-    log.info({
-      "provider": response.meta.provider,
-      "request_id": response.meta.request_id,
-      "usage": response.meta.usage,
-    });
-
-    assert.is_true(ready_to_close(response.value))
+    match (outcome) {
+      let done: ai.Done<Resolution> => {
+        log.info({
+          "provider": done.metadata.provider,
+          "request_id": done.metadata.request_id,
+          "usage": done.metadata.usage,
+        });
+        assert.is_true(ready_to_close(done.value))
+      },
+      let stopped: ai.BudgetReached => {
+        throw baml.errors.Unsupported {
+          message: "live test stopped: " + stopped.reason,
+        }
+      },
+      let handoff: ai.Handoff => {
+        throw baml.errors.Unsupported {
+          message: "live test handed off to " + handoff.call.name,
+        }
+      },
+    }
   }
 }
 ```
@@ -142,9 +155,8 @@ function resolve_with_logs(
 ```
 
 `ResolveTicketWithTools` is the tool-using function from
-[Agents and tools](agents-and-tools.md); the signature spells out the outcome
-union because `ai.AgentOutcome<T>` requires generic type aliases, which the
-compiler does not support yet.
+[Agents and tools](agents-and-tools.md). The signature spells out the explicit
+Agent outcome union.
 
 ### What happens
 
@@ -174,9 +186,9 @@ flowchart TD
 Observers receive model, tool, provider, usage, and terminal events. They
 cannot block a tool or change the run; use an Agent callback for that.
 
-For a bounded call, use `CompletionWithMeta` and inspect
-`response.meta.usage`. Missing usage stays `null`; BAML does not invent token
-or cost data that the provider did not report.
+For a normal model run, inspect `Done.metadata.usage`. The Agent accumulates
+usage reported by each step. Provider fields that are absent remain absent;
+BAML does not invent token or cost data.
 
 ## Choose the right kind of test
 
@@ -196,3 +208,16 @@ when it needs behavior the standard fakes do not model.
 Task values also make provider matrices straightforward: rebind one task with
 `.with_provider(...)` — for example `fast_model()` or `careful_model()` — run
 each provider, and compare the same declared output contract.
+
+Runnable scenario entry points:
+
+```console
+baml run --from crates/baml_tests/baml_src_temp2 \
+  ai_scenarios.observe_a_call
+
+baml run --from crates/baml_tests/baml_src_temp2 \
+  ai_scenarios.observe_an_agent
+
+baml run --from crates/baml_tests/baml_src_temp2 \
+  ai_scenarios.fakes_and_failure_injection
+```

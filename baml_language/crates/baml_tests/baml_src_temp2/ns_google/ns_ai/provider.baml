@@ -40,36 +40,6 @@ implements root.ai.Provider for Gemini {
   }
 }
 
-implements root.ai.GenerationProvider for Gemini {
-  function generate<T>(
-    self,
-    task: root.ai.Task<T>,
-  ) -> root.ai.ResponseWithMetadata<T>
-      throws root.ai.Failure | baml.errors.UnknownError {
-    root.google.ai.internal._generate<T>(self, task)
-  }
-}
-
-implements root.ai.CompletionProvider for Gemini {
-  function complete<T>(
-    self,
-    task: root.ai.Task<T>,
-  ) -> root.ai.ResponseWithMetadata<T>
-      throws root.ai.Failure | baml.errors.UnknownError {
-    root.google.ai.internal._complete<T>(self, task)
-  }
-
-  function replay_policy<T>(
-    self,
-    task: root.ai.Task<T>,
-  ) -> root.ai.ReplayPolicy throws never {
-    root.ai.ReplayPolicy {
-      kind: root.ai.ReplayKind.Safe,
-      idempotency_key: null,
-    }
-  }
-}
-
 function gemini(
     model: string = "gemini-2.5-flash",
     api_key: string? = null,
@@ -103,4 +73,3 @@ function gemini(
         parallel_tool_calls: parallel_tool_calls,
     }
 }
-

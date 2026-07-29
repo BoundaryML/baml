@@ -163,18 +163,18 @@ function _messages_generate<T>(
     );
     let response = baml.http.send(request) catch (e) {
         _ => {
-            throw baml.errors.UnknownError.with_message<never>(
-                e,
-                "Anthropic send failed",
-            )
+            throw root.ai.NetworkFailure {
+                provider: "anthropic",
+                detail: "baml.http.send failed before an Anthropic Messages response arrived",
+            }
         },
     };
     let text = response.text() catch (e) {
         _ => {
-            throw baml.errors.UnknownError.with_message<never>(
-                e,
-                "Anthropic body read failed",
-            )
+            throw root.ai.NetworkFailure {
+                provider: "anthropic",
+                detail: "the Anthropic Messages body could not be read completely",
+            }
         },
     };
     log.info(

@@ -1,10 +1,10 @@
-test "guide 01.03: a generation-only fake does not claim streaming" {
+test "guide 01.03: an Agent-only fake does not claim streaming" {
   let task = ResolveTicket_task(sample_ticket(), fake_resolution());
   let kind = match (task.provider) {
     let streaming: root.ai.StreamingProvider => "streaming",
-    _ => "generation-only",
+    _ => "agent-only",
   };
-  assert.equal(kind, "generation-only")
+  assert.equal(kind, "agent-only")
 }
 
 testset "integ-test-guide-01-streaming" {

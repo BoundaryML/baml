@@ -6,45 +6,34 @@ test "guide 02.01: one tool call is dispatched and the model finishes" {
   let outcome = task.run(
     runner = root.ai.run.Agent<Resolution>.new(tools = [search_knowledge]),
   );
-  //# Verify typed completion
+  //# Verify the typed final value
   match (outcome) {
     let done: root.ai.Done<Resolution> => assert.equal(done.value.category, "billing"),
     _ => assert.is_true(false),
   }
 }
 
-test "guide 02.01: prompt fallback extends ctx.output_format with active tool schemas" {
-  //# Configure a generation-only provider
-  let inner = root.ai.testing.fake_output_provider(`{
-    "calls": [{
-      "id": "call-1",
-      "name": "search_knowledge",
-      "args": {"query": "duplicate charge"}
-    }]
-  }`);
-  //# Begin a prompt-based provider conversation
-  let provider = root.ai.tools.PromptToolProvider { inner: inner };
+test "guide 02.01: OpenAI prompt mode extends ctx.output_format with active tool schemas" {
+  //# Configure a provider-owned prompt-tool conversation
+  let provider = root.openai.responses(
+    api_key = "unused",
+    output_mode = root.openai.OutputMode.Sap,
+    tool_mode = root.openai.ToolMode.Prompt,
+  );
   let conversation = provider.begin<Resolution>(
     ResolveTicketWithTools_task(sample_ticket(), provider, [search_knowledge]),
   );
   let state = match (conversation) {
-    let value: root.ai.tools.PromptToolConversation => value,
-    _ => baml.sys.panic("expected prompt tool conversation"),
+    let value: root.openai.internal.PromptConversation => value,
+    _ => baml.sys.panic("expected OpenAI prompt-tool conversation"),
   };
   let tools = root.ai.tools.normalize_tools([search_knowledge]);
   //# Render active tools into the output contract
-  let rendered = root.ai.tools._prompt_tool_turn<Resolution | root.ai.tools.ToolCalls>(
+  let rendered = root.openai.internal._prompt_turn_task<Resolution | root.ai.tools.ToolCalls>(
     provider,
     state,
-    tools,
-    root.ai.tools._prompt_tool_output_suffix(tools),
+    root.openai.internal._prompt_tool_output_suffix(tools),
   ).prompt.text();
-  //# Execute one prompt-tool turn
-  let turn = provider.step<Resolution>(conversation, tools);
-  match (turn.outcome) {
-    let calls: root.ai.tools.ToolCalls => assert.equal(calls.calls[0].name, "search_knowledge"),
-    let value: Resolution => assert.is_true(false),
-  }
   //# Verify the rendered tool schema
   assert.contains(rendered, "calls")
   assert.contains(rendered, "Available tools:")
@@ -54,8 +43,11 @@ test "guide 02.01: prompt fallback extends ctx.output_format with active tool sc
 
 test "guide 02.01: ModelStep preserves a union task result" {
   //# Build a task whose final value is already a union
-  let inner = root.ai.testing.fake_output_provider(`"done"`);
-  let provider = root.ai.tools.PromptToolProvider { inner: inner };
+  let provider = root.openai.responses(
+    api_key = "unused",
+    output_mode = root.openai.OutputMode.Sap,
+    tool_mode = root.openai.ToolMode.Prompt,
+  );
   let task = root.ai.task<Resolution | string>(
     provider,
     (ctx: baml.llm.Context) -> baml.llm.PromptAst {
@@ -65,17 +57,24 @@ test "guide 02.01: ModelStep preserves a union task result" {
       )
     },
   );
-  //# Execute through the prompt-tool adapter
+  //# Ask the provider to render T | ToolCalls without erasing T's union
   let conversation = provider.begin<Resolution | string>(task);
-  let turn = provider.step<Resolution | string>(
-    conversation,
-    root.ai.tools.normalize_tools([search_knowledge]),
+  let state = match (conversation) {
+    let value: root.openai.internal.PromptConversation => value,
+    _ => baml.sys.panic("expected OpenAI prompt-tool conversation"),
+  };
+  let tools = root.ai.tools.normalize_tools([search_knowledge]);
+  let rendered = root.openai.internal._prompt_turn_task<
+    Resolution | string | root.ai.tools.ToolCalls
+  >(
+    provider,
+    state,
+    root.openai.internal._prompt_tool_output_suffix(tools),
   );
-  match (turn.outcome) {
-    let value: string => assert.equal(value, "done"),
-    let value: Resolution => assert.is_true(false),
-    let calls: root.ai.tools.ToolCalls => assert.is_true(false),
-  }
+  assert.contains(rendered.prompt.text(), "category");
+  assert.contains(rendered.prompt.text(), "reply");
+  assert.contains(rendered.prompt.text(), "string");
+  assert.contains(rendered.prompt.text(), "calls")
 }
 
 testset "integ-test-guide-02-one-tool" {
@@ -98,12 +97,46 @@ testset "integ-test-guide-02-one-tool" {
     }
   }
 
-  test "guide 02.01 live Anthropic: prompt and SAP tool fallback" {
-    //# Configure a generation provider for prompt-tool adaptation
+  test "guide 02.01 live Anthropic: native tools and strict output" {
+    //# Configure native Anthropic tool calling with structured output
     let provider = root.anthropic.Messages {
       ...root.anthropic.messages(),
       model: "claude-sonnet-4-6",
       api_key: baml.env.get_or_panic("ANTHROPIC_API_KEY"),
+    };
+    let trace = guide_agent_trace();
+    let task = ToolInstructions_task(
+      provider,
+      [search_knowledge],
+      `Call search_knowledge exactly once with query "duplicate charge". After its result, return a final resolution with a non-empty summary and reply.`,
+    );
+    let outcome = task.run(
+      runner = root.ai.run.Agent<Resolution>.new(
+        tools = [search_knowledge],
+        after_tool_call = (event) -> {
+          trace.after_calls.push(event.call.name);
+          null
+        },
+      ),
+    );
+    assert.equal(trace.after_calls, ["search_knowledge"]);
+    match (outcome) {
+      let done: root.ai.Done<Resolution> => {
+        assert.is_true(done.value.summary.length() > 0);
+        assert.is_true(done.value.reply.length() > 0)
+      },
+      _ => assert.is_true(false),
+    }
+  }
+
+  test "guide 02.01 live Anthropic: prompt and SAP tool fallback" {
+    //# Configure Anthropic's provider-owned prompt-tool mode
+    let provider = root.anthropic.Messages {
+      ...root.anthropic.messages(),
+      model: "claude-sonnet-4-6",
+      api_key: baml.env.get_or_panic("ANTHROPIC_API_KEY"),
+      output_mode: root.anthropic.OutputMode.Sap,
+      tool_mode: root.anthropic.ToolMode.Prompt,
     };
     //# Run the live prompt-tool loop
     let task = ResolveTicketWithTools_task(sample_ticket(), provider, [search_knowledge]);
@@ -111,6 +144,38 @@ testset "integ-test-guide-02-one-tool" {
       runner = root.ai.run.Agent<Resolution>.new(tools = [search_knowledge]),
     );
     //# Verify the live typed result
+    match (outcome) {
+      let done: root.ai.Done<Resolution> => assert.is_true(done.value.reply.length() > 0),
+      _ => assert.is_true(false),
+    }
+  }
+
+  test "guide 02.01 live Google AI: native tools and typed output" {
+    let provider = root.google.ai.gemini(
+      api_key = baml.env.get_or_panic("GOOGLE_API_KEY"),
+      output_mode = root.google.ai.OutputMode.Native,
+      tool_mode = root.google.ai.ToolMode.Native,
+    );
+    let task = ResolveTicketWithTools_task(sample_ticket(), provider, [search_knowledge]);
+    let outcome = task.run(
+      runner = root.ai.run.Agent<Resolution>.new(tools = [search_knowledge]),
+    );
+    match (outcome) {
+      let done: root.ai.Done<Resolution> => assert.is_true(done.value.reply.length() > 0),
+      _ => assert.is_true(false),
+    }
+  }
+
+  test "guide 02.01 live Google AI: prompt and SAP tool fallback" {
+    let provider = root.google.ai.gemini(
+      api_key = baml.env.get_or_panic("GOOGLE_API_KEY"),
+      output_mode = root.google.ai.OutputMode.Sap,
+      tool_mode = root.google.ai.ToolMode.Prompt,
+    );
+    let task = ResolveTicketWithTools_task(sample_ticket(), provider, [search_knowledge]);
+    let outcome = task.run(
+      runner = root.ai.run.Agent<Resolution>.new(tools = [search_knowledge]),
+    );
     match (outcome) {
       let done: root.ai.Done<Resolution> => assert.is_true(done.value.reply.length() > 0),
       _ => assert.is_true(false),

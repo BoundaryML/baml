@@ -1,6 +1,6 @@
 // Streaming is another nominal strategy value. Both the final output and the
 // compiler-projected partial type remain visible in the runner's Output. Like
-// generation, it needs no separate state because the Task owns provider and
+// model output, it needs no separate state because the Task owns provider and
 // request configuration.
 class Stream<TPartial, T> {
     function new() -> Stream<TPartial, T> throws never {

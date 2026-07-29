@@ -3,11 +3,11 @@ test "guide 07.04: erased providers can be negotiated explicitly" {
     let capabilities = providers.map((provider: root.ai.Provider) -> string {
         match (provider) {
             let realtime: root.ai.realtime.RealtimeProvider => "realtime",
-            let completion: root.ai.CompletionProvider => "completion",
+            let agent: root.ai.AgentProvider => "agent",
             _ => "provider-only",
         }
     });
-    assert.equal(capabilities, ["completion", "realtime"]);
+    assert.equal(capabilities, ["agent", "realtime"]);
     let runs = providers.map((provider: root.ai.Provider) -> NegotiatedRun {
         ResolveTicket_task(sample_ticket(), provider)
             .run(runner = CapabilityNegotiationRunner.new())
@@ -17,7 +17,7 @@ test "guide 07.04: erased providers can be negotiated explicitly" {
             runs.map((run: NegotiatedRun) -> string {
                 run.mode
             }),
-            ["completion", "realtime"],
+            ["agent", "realtime"],
         )
 }
 

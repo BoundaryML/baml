@@ -1,6 +1,7 @@
 class Conversation {
     owner: root.anthropic.Messages,
     history: root.ai.MessageHistory,
+    declared_output_type: string,
     // Anthropic is stateless: every step resends these provider-native blocks.
     // Keeping them intact preserves image/document blocks, thinking signatures,
     // tool_use IDs, and other continuation data.
@@ -20,6 +21,9 @@ class Conversation {
 
         function messages(self) -> root.ai.Messages throws never {
             self.history
+        }
+        function output_type_fingerprint(self) -> string? throws never {
+            self.declared_output_type
         }
     }
 }
@@ -78,6 +82,52 @@ function _message_text(message: root.ai.Message) -> string throws never {
             part.text() ?? ""
         })
         .join("")
+}
+
+function _conversation_role_name(role: root.ai.MessageRole) -> string throws never {
+    match (role) {
+        root.ai.MessageRole.System => "system",
+        root.ai.MessageRole.User => "user",
+        root.ai.MessageRole.Assistant => "assistant",
+        root.ai.MessageRole.Tool => "tool",
+    }
+}
+
+function _conversation_role(value: string) -> root.ai.MessageRole throws never {
+    if (value == "system") {
+        return root.ai.MessageRole.System;
+    }
+    if (value == "assistant") {
+        return root.ai.MessageRole.Assistant;
+    }
+    if (value == "tool") {
+        return root.ai.MessageRole.Tool;
+    }
+    root.ai.MessageRole.User
+}
+
+// Tokens retain this portable text projection beside exact Anthropic blocks.
+function _conversation_history_json(history: root.ai.MessageHistory) -> json[] throws never {
+    history.entries.map((message: root.ai.Message) -> json {
+        { "role": _conversation_role_name(message.role()), "text": _message_text(message) }
+    })
+}
+
+function _conversation_history_from_json(encoded: json[]) -> root.ai.MessageHistory throws never {
+    root.ai.MessageHistory {
+        entries: encoded.map((message: json) -> root.ai.Message {
+            root.ai.ChatMessage {
+                message_role: _conversation_role(baml.json.path_or(message, ".role", "user")),
+                content: [
+                    root.ai.messages.TextPart {
+                        value: baml.json.path_or(message, ".text", ""),
+                        metadata: {},
+                    },
+                ],
+                metadata: null,
+            }
+        }),
+    }
 }
 
 function _continuation_headers(

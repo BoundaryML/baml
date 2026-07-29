@@ -5,8 +5,10 @@ test "guide 03.02: fallback re-renders and tries the next provider" {
   let good = root.ai.testing.FakeProvider { ...fake_resolution(), provider_name: "second" };
   //# Execute the ordered fallback chain
   let task = ResolveTicket_task(sample_ticket(), root.ai.fallback([failed, good]));
-  let response = task.run(
-    runner = root.ai.run.GenerationWithMeta<Resolution>.new(),
+  let response = root.ai.internal._response_from_done(
+    root.ai.internal._require_done(
+      task.run(runner = root.ai.run.Agent<Resolution>.new()),
+    ),
   );
   //# Verify the fallback provider completed
   assert.equal(response.metadata.provider, "second")
@@ -21,6 +23,27 @@ test "guide 03.02: fallback requires at least one provider" {
     },
   };
   assert.is_true(rejected)
+}
+
+function _fallback_wrong_owner_step(
+  provider: root.ai.Fallback,
+  conversation: root.ai.Conversation,
+) -> string throws never {
+  provider.step<Resolution>(conversation, []) catch (e) {
+    let unknown: baml.errors.UnknownError => return "rejected",
+    _ => return "other",
+  };
+  "accepted"
+}
+
+test "guide 03.02: fallback conversations require the exact wrapper instance" {
+  let inner = fake_resolution();
+  let owner = root.ai.fallback([inner]);
+  let other = root.ai.fallback([inner]);
+  let conversation = owner.begin<Resolution>(
+    ResolveTicket_task(sample_ticket(), owner),
+  );
+  assert.equal(_fallback_wrong_owner_step(other, conversation), "rejected")
 }
 
 testset "integ-test-guide-03-fallback" {
@@ -38,8 +61,10 @@ testset "integ-test-guide-03-fallback" {
     ];
     //# Execute the live fallback chain
     let task = ResolveTicket_task(sample_ticket(), root.ai.fallback(providers));
-    let response = task.run(
-      runner = root.ai.run.GenerationWithMeta<Resolution>.new(),
+    let response = root.ai.internal._response_from_done(
+      root.ai.internal._require_done(
+        task.run(runner = root.ai.run.Agent<Resolution>.new()),
+      ),
     );
     //# Verify Anthropic completed the task
     assert.equal(response.metadata.provider, "anthropic")

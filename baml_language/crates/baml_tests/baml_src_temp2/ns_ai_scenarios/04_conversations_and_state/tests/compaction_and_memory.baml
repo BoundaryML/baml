@@ -10,9 +10,14 @@ testset "integ-test-guide-04-compaction" {
         let source = sample_history();
         let compacted = compact_history(source);
         let task = ConversationProbe_task(compacted, live_anthropic());
-        let response = task.run(
-            runner = root.ai.run.GenerationWithMeta<ConversationProbe>.new(),
-        );
+        let response = root
+            .ai
+            .internal
+            ._response_from_done(
+                root.ai
+                    .internal
+                    ._require_done(task.run(runner = root.ai.run.Agent<ConversationProbe>.new())),
+            );
         log.info(
             "live conversation compaction "
                 + {

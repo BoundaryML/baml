@@ -9,7 +9,12 @@ function task_and_runners() -> root.ai.ResponseWithMetadata<Resolution> {
             "tools": task.tools.length(),
         },
     );
-    let response = task.run(runner = root.ai.run.CompletionWithMeta<Resolution>.new());
+    let response = root
+        .ai
+        .internal
+        ._response_from_done(
+            root.ai.internal._require_done(task.run(runner = root.ai.run.Agent<Resolution>.new())),
+        );
     log.info(response);
     response
 }

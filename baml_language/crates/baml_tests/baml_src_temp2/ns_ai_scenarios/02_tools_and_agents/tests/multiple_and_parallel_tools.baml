@@ -18,6 +18,67 @@ test "guide 02.03: one model step may dispatch multiple tool calls" {
     }
 }
 
+function _invalid_tool_calls_are_rejected(calls: root.ai.tools.ToolCall[]) -> bool {
+    let provider = root.ai.testing.ScriptedToolProvider {
+        turns: [root.ai.tools.ToolCalls { calls: calls }],
+        final_output: `
+            {
+                        "category":"billing",
+                        "priority":"Urgent",
+                        "summary":"unreachable",
+                        "reply":"unreachable"
+                    }
+        `,
+        usage_per_step: null,
+    };
+    let rejected = false;
+    let _ = ResolveTicketWithTools_task(sample_ticket(), provider, [search_knowledge, lookup_account])
+        .run(runner = root.ai.run.Agent<Resolution>.new(tools = [search_knowledge, lookup_account])) catch (e) {
+        let failure: root.ai.Failure => {
+            rejected = failure is root.ai.InvalidRequest;
+            null
+        },
+    };
+    rejected
+}
+
+test "guide 02.03: malformed provider tool-call envelopes fail before dispatch" {
+    assert
+        .is_true(
+            _invalid_tool_calls_are_rejected(
+                [
+                    root.ai.tools.ToolCall {
+                        id: "duplicate",
+                        name: "search_knowledge",
+                        args: { "query": "one" },
+                    },
+                    root.ai.tools.ToolCall {
+                        id: "duplicate",
+                        name: "search_knowledge",
+                        args: { "query": "two" },
+                    },
+                ],
+            ),
+        );
+    assert
+        .is_true(
+            _invalid_tool_calls_are_rejected(
+                [
+                    root.ai.tools.ToolCall {
+                        id: "",
+                        name: "search_knowledge",
+                        args: { "query": "missing id" },
+                    },
+                ],
+            ),
+        );
+    assert
+        .is_true(
+            _invalid_tool_calls_are_rejected([root.ai.tools.ToolCall { id: "missing-name", name: "", args: {} }]),
+        );
+    assert.is_true(_invalid_tool_calls_are_rejected([]))
+}
+
 testset "integ-test-guide-02-parallel-tools" {
     test "guide 02.03 live OpenAI: two tools are requested in one provider turn" {
         let trace = guide_agent_trace();

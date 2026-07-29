@@ -1,103 +1,95 @@
-# Structured output and tools
+# Structured output and tool calling
 
-Providers expose the same BAML contract—typed `T`, application tools, and
-provider-owned conversation state—but use their actual wire protocols. This
-page starts with the detailed OpenAI mapping, then describes the Google and
-Anthropic differences.
+An `ai.AgentProvider` must turn each provider response into exactly one of:
 
-The public provider namespaces are intentionally configuration-sized:
+```baml
+class ModelStep<T> {
+  outcome: T | ai.tools.ToolCalls,
+  metadata: ai.ResponseMetadata,
+}
+```
 
-- `openai` contains the Responses and Realtime providers;
-- `google.vertex` contains Gemini on Vertex AI;
-- `google.ai` contains the Gemini API/Google AI provider;
-- `anthropic` contains the Messages provider.
+The provider decides how `T` and the application-tool schemas are represented
+on its wire. The Agent does not know whether the provider used a result
+function, a JSON response schema, or SAP text parsing.
 
-Request builders, wire envelopes, schema transforms, and concrete
-conversation classes live in each provider's `internal` namespace.
+## The decision matrix
 
-| Provider | Typed `T` by default | Application tools | Text fallback |
+There are two independent choices:
+
+1. how the final `T` is represented;
+2. how application tools are represented.
+
+| Output mode | Tool mode | Final `T` | Application tools |
 | --- | --- | --- | --- |
-| OpenAI Responses | reserved `__baml_return_output` function | Responses functions | `OutputMode.Sap` |
-| Google Vertex / AI | `responseJsonSchema` for one-shot generation; reserved result function in an agent | Gemini `functionDeclarations` | `OutputMode.Sap` |
-| Anthropic | `output_config.format` | Messages `tool_use` / `tool_result` | `OutputMode.Sap` |
+| Native/Strict | Native | Provider-native schema or reserved result function | Provider-native function/tool API |
+| SAP | Native | Text parsed as `T` by SAP | Provider-native function/tool API |
+| SAP | Prompt | Text parsed as `T`, or `T \| ToolCalls` when tools are present | Reflected schemas in `ctx.output_format` |
+
+`ToolMode.Prompt` requires `OutputMode.Sap`. Public OpenAI, Anthropic, and
+Google constructors select the mode; their prompt conversation classes are
+private implementation details. Claude Code uses a separate schema-envelope
+protocol described below.
+
+Prompt mode adds the `ToolCalls` branch only when the active application-tool
+roster is nonempty. A zero-tool step renders and parses plain `T`.
+
+The defaults are native tool APIs:
+
+```baml
+openai.responses()
+anthropic.messages()
+google.vertex.gemini()
+google.ai.gemini()
+```
+
+OpenAI defaults to a non-strict result function. Anthropic defaults to its
+strict JSON output schema. Google uses controlled JSON when there are no
+application tools and a reserved result function when native tools are
+present.
+
+## Output shape does not control tool concurrency
+
+`T`, `T[]`, and `A | B` change the schema for one final result. They do not
+change the number of application tool calls the model may request.
+
+| Declared output | Result representation | Parallel application tools |
+| --- | --- | --- |
+| `Resolution` | one object schema | controlled by provider configuration |
+| `Resolution[]` | one array schema | controlled by provider configuration |
+| `Answer \| Escalation` | one union schema | controlled by provider configuration |
+
+In particular, `T[]` does not mean `parallel_tool_calls = true`. Parallelism
+is valid only for independent application calls in one provider turn. The
+Agent correlates all returned IDs and may execute those calls before one
+`submit`.
 
 ## OpenAI Responses
 
-BEP-064 uses `POST /v1/responses` only. Chat Completions is not a fallback.
+BEP-064 implements `POST /v1/responses`. It does not implement or fall back
+to Chat Completions.
 
-The adapter puts two different concepts on OpenAI's function-tool wire format:
-
-- an **application tool** asks the BAML runner to execute a BAML function;
-- `__baml_return_output` returns the final value of type `T`.
-
-An application call continues the agent loop. The reserved result call ends
-it.
-
-## Output modes
-
-Native function calling is the default:
-
-```baml
-let provider = openai.responses()
-```
-
-The relevant configuration is:
-
-```baml
-openai.responses(
-  output_mode = openai.OutputMode.Native,
-  tool_mode = openai.ToolMode.Native,
-  parallel_tool_calls = true,
-)
-```
-
-The four supported behaviors are:
-
-1. `Native + Native` (default): application tools and final `T` are Responses
-   functions.
-2. `Strict + Native`: the same protocol with OpenAI strict schemas.
-3. `Sap + Native`: application tools remain native, but final `T` is
-   `output_text` parsed by SAP. This is the hybrid mode.
-4. `Sap + Prompt`: no OpenAI function tools. The model writes either `T` or
-   `ToolCalls` as text.
-
-`ToolMode.Prompt` requires `OutputMode.Sap`. The OpenAI provider selects the
-prompt adapter internally; users do not construct a second provider wrapper.
-
-`root.openai` is intentionally small. It exposes provider configuration:
-`Responses`, `responses`, `OutputMode`, `ToolMode`, `Realtime`,
-`RealtimeServerVad`, and `realtime_audio_format`. Wire models, request
-builders, schema lowering, conversation state, jobs, and test inspection
-helpers live under `root.openai.internal`.
-
-## Example 1: `T` becomes an HTTP function
+### Native result
 
 Given:
 
 ```baml
-enum TicketPriority {
-  Low
-  Normal
-  Urgent
-}
-
 class Resolution {
   category: string,
-  priority: TicketPriority,
   summary: string,
   reply: string,
 }
 
 function ResolveTicket(ticket: SupportTicket) -> Resolution {
-  client: "openai-responses/gpt-5.6-luna"
+  provider: openai.responses()
   prompt: `
-    Resolve this support ticket.
+    Resolve ${ticket.id}.
     ${ctx.output_format}
   `
 }
 ```
 
-the provider reads `task.output_type()` and sends one flat Responses function:
+an Agent step sends one reserved Responses function:
 
 ```json
 {
@@ -105,7 +97,7 @@ the provider reads `task.output_type()` and sends one flat Responses function:
   "input": [
     {
       "role": "user",
-      "content": "Resolve this support ticket.\n..."
+      "content": "Resolve T-100.\n..."
     }
   ],
   "tools": [
@@ -120,14 +112,10 @@ the provider reads `task.output_type()` and sends one flat Responses function:
             "type": "object",
             "properties": {
               "category": { "type": "string" },
-              "priority": {
-                "type": "string",
-                "enum": ["Low", "Normal", "Urgent"]
-              },
               "summary": { "type": "string" },
               "reply": { "type": "string" }
             },
-            "required": ["category", "priority", "summary", "reply"]
+            "required": ["category", "summary", "reply"]
           }
         },
         "required": ["value"],
@@ -136,21 +124,30 @@ the provider reads `task.output_type()` and sends one flat Responses function:
       "strict": false
     }
   ],
-  "tool_choice": {
-    "type": "function",
-    "name": "__baml_return_output"
-  },
+  "store": true,
+  "tool_choice": "required",
   "parallel_tool_calls": false
 }
 ```
 
-Responses tools are flat: `name`, `description`, `parameters`, and `strict`
-are siblings of `"type": "function"`.
+With no application tools, the reserved result function is the only required
+choice.
 
-The `value` wrapper is necessary because OpenAI function parameters require an
-object root while BAML can return any `T`.
+The `value` wrapper is required because a function's parameter root must be an
+object, while BAML permits any output type. Therefore:
 
-A valid response is:
+- `Resolution[]` puts one array schema under `value`;
+- `string` puts one string schema under `value`;
+- `Answer | Escalation` puts one union schema under `value`;
+- recursive types lift `$defs` to the parameter root.
+
+Arrays and unions do not create several result functions.
+
+In OpenAI `Native` and `Strict` output modes, application tools may not be
+named `__baml_return_output`; construction fails before the request is sent.
+SAP modes do not add that result function.
+
+OpenAI may return:
 
 ```json
 {
@@ -159,54 +156,40 @@ A valid response is:
   "output": [
     {
       "type": "function_call",
-      "call_id": "call_result",
+      "call_id": "result_1",
       "name": "__baml_return_output",
-      "arguments": "{\"value\":{\"category\":\"billing\",\"priority\":\"Urgent\",\"summary\":\"Duplicate charge\",\"reply\":\"We will investigate.\"}}"
+      "arguments": "{\"value\":{\"category\":\"billing\",\"summary\":\"Duplicate charge\",\"reply\":\"We will investigate.\"}}"
     }
   ]
 }
 ```
 
-BAML reads `.value` and exact-decodes it with
-`baml.json.from_json<Resolution>`. Native function arguments never pass
-through SAP.
+The adapter exact-decodes `.value` as `T`. Native function arguments are not
+passed through SAP.
 
-The same wrapper handles every return shape:
+### Application tools
 
-- `Resolution[]` puts one array schema under `value`;
-- `string` puts one string schema under `value`;
-- `Answer | Escalation` puts one union schema under `value`;
-- recursive types lift `$defs` to the function-parameter root.
-
-Arrays and unions do not create multiple result functions.
-
-## Example 2: reflection turns a BAML function into a tool
-
-An ordinary BAML function contains the tool definition and implementation:
+An ordinary BAML function is both the schema source and the implementation:
 
 ```baml
 /// Search the support knowledge base.
-function search_knowledge(query: string) -> json {
+function search_knowledge(query: string) -> json throws never {
   {
     "query": query,
-    "article": "Duplicate charges are normally pending authorizations."
+    "article": "Duplicate charges are normally pending authorizations.",
   }
 }
 ```
 
-`ai.tools.tool(search_knowledge)` stores the function as a
-`baml.AnyFunction`. It gathers metadata with:
+`ai.tools.tool(search_knowledge)` retains the function as
+`baml.AnyFunction`. Reflection supplies the tool name, docstring, argument
+names, argument types, and defaults:
 
 ```baml
 let signature = reflect.signature(search_knowledge)
-
-// name:      "search_knowledge"
-// docstring: "Search the support knowledge base."
-// args:      [{ name: "query", type: string }]
-// opts:      {}
 ```
 
-`_schema_for_function` converts the reflected arguments to:
+The OpenAI adapter serializes it as:
 
 ```json
 {
@@ -225,70 +208,30 @@ let signature = reflect.signature(search_knowledge)
 }
 ```
 
-A native `Agent<Resolution>` sends that application tool beside the result
-tool:
-
-```json
-{
-  "tools": [
-    {
-      "type": "function",
-      "name": "search_knowledge",
-      "parameters": {
-        "type": "object",
-        "properties": {
-          "query": { "type": "string" }
-        },
-        "required": ["query"],
-        "additionalProperties": false
-      },
-      "strict": false
-    },
-    {
-      "type": "function",
-      "name": "__baml_return_output",
-      "parameters": {
-        "type": "object",
-        "properties": {
-          "value": { "...": "Resolution schema" }
-        },
-        "required": ["value"],
-        "additionalProperties": false
-      },
-      "strict": false
-    }
-  ],
-  "tool_choice": "required",
-  "parallel_tool_calls": false
-}
-```
-
-Suppose OpenAI requests:
+In native mode, this function and `__baml_return_output` appear in the same
+request. If OpenAI returns:
 
 ```json
 {
   "type": "function_call",
-  "call_id": "call_search_1",
+  "call_id": "search_1",
   "name": "search_knowledge",
   "arguments": "{\"query\":\"duplicate charge\"}"
 }
 ```
 
-The provider produces a `ToolCall`. The runner finds the matching
-`AnyFunction`, validates the named arguments, and invokes it:
+the provider returns `ToolCalls` from `step`. The Agent resolves the exact
+tool name, validates arguments, and invokes the BAML function:
 
 ```baml
-let output = reflect.call_any<json, never>(
+let value = reflect.call_any<json, never>(
   search_knowledge,
   { "query": "duplicate charge" },
 )
 ```
 
-The actual BAML spelling is `reflect.call_any`. It applies normal BAML default
-arguments, supports bound methods without exposing `self`, and reports
-missing, unknown, or incorrectly typed arguments as correlated tool errors.
-
-The result is sent back using the same call ID:
+The provider does not call `reflect.call_any`. After the Agent executes the
+function, it calls `submit` with the correlated result. OpenAI records:
 
 ```json
 {
@@ -296,7 +239,7 @@ The result is sent back using the same call ID:
   "input": [
     {
       "type": "function_call_output",
-      "call_id": "call_search_1",
+      "call_id": "search_1",
       "output": "{\"query\":\"duplicate charge\",\"article\":\"Duplicate charges are normally pending authorizations.\"}"
     }
   ],
@@ -304,45 +247,44 @@ The result is sent back using the same call ID:
 }
 ```
 
-The next turn may request another application function or call
-`__baml_return_output`. A turn cannot mix application calls with the final
-result because that would create an ambiguous side-effect boundary.
+The next Agent iteration calls `step` again. It may return more application
+calls or the reserved result call.
 
-This is also the default direct-call behavior. A direct LLM function call
-lowers to `ai.run.Completion<T>`, and OpenAI completion selects one generation
-when the task has no application tools or a bounded `begin` / `step` /
-`submit` loop when it does. `ai.run.Generation<T>` is the separate primitive
-for callers that require exactly one Responses request.
+### Strict mode
 
-## Example 3: the exact SAP prompt for a union plus tools
+```baml
+let provider = openai.responses(
+  output_mode = openai.OutputMode.Strict,
+)
+```
 
-### Hybrid SAP
+Strict lowering:
 
-Direct use keeps application tools native:
+- closes every object with `additionalProperties: false`;
+- marks every property required while representing BAML optionals as nullable;
+- recursively lowers nested arrays, unions, and definitions;
+- rejects map-like objects and unconstrained `json`;
+- applies the same strictness to application tools and the result function;
+- disables parallel application tool calls.
+
+### SAP modes
+
+Hybrid SAP keeps native application tools:
 
 ```baml
 let provider = openai.responses(
   output_mode = openai.OutputMode.Sap,
 )
-
-let outcome = task.run(
-  runner = ai.run.Agent<Answer | Escalation>.new(
-    tools = [search_knowledge],
-  ),
-)
 ```
 
-The request contains the native `search_knowledge` function but no
-`__baml_return_output`. `tool_choice` is `"auto"`:
+The request omits `__baml_return_output`. The result decision is:
 
 ```text
-function_call present → application ToolCalls
-no function_call       → parse output_text as Answer | Escalation
+one or more function_call items → ToolCalls
+no function_call               → parse output_text as T
 ```
 
-### Full prompt/SAP
-
-To avoid the tool API entirely:
+Full prompt/SAP avoids the Responses function API:
 
 ```baml
 let provider = openai.responses(
@@ -351,50 +293,24 @@ let provider = openai.responses(
 )
 ```
 
-Internally, the provider delegates the agent turn to BAML's prompt-tool
-adapter. It re-renders the task with `T | ToolCalls` and appends the reflected
-tool catalog to `ctx.output_format`. The adapter invokes the OpenAI
-`GenerationProvider` for one turn; it does not re-enter the agent runner.
-
-For:
-
-```baml
-class SapAnswer {
-  kind: "answer",
-  message: string,
-}
-
-class SapEscalation {
-  kind: "escalation",
-  reason: string,
-}
-
-type SapSupportDecision = SapAnswer | SapEscalation
-```
-
-the live scenario sends this actual prompt:
+When application tools are present, the private prompt adapter re-renders
+`ctx.output_format` for:
 
 ```text
-First call search_knowledge for "duplicate charge". After its
-result, return the answer branch with kind "answer" and a short
-customer-facing message.
-Answer in JSON using any of these schemas:
-{
-  kind: "answer",
-  message: string,
-} or {
-  kind: "escalation",
-  reason: string,
-} or {
-  calls: [
-    {
-      id: string,
-      name: string,
-      args: baml.json.json,
-    }
-  ],
-}
+T | ToolCalls
+```
 
+For `T = Answer | Escalation`, the combined contract is:
+
+```text
+(Answer | Escalation) | ToolCalls
+```
+
+The compiler first renders the schema for `(Answer | Escalation) |
+ToolCalls` at `${ctx.output_format}`. The private adapter then appends this
+protocol text and the reflected catalog:
+
+```text
 The output contract above permits either the final result or a ToolCalls value.
 To use tools, return ToolCalls with one or more calls. Each call must have a
 unique id, an exact tool name from the catalog, and args matching that tool's
@@ -405,77 +321,20 @@ Available tools:
 [{"name":"search_knowledge","description":"Search the support knowledge base.","parameters":{"type":"object","properties":{"query":{"type":"string"}},"required":["query"],"additionalProperties":false}}]
 ```
 
-The HTTP body has that prompt in `input` and no `tools` or `tool_choice`.
+The HTTP request has that text in `input` and no `tools` or `tool_choice`.
+SAP parses either the final union branch or `ToolCalls`. If it gets calls, the
+Agent uses the same reflection-based dispatch as native mode, and the private
+adapter adds the results to its prompt history before the next step.
 
-The first text response can select the tool branch:
+With no application tools, prompt mode renders and parses plain `T`; it does
+not add an unreachable `ToolCalls` branch.
 
-```json
-{
-  "calls": [
-    {
-      "id": "call-1",
-      "name": "search_knowledge",
-      "args": {
-        "query": "duplicate charge"
-      }
-    }
-  ]
-}
-```
-
-SAP parses `ToolCalls`; the runner dispatches with `reflect.call_any`, appends
-the result to prompt history, and asks again. The next text response can select
-a branch of `T`:
-
-```json
-{
-  "kind": "answer",
-  "message": "The second charge is likely a pending authorization."
-}
-```
-
-For `T = A | B`, the combined text contract is:
-
-```text
-(A | B) | ToolCalls
-```
-
-BAML does not turn `A` and `B` into functions. Use literal discriminators for
-the result branches. The `{ calls: ... }` shape is reserved for `ToolCalls`;
-a structurally overlapping result branch is currently ambiguous.
-
-The task template must include `ctx.output_format`. It controls where this
-generated contract appears.
-
-## Rules that apply to every mode
-
-`OutputMode.Strict`:
-
-- closes every object with `additionalProperties: false`;
-- marks every property required while preserving nullable BAML optionals;
-- recursively lowers nested arrays, unions, and `$defs`;
-- rejects map-like objects and unconstrained `json`;
-- applies the same strictness to application tools and the result tool;
-- forces `parallel_tool_calls: false`.
-
-Parallel calls:
-
-- apply only to independent application functions;
-- never depend on whether `T` is a value, array, or union;
-- are always disabled for a bounded typed result.
-
-Native and hybrid continuation uses `previous_response_id` and correlated
-`function_call_output` items. Saving conversation state stores response IDs
-and pending input, not API keys.
-
-Protocol errors do not silently switch modes. Malformed native calls, mixed
-result/application calls, exact-decode failures, and unparseable SAP text
-surface as typed failures. SAP never repairs malformed native arguments.
+Use literal discriminators for branches of a result union. A result branch
+that structurally overlaps `{ calls: ... }` is ambiguous in prompt mode.
 
 ## Google Vertex and Google AI
 
-`google.vertex.Gemini` and `google.ai.Gemini` share the Gemini
-`generateContent` body. Their endpoint and authentication differ:
+The public adapters share Gemini `generateContent` semantics:
 
 ```baml
 let vertex = google.vertex.gemini(
@@ -492,20 +351,14 @@ let ai_studio = google.ai.gemini(
 )
 ```
 
-Vertex uses Google Cloud credentials by default. The provider accepts a
-credential file, inline credential JSON, or Application Default Credentials.
-Supplying `api_key` instead selects Vertex Express Mode's project-less
-publisher endpoint and cannot be combined with project, location, or ADC
-settings.
-Google AI uses `x-goog-api-key`. The initial request goes through
-`PrimitiveClient.build_request`, which also lowers structural image, audio,
-video, and PDF values. Later agent turns call
-`PrimitiveClient.authenticate_request`; this refreshes Vertex OAuth and
-resolves auth-owned URL fields without rewriting the BAML-owned conversation
-body.
+Vertex accepts a credential file, inline credential JSON, or Application
+Default Credentials. An API key selects Vertex Express Mode and cannot be
+combined with project/location/ADC settings. Google AI uses
+`x-goog-api-key`. Continuation requests re-authenticate without rebuilding the
+provider-owned conversation body.
 
-For a bounded generation in `OutputMode.Native`, `T` becomes Gemini's native
-JSON response constraint:
+For a native Agent step with no application tools, `T` becomes controlled
+JSON:
 
 ```json
 {
@@ -515,54 +368,48 @@ JSON response constraint:
       "type": "object",
       "properties": {
         "category": { "type": "string" },
-        "priority": {
-          "type": "string",
-          "enum": ["Low", "Normal", "Urgent"]
-        },
         "summary": { "type": "string" },
         "reply": { "type": "string" }
       },
-      "required": ["category", "priority", "summary", "reply"]
+      "required": ["category", "summary", "reply"]
     }
   }
 }
 ```
 
-BAML reads every non-thought text part, parses JSON, and exact-decodes `T`.
-`T[]` makes the response schema an array; it does not enable parallel tool
-calls.
-
-An agent turn uses Gemini function declarations. For compatibility with
-Gemini models before combined structured-output/function-calling support, the
-final result becomes the same reserved `{ value: T }` function used by
-OpenAI:
+When native application tools are present, Gemini uses
+`functionDeclarations`. The final `T` becomes the reserved
+`{ value: T }` function so application calls and the final result share one
+unambiguous function-calling turn:
 
 ```json
 {
-  "tools": [{
-    "functionDeclarations": [
-      {
-        "name": "search_knowledge",
-        "parametersJsonSchema": {
-          "type": "object",
-          "properties": {
-            "query": { "type": "string" }
-          },
-          "required": ["query"]
+  "tools": [
+    {
+      "functionDeclarations": [
+        {
+          "name": "search_knowledge",
+          "parametersJsonSchema": {
+            "type": "object",
+            "properties": {
+              "query": { "type": "string" }
+            },
+            "required": ["query"]
+          }
+        },
+        {
+          "name": "__baml_return_output",
+          "parametersJsonSchema": {
+            "type": "object",
+            "properties": {
+              "value": { "...": "schema for T" }
+            },
+            "required": ["value"]
+          }
         }
-      },
-      {
-        "name": "__baml_return_output",
-        "parametersJsonSchema": {
-          "type": "object",
-          "properties": {
-            "value": { "...": "schema for T" }
-          },
-          "required": ["value"]
-        }
-      }
-    ]
-  }],
+      ]
+    }
+  ],
   "toolConfig": {
     "functionCallingConfig": {
       "mode": "ANY"
@@ -571,23 +418,22 @@ OpenAI:
 }
 ```
 
-The provider preserves the complete model `content`, including thought
-signatures, and correlates each `functionCall` with a later
-`functionResponse`. Multiple function-call parts mean parallel application
-calls; the shape of `T` is unrelated. If parallel calls are disabled, more
-than one call is rejected because Gemini has no equivalent request flag.
+Gemini reserves `__baml_return_output` in every output mode. An application
+tool with that name is rejected even in SAP mode, so changing output modes
+cannot change the meaning of an existing tool.
 
-`OutputMode.Sap + ToolMode.Native` is hybrid: application calls stay Gemini
-functions and the final text is parsed by SAP. `Sap + Prompt` puts the entire
-`T | ToolCalls` decision in `ctx.output_format` and sends no Gemini tools.
-Google streaming is not advertised yet. Message import is deliberately
-text-and-role only, and prompt-mode conversations cannot be saved or imported
-without the original task render recipe.
+The adapter preserves complete model content, including thought signatures,
+and correlates each `functionCall` with a `functionResponse`. Several
+function-call parts mean parallel application calls; `T[]` remains one final
+array.
+
+`OutputMode.Sap + ToolMode.Native` is hybrid. With application tools,
+`Sap + Prompt` uses the private prompt adapter and the same `T | ToolCalls`
+contract described above.
 
 ## Anthropic Messages
 
-Anthropic has a native strict JSON response format, so its output modes are
-`Strict` and `Sap`:
+Anthropic has two output modes:
 
 ```baml
 let provider = anthropic.messages(
@@ -597,7 +443,7 @@ let provider = anthropic.messages(
 )
 ```
 
-Strict `T` is sent through `output_config.format`:
+Strict `T` uses `output_config.format`:
 
 ```json
 {
@@ -608,14 +454,10 @@ Strict `T` is sent through `output_config.format`:
         "type": "object",
         "properties": {
           "category": { "type": "string" },
-          "priority": {
-            "type": "string",
-            "enum": ["Low", "Normal", "Urgent"]
-          },
           "summary": { "type": "string" },
           "reply": { "type": "string" }
         },
-        "required": ["category", "priority", "summary", "reply"],
+        "required": ["category", "summary", "reply"],
         "additionalProperties": false
       }
     }
@@ -623,25 +465,27 @@ Strict `T` is sent through `output_config.format`:
 }
 ```
 
-Anthropic can combine that final-output schema with application tools. It does
-not need a synthetic result tool: `tool_use` continues the agent, while a
-normal text content block contains the final JSON `T`.
+Anthropic can combine this schema with native `tool_use` blocks. It does not
+need a synthetic result function: tool-use blocks produce `ToolCalls`, while
+normal text contains the final JSON `T`.
 
 ```json
 {
-  "tools": [{
-    "name": "search_knowledge",
-    "description": "Search the support knowledge base.",
-    "input_schema": {
-      "type": "object",
-      "properties": {
-        "query": { "type": "string" }
+  "tools": [
+    {
+      "name": "search_knowledge",
+      "description": "Search the support knowledge base.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "query": { "type": "string" }
+        },
+        "required": ["query"],
+        "additionalProperties": false
       },
-      "required": ["query"],
-      "additionalProperties": false
-    },
-    "strict": true
-  }],
+      "strict": true
+    }
+  ],
   "tool_choice": {
     "type": "auto",
     "disable_parallel_tool_use": false
@@ -649,20 +493,67 @@ normal text content block contains the final JSON `T`.
 }
 ```
 
-The provider retains the whole assistant content array—text, thinking
-signatures, and `tool_use` blocks—then appends all correlated `tool_result`
-blocks in provider call order in one user message. Missing, duplicate, or
-unknown result IDs fail before conversation state is mutated. Native state is
-serializable for save/restore without storing API keys or endpoint
-credentials.
+The adapter retains the whole assistant content array, including thinking
+signatures and tool-use blocks. `submit` appends all correlated
+`tool_result` blocks in provider call order. Missing, duplicate, or unknown
+IDs fail before state is mutated.
 
-`OutputMode.Sap` omits `output_config` and parses final text with SAP.
-`Sap + Prompt` also renders application tools into the prompt. As with the
-other providers, malformed native tool arguments are never repaired by SAP.
-Strict streaming sends the same `output_config` before the SSE accumulator is
-opened. Prompt-mode conversations cannot be saved or imported without their
-original task render recipe.
+`OutputMode.Sap` parses final text as `T`. With application tools,
+`Sap + Prompt` removes native tools and uses the private `T | ToolCalls`
+adapter.
 
-Anthropic input media uses its Messages content blocks. Images and PDFs are
-supported as URL or base64 sources; video is rejected before the request is
-sent.
+## Claude Code CLI
+
+Claude Code does not expose `OutputMode`, `ToolMode`, or SAP parsing. With no
+application tools, the CLI receives the JSON Schema for `T` directly. With
+tools, its private adapter invokes the CLI with `--json-schema` for one
+object-rooted envelope:
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "outcome": {
+      "anyOf": [
+        { "...": "schema for T" },
+        { "...": "schema for ToolCalls" }
+      ]
+    }
+  },
+  "required": ["outcome"],
+  "additionalProperties": false
+}
+```
+
+Prompt text supplies the reflected application-tool catalog and explains the
+choice, but the returned envelope is exact-decoded as `T | ToolCalls`; it is
+not recovered with SAP. Claude Code's built-in CLI tools remain internal to
+the CLI. Only BAML application calls in `ToolCalls` are dispatched by the
+outer Agent.
+
+## Rules shared by every adapter
+
+- `begin` makes no model request.
+- `step` makes exactly one model request.
+- A replay-safe failed `step` leaves its `Conversation` unchanged.
+- `submit` records correlated results and makes no model request.
+- Providers never execute application functions.
+- Native malformed tool arguments are not repaired by SAP.
+- A provider does not silently switch output or tool modes after a protocol
+  error.
+- A turn cannot mix final output with application calls; that would create an
+  ambiguous effect boundary.
+- Saved conversation state contains continuation coordinates, not provider
+  credentials.
+- Media lowering belongs to the provider primitive: images and supported
+  document/audio parts retain their structural representation.
+
+Runnable request-shape and live integration coverage lives in:
+
+```text
+ns_ai_scenarios/01_tasks_and_providers/tests/
+ns_ai_scenarios/02_tools_and_agents/tests/
+ns_openai/ns_internal/responses/request_tests.baml
+ns_anthropic/ns_internal/request_tests.baml
+ns_google/ns_internal/request_tests.baml
+```

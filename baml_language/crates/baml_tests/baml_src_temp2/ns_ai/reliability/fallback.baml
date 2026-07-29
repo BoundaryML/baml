@@ -7,98 +7,153 @@ class Fallback {
     }
 }
 
+class FallbackConversation {
+    owner: Fallback,
+    recipe: PromptRenderRecipe,
+    identity: TaskIdentity?,
+    arguments: map<string, unknown>,
+    tools: root.ai.tools.Tool[],
+    tags: map<string, string>,
+    member_index: int,
+    inner: Conversation,
+    progressed: bool,
+
+    implements Conversation {
+        function provider(self) -> Provider throws never {
+            self.owner
+        }
+
+        function messages(self) -> Messages throws never {
+            self.inner.messages()
+        }
+        function output_type_fingerprint(self) -> string? throws never {
+            self.inner.output_type_fingerprint()
+        }
+    }
+}
+
 implements Provider for Fallback {
   function name(self) -> string throws never { "fallback" }
   function render_shorthand(self) -> string throws never { self.first.render_shorthand() }
 }
 
-implements GenerationProvider for Fallback {
-  function generate<T>(self, task: Task<T>) -> ResponseWithMetadata<T>
-      throws root.ai.Failure | baml.errors.UnknownError {
-    let policy = ReplayPolicy { kind: ReplayKind.Safe, idempotency_key: null };
-    //# Track replayable failures so exhaustion rethrows something real
-    let failures: root.ai.Failure[] = [];
-    //# Try generation providers in order
-    for (let member in self.providers()) {
-      //## Select a generation-capable member
-      match (member) {
-        let provider: GenerationProvider => {
-          //### Attempt generation
-          let response = provider.generate<T>(task.with_provider(member)) catch (e) {
-            let failure: root.ai.Failure => {
-              //#### Continue only after a replay-safe failure
-              if (root.ai.internal._may_replay(policy, failure)) {
-                failures.push(failure);
-                continue;
-              }
-              throw e;
-            },
-            _ => throw baml.errors.UnknownError.with_message<never>(e, "fallback(" + member.name() + ")"),
-          };
-          return response;
+function _fallback_member(provider: Provider) -> AgentProvider throws baml.errors.Unsupported {
+    match (provider) {
+        let capability: AgentProvider => capability,
+        _ => {
+            throw baml.errors.Unsupported {
+      message: "fallback member cannot run an Agent: " + provider.name(),
+    }
         },
-        _ => {},
-      }
     }
-    //# Exhausted: the last member's failure IS the fallback's failure — outer
-    //# layers still see its classification instead of an opaque wrapper.
-    match (failures.at(failures.length() - 1)) {
-      let failure: root.ai.Failure => throw failure,
-      null => throw baml.errors.Unsupported { message: "no fallback member can generate" },
-    }
-  }
 }
 
-implements CompletionProvider for Fallback {
-  function complete<T>(self, task: Task<T>) -> ResponseWithMetadata<T>
+// Fallback may switch members only until the first provider turn succeeds.
+// Once a model turn has produced tool calls or a value, changing providers is
+// an explicit Agent conversation import rather than a blind replay.
+implements AgentProvider for Fallback {
+  function begin<T>(self, task: Task<T>) -> Conversation
       throws root.ai.Failure | baml.errors.UnknownError {
-    let failures: root.ai.Failure[] = [];
-    //# Try drive providers in order
-    for (let member in self.providers()) {
-      //## Select a drive-capable member
-      match (member) {
-        let provider: CompletionProvider => {
-          let policy = provider.replay_policy<T>(task.with_provider(member));
-          //### Attempt provider drive
-          let response = provider.complete<T>(task.with_provider(member)) catch (e) {
-            let failure: root.ai.Failure => {
-              //#### Continue only after a replay-safe failure; anything else
-              //#### is rethrown as itself, classification intact.
-              if (root.ai.internal._may_replay(policy, failure)) {
-                failures.push(failure);
-                continue;
-              }
-              throw e;
-            },
-            _ => throw baml.errors.UnknownError.with_message<never>(e, "fallback(" + member.name() + ")"),
-          };
-          return response;
-        },
-        _ => {},
-      }
-    }
-    //# Exhausted: rethrow the last real failure, not an opaque wrapper
-    match (failures.at(failures.length() - 1)) {
-      let failure: root.ai.Failure => throw failure,
-      null => throw baml.errors.Unsupported { message: "no fallback member can drive" },
+    let provider = _fallback_member(self.first);
+    FallbackConversation {
+      owner: self,
+      recipe: task._render,
+      identity: task.identity,
+      arguments: task.arguments,
+      tools: task.tools,
+      tags: task.tags,
+      member_index: 0,
+      inner: provider.begin<T>(task.with_provider(self.first)),
+      progressed: false,
     }
   }
 
-  function replay_policy<T>(self, task: Task<T>) -> ReplayPolicy throws never {
-    //# Prove the entire fallback chain is replay-safe
-    for (let member in self.providers()) {
-      //## Inspect each member policy
-      match (member) {
-        let provider: CompletionProvider => {
-          let policy = provider.replay_policy<T>(task.with_provider(member));
-          if (policy.kind != ReplayKind.Safe) {
-            return ReplayPolicy { kind: ReplayKind.Never, idempotency_key: null };
-          }
-        },
-        _ => return ReplayPolicy { kind: ReplayKind.Never, idempotency_key: null },
-      }
+  function step<T>(
+    self,
+    conversation: Conversation,
+    tools: root.ai.tools.Tool[],
+  ) -> ModelStep<T> throws root.ai.Failure | baml.errors.UnknownError {
+    let state = match (conversation) {
+      let value: FallbackConversation => value,
+      _ => throw baml.errors.UnknownError.with_message<never>(
+        null,
+        "fallback received another provider's conversation",
+      ),
+    };
+    if (!root.ai.internal._same_provider_instance(state.owner, self)) {
+      throw baml.errors.UnknownError.with_message<never>(
+        null,
+        "fallback received a conversation owned by another fallback instance",
+      )
     }
-    ReplayPolicy { kind: ReplayKind.Safe, idempotency_key: null }
+    let members = self.providers();
+    let failures: root.ai.Failure[] = [];
+    //# Try another provider only before any model turn has succeeded
+    while (state.member_index < members.length()) {
+      let member = members[state.member_index];
+      let provider = _fallback_member(member);
+      let result = provider.step<T>(state.inner, tools) catch (e) {
+        let failure: root.ai.Failure => {
+          if (
+            state.progressed
+              || !root.ai.internal._may_retry_model_step(failure)
+              || state.member_index + 1 >= members.length()
+          ) {
+            throw e;
+          }
+          failures.push(failure);
+          state.member_index = state.member_index + 1;
+          let next = members[state.member_index];
+          let next_provider = _fallback_member(next);
+          state.inner = next_provider.begin<T>(Task<T> {
+            provider: next,
+            prompt: state.recipe.render(next, reflect.type_of<T>()),
+            identity: state.identity,
+            arguments: state.arguments,
+            tools: state.tools,
+            tags: state.tags,
+            _render: state.recipe,
+          });
+          continue;
+        },
+        _ => throw baml.errors.UnknownError.with_message<never>(
+          e,
+          "fallback(" + member.name() + ") step",
+        ),
+      };
+      state.progressed = true;
+      return result;
+    }
+    match (failures.at(failures.length() - 1)) {
+      let failure: root.ai.Failure => throw failure,
+      null => throw baml.errors.Unsupported {
+        message: "fallback has no Agent-capable member",
+      },
+    }
+  }
+
+  function submit(
+    self,
+    conversation: Conversation,
+    results: root.ai.tools.ToolResult[],
+  ) -> Conversation throws root.ai.Failure | baml.errors.UnknownError {
+    let state = match (conversation) {
+      let value: FallbackConversation => value,
+      _ => throw baml.errors.UnknownError.with_message<never>(
+        null,
+        "fallback received another provider's conversation",
+      ),
+    };
+    if (!root.ai.internal._same_provider_instance(state.owner, self)) {
+      throw baml.errors.UnknownError.with_message<never>(
+        null,
+        "fallback received a conversation owned by another fallback instance",
+      )
+    }
+    let member = self.providers()[state.member_index];
+    let provider = _fallback_member(member);
+    state.inner = provider.submit(state.inner, results);
+    state
   }
 }
 

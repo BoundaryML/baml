@@ -9,15 +9,18 @@ test "guide 04.01: editable conversation history is ordinary application data" {
 testset "integ-test-guide-04-application-history" {
     test "guide 04.01 live OpenAI: edited application history becomes model input" {
         let history = sample_history();
-        let updated = history
-            .append(root.ai.ChatMessage.user("The order is O-42."))
-            .to_history();
+        let updated = history.append(root.ai.ChatMessage.user("The order is O-42.")).to_history();
         assert.equal(history.entries.length(), 2);
         assert.equal(updated.entries.length(), 3);
         let task = ConversationProbe_task(updated, live_openai());
-        let response = task.run(
-            runner = root.ai.run.GenerationWithMeta<ConversationProbe>.new(),
-        );
+        let response = root
+            .ai
+            .internal
+            ._response_from_done(
+                root.ai
+                    .internal
+                    ._require_done(task.run(runner = root.ai.run.Agent<ConversationProbe>.new())),
+            );
         log.info(
             "live application history "
                 + {

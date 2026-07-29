@@ -28,18 +28,30 @@ class QuotaLimitedProvider {
     function render_shorthand(self) -> string throws never { self.inner.render_shorthand() }
   }
 
-  implements root.ai.CompletionProvider {
-    function complete<T>(self, task: root.ai.Task<T>) -> root.ai.ResponseWithMetadata<T>
-        throws root.ai.Failure | baml.errors.UnknownError {
+  implements root.ai.AgentProvider {
+    function begin<T>(self, task: root.ai.Task<T>) -> root.ai.Conversation throws never {
+      self.inner.begin<T>(task.with_provider(self.inner))
+    }
+
+    function step<T>(
+      self,
+      conversation: root.ai.Conversation,
+      tools: root.ai.tools.Tool[],
+    ) -> root.ai.ModelStep<T> throws root.ai.Failure | baml.errors.UnknownError {
       self.calls = self.calls + 1;
       if (self.failures_remaining > 0) {
         self.failures_remaining = self.failures_remaining - 1;
         throw VendorQuotaExceeded { quota_name: "daily", transient: self.transient };
       }
-      self.inner.complete<T>(task.with_provider(self.inner))
+      self.inner.step<T>(conversation, tools)
     }
-    function replay_policy<T>(self, task: root.ai.Task<T>) -> root.ai.ReplayPolicy throws never {
-      root.ai.ReplayPolicy { kind: root.ai.ReplayKind.Safe, idempotency_key: null }
+
+    function submit(
+      self,
+      conversation: root.ai.Conversation,
+      results: root.ai.tools.ToolResult[],
+    ) -> root.ai.Conversation throws root.ai.Failure {
+      self.inner.submit(conversation, results)
     }
   }
 }
@@ -95,23 +107,23 @@ test "guide 03.07: unknown failures accumulate breadcrumbs through wrapping laye
     failure_mode: root.ai.testing.FakeFailureMode.Unknown,
   };
   let label = ResolveTicket_manual(sample_ticket(), root.ai.retry(failed, 3)) catch (e) {
-    //# One breadcrumb from the fake, one from the retry layer that wrapped it
+    // One breadcrumb from the fake, one from the retry step that wrapped it.
     let unknown: baml.errors.UnknownError =>
       unknown.message.length().to_string() + ":" + (unknown.message.at(1) ?? ""),
     _ => "unexpected",
   };
-  assert.equal(label, "2:retry(fake)")
+  assert.equal(label, "2:retry(fake) step")
 }
 
-test "guide 03.07: UnknownError.from recovers a wrapped domain error typesafely" {
-  //# A blind layer wrapped the vendor error; the handler reasserts its channel
-  let wrapped = baml.errors.UnknownError.with_message<never>(
-    VendorQuotaExceeded { quota_name: "burst", transient: false },
-    "transport layer",
-  );
-  let label = match (baml.errors.UnknownError.from<VendorQuotaExceeded>(wrapped)) {
+test "guide 03.07: UnknownError preserves a wrapped domain error as structured data" {
+  //# A blind layer records the vendor error without flattening it to text
+  let wrapped = baml.errors.UnknownError {
+    data: VendorQuotaExceeded { quota_name: "burst", transient: false },
+    message: ["transport layer"],
+  };
+  let label = match (wrapped.data) {
     let quota: VendorQuotaExceeded => "quota:" + quota.quota_name,
-    let unknown: baml.errors.UnknownError => "still-unknown",
+    _ => "still-unknown",
   };
   assert.equal(label, "quota:burst")
 }

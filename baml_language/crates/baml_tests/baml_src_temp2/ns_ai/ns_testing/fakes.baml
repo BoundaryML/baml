@@ -19,14 +19,62 @@ class FakeProvider {
     failure_mode: FakeFailureMode,
 }
 
+class FakeConversation {
+    owner: FakeProvider,
+    history: root.ai.MessageHistory,
+    declared_output_type: string,
+
+    implements root.ai.Conversation {
+        function provider(self) -> root.ai.Provider throws never {
+            self.owner
+        }
+
+        function messages(self) -> root.ai.Messages throws never {
+            self.history
+        }
+        function output_type_fingerprint(self) -> string? throws never {
+            self.declared_output_type
+        }
+    }
+}
+
 implements root.ai.Provider for FakeProvider {
   function name(self) -> string throws never { self.provider_name }
   function render_shorthand(self) -> string throws never { _fake_render_shorthand() }
 }
 
-implements root.ai.GenerationProvider for FakeProvider {
-  function generate<T>(self, task: root.ai.Task<T>) -> root.ai.ResponseWithMetadata<T>
-      throws root.ai.Failure | baml.errors.UnknownError {
+implements root.ai.AgentProvider for FakeProvider {
+  function begin<T>(self, task: root.ai.Task<T>) -> root.ai.Conversation throws never {
+    FakeConversation {
+      owner: self,
+      history: task.messages().to_history(),
+      declared_output_type: root.ai.internal._output_type_fingerprint<T>(),
+    }
+  }
+
+  function step<T>(
+    self,
+    conversation: root.ai.Conversation,
+    tools: root.ai.tools.Tool[],
+  ) -> root.ai.ModelStep<T> throws root.ai.Failure | baml.errors.UnknownError {
+    root.ai.internal._require_conversation_output_type<T>(
+      conversation,
+      self.name(),
+    );
+    match (conversation) {
+      let state: FakeConversation => {
+        if (!root.ai.internal._same_provider_instance(state.owner, self)) {
+          throw baml.errors.UnknownError.with_message<never>(
+            state.owner.name(),
+            "fake conversation belongs to another provider",
+          )
+        }
+      },
+      _ => throw baml.errors.UnknownError.with_message<never>(
+        null,
+        "fake provider received another provider's conversation",
+      ),
+    };
     //# Count this provider attempt
     self.calls = self.calls + 1;
     //# Inject the configured retryable, terminal, or unknown failure. The
@@ -53,9 +101,9 @@ implements root.ai.GenerationProvider for FakeProvider {
     let value = baml.sap.parse<T>(self.output) catch (e) {
       _ => throw baml.errors.UnknownError.with_message<never>(e, "fake output parse failed"),
     };
-    //# Return the typed value with deterministic response metadata
-    root.ai.ResponseWithMetadata<T> {
-      value: value,
+    //# Return the typed value from exactly one fake model turn
+    root.ai.ModelStep<T> {
+      outcome: value,
       metadata: root.ai.ResponseMetadata {
         provider: self.provider_name,
         model: "fake",
@@ -71,18 +119,22 @@ implements root.ai.GenerationProvider for FakeProvider {
         attributes: {},
         raw: null,
       },
-      conversation: null,
     }
   }
-}
 
-implements root.ai.CompletionProvider for FakeProvider {
-  function complete<T>(self, task: root.ai.Task<T>) -> root.ai.ResponseWithMetadata<T>
-      throws root.ai.Failure | baml.errors.UnknownError {
-    self.generate<T>(task)
-  }
-  function replay_policy<T>(self, task: root.ai.Task<T>) -> root.ai.ReplayPolicy throws never {
-    root.ai.ReplayPolicy { kind: root.ai.ReplayKind.Safe, idempotency_key: null }
+  function submit(
+    self,
+    conversation: root.ai.Conversation,
+    results: root.ai.tools.ToolResult[],
+  ) -> root.ai.Conversation throws root.ai.Failure {
+    if (results.length() != 0) {
+      throw root.ai.InvalidRequest {
+        provider: self.name(),
+        status_code: null,
+        detail: "fake provider has no pending tool calls",
+      }
+    }
+    conversation
   }
 }
 

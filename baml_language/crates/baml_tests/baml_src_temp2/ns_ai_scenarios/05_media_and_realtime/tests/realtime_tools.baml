@@ -85,7 +85,10 @@ testset "integ-test-guide-05-realtime-tools" {
         )
         .with_tools([lookup_account]);
         let channel = root.ai.testing.RecordingChannel { frames: [] };
-        let live_session = root.ai.realtime.with_automatic_tools(root.ai.realtime.open_live(task, channel), [lookup_account]);
+        let live_session = root
+            .ai
+            .realtime
+            .with_automatic_tools(root.ai.realtime.open_live(task, channel), [lookup_account]);
         let requested = live_session.receive();
         let calls: root.ai.tools.ToolCall[] = [];
         let results: root.ai.tools.ToolResult[] = [];

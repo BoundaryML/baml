@@ -22,8 +22,10 @@ testset "integ-test-guide-03-route-before-call" {
     let selected = if (task.tags.get("tier") == "pro") { careful } else { fast };
     let routed = task.with_provider(selected);
     assert.equal(routed.provider_name(), "anthropic")
-    let response = routed.run(
-      runner = root.ai.run.GenerationWithMeta<Resolution>.new(),
+    let response = root.ai.internal._response_from_done(
+      root.ai.internal._require_done(
+        routed.run(runner = root.ai.run.Agent<Resolution>.new()),
+      ),
     );
     log.info("live route " + {
       "tag": task.tags.get("tier"),

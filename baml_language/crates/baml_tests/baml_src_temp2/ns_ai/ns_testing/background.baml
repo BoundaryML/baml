@@ -57,8 +57,10 @@ implements root.ai.jobs.BackgroundProvider for FakeBackgroundProvider {
         id: options.idempotency_key ?? "fake-job",
         sealed: self.inner.output,
       },
-      response: self.inner.generate<T>(task.with_provider(self.inner)) catch (e) {
-        _ => throw baml.errors.UnknownError.with_message<never>(e, "fake background generation failed"),
+      response: root.ai.internal._run_agent_to_response<T>(
+        task.with_provider(self.inner),
+      ) catch (e) {
+        _ => throw baml.errors.UnknownError.with_message<never>(e, "fake background Agent failed"),
       },
       cancelled: false,
     }

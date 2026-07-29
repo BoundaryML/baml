@@ -70,7 +70,11 @@ testset "integ-test-guide-02-dynamic-tool-registry" {
                             if (context.step == 1 && !has_account) {
                                 let next_tools = context.tools.slice(0, context.tools.length());
                                 next_tools.push(root.ai.tools.normalize_tool(lookup_account));
-                                return root.ai.tools.StepPlan { provider: null, tools: next_tools, stop: null };
+                                return root.ai.tools.StepPlan {
+                                    provider: null,
+                                    tools: next_tools,
+                                    stop: null,
+                                };
                             }
                             root.ai.tools.StepPlan { provider: null, tools: null, stop: null }
                         },

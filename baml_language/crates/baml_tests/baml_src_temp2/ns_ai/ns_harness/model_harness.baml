@@ -1,4 +1,4 @@
-// A small in-process harness adapter backed by any root.ai.CompletionProvider. It is
+// A small in-process harness adapter backed by any root.ai.AgentProvider. It is
 // useful both with a hosted model and as the blueprint for an external
 // coding-harness implementation.
 class ModelHarness {
@@ -32,37 +32,6 @@ implements root.ai.Provider for ModelHarness {
   function render_shorthand(self) -> string throws never { self.inner.render_shorthand() }
 }
 
-implements root.ai.CompletionProvider for ModelHarness {
-  function complete<T>(self, task: root.ai.Task<T>) -> root.ai.ResponseWithMetadata<T> throws baml.errors.UnknownError {
-    //# Open an isolated harness session
-    let session = self.open(HarnessOptions {
-      cwd: null,
-      permission_mode: null,
-      sandbox: null,
-      attributes: {},
-    });
-    //# Run the task inside the session
-    let run = self.run<T>(session, task, null);
-    //# Return harness output as a provider response
-    root.ai.ResponseWithMetadata<T> {
-      value: run.value,
-      metadata: root.ai.ResponseMetadata {
-        provider: self.name(),
-        model: null,
-        request_id: session.id(),
-        finish_reason: "harness_complete",
-        usage: null,
-        attributes: {},
-        raw: null,
-      },
-      conversation: null,
-    }
-  }
-  function replay_policy<T>(self, task: root.ai.Task<T>) -> root.ai.ReplayPolicy throws never {
-    root.ai.ReplayPolicy { kind: root.ai.ReplayKind.Never, idempotency_key: null }
-  }
-}
-
 implements Harness for ModelHarness {
   function label(self) -> string throws never { "model-harness(" + self.inner.name() + ")" }
   function open(self, options: HarnessOptions) -> HarnessSession throws never {
@@ -93,10 +62,10 @@ implements Harness for ModelHarness {
     if (local.is_stopped) {
       throw baml.errors.UnknownError.with_message<never>(null, "harness session is stopped");
     }
-    //# Resolve the backing completion provider
+    //# Resolve the backing Agent provider
     let provider = match (self.inner) {
-      let capability: root.ai.CompletionProvider => capability,
-      _ => throw baml.errors.UnknownError.with_message<never>(null, "harness inner cannot complete"),
+      let capability: root.ai.AgentProvider => capability,
+      _ => throw baml.errors.UnknownError.with_message<never>(null, "harness inner cannot run an Agent"),
     };
     let events: root.ai.observe.AgentEvent[] = [];
     //# Announce the harness run before starting blocking provider work
@@ -110,11 +79,16 @@ implements Harness for ModelHarness {
     );
     //# Run the model through the harness
     let effective_task = _model_harness_task<T>(self.inner, local, task);
-    let response = provider.complete<T>(effective_task) catch (e) {
+    let response = root.ai.internal._run_agent_to_response<T>(
+      effective_task.with_provider(provider),
+    ) catch (e) {
       _ => throw baml.errors.UnknownError.with_message<never>(e, "harness model run failed"),
     };
-    //# Save conversation and resumable coordinates
-    local.history = effective_task.messages().to_history();
+    //# Save the completed conversation, including model and tool turns.
+    local.history = match (response.conversation) {
+      let conversation: root.ai.Conversation => conversation.messages().to_history(),
+      null => effective_task.messages().to_history(),
+    };
     match (response.metadata.usage) {
       let usage: root.ai.Usage => _emit_harness_event(
         root.ai.observe.UsageEvent { id: local.session_id, usage: usage },

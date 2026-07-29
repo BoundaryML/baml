@@ -15,8 +15,10 @@ function route_before_the_call() -> root.ai.ResponseWithMetadata<Resolution> {
   };
   let selected = if (task.tags.get("tier") == "pro") { careful } else { fast };
   let routed = task.with_provider(selected);
-  let response = routed.run(
-    runner = root.ai.run.GenerationWithMeta<Resolution>.new(),
+  let response = root.ai.internal._response_from_done(
+    root.ai.internal._require_done(
+      routed.run(runner = root.ai.run.Agent<Resolution>.new()),
+    ),
   );
   log.info({
     "scenario": "route_before_the_call",

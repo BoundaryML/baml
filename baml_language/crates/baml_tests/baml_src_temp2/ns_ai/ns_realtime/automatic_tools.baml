@@ -30,7 +30,9 @@ class AutomaticToolLiveSession {
                     })
                 ) {
                     let tool: root.ai.tools.Tool => root.ai.tools.invoke_tool(tool, call),
-                    null => root.ai.tools.ToolResult.error(call, "tool is not registered on this task"),
+                    null => {
+                        root.ai.tools.ToolResult.error(call, "tool is not registered on this task")
+                    },
                 }
             });
             //## Add correlated results to the provider transcript and continue

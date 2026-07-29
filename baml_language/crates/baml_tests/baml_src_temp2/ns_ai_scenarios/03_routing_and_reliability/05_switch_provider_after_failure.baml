@@ -10,11 +10,13 @@ function switch_provider_after_failure() -> root.ai.ResponseWithMetadata<Resolut
     ...fake_resolution(),
     provider_name: "healthy-fallback",
   };
-  let response = ResolveTicket_task(
-    sample_ticket(),
-    root.ai.fallback([failed, fallback]),
-  ).run(
-    runner = root.ai.run.GenerationWithMeta<Resolution>.new(),
+  let response = root.ai.internal._response_from_done(
+    root.ai.internal._require_done(
+      ResolveTicket_task(
+        sample_ticket(),
+        root.ai.fallback([failed, fallback]),
+      ).run(runner = root.ai.run.Agent<Resolution>.new()),
+    ),
   );
   log.info({
     "scenario": "switch_provider_after_failure",

@@ -16,7 +16,12 @@ function InspectImage_manual(
     value: image,
     provider: root.ai.Provider,
 ) -> string throws root.ai.Failure | baml.errors.UnknownError {
-    InspectImage_task(value, provider).run(runner = root.ai.run.Completion<string>.new())
+    root.ai
+        .internal
+        ._require_done(
+            InspectImage_task(value, provider).run(runner = root.ai.run.Agent<string>.new()),
+        )
+        .value
 }
 
 // Future compiler lowering for a PDF-valued domain argument.
@@ -33,7 +38,12 @@ function InspectPdf_manual(
     value: pdf,
     provider: root.ai.Provider,
 ) -> string throws root.ai.Failure | baml.errors.UnknownError {
-    InspectPdf_task(value, provider).run(runner = root.ai.run.Completion<string>.new())
+    root.ai
+        .internal
+        ._require_done(
+            InspectPdf_task(value, provider).run(runner = root.ai.run.Agent<string>.new()),
+        )
+        .value
 }
 
 // Future compiler lowering:
@@ -57,7 +67,12 @@ function VoiceSupport_manual(
     instructions: string,
     provider: root.ai.Provider,
 ) -> null throws root.ai.Failure | baml.errors.UnknownError {
-    VoiceSupport_task(instructions, provider).run(runner = root.ai.run.Completion<null>.new())
+    root.ai
+        .internal
+        ._require_done(
+            VoiceSupport_task(instructions, provider).run(runner = root.ai.run.Agent<null>.new()),
+        )
+        .value
 }
 
 // Future compiler lowering:

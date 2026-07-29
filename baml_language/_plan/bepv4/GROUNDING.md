@@ -1,46 +1,61 @@
-# Grounding rule + audit
+# Grounding rule and audit
 
-**Rule:** every code snippet in a BEP page must be grounded in
-`crates/baml_tests/baml_src_temp2` — same names, same shapes, same behavior —
-ideally in `ns_ai_scenarios` where it also runs as a test. Surface syntax the
-prototype compiler cannot parse yet (`X@task(...)`) grounds to its lowered
-corpus spelling (`X_task(...)`) with a "future compiler lowering" comment at
-the corpus site.
+Every code snippet in a BEP page should correspond to code under
+`crates/baml_tests/baml_src_temp2`. The preferred executable examples are the
+no-argument functions in `ns_ai_scenarios`.
 
-## Systemic gaps (design-level, fix once)
+Run an example with:
 
-1. **`ai.run.Retry` / `ai.run.Fallback` (pages) vs `ai.retry()` / `ai.fallback()`
-   (corpus).** The docs promise runner-wrapping; the corpus implements
-   provider-wrapping. One of them must move.
-2. **Named client values** (`FastModel`, `CarefulModel`, `TranscriptionModel`,
-   `BackgroundModel`...). Pages assume `client`-style named declarations; the
-   corpus builds providers with constructor calls (`live_openai()`). Either the
-   scenarios grow named provider values or the pages switch to constructors.
-3. **`ai.AgentOutcome<T>`** needs generic type aliases (compiler issue filed);
-   corpus spells `Done<T> | BudgetReached | Handoff` inline. Pages now note this.
-4. **Fixture identity drift**: each page invents its own functions
-   (`DraftReply`, `ClassifyTicket`, `SummarizeCall`, `InspectClaim`,
-   `AnswerPolicyQuestion`...). Scenarios are `ResolveTicket`-centric. Decide:
-   port the page fixtures into scenarios (better coverage) or rewrite pages
-   onto `ResolveTicket` (less work, more monotony). Recommend porting — each
-   page's example becomes a scenario file under the matching guide number.
+```console
+baml run --from crates/baml_tests/baml_src_temp2 \
+  ai_scenarios.<example>
+```
 
-## Per-page ungrounded identifiers (audit 2026-07-28)
+The corpus uses manual `*_task` helpers where compiler-generated `@task`
+lowering is not yet available in the prototype. Reader-facing docs use the
+intended `F@task(...)` syntax and must preserve the same task fields and
+behavior.
 
-| Page | Ungrounded |
+## Normative names
+
+| Documentation concept | Corpus contract |
 | --- | --- |
-| README | `Help`, `Orders` |
-| agents-and-tools | `AgentOutcome`, `OrderTools` |
-| approvals-limits-and-handoffs | `Queue`, `Refund` |
-| conversations-and-resuming | `CarefulModel`, `SupportModel` |
-| dynamic-tools-and-mcp | `Convert`, `McpDiscovery` |
-| harnesses-and-custom-extensions | `AuditResult`, `CodingModel`, `RepositoryReport`, `Summarize`, `WithAudit` |
-| jobs-batches-and-caches | `AnswerPolicyQuestion`, `BackgroundModel`, `BatchModel`, `CachedModel`, `ClassifyTicket`, `DeepResolveTicket` |
-| routing-retry-and-fallback | `CarefulModel`, `FastModel` |
-| streaming-media-and-transcription | `CallSummary`, `ClaimEvidence(-Partial)`, `Explanation`, `InspectClaim`, `Receipt`, `Statement`, `SummarizeCall`, `TranscribeAudio`, `TranscriptionModel` |
-| tasks-runners-and-results | `Draft`, `DraftReply` |
-| testing-and-observability | `AgentOutcome`, `ConsoleObserver` |
-| voice-and-live-sessions | `Help` |
+| Normal provider | `ai.AgentProvider` |
+| One provider model turn | `ai.ModelStep<T>` from `AgentProvider.step` |
+| Normal explicit execution | `task.run(runner = ai.run.Agent<T>.new())` |
+| Normal result | `ai.Done<T> \| ai.BudgetReached \| ai.Handoff` |
+| Retry/fallback | `ai.retry(...)` / `ai.fallback(...)` provider wrappers |
+| Exact continuation | `ai.Conversation` |
+| Durable continuation | `ai.ResumableAgentProvider` |
+| Provider switch | `ai.ConversationImportProvider` |
 
-Audit is mechanical (identifier extraction from ```baml fences, greps the
-corpus); re-run after any page or scenario change.
+There is no normal provider-owned model/tool loop. A direct generated call
+lowers to a default Agent and unwraps `Done<T>`.
+
+A replay-safe failed provider `step` is transactional: it must leave the
+conversation unchanged so retry sees the same pre-attempt state.
+
+## Scenario map
+
+| Guide | Scenario directory or entry point |
+| --- | --- |
+| Tasks and providers | `ns_ai_scenarios/01_tasks_and_providers` |
+| Agents and tools | `ns_ai_scenarios/02_tools_and_agents` |
+| Routing and reliability | `ns_ai_scenarios/03_routing_and_reliability` |
+| Conversations | `ns_ai_scenarios/04_conversations_and_state` |
+| Media and realtime | `ns_ai_scenarios/05_media_and_realtime` |
+| Observability and testing | `ns_ai_scenarios/06_observability_and_testing` |
+| Production resources | `ns_ai_scenarios/07_production` |
+| External harnesses | `ns_ai_scenarios/08_external_harnesses` |
+
+Provider request-shape tests live beside their private request builders:
+
+```text
+ns_openai/ns_internal/responses/request_tests.baml
+ns_anthropic/ns_internal/request_tests.baml
+ns_google/ns_internal/request_tests.baml
+```
+
+The documentation audit must fail on references to removed normal lifecycle
+interfaces or runners. Mentions of another framework's method names in the
+comparison page are not BAML API references.

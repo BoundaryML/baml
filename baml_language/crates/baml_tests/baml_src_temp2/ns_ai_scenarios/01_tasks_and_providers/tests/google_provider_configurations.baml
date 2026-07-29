@@ -1,5 +1,5 @@
-// Live public-API coverage for typed Google generation. Every case runs a
-// Task through the ordinary completion runner; provider internals are not part
+// Live public-API coverage for typed Google Agent turns. Every case runs a
+// Task through the ordinary Agent runner; provider internals are not part
 // of this contract.
 
 function _google_resolution_array_task(
@@ -78,8 +78,14 @@ testset "integ-test-google-vertex-configurations" {
                     location = location,
                     output_mode = root.google.vertex.OutputMode.Native,
                 );
-            let value = ResolveTicket_task(sample_ticket(), provider)
-                .run(runner = root.ai.run.Completion<Resolution>.new());
+            let value = root
+                .ai
+                .internal
+                ._require_done(
+                    ResolveTicket_task(sample_ticket(), provider)
+                        .run(runner = root.ai.run.Agent<Resolution>.new()),
+                )
+                .value;
             assert.is_true(value.reply.length() > 0)
         }
     }
@@ -100,8 +106,14 @@ testset "integ-test-google-vertex-configurations" {
                     location = location,
                     output_mode = root.google.vertex.OutputMode.Sap,
                 );
-            let value = ResolveTicket_task(sample_ticket(), provider)
-                .run(runner = root.ai.run.Completion<Resolution>.new());
+            let value = root
+                .ai
+                .internal
+                ._require_done(
+                    ResolveTicket_task(sample_ticket(), provider)
+                        .run(runner = root.ai.run.Agent<Resolution>.new()),
+                )
+                .value;
             assert.is_true(value.summary.length() > 0)
         }
     }
@@ -116,8 +128,14 @@ testset "integ-test-google-ai-configurations" {
                 api_key = baml.env.get_or_panic("GOOGLE_API_KEY"),
                 output_mode = root.google.ai.OutputMode.Native,
             );
-        let value = ResolveTicket_task(sample_ticket(), provider)
-            .run(runner = root.ai.run.Completion<Resolution>.new());
+        let value = root
+            .ai
+            .internal
+            ._require_done(
+                ResolveTicket_task(sample_ticket(), provider)
+                    .run(runner = root.ai.run.Agent<Resolution>.new()),
+            )
+            .value;
         assert.is_true(value.reply.length() > 0)
     }
 
@@ -129,8 +147,14 @@ testset "integ-test-google-ai-configurations" {
                 api_key = baml.env.get_or_panic("GOOGLE_API_KEY"),
                 output_mode = root.google.ai.OutputMode.Native,
             );
-        let value = _google_resolution_array_task(provider)
-            .run(runner = root.ai.run.Completion<Resolution[]>.new());
+        let value = root
+            .ai
+            .internal
+            ._require_done(
+                _google_resolution_array_task(provider)
+                    .run(runner = root.ai.run.Agent<Resolution[]>.new()),
+            )
+            .value;
         assert.equal(value.length(), 2);
         assert.is_true(value[0].reply.length() > 0);
         assert.is_true(value[1].reply.length() > 0)
@@ -144,12 +168,18 @@ testset "integ-test-google-ai-configurations" {
                 api_key = baml.env.get_or_panic("GOOGLE_API_KEY"),
                 output_mode = root.google.ai.OutputMode.Sap,
             );
-        let value = ResolveTicket_task(sample_ticket(), provider)
-            .run(runner = root.ai.run.Completion<Resolution>.new());
+        let value = root
+            .ai
+            .internal
+            ._require_done(
+                ResolveTicket_task(sample_ticket(), provider)
+                    .run(runner = root.ai.run.Agent<Resolution>.new()),
+            )
+            .value;
         assert.is_true(value.summary.length() > 0)
     }
 
-    test "Google AI preserves a structural image through completion" {
+    test "Google AI preserves a structural image through an Agent run" {
         let provider = root
             .google
             .ai
@@ -165,7 +195,7 @@ testset "integ-test-google-ai-configurations" {
                 ),
             provider,
         );
-        let value = task.run(runner = root.ai.run.Completion<string>.new());
+        let value = root.ai.internal._require_done(task.run(runner = root.ai.run.Agent<string>.new())).value;
         assert.is_true(value.length() > 0)
     }
 }

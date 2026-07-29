@@ -1,8 +1,8 @@
 // A package-defined runner participates in exactly the same Task.run
-// protocol as a built-in runner. It can still call a provider capability
-// directly when it needs custom lifecycle policy.
-class GuideGenerationCapability<T> {
-    provider: root.ai.GenerationProvider,
+// protocol as the built-in Agent. This example pins an AgentProvider, then
+// delegates the actual conversation loop to the standard Agent lifecycle.
+class GuideAgentCapability<T> {
+    provider: root.ai.AgentProvider,
 
     implements root.ai.Runner<root.ai.Task<T>> {
         type Output = root.ai.ResponseWithMetadata<T>
@@ -12,7 +12,7 @@ class GuideGenerationCapability<T> {
             self,
             task: root.ai.Task<T>,
         ) -> root.ai.ResponseWithMetadata<T> throws root.ai.Failure | baml.errors.UnknownError {
-            self.provider.generate<T>(task.with_provider(self.provider))
+            root.ai.internal._run_agent_to_response<T>(task.with_provider(self.provider))
         }
     }
 }

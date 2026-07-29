@@ -21,17 +21,17 @@ class FakeSession {
             if (self.is_cleaned) {
                 throw baml.errors.UnknownError.with_message<never>(self.session_id, "session has been cleaned up");
             }
-            //# Resolve the session completion provider
-            let completion = match (self.owner.inner) {
-                let value: root.ai.CompletionProvider => value,
+            //# Resolve the session Agent provider
+            let provider = match (self.owner.inner) {
+                let value: root.ai.AgentProvider => value,
                 _ => {
                     throw baml.errors.Unsupported {
-          message: "session inner cannot complete",
+          message: "session inner cannot run an Agent",
         }
                 },
             };
             //# Run and retain the latest conversation
-            let response = completion.complete<T>(task.with_provider(self.owner.inner));
+            let response = root.ai.internal._run_agent_to_response<T>(task.with_provider(provider));
             self.history = task.messages().to_history();
             response
         }

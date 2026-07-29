@@ -1,5 +1,5 @@
 // Live public-API coverage for Anthropic structured output and SAP. Each case
-// executes a typed Task through the normal completion runner.
+// executes a typed Task through the normal Agent runner.
 
 function _anthropic_resolution_array_task(
     provider: root.ai.Provider,
@@ -26,8 +26,14 @@ testset "integ-test-anthropic-messages-configurations" {
                 api_key = baml.env.get_or_panic("ANTHROPIC_API_KEY"),
                 output_mode = root.anthropic.OutputMode.Strict,
             );
-        let value = ResolveTicket_task(sample_ticket(), provider)
-            .run(runner = root.ai.run.Completion<Resolution>.new());
+        let value = root
+            .ai
+            .internal
+            ._require_done(
+                ResolveTicket_task(sample_ticket(), provider)
+                    .run(runner = root.ai.run.Agent<Resolution>.new()),
+            )
+            .value;
         assert.is_true(value.reply.length() > 0)
     }
 
@@ -38,8 +44,14 @@ testset "integ-test-anthropic-messages-configurations" {
                 api_key = baml.env.get_or_panic("ANTHROPIC_API_KEY"),
                 output_mode = root.anthropic.OutputMode.Strict,
             );
-        let value = _anthropic_resolution_array_task(provider)
-            .run(runner = root.ai.run.Completion<Resolution[]>.new());
+        let value = root
+            .ai
+            .internal
+            ._require_done(
+                _anthropic_resolution_array_task(provider)
+                    .run(runner = root.ai.run.Agent<Resolution[]>.new()),
+            )
+            .value;
         assert.equal(value.length(), 2);
         assert.is_true(value[0].reply.length() > 0);
         assert.is_true(value[1].reply.length() > 0)
@@ -52,8 +64,14 @@ testset "integ-test-anthropic-messages-configurations" {
                 api_key = baml.env.get_or_panic("ANTHROPIC_API_KEY"),
                 output_mode = root.anthropic.OutputMode.Sap,
             );
-        let value = ResolveTicket_task(sample_ticket(), provider)
-            .run(runner = root.ai.run.Completion<Resolution>.new());
+        let value = root
+            .ai
+            .internal
+            ._require_done(
+                ResolveTicket_task(sample_ticket(), provider)
+                    .run(runner = root.ai.run.Agent<Resolution>.new()),
+            )
+            .value;
         assert.is_true(value.summary.length() > 0)
     }
 

@@ -19,14 +19,19 @@ function InvestigateRepository_task(
     })
 }
 
-// Future compiler lowering for the direct form when the harness implements
-// CompletionProvider by owning the complete session lifecycle.
+// Future compiler lowering for the direct form when the provider exposes the
+// normal Agent lifecycle. Harness execution remains an explicit Harness runner.
 function InvestigateRepository_manual(
     ticket: SupportTicket,
     harness: root.ai.Provider,
 ) -> Resolution throws root.ai.Failure | baml.errors.UnknownError {
-    InvestigateRepository_task(ticket, harness)
-        .run(runner = root.ai.run.Completion<Resolution>.new())
+    root.ai
+        .internal
+        ._require_done(
+            InvestigateRepository_task(ticket, harness)
+                .run(runner = root.ai.run.Agent<Resolution>.new()),
+        )
+        .value
 }
 
 function fake_model_harness() -> root.ai.harness.ModelHarness throws never {

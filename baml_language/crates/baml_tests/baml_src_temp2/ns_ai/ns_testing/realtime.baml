@@ -75,7 +75,10 @@ class BufferedLiveSession {
             null
         }
 
-        function submit_tool_results(self, results: root.ai.tools.ToolResult[]) -> null throws never {
+        function submit_tool_results(
+            self,
+            results: root.ai.tools.ToolResult[],
+        ) -> null throws never {
             let frame = baml.json.stringify({ "type": "tool.results", "count": results.length() });
             self.control_frames.push(frame);
             self.channel.send(frame) catch (e) {
@@ -136,12 +139,19 @@ class FakeRealtimeProvider {
     }
 
     implements root.ai.realtime.RealtimeProvider {
-        function open_live<T>(self, task: root.ai.Task<T>, channel: root.ai.realtime.Channel) -> root.ai.realtime.LiveSession throws never {
+        function open_live<T>(
+            self,
+            task: root.ai.Task<T>,
+            channel: root.ai.realtime.Channel,
+        ) -> root.ai.realtime.LiveSession throws never {
             channel.send(baml.json.stringify({ "type": "session.created" })) catch (e) {
                 _ => null
             };
             BufferedLiveSession {
-                items: [root.ai.realtime.TranscriptDelta { text: self.transcript }, root.ai.realtime.LiveClosed {  }],
+                items: [
+                    root.ai.realtime.TranscriptDelta { text: self.transcript },
+                    root.ai.realtime.LiveClosed {  },
+                ],
                 channel: channel,
                 is_closed: false,
                 control_frames: [],

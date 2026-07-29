@@ -5,9 +5,9 @@
 
 /// The provider said slow down (HTTP 429 and equivalents).
 class RateLimited {
-  provider: string,
-  /// Backoff hint from the provider, when it sent one.
-  retry_after_ms: int?,
+    provider: string,
+    /// Backoff hint from the provider, when it sent one.
+    retry_after_ms: int?,
 }
 
 implements Failure for RateLimited {
@@ -18,8 +18,8 @@ implements Failure for RateLimited {
 /// The transport failed: connect, reset, DNS, or the response never arrived.
 /// The request may or may not have reached the provider.
 class NetworkFailure {
-  provider: string,
-  detail: string,
+    provider: string,
+    detail: string,
 }
 
 implements Failure for NetworkFailure {
@@ -30,9 +30,9 @@ implements Failure for NetworkFailure {
 /// The provider rejected the request as malformed or unfulfillable
 /// (HTTP 400/404/422 and equivalents). Retrying the same request cannot help.
 class InvalidRequest {
-  provider: string,
-  status_code: int?,
-  detail: string,
+    provider: string,
+    status_code: int?,
+    detail: string,
 }
 
 implements Failure for InvalidRequest {
@@ -43,8 +43,8 @@ implements Failure for InvalidRequest {
 /// The model or provider refused the content (safety filter, policy block).
 /// Terminal: an identical replay gets an identical refusal.
 class Refused {
-  provider: string,
-  reason: string,
+    provider: string,
+    reason: string,
 }
 
 implements Failure for Refused {
@@ -56,8 +56,8 @@ implements Failure for Refused {
 /// Carries the raw model text so callers can log it, repair it, or re-prompt
 /// with it — blind re-send is a policy decision, not a default.
 class ParseFailed {
-  provider: string,
-  raw_output: string,
+    provider: string,
+    raw_output: string,
 }
 
 implements Failure for ParseFailed {
@@ -68,8 +68,8 @@ implements Failure for ParseFailed {
 /// The attempt failed after committing a side effect (a job was enqueued, a
 /// payment was taken). Blind replay would double the effect.
 class EffectCommitted {
-  provider: string,
-  operation: string,
+    provider: string,
+    operation: string,
 }
 
 implements Failure for EffectCommitted {

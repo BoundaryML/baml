@@ -64,7 +64,7 @@ testset "integ-test-guide-02-agent-capabilities" {
     );
     //# Verify control was transferred
     match (outcome) {
-      let value: root.ai.Handoff => assert.equal(value.to, "lookup_account"),
+      let value: root.ai.Handoff => assert.equal(value.call.name, "lookup_account"),
       _ => assert.is_true(false),
     }
   }

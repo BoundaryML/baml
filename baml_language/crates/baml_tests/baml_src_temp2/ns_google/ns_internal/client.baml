@@ -75,21 +75,21 @@ function _built_request<T>(
 function _send_json(
     request: baml.http.Request,
     provider_name: string,
-) -> HttpResult throws root.ai.Failure | baml.errors.UnknownError {
+) -> HttpResult throws root.ai.Failure {
     let response = baml.http.send(request) catch (e) {
         _ => {
-            throw baml.errors.UnknownError.with_message<never>(
-            e,
-            provider_name + " send failed",
-        )
+            throw root.ai.NetworkFailure {
+                provider: provider_name,
+                detail: "baml.http.send failed before a Gemini response arrived",
+            }
         },
     };
     let text = response.text() catch (e) {
         _ => {
-            throw baml.errors.UnknownError.with_message<never>(
-            e,
-            provider_name + " response body read failed",
-        )
+            throw root.ai.NetworkFailure {
+                provider: provider_name,
+                detail: "the Gemini response body could not be read completely",
+            }
         },
     };
     if (!response.ok()) {
@@ -111,7 +111,7 @@ function _generation_body(
     output_type: type,
     use_sap: bool,
 ) -> map<string, json> throws baml.errors.Unsupported {
-    // Generation is a typed value request, never an application-tool turn.
+    // A zero-tool model step requests only the typed task value.
     body.delete("tools");
     body.delete("toolConfig");
     if (!use_sap) {
@@ -189,86 +189,5 @@ function _generation_request<T>(
         url: built.url,
         headers: built.headers,
         body: baml.json.stringify(body),
-    }
-}
-
-function _complete<T>(
-    generation: root.ai.GenerationProvider,
-    tool_provider: root.ai.tools.ToolCallingProvider,
-    task: root.ai.Task<T>,
-    provider_name: string,
-) -> root.ai.ResponseWithMetadata<T> throws root.ai.Failure | baml.errors.UnknownError {
-    //# Use one typed generation when no application tools are active
-    if (task.tools.length() == 0) {
-        return generation.generate<T>(task.with_provider(generation));
-    }
-    let max_steps = 32;
-    let tools = task.tools;
-    //# Begin the provider-owned Gemini function-call conversation
-    let conversation = tool_provider.begin<T>(task.with_provider(generation));
-    let usage = root.ai.Usage {
-        input_tokens: 0,
-        output_tokens: 0,
-        cached_input_tokens: 0,
-        reasoning_tokens: 0,
-        cost_usd: 0.0,
-    };
-    let steps = 0;
-    //# Continue until Gemini returns the reserved typed output
-    while (steps < max_steps) {
-        //## Ask for a final T or application function calls
-        let result = tool_provider.step<T>(conversation, tools);
-        steps = steps + 1;
-        match (result.metadata.usage) {
-            let step_usage: root.ai.Usage => root.ai.internal._add_usage(usage, step_usage),
-            null => {},
-        }
-        match (result.outcome) {
-            let calls: root.ai.tools.ToolCalls => {
-                // Completion<T> cannot surface a handoff outcome. Callers that
-                // need handoffs should select the Agent runner explicitly.
-                for (let call in calls.calls) {
-                    if (
-                        tools
-                            .find((tool: root.ai.tools.Tool) -> bool {
-                                tool.name == call.name
-                            })
-                            ?.handoff
-                            ?? false
-                    ) {
-                        throw baml.errors.UnknownError {
-                            data: {
-                                "provider": provider_name,
-                                "tool": call.name,
-                                "steps_taken": steps,
-                            },
-                            message: [
-                                provider_name
-                                    + " completion reached a handoff; use ai.run.Agent to receive it",
-                            ],
-                        }
-                    }
-                }
-                //## Execute application calls and submit correlated responses
-                let tool_results = root
-                    .ai
-                    .internal
-                    ._run_tool_calls(calls.calls, tools, null, null, null, [], [], null, steps);
-                conversation = tool_provider.submit(conversation, tool_results);
-            },
-            let value: T => {
-                result.metadata.usage = usage;
-                result.metadata.attributes.set("steps", steps);
-                return root.ai.ResponseWithMetadata<T> {
-                    value: value,
-                    metadata: result.metadata,
-                    conversation: conversation,
-                };
-            },
-        }
-    }
-    throw baml.errors.UnknownError {
-        data: { "provider": provider_name, "max_steps": max_steps },
-        message: [provider_name + " completion exhausted its application-tool step budget"],
     }
 }

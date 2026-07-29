@@ -24,8 +24,12 @@ testset "integ-test-guide-07-transport-config" {
     };
     //# Execute an unchanged task through that configured transport
     let task = ResolveTicket_task(sample_ticket(), provider);
-    let response = task.run(
-      runner = root.ai.run.CompletionWithMeta<Resolution>.new(),
+    let response = root.ai.internal._response_from_done(
+      root.ai.internal._require_done(
+        task.run(
+          runner = root.ai.run.Agent<Resolution>.new(),
+        ),
+      ),
     );
     log.info(baml.json.stringify({
       "guide": "07.03",

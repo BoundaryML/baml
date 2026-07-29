@@ -54,7 +54,9 @@ class Transcribe {
     options: root.ai.transcription.TranscriptionOptions,
 
     function new(language: string? = null, prompt: string? = null) -> Transcribe throws never {
-        Transcribe { options: root.ai.transcription.TranscriptionOptions { language: language, prompt: prompt } }
+        Transcribe {
+            options: root.ai.transcription.TranscriptionOptions { language: language, prompt: prompt },
+        }
     }
 
     implements root.ai.Runner<root.ai.transcription.TranscriptionTask> {

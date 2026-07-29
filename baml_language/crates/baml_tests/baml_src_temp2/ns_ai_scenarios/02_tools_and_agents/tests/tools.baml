@@ -17,7 +17,11 @@ test "AnyFunction tool invocation applies ordinary function defaults" {
         .tools
         .invoke_tool(
             tool,
-            root.ai.tools.ToolCall { id: "default-1", name: tool.name, args: { "customer_id": "C-1" } },
+            root.ai.tools.ToolCall {
+                id: "default-1",
+                name: tool.name,
+                args: { "customer_id": "C-1" },
+            },
         );
 
     assert.is_true(!result.is_error);
@@ -57,7 +61,11 @@ test "AnyFunction tool closure captures application state outside its schema" {
         .tools
         .invoke_tool(
             tool,
-            root.ai.tools.ToolCall { id: "closure-1", name: tool.name, args: { "customer_id": "C-1" } },
+            root.ai.tools.ToolCall {
+                id: "closure-1",
+                name: tool.name,
+                args: { "customer_id": "C-1" },
+            },
         );
 
     assert.equal(properties.keys(), ["customer_id"]);
@@ -73,7 +81,11 @@ test "AnyFunction bound method excludes self from its tool schema" {
         .tools
         .invoke_tool(
             tool,
-            root.ai.tools.ToolCall { id: "bound-1", name: tool.name, args: { "customer_id": "C-2" } },
+            root.ai.tools.ToolCall {
+                id: "bound-1",
+                name: tool.name,
+                args: { "customer_id": "C-2" },
+            },
         );
 
     assert.equal(tool.name, "lookup");

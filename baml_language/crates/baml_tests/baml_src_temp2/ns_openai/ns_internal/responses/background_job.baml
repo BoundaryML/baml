@@ -27,18 +27,14 @@ class BackgroundJob<T> {
             }
             self.polls = self.polls + 1;
             //# Fetch the durable provider response by opaque ID
-            let response = baml
-                .http
-                .send(
-                    baml.http.Request {
-                        method: "GET",
-                        url: (self.owner.base_url ?? "https://api.openai.com/v1")
-                            + "/responses/"
-                            + self.id,
-                        headers: _request_headers(self.owner),
-                        body: "",
-                    },
-                ) catch (e) {
+            let request = _authenticated_request(
+                self.owner,
+                "GET",
+                (self.owner.base_url ?? "https://api.openai.com/v1") + "/responses/" + self.id,
+                _request_headers(self.owner),
+                "",
+            );
+            let response = baml.http.send(request) catch (e) {
                 _ => {
                     throw baml.errors.UnknownError.with_message<never>(e, "background poll failed")
                 },
@@ -106,19 +102,17 @@ class BackgroundJob<T> {
                 return null;
             }
             //# Cancel remote work without discarding its resume coordinates
-            let response = baml
-                .http
-                .send(
-                    baml.http.Request {
-                        method: "POST",
-                        url: (self.owner.base_url ?? "https://api.openai.com/v1")
-                            + "/responses/"
-                            + self.id
-                            + "/cancel",
-                        headers: _request_headers(self.owner),
-                        body: "{}",
-                    },
-                ) catch (e) {
+            let request = _authenticated_request(
+                self.owner,
+                "POST",
+                (self.owner.base_url ?? "https://api.openai.com/v1")
+                    + "/responses/"
+                    + self.id
+                    + "/cancel",
+                _request_headers(self.owner),
+                "{}",
+            );
+            let response = baml.http.send(request) catch (e) {
                 _ => {
                     throw baml.errors.UnknownError.with_message<never>(e, "background cancel failed")
                 },

@@ -18,7 +18,7 @@ test "guide 08.07: Claude Code JSONL becomes typed output and normalized events"
         )
 }
 
-test "guide 08.07: Claude Code is a literal local-process completion provider" {
+test "guide 08.07: Claude Code is a literal local-process agent provider" {
     let provider = root.claude_code.claude_code_cli();
     let task = ClaudeCodePing_task(provider);
     let schema = baml.schema.json_schema(reflect.type_of<ClaudeCodePing>());

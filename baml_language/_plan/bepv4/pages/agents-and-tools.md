@@ -10,10 +10,7 @@ goes back to the model.
 | --- | --- |
 | `tools: [...]` | Declares the LLM function's default tools |
 | `ai.run.Agent` | Runs the provider and application tools in a loop |
-| `ai.AgentOutcome<T>` | Alias for `ai.Done<T> \| ai.BudgetReached \| ai.Handoff` |
-
-`AgentOutcome<T>` requires generic type aliases, which the compiler does not
-support yet (issue filed); until it lands, signatures spell the union out.
+| `ai.Done<T> \| ai.BudgetReached \| ai.Handoff` | The explicit Agent outcome union |
 
 ## Example
 
@@ -92,6 +89,11 @@ The direct call is usually enough. If the model requests `search_knowledge`,
 BAML validates its named arguments, invokes the real function, sends the
 result back, and continues until it has a valid `Resolution`.
 
+The generated direct call uses a default `ai.run.Agent` internally. The
+provider returns `ToolCalls`; it never invokes `search_knowledge` itself. The
+Agent owns argument validation, `reflect.call_any`, result correlation, and
+the next provider step.
+
 The model cannot choose captured values or bound `self`. This makes closures
 and bound methods useful for tenant-scoped tools:
 
@@ -155,7 +157,7 @@ An explicit Agent run returns one of three outcomes:
 | --- | --- |
 | `ai.Done<T>` | The final typed value is ready |
 | `ai.BudgetReached` | The run stopped safely and can be continued |
-| `ai.Handoff` | The application should take over |
+| `ai.Handoff` | The application should handle one exact tool call |
 
 ```baml
 let outcome: ai.Done<Resolution> | ai.BudgetReached | ai.Handoff =
@@ -168,9 +170,24 @@ let outcome: ai.Done<Resolution> | ai.BudgetReached | ai.Handoff =
 match (outcome) {
   let done: ai.Done<Resolution> => log.info(done.value),
   let stopped: ai.BudgetReached => log.info(stopped.reason),
-  let handoff: ai.Handoff => log.info(handoff.to),
+  let handoff: ai.Handoff => log.info(handoff.call.name),
 }
 ```
 
 Use the direct call when incomplete outcomes are exceptional. Use the explicit
 runner when stop, resume, or handoff is normal application control flow.
+A handoff retains the provider's call ID; submit a `ToolResult` for
+`handoff.call` before resuming its conversation.
+
+Runnable examples:
+
+```console
+baml run --from crates/baml_tests/baml_src_temp2 \
+  ai_scenarios.one_tool
+
+baml run --from crates/baml_tests/baml_src_temp2 \
+  ai_scenarios.agent_loop
+
+baml run --from crates/baml_tests/baml_src_temp2 \
+  ai_scenarios.multiple_and_parallel_tools
+```

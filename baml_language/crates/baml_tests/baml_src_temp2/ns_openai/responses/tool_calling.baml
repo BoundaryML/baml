@@ -1,4 +1,4 @@
-implements root.ai.tools.ToolCallingProvider for Responses {
+implements root.ai.AgentProvider for Responses {
   function begin<T>(
     self,
     task: root.ai.Task<T>,
@@ -6,10 +6,19 @@ implements root.ai.tools.ToolCallingProvider for Responses {
       throws root.ai.Failure | baml.errors.UnknownError {
     root.openai.internal._validate_output_config(self);
     if (self.tool_mode == root.openai.ToolMode.Prompt) {
-      // Prompt mode is selected here so OpenAI users configure one provider;
-      // the generic adapter remains an internal implementation detail.
-      let prompt_tools = root.ai.tools.PromptToolProvider { inner: self };
-      return prompt_tools.begin<T>(task);
+      return root.openai.internal.PromptConversation {
+        owner: self,
+        history: task.messages().to_history(),
+        declared_output_type: root.ai.internal._output_type_fingerprint<T>(),
+        recipe: task._render,
+        identity: task.identity,
+        arguments: task.arguments,
+        tags: task.tags,
+        input: [],
+        request_url: "",
+        headers: {},
+        pending_call_ids: [],
+      };
     }
     //# Render the first turn into Responses input items
     let request = root.openai.internal._responses_built_request(
@@ -27,8 +36,11 @@ implements root.ai.tools.ToolCallingProvider for Responses {
     root.openai.internal.Conversation {
       owner: self,
       history: task.messages().to_history(),
+      declared_output_type: root.ai.internal._output_type_fingerprint<T>(),
       input: baml.json.path_or<json[]>(request_body, ".input", []),
       previous_response_id: null,
+      request_url: request.url,
+      headers: root.openai.internal._headers_without_auth(request.headers),
       active_tools: [],
       last_output: [],
     }
@@ -38,12 +50,15 @@ implements root.ai.tools.ToolCallingProvider for Responses {
     self,
     conversation: root.ai.Conversation,
     tools: root.ai.tools.Tool[],
-  ) -> root.ai.tools.ModelStep<T>
+  ) -> root.ai.ModelStep<T>
       throws root.ai.Failure | baml.errors.UnknownError {
     root.openai.internal._validate_output_config(self);
+    root.ai.internal._require_conversation_output_type<T>(
+      conversation,
+      self.name(),
+    );
     if (self.tool_mode == root.openai.ToolMode.Prompt) {
-      let prompt_tools = root.ai.tools.PromptToolProvider { inner: self };
-      return prompt_tools.step<T>(conversation, tools);
+      return root.openai.internal._prompt_step<T>(self, conversation, tools);
     }
     let strict = root.openai.internal._is_strict(self);
     let use_sap = root.openai.internal._uses_sap(self);
@@ -56,6 +71,20 @@ implements root.ai.tools.ToolCallingProvider for Responses {
         detail: "OpenAI Responses received another provider's conversation",
       },
     };
+    if (!root.ai.internal._same_provider_instance(state.owner, self)) {
+      throw root.ai.InvalidRequest {
+        provider: "openai-responses",
+        status_code: null,
+        detail: "OpenAI Responses received a conversation owned by another provider instance",
+      };
+    }
+    if (state.last_output.length() != 0) {
+      throw root.ai.InvalidRequest {
+        provider: "openai-responses",
+        status_code: null,
+        detail: "submit tool results before requesting the next OpenAI Responses step",
+      };
+    }
     //# Select native or hybrid SAP tool transport
     // With OutputMode.Sap, _agent_tools keeps native application tools but
     // omits the result tool; final T comes from output_text. ToolMode.Prompt
@@ -66,7 +95,6 @@ implements root.ai.tools.ToolCallingProvider for Responses {
       strict,
       use_sap,
     );
-    state.active_tools = encoded_tools;
     let body = root.openai.internal._request_body(self, state.input);
     let allow_parallel = root.openai.internal._allow_parallel_tool_calls(
       self,
@@ -105,22 +133,22 @@ implements root.ai.tools.ToolCallingProvider for Responses {
       "parallel_tool_calls": allow_parallel,
     }));
     //# Execute one Responses model turn
-    let response = baml.http.send(baml.http.Request {
-      method: "POST",
-      url: (self.base_url ?? "https://api.openai.com/v1") + "/responses",
-      headers: root.openai.internal._request_headers(self),
-      body: baml.json.stringify(body),
-    }) catch (e) {
-      _ => throw baml.errors.UnknownError.with_message<never>(
-        e,
-        "OpenAI Responses tools send failed",
-      ),
+    let request = root.openai.internal._authenticated_continuation_request(
+      self,
+      state,
+      body,
+    );
+    let response = baml.http.send(request) catch (e) {
+      _ => throw root.ai.NetworkFailure {
+        provider: "openai-responses",
+        detail: "baml.http.send failed before a Responses API response arrived",
+      },
     };
     let text = response.text() catch (e) {
-      _ => throw baml.errors.UnknownError.with_message<never>(
-        e,
-        "OpenAI Responses tools body failed",
-      ),
+      _ => throw root.ai.NetworkFailure {
+        provider: "openai-responses",
+        detail: "the Responses API body could not be read completely",
+      },
     };
     if (!response.ok()) {
       throw root.ai.internal.classify_http(
@@ -155,6 +183,9 @@ implements root.ai.tools.ToolCallingProvider for Responses {
       baml.json.path_or(call, ".name", "") == root.openai.internal._output_tool_name()
     });
     let metadata = root.openai.internal._response_metadata(raw, self.model);
+    // Commit turn-local request state only after the request and provider
+    // envelope have succeeded. Retry may call step again after a safe failure.
+    state.active_tools = encoded_tools;
     //# Finish only when the singular reserved result tool is called
     if (!use_sap && output_calls.length() > 0) {
       if (calls.length() != 1 || output_calls.length() != 1) {
@@ -175,13 +206,15 @@ implements root.ai.tools.ToolCallingProvider for Responses {
           ),
         ),
       );
-      return root.ai.tools.ModelStep<T> {
+      return root.ai.ModelStep<T> {
         outcome: value,
         metadata: metadata,
       };
     }
     //# Yield application calls so the runner can execute them
     if (calls.length() > 0) {
+      // Validate the provider's IDs before handing the calls to the runner.
+      let _ = root.openai.internal._pending_call_ids(calls);
       state.last_output = calls;
       let response_id = baml.json.path_or(raw, ".id", "");
       if (response_id.length() == 0) {
@@ -200,7 +233,7 @@ implements root.ai.tools.ToolCallingProvider for Responses {
         }],
         metadata: null,
       });
-      return root.ai.tools.ModelStep<T> {
+      return root.ai.ModelStep<T> {
         outcome: root.openai.internal._application_calls(calls, text),
         metadata: metadata,
       };
@@ -229,7 +262,7 @@ implements root.ai.tools.ToolCallingProvider for Responses {
         raw_output: content,
       },
     };
-    root.ai.tools.ModelStep<T> {
+    root.ai.ModelStep<T> {
       outcome: value,
       metadata: metadata,
     }
@@ -242,8 +275,7 @@ implements root.ai.tools.ToolCallingProvider for Responses {
   ) -> root.ai.Conversation throws root.ai.Failure {
     root.openai.internal._validate_output_config(self);
     if (self.tool_mode == root.openai.ToolMode.Prompt) {
-      let prompt_tools = root.ai.tools.PromptToolProvider { inner: self };
-      return prompt_tools.submit(conversation, results);
+      return root.openai.internal._prompt_submit(self, conversation, results);
     }
     //# Recover the continuation that produced these call IDs
     let state = match (conversation) {
@@ -254,15 +286,27 @@ implements root.ai.tools.ToolCallingProvider for Responses {
         detail: "OpenAI Responses received another provider's conversation",
       },
     };
-    //# Correlate runner results with Responses function_call_output items
-    state.input = results.map((result: root.ai.tools.ToolResult) -> json {
+    if (!root.ai.internal._same_provider_instance(state.owner, self)) {
+      throw root.ai.InvalidRequest {
+        provider: "openai-responses",
+        status_code: null,
+        detail: "OpenAI Responses received a conversation owned by another provider instance",
+      };
+    }
+    //# Correlate exactly one runner result with every pending function call
+    let pending_ids = root.openai.internal._pending_call_ids(state.last_output);
+    let ordered = root.openai.internal._correlate_tool_results(
+      pending_ids,
+      results,
+    );
+    state.input = ordered.map((result: root.ai.tools.ToolResult) -> json {
       {
         "type": "function_call_output",
         "call_id": result.id,
         "output": baml.json.stringify(result.output),
       }
     });
-    for (let result in results) {
+    for (let result in ordered) {
       state.history.entries.push(root.ai.ChatMessage {
         message_role: root.ai.MessageRole.Tool,
         content: [root.ai.messages.ProviderDataPart {
@@ -276,6 +320,7 @@ implements root.ai.tools.ToolCallingProvider for Responses {
         metadata: null,
       });
     }
+    state.last_output = [];
     state
   }
 }

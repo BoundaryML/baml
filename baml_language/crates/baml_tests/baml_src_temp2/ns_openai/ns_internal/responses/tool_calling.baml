@@ -17,6 +17,46 @@ function _request_headers(provider: root.openai.Responses) -> map<string, string
     headers
 }
 
+function _authenticated_request(
+    provider: root.openai.Responses,
+    method: string,
+    url: string,
+    headers: map<string, string>,
+    body: string,
+) -> baml.http.Request throws baml.errors.UnknownError {
+    let normalized_headers = _headers_without_auth(headers);
+    normalized_headers.set("Content-Type", "application/json");
+    let request = baml.http.Request { method: method, url: url, headers: normalized_headers, body: body };
+    _configured_primitive(
+        provider.render_shorthand(),
+        provider.model,
+        provider.api_key,
+        provider.base_url,
+        provider.extra_headers,
+        provider.extra_body,
+    )
+    .authenticate_request(request) catch (e) {
+        _ => {
+            throw baml.errors.UnknownError.with_message<never>(
+                e,
+                "OpenAI Responses continuation authentication failed",
+            )
+        },
+    }
+}
+
+function _authenticated_continuation_request(
+    provider: root.openai.Responses,
+    state: Conversation,
+    body: map<string, json>,
+) -> baml.http.Request throws baml.errors.UnknownError {
+    let headers: map<string, string> = {};
+    for (let key in state.headers.keys()) {
+        headers.set(key, state.headers[key]);
+    }
+    _authenticated_request(provider, "POST", state.request_url, headers, baml.json.stringify(body))
+}
+
 function _request_body(
     provider: root.openai.Responses,
     input: json[],
@@ -82,4 +122,48 @@ function _allow_parallel_tool_calls(
     application_tool_count: int,
 ) -> bool throws never {
     provider.parallel_tool_calls && !_is_strict(provider) && application_tool_count > 1
+}
+
+function _pending_call_ids(raw_calls: json[]) -> string[] throws root.ai.InvalidRequest {
+    let ids: string[] = [];
+    for (let call in raw_calls) {
+        let id = baml.json.path_or(call, ".call_id", baml.json.path_or(call, ".id", ""));
+        if (id.length() == 0 || ids.includes(id)) {
+            throw root.ai.InvalidRequest {
+                provider: "openai-responses",
+                status_code: null,
+                detail: "pending OpenAI tool calls must have unique, non-empty call IDs",
+            };
+        }
+        ids.push(id);
+    }
+    ids
+}
+
+function _correlate_tool_results(
+    pending_ids: string[],
+    results: root.ai.tools.ToolResult[],
+) -> root.ai.tools.ToolResult[] throws root.ai.InvalidRequest {
+    if (pending_ids.length() == 0 || pending_ids.length() != results.length()) {
+        throw root.ai.InvalidRequest {
+            provider: "openai-responses",
+            status_code: null,
+            detail: "tool results must match every pending OpenAI function call",
+        };
+    }
+    let ordered: root.ai.tools.ToolResult[] = [];
+    for (let call_id in pending_ids) {
+        let matching = results.filter((result: root.ai.tools.ToolResult) -> bool {
+            result.id == call_id
+        });
+        if (matching.length() != 1) {
+            throw root.ai.InvalidRequest {
+                provider: "openai-responses",
+                status_code: null,
+                detail: "tool result IDs must match pending OpenAI call IDs exactly once",
+            };
+        }
+        ordered.push(matching[0]);
+    }
+    ordered
 }

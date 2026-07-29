@@ -1,4 +1,4 @@
-test "guide 06.02: an observer receives model, tool, and completion events" {
+test "guide 06.02: an observer receives model, tool, and terminal events" {
     //# Attach an observer directly to the agent runner
     let observer = GuideObserver { kinds: [] };
     //# Run an observable tool loop
@@ -6,7 +6,7 @@ test "guide 06.02: an observer receives model, tool, and completion events" {
         .run(
             runner = root.ai.run.Agent<Resolution>.new(tools = [search_knowledge], observers = [observer]),
         );
-    //# Verify model and completion events
+    //# Verify model and terminal events
     assert.contains(observer.kinds.join(","), "model_started");
     assert.contains(observer.kinds.join(","), "run_finished")
 }

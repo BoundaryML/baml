@@ -1,4 +1,245 @@
 // Tests for the save_and_resume scenario.
+class MisownedBeginProvider {
+  inner: root.ai.testing.FakeProvider,
+
+  implements root.ai.Provider {
+    function name(self) -> string throws never { "misowned-begin" }
+    function render_shorthand(self) -> string throws never { self.inner.render_shorthand() }
+  }
+
+  implements root.ai.AgentProvider {
+    function begin<T>(self, task: root.ai.Task<T>) -> root.ai.Conversation throws never {
+      self.inner.begin<T>(task.with_provider(self.inner))
+    }
+    function step<T>(
+      self,
+      conversation: root.ai.Conversation,
+      tools: root.ai.tools.Tool[],
+    ) -> root.ai.ModelStep<T> throws root.ai.Failure | baml.errors.UnknownError {
+      self.inner.step<T>(conversation, tools)
+    }
+    function submit(
+      self,
+      conversation: root.ai.Conversation,
+      results: root.ai.tools.ToolResult[],
+    ) -> root.ai.Conversation throws root.ai.Failure {
+      self.inner.submit(conversation, results)
+    }
+  }
+}
+
+class StructurallyEqualMisownedBeginProvider {
+  implements root.ai.Provider {
+    function name(self) -> string throws never { "same-shape-misowned-begin" }
+    function render_shorthand(self) -> string throws never {
+      "baml-fallback/fake"
+    }
+  }
+
+  implements root.ai.AgentProvider {
+    function begin<T>(self, task: root.ai.Task<T>) -> root.ai.Conversation throws never {
+      root.ai.ProviderConversation {
+        // A fresh empty provider compares structurally equal to self, but it
+        // is not the provider instance selected by the Agent.
+        owner: StructurallyEqualMisownedBeginProvider {},
+        history: task.messages().to_history(),
+        sealed_state: {},
+        declared_output_type: root.ai.internal._output_type_fingerprint<T>(),
+      }
+    }
+    function step<T>(
+      self,
+      conversation: root.ai.Conversation,
+      tools: root.ai.tools.Tool[],
+    ) -> root.ai.ModelStep<T> throws never {
+      baml.sys.panic("ownership validation must run before step")
+    }
+    function submit(
+      self,
+      conversation: root.ai.Conversation,
+      results: root.ai.tools.ToolResult[],
+    ) -> root.ai.Conversation throws never {
+      conversation
+    }
+  }
+}
+
+class MisownedImportProvider {
+  inner: root.ai.testing.FakeToolProvider,
+
+  implements root.ai.Provider {
+    function name(self) -> string throws never { "misowned-import" }
+    function render_shorthand(self) -> string throws never { self.inner.render_shorthand() }
+  }
+
+  implements root.ai.AgentProvider {
+    function begin<T>(self, task: root.ai.Task<T>) -> root.ai.Conversation throws never {
+      self.inner.begin<T>(task.with_provider(self.inner))
+    }
+    function step<T>(
+      self,
+      conversation: root.ai.Conversation,
+      tools: root.ai.tools.Tool[],
+    ) -> root.ai.ModelStep<T> throws root.ai.Failure | baml.errors.UnknownError {
+      self.inner.step<T>(conversation, tools)
+    }
+    function submit(
+      self,
+      conversation: root.ai.Conversation,
+      results: root.ai.tools.ToolResult[],
+    ) -> root.ai.Conversation throws baml.errors.UnknownError {
+      self.inner.submit(conversation, results)
+    }
+  }
+
+  implements root.ai.ConversationImportProvider {
+    function import_messages<T>(
+      self,
+      messages: root.ai.Messages,
+    ) -> root.ai.ConversationImport throws never {
+      self.inner.import_messages<T>(messages)
+    }
+  }
+}
+
+class MisownedSubmitProvider {
+  wrong_owner: root.ai.testing.FakeToolProvider,
+  submit_calls: int,
+
+  implements root.ai.Provider {
+    function name(self) -> string throws never { "misowned-submit" }
+    function render_shorthand(self) -> string throws never {
+      self.wrong_owner.render_shorthand()
+    }
+  }
+
+  implements root.ai.AgentProvider {
+    function begin<T>(self, task: root.ai.Task<T>) -> root.ai.Conversation throws never {
+      root.ai.ProviderConversation {
+        owner: self,
+        history: task.messages().to_history(),
+        sealed_state: {},
+        declared_output_type: root.ai.internal._output_type_fingerprint<T>(),
+      }
+    }
+    function step<T>(
+      self,
+      conversation: root.ai.Conversation,
+      tools: root.ai.tools.Tool[],
+    ) -> root.ai.ModelStep<T> throws never {
+      root.ai.ModelStep<T> {
+        outcome: root.ai.tools.ToolCalls { calls: [one_knowledge_call()] },
+        metadata: root.ai.ResponseMetadata {
+          provider: self.name(),
+          model: "fake",
+          request_id: "misowned-submit-step",
+          finish_reason: null,
+          usage: null,
+          attributes: {},
+          raw: null,
+        },
+      }
+    }
+    function submit(
+      self,
+      conversation: root.ai.Conversation,
+      results: root.ai.tools.ToolResult[],
+    ) -> root.ai.Conversation throws never {
+      self.submit_calls += 1;
+      root.ai.ProviderConversation {
+        owner: self.wrong_owner,
+        history: conversation.messages().to_history(),
+        sealed_state: {},
+        declared_output_type: conversation.output_type_fingerprint(),
+      }
+    }
+  }
+}
+
+test "guide 04.05: Agent rejects begin state owned by another provider instance" {
+  let inner = fake_resolution();
+  let wrapper = MisownedBeginProvider { inner: inner };
+  let rejected = false;
+  let _ = ResolveTicket_task(sample_ticket(), wrapper)
+    .run(runner = root.ai.run.Agent<Resolution>.new()) catch (e) {
+      let failure: root.ai.Failure => {
+        rejected = failure is root.ai.InvalidRequest;
+        null
+      },
+    };
+  assert.is_true(rejected);
+  assert.equal(inner.calls, 0)
+}
+
+test "guide 04.05: provider ownership uses object identity, not structural equality" {
+  let provider = StructurallyEqualMisownedBeginProvider {};
+  let rejected = false;
+  let _ = ResolveTicket_task(sample_ticket(), provider)
+    .run(runner = root.ai.run.Agent<Resolution>.new()) catch (e) {
+      let failure: root.ai.Failure => {
+        rejected = failure is root.ai.InvalidRequest;
+        null
+      },
+    };
+  assert.is_true(rejected)
+}
+
+test "guide 04.05: Agent rejects imported state owned by another provider instance" {
+  let first = fake_tool_provider([one_knowledge_call()]);
+  let inner = fake_tool_provider([]);
+  let wrapper = MisownedImportProvider { inner: inner };
+  let rejected = false;
+  let _ = ResolveTicketWithTools_task(sample_ticket(), first, [search_knowledge])
+    .run(
+      runner = root.ai.run.Agent<Resolution>.new(
+        tools = [search_knowledge],
+        prepare_step = (context) -> {
+          root.ai.tools.StepPlan {
+            provider: if (context.step == 1) { wrapper } else { null },
+            tools: null,
+            stop: null,
+          }
+        },
+      ),
+    ) catch (e) {
+      let failure: root.ai.Failure => {
+        rejected = failure is root.ai.InvalidRequest;
+        null
+      },
+    };
+  assert.is_true(rejected)
+}
+
+test "guide 04.05: Agent rejects submitted state owned by another provider instance" {
+  let provider = MisownedSubmitProvider {
+    wrong_owner: fake_tool_provider([]),
+    submit_calls: 0,
+  };
+  let rejected = false;
+  let _ = ResolveTicketWithTools_task(
+    sample_ticket(),
+    provider,
+    [search_knowledge],
+  )
+    .run(runner = root.ai.run.Agent<Resolution>.new(tools = [search_knowledge]))
+    catch (e) {
+      let failure: root.ai.Failure => {
+        rejected = failure is root.ai.InvalidRequest;
+        null
+      },
+    };
+  assert.is_true(rejected);
+  assert.equal(provider.submit_calls, 1)
+}
+
+test "guide 04.05: output fingerprints include nominal and structural identity" {
+  let resolution = root.ai.internal._output_type_fingerprint<Resolution>();
+  let text = root.ai.internal._output_type_fingerprint<string>();
+  assert.contains(resolution, "baml-output/v1;");
+  assert.contains(resolution, "Resolution");
+  assert.is_true(resolution != text)
+}
+
 test "guide 04.05: OpenAI seals and restores its exact provider conversation" {
   //# Begin a native provider conversation
   let provider = root.openai.Responses {
@@ -67,6 +308,126 @@ test "guide 04.05: conversation tokens validate provider ownership" {
   assert.equal(label, "rejected")
 }
 
+test "guide 04.05: save requires the owner instance and restore requires the same configuration" {
+  let owner = root.openai.responses(model = "gpt-5.6-luna", api_key = "owner-key");
+  let same_config = root.openai.responses(model = "gpt-5.6-luna", api_key = "rotated-key");
+  let other_config = root.openai.responses(
+    model = "gpt-5.6-luna",
+    api_key = "owner-key",
+    base_url = "https://other-account.example.test",
+  );
+  let conversation = owner.begin<Resolution>(
+    ResolveTicket_task(sample_ticket(), owner),
+  );
+
+  let wrong_owner_rejected = false;
+  let _ = same_config.save_conversation(conversation) catch (e) {
+    let unknown: baml.errors.UnknownError => {
+      wrong_owner_rejected = true;
+      root.ai.ConversationToken { provider: "rejected", version: 0, sealed: "" }
+    },
+  };
+  assert.is_true(wrong_owner_rejected);
+
+  // Credentials may rotate across processes, but request-shaping identity may
+  // not silently change for an opaque continuation.
+  let token = owner.save_conversation(conversation);
+  let restored = same_config.restore_conversation(token);
+  assert.equal(restored.provider(), same_config);
+
+  let wrong_config_rejected = false;
+  let _ = other_config.restore_conversation(token) catch (e) {
+    let unknown: baml.errors.UnknownError => {
+      wrong_config_rejected = true;
+      conversation
+    },
+  };
+  assert.is_true(wrong_config_rejected)
+}
+
+test "guide 04.05: Anthropic and Google apply the same token ownership boundary" {
+  let anthropic_owner = root.anthropic.messages(
+    model = "claude-test",
+    api_key = "owner-key",
+    base_url = "https://anthropic.example.test",
+  );
+  let anthropic_other = root.anthropic.messages(
+    model = "claude-test",
+    api_key = "other-key",
+    base_url = "https://anthropic.example.test",
+  );
+  let anthropic_conversation = anthropic_owner.begin<Resolution>(
+    ResolveTicket_task(sample_ticket(), anthropic_owner),
+  );
+  let anthropic_rejected = false;
+  let _ = anthropic_other.save_conversation(anthropic_conversation) catch (e) {
+    let unknown: baml.errors.UnknownError => {
+      anthropic_rejected = true;
+      root.ai.ConversationToken { provider: "rejected", version: 0, sealed: "" }
+    },
+  };
+  assert.is_true(anthropic_rejected);
+
+  let google_owner = root.google.vertex.gemini(
+    model = "gemini-test",
+    api_key = "owner-key",
+  );
+  let google_other = root.google.vertex.gemini(
+    model = "gemini-test",
+    api_key = "other-key",
+  );
+  let google_conversation = google_owner.begin<Resolution>(
+    ResolveTicket_task(sample_ticket(), google_owner),
+  );
+  let google_rejected = false;
+  let _ = google_other.save_conversation(google_conversation) catch (e) {
+    let unknown: baml.errors.UnknownError => {
+      google_rejected = true;
+      root.ai.ConversationToken { provider: "rejected", version: 0, sealed: "" }
+    },
+  };
+  assert.is_true(google_rejected)
+}
+
+test "guide 04.05: an Agent rejects a conversation created for another output type" {
+  let provider = fake_resolution();
+  let conversation = provider.begin<Resolution>(
+    ResolveTicket_task(sample_ticket(), provider),
+  );
+  let wrong_task = root.ai.task<string>(
+    provider,
+    (ctx: baml.llm.Context) -> baml.llm.PromptAst {
+      baml.llm.assemble_prompt_ast(["Return text.\n", ""], [ctx.output_format])
+    },
+  );
+  let rejected = false;
+  let _ = wrong_task
+    .run(
+      runner = root.ai.run.Agent<string>.new(conversation = conversation),
+    )
+    catch (e) {
+      let invalid: root.ai.InvalidRequest => {
+        rejected = true;
+        root.ai.Done<string> {
+          value: "unreachable",
+          metadata: root.ai.ResponseMetadata {
+            provider: "test",
+            model: null,
+            request_id: null,
+            finish_reason: null,
+            usage: null,
+            attributes: {},
+            raw: null,
+          },
+          conversation: conversation,
+        }
+      },
+      _ => baml.sys.panic("unexpected conversation type error"),
+    };
+  assert.is_true(rejected);
+  assert.equal(provider.calls, 0)
+}
+
 testset "integ-test-guide-04-save-and-resume" {
   test "guide 04.05 live OpenAI: save after a tool request and resume to completion" {
     let provider = live_openai();
@@ -88,7 +449,7 @@ testset "integ-test-guide-04-save-and-resume" {
       root.ai.tools.invoke_tool(tools[0], call)
     });
     let resumed = provider
-      .as<root.ai.tools.ToolCallingProvider>
+      .as<root.ai.AgentProvider>
       .submit(restored, results);
     let dispatched: string[] = [];
     let outcome = task.run(

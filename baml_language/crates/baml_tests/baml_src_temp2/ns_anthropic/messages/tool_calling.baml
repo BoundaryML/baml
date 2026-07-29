@@ -1,4 +1,4 @@
-implements root.ai.tools.ToolCallingProvider for Messages {
+implements root.ai.AgentProvider for Messages {
   function begin<T>(
     self,
     task: root.ai.Task<T>,
@@ -6,9 +6,8 @@ implements root.ai.tools.ToolCallingProvider for Messages {
       throws root.ai.Failure | baml.errors.UnknownError {
     root.anthropic.internal._validate_output_config(self);
     if (self.tool_mode == root.anthropic.ToolMode.Prompt) {
-      // Prompt mode uses the provider-neutral T | ToolCalls text protocol.
-      let prompt_tools = root.ai.tools.PromptToolProvider { inner: self };
-      return prompt_tools.begin<T>(task);
+      // Prompt mode uses Anthropic's private T | ToolCalls text protocol.
+      return root.anthropic.internal._prompt_begin<T>(self, task);
     }
     //# Render the first turn into provider-native Messages blocks
     let request = root.anthropic.internal._messages_built_request(
@@ -27,6 +26,7 @@ implements root.ai.tools.ToolCallingProvider for Messages {
     root.anthropic.internal.Conversation {
       owner: self,
       history: task.messages().to_history(),
+      declared_output_type: root.ai.internal._output_type_fingerprint<T>(),
       system: baml.json.path_or<json[]>(request_body, ".system", []),
       messages: baml.json.path_or<json[]>(request_body, ".messages", []),
       request_url: request.url,
@@ -40,12 +40,15 @@ implements root.ai.tools.ToolCallingProvider for Messages {
     self,
     conversation: root.ai.Conversation,
     tools: root.ai.tools.Tool[],
-  ) -> root.ai.tools.ModelStep<T>
+  ) -> root.ai.ModelStep<T>
       throws root.ai.Failure | baml.errors.UnknownError {
     root.anthropic.internal._validate_output_config(self);
+    root.ai.internal._require_conversation_output_type<T>(
+      conversation,
+      self.name(),
+    );
     if (self.tool_mode == root.anthropic.ToolMode.Prompt) {
-      let prompt_tools = root.ai.tools.PromptToolProvider { inner: self };
-      return prompt_tools.step<T>(conversation, tools);
+      return root.anthropic.internal._prompt_step<T>(self, conversation, tools);
     }
     //# Recover the Anthropic continuation owned by this provider
     let state = match (conversation) {
@@ -58,12 +61,29 @@ implements root.ai.tools.ToolCallingProvider for Messages {
         }
       },
     };
+    if (!root.ai.internal._same_provider_instance(state.owner, self)) {
+      throw root.ai.InvalidRequest {
+        provider: "anthropic",
+        status_code: null,
+        detail: "Anthropic received a conversation owned by another provider instance",
+      };
+    }
+    if (
+      state.last_assistant_content.some((part: json) -> bool {
+        root.anthropic.internal._is_tool_use(part)
+      })
+    ) {
+      throw root.ai.InvalidRequest {
+        provider: "anthropic",
+        status_code: null,
+        detail: "submit tool results before requesting the next Anthropic step",
+      };
+    }
     //# Encode application tools independently from the typed output schema
     let encoded_tools = root.anthropic.internal._application_tools(
       tools,
       self.strict_tool_inputs,
     );
-    state.active_tools = encoded_tools;
     let body = root.anthropic.internal._conversation_body<T>(
       self,
       state,
@@ -94,18 +114,18 @@ implements root.ai.tools.ToolCallingProvider for Messages {
     );
     let response = baml.http.send(request) catch (e) {
       _ => {
-        throw baml.errors.UnknownError.with_message<never>(
-          e,
-          "Anthropic tools send failed",
-        )
+        throw root.ai.NetworkFailure {
+          provider: "anthropic",
+          detail: "baml.http.send failed before an Anthropic Messages response arrived",
+        }
       },
     };
     let text = response.text() catch (e) {
       _ => {
-        throw baml.errors.UnknownError.with_message<never>(
-          e,
-          "Anthropic tools body failed",
-        )
+        throw root.ai.NetworkFailure {
+          provider: "anthropic",
+          detail: "the Anthropic Messages body could not be read completely",
+        }
       },
     };
     if (!response.ok()) {
@@ -143,6 +163,9 @@ implements root.ai.tools.ToolCallingProvider for Messages {
     }
     let raw_calls = root.anthropic.internal._response_tool_uses(raw);
     let metadata = root.anthropic.internal._response_metadata(raw, self.model);
+    // Commit turn-local request state only after the request and provider
+    // envelope have succeeded. Retry may call step again after a safe failure.
+    state.active_tools = encoded_tools;
     //# Yield native tool_use blocks so the runner can execute them
     if (raw_calls.length() > 0) {
       if (stop_reason != "tool_use") {
@@ -165,7 +188,7 @@ implements root.ai.tools.ToolCallingProvider for Messages {
         }],
         metadata: null,
       });
-      return root.ai.tools.ModelStep<T> {
+      return root.ai.ModelStep<T> {
         outcome: root.anthropic.internal._application_calls(raw_calls, text),
         metadata: metadata,
       };
@@ -181,7 +204,7 @@ implements root.ai.tools.ToolCallingProvider for Messages {
         root.anthropic.internal._response_text(raw) ?? "",
       ),
     );
-    root.ai.tools.ModelStep<T> {
+    root.ai.ModelStep<T> {
       outcome: value,
       metadata: metadata,
     }
@@ -195,8 +218,7 @@ implements root.ai.tools.ToolCallingProvider for Messages {
       throws root.ai.Failure {
     root.anthropic.internal._validate_output_config(self);
     if (self.tool_mode == root.anthropic.ToolMode.Prompt) {
-      let prompt_tools = root.ai.tools.PromptToolProvider { inner: self };
-      return prompt_tools.submit(conversation, results);
+      return root.anthropic.internal._prompt_submit(self, conversation, results);
     }
     //# Recover the continuation that produced these tool_use IDs
     let state = match (conversation) {
@@ -209,6 +231,13 @@ implements root.ai.tools.ToolCallingProvider for Messages {
         }
       },
     };
+    if (!root.ai.internal._same_provider_instance(state.owner, self)) {
+      throw root.ai.InvalidRequest {
+        provider: "anthropic",
+        status_code: null,
+        detail: "Anthropic received a conversation owned by another provider instance",
+      };
+    }
     //# Correlate exactly one runner result with every pending tool_use block
     let assistant_content = state.last_assistant_content;
     let pending: json[] = [];
@@ -224,7 +253,9 @@ implements root.ai.tools.ToolCallingProvider for Messages {
         detail: "tool results must match every pending Anthropic tool_use block",
       };
     }
-    let tool_results: json[] = [];
+    // Validate and order the complete result set before mutating either
+    // portable or provider-native conversation history.
+    let ordered_results: root.ai.tools.ToolResult[] = [];
     for (let call in pending) {
       let call_id = root.anthropic.internal._tool_use_id(call) ?? "";
       let pending_with_id: json[] = [];
@@ -251,7 +282,13 @@ implements root.ai.tools.ToolCallingProvider for Messages {
           detail: "tool result IDs must match pending Anthropic tool_use IDs exactly once",
         };
       }
-      let result = matching[0];
+      ordered_results.push(matching[0]);
+    }
+    // All correlations are valid. Build the two history projections, then
+    // commit them together so a late invalid ID cannot leave partial state.
+    let tool_results: json[] = [];
+    let history_entries: root.ai.Message[] = [];
+    for (let result in ordered_results) {
       let result_block: json = {
         "type": "tool_result",
         "tool_use_id": result.id,
@@ -259,7 +296,7 @@ implements root.ai.tools.ToolCallingProvider for Messages {
         "is_error": result.is_error,
       };
       tool_results.push(result_block);
-      state.history.entries.push(root.ai.ChatMessage {
+      history_entries.push(root.ai.ChatMessage {
         message_role: root.ai.MessageRole.Tool,
         content: [root.ai.messages.ProviderDataPart {
           provider: "anthropic",
@@ -271,6 +308,9 @@ implements root.ai.tools.ToolCallingProvider for Messages {
         }],
         metadata: null,
       });
+    }
+    for (let entry in history_entries) {
+      state.history.entries.push(entry);
     }
     state.messages.push({
       "role": "user",

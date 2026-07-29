@@ -1,4 +1,4 @@
-// Record the model, tool, and completion events emitted while a support agent
+// Record the model, tool, and terminal events emitted while a support agent
 // resolves a ticket.
 function events_and_callbacks() -> null {
     let observer = GuideObserver { kinds: [] };

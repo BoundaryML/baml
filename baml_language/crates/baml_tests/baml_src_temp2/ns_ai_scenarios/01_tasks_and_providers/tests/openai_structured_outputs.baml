@@ -108,12 +108,10 @@ test "OpenAI prompt tool mode selects the text adapter internally" {
             output_mode = root.openai.OutputMode.Sap,
             tool_mode = root.openai.ToolMode.Prompt,
         );
-    let conversation = provider.begin<Resolution>(
-        ResolveTicket_task(sample_ticket(), provider),
-    );
+    let conversation = provider.begin<Resolution>(ResolveTicket_task(sample_ticket(), provider));
     match (conversation) {
-        let value: root.ai.tools.PromptToolConversation => {
-            assert.equal(value.owner.inner.name(), "openai")
+        let value: root.openai.internal.PromptConversation => {
+            assert.equal(value.owner.name(), "openai")
         },
         _ => assert.is_true(false),
     }
@@ -129,12 +127,7 @@ test "OpenAI agent mode adds the result tool unless SAP is explicit" {
 
 test "OpenAI parallel calls depend on app tools and strictness, not output shape" {
     let non_strict = root.openai.responses(parallel_tool_calls = true);
-    let strict = root
-        .openai
-        .responses(
-            output_mode = root.openai.OutputMode.Strict,
-            parallel_tool_calls = true,
-        );
+    let strict = root.openai.responses(output_mode = root.openai.OutputMode.Strict, parallel_tool_calls = true);
     assert.equal(root.openai.internal._allow_parallel_tool_calls(non_strict, 1), false);
     assert.equal(root.openai.internal._allow_parallel_tool_calls(non_strict, 2), true);
     assert.equal(root.openai.internal._allow_parallel_tool_calls(strict, 2), false)
@@ -241,8 +234,17 @@ testset "integ-test-openai-responses-configurations" {
         let provider = root
             .openai
             .responses(model = "gpt-5.6-luna", api_key = baml.env.get_or_panic("OPENAI_API_KEY"));
-        let response = ResolveTicket_task(sample_ticket(), provider)
-            .run(runner = root.ai.run.GenerationWithMeta<Resolution>.new());
+        let response = root
+            .ai
+            .internal
+            ._response_from_done(
+                root.ai
+                    .internal
+                    ._require_done(
+                        ResolveTicket_task(sample_ticket(), provider)
+                            .run(runner = root.ai.run.Agent<Resolution>.new()),
+                    ),
+            );
         let calls = root.openai.internal._response_function_calls(response.metadata.raw);
         assert.equal(calls.length(), 1);
         assert.equal(baml.json.path<string>(calls[0], ".name"), "__baml_return_output");
@@ -257,13 +259,20 @@ testset "integ-test-openai-responses-configurations" {
                 api_key = baml.env.get_or_panic("OPENAI_API_KEY"),
                 output_mode = root.openai.OutputMode.Strict,
             );
-        let response = ResolveTicket_task(sample_ticket(), provider)
-            .run(runner = root.ai.run.GenerationWithMeta<Resolution>.new());
-        assert
-            .equal(
-                baml.json.path<string>(response.metadata.raw, ".output[0].name"),
-                "__baml_return_output",
+        let response = root
+            .ai
+            .internal
+            ._response_from_done(
+                root.ai
+                    .internal
+                    ._require_done(
+                        ResolveTicket_task(sample_ticket(), provider)
+                            .run(runner = root.ai.run.Agent<Resolution>.new()),
+                    ),
             );
+        let calls = root.openai.internal._response_function_calls(response.metadata.raw);
+        assert.equal(calls.length(), 1);
+        assert.equal(baml.json.path<string>(calls[0], ".name"), "__baml_return_output");
         assert.is_true(response.value.summary.length() > 0)
     }
 
@@ -276,8 +285,17 @@ testset "integ-test-openai-responses-configurations" {
                 output_mode = root.openai.OutputMode.Strict,
                 parallel_tool_calls = true,
             );
-        let response = _openai_array_task(provider)
-            .run(runner = root.ai.run.GenerationWithMeta<OpenAIStructuredFixture[]>.new());
+        let response = root
+            .ai
+            .internal
+            ._response_from_done(
+                root.ai
+                    .internal
+                    ._require_done(
+                        _openai_array_task(provider)
+                            .run(runner = root.ai.run.Agent<OpenAIStructuredFixture[]>.new()),
+                    ),
+            );
         let calls = root.openai.internal._response_function_calls(response.metadata.raw);
         assert.equal(calls.length(), 1);
         assert.equal(response.value.length(), 2);
@@ -293,8 +311,17 @@ testset "integ-test-openai-responses-configurations" {
                 api_key = baml.env.get_or_panic("OPENAI_API_KEY"),
                 output_mode = root.openai.OutputMode.Sap,
             );
-        let response = ResolveTicket_task(sample_ticket(), provider)
-            .run(runner = root.ai.run.GenerationWithMeta<Resolution>.new());
+        let response = root
+            .ai
+            .internal
+            ._response_from_done(
+                root.ai
+                    .internal
+                    ._require_done(
+                        ResolveTicket_task(sample_ticket(), provider)
+                            .run(runner = root.ai.run.Agent<Resolution>.new()),
+                    ),
+            );
         assert.is_true(root.openai.internal._response_output_text(response.metadata.raw) != null);
         assert.is_true(response.value.reply.length() > 0)
     }

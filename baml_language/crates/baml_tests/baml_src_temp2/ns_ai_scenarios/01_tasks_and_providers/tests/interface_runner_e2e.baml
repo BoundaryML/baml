@@ -2,17 +2,20 @@
 //
 //   1. `Task<T>.run` accepts a nominal `Runner<Task<T>>`.
 //   2. The concrete runner binds associated Output and Error types.
-//   3. The runner delegates to the same provider capability implementation as
-//      the function-driven baseline, keeping this an API-shape experiment.
+//   3. The Agent owns the loop and delegates one model turn at a time to the
+//      provider.
 //   4. Both deterministic and live scenarios use the identical call shape.
 
-test "interface runner e2e: typed generation with metadata" {
+test "interface runner e2e: typed Agent result with metadata" {
     let fake = fake_resolution();
     let task = ResolveTicket_task(sample_ticket(), fake);
 
-    let response = task.run(
-        runner = root.ai.run.GenerationWithMeta<Resolution>.new(),
-    );
+    let response = root
+        .ai
+        .internal
+        ._response_from_done(
+            root.ai.internal._require_done(task.run(runner = root.ai.run.Agent<Resolution>.new())),
+        );
 
     assert.equal(response.value.category, "billing");
     assert.equal(response.metadata.provider, "fake");
@@ -21,31 +24,32 @@ test "interface runner e2e: typed generation with metadata" {
 
 test "interface runner e2e: typed value projection" {
     let task = ResolveTicket_task(sample_ticket(), fake_resolution());
-    let resolution: Resolution = task.run(
-        runner = root.ai.run.Generation<Resolution>.new(),
-    );
+    let resolution: Resolution = root.ai.internal._require_done(task.run(runner = root.ai.run.Agent<Resolution>.new())).value;
 
     assert.equal(resolution.priority, TicketPriority.Urgent)
 }
 
-test "interface runner e2e: provider completion" {
+test "interface runner e2e: provider-backed Agent result" {
     let task = ResolveTicket_task(sample_ticket(), fake_resolution());
-    let resolution: Resolution = task.run(
-        runner = root.ai.run.Completion<Resolution>.new(),
-    );
+    let resolution: Resolution = root.ai.internal._require_done(task.run(runner = root.ai.run.Agent<Resolution>.new())).value;
 
     assert.equal(resolution.summary, "Duplicate charge")
 }
 
 testset "integ-test-interface-runner-e2e" {
-    test "interface runner live OpenAI generation" {
+    test "interface runner live OpenAI Agent" {
         let task = ResolveTicket_task(sample_ticket(), live_openai());
-        let response = task.run(
-            runner = root.ai.run.GenerationWithMeta<Resolution>.new(),
-        );
+        let response = root
+            .ai
+            .internal
+            ._response_from_done(
+                root.ai
+                    .internal
+                    ._require_done(task.run(runner = root.ai.run.Agent<Resolution>.new())),
+            );
 
         log.info(
-            "interface runner live generation "
+            "interface runner live Agent "
                 + {
                     "provider": response.metadata.provider,
                     "request_id": response.metadata.request_id,

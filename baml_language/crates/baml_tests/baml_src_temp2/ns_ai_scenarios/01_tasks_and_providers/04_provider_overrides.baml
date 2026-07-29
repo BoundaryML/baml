@@ -13,8 +13,10 @@ function provider_overrides() -> root.ai.ResponseWithMetadata<Resolution> {
     };
     let original = ResolveTicket_task(sample_ticket(), fast);
     let overridden = original.with_provider(careful);
-    let response = overridden.run(
-        runner = root.ai.run.GenerationWithMeta<Resolution>.new(),
+    let response = root.ai.internal._response_from_done(
+      root.ai.internal._require_done(
+        overridden.run(runner = root.ai.run.Agent<Resolution>.new()),
+      ),
     );
     log.info(
         {

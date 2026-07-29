@@ -1,6 +1,6 @@
-// Application-managed tool loop. The runner owns lifecycle policy while the
-// selected ToolCallingProvider owns provider-specific conversation state and
-// wire turns.
+// The normal model lifecycle. The runner owns every loop decision and every
+// application tool effect; the selected AgentProvider owns exactly one model
+// turn at a time plus its provider-specific conversation state.
 class Agent<T> {
     budget: root.ai.Budget?,
     tools: root.ai.tools.Tool[]?,
@@ -16,10 +16,12 @@ class Agent<T> {
     conversation: root.ai.Conversation?,
 
     function new(
-        budget: root.ai.Budget? = null,
+        budget: root.ai.Budget? = root.ai.Budget { max_steps: 32, max_cost_usd: null },
         tools: root.ai.tools.ToolInput[]? = null,
         tool_registry: root.ai.tools.ToolRegistry? = null,
-        prepare_step: ((root.ai.tools.StepContext) -> root.ai.tools.StepPlan throws root.ai.Failure)? = null,
+        prepare_step: (
+            (root.ai.tools.StepContext) -> root.ai.tools.StepPlan throws root.ai.Failure
+        )? = null,
         before_tool_call: (
             (root.ai.tools.BeforeToolCall) -> root.ai.tools.ToolDecision throws root.ai.Failure
         )? = null,
@@ -65,17 +67,35 @@ class Agent<T> {
                 let existing: root.ai.Conversation => existing.provider(),
                 null => task.provider,
             };
-            let provider = root.ai.tools._adapt_tool_calling_provider(selected);
+            match (self.conversation) {
+                let existing: root.ai.Conversation => {
+                    root.ai.internal._require_conversation_invariants<T>(existing, selected)
+                },
+                null => {},
+            }
+            let provider = match (selected) {
+                let capability: root.ai.AgentProvider => capability,
+                _ => {
+                    throw baml.errors.Unsupported {
+                        message: "provider cannot run an agent: " + selected.name(),
+                    }
+                },
+            };
             //# Resume or begin the provider conversation
             let conversation = match (self.conversation) {
                 let existing: root.ai.Conversation => existing,
-                null => provider.begin<T>(task),
+                null => {
+                    let created = provider.begin<T>(task);
+                    root.ai.internal._require_conversation_invariants<T>(created, selected);
+                    created
+                },
             };
             //# Build the active tool registry
             let registry = match (self.tool_registry) {
                 let existing: root.ai.tools.ToolRegistry => existing,
                 null => {
-                    root.ai.tools
+                    root.ai
+                        .tools
                         .ToolRegistry
                         .new(root.ai.tools._tool_inputs_from_tools(self.tools ?? task.tools))
                 },
@@ -157,7 +177,8 @@ class Agent<T> {
                         // A non-null plan contains the complete next roster.
                         match (plan.tools) {
                             let replacement: root.ai.tools.Tool[] => {
-                                registry.replace_all(root.ai.tools._tool_inputs_from_tools(replacement))
+                                registry
+                                    .replace_all(root.ai.tools._tool_inputs_from_tools(replacement))
                             },
                             null => {},
                         }
@@ -165,7 +186,7 @@ class Agent<T> {
                         match (plan.provider) {
                             let next: root.ai.Provider => {
                                 let importer = match (next) {
-                                    let capability: root.ai.tools.ConversationImportProvider => capability,
+                                    let capability: root.ai.ConversationImportProvider => capability,
                                     _ => {
                                         throw baml.errors.Unsupported {
                                             message: "provider switch requires conversation import: "
@@ -173,12 +194,16 @@ class Agent<T> {
                                         }
                                     },
                                 };
-                                let imported = importer.import_messages(conversation.messages());
+                                let imported = importer.import_messages<T>(conversation.messages());
                                 let previous = selected.name();
                                 selected = next;
                                 provider = importer;
                                 conversation = imported.conversation;
-                                root.ai.internal
+                                root.ai
+                                    .internal
+                                    ._require_conversation_invariants<T>(conversation, selected);
+                                root.ai
+                                    .internal
                                     ._emit_agent_event(
                                         root.ai.observe.ProviderChangedEvent {
                                             id: self.run_id,
@@ -198,7 +223,8 @@ class Agent<T> {
                 }
                 //## Publish changes to the active tool roster
                 if (registry.version != roster_version) {
-                    root.ai.internal
+                    root.ai
+                        .internal
                         ._emit_agent_event(
                             root.ai.observe.ToolRosterChangedEvent {
                                 id: self.run_id,
@@ -213,9 +239,13 @@ class Agent<T> {
                         );
                 }
                 tools = registry.snapshot();
-                root.ai.internal
+                root.ai
+                    .internal
                     ._emit_agent_event(
-                        root.ai.observe.ModelStartedEvent { id: self.run_id, provider: selected.name() },
+                        root.ai.observe.ModelStartedEvent {
+                            id: self.run_id,
+                            provider: selected.name(),
+                        },
                         self.on_event,
                         self.observers,
                         self.recorders,
@@ -227,7 +257,8 @@ class Agent<T> {
                 match (step_result.metadata.usage) {
                     let step_usage: root.ai.Usage => {
                         root.ai.internal._add_usage(usage, step_usage);
-                        root.ai.internal
+                        root.ai
+                            .internal
                             ._emit_agent_event(
                                 root.ai.observe.UsageEvent { id: self.run_id, usage: usage },
                                 self.on_event,
@@ -240,10 +271,28 @@ class Agent<T> {
                 //## Handle tool calls or a final value
                 match (step_result.outcome) {
                     let calls: root.ai.tools.ToolCalls => {
-                        //### Stop before dispatching a handoff tool
-                        for (let call in calls.calls) {
-                            if (tools.find((tool: root.ai.tools.Tool) -> bool { tool.name == call.name })?.handoff ?? false) {
-                                root.ai.internal
+                        //### Validate correlation IDs before any application effect
+                        root.ai.internal._validate_tool_calls(calls, selected.name());
+                        //### Stop only for one unambiguous handoff call
+                        let handoffs = calls.calls.filter((call: root.ai.tools.ToolCall) -> bool {
+                            tools
+                                .find((tool: root.ai.tools.Tool) -> bool {
+                                    tool.name == call.name
+                                })
+                                ?.handoff
+                                ?? false
+                        });
+                        if (handoffs.length() > 0 && calls.calls.length() != 1) {
+                            throw root.ai.InvalidRequest {
+                                provider: selected.name(),
+                                status_code: null,
+                                detail: "a handoff model step must contain exactly one handoff call and no application calls",
+                            };
+                        }
+                        match (handoffs.at(0)) {
+                            let call: root.ai.tools.ToolCall => {
+                                root.ai
+                                    .internal
                                     ._emit_agent_event(
                                         root.ai.observe.RunFinishedEvent {
                                             id: self.run_id,
@@ -254,17 +303,18 @@ class Agent<T> {
                                         self.recorders,
                                     );
                                 return root.ai.Handoff {
-                                    to: call.name,
-                                    args: call.args,
+                                    call: call,
                                     conversation: conversation,
                                     steps_taken: steps,
                                 };
-                            }
+                            },
+                            null => {},
                         }
                         //### Dispatch tools and continue the conversation
                         let results = root
                             .ai
-                            .internal._run_tool_calls(
+                            .internal
+                            ._run_tool_calls(
                                 calls.calls,
                                 tools,
                                 self.before_tool_call,
@@ -275,22 +325,30 @@ class Agent<T> {
                                 self.run_id,
                                 steps,
                             );
-                        conversation = provider.submit(conversation, results);
+                        let submitted = provider.submit(conversation, results);
+                        root.ai.internal._require_conversation_invariants<T>(submitted, selected);
+                        conversation = submitted;
                     },
                     let value: T => {
                         //### Return the typed final value
-                        let meta = root.ai.ResponseMetadata {
-                            provider: selected.name(),
-                            model: null,
-                            request_id: self.run_id,
-                            finish_reason: "agent_complete",
-                            usage: usage,
-                            attributes: { "steps": steps },
-                            raw: null,
-                        };
-                        root.ai.internal
+                        // Keep the provider's final response identity and raw
+                        // payload. Only cumulative run fields are overlaid.
+                        let meta = step_result.metadata;
+                        meta.usage = usage;
+                        meta.attributes.set("steps", steps);
+                        match (self.run_id) {
+                            let id: string => {
+                                meta.attributes.set("run_id", id)
+                            },
+                            null => {},
+                        }
+                        root.ai
+                            .internal
                             ._emit_agent_event(
-                                root.ai.observe.RunFinishedEvent { id: self.run_id, outcome: "done" },
+                                root.ai.observe.RunFinishedEvent {
+                                    id: self.run_id,
+                                    outcome: "done",
+                                },
                                 self.on_event,
                                 self.observers,
                                 self.recorders,

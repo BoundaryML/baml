@@ -3,75 +3,120 @@ class Retry {
     max_attempts: int,
 }
 
+class RetryConversation {
+    owner: Retry,
+    inner: Conversation,
+
+    implements Conversation {
+        function provider(self) -> Provider throws never {
+            self.owner
+        }
+
+        function messages(self) -> Messages throws never {
+            self.inner.messages()
+        }
+        function output_type_fingerprint(self) -> string? throws never {
+            self.inner.output_type_fingerprint()
+        }
+    }
+}
+
 implements Provider for Retry {
   function name(self) -> string throws never { "retry(" + self.inner.name() + ")" }
   function render_shorthand(self) -> string throws never { self.inner.render_shorthand() }
 }
 
-implements GenerationProvider for Retry {
-  function generate<T>(self, task: Task<T>) -> ResponseWithMetadata<T>
+// Retry wraps individual provider turns. It never replays the Agent lifecycle
+// or any application tool that has already run.
+implements AgentProvider for Retry {
+  function begin<T>(self, task: Task<T>) -> Conversation
       throws root.ai.Failure | baml.errors.UnknownError {
-    //# Resolve the generation capability
     let provider = match (self.inner) {
-      let capability: GenerationProvider => capability,
-      _ => throw baml.errors.Unsupported { message: "retry inner cannot generate" },
+      let capability: AgentProvider => capability,
+      _ => throw baml.errors.Unsupported {
+        message: "retry inner cannot run an Agent: " + self.inner.name(),
+      },
     };
-    let policy = ReplayPolicy { kind: ReplayKind.Safe, idempotency_key: null };
+    RetryConversation {
+      owner: self,
+      inner: provider.begin<T>(task.with_provider(self.inner)),
+    }
+  }
+
+  function step<T>(
+    self,
+    conversation: Conversation,
+    tools: root.ai.tools.Tool[],
+  ) -> ModelStep<T> throws root.ai.Failure | baml.errors.UnknownError {
+    let state = match (conversation) {
+      let value: RetryConversation => value,
+      _ => throw baml.errors.UnknownError.with_message<never>(
+        null,
+        "retry received another provider's conversation",
+      ),
+    };
+    if (!root.ai.internal._same_provider_instance(state.owner, self)) {
+      throw baml.errors.UnknownError.with_message<never>(
+        null,
+        "retry received a conversation owned by another retry instance",
+      )
+    }
+    let provider = match (self.inner) {
+      let capability: AgentProvider => capability,
+      _ => throw baml.errors.Unsupported {
+        message: "retry inner cannot run an Agent: " + self.inner.name(),
+      },
+    };
     let attempt = 1;
-    //# Retry replay-safe generation
+    //# Retry only a replay-safe provider turn
     while (attempt <= self.max_attempts) {
-      //## Attempt provider generation
-      let result = provider.generate<T>(task.with_provider(self.inner)) catch (e) {
+      let result = provider.step<T>(state.inner, tools) catch (e) {
         let failure: root.ai.Failure => {
-          //### A failure that cannot replay is rethrown as itself — its
-          //### classification (is_transient, effects) already says why.
-          if (attempt >= self.max_attempts || !root.ai.internal._may_replay(policy, failure)) { throw e; }
+          if (
+            attempt >= self.max_attempts
+              || !root.ai.internal._may_retry_model_step(failure)
+          ) {
+            throw e;
+          }
           attempt = attempt + 1;
           continue;
         },
-
-        _ => throw baml.errors.UnknownError.with_message<never>(e, "retry(" + self.inner.name() + ")"),
+        _ => throw baml.errors.UnknownError.with_message<never>(
+          e,
+          "retry(" + self.inner.name() + ") step",
+        ),
       };
       return result;
     }
     baml.sys.panic("retry exhausted without returning or throwing")
   }
-}
 
-implements CompletionProvider for Retry {
-  function complete<T>(self, task: Task<T>) -> ResponseWithMetadata<T>
-      throws root.ai.Failure | baml.errors.UnknownError {
-    //# Resolve the drive capability
-    let provider = match (self.inner) {
-      let capability: CompletionProvider => capability,
-      _ => throw baml.errors.Unsupported { message: "retry inner cannot drive" },
+  function submit(
+    self,
+    conversation: Conversation,
+    results: root.ai.tools.ToolResult[],
+  ) -> Conversation throws root.ai.Failure | baml.errors.UnknownError {
+    let state = match (conversation) {
+      let value: RetryConversation => value,
+      _ => throw baml.errors.UnknownError.with_message<never>(
+        null,
+        "retry received another provider's conversation",
+      ),
     };
-    //# Load the provider replay policy
-    let policy = provider.replay_policy<T>(task.with_provider(self.inner));
-    let attempt = 1;
-    //# Retry replay-safe drive calls
-    while (attempt <= self.max_attempts) {
-      //## Attempt provider drive
-      let result = provider.complete<T>(task.with_provider(self.inner)) catch (e) {
-        let failure: root.ai.Failure => {
-          //### Rethrow anything that cannot replay: exhausted attempts, or a
-          //### failure whose facts (terminal, effectful) make replay unsafe.
-          if (attempt >= self.max_attempts || !root.ai.internal._may_replay(policy, failure)) { throw e; }
-          attempt = attempt + 1;
-          continue;
-        },
-        _ => throw baml.errors.UnknownError.with_message<never>(e, "retry(" + self.inner.name() + ")"),
-      };
-      return result;
+    if (!root.ai.internal._same_provider_instance(state.owner, self)) {
+      throw baml.errors.UnknownError.with_message<never>(
+        null,
+        "retry received a conversation owned by another retry instance",
+      )
     }
-    baml.sys.panic("retry exhausted without returning or throwing")
-  }
-
-  function replay_policy<T>(self, task: Task<T>) -> ReplayPolicy throws never {
-    match (self.inner) {
-      let provider: CompletionProvider => provider.replay_policy<T>(task.with_provider(self.inner)),
-      _ => ReplayPolicy { kind: ReplayKind.Never, idempotency_key: null },
-    }
+    let provider = match (self.inner) {
+      let capability: AgentProvider => capability,
+      _ => throw baml.errors.Unsupported {
+        message: "retry inner cannot run an Agent: " + self.inner.name(),
+      },
+    };
+    state.inner = provider.submit(state.inner, results);
+    state
   }
 }
 

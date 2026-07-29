@@ -51,11 +51,11 @@ function _responses_built_request<T>(
     if (!use_sap) {
         body.set("tools", [_output_tool(task.output_type(), strict)]);
         body.set("tool_choice", { "type": "function", "name": _output_tool_name() });
-        // A bounded typed completion always expects exactly one result call.
+        // A typed Agent turn always expects exactly one final result call.
         // Output cardinality is represented inside value's schema.
         body.set("parallel_tool_calls", false);
     } else {
-        // SAP completion relies on the task's ctx.output_format instruction
+        // SAP output relies on the task's ctx.output_format instruction
         // and parses output_text as T. It sends no synthetic result tool.
         // Prompt tool mode may deliberately make that T be T | ToolCalls when
         // the caller wants a completely text-based agent protocol.
@@ -94,73 +94,5 @@ function _responses_built_request<T>(
         url: built.url,
         headers: built.headers,
         body: baml.json.stringify(body),
-    }
-}
-
-function _responses_generate<T>(
-    provider: root.openai.Responses,
-    task: root.ai.Task<T>,
-) -> root.ai.ResponseWithMetadata<T> throws root.ai.Failure | baml.errors.UnknownError {
-    let request = _responses_built_request(provider, task, false);
-    log.info(
-        baml.json
-            .stringify(
-                {
-                    "event": "llm.request",
-                    "provider": "openai-responses",
-                    "model": provider.model,
-                    "request_bytes": request.body.length(),
-                    "output_mode": provider.output_mode.to_string(),
-                    "tool_mode": provider.tool_mode.to_string(),
-                },
-            ),
-    );
-    let response = baml.http.send(request) catch (e) {
-        _ => {
-            throw baml.errors.UnknownError.with_message<never>(
-            e,
-            "OpenAI Responses send failed",
-        )
-        },
-    };
-    let text = response.text() catch (e) {
-        _ => {
-            throw baml.errors.UnknownError.with_message<never>(
-            e,
-            "OpenAI Responses body read failed",
-        )
-        },
-    };
-    log.info(
-        baml.json
-            .stringify(
-                {
-                    "event": "llm.response",
-                    "provider": "openai-responses",
-                    "model": provider.model,
-                    "status_code": response.status_code,
-                    "response_bytes": text.length(),
-                },
-            ),
-    );
-    if (!response.ok()) {
-        throw root.ai.internal.classify_http(
-            "openai-responses",
-            response.status_code,
-            text,
-        );
-    }
-    let raw = baml.json.parse(text) catch (e) {
-        _ => {
-            throw root.ai.ParseFailed {
-            provider: "openai-responses",
-            raw_output: text,
-        }
-        },
-    };
-    root.ai.ResponseWithMetadata<T> {
-        value: _parse_response_value<T>(raw, text, _uses_sap(provider)),
-        metadata: _response_metadata(raw, provider.model),
-        conversation: null,
     }
 }

@@ -1,4 +1,4 @@
-// Capture a chronological trace of model steps, tool activity, and completion
+// Capture a chronological trace of model steps, tool activity, and termination
 // while an agent works.
 function observe_an_agent(
 ) -> string throws root.ai.Failure | baml.errors.UnknownError | baml.errors.Unsupported {
@@ -10,7 +10,7 @@ function observe_an_agent(
     let result = match (outcome) {
         let done: root.ai.Done<Resolution> => done.value.reply,
         let budget: root.ai.BudgetReached => `budget reached: ${budget.reason}`,
-        let handoff: root.ai.Handoff => `handoff: ${handoff.to}`,
+        let handoff: root.ai.Handoff => `handoff: ${handoff.call.name}`,
     };
     log.info({ "events": observer.kinds, "result": result });
     result

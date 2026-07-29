@@ -33,6 +33,7 @@ function _anthropic_pending_conversation(
     Conversation {
         owner: provider,
         history: root.ai.MessageHistory.empty(),
+        declared_output_type: reflect.type_of<AnthropicRequestFixture>().to_string(),
         system: [],
         messages: [
             {
@@ -146,6 +147,35 @@ test "Anthropic submit rejects duplicate results for parallel tool calls" {
         )
 }
 
+test "Anthropic submit leaves conversation unchanged when a later result is invalid" {
+    let provider = root.anthropic.messages(api_key = "test-anthropic-key", base_url = "https://example.test");
+    let state = match (_anthropic_pending_conversation(provider)) {
+        let value: Conversation => value,
+        _ => baml.sys.panic("expected Anthropic conversation"),
+    };
+    let original_history_length = state.history.entries.length();
+    let original_message_length = state.messages.length();
+    let rejected = false;
+    let _ = provider
+        .submit(
+            state,
+            [
+                root.ai.tools.ToolResult { id: "first", output: { "value": 1 }, is_error: false },
+                root.ai.tools.ToolResult { id: "unknown", output: { "value": 2 }, is_error: false },
+            ],
+        ) catch (e) {
+        let invalid: root.ai.InvalidRequest => {
+            rejected = true;
+            state
+        },
+        _ => baml.sys.panic("unexpected Anthropic submit error"),
+    };
+    assert.is_true(rejected);
+    assert.equal(state.history.entries.length(), original_history_length);
+    assert.equal(state.messages.length(), original_message_length);
+    assert.equal(state.last_assistant_content.length(), 2)
+}
+
 test "Anthropic submit restores provider tool order" {
     let provider = root.anthropic.messages(api_key = "test-anthropic-key", base_url = "https://example.test");
     let conversation = _anthropic_pending_conversation(provider);
@@ -172,4 +202,40 @@ test "Anthropic submit restores provider tool order" {
         },
         _ => assert.is_true(false),
     }
+}
+
+test "Anthropic prompt submit correlates every pending call exactly once" {
+    let provider = root
+        .anthropic
+        .messages(
+            api_key = "unused",
+            base_url = "https://example.test",
+            output_mode = root.anthropic.OutputMode.Sap,
+            tool_mode = root.anthropic.ToolMode.Prompt,
+        );
+    let state = match (_prompt_begin<AnthropicRequestFixture>(provider, _anthropic_request_fixture_task(provider))) {
+        let value: PromptConversation => value,
+        _ => baml.sys.panic("expected Anthropic prompt conversation"),
+    };
+    state.pending_calls
+        = [
+            root.ai.tools.ToolCall { id: "first", name: "lookup", args: {} },
+            root.ai.tools.ToolCall { id: "second", name: "lookup", args: {} },
+        ];
+    let rejected = false;
+    let _ = _prompt_submit(
+        provider,
+        state,
+        [
+            root.ai.tools.ToolResult { id: "first", output: "one", is_error: false },
+            root.ai.tools.ToolResult { id: "first", output: "duplicate", is_error: false },
+        ],
+    ) catch (e) {
+        let invalid: root.ai.InvalidRequest => {
+            rejected = true;
+            state
+        },
+        _ => baml.sys.panic("unexpected Anthropic prompt submit error"),
+    };
+    assert.is_true(rejected)
 }

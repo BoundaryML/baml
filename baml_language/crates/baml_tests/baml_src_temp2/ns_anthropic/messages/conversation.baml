@@ -1,5 +1,5 @@
-implements root.ai.tools.ConversationImportProvider for Messages {
-  function import_messages(
+implements root.ai.ConversationImportProvider for Messages {
+  function import_messages<T>(
     self,
     messages: root.ai.Messages,
   ) -> root.ai.ConversationImport throws baml.errors.UnknownError {
@@ -30,6 +30,7 @@ implements root.ai.tools.ConversationImportProvider for Messages {
       conversation: root.anthropic.internal.Conversation {
         owner: self,
         history: history,
+        declared_output_type: root.ai.internal._output_type_fingerprint<T>(),
         system: system,
         messages: wire_messages,
         request_url: base_request.url,
@@ -45,7 +46,7 @@ implements root.ai.tools.ConversationImportProvider for Messages {
   }
 }
 
-implements root.ai.tools.ResumableToolCallingProvider for Messages {
+implements root.ai.ResumableAgentProvider for Messages {
   function save_conversation(
     self,
     conversation: root.ai.Conversation,
@@ -65,10 +66,29 @@ implements root.ai.tools.ResumableToolCallingProvider for Messages {
         )
       },
     };
+    if (!root.ai.internal._same_provider_instance(state.owner, self)) {
+      throw baml.errors.UnknownError.with_message<never>(
+        null,
+        "Anthropic cannot save a conversation owned by another provider instance",
+      )
+    }
+    let provider_identity = baml.json.stringify({
+      "model": self.model,
+      "base_url": self.base_url,
+      "anthropic_version": self.anthropic_version,
+      "output_mode": self.output_mode.to_string(),
+      "tool_mode": self.tool_mode.to_string(),
+      "strict_tool_inputs": self.strict_tool_inputs,
+      "parallel_tool_calls": self.parallel_tool_calls,
+    });
     root.ai.ConversationToken {
       provider: self.name(),
       version: 1,
       sealed: baml.json.stringify({
+        "model": self.model,
+        "provider_identity": provider_identity,
+        "output_type": state.declared_output_type,
+        "history": root.anthropic.internal._conversation_history_json(state.history),
         "system": state.system,
         "messages": state.messages,
         "active_tools": state.active_tools,
@@ -101,10 +121,42 @@ implements root.ai.tools.ResumableToolCallingProvider for Messages {
         )
       },
     };
+    let token_model = baml.json.path_or(state, ".model", self.model);
+    if (token_model != self.model) {
+      throw baml.errors.UnknownError.with_message<never>(
+        token_model,
+        "Anthropic conversation token belongs to another model",
+      );
+    }
+    let provider_identity = baml.json.stringify({
+      "model": self.model,
+      "base_url": self.base_url,
+      "anthropic_version": self.anthropic_version,
+      "output_mode": self.output_mode.to_string(),
+      "tool_mode": self.tool_mode.to_string(),
+      "strict_tool_inputs": self.strict_tool_inputs,
+      "parallel_tool_calls": self.parallel_tool_calls,
+    });
+    if (baml.json.path_or(state, ".provider_identity", "") != provider_identity) {
+      throw baml.errors.UnknownError.with_message<never>(
+        token,
+        "Anthropic conversation token belongs to another provider configuration",
+      )
+    }
+    let output_type = baml.json.path_or(state, ".output_type", "");
+    if (output_type.length() == 0) {
+      throw baml.errors.UnknownError.with_message<never>(
+        token,
+        "Anthropic conversation token has no output type",
+      );
+    }
     let base_request = root.anthropic.internal._provider_base_request(self);
     root.anthropic.internal.Conversation {
       owner: self,
-      history: root.ai.MessageHistory.empty(),
+      history: root.anthropic.internal._conversation_history_from_json(
+        baml.json.path_or<json[]>(state, ".history", []),
+      ),
+      declared_output_type: output_type,
       system: baml.json.path_or<json[]>(state, ".system", []),
       messages: baml.json.path_or<json[]>(state, ".messages", []),
       request_url: base_request.url,

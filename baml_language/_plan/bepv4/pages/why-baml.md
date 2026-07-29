@@ -207,7 +207,7 @@ library. It does not claim equal implementation maturity or ecosystem size.
 | Tool approval and lifecycle hooks                       | ✅    | ✅                                | ✅                    |
 | Resume and fork conversation or harness state           | ✅    | ✅                                | ✅                    |
 | Provider routing, retry, and fallback                   | ✅    | ✅                                | ✅                    |
-| Replay policy aware of visible output and side effects  | ✅    | ◐                                | ◐                    |
+| Model-step retry rejects unknown or committed effects   | ✅    | ◐                                | ◐                    |
 | Background jobs, batches, and caches as typed resources | ✅    | ◐                                | ◐                    |
 | Managed realtime voice lifecycle                        | ✅    | ◐                                | ◐                    |
 | Sandboxed coding-agent harness                          | ◐    | ✅                                | ✅                    |
@@ -230,11 +230,11 @@ BAML's sharper advantages are:
 
 1. **One model-facing declaration.** The prompt, provider, output type, and
 default tools have one stable identity.
-2. **One typed task, several lifecycles.** Completion, streaming, agents,
+2. **One typed task, several lifecycles.** Agent execution, streaming,
 background work, and harnesses can consume the same task while returning
 different exact types.
 3. **Provider requirements are visible to the type checker.** A runner can ask
-for streaming, tool calling, realtime, or another capability without
+for `AgentProvider`, streaming, realtime, or another capability without
 discovering incompatibility after a request starts.
 4. **The workflow remains visible to BAML.** Graphs, tests, logs, generated
 clients, and errors can all name `ResolveTicketWithTools` even when a generic

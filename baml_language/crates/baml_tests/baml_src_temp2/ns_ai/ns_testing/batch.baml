@@ -45,10 +45,10 @@ class FakeBatchProvider {
             let responses: root.ai.ResponseWithMetadata<T>[] = [];
             //# Execute every task in the batch
             for (let task in tasks) {
-                //## Generate one batch result
-                let response = self.inner.generate<T>(task.with_provider(self.inner)) catch (e) {
+                //## Run one batch task through the normal Agent lifecycle
+                let response = root.ai.internal._run_agent_to_response<T>(task.with_provider(self.inner)) catch (e) {
                     _ => {
-                        throw baml.errors.UnknownError.with_message<never>(e, "fake batch generation failed")
+                        throw baml.errors.UnknownError.with_message<never>(e, "fake batch Agent failed")
                     },
                 };
                 responses.push(response);

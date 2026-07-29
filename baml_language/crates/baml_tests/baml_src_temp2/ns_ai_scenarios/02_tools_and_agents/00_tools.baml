@@ -61,15 +61,20 @@ function ToolInstructions_task(
 
 // Future compiler lowering:
 //   ResolveTicketWithTools(ticket, $provider = agent)
-// becomes a completion run over ResolveTicketWithTools_task(...). A provider
-// that owns the full remote lifecycle implements CompletionProvider.
+// becomes a bounded Agent run over ResolveTicketWithTools_task(...). The
+// AgentProvider owns model turns; the Agent runner owns tool execution.
 function ResolveTicketWithTools_manual(
     ticket: SupportTicket,
     agent: root.ai.Provider,
     tools: root.ai.tools.Tool[],
 ) -> Resolution throws root.ai.Failure | baml.errors.UnknownError {
-    ResolveTicketWithTools_task(ticket, agent, root.ai.tools._tool_inputs_from_tools(tools))
-        .run(runner = root.ai.run.Completion<Resolution>.new())
+    root.ai
+        .internal
+        ._require_done(
+            ResolveTicketWithTools_task(ticket, agent, root.ai.tools._tool_inputs_from_tools(tools))
+                .run(runner = root.ai.run.Agent<Resolution>.new()),
+        )
+        .value
 }
 
 class GuideObserver {

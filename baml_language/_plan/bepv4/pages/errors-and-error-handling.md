@@ -1,9 +1,10 @@
 # Errors and error handling
 
-Every fallible AI operation throws on one channel: a classified failure that
+Normal model execution throws on one channel: a classified failure that
 implements `ai.Failure`, or the universal wrapper `baml.errors.UnknownError`.
 Errors carry facts about what happened; retry, fallback, and application code
-decide what to do with them.
+decide what to do with them. Capability-specific interfaces may use a narrower
+channel when they do not expose classified provider failures.
 
 ## Utilities used
 
@@ -25,13 +26,12 @@ interface Failure {
 }
 ```
 
-Every provider capability declares the same channel — `throws ai.Failure |
-baml.errors.UnknownError` — and so does every combinator that wraps one.
-A throw is legal iff the value implements `ai.Failure` or is routed through
-`baml.errors.UnknownError`, and the compiler enforces this at the `throws`
-clause. Retry and fallback never learn concrete error types: they consult
-`is_transient()` and `effects()` and nothing else. Precision belongs to the
-catch site.
+`AgentProvider` declares `throws ai.Failure | baml.errors.UnknownError`, as do
+retry and fallback. A throw on that channel is legal iff the value implements
+`ai.Failure` or is routed through `baml.errors.UnknownError`, and the compiler
+enforces this at the `throws` clause. Retry and fallback never learn concrete
+error types: they consult `is_transient()` and `effects()` and nothing else.
+Precision belongs to the catch site.
 
 The two methods are deliberately all there is. `is_transient` answers "could
 an identical attempt plausibly succeed?" — rate limits and transport blips
@@ -100,7 +100,7 @@ let resolution = ResolveTicket(ticket) catch (e) {
 
 The first two arms are runtime refinements: the static error type is only
 `ai.Failure | baml.errors.UnknownError`, and the same catch works whether the
-handle is a concrete provider or an `ai.CompletionProvider`.
+handle is a concrete provider or the `ai.AgentProvider` interface.
 
 ## Defining your own errors
 
@@ -153,7 +153,7 @@ trailing catch:
 ```baml
 } catch (e) {
   let known: ai.Failure => throw known,
-  _ => throw baml.errors.UnknownError.with_message<never>(e, "openai generate"),
+    _ => throw baml.errors.UnknownError.with_message<never>(e, "openai step"),
 }
 ```
 
@@ -183,13 +183,15 @@ normalize catch is what maintains the invariant that wrappers do not nest.
 
 ## Exhaustion keeps the real error
 
-When retry gives up or every fallback member has failed, the last real
-failure is rethrown — classification intact — rather than being flattened
-into a summary error. An outer layer wrapping `ai.fallback([ai.retry(a, 3), b])`
-still sees `ai.RateLimited` and can act on it. A failure that is transient but not
-replay-safe (`effects()` is `Committed`, or `Unknown` without an idempotency
-key) is likewise rethrown as itself: its own facts say why replay was
-refused.
+When retry gives up or every fallback member has failed before progress, the
+last real failure is rethrown — classification intact — rather than being
+flattened into a summary error. An outer layer wrapping
+`ai.fallback([ai.retry(a, 3), b])` still sees `ai.RateLimited` and can act on
+it. Retry wraps only the current provider `step`; it never replays the Agent
+or an application tool. A replay-safe failed `step` must leave its conversation
+unchanged, because retry reuses that same pre-attempt state. After any
+successful model turn, fallback also keeps the selected provider and rethrows
+later failures instead of restarting on a new member.
 
 ## Errors are for faults
 

@@ -33,7 +33,8 @@ class VoiceAgent {
             let raw_live_session = root.ai.realtime.open_live(task, self.channel);
             //# Add application tool execution only for the managed voice lifecycle
             let live_session = if (task.tools.length() > 0) {
-                root.ai.realtime
+                root.ai
+                    .realtime
                     .with_automatic_tools(
                         raw_live_session,
                         root.ai.tools._tool_inputs_from_tools(task.tools),

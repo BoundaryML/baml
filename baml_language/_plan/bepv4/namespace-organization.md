@@ -1,54 +1,57 @@
-# Organizing `ai`: core stays flat, capabilities get sub-namespaces
+# Organizing `ai`
 
-The flat `ai` namespace currently exposes everything from `Task<T>` to fake
-realtime sessions. Comments on the BEP (Sam: "IDK how to navigate this with
-`baml describe`"; 2kai: "differentiate core vs out-of-the-box implementations
-on a namespace level") both point the same way, and `ns_ai/ns_run` → `ai.run`
-already set the precedent: a sub-namespace is a directory named `ns_*` inside
-`ns_ai/`.
+The flat `ai` namespace contains the contracts required for ordinary typed
+model execution. Capability-specific machinery lives one namespace below it.
+Provider-specific wire implementation stays in the provider's private
+namespace.
 
-**Criterion:** a name stays in flat `ai` iff a first afternoon with BAML
-touches it. Capability-specific machinery moves to `ai.<capability>`;
-test doubles move to `ai.testing`; things only provider adapters touch live
-with their capability.
+## Layout
 
-## Proposed layout
-
-| Namespace | Contents (moved from flat `ai`) |
+| Namespace | Contents |
 | --- | --- |
-| `ai` (core, stays flat) | `Task`, `Response`, `ResponseWithMetadata`, `Meta`, `Usage`, `Conversation`, `MessageHistory`, `Provider`, `CompletionProvider`, `GenerationProvider`, `StreamingProvider`, `Failure`, `Effects`, default errors, `retry()`, `fallback()`, `Done`, `BudgetReached`, `Handoff`, `Budget` |
-| `ai.run` | (already exists) all runners |
-| `ai.tools` | `Tool`, `ToolInput`, `ToolRegistry`, `ToolResult`, `ToolCall`, callbacks, capability negotiation, prompt-fallback rendering |
-| `ai.realtime` | `Channel`, `LiveSession`, `LiveEvent`, audio formats, collect helpers |
-| `ai.transcription` | transcription protocol + audio stream types |
+| `ai` | `Task`, `ResponseWithMetadata`, `ResponseMetadata`, `Usage`, `Conversation`, `MessageHistory`, `Provider`, `AgentProvider`, `ModelStep`, `ResumableAgentProvider`, `ConversationImportProvider`, `StreamingProvider`, `Failure`, `Effects`, `retry`, `fallback`, `Done`, `BudgetReached`, `Handoff`, `Budget` |
+| `ai.run` | `Agent`, `Stream`, `Background`, `Batch`, `Transcribe`, `VoiceAgent`, `Harness`, and other public runners |
+| `ai.tools` | `Tool`, `ToolInput`, `ToolRegistry`, `ToolResult`, `ToolCall`, callbacks, and JSON-schema tool construction |
+| `ai.realtime` | channels, live sessions/events, audio formats, and collection helpers |
+| `ai.transcription` | transcription provider protocol and audio streams |
 | `ai.sessions` | provider-owned session protocol |
-| `ai.jobs` | background + batch protocols (`Job`, `Batch`, options) |
-| `ai.observe` | observability events, observers, usage accounting internals |
-| `ai.harness` | harness protocol and models |
-| `ai.messages` | message parts, prompt adapters (raw internals; `Conversation`/`MessageHistory` stay core) |
-| `ai.testing` | every fake: `FakeProvider`, fake tools, fake realtime/sessions/transcription/background/batch |
-| `ai.internal` | hidden plumbing (`_run_tool_calls`, `_emit_agent_event`, `_add_usage`, `_may_replay`, `classify_http`): not public surface, may change shape without notice, never appears in examples |
-| `google` (not `ai`) | named-cache protocol + `CreateCache` (done — Gemini-only concept) |
+| `ai.jobs` | background and batch protocols, jobs, batches, and options |
+| `ai.observe` | Agent events, observers, recorders, and usage accounting |
+| `ai.harness` | external harness protocol, sessions, options, and results |
+| `ai.messages` | structural message parts and shared provider plumbing |
+| `ai.testing` | deterministic fakes for providers and other capabilities |
+| `ai.internal` | non-public execution and provider helper functions |
 
-Judgment calls, flagged:
+## Decisions
 
-- **Outcomes and `Budget` stay core.** Every agent caller matches on
-  `Done`/`BudgetReached`/`Handoff`; pushing them to `ai.agent` would put the
-  most-typed names behind a prefix.
-- **`retry`/`fallback` and `ReplayPolicy`/`ReplayKind` stay core** — the
-  replay contract is part of `CompletionProvider`'s signature; only the
-  `_may_replay` judgment moved to `ai.internal`.
-- **Errors stay core.** The channel appears in every signature; making it
-  `ai.failures.Failure` would tax every throws clause.
+- `AgentProvider` stays flat because it is the normal provider execution
+  capability.
+- `ModelStep<T>` stays flat because it is the boundary between every Agent and
+  normal provider.
+- `Done`, `BudgetReached`, `Handoff`, and `Budget` stay flat because every
+  explicit Agent caller uses them.
+- `retry` and `fallback` stay flat because they are provider wrappers for the
+  normal lifecycle.
+- errors stay flat because their channel appears throughout public
+  signatures.
+- application tool values and hooks live in `ai.tools`.
+- provider prompt-mode adapters do not live in `ai.tools`; OpenAI, Anthropic,
+  and Google keep those adapters private because they retain provider-specific
+  task render recipes and continuation state.
+- Claude Code's private Agent adapter uses a CLI JSON-schema envelope for
+  `T | ToolCalls`; it is not a prompt/SAP provider mode.
 
-## Migration mechanics
+Provider namespaces expose configuration-sized APIs:
 
-Directory renames inside `ns_ai/` (`tools/` → `ns_tools/`, `resources/realtime/`
-→ `ns_realtime/`, ...) plus a requalification sweep (same shape as the cache
-move: bare names in moved files gain `root.ai.` prefixes; external references
-gain the sub-namespace segment). Scenario files and BEP pages update in the
-same pass; the grounding audit re-runs after.
+```text
+openai.Responses / openai.responses(...)
+anthropic.Messages / anthropic.messages(...)
+google.vertex.Gemini / google.vertex.gemini(...)
+google.ai.Gemini / google.ai.gemini(...)
+claude_code.ClaudeCodeCli
+```
 
-Estimated blast radius: most of the 179 corpus files touch `ai.tools` or a
-resource protocol at least once; the sweep is mechanical but should land as
-its own commit.
+Request envelopes, concrete conversation classes, schema transforms,
+authentication helpers, prompt/SAP tool adapters, and Claude Code's
+schema-envelope adapter are implementation details. They may change without
+expanding the portable `ai` surface.

@@ -58,7 +58,7 @@ test "guide 03.04: OpenAI Responses imports portable message text" {
       metadata: null,
     },
   ] };
-  let imported = provider.import_messages(history);
+  let imported = provider.import_messages<Resolution>(history);
   match (imported.conversation) {
     let state: root.openai.internal.Conversation => {
       assert.equal(state.input.length(), 2)
@@ -80,14 +80,14 @@ class NamedOpenAiToolProvider {
   }
 }
 
-implements root.ai.tools.ToolCallingProvider for NamedOpenAiToolProvider {
+implements root.ai.AgentProvider for NamedOpenAiToolProvider {
   function begin<T>(self, task: root.ai.Task<T>) -> root.ai.Conversation
       throws root.ai.Failure | baml.errors.UnknownError {
     self.inner.begin<T>(task.with_provider(self.inner))
   }
 
   function step<T>(self, conversation: root.ai.Conversation, tools: root.ai.tools.Tool[])
-      -> root.ai.tools.ModelStep<T> throws root.ai.Failure | baml.errors.UnknownError {
+      -> root.ai.ModelStep<T> throws root.ai.Failure | baml.errors.UnknownError {
     self.inner.step<T>(conversation, tools)
   }
 
@@ -98,15 +98,15 @@ implements root.ai.tools.ToolCallingProvider for NamedOpenAiToolProvider {
   ) -> root.ai.Conversation throws root.ai.Failure | baml.errors.UnknownError {
     self
       .inner
-      .as<root.ai.tools.ToolCallingProvider>
+      .as<root.ai.AgentProvider>
       .submit(conversation, results)
   }
 }
 
-implements root.ai.tools.ConversationImportProvider for NamedOpenAiToolProvider {
-  function import_messages(self, messages: root.ai.Messages)
+implements root.ai.ConversationImportProvider for NamedOpenAiToolProvider {
+  function import_messages<T>(self, messages: root.ai.Messages)
       -> root.ai.ConversationImport throws baml.errors.UnknownError {
-    self.inner.import_messages(messages)
+    self.inner.import_messages<T>(messages)
   }
 }
 

@@ -1,5 +1,5 @@
 // Tests for the side_effects_and_idempotency scenario.
-test "guide 03.06: retry rejects a completion without replay evidence" {
+test "guide 03.06: retry rejects a provider-step failure with committed effects" {
   let inner = root.ai.testing.FakeProvider { ...fake_resolution(), failures_remaining: 1 };
   let effectful = EffectfulProvider { inner: inner };
   let label = ResolveTicket_manual(sample_ticket(), root.ai.retry(effectful, 2)) catch (e) {
@@ -58,17 +58,29 @@ class EffectfulAfterLiveResponse {
     function render_shorthand(self) -> string throws never { self.inner.render_shorthand() }
   }
 
-  implements root.ai.CompletionProvider {
-    function complete<T>(self, task: root.ai.Task<T>) -> root.ai.ResponseWithMetadata<T>
+  implements root.ai.AgentProvider {
+    function begin<T>(self, task: root.ai.Task<T>) -> root.ai.Conversation
         throws root.ai.Failure | baml.errors.UnknownError {
+      self.inner.begin<T>(task.with_provider(self.inner))
+    }
+
+    function step<T>(
+      self,
+      conversation: root.ai.Conversation,
+      tools: root.ai.tools.Tool[],
+    ) -> root.ai.ModelStep<T> throws root.ai.Failure | baml.errors.UnknownError {
       self.calls = self.calls + 1;
-      let response = self.inner.complete<T>(task.with_provider(self.inner));
+      let response = self.inner.step<T>(conversation, tools);
       self.observed_request_ids.push(response.metadata.request_id ?? "missing");
       throw LiveEffectCommittedFailure { request_id: response.metadata.request_id };
     }
 
-    function replay_policy<T>(self, task: root.ai.Task<T>) -> root.ai.ReplayPolicy throws never {
-      root.ai.ReplayPolicy { kind: root.ai.ReplayKind.Never, idempotency_key: null }
+    function submit(
+      self,
+      conversation: root.ai.Conversation,
+      results: root.ai.tools.ToolResult[],
+    ) -> root.ai.Conversation throws root.ai.Failure | baml.errors.UnknownError {
+      self.inner.as<root.ai.AgentProvider>.submit(conversation, results)
     }
   }
 }

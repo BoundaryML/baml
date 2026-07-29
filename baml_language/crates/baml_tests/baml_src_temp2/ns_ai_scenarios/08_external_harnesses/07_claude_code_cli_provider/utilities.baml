@@ -61,8 +61,8 @@ function ClaudeCodeWebFetch_task(
 //   }
 //
 // The provider keeps its native WebFetch tool while the task captures the BAML
-// application tool. Its CompletionProvider implementation owns the bounded
-// strategy needed to finish the complete task as T.
+// application tool. The Agent runner owns the bounded loop needed to finish the
+// complete task as T.
 function ClaudeCodeWebFetchWithBamlTool_task(
     provider: root.ai.Provider,
 ) -> root.ai.Task<HackerNewsTopStoryWithBamlTool> throws never {
@@ -87,12 +87,18 @@ function ClaudeCodeWebFetchWithBamlTool_task(
 function ClaudeCodeWebFetchWithBamlTool_manual(
     provider: root.claude_code.ClaudeCodeCli,
 ) -> HackerNewsTopStoryWithBamlTool throws root.ai.Failure | baml.errors.UnknownError | baml.errors.Unsupported {
-    ClaudeCodeWebFetchWithBamlTool_task(provider)
-        .run(runner = root.ai.run.Completion<HackerNewsTopStoryWithBamlTool>.new())
+    root.ai
+        .internal
+        ._require_done(
+            ClaudeCodeWebFetchWithBamlTool_task(provider)
+                .run(runner = root.ai.run.Agent<HackerNewsTopStoryWithBamlTool>.new()),
+        )
+        .value
 }
 
 function live_claude_code_with_web_fetch() -> root.claude_code.ClaudeCodeCli throws never {
     root.claude_code.ClaudeCodeCli {
+        _instance_id: baml.id.new(),
         executable: baml.env.get("CLAUDE_CODE_CLI") catch (e) {
             _ => null
         }
@@ -101,7 +107,6 @@ function live_claude_code_with_web_fetch() -> root.claude_code.ClaudeCodeCli thr
         cwd: "/tmp",
         timeout_ms: 60000,
         max_turns: 3,
-        max_application_tool_steps: 4,
         max_budget_usd: "0.10",
         permission_mode: "dontAsk",
         tools: ["WebFetch"],

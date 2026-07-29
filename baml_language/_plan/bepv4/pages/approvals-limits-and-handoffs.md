@@ -12,7 +12,7 @@ approval, authorization, argument rewriting, and blocking logic directly to
 | `prepare_step` callback | Changes the next provider, tool roster, or stop decision |
 | `ai.tools.ToolDecision` | Allows, replaces, or blocks one tool call |
 | `ai.Budget { max_steps, max_cost_usd }` | Stops work between provider steps |
-| `ai.tools.tool(...).as_handoff()` | Marks a tool call as application takeover |
+| `ai.tools.tool(...).as_handoff()` | Returns one exact call to the application before dispatch |
 
 ## Example
 
@@ -83,7 +83,7 @@ flowchart TD
   model --> result{"Provider returned?"}
   result -->|final value| done["Done<Resolution>"]
   result -->|tool call| transfer{"Handoff tool?"}
-  transfer -->|yes| handoff["Handoff"]
+  transfer -->|yes| handoff["Handoff with exact ToolCall"]
   transfer -->|no| callback["before_tool_call"]
   callback -->|approved| history["Run lookup_account_with_history"]
   callback -->|not approved| blocked["Return blocked tool result"]
@@ -99,29 +99,34 @@ flowchart TD
 [INFO] proposed tool: lookup_account_with_history(customer_id = "C-1", ...)
 [INFO] before_tool_call: blocked "human approval required"
 [INFO] returned blocked result to the model
-[INFO] Agent returned Handoff { to: "lookup_account", ... }
+[INFO] Agent returned Handoff { call: ToolCall { id: "call_42", name: "lookup_account", ... }, ... }
 ```
 
 A blocked call still receives a correlated tool result. The model can explain
 the denial, choose another action, or request a handoff. The blocked function
 does not run.
 
-A handoff tool never runs at all: when the model calls a tool marked
-`.as_handoff()`, the Agent returns `ai.Handoff` with the tool's name and
-arguments before dispatch, and the application takes over from there.
+A handoff tool never runs inside the Agent. When the model calls a tool marked
+`.as_handoff()`, the Agent returns `ai.Handoff` with the exact `ToolCall`
+before dispatch. The call retains its provider correlation ID, name, and
+arguments.
+
+A handoff must be unambiguous. If one model step mixes a handoff with an
+application call, or returns several handoff calls, the Agent throws
+`ai.InvalidRequest` before executing anything.
 
 ## Handle every terminal outcome
 
 Each outcome carries what the caller needs to continue:
 
-- `ai.Done<T> { value, meta, conversation }` — the final typed value, the
+- `ai.Done<T> { value, metadata, conversation }` — the final typed value, the
   response metadata, and the conversation that produced it.
 - `ai.BudgetReached { conversation, steps_taken, reason }` — a safe stop with
   everything needed to resume. `Budget` is multi-dimensional — `max_steps`
   and/or `max_cost_usd` — and `reason` names the limit that tripped.
-- `ai.Handoff { to, args, conversation, steps_taken }` — a tool marked
-  `.as_handoff()` fired; the application takes over with the tool's arguments
-  and the conversation so far.
+- `ai.Handoff { call, conversation, steps_taken }` — a tool marked
+  `.as_handoff()` fired; `call` is the exact `ai.tools.ToolCall` the
+  application must resolve.
 
 ```baml
 match (outcome) {
@@ -133,14 +138,48 @@ match (outcome) {
   },
 
   let handoff: ai.Handoff => {
-    // The application takes over handoff.to with handoff.args.
-    log.info(`handoff requested: ${handoff.to}`)
+    // The application takes over the exact correlated call.
+    log.info(`handoff requested: ${handoff.call.name} (${handoff.call.id})`)
   },
 }
 ```
 
-Both incomplete outcomes retain the conversation. The application can inspect
-it, save it, or resume it after a limit or approval changes.
+Both incomplete outcomes retain the conversation. `BudgetReached` can resume
+that state directly. A `Handoff` still has a pending provider call, so the
+application must submit its result first.
+
+## Complete a handoff and resume
+
+The application performs the external work, creates one result correlated to
+`handoff.call.id`, and submits it through the conversation's provider:
+
+```baml
+function resume_after_handoff(
+  handoff: ai.Handoff,
+  external_output: json,
+) -> ai.Done<Resolution> | ai.BudgetReached | ai.Handoff
+    throws ai.Failure | baml.errors.UnknownError | baml.errors.Unsupported {
+  let provider = match (handoff.conversation.provider()) {
+    let agent: ai.AgentProvider => agent,
+    _ => throw baml.errors.Unsupported {
+      message: "handoff conversation provider cannot resume an Agent",
+    },
+  };
+
+  let result = ai.tools.ToolResult.ok(handoff.call, external_output);
+  let conversation = provider.submit(handoff.conversation, [result]);
+
+  ResolveTicketWithTools@task(sample_ticket()).run(
+    runner = ai.run.Agent<Resolution>.new(
+      conversation = conversation,
+    ),
+  )
+}
+```
+
+`ToolResult.ok(handoff.call, ...)` copies the exact call ID. Use
+`ToolResult.error(handoff.call, message)` when the external work fails. In
+either case, `submit` must happen before the next Agent `step`.
 
 ## What callbacks can change
 

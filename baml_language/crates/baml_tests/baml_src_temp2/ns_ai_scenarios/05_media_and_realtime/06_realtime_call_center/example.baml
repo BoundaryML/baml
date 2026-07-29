@@ -12,7 +12,9 @@ function realtime_call_center() -> null {
     };
     let channel = root.ai.testing.RecordingChannel { frames: [] };
     let task = _realtime_call_center_task(
-        root.ai.testing.FakeRealtimeProvider { transcript: "Hello, I can help schedule your meeting." },
+        root.ai.testing.FakeRealtimeProvider {
+            transcript: "Hello, I can help schedule your meeting.",
+        },
         "Introduce yourself and ask what meeting the caller wants to schedule.",
     );
     task.run(runner = root.ai.run.VoiceAgent.new(audio, channel));

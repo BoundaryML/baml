@@ -146,35 +146,6 @@ function _build_request<T>(
     )
 }
 
-function _generate<T>(
-    provider: root.google.vertex.Gemini,
-    task: root.ai.Task<T>,
-) -> root.ai.ResponseWithMetadata<T>
-    throws root.ai.Failure | baml.errors.UnknownError {
-    _validate(provider);
-    root.google.internal._generate(
-        _primitive(provider),
-        task,
-        provider.name(),
-        provider.model,
-        _use_sap(provider),
-    )
-}
-
-function _complete<T>(
-    provider: root.google.vertex.Gemini,
-    task: root.ai.Task<T>,
-) -> root.ai.ResponseWithMetadata<T>
-    throws root.ai.Failure | baml.errors.UnknownError {
-    _validate(provider);
-    root.google.internal._complete(
-        provider,
-        provider,
-        task,
-        provider.name(),
-    )
-}
-
 function _begin<T>(
     provider: root.google.vertex.Gemini,
     task: root.ai.Task<T>,
@@ -193,7 +164,12 @@ function _save(
     provider: root.google.vertex.Gemini,
     conversation: root.ai.Conversation,
 ) -> root.ai.ConversationToken throws baml.errors.UnknownError {
-    root.google.internal._save_conversation(conversation, provider.name())
+    root.google.internal._save_conversation(
+        conversation,
+        provider,
+        provider.name(),
+        _resume_identity(provider),
+    )
 }
 
 function _restore(
@@ -205,15 +181,29 @@ function _restore(
         _primitive(provider),
         provider.name(),
         provider.model,
+        _resume_identity(provider),
         token,
     )
 }
 
-function _import(
+function _resume_identity(provider: root.google.vertex.Gemini) -> string throws never {
+    baml.json.stringify({
+        "model": provider.model,
+        "project_id": provider.project_id,
+        "location": provider.location,
+        "express_mode": provider.api_key != null,
+        "base_url": provider.base_url,
+        "output_mode": provider.output_mode.to_string(),
+        "tool_mode": provider.tool_mode.to_string(),
+        "parallel_tool_calls": provider.parallel_tool_calls,
+    })
+}
+
+function _import<T>(
     provider: root.google.vertex.Gemini,
     messages: root.ai.Messages,
 ) -> root.ai.ConversationImport throws baml.errors.UnknownError {
-    root.google.internal._import_messages(
+    root.google.internal._import_messages<T>(
         provider,
         _primitive(provider),
         provider.name(),

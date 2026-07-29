@@ -1,13 +1,15 @@
 // Tests for the provider_owned_sessions scenario.
 test "guide 04.04: provider-owned sessions open, run, and resume" {
     let provider = root.ai.testing.FakeSessionProvider { inner: fake_resolution(), sessions: [] };
-    let session = provider.open_session(root.ai.sessions.SessionOptions {
-        session_id: "support-T-100",
-        attributes: { "team": "support" },
-    });
-    let response = ResolveTicket_task(sample_ticket(), provider).run(
-        runner = root.ai.run.InSession<Resolution>.new(session),
-    );
+    let session = provider
+        .open_session(
+            root.ai.sessions.SessionOptions {
+                session_id: "support-T-100",
+                attributes: { "team": "support" },
+            },
+        );
+    let response = ResolveTicket_task(sample_ticket(), provider)
+        .run(runner = root.ai.run.InSession<Resolution>.new(session));
     assert.equal(response.value.category, "billing");
     let resumed = provider.resume_session(session.token());
     assert.equal(resumed.id(), session.id());
@@ -36,13 +38,15 @@ test "guide 04.04: session tokens validate provider ownership" {
 testset "integ-test-guide-04-provider-sessions" {
     test "guide 04.04 live OpenAI: session run and token resume" {
         let provider = root.ai.testing.FakeSessionProvider { inner: live_openai(), sessions: [] };
-        let session = provider.open_session(root.ai.sessions.SessionOptions {
-            session_id: "live-support-T-100",
-            attributes: { "team": "support" },
-        });
-        let response = ResolveTicket_task(sample_ticket(), provider).run(
-            runner = root.ai.run.InSession<Resolution>.new(session),
-        );
+        let session = provider
+            .open_session(
+                root.ai.sessions.SessionOptions {
+                    session_id: "live-support-T-100",
+                    attributes: { "team": "support" },
+                },
+            );
+        let response = ResolveTicket_task(sample_ticket(), provider)
+            .run(runner = root.ai.run.InSession<Resolution>.new(session));
         let token = session.token();
         let resumed = provider.resume_session(token);
         // session.cleanup();

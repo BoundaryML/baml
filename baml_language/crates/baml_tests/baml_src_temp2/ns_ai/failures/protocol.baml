@@ -11,13 +11,13 @@
 
 /// Whether a failed attempt may have committed side effects.
 enum Effects {
-  /// Failed before anything could commit — replay is safe.
-  None,
-  /// The request was sent but the outcome was never observed — replay only
-  /// with an idempotency key.
-  Unknown,
-  /// Effects definitely happened — never blind-replay.
-  Committed,
+    /// Failed before anything could commit — replay is safe.
+    None,
+    /// The request was sent but the outcome was never observed — replay only
+    /// with an idempotency key.
+    Unknown,
+    /// Effects definitely happened — never blind-replay.
+    Committed,
 }
 
 /// The one classification axis generic policy code consumes. Errors carry

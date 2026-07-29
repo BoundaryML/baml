@@ -10,8 +10,19 @@ testset "integ-test-anthropic-native-tools" {
                 output_mode = root.anthropic.OutputMode.Strict,
                 tool_mode = root.anthropic.ToolMode.Native,
             );
-        let task = ResolveTicketWithTools_task(sample_ticket(), provider, [search_knowledge]);
-        let outcome = task.run(runner = root.ai.run.Agent<Resolution>.new(tools = [search_knowledge])) catch_all (e) {
+        let trace = guide_agent_trace();
+        let task = ToolInstructions_task(
+            provider,
+            [search_knowledge],
+            `Call search_knowledge exactly once with query "duplicate charge". After its result, return a final resolution with a non-empty summary and reply.`,
+        );
+        let outcome = task
+            .run(
+                runner = root.ai.run.Agent<Resolution>.new(tools = [search_knowledge], after_tool_call = (event) -> {
+                    trace.after_calls.push(event.call.name);
+                    null
+                }),
+            ) catch_all (e) {
             _ => {
                 log.error({ "anthropic_native_tool_failure": e });
                 throw baml.errors.UnknownError.with_message<never>(
@@ -20,8 +31,12 @@ testset "integ-test-anthropic-native-tools" {
                 )
             },
         };
+        assert.equal(trace.after_calls, ["search_knowledge"]);
         match (outcome) {
-            let done: root.ai.Done<Resolution> => assert.is_true(done.value.reply.length() > 0),
+            let done: root.ai.Done<Resolution> => {
+                assert.is_true(done.value.summary.length() > 0);
+                assert.is_true(done.value.reply.length() > 0)
+            },
             _ => assert.is_true(false),
         }
     }

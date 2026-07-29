@@ -5,10 +5,28 @@ test "guide 06.05: provider evaluation is ordinary typed application code" {
 
 testset "integ-test-guide-06-evaluate-quality" {
     test "guide 06.05 live providers: the same typed rubric scores both candidates" {
-        let openai = ResolveTicket_task(sample_ticket(), live_openai())
-            .run(runner = root.ai.run.GenerationWithMeta<Resolution>.new());
-        let anthropic = ResolveTicket_task(sample_ticket(), live_anthropic())
-            .run(runner = root.ai.run.GenerationWithMeta<Resolution>.new());
+        let openai = root
+            .ai
+            .internal
+            ._response_from_done(
+                root.ai
+                    .internal
+                    ._require_done(
+                        ResolveTicket_task(sample_ticket(), live_openai())
+                            .run(runner = root.ai.run.Agent<Resolution>.new()),
+                    ),
+            );
+        let anthropic = root
+            .ai
+            .internal
+            ._response_from_done(
+                root.ai
+                    .internal
+                    ._require_done(
+                        ResolveTicket_task(sample_ticket(), live_anthropic())
+                            .run(runner = root.ai.run.Agent<Resolution>.new()),
+                    ),
+            );
         let openai_score = resolution_score(openai.value);
         let anthropic_score = resolution_score(anthropic.value);
         log.info(

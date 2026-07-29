@@ -42,36 +42,6 @@ implements root.ai.Provider for Messages {
   }
 }
 
-implements root.ai.GenerationProvider for Messages {
-  function generate<T>(
-    self,
-    task: root.ai.Task<T>,
-  ) -> root.ai.ResponseWithMetadata<T>
-      throws root.ai.Failure | baml.errors.UnknownError {
-    root.anthropic.internal._messages_generate<T>(self, task)
-  }
-}
-
-implements root.ai.CompletionProvider for Messages {
-  function complete<T>(
-    self,
-    task: root.ai.Task<T>,
-  ) -> root.ai.ResponseWithMetadata<T>
-      throws root.ai.Failure | baml.errors.UnknownError {
-    root.anthropic.internal._messages_complete<T>(self, task)
-  }
-
-  function replay_policy<T>(
-    self,
-    task: root.ai.Task<T>,
-  ) -> root.ai.ReplayPolicy throws never {
-    root.ai.ReplayPolicy {
-      kind: root.ai.ReplayKind.Safe,
-      idempotency_key: null,
-    }
-  }
-}
-
 implements root.ai.StreamingProvider for Messages {
   function stream<TPartial, T>(
     self,

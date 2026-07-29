@@ -1,13 +1,32 @@
 test "guide 06.03: usage is aggregatable without becoming continuation state" {
-    let first = ResolveTicket_task(sample_ticket(), fake_resolution())
-        .run(runner = root.ai.run.GenerationWithMeta<Resolution>.new());
-    let second = ResolveTicket_task(sample_ticket(), fake_resolution())
-        .run(runner = root.ai.run.GenerationWithMeta<Resolution>.new());
+    let first = root
+        .ai
+        .internal
+        ._response_from_done(
+            root.ai
+                .internal
+                ._require_done(
+                    ResolveTicket_task(sample_ticket(), fake_resolution())
+                        .run(runner = root.ai.run.Agent<Resolution>.new()),
+                ),
+        );
+    let second = root
+        .ai
+        .internal
+        ._response_from_done(
+            root.ai
+                .internal
+                ._require_done(
+                    ResolveTicket_task(sample_ticket(), fake_resolution())
+                        .run(runner = root.ai.run.Agent<Resolution>.new()),
+                ),
+        );
     let usage = root.ai.observe.aggregate_usage([first.metadata, second.metadata]);
     assert.equal(usage.input_tokens, 2);
     assert
         .equal(
-            root.ai.observe
+            root.ai
+                .observe
                 .estimated_cost(
                     usage,
                     root.ai.observe.TokenPrice { input_per_million: 1.0, output_per_million: 2.0 },
@@ -18,10 +37,28 @@ test "guide 06.03: usage is aggregatable without becoming continuation state" {
 
 testset "integ-test-guide-06-usage-and-cost" {
     test "guide 06.03 live providers: aggregate exact counters and estimate explicit price" {
-        let first = ResolveTicket_task(sample_ticket(), live_openai())
-            .run(runner = root.ai.run.GenerationWithMeta<Resolution>.new());
-        let second = ResolveTicket_task(sample_ticket(), live_anthropic())
-            .run(runner = root.ai.run.GenerationWithMeta<Resolution>.new());
+        let first = root
+            .ai
+            .internal
+            ._response_from_done(
+                root.ai
+                    .internal
+                    ._require_done(
+                        ResolveTicket_task(sample_ticket(), live_openai())
+                            .run(runner = root.ai.run.Agent<Resolution>.new()),
+                    ),
+            );
+        let second = root
+            .ai
+            .internal
+            ._response_from_done(
+                root.ai
+                    .internal
+                    ._require_done(
+                        ResolveTicket_task(sample_ticket(), live_anthropic())
+                            .run(runner = root.ai.run.Agent<Resolution>.new()),
+                    ),
+            );
         let first_usage = first.metadata.usage
             ?? root.ai.Usage {
                 input_tokens: 0,

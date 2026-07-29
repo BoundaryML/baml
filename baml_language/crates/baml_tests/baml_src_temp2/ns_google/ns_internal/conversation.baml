@@ -6,6 +6,7 @@ class Conversation {
     provider_name: string,
     model: string,
     history: root.ai.MessageHistory,
+    declared_output_type: string,
     url: string,
     headers: map<string, string>,
     body_template: json,
@@ -20,7 +21,316 @@ class Conversation {
         function messages(self) -> root.ai.Messages throws never {
             self.history
         }
+        function output_type_fingerprint(self) -> string? throws never {
+            self.declared_output_type
+        }
     }
+}
+
+// Prompt tool mode keeps the provider's task recipe so each turn can render
+// one text contract for T | ToolCalls. It intentionally stores no native
+// Gemini function-call state.
+class PromptConversation {
+    owner: root.ai.Provider,
+    primitive: baml.llm.PrimitiveClient,
+    provider_name: string,
+    model: string,
+    history: root.ai.MessageHistory,
+    declared_output_type: string,
+    recipe: root.ai.PromptRenderRecipe,
+    identity: root.ai.TaskIdentity?,
+    arguments: map<string, unknown>,
+    tags: map<string, string>,
+    last_calls: root.ai.tools.ToolCall[],
+
+    implements root.ai.Conversation {
+        function provider(self) -> root.ai.Provider throws never {
+            self.owner
+        }
+        function messages(self) -> root.ai.Messages throws never {
+            self.history
+        }
+        function output_type_fingerprint(self) -> string? throws never {
+            self.declared_output_type
+        }
+    }
+}
+
+function _prompt_tool_schema(tool: root.ai.tools.Tool) -> json throws never {
+    { "name": tool.name, "description": tool.description, "parameters": tool.input_schema }
+}
+
+function _prompt_tool_output_suffix(tools: root.ai.tools.Tool[]) -> string throws never {
+    let schemas = tools.map((tool: root.ai.tools.Tool) -> json {
+        _prompt_tool_schema(tool)
+    });
+    "\n\n"
+        + `
+            The output contract above permits either the final result or a ToolCalls value.
+            To use tools, return ToolCalls with one or more calls. Each call must have a
+            unique id, an exact tool name from the catalog, and args matching that tool's
+            parameters JSON Schema. Do not invent tool names. After tool results are
+            provided, choose tools again or return the final result.
+
+            Available tools:
+            ${baml.json.stringify(schemas)}
+        `
+}
+
+function _prompt_message_text(message: root.ai.Message) -> string throws never {
+    message
+        .parts()
+        .map((part: root.ai.MessagePart) -> string {
+            part.text() ?? ""
+        })
+        .join("")
+}
+
+function _prompt_role(role: root.ai.MessageRole) -> string throws never {
+    match (role) {
+        root.ai.MessageRole.System => "system",
+        root.ai.MessageRole.User => "user",
+        root.ai.MessageRole.Assistant => "assistant",
+        root.ai.MessageRole.Tool => "tool",
+    }
+}
+
+function _prompt_history(history: root.ai.MessageHistory) -> string throws never {
+    if (history.entries.length() <= 1) {
+        return "";
+    }
+    history
+        .entries
+        .slice(1, history.entries.length())
+        .map((message: root.ai.Message) -> string {
+            _prompt_role(message.role()) + ": " + _prompt_message_text(message)
+        })
+        .join("\n")
+}
+
+function _new_prompt_conversation<T>(
+    owner: root.ai.Provider,
+    primitive: baml.llm.PrimitiveClient,
+    provider_name: string,
+    model: string,
+    task: root.ai.Task<T>,
+) -> PromptConversation throws never {
+    PromptConversation {
+        owner: owner,
+        primitive: primitive,
+        provider_name: provider_name,
+        model: model,
+        history: task.messages().to_history(),
+        declared_output_type: root.ai.internal._output_type_fingerprint<T>(),
+        recipe: task._render,
+        identity: task.identity,
+        arguments: task.arguments,
+        tags: task.tags,
+        last_calls: [],
+    }
+}
+
+function _owned_prompt_conversation(
+    conversation: root.ai.Conversation,
+    provider_name: string,
+) -> PromptConversation throws root.ai.InvalidRequest {
+    let state = match (conversation) {
+        let value: PromptConversation => value,
+        _ => {
+            throw root.ai.InvalidRequest {
+                provider: provider_name,
+                status_code: null,
+                detail: provider_name + " prompt tools received another provider's conversation",
+            }
+        },
+    };
+    if (state.provider_name != provider_name) {
+        throw root.ai.InvalidRequest {
+            provider: provider_name,
+            status_code: null,
+            detail: provider_name + " prompt tools received another Google backend's conversation",
+        };
+    }
+    state
+}
+
+function _prompt_turn<T>(
+    state: PromptConversation,
+    tools: root.ai.tools.Tool[],
+    output_suffix: string,
+) -> root.ai.Task<T> throws never {
+    //# Render the task with the text choice for this turn
+    let rendered = state.recipe.render_with_output_format(state.owner, reflect.type_of<T>(), output_suffix);
+    //# Reattach prior tool-loop messages after the original rendered prompt
+    let prior = _prompt_history(state.history);
+    let prompt = if (prior.length() == 0) {
+        rendered
+    } else {
+        baml.llm
+            .assemble_prompt_ast(
+                ["", "\n\nConversation so far:\n", ""],
+                [root.ai.messages._prompt_text_content(rendered), prior],
+            )
+    };
+    let recipe = root.ai.PromptRenderRecipe {
+        template: (ctx: baml.llm.Context) -> baml.llm.PromptAst {
+            prompt
+        },
+    };
+    root.ai.Task<T> {
+        provider: state.owner,
+        prompt: prompt,
+        identity: state.identity,
+        arguments: state.arguments,
+        tools: tools,
+        tags: state.tags,
+        _render: recipe,
+    }
+}
+
+function _prompt_step<T>(
+    conversation: root.ai.Conversation,
+    tools: root.ai.tools.Tool[],
+    provider_name: string,
+) -> root.ai.ModelStep<T> throws root.ai.Failure | baml.errors.UnknownError {
+    //# Resume the Google text-tool conversation
+    let state = _owned_prompt_conversation(conversation, provider_name);
+    if (state.last_calls.length() != 0) {
+        throw root.ai.InvalidRequest {
+            provider: provider_name,
+            status_code: null,
+            detail: "submit tool results before requesting the next Google prompt-tool step",
+        };
+    }
+    //# A zero-tool turn asks for T directly and parses it with SAP
+    if (tools.length() == 0) {
+        let response = _generate<T>(
+                state.primitive,
+                _prompt_turn<T>(state, [], ""),
+                provider_name,
+                state.model,
+                true,
+            );
+        state.last_calls = [];
+        state
+            .history
+            .entries
+            .push(root.ai.ChatMessage.assistant(_response_text(response.metadata.raw) ?? ""));
+        return root.ai.ModelStep<T> { outcome: response.value, metadata: response.metadata };
+    }
+    //# Ask for the text choice T | ToolCalls without native function declarations
+    let response = _generate<T | root.ai.tools.ToolCalls>(
+            state.primitive,
+            _prompt_turn<T | root.ai.tools.ToolCalls>(
+                    state,
+                    tools,
+                    _prompt_tool_output_suffix(tools),
+                ),
+            provider_name,
+            state.model,
+            true,
+        );
+    match (response.value) {
+        let calls: root.ai.tools.ToolCalls => {
+            state.last_calls = calls.calls;
+            state
+                .history
+                .entries
+                .push(
+                    root.ai
+                        .ChatMessage
+                        .assistant(
+                            baml.json
+                                .stringify(
+                                    {
+                                        "calls": calls.calls.map((call: root.ai.tools.ToolCall) -> json {
+                                            { "id": call.id, "name": call.name, "args": call.args }
+                                        }),
+                                    },
+                                ),
+                        ),
+                );
+            root.ai.ModelStep<T> { outcome: calls, metadata: response.metadata }
+        },
+        let value: T => {
+            state.last_calls = [];
+            state
+                .history
+                .entries
+                .push(root.ai.ChatMessage.assistant(_response_text(response.metadata.raw) ?? ""));
+            root.ai.ModelStep<T> { outcome: value, metadata: response.metadata }
+        },
+    }
+}
+
+function _prompt_results_for_call(
+    results: root.ai.tools.ToolResult[],
+    call_id: string,
+) -> root.ai.tools.ToolResult[] throws never {
+    results.filter((result: root.ai.tools.ToolResult) -> bool {
+        result.id == call_id
+    })
+}
+
+function _prompt_submit(
+    conversation: root.ai.Conversation,
+    results: root.ai.tools.ToolResult[],
+    provider_name: string,
+) -> root.ai.Conversation throws root.ai.Failure {
+    //# Correlate every text-protocol result before mutating the transcript
+    let state = _owned_prompt_conversation(conversation, provider_name);
+    if (results.length() != state.last_calls.length()) {
+        throw root.ai.InvalidRequest {
+            provider: provider_name,
+            status_code: null,
+            detail: "tool results must match every pending Google prompt-tool call",
+        };
+    }
+    for (let call in state.last_calls) {
+        let pending_count = state
+            .last_calls
+            .filter((candidate: root.ai.tools.ToolCall) -> bool {
+                candidate.id == call.id
+            })
+            .length();
+        let result_count = _prompt_results_for_call(results, call.id).length();
+        if (call.id.length() == 0 || pending_count != 1 || result_count != 1) {
+            throw root.ai.InvalidRequest {
+                provider: provider_name,
+                status_code: null,
+                detail: `tool results must contain exactly one result for each pending Google prompt-tool call (${call.id}: pending=${pending_count}, results=${result_count})`,
+            };
+        }
+    }
+    //# Append results in the model's call order
+    for (let call in state.last_calls) {
+        let result = _prompt_results_for_call(results, call.id)[0];
+        state
+            .history
+            .entries
+            .push(
+                root.ai.ChatMessage {
+                    message_role: root.ai.MessageRole.Tool,
+                    content: [
+                        root.ai.messages.TextPart {
+                            value: baml
+                                .json
+                                .stringify(
+                                    {
+                                        "id": result.id,
+                                        "output": result.output,
+                                        "is_error": result.is_error,
+                                    },
+                                ),
+                            metadata: {},
+                        },
+                    ],
+                    metadata: null,
+                },
+            );
+    }
+    state.last_calls = [];
+    state
 }
 
 function _headers_without_auth(headers: map<string, string>) -> map<string, string> throws never {
@@ -49,6 +359,7 @@ function _new_conversation<T>(
         provider_name: provider_name,
         model: model,
         history: task.messages().to_history(),
+        declared_output_type: root.ai.internal._output_type_fingerprint<T>(),
         url: request.url,
         headers: _headers_without_auth(request.headers),
         body_template: body,
@@ -217,10 +528,26 @@ function _step<T>(
     provider_name: string,
     use_sap: bool,
     parallel_tool_calls: bool,
-) -> root.ai.tools.ModelStep<T> throws root.ai.Failure | baml.errors.UnknownError {
+) -> root.ai.ModelStep<T> throws root.ai.Failure | baml.errors.UnknownError {
     //# Recover the exact provider-native Gemini continuation
     let state = _owned_conversation(conversation, provider_name);
-    let body = _tool_body(state, reflect.type_of<T>(), tools, use_sap);
+    if (state.last_calls.length() != 0) {
+        throw root.ai.InvalidRequest {
+            provider: provider_name,
+            status_code: null,
+            detail: "submit tool results before requesting the next Gemini step",
+        };
+    }
+    // With no application tools, Gemini's native JSON response schema is the
+    // strongest typed-output contract. Once tools are present, native mode uses
+    // the reserved result function so T and application calls share one choice.
+    let body = if (tools.length() == 0) {
+        let generation = _clone_body(state.body_template, state.provider_name);
+        generation.set("contents", state.contents);
+        _generation_body(generation, reflect.type_of<T>(), use_sap)
+    } else {
+        _tool_body(state, reflect.type_of<T>(), tools, use_sap)
+    };
     let unauthenticated = baml.http.Request {
         method: "POST",
         url: state.url,
@@ -240,9 +567,14 @@ function _step<T>(
         baml.json
             .stringify(
                 {
-                    "event": "llm.tools.request",
+                    "event": if (tools.length() == 0) {
+                        "llm.request"
+                    } else {
+                        "llm.tools.request"
+                    },
                     "provider": provider_name,
                     "model": state.model,
+                    "output_type": state.declared_output_type,
                     "content_count": state.contents.length(),
                     "application_tool_count": tools.length(),
                     "output_mode": if (use_sap) {
@@ -277,6 +609,14 @@ function _step<T>(
         _normalized_call_name(call) == _output_tool_name()
     });
     let metadata = _response_metadata(result.raw, state.model, provider_name);
+    //# Finish a zero-tool turn through native JSON schema or SAP text parsing
+    if (tools.length() == 0) {
+        state.last_calls = [];
+        return root.ai.ModelStep<T> {
+            outcome: _parse_generation_value<T>(result.raw, result.text, provider_name, use_sap),
+            metadata: metadata,
+        };
+    }
     //# Finish only from one reserved result call in native output mode
     if (!use_sap && output_calls.length() > 0) {
         if (calls.length() != 1 || output_calls.length() != 1) {
@@ -286,7 +626,7 @@ function _step<T>(
             };
         }
         state.last_calls = [];
-        return root.ai.tools.ModelStep<T> {
+        return root.ai.ModelStep<T> {
             outcome: _parse_output_call<T>(_normalized_call_raw(output_calls[0]), result.text, provider_name),
             metadata: metadata,
         };
@@ -300,7 +640,7 @@ function _step<T>(
             };
         }
         state.last_calls = calls;
-        return root.ai.tools.ModelStep<T> {
+        return root.ai.ModelStep<T> {
             outcome: _application_calls(calls, result.text, provider_name),
             metadata: metadata,
         };
@@ -330,7 +670,7 @@ function _step<T>(
         }
         },
     };
-    root.ai.tools.ModelStep<T> { outcome: value, metadata: metadata }
+    root.ai.ModelStep<T> { outcome: value, metadata: metadata }
 }
 
 function _calls_for_result(state: Conversation, result_id: string) -> json[] throws never {
@@ -463,7 +803,9 @@ function _history_from_json(encoded: json[]) -> root.ai.MessageHistory throws ne
 
 function _save_conversation(
     conversation: root.ai.Conversation,
+    owner: root.ai.Provider,
     provider_name: string,
+    provider_identity: string,
 ) -> root.ai.ConversationToken throws baml.errors.UnknownError {
     let state = match (conversation) {
         let value: Conversation if value.provider_name == provider_name => value,
@@ -474,6 +816,12 @@ function _save_conversation(
         )
         },
     };
+    if (!root.ai.internal._same_provider_instance(state.owner, owner)) {
+        throw baml.errors.UnknownError.with_message<never>(
+            null,
+            provider_name + " cannot save a conversation owned by another provider instance",
+        )
+    }
     root.ai.ConversationToken {
         provider: provider_name,
         version: 1,
@@ -484,6 +832,8 @@ function _save_conversation(
             .stringify(
                 {
                     "model": state.model,
+                    "provider_identity": provider_identity,
+                    "output_type": state.declared_output_type,
                     "history": _history_json(state.history),
                     // URL, headers, query parameters, and extra_body are rebuilt from
                     // the provider on restore. In particular, Vertex Express carries
@@ -508,6 +858,7 @@ function _restore_conversation(
     primitive: baml.llm.PrimitiveClient,
     provider_name: string,
     fallback_model: string,
+    provider_identity: string,
     token: root.ai.ConversationToken,
 ) -> root.ai.Conversation throws baml.errors.UnknownError {
     if (token.provider != provider_name || token.version != 1) {
@@ -531,6 +882,19 @@ function _restore_conversation(
             provider_name + " conversation token belongs to another model",
         );
     }
+    if (baml.json.path_or(state, ".provider_identity", "") != provider_identity) {
+        throw baml.errors.UnknownError.with_message<never>(
+            token,
+            provider_name + " conversation token belongs to another provider configuration",
+        )
+    }
+    let output_type = baml.json.path_or(state, ".output_type", "");
+    if (output_type.length() == 0) {
+        throw baml.errors.UnknownError.with_message<never>(
+            token,
+            provider_name + " conversation token has no output type",
+        );
+    }
     let request = _import_base_request(primitive, provider_name);
     let body = _body_object(request, provider_name);
     match (baml.json.path_or<map<string, json>?>(state, ".system_instruction", null)) {
@@ -545,6 +909,7 @@ function _restore_conversation(
         provider_name: provider_name,
         model: fallback_model,
         history: _history_from_json(baml.json.path_or<json[]>(state, ".history", [])),
+        declared_output_type: output_type,
         url: request.url,
         headers: _headers_without_auth(request.headers),
         body_template: body,
@@ -603,7 +968,7 @@ function _import_base_request(
     }
 }
 
-function _import_messages(
+function _import_messages<T>(
     owner: root.ai.Provider,
     primitive: baml.llm.PrimitiveClient,
     provider_name: string,
@@ -626,6 +991,7 @@ function _import_messages(
             provider_name: provider_name,
             model: model,
             history: messages.to_history(),
+            declared_output_type: root.ai.internal._output_type_fingerprint<T>(),
             url: request.url,
             headers: _headers_without_auth(request.headers),
             body_template: body,

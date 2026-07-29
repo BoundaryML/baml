@@ -33,7 +33,11 @@ class CapabilityNegotiationRunner {
             //# Narrow the erased provider to the strongest supported interaction
             match (task.provider) {
                 let realtime: root.ai.realtime.RealtimeProvider => {
-                    let live_session = realtime.open_live<Resolution>(task, root.ai.testing.RecordingChannel { frames: [] });
+                    let live_session = realtime
+                        .open_live<Resolution>(
+                            task,
+                            root.ai.testing.RecordingChannel { frames: [] },
+                        );
                     NegotiatedRun {
                         provider: realtime.name(),
                         mode: "realtime",
@@ -48,11 +52,18 @@ class CapabilityNegotiationRunner {
                         output: resolution.reply,
                     }
                 },
-                let completion: root.ai.CompletionProvider => {
-                    let resolution = completion.complete<Resolution>(task).value;
+                let agent: root.ai.AgentProvider => {
+                    let resolution = root
+                        .ai
+                        .internal
+                        ._require_done(
+                            task.with_provider(agent)
+                                .run(runner = root.ai.run.Agent<Resolution>.new()),
+                        )
+                        .value;
                     NegotiatedRun {
-                        provider: completion.name(),
-                        mode: "completion",
+                        provider: agent.name(),
+                        mode: "agent",
                         output: resolution.reply,
                     }
                 },

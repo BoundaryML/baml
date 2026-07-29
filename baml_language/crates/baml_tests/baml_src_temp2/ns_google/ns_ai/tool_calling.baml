@@ -1,4 +1,4 @@
-implements root.ai.tools.ToolCallingProvider for Gemini {
+implements root.ai.AgentProvider for Gemini {
   function begin<T>(
     self,
     task: root.ai.Task<T>,
@@ -6,8 +6,13 @@ implements root.ai.tools.ToolCallingProvider for Gemini {
       throws root.ai.Failure | baml.errors.UnknownError {
     root.google.ai.internal._validate(self);
     if (self.tool_mode == ToolMode.Prompt) {
-      let prompt_tools = root.ai.tools.PromptToolProvider { inner: self };
-      return prompt_tools.begin<T>(task);
+      return root.google.internal._new_prompt_conversation(
+        self,
+        root.google.ai.internal._primitive(self),
+        self.name(),
+        self.model,
+        task,
+      );
     }
     root.google.ai.internal._begin<T>(self, task)
   }
@@ -16,13 +21,27 @@ implements root.ai.tools.ToolCallingProvider for Gemini {
     self,
     conversation: root.ai.Conversation,
     tools: root.ai.tools.Tool[],
-  ) -> root.ai.tools.ModelStep<T>
+  ) -> root.ai.ModelStep<T>
       throws root.ai.Failure | baml.errors.UnknownError {
     root.google.ai.internal._validate(self);
+    root.ai.internal._require_conversation_output_type<T>(
+      conversation,
+      self.name(),
+    );
+    if (!root.ai.internal._same_provider_instance(conversation.provider(), self)) {
+      throw root.ai.InvalidRequest {
+        provider: self.name(),
+        status_code: null,
+        detail: "Google AI received a conversation owned by another provider instance",
+      };
+    }
     root.google.internal._validate_application_tool_names(tools, self.name());
     if (self.tool_mode == ToolMode.Prompt) {
-      let prompt_tools = root.ai.tools.PromptToolProvider { inner: self };
-      return prompt_tools.step<T>(conversation, tools);
+      return root.google.internal._prompt_step<T>(
+        conversation,
+        tools,
+        self.name(),
+      );
     }
     root.google.internal._step<T>(
       conversation,
@@ -40,9 +59,19 @@ implements root.ai.tools.ToolCallingProvider for Gemini {
   ) -> root.ai.Conversation
       throws root.ai.Failure {
     root.google.ai.internal._validate(self);
+    if (!root.ai.internal._same_provider_instance(conversation.provider(), self)) {
+      throw root.ai.InvalidRequest {
+        provider: self.name(),
+        status_code: null,
+        detail: "Google AI received a conversation owned by another provider instance",
+      };
+    }
     if (self.tool_mode == ToolMode.Prompt) {
-      let prompt_tools = root.ai.tools.PromptToolProvider { inner: self };
-      return prompt_tools.submit(conversation, results);
+      return root.google.internal._prompt_submit(
+        conversation,
+        results,
+        self.name(),
+      );
     }
     root.google.internal._submit(conversation, results, self.name())
   }

@@ -161,7 +161,7 @@ test "Google message import rebuilds Gemini user and model contents" {
     let messages = root.ai.MessageHistory {
         entries: [root.ai.ChatMessage.user("hello"), root.ai.ChatMessage.assistant("hi")],
     };
-    let imported = provider.import_messages(messages);
+    let imported = provider.import_messages<RequestFixture>(messages);
     assert.equal(imported.fidelity, root.ai.ConversationFidelity.MessagesOnly);
     match (imported.conversation) {
         let state: Conversation => {
@@ -266,6 +266,44 @@ test "Google reserves its typed-output tool name in SAP and Native modes" {
             rejected = true;
             null
         },
+    };
+    assert.is_true(rejected)
+}
+
+test "Google prompt mode requires pending results before another step" {
+    let provider = root
+        .google
+        .ai
+        .gemini(
+            model = "gemini-test",
+            api_key = "unused",
+            base_url = "https://example.test/v1beta",
+            output_mode = root.google.ai.OutputMode.Sap,
+            tool_mode = root.google.ai.ToolMode.Prompt,
+        );
+    let state = match (provider.begin<RequestFixture>(_request_fixture_task(provider))) {
+        let value: PromptConversation => value,
+        _ => baml.sys.panic("expected Google prompt conversation"),
+    };
+    state.last_calls = [root.ai.tools.ToolCall { id: "pending", name: "lookup", args: {} }];
+    let rejected = false;
+    let _ = provider.step<RequestFixture>(state, []) catch (e) {
+        let invalid: root.ai.InvalidRequest => {
+            rejected = true;
+            root.ai.ModelStep<RequestFixture> {
+                outcome: RequestFixture { answer: "unreachable" },
+                metadata: root.ai.ResponseMetadata {
+                    provider: "test",
+                    model: null,
+                    request_id: null,
+                    finish_reason: null,
+                    usage: null,
+                    attributes: {},
+                    raw: null,
+                },
+            }
+        },
+        _ => baml.sys.panic("unexpected Google prompt error"),
     };
     assert.is_true(rejected)
 }

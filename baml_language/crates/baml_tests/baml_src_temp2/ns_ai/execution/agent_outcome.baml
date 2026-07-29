@@ -11,8 +11,9 @@ class BudgetReached {
 }
 
 class Handoff {
-    to: string,
-    args: json,
+    // The exact provider call is retained so the application can correlate a
+    // ToolResult and submit it before resuming this conversation.
+    call: root.ai.tools.ToolCall,
     conversation: Conversation,
     steps_taken: int,
 }

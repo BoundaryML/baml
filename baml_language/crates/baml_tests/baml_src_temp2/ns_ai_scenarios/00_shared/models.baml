@@ -98,13 +98,15 @@ function ResolveTicket_task(
 
 // Future compiler lowering:
 //   ResolveTicket(ticket, $provider = provider)
-// becomes an ordinary completion run over ResolveTicket_task(ticket, provider).
+// becomes an ordinary bounded Agent run over ResolveTicket_task(ticket, provider).
 function ResolveTicket_manual(
   ticket: SupportTicket,
   provider: root.ai.Provider,
 ) -> Resolution throws root.ai.Failure | baml.errors.UnknownError {
-  ResolveTicket_task(ticket, provider)
-    .run(runner = root.ai.run.Completion<Resolution>.new())
+  root.ai.internal._require_done(
+    ResolveTicket_task(ticket, provider)
+      .run(runner = root.ai.run.Agent<Resolution>.new()),
+  ).value
 }
 
 function drain_resolution_stream(

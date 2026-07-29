@@ -7,7 +7,8 @@ test "guide 02.05: before-tool callbacks may rewrite a call" {
         .new(
             tools = [search_knowledge, lookup_account],
             before_tool_call = (event) -> {
-                root.ai.tools
+                root.ai
+                    .tools
                     .ToolDecision
                     .replace(
                         root.ai.tools.ToolCall {
@@ -74,7 +75,8 @@ testset "integ-test-guide-02-modify-or-block-tools" {
                     .new(
                         tools = [account_alias_tool(), lookup_account],
                         before_tool_call = (event) -> {
-                            root.ai.tools
+                            root.ai
+                                .tools
                                 .ToolDecision
                                 .replace(
                                     root.ai.tools.ToolCall {

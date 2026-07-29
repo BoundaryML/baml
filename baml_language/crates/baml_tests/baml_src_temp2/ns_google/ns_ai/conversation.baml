@@ -1,4 +1,4 @@
-implements root.ai.tools.ResumableToolCallingProvider for Gemini {
+implements root.ai.ResumableAgentProvider for Gemini {
   function save_conversation(
     self,
     conversation: root.ai.Conversation,
@@ -26,8 +26,8 @@ implements root.ai.tools.ResumableToolCallingProvider for Gemini {
   }
 }
 
-implements root.ai.tools.ConversationImportProvider for Gemini {
-  function import_messages(
+implements root.ai.ConversationImportProvider for Gemini {
+  function import_messages<T>(
     self,
     messages: root.ai.Messages,
   ) -> root.ai.ConversationImport throws baml.errors.UnknownError {
@@ -37,6 +37,6 @@ implements root.ai.tools.ConversationImportProvider for Gemini {
         "Cannot import messages with ToolMode.Prompt because prompt tools require the original Task and its prompt-rendering function. Use ToolMode.Native, or start a new Task from the messages.",
       );
     }
-    root.google.ai.internal._import(self, messages)
+    root.google.ai.internal._import<T>(self, messages)
   }
 }

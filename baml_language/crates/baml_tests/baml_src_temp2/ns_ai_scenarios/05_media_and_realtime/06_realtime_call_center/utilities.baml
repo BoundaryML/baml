@@ -300,8 +300,7 @@ class MacRealtimeAudioDevice {
 // Run from the repository root:
 //   baml run ai_scenarios.openai_realtime_call_center \
 //     --from crates/baml_tests/baml_src_temp2
-function openai_realtime_call_center(
-) -> null throws root.ai.Failure | baml.errors.UnknownError {
+function openai_realtime_call_center() -> null throws root.ai.Failure | baml.errors.UnknownError {
     let provider = root.openai.Realtime {
         model: "gpt-realtime-2.1",
         voice: "marin",

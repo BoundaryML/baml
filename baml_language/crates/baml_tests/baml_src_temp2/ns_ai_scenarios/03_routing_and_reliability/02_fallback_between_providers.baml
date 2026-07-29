@@ -10,11 +10,13 @@ function fallback_between_providers() -> root.ai.ResponseWithMetadata<Resolution
     ...fake_resolution(),
     provider_name: "fallback",
   };
-  let response = ResolveTicket_task(
-    sample_ticket(),
-    root.ai.fallback([failed, fallback]),
-  ).run(
-    runner = root.ai.run.GenerationWithMeta<Resolution>.new(),
+  let response = root.ai.internal._response_from_done(
+    root.ai.internal._require_done(
+      ResolveTicket_task(
+        sample_ticket(),
+        root.ai.fallback([failed, fallback]),
+      ).run(runner = root.ai.run.Agent<Resolution>.new()),
+    ),
   );
   log.info({
     "scenario": "fallback_between_providers",

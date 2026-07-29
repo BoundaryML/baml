@@ -6,12 +6,14 @@
 // the CLI event transcript alongside normalized AgentEvents.
 //
 class ClaudeCodeCli {
+    // BAML class equality is structural, so conversation ownership needs an
+    // explicit per-instance identity rather than comparing provider fields.
+    _instance_id: string,
     executable: string,
     model: string,
     cwd: string?,
     timeout_ms: int,
     max_turns: int,
-    max_application_tool_steps: int,
     max_budget_usd: string?,
     permission_mode: string,
     tools: string[],
@@ -20,7 +22,7 @@ class ClaudeCodeCli {
     persist_session: bool,
     harness_sessions: ClaudeCodeHarnessSession[],
 
-    function complete_with_events<T>(
+    function _run_cli_with_events<T>(
         self,
         task: root.ai.Task<T>,
         on_event: ((root.ai.observe.AgentEvent) -> null throws never)? = null,
@@ -145,12 +147,12 @@ class ClaudeCodeJsonSchema {
 
 function claude_code_cli() -> ClaudeCodeCli throws never {
     ClaudeCodeCli {
+        _instance_id: baml.id.new(),
         executable: "claude",
         model: "haiku",
         cwd: null,
         timeout_ms: 120000,
         max_turns: 1,
-        max_application_tool_steps: 4,
         max_budget_usd: null,
         permission_mode: "dontAsk",
         tools: [],
@@ -372,19 +374,47 @@ function _parse_claude_code_cli_lines<T, E>(
 // Claude Code requires the structured-output schema to be rooted at an object.
 // Keep the BAML class non-generic and supply the precise generic schema
 // separately so an unresolved nested TypeVar cannot reach ctx.output_format.
-class ClaudeCodeCompletionTurn {
+class ClaudeCodeAgentTurn {
     outcome: json,
 }
 
-function _claude_code_completion_turn_schema<T>() -> json throws baml.errors.UnknownError {
+class ClaudeCodeAgentConversation {
+    owner: ClaudeCodeCli,
+    _owner_instance_id: string,
+    history: root.ai.MessageHistory,
+    // The initial task messages are already present in portable history.
+    // Only entries after this boundary are appended to a re-rendered request.
+    initial_history_length: int,
+    declared_output_type: string,
+    recipe: root.ai.PromptRenderRecipe,
+    identity: root.ai.TaskIdentity?,
+    arguments: map<string, unknown>,
+    tags: map<string, string>,
+    pending_calls: root.ai.tools.ToolCall[],
+
+    implements root.ai.Conversation {
+        function provider(self) -> root.ai.Provider throws never {
+            self.owner
+        }
+
+        function messages(self) -> root.ai.Messages throws never {
+            self.history
+        }
+        function output_type_fingerprint(self) -> string? throws never {
+            self.declared_output_type
+        }
+    }
+}
+
+function _claude_code_agent_turn_schema<T>() -> json throws baml.errors.UnknownError {
     let final_schema = baml.schema.json_schema(reflect.type_of<T>()) catch (e) {
         _ => {
-            throw baml.errors.UnknownError.with_message<never>(e, "Claude Code completion result cannot be represented as JSON Schema")
+            throw baml.errors.UnknownError.with_message<never>(e, "Claude Code Agent result cannot be represented as JSON Schema")
         },
     };
     let final_root = baml.json.from_json<map<string, json>>(final_schema) catch (e) {
         _ => {
-            throw baml.errors.UnknownError.with_message<never>(e, "Claude Code completion schema must have an object root")
+            throw baml.errors.UnknownError.with_message<never>(e, "Claude Code Agent schema must have an object root")
         },
     };
     // References emitted for T are rooted at #/$defs. Move those definitions
@@ -392,7 +422,7 @@ function _claude_code_completion_turn_schema<T>() -> json throws baml.errors.Unk
     let definitions: json = final_root.delete("$defs") ?? {};
     let embedded_final = baml.json.to_json(final_root) catch (e) {
         _ => {
-            throw baml.errors.UnknownError.with_message<never>(e, "Claude Code completion schema could not be embedded")
+            throw baml.errors.UnknownError.with_message<never>(e, "Claude Code Agent schema could not be embedded")
         },
     };
     // Tool arguments are checked again by invoke_tool. Keeping args as an
@@ -426,16 +456,20 @@ function _claude_code_completion_turn_schema<T>() -> json throws baml.errors.Unk
     }
 }
 
-function _claude_code_completion_suffix<T>(
+function _claude_code_agent_suffix<T>(
     tools: root.ai.tools.Tool[],
 ) -> string throws baml.errors.UnknownError {
     let final_schema = baml.schema.json_schema(reflect.type_of<T>()) catch (e) {
         _ => {
-            throw baml.errors.UnknownError.with_message<never>(e, "Claude Code completion result cannot be represented as JSON Schema")
+            throw baml.errors.UnknownError.with_message<never>(e, "Claude Code Agent result cannot be represented as JSON Schema")
         },
     };
     let schemas = tools.map((tool: root.ai.tools.Tool) -> json {
-        root.ai.tools._prompt_tool_schema(tool)
+        {
+            "name": tool.name,
+            "description": tool.description,
+            "parameters": tool.input_schema,
+        }
     });
     "\n\n"
         + `
@@ -458,98 +492,86 @@ function _claude_code_completion_suffix<T>(
         `
 }
 
-function _claude_code_complete_with_application_tools<T>(
-    provider: ClaudeCodeCli,
-    task: root.ai.Task<T>,
-) -> root.ai.ResponseWithMetadata<T> throws baml.errors.UnknownError {
-    let tools = task.tools;
-    let adapter = root.ai.tools.PromptToolProvider { inner: provider };
-    let conversation = adapter.begin<T>(task);
-    let state = match (conversation) {
-        let value: root.ai.tools.PromptToolConversation => value,
-        _ => {
-            throw baml.errors.UnknownError.with_message<never>(null, "Claude Code completion conversation had the wrong type")
-        },
-    };
-    let schema = _claude_code_completion_turn_schema<T>();
-    let suffix = _claude_code_completion_suffix<T>(tools);
-    let step = 0;
-    //# Fulfill complete<T> through an explicitly bounded application-tool loop
-    while (step < provider.max_application_tool_steps) {
-        let run = provider
-            .complete_with_events<ClaudeCodeCompletionTurn>(
-                root.ai.tools._prompt_tool_turn<ClaudeCodeCompletionTurn>(
-                    adapter,
-                    state,
-                    tools,
-                    suffix,
-                ),
-                output_schema = ClaudeCodeJsonSchema { value: schema },
-            );
-        let outcome: T | root.ai.tools.ToolCalls = baml.json
-            .from_json<T | root.ai.tools.ToolCalls>(run.response.value.outcome) catch (e) {
-            _ => {
-                throw baml.errors.UnknownError.with_message<never>(e, "Claude Code completion returned an invalid outcome")
-            },
-        };
-        step = step + 1;
-        //# Return the final typed value
-        match (outcome) {
-            let calls: root.ai.tools.ToolCalls => {
-                //## Preserve the requested calls in the prompt conversation
-                state
-                    .history
-                    .entries
-                    .push(
-                        root.ai.ChatMessage
-                            .assistant(
-                                baml.json
-                                    .stringify(
-                                        {
-                                            "calls": calls.calls.map((call: root.ai.tools.ToolCall) -> json {
-                                                {
-                                                    "id": call.id,
-                                                    "name": call.name,
-                                                    "args": call.args,
-                                                }
-                                            }),
-                                        },
-                                    ),
-                            ),
-                    );
-                //## Dispatch BAML functions and submit correlated results
-                let results = root.ai.internal._run_tool_calls(
-                    calls.calls,
-                    tools,
-                    null,
-                    null,
-                    null,
-                    [],
-                    [],
-                    null,
-                    step,
-                ) catch (e) {
-                    _ => {
-                        throw baml.errors.UnknownError.with_message<never>(e, "Claude Code completion tool callback failed")
-                    },
-                };
-                let _ = adapter.submit(state, results) catch (e) {
-                    _ => {
-                        throw baml.errors.UnknownError.with_message<never>(e, "Claude Code completion could not submit BAML tool results")
-                    },
-                };
-            },
-            let value: T => {
-                return root.ai.ResponseWithMetadata<T> {
-                    value: value,
-                    metadata: run.response.metadata,
-                    conversation: state,
-                };
-            },
-        }
-    }
+function _claude_code_history_text(
+    history: root.ai.MessageHistory,
+) -> string throws never {
+    history
+        .entries
+        .map((message: root.ai.Message) -> string {
+            message.role().to_string()
+                + ": "
+                + root.ai.message_text(message)
+        })
+        .join("\n")
+}
 
-    throw baml.errors.UnknownError.with_message<never>({ "max_application_tool_steps": provider.max_application_tool_steps }, "Claude Code completion exhausted its application-tool step budget")
+function _claude_code_agent_turn<T>(
+    provider: ClaudeCodeCli,
+    state: ClaudeCodeAgentConversation,
+    output_suffix: string,
+) -> root.ai.Task<T> throws never {
+    let rendered = state
+        .recipe
+        .render_with_output_format(
+            provider,
+            reflect.type_of<T>(),
+            output_suffix,
+        );
+    // The freshly rendered prompt already contains the original task
+    // messages. Append only continuation entries so requests do not duplicate
+    // the initial prompt while portable history still remains complete.
+    let continuation = root.ai.MessageHistory {
+        entries: state
+            .history
+            .entries
+            .slice(state.initial_history_length, state.history.entries.length()),
+    };
+    let prior = _claude_code_history_text(continuation);
+    let prompt = if (prior.length() == 0) {
+        rendered
+    } else {
+        baml.llm.assemble_prompt_ast(
+            ["", "\n\nConversation so far:\n", ""],
+            [
+                root.ai.messages._prompt_text_content(rendered),
+                prior,
+            ],
+        )
+    };
+    root.ai.Task<T> {
+        provider: provider,
+        prompt: prompt,
+        identity: state.identity,
+        arguments: state.arguments,
+        tools: [],
+        tags: state.tags,
+        _render: root.ai.PromptRenderRecipe {
+            template: (ctx: baml.llm.Context) -> baml.llm.PromptAst {
+                prompt
+            },
+        },
+    }
+}
+
+function _claude_code_final_assistant_text<T>(
+    run: ClaudeCodeCliRun<T>,
+) -> string throws never {
+    let text = baml.json.path_or<string>(run.response.metadata.raw, ".result", "");
+    if (text.length() > 0) {
+        text
+    } else {
+        run.response.value.to_string()
+    }
+}
+
+function _claude_code_record_final<T>(
+    state: ClaudeCodeAgentConversation,
+    run: ClaudeCodeCliRun<T>,
+) -> null throws never {
+    state.history.entries.push(
+        root.ai.ChatMessage.assistant(_claude_code_final_assistant_text(run)),
+    );
+    null
 }
 
 implements root.ai.Provider for ClaudeCodeCli {
@@ -557,37 +579,192 @@ implements root.ai.Provider for ClaudeCodeCli {
   function render_shorthand(self) -> string throws never { "anthropic/" + self.model }
 }
 
-implements root.ai.GenerationProvider for ClaudeCodeCli {
-  function generate<T>(
+implements root.ai.AgentProvider for ClaudeCodeCli {
+  function begin<T>(
     self,
     task: root.ai.Task<T>,
-  ) -> root.ai.ResponseWithMetadata<T> throws baml.errors.UnknownError {
-    self.complete_with_events<T>(task).response
+  ) -> root.ai.Conversation throws never {
+    let history = task.messages().to_history();
+    ClaudeCodeAgentConversation {
+      owner: self,
+      _owner_instance_id: self._instance_id,
+      history: history,
+      initial_history_length: history.entries.length(),
+      declared_output_type: root.ai.internal._output_type_fingerprint<T>(),
+      recipe: task._render,
+      identity: task.identity,
+      arguments: task.arguments,
+      tags: task.tags,
+      pending_calls: [],
+    }
   }
-}
 
-implements root.ai.CompletionProvider for ClaudeCodeCli {
-  function complete<T>(
+  function step<T>(
     self,
-    task: root.ai.Task<T>,
-  ) -> root.ai.ResponseWithMetadata<T> throws baml.errors.UnknownError {
-    //# Completion owns the strategy; direct callers never choose by capability
-    if (task.tools.length() == 0) {
-      return self.complete_with_events<T>(task.with_provider(self)).response;
+    conversation: root.ai.Conversation,
+    tools: root.ai.tools.Tool[],
+  ) -> root.ai.ModelStep<T>
+      throws root.ai.Failure | baml.errors.UnknownError {
+    root.ai.internal._require_conversation_output_type<T>(
+      conversation,
+      self.name(),
+    );
+    let state = match (conversation) {
+      let value: ClaudeCodeAgentConversation => value,
+      _ => throw root.ai.InvalidRequest {
+        provider: "claude-code-cli",
+        status_code: null,
+        detail: "Claude Code received another provider's conversation",
+      },
+    };
+    if (state._owner_instance_id != self._instance_id) {
+      throw root.ai.InvalidRequest {
+        provider: "claude-code-cli",
+        status_code: null,
+        detail: "Claude Code received a conversation owned by another provider instance",
+      };
     }
-    _claude_code_complete_with_application_tools<T>(
-      self,
-      task.with_provider(self),
-    )
+    if (state.pending_calls.length() != 0) {
+      throw baml.errors.UnknownError.with_message<never>(
+        state.pending_calls,
+        "Claude Code requires tool results before the next step",
+      );
+    }
+    if (tools.length() == 0) {
+      let run = self._run_cli_with_events<T>(
+        _claude_code_agent_turn<T>(self, state, ""),
+      );
+      _claude_code_record_final(state, run);
+      return root.ai.ModelStep<T> {
+        outcome: run.response.value,
+        metadata: run.response.metadata,
+      };
+    }
+    let run = self._run_cli_with_events<ClaudeCodeAgentTurn>(
+      _claude_code_agent_turn<ClaudeCodeAgentTurn>(
+        self,
+        state,
+        _claude_code_agent_suffix<T>(tools),
+      ),
+      output_schema = ClaudeCodeJsonSchema {
+        value: _claude_code_agent_turn_schema<T>(),
+      },
+    );
+    let outcome = baml.json.from_json<T | root.ai.tools.ToolCalls>(
+      run.response.value.outcome,
+    ) catch (e) {
+      _ => throw baml.errors.UnknownError.with_message<never>(
+        e,
+        "Claude Code returned an invalid Agent outcome",
+      ),
+    };
+    match (outcome) {
+      let calls: root.ai.tools.ToolCalls => {
+        state.pending_calls = calls.calls;
+        state.history.entries.push(
+          root.ai.ChatMessage.assistant(
+            baml.json.stringify({
+              "calls": calls.calls.map(
+                (call: root.ai.tools.ToolCall) -> json {
+                  {
+                    "id": call.id,
+                    "name": call.name,
+                    "args": call.args,
+                  }
+                },
+              ),
+            }),
+          ),
+        );
+      },
+      let value: T => {
+        _claude_code_record_final(state, run);
+      },
+    }
+    root.ai.ModelStep<T> {
+      outcome: outcome,
+      metadata: run.response.metadata,
+    }
   }
-  function replay_policy<T>(
+
+  function submit(
     self,
-    task: root.ai.Task<T>,
-  ) -> root.ai.ReplayPolicy throws never {
-    root.ai.ReplayPolicy {
-        kind: root.ai.ReplayKind.Never,
-        idempotency_key: null,
+    conversation: root.ai.Conversation,
+    results: root.ai.tools.ToolResult[],
+  ) -> root.ai.Conversation throws root.ai.Failure {
+    let state = match (conversation) {
+      let value: ClaudeCodeAgentConversation => value,
+      _ => throw root.ai.InvalidRequest {
+        provider: "claude-code-cli",
+        status_code: null,
+        detail: "Claude Code received another provider's conversation",
+      },
+    };
+    if (state._owner_instance_id != self._instance_id) {
+      throw root.ai.InvalidRequest {
+        provider: "claude-code-cli",
+        status_code: null,
+        detail: "Claude Code received a conversation owned by another provider instance",
+      };
     }
+    if (results.length() != state.pending_calls.length()) {
+      throw root.ai.InvalidRequest {
+        provider: "claude-code-cli",
+        status_code: null,
+        detail: "Claude Code requires one result for every pending tool call",
+      };
+    }
+    // First validate and order the complete result set. Do not mutate history
+    // until every pending ID is unique and has exactly one matching result.
+    let ordered_results: root.ai.tools.ToolResult[] = [];
+    for (let call in state.pending_calls) {
+      let pending_with_id = state
+        .pending_calls
+        .filter((pending: root.ai.tools.ToolCall) -> bool {
+          pending.id == call.id
+        });
+      let matches = results.filter(
+        (result: root.ai.tools.ToolResult) -> bool {
+          result.id == call.id
+        },
+      );
+      if (
+        call.id.length() == 0
+          || pending_with_id.length() != 1
+          || matches.length() != 1
+      ) {
+        throw root.ai.InvalidRequest {
+          provider: "claude-code-cli",
+          status_code: null,
+          detail: "Claude Code tool result IDs must match pending calls exactly once",
+        };
+      }
+      ordered_results.push(matches[0]);
+    }
+    // Correlation succeeded for the whole batch. Build all portable messages
+    // before committing them, then clear the pending set.
+    let history_entries: root.ai.Message[] = ordered_results
+      .map((result: root.ai.tools.ToolResult) -> root.ai.Message {
+        root.ai.ChatMessage {
+          message_role: root.ai.MessageRole.Tool,
+          content: [
+            root.ai.messages.TextPart {
+              value: baml.json.stringify({
+                "id": result.id,
+                "output": result.output,
+                "is_error": result.is_error,
+              }),
+              metadata: {},
+            },
+          ],
+          metadata: null,
+        }
+      });
+    for (let entry in history_entries) {
+      state.history.entries.push(entry);
+    }
+    state.pending_calls = [];
+    state
   }
 }
 
@@ -596,12 +773,12 @@ function _claude_code_harness_provider(
     session: ClaudeCodeHarnessSession,
 ) -> ClaudeCodeCli throws never {
     ClaudeCodeCli {
+        _instance_id: baml.id.new(),
         executable: provider.executable,
         model: provider.model,
         cwd: session.options.cwd ?? provider.cwd,
         timeout_ms: provider.timeout_ms,
         max_turns: provider.max_turns,
-        max_application_tool_steps: provider.max_application_tool_steps,
         max_budget_usd: provider.max_budget_usd,
         permission_mode: session.options.permission_mode ?? provider.permission_mode,
         tools: provider.tools,
@@ -674,7 +851,7 @@ implements root.ai.harness.Harness for ClaudeCodeCli {
         let configured = _claude_code_harness_provider(self, local);
         let effective_task = _claude_code_harness_task<T>(configured, local, task);
         //# Normalize Claude Code JSONL into the shared harness event callback
-        let cli_run = configured.complete_with_events<T>(effective_task, on_event = on_event);
+        let cli_run = configured._run_cli_with_events<T>(effective_task, on_event = on_event);
         if (cli_run.session_id.length() > 0) {
             local.session_id = cli_run.session_id;
         }

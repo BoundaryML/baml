@@ -5,7 +5,9 @@ class Background<T> {
     options: root.ai.jobs.BackgroundOptions,
 
     function new(idempotency_key: string? = null) -> Background<T> throws never {
-        Background<T> { options: root.ai.jobs.BackgroundOptions { idempotency_key: idempotency_key } }
+        Background<T> {
+            options: root.ai.jobs.BackgroundOptions { idempotency_key: idempotency_key },
+        }
     }
 
     implements root.ai.Runner<root.ai.Task<T>> {

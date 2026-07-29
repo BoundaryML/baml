@@ -41,7 +41,33 @@ function _strict_schema(schema: json, path: string) -> json throws baml.errors.U
                 };
             }
             for (let key in object.keys()) {
-                object.set(key, _strict_schema(object[key], path + "." + key));
+                // These keywords contain maps *of schemas*. The container may
+                // legitimately be empty, as it is for an empty BAML class.
+                if (
+                    key == "properties"
+                        || key == "$defs"
+                        || key == "definitions"
+                        || key == "patternProperties"
+                        || key == "dependentSchemas"
+                ) {
+                    match (object[key]) {
+                        let schemas: map<string, json> => {
+                            for (let name in schemas.keys()) {
+                                schemas
+                                    .set(
+                                        name,
+                                        _strict_schema(schemas[name], path + "." + key + "." + name),
+                                    );
+                            }
+                            object.set(key, schemas);
+                        },
+                        let value: json => {
+                            object.set(key, _strict_schema(value, path + "." + key));
+                        },
+                    }
+                } else {
+                    object.set(key, _strict_schema(object[key], path + "." + key));
+                }
             }
             match (object.get("type")) {
                 "object" => {
