@@ -4,8 +4,9 @@ use std::{
 };
 
 use anyhow::{Context, Result};
-use bytesize::ByteSize;
 use serde::{Deserialize, Deserializer, de};
+
+use crate::human_size;
 
 #[derive(Debug, Deserialize)]
 pub(crate) struct Config {
@@ -218,30 +219,17 @@ pub(crate) struct Policy {
     pub max_delta_pct: Option<f64>,
 }
 
-#[derive(Deserialize)]
-#[serde(untagged)]
-enum SizeThreshold {
-    Bytes(u64),
-    HumanReadable(String),
-}
-
 fn deserialize_optional_size<'de, D>(deserializer: D) -> std::result::Result<Option<u64>, D::Error>
 where
     D: Deserializer<'de>,
 {
-    let threshold = Option::<SizeThreshold>::deserialize(deserializer)?;
-    threshold
-        .map(|threshold| match threshold {
-            SizeThreshold::Bytes(bytes) => Ok(bytes),
-            SizeThreshold::HumanReadable(value) => parse_size(&value).map_err(de::Error::custom),
-        })
+    Option::<String>::deserialize(deserializer)?
+        .map(|value| parse_size(&value).map_err(de::Error::custom))
         .transpose()
 }
 
 fn parse_size(value: &str) -> Result<u64> {
-    value
-        .parse::<ByteSize>()
-        .map(|size| size.as_u64())
+    human_size::parse(value)
         .map_err(anyhow::Error::msg)
         .with_context(|| format!("invalid size threshold `{value}`"))
 }
@@ -337,12 +325,14 @@ mod tests {
     }
 
     #[test]
-    fn policy_accepts_human_readable_and_legacy_byte_thresholds() {
+    fn policy_accepts_human_readable_thresholds() {
         let human: Policy = toml::from_str(r#"max_file_bytes = "1.5 MiB""#).unwrap();
         assert_eq!(human.max_file_bytes, Some(1_572_864));
+    }
 
-        let legacy: Policy = toml::from_str("max_file_bytes = 1_572_864").unwrap();
-        assert_eq!(legacy.max_file_bytes, Some(1_572_864));
+    #[test]
+    fn policy_rejects_integer_thresholds() {
+        assert!(toml::from_str::<Policy>("max_file_bytes = 1_572_864").is_err());
     }
 
     #[test]
@@ -352,6 +342,6 @@ mod tests {
         config.validate().unwrap();
 
         let macos = &config.artifacts["baml-cli"].platform["aarch64-apple-darwin"];
-        assert_eq!(macos.max_file_bytes, Some(21_957_181));
+        assert_eq!(macos.max_file_bytes, Some(21_915_238));
     }
 }

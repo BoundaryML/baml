@@ -9,11 +9,11 @@
 use std::{collections::BTreeMap, path::Path};
 
 use anyhow::{Context, Result};
-use bytesize::{ByteSize, Unit};
 use toml_edit::{DocumentMut, Item, Table, Value};
 
 use crate::{
     config::{Config, GateMetric},
+    human_size,
     measure::ArtifactMeasurement,
 };
 
@@ -56,7 +56,7 @@ pub(crate) fn sync_ceilings(
             let ceiling = ceiling_for(gated_bytes, margin_pct);
             set_ceiling(&mut doc, name, platform, key, ceiling);
             updates += 1;
-            let formatted_ceiling = format_size(ceiling);
+            let formatted_ceiling = human_size::format(ceiling);
             eprintln!(
                 "  ceiling {name} [{platform}] {key} = {formatted_ceiling} ({gated_bytes} + {margin_pct}%)"
             );
@@ -125,40 +125,10 @@ fn implicit_table() -> Item {
 }
 
 fn human_readable_size(bytes: u64) -> Value {
-    let mut v = Value::from(format_size(bytes));
+    let mut v = Value::from(human_size::format(bytes));
     v.decor_mut().set_prefix(" ");
     v.decor_mut().set_suffix("");
     v
-}
-
-fn format_size(bytes: u64) -> String {
-    let render = |value| format!("{:.2}", ByteSize::b(value).display().iec());
-    let rendered = render(bytes);
-    let parsed = rendered
-        .parse::<ByteSize>()
-        .expect("bytesize output is valid bytesize input")
-        .as_u64();
-    if parsed >= bytes {
-        return rendered;
-    }
-
-    let unit = rendered
-        .rsplit_once(' ')
-        .expect("bytesize IEC output includes a unit")
-        .1
-        .parse::<Unit>()
-        .expect("bytesize IEC output uses a known unit");
-    let display_step = (unit * 1).div_ceil(100);
-    let rounded_up = render(bytes.saturating_add(display_step));
-    let rounded_up_bytes = rounded_up
-        .parse::<ByteSize>()
-        .expect("bytesize output is valid bytesize input")
-        .as_u64();
-    assert!(
-        rounded_up_bytes >= bytes,
-        "human-readable ceiling must not be lower than its byte value"
-    );
-    rounded_up
 }
 
 #[cfg(test)]
@@ -174,20 +144,6 @@ mod tests {
     }
 
     #[test]
-    fn formats_human_readable_binary_sizes_without_lowering_the_ceiling() {
-        assert_eq!(format_size(15_519_843), "14.81 MiB");
-        assert_eq!(format_size(1_024), "1.00 KiB");
-        assert_eq!(format_size(1_073_741_824), "1.00 GiB");
-        assert_eq!(format_size(0), "0 B");
-
-        for bytes in [1, 1_023, 1_025, 1_048_577, 21_956_782, 1_073_741_825] {
-            let formatted = format_size(bytes);
-            let parsed = formatted.parse::<ByteSize>().unwrap().as_u64();
-            assert!(parsed >= bytes, "{formatted} is lower than {bytes} bytes");
-        }
-    }
-
-    #[test]
     fn set_ceiling_writes_a_human_readable_toml_string() {
         let mut doc = DocumentMut::new();
         set_ceiling(
@@ -199,7 +155,7 @@ mod tests {
         );
         assert_eq!(
             doc.to_string(),
-            "[artifacts.baml-cli.platform.aarch64-apple-darwin]\nmax_file_bytes = \"20.94 MiB\"\n"
+            "[artifacts.baml-cli.platform.aarch64-apple-darwin]\nmax_file_bytes = \"20.9 MiB\"\n"
         );
     }
 }

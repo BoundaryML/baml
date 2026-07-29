@@ -11,6 +11,7 @@ mod ceilings;
 mod compare;
 mod config;
 mod fetch;
+mod human_size;
 mod measure;
 mod output;
 
@@ -454,7 +455,10 @@ fn cmd_bake(args: BakeArgs) -> Result<i32> {
             merged.insert(name.clone(), measurement.clone());
         }
 
-        if existing.as_ref().is_some_and(|e| e.artifacts == merged) {
+        if existing
+            .as_ref()
+            .is_some_and(|baseline| baseline.measurements_match(&merged))
+        {
             eprintln!("baseline unchanged: {}", path.display());
             continue;
         }
