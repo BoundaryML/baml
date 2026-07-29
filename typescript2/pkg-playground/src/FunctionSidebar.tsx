@@ -127,6 +127,7 @@ function TestTreeNode({
               'ml-auto text-[9px] shrink-0',
               outcome === 'pass' ? 'text-green-500' : 'text-red-500',
             )}
+            role="status"
             aria-label={`Latest test run status: ${outcome}`}
             title={`Latest test run status: ${outcome}`}
           >

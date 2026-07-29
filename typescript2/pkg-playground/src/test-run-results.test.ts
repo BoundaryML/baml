@@ -37,16 +37,49 @@ describe('collectLatestTestRunResults', () => {
       error: 'Could not start',
     });
   });
+
+  it('uses the newest run error instead of an older completed result', () => {
+    const runs: TestRunResultSource[] = [
+      testRun('my/test', null, {
+        error: 'Runtime failed',
+        status: 'error',
+      }),
+      testRun('my/test', { outcome: 'pass' }),
+    ];
+
+    expect(collectLatestTestRunResults(runs, new Map()).get('my/test')).toEqual(
+      {
+        outcome: 'error',
+        error: 'Runtime failed',
+      },
+    );
+  });
+
+  it('uses the newest cancellation instead of an older completed result', () => {
+    const runs: TestRunResultSource[] = [
+      testRun('my/test', null, { status: 'cancelled' }),
+      testRun('my/test', { outcome: 'pass' }),
+    ];
+
+    expect(collectLatestTestRunResults(runs, new Map()).get('my/test')).toEqual(
+      {
+        outcome: 'error',
+        error: 'Cancelled',
+      },
+    );
+  });
 });
 
 function testRun(
   testName: string,
   result: RunStoreDisplayRun['result'],
+  overrides: Partial<Pick<TestRunResultSource, 'error' | 'status'>> = {},
 ): TestRunResultSource {
   return {
     testName,
     result,
     error: null,
     status: 'success',
+    ...overrides,
   };
 }

@@ -34,7 +34,7 @@ describe('FunctionSidebar test rows', () => {
       expect(statusIndex).toBeGreaterThan(-1);
       expect(runIndex).toBeGreaterThan(statusIndex);
       expect(markup).toContain(
-        `aria-label="Latest test run status: ${outcome}" title="Latest test run status: ${outcome}">${outcome}</span><button`,
+        `role="status" aria-label="Latest test run status: ${outcome}" title="Latest test run status: ${outcome}">${outcome}</span><button`,
       );
     },
   );
