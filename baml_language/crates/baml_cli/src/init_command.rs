@@ -170,40 +170,11 @@ name = "{name}"
 # [scripts]
 # dev = "-f main"
 
-# Uncomment this to generate the Python SDK.
+# Add a client generator, then generate its SDK:
+#   baml generate add python/pydantic2
+#   baml generate
 #
-# Note: you also need to install the BAML runtime bridge for Python:
-#   uv add baml_bridge
-#   pip install baml_bridge
-#   conda install -c conda-forge baml_bridge
-#
-# [generator.python_client]
-# output_type = "python/pydantic"
-# output_dir = "./baml_python"
-# naming_convention = "preserve-case"
-
-# Uncomment this to generate the Node SDK.
-#
-# Note: you also need to install the BAML runtime bridge for Node.js:
-#   npm install @boundaryml/baml-bridge
-#   pnpm add @boundaryml/baml-bridge
-#   yarn add @boundaryml/baml-bridge
-#   bun add @boundaryml/baml-bridge
-#
-# [generator.node_client]
-# output_type = "typescript/node"
-# output_dir = "./baml_ts"
-# naming_convention = "preserve-case"
-
-# Uncomment this to generate the Go SDK. `sdk_import_path` must match the
-# import path of the generated `baml_sdk` directory in your Go module.
-#
-# [generator.go_client]
-# output_type = "go"
-# output_dir = "."
-# naming_convention = "language"
-# sdk_import_path = "example.com/my-project/baml_sdk"
-# max_typed_union_arity = 3 # larger unions are generated as `any`
+# Run `baml generate add --help` to see every supported output type.
 "#,
     )
 }
@@ -229,6 +200,7 @@ mod tests {
         let toml = std::fs::read_to_string(tmp.path().join("baml.toml")).unwrap();
         assert!(toml.contains("[package]"));
         assert!(toml.contains("name = "));
+        assert!(toml.contains("baml generate add python/pydantic2"));
         assert!(tmp.path().join("baml_src/main.baml").exists());
     }
 

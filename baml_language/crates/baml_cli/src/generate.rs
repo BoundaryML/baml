@@ -7,20 +7,28 @@ use std::{
 };
 
 use anyhow::{Context, Result, anyhow};
-use baml_codegen_types::{GeneratedOutputFile, write_generated_output};
+use baml_codegen_types::{
+    GeneratedOutputFile, Generator, NamingConvention, OutputType, write_generated_output,
+};
 use baml_db::{
     FileId, Span,
     baml_compiler_diagnostics::{Diagnostic, DiagnosticId, DiagnosticPhase, Severity, render},
 };
-use clap::Args;
-use sdkgen_python_pydantic2::{NamingConvention, OutputType};
+use clap::{
+    Args, Subcommand,
+    builder::{PossibleValuesParser, TypedValueParser},
+};
 use text_size::{TextRange, TextSize};
 use toml::Spanned;
+use toml_edit::{DocumentMut, Item, Table, value};
 
 use crate::{commands::release_version, reporter::Reporter};
 
 #[derive(Args, Clone, Debug)]
 pub struct GenerateArgs {
+    #[command(subcommand)]
+    pub command: Option<GenerateCommand>,
+
     /// Project search starting point. Defaults to the current directory.
     #[arg(long, value_name = "PATH")]
     pub from: Option<PathBuf>,
@@ -28,6 +36,26 @@ pub struct GenerateArgs {
     /// Output directory override (takes precedence over generator config)
     #[arg(long, short = 'o')]
     pub output: Option<PathBuf>,
+}
+
+#[derive(Subcommand, Clone, Debug)]
+pub enum GenerateCommand {
+    /// Add a client generator to baml.toml.
+    Add(AddGeneratorArgs),
+}
+
+#[derive(Args, Clone, Debug)]
+pub struct AddGeneratorArgs {
+    #[arg(value_name = "OUTPUT_TYPE", value_parser = add_output_type_parser())]
+    pub output_type: OutputType,
+
+    /// Project search starting point. Defaults to the current directory.
+    #[arg(long, value_name = "PATH")]
+    pub from: Option<PathBuf>,
+
+    /// Go module import path for the generated baml_sdk package.
+    #[arg(long, value_name = "IMPORT_PATH")]
+    pub sdk_import_path: Option<String>,
 }
 
 /// A validated generator, resolved from a `[generator.<name>]` section of
@@ -46,8 +74,127 @@ struct GeneratorDef {
     max_typed_union_arity: usize,
 }
 
+impl AddGeneratorArgs {
+    fn run(&self) -> Result<crate::ExitCode> {
+        let root = crate::project_load::find_project_root_from(self.from.as_deref())?.ok_or_else(
+            || anyhow!("no BAML project found; run `baml init` before adding a generator"),
+        )?;
+        let toml_path = root.join("baml.toml");
+        if !toml_path.is_file() {
+            anyhow::bail!(
+                "`{}` has no baml.toml; run `baml init` before adding a generator",
+                root.display()
+            );
+        }
+
+        let content = std::fs::read_to_string(&toml_path)
+            .with_context(|| format!("failed to read {}", toml_path.display()))?;
+        let manifest = crate::manifest::parse(&content)
+            .with_context(|| format!("failed to parse {}", toml_path.display()))?;
+        crate::manifest::package_name(&manifest, &toml_path)?;
+
+        let mut generator = Generator::from(self.output_type);
+        match (self.output_type, self.sdk_import_path.as_deref()) {
+            (OutputType::Go, Some(import_path)) if is_valid_go_import_path(import_path) => {
+                generator.sdk_import_path = Some(import_path.to_string());
+            }
+            (OutputType::Go, Some(import_path)) => {
+                anyhow::bail!("invalid Go SDK import path `{import_path}`");
+            }
+            (OutputType::Go, None) => {
+                anyhow::bail!("the Go generator requires `--sdk-import-path <MODULE>/baml_sdk`");
+            }
+            (_, Some(_)) => {
+                anyhow::bail!("`--sdk-import-path` is only valid for the Go generator");
+            }
+            (_, None) => {}
+        }
+
+        let (updated, name) = add_generator_to_manifest(&content, &generator)
+            .with_context(|| format!("failed to update {}", toml_path.display()))?;
+        std::fs::write(&toml_path, updated)
+            .with_context(|| format!("failed to write {}", toml_path.display()))?;
+
+        Reporter::new().finish(
+            "Added",
+            format!("generator.{name} to {}", toml_path.display()),
+        );
+        Ok(crate::ExitCode::Success)
+    }
+}
+
+fn parse_add_output_type(value: &str) -> Result<OutputType, String> {
+    OutputType::all()
+        .iter()
+        .copied()
+        .find(|output_type| value == output_type.add_name())
+        .ok_or_else(|| {
+            let expected = OutputType::all()
+                .iter()
+                .copied()
+                .map(OutputType::add_name)
+                .collect::<Vec<_>>()
+                .join(", ");
+            format!("unknown generator output type `{value}`; expected one of: {expected}")
+        })
+}
+
+fn add_output_type_parser() -> impl TypedValueParser<Value = OutputType> {
+    PossibleValuesParser::new(OutputType::all().iter().copied().map(OutputType::add_name)).map(
+        |value| parse_add_output_type(&value).expect("possible generator output type must parse"),
+    )
+}
+
+fn add_generator_to_manifest(content: &str, generator: &Generator) -> Result<(String, String)> {
+    let manifest = crate::manifest::parse(content).context("invalid baml.toml")?;
+    let name = (1..)
+        .map(|index| format!("client{index}"))
+        .find(|name| !manifest.generator.contains_key(name))
+        .expect("generator index space is unbounded");
+
+    let mut document = content
+        .parse::<DocumentMut>()
+        .context("invalid baml.toml")?;
+    if document.get("generator").is_none() {
+        let mut generators = Table::new();
+        generators.set_implicit(true);
+        document.insert("generator", Item::Table(generators));
+    }
+    let generators = document["generator"]
+        .as_table_mut()
+        .context("`generator` must be a TOML table")?;
+
+    let mut table = Table::new();
+    table.insert("output_type", value(generator.output_type.to_string()));
+    if let Some(output_dir) = &generator.output_dir {
+        table.insert("output_dir", value(output_dir));
+    }
+    table.insert(
+        "naming_convention",
+        value(generator.naming_convention.to_string()),
+    );
+    if let Some(sdk_import_path) = &generator.sdk_import_path {
+        table.insert("sdk_import_path", value(sdk_import_path));
+    }
+    if let Some(max_typed_union_arity) = generator.max_typed_union_arity {
+        let max_typed_union_arity = i64::try_from(max_typed_union_arity)
+            .context("max_typed_union_arity exceeds TOML's integer range")?;
+        table.insert("max_typed_union_arity", value(max_typed_union_arity));
+    }
+    generators.insert(&name, Item::Table(table));
+
+    Ok((document.to_string(), name))
+}
+
 impl GenerateArgs {
     pub fn run(&self) -> Result<crate::ExitCode> {
+        match &self.command {
+            Some(GenerateCommand::Add(args)) => args.run(),
+            None => self.run_generate(),
+        }
+    }
+
+    fn run_generate(&self) -> Result<crate::ExitCode> {
         let reporter = Reporter::new();
         reporter.status(
             "Generating",
@@ -631,7 +778,11 @@ fn to_text_range(span: std::ops::Range<usize>) -> TextRange {
 mod tests {
     use std::fs;
 
-    use super::{Diagnostic, GeneratorDef, discover_generators, is_valid_go_import_path};
+    use super::{
+        AddGeneratorArgs, Diagnostic, Generator, GeneratorDef, OutputType,
+        add_generator_to_manifest, discover_generators, is_valid_go_import_path,
+        parse_add_output_type,
+    };
 
     fn go_manifest(threshold: Option<i64>) -> String {
         let threshold = threshold
@@ -646,6 +797,90 @@ mod tests {
         let directory = tempfile::tempdir().unwrap();
         fs::write(directory.path().join("baml.toml"), content).unwrap();
         discover_generators(directory.path())
+    }
+
+    #[test]
+    fn add_parser_accepts_every_output_type_name() {
+        for &output_type in OutputType::all() {
+            assert_eq!(
+                parse_add_output_type(output_type.add_name()),
+                Ok(output_type)
+            );
+        }
+    }
+
+    #[test]
+    fn add_generator_preserves_manifest_and_uses_first_free_client_name() {
+        let content = "# keep this comment\n[package]\nname = \"test\"\n\n[generator.client1]\noutput_type = \"rust\"\nnaming_convention = \"preserve-case\"\n";
+        let generator = Generator::from(OutputType::PythonPydantic);
+
+        let (updated, name) = add_generator_to_manifest(content, &generator).unwrap();
+
+        assert_eq!(name, "client2");
+        assert!(updated.contains("# keep this comment"));
+        let manifest = crate::manifest::parse(&updated).unwrap();
+        let added = manifest.generator["client2"].get_ref();
+        assert_eq!(
+            added.output_type.as_ref().unwrap().get_ref(),
+            "python/pydantic"
+        );
+        assert_eq!(
+            added.naming_convention.as_ref().unwrap().get_ref(),
+            "preserve-case"
+        );
+    }
+
+    #[test]
+    fn add_go_generator_writes_required_import_path() {
+        let mut generator = Generator::from(OutputType::Go);
+        generator.sdk_import_path = Some("example.com/test/baml_sdk".to_string());
+
+        let (updated, name) =
+            add_generator_to_manifest("[package]\nname = \"test\"\n", &generator).unwrap();
+
+        assert_eq!(name, "client1");
+        let manifest = crate::manifest::parse(&updated).unwrap();
+        let added = manifest.generator["client1"].get_ref();
+        assert_eq!(added.output_type.as_ref().unwrap().get_ref(), "go");
+        assert_eq!(
+            added.naming_convention.as_ref().unwrap().get_ref(),
+            "language"
+        );
+        assert_eq!(
+            added.sdk_import_path.as_ref().unwrap().get_ref(),
+            "example.com/test/baml_sdk"
+        );
+    }
+
+    #[test]
+    fn add_command_updates_project_manifest() {
+        let directory = tempfile::tempdir().unwrap();
+        fs::write(
+            directory.path().join("baml.toml"),
+            "[package]\nname = \"test\"\n",
+        )
+        .unwrap();
+
+        let result = AddGeneratorArgs {
+            output_type: OutputType::TypescriptNode,
+            from: Some(directory.path().to_path_buf()),
+            sdk_import_path: None,
+        }
+        .run()
+        .unwrap();
+
+        assert!(matches!(result, crate::ExitCode::Success));
+        let updated = fs::read_to_string(directory.path().join("baml.toml")).unwrap();
+        let manifest = crate::manifest::parse(&updated).unwrap();
+        assert_eq!(
+            manifest.generator["client1"]
+                .get_ref()
+                .output_type
+                .as_ref()
+                .unwrap()
+                .get_ref(),
+            "typescript/node"
+        );
     }
 
     #[test]
