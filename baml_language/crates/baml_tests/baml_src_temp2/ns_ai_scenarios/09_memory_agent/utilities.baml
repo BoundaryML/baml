@@ -5,7 +5,7 @@
 // Durable memory
 // ---------------------------------------------------------------------------
 
-class MemoryAgentMemory {
+class MemoryEntry {
     name: string,
     keywords: string[],
     body: string,
@@ -69,10 +69,10 @@ class MemoryAgentStore {
         `${self.dir}/${_memory_agent_slugify(name)}.md`
     }
 
-    function remember(self, name: string, keywords: string[], body: string) -> MemoryAgentMemory {
+    function remember(self, name: string, keywords: string[], body: string) -> MemoryEntry {
         //# Persist one durable fact as readable Markdown
         self.ensure();
-        let memory = MemoryAgentMemory {
+        let memory = MemoryEntry {
             name: _memory_agent_slugify(name),
             keywords: _memory_agent_normalize_keywords(keywords),
             body: body.trim(),
@@ -81,7 +81,7 @@ class MemoryAgentStore {
         memory
     }
 
-    function get(self, name: string) -> MemoryAgentMemory? {
+    function get(self, name: string) -> MemoryEntry? {
         let path = self.path_for(name);
         if (!baml.fs.exists(path)) {
             return null;
@@ -98,11 +98,11 @@ class MemoryAgentStore {
         true
     }
 
-    function all(self) -> MemoryAgentMemory[] {
+    function all(self) -> MemoryEntry[] {
         if (!baml.fs.exists(self.dir)) {
             return [];
         };
-        let memories: MemoryAgentMemory[] = [];
+        let memories: MemoryEntry[] = [];
         for (let entry in baml.fs.read_dir(self.dir)) {
             if (entry.is_file && entry.name.ends_with(".md")) {
                 let slug = entry.name.substring(0, entry.name.length() - 3);
@@ -115,16 +115,16 @@ class MemoryAgentStore {
         memories
     }
 
-    function search(self, query: string, limit: int = 3) -> MemoryAgentMemory[] {
+    function search(self, query: string, limit: int = 3) -> MemoryEntry[] {
         //# Score all memories against the current user message
         let tokens = _memory_agent_tokenize(query);
         if (tokens.length() == 0) {
             return [];
         };
-        let hits = self.all().filter((memory: MemoryAgentMemory) -> bool {
+        let hits = self.all().filter((memory: MemoryEntry) -> bool {
             memory.score(tokens) > 0
         });
-        hits.sort_by_key((memory: MemoryAgentMemory) -> int {
+        hits.sort_by_key((memory: MemoryEntry) -> int {
             0 - memory.score(tokens)
         });
         hits.slice(0, _memory_agent_min_int(limit, hits.length()))
@@ -132,19 +132,19 @@ class MemoryAgentStore {
 
     function inject(self, query: string, history: string, limit: int = 3) -> MemoryAgentRecall {
         //# Inject relevant facts only once per application transcript
-        let fresh = self.search(query, limit = limit).filter((memory: MemoryAgentMemory) -> bool {
+        let fresh = self.search(query, limit = limit).filter((memory: MemoryEntry) -> bool {
             !history.includes(memory.marker())
         });
         if (fresh.length() == 0) {
             return MemoryAgentRecall { block: "", names: [] };
         };
-        let lines = fresh.map((memory: MemoryAgentMemory) -> string {
+        let lines = fresh.map((memory: MemoryEntry) -> string {
             memory.render()
         });
         MemoryAgentRecall {
             block: `\n[RECALLED MEMORY — durable facts from earlier sessions; trust them unless the user contradicts them]\n${lines.join("\n")}`
                 + "\n",
-            names: fresh.map((memory: MemoryAgentMemory) -> string {
+            names: fresh.map((memory: MemoryEntry) -> string {
                 memory.name
             }),
         }
@@ -156,7 +156,7 @@ class MemoryAgentStore {
             return "(memory is empty)";
         };
         memories
-            .map((memory: MemoryAgentMemory) -> string {
+            .map((memory: MemoryEntry) -> string {
                 `- ${memory.name} (${memory.keywords.join(", ")}): ${memory.body}`
             })
             .join("\n")
@@ -167,7 +167,7 @@ class MemoryAgentStore {
         if (memories.length() == 0) {
             return `  (no memories yet — stored under ${self.dir}/)` + "\n";
         };
-        let lines = memories.map((memory: MemoryAgentMemory) -> string {
+        let lines = memories.map((memory: MemoryEntry) -> string {
             `  • ${memory.name} (${memory.keywords.join(", ")})\n    ${memory.body}`
         });
         `  ${memories.length()} memor${_memory_agent_plural(memories.length())} in ${self.dir}/\n${lines.join("\n")}`
@@ -195,10 +195,10 @@ function _memory_agent_fresh_store(case_name: string) -> MemoryAgentStore {
     store
 }
 
-function _memory_agent_parse_memory(slug: string, raw: string) -> MemoryAgentMemory {
+function _memory_agent_parse_memory(slug: string, raw: string) -> MemoryEntry {
     let lines = raw.lines();
     if ((lines.at(0) ?? "").trim() != "---") {
-        return MemoryAgentMemory { name: slug, keywords: [], body: raw.trim() };
+        return MemoryEntry { name: slug, keywords: [], body: raw.trim() };
     };
     let name = slug;
     let keywords: string[] = [];
@@ -224,7 +224,7 @@ function _memory_agent_parse_memory(slug: string, raw: string) -> MemoryAgentMem
             body.push(line);
         };
     }
-    MemoryAgentMemory { name: name, keywords: keywords, body: body.join("\n").trim() }
+    MemoryEntry { name: name, keywords: keywords, body: body.join("\n").trim() }
 }
 
 function _memory_agent_header_value(line: string, key: string) -> string {
