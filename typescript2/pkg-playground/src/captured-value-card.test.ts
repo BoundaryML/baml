@@ -4,6 +4,12 @@ import {
   capturedValueCardContentHeight,
   capturedValueCardDiagnosticHeight,
 } from './CapturedValueCard';
+import { graphValuePreviewHeight } from './graph/layout';
+import {
+  NODE_VALUE_PREVIEW_FOOTER_HEIGHT,
+  NODE_VALUE_PREVIEW_GAP,
+} from './graph/nodes/NodeOutputPreview';
+import type { WorkflowNode } from './graph/types';
 import type { RunTraceCallValue } from './run-store-projections';
 
 describe('captured value card graph sizing', () => {
@@ -38,6 +44,15 @@ describe('captured value card graph sizing', () => {
       ),
     ).toBe(48);
   });
+
+  it('reserves a gap and footer row when five previews are truncated to four', () => {
+    const fourPreviewsHeight = graphValuePreviewHeight(nodeWithPreviews(4));
+    const fivePreviewsHeight = graphValuePreviewHeight(nodeWithPreviews(5));
+
+    expect(fivePreviewsHeight - fourPreviewsHeight).toBe(
+      NODE_VALUE_PREVIEW_GAP + NODE_VALUE_PREVIEW_FOOTER_HEIGHT,
+    );
+  });
 });
 
 function preview(value: unknown): RunTraceCallValue {
@@ -50,5 +65,23 @@ function preview(value: unknown): RunTraceCallValue {
     timestampMs: 0,
     value: value as RunTraceCallValue['value'],
     valueRef: null,
+  };
+}
+
+function nodeWithPreviews(count: number): WorkflowNode {
+  return {
+    data: {
+      executionState: 'success',
+      graphNodeType: 'function',
+      label: 'preview',
+      logFilterKey: 'preview',
+      selected: false,
+      valuePreviews: Array.from({ length: count }, (_, index) =>
+        preview(`value-${index}`),
+      ),
+    },
+    id: 'preview',
+    position: { x: 0, y: 0 },
+    type: 'base',
   };
 }

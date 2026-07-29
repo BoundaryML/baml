@@ -19,6 +19,7 @@ interface NodeOutputPreviewProps {
 export const NODE_VALUE_PREVIEW_MAX = 4;
 export const NODE_VALUE_PREVIEW_WIDTH = CAPTURED_VALUE_CARD_WIDTH;
 export const NODE_VALUE_PREVIEW_GAP = 6;
+export const NODE_VALUE_PREVIEW_FOOTER_HEIGHT = 14;
 
 export function NodeOutputPreview({
   result,
@@ -65,6 +66,7 @@ export function NodeOutputPreview({
             color: '#a1a1aa',
             fontSize: 10,
             fontWeight: 600,
+            lineHeight: `${NODE_VALUE_PREVIEW_FOOTER_HEIGHT}px`,
             paddingLeft: 2,
           }}
         >

@@ -9,6 +9,7 @@ import {
 } from '../CapturedValueCard';
 import { depthScale } from './lod';
 import {
+  NODE_VALUE_PREVIEW_FOOTER_HEIGHT,
   NODE_VALUE_PREVIEW_GAP,
   NODE_VALUE_PREVIEW_MAX,
   NODE_VALUE_PREVIEW_WIDTH,
@@ -78,19 +79,9 @@ function wrappingOptions(
 
 function nodeSize(node: WorkflowNode): { w: number; h: number } {
   const base = NODE_SIZES[node.type ?? 'base'] ?? NODE_SIZES.base;
-  const valuePreviewCount = node.data.valuePreviews?.length ?? 0;
+  const previewHeight = graphValuePreviewHeight(node);
   const visualSize = (() => {
-    if (valuePreviewCount > 0) {
-      const visibleValues = (node.data.valuePreviews ?? []).slice(
-        0,
-        NODE_VALUE_PREVIEW_MAX,
-      );
-      const previewHeight =
-        visibleValues.reduce(
-          (height, value) => height + capturedValueCardHeight(value),
-          0,
-        ) +
-        Math.max(0, visibleValues.length - 1) * NODE_VALUE_PREVIEW_GAP;
+    if (previewHeight > 0) {
       return {
         h: base.h + previewHeight + 14,
         w: Math.max(base.w, NODE_VALUE_PREVIEW_WIDTH),
@@ -130,7 +121,7 @@ function nodeSize(node: WorkflowNode): { w: number; h: number } {
   // that render a result/image/error preview, whose content doesn't shrink, so
   // the box stays sized to it. Groups auto-size from children. Buffer is fixed.
   const hasPreview =
-    valuePreviewCount > 0 || !!node.data.errorMessage || !!node.data.hasResult;
+    previewHeight > 0 || !!node.data.errorMessage || !!node.data.hasResult;
   const s = hasPreview
     ? 1
     : depthScale(typeof node.data.depth === 'number' ? node.data.depth : 0);
@@ -249,18 +240,21 @@ function buildElkNodes(
   });
 }
 
-function graphValuePreviewHeight(node: WorkflowNode): number {
-  const values = (node.data.valuePreviews ?? []).slice(
-    0,
-    NODE_VALUE_PREVIEW_MAX,
-  );
+export function graphValuePreviewHeight(node: WorkflowNode): number {
+  const allValues = node.data.valuePreviews ?? [];
+  const values = allValues.slice(0, NODE_VALUE_PREVIEW_MAX);
   if (values.length === 0) return 0;
+  const footerHeight =
+    allValues.length > NODE_VALUE_PREVIEW_MAX
+      ? NODE_VALUE_PREVIEW_GAP + NODE_VALUE_PREVIEW_FOOTER_HEIGHT
+      : 0;
   return (
     values.reduce(
       (height, value) => height + capturedValueCardHeight(value),
       0,
     ) +
-    Math.max(0, values.length - 1) * NODE_VALUE_PREVIEW_GAP
+    Math.max(0, values.length - 1) * NODE_VALUE_PREVIEW_GAP +
+    footerHeight
   );
 }
 
