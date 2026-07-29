@@ -28,7 +28,7 @@ const MIN_ROWS = 3;
 const MAX_ROWS = 24;
 
 type TerminalHandle = {
-  write: (data: string) => void;
+  write: (data: string, callback?: () => void) => void;
   reset: () => void;
   dispose: () => void;
   buffer: { active: { length: number } };
@@ -93,6 +93,14 @@ export const RunOutputTerminal: FC<RunOutputTerminalProps> = ({ chunks, runKey }
       termRef.current?.dispose();
       termRef.current = null;
       fitRef.current = null;
+      // Rewind the write cursor with the terminal. Refs outlive the emulator
+      // (React StrictMode double-invokes effects in dev, and any parent
+      // remount does the same), so leaving the cursor at N would replay
+      // nothing into the fresh, empty screen and the user would see output
+      // that starts mid-stream. Pending writes go too: they were already
+      // flushed into the instance we just disposed.
+      writtenRef.current = 0;
+      pendingRef.current = [];
     };
   }, []);
 
@@ -121,24 +129,34 @@ export const RunOutputTerminal: FC<RunOutputTerminalProps> = ({ chunks, runKey }
       writtenRef.current = 0;
       pendingRef.current = [];
     }
-    for (let i = writtenRef.current; i < chunks.length; i++) {
+    const first = writtenRef.current;
+    for (let i = first; i < chunks.length; i++) {
       const text = chunks[i]!.text;
       if (termRef.current) {
-        termRef.current.write(text);
+        // Grow to fit the buffer once the parser has caught up. `write` is
+        // async (the callback fires "when the data was processed by the
+        // parser"), so measuring right after the call would size against the
+        // previous frame's buffer and lag one update behind. Reading the
+        // emulator's own line count rather than counting newlines keeps this
+        // honest for output that moves the cursor or clears the screen
+        // instead of appending lines.
+        const isLast = i === chunks.length - 1;
+        termRef.current.write(
+          text,
+          isLast
+            ? () => {
+                const used = termRef.current?.buffer.active.length;
+                if (used == null) return;
+                const next = Math.min(MAX_ROWS, Math.max(MIN_ROWS, used));
+                setRows((prev) => (prev === next ? prev : next));
+              }
+            : undefined,
+        );
       } else {
         pendingRef.current.push(text);
       }
     }
     writtenRef.current = chunks.length;
-
-    // Grow to fit the buffer. Reading the emulator's own line count rather
-    // than counting newlines keeps this honest for output that moves the
-    // cursor or clears the screen instead of appending lines.
-    const used = termRef.current?.buffer.active.length;
-    if (used != null) {
-      const next = Math.min(MAX_ROWS, Math.max(MIN_ROWS, used));
-      setRows((prev) => (prev === next ? prev : next));
-    }
   }, [chunks]);
 
   return (

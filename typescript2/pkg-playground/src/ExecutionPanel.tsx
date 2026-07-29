@@ -3107,6 +3107,17 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
                           />
                         </div>
                       ))}
+                      {run.outputChunks.length > 0 && (
+                        <div className="py-1.5 pr-2.5 pl-[22px] border-b border-vsc-border-subtle">
+                          <div className="text-[10px] font-semibold text-vsc-text-muted mb-0.5 uppercase tracking-wide">
+                            Output
+                          </div>
+                          <RunOutputTerminal
+                            chunks={run.outputChunks}
+                            runKey={run.id}
+                          />
+                        </div>
+                      )}
                       {run.status === 'cancelled' && (
                         <div className="py-1.5 pr-2.5 pl-[22px]">
                           <div className="text-[11px] text-vsc-text-faint italic">
