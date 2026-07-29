@@ -286,6 +286,7 @@ export function CapturedValueCard({
             lineHeight: 1.35,
             marginTop: 5,
             overflowWrap: preserveDiagnosticLines ? 'anywhere' : undefined,
+            textAlign: preserveDiagnosticLines ? 'left' : undefined,
             whiteSpace: preserveDiagnosticLines ? 'pre-wrap' : undefined,
           }}
         >

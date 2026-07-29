@@ -10,8 +10,8 @@ Linear: https://linear.app/boundaryml2/issue/B-1055/error-nodes-in-graph-are-for
 - Before image: `artifacts/B-1055-before.jpg`.
 - Root cause: `CapturedValueCard` renders `value.diagnostic` at unlimited natural height while graph layout reserves only 18px for it, so multiline tracebacks overflow the fixed error node and overlap later nodes and edges.
 - The first fix constrained graph diagnostics to one ellipsized row; user review rejected that design because the traceback and structured values need to remain readable in the graph.
-- Revised graph cards to preserve each traceback line, render inputs and typed errors as expanded pretty JSON with separate key rows, and allocate graph height for every diagnostic line while leaving the detailed execution panel unchanged.
-- After image: `artifacts/B-1055-after.png`.
+- Revised graph cards to preserve and left-align each traceback line, render inputs and typed errors as expanded pretty JSON with separate key rows, and allocate graph height for every diagnostic line while leaving the detailed execution panel unchanged.
+- After image: `artifacts/B-1055-after-left-aligned.jpg`.
 - Uploaded the before and after images to Linear for embedding in the PR description.
 - Verified the real repro after the revision: input and `InvalidArgument` keys render on separate rows, every logical traceback line starts on its own row, long source lines wrap within the error card, and the graph layout reserves the resulting card height without overlap.
 - `pnpm format:ci --since=origin/canary --reporter=github` passed.
