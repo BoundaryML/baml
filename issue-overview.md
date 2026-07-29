@@ -15,4 +15,5 @@ Linear: https://linear.app/boundaryml2/issue/B-1061/default-arg-ui-when-default-
 - 2026-07-29: Captured the identically framed after image at `typescript2/pkg-playground/docs/B-1061-after.jpg`; both before and after artifacts are genuine 696x256 JPEG files.
 - 2026-07-29: Automated validation passed with `pnpm exec biome check pkg-playground/src/ArgsForm.tsx`, `pnpm --filter @b/pkg-playground typecheck`, `pnpm --filter @b/pkg-playground test` (145 tests), `pnpm --filter app-vscode-webview typecheck`, `pnpm --filter app-promptfiddle typecheck`, `pnpm --filter app-vscode-webview test:unit:run -- ExecutionPanel.strict-mode.test.tsx` (22 tests), and `git diff --check`.
 - 2026-07-29: The first webview test run caught that required parameters had also lost their schema-specific placeholders; the condition was narrowed to default-capable parameters and the rerun passed.
-- 2026-07-29: PR publication, CI monitoring, and CodeRabbit approval are pending.
+- 2026-07-29: Committed the fix as `59c86d070912985495bca4c9b04598b4feea1a55`, pushed `agent/b-1061-default-arg-placeholder`, and opened ready-for-review PR https://github.com/BoundaryML/baml/pull/4275 against `canary`; the PR description embeds durable before and after images from that commit.
+- 2026-07-29: CI monitoring and CodeRabbit approval are pending; the Vercel check will be ignored as requested.
