@@ -22,6 +22,9 @@ const HTTP_TIMEOUT: Duration = Duration::from_secs(30);
 /// Short timeout for the passive background freshness checks that run before
 /// normal commands, so an unreachable network can't stall the actual work.
 const AUTO_CHECK_TIMEOUT: Duration = Duration::from_secs(5);
+/// How long `baml --version` waits for a local toolchain to report its own
+/// version before giving up and printing just the path.
+const LOCAL_VERSION_TIMEOUT: Duration = Duration::from_secs(3);
 
 #[derive(Debug, Default, Serialize, Deserialize)]
 struct Config {
@@ -207,12 +210,15 @@ fn print_version() {
         }
     };
     if let Some(cli) = path_selector(&selector.selector) {
-        match verify_path_toolchain(cli, "") {
-            Ok(()) => println!(
-                "baml toolchain {}{}",
-                cli.display(),
-                selector_annotation(&selector)
-            ),
+        // The failure branch needs the origin most: a broken local toolchain is
+        // useless to diagnose without knowing which setting chose it.
+        match verify_path_toolchain(cli, &path_selector_origin(&selector.source)) {
+            Ok(()) => {
+                let version =
+                    local_toolchain_version(cli).unwrap_or_else(|| "version unknown".to_string());
+                println!("baml toolchain {version} (local: {})", cli.display());
+                println!("  {}", path_source_label(&selector.source));
+            }
             Err(err) => {
                 println!("baml toolchain not usable");
                 println!("{err:#}");
@@ -511,10 +517,7 @@ fn active_selector() -> Result<ResolvedSelector> {
     if !selector.is_empty() {
         // A machine-global default resolved against cwd would run a different
         // binary from each directory, so it has to stand on its own.
-        if is_path_selector(selector)
-            && !selector.starts_with('~')
-            && !Path::new(selector).is_absolute()
-        {
+        if is_path_selector(selector) && !is_cwd_independent(selector) {
             return Err(anyhow!(
                 "{} sets default.selector to a relative path ({selector}), which would depend on the current directory.\nUse an absolute path, or run: baml toolchain use <path>",
                 config_path().display()
@@ -690,10 +693,30 @@ fn path_selector(selector: &str) -> Option<&Path> {
 /// Expand a leading `~` and absolutize against `base`, the directory the path
 /// was written in.
 fn resolve_selector_path(raw: &str, base: &Path) -> PathBuf {
-    let home = env::var_os("HOME")
-        .or_else(|| env::var_os("USERPROFILE"))
-        .map(PathBuf::from);
+    let home = home_dir();
     resolve_selector_path_with_home(raw, base, home.as_deref())
+}
+
+fn home_dir() -> Option<PathBuf> {
+    env::var_os("HOME")
+        .or_else(|| env::var_os("USERPROFILE"))
+        .map(PathBuf::from)
+}
+
+/// Whether a path selector stands on its own, independent of the directory it
+/// is read from. Only absolute paths and a `~` that can actually be expanded
+/// qualify: with no home directory `~/x` falls back to being joined onto the
+/// current one, and `~user` is not a form we expand at all, so both would leave
+/// a global default meaning something different in every directory.
+fn is_cwd_independent(selector: &str) -> bool {
+    is_cwd_independent_with_home(selector, home_dir().as_deref())
+}
+
+fn is_cwd_independent_with_home(selector: &str, home: Option<&Path>) -> bool {
+    if Path::new(selector).is_absolute() {
+        return true;
+    }
+    (selector == "~" || selector.starts_with("~/")) && home.is_some()
 }
 
 fn resolve_selector_path_with_home(raw: &str, base: &Path, home: Option<&Path>) -> PathBuf {
@@ -781,16 +804,65 @@ fn normalize_selector(selector: &str, base: &Path) -> String {
     selector.to_string()
 }
 
+/// Where a path toolchain came from. Unlike [`selector_origin`], this always
+/// answers, including for the global config: with a local toolchain the whole
+/// question is which forgotten setting picked this binary.
+fn path_source_label(source: &SelectorSource) -> String {
+    match source {
+        SelectorSource::Env => "set by $BAML_VERSION".to_string(),
+        SelectorSource::Project(path) => format!("set by {}", path.display()),
+        SelectorSource::Config | SelectorSource::Fallback => {
+            format!("set by default.selector in {}", config_path().display())
+        }
+    }
+}
+
 /// The `set by ...` line appended to path-toolchain errors, so a stale
 /// override is traceable to whatever set it.
 fn path_selector_origin(source: &SelectorSource) -> String {
-    match source {
-        SelectorSource::Env => "\n  set by $BAML_VERSION".to_string(),
-        SelectorSource::Project(path) => format!("\n  set by path in {}", path.display()),
-        SelectorSource::Config | SelectorSource::Fallback => {
-            format!("\n  set by default.selector in {}", config_path().display())
+    format!("\n  {}", path_source_label(source))
+}
+
+/// Ask a local toolchain what version it is. There is no manifest to consult
+/// for a binary the wrapper did not install, and reporting only a path would
+/// leave `baml --version` with no version at all for anything reading it.
+/// Returns `None` if the binary fails, answers with nothing, or does not answer
+/// promptly, in which case the caller falls back to reporting just the path.
+fn local_toolchain_version(cli: &Path) -> Option<String> {
+    use std::process::Stdio;
+
+    let mut child = Command::new(cli)
+        .arg("--version")
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .env("BAML_WRAPPER_EXEC", "1")
+        .env("BAML_WRAPPER_LOCAL_TOOLCHAIN", cli)
+        .spawn()
+        .ok()?;
+
+    let deadline = std::time::Instant::now() + LOCAL_VERSION_TIMEOUT;
+    let status = loop {
+        match child.try_wait() {
+            Ok(Some(status)) => break status,
+            Ok(None) if std::time::Instant::now() < deadline => {
+                std::thread::sleep(Duration::from_millis(10));
+            }
+            // A binary that will not answer promptly is not worth blocking
+            // `--version` on, and a hung child must not outlive us.
+            _ => {
+                let _ = child.kill();
+                return None;
+            }
         }
+    };
+    if !status.success() {
+        return None;
     }
+    let output = child.wait_with_output().ok()?;
+    let text = String::from_utf8(output.stdout).ok()?;
+    let line = text.lines().next()?.trim();
+    (!line.is_empty()).then(|| line.to_string())
 }
 
 /// Refuse to exec the wrapper itself. `baml` and `baml-cli` are built into the
@@ -1216,14 +1288,18 @@ fn status_toolchain(override_url: Option<&str>) -> Result<()> {
     println!("active selector: {}", selector.selector);
 
     if let Some(cli) = path_selector(&selector.selector) {
-        if let Some(origin) = selector_origin(&selector.source) {
-            println!("source: {origin}");
-        }
+        println!("source: {}", path_source_label(&selector.source));
         match verify_path_toolchain(cli, "") {
-            Ok(()) => println!("status: local toolchain binary, not managed by the wrapper"),
+            Ok(()) => {
+                let version =
+                    local_toolchain_version(cli).unwrap_or_else(|| "version unknown".to_string());
+                println!("reported version: {version}");
+                println!("status: local toolchain binary, not managed by the wrapper");
+            }
             Err(err) => println!("status: local toolchain binary is unusable\n{err:#}"),
         }
         println!("Remote versions were not checked.");
+        println!("Run: baml toolchain use canary to go back to a managed toolchain");
         return Ok(());
     }
 
@@ -1339,7 +1415,7 @@ fn list_toolchains() {
 fn uninstall_toolchain(version: &str) -> Result<()> {
     if is_path_selector(version) {
         return Err(anyhow!(
-            "{version} is a local path; the wrapper does not manage it.\nRun: baml toolchain use canary to stop using it"
+            "{version} is a local path and is not managed by the wrapper, so there is nothing to uninstall.\nTo stop using it, select a managed toolchain instead.\nRun: baml toolchain use canary\nOr:  baml toolchain use nightly"
         ));
     }
     let dir = toolchains_dir().join(version);
@@ -1763,15 +1839,64 @@ mod tests {
     #[test]
     fn missing_path_toolchain_reports_its_origin() {
         let missing = Path::new(TEST_BASE).join("missing").join(cli_exe_name());
-        let manifest = Path::new(TEST_BASE).join("baml.toml");
-        let origin = path_selector_origin(&SelectorSource::Project(manifest.clone()));
+        let origin = path_selector_origin(&SelectorSource::Env);
         let err = verify_path_toolchain(&missing, &origin)
             .unwrap_err()
             .to_string();
         assert!(err.contains("toolchain binary not found"), "{err}");
+        assert!(err.contains("set by $BAML_VERSION"), "{err}");
+    }
+
+    #[test]
+    fn absolute_selectors_stand_on_their_own() {
+        assert!(is_cwd_independent_with_home(TEST_ABSOLUTE, None));
+        assert!(is_cwd_independent_with_home(
+            TEST_ABSOLUTE,
+            Some(Path::new(TEST_HOME))
+        ));
+    }
+
+    /// `~/x` only stands on its own if there is a home directory to expand it
+    /// to; otherwise it falls back to being joined onto the current directory.
+    #[test]
+    fn tilde_stands_on_its_own_only_with_a_home() {
+        assert!(is_cwd_independent_with_home(
+            "~/builds/baml-cli",
+            Some(Path::new(TEST_HOME))
+        ));
+        assert!(!is_cwd_independent_with_home("~/builds/baml-cli", None));
+    }
+
+    /// `~user` is not a form we expand, so it must not be waved through by a
+    /// bare `~` prefix check.
+    #[test]
+    fn other_users_tilde_does_not_stand_on_its_own() {
+        assert!(!is_cwd_independent_with_home(
+            "~alice/builds/baml-cli",
+            Some(Path::new(TEST_HOME))
+        ));
+    }
+
+    #[test]
+    fn relative_selectors_never_stand_on_their_own() {
+        for selector in ["./target/debug/baml-cli", "../build/baml-cli"] {
+            assert!(
+                !is_cwd_independent_with_home(selector, Some(Path::new(TEST_HOME))),
+                "{selector}"
+            );
+        }
+    }
+
+    /// The global config is the source most likely to be forgotten, and the one
+    /// `selector_origin` stays quiet about, so a path toolchain must still name
+    /// it.
+    #[test]
+    fn config_sourced_path_still_names_its_origin() {
+        let label = path_source_label(&SelectorSource::Config);
+        assert!(label.contains("default.selector"), "{label}");
         assert!(
-            err.contains(&format!("set by path in {}", manifest.display())),
-            "{err}"
+            label.contains(&config_path().display().to_string()),
+            "{label}"
         );
     }
 
