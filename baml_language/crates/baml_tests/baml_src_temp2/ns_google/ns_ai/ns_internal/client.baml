@@ -26,6 +26,39 @@ function _merged_query(provider: root.google.ai.Gemini) -> map<string, string>
     query
 }
 
+function _is_reserved_body_key(key: string) -> bool throws never {
+    key == "contents"
+        || key == "systemInstruction"
+        || key == "tools"
+        || key == "toolConfig"
+}
+
+// Prompt/media and function protocol fields are constructed by the adapter.
+// generationConfig remains mergeable here; the shared generation/tool builders
+// subsequently overwrite or remove response schema fields they own.
+function _request_body(
+    provider: root.google.ai.Gemini,
+    base_body: map<string, unknown>,
+) -> map<string, unknown> throws never {
+    let body: map<string, unknown> = {};
+    for (let key in base_body.keys()) {
+        if (!_is_reserved_body_key(key)) {
+            body.set(key, base_body[key]);
+        }
+    }
+    match (provider.extra_body) {
+        let extra: map<string, unknown> => {
+            for (let key in extra.keys()) {
+                if (!_is_reserved_body_key(key)) {
+                    body.set(key, extra[key]);
+                }
+            }
+        },
+        null => {},
+    }
+    body
+}
+
 function _primitive(provider: root.google.ai.Gemini) -> baml.llm.PrimitiveClient
     throws baml.errors.UnknownError {
     let base = baml.llm.from_shorthand(provider.render_shorthand()) catch (e) {
@@ -43,7 +76,7 @@ function _primitive(provider: root.google.ai.Gemini) -> baml.llm.PrimitiveClient
             base_url: provider.base_url,
             headers: _merged_headers(provider),
             query_params: _merged_query(provider),
-            request_body: provider.extra_body ?? base.options.request_body,
+            request_body: _request_body(provider, base.options.request_body),
             provider_options: baml.llm.GoogleAiOptions {
                 enterprise: provider.enterprise,
                 credentials: provider.credentials,

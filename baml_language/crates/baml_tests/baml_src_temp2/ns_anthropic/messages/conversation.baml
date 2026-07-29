@@ -2,8 +2,15 @@ implements root.ai.tools.ConversationImportProvider for Messages {
   function import_messages(
     self,
     messages: root.ai.Messages,
-  ) -> root.ai.ConversationImport throws never {
+  ) -> root.ai.ConversationImport throws baml.errors.UnknownError {
+    if (self.tool_mode == root.anthropic.ToolMode.Prompt) {
+      throw baml.errors.UnknownError.with_message<never>(
+        null,
+        "Cannot import messages with ToolMode.Prompt because prompt tools require the original Task and its prompt-rendering function. Use ToolMode.Native, or start a new Task from the messages.",
+      );
+    }
     let history = messages.to_history();
+    let base_request = root.anthropic.internal._provider_base_request(self);
     let system: json[] = [];
     let wire_messages: json[] = [];
     for (let message in history.entries) {
@@ -25,7 +32,8 @@ implements root.ai.tools.ConversationImportProvider for Messages {
         history: history,
         system: system,
         messages: wire_messages,
-        request_url: root.anthropic.internal._provider_url(self),
+        request_url: base_request.url,
+        headers: root.anthropic.internal._headers_without_auth(base_request.headers),
         active_tools: [],
         last_assistant_content: [],
       },
@@ -42,6 +50,12 @@ implements root.ai.tools.ResumableToolCallingProvider for Messages {
     self,
     conversation: root.ai.Conversation,
   ) -> root.ai.ConversationToken throws baml.errors.UnknownError {
+    if (self.tool_mode == root.anthropic.ToolMode.Prompt) {
+      throw baml.errors.UnknownError.with_message<never>(
+        null,
+        "Cannot save a ToolMode.Prompt conversation because resuming it requires the original Task and its prompt-rendering function. Use ToolMode.Native for save and restore.",
+      );
+    }
     let state = match (conversation) {
       let value: root.anthropic.internal.Conversation => value,
       _ => {
@@ -57,7 +71,6 @@ implements root.ai.tools.ResumableToolCallingProvider for Messages {
       sealed: baml.json.stringify({
         "system": state.system,
         "messages": state.messages,
-        "request_url": state.request_url,
         "active_tools": state.active_tools,
         "last_assistant_content": state.last_assistant_content,
       }),
@@ -68,6 +81,12 @@ implements root.ai.tools.ResumableToolCallingProvider for Messages {
     self,
     token: root.ai.ConversationToken,
   ) -> root.ai.Conversation throws baml.errors.UnknownError {
+    if (self.tool_mode == root.anthropic.ToolMode.Prompt) {
+      throw baml.errors.UnknownError.with_message<never>(
+        null,
+        "Cannot restore a conversation with ToolMode.Prompt because the token does not contain the original Task or its prompt-rendering function. Use ToolMode.Native for save and restore.",
+      );
+    }
     if (token.provider != self.name() || token.version != 1) {
       throw baml.errors.UnknownError.with_message<never>(
         token,
@@ -82,16 +101,14 @@ implements root.ai.tools.ResumableToolCallingProvider for Messages {
         )
       },
     };
+    let base_request = root.anthropic.internal._provider_base_request(self);
     root.anthropic.internal.Conversation {
       owner: self,
       history: root.ai.MessageHistory.empty(),
       system: baml.json.path_or<json[]>(state, ".system", []),
       messages: baml.json.path_or<json[]>(state, ".messages", []),
-      request_url: baml.json.path_or(
-        state,
-        ".request_url",
-        root.anthropic.internal._provider_url(self),
-      ),
+      request_url: base_request.url,
+      headers: root.anthropic.internal._headers_without_auth(base_request.headers),
       active_tools: baml.json.path_or<json[]>(state, ".active_tools", []),
       last_assistant_content: baml.json.path_or<json[]>(
         state,

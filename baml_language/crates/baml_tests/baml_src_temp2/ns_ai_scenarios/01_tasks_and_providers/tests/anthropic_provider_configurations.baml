@@ -56,4 +56,15 @@ testset "integ-test-anthropic-messages-configurations" {
             .run(runner = root.ai.run.Completion<Resolution>.new());
         assert.is_true(value.summary.length() > 0)
     }
+
+    test "Anthropic strict streams a class-valued task" {
+        let provider = root
+            .anthropic
+            .messages(
+                api_key = baml.env.get_or_panic("ANTHROPIC_API_KEY"),
+                output_mode = root.anthropic.OutputMode.Strict,
+            );
+        let value = drain_resolution_stream(ResolveTicket_task(sample_ticket(), provider));
+        assert.is_true(value.reply.length() > 0)
+    }
 }

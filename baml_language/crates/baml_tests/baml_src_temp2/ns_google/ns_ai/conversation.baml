@@ -6,7 +6,7 @@ implements root.ai.tools.ResumableToolCallingProvider for Gemini {
     if (self.tool_mode == ToolMode.Prompt) {
       throw baml.errors.UnknownError.with_message<never>(
         null,
-        "Prompt tool conversations do not have serializable provider-native state",
+        "Cannot save a ToolMode.Prompt conversation because resuming it requires the original Task and its prompt-rendering function. Use ToolMode.Native for save and restore.",
       );
     }
     root.google.ai.internal._save(self, conversation)
@@ -19,7 +19,7 @@ implements root.ai.tools.ResumableToolCallingProvider for Gemini {
     if (self.tool_mode == ToolMode.Prompt) {
       throw baml.errors.UnknownError.with_message<never>(
         null,
-        "Prompt tool conversations do not have serializable provider-native state",
+        "Cannot restore a conversation with ToolMode.Prompt because the token does not contain the original Task or its prompt-rendering function. Use ToolMode.Native for save and restore.",
       );
     }
     root.google.ai.internal._restore(self, token)
@@ -34,7 +34,7 @@ implements root.ai.tools.ConversationImportProvider for Gemini {
     if (self.tool_mode == ToolMode.Prompt) {
       throw baml.errors.UnknownError.with_message<never>(
         null,
-        "Prompt tool mode cannot import a conversation without the original Task render recipe",
+        "Cannot import messages with ToolMode.Prompt because prompt tools require the original Task and its prompt-rendering function. Use ToolMode.Native, or start a new Task from the messages.",
       );
     }
     root.google.ai.internal._import(self, messages)

@@ -221,13 +221,57 @@ function _messages_stream<TPartial, T>(
             )
         },
     };
-    let request = primitive.build_request_stream(specialized, task.output_type()) catch (e) {
+    let built = primitive.build_request_stream(specialized, task.output_type()) catch (e) {
         _ => {
             throw baml.errors.UnknownError.with_message<never>(
                 e,
                 "Anthropic stream request failed",
             )
         },
+    };
+    let parsed = baml.json.parse(built.body) catch (e) {
+        _ => {
+            throw baml.errors.UnknownError.with_message<never>(
+                e,
+                "Anthropic stream request body was not JSON",
+            )
+        },
+    };
+    let body = match (parsed) {
+        let object: map<string, json> => object,
+        _ => {
+            throw baml.errors.UnknownError.with_message<never>(
+                parsed,
+                "Anthropic stream request body was not an object",
+            )
+        },
+    };
+    if (_uses_sap(provider)) {
+        body.delete("output_config");
+    } else {
+        let schema = _output_schema(task.output_type()) catch (e) {
+            _ => {
+                throw baml.errors.UnknownError.with_message<never>(
+                    e,
+                    "Anthropic strict stream output schema is unsupported",
+                )
+            },
+        };
+        body.set(
+            "output_config",
+            {
+                "format": {
+                    "type": "json_schema",
+                    "schema": schema,
+                },
+            },
+        );
+    }
+    let request = baml.http.Request {
+        method: built.method,
+        url: built.url,
+        headers: built.headers,
+        body: baml.json.stringify(body),
     };
     log.info(
         baml.json.stringify({

@@ -19,6 +19,7 @@ implements root.ai.tools.ToolCallingProvider for Gemini {
   ) -> root.ai.tools.ModelStep<T>
       throws root.ai.Failure | baml.errors.UnknownError {
     root.google.ai.internal._validate(self);
+    root.google.internal._validate_application_tool_names(tools, self.name());
     if (self.tool_mode == ToolMode.Prompt) {
       let prompt_tools = root.ai.tools.PromptToolProvider { inner: self };
       return prompt_tools.step<T>(conversation, tools);

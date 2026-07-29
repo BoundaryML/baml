@@ -30,6 +30,7 @@ implements root.ai.tools.ToolCallingProvider for Messages {
       system: baml.json.path_or<json[]>(request_body, ".system", []),
       messages: baml.json.path_or<json[]>(request_body, ".messages", []),
       request_url: request.url,
+      headers: root.anthropic.internal._headers_without_auth(request.headers),
       active_tools: [],
       last_assistant_content: [],
     }
@@ -208,20 +209,56 @@ implements root.ai.tools.ToolCallingProvider for Messages {
         }
       },
     };
-    //# Correlate runner results in one user turn of tool_result blocks
-    let tool_results = results.map((result: root.ai.tools.ToolResult) -> json {
-      {
+    //# Correlate exactly one runner result with every pending tool_use block
+    let assistant_content = state.last_assistant_content;
+    let pending: json[] = [];
+    for (let part in assistant_content) {
+      if (root.anthropic.internal._is_tool_use(part)) {
+        pending.push(part);
+      }
+    }
+    if (pending.length() == 0 || pending.length() != results.length()) {
+      throw root.ai.InvalidRequest {
+        provider: "anthropic",
+        status_code: null,
+        detail: "tool results must match every pending Anthropic tool_use block",
+      };
+    }
+    let tool_results: json[] = [];
+    for (let call in pending) {
+      let call_id = root.anthropic.internal._tool_use_id(call) ?? "";
+      let pending_with_id: json[] = [];
+      for (let candidate in pending) {
+        if ((root.anthropic.internal._tool_use_id(candidate) ?? "") == call_id) {
+          pending_with_id.push(candidate);
+        }
+      }
+      let matching: root.ai.tools.ToolResult[] = [];
+      for (let candidate in results) {
+        if (candidate.id == call_id) {
+          matching.push(candidate);
+        }
+      }
+      log.debug("call=" + call_id + " pending_same=" + pending_with_id.length().to_string() + " matching=" + matching.length().to_string());
+      if (
+        call_id.length() == 0
+          || pending_with_id.length() != 1
+          || matching.length() != 1
+      ) {
+        throw root.ai.InvalidRequest {
+          provider: "anthropic",
+          status_code: null,
+          detail: "tool result IDs must match pending Anthropic tool_use IDs exactly once",
+        };
+      }
+      let result = matching[0];
+      let result_block: json = {
         "type": "tool_result",
         "tool_use_id": result.id,
         "content": baml.json.stringify(result.output),
         "is_error": result.is_error,
-      }
-    });
-    state.messages.push({
-      "role": "user",
-      "content": tool_results,
-    });
-    for (let result in results) {
+      };
+      tool_results.push(result_block);
       state.history.entries.push(root.ai.ChatMessage {
         message_role: root.ai.MessageRole.Tool,
         content: [root.ai.messages.ProviderDataPart {
@@ -235,6 +272,11 @@ implements root.ai.tools.ToolCallingProvider for Messages {
         metadata: null,
       });
     }
+    state.messages.push({
+      "role": "user",
+      "content": tool_results,
+    });
+    state.last_assistant_content = [];
     state
   }
 }

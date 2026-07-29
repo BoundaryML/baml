@@ -77,8 +77,8 @@ implements root.ai.StreamingProvider for Messages {
     self,
     task: root.ai.Task<T>,
   ) -> baml.llm.Stream<TPartial, T> throws baml.errors.UnknownError {
-    // The primitive stream currently uses SAP for incremental and final
-    // parsing. Native strict output is used by generate/complete.
+    // The primitive owns SSE accumulation. The adapter still applies the
+    // selected Strict or SAP wire configuration before opening the stream.
     root.anthropic.internal._messages_stream<TPartial, T>(self, task)
   }
 }

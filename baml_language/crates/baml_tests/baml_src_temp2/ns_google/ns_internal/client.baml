@@ -3,37 +3,49 @@ class HttpResult {
     text: string,
 }
 
-function _body_object(request: baml.http.Request, provider_name: string) -> map<string, json>
-    throws baml.errors.UnknownError {
+function _body_object(
+    request: baml.http.Request,
+    provider_name: string,
+) -> map<string, json> throws baml.errors.UnknownError {
     let parsed = baml.json.parse(request.body) catch (e) {
-        _ => throw baml.errors.UnknownError.with_message<never>(
+        _ => {
+            throw baml.errors.UnknownError.with_message<never>(
             e,
             provider_name + " request body was not JSON",
-        ),
+        )
+        },
     };
     match (parsed) {
         let object: map<string, json> => object,
-        _ => throw baml.errors.UnknownError.with_message<never>(
+        _ => {
+            throw baml.errors.UnknownError.with_message<never>(
             parsed,
             provider_name + " request body was not an object",
-        ),
+        )
+        },
     }
 }
 
-function _clone_body(body: json, provider_name: string) -> map<string, json>
-    throws baml.errors.UnknownError {
+function _clone_body(
+    body: json,
+    provider_name: string,
+) -> map<string, json> throws baml.errors.UnknownError {
     let cloned = baml.json.parse(baml.json.stringify(body)) catch (e) {
-        _ => throw baml.errors.UnknownError.with_message<never>(
+        _ => {
+            throw baml.errors.UnknownError.with_message<never>(
             e,
             provider_name + " could not clone its request body",
-        ),
+        )
+        },
     };
     match (cloned) {
         let object: map<string, json> => object,
-        _ => throw baml.errors.UnknownError.with_message<never>(
+        _ => {
+            throw baml.errors.UnknownError.with_message<never>(
             cloned,
             provider_name + " request body template was not an object",
-        ),
+        )
+        },
     }
 }
 
@@ -43,40 +55,52 @@ function _built_request<T>(
     provider_name: string,
 ) -> baml.http.Request throws baml.errors.UnknownError {
     let specialized = primitive.specialize_prompt(task.prompt) catch (e) {
-        _ => throw baml.errors.UnknownError.with_message<never>(
+        _ => {
+            throw baml.errors.UnknownError.with_message<never>(
             e,
             provider_name + " prompt specialization failed",
-        ),
+        )
+        },
     };
     primitive.build_request(specialized, task.output_type()) catch (e) {
-        _ => throw baml.errors.UnknownError.with_message<never>(
+        _ => {
+            throw baml.errors.UnknownError.with_message<never>(
             e,
             provider_name + " request build failed",
-        ),
+        )
+        },
     }
 }
 
-function _send_json(request: baml.http.Request, provider_name: string) -> HttpResult
-    throws root.ai.Failure | baml.errors.UnknownError {
+function _send_json(
+    request: baml.http.Request,
+    provider_name: string,
+) -> HttpResult throws root.ai.Failure | baml.errors.UnknownError {
     let response = baml.http.send(request) catch (e) {
-        _ => throw baml.errors.UnknownError.with_message<never>(
+        _ => {
+            throw baml.errors.UnknownError.with_message<never>(
             e,
             provider_name + " send failed",
-        ),
+        )
+        },
     };
     let text = response.text() catch (e) {
-        _ => throw baml.errors.UnknownError.with_message<never>(
+        _ => {
+            throw baml.errors.UnknownError.with_message<never>(
             e,
             provider_name + " response body read failed",
-        ),
+        )
+        },
     };
     if (!response.ok()) {
         throw root.ai.internal.classify_http(provider_name, response.status_code, text);
     }
     let raw = baml.json.parse(text) catch (e) {
-        _ => throw root.ai.ParseFailed {
+        _ => {
+            throw root.ai.ParseFailed {
             provider: provider_name,
             raw_output: text,
+        }
         },
     };
     HttpResult { raw: raw, text: text }
@@ -123,30 +147,28 @@ function _generate<T>(
     provider_name: string,
     model: string,
     use_sap: bool,
-) -> root.ai.ResponseWithMetadata<T>
-    throws root.ai.Failure | baml.errors.UnknownError {
-    let request = _generation_request(
-        primitive,
-        task,
-        provider_name,
-        use_sap,
+) -> root.ai.ResponseWithMetadata<T> throws root.ai.Failure | baml.errors.UnknownError {
+    let request = _generation_request(primitive, task, provider_name, use_sap);
+    log.info(
+        baml.json
+            .stringify(
+                {
+                    "event": "llm.request",
+                    "provider": provider_name,
+                    "model": model,
+                    "request_bytes": request.body.length(),
+                    "output_mode": if (use_sap) {
+                        "sap"
+                    } else {
+                        "native"
+                    },
+                },
+            ),
     );
-    log.info(baml.json.stringify({
-        "event": "llm.request",
-        "provider": provider_name,
-        "model": model,
-        "request_bytes": request.body.length(),
-        "output_mode": if (use_sap) { "sap" } else { "native" },
-    }));
     let result = _send_json(request, provider_name);
     _validate_response(result.raw, result.text, provider_name);
     root.ai.ResponseWithMetadata<T> {
-        value: _parse_generation_value<T>(
-            result.raw,
-            result.text,
-            provider_name,
-            use_sap,
-        ),
+        value: _parse_generation_value<T>(result.raw, result.text, provider_name, use_sap),
         metadata: _response_metadata(result.raw, model, provider_name),
         conversation: null,
     }
@@ -161,11 +183,7 @@ function _generation_request<T>(
     use_sap: bool,
 ) -> baml.http.Request throws root.ai.Failure | baml.errors.UnknownError {
     let built = _built_request(primitive, task, provider_name);
-    let body = _generation_body(
-        _body_object(built, provider_name),
-        task.output_type(),
-        use_sap,
-    );
+    let body = _generation_body(_body_object(built, provider_name), task.output_type(), use_sap);
     baml.http.Request {
         method: built.method,
         url: built.url,
@@ -179,8 +197,7 @@ function _complete<T>(
     tool_provider: root.ai.tools.ToolCallingProvider,
     task: root.ai.Task<T>,
     provider_name: string,
-) -> root.ai.ResponseWithMetadata<T>
-    throws root.ai.Failure | baml.errors.UnknownError {
+) -> root.ai.ResponseWithMetadata<T> throws root.ai.Failure | baml.errors.UnknownError {
     //# Use one typed generation when no application tools are active
     if (task.tools.length() == 0) {
         return generation.generate<T>(task.with_provider(generation));
@@ -233,17 +250,10 @@ function _complete<T>(
                     }
                 }
                 //## Execute application calls and submit correlated responses
-                let tool_results = root.ai.internal._run_tool_calls(
-                    calls.calls,
-                    tools,
-                    null,
-                    null,
-                    null,
-                    [],
-                    [],
-                    null,
-                    steps,
-                );
+                let tool_results = root
+                    .ai
+                    .internal
+                    ._run_tool_calls(calls.calls, tools, null, null, null, [], [], null, steps);
                 conversation = tool_provider.submit(conversation, tool_results);
             },
             let value: T => {

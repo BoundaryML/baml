@@ -23,16 +23,11 @@ class Conversation {
     }
 }
 
-function _headers_without_auth(headers: map<string, string>) -> map<string, string>
-    throws never {
+function _headers_without_auth(headers: map<string, string>) -> map<string, string> throws never {
     let clean: map<string, string> = {};
     for (let key in headers.keys()) {
         let lower = key.to_lower_case();
-        if (
-            lower != "authorization"
-                && lower != "x-goog-api-key"
-                && lower != "x-goog-user-project"
-        ) {
+        if (lower != "authorization" && lower != "x-goog-api-key" && lower != "x-goog-user-project") {
             clean.set(key, headers[key]);
         }
     }
@@ -69,10 +64,12 @@ function _owned_conversation(
 ) -> Conversation throws root.ai.InvalidRequest {
     let state = match (conversation) {
         let value: Conversation => value,
-        _ => throw root.ai.InvalidRequest {
+        _ => {
+            throw root.ai.InvalidRequest {
             provider: provider_name,
             status_code: null,
             detail: provider_name + " received another provider's conversation",
+        }
         },
     };
     if (state.provider_name != provider_name) {
@@ -90,7 +87,7 @@ function _tool_body(
     output_type: type,
     tools: root.ai.tools.Tool[],
     use_sap: bool,
-) -> map<string, json> throws baml.errors.UnknownError | baml.errors.Unsupported {
+) -> map<string, json> throws baml.errors.UnknownError | baml.errors.Unsupported | root.ai.InvalidRequest {
     let body = _clone_body(state.body_template, state.provider_name);
     body.set("contents", state.contents);
     // Native generation schemas and function calling are mutually exclusive.
@@ -105,14 +102,21 @@ function _tool_body(
     }
     body.delete("tools");
     body.delete("toolConfig");
-    let declarations = _agent_declarations(output_type, tools, use_sap);
+    let declarations = _agent_declarations(output_type, tools, use_sap, state.provider_name);
     if (declarations.length() > 0) {
         body.set("tools", [{ "functionDeclarations": declarations }]);
-        body.set("toolConfig", {
-            "functionCallingConfig": {
-                "mode": if (use_sap) { "AUTO" } else { "ANY" },
+        body.set(
+            "toolConfig",
+            {
+                "functionCallingConfig": {
+                    "mode": if (use_sap) {
+                        "AUTO"
+                    } else {
+                        "ANY"
+                    },
+                },
             },
-        });
+        );
     }
     body
 }
@@ -128,14 +132,60 @@ function _normalized_calls(state: Conversation, raw_calls: json[]) -> json[] thr
                 generated
             },
         };
-        calls.push({
-            "id": id,
-            "name": baml.json.path_or(raw, ".name", ""),
-            "args": baml.json.path_or<json>(raw, ".args", {}),
-            "raw": raw,
-        });
+        calls
+            .push(
+                {
+                    "id": id,
+                    "name": baml.json.path_or(raw, ".name", ""),
+                    "args": baml.json.path_or<json>(raw, ".args", {}),
+                    "raw": raw,
+                },
+            );
     }
     calls
+}
+
+function _normalized_call_object(call: json) -> map<string, json> throws never {
+    baml.json.from_json<map<string, json>>(call) catch (e) {
+        _ => {
+            let empty: map<string, json> = {};
+            empty
+        },
+    }
+}
+
+function _normalized_call_id(call: json) -> string throws never {
+    match (_normalized_call_object(call).get("id")) {
+        let value: string => value,
+        _ => "",
+    }
+}
+
+function _normalized_call_name(call: json) -> string throws never {
+    match (_normalized_call_object(call).get("name")) {
+        let value: string => value,
+        _ => "",
+    }
+}
+
+function _normalized_call_args(call: json) -> json throws never {
+    match (_normalized_call_object(call).get("args")) {
+        let value: map<string, json> => value,
+        _ => {
+            let empty: map<string, json> = {};
+            empty
+        },
+    }
+}
+
+function _normalized_call_raw(call: json) -> json throws never {
+    match (_normalized_call_object(call).get("raw")) {
+        let value: map<string, json> => value,
+        _ => {
+            let empty: map<string, json> = {};
+            empty
+        },
+    }
 }
 
 function _application_calls(
@@ -145,7 +195,7 @@ function _application_calls(
 ) -> root.ai.tools.ToolCalls throws root.ai.ParseFailed {
     root.ai.tools.ToolCalls {
         calls: calls.map((call: json) -> root.ai.tools.ToolCall {
-            let name = baml.json.path_or(call, ".name", "");
+            let name = _normalized_call_name(call);
             if (name.length() == 0 || name == _output_tool_name()) {
                 throw root.ai.ParseFailed {
                     provider: provider_name,
@@ -153,9 +203,9 @@ function _application_calls(
                 };
             }
             root.ai.tools.ToolCall {
-                id: baml.json.path_or(call, ".id", ""),
+                id: _normalized_call_id(call),
                 name: name,
-                args: baml.json.path_or<json>(call, ".args", {}),
+                args: _normalized_call_args(call),
             }
         }),
     }
@@ -167,8 +217,7 @@ function _step<T>(
     provider_name: string,
     use_sap: bool,
     parallel_tool_calls: bool,
-) -> root.ai.tools.ModelStep<T>
-    throws root.ai.Failure | baml.errors.UnknownError {
+) -> root.ai.tools.ModelStep<T> throws root.ai.Failure | baml.errors.UnknownError {
     //# Recover the exact provider-native Gemini continuation
     let state = _owned_conversation(conversation, provider_name);
     let body = _tool_body(state, reflect.type_of<T>(), tools, use_sap);
@@ -180,42 +229,54 @@ function _step<T>(
     };
     //# Refresh API-key or ADC authentication without rebuilding wire state
     let request = state.primitive.authenticate_request(unauthenticated) catch (e) {
-        _ => throw baml.errors.UnknownError.with_message<never>(
+        _ => {
+            throw baml.errors.UnknownError.with_message<never>(
             e,
             provider_name + " continuation authentication failed",
-        ),
+        )
+        },
     };
-    log.info(baml.json.stringify({
-        "event": "llm.tools.request",
-        "provider": provider_name,
-        "model": state.model,
-        "content_count": state.contents.length(),
-        "application_tool_count": tools.length(),
-        "output_mode": if (use_sap) { "sap" } else { "native" },
-        "parallel_tool_calls": parallel_tool_calls,
-    }));
+    log.info(
+        baml.json
+            .stringify(
+                {
+                    "event": "llm.tools.request",
+                    "provider": provider_name,
+                    "model": state.model,
+                    "content_count": state.contents.length(),
+                    "application_tool_count": tools.length(),
+                    "output_mode": if (use_sap) {
+                        "sap"
+                    } else {
+                        "native"
+                    },
+                    "parallel_tool_calls": parallel_tool_calls,
+                },
+            ),
+    );
     //# Execute one Gemini generateContent turn
     let result = _send_json(request, provider_name);
     _validate_response(result.raw, result.text, provider_name);
     let content = _candidate_content(result.raw, result.text, provider_name);
     // Preserve all parts, not just calls/text: thoughtSignature is opaque state.
     state.contents.push(content);
-    state.history.entries.push(root.ai.ChatMessage {
-        message_role: root.ai.MessageRole.Assistant,
-        content: [root.ai.messages.ProviderDataPart {
-            provider: provider_name,
-            data: content,
-        }],
-        metadata: null,
-    });
+    state
+        .history
+        .entries
+        .push(
+            root.ai.ChatMessage {
+                message_role: root.ai.MessageRole.Assistant,
+                content: [root.ai.messages.ProviderDataPart { provider: provider_name, data: content }],
+                metadata: null,
+            },
+        );
 
     let raw_calls = _raw_function_calls(result.raw);
     let calls = _normalized_calls(state, raw_calls);
     let output_calls = calls.filter((call: json) -> bool {
-        baml.json.path_or(call, ".name", "") == _output_tool_name()
+        _normalized_call_name(call) == _output_tool_name()
     });
     let metadata = _response_metadata(result.raw, state.model, provider_name);
-
     //# Finish only from one reserved result call in native output mode
     if (!use_sap && output_calls.length() > 0) {
         if (calls.length() != 1 || output_calls.length() != 1) {
@@ -226,15 +287,10 @@ function _step<T>(
         }
         state.last_calls = [];
         return root.ai.tools.ModelStep<T> {
-            outcome: _parse_output_call<T>(
-                baml.json.path_or(output_calls[0], ".raw", null),
-                result.text,
-                provider_name,
-            ),
+            outcome: _parse_output_call<T>(_normalized_call_raw(output_calls[0]), result.text, provider_name),
             metadata: metadata,
         };
     }
-
     //# Yield application calls to the runner
     if (calls.length() > 0) {
         if (!parallel_tool_calls && calls.length() > 1) {
@@ -249,7 +305,6 @@ function _step<T>(
             metadata: metadata,
         };
     }
-
     //# Hybrid SAP mode accepts final T from ordinary text
     if (!use_sap) {
         throw root.ai.ParseFailed {
@@ -259,28 +314,37 @@ function _step<T>(
     }
     let text = match (_response_text(result.raw)) {
         let value: string => value,
-        null => throw root.ai.ParseFailed {
+        null => {
+            throw root.ai.ParseFailed {
             provider: provider_name,
             raw_output: result.text,
+        }
         },
     };
     state.last_calls = [];
     let value = baml.sap.parse<T>(text) catch (e) {
-        _ => throw root.ai.ParseFailed {
+        _ => {
+            throw root.ai.ParseFailed {
             provider: provider_name,
             raw_output: text,
+        }
         },
     };
-    root.ai.tools.ModelStep<T> {
-        outcome: value,
-        metadata: metadata,
-    }
+    root.ai.tools.ModelStep<T> { outcome: value, metadata: metadata }
 }
 
-function _calls_for_result(state: Conversation, result_id: string) -> json[]
-    throws never {
+function _calls_for_result(state: Conversation, result_id: string) -> json[] throws never {
     state.last_calls.filter((call: json) -> bool {
-        baml.json.path_or(call, ".id", "") == result_id
+        _normalized_call_id(call) == result_id
+    })
+}
+
+function _results_for_call(
+    results: root.ai.tools.ToolResult[],
+    call_id: string,
+) -> root.ai.tools.ToolResult[] throws never {
+    results.filter((result: root.ai.tools.ToolResult) -> bool {
+        result.id == call_id
     })
 }
 
@@ -298,41 +362,54 @@ function _submit(
             detail: "tool results must match every pending Gemini function call",
         };
     }
-    let parts: json[] = [];
-    for (let result in results) {
-        let matching = _calls_for_result(state, result.id);
-        if (matching.length() != 1) {
+    // Validate the whole result set before mutating conversation/history.
+    // Each pending provider call ID and each submitted result ID must occur
+    // exactly once. A duplicate id1 cannot satisfy pending id1 + id2.
+    for (let call in state.last_calls) {
+        let call_id = _normalized_call_id(call);
+        let pending_count = _calls_for_result(state, call_id).length();
+        let result_count = _results_for_call(results, call_id).length();
+        if (call_id.length() == 0 || pending_count != 1 || result_count != 1) {
             throw root.ai.InvalidRequest {
                 provider: provider_name,
                 status_code: null,
-                detail: "tool result has no matching Gemini function call: " + result.id,
+                detail: `tool results must contain exactly one result for each pending Gemini call (${call_id}: pending=${pending_count}, results=${result_count})`,
             };
         }
-        let call = matching[0];
+    }
+    let parts: json[] = [];
+    // Emit in the model/provider call order, independent of runner result order.
+    for (let call in state.last_calls) {
+        let call_id = _normalized_call_id(call);
+        let result = _results_for_call(results, call_id)[0];
         let response_part: json = {
             "functionResponse": {
-                "id": result.id,
-                "name": baml.json.path_or(call, ".name", ""),
-                "response": {
-                    "result": result.output,
-                    "is_error": result.is_error,
-                },
+                "id": call_id,
+                "name": _normalized_call_name(call),
+                "response": { "result": result.output, "is_error": result.is_error },
             },
         };
         parts.push(response_part);
-        state.history.entries.push(root.ai.ChatMessage {
-            message_role: root.ai.MessageRole.Tool,
-            content: [root.ai.messages.ProviderDataPart {
-                provider: provider_name,
-                data: {
-                    "id": result.id,
-                    "name": baml.json.path_or(call, ".name", ""),
-                    "output": result.output,
-                    "is_error": result.is_error,
+        state
+            .history
+            .entries
+            .push(
+                root.ai.ChatMessage {
+                    message_role: root.ai.MessageRole.Tool,
+                    content: [
+                        root.ai.messages.ProviderDataPart {
+                            provider: provider_name,
+                            data: {
+                                "id": call_id,
+                                "name": _normalized_call_name(call),
+                                "output": result.output,
+                                "is_error": result.is_error,
+                            },
+                        },
+                    ],
+                    metadata: null,
                 },
-            }],
-            metadata: null,
-        });
+            );
     }
     state.contents.push({ "role": "user", "parts": parts });
     state.last_calls = [];
@@ -363,10 +440,7 @@ function _history_role_from_string(role: string) -> root.ai.MessageRole throws n
 
 function _history_json(history: root.ai.MessageHistory) -> json[] throws never {
     history.entries.map((message: root.ai.Message) -> json {
-        {
-            "role": _history_role(message.role()),
-            "text": root.ai.message_text(message),
-        }
+        { "role": _history_role(message.role()), "text": root.ai.message_text(message) }
     })
 }
 
@@ -374,13 +448,13 @@ function _history_from_json(encoded: json[]) -> root.ai.MessageHistory throws ne
     root.ai.MessageHistory {
         entries: encoded.map((message: json) -> root.ai.Message {
             root.ai.ChatMessage {
-                message_role: _history_role_from_string(
-                    baml.json.path_or(message, ".role", "user"),
-                ),
-                content: [root.ai.messages.TextPart {
-                    value: baml.json.path_or(message, ".text", ""),
-                    metadata: {},
-                }],
+                message_role: _history_role_from_string(baml.json.path_or(message, ".role", "user")),
+                content: [
+                    root.ai.messages.TextPart {
+                        value: baml.json.path_or(message, ".text", ""),
+                        metadata: {},
+                    },
+                ],
                 metadata: null,
             }
         }),
@@ -393,31 +467,39 @@ function _save_conversation(
 ) -> root.ai.ConversationToken throws baml.errors.UnknownError {
     let state = match (conversation) {
         let value: Conversation if value.provider_name == provider_name => value,
-        _ => throw baml.errors.UnknownError.with_message<never>(
+        _ => {
+            throw baml.errors.UnknownError.with_message<never>(
             null,
             provider_name + " cannot save another provider's conversation",
-        ),
+        )
+        },
     };
     root.ai.ConversationToken {
         provider: provider_name,
         version: 1,
         // Auth headers were removed when the state was created. The restored
         // primitive authenticates each continuation from current credentials.
-        sealed: baml.json.stringify({
-            "model": state.model,
-            "history": _history_json(state.history),
-            // URL, headers, query parameters, and extra_body are rebuilt from
-            // the provider on restore. In particular, Vertex Express carries
-            // its API key in `?key=` and must never seal that authenticated URL.
-            "system_instruction": baml.json.path_or<map<string, json>?>(
-                state.body_template,
-                ".systemInstruction",
-                null,
+        sealed: baml
+            .json
+            .stringify(
+                {
+                    "model": state.model,
+                    "history": _history_json(state.history),
+                    // URL, headers, query parameters, and extra_body are rebuilt from
+                    // the provider on restore. In particular, Vertex Express carries
+                    // its API key in `?key=` and must never seal that authenticated URL.
+                    "system_instruction": baml
+                        .json
+                        .path_or<map<string, json>?>(
+                            state.body_template,
+                            ".systemInstruction",
+                            null,
+                        ),
+                    "contents": state.contents,
+                    "last_calls": state.last_calls,
+                    "next_call_id": state.next_call_id,
+                },
             ),
-            "contents": state.contents,
-            "last_calls": state.last_calls,
-            "next_call_id": state.next_call_id,
-        }),
     }
 }
 
@@ -435,10 +517,12 @@ function _restore_conversation(
         );
     }
     let state = baml.json.parse(token.sealed) catch (e) {
-        _ => throw baml.errors.UnknownError.with_message<never>(
+        _ => {
+            throw baml.errors.UnknownError.with_message<never>(
             e,
             "invalid " + provider_name + " conversation token",
-        ),
+        )
+        },
     };
     let token_model = baml.json.path_or(state, ".model", fallback_model);
     if (token_model != fallback_model) {
@@ -449,17 +533,8 @@ function _restore_conversation(
     }
     let request = _import_base_request(primitive, provider_name);
     let body = _body_object(request, provider_name);
-    match (
-        baml.json.path_or<map<string, json>?>(
-            state,
-            ".system_instruction",
-            null,
-        )
-    ) {
-        let instruction: map<string, json> => body.set(
-            "systemInstruction",
-            instruction,
-        ),
+    match (baml.json.path_or<map<string, json>?>(state, ".system_instruction", null)) {
+        let instruction: map<string, json> => body.set("systemInstruction", instruction),
         null => body.delete("systemInstruction"),
     }
     let contents = baml.json.path_or<json[]>(state, ".contents", []);
@@ -469,9 +544,7 @@ function _restore_conversation(
         primitive: primitive,
         provider_name: provider_name,
         model: fallback_model,
-        history: _history_from_json(
-            baml.json.path_or<json[]>(state, ".history", []),
-        ),
+        history: _history_from_json(baml.json.path_or<json[]>(state, ".history", [])),
         url: request.url,
         headers: _headers_without_auth(request.headers),
         body_template: body,
@@ -500,17 +573,11 @@ function _messages_wire(messages: root.ai.Messages) -> ImportedWire throws never
             } else {
                 "user"
             };
-            let content: json = {
-                "role": role,
-                "parts": [{ "text": text }],
-            };
+            let content: json = { "role": role, "parts": [{ "text": text }] };
             contents.push(content);
         }
     }
-    ImportedWire {
-        contents: contents,
-        system_parts: system_parts,
-    }
+    ImportedWire { contents: contents, system_parts: system_parts }
 }
 
 function _import_base_request(
@@ -519,16 +586,20 @@ function _import_base_request(
 ) -> baml.http.Request throws baml.errors.UnknownError {
     let prompt = baml.llm.assemble_prompt_ast(["Imported conversation"], []);
     let specialized = primitive.specialize_prompt(prompt) catch (e) {
-        _ => throw baml.errors.UnknownError.with_message<never>(
+        _ => {
+            throw baml.errors.UnknownError.with_message<never>(
             e,
             provider_name + " import prompt specialization failed",
-        ),
+        )
+        },
     };
     primitive.build_request(specialized, reflect.type_of<string>()) catch (e) {
-        _ => throw baml.errors.UnknownError.with_message<never>(
+        _ => {
+            throw baml.errors.UnknownError.with_message<never>(
             e,
             provider_name + " import request build failed",
-        ),
+        )
+        },
     }
 }
 

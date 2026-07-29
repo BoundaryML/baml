@@ -270,7 +270,7 @@ function and keeps nearby variations on the same page.
 | Give an LLM ordinary BAML tools | [Agents and tools](./pages/agents-and-tools.md) |
 | Choose a runner, add a provider, or keep metadata | [Tasks, runners, and results](./pages/tasks-runners-and-results.md) |
 | Add tools during a run or connect MCP | [Dynamic tools and MCP](./pages/dynamic-tools-and-mcp.md) |
-| Understand OpenAI schemas, result tools, or parallel calls | [OpenAI structured outputs and tool calling](./pages/structured-outputs-and-tool-calling.md) |
+| Understand provider schemas, result tools, or parallel calls | [Structured outputs and tool calling](./pages/structured-outputs-and-tool-calling.md) |
 | Approve effects, set limits, or hand off | [Approvals, limits, and handoffs](./pages/approvals-limits-and-handoffs.md) |
 | Continue or move a conversation | [Conversations and resuming](./pages/conversations-and-resuming.md) |
 | Stream typed output or work with media | [Streaming, media, and transcription](./pages/streaming-media-and-transcription.md) |

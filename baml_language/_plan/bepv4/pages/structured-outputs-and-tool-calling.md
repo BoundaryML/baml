@@ -15,6 +15,12 @@ The public provider namespaces are intentionally configuration-sized:
 Request builders, wire envelopes, schema transforms, and concrete
 conversation classes live in each provider's `internal` namespace.
 
+| Provider | Typed `T` by default | Application tools | Text fallback |
+| --- | --- | --- | --- |
+| OpenAI Responses | reserved `__baml_return_output` function | Responses functions | `OutputMode.Sap` |
+| Google Vertex / AI | `responseJsonSchema` for one-shot generation; reserved result function in an agent | Gemini `functionDeclarations` | `OutputMode.Sap` |
+| Anthropic | `output_config.format` | Messages `tool_use` / `tool_result` | `OutputMode.Sap` |
+
 ## OpenAI Responses
 
 BEP-064 uses `POST /v1/responses` only. Chat Completions is not a fallback.
@@ -477,6 +483,10 @@ let vertex = google.vertex.gemini(
   location = "us-central1",
 )
 
+let vertex_express = google.vertex.gemini(
+  api_key = baml.env.get_or_panic("VERTEX_API_KEY"),
+)
+
 let ai_studio = google.ai.gemini(
   api_key = baml.env.get_or_panic("GOOGLE_API_KEY"),
 )
@@ -484,6 +494,9 @@ let ai_studio = google.ai.gemini(
 
 Vertex uses Google Cloud credentials by default. The provider accepts a
 credential file, inline credential JSON, or Application Default Credentials.
+Supplying `api_key` instead selects Vertex Express Mode's project-less
+publisher endpoint and cannot be combined with project, location, or ADC
+settings.
 Google AI uses `x-goog-api-key`. The initial request goes through
 `PrimitiveClient.build_request`, which also lowers structural image, audio,
 video, and PDF values. Later agent turns call
@@ -561,11 +574,15 @@ OpenAI:
 The provider preserves the complete model `content`, including thought
 signatures, and correlates each `functionCall` with a later
 `functionResponse`. Multiple function-call parts mean parallel application
-calls; the shape of `T` is unrelated.
+calls; the shape of `T` is unrelated. If parallel calls are disabled, more
+than one call is rejected because Gemini has no equivalent request flag.
 
 `OutputMode.Sap + ToolMode.Native` is hybrid: application calls stay Gemini
 functions and the final text is parsed by SAP. `Sap + Prompt` puts the entire
 `T | ToolCalls` decision in `ctx.output_format` and sends no Gemini tools.
+Google streaming is not advertised yet. Message import is deliberately
+text-and-role only, and prompt-mode conversations cannot be saved or imported
+without the original task render recipe.
 
 ## Anthropic Messages
 
@@ -634,12 +651,17 @@ normal text content block contains the final JSON `T`.
 
 The provider retains the whole assistant content array—text, thinking
 signatures, and `tool_use` blocks—then appends all correlated `tool_result`
-blocks in one user message. This state is serializable for save/restore without
-storing API keys.
+blocks in provider call order in one user message. Missing, duplicate, or
+unknown result IDs fail before conversation state is mutated. Native state is
+serializable for save/restore without storing API keys or endpoint
+credentials.
 
 `OutputMode.Sap` omits `output_config` and parses final text with SAP.
 `Sap + Prompt` also renders application tools into the prompt. As with the
 other providers, malformed native tool arguments are never repaired by SAP.
+Strict streaming sends the same `output_config` before the SSE accumulator is
+opened. Prompt-mode conversations cannot be saved or imported without their
+original task render recipe.
 
 Anthropic input media uses its Messages content blocks. Images and PDFs are
 supported as URL or base64 sources; video is rejected before the request is

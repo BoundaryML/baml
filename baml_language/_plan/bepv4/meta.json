@@ -30,11 +30,11 @@
       "title": "Dynamic tools and MCP",
       "order": 3
     },
-    {
-      "slug": "structured-outputs-and-tool-calling",
-      "title": "OpenAI structured outputs and tool calling",
-      "order": 4
-    },
+  {
+    "slug": "structured-outputs-and-tool-calling",
+    "title": "Structured outputs and tool calling",
+    "order": 4
+  },
     {
       "slug": "approvals-limits-and-handoffs",
       "title": "Approvals, limits, and handoffs",

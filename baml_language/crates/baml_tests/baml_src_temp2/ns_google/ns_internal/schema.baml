@@ -13,13 +13,14 @@ function _output_value_schema(output_type: type) -> json throws baml.errors.Unsu
 // value wrapper keeps primitive, array, union, and nullable task outputs legal.
 // Hoist $defs because JSON Schema references remain rooted at the complete
 // parameters document.
-function _output_parameters(output_type: type) -> map<string, json>
-    throws baml.errors.Unsupported {
+function _output_parameters(output_type: type) -> map<string, json> throws baml.errors.Unsupported {
     let value_schema = _output_value_schema(output_type);
     let schema_object = match (value_schema) {
         let object: map<string, json> => object,
-        _ => throw baml.errors.Unsupported {
+        _ => {
+            throw baml.errors.Unsupported {
             message: "Gemini output schema must be a JSON Schema object",
+        }
         },
     };
     let has_definitions = schema_object.has("$defs");
@@ -39,8 +40,7 @@ function _output_parameters(output_type: type) -> map<string, json>
     parameters
 }
 
-function _output_declaration(output_type: type) -> json
-    throws baml.errors.Unsupported {
+function _output_declaration(output_type: type) -> json throws baml.errors.Unsupported {
     {
         "name": _output_tool_name(),
         "description": "Return the final typed result. Call this only when the task is complete.",
@@ -56,21 +56,33 @@ function _application_declaration(tool: root.ai.tools.Tool) -> json throws never
     }
 }
 
+function _validate_application_tool_names(
+    tools: root.ai.tools.Tool[],
+    provider_name: string,
+) -> null throws root.ai.InvalidRequest {
+    if (
+        tools.some((tool: root.ai.tools.Tool) -> bool {
+            tool.name == _output_tool_name()
+        })
+    ) {
+        throw root.ai.InvalidRequest {
+            provider: provider_name,
+            status_code: null,
+            detail: "Gemini reserves the tool name " + _output_tool_name(),
+        };
+    }
+    null
+}
+
 function _agent_declarations(
     output_type: type,
     tools: root.ai.tools.Tool[],
     use_sap: bool,
-) -> json[] throws baml.errors.Unsupported {
-    if (
-        !use_sap
-            && tools.some((tool: root.ai.tools.Tool) -> bool {
-                tool.name == _output_tool_name()
-            })
-    ) {
-        throw baml.errors.Unsupported {
-            message: "Gemini reserves the tool name " + _output_tool_name(),
-        };
-    }
+    provider_name: string,
+) -> json[] throws baml.errors.Unsupported | root.ai.InvalidRequest {
+    // Reserve the result name in every output mode. This keeps an application
+    // tool from changing meaning when a provider switches between Native/SAP.
+    _validate_application_tool_names(tools, provider_name);
     let declarations = tools.map((tool: root.ai.tools.Tool) -> json {
         _application_declaration(tool)
     });
@@ -79,4 +91,3 @@ function _agent_declarations(
     }
     declarations
 }
-

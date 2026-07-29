@@ -43,13 +43,11 @@ function _closed_schema(schema: json, path: string) -> json throws baml.errors.U
                     match (object[key]) {
                         let schemas: map<string, json> => {
                             for (let name in schemas.keys()) {
-                                schemas.set(
-                                    name,
-                                    _closed_schema(
-                                        schemas[name],
-                                        path + "." + key + "." + name,
-                                    ),
-                                );
+                                schemas
+                                    .set(
+                                        name,
+                                        _closed_schema(schemas[name], path + "." + key + "." + name),
+                                    );
                             }
                             object.set(key, schemas);
                         },
@@ -100,10 +98,7 @@ function _output_schema(output_type: type) -> json throws baml.errors.Unsupporte
     _closed_schema(cloned, "$output")
 }
 
-function _tool_input_schema(
-    schema: json,
-    strict: bool,
-) -> json throws baml.errors.Unsupported {
+function _tool_input_schema(schema: json, strict: bool) -> json throws baml.errors.Unsupported {
     if (!strict) {
         return schema;
     }
@@ -159,9 +154,14 @@ function _response_text(raw: json) -> string? throws never {
 }
 
 function _response_tool_uses(raw: json) -> json[] throws never {
-    _response_content(raw).filter((content: json) -> bool {
-        baml.json.path_or(content, ".type", "") == "tool_use"
-    })
+    let content = _response_content(raw);
+    let calls: json[] = [];
+    for (let part in content) {
+        if (_is_tool_use(part)) {
+            calls.push(part);
+        }
+    }
+    calls
 }
 
 function _response_metadata(

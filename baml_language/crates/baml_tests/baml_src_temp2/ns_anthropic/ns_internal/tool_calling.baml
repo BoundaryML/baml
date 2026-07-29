@@ -34,11 +34,31 @@ function _application_calls(
                     raw_output: raw_output,
                 };
             }
-            root.ai.tools.ToolCall {
-                id: id,
-                name: name,
-                args: args,
-            }
+            root.ai.tools.ToolCall { id: id, name: name, args: args }
         }),
+    }
+}
+
+function _tool_use_id(raw: json) -> string? throws never {
+    match (raw) {
+        let object: map<string, json> => {
+            match (object.get("id")) {
+                let id: string => id,
+                _ => null,
+            }
+        },
+        _ => null,
+    }
+}
+
+function _is_tool_use(raw: json) -> bool throws never {
+    match (raw) {
+        let object: map<string, json> => {
+            match (object.get("type")) {
+                "tool_use" => true,
+                _ => false,
+            }
+        },
+        _ => false,
     }
 }

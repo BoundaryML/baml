@@ -852,6 +852,67 @@ test "assert-equal-failure" {
     );
 }
 
+/// Non-assertion errors should retain their type, fields, and BAML stack
+/// context instead of producing a bare `FAIL` line.
+#[test]
+fn test_thrown_error_prints_rendered_error_context() {
+    let built = &common::baml_cli();
+    let tmp = tempfile::tempdir().unwrap();
+
+    create_project(
+        tmp.path(),
+        r#"
+class ProviderFailure {
+  message string
+  status int
+}
+
+function fail_request() -> void {
+  throw ProviderFailure {
+    message: "provider rejected request",
+    status: 429,
+  }
+}
+
+test "provider-failure" {
+  fail_request()
+}
+"#,
+    );
+
+    let output = run_baml_cli(built, tmp.path(), &["test", "--from", "."]);
+    assert_eq!(
+        output.status.code(),
+        Some(2),
+        "Expected test failure exit code for thrown error, got: {:?}\nstdout: {}\nstderr: {}",
+        output.status.code(),
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr),
+    );
+
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("user.ProviderFailure"),
+        "Expected the thrown error type in stderr, got: {stderr}",
+    );
+    assert!(
+        stderr.contains(r#"message: "provider rejected request""#),
+        "Expected the thrown error message in stderr, got: {stderr}",
+    );
+    assert!(
+        stderr.contains("status: 429"),
+        "Expected the thrown error fields in stderr, got: {stderr}",
+    );
+    assert!(
+        stderr.contains("main.baml"),
+        "Expected BAML source context in stderr, got: {stderr}",
+    );
+    assert!(
+        !stderr.contains("Span {") && !stderr.contains("FileId("),
+        "User-facing test output should not include internal source debug data: {stderr}",
+    );
+}
+
 /// `assert.approx_equal` lets float assertions pass with a tolerance so normal
 /// floating-point rounding artifacts do not fail tests.
 ///
