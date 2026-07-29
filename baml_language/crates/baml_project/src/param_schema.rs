@@ -849,7 +849,7 @@ function Plain(x: int) -> int { x }
         );
     }
 
-    /// Pins the exact wire bytes of `params` + `types` against the golden
+    /// Pins the exact wire shape of `params` + `types` against the golden
     /// fixture that the TS side (`param-schema-golden.test.ts` in
     /// pkg-playground) validates against its `worker-protocol.ts` mirror —
     /// the FQN and shape contracts are otherwise enforced only by convention.
@@ -873,21 +873,19 @@ function Plain(x: int) -> int { x }
             "#,
         )]);
         let listing = list_functions_with_metadata(&db);
-        let actual = serde_json::to_string_pretty(&serde_json::json!({
+        let actual = serde_json::json!({
             "params": params_json(&listing, "Golden"),
             "types": types_json(&listing),
-        }))
-        .unwrap();
-        let golden = include_str!(
+        });
+        let golden: serde_json::Value = serde_json::from_str(include_str!(
             "../../../../typescript2/pkg-playground/src/__fixtures__/param-schema-golden.json"
-        );
-        // .gitattributes pins the fixture to LF, but stale Windows checkouts
-        // (attribute added after the file) may still hold CRLF — normalize.
-        let golden = golden.replace("\r\n", "\n");
+        ))
+        .expect("golden fixture should contain valid JSON");
         assert_eq!(
             actual,
-            golden.trim_end(),
-            "wire shape drifted from the golden fixture; actual:\n{actual}"
+            golden,
+            "wire shape drifted from the golden fixture; actual:\n{}",
+            serde_json::to_string_pretty(&actual).unwrap()
         );
     }
 

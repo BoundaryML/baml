@@ -1,3 +1,4 @@
+// biome-ignore-all lint/style/useFilenamingConvention: Preserve the existing public component filename.
 /**
  * Dynamic args form for the Run tab.
  *
@@ -15,15 +16,15 @@
  * degrade to a per-field raw-JSON textarea.
  */
 
+import { ChevronRight, Plus, Trash2 } from 'lucide-react';
 import {
   createContext,
+  type FC,
+  type ReactNode,
   useContext,
   useMemo,
   useState,
-  type FC,
-  type ReactNode,
 } from 'react';
-import { ChevronRight, Plus, Trash2 } from 'lucide-react';
 
 import {
   activeUnionVariant,
@@ -34,9 +35,9 @@ import {
   isRawJsonSchema,
   resolveRef,
   schemaLabel,
+  type TypeLookup,
   typeLookupFrom,
   valueMatchesSchema,
-  type TypeLookup,
 } from './args-form-model';
 import { Button } from './components/ui/button';
 import {
@@ -93,14 +94,14 @@ export const ArgsForm: FC<ArgsFormProps> = ({
         {params.map((param) => (
           <ParamRow
             key={param.name}
-            param={param}
-            value={value[param.name]}
-            present={param.name in value}
             onChange={(v) => onChange({ ...value, [param.name]: v })}
             onOmit={() => {
               const { [param.name]: _omitted, ...rest } = value;
               onChange(rest);
             }}
+            param={param}
+            present={param.name in value}
+            value={value[param.name]}
           />
         ))}
       </div>
@@ -109,16 +110,19 @@ export const ArgsForm: FC<ArgsFormProps> = ({
 };
 
 /** Shared field header: name plus a faint type label. */
-const FieldLabel: FC<{ name: string; schema: FieldSchema; extra?: ReactNode }> =
-  ({ name, schema, extra }) => (
-    <div className="flex items-center gap-1.5">
-      <span className="font-vsc-mono text-xs text-foreground">{name}</span>
-      <span className="font-vsc-mono text-[10px] text-vsc-text-faint">
-        {schemaLabel(schema)}
-      </span>
-      {extra}
-    </div>
-  );
+const FieldLabel: FC<{
+  name: string;
+  schema: FieldSchema;
+  extra?: ReactNode;
+}> = ({ name, schema, extra }) => (
+  <div className="flex items-center gap-1.5">
+    <span className="font-vsc-mono text-xs text-foreground">{name}</span>
+    <span className="font-vsc-mono text-[10px] text-vsc-text-faint">
+      {schemaLabel(schema)}
+    </span>
+    {extra}
+  </div>
+);
 
 const ParamRow: FC<{
   param: ParamSchema;
@@ -132,8 +136,6 @@ const ParamRow: FC<{
   return (
     <div className="flex flex-col gap-0.5">
       <FieldLabel
-        name={param.name}
-        schema={param.schema}
         extra={
           param.hasDefault && (
             <label
@@ -141,9 +143,9 @@ const ParamRow: FC<{
               htmlFor={`override-${param.name}`}
             >
               <Switch
-                id={`override-${param.name}`}
                 aria-label={`Override ${param.name}`}
                 checked={!omitted}
+                id={`override-${param.name}`}
                 onCheckedChange={(on) =>
                   on
                     ? onChange(defaultValueForSchema(param.schema, lookup))
@@ -154,18 +156,20 @@ const ParamRow: FC<{
             </label>
           )
         }
+        name={param.name}
+        schema={param.schema}
       />
       <fieldset
         className="m-0 min-w-0 border-0 p-0 disabled:opacity-60"
         disabled={omitted}
       >
         <FieldInput
-          schema={param.schema}
-          value={value}
-          onChange={onChange}
           depth={0}
           disabled={omitted}
+          onChange={onChange}
           placeholder={param.defaultExpression}
+          schema={param.schema}
+          value={value}
         />
       </fieldset>
     </div>
@@ -209,7 +213,9 @@ const FieldInput: FC<FieldInputProps> = (props) => {
     case 'bool':
       return <BoolField {...props} />;
     case 'null':
-      return <span className="font-vsc-mono text-xs text-vsc-text-faint">null</span>;
+      return (
+        <span className="font-vsc-mono text-xs text-vsc-text-faint">null</span>
+      );
     case 'literal':
       return (
         <span className="font-vsc-mono text-xs text-vsc-description">
@@ -218,11 +224,7 @@ const FieldInput: FC<FieldInputProps> = (props) => {
       );
     case 'enumVariant':
       return (
-        <EnumField
-          {...props}
-          enumName={schema.name}
-          values={[schema.value]}
-        />
+        <EnumField {...props} enumName={schema.name} values={[schema.value]} />
       );
     case 'ref': {
       // isRawJsonSchema handled dangling refs above, so this resolves.
@@ -244,16 +246,16 @@ const FieldInput: FC<FieldInputProps> = (props) => {
         return (
           <FieldInput
             {...props}
-            schema={resolved.schema}
             refPath={[...refPath, schema.name]}
+            schema={resolved.schema}
           />
         );
       }
       return (
         <ClassSection
           {...props}
-          typeName={resolved.name}
           fields={resolved.fields}
+          typeName={resolved.name}
         />
       );
     }
@@ -289,9 +291,9 @@ const StringField: FC<FieldInputProps> = ({
 }) => (
   <Input
     className="h-7 text-xs font-vsc-mono"
-    value={typeof value === 'string' ? value : ''}
-    placeholder={placeholder}
     onChange={(e) => onChange(e.target.value)}
+    placeholder={placeholder}
+    value={typeof value === 'string' ? value : ''}
   />
 );
 
@@ -303,9 +305,7 @@ const NumberField: FC<FieldInputProps & { integer?: boolean }> = ({
   placeholder,
 }) => {
   const canonical =
-    typeof value === 'number' || typeof value === 'bigint'
-      ? String(value)
-      : '';
+    typeof value === 'number' || typeof value === 'bigint' ? String(value) : '';
   const [draft, setDraft] = useDraft(canonical);
   const parse = (text: string): number | null => {
     const trimmed = text.trim();
@@ -320,16 +320,16 @@ const NumberField: FC<FieldInputProps & { integer?: boolean }> = ({
   // of argsJson.
   return (
     <Input
+      aria-invalid={!disabled && parse(draft) === null}
       className="h-7 text-xs font-vsc-mono"
       inputMode={integer ? 'numeric' : 'decimal'}
-      value={draft}
-      placeholder={placeholder ?? (integer ? '0' : '0.0')}
-      aria-invalid={!disabled && parse(draft) === null}
       onChange={(e) => {
         setDraft(e.target.value);
         const num = parse(e.target.value);
         if (num !== null) onChange(num);
       }}
+      placeholder={placeholder ?? (integer ? '0' : '0.0')}
+      value={draft}
     />
   );
 };
@@ -348,22 +348,22 @@ const EnumField: FC<
   if (values.length <= ENUM_TOGGLE_MAX) {
     return (
       <ToggleGroup
+        onValueChange={(v) => onChange(enumValue(enumName, v))}
+        options={values.map((v) => ({ label: v, value: v }))}
         size="sm"
         value={current ?? ''}
-        options={values.map((v) => ({ value: v, label: v }))}
-        onValueChange={(v) => onChange(enumValue(enumName, v))}
       />
     );
   }
   return (
     <div className="max-w-[240px]">
       <Select
-        value={current ?? ''}
         onChange={(e) => {
           // The empty value is the "select…" placeholder, not a variant.
           if (e.target.value === '') return;
           onChange(enumValue(enumName, e.target.value));
         }}
+        value={current ?? ''}
       >
         {current === undefined && <option value="">select…</option>}
         {values.map((v) => (
@@ -384,11 +384,11 @@ const ClassSection: FC<
   const setField = (name: string, v: unknown) =>
     onChange({ ...obj, $baml: { type: typeName }, [name]: v });
   return (
-    <Collapsible open={open} onOpenChange={setOpen}>
+    <Collapsible onOpenChange={setOpen} open={open}>
       <CollapsibleTrigger className="flex items-center gap-1 cursor-pointer text-xs text-vsc-description hover:text-foreground">
         <ChevronRight
-          size={12}
           className={cn('transition-transform', open && 'rotate-90')}
+          size={12}
         />
         <span className="font-vsc-mono">{schemaLabel(schema)}</span>
       </CollapsibleTrigger>
@@ -397,13 +397,13 @@ const ClassSection: FC<
       <CollapsibleContent>
         <div className="flex flex-col gap-1 border-l border-vsc-border ml-1.5 pl-2.5 pt-1">
           {fields.map((field) => (
-            <div key={field.name} className="flex flex-col gap-0.5">
+            <div className="flex flex-col gap-0.5" key={field.name}>
               <FieldLabel name={field.name} schema={field.schema} />
               <FieldInput
+                depth={depth + 1}
+                onChange={(v) => setField(field.name, v)}
                 schema={field.schema}
                 value={obj[field.name]}
-                onChange={(v) => setField(field.name, v)}
-                depth={depth + 1}
               />
             </div>
           ))}
@@ -421,35 +421,36 @@ const ListField: FC<
   return (
     <div className="flex flex-col gap-1">
       {items.map((item, i) => (
-        <div key={i} className="flex items-start gap-1">
+        // biome-ignore lint/suspicious/noArrayIndexKey: Argument list values do not have stable identities.
+        <div className="flex items-start gap-1" key={i}>
           <div className="flex-1 min-w-0">
             <FieldInput
-              schema={schema.item}
-              value={item}
+              depth={depth + 1}
               onChange={(v) =>
                 onChange(items.map((cur, j) => (j === i ? v : cur)))
               }
-              depth={depth + 1}
+              schema={schema.item}
+              value={item}
             />
           </div>
           <Button
-            variant="ghost"
-            size="icon-xs"
-            className="text-vsc-red shrink-0"
             aria-label="Remove item"
+            className="text-vsc-red shrink-0"
             onClick={() => onChange(items.filter((_, j) => j !== i))}
+            size="icon-xs"
+            variant="ghost"
           >
             <Trash2 />
           </Button>
         </div>
       ))}
       <Button
-        variant="ghost"
-        size="xs"
         className="self-start text-vsc-link"
         onClick={() =>
           onChange([...items, defaultValueForSchema(schema.item, lookup)])
         }
+        size="xs"
+        variant="ghost"
       >
         <Plus /> add item
       </Button>
@@ -467,10 +468,8 @@ const MapKeyInput: FC<{
   const collides = draft !== mapKey && siblingKeys.includes(draft);
   return (
     <Input
-      className="h-7 text-xs font-vsc-mono w-[130px] shrink-0"
-      value={draft}
-      placeholder="key"
       aria-invalid={collides}
+      className="h-7 text-xs font-vsc-mono w-[130px] shrink-0"
       onChange={(e) => {
         setDraft(e.target.value);
         if (
@@ -480,6 +479,8 @@ const MapKeyInput: FC<{
           onRename(e.target.value);
         }
       }}
+      placeholder="key"
+      value={draft}
     />
   );
 };
@@ -509,34 +510,33 @@ const MapField: FC<
   return (
     <div className="flex flex-col gap-1">
       {entries.map(([k, v], i) => (
-        <div key={i} className="flex items-start gap-1">
+        // biome-ignore lint/suspicious/noArrayIndexKey: Map keys are editable and cannot identify component state.
+        <div className="flex items-start gap-1" key={i}>
           <MapKeyInput
             mapKey={k}
-            siblingKeys={entries.map(([sk]) => sk)}
             onRename={(nk) => rebuild((e, j) => (j === i ? [nk, e[1]] : e))}
+            siblingKeys={entries.map(([sk]) => sk)}
           />
           <div className="flex-1 min-w-0">
             <FieldInput
+              depth={depth + 1}
+              onChange={(nv) => rebuild((e, j) => (j === i ? [e[0], nv] : e))}
               schema={schema.value}
               value={v}
-              onChange={(nv) => rebuild((e, j) => (j === i ? [e[0], nv] : e))}
-              depth={depth + 1}
             />
           </div>
           <Button
-            variant="ghost"
-            size="icon-xs"
-            className="text-vsc-red shrink-0"
             aria-label="Remove entry"
+            className="text-vsc-red shrink-0"
             onClick={() => rebuild((e, j) => (j === i ? null : e))}
+            size="icon-xs"
+            variant="ghost"
           >
             <Trash2 />
           </Button>
         </div>
       ))}
       <Button
-        variant="ghost"
-        size="xs"
         className="self-start text-vsc-link"
         onClick={() =>
           onChange({
@@ -544,6 +544,8 @@ const MapField: FC<
             [freshKey()]: defaultValueForSchema(schema.value, lookup),
           })
         }
+        size="xs"
+        variant="ghost"
       >
         <Plus /> add entry
       </Button>
@@ -558,7 +560,7 @@ const OptionalField: FC<
   const isSet = value !== null && value !== undefined;
   return (
     <div className="flex flex-col gap-1">
-      <label className="flex items-center gap-1.5 text-[10px] text-vsc-description">
+      <div className="flex items-center gap-1.5 text-[10px] text-vsc-description">
         <Switch
           checked={isSet}
           onCheckedChange={(on) =>
@@ -566,15 +568,15 @@ const OptionalField: FC<
           }
         />
         {isSet ? 'set' : 'null'}
-      </label>
+      </div>
       {isSet && (
         <FieldInput
+          depth={depth}
+          onChange={onChange}
+          placeholder={placeholder}
+          refPath={refPath}
           schema={schema.inner}
           value={value}
-          onChange={onChange}
-          depth={depth}
-          refPath={refPath}
-          placeholder={placeholder}
         />
       )}
     </div>
@@ -601,26 +603,26 @@ const UnionField: FC<
   return (
     <div className="flex flex-col gap-1">
       <ToggleGroup
-        size="sm"
-        value={String(active)}
-        options={schema.variants.map((v, i) => ({
-          value: String(i),
-          label: schemaLabel(v),
-        }))}
         onValueChange={(v) => {
           const index = Number(v);
           setChosen(index);
           onChange(defaultValueForSchema(schema.variants[index], lookup));
         }}
+        options={schema.variants.map((v, i) => ({
+          label: schemaLabel(v),
+          value: String(i),
+        }))}
+        size="sm"
+        value={String(active)}
       />
       {schema.variants[active] && (
         <FieldInput
+          depth={depth}
+          onChange={onChange}
+          placeholder={placeholder}
+          refPath={refPath}
           schema={schema.variants[active]}
           value={value}
-          onChange={onChange}
-          depth={depth}
-          refPath={refPath}
-          placeholder={placeholder}
         />
       )}
     </div>
@@ -641,7 +643,9 @@ const RawJsonField: FC<FieldInputProps> = ({
 }) => {
   const canonical = value === undefined ? '' : JSON.stringify(value);
   const [draft, setDraft] = useDraft(canonical);
-  const parse = (text: string): { ok: true; value: unknown } | { ok: false } => {
+  const parse = (
+    text: string,
+  ): { ok: true; value: unknown } | { ok: false } => {
     if (text.trim() === '') return { ok: false };
     try {
       return { ok: true, value: JSON.parse(text) };
@@ -651,16 +655,16 @@ const RawJsonField: FC<FieldInputProps> = ({
   };
   return (
     <Textarea
-      className="min-h-[28px] px-2 py-1 font-vsc-mono text-xs resize-y"
-      rows={1}
-      value={draft}
-      placeholder={placeholder ?? `JSON (${schemaLabel(schema)})`}
       aria-invalid={!disabled && !parse(draft).ok}
+      className="min-h-[28px] px-2 py-1 font-vsc-mono text-xs resize-y"
       onChange={(e) => {
         setDraft(e.target.value);
         const parsed = parse(e.target.value);
         if (parsed.ok) onChange(parsed.value);
       }}
+      placeholder={placeholder ?? `JSON (${schemaLabel(schema)})`}
+      rows={1}
+      value={draft}
     />
   );
 };
