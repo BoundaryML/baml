@@ -38,4 +38,24 @@ describe('FunctionSidebar test rows', () => {
       );
     },
   );
+
+  it('keeps the run action right-aligned when the test has no result', () => {
+    const markup = renderToStaticMarkup(
+      <FunctionSidebar
+        functions={[]}
+        showInternalFunctions={false}
+        internalFunctionCount={0}
+        testTree={[{ type: 'test', name: 'resume/basic' }]}
+        selectedFn={null}
+        onSelectFn={() => {}}
+        onRefreshTests={() => {}}
+        onRunTest={() => {}}
+      />,
+    );
+
+    expect(markup).not.toContain('Latest test run status:');
+    expect(markup).toMatch(
+      /<button class="[^"]*\bml-auto\b[^"]*" title="Run test: resume\/basic">run<\/button>/,
+    );
+  });
 });
