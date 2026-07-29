@@ -213,6 +213,7 @@ pub struct TestInfo {
 #[serde(rename_all = "camelCase")]
 pub struct ProjectUpdate {
     pub is_bex_current: bool,
+    pub generation: u64,
     pub functions: Vec<FunctionInfo>,
     pub tests: Vec<TestInfo>,
     /// Shared type table for `FunctionInfo.params` refs; `None` = binary
@@ -338,6 +339,7 @@ impl From<bex_project::PlaygroundNotification> for PlaygroundNotification {
                     project,
                     update: ProjectUpdate {
                         is_bex_current: update.is_bex_current,
+                        generation: update.generation,
                         functions: update
                             .functions
                             .into_iter()

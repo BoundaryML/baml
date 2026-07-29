@@ -239,6 +239,8 @@ pub struct ProjectDiagnostic {
 #[serde(rename_all = "camelCase")]
 pub struct ProjectUpdate {
     pub is_bex_current: bool,
+    /// Generation of the installed engine that backs this project update.
+    pub generation: u64,
     pub functions: Vec<FunctionInfo>,
     /// Statically declared legacy test cases that can seed function previews.
     pub tests: Vec<TestInfo>,

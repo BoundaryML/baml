@@ -1173,6 +1173,7 @@ impl BexMulitProject {
     /// keeps the last announced state rather than sending a wiped payload.
     fn build_project_update(&self, project: &LiveProject) -> Option<crate::bex_lsp::ProjectUpdate> {
         let is_bex_current = project.project.is_bex_current();
+        let generation = project.project.current_generation();
 
         let guard = project.project.read_source_for_request().ok()?;
         let candidate = crate::project::collect_diagnostic_candidate(&guard);
@@ -1217,6 +1218,7 @@ impl BexMulitProject {
 
         Some(crate::bex_lsp::ProjectUpdate {
             is_bex_current,
+            generation,
             functions,
             tests,
             types: Some(listing.types),
