@@ -36,13 +36,13 @@ jobs:
       id-token: write
       contents: read
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           ref: ${{ inputs.source_sha }}
           persist-credentials: false
 
       - name: Download Web SDK dist
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: web-sdk-dist
           path: baml_language/sdks/typescript/bridge_typescript_web/dist
@@ -51,7 +51,7 @@ jobs:
         # This publisher only uses npm. Enabling the repository composite's pnpm
         # cache without installing dependencies makes its post-job cache save fail
         # after a successful publish.
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v7
         with:
           node-version: latest
           registry-url: "https://registry.npmjs.org"
