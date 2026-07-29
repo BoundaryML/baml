@@ -46,8 +46,7 @@ export function NodeOutputPreview({
         flexDirection: 'column',
         gap: NODE_VALUE_PREVIEW_GAP,
         marginTop: 6,
-        maxWidth: NODE_VALUE_PREVIEW_WIDTH,
-        width: '100%',
+        width: NODE_VALUE_PREVIEW_WIDTH,
       }}
     >
       {visible.map((value) => (
@@ -55,7 +54,8 @@ export function NodeOutputPreview({
           compact
           customRenderers={customRenderers}
           key={value.id}
-          truncateDiagnostic
+          preserveDiagnosticLines
+          prettyPrintValue
           value={value}
         />
       ))}

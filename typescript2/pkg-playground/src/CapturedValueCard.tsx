@@ -11,9 +11,11 @@ export const CAPTURED_VALUE_CARD_MAX_IMAGES = 4;
 export const CAPTURED_VALUE_CARD_IMAGE_GAP = 6;
 export const CAPTURED_VALUE_CARD_SINGLE_IMAGE_HEIGHT = 240;
 export const CAPTURED_VALUE_CARD_TILE_IMAGE_HEIGHT = 126;
-export const CAPTURED_VALUE_CARD_TEXT_HEIGHT = 96;
+export const CAPTURED_VALUE_CARD_TEXT_HEIGHT = 120;
 export const CAPTURED_VALUE_CARD_HEADER_HEIGHT = 21;
 export const CAPTURED_VALUE_CARD_PADDING_Y = 16;
+export const CAPTURED_VALUE_CARD_DIAGNOSTIC_LINE_HEIGHT = 14;
+const CAPTURED_VALUE_CARD_DIAGNOSTIC_CHARACTERS_PER_LINE = 54;
 
 const ROLE_LABELS: Record<RunTraceCallValue['role'], string> = {
   callError: 'Error',
@@ -42,7 +44,8 @@ interface CapturedValueCardProps {
   value: RunTraceCallValue;
   compact?: boolean;
   customRenderers?: Record<string, FC<ResultRendererProps>>;
-  truncateDiagnostic?: boolean;
+  preserveDiagnosticLines?: boolean;
+  prettyPrintValue?: boolean;
 }
 
 export function capturedValueCardContentHeight(
@@ -61,15 +64,40 @@ export function capturedValueCardContentHeight(
       (rows - 1) * CAPTURED_VALUE_CARD_IMAGE_GAP
     );
   }
-  if (value.value !== null) return CAPTURED_VALUE_CARD_TEXT_HEIGHT;
+  if (value.value !== null) {
+    return Math.min(
+      CAPTURED_VALUE_CARD_TEXT_HEIGHT,
+      expandedValueRowCount(value.value) * 24,
+    );
+  }
   return 0;
+}
+
+export function capturedValueCardDiagnosticHeight(
+  diagnostic: string | null | undefined,
+): number {
+  if (!diagnostic) return 0;
+  const lines = diagnostic.split(/\r?\n/);
+  const visualRows = lines.reduce(
+    (rows, line) =>
+      rows +
+      Math.max(
+        1,
+        Math.ceil(
+          line.length / CAPTURED_VALUE_CARD_DIAGNOSTIC_CHARACTERS_PER_LINE,
+        ),
+      ),
+    0,
+  );
+  return 5 + visualRows * CAPTURED_VALUE_CARD_DIAGNOSTIC_LINE_HEIGHT;
 }
 
 export function CapturedValueCard({
   value,
   compact = false,
   customRenderers,
-  truncateDiagnostic = false,
+  preserveDiagnosticLines = false,
+  prettyPrintValue = false,
 }: CapturedValueCardProps) {
   const images = valueToImagePreviews(value.value);
   const visibleImages = images.slice(0, CAPTURED_VALUE_CARD_MAX_IMAGES);
@@ -240,7 +268,9 @@ export function CapturedValueCard({
         >
           <ValueRenderer
             customRenderers={customRenderers}
-            displayMode={compact ? 'inline' : 'expanded'}
+            displayMode={
+              prettyPrintValue ? 'expanded' : compact ? 'inline' : 'expanded'
+            }
             value={value.value}
           />
         </div>
@@ -249,12 +279,14 @@ export function CapturedValueCard({
         <div
           style={{
             color: '#a1a1aa',
+            fontFamily: preserveDiagnosticLines
+              ? 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace'
+              : undefined,
             fontSize: 10,
             lineHeight: 1.35,
             marginTop: 5,
-            overflow: truncateDiagnostic ? 'hidden' : undefined,
-            textOverflow: truncateDiagnostic ? 'ellipsis' : undefined,
-            whiteSpace: truncateDiagnostic ? 'nowrap' : undefined,
+            overflowWrap: preserveDiagnosticLines ? 'anywhere' : undefined,
+            whiteSpace: preserveDiagnosticLines ? 'pre-wrap' : undefined,
           }}
         >
           {value.diagnostic}
@@ -266,4 +298,30 @@ export function CapturedValueCard({
 
 function valueToImagePreviews(value: BamlJsValue | null) {
   return value == null ? [] : findImageMedia(value, { maxItems: 24 });
+}
+
+function expandedValueRowCount(value: BamlJsValue, depth = 0): number {
+  if (value == null || typeof value !== 'object') return 1;
+  if (depth >= 2) return 1;
+
+  if (Array.isArray(value)) {
+    if (value.length === 0) return 1;
+    return (
+      1 +
+      value.reduce<number>(
+        (rows, item) => rows + expandedValueRowCount(item, depth + 1),
+        0,
+      )
+    );
+  }
+
+  const entries = Object.entries(value).filter(([key]) => key !== '$baml');
+  if (entries.length === 0) return 1;
+  return (
+    1 +
+    entries.reduce<number>((rows, [, nested]) => {
+      if (nested == null || typeof nested !== 'object') return rows + 1;
+      return rows + 1 + expandedValueRowCount(nested as BamlJsValue, depth + 1);
+    }, 0)
+  );
 }
