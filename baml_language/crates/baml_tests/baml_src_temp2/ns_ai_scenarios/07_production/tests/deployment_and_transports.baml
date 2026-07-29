@@ -29,8 +29,8 @@ testset "integ-test-guide-07-transport-config" {
     );
     log.info(baml.json.stringify({
       "guide": "07.03",
-      "provider": response.meta.provider,
-      "model": response.meta.model,
+      "provider": response.metadata.provider,
+      "model": response.metadata.model,
       "base_url": provider.base_url,
       "custom_header_count": provider.extra_headers?.length() ?? 0,
       "custom_body_count": provider.extra_body?.length() ?? 0,
@@ -38,8 +38,8 @@ testset "integ-test-guide-07-transport-config" {
     assert.equal(provider.base_url, "https://api.openai.com/v1")
     assert.equal(provider.extra_headers?.get("X-Baml-Guide"), "07.03")
     assert.equal(provider.extra_body?.length(), 1)
-    assert.equal(response.meta.provider, "openai")
-    assert.equal(response.meta.model, provider.model)
+    assert.equal(response.metadata.provider, "openai")
+    assert.equal(response.metadata.model, provider.model)
     assert.is_true(response.value.reply.length() > 0)
   }
 }

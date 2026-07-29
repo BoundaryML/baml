@@ -1,83 +1,69 @@
 # Routing, retry, and fallback
 
 Routing chooses a provider before work starts. Retry repeats a safe failure.
-Fallback moves to another compatible provider after a failure.
+Fallback moves to another compatible provider after a failure. All three are
+provider decisions, so all three compose as providers: `ai.retry(...)` and
+`ai.fallback(...)` wrap providers and are themselves providers.
 
 ## Utilities used
 
 | Utility | What it does |
 | --- | --- |
 | `task.with_provider(...)` | Routes one task before execution |
-| `ai.run.Retry` | Repeats the inner runner when replay is safe |
-| `ai.run.Fallback` | Tries compatible providers in order |
-| `ReplayPolicy` | Describes whether an operation may be repeated |
+| `ai.retry(provider, max_attempts)` | A provider that repeats its inner provider when replay is safe |
+| `ai.fallback([providers])` | A provider that tries compatible members in order |
+| `ai.ReplayPolicy` | The inner provider's contract for whether an operation may repeat |
 
 ## Example
 
-```baml
-class Resolution {
-  reply: string,
-  resolved: bool,
-}
+The example uses the shared support-ticket models (`SupportTicket`,
+`Resolution`, `sample_ticket()`) and the shared provider values
+`fast_model()` and `careful_model()`.
 
-function ResolveTicket(message: string) -> Resolution {
-  provider: FastModel
+```baml
+function ResolveTicket(ticket: SupportTicket) -> Resolution {
+  provider: fast_model()
   prompt: `
     Resolve this support ticket.
-
-    ${message}
+    Subject: ${ticket.subject}
+    Body: ${ticket.body}
 
     ${ctx.output_format}
   `
 }
 
-let task = ResolveTicket.task("I was charged twice.");
-
-let resolution = task.run(
-  runner = ai.run.Fallback.new(
-    runner = ai.run.Retry.new(
-      runner = ai.run.Completion.new(),
-      max_attempts = 3,
-    ),
-    providers = [
-      FastModel,
-      CarefulModel,
-    ],
-  ),
-)
-```
-
-### What happens
-
-```mermaid
-flowchart LR
-  task["ResolveTicket task"] --> fallback["Fallback"]
-  fallback --> fast["FastModel"]
-  fast -->|retryable failure| retry["Retry when replay-safe"]
-  retry --> fast
-  fast -->|attempts exhausted| careful["CarefulModel"]
-  fast -->|success| result["Resolution"]
-  careful --> result
+let resolution = ResolveTicket@task(sample_ticket())
+  .with_provider(ai.fallback([
+    ai.retry(fast_model(), 3),
+    careful_model(),
+  ]))
+  .run(runner = ai.run.Completion<Resolution>.new())
 ```
 
 ### Illustrative output
 
 ```console
-[INFO] provider attempt: FastModel
-[WARN] FastModel returned rate_limit; replay is safe
-[INFO] retrying FastModel: attempt 2 of 3
-[WARN] FastModel attempts exhausted
-[INFO] falling back to CarefulModel
-[INFO] CarefulModel returned Resolution { resolved: true, ... }
+[INFO] provider attempt: openai (fast_model)
+[WARN] openai returned RateLimited { retry_after_ms: 250 }
+[INFO] retrying openai: attempt 2 of 3
+[WARN] openai attempts exhausted
+[INFO] falling back to anthropic (careful_model)
+[INFO] returned Resolution { category: "billing", ... }
 ```
 
-The wrappers preserve the inner runner's result type, so this expression still
-returns `Resolution`. Before each fallback attempt, the task is rebound and
-re-rendered for that provider.
+The wrappers are providers, so the runner and result type do not change: this
+expression still returns `Resolution`. Before each attempt the task is rebound
+and re-rendered for the provider actually being tried, and composition nests
+freely — `ai.fallback([ai.retry(a, 3), b])` retries `a` before moving to `b`,
+while an outer catch still sees the real classified failure (see
+[Errors and error handling](errors-and-error-handling.md)).
 
 Fallback is ordered recovery, not load balancing. It continues only after a
-failure that is retryable and safe to replay. Its provider list must contain at
-least one provider; an empty fallback is rejected as invalid configuration.
+failure whose own classification (`is_transient()`, `effects()`) and the
+member's `ai.ReplayPolicy` say replay is safe.
+Its provider list must contain at least one member; an empty fallback is
+rejected with `baml.errors.InvalidArgument`. On exhaustion, the last member's real
+failure is rethrown, classification intact.
 
 ## Route before running
 
@@ -85,41 +71,28 @@ Use ordinary application code when tenant policy, data residency, cost, or
 request type can choose the provider up front:
 
 ```baml
-function route_ticket(message: string) -> ai.CompletionProvider {
-  if (message.to_lower_case().contains("legal")) {
-    CarefulModel
+function route_ticket(ticket: SupportTicket) -> ai.CompletionProvider {
+  if (ticket.customer_tier == "pro") {
+    careful_model()
   } else {
-    FastModel
+    fast_model()
   }
 }
 
-let message = "I need help with a legal notice.";
-let routed = ResolveTicket
-  .task(message)
-  .with_provider(route_ticket(message));
+let ticket = sample_ticket();
+let routed = ResolveTicket@task(ticket)
+  .with_provider(route_ticket(ticket));
 
 let resolution = routed.run(
-  runner = ai.run.Completion.new(),
+  runner = ai.run.Completion<Resolution>.new(),
 )
-```
-
-### What happens
-
-```mermaid
-flowchart LR
-  message["Ticket message"] --> policy["route_ticket"]
-  policy -->|legal| careful["CarefulModel"]
-  policy -->|other| fast["FastModel"]
-  careful --> task["Rebound ResolveTicket task"]
-  fast --> task
-  task --> result["Resolution"]
 ```
 
 ### Illustrative output
 
 ```console
-[INFO] route_ticket matched policy: legal
-[INFO] rebound task to CarefulModel
+[INFO] route_ticket matched policy: customer_tier = "pro"
+[INFO] rebound task to anthropic (careful_model)
 [INFO] rendered provider-specific request
 [INFO] Completion returned Resolution
 ```
@@ -131,16 +104,31 @@ provider is therefore a type error instead of a failed request.
 
 Retrying a read is different from retrying a refund. After an application tool
 succeeds, a later model failure does not make the entire Agent run replay-safe.
-Give remote effects idempotency keys and configure replay policy explicitly:
+A provider states its own contract through `replay_policy`: `ai.ReplayKind.Safe`
+permits replay, `ai.ReplayKind.RequiresIdempotencyKey` permits it only with a
+key, and `ai.ReplayKind.Never` refuses it. A provider that commits remote effects
+declares that explicitly:
 
 ```baml
-function issue_refund(
-  order_id: string,
-  idempotency_key: string,
-) -> string {
-  refunds.issue(order_id, idempotency_key)
+class EffectfulProvider {
+  inner: ai.testing.FakeProvider,
+  implements ai.Provider {
+    function name(self) -> string throws never { "effectful" }
+    function render_shorthand(self) -> string throws never { self.inner.render_shorthand() }
+  }
+  implements ai.CompletionProvider {
+    function complete<T>(self, task: ai.Task<T>) -> ai.ResponseWithMetadata<T>
+        throws ai.Failure | baml.errors.UnknownError {
+      self.inner.complete<T>(task.with_provider(self.inner))
+    }
+    function replay_policy<T>(self, task: ai.Task<T>) -> ai.ReplayPolicy throws never {
+      ai.ReplayPolicy { kind: ai.ReplayKind.Never, idempotency_key: null }
+    }
+  }
 }
 ```
 
-When policy cannot prove safety, retry fails with `CannotRetry` and explains
-which boundary made replay unsafe.
+When policy cannot prove safety, retry rethrows the failure as itself: its
+classification (`is_transient()`, `effects()`) already says why replay was
+refused. See [Errors and error handling](errors-and-error-handling.md) for the
+full error model.

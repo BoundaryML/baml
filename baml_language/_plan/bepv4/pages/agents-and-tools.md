@@ -10,55 +10,65 @@ goes back to the model.
 | --- | --- |
 | `tools: [...]` | Declares the LLM function's default tools |
 | `ai.run.Agent` | Runs the provider and application tools in a loop |
-| `ai.AgentOutcome<T>` | Keeps explicit completion, stop, and handoff outcomes |
+| `ai.AgentOutcome<T>` | Alias for `ai.Done<T> \| ai.BudgetReached \| ai.Handoff` |
+
+`AgentOutcome<T>` requires generic type aliases, which the compiler does not
+support yet (issue filed); until it lands, signatures spell the union out.
 
 ## Example
 
 ```baml
-class Ticket {
+enum TicketPriority {
+  Low
+  Normal
+  Urgent
+}
+
+class SupportTicket {
   id: string,
-  message: string,
+  subject: string,
+  body: string,
+  customer_tier: string,
 }
 
 class Resolution {
+  category: string,
+  priority: TicketPriority,
+  summary: string,
   reply: string,
-  resolved: bool,
 }
 
-/// Look up an order in the application database.
-function lookup_order(order_id: string) -> string {
-  orders.get_status(order_id)
+/// Search the support knowledge base.
+function search_knowledge(query: string) -> json throws never {
+  { "query": query, "article": "Duplicate charges are normally pending authorizations." }
 }
 
-/// Search the current support policy.
-function search_policy(query: string) -> string {
-  policies.search(query)
+/// Look up a customer account.
+function lookup_account(customer_id: string) -> json throws never {
+  { "customer_id": customer_id, "status": "active", "tier": "pro" }
 }
 
-function ResolveTicket(ticket: Ticket) -> Resolution {
+function ResolveTicketWithTools(ticket: SupportTicket) -> Resolution {
   provider: "openai/gpt-5.6-luna"
   prompt: `
-    Resolve this support ticket.
-    Use tools when you need current order or policy information.
-
-    ${ticket}
+    Resolve ticket ${ticket.id}. Use the available tools before answering.
 
     ${ctx.output_format}
   `
   tools: [
-    lookup_order,
-    search_policy,
+    search_knowledge,
+    lookup_account,
   ]
 }
 
-let resolution: Resolution = ResolveTicket(ticket)
+let resolution: Resolution = ResolveTicketWithTools(sample_ticket())
 ```
 
 ### What happens
 
 ```mermaid
 flowchart TD
-  call["ResolveTicket(ticket)"] --> budget{"Default loop limit remains?"}
+  call["ResolveTicketWithTools(ticket)"] --> budget{"Default loop limit remains?"}
   budget -->|yes| model["Provider reads prompt and tool schemas"]
   model --> result{"Provider returned?"}
   result -->|tool calls| validate["Validate named arguments"]
@@ -72,35 +82,36 @@ flowchart TD
 ### Illustrative output
 
 ```console
-[INFO] ResolveTicket started
-[INFO] called tool: lookup_order(order_id = "order-42")
-[INFO] tool returned: "out for delivery"
-[INFO] ResolveTicket returned Resolution { resolved: true, ... }
+[INFO] ResolveTicketWithTools started
+[INFO] called tool: search_knowledge(query = "duplicate charge")
+[INFO] tool returned: { "query": "duplicate charge", "article": "Duplicate charges are normally pending authorizations." }
+[INFO] ResolveTicketWithTools returned Resolution { category: "billing", ... }
 ```
 
-The direct call is usually enough. If the model requests `lookup_order`, BAML
-validates its named arguments, invokes the real function, sends the result
-back, and continues until it has a valid `Resolution`.
+The direct call is usually enough. If the model requests `search_knowledge`,
+BAML validates its named arguments, invokes the real function, sends the
+result back, and continues until it has a valid `Resolution`.
 
 The model cannot choose captured values or bound `self`. This makes closures
 and bound methods useful for tenant-scoped tools:
 
 ```baml
-class OrderTools {
+class BoundAccountTools {
   tenant_id: string,
 
-  function lookup(self, order_id: string) -> string {
-    orders.for_tenant(self.tenant_id).get_status(order_id)
+  /// Look up an account with a bound application service.
+  function lookup(self, customer_id: string) -> json throws never {
+    { "tenant_id": self.tenant_id, "customer_id": customer_id }
   }
 }
 
-let tenant_orders = OrderTools { tenant_id: tenant.id };
+let tenant_accounts = BoundAccountTools { tenant_id: "tenant-42" };
 
-let outcome = ResolveTicket.task(ticket).run(
-  runner = ai.run.Agent.new(
+let outcome = ResolveTicketWithTools@task(sample_ticket()).run(
+  runner = ai.run.Agent<Resolution>.new(
     tools = [
-      tenant_orders.lookup,
-      search_policy,
+      tenant_accounts.lookup,
+      search_knowledge,
     ],
   ),
 )
@@ -110,14 +121,14 @@ let outcome = ResolveTicket.task(ticket).run(
 
 ```mermaid
 flowchart TD
-  tenant["tenant.id"] --> bound["tenant_orders.lookup"]
-  task["ResolveTicket task"] --> agent["Agent with tool override"]
+  tenant["captured tenant_id"] --> bound["tenant_accounts.lookup"]
+  task["ResolveTicketWithTools task"] --> agent["Agent with tool override"]
   bound --> agent
   agent --> budget{"Budget remains?"}
   budget -->|yes| step["Provider step"]
   step --> result{"Final value or tool calls?"}
-  result -->|tool calls| method["OrderTools.lookup"]
-  method --> scoped["Tenant-scoped order store"]
+  result -->|tool calls| method["BoundAccountTools.lookup"]
+  method --> scoped["Tenant-scoped account service"]
   scoped --> submit["Submit tool result"]
   submit --> budget
   result -->|final value| done["Done<Resolution>"]
@@ -127,9 +138,9 @@ flowchart TD
 ### Illustrative output
 
 ```console
-[INFO] Agent tool override: tenant_orders.lookup, search_policy
-[INFO] called bound tool: lookup(order_id = "order-42")
-[INFO] lookup used captured tenant_id = "tenant-7"
+[INFO] Agent tool override: lookup, search_knowledge
+[INFO] called bound tool: lookup(customer_id = "C-1")
+[INFO] lookup used captured tenant_id = "tenant-42"
 ```
 
 Passing `tools` to `Agent.new` replaces the tools declared on the LLM
@@ -147,14 +158,17 @@ An explicit Agent run returns one of three outcomes:
 | `ai.Handoff` | The application should take over |
 
 ```baml
-let outcome: ai.AgentOutcome<Resolution> = ResolveTicket.task(ticket).run(
-  runner = ai.run.Agent.new(max_steps = 8),
-);
+let outcome: ai.Done<Resolution> | ai.BudgetReached | ai.Handoff =
+  ResolveTicketWithTools@task(sample_ticket()).run(
+    runner = ai.run.Agent<Resolution>.new(
+      budget = ai.Budget { max_steps: 8, max_cost_usd: null },
+    ),
+  );
 
 match (outcome) {
-  let done: ai.Done<Resolution> => show(done.value),
-  let stopped: ai.BudgetReached => queue_for_review(stopped.conversation),
-  let handoff: ai.Handoff => transfer_to_human(handoff),
+  let done: ai.Done<Resolution> => log.info(done.value),
+  let stopped: ai.BudgetReached => log.info(stopped.reason),
+  let handoff: ai.Handoff => log.info(handoff.to),
 }
 ```
 

@@ -32,14 +32,14 @@ testset "integ-test-guide-01-task-and-runners" {
         log.info(
             "live task executed "
                 + {
-                    "provider": response.meta.provider,
-                    "request_id": response.meta.request_id,
-                    "usage": response.meta.usage,
+                    "provider": response.metadata.provider,
+                    "request_id": response.metadata.request_id,
+                    "usage": response.metadata.usage,
                 }
                 .to_string(),
         );
-        assert.equal(response.meta.provider, "openai");
-        assert.is_true((response.meta.usage?.input_tokens ?? 0) > 0);
+        assert.equal(response.metadata.provider, "openai");
+        assert.is_true((response.metadata.usage?.input_tokens ?? 0) > 0);
         assert.is_true(response.value.reply.length() > 0)
     }
 }

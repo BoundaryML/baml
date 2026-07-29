@@ -23,7 +23,7 @@ testset "integ-test-guide-06-evaluate-quality" {
         );
         assert.is_true(openai_score >= 0.5);
         assert.is_true(anthropic_score >= 0.5);
-        assert.equal(openai.meta.provider, "openai");
-        assert.equal(anthropic.meta.provider, "anthropic")
+        assert.equal(openai.metadata.provider, "openai");
+        assert.equal(anthropic.metadata.provider, "anthropic")
     }
 }

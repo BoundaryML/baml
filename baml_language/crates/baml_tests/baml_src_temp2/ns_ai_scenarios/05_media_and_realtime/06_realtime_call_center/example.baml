@@ -1,18 +1,18 @@
 // Operate a voice call-center agent that can listen, speak, use scheduling
 // tools, and clean up its realtime audio session.
 function realtime_call_center() -> null {
-    let audio = root.ai.BufferedRealtimeAudioDevice {
-        input_audio_format: root.ai.fake_realtime_audio_format(),
-        output_audio_format: root.ai.fake_realtime_audio_format(),
+    let audio = root.ai.testing.BufferedRealtimeAudioDevice {
+        input_audio_format: root.ai.testing.fake_realtime_audio_format(),
+        output_audio_format: root.ai.testing.fake_realtime_audio_format(),
         input_chunks: [],
         next_input_index: 0,
         output_chunks: [],
         played_ms: 0,
         is_closed: false,
     };
-    let channel = root.ai.RecordingChannel { frames: [] };
+    let channel = root.ai.testing.RecordingChannel { frames: [] };
     let task = _realtime_call_center_task(
-        root.ai.FakeRealtimeProvider { transcript: "Hello, I can help schedule your meeting." },
+        root.ai.testing.FakeRealtimeProvider { transcript: "Hello, I can help schedule your meeting." },
         "Introduce yourself and ask what meeting the caller wants to schedule.",
     );
     task.run(runner = root.ai.run.VoiceAgent.new(audio, channel));

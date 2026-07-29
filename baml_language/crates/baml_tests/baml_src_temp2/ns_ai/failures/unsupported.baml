@@ -1,13 +1,7 @@
+// The stdlib's Unsupported error rides the Failure channel: capability
+// mismatches (a retry wrapper around a provider that cannot generate, a
+// fallback chain with no capable member) are classified, terminal failures.
 implements Failure for baml.errors.Unsupported {
-  function is_retryable(self) -> bool { false }
-  function is_effectful(self) -> bool { false }
-  function is_policy_refusal(self) -> bool { false }
-  function is_resumable(self) -> bool { false }
-  function is_unsupported(self) -> bool { true }
-}
-
-implements CallError for baml.errors.Unsupported {
-  function is_network_error(self) -> bool { false }
-  function is_rate_limit(self) -> bool { false }
-  function is_parse_error(self) -> bool { false }
+  function is_transient(self) -> bool throws never { false }
+  function effects(self) -> Effects throws never { Effects.None }
 }

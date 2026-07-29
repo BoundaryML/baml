@@ -4,7 +4,7 @@ test "guide 01.05: a custom runner can call a known capability directly" {
     let response = task.run(
         runner = GuideGenerationCapability<Resolution> { provider: provider },
     );
-    assert.equal(response.meta.provider, "fake");
+    assert.equal(response.metadata.provider, "fake");
     assert.equal(response.value.category, "billing")
 }
 
@@ -17,13 +17,13 @@ testset "integ-test-guide-01-direct-provider-access" {
         log.info(
             "live direct capability "
                 + {
-                    "provider": response.meta.provider,
-                    "finish_reason": response.meta.finish_reason,
-                    "request_id": response.meta.request_id,
+                    "provider": response.metadata.provider,
+                    "finish_reason": response.metadata.finish_reason,
+                    "request_id": response.metadata.request_id,
                 }
                 .to_string(),
         );
-        assert.equal(response.meta.provider, "openai");
+        assert.equal(response.metadata.provider, "openai");
         assert.is_true(response.value.reply.length() > 0)
     }
 }

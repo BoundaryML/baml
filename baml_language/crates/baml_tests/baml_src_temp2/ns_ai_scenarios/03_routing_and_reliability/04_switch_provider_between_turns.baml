@@ -2,7 +2,7 @@
 // without restarting the workflow.
 function switch_provider_between_turns() -> null {
   let first = fake_tool_provider([one_knowledge_call()]);
-  let second = root.ai.FakeToolProvider {
+  let second = root.ai.testing.FakeToolProvider {
     ...fake_tool_provider([]),
     provider_name: "fake-tools-secondary",
   };
@@ -16,7 +16,7 @@ function switch_provider_between_turns() -> null {
     runner = root.ai.run.Agent<Resolution>.new(
       tools = [search_knowledge],
       prepare_step = (context) -> {
-        root.ai.StepPlan {
+        root.ai.tools.StepPlan {
           provider: if (context.step == 1) { second } else { null },
           tools: null,
           stop: null,

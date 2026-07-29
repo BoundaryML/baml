@@ -1,7 +1,7 @@
 // Save exact provider conversation state as an opaque token and restore it for
 // a later run.
 function save_and_resume(
-) -> root.ai.ConversationToken throws root.ai.ToolError
+) -> root.ai.ConversationToken throws root.ai.Failure
     | baml.errors.UnknownError
     | baml.errors.Unsupported
 {

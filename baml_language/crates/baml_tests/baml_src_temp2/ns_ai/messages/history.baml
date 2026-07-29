@@ -36,7 +36,7 @@ class ChatMessage {
     function user(text: string) -> ChatMessage throws never {
         ChatMessage {
             message_role: MessageRole.User,
-            content: [TextPart { value: text, metadata: {} }],
+            content: [root.ai.messages.TextPart { value: text, metadata: {} }],
             metadata: null,
         }
     }
@@ -44,7 +44,7 @@ class ChatMessage {
     function assistant(text: string) -> ChatMessage throws never {
         ChatMessage {
             message_role: MessageRole.Assistant,
-            content: [TextPart { value: text, metadata: {} }],
+            content: [root.ai.messages.TextPart { value: text, metadata: {} }],
             metadata: null,
         }
     }

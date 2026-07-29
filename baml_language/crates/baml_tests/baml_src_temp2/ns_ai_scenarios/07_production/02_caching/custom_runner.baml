@@ -13,15 +13,15 @@ class ManagedCacheRunner<T> {
 
     implements root.ai.Runner<root.ai.Task<T>> {
         type Output = root.ai.ResponseWithMetadata<T>
-        type Error = baml.errors.UnknownError | baml.errors.Unsupported
+        type Error = root.ai.Failure | baml.errors.UnknownError
 
         function run(
             self,
             task: root.ai.Task<T>,
-        ) -> root.ai.ResponseWithMetadata<T> throws baml.errors.UnknownError | baml.errors.Unsupported {
+        ) -> root.ai.ResponseWithMetadata<T> throws root.ai.Failure | baml.errors.UnknownError {
             //# Require the task's provider to own managed-cache resources
             let provider = match (task.provider) {
-                let managed: root.ai.ManagedCacheProvider => managed,
+                let managed: root.google.ManagedCacheProvider => managed,
                 _ => {
                     throw baml.errors.Unsupported {
                         message: "task provider cannot create managed caches: " + task.provider_name(),
@@ -29,7 +29,7 @@ class ManagedCacheRunner<T> {
                 },
             };
             //# Create the cache and guarantee remote cleanup
-            let cache = provider.create_cache(self.messages, root.ai.CacheOptions { ttl: self.ttl });
+            let cache = provider.create_cache(self.messages, root.google.CacheOptions { ttl: self.ttl });
             defer {
                 cache.delete()
             }

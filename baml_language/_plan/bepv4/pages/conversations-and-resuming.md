@@ -14,32 +14,28 @@ continue. Pass it back to `Agent.new` when the next run uses the same provider.
 
 ## Example
 
+The example uses the shared support-ticket models (`SupportTicket`,
+`Resolution`, `sample_ticket()`), the shared tool `search_knowledge`, and the
+shared provider values `fast_model()` (an `openai.Chat`) and `careful_model()`
+(an `anthropic.Messages`).
+
 ```baml
-class Resolution {
-  reply: string,
-  resolved: bool,
-}
-
-function lookup_order(order_id: string) -> string {
-  orders.get_status(order_id)
-}
-
-function ResolveTicket(message: string) -> Resolution {
-  provider: SupportModel
+function ResolveTicketWithTools(ticket: SupportTicket) -> Resolution {
+  provider: fast_model()
   prompt: `
-    Continue resolving this support ticket.
-
-    ${message}
+    Resolve ticket ${ticket.id}. Use the available tools before answering.
 
     ${ctx.output_format}
   `
-  tools: [lookup_order]
+  tools: [search_knowledge]
 }
 
-let first = ResolveTicket.task(
-  "Find order-42 and tell me what we still need.",
-).run(
-  runner = ai.run.Agent.new(max_steps = 2),
+let ticket = sample_ticket();
+
+let first = ResolveTicketWithTools@task(ticket).run(
+  runner = ai.run.Agent<Resolution>.new(
+    budget = ai.Budget { max_steps: 2, max_cost_usd: null },
+  ),
 );
 
 let conversation = match (first) {
@@ -48,12 +44,10 @@ let conversation = match (first) {
   let handoff: ai.Handoff => handoff.conversation,
 };
 
-let continued = ResolveTicket.task(
-  "The customer confirmed the shipping address. Continue.",
-).run(
-  runner = ai.run.Agent.new(
+let continued = ResolveTicketWithTools@task(ticket).run(
+  runner = ai.run.Agent<Resolution>.new(
     conversation = conversation,
-    max_steps = 6,
+    budget = ai.Budget { max_steps: 6, max_cost_usd: null },
   ),
 )
 ```
@@ -78,95 +72,85 @@ flowchart TD
 
 ```console
 [INFO] first run stopped after 2 steps
-[INFO] retained conversation: provider = "support-model"
+[INFO] retained conversation: provider = "openai"
 [INFO] resuming conversation with 1 completed tool call
 [INFO] continued run returned Done<Resolution>
 ```
 
-The runner checks that the selected provider owns the conversation before any
-request is sent. Provider state may contain more than visible messages, such
-as tool-call IDs, encrypted reasoning blocks, or continuation handles.
+When a conversation is passed, the runner resumes with the provider that owns
+it — the conversation is authoritative continuation state. Provider state may
+contain more than visible messages, such as tool-call IDs, encrypted reasoning
+blocks, or continuation handles.
 
 ## Save it for another process
 
+`save_conversation` and `restore_conversation` come from
+`ai.tools.ResumableToolCallingProvider`; `openai.Chat` implements it, so any
+`fast_model()` value can seal and reopen its own conversations:
+
 ```baml
-let token = SupportModel.save_conversation(conversation);
-database.save("ticket-42", baml.json.stringify(token));
+let model = fast_model();
 
-let stored = baml.json.from_string<ai.ConversationToken>(
-  database.load("ticket-42"),
-);
+let token = model.save_conversation(conversation);
+log.info({ "provider": token.provider, "version": token.version });
 
-let restored = SupportModel.restore_conversation(stored);
+let restored = model.restore_conversation(token);
 
-let outcome = ResolveTicket.task("Continue.").run(
-  runner = ai.run.Agent.new(conversation = restored),
+let outcome = ResolveTicketWithTools@task(ticket).run(
+  runner = ai.run.Agent<Resolution>.new(conversation = restored),
 )
-```
-
-### What happens
-
-```mermaid
-flowchart LR
-  conversation["Conversation"] --> save["save_conversation"]
-  save --> token["Opaque versioned token"]
-  token --> database["Application database"]
-  database --> restore["restore_conversation"]
-  restore --> resumed["Resumed bounded Agent loop"]
 ```
 
 ### Illustrative output
 
 ```console
-[INFO] saved conversation token: provider = "support-model", version = 1
-[INFO] loaded token for ticket-42
+[INFO] saved conversation token: provider = "openai", version = 1
 [INFO] restored provider-owned conversation
-[INFO] resumed ResolveTicket
+[INFO] resumed ResolveTicketWithTools
 ```
 
-The token is opaque and versioned. It contains continuation coordinates, not
-application credentials.
+The token is an `ai.ConversationToken`: opaque and versioned. Serialize it
+with `baml.json.stringify(token)` and store it anywhere. It contains
+continuation coordinates, not application credentials.
 
 ## Move to another provider
 
 A conversation belongs to one provider. To switch, export portable messages
-and let the destination provider import them:
+and let the destination provider import them. The destination must implement
+`ai.tools.ConversationImportProvider` — `openai.Chat` does, so the move below
+targets a second `openai.Chat` value; `careful_model()`'s `anthropic.Messages`
+does not implement import yet, so it cannot be a destination:
 
 ```baml
-let imported = CarefulModel.import_messages(conversation.messages());
+let destination = openai.Chat {
+  ...openai.chat(),
+  model: "gpt-5.6-luna",
+  api_key: baml.env.get_or_panic("OPENAI_API_KEY"),
+};
+
+let imported = destination.import_messages(conversation.messages());
 
 log.info(imported.fidelity);
 log.info(imported.warnings);
 
-let outcome = ResolveTicket
-  .task("Give the final recommendation.")
-  .with_provider(CarefulModel)
+let outcome = ResolveTicketWithTools@task(ticket)
+  .with_provider(destination)
   .run(
-    runner = ai.run.Agent.new(
+    runner = ai.run.Agent<Resolution>.new(
       conversation = imported.conversation,
     ),
   )
-```
-
-### What happens
-
-```mermaid
-flowchart LR
-  source["Source Conversation"] --> messages["Portable messages"]
-  messages --> import["CarefulModel.import_messages"]
-  import --> fidelity["Fidelity and warnings"]
-  import --> destination["CarefulModel Conversation"]
-  destination --> run["Continue bounded Agent loop"]
 ```
 
 ### Illustrative output
 
 ```console
 [INFO] exported 6 portable messages
-[INFO] imported conversation into CarefulModel
-[WARN] import fidelity: messages-only
-[INFO] continued with provider = "careful-model"
+[INFO] imported conversation into destination provider
+[WARN] import fidelity: MessagesOnly
+[INFO] continued with provider = "openai"
 ```
 
-The import reports whether the move was exact, messages-only, or lossy.
-Switching provider labels without importing state is never a valid resume.
+The `ai.ConversationFidelity` on the import reports whether the move was
+`Exact`, `MessagesOnly`, or `Lossy`. Switching provider labels without
+importing state is never a valid resume.

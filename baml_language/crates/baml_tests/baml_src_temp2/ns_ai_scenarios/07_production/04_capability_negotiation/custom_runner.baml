@@ -13,9 +13,9 @@ class CapabilityNegotiationRunner {
 
     implements root.ai.Runner<root.ai.Task<Resolution>> {
         type Output = NegotiatedRun
-        type Error = root.ai.CallError
+        type Error = root.ai.Failure
             | baml.errors.UnknownError
-            | root.ai.StreamError
+            | root.ai.Failure
             | baml.errors.Unsupported
             | baml.errors.Io
             | baml.errors.LlmClient
@@ -23,21 +23,21 @@ class CapabilityNegotiationRunner {
         function run(
             self,
             task: root.ai.Task<Resolution>,
-        ) -> NegotiatedRun throws root.ai.CallError
+        ) -> NegotiatedRun throws root.ai.Failure
             | baml.errors.UnknownError
-            | root.ai.StreamError
+            | root.ai.Failure
             | baml.errors.Unsupported
             | baml.errors.Io
             | baml.errors.LlmClient
 {
             //# Narrow the erased provider to the strongest supported interaction
             match (task.provider) {
-                let realtime: root.ai.RealtimeProvider => {
-                    let live_session = realtime.open_live<Resolution>(task, root.ai.RecordingChannel { frames: [] });
+                let realtime: root.ai.realtime.RealtimeProvider => {
+                    let live_session = realtime.open_live<Resolution>(task, root.ai.testing.RecordingChannel { frames: [] });
                     NegotiatedRun {
                         provider: realtime.name(),
                         mode: "realtime",
-                        output: root.ai.collect_live_text(live_session),
+                        output: root.ai.realtime.collect_live_text(live_session),
                     }
                 },
                 let stream: root.ai.StreamingProvider => {

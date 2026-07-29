@@ -15,7 +15,7 @@ test "interface runner e2e: typed generation with metadata" {
     );
 
     assert.equal(response.value.category, "billing");
-    assert.equal(response.meta.provider, "fake");
+    assert.equal(response.metadata.provider, "fake");
     assert.equal(fake.calls, 1)
 }
 
@@ -47,15 +47,15 @@ testset "integ-test-interface-runner-e2e" {
         log.info(
             "interface runner live generation "
                 + {
-                    "provider": response.meta.provider,
-                    "request_id": response.meta.request_id,
-                    "usage": response.meta.usage,
+                    "provider": response.metadata.provider,
+                    "request_id": response.metadata.request_id,
+                    "usage": response.metadata.usage,
                 }
                 .to_string(),
         );
 
-        assert.equal(response.meta.provider, "openai");
-        assert.is_true((response.meta.usage?.input_tokens ?? 0) > 0);
+        assert.equal(response.metadata.provider, "openai");
+        assert.is_true((response.metadata.usage?.input_tokens ?? 0) > 0);
         assert.is_true(response.value.reply.length() > 0)
     }
 }

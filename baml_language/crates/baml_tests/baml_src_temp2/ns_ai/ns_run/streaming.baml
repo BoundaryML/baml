@@ -9,12 +9,12 @@ class Stream<TPartial, T> {
 
     implements root.ai.Runner<root.ai.Task<T>> {
         type Output = baml.llm.Stream<TPartial, T>
-        type Error = root.ai.StreamError | baml.errors.UnknownError | baml.errors.Unsupported
+        type Error = root.ai.Failure | baml.errors.UnknownError
 
         function run(
             self,
             task: root.ai.Task<T>,
-        ) -> baml.llm.Stream<TPartial, T> throws root.ai.StreamError | baml.errors.UnknownError | baml.errors.Unsupported {
+        ) -> baml.llm.Stream<TPartial, T> throws root.ai.Failure | baml.errors.UnknownError | baml.errors.Unsupported {
             //# Select streaming capability without draining the returned stream
             match (task.provider) {
                 let provider: root.ai.StreamingProvider => {

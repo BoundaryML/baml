@@ -24,16 +24,16 @@ function InvestigateRepository_task(
 function InvestigateRepository_manual(
     ticket: SupportTicket,
     harness: root.ai.Provider,
-) -> Resolution throws root.ai.CallError | baml.errors.UnknownError {
+) -> Resolution throws root.ai.Failure | baml.errors.UnknownError {
     InvestigateRepository_task(ticket, harness)
         .run(runner = root.ai.run.Completion<Resolution>.new())
 }
 
-function fake_model_harness() -> root.ai.ModelHarness throws never {
-    root.ai.ModelHarness { inner: fake_resolution(), sessions: [] }
+function fake_model_harness() -> root.ai.harness.ModelHarness throws never {
+    root.ai.harness.ModelHarness { inner: fake_resolution(), sessions: [] }
 }
 
 function live_openai_model_harness(
-) -> root.ai.ModelHarness throws baml.errors.Io | baml.errors.ParseError {
-    root.ai.ModelHarness { inner: live_openai(), sessions: [] }
+) -> root.ai.harness.ModelHarness throws baml.errors.Io | baml.errors.ParseError {
+    root.ai.harness.ModelHarness { inner: live_openai(), sessions: [] }
 }

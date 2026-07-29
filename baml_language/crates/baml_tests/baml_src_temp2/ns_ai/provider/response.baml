@@ -18,6 +18,6 @@ class ResponseMetadata {
 
 class ResponseWithMetadata<T> {
     value: T,
-    meta: ResponseMetadata,
+    metadata: ResponseMetadata,
     conversation: Conversation?,
 }

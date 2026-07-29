@@ -29,7 +29,7 @@ function _primitive_generate<T>(
   primitive: baml.llm.PrimitiveClient,
   task: root.ai.Task<T>,
   model: string,
-) -> root.ai.ResponseWithMetadata<T> throws baml.errors.UnknownError {
+) -> root.ai.ResponseWithMetadata<T> throws root.ai.Failure | baml.errors.UnknownError {
   let specialized = primitive.specialize_prompt(task.prompt) catch (e) {
     _ => throw baml.errors.UnknownError {
       data: e,
@@ -68,21 +68,15 @@ function _primitive_generate<T>(
     "response_bytes": body.length(),
   }));
   if (!http_response.ok()) {
-    throw baml.errors.UnknownError {
-      data: body,
-      message: ["anthropic http " + http_response.status_code.to_string()],
-    };
+    throw root.ai.internal.classify_http("anthropic", http_response.status_code, body);
   }
   let value = primitive.parse<T>(body) catch (e) {
-    _ => throw baml.errors.UnknownError {
-      data: e,
-      message: ["anthropic typed parse failed"],
-    },
+    _ => throw root.ai.ParseFailed { provider: "anthropic", raw_output: body },
   };
   let raw: json = baml.json.parse(body) catch (e) { _ => null };
   root.ai.ResponseWithMetadata<T> {
     value: value,
-    meta: root.ai.ResponseMetadata {
+    metadata: root.ai.ResponseMetadata {
       provider: "anthropic",
       model: model,
       request_id: baml.json.path_or<string?>(raw, ".id", null),

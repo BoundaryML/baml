@@ -15,7 +15,7 @@ function InspectImage_task(
 function InspectImage_manual(
     value: image,
     provider: root.ai.Provider,
-) -> string throws root.ai.CallError | baml.errors.UnknownError {
+) -> string throws root.ai.Failure | baml.errors.UnknownError {
     InspectImage_task(value, provider).run(runner = root.ai.run.Completion<string>.new())
 }
 
@@ -32,7 +32,7 @@ function InspectPdf_task(
 function InspectPdf_manual(
     value: pdf,
     provider: root.ai.Provider,
-) -> string throws root.ai.CallError | baml.errors.UnknownError {
+) -> string throws root.ai.Failure | baml.errors.UnknownError {
     InspectPdf_task(value, provider).run(runner = root.ai.run.Completion<string>.new())
 }
 
@@ -56,7 +56,7 @@ function VoiceSupport_task(
 function VoiceSupport_manual(
     instructions: string,
     provider: root.ai.Provider,
-) -> null throws root.ai.CallError | baml.errors.UnknownError {
+) -> null throws root.ai.Failure | baml.errors.UnknownError {
     VoiceSupport_task(instructions, provider).run(runner = root.ai.run.Completion<null>.new())
 }
 
@@ -65,10 +65,10 @@ function VoiceSupport_manual(
 // becomes this hand-written function-specific task companion. The task owns
 // both the provider and its strongly typed audio argument.
 function TranscribeCall_task(
-    audio: root.ai.AudioStream,
+    audio: root.ai.transcription.AudioStream,
     provider: root.ai.Provider,
-) -> root.ai.TranscriptionTask throws never {
-    root.ai.TranscriptionTask {
+) -> root.ai.transcription.TranscriptionTask throws never {
+    root.ai.transcription.TranscriptionTask {
         provider: provider,
         audio: audio,
         prompt: "Transcribe this finite customer-support recording.",

@@ -1,7 +1,7 @@
 // Exercise dynamic tools, callbacks, and observation together in one complete
 // agent workflow.
 function live_agent_matrix() -> null {
-    let registry = root.ai.ToolRegistry.new([search_knowledge]);
+    let registry = root.ai.tools.ToolRegistry.new([search_knowledge]);
     let trace = guide_agent_trace();
     let observer = GuideObserver { kinds: [] };
     let runner = root
@@ -14,10 +14,10 @@ function live_agent_matrix() -> null {
             prepare_step = (context) -> {
                 if (context.step == 0) {
                     let next_tools = context.tools.slice(0, context.tools.length());
-                    next_tools.push(root.ai.normalize_tool(lookup_account));
-                    root.ai.StepPlan { provider: null, tools: next_tools, stop: null }
+                    next_tools.push(root.ai.tools.normalize_tool(lookup_account));
+                    root.ai.tools.StepPlan { provider: null, tools: next_tools, stop: null }
                 } else {
-                    root.ai.StepPlan { provider: null, tools: null, stop: null }
+                    root.ai.tools.StepPlan { provider: null, tools: null, stop: null }
                 }
             },
             on_event = (event) -> {

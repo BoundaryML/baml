@@ -7,7 +7,7 @@ function application_owned_history() -> ConversationProbe {
     .to_history();
   let task = ConversationProbe_task(
     updated,
-    root.ai.fake_output_provider(`{
+    root.ai.testing.fake_output_provider(`{
       "branch": "general",
       "evidence": "The order is O-42."
     }`),

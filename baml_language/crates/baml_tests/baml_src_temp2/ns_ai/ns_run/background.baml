@@ -2,23 +2,23 @@
 // configure the execution strategy; the returned Job<T> owns the remote
 // lifecycle after submission.
 class Background<T> {
-    options: root.ai.BackgroundOptions,
+    options: root.ai.jobs.BackgroundOptions,
 
     function new(idempotency_key: string? = null) -> Background<T> throws never {
-        Background<T> { options: root.ai.BackgroundOptions { idempotency_key: idempotency_key } }
+        Background<T> { options: root.ai.jobs.BackgroundOptions { idempotency_key: idempotency_key } }
     }
 
     implements root.ai.Runner<root.ai.Task<T>> {
-        type Output = root.ai.Job<T>
-        type Error = baml.errors.UnknownError | baml.errors.Unsupported
+        type Output = root.ai.jobs.Job<T>
+        type Error = root.ai.Failure | baml.errors.UnknownError
 
         function run(
             self,
             task: root.ai.Task<T>,
-        ) -> root.ai.Job<T> throws baml.errors.UnknownError | baml.errors.Unsupported {
+        ) -> root.ai.jobs.Job<T> throws root.ai.Failure | baml.errors.UnknownError {
             //# Select a background-capable provider
             match (task.provider) {
-                let provider: root.ai.BackgroundProvider => {
+                let provider: root.ai.jobs.BackgroundProvider => {
                     //## Submit remote work and return its durable job resource
                     provider.submit<T>(task, self.options)
                 },

@@ -3,39 +3,39 @@
 // policy.
 
 function _transcription_options(
-    task: root.ai.TranscriptionTask,
-    configured: root.ai.TranscriptionOptions,
-) -> root.ai.TranscriptionOptions throws never {
+    task: root.ai.transcription.TranscriptionTask,
+    configured: root.ai.transcription.TranscriptionOptions,
+) -> root.ai.transcription.TranscriptionOptions throws never {
     //# Merge runner overrides with the task's transcription prompt
-    root.ai.TranscriptionOptions {
+    root.ai.transcription.TranscriptionOptions {
         language: configured.language,
         prompt: configured.prompt ?? task.prompt,
     }
 }
 
 class TranscribeWithMeta {
-    options: root.ai.TranscriptionOptions,
+    options: root.ai.transcription.TranscriptionOptions,
 
     function new(
         language: string? = null,
         prompt: string? = null,
     ) -> TranscribeWithMeta throws never {
         TranscribeWithMeta {
-            options: root.ai.TranscriptionOptions { language: language, prompt: prompt },
+            options: root.ai.transcription.TranscriptionOptions { language: language, prompt: prompt },
         }
     }
 
-    implements root.ai.Runner<root.ai.TranscriptionTask> {
+    implements root.ai.Runner<root.ai.transcription.TranscriptionTask> {
         type Output = root.ai.ResponseWithMetadata<string>
-        type Error = root.ai.CallError | baml.errors.UnknownError
+        type Error = root.ai.Failure | baml.errors.UnknownError
 
         function run(
             self,
-            task: root.ai.TranscriptionTask,
-        ) -> root.ai.ResponseWithMetadata<string> throws root.ai.CallError | baml.errors.UnknownError {
+            task: root.ai.transcription.TranscriptionTask,
+        ) -> root.ai.ResponseWithMetadata<string> throws root.ai.Failure | baml.errors.UnknownError {
             //# Select bounded-audio transcription and retain provider metadata
             match (task.provider) {
-                let capability: root.ai.TranscriptionProvider => {
+                let capability: root.ai.transcription.TranscriptionProvider => {
                     //## Transcribe the finite audio stream
                     capability.transcribe(task.audio, _transcription_options(task, self.options))
                 },
@@ -51,23 +51,23 @@ class TranscribeWithMeta {
 }
 
 class Transcribe {
-    options: root.ai.TranscriptionOptions,
+    options: root.ai.transcription.TranscriptionOptions,
 
     function new(language: string? = null, prompt: string? = null) -> Transcribe throws never {
-        Transcribe { options: root.ai.TranscriptionOptions { language: language, prompt: prompt } }
+        Transcribe { options: root.ai.transcription.TranscriptionOptions { language: language, prompt: prompt } }
     }
 
-    implements root.ai.Runner<root.ai.TranscriptionTask> {
+    implements root.ai.Runner<root.ai.transcription.TranscriptionTask> {
         type Output = string
-        type Error = root.ai.CallError | baml.errors.UnknownError
+        type Error = root.ai.Failure | baml.errors.UnknownError
 
         function run(
             self,
-            task: root.ai.TranscriptionTask,
-        ) -> string throws root.ai.CallError | baml.errors.UnknownError {
+            task: root.ai.transcription.TranscriptionTask,
+        ) -> string throws root.ai.Failure | baml.errors.UnknownError {
             //# Select bounded-audio transcription and project only the text
             match (task.provider) {
-                let capability: root.ai.TranscriptionProvider => {
+                let capability: root.ai.transcription.TranscriptionProvider => {
                     //## Transcribe the finite audio stream
                     capability
                         .transcribe(task.audio, _transcription_options(task, self.options))

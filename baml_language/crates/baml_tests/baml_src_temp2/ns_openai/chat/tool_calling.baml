@@ -1,5 +1,5 @@
-function _tool_schemas(tools: root.ai.Tool[]) -> json[] throws never {
-    tools.map((tool: root.ai.Tool) -> json {
+function _tool_schemas(tools: root.ai.tools.Tool[]) -> json[] throws never {
+    tools.map((tool: root.ai.tools.Tool) -> json {
         {
             "type": "function",
             "function": {
@@ -12,7 +12,7 @@ function _tool_schemas(tools: root.ai.Tool[]) -> json[] throws never {
     })
 }
 
-implements root.ai.ToolCallingProvider for Chat {
+implements root.ai.tools.ToolCallingProvider for Chat {
   function begin<T>(self, task: root.ai.Task<T>) -> root.ai.Conversation throws never {
     //# Start the native OpenAI conversation
     let history = task.messages().to_history();
@@ -22,7 +22,7 @@ implements root.ai.ToolCallingProvider for Chat {
       tools_json: _tool_schemas(task.tools),
       wire_messages: task.prompt.messages().map((message: baml.llm.PromptMessage) -> json {
         {
-          "role": root.ai._prompt_role_or_user(message.role),
+          "role": root.ai.messages._prompt_role_or_user(message.role),
           "content": message.content,
         }
       }),
@@ -32,12 +32,12 @@ implements root.ai.ToolCallingProvider for Chat {
   function step<T>(
     self,
     conversation: root.ai.Conversation,
-    tools: root.ai.Tool[],
-  ) -> root.ai.ModelStep<T> throws root.ai.ToolError | baml.errors.UnknownError {
+    tools: root.ai.tools.Tool[],
+  ) -> root.ai.tools.ModelStep<T> throws root.ai.Failure | baml.errors.UnknownError {
     //# Resume the native OpenAI conversation
     let state = match (conversation) {
       let value: Conversation => value,
-      _ => throw root.ai.ToolError {
+      _ => throw root.ai.Failure {
         message: "OpenAI received another provider's conversation",
       },
     };
@@ -45,10 +45,7 @@ implements root.ai.ToolCallingProvider for Chat {
     state.tools_json = _tool_schemas(tools);
     let key = match (self.api_key) {
       let value: string => value,
-      null => throw baml.errors.UnknownError {
-        data: null,
-        message: ["OpenAI tool calling requires api_key"],
-      },
+      null => throw baml.errors.UnknownError.with_message<never>(null, "OpenAI tool calling requires api_key"),
     };
     let body: map<string, json> = {
       "model": self.model,
@@ -75,16 +72,10 @@ implements root.ai.ToolCallingProvider for Chat {
       },
       body: baml.json.stringify(body),
     }) catch (e) {
-      _ => throw baml.errors.UnknownError {
-        data: e,
-        message: ["openai tools send failed"],
-      },
+      _ => throw baml.errors.UnknownError.with_message<never>(e, "openai tools send failed"),
     };
     let text = response.text() catch (e) {
-      _ => throw baml.errors.UnknownError {
-        data: e,
-        message: ["openai tools body failed"],
-      },
+      _ => throw baml.errors.UnknownError.with_message<never>(e, "openai tools body failed"),
     };
     log.info(baml.json.stringify({
       "event": "llm.tools.response",
@@ -95,17 +86,11 @@ implements root.ai.ToolCallingProvider for Chat {
     }));
     //# Parse the provider response and usage
     let wire: ToolResponse = baml.sap.parse<ToolResponse>(text) catch (e) {
-      _ => throw baml.errors.UnknownError {
-        data: e,
-        message: ["openai tools parse failed"],
-      },
+      _ => throw baml.errors.UnknownError.with_message<never>(e, "openai tools parse failed"),
     };
     let choice = match (wire.choices.at(0)) {
       let value: ToolChoice => value,
-      null => throw baml.errors.UnknownError {
-        data: text,
-        message: ["openai tools returned no choice"],
-      },
+      null => throw baml.errors.UnknownError.with_message<never>(text, "openai tools returned no choice"),
     };
     let message = choice.message;
     let meta = root.ai.ResponseMetadata {
@@ -141,34 +126,31 @@ implements root.ai.ToolCallingProvider for Chat {
         state.wire_messages.push({ "role": "assistant", "tool_calls": raw_calls });
         state.history.entries.push(root.ai.ChatMessage {
           message_role: root.ai.MessageRole.Assistant,
-          content: [root.ai.ProviderDataPart {
+          content: [root.ai.messages.ProviderDataPart {
             provider: "openai",
             data: { "tool_calls": raw_calls },
           }],
           metadata: null,
         });
-        let calls = root.ai.ToolCalls {
-          calls: raw_calls.map((raw: json) -> root.ai.ToolCall {
+        let calls = root.ai.tools.ToolCalls {
+          calls: raw_calls.map((raw: json) -> root.ai.tools.ToolCall {
             let args_text = baml.json.path_or(raw, ".function.arguments", "{}");
-            root.ai.ToolCall {
+            root.ai.tools.ToolCall {
               id: baml.json.path_or(raw, ".id", ""),
               name: baml.json.path_or(raw, ".function.name", ""),
               args: baml.json.parse(args_text) catch (e) { _ => null },
             }
           }),
         };
-        root.ai.ModelStep<T> { outcome: calls, meta: meta }
+        root.ai.tools.ModelStep<T> { outcome: calls, metadata: meta }
       },
       null => {
         //## Parse the final assistant value
         state.history.entries.push(root.ai.ChatMessage.assistant(message.content ?? ""));
         let value = baml.sap.parse<T>(message.content ?? "") catch (e) {
-          _ => throw baml.errors.UnknownError {
-            data: e,
-            message: ["openai agent final parse failed"],
-          },
+          _ => throw baml.errors.UnknownError.with_message<never>(e, "openai agent final parse failed"),
         };
-        root.ai.ModelStep<T> { outcome: value, meta: meta }
+        root.ai.tools.ModelStep<T> { outcome: value, metadata: meta }
       },
     }
   }
@@ -176,12 +158,12 @@ implements root.ai.ToolCallingProvider for Chat {
   function submit(
     self,
     conversation: root.ai.Conversation,
-    results: root.ai.ToolResult[],
-  ) -> root.ai.Conversation throws root.ai.ToolError {
+    results: root.ai.tools.ToolResult[],
+  ) -> root.ai.Conversation throws root.ai.Failure {
     //# Resume the conversation receiving tool results
     let state = match (conversation) {
       let value: Conversation => value,
-      _ => throw root.ai.ToolError {
+      _ => throw root.ai.Failure {
         message: "OpenAI received another provider's conversation",
       },
     };
@@ -194,7 +176,7 @@ implements root.ai.ToolCallingProvider for Chat {
       });
       state.history.entries.push(root.ai.ChatMessage {
         message_role: root.ai.MessageRole.Tool,
-        content: [root.ai.ProviderDataPart {
+        content: [root.ai.messages.ProviderDataPart {
           provider: "openai",
           data: {
             "tool_call_id": result.id,

@@ -1,14 +1,14 @@
 // Continue later work inside a provider-owned session without manually
 // reconstructing its conversation state.
 function provider_owned_sessions(
-) -> root.ai.ResponseWithMetadata<Resolution>[] throws root.ai.CallError
+) -> root.ai.ResponseWithMetadata<Resolution>[] throws root.ai.Failure
     | baml.errors.UnknownError
 {
-  let provider = root.ai.FakeSessionProvider {
+  let provider = root.ai.testing.FakeSessionProvider {
     inner: fake_resolution(),
     sessions: [],
   };
-  let opened = provider.open_session(root.ai.SessionOptions {
+  let opened = provider.open_session(root.ai.sessions.SessionOptions {
     session_id: "support-T-100",
     attributes: { "team": "support" },
   });

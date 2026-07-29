@@ -144,10 +144,7 @@ function _realtime_call_center_task(
 function realtime_audio_helper_path() -> string throws baml.errors.UnknownError {
     let configured = baml.env.get("BAML_REALTIME_AUDIO_HELPER") catch (e) {
         _ => {
-            throw baml.errors.UnknownError {
-      data: e,
-      message: ["could not read BAML_REALTIME_AUDIO_HELPER"],
-    }
+            throw baml.errors.UnknownError.with_message<never>(e, "could not read BAML_REALTIME_AUDIO_HELPER")
         },
     };
     configured ?? "crates/baml_tests/support/realtime_audio_macos.swift"
@@ -156,19 +153,13 @@ function realtime_audio_helper_path() -> string throws baml.errors.UnknownError 
 function realtime_openai_api_key() -> string throws baml.errors.UnknownError {
     let key = baml.env.get("OPENAI_API_KEY") catch (e) {
         _ => {
-            throw baml.errors.UnknownError {
-      data: e,
-      message: ["could not read OPENAI_API_KEY"],
-    }
+            throw baml.errors.UnknownError.with_message<never>(e, "could not read OPENAI_API_KEY")
         },
     };
     match (key) {
         let value: string => value,
         null => {
-            throw baml.errors.UnknownError {
-      data: null,
-      message: ["OPENAI_API_KEY is required"],
-    }
+            throw baml.errors.UnknownError.with_message<never>(null, "OPENAI_API_KEY is required")
         },
     }
 }
@@ -187,10 +178,7 @@ function start_realtime_audio_device() -> baml.sys.Process throws baml.errors.Un
             },
         ) catch (e) {
         _ => {
-            throw baml.errors.UnknownError {
-      data: e,
-      message: ["could not start full-duplex macOS audio"],
-    }
+            throw baml.errors.UnknownError.with_message<never>(e, "could not start full-duplex macOS audio")
         },
     }
 }
@@ -215,12 +203,12 @@ class MacRealtimeAudioDevice {
         }
     }
 
-    implements root.ai.RealtimeAudioDevice {
-        function input_format(self) -> root.ai.RealtimeAudioFormat throws never {
+    implements root.ai.realtime.RealtimeAudioDevice {
+        function input_format(self) -> root.ai.realtime.RealtimeAudioFormat throws never {
             root.openai.realtime_audio_format()
         }
 
-        function output_format(self) -> root.ai.RealtimeAudioFormat throws never {
+        function output_format(self) -> root.ai.realtime.RealtimeAudioFormat throws never {
             root.openai.realtime_audio_format()
         }
 
@@ -230,20 +218,14 @@ class MacRealtimeAudioDevice {
             }
             let next = self.process.stdout._next() catch (e) {
                 _ => {
-                    throw baml.errors.UnknownError {
-            data: e,
-            message: ["could not read a microphone frame"],
-          }
+                    throw baml.errors.UnknownError.with_message<never>(e, "could not read a microphone frame")
                 },
             };
             match (next) {
                 let encoded: string => {
                     baml.Uint8Array.from_base64(encoded) catch (e) {
                         _ => {
-                            throw baml.errors.UnknownError {
-                data: e,
-                message: ["microphone helper emitted an invalid audio frame"],
-              }
+                            throw baml.errors.UnknownError.with_message<never>(e, "microphone helper emitted an invalid audio frame")
                         },
                     }
                 },
@@ -262,10 +244,7 @@ class MacRealtimeAudioDevice {
             }
             self.process.write_stdin("audio " + pcm16_24khz_mono.to_base64() + "\n") catch (e) {
                 _ => {
-                    throw baml.errors.UnknownError {
-            data: e,
-            message: ["could not send assistant audio to the macOS audio device"],
-          }
+                    throw baml.errors.UnknownError.with_message<never>(e, "could not send assistant audio to the macOS audio device")
                 },
             };
             self.playback_bytes = self.playback_bytes + pcm16_24khz_mono.length();
@@ -295,10 +274,7 @@ class MacRealtimeAudioDevice {
             };
             self.process.write_stdin("stop\n") catch (e) {
                 _ => {
-                    throw baml.errors.UnknownError {
-            data: e,
-            message: ["could not stop macOS assistant audio playback"],
-          }
+                    throw baml.errors.UnknownError.with_message<never>(e, "could not stop macOS assistant audio playback")
                 },
             };
             self.playback_started_ms = null;
@@ -325,7 +301,7 @@ class MacRealtimeAudioDevice {
 //   baml run ai_scenarios.openai_realtime_call_center \
 //     --from crates/baml_tests/baml_src_temp2
 function openai_realtime_call_center(
-) -> null throws baml.errors.UnknownError | baml.errors.Unsupported {
+) -> null throws root.ai.Failure | baml.errors.UnknownError {
     let provider = root.openai.Realtime {
         model: "gpt-realtime-2.1",
         voice: "marin",
@@ -345,7 +321,7 @@ function openai_realtime_call_center(
         },
         keep_open: true,
     };
-    let channel = root.ai.RecordingChannel { frames: [] };
+    let channel = root.ai.testing.RecordingChannel { frames: [] };
     let task = _realtime_call_center_task(provider, "Begin the call now: introduce yourself and ask what meeting I want to schedule.");
     baml.io
         .println(

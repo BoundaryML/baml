@@ -7,55 +7,71 @@ function.
 ## An agent in one minute
 
 ```baml
-class Ticket {
+class SupportTicket {
   id: string,
-  message: string,
+  subject: string,
+  body: string,
+  customer_tier: string,
+}
+
+enum TicketPriority {
+  Low
+  Normal
+  Urgent
 }
 
 class Resolution {
+  category: string,
+  priority: TicketPriority,
+  summary: string,
   reply: string,
-  resolved: bool,
 }
 
-/// Look up the latest status of an order.
-function lookup_order(order_id: string) -> string {
-  "Order is out for delivery."
+/// Search the support knowledge base.
+function search_knowledge(query: string) -> json throws never {
+  { "query": query, "article": "Duplicate charges are normally pending authorizations." }
 }
 
-/// Search the support policy documents.
-function search_policy(query: string) -> string {
-  "Orders may be replaced after seven days without movement."
+/// Look up a customer account.
+function lookup_account(customer_id: string) -> json throws never {
+  { "customer_id": customer_id, "status": "active", "tier": "pro" }
 }
 
-function ResolveTicket(ticket: Ticket) -> Resolution {
+function ResolveTicketWithTools(ticket: SupportTicket) -> Resolution {
   provider: "openai/gpt-5.6-luna"
 
   prompt: `
-    Help the customer with this support ticket.
+    Resolve ticket ${ticket.id}. Use the available tools before answering.
 
-    Use the available tools when you need more information.
-
-    ${ticket}
+    Subject: ${ticket.subject}
+    Body: ${ticket.body}
 
     ${ctx.output_format}
   `
 
   tools: [
-    lookup_order,
-    search_policy,
+    search_knowledge,
+    lookup_account,
   ]
 }
 
 
 // call it here!
-let resolution: Resolution = ResolveTicket(ticket)
+let ticket = SupportTicket {
+  id: "T-100",
+  subject: "Charged twice",
+  body: "I see two charges for order O-42.",
+  customer_tier: "pro",
+};
+
+let resolution: Resolution = ResolveTicketWithTools(ticket)
 ```
 
 ### What happens
 
 ```mermaid
 flowchart TD
-  call["ResolveTicket(ticket)"] --> budget{"Default loop limit remains?"}
+  call["ResolveTicketWithTools(ticket)"] --> budget{"Default loop limit remains?"}
   budget -->|yes| model["Provider step"]
   model --> result{"Provider returned?"}
   result -->|tool calls| tools["Validate and run requested tools"]
@@ -65,6 +81,16 @@ flowchart TD
   budget -->|no| error["Direct call fails: no final value"]
 ```
 
+Tools belong to the function: they are part of the model-facing contract the
+prompt describes, and the list accepts ordinary BAML functions, methods, and
+closures (anything callable). How they reach the model is the provider
+adapter's decision — native function-calling when the wire supports it, a
+prompt-rendered tool protocol otherwise — so the same function works on
+providers without native tool support. Runners decide whether tools run at
+all: the plain completion path executes requested tools within the provider's
+default completion, while bounded multi-step loops belong to `ai.run.Agent`
+with an explicit `Budget`.
+
 That is the common path. BAML sends the prompt, runs any requested tools, and
 returns the declared `Resolution`.
 
@@ -73,9 +99,9 @@ returns the declared `Resolution`.
 These lines show the shape of a run; they are not captured output:
 
 ```console
-[INFO] called tool: lookup_order("order-42")
-[INFO] called tool: search_policy("out for delivery")
-[INFO] ResolveTicket returned Resolution { resolved: true, ... }
+[INFO] called tool: search_knowledge("duplicate charge")
+[INFO] called tool: lookup_account("C-42")
+[INFO] ResolveTicketWithTools returned Resolution { category: "billing", ... }
 ```
 
 The return type is also the model's output schema. A tool's signature is also
@@ -87,9 +113,9 @@ The normal call returns `T`. Create a task when you need to choose how the
 same call runs:
 
 ```baml
-let outcome = ResolveTicket.task(ticket).run(
-  runner = ai.run.Agent.new(
-    max_steps = 8,
+let outcome = ResolveTicketWithTools@task(ticket).run(
+  runner = ai.run.Agent<Resolution>.new(
+    budget = ai.Budget { max_steps: 8, max_cost_usd: null },
   ),
 )
 ```
@@ -98,7 +124,7 @@ let outcome = ResolveTicket.task(ticket).run(
 
 ```mermaid
 flowchart TD
-  task["ResolveTicket.task(ticket)"] --> runner["ai.run.Agent"]
+  task["ResolveTicketWithTools@task(ticket)"] --> runner["ai.run.Agent"]
   runner --> budget{"Step and cost budget remain?"}
   budget -->|yes| model["Provider step"]
   model --> result{"Provider returned?"}
@@ -112,20 +138,22 @@ flowchart TD
 ### Illustrative output
 
 ```console
-[INFO] Agent started: ResolveTicket
-[INFO] step 1: provider requested lookup_order
+[INFO] Agent started: ResolveTicketWithTools
+[INFO] step 1: provider requested search_knowledge
 [INFO] Agent finished: Done<Resolution>
 ```
 
-The task still represents `ResolveTicket(ticket)`. The runner only changes
+The task still represents `ResolveTicketWithTools(ticket)`. The runner only changes
 the lifecycle and the result you receive. For example, another runner can
 stream the result, submit background work, preserve response metadata, or
 send the task to a coding harness.
 
 ## If you have used the Vercel AI SDK
 
-The ideas are similar. BAML keeps the model-facing contract in one typed LLM
-function and lets runners reuse it.
+The ideas are similar. BAML keeps the model-facing contract — signature,
+prompt, output type, default tools — in one typed LLM function; lifecycle
+concerns (streaming, tool loops, retry, background work) live in reusable
+runners rather than in the function itself.
 
 | Goal | BAML | Vercel AI SDK |
 | --- | --- | --- |
@@ -146,48 +174,51 @@ You do not need all of this to start. The comments show when each part becomes
 useful. `ai` holds portable contracts and orchestration. Provider namespaces
 hold provider configuration, wire behavior, and provider-owned resources.
 
+Flat `ai` is the first afternoon's surface; capability-specific machinery
+lives one namespace down (`baml describe ai.tools` etc. lists each).
+
 ```text
-ai
-├── Task<T, P>                 // one LLM function call that has not run yet
-├── Response<T>, Meta, Usage   // typed value plus provider details
-├── Conversation              // exact state for continuing an agent
-├── MessageHistory            // editable, portable messages
+ai                             // CORE — what every program touches
+├── Task<T>                    // one LLM function call that has not run yet
+├── ResponseWithMetadata<T>    // typed value plus ResponseMetadata and Usage
+├── Conversation               // exact state for continuing an agent
+├── MessageHistory             // editable, portable messages
+├── Failure, Effects           // the error channel (+ default errors)
+├── retry(...), fallback(...)  // provider wrappers for reliability
+├── Done, BudgetReached, Handoff, Budget // agent outcomes and limits
 │
-├── Provider                  // how BAML communicates with a model or AI service
-├── CompletionProvider        // return one bounded typed result
-├── GenerationProvider        // perform exactly one model interaction
-├── StreamingProvider         // stream partials and a final typed result
-├── ToolCallingProvider       // participate in an application-managed tool loop
-├── RealtimeProvider          // open a provider-owned live session
-     ......
+├── Provider                   // how BAML communicates with a model or AI service
+├── CompletionProvider         // return one bounded typed result
+├── GenerationProvider         // perform exactly one model interaction
+├── StreamingProvider          // stream partials and a final typed result
 │
-├── run                       // how a typed task proceeds; usually runner = ...
-│   ├── Agent                 // task.run(runner = ...): run application tools
-│   │   ├── prepare_step      // change provider, tools, or stop before a step
-│   │   ├── before_tool_call  // allow, replace, or block a proposed call
-│   │   ├── after_tool_call   // inspect each completed application tool
-│   │   └── on_event          // lightweight callback for run events
-│   ├── CompletionWithMeta    // return Response<T> (contains metadata + output)
-│   ├── Stream                // return partials, then final T
-│   ├── Retry, Fallback       // wrap another runner
-│   ├── Background, Batch     // return remote work resources
+├── run                        // how a typed task proceeds; usually runner = ...
+│   ├── Agent                  // task.run(runner = ...): run application tools
+│   │   ├── prepare_step       // change provider, tools, or stop before a step
+│   │   ├── before_tool_call   // allow, replace, or block a proposed call
+│   │   ├── after_tool_call    // inspect each completed application tool
+│   │   └── on_event           // lightweight callback for run events
+│   ├── CompletionWithMeta     // return ResponseWithMetadata<T> (value + metadata)
+│   ├── Stream                 // return partials, then final T
+│   ├── Background, Batch      // return remote work handles
 │   ├── Transcribe, TranscribeWithMeta // finite audio to text
-│   ├── VoiceAgent            // managed realtime voice loop
+│   ├── VoiceAgent             // managed realtime voice loop
 │   └── Harness                // coding agents; on_event observes live progress
 │
-├── tools
-│   ├── tool(...)             // add policy to an ordinary function tool
-│   ├── ToolRegistry          // change the roster between agent steps
-│   └── AgentObserver         // watch events without changing the run
-│
-├── resources
-│   ├── Job, Batch, Cache     // remote work with poll/cancel/delete
-│   ├── BatchQueue            // mixed task types with typed item handles
-│   ├── LiveSession           // raw bidirectional provider session
-│   ├── HarnessSession        // steer, interrupt, save, or resume a harness
-│   ├── open_live(...)        // open a raw live provider session
-│   ├── create_cache(...)     // create reusable provider context
-│   └── mcp.connect(...)      // discover remote tools
+├── tools                      // tool machinery (ToolCallingProvider lives here)
+│   ├── tool(...)              // add policy/metadata to an ordinary function tool
+│   ├── ToolRegistry           // change the roster between agent steps
+│   ├── ToolCall, ToolResult   // correlated tool calls and results
+│   ├── BeforeToolCall, AfterToolCall // payloads for the agent's tool hooks
+│   └── tool_from_json_schema  // wrap discovered (e.g. MCP) remote tools
+├── realtime                   // Channel, LiveSession, open_live(...), RealtimeProvider
+├── transcription              // transcription protocol and audio streams
+├── sessions                   // provider-owned session continuations
+├── jobs                       // Job, Batch: poll/cancel handles
+├── observe                    // observers, run events, usage accounting
+├── harness                    // HarnessSession: steer, interrupt, save, resume
+├── messages                   // message parts and prompt adapters (internals)
+├── testing                    // FakeProvider and friends — deterministic doubles
 │
 openai
 ├── Chat                       // ordinary typed calls, streams, and tool calling
@@ -201,7 +232,8 @@ anthropic
 └── Messages                   // Anthropic model and transport configuration
 
 google
-└── Gemini                     // Gemini configuration and managed caches
+├── Gemini                     // Gemini configuration
+└── Cache, CreateCache         // named caches (Gemini-only; plumbed automatically)
 
 claude_code
 └── ClaudeCodeCli              // local Claude Code harness adapter
@@ -215,7 +247,9 @@ portable API. Every provider supplies its own prompt-rendering shorthand; `ai`
 does not silently choose a model vendor.
 
 A provider owns communication: authentication, wire behavior, parsing, and
-provider-owned state. A runner owns the reusable lifecycle of a typed task:
+provider-owned state (server-side conversation continuations, uploaded files,
+provider-managed caches, live session handles). A runner owns the reusable
+lifecycle of a typed task:
 completion, streaming, tool loops, retry, background work, or a harness.
 Changing only a model or base URL usually creates another provider value, not
 another provider type. The [tasks and runners guide](./pages/tasks-runners-and-results.md)

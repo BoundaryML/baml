@@ -31,7 +31,7 @@ test "guide 08.01: the harness task carries the evidence needed by the model" {
 testset "integ-test-guide-08-model-harness" {
   test "guide 08.01 live OpenAI: real model behind the harness contract" {
     //# Configure a live OpenAI-backed harness
-    let harness = root.ai.ModelHarness {
+    let harness = root.ai.harness.ModelHarness {
       inner: root.openai.Chat {
         ...root.openai.chat(),
         model: "gpt-5.6-luna",
@@ -55,7 +55,7 @@ testset "integ-test-guide-08-model-harness" {
 
   test "guide 08.01 live Anthropic: same harness adapter" {
     //# Configure a live Anthropic-backed harness
-    let harness = root.ai.ModelHarness {
+    let harness = root.ai.harness.ModelHarness {
       inner: root.anthropic.Messages {
         ...root.anthropic.messages(),
         model: "claude-sonnet-4-6",

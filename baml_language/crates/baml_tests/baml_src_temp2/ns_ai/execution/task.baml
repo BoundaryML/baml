@@ -10,7 +10,7 @@ class Task<T> {
     prompt: baml.llm.PromptAst,
     identity: TaskIdentity?,
     arguments: map<string, unknown>,
-    tools: Tool[],
+    tools: root.ai.tools.Tool[],
     tags: map<string, string>,
     _render: PromptRenderRecipe,
 
@@ -34,7 +34,7 @@ class Task<T> {
     }
 
     function messages(self) -> Messages throws never {
-        _prompt_to_messages(self.prompt)
+        root.ai.messages._prompt_to_messages(self.prompt)
     }
 
     function with_provider(self, provider: Provider) -> Task<T> throws never {
@@ -50,14 +50,14 @@ class Task<T> {
         }
     }
 
-    function with_tools(self, tools: ToolInput[]) -> Task<T> throws never {
+    function with_tools(self, tools: root.ai.tools.ToolInput[]) -> Task<T> throws never {
         //# Replace the task's tool roster without executing it
         Task<T> {
             provider: self.provider,
             prompt: self.prompt,
             identity: self.identity,
             arguments: self.arguments,
-            tools: normalize_tools(tools),
+            tools: root.ai.tools.normalize_tools(tools),
             tags: self.tags,
             _render: self._render,
         }
@@ -75,7 +75,7 @@ function task_named<T>(
     provider: Provider,
     name: string,
     arguments: map<string, unknown>,
-    tools: ToolInput[],
+    tools: root.ai.tools.ToolInput[],
     template: (baml.llm.Context) -> baml.llm.PromptAst throws never,
 ) -> Task<T> throws never {
     //# Capture the reusable prompt recipe
@@ -86,7 +86,7 @@ function task_named<T>(
         prompt: recipe.render(provider, reflect.type_of<T>()),
         identity: TaskIdentity { name: name, package: "bepv2_reference" },
         arguments: arguments,
-        tools: normalize_tools(tools),
+        tools: root.ai.tools.normalize_tools(tools),
         tags: {},
         _render: recipe,
     }

@@ -1,5 +1,5 @@
 test "guide 02.09: remove one application tool between provider steps" {
-    let registry = root.ai.ToolRegistry.new([search_knowledge, lookup_account]);
+    let registry = root.ai.tools.ToolRegistry.new([search_knowledge, lookup_account]);
     let runner = root.ai.run.Agent<Resolution>.new(tools = [], tool_registry = registry, prepare_step = (context) -> {
         tool_roster_plan(context, remove_name = "lookup_account")
     });
@@ -7,7 +7,7 @@ test "guide 02.09: remove one application tool between provider steps" {
     let outcome = task.run(runner = runner);
     match (outcome) {
         let done: root.ai.Done<Resolution> => match (done.conversation) {
-            let conversation: root.ai.FakeToolConversation => {
+            let conversation: root.ai.testing.FakeToolConversation => {
                 assert.equal(conversation.last_tools.length(), 1);
                 assert.equal(conversation.last_tools[0].name, "search_knowledge");
             },
@@ -29,7 +29,7 @@ test "guide 02.09: an explicit empty list removes all application tools" {
     let outcome = task.run(runner = runner);
     match (outcome) {
         let done: root.ai.Done<Resolution> => match (done.conversation) {
-            let conversation: root.ai.FakeToolConversation => {
+            let conversation: root.ai.testing.FakeToolConversation => {
                 assert.equal(conversation.last_tools.length(), 0)
             },
             _ => assert.is_true(false),
@@ -39,7 +39,7 @@ test "guide 02.09: an explicit empty list removes all application tools" {
 }
 
 test "guide 02.09: an empty replacement updates the registry and persists" {
-    let registry = root.ai.ToolRegistry.new([search_knowledge, lookup_account]);
+    let registry = root.ai.tools.ToolRegistry.new([search_knowledge, lookup_account]);
     let runner = root.ai.run.Agent<Resolution>.new(tools = [], tool_registry = registry, prepare_step = (context) -> {
         tool_roster_plan(context, remove_name = null, clear_roster = true)
     });
@@ -47,7 +47,7 @@ test "guide 02.09: an empty replacement updates the registry and persists" {
     let outcome = task.run(runner = runner);
     match (outcome) {
         let done: root.ai.Done<Resolution> => match (done.conversation) {
-            let conversation: root.ai.FakeToolConversation => {
+            let conversation: root.ai.testing.FakeToolConversation => {
                 assert.equal(registry.snapshot().length(), 0);
                 assert.equal(conversation.last_tools.length(), 0);
             },
@@ -58,7 +58,7 @@ test "guide 02.09: an empty replacement updates the registry and persists" {
 }
 
 test "guide 02.09: remove application and provider-owned tools together" {
-    let web_search = root.ai.ProviderTool {
+    let web_search = root.ai.tools.ProviderTool {
         name: "web_search",
         kind: "openai.web_search",
         config: { "search_context_size": "low" },
@@ -74,7 +74,7 @@ test "guide 02.09: remove application and provider-owned tools together" {
     let outcome = task.run(runner = runner);
     match (outcome) {
         let done: root.ai.Done<Resolution> => match (done.conversation) {
-            let conversation: root.ai.FakeToolConversation => {
+            let conversation: root.ai.testing.FakeToolConversation => {
                 assert.equal(conversation.owner.name(), "fake-tools");
                 assert.equal(conversation.last_tools.length(), 0);
                 assert.equal(conversation.last_provider_tools.length(), 0);
@@ -87,7 +87,7 @@ test "guide 02.09: remove application and provider-owned tools together" {
 
 testset "integ-test-guide-02-remove-tools" {
     test "guide 02.09 live OpenAI: removing a tool changes the next provider request" {
-        let registry = root.ai.ToolRegistry.new([search_knowledge, lookup_account]);
+        let registry = root.ai.tools.ToolRegistry.new([search_knowledge, lookup_account]);
         let observer = GuideObserver { kinds: [] };
         let provider = live_openai();
         let task = ToolInstructions_task(
@@ -119,7 +119,7 @@ testset "integ-test-guide-02-remove-tools" {
                     log.info(
                         "live removed tools "
                             + {
-                                "registry": registry.snapshot().map((tool: root.ai.Tool) -> string {
+                                "registry": registry.snapshot().map((tool: root.ai.tools.Tool) -> string {
                                     tool.name
                                 }),
                                 "provider_tools": names,

@@ -21,15 +21,15 @@ test "guide 04.05: an agent resumes the supplied conversation instead of startin
   let provider = fake_tool_provider([one_knowledge_call()]);
   let task = ResolveTicketWithTools_task(sample_ticket(), provider, [search_knowledge]);
   let conversation = provider.begin<Resolution>(task);
-  let tools = root.ai.normalize_tools([search_knowledge]);
+  let tools = root.ai.tools.normalize_tools([search_knowledge]);
   let first = provider.step<Resolution>(conversation, tools);
   let calls = match (first.outcome) {
-    let value: root.ai.ToolCalls => value,
+    let value: root.ai.tools.ToolCalls => value,
     let value: Resolution => baml.sys.panic("expected first tool turn"),
   };
   //# Submit tool results before handing control to the agent
-  let results = calls.calls.map((call: root.ai.ToolCall) -> root.ai.ToolResult {
-    root.ai.invoke_tool(tools[0], call)
+  let results = calls.calls.map((call: root.ai.tools.ToolCall) -> root.ai.tools.ToolResult {
+    root.ai.tools.invoke_tool(tools[0], call)
   });
   let resumed = provider.submit(conversation, results);
   let dispatched: string[] = [];
@@ -76,16 +76,16 @@ testset "integ-test-guide-04-save-and-resume" {
       `Call search_knowledge exactly once with query "duplicate charge". After its result, return the final resolution.`,
     );
     let conversation = provider.begin<Resolution>(task);
-    let tools = root.ai.normalize_tools([search_knowledge]);
+    let tools = root.ai.tools.normalize_tools([search_knowledge]);
     let first = provider.step<Resolution>(conversation, tools);
     let calls = match (first.outcome) {
-      let value: root.ai.ToolCalls => value,
+      let value: root.ai.tools.ToolCalls => value,
       let value: Resolution => baml.sys.panic("expected a live tool request before save"),
     };
     let token = provider.save_conversation(conversation);
     let restored = provider.restore_conversation(token);
-    let results = calls.calls.map((call: root.ai.ToolCall) -> root.ai.ToolResult {
-      root.ai.invoke_tool(tools[0], call)
+    let results = calls.calls.map((call: root.ai.tools.ToolCall) -> root.ai.tools.ToolResult {
+      root.ai.tools.invoke_tool(tools[0], call)
     });
     let resumed = provider.submit(restored, results);
     let dispatched: string[] = [];
@@ -102,7 +102,7 @@ testset "integ-test-guide-04-save-and-resume" {
     log.info("live conversation resume " + {
       "saved_provider": token.provider,
       "saved_bytes": token.sealed.length(),
-      "pre_resume_calls": calls.calls.map((call: root.ai.ToolCall) -> string { call.name }),
+      "pre_resume_calls": calls.calls.map((call: root.ai.tools.ToolCall) -> string { call.name }),
       "replayed_dispatches": dispatched,
     }.to_string());
     assert.equal(token.provider, "openai")

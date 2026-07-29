@@ -14,8 +14,10 @@ implements Provider for Fallback {
 
 implements GenerationProvider for Fallback {
   function generate<T>(self, task: Task<T>) -> ResponseWithMetadata<T>
-      throws root.ai.CallError | baml.errors.UnknownError {
+      throws root.ai.Failure | baml.errors.UnknownError {
     let policy = ReplayPolicy { kind: ReplayKind.Safe, idempotency_key: null };
+    //# Track replayable failures so exhaustion rethrows something real
+    let failures: root.ai.Failure[] = [];
     //# Try generation providers in order
     for (let member in self.providers()) {
       //## Select a generation-capable member
@@ -25,23 +27,32 @@ implements GenerationProvider for Fallback {
           let response = provider.generate<T>(task.with_provider(member)) catch (e) {
             let failure: root.ai.Failure => {
               //#### Continue only after a replay-safe failure
-              if (_may_replay(policy, failure)) { continue; }
+              if (root.ai.internal._may_replay(policy, failure)) {
+                failures.push(failure);
+                continue;
+              }
               throw e;
             },
-            _ => throw e,
+            _ => throw baml.errors.UnknownError.with_message<never>(e, "fallback(" + member.name() + ")"),
           };
           return response;
         },
         _ => {},
       }
     }
-    throw baml.errors.UnknownError { data: null, message: ["all fallback providers failed"] }
+    //# Exhausted: the last member's failure IS the fallback's failure — outer
+    //# layers still see its classification instead of an opaque wrapper.
+    match (failures.at(failures.length() - 1)) {
+      let failure: root.ai.Failure => throw failure,
+      null => throw baml.errors.Unsupported { message: "no fallback member can generate" },
+    }
   }
 }
 
 implements CompletionProvider for Fallback {
   function complete<T>(self, task: Task<T>) -> ResponseWithMetadata<T>
-      throws root.ai.CallError | baml.errors.UnknownError {
+      throws root.ai.Failure | baml.errors.UnknownError {
+    let failures: root.ai.Failure[] = [];
     //# Try drive providers in order
     for (let member in self.providers()) {
       //## Select a drive-capable member
@@ -51,23 +62,26 @@ implements CompletionProvider for Fallback {
           //### Attempt provider drive
           let response = provider.complete<T>(task.with_provider(member)) catch (e) {
             let failure: root.ai.Failure => {
-              //#### Continue only after a replay-safe failure
-              if (_may_replay(policy, failure)) { continue; }
-              if (failure.is_retryable()) {
-                throw root.ai.CannotRetry {
-                  message: "fallback refused to replay " + member.name(),
-                };
+              //#### Continue only after a replay-safe failure; anything else
+              //#### is rethrown as itself, classification intact.
+              if (root.ai.internal._may_replay(policy, failure)) {
+                failures.push(failure);
+                continue;
               }
               throw e;
             },
-            _ => throw e,
+            _ => throw baml.errors.UnknownError.with_message<never>(e, "fallback(" + member.name() + ")"),
           };
           return response;
         },
         _ => {},
       }
     }
-    throw baml.errors.UnknownError { data: null, message: ["all fallback providers failed"] }
+    //# Exhausted: rethrow the last real failure, not an opaque wrapper
+    match (failures.at(failures.length() - 1)) {
+      let failure: root.ai.Failure => throw failure,
+      null => throw baml.errors.Unsupported { message: "no fallback member can drive" },
+    }
   }
 
   function replay_policy<T>(self, task: Task<T>) -> ReplayPolicy throws never {

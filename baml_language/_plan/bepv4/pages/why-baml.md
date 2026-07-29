@@ -1,6 +1,7 @@
 # BAML vs. Other AI Frameworks
 
-Vercel AI SDK, Claude Agent SDK, and PydanticAI are all capable systems. BAML's
+Vercel AI SDK, Claude Agent SDK, and PydanticAI are all capable systems — and
+so is the raw OpenAI Python SDK plus hand-rolled parsing. BAML's
 pitch is not that those libraries cannot build agents. It is that BAML can
 describe the model-facing contract once, keep it typed, and reuse it across
 providers, languages, and execution lifecycles.
@@ -11,12 +12,12 @@ This example has a typed input, a typed structured result, two application
 tools, and a multi-step tool loop.
 
 
-| Part                | BAML                                        | Vercel AI SDK                                 |
-| ------------------- | ------------------------------------------- | --------------------------------------------- |
-| Result contract     | `function ResolveTicket(...) -> Resolution` | `Output.object({ schema: resolutionSchema })` |
-| Tool contract       | `function lookup_order(...) -> string`      | `tool({ inputSchema, execute })`              |
-| Agent configuration | Inside the named LLM function               | Inside `new ToolLoopAgent(...)`               |
-| Run it              | `ResolveTicket(ticket)`                     | `await supportAgent.generate(...)`            |
+| Part                | BAML                                                 | Vercel AI SDK                                 |
+| ------------------- | ---------------------------------------------------- | --------------------------------------------- |
+| Result contract     | `function ResolveTicketWithTools(...) -> Resolution` | `Output.object({ schema: resolutionSchema })` |
+| Tool contract       | `function search_knowledge(...) -> json`             | `tool({ inputSchema, execute })`              |
+| Agent configuration | Inside the named LLM function                        | Inside `new ToolLoopAgent(...)`               |
+| Run it              | `ResolveTicketWithTools(ticket)`                     | `await supportAgent.generate(...)`            |
 
 
 Here are the complete versions.
@@ -24,50 +25,64 @@ Here are the complete versions.
 ### BAML
 
 ```baml
-class Ticket {
+enum TicketPriority {
+  Low
+  Normal
+  Urgent
+}
+
+class SupportTicket {
   id: string,
-  message: string,
+  subject: string,
+  body: string,
+  customer_tier: string,
 }
 
 class Resolution {
+  category: string,
+  priority: TicketPriority,
+  summary: string,
   reply: string,
-  resolved: bool,
 }
 
-/// Look up the current order status.
-function lookup_order(
-  order_id: string,
-) -> string {
-  orders.get_status(order_id)
-}
-
-/// Search the support policy.
-function search_policy(
+/// Search the support knowledge base.
+function search_knowledge(
   query: string,
-) -> string {
-  policies.search(query)
+) -> json throws never {
+  {
+    "query": query,
+    "article": "Duplicate charges are normally pending authorizations.",
+  }
 }
 
-function ResolveTicket(
-  ticket: Ticket,
-) -> Resolution {
-  provider: "openai/gpt-5.6-luna"
-  prompt: `
-    Resolve this support ticket.
-    Use tools for current information.
+/// Look up a customer account.
+function lookup_account(
+  customer_id: string,
+) -> json throws never {
+  {
+    "customer_id": customer_id,
+    "status": "active",
+    "tier": "pro",
+  }
+}
 
-    ${ticket}
+function ResolveTicketWithTools(
+  ticket: SupportTicket,
+) -> Resolution {
+  provider: fast_model()
+  prompt: `
+    Resolve ticket ${ticket.id}. Use the available tools before answering.
 
     ${ctx.output_format}
   `
   tools: [
-    lookup_order,
-    search_policy,
+    search_knowledge,
+    lookup_account,
   ]
 }
 
 let resolution: Resolution =
-  ResolveTicket(ticket)
+  ResolveTicketWithTools(sample_ticket())
 ```
 
 ### Vercel AI SDK
@@ -80,44 +95,59 @@ import {
 } from "ai";
 import { z } from "zod";
 
-type Ticket = {
+type SupportTicket = {
   id: string;
-  message: string;
+  subject: string;
+  body: string;
+  customerTier: string;
 };
 
 const resolutionSchema = z.object({
+  category: z.string(),
+  priority: z.enum([
+    "Low",
+    "Normal",
+    "Urgent",
+  ]),
+  summary: z.string(),
   reply: z.string(),
-  resolved: z.boolean(),
 });
 
-const lookupOrder = tool({
+const searchKnowledge = tool({
   description:
-    "Look up the current order status.",
-  inputSchema: z.object({
-    orderId: z.string(),
-  }),
-  execute: async ({ orderId }) =>
-    orders.getStatus(orderId),
-});
-
-const searchPolicy = tool({
-  description:
-    "Search the support policy.",
+    "Search the support knowledge base.",
   inputSchema: z.object({
     query: z.string(),
   }),
-  execute: async ({ query }) =>
-    policies.search(query),
+  execute: async ({ query }) => ({
+    query,
+    article:
+      "Duplicate charges are normally " +
+      "pending authorizations.",
+  }),
+});
+
+const lookupAccount = tool({
+  description:
+    "Look up a customer account.",
+  inputSchema: z.object({
+    customerId: z.string(),
+  }),
+  execute: async ({ customerId }) => ({
+    customerId,
+    status: "active",
+    tier: "pro",
+  }),
 });
 
 const supportAgent = new ToolLoopAgent({
   model: "openai/gpt-5.6-luna",
   instructions:
-    "Resolve the ticket. Use tools " +
-    "for current information.",
+    "Resolve the ticket. Use the " +
+    "available tools before answering.",
   tools: {
-    lookupOrder,
-    searchPolicy,
+    searchKnowledge,
+    lookupAccount,
   },
   output: Output.object({
     schema: resolutionSchema,
@@ -140,7 +170,7 @@ from:
 | Tool schema                         | The BAML function signature                                | `tool(...)` plus an input schema                     |
 | Prompt, provider, and default tools | One named LLM function                                     | Agent configuration plus a call                      |
 | Normal result                       | The declared `Resolution`                                  | `GenerateTextResult.output` inferred from the schema |
-| Other lifecycle                     | Run `ResolveTicket.task(ticket)` with another typed runner | Use another method or compose another SDK/runtime    |
+| Other lifecycle                     | Run `ResolveTicketWithTools@task(ticket)` with another typed runner | Use another method or compose another SDK/runtime    |
 
 
 This shows the specific  
@@ -207,8 +237,8 @@ different exact types.
 for streaming, tool calling, realtime, or another capability without
 discovering incompatibility after a request starts.
 4. **The workflow remains visible to BAML.** Graphs, tests, logs, generated
-clients, and errors can all name `ResolveTicket` even when a generic runner
-executes it.
+clients, and errors can all name `ResolveTicketWithTools` even when a generic
+runner executes it.
 5. **The orchestration is portable.** The same BAML source can generate typed
 TypeScript and Python entry points without rewriting the agent in both host
 languages.

@@ -35,7 +35,7 @@ function _message_text(message: root.ai.Message) -> string throws never {
 function _message_provider_data(message: root.ai.Message) -> json? throws never {
     for (let part in message.parts()) {
         match (part) {
-            let data: root.ai.ProviderDataPart => {
+            let data: root.ai.messages.ProviderDataPart => {
                 if (data.provider == "openai") {
                     return data.data;
                 }
@@ -46,7 +46,7 @@ function _message_provider_data(message: root.ai.Message) -> json? throws never 
     null
 }
 
-implements root.ai.ConversationImportProvider for Chat {
+implements root.ai.tools.ConversationImportProvider for Chat {
   function import_messages(
     self,
     messages: root.ai.Messages,
@@ -114,17 +114,14 @@ implements root.ai.ConversationImportProvider for Chat {
   }
 }
 
-implements root.ai.ResumableToolCallingProvider for Chat {
+implements root.ai.tools.ResumableToolCallingProvider for Chat {
   function save_conversation(
     self,
     conversation: root.ai.Conversation,
   ) -> root.ai.ConversationToken throws baml.errors.UnknownError {
     let state = match (conversation) {
       let value: Conversation => value,
-      _ => throw baml.errors.UnknownError {
-        data: null,
-        message: ["wrong OpenAI conversation"],
-      },
+      _ => throw baml.errors.UnknownError.with_message<never>(null, "wrong OpenAI conversation"),
     };
     root.ai.ConversationToken {
       provider: self.name(),
@@ -141,16 +138,10 @@ implements root.ai.ResumableToolCallingProvider for Chat {
     token: root.ai.ConversationToken,
   ) -> root.ai.Conversation throws baml.errors.UnknownError {
     if (token.provider != self.name() || token.version != 1) {
-      throw baml.errors.UnknownError {
-        data: token,
-        message: ["OpenAI conversation token has the wrong provider or version"],
-      };
+      throw baml.errors.UnknownError.with_message<never>(token, "OpenAI conversation token has the wrong provider or version");
     }
     let state = baml.json.parse(token.sealed) catch (e) {
-      _ => throw baml.errors.UnknownError {
-        data: e,
-        message: ["invalid OpenAI conversation token"],
-      },
+      _ => throw baml.errors.UnknownError.with_message<never>(e, "invalid OpenAI conversation token"),
     };
     Conversation {
       owner: self,

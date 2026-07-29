@@ -1,6 +1,6 @@
 test "guide 07.02: managed cache lifetime is explicit" {
-    let provider = root.ai.FakeCacheProvider { inner: fake_resolution() };
-    let cache = root.ai.run.CreateCache.new(sample_history(), baml.time.Duration.from_minutes(5)).run(provider);
+    let provider = root.google.FakeCacheProvider { inner: fake_resolution() };
+    let cache = root.google.CreateCache.new(sample_history(), baml.time.Duration.from_minutes(5)).run(provider);
     assert.equal(cache.key(), "fake-cache-key");
     assert
         .equal(
@@ -13,13 +13,13 @@ test "guide 07.02: managed cache lifetime is explicit" {
     // cache.cleanup();
     // cache.cleanup();
     // match (cache) {
-    //     let fake: root.ai.FakeCache => assert.is_true(fake.deleted),
+    //     let fake: root.google.FakeCache => assert.is_true(fake.deleted),
     //     _ => assert.is_true(false),
     // }
 }
 
 test "guide 07.02: a custom runner owns the complete cache lifecycle" {
-    let provider = root.ai.FakeCacheProvider { inner: fake_resolution() };
+    let provider = root.google.FakeCacheProvider { inner: fake_resolution() };
     let response = ResolveTicket_task(sample_ticket(), provider)
         .run(
             runner = ManagedCacheRunner<Resolution>.new(sample_history(), baml.time.Duration.from_minutes(5)),
@@ -49,12 +49,12 @@ testset "integ-test-guide-07-managed-cache" {
                     {
                         "guide": "07.02",
                         "cache_key": provider.created_keys[0],
-                        "cached_input_tokens": response.meta.usage?.cached_input_tokens ?? 0,
+                        "cached_input_tokens": response.metadata.usage?.cached_input_tokens ?? 0,
                     },
                 ),
         );
-        assert.equal(response.meta.provider, "gemini-managed-cache");
-        assert.is_true((response.meta.usage?.cached_input_tokens ?? 0) > 0);
+        assert.equal(response.metadata.provider, "gemini-managed-cache");
+        assert.is_true((response.metadata.usage?.cached_input_tokens ?? 0) > 0);
         assert.is_true(response.value.reply.length() > 0)
     }
 }

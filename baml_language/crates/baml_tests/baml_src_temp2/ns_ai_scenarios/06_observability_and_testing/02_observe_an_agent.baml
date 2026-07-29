@@ -1,7 +1,7 @@
 // Capture a chronological trace of model steps, tool activity, and completion
 // while an agent works.
 function observe_an_agent(
-) -> string throws root.ai.ToolError | baml.errors.UnknownError | baml.errors.Unsupported {
+) -> string throws root.ai.Failure | baml.errors.UnknownError | baml.errors.Unsupported {
     let observer = GuideObserver { kinds: [] };
     let outcome = ResolveTicketWithTools_task(sample_ticket(), fake_tool_provider([one_knowledge_call()]), [search_knowledge])
         .run(

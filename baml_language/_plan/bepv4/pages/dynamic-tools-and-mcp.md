@@ -7,86 +7,133 @@ work. Use a `ToolRegistry` when the roster may change between model steps.
 
 | Utility | What it does |
 | --- | --- |
-| `ai.ToolRegistry` | Holds the active application tools |
-| `ai.mcp.connect` | Opens an MCP connection |
-| `connection.list_tools()` | Reads the server's tool definitions |
-| `ai.tool_from_json_schema` | Turns a runtime schema and handler into a tool |
+| `ai.tools.ToolRegistry` | Holds the active application tools |
+| `ai.tools.tool(...)` | Wraps a function or bound method as a tool |
+| `ai.tools.tool_from_json_schema` | Turns a runtime schema and handler into a tool |
+| `prepare_step` and `ai.tools.StepPlan` | Applies the complete next tool roster before a model step |
 
 ## Example
 
-This agent starts with one tool: `add_mcp_server`. Calling it connects to a
-server and adds that server's tools for the next model step.
+This agent starts with one tool: `add_mcp_server`. Calling it queues a server
+connection, and the `prepare_step` callback activates that server's tools for
+the next model step.
 
 ```baml
-class Resolution {
-  reply: string,
-  sources: string[],
+enum TicketPriority {
+  Low
+  Normal
+  Urgent
 }
 
-function ResolveTicket(message: string) -> Resolution {
+class Resolution {
+  category: string,
+  priority: TicketPriority,
+  summary: string,
+  reply: string,
+}
+
+function McpBootstrap(order_id: string) -> Resolution {
   provider: "openai/gpt-5.6-luna"
   prompt: `
-    Resolve this support ticket.
-    Add an approved MCP server if you need capabilities that are not available.
-
-    ${message}
+    Find the status of order ${order_id}. You must first call add_mcp_server
+    with server "orders". After that succeeds, call the newly available
+    orders MCP lookup tool.
 
     ${ctx.output_format}
   `
 }
 
-class McpDiscovery {
-  registry: ai.ToolRegistry,
-  connections: ai.mcp.Connection[],
+class FakeMcpConnection {
+  discoveries: int,
+  looked_up_orders: string[],
 
-  /// Connect to an approved MCP server and enable its tools.
-  function add_mcp_server(self, server_url: string) -> string {
-    //# Connect and keep the resource alive for the whole agent run.
-    let connection = ai.mcp.connect(server_url);
-    self.connections.push(connection);
-
-    //# Convert each discovered schema into an executable BAML tool.
-    for (let definition in connection.list_tools()) {
-      self.registry.add(
-        ai.tool_from_json_schema(
-          definition.name,
-          definition.description,
-          definition.input_schema,
-          (args) -> {
-            connection.call(definition.name, args)
-          },
-        ),
-      )
-    }
-
-    "MCP tools will be available on the next step"
+  function tools(self) -> ai.tools.Tool[] throws never {
+    self.discoveries = self.discoveries + 1;
+    [ai.tools.tool_from_json_schema(
+      "mcp__orders__lookup_order",
+      "Look up an order through the connected orders MCP server.",
+      {
+        "type": "object",
+        "properties": { "order_id": { "type": "string" } },
+        "required": ["order_id"],
+      },
+      self.lookup_order,
+    )]
   }
 
-  function close(self) -> null {
-    for (let connection in self.connections) {
-      connection.close()
-    }
-  }
-
-  function cleanup(self) -> void {
-    self.close()
+  function lookup_order(self, order_id: string) -> json throws never {
+    self.looked_up_orders.push(order_id);
+    { "order_id": order_id, "status": "shipped" }
   }
 }
 
-let registry = ai.ToolRegistry.new([]);
-let discovery = McpDiscovery {
-  registry: registry,
-  connections: [],
-};
-registry.add(discovery.add_mcp_server);
+class McpServerBroker {
+  connection: FakeMcpConnection,
+  pending_servers: string[],
+  connected_servers: string[],
 
-defer { discovery.close() }
+  /// Connect an MCP server and add its tools on the next agent turn. Available server: orders.
+  function request_server(self, server: string) -> json throws never {
+    if (server != "orders") {
+      return { "server": server, "status": "unknown_server" };
+    }
+    if (self.connected_servers.filter((name: string) -> bool { name == server }).length() == 0
+        && self.pending_servers.filter((name: string) -> bool { name == server }).length() == 0) {
+      self.pending_servers.push(server);
+    }
+    { "server": server, "status": "connection_requested" }
+  }
 
-let outcome = ResolveTicket.task(
-  "Find the account policy for customer-7.",
-).run(
-  runner = ai.run.Agent.new(
+  function activate_pending(self, current_tools: ai.tools.Tool[]) -> ai.tools.Tool[]? throws never {
+    let pending = self.pending_servers.slice(0, self.pending_servers.length());
+    self.pending_servers = [];
+    let next_tools = current_tools.slice(0, current_tools.length());
+    let changed = false;
+    //# Activate MCP servers requested by the model
+    for (let server in pending) {
+      if (server == "orders"
+          && self.connected_servers.filter((name: string) -> bool { name == server }).length() == 0) {
+        //## Discover and add this server's tools to the next roster
+        for (let tool in self.connection.tools()) {
+          next_tools.push(tool);
+          changed = true;
+        }
+        self.connected_servers.push(server);
+      }
+    }
+    if (changed) { next_tools } else { null }
+  }
+}
+
+function add_mcp_server_tool(broker: McpServerBroker) -> ai.tools.Tool throws never {
+  ai.tools.tool(
+    broker.request_server,
+    name = "add_mcp_server",
+  )
+}
+
+function mcp_broker() -> McpServerBroker throws never {
+  McpServerBroker {
+    connection: FakeMcpConnection { discoveries: 0, looked_up_orders: [] },
+    pending_servers: [],
+    connected_servers: [],
+  }
+}
+
+let broker = mcp_broker();
+let registry = ai.tools.ToolRegistry.new([add_mcp_server_tool(broker)]);
+
+let outcome = McpBootstrap@task("O-42").run(
+  runner = ai.run.Agent<Resolution>.new(
+    tools = [],
     tool_registry = registry,
+    prepare_step = (context) -> {
+      ai.tools.StepPlan {
+        provider: null,
+        tools: broker.activate_pending(context.tools),
+        stop: null,
+      }
+    },
   ),
 )
 ```
@@ -96,62 +143,58 @@ let outcome = ResolveTicket.task(
 ```mermaid
 flowchart TD
   agent["Agent starts with add_mcp_server"] --> budget{"Budget remains?"}
-  budget -->|yes| prepare["Snapshot current ToolRegistry"]
-  prepare --> model["Provider step"]
+  budget -->|yes| prepare["prepare_step: broker.activate_pending"]
+  prepare --> roster{"Pending server?"}
+  roster -->|yes| discover["Discover tool schemas"]
+  discover --> registry["Replace the ToolRegistry roster"]
+  registry --> model["Provider step"]
+  roster -->|no| model
   model --> result{"Final value or tool calls?"}
-  result -->|final value| done["Done<Resolution>"]
-  result -->|add_mcp_server| connect["Connect to MCP server"]
-  connect --> discover["Discover tool schemas"]
-  discover --> registry["Add handlers to ToolRegistry"]
-  registry --> submit["Submit bootstrap result"]
-  result -->|discovered MCP tool| mcp["Call MCP server"]
+  result -->|add_mcp_server| connect["request_server queues orders"]
+  connect --> submit["Submit bootstrap result"]
+  result -->|mcp__orders__lookup_order| mcp["Call the MCP-backed handler"]
   mcp --> submit
   submit --> budget
+  result -->|final value| done["Done<Resolution>"]
   budget -->|no| stopped["BudgetReached"]
 ```
 
 ### Illustrative output
 
 ```console
-[INFO] called tool: add_mcp_server("https://support.example/mcp")
-[INFO] connected MCP server: support
-[INFO] discovered tools: search_policy, lookup_account
-[INFO] tool roster changed for step 2
-[INFO] called MCP tool: search_policy({ "customer_id": "customer-7" })
+[INFO] called tool: add_mcp_server(server = "orders")
+[INFO] tool returned: { "server": "orders", "status": "connection_requested" }
+[INFO] tool roster changed for step 2: add_mcp_server, mcp__orders__lookup_order
+[INFO] called MCP tool: mcp__orders__lookup_order(order_id = "O-42")
+[INFO] Done: Resolution { summary: "Order checked through MCP", ... }
 ```
 
 The registry is authoritative for this run. A tool added during one step is
-offered on the next step. Tool names are unique, and replacement is explicit.
+offered on the next step. Tool names are unique, and replacement is explicit:
+a non-null `StepPlan.tools` is the complete next roster.
 
-The generated handlers retain the MCP connection they call. Keep connections
-alive until the Agent finishes, close them with `defer`, and provide
-`cleanup()` as the garbage-collection fallback.
+The generated handlers retain the connection they call:
+`mcp__orders__lookup_order` is `connection.lookup_order` bound to the broker's
+live connection, so the broker keeps that connection alive for the whole
+Agent run. (`FakeMcpConnection` stands in for a real MCP client here; a
+production broker speaks the MCP wire protocol but exposes the same `tools()`
+surface.)
 
 ## Simpler variation: discover before the run
 
-If the server and roster are known before execution, connect first and pass
-the resulting tools directly:
+If the server and roster are known before execution, discover first and seed
+the registry directly:
 
 ```baml
-let connection = ai.mcp.connect(support_server_url);
-defer { connection.close() }
+let broker = mcp_broker();
 
-let registry = ai.ToolRegistry.new([]);
-for (let definition in connection.list_tools()) {
-  registry.add(
-    ai.tool_from_json_schema(
-      definition.name,
-      definition.description,
-      definition.input_schema,
-      (args) -> {
-        connection.call(definition.name, args)
-      },
-    ),
-  )
+let registry = ai.tools.ToolRegistry.new([]);
+for (let tool in broker.connection.tools()) {
+  registry.add(tool);
 }
 
-let outcome = ResolveTicket.task(message).run(
-  runner = ai.run.Agent.new(
+let outcome = ResolveTicketWithTools@task(sample_ticket()).run(
+  runner = ai.run.Agent<Resolution>.new(
     tool_registry = registry,
   ),
 )
@@ -161,12 +204,12 @@ let outcome = ResolveTicket.task(message).run(
 
 ```mermaid
 flowchart TD
-  connect["Connect before run"] --> discover["Discover MCP schemas"]
-  discover --> registry["Build ToolRegistry"]
+  connect["Connect before run"] --> discover["connection.tools() discovers schemas"]
+  discover --> registry["Seed the ToolRegistry with add"]
   registry --> budget{"Agent budget remains?"}
   budget -->|yes| model["Provider step with complete roster"]
   model --> result{"Final value or tool calls?"}
-  result -->|MCP tool calls| mcp["Call MCP server"]
+  result -->|MCP tool calls| mcp["Call the MCP-backed handler"]
   mcp --> submit["Submit correlated results"]
   submit --> budget
   result -->|final value| done["Done<Resolution>"]
@@ -176,11 +219,12 @@ flowchart TD
 ### Illustrative output
 
 ```console
-[INFO] connected MCP server before Agent start
-[INFO] discovered 2 tools
-[INFO] Agent started with: search_policy, lookup_account
-[INFO] Agent finished; closing MCP connection
+[INFO] discovered 1 tool before Agent start
+[INFO] Agent started with: mcp__orders__lookup_order
+[INFO] Agent finished without changing the roster
 ```
 
-Use this version when the model does not need to decide whether or when to add
-the server.
+Use this version when the model does not need to decide whether or when to
+add the server. `ResolveTicketWithTools` is the tool-using function from
+[Agents and tools](agents-and-tools.md); when a `tool_registry` is passed, it
+is authoritative and the function's declared tools are not offered.

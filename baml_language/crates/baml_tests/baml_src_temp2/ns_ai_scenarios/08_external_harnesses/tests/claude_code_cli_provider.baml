@@ -6,12 +6,12 @@ test "guide 08.07: Claude Code JSONL becomes typed output and normalized events"
             claude_code_cli_fixture(),
         );
     assert.equal(run.response.value.answer, "PONG");
-    assert.equal(run.response.meta.provider, "claude-code-cli");
+    assert.equal(run.response.metadata.provider, "claude-code-cli");
     assert.equal(run.session_id, "fixture-session");
     assert.equal(run.event_delivery, "streaming_jsonl");
     assert
         .equal(
-            run.events.map((event: root.ai.AgentEvent) -> string {
+            run.events.map((event: root.ai.observe.AgentEvent) -> string {
                 event.kind()
             }),
             ["model_started", "text_delta", "usage_updated", "run_finished"],
@@ -35,7 +35,7 @@ test "guide 08.07: Claude Code keeps interactive control on a separate HarnessSe
     let harness = root.claude_code.claude_code_cli();
     let session = harness
         .open(
-            root.ai.HarnessOptions {
+            root.ai.harness.HarnessOptions {
                 cwd: "/tmp",
                 permission_mode: "dontAsk",
                 sandbox: "safe-mode",
@@ -58,14 +58,14 @@ testset "integ-test-guide-08-claude-code-cli" {
         let run = ClaudeCodeWebFetch_task(provider)
             .run(
                 runner = root.ai.run.Harness<HackerNewsTopStory>.new(provider, cwd = "/tmp", permission_mode = "dontAsk", sandbox = "safe-mode", on_event = (
-                    event: root.ai.AgentEvent,
+                    event: root.ai.observe.AgentEvent,
                 ) -> null {
                     callback_kinds.push(event.kind());
                     log.info("Claude Code harness event: " + event.kind());
                     null
                 }),
             );
-        let kinds = run.events.map((event: root.ai.AgentEvent) -> string {
+        let kinds = run.events.map((event: root.ai.observe.AgentEvent) -> string {
             event.kind()
         });
         log.info(run.value);

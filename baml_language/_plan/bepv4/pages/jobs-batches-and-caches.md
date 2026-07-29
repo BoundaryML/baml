@@ -8,39 +8,54 @@ or deleted.
 
 | Utility | What it does |
 | --- | --- |
-| `ai.run.Background` | Starts remote work and returns `Job<T>` |
-| `ai.run.Batch<T>` | Submits homogeneous tasks together |
-| `ai.create_cache` | Creates provider-managed context |
-| `openai.Responses` | Implements durable OpenAI background jobs |
+| `ai.run.Background<T>` | Runner: starts remote work and returns an `ai.jobs.Job<T>` handle |
+| `ai.run.Batch<T>` | Submits homogeneous tasks together as one `ai.jobs.Batch<T>` |
+| `google.CreateCache` | Explicit named caches (Gemini-specific) |
 | `google.Gemini` | Implements Gemini managed caches |
+| `openai.Responses` | Implements durable OpenAI background jobs |
 | `defer` | Cleans up a resource on every scope exit |
+
+A `Task<T>` is work that has not started; an `ai.jobs.Job<T>` is a handle to
+work a provider has already accepted. `ai.run.Background<T>` is the runner
+that turns the first into the second; `poll()`, `cancel()`, and `token()`
+live on the handle.
 
 ## Example: background work
 
 ```baml
 class Resolution {
+  category: string,
+  priority: TicketPriority,
+  summary: string,
   reply: string,
-  resolved: bool,
 }
 
-function DeepResolveTicket(message: string) -> Resolution {
-  provider: BackgroundModel
+function ResolveTicket(ticket: SupportTicket) -> Resolution {
+  provider: openai.Responses {
+    model: "gpt-5.6-luna",
+    api_key: baml.env.get_or_panic("OPENAI_API_KEY"),
+    base_url: null,
+  }
   prompt: `
-    Investigate and resolve this support ticket.
-
-    ${message}
+    Resolve this support ticket.
+    Subject: ${ticket.subject}
+    Body: ${ticket.body}
 
     ${ctx.output_format}
   `
 }
 
 function wait_for_resolution(
-  job: ai.Job<Resolution>,
+  job: ai.jobs.Job<Resolution>,
 ) -> Resolution {
   while (true) {
     match (job.poll()) {
-      let response: ai.Response<Resolution> => return response.value,
-      null => baml.sys.sleep(baml.time.Duration.from_seconds(1)),
+      let response: ai.ResponseWithMetadata<Resolution> => return response.value,
+      null => {
+        baml.sys.sleep(baml.time.Duration.from_seconds(1)) catch (e) {
+          _ => null
+        };
+      },
     }
   }
 
@@ -48,18 +63,17 @@ function wait_for_resolution(
 }
 
 function resolve_ticket_in_background(
-  message: string,
+  ticket: SupportTicket,
 ) -> Resolution {
-  let job: ai.Job<Resolution> = DeepResolveTicket
-    .task(message)
+  let job: ai.jobs.Job<Resolution> = ResolveTicket@task(ticket)
     .run(
-      runner = ai.run.Background.new(
-        idempotency_key = "ticket-1042:deep-resolution",
+      runner = ai.run.Background<Resolution>.new(
+        idempotency_key = "ticket-" + ticket.id,
       ),
     );
 
   defer {
-    if (job.status() == ai.JobStatus.Pending) {
+    if (job.status() == ai.jobs.JobStatus.Pending) {
       job.cancel()
     }
   }
@@ -72,151 +86,129 @@ function resolve_ticket_in_background(
 
 ```mermaid
 flowchart LR
-  task["DeepResolveTicket task"] --> background["ai.run.Background"]
+  task["ResolveTicket task"] --> background["ai.run.Background"]
   background --> submit["Submit remote work"]
-  submit --> job["Job<Resolution> and token"]
+  submit --> job["Job&lt;Resolution&gt; and token"]
   job --> poll["Application polls"]
   poll -->|pending| poll
-  poll -->|complete| response["Response<Resolution>"]
+  poll -->|complete| response["ResponseWithMetadata&lt;Resolution&gt;"]
   response --> result["Resolution"]
 ```
 
 ### Illustrative output
 
 ```console
-[INFO] submitted background job: job_1042
-[INFO] persisted resume token for job_1042
+[INFO] submitted background job: ticket-T-100
+[INFO] persisted resume token for ticket-T-100
 [INFO] poll: pending
-[INFO] poll: running
-[INFO] poll: completed
-[INFO] received Resolution { resolved: true, ... }
+[INFO] poll: pending
+[INFO] poll: complete
+[INFO] received Resolution { category: "billing", ... }
 ```
 
 Persist `job.token()` when another worker will continue polling. The token
-contains stable resume coordinates, not credentials. `cancel()` is idempotent
-and cooperates with the resource's cleanup policy.
+contains stable resume coordinates, not credentials; a fresh process rebuilds
+a handle from it with `provider.resume_job<Resolution>(token)` and its own
+configured provider. `cancel()` is idempotent and cooperates with the
+resource's cleanup policy.
 
 ## Variation: submit a batch
 
 ```baml
-class Classification {
-  category: string,
-}
+function resolve_tickets_as_batch(
+  tickets: SupportTicket[],
+) -> Resolution[] {
+  let provider = ai.testing.FakeBatchProvider { inner: fake_resolution() };
 
-function ClassifyTicket(message: string) -> Classification {
-  provider: BatchModel
-  prompt: `
-    Classify this support ticket.
-
-    ${message}
-
-    ${ctx.output_format}
-  `
-}
-
-function classify_tickets(
-  messages: string[],
-) -> Classification[] {
-  let tasks = messages.map((message) -> {
-    ClassifyTicket.task(message)
+  let tasks = tickets.map((ticket: SupportTicket) -> ai.Task<Resolution> {
+    ResolveTicket@task(ticket).with_provider(provider)
   });
 
-  let batch: ai.Batch<Classification> = ai.run.Batch<Classification>.new(
-    provider = BatchModel,
-    idempotency_key = "daily-ticket-classification",
+  let batch: ai.jobs.Batch<Resolution> = ai.run.Batch<Resolution>.new(
+    provider,
+    idempotency_key = "daily-ticket-resolution",
   ).run(tasks);
 
   defer {
-    if (batch.status() == ai.JobStatus.Pending) {
+    if (batch.status() == ai.jobs.JobStatus.Pending) {
       batch.cancel()
     }
   }
 
-  while (batch.status() == ai.JobStatus.Pending) {
-    baml.sys.sleep(baml.time.Duration.from_seconds(1))
+  while (batch.status() == ai.jobs.JobStatus.Pending) {
+    baml.sys.sleep(baml.time.Duration.from_seconds(1)) catch (e) {
+      _ => null
+    };
   }
 
-  batch.results().map((response) -> { response.value })
+  batch.results().map((response: ai.ResponseWithMetadata<Resolution>) -> Resolution {
+    response.value
+  })
 }
-```
-
-### What happens
-
-```mermaid
-flowchart LR
-  messages["Ticket messages"] --> tasks["Classification tasks"]
-  tasks --> batch_runner["ai.run.Batch"]
-  batch_runner --> remote["Provider batch"]
-  remote --> handles["Typed Classification results"]
 ```
 
 ### Illustrative output
 
 ```console
-[INFO] submitted batch: 250 Classification tasks
-[INFO] batch status: validating
-[INFO] batch status: completed
-[INFO] collected 250 Classification results
+[INFO] submitted batch: 250 ResolveTicket tasks
+[INFO] batch status: pending
+[INFO] batch status: complete
+[INFO] collected 250 Resolution results
 ```
 
-The simple batch API is homogeneous: every item returns `Classification`. For
-mixed task types, use `BatchQueue`; each submitted item receives its own typed
-result handle.
+The batch runner consumes the task collection as a whole, so its provider is
+named up front and must implement `ai.jobs.BatchProvider`. The example uses
+the deterministic `ai.testing.FakeBatchProvider` from the scenario corpus;
+any batch-capable adapter fits the same slot. The batch API is homogeneous:
+every item returns `Resolution`, and `results()` preserves each item's
+`ResponseWithMetadata<Resolution>`. Mixed output types belong in separate
+batches.
 
 ## Variation: reuse provider-managed context
 
+Named caches are not a portable concept: only Gemini exposes them, and
+OpenAI/Anthropic manage prompt caching transparently on the wire. The portable
+`ai` namespace therefore has no cache API. Providers that cache transparently
+just do it; Gemini's named caches live in the `google` namespace, and the
+Gemini adapter plumbs an active cache into every request of a conversation —
+explicit `google.CreateCache` / `cache.delete()` is for applications that
+manage cache lifetime themselves.
+
 ```baml
-class Answer {
-  text: string,
-}
-
-function AnswerPolicyQuestion(question: string) -> Answer {
-  provider: CachedModel
-  prompt: `
-    Answer this policy question.
-
-    ${question}
-
-    ${ctx.output_format}
-  `
-}
-
 function answer_with_policy_cache(
   policy_corpus: ai.Messages,
-  question: string,
-) -> Answer {
-  let cache = ai.create_cache(
-    provider = CachedModel,
-    messages = policy_corpus,
-    ttl = baml.time.Duration.from_minutes(30),
-  );
+  ticket: SupportTicket,
+) -> Resolution {
+  let provider = google.Gemini {
+    model: "gemini-2.5-flash",
+    api_key: baml.env.get_or_panic("GOOGLE_API_KEY"),
+    base_url: null,
+    created_keys: [],
+    deleted_keys: [],
+  };
+
+  let cache = google.CreateCache.new(
+    policy_corpus,
+    baml.time.Duration.from_minutes(30),
+  ).run(provider);
 
   defer { cache.delete() }
 
-  cache.run(AnswerPolicyQuestion.task(question)).value
+  cache.run<Resolution>(ResolveTicket@task(ticket)).value
 }
-```
-
-### What happens
-
-```mermaid
-flowchart LR
-  corpus["Policy corpus"] --> cache["Provider-managed Cache"]
-  question["AnswerPolicyQuestion task"] --> cache
-  cache --> provider["Request reuses cached context"]
-  provider --> answer["Typed Answer"]
-  cache -->|scope exit| delete["Delete remote cache"]
 ```
 
 ### Illustrative output
 
 ```console
 [INFO] created provider cache: policy-corpus, ttl = 30m
-[INFO] cache hit for AnswerPolicyQuestion
-[INFO] returned Answer { text: "...", ... }
+[INFO] cache hit for ResolveTicket
+[INFO] returned Resolution { category: "billing", ... }
 [INFO] deleted provider cache
 ```
 
-Use `defer` when the lifetime is known. Resource `cleanup()` methods provide a
-garbage-collection fallback, but remote resources should not wait on eventual
-GC during normal production execution.
+Cache creation is provider-first: there is no task until the cache resource
+exists, so `google.CreateCache.new(messages, ttl)` runs against the provider
+and returns the `Cache` resource. Use `defer` when the lifetime is known.
+Remote resources should not wait on eventual garbage collection during normal
+production execution; delete them explicitly on every exit path.

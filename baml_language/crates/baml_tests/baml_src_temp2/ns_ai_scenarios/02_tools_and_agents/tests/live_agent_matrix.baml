@@ -7,8 +7,8 @@ testset "integ-test-guide-02-agent-capabilities" {
       api_key: baml.env.get_or_panic("OPENAI_API_KEY"),
     };
     //# Build a dynamic registry, callbacks, and observer
-    let registry = root.ai.ToolRegistry.new([search_knowledge]);
-    let account_tool = root.ai.normalize_tool(lookup_account);
+    let registry = root.ai.tools.ToolRegistry.new([search_knowledge]);
+    let account_tool = root.ai.tools.normalize_tool(lookup_account);
     let trace = guide_agent_trace();
     let observer = GuideObserver { kinds: [] };
     let runner = root.ai.run.Agent<Resolution>.new(
@@ -18,9 +18,9 @@ testset "integ-test-guide-02-agent-capabilities" {
         if (context.step == 0) {
           let next_tools = context.tools.slice(0, context.tools.length());
           next_tools.push(account_tool);
-          root.ai.StepPlan { provider: null, tools: next_tools, stop: null }
+          root.ai.tools.StepPlan { provider: null, tools: next_tools, stop: null }
         } else {
-          root.ai.StepPlan { provider: null, tools: null, stop: null }
+          root.ai.tools.StepPlan { provider: null, tools: null, stop: null }
         }
       },
       on_event = (event) -> {
@@ -53,7 +53,7 @@ testset "integ-test-guide-02-agent-capabilities" {
       model: "gpt-5.6-luna",
       api_key: baml.env.get_or_panic("OPENAI_API_KEY"),
     };
-    let handoff = root.ai.tool(lookup_account).as_handoff();
+    let handoff = root.ai.tools.tool(lookup_account).as_handoff();
     //# Run until the handoff boundary
     let task = ResolveTicketWithTools_task(sample_ticket(), provider, [handoff]);
     let outcome = task.run(

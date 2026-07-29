@@ -15,18 +15,15 @@ class AudioTranscription {
         }
     }
 
-    implements root.ai.TranscriptionProvider {
+    implements root.ai.transcription.TranscriptionProvider {
         function transcribe(
             self,
-            stream: root.ai.AudioStream,
-            options: root.ai.TranscriptionOptions,
-        ) -> root.ai.ResponseWithMetadata<string> throws baml.errors.UnknownError {
+            stream: root.ai.transcription.AudioStream,
+            options: root.ai.transcription.TranscriptionOptions,
+        ) -> root.ai.ResponseWithMetadata<string> throws root.ai.Failure | baml.errors.UnknownError {
             let chunks = stream.collect();
             if (chunks.length() != 1) {
-                throw baml.errors.UnknownError {
-          data: chunks.length(),
-          message: ["bounded transcription currently requires exactly one audio chunk"],
-        };
+                throw baml.errors.UnknownError.with_message<never>(chunks.length(), "bounded transcription currently requires exactly one audio chunk");
             }
             self.received_chunks = chunks.length();
             let chunk = chunks[0];
@@ -35,10 +32,7 @@ class AudioTranscription {
             let key = match (self.inner.api_key) {
                 let value: string => value,
                 null => {
-                    throw baml.errors.UnknownError {
-            data: null,
-            message: ["OpenAI transcription requires api_key"],
-          }
+                    throw baml.errors.UnknownError.with_message<never>(null, "OpenAI transcription requires api_key")
                 },
             };
             let request_body: map<string, json> = {
@@ -81,18 +75,12 @@ class AudioTranscription {
                     },
                 ) catch (e) {
                 _ => {
-                    throw baml.errors.UnknownError {
-            data: e,
-            message: ["OpenAI transcription send failed"],
-          }
+                    throw baml.errors.UnknownError.with_message<never>(e, "OpenAI transcription send failed")
                 },
             };
             let body = http_response.text() catch (e) {
                 _ => {
-                    throw baml.errors.UnknownError {
-            data: e,
-            message: ["OpenAI transcription body read failed"],
-          }
+                    throw baml.errors.UnknownError.with_message<never>(e, "OpenAI transcription body read failed")
                 },
             };
             log.info(
@@ -108,29 +96,20 @@ class AudioTranscription {
                     ),
             );
             if (!http_response.ok()) {
-                throw baml.errors.UnknownError {
-          data: body,
-          message: ["OpenAI transcription http " + http_response.status_code.to_string()],
-        };
+                throw root.ai.internal.classify_http("openai", http_response.status_code, body);
             }
             let raw: json = baml.json.parse(body) catch (e) {
                 _ => {
-                    throw baml.errors.UnknownError {
-            data: e,
-            message: ["OpenAI transcription JSON parse failed"],
-          }
+                    throw baml.errors.UnknownError.with_message<never>(e, "OpenAI transcription JSON parse failed")
                 },
             };
             let transcript = baml.json.path_or<string>(raw, ".choices[0].message.content", "");
             if (transcript.length() == 0) {
-                throw baml.errors.UnknownError {
-          data: raw,
-          message: ["OpenAI transcription returned no text"],
-        };
+                throw baml.errors.UnknownError.with_message<never>(raw, "OpenAI transcription returned no text");
             }
             root.ai.ResponseWithMetadata<string> {
                 value: transcript,
-                meta: root.ai.ResponseMetadata {
+                metadata: root.ai.ResponseMetadata {
                     provider: self.name(),
                     model: self.inner.model,
                     request_id: baml.json.path_or<string?>(raw, ".id", null),

@@ -1,6 +1,6 @@
-test "guide 02.08: a handoff tool returns control to the application" {
-    let handoff_tool = root.ai.tool(lookup_account).as_handoff();
-    let provider = fake_tool_provider([root.ai.ToolCall { id: "handoff-1", name: "lookup_account", args: { "customer_id": "C-1" } }]);
+test "guide 02.08: a handoff root.ai.tools.tool returns control to the application" {
+    let handoff_tool = root.ai.tools.tool(lookup_account).as_handoff();
+    let provider = fake_tool_provider([root.ai.tools.ToolCall { id: "handoff-1", name: "lookup_account", args: { "customer_id": "C-1" } }]);
     let task = ResolveTicketWithTools_task(sample_ticket(), provider, [handoff_tool]);
     let outcome = task.run(
         runner = root.ai.run.Agent<Resolution>.new(tools = [handoff_tool]),
@@ -28,8 +28,8 @@ test "guide 02.08: a step budget returns resumable state" {
 }
 
 test "guide 02.08: a cost budget stops between provider steps" {
-    let provider = root.ai.ScriptedToolProvider {
-        turns: [root.ai.ToolCalls { calls: [one_knowledge_call()] }],
+    let provider = root.ai.testing.ScriptedToolProvider {
+        turns: [root.ai.tools.ToolCalls { calls: [one_knowledge_call()] }],
         final_output: `
             {
                   "category":"billing",

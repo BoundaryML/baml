@@ -35,8 +35,8 @@ class RealtimeServerVad {
 // OpenAI Realtime currently exchanges signed little-endian PCM16, mono,
 // at 24 kHz. The provider package owns this requirement; portable ai runners
 // only compare the session and device declarations.
-function realtime_audio_format() -> root.ai.RealtimeAudioFormat throws never {
-    root.ai.RealtimeAudioFormat { encoding: "pcm_s16le", sample_rate_hz: 24_000, channels: 1 }
+function realtime_audio_format() -> root.ai.realtime.RealtimeAudioFormat throws never {
+    root.ai.realtime.RealtimeAudioFormat { encoding: "pcm_s16le", sample_rate_hz: 24_000, channels: 1 }
 }
 
 function _openai_realtime_turn_detection(vad: RealtimeServerVad?) -> json throws never {
@@ -55,8 +55,8 @@ function _openai_realtime_turn_detection(vad: RealtimeServerVad?) -> json throws
     }
 }
 
-function _openai_realtime_tool_schemas(tools: root.ai.Tool[]) -> json[] throws never {
-    tools.map((tool: root.ai.Tool) -> json {
+function _openai_realtime_tool_schemas(tools: root.ai.tools.Tool[]) -> json[] throws never {
+    tools.map((tool: root.ai.tools.Tool) -> json {
         {
             "type": "function",
             "name": tool.name,
@@ -96,7 +96,7 @@ function _openai_realtime_task_input(rendered_prompt: baml.llm.PromptAst) -> str
 }
 
 function _openai_realtime_response_create(
-    tools: root.ai.Tool[],
+    tools: root.ai.tools.Tool[],
     output_audio: bool,
     voice: string,
 ) -> string throws never {

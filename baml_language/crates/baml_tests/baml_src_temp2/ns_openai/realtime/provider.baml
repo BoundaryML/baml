@@ -1,19 +1,16 @@
-implements root.ai.RealtimeProvider for Realtime {
+implements root.ai.realtime.RealtimeProvider for Realtime {
   function open_live<T>(
     self,
     task: root.ai.Task<T>,
-    channel: root.ai.Channel,
-  ) -> root.ai.LiveSession
+    channel: root.ai.realtime.Channel,
+  ) -> root.ai.realtime.LiveSession
       throws baml.errors.UnknownError {
     //# Open and retain the realtime WebSocket
     let ws = baml.ws.connect(
       "wss://api.openai.com/v1/realtime?model=" + self.model,
       { "Authorization": "Bearer " + self.api_key },
     ) catch (e) {
-      _ => throw baml.errors.UnknownError {
-        data: e,
-        message: ["realtime connect failed"],
-      },
+      _ => throw baml.errors.UnknownError.with_message<never>(e, "realtime connect failed"),
     };
     //## Configure the persistent voice session before adding conversation items
     let session_update = _openai_realtime_session_update(
@@ -25,10 +22,7 @@ implements root.ai.RealtimeProvider for Realtime {
     ws.send(session_update) catch (e) {
       _ => {
         ws.close();
-        throw baml.errors.UnknownError {
-          data: e,
-          message: ["realtime session.update failed"],
-        };
+        throw baml.errors.UnknownError.with_message<never>(e, "realtime session.update failed");
       },
     };
     channel.send(session_update) catch (e) { _ => null };
@@ -48,10 +42,7 @@ implements root.ai.RealtimeProvider for Realtime {
     ws.send(initial_item) catch (e) {
       _ => {
         ws.close();
-        throw baml.errors.UnknownError {
-          data: e,
-          message: ["realtime initial item failed"],
-        };
+        throw baml.errors.UnknownError.with_message<never>(e, "realtime initial item failed");
       },
     };
     channel.send(initial_item) catch (e) { _ => null };
@@ -61,10 +52,7 @@ implements root.ai.RealtimeProvider for Realtime {
     ws.send(response_create) catch (e) {
       _ => {
         ws.close();
-        throw baml.errors.UnknownError {
-          data: e,
-          message: ["realtime response.create failed"],
-        };
+        throw baml.errors.UnknownError.with_message<never>(e, "realtime response.create failed");
       },
     };
     channel.send(response_create) catch (e) { _ => null };

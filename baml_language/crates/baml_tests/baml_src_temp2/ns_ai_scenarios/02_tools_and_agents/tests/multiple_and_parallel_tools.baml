@@ -1,7 +1,7 @@
 test "guide 02.03: one model step may dispatch multiple tool calls" {
     let calls = [
         one_knowledge_call(),
-        root.ai.ToolCall { id: "call-2", name: "lookup_account", args: { "customer_id": "C-1" } },
+        root.ai.tools.ToolCall { id: "call-2", name: "lookup_account", args: { "customer_id": "C-1" } },
     ];
     let provider = fake_tool_provider(calls);
     let task = ResolveTicketWithTools_task(sample_ticket(), provider, [search_knowledge, lookup_account]);

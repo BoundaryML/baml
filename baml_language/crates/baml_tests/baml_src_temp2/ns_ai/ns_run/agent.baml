@@ -3,30 +3,30 @@
 // wire turns.
 class Agent<T> {
     budget: root.ai.Budget?,
-    tools: root.ai.Tool[]?,
-    tool_registry: root.ai.ToolRegistry?,
-    prepare_step: ((root.ai.StepContext) -> root.ai.StepPlan throws root.ai.ToolError)?,
-    before_tool_call: ((root.ai.BeforeToolCall) -> root.ai.ToolDecision throws root.ai.ToolError)?,
-    after_tool_call: ((root.ai.AfterToolCall) -> null throws root.ai.ToolError)?,
-    on_event: ((root.ai.AgentEvent) -> null throws never)?,
-    observers: root.ai.AgentObserver[],
-    recorders: root.ai.AgentRecorder[],
+    tools: root.ai.tools.Tool[]?,
+    tool_registry: root.ai.tools.ToolRegistry?,
+    prepare_step: ((root.ai.tools.StepContext) -> root.ai.tools.StepPlan throws root.ai.Failure)?,
+    before_tool_call: ((root.ai.tools.BeforeToolCall) -> root.ai.tools.ToolDecision throws root.ai.Failure)?,
+    after_tool_call: ((root.ai.tools.AfterToolCall) -> null throws root.ai.Failure)?,
+    on_event: ((root.ai.observe.AgentEvent) -> null throws never)?,
+    observers: root.ai.observe.AgentObserver[],
+    recorders: root.ai.observe.AgentRecorder[],
     state: map<string, unknown>,
     run_id: string?,
     conversation: root.ai.Conversation?,
 
     function new(
         budget: root.ai.Budget? = null,
-        tools: root.ai.ToolInput[]? = null,
-        tool_registry: root.ai.ToolRegistry? = null,
-        prepare_step: ((root.ai.StepContext) -> root.ai.StepPlan throws root.ai.ToolError)? = null,
+        tools: root.ai.tools.ToolInput[]? = null,
+        tool_registry: root.ai.tools.ToolRegistry? = null,
+        prepare_step: ((root.ai.tools.StepContext) -> root.ai.tools.StepPlan throws root.ai.Failure)? = null,
         before_tool_call: (
-            (root.ai.BeforeToolCall) -> root.ai.ToolDecision throws root.ai.ToolError
+            (root.ai.tools.BeforeToolCall) -> root.ai.tools.ToolDecision throws root.ai.Failure
         )? = null,
-        after_tool_call: ((root.ai.AfterToolCall) -> null throws root.ai.ToolError)? = null,
-        on_event: ((root.ai.AgentEvent) -> null throws never)? = null,
-        observers: root.ai.AgentObserver[] = [],
-        recorders: root.ai.AgentRecorder[] = [],
+        after_tool_call: ((root.ai.tools.AfterToolCall) -> null throws root.ai.Failure)? = null,
+        on_event: ((root.ai.observe.AgentEvent) -> null throws never)? = null,
+        observers: root.ai.observe.AgentObserver[] = [],
+        recorders: root.ai.observe.AgentRecorder[] = [],
         state: map<string, unknown> = {},
         run_id: string? = null,
         conversation: root.ai.Conversation? = null,
@@ -34,7 +34,7 @@ class Agent<T> {
         Agent<T> {
             budget: budget,
             tools: match (tools) {
-                let inputs: root.ai.ToolInput[] => root.ai.normalize_tools(inputs),
+                let inputs: root.ai.tools.ToolInput[] => root.ai.tools.normalize_tools(inputs),
                 null => null,
             },
             tool_registry: tool_registry,
@@ -52,12 +52,12 @@ class Agent<T> {
 
     implements root.ai.Runner<root.ai.Task<T>> {
         type Output = root.ai.Done<T> | root.ai.BudgetReached | root.ai.Handoff
-        type Error = root.ai.ToolError | baml.errors.UnknownError | baml.errors.Unsupported
+        type Error = root.ai.Failure | baml.errors.UnknownError
 
         function run(
             self,
             task: root.ai.Task<T>,
-        ) -> root.ai.Done<T> | root.ai.BudgetReached | root.ai.Handoff throws root.ai.ToolError | baml.errors.UnknownError | baml.errors.Unsupported {
+        ) -> root.ai.Done<T> | root.ai.BudgetReached | root.ai.Handoff throws root.ai.Failure | baml.errors.UnknownError | baml.errors.Unsupported {
             //# Select the conversation-owning provider
             // A provider conversation is authoritative continuation state. Switching its
             // owner requires explicit import; display names are not identity keys.
@@ -65,7 +65,7 @@ class Agent<T> {
                 let existing: root.ai.Conversation => existing.provider(),
                 null => task.provider,
             };
-            let provider = root.ai._adapt_tool_calling_provider(selected);
+            let provider = root.ai.tools._adapt_tool_calling_provider(selected);
             //# Resume or begin the provider conversation
             let conversation = match (self.conversation) {
                 let existing: root.ai.Conversation => existing,
@@ -73,11 +73,11 @@ class Agent<T> {
             };
             //# Build the active tool registry
             let registry = match (self.tool_registry) {
-                let existing: root.ai.ToolRegistry => existing,
+                let existing: root.ai.tools.ToolRegistry => existing,
                 null => {
-                    root.ai
+                    root.ai.tools
                         .ToolRegistry
-                        .new(root.ai._tool_inputs_from_tools(self.tools ?? task.tools))
+                        .new(root.ai.tools._tool_inputs_from_tools(self.tools ?? task.tools))
                 },
             };
             //# Initialize cumulative usage
@@ -99,7 +99,7 @@ class Agent<T> {
                             "usage": usage,
                             "budget": self.budget,
                             "provider": provider.name(),
-                            "tools": registry.snapshot().map((tool: root.ai.Tool) -> string {
+                            "tools": registry.snapshot().map((tool: root.ai.tools.Tool) -> string {
                                 tool.name
                             }),
                         }
@@ -132,9 +132,9 @@ class Agent<T> {
                 //## Prepare the next model step
                 match (self.prepare_step) {
                     null => {},
-                    let callback: ((root.ai.StepContext) -> root.ai.StepPlan throws root.ai.ToolError) => {
+                    let callback: ((root.ai.tools.StepContext) -> root.ai.tools.StepPlan throws root.ai.Failure) => {
                         let plan = callback(
-                            root.ai.StepContext {
+                            root.ai.tools.StepContext {
                                 run_id: self.run_id,
                                 step: steps,
                                 provider: selected,
@@ -145,7 +145,7 @@ class Agent<T> {
                             },
                         );
                         match (plan.stop) {
-                            let stop: root.ai.AgentStop => {
+                            let stop: root.ai.tools.AgentStop => {
                                 return root.ai.BudgetReached {
                                     conversation: conversation,
                                     steps_taken: steps,
@@ -156,8 +156,8 @@ class Agent<T> {
                         }
                         // A non-null plan contains the complete next roster.
                         match (plan.tools) {
-                            let replacement: root.ai.Tool[] => {
-                                registry.replace_all(root.ai._tool_inputs_from_tools(replacement))
+                            let replacement: root.ai.tools.Tool[] => {
+                                registry.replace_all(root.ai.tools._tool_inputs_from_tools(replacement))
                             },
                             null => {},
                         }
@@ -165,7 +165,7 @@ class Agent<T> {
                         match (plan.provider) {
                             let next: root.ai.Provider => {
                                 let importer = match (next) {
-                                    let capability: root.ai.ConversationImportProvider => capability,
+                                    let capability: root.ai.tools.ConversationImportProvider => capability,
                                     _ => {
                                         throw baml.errors.Unsupported {
                                             message: "provider switch requires conversation import: "
@@ -178,9 +178,9 @@ class Agent<T> {
                                 selected = next;
                                 provider = importer;
                                 conversation = imported.conversation;
-                                root.ai
+                                root.ai.internal
                                     ._emit_agent_event(
-                                        root.ai.ProviderChangedEvent {
+                                        root.ai.observe.ProviderChangedEvent {
                                             id: self.run_id,
                                             from_provider: previous,
                                             to_provider: selected.name(),
@@ -198,12 +198,12 @@ class Agent<T> {
                 }
                 //## Publish changes to the active tool roster
                 if (registry.version != roster_version) {
-                    root.ai
+                    root.ai.internal
                         ._emit_agent_event(
-                            root.ai.ToolRosterChangedEvent {
+                            root.ai.observe.ToolRosterChangedEvent {
                                 id: self.run_id,
                                 step: steps,
-                                tools: registry.snapshot().map((tool: root.ai.Tool) -> string {
+                                tools: registry.snapshot().map((tool: root.ai.tools.Tool) -> string {
                                     tool.name
                                 }),
                             },
@@ -213,9 +213,9 @@ class Agent<T> {
                         );
                 }
                 tools = registry.snapshot();
-                root.ai
+                root.ai.internal
                     ._emit_agent_event(
-                        root.ai.ModelStartedEvent { id: self.run_id, provider: selected.name() },
+                        root.ai.observe.ModelStartedEvent { id: self.run_id, provider: selected.name() },
                         self.on_event,
                         self.observers,
                         self.recorders,
@@ -224,12 +224,12 @@ class Agent<T> {
                 let step_result = provider.step<T>(conversation, tools);
                 steps = steps + 1;
                 //## Accumulate provider usage
-                match (step_result.meta.usage) {
+                match (step_result.metadata.usage) {
                     let step_usage: root.ai.Usage => {
-                        root.ai._add_usage(usage, step_usage);
-                        root.ai
+                        root.ai.internal._add_usage(usage, step_usage);
+                        root.ai.internal
                             ._emit_agent_event(
-                                root.ai.UsageEvent { id: self.run_id, usage: usage },
+                                root.ai.observe.UsageEvent { id: self.run_id, usage: usage },
                                 self.on_event,
                                 self.observers,
                                 self.recorders,
@@ -239,13 +239,13 @@ class Agent<T> {
                 }
                 //## Handle tool calls or a final value
                 match (step_result.outcome) {
-                    let calls: root.ai.ToolCalls => {
+                    let calls: root.ai.tools.ToolCalls => {
                         //### Stop before dispatching a handoff tool
                         for (let call in calls.calls) {
-                            if (root.ai._is_handoff(tools, call)) {
-                                root.ai
+                            if (tools.find((tool: root.ai.tools.Tool) -> bool { tool.name == call.name })?.handoff ?? false) {
+                                root.ai.internal
                                     ._emit_agent_event(
-                                        root.ai.RunFinishedEvent {
+                                        root.ai.observe.RunFinishedEvent {
                                             id: self.run_id,
                                             outcome: "handoff",
                                         },
@@ -264,7 +264,7 @@ class Agent<T> {
                         //### Dispatch tools and continue the conversation
                         let results = root
                             .ai
-                            ._run_tool_calls(
+                            .internal._run_tool_calls(
                                 calls.calls,
                                 tools,
                                 self.before_tool_call,
@@ -288,14 +288,14 @@ class Agent<T> {
                             attributes: { "steps": steps },
                             raw: null,
                         };
-                        root.ai
+                        root.ai.internal
                             ._emit_agent_event(
-                                root.ai.RunFinishedEvent { id: self.run_id, outcome: "done" },
+                                root.ai.observe.RunFinishedEvent { id: self.run_id, outcome: "done" },
                                 self.on_event,
                                 self.observers,
                                 self.recorders,
                             );
-                        return root.ai.Done<T> { value: value, meta: meta, conversation: conversation };
+                        return root.ai.Done<T> { value: value, metadata: meta, conversation: conversation };
                     },
                 }
             }

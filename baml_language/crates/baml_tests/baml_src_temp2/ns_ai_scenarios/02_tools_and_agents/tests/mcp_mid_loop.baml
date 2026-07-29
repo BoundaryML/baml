@@ -2,15 +2,15 @@ test "guide 02.07: a bootstrap tool adds an MCP server between model steps" {
   //# Start with only the MCP bootstrap tool
   let broker = mcp_broker();
   let bootstrap_tool = add_mcp_server_tool(broker);
-  let registry = root.ai.ToolRegistry.new([bootstrap_tool]);
-  let provider = root.ai.ScriptedToolProvider {
+  let registry = root.ai.tools.ToolRegistry.new([bootstrap_tool]);
+  let provider = root.ai.testing.ScriptedToolProvider {
     turns: [
-      root.ai.ToolCalls { calls: [root.ai.ToolCall {
+      root.ai.tools.ToolCalls { calls: [root.ai.tools.ToolCall {
         id: "call-1",
         name: "add_mcp_server",
         args: { "server": "orders" },
       }] },
-      root.ai.ToolCalls { calls: [root.ai.ToolCall {
+      root.ai.tools.ToolCalls { calls: [root.ai.tools.ToolCall {
         id: "call-2",
         name: "mcp__orders__lookup_order",
         args: { "order_id": "O-42" },
@@ -30,7 +30,7 @@ test "guide 02.07: a bootstrap tool adds an MCP server between model steps" {
     prepare_step = (context) -> {
       //# Apply bootstrap requests before the next model step
       let next_tools = broker.activate_pending(context.tools);
-      root.ai.StepPlan { provider: null, tools: next_tools, stop: null }
+      root.ai.tools.StepPlan { provider: null, tools: next_tools, stop: null }
     },
   );
 
@@ -44,7 +44,7 @@ test "guide 02.07: a bootstrap tool adds an MCP server between model steps" {
   assert.equal(broker.connection.looked_up_orders, ["O-42"])
   match (outcome) {
     let done: root.ai.Done<Resolution> => match (done.conversation) {
-      let conversation: root.ai.ScriptedToolConversation => {
+      let conversation: root.ai.testing.ScriptedToolConversation => {
         assert.equal(conversation.observed_tool_rosters[0], ["add_mcp_server"]);
         assert.equal(
           conversation.observed_tool_rosters[1],
@@ -62,7 +62,7 @@ testset "integ-test-guide-02-mcp-bootstrap" {
   test "guide 02.07 live OpenAI: the model adds and uses an MCP server" {
     let broker = mcp_broker();
     let bootstrap_tool = add_mcp_server_tool(broker);
-    let registry = root.ai.ToolRegistry.new([bootstrap_tool]);
+    let registry = root.ai.tools.ToolRegistry.new([bootstrap_tool]);
     let observer = GuideObserver { kinds: [] };
     let provider = root.openai.Chat {
       ...root.openai.chat(),
@@ -77,7 +77,7 @@ testset "integ-test-guide-02-mcp-bootstrap" {
         prepare_step = (context) -> {
           //# Apply bootstrap requests before the next model step
           let next_tools = broker.activate_pending(context.tools);
-          root.ai.StepPlan { provider: null, tools: next_tools, stop: null }
+          root.ai.tools.StepPlan { provider: null, tools: next_tools, stop: null }
         },
         observers = [observer],
       ),

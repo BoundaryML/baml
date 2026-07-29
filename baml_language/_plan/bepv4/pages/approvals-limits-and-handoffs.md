@@ -10,59 +10,66 @@ approval, authorization, argument rewriting, and blocking logic directly to
 | --- | --- |
 | `before_tool_call` callback | Makes a decision before an Agent runs a tool |
 | `prepare_step` callback | Changes the next provider, tool roster, or stop decision |
-| `ai.ToolDecision` | Allows, replaces, or blocks one tool call |
-| `max_steps`, `max_cost_usd` | Stops work between provider steps |
-| `ai.tool(...).as_handoff()` | Marks a tool call as application takeover |
+| `ai.tools.ToolDecision` | Allows, replaces, or blocks one tool call |
+| `ai.Budget { max_steps, max_cost_usd }` | Stops work between provider steps |
+| `ai.tools.tool(...).as_handoff()` | Marks a tool call as application takeover |
 
 ## Example
 
 ```baml
+enum TicketPriority {
+  Low
+  Normal
+  Urgent
+}
+
 class Resolution {
+  category: string,
+  priority: TicketPriority,
+  summary: string,
   reply: string,
-  resolved: bool,
 }
 
-function issue_refund(
-  order_id: string,
-  amount_usd: float,
-  idempotency_key: string,
-) -> string {
-  refunds.issue(order_id, amount_usd, idempotency_key)
+/// Look up an account with optional history.
+function lookup_account_with_history(
+  customer_id: string,
+  include_history: bool = false,
+) -> json throws never {
+  { "customer_id": customer_id, "include_history": include_history }
 }
 
-function transfer_to_human(reason: string) -> string {
-  reason
+/// Look up a customer account.
+function lookup_account(customer_id: string) -> json throws never {
+  { "customer_id": customer_id, "status": "active", "tier": "pro" }
 }
 
-function ResolveTicket(message: string) -> Resolution {
+function ResolveTicketWithTools(ticket: SupportTicket) -> Resolution {
   provider: "openai/gpt-5.6-luna"
   prompt: `
-    Resolve this support ticket.
-    Ask for a human when the request needs authority you do not have.
-
-    ${message}
+    Resolve ticket ${ticket.id}. Use the available tools before answering.
+    Hand the account over to a person when the request needs authority you
+    do not have.
 
     ${ctx.output_format}
   `
   tools: [
-    issue_refund,
-    ai.tool(transfer_to_human).as_handoff(),
+    lookup_account_with_history,
+    ai.tools.tool(lookup_account).as_handoff(),
   ]
 }
 
-let refund_approved = false;
+let history_approved = false;
 
-let outcome = ResolveTicket.task("Refund order-42.").run(
-  runner = ai.run.Agent.new(
+let outcome = ResolveTicketWithTools@task(sample_ticket()).run(
+  runner = ai.run.Agent<Resolution>.new(
     before_tool_call = (event) -> {
-      if (event.call.name == "issue_refund" && !refund_approved) {
-        ai.ToolDecision.block("human approval required")
+      if (event.call.name == "lookup_account_with_history" && !history_approved) {
+        ai.tools.ToolDecision.block("human approval required")
       } else {
-        ai.ToolDecision.allow(event.call)
+        ai.tools.ToolDecision.allow(event.call)
       }
     },
-    max_steps = 8,
-    max_cost_usd = 0.25,
+    budget = ai.Budget { max_steps: 8, max_cost_usd: 0.25 },
   ),
 )
 ```
@@ -71,16 +78,16 @@ let outcome = ResolveTicket.task("Refund order-42.").run(
 
 ```mermaid
 flowchart TD
-  task["ResolveTicket task"] --> budget{"Step and cost budget remain?"}
+  task["ResolveTicketWithTools task"] --> budget{"Step and cost budget remain?"}
   budget -->|yes| model["Provider step"]
   model --> result{"Provider returned?"}
   result -->|final value| done["Done<Resolution>"]
   result -->|tool call| transfer{"Handoff tool?"}
   transfer -->|yes| handoff["Handoff"]
   transfer -->|no| callback["before_tool_call"]
-  callback -->|approved| refund["Run issue_refund"]
+  callback -->|approved| history["Run lookup_account_with_history"]
   callback -->|not approved| blocked["Return blocked tool result"]
-  refund --> submit["Submit correlated result"]
+  history --> submit["Submit correlated result"]
   blocked --> submit
   submit --> budget
   budget -->|no| stopped["BudgetReached"]
@@ -89,30 +96,45 @@ flowchart TD
 ### Illustrative output
 
 ```console
-[INFO] proposed tool: issue_refund(order_id = "order-42", ...)
+[INFO] proposed tool: lookup_account_with_history(customer_id = "C-1", ...)
 [INFO] before_tool_call: blocked "human approval required"
 [INFO] returned blocked result to the model
-[INFO] Agent requested handoff: transfer_to_human
+[INFO] Agent returned Handoff { to: "lookup_account", ... }
 ```
 
 A blocked call still receives a correlated tool result. The model can explain
 the denial, choose another action, or request a handoff. The blocked function
 does not run.
 
+A handoff tool never runs at all: when the model calls a tool marked
+`.as_handoff()`, the Agent returns `ai.Handoff` with the tool's name and
+arguments before dispatch, and the application takes over from there.
+
 ## Handle every terminal outcome
+
+Each outcome carries what the caller needs to continue:
+
+- `ai.Done<T> { value, meta, conversation }` — the final typed value, the
+  response metadata, and the conversation that produced it.
+- `ai.BudgetReached { conversation, steps_taken, reason }` — a safe stop with
+  everything needed to resume. `Budget` is multi-dimensional — `max_steps`
+  and/or `max_cost_usd` — and `reason` names the limit that tripped.
+- `ai.Handoff { to, args, conversation, steps_taken }` — a tool marked
+  `.as_handoff()` fired; the application takes over with the tool's arguments
+  and the conversation so far.
 
 ```baml
 match (outcome) {
-  let done: ai.Done<Resolution> => send(done.value),
+  let done: ai.Done<Resolution> => log.info(done.value.reply),
 
   let stopped: ai.BudgetReached => {
-    log.info(`stopped after ${stopped.steps_taken} steps`);
-    queue_for_review(stopped.conversation)
+    // Save stopped.conversation and resume after the limit or approval changes.
+    log.info(`stopped after ${stopped.steps_taken} steps: ${stopped.reason}`)
   },
 
   let handoff: ai.Handoff => {
-    log.info(`handoff requested: ${handoff.reason}`);
-    open_human_case(handoff.conversation)
+    // The application takes over handoff.to with handoff.args.
+    log.info(`handoff requested: ${handoff.to}`)
   },
 }
 ```

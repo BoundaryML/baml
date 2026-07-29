@@ -1,15 +1,15 @@
 // Tests for the fallback_between_providers scenario.
 test "guide 03.02: fallback re-renders and tries the next provider" {
   //# Configure a failing primary and healthy fallback
-  let failed = root.ai.FakeProvider { ...fake_resolution(), failures_remaining: 2 };
-  let good = root.ai.FakeProvider { ...fake_resolution(), provider_name: "second" };
+  let failed = root.ai.testing.FakeProvider { ...fake_resolution(), failures_remaining: 2 };
+  let good = root.ai.testing.FakeProvider { ...fake_resolution(), provider_name: "second" };
   //# Execute the ordered fallback chain
   let task = ResolveTicket_task(sample_ticket(), root.ai.fallback([failed, good]));
   let response = task.run(
     runner = root.ai.run.GenerationWithMeta<Resolution>.new(),
   );
   //# Verify the fallback provider completed
-  assert.equal(response.meta.provider, "second")
+  assert.equal(response.metadata.provider, "second")
 }
 
 test "guide 03.02: fallback requires at least one provider" {
@@ -28,7 +28,7 @@ testset "integ-test-guide-03-fallback" {
     //# Configure a failing fake and live fallback
     let providers: root.ai.Provider[] = [
       {
-        root.ai.FakeProvider { ...fake_resolution(), failures_remaining: 1 }
+        root.ai.testing.FakeProvider { ...fake_resolution(), failures_remaining: 1 }
       },
       root.anthropic.Messages {
         ...root.anthropic.messages(),
@@ -42,6 +42,6 @@ testset "integ-test-guide-03-fallback" {
       runner = root.ai.run.GenerationWithMeta<Resolution>.new(),
     );
     //# Verify Anthropic completed the task
-    assert.equal(response.meta.provider, "anthropic")
+    assert.equal(response.metadata.provider, "anthropic")
   }
 }

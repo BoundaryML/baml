@@ -1,7 +1,7 @@
 // Tests for the provider_owned_sessions scenario.
 test "guide 04.04: provider-owned sessions open, run, and resume" {
-    let provider = root.ai.FakeSessionProvider { inner: fake_resolution(), sessions: [] };
-    let session = provider.open_session(root.ai.SessionOptions {
+    let provider = root.ai.testing.FakeSessionProvider { inner: fake_resolution(), sessions: [] };
+    let session = provider.open_session(root.ai.sessions.SessionOptions {
         session_id: "support-T-100",
         attributes: { "team": "support" },
     });
@@ -20,8 +20,8 @@ test "guide 04.04: provider-owned sessions open, run, and resume" {
 }
 
 test "guide 04.04: session tokens validate provider ownership" {
-    let provider = root.ai.FakeSessionProvider { inner: fake_resolution(), sessions: [] };
-    let token = root.ai.SessionToken {
+    let provider = root.ai.testing.FakeSessionProvider { inner: fake_resolution(), sessions: [] };
+    let token = root.ai.sessions.SessionToken {
         provider: "another-provider",
         id: "missing",
         version: 1,
@@ -35,8 +35,8 @@ test "guide 04.04: session tokens validate provider ownership" {
 
 testset "integ-test-guide-04-provider-sessions" {
     test "guide 04.04 live OpenAI: session run and token resume" {
-        let provider = root.ai.FakeSessionProvider { inner: live_openai(), sessions: [] };
-        let session = provider.open_session(root.ai.SessionOptions {
+        let provider = root.ai.testing.FakeSessionProvider { inner: live_openai(), sessions: [] };
+        let session = provider.open_session(root.ai.sessions.SessionOptions {
             session_id: "live-support-T-100",
             attributes: { "team": "support" },
         });
@@ -52,11 +52,11 @@ testset "integ-test-guide-04-provider-sessions" {
                 + {
                     "session_id": session.id(),
                     "resumed_id": resumed.id(),
-                    "provider": response.meta.provider,
+                    "provider": response.metadata.provider,
                 }
                 .to_string(),
         );
-        assert.equal(response.meta.provider, "openai");
+        assert.equal(response.metadata.provider, "openai");
         assert.equal(resumed.id(), session.id());
         // match (session) {
         //     let local: root.ai.FakeSession => assert.equal(local.cleanup_count, 1),

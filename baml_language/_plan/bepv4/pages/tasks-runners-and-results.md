@@ -9,69 +9,62 @@ a runner.
 | --- | --- |
 | Direct call | The declared `T` |
 | `ai.run.Completion` | `T` |
-| `ai.run.CompletionWithMeta` | `ai.Response<T>` |
+| `ai.run.CompletionWithMeta` | `ai.ResponseWithMetadata<T>` |
 | `ai.run.Generation` | `T` after exactly one provider interaction |
 | `ai.run.Stream` | Partial values followed by a final `T` |
 
 ## Example
 
+The examples use the shared support-ticket models: `SupportTicket`,
+`Resolution`, the `sample_ticket()` helper that builds one, and the
+`fast_model()` provider value.
+
 ```baml
-class Draft {
-  subject: string,
-  body: string,
-}
-
-function DraftReply(message: string) -> Draft {
-  provider: "openai/gpt-5.6-luna"
+function ResolveTicket(ticket: SupportTicket) -> Resolution {
+  provider: fast_model()
   prompt: `
-    Draft a helpful support reply.
-
-    ${message}
+    Resolve this support ticket.
+    Subject: ${ticket.subject}
+    Body: ${ticket.body}
 
     ${ctx.output_format}
   `
 }
 
-let draft: Draft = DraftReply("My package is late.")
-```
-
-### What happens
-
-```mermaid
-flowchart LR
-  call["DraftReply(message)"] --> contract["Typed prompt and Draft schema"]
-  contract --> provider["Provider request"]
-  provider --> parse["Parse and validate output"]
-  parse --> draft["Draft"]
+let resolution: Resolution = ResolveTicket(sample_ticket())
 ```
 
 ### Illustrative output
 
 ```console
-[INFO] calling DraftReply with provider openai
+[INFO] calling ResolveTicket with provider openai
 [INFO] provider returned structured output
-[INFO] validated Draft { subject: "About your late package", ... }
+[INFO] validated Resolution { category: "billing", ... }
 ```
+
+`ResolveTicket@task` is the derived companion of the function: same arguments,
+but it returns the unexecuted `ai.Task<Resolution>` instead of running it. The
+`@` postfix marks a compiler-created function — `ResolveTicket` itself stays an
+ordinary call. A `Task<T>` carries the bound arguments, the provider, the
+declared tools, and the prompt recipe; `.with_provider(...)`, `.with_tools(...)`,
+and `.run(runner = ...)` are methods on that value. A direct call
+`ResolveTicket(...)` is exactly
+`ResolveTicket@task(...).run(runner = ai.run.Completion<Resolution>.new())`.
+
+`$provider` on a direct call and `.with_provider(...)` on a task are the same
+rebind at different moments: a direct call has no task value to method-chain,
+so the call-site argument is the only place to say it.
 
 Creating a task does not contact the provider:
 
 ```baml
-let task = DraftReply.task("My package is late.")
-```
-
-### Task construction flow
-
-```mermaid
-flowchart LR
-  recipe["DraftReply + arguments"] --> task["Task<Draft>"]
-  task --> stored["Inspectable, reusable value"]
-  task --> idle["Provider requests made: 0"]
+let task = ResolveTicket@task(sample_ticket())
 ```
 
 ### Illustrative output
 
 ```console
-[INFO] created Task<Draft> for DraftReply
+[INFO] created Task<Resolution> for ResolveTicket
 [INFO] provider requests made: 0
 ```
 
@@ -82,24 +75,13 @@ ways.
 ## Keep provider metadata
 
 ```baml
-let response: ai.Response<Draft> = task.run(
-  runner = ai.run.CompletionWithMeta.new(),
+let response: ai.ResponseWithMetadata<Resolution> = task.run(
+  runner = ai.run.CompletionWithMeta<Resolution>.new(),
 );
 
-log.info(response.meta.request_id);
-log.info(response.meta.usage);
-send(response.value)
-```
-
-### What happens
-
-```mermaid
-flowchart LR
-  task["Task<Draft>"] --> runner["CompletionWithMeta"]
-  runner --> provider["Provider"]
-  provider --> response["Response<Draft>"]
-  response --> value["Draft"]
-  response --> meta["Request ID, model, usage, cost"]
+log.info(response.metadata.request_id);
+log.info(response.metadata.usage);
+log.info(response.value)
 ```
 
 ### Illustrative output
@@ -110,8 +92,9 @@ flowchart LR
 [INFO] usage = { input_tokens: 84, output_tokens: 38 }
 ```
 
-`Response<T>` keeps the value and metadata together. Metadata may include the
-provider, model, request ID, finish reason, token usage, and reported cost.
+`ResponseWithMetadata<T>` keeps the value and metadata together. Metadata may
+include the provider, model, request ID, finish reason, token usage, and
+reported cost.
 
 ## Override the provider
 
@@ -119,39 +102,30 @@ Use `$provider` on a direct call or `.with_provider(...)` on a task:
 
 ```baml
 let careful = anthropic.Messages {
+  ...anthropic.messages(),
   model: "claude-sonnet-4-6",
   api_key: baml.env.get_or_panic("ANTHROPIC_API_KEY"),
-  base_url: null,
-  extra_headers: null,
-  extra_body: null,
 };
 
-let direct = DraftReply(
-  "My package is late.",
+let direct = ResolveTicket(
+  sample_ticket(),
   $provider = careful,
 );
 
 let response = task
   .with_provider(careful)
-  .run(runner = ai.run.CompletionWithMeta.new());
+  .run(runner = ai.run.CompletionWithMeta<Resolution>.new());
 ```
 
-### What happens
-
-```mermaid
-flowchart LR
-  original["Original Task with OpenAI"] --> rebind["with_provider(careful)"]
-  rebind --> copied["New Task with Anthropic"]
-  copied --> render["Re-render provider-sensitive request"]
-  render --> response["Response<Draft>"]
-```
+The shared `careful_model()` helper builds exactly this `anthropic.Messages`
+value when you do not need to spell out the configuration.
 
 ### Illustrative output
 
 ```console
 [INFO] original task provider unchanged: openai
 [INFO] rebound copy to anthropic/claude-sonnet-4-6
-[INFO] CompletionWithMeta returned Response<Draft>
+[INFO] CompletionWithMeta returned ResponseWithMetadata<Resolution>
 ```
 
 Rebinding returns a new task and re-renders provider-sensitive prompt details.
@@ -198,9 +172,10 @@ Use a direct call until you need a different output shape or lifecycle. Then
 create a task and pick the runner whose return type matches the work:
 
 ```text
-CompletionWithMeta  → Response<T>
-Agent               → AgentOutcome<T>
-Stream              → Stream<TPartial, T>
-Background          → Job<T>
-Batch               → Batch<T>
+Completion          → T
+CompletionWithMeta  → ResponseWithMetadata<T>
+Agent               → Done<T> | BudgetReached | Handoff
+Stream              → baml.llm.Stream<TPartial, T>
+Background          → ai.jobs.Job<T>
+Batch               → ai.jobs.Batch<T>
 ```

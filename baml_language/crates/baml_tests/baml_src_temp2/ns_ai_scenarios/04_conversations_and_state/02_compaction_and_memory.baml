@@ -5,7 +5,7 @@ function compaction_and_memory() -> ConversationProbe {
   let compacted = compact_history(source);
   let task = ConversationProbe_task(
     compacted,
-    root.ai.fake_output_provider(`{
+    root.ai.testing.fake_output_provider(`{
       "branch": "general",
       "evidence": "Summary: customer reports a duplicate charge; support acknowledged it."
     }`),

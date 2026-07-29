@@ -1,7 +1,7 @@
 // Tests for the switch_provider_between_turns scenario.
 test "guide 03.04: prepare_step can switch providers through conversation import" {
   let first = fake_tool_provider([one_knowledge_call()]);
-  let second = root.ai.FakeToolProvider {
+  let second = root.ai.testing.FakeToolProvider {
     ...fake_tool_provider([]),
     provider_name: "fake-tools-secondary",
   };
@@ -11,7 +11,7 @@ test "guide 03.04: prepare_step can switch providers through conversation import
     runner = root.ai.run.Agent<Resolution>.new(
       tools = [search_knowledge],
       prepare_step = (context) -> {
-        root.ai.StepPlan {
+        root.ai.tools.StepPlan {
           provider: if (context.step == 1) { second } else { null },
           tools: null,
           stop: null,
@@ -43,7 +43,7 @@ test "guide 03.04: OpenAI import keeps a tool result paired with its tool call" 
   let history = root.ai.MessageHistory { entries: [
     root.ai.ChatMessage {
       message_role: root.ai.MessageRole.Assistant,
-      content: [root.ai.ProviderDataPart {
+      content: [root.ai.messages.ProviderDataPart {
         provider: "openai",
         data: { "tool_calls": calls },
       }],
@@ -51,7 +51,7 @@ test "guide 03.04: OpenAI import keeps a tool result paired with its tool call" 
     },
     root.ai.ChatMessage {
       message_role: root.ai.MessageRole.Tool,
-      content: [root.ai.ProviderDataPart {
+      content: [root.ai.messages.ProviderDataPart {
         provider: "openai",
         data: { "tool_call_id": "call-1", "output": { "ok": true } },
       }],
@@ -81,27 +81,27 @@ class NamedOpenAiToolProvider {
   }
 }
 
-implements root.ai.ToolCallingProvider for NamedOpenAiToolProvider {
+implements root.ai.tools.ToolCallingProvider for NamedOpenAiToolProvider {
   function begin<T>(self, task: root.ai.Task<T>) -> root.ai.Conversation
-      throws root.ai.ToolError | baml.errors.UnknownError {
+      throws root.ai.Failure | baml.errors.UnknownError {
     self.inner.begin<T>(task.with_provider(self.inner))
   }
 
-  function step<T>(self, conversation: root.ai.Conversation, tools: root.ai.Tool[])
-      -> root.ai.ModelStep<T> throws root.ai.ToolError | baml.errors.UnknownError {
+  function step<T>(self, conversation: root.ai.Conversation, tools: root.ai.tools.Tool[])
+      -> root.ai.tools.ModelStep<T> throws root.ai.Failure | baml.errors.UnknownError {
     self.inner.step<T>(conversation, tools)
   }
 
   function submit(
     self,
     conversation: root.ai.Conversation,
-    results: root.ai.ToolResult[],
-  ) -> root.ai.Conversation throws root.ai.ToolError | baml.errors.UnknownError {
+    results: root.ai.tools.ToolResult[],
+  ) -> root.ai.Conversation throws root.ai.Failure | baml.errors.UnknownError {
     self.inner.submit(conversation, results)
   }
 }
 
-implements root.ai.ConversationImportProvider for NamedOpenAiToolProvider {
+implements root.ai.tools.ConversationImportProvider for NamedOpenAiToolProvider {
   function import_messages(self, messages: root.ai.Messages)
       -> root.ai.ConversationImport throws baml.errors.UnknownError {
     self.inner.import_messages(messages)
@@ -126,7 +126,7 @@ testset "integ-test-guide-03-switch-between-turns" {
       runner = root.ai.run.Agent<Resolution>.new(
         tools = [search_knowledge],
         prepare_step = (context) -> {
-          root.ai.StepPlan {
+          root.ai.tools.StepPlan {
             provider: if (context.step == 1) { second } else { null },
             tools: null,
             stop: null,
@@ -146,7 +146,7 @@ testset "integ-test-guide-03-switch-between-turns" {
     assert.contains(observer.kinds.join(","), "provider_changed")
     match (outcome) {
       let done: root.ai.Done<Resolution> => {
-        assert.equal(done.meta.provider, "openai-secondary");
+        assert.equal(done.metadata.provider, "openai-secondary");
         assert.is_true(done.value.reply.length() > 0);
       },
       _ => assert.is_true(false),

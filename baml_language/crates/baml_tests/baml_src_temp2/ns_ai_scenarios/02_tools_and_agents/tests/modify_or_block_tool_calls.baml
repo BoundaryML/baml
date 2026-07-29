@@ -7,10 +7,10 @@ test "guide 02.05: before-tool callbacks may rewrite a call" {
         .new(
             tools = [search_knowledge, lookup_account],
             before_tool_call = (event) -> {
-                root.ai
+                root.ai.tools
                     .ToolDecision
                     .replace(
-                        root.ai.ToolCall {
+                        root.ai.tools.ToolCall {
                             id: event.call.id,
                             name: "lookup_account",
                             args: event.call.args,
@@ -41,9 +41,9 @@ test "guide 02.05: before-tool callbacks may block a call" {
             tools = [search_knowledge],
             before_tool_call = (event) -> {
                 if (event.call.name == "search_knowledge") {
-                    root.ai.ToolDecision.block("blocked by policy")
+                    root.ai.tools.ToolDecision.block("blocked by policy")
                 } else {
-                    root.ai.ToolDecision.allow(event.call)
+                    root.ai.tools.ToolDecision.allow(event.call)
                 }
             },
             after_tool_call = (event) -> {
@@ -74,10 +74,10 @@ testset "integ-test-guide-02-modify-or-block-tools" {
                     .new(
                         tools = [account_alias_tool(), lookup_account],
                         before_tool_call = (event) -> {
-                            root.ai
+                            root.ai.tools
                                 .ToolDecision
                                 .replace(
-                                    root.ai.ToolCall {
+                                    root.ai.tools.ToolCall {
                                         id: event.call.id,
                                         name: "lookup_account",
                                         args: event.call.args,
@@ -117,9 +117,9 @@ testset "integ-test-guide-02-modify-or-block-tools" {
                         tools = [search_knowledge],
                         before_tool_call = (event) -> {
                             if (event.call.name == "search_knowledge") {
-                                root.ai.ToolDecision.block("blocked by policy")
+                                root.ai.tools.ToolDecision.block("blocked by policy")
                             } else {
-                                root.ai.ToolDecision.allow(event.call)
+                                root.ai.tools.ToolDecision.allow(event.call)
                             }
                         },
                         after_tool_call = (event) -> {

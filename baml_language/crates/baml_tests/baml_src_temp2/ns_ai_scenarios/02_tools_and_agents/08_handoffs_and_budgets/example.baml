@@ -1,12 +1,12 @@
 // Return control to the application when work needs another specialist, and
 // stop agent work cleanly when its step budget is exhausted.
 function handoffs_and_budgets() -> null {
-    let handoff_tool = root.ai.tool(lookup_account).as_handoff();
+    let handoff_tool = root.ai.tools.tool(lookup_account).as_handoff();
     let handoff_task = ResolveTicketWithTools_task(
         sample_ticket(),
         fake_tool_provider(
             [
-                root.ai.ToolCall {
+                root.ai.tools.ToolCall {
                     id: "handoff-1",
                     name: "lookup_account",
                     args: { "customer_id": "C-1" },

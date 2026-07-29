@@ -1,7 +1,7 @@
 # Harnesses and custom extensions
 
 Use a harness runner for an external coding agent or sandbox. If a lifecycle
-does not exist in `ai.run`, a library can implement `Runner` and give
+does not exist in `ai.run`, a library can implement `ai.Runner` and give
 `Task.run` a new typed result.
 
 ## Utilities used
@@ -9,8 +9,9 @@ does not exist in `ai.run`, a library can implement `Runner` and give
 | Utility | What it does |
 | --- | --- |
 | `ai.run.Harness<T>` | Runs a task and can report normalized events through `on_event` |
-| `ai.HarnessRun<T>` | Returns the typed value, retained events, and resume token |
-| `ai.HarnessSession` | Advanced control for steering, interruption, save, and resume |
+| `ai.harness.HarnessRun<T>` | Returns the typed value, retained events, portable history, and resume token |
+| `ai.harness.HarnessSession` | Advanced control for steering, interruption, save, and resume |
+| `ai.harness.Harness` | Protocol a harness adapter implements: open, run, steer, interrupt, save, restore |
 | `ai.Runner<Input>` | Protocol for adding a lifecycle |
 | `claude_code.ClaudeCodeCli` | Adapts the local Claude Code CLI to the harness contracts |
 | Provider capability interfaces | Add only the operations a provider supports |
@@ -18,35 +19,60 @@ does not exist in `ai.run`, a library can implement `Runner` and give
 ## Example: a coding harness
 
 ```baml
-class RepositoryReport {
-  cause: string,
-  recommendation: string,
+class Resolution {
+  category: string,
+  priority: TicketPriority,
+  summary: string,
+  reply: string,
 }
 
-function InvestigateRepository(issue: string) -> RepositoryReport {
-  provider: CodingModel
+function InvestigateRepository(ticket: SupportTicket) -> Resolution {
+  provider: "openai/gpt-5.6-luna"
   prompt: `
-    Investigate this repository issue without changing files.
-
-    ${issue}
+    Investigate this support ticket and propose a resolution.
+    Ticket: ${ticket.id}
+    Subject: ${ticket.subject}
+    Body: ${ticket.body}
+    Customer tier: ${ticket.customer_tier}
 
     ${ctx.output_format}
   `
 }
 
-let report = InvestigateRepository.task(issue).run(
-  runner = ai.run.Harness<RepositoryReport>.new(
-    harness = ClaudeCode.new(
-      allowed_tools = ["read", "search", "test"],
-    ),
+let run = InvestigateRepository@task(sample_ticket()).run(
+  runner = ai.run.Harness<Resolution>.new(
+    fake_model_harness(),
     cwd = "/workspace",
     permission_mode = "read-only",
     sandbox = "workspace",
-    on_event = (event) -> {
-      ui.show(event)
-    },
+    attributes = { "team": "support" },
   ),
-)
+);
+
+let resolution: Resolution = run.value
+```
+
+`fake_model_harness()` builds an `ai.harness.ModelHarness`, an in-process
+adapter that implements the full `ai.harness.Harness` contract and doubles as
+the blueprint for an external implementation. A real coding harness plugs into
+the same runner. `claude_code.ClaudeCodeCli` adapts the local Claude Code CLI:
+
+```baml
+let coding_harness = claude_code.ClaudeCodeCli {
+  executable: "claude",
+  model: "haiku",
+  cwd: "/workspace",
+  timeout_ms: 60000,
+  max_turns: 3,
+  max_application_tool_steps: 4,
+  max_budget_usd: "0.10",
+  permission_mode: "dontAsk",
+  tools: ["WebFetch"],
+  allowed_tools: ["WebFetch"],
+  safe_mode: true,
+  persist_session: false,
+  harness_sessions: [],
+}
 ```
 
 ### What happens
@@ -54,7 +80,7 @@ let report = InvestigateRepository.task(issue).run(
 ```mermaid
 flowchart TD
   task["InvestigateRepository task"] --> runner["ai.run.Harness"]
-  runner --> adapter["Claude Code adapter"]
+  runner --> adapter["Harness adapter"]
   adapter --> policy["Request read-only workspace policy"]
   policy --> active{"Harness active and turn limit remains?"}
   active -->|yes| step["External harness step"]
@@ -64,7 +90,7 @@ flowchart TD
   action -->|yes| tool["Read, search, or test"]
   tool --> active
   action -->|no| adapter
-  adapter --> report["Typed RepositoryReport"]
+  adapter --> report["Typed Resolution"]
   active -->|no| stopped["Harness stops or reports an error"]
 ```
 
@@ -73,10 +99,9 @@ flowchart TD
 ```console
 [INFO] opening harness: cwd = "/workspace"
 [INFO] requested policy: read-only, sandbox = "workspace"
-[INFO] event: tool_call_proposed search("payment retry")
-[INFO] event: tool_call_proposed test("billing::retry")
+[INFO] event: model_started model-harness(fake)
 [INFO] event: run_finished
-[INFO] harness returned RepositoryReport { cause: "...", ... }
+[INFO] harness returned Resolution { category: "billing", ... }
 ```
 
 Permissions are runtime configuration, not prompt suggestions. A harness
@@ -86,22 +111,23 @@ adapter must reject a requested boundary it cannot enforce.
 it while work is happening and also retains those events in `run.events`:
 
 ```baml
-let seen: string[] = []
+let observed: string[] = [];
 
-let run = InvestigateRepository.task(issue).run(
-  runner = ai.run.Harness<RepositoryReport>.new(
-    harness = ClaudeCode,
+let run = InvestigateRepository@task(sample_ticket()).run(
+  runner = ai.run.Harness<Resolution>.new(
+    fake_model_harness(),
     cwd = "/workspace",
     permission_mode = "read-only",
-    on_event = (event) -> {
-      seen.push(event.kind())
-      log.info(event)
+    on_event = (event: ai.observe.AgentEvent) -> null {
+      observed.push(event.kind());
+      log.info(event);
+      null
     },
   ),
-)
+);
 
-assert.equal(seen, run.events.map((event) -> { event.kind() }))
-let report = run.value
+assert.equal(observed.length(), run.events.length());
+let resolution = run.value
 ```
 
 ### Event callback flow
@@ -116,17 +142,17 @@ flowchart TD
   retain --> callback["Call on_event immediately"]
   callback --> ui["Log or update UI"]
   ui --> active
-  harness -->|final value| final["HarnessRun<RepositoryReport>"]
+  harness -->|final value| final["HarnessRun<Resolution>"]
   active -->|no| stopped["Stopped or failed"]
 ```
 
 ### Illustrative output
 
 ```console
-[INFO] harness run opened
-[INFO] event: search "payment retry"
-[INFO] event: test billing::retry passed
-[INFO] event: final RepositoryReport
+[INFO] event: model_started
+[INFO] event: usage
+[INFO] event: run_finished
+[INFO] observed 3 events, run retained 3
 ```
 
 The callback is for observation. It cannot rewrite an event or change harness
@@ -134,29 +160,34 @@ policy. Use a `HarnessSession` when the application needs bidirectional
 control:
 
 ```baml
-let session = ClaudeCode.open(
-  ai.HarnessOptions {
+let harness = fake_model_harness();
+
+let session = harness.open(
+  ai.harness.HarnessOptions {
     cwd: "/workspace",
     permission_mode: "read-only",
     sandbox: "workspace",
-    attributes: {},
+    attributes: { "team": "support" },
   },
-)
+);
 
-ClaudeCode.steer(session, "Inspect the retry path first.")
-let run = ClaudeCode.run(
+harness.steer(session, "Focus on billing code.");
+let run = harness.run<Resolution>(
   session,
-  InvestigateRepository.task(issue),
-  (event) -> {
-    log.info(event)
+  InvestigateRepository@task(sample_ticket()),
+  (event: ai.observe.AgentEvent) -> null {
+    log.info(event);
+    null
   },
-)
+);
 
-let token = ClaudeCode.save_session(session)
+let token = harness.save_session(session)
 ```
 
 The normal runner opens and owns a session for you. The explicit session API is
 for steering, interruption, and resumption—not for ordinary event listening.
+`harness.interrupt(session)` stops the session, and
+`harness.restore_session(token)` reclaims it later from the opaque token.
 
 An external harness is not automatically an LLM provider just because it may
 call models internally. From BAML's point of view, a coding harness owns a
@@ -172,7 +203,7 @@ executions, or move work across a process boundary.
 
 | Runner shape | Examples | Typical output |
 | --- | --- | --- |
-| Direct lifecycle | Completion, stream, application tool loop, transcription | `T`, `Response<T>`, a stream, or an explicit outcome |
+| Direct lifecycle | Completion, stream, application tool loop, transcription | `T`, `ResponseWithMetadata<T>`, a stream, or an explicit outcome |
 | Policy wrapper | Retry, fallback, timeout, rate limit, circuit breaker, audit | Usually the inner runner's output, with additional errors or policy |
 | Composite | Routing, racing compatible providers, ensemble, judge-and-select | A selected `T` or a typed aggregate |
 | Durable boundary | Background work, workflow engine, scheduler, human-review queue | A typed job, workflow, or review handle |
@@ -192,101 +223,89 @@ only model or endpoint settings change, and use an observer when code only
 watches events. A runner is justified when execution semantics or the result
 shape changes.
 
-## Example: wrap an existing runner
+## Example: a custom runner
 
 A runner is a configured class with an associated output and error type:
 
 ```baml
-class Summary {
-  title: string,
-  bullets: string[],
+class NegotiatedRun {
+  provider: string,
+  mode: string,
+  output: string,
 }
 
-class AuditResult<T> {
-  value: T,
-  audit_id: string,
-}
+class CapabilityNegotiationRunner {
+  function new() -> CapabilityNegotiationRunner throws never {
+    CapabilityNegotiationRunner {}
+  }
 
-function Summarize(article: string) -> Summary {
-  provider: "openai/gpt-5.6-luna"
-  prompt: `
-    Summarize this article.
-
-    ${article}
-
-    ${ctx.output_format}
-  `
-}
-
-class WithAudit<T, P extends ai.Provider> {
-  inner: ai.Runner<
-    ai.Task<T, P>,
-    Output = T,
-    Error = ai.CallError | baml.errors.UnknownError,
-  >,
-  label: string,
-
-  implements ai.Runner<ai.Task<T, P>> {
-    type Output = AuditResult<T>
-    type Error = ai.CallError | baml.errors.UnknownError
+  implements ai.Runner<ai.Task<Resolution>> {
+    type Output = NegotiatedRun
+    type Error = ai.Failure
+      | baml.errors.UnknownError
+      | baml.errors.Unsupported
+      | baml.errors.Io
+      | baml.errors.LlmClient
 
     function run(
       self,
-      task: ai.Task<T, P>,
-    ) -> AuditResult<T> throws ai.CallError | baml.errors.UnknownError {
-      let audit_id = audits.start(self.label);
-      let value = self.inner.run(task);
-      audits.complete(audit_id);
-
-      AuditResult<T> {
-        value: value,
-        audit_id: audit_id,
+      task: ai.Task<Resolution>,
+    ) -> NegotiatedRun throws ai.Failure
+        | baml.errors.UnknownError
+        | baml.errors.Unsupported
+        | baml.errors.Io
+        | baml.errors.LlmClient {
+      //# Narrow the erased provider to the strongest supported interaction
+      match (task.provider) {
+        let stream: ai.StreamingProvider => {
+          let resolution = stream.stream<Resolution$stream, Resolution>(task).final();
+          NegotiatedRun {
+            provider: stream.name(),
+            mode: "stream",
+            output: resolution.reply,
+          }
+        },
+        let completion: ai.CompletionProvider => {
+          let resolution = completion.complete<Resolution>(task).value;
+          NegotiatedRun {
+            provider: completion.name(),
+            mode: "completion",
+            output: resolution.reply,
+          }
+        },
+        _ => throw baml.errors.Unsupported {
+          message: "task provider cannot resolve a ticket: " + task.provider_name(),
+        },
       }
     }
   }
 }
 
-let recorded: AuditResult<Summary> = Summarize.task(article).run(
-  runner = WithAudit<Summary, openai.Chat> {
-    inner: ai.run.Completion.new(),
-    label: "article-summary",
-  },
+let negotiated: NegotiatedRun = InvestigateRepository@task(sample_ticket()).run(
+  runner = CapabilityNegotiationRunner.new(),
 );
 
-log.info(`audit record: ${recorded.audit_id}`);
-let summary = recorded.value
-```
-
-### What happens
-
-```mermaid
-flowchart LR
-  task["Summarize task"] --> audited["WithAudit runner"]
-  audited --> record["Open audit record"]
-  record --> inner["Completion runner"]
-  inner --> provider["Provider"]
-  provider --> summary["Summary"]
-  summary --> close["Complete audit record"]
-  close --> result["AuditResult<Summary>"]
+log.info(`selected mode: ${negotiated.mode}`);
+let reply = negotiated.output
 ```
 
 ### Illustrative output
 
 ```console
-[INFO] opened audit record audit_42 for article-summary
-[INFO] Completion returned Summary
-[INFO] completed audit record audit_42
-[INFO] returned AuditResult<Summary>
+[INFO] task provider supports completion only
+[INFO] completion returned Resolution
+[INFO] returned NegotiatedRun { provider: "openai(gpt-5.6-luna)", mode: "completion", ... }
 ```
 
 The associated `Output` makes the return type of `task.run(...)` precise.
 There is no untyped registry, and adding the runner does not require changing
-BAML itself. `WithAudit` delegates the provider interaction but intentionally
-changes the result from `Summary` to `AuditResult<Summary>`. If the application
-only needs to copy events to a log, use an observer instead.
+BAML itself. `CapabilityNegotiationRunner` delegates the provider interaction
+but intentionally changes the result from `Resolution` to `NegotiatedRun`. If
+the application only needs to copy events to a log, use an observer instead.
 
-The example shows the successful path. A production wrapper must also mark
-the audit record failed or cancelled on every non-success exit.
+The example shows the successful path. A production runner that acquires
+resources must also release them on every non-success exit, for example with a
+`defer` block around remote cleanup.
 
 ## Extending providers
 
@@ -294,21 +313,23 @@ A provider implements common identity plus only the capabilities it can
 honestly execute:
 
 ```text
-Provider
-├── CompletionProvider
-├── GenerationProvider
-├── StreamingProvider
-├── ToolCallingProvider
-├── BackgroundProvider
-├── BatchProvider
-└── RealtimeProvider
+ai.Provider
+├── ai.CompletionProvider
+├── ai.GenerationProvider
+├── ai.StreamingProvider
+├── ai.tools.ToolCallingProvider
+├── ai.jobs.BackgroundProvider
+├── ai.jobs.BatchProvider
+├── ai.transcription.TranscriptionProvider
+└── ai.realtime.RealtimeProvider
 ```
 
 A custom runner asks for the smallest capability it needs. A stream runner
-requires `StreamingProvider`; an application tool loop requires
-`ToolCallingProvider`; a durable background runner requires
-`BackgroundProvider`. The constraint makes an unsupported pairing a type
-error before a request starts.
+requires `ai.StreamingProvider`; an application tool loop requires
+`ai.tools.ToolCallingProvider`; a durable background runner requires
+`ai.jobs.BackgroundProvider`. The runner narrows `task.provider` to that
+capability and rejects an unsupported pairing with `baml.errors.Unsupported`
+before a request starts.
 
 Add a provider adapter when the extension changes the authentication protocol,
 transport, request rendering, response parsing, provider events, or

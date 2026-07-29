@@ -23,7 +23,7 @@ class ClaudeCodeCli {
     function complete_with_events<T>(
         self,
         task: root.ai.Task<T>,
-        on_event: ((root.ai.AgentEvent) -> null throws never)? = null,
+        on_event: ((root.ai.observe.AgentEvent) -> null throws never)? = null,
         output_schema: ClaudeCodeJsonSchema? = null,
     ) -> ClaudeCodeCliRun<T> throws baml.errors.UnknownError {
         let schema = match (output_schema) {
@@ -31,10 +31,7 @@ class ClaudeCodeCli {
             null => {
                 baml.schema.json_schema(reflect.type_of<T>()) catch (e) {
                     _ => {
-                        throw baml.errors.UnknownError {
-                        data: e,
-                        message: ["Claude Code CLI output type cannot be represented as JSON Schema"],
-                    }
+                        throw baml.errors.UnknownError.with_message<never>(e, "Claude Code CLI output type cannot be represented as JSON Schema")
                     },
                 }
             },
@@ -53,10 +50,7 @@ class ClaudeCodeCli {
                 },
             ) catch (e) {
             _ => {
-                throw baml.errors.UnknownError {
-        data: e,
-        message: ["failed to start the Claude Code CLI"],
-      }
+                throw baml.errors.UnknownError.with_message<never>(e, "failed to start the Claude Code CLI")
             },
         };
         defer {
@@ -66,28 +60,19 @@ class ClaudeCodeCli {
                 | baml.errors.Timeout>(self, process.stdout, on_event) catch (e) {
             let unknown: baml.errors.UnknownError => throw unknown,
             _ => {
-                throw baml.errors.UnknownError {
-                data: e,
-                message: ["failed while reading Claude Code CLI events"],
-            }
+                throw baml.errors.UnknownError.with_message<never>(e, "failed while reading Claude Code CLI events")
             },
         };
         let exit = process.wait() catch (e) {
             _ => {
-                throw baml.errors.UnknownError {
-                data: e,
-                message: ["failed while waiting for the Claude Code CLI"],
-            }
+                throw baml.errors.UnknownError.with_message<never>(e, "failed while waiting for the Claude Code CLI")
             },
         };
         if (!exit.ok()) {
-            throw baml.errors.UnknownError {
-        data: {
-          "exit_code": exit.exit_code,
-          "signal": exit.signal,
-        },
-        message: ["Claude Code CLI exited unsuccessfully"],
-      };
+            throw baml.errors.UnknownError.with_message<never>(
+        { "exit_code": exit.exit_code, "signal": exit.signal },
+        "Claude Code CLI exited unsuccessfully",
+      );
         }
         run
     }
@@ -133,7 +118,7 @@ class ClaudeCodeCli {
 
 class ClaudeCodeCliRun<T> {
     response: root.ai.ResponseWithMetadata<T>,
-    events: root.ai.AgentEvent[],
+    events: root.ai.observe.AgentEvent[],
     raw_events: json[],
     session_id: string,
     event_delivery: string,
@@ -141,12 +126,12 @@ class ClaudeCodeCliRun<T> {
 
 class ClaudeCodeHarnessSession {
     session_id: string,
-    options: root.ai.HarnessOptions,
+    options: root.ai.harness.HarnessOptions,
     history: root.ai.MessageHistory,
     is_stopped: bool,
     steering: string[],
 
-    implements root.ai.HarnessSession {
+    implements root.ai.harness.HarnessSession {
         function id(self) -> string throws never { self.session_id }
         function messages(self) -> root.ai.Messages throws never { self.history }
         function stopped(self) -> bool throws never { self.is_stopped }
@@ -188,10 +173,10 @@ function parse_claude_code_cli_output<T>(
 function _parse_claude_code_cli_lines<T, E>(
     provider: ClaudeCodeCli,
     lines: baml.iter.Iterable<Item = string, Error = E>,
-    on_event: ((root.ai.AgentEvent) -> null throws never)?,
+    on_event: ((root.ai.observe.AgentEvent) -> null throws never)?,
 ) -> ClaudeCodeCliRun<T> throws baml.errors.UnknownError | E {
     let raw_events: json[] = [];
-    let events: root.ai.AgentEvent[] = [];
+    let events: root.ai.observe.AgentEvent[] = [];
     let terminal: json = null;
     let terminal_found = false;
     let session_id = "";
@@ -204,10 +189,10 @@ function _parse_claude_code_cli_lines<T, E>(
         }
         let raw = baml.json.parse(trimmed) catch (e) {
             _ => {
-                throw baml.errors.UnknownError {
-        data: { "line": trimmed, "parse_error": e },
-        message: ["Claude Code CLI emitted invalid JSONL"],
-      }
+                throw baml.errors.UnknownError.with_message<never>(
+        { "line": trimmed, "parse_error": e },
+        "Claude Code CLI emitted invalid JSONL",
+      )
             },
         };
         raw_events.push(raw);
@@ -220,8 +205,8 @@ function _parse_claude_code_cli_lines<T, E>(
 
         if (kind == "system" && baml.json.path_or<string>(raw, ".subtype", "") == "init") {
             actual_model = baml.json.path_or<string?>(raw, ".model", provider.model);
-            root.ai._emit_harness_event(
-                root.ai.ModelStartedEvent {
+            root.ai.harness._emit_harness_event(
+                root.ai.observe.ModelStartedEvent {
                     id: if (session_id.length() > 0) {
                         session_id
                     } else {
@@ -240,8 +225,8 @@ function _parse_claude_code_cli_lines<T, E>(
         ) {
             let delta_kind = baml.json.path_or<string>(raw, ".event.delta.type", "");
             if (delta_kind == "text_delta") {
-                root.ai._emit_harness_event(
-                    root.ai.TextDeltaEvent {
+                root.ai.harness._emit_harness_event(
+                    root.ai.observe.TextDeltaEvent {
                         id: if (session_id.length() > 0) {
                             session_id
                         } else {
@@ -255,8 +240,8 @@ function _parse_claude_code_cli_lines<T, E>(
                 );
             }
             if (delta_kind == "input_json_delta") {
-                root.ai._emit_harness_event(
-                    root.ai.TextDeltaEvent {
+                root.ai.harness._emit_harness_event(
+                    root.ai.observe.TextDeltaEvent {
                         id: if (session_id.length() > 0) {
                             session_id
                         } else {
@@ -276,13 +261,13 @@ function _parse_claude_code_cli_lines<T, E>(
                 && baml.json.path_or<string>(raw, ".event.type", "") == "content_block_start"
                 && baml.json.path_or<string>(raw, ".event.content_block.type", "") == "tool_use"
         ) {
-            let call = root.ai.ToolCall {
+            let call = root.ai.tools.ToolCall {
                 id: baml.json.path_or<string>(raw, ".event.content_block.id", ""),
                 name: baml.json.path_or<string>(raw, ".event.content_block.name", ""),
                 args: baml.json.path_or<json>(raw, ".event.content_block.input", {}),
             };
-            root.ai._emit_harness_event(
-                root.ai.ToolCallEvent {
+            root.ai.harness._emit_harness_event(
+                root.ai.observe.ToolCallEvent {
                     id: if (session_id.length() > 0) {
                         session_id
                     } else {
@@ -304,17 +289,11 @@ function _parse_claude_code_cli_lines<T, E>(
     }
 
     if (!terminal_found) {
-        throw baml.errors.UnknownError {
-      data: raw_events,
-      message: ["Claude Code CLI stream ended without a result event"],
-    };
+        throw baml.errors.UnknownError.with_message<never>(raw_events, "Claude Code CLI stream ended without a result event");
     }
     let result = terminal;
     if (baml.json.path_or<bool>(result, ".is_error", false)) {
-        throw baml.errors.UnknownError {
-      data: result,
-      message: ["Claude Code CLI returned an error result"],
-    };
+        throw baml.errors.UnknownError.with_message<never>(result, "Claude Code CLI returned an error result");
     }
 
     let result_text = baml.json.path_or<string>(result, ".result", "");
@@ -322,20 +301,14 @@ function _parse_claude_code_cli_lines<T, E>(
         _ => {
             baml.json.parse(result_text) catch (parse_error) {
                 _ => {
-                    throw baml.errors.UnknownError {
-        data: parse_error,
-        message: ["Claude Code CLI result did not contain structured JSON output"],
-      }
+                    throw baml.errors.UnknownError.with_message<never>(parse_error, "Claude Code CLI result did not contain structured JSON output")
                 },
             }
         }
     };
     let value: T = baml.json.from_json<T>(structured) catch (e) {
         _ => {
-            throw baml.errors.UnknownError {
-      data: e,
-      message: ["Claude Code CLI structured output did not match the BAML type"],
-    }
+            throw baml.errors.UnknownError.with_message<never>(e, "Claude Code CLI structured output did not match the BAML type")
         },
     };
 
@@ -346,8 +319,8 @@ function _parse_claude_code_cli_lines<T, E>(
         reasoning_tokens: null,
         cost_usd: baml.json.path_or<float?>(result, ".total_cost_usd", null),
     };
-    root.ai._emit_harness_event(
-        root.ai.UsageEvent {
+    root.ai.harness._emit_harness_event(
+        root.ai.observe.UsageEvent {
             id: if (session_id.length() > 0) {
                 session_id
             } else {
@@ -358,8 +331,8 @@ function _parse_claude_code_cli_lines<T, E>(
         events,
         on_event,
     );
-    root.ai._emit_harness_event(
-        root.ai.RunFinishedEvent {
+    root.ai.harness._emit_harness_event(
+        root.ai.observe.RunFinishedEvent {
             id: if (session_id.length() > 0) {
                 session_id
             } else {
@@ -374,7 +347,7 @@ function _parse_claude_code_cli_lines<T, E>(
     ClaudeCodeCliRun<T> {
         response: root.ai.ResponseWithMetadata<T> {
             value: value,
-            meta: root.ai.ResponseMetadata {
+            metadata: root.ai.ResponseMetadata {
                 provider: "claude-code-cli",
                 model: actual_model ?? provider.model,
                 request_id: baml.json.path_or<string?>(result, ".uuid", null),
@@ -406,18 +379,12 @@ class ClaudeCodeCompletionTurn {
 function _claude_code_completion_turn_schema<T>() -> json throws baml.errors.UnknownError {
     let final_schema = baml.schema.json_schema(reflect.type_of<T>()) catch (e) {
         _ => {
-            throw baml.errors.UnknownError {
-                data: e,
-                message: ["Claude Code completion result cannot be represented as JSON Schema"],
-            }
+            throw baml.errors.UnknownError.with_message<never>(e, "Claude Code completion result cannot be represented as JSON Schema")
         },
     };
     let final_root = baml.json.from_json<map<string, json>>(final_schema) catch (e) {
         _ => {
-            throw baml.errors.UnknownError {
-                data: e,
-                message: ["Claude Code completion schema must have an object root"],
-            }
+            throw baml.errors.UnknownError.with_message<never>(e, "Claude Code completion schema must have an object root")
         },
     };
     // References emitted for T are rooted at #/$defs. Move those definitions
@@ -425,10 +392,7 @@ function _claude_code_completion_turn_schema<T>() -> json throws baml.errors.Unk
     let definitions: json = final_root.delete("$defs") ?? {};
     let embedded_final = baml.json.to_json(final_root) catch (e) {
         _ => {
-            throw baml.errors.UnknownError {
-                data: e,
-                message: ["Claude Code completion schema could not be embedded"],
-            }
+            throw baml.errors.UnknownError.with_message<never>(e, "Claude Code completion schema could not be embedded")
         },
     };
     // Tool arguments are checked again by invoke_tool. Keeping args as an
@@ -463,18 +427,15 @@ function _claude_code_completion_turn_schema<T>() -> json throws baml.errors.Unk
 }
 
 function _claude_code_completion_suffix<T>(
-    tools: root.ai.Tool[],
+    tools: root.ai.tools.Tool[],
 ) -> string throws baml.errors.UnknownError {
     let final_schema = baml.schema.json_schema(reflect.type_of<T>()) catch (e) {
         _ => {
-            throw baml.errors.UnknownError {
-                data: e,
-                message: ["Claude Code completion result cannot be represented as JSON Schema"],
-            }
+            throw baml.errors.UnknownError.with_message<never>(e, "Claude Code completion result cannot be represented as JSON Schema")
         },
     };
-    let schemas = tools.map((tool: root.ai.Tool) -> json {
-        root.ai._prompt_tool_schema(tool)
+    let schemas = tools.map((tool: root.ai.tools.Tool) -> json {
+        root.ai.tools._prompt_tool_schema(tool)
     });
     "\n\n"
         + `
@@ -502,15 +463,12 @@ function _claude_code_complete_with_application_tools<T>(
     task: root.ai.Task<T>,
 ) -> root.ai.ResponseWithMetadata<T> throws baml.errors.UnknownError {
     let tools = task.tools;
-    let adapter = root.ai.PromptToolProvider { inner: provider };
+    let adapter = root.ai.tools.PromptToolProvider { inner: provider };
     let conversation = adapter.begin<T>(task);
     let state = match (conversation) {
-        let value: root.ai.PromptToolConversation => value,
+        let value: root.ai.tools.PromptToolConversation => value,
         _ => {
-            throw baml.errors.UnknownError {
-                data: null,
-                message: ["Claude Code completion conversation had the wrong type"],
-            }
+            throw baml.errors.UnknownError.with_message<never>(null, "Claude Code completion conversation had the wrong type")
         },
     };
     let schema = _claude_code_completion_turn_schema<T>();
@@ -520,7 +478,7 @@ function _claude_code_complete_with_application_tools<T>(
     while (step < provider.max_application_tool_steps) {
         let run = provider
             .complete_with_events<ClaudeCodeCompletionTurn>(
-                root.ai._prompt_tool_turn<ClaudeCodeCompletionTurn>(
+                root.ai.tools._prompt_tool_turn<ClaudeCodeCompletionTurn>(
                     adapter,
                     state,
                     tools,
@@ -528,19 +486,16 @@ function _claude_code_complete_with_application_tools<T>(
                 ),
                 output_schema = ClaudeCodeJsonSchema { value: schema },
             );
-        let outcome: T | root.ai.ToolCalls = baml.json
-            .from_json<T | root.ai.ToolCalls>(run.response.value.outcome) catch (e) {
+        let outcome: T | root.ai.tools.ToolCalls = baml.json
+            .from_json<T | root.ai.tools.ToolCalls>(run.response.value.outcome) catch (e) {
             _ => {
-                throw baml.errors.UnknownError {
-                    data: e,
-                    message: ["Claude Code completion returned an invalid outcome"],
-                }
+                throw baml.errors.UnknownError.with_message<never>(e, "Claude Code completion returned an invalid outcome")
             },
         };
         step = step + 1;
         //# Return the final typed value
         match (outcome) {
-            let calls: root.ai.ToolCalls => {
+            let calls: root.ai.tools.ToolCalls => {
                 //## Preserve the requested calls in the prompt conversation
                 state
                     .history
@@ -551,7 +506,7 @@ function _claude_code_complete_with_application_tools<T>(
                                 baml.json
                                     .stringify(
                                         {
-                                            "calls": calls.calls.map((call: root.ai.ToolCall) -> json {
+                                            "calls": calls.calls.map((call: root.ai.tools.ToolCall) -> json {
                                                 {
                                                     "id": call.id,
                                                     "name": call.name,
@@ -563,7 +518,7 @@ function _claude_code_complete_with_application_tools<T>(
                             ),
                     );
                 //## Dispatch BAML functions and submit correlated results
-                let results = root.ai._run_tool_calls(
+                let results = root.ai.internal._run_tool_calls(
                     calls.calls,
                     tools,
                     null,
@@ -575,35 +530,26 @@ function _claude_code_complete_with_application_tools<T>(
                     step,
                 ) catch (e) {
                     _ => {
-                        throw baml.errors.UnknownError {
-                            data: e,
-                            message: ["Claude Code completion tool callback failed"],
-                        }
+                        throw baml.errors.UnknownError.with_message<never>(e, "Claude Code completion tool callback failed")
                     },
                 };
                 let _ = adapter.submit(state, results) catch (e) {
                     _ => {
-                        throw baml.errors.UnknownError {
-                            data: e,
-                            message: ["Claude Code completion could not submit BAML tool results"],
-                        }
+                        throw baml.errors.UnknownError.with_message<never>(e, "Claude Code completion could not submit BAML tool results")
                     },
                 };
             },
             let value: T => {
                 return root.ai.ResponseWithMetadata<T> {
                     value: value,
-                    meta: run.response.meta,
+                    metadata: run.response.metadata,
                     conversation: state,
                 };
             },
         }
     }
 
-    throw baml.errors.UnknownError {
-        data: { "max_application_tool_steps": provider.max_application_tool_steps },
-        message: ["Claude Code completion exhausted its application-tool step budget"],
-    }
+    throw baml.errors.UnknownError.with_message<never>({ "max_application_tool_steps": provider.max_application_tool_steps }, "Claude Code completion exhausted its application-tool step budget")
 }
 
 implements root.ai.Provider for ClaudeCodeCli {
@@ -684,20 +630,20 @@ function _claude_code_harness_task<T>(
         prompt: baml.llm.assemble_prompt_ast(
             ["", "\nHarness steering (follow exactly):\n", ""],
             [
-                root.ai._prompt_text_content(rebound.prompt),
+                root.ai.messages._prompt_text_content(rebound.prompt),
                 session.steering.join("\n"),
             ],
         ),
     }
 }
 
-implements root.ai.Harness for ClaudeCodeCli {
+implements root.ai.harness.Harness for ClaudeCodeCli {
     function label(self) -> string throws never { "claude-code-cli" }
 
     function open(
         self,
-        options: root.ai.HarnessOptions,
-    ) -> root.ai.HarnessSession throws never {
+        options: root.ai.harness.HarnessOptions,
+    ) -> root.ai.harness.HarnessSession throws never {
         let session = ClaudeCodeHarnessSession {
             session_id: "claude-code-session-" + (self.harness_sessions.length() + 1).to_string(),
             options: options,
@@ -711,24 +657,18 @@ implements root.ai.Harness for ClaudeCodeCli {
 
     function run<T>(
         self,
-        session: root.ai.HarnessSession,
+        session: root.ai.harness.HarnessSession,
         task: root.ai.Task<T>,
-        on_event: ((root.ai.AgentEvent) -> null throws never)?,
-    ) -> root.ai.HarnessRun<T> throws baml.errors.UnknownError {
+        on_event: ((root.ai.observe.AgentEvent) -> null throws never)?,
+    ) -> root.ai.harness.HarnessRun<T> throws baml.errors.UnknownError {
         let local = match (session) {
             let value: ClaudeCodeHarnessSession => value,
             _ => {
-                throw baml.errors.UnknownError {
-                    data: null,
-                    message: ["Claude Code received a session owned by another harness"],
-                }
+                throw baml.errors.UnknownError.with_message<never>(null, "Claude Code received a session owned by another harness")
             },
         };
         if (local.is_stopped) {
-            throw baml.errors.UnknownError {
-                data: { "session_id": local.session_id },
-                message: ["Claude Code harness session is stopped"],
-            };
+            throw baml.errors.UnknownError.with_message<never>({ "session_id": local.session_id }, "Claude Code harness session is stopped");
         }
         //# Apply per-session isolation and steering before launching Claude Code
         let configured = _claude_code_harness_provider(self, local);
@@ -739,7 +679,7 @@ implements root.ai.Harness for ClaudeCodeCli {
             local.session_id = cli_run.session_id;
         }
         local.history = effective_task.messages().to_history();
-        root.ai.HarnessRun<T> {
+        root.ai.harness.HarnessRun<T> {
             value: cli_run.response.value,
             events: cli_run.events,
             token: self.save_session(local),
@@ -749,19 +689,16 @@ implements root.ai.Harness for ClaudeCodeCli {
 
     function save_session(
         self,
-        session: root.ai.HarnessSession,
-    ) -> root.ai.HarnessSessionToken
+        session: root.ai.harness.HarnessSession,
+    ) -> root.ai.harness.HarnessSessionToken
         throws baml.errors.UnknownError {
         let local = match (session) {
             let value: ClaudeCodeHarnessSession => value,
             _ => {
-                throw baml.errors.UnknownError {
-                    data: null,
-                    message: ["cannot save a session owned by another harness"],
-                }
+                throw baml.errors.UnknownError.with_message<never>(null, "cannot save a session owned by another harness")
             },
         };
-        root.ai.HarnessSessionToken {
+        root.ai.harness.HarnessSessionToken {
             provider: self.label(),
             runtime: "claude-code-cli",
             session_id: local.session_id,
@@ -772,58 +709,46 @@ implements root.ai.Harness for ClaudeCodeCli {
 
     function restore_session(
         self,
-        token: root.ai.HarnessSessionToken,
-    ) -> root.ai.HarnessSession
+        token: root.ai.harness.HarnessSessionToken,
+    ) -> root.ai.harness.HarnessSession
         throws baml.errors.UnknownError {
         if (
             token.provider != self.label()
                 || token.runtime != "claude-code-cli"
                 || token.version != 1
         ) {
-            throw baml.errors.UnknownError {
-                data: token,
-                message: ["Claude Code harness token belongs to another runtime"],
-            };
+            throw baml.errors.UnknownError.with_message<never>(token, "Claude Code harness token belongs to another runtime");
         }
         for (let session in self.harness_sessions) {
             if (session.session_id == token.session_id) {
                 return session;
             }
         }
-        throw baml.errors.UnknownError {
-            data: token,
-            message: ["Claude Code harness session was not found"],
-        }
+        throw baml.errors.UnknownError.with_message<never>(token, "Claude Code harness session was not found")
     }
 
     function steer(
         self,
-        session: root.ai.HarnessSession,
+        session: root.ai.harness.HarnessSession,
         instruction: string,
     ) -> null
         throws baml.errors.UnknownError {
         let local = match (session) {
             let value: ClaudeCodeHarnessSession => value,
             _ => {
-                throw baml.errors.UnknownError {
-                    data: null,
-                    message: ["cannot steer a session owned by another harness"],
-                }
+                throw baml.errors.UnknownError.with_message<never>(null, "cannot steer a session owned by another harness")
             },
         };
         local.steering.push(instruction);
         null
     }
 
-    function interrupt(self, session: root.ai.HarnessSession) -> null
+    function interrupt(self, session: root.ai.harness.HarnessSession) -> null
         throws baml.errors.UnknownError {
         let local = match (session) {
             let value: ClaudeCodeHarnessSession => value,
             _ => {
-                throw baml.errors.UnknownError {
-                    data: null,
-                    message: ["cannot interrupt a session owned by another harness"],
-                }
+                throw baml.errors.UnknownError.with_message<never>(null, "cannot interrupt a session owned by another harness")
             },
         };
         local.is_stopped = true;

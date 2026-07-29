@@ -3,21 +3,21 @@
 function mcp_mid_loop() -> null {
     let broker = mcp_broker();
     let bootstrap_tool = add_mcp_server_tool(broker);
-    let registry = root.ai.ToolRegistry.new([bootstrap_tool]);
-    let provider = root.ai.ScriptedToolProvider {
+    let registry = root.ai.tools.ToolRegistry.new([bootstrap_tool]);
+    let provider = root.ai.testing.ScriptedToolProvider {
         turns: [
-            root.ai.ToolCalls {
+            root.ai.tools.ToolCalls {
                 calls: [
-                    root.ai.ToolCall {
+                    root.ai.tools.ToolCall {
                         id: "call-1",
                         name: "add_mcp_server",
                         args: { "server": "orders" },
                     },
                 ],
             },
-            root.ai.ToolCalls {
+            root.ai.tools.ToolCalls {
                 calls: [
-                    root.ai.ToolCall {
+                    root.ai.tools.ToolCall {
                         id: "call-2",
                         name: "mcp__orders__lookup_order",
                         args: { "order_id": "O-42" },
@@ -37,7 +37,7 @@ function mcp_mid_loop() -> null {
     };
     let runner = root.ai.run.Agent<Resolution>.new(tools = [], tool_registry = registry, prepare_step = (context) -> {
         let next_tools = broker.activate_pending(context.tools);
-        root.ai.StepPlan { provider: null, tools: next_tools, stop: null }
+        root.ai.tools.StepPlan { provider: null, tools: next_tools, stop: null }
     });
     let outcome = McpBootstrap_task(provider, bootstrap_tool).run(runner = runner);
     log.info(

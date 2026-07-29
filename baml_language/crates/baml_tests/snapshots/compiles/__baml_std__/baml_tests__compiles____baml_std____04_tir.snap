@@ -930,6 +930,33 @@ class baml.errors.UnknownError {
   data: unknown
   message: string[]
 }
+function baml.errors.UnknownError.from<T>(data: unknown) -> T | baml.errors.UnknownError throws never {
+  { : T | baml.errors.UnknownError
+    match (data : unknown) : T | baml.errors.UnknownError
+      value: T =>
+        value : T
+      UnknownError { data: inner: T } =>
+        inner : T
+      e: UnknownError =>
+        e : baml.errors.UnknownError
+      _ =>
+        UnknownError { data: data, message: [] } : baml.errors.UnknownError
+  }
+}
+function baml.errors.UnknownError.with_message<T>(data: unknown, message: string) -> T | baml.errors.UnknownError throws never {
+  { : baml.errors.UnknownError | T
+    match (data : unknown) : baml.errors.UnknownError | T
+      e: UnknownError =>
+        { : baml.errors.UnknownError
+          e.message = e.message.concat([message]) : string[]
+          e : baml.errors.UnknownError
+        }
+      value: T =>
+        value : T
+      _ =>
+        UnknownError { data: data, message: [message] } : baml.errors.UnknownError
+  }
+}
 class baml.errors.UnknownError$stream {
   data: unknown
   message: string[]

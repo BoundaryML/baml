@@ -1,12 +1,12 @@
 // Recover a support request on a healthy provider after the active provider
 // fails.
 function switch_provider_after_failure() -> root.ai.ResponseWithMetadata<Resolution> {
-  let failed = root.ai.FakeProvider {
+  let failed = root.ai.testing.FakeProvider {
     ...fake_resolution(),
     provider_name: "failed-primary",
     failures_remaining: 1,
   };
-  let fallback = root.ai.FakeProvider {
+  let fallback = root.ai.testing.FakeProvider {
     ...fake_resolution(),
     provider_name: "healthy-fallback",
   };
@@ -19,7 +19,7 @@ function switch_provider_after_failure() -> root.ai.ResponseWithMetadata<Resolut
   log.info({
     "scenario": "switch_provider_after_failure",
     "primary_calls": failed.calls,
-    "completed_by": response.meta.provider,
+    "completed_by": response.metadata.provider,
   });
   response
 }

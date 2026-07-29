@@ -35,13 +35,24 @@ function sample_ticket() -> SupportTicket throws never {
   }
 }
 
-function fake_resolution() -> root.ai.FakeProvider throws never {
-  root.ai.fake_output_provider(`{
+function fake_resolution() -> root.ai.testing.FakeProvider throws never {
+  root.ai.testing.fake_output_provider(`{
     "category": "billing",
     "priority": "Urgent",
     "summary": "Duplicate charge",
     "reply": "We will investigate order O-42."
   }`)
+}
+
+// Named model values used throughout the BEP pages: the fast default and the
+// careful escalation target. Thin aliases over the live constructors so doc
+// snippets and scenarios share one vocabulary.
+function fast_model() -> root.openai.Chat throws baml.errors.Io | baml.errors.ParseError {
+  live_openai()
+}
+
+function careful_model() -> root.anthropic.Messages throws baml.errors.Io | baml.errors.ParseError {
+  live_anthropic()
 }
 
 function live_openai() -> root.openai.Chat throws baml.errors.Io | baml.errors.ParseError {
@@ -91,14 +102,14 @@ function ResolveTicket_task(
 function ResolveTicket_manual(
   ticket: SupportTicket,
   provider: root.ai.Provider,
-) -> Resolution throws root.ai.CallError | baml.errors.UnknownError {
+) -> Resolution throws root.ai.Failure | baml.errors.UnknownError {
   ResolveTicket_task(ticket, provider)
     .run(runner = root.ai.run.Completion<Resolution>.new())
 }
 
 function drain_resolution_stream(
   task: root.ai.Task<Resolution>,
-) -> Resolution throws baml.errors.UnknownError | root.ai.StreamError
+) -> Resolution throws baml.errors.UnknownError | root.ai.Failure
     | baml.errors.Unsupported | baml.errors.Io | baml.errors.LlmClient {
   let stream = task.run(
     runner = root.ai.run.Stream<Resolution$stream, Resolution>.new(),

@@ -1,13 +1,13 @@
 // Tests for the realtime_call_center scenario.
 test "guide 05.06: call-center scheduling tool exposes every required field" {
-    let tool = root.ai.normalize_tool(root.ai_scenarios.schedule_meeting);
+    let tool = root.ai.tools.normalize_tool(root.ai_scenarios.schedule_meeting);
     assert.equal(tool.name, "schedule_meeting");
     let required = baml.json.path_or<json[]>(tool.input_schema, ".required", []);
     assert.equal(required.length(), 7)
 }
 
 test "guide 05.06: weather is an explicit fake task tool" {
-    let tool = root.ai.normalize_tool(root.ai_scenarios.check_weather);
+    let tool = root.ai.tools.normalize_tool(root.ai_scenarios.check_weather);
     assert.equal(tool.name, "check_weather");
     let required = baml.json.path_or<string[]>(tool.input_schema, ".required", []);
     assert.equal(required, ["location", "date"]);
@@ -21,7 +21,7 @@ test "guide 05.06: weather is an explicit fake task tool" {
 }
 
 test "guide 05.06: conversation completion is an explicit task tool" {
-    let tool = root.ai.normalize_tool(root.ai_scenarios.mark_conversation_complete);
+    let tool = root.ai.tools.normalize_tool(root.ai_scenarios.mark_conversation_complete);
     assert.equal(tool.name, "mark_conversation_complete");
     let required = baml.json.path_or<string[]>(tool.input_schema, ".required", []);
     assert.equal(required, ["reason"]);
@@ -29,24 +29,24 @@ test "guide 05.06: conversation completion is an explicit task tool" {
     let task = root
         .ai_scenarios
         ._realtime_call_center_task(
-            root.ai.FakeRealtimeProvider { transcript: "hello" },
+            root.ai.testing.FakeRealtimeProvider { transcript: "hello" },
             "Say hello.",
         );
     assert
         .is_true(
-            task.tools.some((candidate: root.ai.Tool) -> bool {
+            task.tools.some((candidate: root.ai.tools.Tool) -> bool {
                 candidate.name == "schedule_meeting"
             }),
         );
     assert
         .is_true(
-            task.tools.some((candidate: root.ai.Tool) -> bool {
+            task.tools.some((candidate: root.ai.tools.Tool) -> bool {
                 candidate.name == "check_weather"
             }),
         );
     assert
         .is_true(
-            task.tools.some((candidate: root.ai.Tool) -> bool {
+            task.tools.some((candidate: root.ai.tools.Tool) -> bool {
                 candidate.name == "mark_conversation_complete"
             }),
         )
@@ -56,7 +56,7 @@ test "guide 05.06: the task owns both call-center instructions and its opening t
     let task = root
         .ai_scenarios
         ._realtime_call_center_task(
-            root.ai.FakeRealtimeProvider { transcript: "hello" },
+            root.ai.testing.FakeRealtimeProvider { transcript: "hello" },
             "Say hello.",
         );
     let messages = task.prompt.messages();
@@ -71,9 +71,9 @@ test "guide 05.06: the task owns both call-center instructions and its opening t
 }
 
 test "guide 05.06: a duplex voice agent pumps microphone input beside session events" {
-    let audio = root.ai.BufferedRealtimeAudioDevice {
-        input_audio_format: root.ai.fake_realtime_audio_format(),
-        output_audio_format: root.ai.fake_realtime_audio_format(),
+    let audio = root.ai.testing.BufferedRealtimeAudioDevice {
+        input_audio_format: root.ai.testing.fake_realtime_audio_format(),
+        output_audio_format: root.ai.testing.fake_realtime_audio_format(),
         input_chunks: [],
         next_input_index: 0,
         output_chunks: [],
@@ -83,17 +83,17 @@ test "guide 05.06: a duplex voice agent pumps microphone input beside session ev
     let task = root
         .ai_scenarios
         ._realtime_call_center_task(
-            root.ai.FakeRealtimeProvider { transcript: "hello" },
+            root.ai.testing.FakeRealtimeProvider { transcript: "hello" },
             "Say hello.",
         );
-    task.run(runner = root.ai.run.VoiceAgent.new(audio, root.ai.RecordingChannel { frames: [] }));
+    task.run(runner = root.ai.run.VoiceAgent.new(audio, root.ai.testing.RecordingChannel { frames: [] }));
     assert.is_true(audio.is_closed)
 }
 
 test "guide 05.06: voice agent rejects an incompatible audio device" {
-    let audio = root.ai.BufferedRealtimeAudioDevice {
-        input_audio_format: root.ai.RealtimeAudioFormat { encoding: "other", sample_rate_hz: 8_000, channels: 1 },
-        output_audio_format: root.ai.fake_realtime_audio_format(),
+    let audio = root.ai.testing.BufferedRealtimeAudioDevice {
+        input_audio_format: root.ai.realtime.RealtimeAudioFormat { encoding: "other", sample_rate_hz: 8_000, channels: 1 },
+        output_audio_format: root.ai.testing.fake_realtime_audio_format(),
         input_chunks: [],
         next_input_index: 0,
         output_chunks: [],
@@ -103,11 +103,11 @@ test "guide 05.06: voice agent rejects an incompatible audio device" {
     let task = root
         .ai_scenarios
         ._realtime_call_center_task(
-            root.ai.FakeRealtimeProvider { transcript: "hello" },
+            root.ai.testing.FakeRealtimeProvider { transcript: "hello" },
             "Say hello.",
         );
     let rejected = false;
-    task.run(runner = root.ai.run.VoiceAgent.new(audio, root.ai.RecordingChannel { frames: [] })) catch (e) {
+    task.run(runner = root.ai.run.VoiceAgent.new(audio, root.ai.testing.RecordingChannel { frames: [] })) catch (e) {
         let unsupported: baml.errors.Unsupported => {
             rejected = unsupported.message.includes("input format mismatch");
             null
@@ -118,7 +118,7 @@ test "guide 05.06: voice agent rejects an incompatible audio device" {
 }
 
 class LatestWinsRealtimeProvider {
-    events: root.ai.LiveEvent[],
+    events: root.ai.realtime.LiveEvent[],
 
     implements root.ai.Provider {
         function name(self) -> string throws never {
@@ -128,13 +128,13 @@ class LatestWinsRealtimeProvider {
             "fake/latest-wins"
         }
     }
-    implements root.ai.RealtimeProvider {
+    implements root.ai.realtime.RealtimeProvider {
         function open_live<T>(
             self,
             task: root.ai.Task<T>,
-            channel: root.ai.Channel,
-        ) -> root.ai.LiveSession throws never {
-            root.ai.BufferedLiveSession {
+            channel: root.ai.realtime.Channel,
+        ) -> root.ai.realtime.LiveSession throws never {
+            root.ai.testing.BufferedLiveSession {
                 items: self.events,
                 channel: channel,
                 is_closed: false,
@@ -147,9 +147,9 @@ class LatestWinsRealtimeProvider {
 test "guide 05.06: a newer assistant item replaces queued older audio" {
     let old_audio = baml.Uint8Array.from_base64("AQI=");
     let latest_audio = baml.Uint8Array.from_base64("AwQ=");
-    let audio = root.ai.BufferedRealtimeAudioDevice {
-        input_audio_format: root.ai.fake_realtime_audio_format(),
-        output_audio_format: root.ai.fake_realtime_audio_format(),
+    let audio = root.ai.testing.BufferedRealtimeAudioDevice {
+        input_audio_format: root.ai.testing.fake_realtime_audio_format(),
+        output_audio_format: root.ai.testing.fake_realtime_audio_format(),
         input_chunks: [],
         next_input_index: 0,
         output_chunks: [],
@@ -158,34 +158,34 @@ test "guide 05.06: a newer assistant item replaces queued older audio" {
     };
     let provider = LatestWinsRealtimeProvider {
         events: [
-            root.ai.AssistantAudioStarted { item_id: "old" },
-            root.ai.AssistantAudioDelta { audio: old_audio },
-            root.ai.LiveTurnCompleted {  },
-            root.ai.AssistantAudioStarted { item_id: "latest" },
-            root.ai.AssistantAudioDelta { audio: latest_audio },
-            root.ai.LiveClosed {  },
+            root.ai.realtime.AssistantAudioStarted { item_id: "old" },
+            root.ai.realtime.AssistantAudioDelta { audio: old_audio },
+            root.ai.realtime.LiveTurnCompleted {  },
+            root.ai.realtime.AssistantAudioStarted { item_id: "latest" },
+            root.ai.realtime.AssistantAudioDelta { audio: latest_audio },
+            root.ai.realtime.LiveClosed {  },
         ],
     };
     let task = root.ai_scenarios._realtime_call_center_task(provider, "Say two things.");
 
-    task.run(runner = root.ai.run.VoiceAgent.new(audio, root.ai.RecordingChannel { frames: [] }));
+    task.run(runner = root.ai.run.VoiceAgent.new(audio, root.ai.testing.RecordingChannel { frames: [] }));
 
     assert.equal(audio.output_chunks, [latest_audio])
 }
 
 test "guide 05.06: sustained server-VAD speech stops playback, cancels, then truncates" {
     let assistant_audio = baml.Uint8Array.from_base64("AQI=");
-    let audio = root.ai.BufferedRealtimeAudioDevice {
-        input_audio_format: root.ai.fake_realtime_audio_format(),
-        output_audio_format: root.ai.fake_realtime_audio_format(),
+    let audio = root.ai.testing.BufferedRealtimeAudioDevice {
+        input_audio_format: root.ai.testing.fake_realtime_audio_format(),
+        output_audio_format: root.ai.testing.fake_realtime_audio_format(),
         input_chunks: [],
         next_input_index: 0,
         output_chunks: [assistant_audio],
         played_ms: 625,
         is_closed: false,
     };
-    let channel = root.ai.RecordingChannel { frames: [] };
-    let live_session = root.ai.BufferedLiveSession {
+    let channel = root.ai.testing.RecordingChannel { frames: [] };
+    let live_session = root.ai.testing.BufferedLiveSession {
         items: [],
         channel: channel,
         is_closed: false,
@@ -226,18 +226,18 @@ test "guide 05.06: truncation cannot exceed the exact assistant item's audio" {
 
 test "guide 05.06: speech stopped before the threshold does not interrupt" {
     let assistant_audio = baml.Uint8Array.from_base64("AQI=");
-    let audio = root.ai.BufferedRealtimeAudioDevice {
-        input_audio_format: root.ai.fake_realtime_audio_format(),
-        output_audio_format: root.ai.fake_realtime_audio_format(),
+    let audio = root.ai.testing.BufferedRealtimeAudioDevice {
+        input_audio_format: root.ai.testing.fake_realtime_audio_format(),
+        output_audio_format: root.ai.testing.fake_realtime_audio_format(),
         input_chunks: [],
         next_input_index: 0,
         output_chunks: [assistant_audio],
         played_ms: 625,
         is_closed: false,
     };
-    let live_session = root.ai.BufferedLiveSession {
+    let live_session = root.ai.testing.BufferedLiveSession {
         items: [],
-        channel: root.ai.RecordingChannel { frames: [] },
+        channel: root.ai.testing.RecordingChannel { frames: [] },
         is_closed: false,
         control_frames: [],
     };
@@ -313,16 +313,17 @@ testset "integ-test-guide-05-realtime-call-center" {
             );
         let live_session = root
             .ai
+            .realtime
             .with_automatic_tools(
-                root.ai.open_live(task, root.ai.RecordingChannel { frames: [] }),
-                root.ai._tool_inputs_from_tools(task.tools),
+                root.ai.realtime.open_live(task, root.ai.testing.RecordingChannel { frames: [] }),
+                root.ai.tools._tool_inputs_from_tools(task.tools),
             );
 
-        let opening = root.ai.collect_live_turn(live_session);
+        let opening = root.ai.realtime.collect_live_turn(live_session);
         assert.equal(opening.tool_calls.length(), 0);
 
         live_session.send_text("My name is Aaron, and I want a meeting about BAML.");
-        let incomplete = root.ai.collect_live_turn(live_session);
+        let incomplete = root.ai.realtime.collect_live_turn(live_session);
         assert.equal(incomplete.tool_calls.length(), 0);
 
         live_session
@@ -331,7 +332,7 @@ testset "integ-test-guide-05-realtime-call-center" {
                     + "in America/Los_Angeles for 30 minutes to discuss BAML. "
                     + "Those details are correct and I explicitly confirm them.",
             );
-        let complete = root.ai.collect_live_turn(live_session);
+        let complete = root.ai.realtime.collect_live_turn(live_session);
         assert.equal(complete.tool_calls.length(), 1);
         assert.equal(complete.tool_calls[0].name, "schedule_meeting");
         assert
@@ -358,16 +359,16 @@ testset "integ-test-guide-05-realtime-call-center" {
         assert.is_true(complete.assistant_transcript.length() > 0);
 
         live_session.send_text("Thanks, that is everything I needed. Goodbye.");
-        let ending = root.ai.collect_live_turn(live_session);
+        let ending = root.ai.realtime.collect_live_turn(live_session);
         assert
             .is_true(
-                ending.tool_calls.some((call: root.ai.ToolCall) -> bool {
+                ending.tool_calls.some((call: root.ai.tools.ToolCall) -> bool {
                     call.name == "mark_conversation_complete"
                 }),
             );
         assert
             .is_true(
-                ending.tool_results.some((result: root.ai.ToolResult) -> bool {
+                ending.tool_results.some((result: root.ai.tools.ToolResult) -> bool {
                     !result.is_error
                 }),
             );

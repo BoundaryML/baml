@@ -10,49 +10,58 @@ provider. Use observers and response metadata to understand live runs.
 | --- | --- |
 | `test` and `testset` | Define BAML tests |
 | `assert.*` | Checks typed values |
-| `ai.AgentObserver` | Watches an Agent without changing it |
-| `ai.Response<T>.meta` | Keeps request, usage, and provider details |
+| `ai.observe.AgentObserver` | Watches an Agent without changing it |
+| `ai.ResponseWithMetadata<T>.meta` | Keeps request, usage, and provider details |
+| `ai.testing.FakeProvider` | Deterministic provider double with failure injection |
 
 ## Example: test workflow code without a model
 
 ```baml
-class Resolution {
-  reply: string,
-  resolved: bool,
+enum TicketPriority {
+  Low
+  Normal
+  Urgent
 }
 
-function ResolveTicket(message: string) -> Resolution {
+class SupportTicket {
+  id: string,
+  subject: string,
+  body: string,
+  customer_tier: string,
+}
+
+class Resolution {
+  category: string,
+  priority: TicketPriority,
+  summary: string,
+  reply: string,
+}
+
+function ResolveTicket(ticket: SupportTicket) -> Resolution {
   provider: "openai/gpt-5.6-luna"
   prompt: `
     Resolve this support ticket.
-
-    ${message}
+    Subject: ${ticket.subject}
+    Body: ${ticket.body}
 
     ${ctx.output_format}
   `
 }
 
 function ready_to_close(resolution: Resolution) -> bool {
-  resolution.resolved && resolution.reply.length() > 0
+  resolution.reply.length() > 0 && resolution.summary.length() > 0
 }
 
 test "a resolved ticket is ready to close" {
   let resolution = Resolution {
+    category: "billing",
+    priority: TicketPriority.Urgent,
+    summary: "Duplicate charge",
     reply: "The duplicate charge will be reversed.",
-    resolved: true,
   };
 
   assert.is_true(ready_to_close(resolution))
 }
-```
-
-### What happens
-
-```mermaid
-flowchart LR
-  test["BAML test"] --> value["Literal Resolution"]
-  value --> workflow["ready_to_close"]
-  workflow --> assertion["assert.is_true"]
 ```
 
 ### Illustrative output
@@ -74,11 +83,9 @@ put them in a clearly named live testset:
 ```baml
 testset "live-provider" {
   test "ResolveTicket returns a useful reply" {
-    let response = ResolveTicket
-      .task("I was charged twice.")
-      .run(
-        runner = ai.run.CompletionWithMeta.new(),
-      );
+    let response = ResolveTicket@task(sample_ticket()).run(
+      runner = ai.run.CompletionWithMeta<Resolution>.new(),
+    );
 
     log.info({
       "provider": response.meta.provider,
@@ -89,17 +96,6 @@ testset "live-provider" {
     assert.is_true(ready_to_close(response.value))
   }
 }
-```
-
-### What happens
-
-```mermaid
-flowchart LR
-  test["Live test"] --> task["ResolveTicket task"]
-  task --> provider["Configured provider"]
-  provider --> response["Response<Resolution>"]
-  response --> metadata["Log metadata"]
-  response --> assertion["Check typed result"]
 ```
 
 ### Illustrative output
@@ -114,29 +110,41 @@ flowchart LR
 ## Variation: observe a live Agent
 
 ```baml
-function lookup_order(order_id: string) -> string {
-  orders.get_status(order_id)
+/// Search the support knowledge base.
+function search_knowledge(query: string) -> json throws never {
+  { "query": query, "article": "Duplicate charges are normally pending authorizations." }
 }
 
-class ConsoleObserver {
-  implements ai.AgentObserver {
-    function on_event(self, event: ai.AgentEvent) -> null {
-      log.info(event)
+class GuideObserver {
+  kinds: string[],
+
+  implements ai.observe.AgentObserver {
+    function on_event(self, event: ai.observe.AgentEvent) -> null throws never {
+      self.kinds.push(event.kind());
+      null
     }
   }
 }
 
 function resolve_with_logs(
-  message: string,
-) -> ai.AgentOutcome<Resolution> {
-  ResolveTicket.task(message).run(
-    runner = ai.run.Agent.new(
-      tools = [lookup_order],
-      observers = [ConsoleObserver {}],
+  ticket: SupportTicket,
+) -> ai.Done<Resolution> | ai.BudgetReached | ai.Handoff {
+  let observer = GuideObserver { kinds: [] };
+  let outcome = ResolveTicketWithTools@task(ticket).run(
+    runner = ai.run.Agent<Resolution>.new(
+      tools = [search_knowledge],
+      observers = [observer],
     ),
-  )
+  );
+  log.info(observer.kinds);
+  outcome
 }
 ```
+
+`ResolveTicketWithTools` is the tool-using function from
+[Agents and tools](agents-and-tools.md); the signature spells out the outcome
+union because `ai.AgentOutcome<T>` requires generic type aliases, which the
+compiler does not support yet.
 
 ### What happens
 
@@ -145,8 +153,8 @@ flowchart TD
   agent["Live Agent"] --> budget{"Budget remains?"}
   budget -->|yes| step["Provider step"]
   step --> events["Publish model and usage events"]
-  events --> observer["ConsoleObserver"]
-  observer --> logs["Application logs"]
+  events --> observer["GuideObserver.on_event"]
+  observer --> logs["Recorded event kinds"]
   step --> result{"Final value or tool calls?"}
   result -->|tool calls| tools["Run tools and publish events"]
   tools --> observer
@@ -160,10 +168,7 @@ flowchart TD
 ### Illustrative output
 
 ```console
-[INFO] ModelStartedEvent { provider: "openai" }
-[INFO] ToolCallEvent { phase: "started", name: "lookup_order" }
-[INFO] UsageEvent { input_tokens: 144, output_tokens: 32 }
-[INFO] RunFinishedEvent { outcome: "done" }
+[INFO] ["model_started", "usage_updated", "tool_call_proposed", "tool_call_started", "tool_call_finished", "model_started", "usage_updated", "run_finished"]
 ```
 
 Observers receive model, tool, provider, usage, and terminal events. They
@@ -178,13 +183,16 @@ or cost data that the provider did not report.
 | Layer | What it proves |
 | --- | --- |
 | Pure BAML tests | Business logic and transformations |
-| Application-owned provider doubles | Deterministic orchestration cases your application chooses to model |
+| Deterministic fakes (`ai.testing.FakeProvider`) | Orchestration, retry, and recovery paths without a model |
 | Credentialed live tests | Provider compatibility and model quality |
 
-If an application needs a provider double, it can implement the relevant
-provider capability in its own test sources. That is ordinary application
-code, not a standard `ai` utility.
+`ai.testing.FakeProvider` returns a fixed payload —
+`ai.testing.fake_output_provider(...)` builds one — and injects failures on
+demand: with `failures_remaining: 1` it throws a classified failure once, then
+succeeds, which exercises the same recovery paths a live provider would. An
+application can still implement a provider capability in its own test sources
+when it needs behavior the standard fakes do not model.
 
 Task values also make provider matrices straightforward: rebind one task with
-`.with_provider(...)`, run each provider, and compare the same declared output
-contract.
+`.with_provider(...)` — for example `fast_model()` or `careful_model()` — run
+each provider, and compare the same declared output contract.

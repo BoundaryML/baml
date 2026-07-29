@@ -1,9 +1,9 @@
 // Tests for the side_effects_and_idempotency scenario.
 test "guide 03.06: retry rejects a completion without replay evidence" {
-  let inner = root.ai.FakeProvider { ...fake_resolution(), failures_remaining: 1 };
+  let inner = root.ai.testing.FakeProvider { ...fake_resolution(), failures_remaining: 1 };
   let effectful = EffectfulProvider { inner: inner };
   let label = ResolveTicket_manual(sample_ticket(), root.ai.retry(effectful, 2)) catch (e) {
-    let refused: root.ai.CallError => "cannot-retry",
+    let refused: root.ai.Failure => "cannot-retry",
     _ => "unexpected",
   };
   assert.equal(label, "cannot-retry")
@@ -11,13 +11,13 @@ test "guide 03.06: retry rejects a completion without replay evidence" {
 }
 
 test "guide 03.06: a terminal failure is not retried" {
-  let failed = root.ai.FakeProvider {
+  let failed = root.ai.testing.FakeProvider {
     ...fake_resolution(),
     failures_remaining: 1,
-    failure_mode: root.ai.FakeFailureMode.Terminal,
+    failure_mode: root.ai.testing.FakeFailureMode.Terminal,
   };
   let label = ResolveTicket_manual(sample_ticket(), root.ai.retry(failed, 3)) catch (e) {
-    let terminal: root.ai.CallError => if (!terminal.is_retryable()) { "terminal" } else { "unexpected" },
+    let terminal: root.ai.Failure => if (!terminal.is_transient()) { "terminal" } else { "unexpected" },
     _ => "unexpected",
   };
   assert.equal(label, "terminal")
@@ -25,10 +25,10 @@ test "guide 03.06: a terminal failure is not retried" {
 }
 
 test "guide 03.06: an unknown failure is never assumed replay-safe" {
-  let failed = root.ai.FakeProvider {
+  let failed = root.ai.testing.FakeProvider {
     ...fake_resolution(),
     failures_remaining: 1,
-    failure_mode: root.ai.FakeFailureMode.Unknown,
+    failure_mode: root.ai.testing.FakeFailureMode.Unknown,
   };
   let label = ResolveTicket_manual(sample_ticket(), root.ai.retry(failed, 3)) catch (e) {
     let unknown: baml.errors.UnknownError => "unknown",
@@ -43,17 +43,9 @@ class LiveEffectCommittedFailure {
 }
 
 implements root.ai.Failure for LiveEffectCommittedFailure {
-  function is_retryable(self) -> bool throws never { true }
-  function is_effectful(self) -> bool throws never { true }
-  function is_policy_refusal(self) -> bool throws never { false }
-  function is_resumable(self) -> bool throws never { false }
-  function is_unsupported(self) -> bool throws never { false }
-}
-
-implements root.ai.CallError for LiveEffectCommittedFailure {
-  function is_network_error(self) -> bool throws never { true }
-  function is_rate_limit(self) -> bool throws never { false }
-  function is_parse_error(self) -> bool throws never { false }
+  // Transient in principle — but the committed effect is what blocks replay.
+  function is_transient(self) -> bool throws never { true }
+  function effects(self) -> root.ai.Effects throws never { root.ai.Effects.Committed }
 }
 
 class EffectfulAfterLiveResponse {
@@ -68,11 +60,11 @@ class EffectfulAfterLiveResponse {
 
   implements root.ai.CompletionProvider {
     function complete<T>(self, task: root.ai.Task<T>) -> root.ai.ResponseWithMetadata<T>
-        throws root.ai.CallError | baml.errors.UnknownError {
+        throws root.ai.Failure | baml.errors.UnknownError {
       self.calls = self.calls + 1;
       let response = self.inner.complete<T>(task.with_provider(self.inner));
-      self.observed_request_ids.push(response.meta.request_id ?? "missing");
-      throw LiveEffectCommittedFailure { request_id: response.meta.request_id };
+      self.observed_request_ids.push(response.metadata.request_id ?? "missing");
+      throw LiveEffectCommittedFailure { request_id: response.metadata.request_id };
     }
 
     function replay_policy<T>(self, task: root.ai.Task<T>) -> root.ai.ReplayPolicy throws never {
@@ -92,7 +84,7 @@ testset "integ-test-guide-03-side-effects" {
       sample_ticket(),
       root.ai.retry(effectful, 2),
     ) catch (e) {
-      let refused: root.ai.CallError => "cannot-retry",
+      let refused: root.ai.Failure => "cannot-retry",
       _ => "unexpected",
     };
     log.info("live replay refusal " + {

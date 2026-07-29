@@ -671,6 +671,12 @@ class baml.errors.UnknownError$stream {
   data: unknown
   message: string[]
 }
+function baml.errors.from(data: unknown) -> T | baml.errors.UnknownError  [expr] {
+  {  } match (data) { value: T => value, UnknownError { data: inner: T } => inner, e: baml.errors.UnknownError => e, _ => baml.errors.UnknownError { data: data, message: [] } }
+}
+function baml.errors.with_message(data: unknown, message: string) -> T | baml.errors.UnknownError  [expr] {
+  {  } match (data) { e: baml.errors.UnknownError => { e.message = e.message.concat([message]) } e, value: T => value, _ => baml.errors.UnknownError { data: data, message: [message] } }
+}
 
 --- <builtin>/baml/ns_events/events.baml ---
 

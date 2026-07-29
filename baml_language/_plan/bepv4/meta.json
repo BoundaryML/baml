@@ -6,7 +6,7 @@
   "version": 1,
   "shepherds": [],
   "created": "2026-07-26",
-  "updated": "2026-07-26",
+  "updated": "2026-07-28",
   "isGoodReference": false,
   "openIssueCount": 0,
   "pages": [
@@ -51,24 +51,29 @@
       "order": 7
     },
     {
+      "slug": "errors-and-error-handling",
+      "title": "Errors and error handling",
+      "order": 8
+    },
+    {
       "slug": "jobs-batches-and-caches",
       "title": "Jobs, batches, and caches",
-      "order": 8
+      "order": 9
     },
     {
       "slug": "voice-and-live-sessions",
       "title": "Voice and live sessions",
-      "order": 9
+      "order": 10
     },
     {
       "slug": "testing-and-observability",
       "title": "Testing and observability",
-      "order": 10
+      "order": 11
     },
     {
       "slug": "harnesses-and-custom-extensions",
       "title": "Harnesses and custom extensions",
-      "order": 11
+      "order": 12
     }
   ]
 }

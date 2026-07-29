@@ -1,13 +1,13 @@
 // Tests for the images_pdfs_and_audio scenario.
 test "guide 05.01: messages expose image, PDF, and audio parts uniformly" {
   let parts: root.ai.MessagePart[] = [
-    root.ai.ImagePart {
+    root.ai.messages.ImagePart {
       value: image.from_url("https://example.com/receipt.png", "image/png"), metadata: {},
     },
-    root.ai.PdfPart {
+    root.ai.messages.PdfPart {
       value: pdf.from_url("https://example.com/invoice.pdf", null), metadata: {},
     },
-    root.ai.AudioPart {
+    root.ai.messages.AudioPart {
       value: audio.from_url("https://example.com/note.wav", "audio/wav"), metadata: {},
     },
   ];
@@ -19,7 +19,7 @@ test "guide 05.01: messages expose image, PDF, and audio parts uniformly" {
 test "guide 05.01: a PDF stays structural through the task prompt" {
   let task = InspectPdf_task(
     pdf.from_url("https://example.com/invoice.pdf", "application/pdf"),
-    root.ai.fake_output_provider(`"unused"`),
+    root.ai.testing.fake_output_provider(`"unused"`),
   );
   let rendered = task.prompt.text();
   assert.contains(rendered, "pdf::url")

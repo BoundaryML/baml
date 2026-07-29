@@ -11,14 +11,14 @@ function fork_a_conversation() -> ConversationProbe[] {
 
   let billing_result = ConversationProbe_task(
     billing,
-    root.ai.fake_output_provider(`{
+    root.ai.testing.fake_output_provider(`{
       "branch": "billing",
       "evidence": "Please refund it."
     }`),
   ).run(runner = root.ai.run.Generation<ConversationProbe>.new());
   let fraud_result = ConversationProbe_task(
     fraud,
-    root.ai.fake_output_provider(`{
+    root.ai.testing.fake_output_provider(`{
       "branch": "fraud",
       "evidence": "Could this be fraud?"
     }`),

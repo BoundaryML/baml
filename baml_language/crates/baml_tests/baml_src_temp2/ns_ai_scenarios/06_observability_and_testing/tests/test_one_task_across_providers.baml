@@ -1,8 +1,8 @@
 
 test "guide 06.04: one task can be tested against multiple provider implementations" {
   //# Configure equivalent provider candidates
-  let first = root.ai.FakeProvider { ...fake_resolution(), provider_name: "candidate-a" };
-  let second = root.ai.FakeProvider { ...fake_resolution(), provider_name: "candidate-b" };
+  let first = root.ai.testing.FakeProvider { ...fake_resolution(), provider_name: "candidate-a" };
+  let second = root.ai.testing.FakeProvider { ...fake_resolution(), provider_name: "candidate-b" };
   //# Run the same task against every candidate
   for (let provider in [first, second]) {
     //## Verify one provider result

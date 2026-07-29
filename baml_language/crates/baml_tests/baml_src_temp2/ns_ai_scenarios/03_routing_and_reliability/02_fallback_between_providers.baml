@@ -1,12 +1,12 @@
 // Still resolve a support ticket when the preferred provider is temporarily
 // unavailable.
 function fallback_between_providers() -> root.ai.ResponseWithMetadata<Resolution> {
-  let failed = root.ai.FakeProvider {
+  let failed = root.ai.testing.FakeProvider {
     ...fake_resolution(),
     provider_name: "primary",
     failures_remaining: 1,
   };
-  let fallback = root.ai.FakeProvider {
+  let fallback = root.ai.testing.FakeProvider {
     ...fake_resolution(),
     provider_name: "fallback",
   };
@@ -18,7 +18,7 @@ function fallback_between_providers() -> root.ai.ResponseWithMetadata<Resolution
   );
   log.info({
     "scenario": "fallback_between_providers",
-    "completed_by": response.meta.provider,
+    "completed_by": response.metadata.provider,
     "response": response.value,
   });
   response

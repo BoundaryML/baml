@@ -13,7 +13,7 @@ implements root.ai.Provider for Chat {
 
 implements root.ai.GenerationProvider for Chat {
   function generate<T>(self, task: root.ai.Task<T>) -> root.ai.ResponseWithMetadata<T>
-      throws baml.errors.UnknownError {
+      throws root.ai.Failure | baml.errors.UnknownError {
     _primitive_generate<T>(
       _configured_primitive(
         self.render_shorthand(),
@@ -31,7 +31,7 @@ implements root.ai.GenerationProvider for Chat {
 
 implements root.ai.CompletionProvider for Chat {
   function complete<T>(self, task: root.ai.Task<T>) -> root.ai.ResponseWithMetadata<T>
-      throws baml.errors.UnknownError {
+      throws root.ai.Failure | baml.errors.UnknownError {
     self.generate<T>(task)
   }
 

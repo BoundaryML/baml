@@ -10,7 +10,7 @@ implements Provider for Retry {
 
 implements GenerationProvider for Retry {
   function generate<T>(self, task: Task<T>) -> ResponseWithMetadata<T>
-      throws root.ai.CallError | baml.errors.UnknownError {
+      throws root.ai.Failure | baml.errors.UnknownError {
     //# Resolve the generation capability
     let provider = match (self.inner) {
       let capability: GenerationProvider => capability,
@@ -23,12 +23,14 @@ implements GenerationProvider for Retry {
       //## Attempt provider generation
       let result = provider.generate<T>(task.with_provider(self.inner)) catch (e) {
         let failure: root.ai.Failure => {
-          //### Decide whether this failure may replay
-          if (attempt >= self.max_attempts || !_may_replay(policy, failure)) { throw e; }
+          //### A failure that cannot replay is rethrown as itself — its
+          //### classification (is_transient, effects) already says why.
+          if (attempt >= self.max_attempts || !root.ai.internal._may_replay(policy, failure)) { throw e; }
           attempt = attempt + 1;
           continue;
         },
-        _ => throw e,
+
+        _ => throw baml.errors.UnknownError.with_message<never>(e, "retry(" + self.inner.name() + ")"),
       };
       return result;
     }
@@ -38,7 +40,7 @@ implements GenerationProvider for Retry {
 
 implements CompletionProvider for Retry {
   function complete<T>(self, task: Task<T>) -> ResponseWithMetadata<T>
-      throws root.ai.CallError | baml.errors.UnknownError {
+      throws root.ai.Failure | baml.errors.UnknownError {
     //# Resolve the drive capability
     let provider = match (self.inner) {
       let capability: CompletionProvider => capability,
@@ -52,20 +54,13 @@ implements CompletionProvider for Retry {
       //## Attempt provider drive
       let result = provider.complete<T>(task.with_provider(self.inner)) catch (e) {
         let failure: root.ai.Failure => {
-          //### Decide whether this failure may replay
-          if (attempt >= self.max_attempts) { throw e; }
-          if (!_may_replay(policy, failure)) {
-            if (failure.is_retryable()) {
-              throw root.ai.CannotRetry {
-                message: "retry refused to replay " + self.inner.name(),
-              };
-            }
-            throw e;
-          }
+          //### Rethrow anything that cannot replay: exhausted attempts, or a
+          //### failure whose facts (terminal, effectful) make replay unsafe.
+          if (attempt >= self.max_attempts || !root.ai.internal._may_replay(policy, failure)) { throw e; }
           attempt = attempt + 1;
           continue;
         },
-        _ => throw e,
+        _ => throw baml.errors.UnknownError.with_message<never>(e, "retry(" + self.inner.name() + ")"),
       };
       return result;
     }

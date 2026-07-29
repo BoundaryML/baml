@@ -1,11 +1,11 @@
 // Choose the appropriate provider from task metadata before sending any model
 // request.
 function route_before_the_call() -> root.ai.ResponseWithMetadata<Resolution> {
-  let fast = root.ai.FakeProvider {
+  let fast = root.ai.testing.FakeProvider {
     ...fake_resolution(),
     provider_name: "fast",
   };
-  let careful = root.ai.FakeProvider {
+  let careful = root.ai.testing.FakeProvider {
     ...fake_resolution(),
     provider_name: "careful",
   };

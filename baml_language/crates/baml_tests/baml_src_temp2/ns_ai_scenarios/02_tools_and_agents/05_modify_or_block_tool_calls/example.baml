@@ -9,10 +9,10 @@ function modify_or_block_tool_calls() -> null {
         .new(
             tools = [search_knowledge, lookup_account],
             before_tool_call = (event) -> {
-                root.ai
+                root.ai.tools
                     .ToolDecision
                     .replace(
-                        root.ai.ToolCall {
+                        root.ai.tools.ToolCall {
                             id: event.call.id,
                             name: "lookup_account",
                             args: event.call.args,

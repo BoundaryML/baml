@@ -2821,6 +2821,130 @@ fn baml.errors.StackTrace.baml.ToString.to_string(self: baml.errors.StackTrace) 
 
 fn baml.errors.StackTrace._to_string_impl = builtin(vm)
 
+fn baml.errors.UnknownError.from(data: unknown) -> baml.errors.UnknownError | T {
+    // Locals:
+    let _0: baml.errors.UnknownError | T // _0 // return
+    let _1: unknown // data // param
+    let _2: unknown
+    let _3: T // value
+    let _4: bool
+    let _5: unknown
+    let _6: unknown
+    let _7: T // inner
+    let _8: unknown
+    let _9: baml.errors.UnknownError // e
+    let _10: string[]
+
+    bb0: {
+        _2 = copy _1;
+        _2 = narrow_bind copy _2 as TypeArgRef(0) -> [bb7, bb1];
+    }
+
+    bb1: {
+        _4 = is_type(copy _1, baml.errors.UnknownError);
+        branch copy _4 -> [bb2, bb3];
+    }
+
+    bb2: {
+        _5 = copy _1.0;
+        _6 = copy _5;
+        _6 = narrow_bind copy _6 as TypeArgRef(0) -> [bb6, bb3];
+    }
+
+    bb3: {
+        _8 = copy _1;
+        _8 = narrow_bind copy _8 as Class(QualifiedTypeName { pkg: Dep("baml"), namespace: ["errors"], name: "UnknownError" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb5, bb4];
+    }
+
+    bb4: {
+        _10 = []: string[];
+        _0 = baml.errors.UnknownError { copy _1, copy _10 };
+        goto -> bb8;
+    }
+
+    bb5: {
+        _9 = copy _8;
+        _0 = copy _9;
+        goto -> bb8;
+    }
+
+    bb6: {
+        _7 = copy _6;
+        _0 = copy _7;
+        goto -> bb8;
+    }
+
+    bb7: {
+        _3 = copy _2;
+        _0 = copy _3;
+        goto -> bb8;
+    }
+
+    bb8: {
+        return;
+    }
+}
+
+fn baml.errors.UnknownError.with_message(data: unknown, message: string) -> baml.errors.UnknownError | T {
+    // Locals:
+    let _0: baml.errors.UnknownError | T // _0 // return
+    let _1: unknown // data // param
+    let _2: string // message // param
+    let _3: unknown
+    let _4: baml.errors.UnknownError // e
+    let _5: (string[], string[]) -> string[] throws never
+    let _6: string[]
+    let _7: type
+    let _8: string[]
+    let _9: unknown
+    let _10: T // value
+    let _11: string[]
+
+    bb0: {
+        _3 = copy _1;
+        _3 = narrow_bind copy _3 as Class(QualifiedTypeName { pkg: Dep("baml"), namespace: ["errors"], name: "UnknownError" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb4, bb1];
+    }
+
+    bb1: {
+        _9 = copy _1;
+        _9 = narrow_bind copy _9 as TypeArgRef(0) -> [bb3, bb2];
+    }
+
+    bb2: {
+        _11 = [copy _2]: string[];
+        _0 = baml.errors.UnknownError { copy _1, copy _11 };
+        goto -> bb7;
+    }
+
+    bb3: {
+        _10 = copy _9;
+        _0 = copy _10;
+        goto -> bb7;
+    }
+
+    bb4: {
+        _4 = copy _3;
+        _5 = copy _4.1;
+        _6 = [copy _2]: string[];
+        _7 = load_type(string);
+        _8 = call const fn baml.Array.concat<copy _7>(copy _5, copy _6) -> [bb5];
+    }
+
+    bb5: {
+        _4.1 = copy _8;
+        goto -> bb6;
+    }
+
+    bb6: {
+        _0 = copy _4;
+        goto -> bb7;
+    }
+
+    bb7: {
+        return;
+    }
+}
+
 fn baml.fs.File.text = builtin(io)
 
 fn baml.fs.File.bytes = builtin(io)

@@ -1,13 +1,13 @@
 test "guide 07.01: a background job has poll, cancel, and resume coordinates" {
-    let provider = root.ai.FakeBackgroundProvider { inner: fake_resolution() };
+    let provider = root.ai.testing.FakeBackgroundProvider { inner: fake_resolution() };
     let job = ResolveTicket_task(sample_ticket(), provider)
         .run(runner = root.ai.run.Background<Resolution>.new(idempotency_key = "ticket-T-100"));
-    assert.equal(job.status(), root.ai.JobStatus.Complete);
+    assert.equal(job.status(), root.ai.jobs.JobStatus.Complete);
     assert.equal(job.poll()?.value.category, "billing");
     assert.equal(job.token().id, "ticket-T-100");
     // job.cleanup();
     // job.cleanup();
-    // assert.equal(job.status(), root.ai.JobStatus.Cancelled)
+    // assert.equal(job.status(), root.ai.jobs.JobStatus.Cancelled)
 }
 
 testset "integ-test-guide-07-background" {
@@ -50,7 +50,7 @@ testset "integ-test-guide-07-background" {
                     // Polling is read-only and replay-safe. A transient transport failure
                     // must not discard the durable response ID or force resubmission.
                     _ => {
-                        if (resumed.status() == root.ai.JobStatus.Failed) {
+                        if (resumed.status() == root.ai.jobs.JobStatus.Failed) {
                             throw e;
                         }
                         poll_errors = poll_errors + 1;
@@ -77,14 +77,14 @@ testset "integ-test-guide-07-background" {
                         "polls": attempts,
                         "poll_errors": poll_errors,
                         "elapsed_ms": baml.sys.now_ms() - started_ms,
-                        "provider": response.meta.provider,
-                        "input_tokens": response.meta.usage?.input_tokens ?? 0,
+                        "provider": response.metadata.provider,
+                        "input_tokens": response.metadata.usage?.input_tokens ?? 0,
                     },
                 ),
         );
-        assert.equal(resumed.status(), root.ai.JobStatus.Complete);
-        assert.equal(response.meta.request_id, persisted.id);
-        assert.equal(response.meta.provider, "openai-background");
+        assert.equal(resumed.status(), root.ai.jobs.JobStatus.Complete);
+        assert.equal(response.metadata.request_id, persisted.id);
+        assert.equal(response.metadata.provider, "openai-background");
         assert.is_true(response.value.reply.length() > 0)
     }
 }

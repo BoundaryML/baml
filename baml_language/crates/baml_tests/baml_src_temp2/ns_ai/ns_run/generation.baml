@@ -8,12 +8,12 @@ class CompletionWithMeta<T> {
 
     implements root.ai.Runner<root.ai.Task<T>> {
         type Output = root.ai.ResponseWithMetadata<T>
-        type Error = root.ai.CallError | baml.errors.UnknownError
+        type Error = root.ai.Failure | baml.errors.UnknownError
 
         function run(
             self,
             task: root.ai.Task<T>,
-        ) -> root.ai.ResponseWithMetadata<T> throws root.ai.CallError | baml.errors.UnknownError {
+        ) -> root.ai.ResponseWithMetadata<T> throws root.ai.Failure | baml.errors.UnknownError {
             //# Select bounded completion and retain provider metadata
             match (task.provider) {
                 let provider: root.ai.CompletionProvider => {
@@ -38,12 +38,12 @@ class Completion<T> {
 
     implements root.ai.Runner<root.ai.Task<T>> {
         type Output = T
-        type Error = root.ai.CallError | baml.errors.UnknownError
+        type Error = root.ai.Failure | baml.errors.UnknownError
 
         function run(
             self,
             task: root.ai.Task<T>,
-        ) -> T throws root.ai.CallError | baml.errors.UnknownError {
+        ) -> T throws root.ai.Failure | baml.errors.UnknownError {
             //# Select bounded completion and project only the typed value
             match (task.provider) {
                 let provider: root.ai.CompletionProvider => {
@@ -68,12 +68,12 @@ class GenerationWithMeta<T> {
 
     implements root.ai.Runner<root.ai.Task<T>> {
         type Output = root.ai.ResponseWithMetadata<T>
-        type Error = root.ai.CallError | baml.errors.UnknownError
+        type Error = root.ai.Failure | baml.errors.UnknownError
 
         function run(
             self,
             task: root.ai.Task<T>,
-        ) -> root.ai.ResponseWithMetadata<T> throws root.ai.CallError | baml.errors.UnknownError {
+        ) -> root.ai.ResponseWithMetadata<T> throws root.ai.Failure | baml.errors.UnknownError {
             //# Select single-generation capability and retain provider metadata
             match (task.provider) {
                 let provider: root.ai.GenerationProvider => {
@@ -98,12 +98,12 @@ class Generation<T> {
 
     implements root.ai.Runner<root.ai.Task<T>> {
         type Output = T
-        type Error = root.ai.CallError | baml.errors.UnknownError
+        type Error = root.ai.Failure | baml.errors.UnknownError
 
         function run(
             self,
             task: root.ai.Task<T>,
-        ) -> T throws root.ai.CallError | baml.errors.UnknownError {
+        ) -> T throws root.ai.Failure | baml.errors.UnknownError {
             //# Select single-generation capability and project only the typed value
             match (task.provider) {
                 let provider: root.ai.GenerationProvider => {

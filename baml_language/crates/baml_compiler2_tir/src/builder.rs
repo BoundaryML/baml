@@ -8565,7 +8565,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                     };
                 }
 
-                let throw_matches = Self::throw_matches_from_ty(&narrowed_ty, &residual);
+                let throw_matches = self.throw_matches_from_ty(&narrowed_ty, &residual);
                 let panic_subset_ty = self.ty_panic_subset(&narrowed_ty);
                 let has_panic_component = panic_subset_ty.is_some();
 
@@ -9292,9 +9292,15 @@ impl<'db> TypeInferenceBuilder<'db> {
     }
 
     /// Check if a pattern type covers a throw fact type.
-    fn ty_covers_fact(pattern_ty: &Ty, fact: &Ty) -> bool {
+    fn ty_covers_fact(&self, pattern_ty: &Ty, fact: &Ty) -> bool {
         if pattern_ty == fact {
             return true;
+        }
+        // An interface pattern covers a fact when every value of the fact is
+        // an implementer — e.g. `let f: ai.Failure` over a concrete throw fact
+        // whose class implements `ai.Failure`.
+        if matches!(pattern_ty, Ty::Interface(..)) {
+            return self.is_subtype(fact, pattern_ty);
         }
         match pattern_ty {
             Ty::Int { .. } => {
@@ -9323,7 +9329,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             Ty::Uint8Array { .. } => matches!(fact, Ty::Uint8Array { .. }),
             Ty::Media(k, _) => matches!(fact, Ty::Media(fk, _) if k == fk),
             Ty::Literal(_, _, _) => false,
-            Ty::Union(parts, _) => parts.iter().any(|part| Self::ty_covers_fact(part, fact)),
+            Ty::Union(parts, _) => parts.iter().any(|part| self.ty_covers_fact(part, fact)),
             Ty::Class(qn, type_args, _) => matches!(
                 fact,
                 Ty::Class(fqn, fact_args, _) if fqn == qn && fact_args == type_args
@@ -9341,7 +9347,14 @@ impl<'db> TypeInferenceBuilder<'db> {
         }
     }
 
-    fn ty_may_match_fact(pattern_ty: &Ty, fact: &Ty) -> bool {
+    fn ty_may_match_fact(&self, pattern_ty: &Ty, fact: &Ty) -> bool {
+        // A concrete pattern can match a value thrown under an interface fact
+        // when the pattern's type implements that interface: the runtime value
+        // behind `throws ai.Failure` can be any implementing class, so a
+        // `let q: MyQuotaError` arm is a reachable refinement, not dead code.
+        if matches!(fact, Ty::Interface(..)) && self.is_subtype(pattern_ty, fact) {
+            return true;
+        }
         match pattern_ty {
             Ty::Literal(lit, _, _) => match lit {
                 baml_base::Literal::Int(_) => matches!(fact, Ty::Int { .. }),
@@ -9358,24 +9371,28 @@ impl<'db> TypeInferenceBuilder<'db> {
         }
     }
 
-    fn ty_match_strength(narrowed_ty: &Ty, throw_fact: &Ty) -> PatternMatchStrength {
+    fn ty_match_strength(&self, narrowed_ty: &Ty, throw_fact: &Ty) -> PatternMatchStrength {
         let is_unknown = matches!(
             throw_fact,
             Ty::Unknown { .. } | Ty::BuiltinUnknown { .. } | Ty::Error { .. }
         );
-        if Self::ty_covers_fact(narrowed_ty, throw_fact) {
+        if self.ty_covers_fact(narrowed_ty, throw_fact) {
             PatternMatchStrength::DefiniteMatch
-        } else if is_unknown || Self::ty_may_match_fact(narrowed_ty, throw_fact) {
+        } else if is_unknown || self.ty_may_match_fact(narrowed_ty, throw_fact) {
             PatternMatchStrength::MayMatch
         } else {
             PatternMatchStrength::NoMatch
         }
     }
 
-    fn throw_matches_from_ty(narrowed_ty: &Ty, throw_types: &BTreeSet<Ty>) -> ThrowPatternMatches {
+    fn throw_matches_from_ty(
+        &self,
+        narrowed_ty: &Ty,
+        throw_types: &BTreeSet<Ty>,
+    ) -> ThrowPatternMatches {
         let mut out = ThrowPatternMatches::default();
         for throw_fact in throw_types {
-            match Self::ty_match_strength(narrowed_ty, throw_fact) {
+            match self.ty_match_strength(narrowed_ty, throw_fact) {
                 PatternMatchStrength::NoMatch => {}
                 PatternMatchStrength::MayMatch => {
                     out.may_match.insert(throw_fact.clone());

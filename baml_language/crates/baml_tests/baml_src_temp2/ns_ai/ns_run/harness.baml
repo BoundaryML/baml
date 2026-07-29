@@ -1,21 +1,21 @@
 // The harness and its policy configure how one task is submitted. HarnessRun<T>
 // retains the terminal T, events, portable history, and resume token.
 class Harness<T> {
-    harness: root.ai.Harness,
-    options: root.ai.HarnessOptions,
-    on_event: ((root.ai.AgentEvent) -> null throws never)?,
+    harness: root.ai.harness.Harness,
+    options: root.ai.harness.HarnessOptions,
+    on_event: ((root.ai.observe.AgentEvent) -> null throws never)?,
 
     function new(
-        harness: root.ai.Harness,
+        harness: root.ai.harness.Harness,
         cwd: string? = null,
         permission_mode: string? = null,
         sandbox: string? = null,
         attributes: map<string, string> = {},
-        on_event: ((root.ai.AgentEvent) -> null throws never)? = null,
+        on_event: ((root.ai.observe.AgentEvent) -> null throws never)? = null,
     ) -> Harness<T> throws never {
         Harness<T> {
             harness: harness,
-            options: root.ai.HarnessOptions {
+            options: root.ai.harness.HarnessOptions {
                 cwd: cwd,
                 permission_mode: permission_mode,
                 sandbox: sandbox,
@@ -26,13 +26,13 @@ class Harness<T> {
     }
 
     implements root.ai.Runner<root.ai.Task<T>> {
-        type Output = root.ai.HarnessRun<T>
-        type Error = baml.errors.UnknownError
+        type Output = root.ai.harness.HarnessRun<T>
+        type Error = root.ai.Failure | baml.errors.UnknownError
 
         function run(
             self,
             task: root.ai.Task<T>,
-        ) -> root.ai.HarnessRun<T> throws baml.errors.UnknownError {
+        ) -> root.ai.harness.HarnessRun<T> throws baml.errors.UnknownError {
             //# Open an isolated harness session with workspace policy
             let session = self.harness.open(self.options);
             //# Run the harness while forwarding normalized events to this invocation

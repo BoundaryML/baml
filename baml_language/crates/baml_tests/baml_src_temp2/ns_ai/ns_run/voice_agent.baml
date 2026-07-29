@@ -1,15 +1,15 @@
 // High-level realtime runner. Raw provider sessions are opened with
-// root.ai.open_live; VoiceAgent adds the managed event loop, application-tool
+// root.ai.realtime.open_live; VoiceAgent adds the managed event loop, application-tool
 // execution, and audio device lifecycle.
 class VoiceAgent {
-    audio: root.ai.RealtimeAudioDevice,
-    channel: root.ai.Channel,
+    audio: root.ai.realtime.RealtimeAudioDevice,
+    channel: root.ai.realtime.Channel,
     completion_tool: string?,
     barge_in_after_ms: int,
 
     function new(
-        audio: root.ai.RealtimeAudioDevice,
-        channel: root.ai.Channel,
+        audio: root.ai.realtime.RealtimeAudioDevice,
+        channel: root.ai.realtime.Channel,
         completion_tool: string? = null,
         barge_in_after_ms: int = 500,
     ) -> VoiceAgent throws never {
@@ -23,20 +23,20 @@ class VoiceAgent {
 
     implements root.ai.Runner<root.ai.Task<null>> {
         type Output = null
-        type Error = baml.errors.UnknownError | baml.errors.Unsupported
+        type Error = root.ai.Failure | baml.errors.UnknownError
 
         function run(
             self,
             task: root.ai.Task<null>,
-        ) -> null throws baml.errors.UnknownError | baml.errors.Unsupported {
+        ) -> null throws root.ai.Failure | baml.errors.UnknownError {
             //# Open the raw provider-owned realtime resource
-            let raw_live_session = root.ai.open_live(task, self.channel);
+            let raw_live_session = root.ai.realtime.open_live(task, self.channel);
             //# Add application tool execution only for the managed voice lifecycle
             let live_session = if (task.tools.length() > 0) {
-                root.ai
+                root.ai.realtime
                     .with_automatic_tools(
                         raw_live_session,
-                        root.ai._tool_inputs_from_tools(task.tools),
+                        root.ai.tools._tool_inputs_from_tools(task.tools),
                     )
             } else {
                 raw_live_session
@@ -100,7 +100,7 @@ class VoiceAgent {
                 for (let event in events) {
                     log.info(event);
                     match (event) {
-                        let started: root.ai.UserSpeechStarted => {
+                        let started: root.ai.realtime.UserSpeechStarted => {
                             //### Arm delayed interruption when the caller begins speaking
                             // Provider-side VAD is the source of truth for whether the
                             // microphone contains speech. Brief detections do not barge
@@ -119,7 +119,7 @@ class VoiceAgent {
                                 )
                             });
                         },
-                        let stopped: root.ai.UserSpeechStopped => {
+                        let stopped: root.ai.realtime.UserSpeechStopped => {
                             //### Request a response when the caller finishes a turn
                             if (state.user_speech_item_id == stopped.item_id) {
                                 state.user_speaking = false;
@@ -134,7 +134,7 @@ class VoiceAgent {
                                 }
                             }
                         },
-                        let started: root.ai.AssistantAudioStarted => {
+                        let started: root.ai.realtime.AssistantAudioStarted => {
                             //### Replace queued playback with the newest assistant response
                             // Assistant audio is latest-wins. A newly-started
                             // assistant item replaces any older queued playback.
@@ -144,17 +144,17 @@ class VoiceAgent {
                             state.assistant_audio_active = true;
                             state.assistant_response_active = true;
                         },
-                        let delta: root.ai.AssistantAudioDelta => {
+                        let delta: root.ai.realtime.AssistantAudioDelta => {
                             //### Play the next assistant audio frame
                             self.audio.play_output(delta.audio);
                         },
-                        let transcript: root.ai.UserTranscript => {
+                        let transcript: root.ai.realtime.UserTranscript => {
                             baml.io.println("\nYou: " + transcript.text);
                         },
-                        let delta: root.ai.TranscriptDelta => {
+                        let delta: root.ai.realtime.TranscriptDelta => {
                             baml.io.print(delta.text);
                         },
-                        let calls: root.ai.LiveToolCalls => {
+                        let calls: root.ai.realtime.LiveToolCalls => {
                             //### Remember calls that explicitly complete the voice workflow
                             match (self.completion_tool) {
                                 let completion_tool: string => {
@@ -167,10 +167,10 @@ class VoiceAgent {
                                 null => {},
                             }
                         },
-                        let results: root.ai.LiveToolResults => {
+                        let results: root.ai.realtime.LiveToolResults => {
                             //### Close after a successful completion-tool result
                             if (
-                                results.results.some((result: root.ai.ToolResult) -> bool {
+                                results.results.some((result: root.ai.tools.ToolResult) -> bool {
                                     completion_call_ids.includes(result.id) && !result.is_error
                                 })
                             ) {
@@ -180,7 +180,7 @@ class VoiceAgent {
                                 closed = true;
                             }
                         },
-                        let completed: root.ai.LiveTurnCompleted => {
+                        let completed: root.ai.realtime.LiveTurnCompleted => {
                             //### Finish playback and release any queued caller turn
                             self.audio.finish_output();
                             state.assistant_response_active = false;
@@ -189,7 +189,7 @@ class VoiceAgent {
                                 live_session.request_response();
                             }
                         },
-                        let ended: root.ai.LiveClosed => {
+                        let ended: root.ai.realtime.LiveClosed => {
                             //### Stop when the provider closes the live session
                             self.audio.finish_output();
                             closed = true;
@@ -218,8 +218,8 @@ function _interrupt_after_sustained_user_speech(
     state: VoiceAgentState,
     speech_generation: int,
     delay_ms: int,
-    audio: root.ai.RealtimeAudioDevice,
-    live_session: root.ai.LiveSession,
+    audio: root.ai.realtime.RealtimeAudioDevice,
+    live_session: root.ai.realtime.LiveSession,
 ) -> null throws never {
     //# Wait until caller speech has lasted long enough to count as barge-in
     baml.sys.sleep(baml.time.Duration.from_milliseconds(delay_ms)) catch (e) {
@@ -269,8 +269,8 @@ function _interrupt_after_sustained_user_speech(
 }
 
 function _pump_voice_input(
-    audio: root.ai.RealtimeAudioDevice,
-    live_session: root.ai.LiveSession,
+    audio: root.ai.realtime.RealtimeAudioDevice,
+    live_session: root.ai.realtime.LiveSession,
 ) -> null throws never {
     let listening = true;
     //# Forward microphone frames until input ends or the live session closes

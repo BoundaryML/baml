@@ -2,7 +2,7 @@ test "guide 08.04: steering and interruption target a concrete session" {
     let harness = fake_model_harness();
     let session = harness
         .open(
-            root.ai.HarnessOptions {
+            root.ai.harness.HarnessOptions {
                 cwd: "/workspace",
                 permission_mode: "read-only",
                 sandbox: "workspace",
@@ -25,7 +25,7 @@ testset "integ-test-guide-08-harness-controls" {
         let harness = live_openai_model_harness();
         let session = harness
             .open(
-                root.ai.HarnessOptions {
+                root.ai.harness.HarnessOptions {
                     cwd: "/workspace",
                     permission_mode: "read-only",
                     sandbox: "workspace",
@@ -44,7 +44,7 @@ testset "integ-test-guide-08-harness-controls" {
         assert.contains(steered.value.reply, "STEER-8427");
         //# Interrupt retains the session but rejects subsequent work
         harness.interrupt(session);
-        let blocked: root.ai.HarnessRun<Resolution>? = harness
+        let blocked: root.ai.harness.HarnessRun<Resolution>? = harness
             .run<Resolution>(
                 session,
                 InvestigateRepository_task(sample_ticket(), harness.inner),

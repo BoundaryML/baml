@@ -86,7 +86,7 @@ function ClaudeCodeWebFetchWithBamlTool_task(
 //
 function ClaudeCodeWebFetchWithBamlTool_manual(
     provider: root.claude_code.ClaudeCodeCli,
-) -> HackerNewsTopStoryWithBamlTool throws root.ai.CallError | baml.errors.UnknownError | baml.errors.Unsupported {
+) -> HackerNewsTopStoryWithBamlTool throws root.ai.Failure | baml.errors.UnknownError | baml.errors.Unsupported {
     ClaudeCodeWebFetchWithBamlTool_task(provider)
         .run(runner = root.ai.run.Completion<HackerNewsTopStoryWithBamlTool>.new())
 }

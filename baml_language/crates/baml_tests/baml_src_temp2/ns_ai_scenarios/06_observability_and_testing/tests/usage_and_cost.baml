@@ -3,14 +3,14 @@ test "guide 06.03: usage is aggregatable without becoming continuation state" {
         .run(runner = root.ai.run.GenerationWithMeta<Resolution>.new());
     let second = ResolveTicket_task(sample_ticket(), fake_resolution())
         .run(runner = root.ai.run.GenerationWithMeta<Resolution>.new());
-    let usage = root.ai.aggregate_usage([first.meta, second.meta]);
+    let usage = root.ai.observe.aggregate_usage([first.metadata, second.metadata]);
     assert.equal(usage.input_tokens, 2);
     assert
         .equal(
-            root.ai
+            root.ai.observe
                 .estimated_cost(
                     usage,
-                    root.ai.TokenPrice { input_per_million: 1.0, output_per_million: 2.0 },
+                    root.ai.observe.TokenPrice { input_per_million: 1.0, output_per_million: 2.0 },
                 ),
             0.000006,
         )
@@ -22,7 +22,7 @@ testset "integ-test-guide-06-usage-and-cost" {
             .run(runner = root.ai.run.GenerationWithMeta<Resolution>.new());
         let second = ResolveTicket_task(sample_ticket(), live_anthropic())
             .run(runner = root.ai.run.GenerationWithMeta<Resolution>.new());
-        let first_usage = first.meta.usage
+        let first_usage = first.metadata.usage
             ?? root.ai.Usage {
                 input_tokens: 0,
                 output_tokens: 0,
@@ -30,7 +30,7 @@ testset "integ-test-guide-06-usage-and-cost" {
                 reasoning_tokens: 0,
                 cost_usd: null,
             };
-        let second_usage = second.meta.usage
+        let second_usage = second.metadata.usage
             ?? root.ai.Usage {
                 input_tokens: 0,
                 output_tokens: 0,
@@ -38,12 +38,13 @@ testset "integ-test-guide-06-usage-and-cost" {
                 reasoning_tokens: 0,
                 cost_usd: null,
             };
-        let aggregate = root.ai.aggregate_usage([first.meta, second.meta]);
+        let aggregate = root.ai.observe.aggregate_usage([first.metadata, second.metadata]);
         let estimate = root
             .ai
+            .observe
             .estimated_cost(
                 aggregate,
-                root.ai.TokenPrice { input_per_million: 1.0, output_per_million: 2.0 },
+                root.ai.observe.TokenPrice { input_per_million: 1.0, output_per_million: 2.0 },
             );
         log.info(
             baml.json

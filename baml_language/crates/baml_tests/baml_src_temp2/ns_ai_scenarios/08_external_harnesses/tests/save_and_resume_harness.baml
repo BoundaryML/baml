@@ -2,7 +2,7 @@ test "guide 08.05: harness sessions save and resume with opaque tokens" {
     let harness = fake_model_harness();
     let session = harness
         .open(
-            root.ai.HarnessOptions {
+            root.ai.harness.HarnessOptions {
                 cwd: "/workspace",
                 permission_mode: "read-only",
                 sandbox: "workspace",
@@ -25,7 +25,7 @@ testset "integ-test-guide-08-harness-resume" {
         let harness = live_openai_model_harness();
         let session = harness
             .open(
-                root.ai.HarnessOptions {
+                root.ai.harness.HarnessOptions {
                     cwd: "/workspace",
                     permission_mode: "read-only",
                     sandbox: "workspace",
@@ -42,7 +42,7 @@ testset "integ-test-guide-08-harness-resume" {
         let encoded = baml.json.to_string(first.token) catch (e) {
             _ => baml.sys.panic("harness token serialization failed"),
         };
-        let token = baml.sap.parse<root.ai.HarnessSessionToken>(encoded) catch (e) {
+        let token = baml.sap.parse<root.ai.harness.HarnessSessionToken>(encoded) catch (e) {
             _ => baml.sys.panic("harness token parse failed"),
         };
         let restored = harness.restore_session(token);

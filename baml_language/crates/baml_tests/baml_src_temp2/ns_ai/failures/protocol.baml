@@ -1,33 +1,34 @@
-// Capability error model for provider/LLM interfaces. These types are local
-// to the root.ai fixture namespace rather than part of the baml.errors stdlib.
+// Failure classification for provider/LLM capability channels. These types are
+// local to the root.ai fixture namespace rather than part of the baml.errors
+// stdlib.
+//
+// The channel every fallible capability method declares is
+// `root.ai.Failure | baml.errors.UnknownError`: a classified error the policy
+// layer can reason about, or the universal wrapper for anything foreign. A
+// throw is legal iff the value implements `Failure` or is routed through
+// `baml.errors.UnknownError.with_message` (see the trailing normalize catch in
+// each provider).
 
-/// Cross-capability decision axis used by retry and fallback policies.
+/// Whether a failed attempt may have committed side effects.
+enum Effects {
+  /// Failed before anything could commit — replay is safe.
+  None,
+  /// The request was sent but the outcome was never observed — replay only
+  /// with an idempotency key.
+  Unknown,
+  /// Effects definitely happened — never blind-replay.
+  Committed,
+}
+
+/// The one classification axis generic policy code consumes. Errors carry
+/// facts; retry and fallback decide what to do with them. Precision beyond
+/// these two methods comes from catching concrete error types, not from
+/// interface getters.
 interface Failure {
-  function is_retryable(self) -> bool throws never
-  function is_effectful(self) -> bool throws never
-  function is_policy_refusal(self) -> bool throws never
-  function is_resumable(self) -> bool throws never
-  function is_unsupported(self) -> bool throws never
-}
+  /// Could an identical attempt plausibly succeed? Rate limits and transport
+  /// blips: yes. Refusals, invalid requests, parse failures: no.
+  function is_transient(self) -> bool throws never
 
-/// Request/response failures.
-interface CallError requires Failure {
-  function is_network_error(self) -> bool throws never
-  function is_rate_limit(self) -> bool throws never
-  function is_parse_error(self) -> bool throws never
-}
-
-/// Incremental streaming failures.
-interface StreamError requires Failure {
-  function is_network_error(self) -> bool throws never
-}
-
-/// Failures on a multi-turn tool-calling path.
-interface ToolError requires Failure {
-  function is_network_error(self) -> bool throws never
-}
-
-/// Failures on a live/duplex session.
-interface RealtimeError requires Failure {
-  function is_network_error(self) -> bool throws never
+  /// What this attempt may have committed before it failed.
+  function effects(self) -> Effects throws never
 }

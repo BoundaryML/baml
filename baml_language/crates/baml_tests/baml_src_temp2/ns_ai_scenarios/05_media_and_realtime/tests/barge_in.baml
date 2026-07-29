@@ -2,15 +2,16 @@
 test "guide 05.04: interruption belongs to the opened live resource" {
     let live_session = root
         .ai
+        .realtime
         .open_live(
-            VoiceSupport_task("talk", root.ai.FakeRealtimeProvider { transcript: "hello" }),
-            root.ai.RecordingChannel { frames: [] },
+            VoiceSupport_task("talk", root.ai.testing.FakeRealtimeProvider { transcript: "hello" }),
+            root.ai.testing.RecordingChannel { frames: [] },
         );
     live_session.cancel_response();
     live_session.truncate_assistant_audio(250);
-    assert.equal(root.ai.collect_live_text(live_session), "hello");
+    assert.equal(root.ai.realtime.collect_live_text(live_session), "hello");
     match (live_session) {
-        let buffered: root.ai.BufferedLiveSession => {
+        let buffered: root.ai.testing.BufferedLiveSession => {
             // assert.is_true(buffered.is_closed);
             assert.equal(buffered.control_frames.length(), 2);
             assert
@@ -31,9 +32,10 @@ test "guide 05.04: interruption belongs to the opened live resource" {
 
 testset "integ-test-guide-05-barge-in" {
     test "guide 05.04 live OpenAI: cancel precedes played-position truncation on one session" {
-        let channel = root.ai.RecordingChannel { frames: [] };
+        let channel = root.ai.testing.RecordingChannel { frames: [] };
         let live_session = root
             .ai
+            .realtime
             .open_live(
                 VoiceSupport_task(
                     "Begin a spoken explanation of why duplicate card charges can appear.",
@@ -54,7 +56,7 @@ testset "integ-test-guide-05-barge-in" {
         assert
             .is_true(
                 started
-                    .filter((event: root.ai.LiveEvent) -> bool {
+                    .filter((event: root.ai.realtime.LiveEvent) -> bool {
                         event.kind() == "assistant_audio_started"
                     })
                     .length()

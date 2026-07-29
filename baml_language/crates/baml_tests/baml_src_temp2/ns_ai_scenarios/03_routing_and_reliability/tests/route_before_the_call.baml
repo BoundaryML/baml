@@ -1,7 +1,7 @@
 // Tests for the route_before_the_call scenario.
 test "guide 03.03: routing selects a provider before execution" {
-  let fast = root.ai.FakeProvider { ...fake_resolution(), provider_name: "fast" };
-  let careful = root.ai.FakeProvider { ...fake_resolution(), provider_name: "careful" };
+  let fast = root.ai.testing.FakeProvider { ...fake_resolution(), provider_name: "fast" };
+  let careful = root.ai.testing.FakeProvider { ...fake_resolution(), provider_name: "careful" };
   let task = root.ai.Task<Resolution> {
     ...ResolveTicket_task(sample_ticket(), fast),
     tags: { "tier": "pro" },
@@ -28,9 +28,9 @@ testset "integ-test-guide-03-route-before-call" {
     log.info("live route " + {
       "tag": task.tags.get("tier"),
       "selected": routed.provider_name(),
-      "executed_by": response.meta.provider,
+      "executed_by": response.metadata.provider,
     }.to_string());
-    assert.equal(response.meta.provider, "anthropic")
+    assert.equal(response.metadata.provider, "anthropic")
     assert.is_true(response.value.summary.length() > 0)
   }
 }

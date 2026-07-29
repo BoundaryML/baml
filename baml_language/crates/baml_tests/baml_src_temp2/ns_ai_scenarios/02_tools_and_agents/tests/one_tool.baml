@@ -15,7 +15,7 @@ test "guide 02.01: one tool call is dispatched and the model finishes" {
 
 test "guide 02.01: prompt fallback extends ctx.output_format with active tool schemas" {
   //# Configure a generation-only provider
-  let inner = root.ai.fake_output_provider(`{
+  let inner = root.ai.testing.fake_output_provider(`{
     "calls": [{
       "id": "call-1",
       "name": "search_knowledge",
@@ -23,26 +23,26 @@ test "guide 02.01: prompt fallback extends ctx.output_format with active tool sc
     }]
   }`);
   //# Begin a prompt-based provider conversation
-  let provider = root.ai.PromptToolProvider { inner: inner };
+  let provider = root.ai.tools.PromptToolProvider { inner: inner };
   let conversation = provider.begin<Resolution>(
     ResolveTicketWithTools_task(sample_ticket(), provider, [search_knowledge]),
   );
   let state = match (conversation) {
-    let value: root.ai.PromptToolConversation => value,
+    let value: root.ai.tools.PromptToolConversation => value,
     _ => baml.sys.panic("expected prompt tool conversation"),
   };
-  let tools = root.ai.normalize_tools([search_knowledge]);
+  let tools = root.ai.tools.normalize_tools([search_knowledge]);
   //# Render active tools into the output contract
-  let rendered = root.ai._prompt_tool_turn<Resolution | root.ai.ToolCalls>(
+  let rendered = root.ai.tools._prompt_tool_turn<Resolution | root.ai.tools.ToolCalls>(
     provider,
     state,
     tools,
-    root.ai._prompt_tool_output_suffix(tools),
+    root.ai.tools._prompt_tool_output_suffix(tools),
   ).prompt.text();
   //# Execute one prompt-tool turn
   let turn = provider.step<Resolution>(conversation, tools);
   match (turn.outcome) {
-    let calls: root.ai.ToolCalls => assert.equal(calls.calls[0].name, "search_knowledge"),
+    let calls: root.ai.tools.ToolCalls => assert.equal(calls.calls[0].name, "search_knowledge"),
     let value: Resolution => assert.is_true(false),
   }
   //# Verify the rendered tool schema
@@ -54,8 +54,8 @@ test "guide 02.01: prompt fallback extends ctx.output_format with active tool sc
 
 test "guide 02.01: ModelStep preserves a union task result" {
   //# Build a task whose final value is already a union
-  let inner = root.ai.fake_output_provider(`"done"`);
-  let provider = root.ai.PromptToolProvider { inner: inner };
+  let inner = root.ai.testing.fake_output_provider(`"done"`);
+  let provider = root.ai.tools.PromptToolProvider { inner: inner };
   let task = root.ai.task<Resolution | string>(
     provider,
     (ctx: baml.llm.Context) -> baml.llm.PromptAst {
@@ -69,12 +69,12 @@ test "guide 02.01: ModelStep preserves a union task result" {
   let conversation = provider.begin<Resolution | string>(task);
   let turn = provider.step<Resolution | string>(
     conversation,
-    root.ai.normalize_tools([search_knowledge]),
+    root.ai.tools.normalize_tools([search_knowledge]),
   );
   match (turn.outcome) {
     let value: string => assert.equal(value, "done"),
     let value: Resolution => assert.is_true(false),
-    let calls: root.ai.ToolCalls => assert.is_true(false),
+    let calls: root.ai.tools.ToolCalls => assert.is_true(false),
   }
 }
 

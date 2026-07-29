@@ -1,11 +1,11 @@
 test "guide 01.04: changing providers re-renders the same task recipe" {
-  let fast = root.ai.FakeProvider {
-    ...root.ai.fake_output_provider(`{
+  let fast = root.ai.testing.FakeProvider {
+    ...root.ai.testing.fake_output_provider(`{
       "category":"billing","priority":"Normal","summary":"fast","reply":"fast reply"
     }`),
     provider_name: "fast",
   };
-  let careful = root.ai.FakeProvider {
+  let careful = root.ai.testing.FakeProvider {
     ...fake_resolution(),
     provider_name: "careful",
   };
@@ -29,9 +29,9 @@ testset "integ-test-guide-01-provider-overrides" {
     log.info("live provider override " + {
       "before": original.provider_name(),
       "after": overridden.provider_name(),
-      "executed_by": response.meta.provider,
+      "executed_by": response.metadata.provider,
     }.to_string());
-    assert.equal(response.meta.provider, "anthropic")
+    assert.equal(response.metadata.provider, "anthropic")
     assert.is_true(response.value.summary.length() > 0)
   }
 }
