@@ -42,6 +42,7 @@ interface CapturedValueCardProps {
   value: RunTraceCallValue;
   compact?: boolean;
   customRenderers?: Record<string, FC<ResultRendererProps>>;
+  truncateDiagnostic?: boolean;
 }
 
 export function capturedValueCardContentHeight(
@@ -68,6 +69,7 @@ export function CapturedValueCard({
   value,
   compact = false,
   customRenderers,
+  truncateDiagnostic = false,
 }: CapturedValueCardProps) {
   const images = valueToImagePreviews(value.value);
   const visibleImages = images.slice(0, CAPTURED_VALUE_CARD_MAX_IMAGES);
@@ -250,9 +252,9 @@ export function CapturedValueCard({
             fontSize: 10,
             lineHeight: 1.35,
             marginTop: 5,
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-            whiteSpace: 'nowrap',
+            overflow: truncateDiagnostic ? 'hidden' : undefined,
+            textOverflow: truncateDiagnostic ? 'ellipsis' : undefined,
+            whiteSpace: truncateDiagnostic ? 'nowrap' : undefined,
           }}
         >
           {value.diagnostic}

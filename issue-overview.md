@@ -9,7 +9,7 @@ Linear: https://linear.app/boundaryml2/issue/B-1055/error-nodes-in-graph-are-for
 - Reproduced locally by serving `tools/sdk-parity-lint/baml_src`, selecting `main`, leaving `repo_root` omitted, and clicking Run.
 - Before image: `artifacts/B-1055-before.jpg`.
 - Root cause: `CapturedValueCard` renders `value.diagnostic` at unlimited natural height while graph layout reserves only 18px for it, so multiline tracebacks overflow the fixed error node and overlap later nodes and edges.
-- Implemented the fix in `typescript2/pkg-playground/src/CapturedValueCard.tsx`: diagnostics now stay on one ellipsized row, matching the graph layout allocation while retaining the full diagnostic in the card tooltip and detailed run panel.
+- Implemented the fix in `typescript2/pkg-playground/src/CapturedValueCard.tsx` and `graph/nodes/NodeOutputPreview.tsx`: graph diagnostics now stay on one ellipsized row, matching the graph layout allocation while retaining multiline diagnostics in the detailed execution panel and the full graph text in the existing tooltip.
 - After image: `artifacts/B-1055-after.jpg`.
 - Uploaded the before and after images to Linear for embedding in the PR description.
 - Verified the real repro after the change: the traceback is truncated in the graph card and the downstream node and edge no longer overlap it.
@@ -21,4 +21,5 @@ Linear: https://linear.app/boundaryml2/issue/B-1055/error-nodes-in-graph-are-for
 - Opened ready-for-review PR https://github.com/BoundaryML/baml/pull/4271 against `canary` with before/after playground images in the description.
 - Non-Vercel CI passed, including Biome, generated-artifact typecheck, jsdom unit tests, and Playwright browser tests.
 - CodeRabbit initially deferred review because of its temporary review limit; an explicit review will be requested when the stated cooldown expires.
+- Addressed review feedback by scoping diagnostic truncation to graph previews instead of every shared `CapturedValueCard` consumer.
 - CodeRabbit approval is pending; Vercel checks are intentionally ignored.

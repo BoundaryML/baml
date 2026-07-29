@@ -1,8 +1,9 @@
-import type { FC } from 'react';
+// biome-ignore-all lint/style/useFilenamingConvention: Preserve the existing public component filename.
 import type { BamlJsValue } from '@b/pkg-proto';
+import type { FC } from 'react';
 import {
-  CapturedValueCard,
   CAPTURED_VALUE_CARD_WIDTH,
+  CapturedValueCard,
 } from '../../CapturedValueCard';
 import type { ResultRendererProps } from '../../result-renderers';
 import type { GraphNodeValuePreview } from '../../run-store-projections';
@@ -26,7 +27,12 @@ export function NodeOutputPreview({
   errorMessage,
   customRenderers,
 }: NodeOutputPreviewProps) {
-  const values = graphPreviewValues(valuePreviews, result, hasResult, errorMessage);
+  const values = graphPreviewValues(
+    valuePreviews,
+    result,
+    hasResult,
+    errorMessage,
+  );
   if (values.length === 0) return null;
 
   const visible = values.slice(0, NODE_VALUE_PREVIEW_MAX);
@@ -40,16 +46,17 @@ export function NodeOutputPreview({
         flexDirection: 'column',
         gap: NODE_VALUE_PREVIEW_GAP,
         marginTop: 6,
-        width: '100%',
         maxWidth: NODE_VALUE_PREVIEW_WIDTH,
+        width: '100%',
       }}
     >
       {visible.map((value) => (
         <CapturedValueCard
-          key={value.id}
-          value={value}
           compact
           customRenderers={customRenderers}
+          key={value.id}
+          truncateDiagnostic
+          value={value}
         />
       ))}
       {remaining > 0 ? (
@@ -79,14 +86,14 @@ function graphPreviewValues(
   if (errorMessage) {
     return [
       {
-        id: 'node-error',
-        timestampMs: 0,
-        role: 'callError',
-        label: 'error',
-        valueRef: null,
-        value: null,
-        state: 'error',
         diagnostic: errorMessage,
+        id: 'node-error',
+        label: 'error',
+        role: 'callError',
+        state: 'error',
+        timestampMs: 0,
+        value: null,
+        valueRef: null,
       },
     ];
   }
@@ -94,14 +101,14 @@ function graphPreviewValues(
   if (hasResult) {
     return [
       {
-        id: 'node-result',
-        timestampMs: 0,
-        role: 'callOutput',
-        label: 'output',
-        valueRef: null,
-        value: result ?? null,
-        state: result == null ? 'unavailable' : 'available',
         diagnostic: null,
+        id: 'node-result',
+        label: 'output',
+        role: 'callOutput',
+        state: result == null ? 'unavailable' : 'available',
+        timestampMs: 0,
+        value: result ?? null,
+        valueRef: null,
       },
     ];
   }
