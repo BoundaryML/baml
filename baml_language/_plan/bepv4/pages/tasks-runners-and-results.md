@@ -7,9 +7,9 @@ a runner.
 
 | Utility | Result |
 | --- | --- |
-| Direct call | The declared `T` |
-| `ai.run.Completion` | `T` |
-| `ai.run.CompletionWithMeta` | `ai.ResponseWithMetadata<T>` |
+| Direct call | The declared `T` after the provider's default completion lifecycle |
+| `ai.run.Completion` | `T` after the provider's default completion lifecycle |
+| `ai.run.CompletionWithMeta` | The same completion plus `ai.ResponseWithMetadata<T>` |
 | `ai.run.Generation` | `T` after exactly one provider interaction |
 | `ai.run.Stream` | Partial values followed by a final `T` |
 
@@ -50,6 +50,18 @@ declared tools, and the prompt recipe; `.with_provider(...)`, `.with_tools(...)`
 and `.run(runner = ...)` are methods on that value. A direct call
 `ResolveTicket(...)` is exactly
 `ResolveTicket@task(...).run(runner = ai.run.Completion<Resolution>.new())`.
+
+`Completion` does not mean one model turn. It asks the provider to finish the
+task and return the final `T`. A provider may implement that as one generation
+for a task without application tools, or as a bounded provider-default tool
+loop when tools are declared. `Generation` is the explicit exactly-one-turn
+primitive.
+
+For example, OpenAI Responses completion performs one generation when
+`task.tools` is empty. When tools are present, it runs `begin`, `step`, tool
+dispatch, and `submit` until OpenAI returns the final typed value or the
+provider's completion limit is reached. This loop calls the provider's
+tool-calling primitives; it does not recursively call `complete`.
 
 `$provider` on a direct call and `.with_provider(...)` on a task are the same
 rebind at different moments: a direct call has no task value to method-chain,
@@ -155,7 +167,7 @@ above it.
 For example:
 
 - Another OpenAI-compatible base URL is usually another configured
-  `openai.Chat` value.
+  `openai.Responses` value.
 - A vendor with its own authentication, message format, streaming events, and
   continuation handles needs a provider adapter.
 - A durable human-review queue that can accept tasks from several providers is
@@ -174,6 +186,7 @@ create a task and pick the runner whose return type matches the work:
 ```text
 Completion          → T
 CompletionWithMeta  → ResponseWithMetadata<T>
+Generation          → T after exactly one provider interaction
 Agent               → Done<T> | BudgetReached | Handoff
 Stream              → baml.llm.Stream<TPartial, T>
 Background          → ai.jobs.Job<T>

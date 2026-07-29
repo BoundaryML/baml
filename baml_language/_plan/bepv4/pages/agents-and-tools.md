@@ -49,7 +49,7 @@ function lookup_account(customer_id: string) -> json throws never {
 }
 
 function ResolveTicketWithTools(ticket: SupportTicket) -> Resolution {
-  provider: "openai/gpt-5.6-luna"
+  provider: "openai-responses/gpt-5.6-luna"
   prompt: `
     Resolve ticket ${ticket.id}. Use the available tools before answering.
 

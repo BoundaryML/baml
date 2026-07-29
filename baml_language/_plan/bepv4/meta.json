@@ -31,49 +31,54 @@
       "order": 3
     },
     {
+      "slug": "structured-outputs-and-tool-calling",
+      "title": "OpenAI structured outputs and tool calling",
+      "order": 4
+    },
+    {
       "slug": "approvals-limits-and-handoffs",
       "title": "Approvals, limits, and handoffs",
-      "order": 4
+      "order": 5
     },
     {
       "slug": "conversations-and-resuming",
       "title": "Conversations and resuming",
-      "order": 5
+      "order": 6
     },
     {
       "slug": "streaming-media-and-transcription",
       "title": "Streaming, media, and transcription",
-      "order": 6
+      "order": 7
     },
     {
       "slug": "routing-retry-and-fallback",
       "title": "Routing, retry, and fallback",
-      "order": 7
+      "order": 8
     },
     {
       "slug": "errors-and-error-handling",
       "title": "Errors and error handling",
-      "order": 8
+      "order": 9
     },
     {
       "slug": "jobs-batches-and-caches",
       "title": "Jobs, batches, and caches",
-      "order": 9
+      "order": 10
     },
     {
       "slug": "voice-and-live-sessions",
       "title": "Voice and live sessions",
-      "order": 10
+      "order": 11
     },
     {
       "slug": "testing-and-observability",
       "title": "Testing and observability",
-      "order": 11
+      "order": 12
     },
     {
       "slug": "harnesses-and-custom-extensions",
       "title": "Harnesses and custom extensions",
-      "order": 12
+      "order": 13
     }
   ]
 }

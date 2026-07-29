@@ -64,8 +64,8 @@ testset "integ-test-guide-02-mcp-bootstrap" {
     let bootstrap_tool = add_mcp_server_tool(broker);
     let registry = root.ai.tools.ToolRegistry.new([bootstrap_tool]);
     let observer = GuideObserver { kinds: [] };
-    let provider = root.openai.Chat {
-      ...root.openai.chat(),
+    let provider = root.openai.Responses {
+      ...root.openai.responses(),
       model: "gpt-5.6-luna",
       api_key: baml.env.get_or_panic("OPENAI_API_KEY"),
     };

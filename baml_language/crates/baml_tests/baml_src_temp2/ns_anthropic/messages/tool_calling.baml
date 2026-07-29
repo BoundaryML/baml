@@ -1,0 +1,240 @@
+implements root.ai.tools.ToolCallingProvider for Messages {
+  function begin<T>(
+    self,
+    task: root.ai.Task<T>,
+  ) -> root.ai.Conversation
+      throws root.ai.Failure | baml.errors.UnknownError {
+    root.anthropic.internal._validate_output_config(self);
+    if (self.tool_mode == root.anthropic.ToolMode.Prompt) {
+      // Prompt mode uses the provider-neutral T | ToolCalls text protocol.
+      let prompt_tools = root.ai.tools.PromptToolProvider { inner: self };
+      return prompt_tools.begin<T>(task);
+    }
+    //# Render the first turn into provider-native Messages blocks
+    let request = root.anthropic.internal._messages_built_request(
+      self,
+      task,
+      log_shape = false,
+    );
+    let request_body = baml.json.parse(request.body) catch (e) {
+      _ => {
+        throw baml.errors.UnknownError.with_message<never>(
+          e,
+          "Anthropic initial request body was not JSON",
+        )
+      },
+    };
+    root.anthropic.internal.Conversation {
+      owner: self,
+      history: task.messages().to_history(),
+      system: baml.json.path_or<json[]>(request_body, ".system", []),
+      messages: baml.json.path_or<json[]>(request_body, ".messages", []),
+      request_url: request.url,
+      active_tools: [],
+      last_assistant_content: [],
+    }
+  }
+
+  function step<T>(
+    self,
+    conversation: root.ai.Conversation,
+    tools: root.ai.tools.Tool[],
+  ) -> root.ai.tools.ModelStep<T>
+      throws root.ai.Failure | baml.errors.UnknownError {
+    root.anthropic.internal._validate_output_config(self);
+    if (self.tool_mode == root.anthropic.ToolMode.Prompt) {
+      let prompt_tools = root.ai.tools.PromptToolProvider { inner: self };
+      return prompt_tools.step<T>(conversation, tools);
+    }
+    //# Recover the Anthropic continuation owned by this provider
+    let state = match (conversation) {
+      let value: root.anthropic.internal.Conversation => value,
+      _ => {
+        throw root.ai.InvalidRequest {
+          provider: "anthropic",
+          status_code: null,
+          detail: "Anthropic received another provider's conversation",
+        }
+      },
+    };
+    //# Encode application tools independently from the typed output schema
+    let encoded_tools = root.anthropic.internal._application_tools(
+      tools,
+      self.strict_tool_inputs,
+    );
+    state.active_tools = encoded_tools;
+    let body = root.anthropic.internal._conversation_body<T>(
+      self,
+      state,
+      encoded_tools,
+    );
+    log.info(
+      baml.json.stringify({
+        "event": "llm.tools.request",
+        "provider": "anthropic",
+        "model": self.model,
+        "message_count": state.messages.length(),
+        "tool_count": encoded_tools.length(),
+        "tool_names": encoded_tools
+          .map((tool: json) -> string {
+            baml.json.path_or(tool, ".name", "")
+          })
+          .join(","),
+        "output_mode": self.output_mode.to_string(),
+        "tool_mode": self.tool_mode.to_string(),
+        "parallel_tool_calls": self.parallel_tool_calls,
+      }),
+    );
+    //# Authenticate and execute one stateless Messages turn
+    let request = root.anthropic.internal._authenticated_continuation_request(
+      self,
+      state,
+      body,
+    );
+    let response = baml.http.send(request) catch (e) {
+      _ => {
+        throw baml.errors.UnknownError.with_message<never>(
+          e,
+          "Anthropic tools send failed",
+        )
+      },
+    };
+    let text = response.text() catch (e) {
+      _ => {
+        throw baml.errors.UnknownError.with_message<never>(
+          e,
+          "Anthropic tools body failed",
+        )
+      },
+    };
+    if (!response.ok()) {
+      throw root.ai.internal.classify_http(
+        "anthropic",
+        response.status_code,
+        text,
+      );
+    }
+    //# Decode the provider envelope without repairing wire errors
+    let raw = baml.json.parse(text) catch (e) {
+      _ => {
+        throw root.ai.ParseFailed {
+          provider: "anthropic",
+          raw_output: text,
+        }
+      },
+    };
+    let stop_reason = baml.json.path_or(raw, ".stop_reason", "");
+    if (stop_reason == "refusal") {
+      throw root.ai.Refused {
+        provider: "anthropic",
+        reason: root.anthropic.internal._response_text(raw)
+          ?? "Anthropic refused the request",
+      };
+    }
+    if (
+      stop_reason == "max_tokens"
+        || stop_reason == "model_context_window_exceeded"
+    ) {
+      throw root.ai.ParseFailed {
+        provider: "anthropic",
+        raw_output: text,
+      };
+    }
+    let raw_calls = root.anthropic.internal._response_tool_uses(raw);
+    let metadata = root.anthropic.internal._response_metadata(raw, self.model);
+    //# Yield native tool_use blocks so the runner can execute them
+    if (raw_calls.length() > 0) {
+      if (stop_reason != "tool_use") {
+        throw root.ai.ParseFailed {
+          provider: "anthropic",
+          raw_output: text,
+        };
+      }
+      let content = root.anthropic.internal._response_content(raw);
+      state.last_assistant_content = content;
+      state.messages.push({
+        "role": "assistant",
+        "content": content,
+      });
+      state.history.entries.push(root.ai.ChatMessage {
+        message_role: root.ai.MessageRole.Assistant,
+        content: [root.ai.messages.ProviderDataPart {
+          provider: "anthropic",
+          data: { "content": content },
+        }],
+        metadata: null,
+      });
+      return root.ai.tools.ModelStep<T> {
+        outcome: root.anthropic.internal._application_calls(raw_calls, text),
+        metadata: metadata,
+      };
+    }
+    //# Parse a final strict JSON value or SAP text value
+    let value = root.anthropic.internal._parse_response_value<T>(
+      raw,
+      text,
+      root.anthropic.internal._uses_sap(self),
+    );
+    state.history.entries.push(
+      root.ai.ChatMessage.assistant(
+        root.anthropic.internal._response_text(raw) ?? "",
+      ),
+    );
+    root.ai.tools.ModelStep<T> {
+      outcome: value,
+      metadata: metadata,
+    }
+  }
+
+  function submit(
+    self,
+    conversation: root.ai.Conversation,
+    results: root.ai.tools.ToolResult[],
+  ) -> root.ai.Conversation
+      throws root.ai.Failure {
+    root.anthropic.internal._validate_output_config(self);
+    if (self.tool_mode == root.anthropic.ToolMode.Prompt) {
+      let prompt_tools = root.ai.tools.PromptToolProvider { inner: self };
+      return prompt_tools.submit(conversation, results);
+    }
+    //# Recover the continuation that produced these tool_use IDs
+    let state = match (conversation) {
+      let value: root.anthropic.internal.Conversation => value,
+      _ => {
+        throw root.ai.InvalidRequest {
+          provider: "anthropic",
+          status_code: null,
+          detail: "Anthropic received another provider's conversation",
+        }
+      },
+    };
+    //# Correlate runner results in one user turn of tool_result blocks
+    let tool_results = results.map((result: root.ai.tools.ToolResult) -> json {
+      {
+        "type": "tool_result",
+        "tool_use_id": result.id,
+        "content": baml.json.stringify(result.output),
+        "is_error": result.is_error,
+      }
+    });
+    state.messages.push({
+      "role": "user",
+      "content": tool_results,
+    });
+    for (let result in results) {
+      state.history.entries.push(root.ai.ChatMessage {
+        message_role: root.ai.MessageRole.Tool,
+        content: [root.ai.messages.ProviderDataPart {
+          provider: "anthropic",
+          data: {
+            "tool_use_id": result.id,
+            "output": result.output,
+            "is_error": result.is_error,
+          },
+        }],
+        metadata: null,
+      });
+    }
+    state
+  }
+}

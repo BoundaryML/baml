@@ -1,8 +1,8 @@
 testset "integ-test-guide-02-agent-capabilities" {
   test "guide 02 live OpenAI: dynamic tools, callbacks, events, and parallel-capable dispatch" {
     //# Configure the native provider
-    let provider = root.openai.Chat {
-      ...root.openai.chat(),
+    let provider = root.openai.Responses {
+      ...root.openai.responses(),
       model: "gpt-5.6-luna",
       api_key: baml.env.get_or_panic("OPENAI_API_KEY"),
     };
@@ -37,7 +37,10 @@ testset "integ-test-guide-02-agent-capabilities" {
     //# Inspect the provider conversation and emitted events
     match (outcome) {
       let done: root.ai.Done<Resolution> => match (done.conversation) {
-        let conversation: root.openai.Conversation => assert.equal(conversation.tools_json.length(), 2),
+        let conversation: root.openai.internal.Conversation => assert.equal(
+          conversation.active_tools.length(),
+          2,
+        ),
         _ => assert.is_true(false),
       },
       _ => assert.is_true(false),
@@ -48,8 +51,8 @@ testset "integ-test-guide-02-agent-capabilities" {
 
   test "guide 02 live OpenAI: handoff stops before application dispatch" {
     //# Configure a native provider and handoff tool
-    let provider = root.openai.Chat {
-      ...root.openai.chat(),
+    let provider = root.openai.Responses {
+      ...root.openai.responses(),
       model: "gpt-5.6-luna",
       api_key: baml.env.get_or_panic("OPENAI_API_KEY"),
     };

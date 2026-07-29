@@ -13,8 +13,8 @@ implements root.ai.realtime.RealtimeProvider for Realtime {
       _ => throw baml.errors.UnknownError.with_message<never>(e, "realtime connect failed"),
     };
     //## Configure the persistent voice session before adding conversation items
-    let session_update = _openai_realtime_session_update(
-      _openai_realtime_task_instructions(task.prompt),
+    let session_update = root.openai.internal._openai_realtime_session_update(
+      root.openai.internal._openai_realtime_task_instructions(task.prompt),
       self.voice,
       self.input_transcription_model,
       self.server_vad,
@@ -26,7 +26,9 @@ implements root.ai.realtime.RealtimeProvider for Realtime {
       },
     };
     channel.send(session_update) catch (e) { _ => null };
-    let initial_text = _openai_realtime_task_input(task.prompt);
+    let initial_text = root.openai.internal._openai_realtime_task_input(
+      task.prompt,
+    );
     let initial_item = baml.json.stringify({
       "type": "conversation.item.create",
       "item": {
@@ -47,7 +49,11 @@ implements root.ai.realtime.RealtimeProvider for Realtime {
     };
     channel.send(initial_item) catch (e) { _ => null };
     let output_audio = self.output_audio ?? false;
-    let response_create = _openai_realtime_response_create(task.tools, output_audio, self.voice);
+    let response_create = root.openai.internal._openai_realtime_response_create(
+      task.tools,
+      output_audio,
+      self.voice,
+    );
     //## Start inference without draining or closing the resource
     ws.send(response_create) catch (e) {
       _ => {
@@ -56,7 +62,7 @@ implements root.ai.realtime.RealtimeProvider for Realtime {
       },
     };
     channel.send(response_create) catch (e) { _ => null };
-    RealtimeSession {
+    root.openai.internal.RealtimeSession {
       socket: ws,
       channel: channel,
       tools: task.tools,

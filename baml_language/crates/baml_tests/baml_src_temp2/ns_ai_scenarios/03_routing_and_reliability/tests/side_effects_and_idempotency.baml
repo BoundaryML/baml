@@ -49,7 +49,7 @@ implements root.ai.Failure for LiveEffectCommittedFailure {
 }
 
 class EffectfulAfterLiveResponse {
-  inner: root.openai.Chat,
+  inner: root.openai.Responses,
   calls: int,
   observed_request_ids: string[],
 

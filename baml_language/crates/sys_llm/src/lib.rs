@@ -386,6 +386,25 @@ pub async fn execute_build_request_from_owned(
     Ok(request)
 }
 
+/// Apply provider authentication to a provider-native request without
+/// rebuilding its URL or body.
+///
+/// This is the continuation-turn counterpart to `execute_build_request_from_owned`.
+/// It keeps OAuth/ADC refresh and other credential IO in the runtime while
+/// allowing BAML provider adapters to own their wire-format conversation state.
+pub async fn execute_authenticate_request_from_owned(
+    client: &baml_std::PrimitiveClient,
+    mut request: baml_std::HttpRequest,
+    io: Arc<dyn ::sys_types::runtime_io::RuntimeIo>,
+) -> Result<baml_std::HttpRequest, LlmOpError> {
+    let provider = LlmProvider::from_str(&client.provider)
+        .map_err(|e| LlmOpError::Other(format!("Unknown provider '{}': {e}", client.provider)))?;
+    auth_request::auth_request(provider, &mut request, client, io)
+        .await
+        .map_err(|e| LlmOpError::Other(e.to_string()))?;
+    Ok(request)
+}
+
 /// Build an HTTP request with streaming enabled.
 ///
 /// Same as `execute_build_request_from_owned` but adds `"stream": true` to the body.
@@ -1043,8 +1062,8 @@ mod tests {
     use bex_external_types::{BexExternalValue, RuntimeTy};
 
     use super::{
-        build_output_format_content, execute_build_request_from_owned,
-        execute_parse_response_from_owned, render_output_format,
+        build_output_format_content, execute_authenticate_request_from_owned,
+        execute_build_request_from_owned, execute_parse_response_from_owned, render_output_format,
     };
     use crate::baml_std;
 
@@ -1098,6 +1117,43 @@ mod tests {
 
     fn body_json(request: &baml_std::HttpRequest) -> serde_json::Value {
         serde_json::from_str(&request.body).unwrap()
+    }
+
+    #[tokio::test]
+    async fn authenticate_request_adds_google_key_without_rewriting_body() {
+        let client = baml_std::PrimitiveClient::new(
+            "TestGoogle".to_string(),
+            "google-ai".to_string(),
+            baml_std::PrimitiveClientOptions {
+                model: Some("gemini-2.5-flash".to_string()),
+                api_key: Some("test-google-key".to_string()),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        let request = baml_std::HttpRequest {
+            method: "POST".to_string(),
+            url: "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent"
+                .to_string(),
+            headers: indexmap::IndexMap::from([(
+                "content-type".to_string(),
+                "application/json".to_string(),
+            )]),
+            body: r#"{"contents":[{"role":"user","parts":[{"text":"hello"}]}]}"#.to_string(),
+        };
+        let authenticated =
+            execute_authenticate_request_from_owned(&client, request, Arc::new(NoopRuntimeIo))
+                .await
+                .unwrap();
+
+        assert_eq!(
+            authenticated.headers.get("x-goog-api-key"),
+            Some(&"test-google-key".to_string())
+        );
+        assert_eq!(
+            authenticated.body,
+            r#"{"contents":[{"role":"user","parts":[{"text":"hello"}]}]}"#
+        );
     }
 
     #[test]

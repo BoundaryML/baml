@@ -33,7 +33,7 @@ class Resolution {
 }
 
 function McpBootstrap(order_id: string) -> Resolution {
-  provider: "openai/gpt-5.6-luna"
+  provider: "openai-responses/gpt-5.6-luna"
   prompt: `
     Find the status of order ${order_id}. You must first call add_mcp_server
     with server "orders". After that succeeds, call the newly available

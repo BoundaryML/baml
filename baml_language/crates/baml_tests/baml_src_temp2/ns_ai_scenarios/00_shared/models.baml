@@ -47,7 +47,7 @@ function fake_resolution() -> root.ai.testing.FakeProvider throws never {
 // Named model values used throughout the BEP pages: the fast default and the
 // careful escalation target. Thin aliases over the live constructors so doc
 // snippets and scenarios share one vocabulary.
-function fast_model() -> root.openai.Chat throws baml.errors.Io | baml.errors.ParseError {
+function fast_model() -> root.openai.Responses throws baml.errors.Io | baml.errors.ParseError {
   live_openai()
 }
 
@@ -55,9 +55,9 @@ function careful_model() -> root.anthropic.Messages throws baml.errors.Io | baml
   live_anthropic()
 }
 
-function live_openai() -> root.openai.Chat throws baml.errors.Io | baml.errors.ParseError {
-  root.openai.Chat {
-    ...root.openai.chat(),
+function live_openai() -> root.openai.Responses throws baml.errors.Io | baml.errors.ParseError {
+  root.openai.Responses {
+    ...root.openai.responses(),
     model: "gpt-5.6-luna",
     api_key: baml.env.get_or_panic("OPENAI_API_KEY"),
   }

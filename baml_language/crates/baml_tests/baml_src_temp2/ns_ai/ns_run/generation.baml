@@ -17,7 +17,7 @@ class CompletionWithMeta<T> {
             //# Select bounded completion and retain provider metadata
             match (task.provider) {
                 let provider: root.ai.CompletionProvider => {
-                    //## Complete the task once
+                    //## Run the provider-default lifecycle to a final typed value
                     provider.complete<T>(task)
                 },
                 _ => {
@@ -47,7 +47,7 @@ class Completion<T> {
             //# Select bounded completion and project only the typed value
             match (task.provider) {
                 let provider: root.ai.CompletionProvider => {
-                    //## Complete the task once and discard response metadata
+                    //## Run the provider-default lifecycle and discard response metadata
                     provider.complete<T>(task).value
                 },
                 _ => {

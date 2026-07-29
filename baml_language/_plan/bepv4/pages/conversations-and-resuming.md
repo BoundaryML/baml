@@ -16,7 +16,7 @@ continue. Pass it back to `Agent.new` when the next run uses the same provider.
 
 The example uses the shared support-ticket models (`SupportTicket`,
 `Resolution`, `sample_ticket()`), the shared tool `search_knowledge`, and the
-shared provider values `fast_model()` (an `openai.Chat`) and `careful_model()`
+shared provider values `fast_model()` (an `openai.Responses`) and `careful_model()`
 (an `anthropic.Messages`).
 
 ```baml
@@ -85,7 +85,7 @@ blocks, or continuation handles.
 ## Save it for another process
 
 `save_conversation` and `restore_conversation` come from
-`ai.tools.ResumableToolCallingProvider`; `openai.Chat` implements it, so any
+`ai.tools.ResumableToolCallingProvider`; `openai.Responses` implements it, so any
 `fast_model()` value can seal and reopen its own conversations:
 
 ```baml
@@ -117,13 +117,13 @@ continuation coordinates, not application credentials.
 
 A conversation belongs to one provider. To switch, export portable messages
 and let the destination provider import them. The destination must implement
-`ai.tools.ConversationImportProvider` — `openai.Chat` does, so the move below
-targets a second `openai.Chat` value; `careful_model()`'s `anthropic.Messages`
+`ai.tools.ConversationImportProvider` — `openai.Responses` does, so the move below
+targets a second `openai.Responses` value; `careful_model()`'s `anthropic.Messages`
 does not implement import yet, so it cannot be a destination:
 
 ```baml
-let destination = openai.Chat {
-  ...openai.chat(),
+let destination = openai.Responses {
+  ...openai.responses(),
   model: "gpt-5.6-luna",
   api_key: baml.env.get_or_panic("OPENAI_API_KEY"),
 };

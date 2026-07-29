@@ -207,7 +207,7 @@ interface StreamingProvider requires Provider {
 enforcement point: a provider that wants to surface a foreign error must
 normalize it (`Error.wrap`) before it crosses the protocol boundary.
 
-### OpenAI client (`ns_openai/internal/client.baml`)
+### OpenAI client (`ns_openai/ns_internal/client.baml`)
 
 Every `throw baml.errors.UnknownError { message: [...] }` becomes a
 constructor call. The two sites that matter most:

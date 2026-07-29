@@ -18,12 +18,12 @@ output before the final typed value.
 
 ```baml
 function InspectImage(value: image) -> string {
-  provider: "openai/gpt-5.6-luna"
+  provider: "openai-responses/gpt-5.6-luna"
   prompt: `Describe this image in one short sentence: ${value}`
 }
 
 function InspectPdf(value: pdf) -> string {
-  provider: "openai/gpt-5.6-luna"
+  provider: "openai-responses/gpt-5.6-luna"
   prompt: `Summarize this PDF: ${value}`
 }
 
@@ -61,7 +61,7 @@ class Resolution {
 }
 
 function ResolveTicket(ticket: SupportTicket) -> Resolution {
-  provider: "openai/gpt-5.6-luna"
+  provider: "anthropic/claude-sonnet-4-6"
   prompt: `
     Resolve this support ticket.
     Subject: ${ticket.subject}
@@ -103,25 +103,23 @@ the provider's response and validates the typed result as the full
 ## Transcribe, then run an LLM function
 
 Transcription is a separate bounded operation. This keeps audio transport
-settings out of the resolution prompt:
+settings out of the resolution prompt.
 
 `ai.transcription.TranscriptionProvider` is the portable capability. A
-concrete adapter such as `openai.AudioTranscription` owns the provider's audio
-encoding, endpoint, response parsing, and usage fields.
+concrete provider owns its audio encoding, endpoint, response parsing, and
+usage fields. BEP-064 does not propose an OpenAI transcription adapter:
+`openai.Responses` uses the Responses API only, where audio is one possible
+LLM input modality rather than the old Chat Completions transcription shim.
 
 ```baml
-function TranscribeCall(audio: ai.transcription.AudioStream) -> string {
-  provider: openai.AudioTranscription {
-    inner: openai.Chat { ...live_openai(), model: "gpt-audio" },
-    received_chunks: 0,
-  }
-  prompt: `Transcribe this finite customer-support recording.`
-}
-
 function resolve_recorded_call(
   recorded_audio: ai.transcription.AudioStream,
+  transcription_provider: ai.transcription.TranscriptionProvider,
 ) -> Resolution {
-  let transcript = TranscribeCall@task(recorded_audio)
+  let transcript = TranscribeCall_task(
+      recorded_audio,
+      transcription_provider,
+    )
     .run(
       runner = ai.run.Transcribe.new(
         language = "en",
@@ -143,7 +141,10 @@ let recorded_audio = ai.transcription.AudioStream {
   channels: 1,
 };
 
-let resolution = resolve_recorded_call(recorded_audio)
+let resolution = resolve_recorded_call(
+  recorded_audio,
+  configured_transcription_provider,
+)
 ```
 
 ### Illustrative output
@@ -160,8 +161,8 @@ transcription function is advisory vocabulary/context at best, and providers
 that cannot use it drop it. The task model is kept anyway so transcription
 gets the same routing, override, and runner machinery as every other task.
 
-The task owns the audio argument, the configured `openai.AudioTranscription`
-provider, and the function's prompt. `TranscribeCall@task(...)` builds an
+The task owns the audio argument, its configured transcription provider, and
+the function's prompt. A transcription function builds an
 `ai.transcription.TranscriptionTask`, so an unrelated `Task<string>` can never
 reach a transcription runner. `Transcribe` owns only transcription policy such
 as the language and an optional vocabulary-hint override. Like every other

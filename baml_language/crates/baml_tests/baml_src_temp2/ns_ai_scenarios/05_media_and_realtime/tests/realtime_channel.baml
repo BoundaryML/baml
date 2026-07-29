@@ -47,7 +47,7 @@ testset "integ-test-guide-05-realtime" {
         );
         assert.contains(transcript.to_lower_case(), "pong");
         match (live_session) {
-            let session: root.openai.RealtimeSession => {
+            let session: root.openai.internal.RealtimeSession => {
                 assert.is_true(session.is_closed);
                 assert.is_true(session.items.length() > 0)
             },

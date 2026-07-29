@@ -27,7 +27,7 @@ class Resolution {
 }
 
 function InvestigateRepository(ticket: SupportTicket) -> Resolution {
-  provider: "openai/gpt-5.6-luna"
+  provider: "openai-responses/gpt-5.6-luna"
   prompt: `
     Investigate this support ticket and propose a resolution.
     Ticket: ${ticket.id}

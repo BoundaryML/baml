@@ -38,7 +38,7 @@ function lookup_account(customer_id: string) -> json throws never {
 }
 
 function ResolveTicketWithTools(ticket: SupportTicket) -> Resolution {
-  provider: "openai/gpt-5.6-luna"
+  provider: "openai-responses/gpt-5.6-luna"
 
   prompt: `
     Resolve ticket ${ticket.id}. Use the available tools before answering.
@@ -86,10 +86,11 @@ prompt describes, and the list accepts ordinary BAML functions, methods, and
 closures (anything callable). How they reach the model is the provider
 adapter's decision — native function-calling when the wire supports it, a
 prompt-rendered tool protocol otherwise — so the same function works on
-providers without native tool support. Runners decide whether tools run at
-all: the plain completion path executes requested tools within the provider's
-default completion, while bounded multi-step loops belong to `ai.run.Agent`
-with an explicit `Budget`.
+providers without native tool support. The plain completion path executes
+requested tools within the provider's bounded default lifecycle and returns
+the final `T` or fails. Choose `ai.run.Agent` when the application must control
+the loop or receive explicit `Done`, `BudgetReached`, or `Handoff` outcomes.
+Choose `ai.run.Generation` when exactly one model interaction is required.
 
 That is the common path. BAML sends the prompt, runs any requested tools, and
 returns the declared `Resolution`.
@@ -221,30 +222,34 @@ ai                             // CORE — what every program touches
 ├── testing                    // FakeProvider and friends — deterministic doubles
 │
 openai
-├── Chat                       // ordinary typed calls, streams, and tool calling
-├── Responses                  // durable OpenAI Responses background jobs
-├── Realtime                   // OpenAI Realtime sessions and configuration
-├── RealtimeSession            // provider-owned live WebSocket state
-├── AudioTranscription         // finite audio transcription adapter
-└── Conversation               // exact OpenAI chat/tool state
+├── Responses                  // typed calls, tool calling, and background jobs
+└── Realtime                   // OpenAI Realtime sessions and configuration
+    └── internal               // wire models and provider-owned continuation state
 
 anthropic
-└── Messages                   // Anthropic model and transport configuration
+├── Messages                   // Anthropic Messages configuration
+├── OutputMode, ToolMode       // strict/SAP output and native/prompt tools
+└── internal                   // Messages wire state and schema helpers
 
 google
-├── Gemini                     // Gemini configuration
+├── vertex
+│   └── Gemini                 // Gemini on Vertex AI, using ADC/OAuth or API key
+├── ai
+│   └── Gemini                 // Gemini API / Google AI configuration
+├── internal                   // shared Gemini wire and schema helpers
 └── Cache, CreateCache         // named caches (Gemini-only; plumbed automatically)
 
 claude_code
 └── ClaudeCodeCli              // local Claude Code harness adapter
 ```
 
-Provider values such as `openai.Chat` and `anthropic.Messages` keep model,
-authentication, endpoint, wire behavior, and provider-specific options
-together. They implement small interfaces from `ai`, so an incompatible runner
-can fail at type-check time without making provider internals part of the
-portable API. Every provider supplies its own prompt-rendering shorthand; `ai`
-does not silently choose a model vendor.
+Provider values such as `openai.Responses`, `anthropic.Messages`,
+`google.vertex.Gemini`, and `google.ai.Gemini` keep model, authentication,
+endpoint, wire behavior, and provider-specific options together. They
+implement small interfaces from `ai`, so an incompatible runner can fail at
+type-check time without making provider internals part of the portable API.
+Every provider supplies its own prompt-rendering shorthand; `ai` does not
+silently choose a model vendor.
 
 A provider owns communication: authentication, wire behavior, parsing, and
 provider-owned state (server-side conversation continuations, uploaded files,
@@ -257,7 +262,7 @@ includes the full decision rule.
 
 ## Pick the guide that matches your job
 
-There are eleven focused guides. Each one starts with a complete LLM
+There are twelve focused guides. Each one starts with a complete LLM
 function and keeps nearby variations on the same page.
 
 | I want to... | Read |
@@ -265,6 +270,7 @@ function and keeps nearby variations on the same page.
 | Give an LLM ordinary BAML tools | [Agents and tools](./pages/agents-and-tools.md) |
 | Choose a runner, add a provider, or keep metadata | [Tasks, runners, and results](./pages/tasks-runners-and-results.md) |
 | Add tools during a run or connect MCP | [Dynamic tools and MCP](./pages/dynamic-tools-and-mcp.md) |
+| Understand OpenAI schemas, result tools, or parallel calls | [OpenAI structured outputs and tool calling](./pages/structured-outputs-and-tool-calling.md) |
 | Approve effects, set limits, or hand off | [Approvals, limits, and handoffs](./pages/approvals-limits-and-handoffs.md) |
 | Continue or move a conversation | [Conversations and resuming](./pages/conversations-and-resuming.md) |
 | Stream typed output or work with media | [Streaming, media, and transcription](./pages/streaming-media-and-transcription.md) |

@@ -33,8 +33,8 @@ test "guide 03.04: prepare_step can switch providers through conversation import
   assert.contains(trace.events.join(","), "provider_changed")
 }
 
-test "guide 03.04: OpenAI import keeps a tool result paired with its tool call" {
-  let provider = root.openai.Chat { ...root.openai.chat(), api_key: "unused" };
+test "guide 03.04: OpenAI Responses imports portable message text" {
+  let provider = root.openai.Responses { ...root.openai.responses(), api_key: "unused" };
   let calls: json[] = [{
     "id": "call-1",
     "type": "function",
@@ -60,12 +60,11 @@ test "guide 03.04: OpenAI import keeps a tool result paired with its tool call" 
   ] };
   let imported = provider.import_messages(history);
   match (imported.conversation) {
-    let state: root.openai.Conversation => {
-      assert.equal(state.wire_messages.length(), 2)
-      assert.equal(baml.json.path_or(state.wire_messages[0], ".role", ""), "assistant")
-      assert.equal(baml.json.path_or(state.wire_messages[0], ".tool_calls[0].id", ""), "call-1")
-      assert.equal(baml.json.path_or(state.wire_messages[1], ".role", ""), "tool")
-      assert.equal(baml.json.path_or(state.wire_messages[1], ".tool_call_id", ""), "call-1")
+    let state: root.openai.internal.Conversation => {
+      assert.equal(state.input.length(), 2)
+      assert.equal(baml.json.path_or(state.input[0], ".role", ""), "assistant")
+      assert.equal(baml.json.path_or(state.input[1], ".role", ""), "user")
+      assert.equal(state.previous_response_id, null)
     },
     _ => assert.is_true(false),
   }
@@ -73,7 +72,7 @@ test "guide 03.04: OpenAI import keeps a tool result paired with its tool call" 
 
 class NamedOpenAiToolProvider {
   label: string,
-  inner: root.openai.Chat,
+  inner: root.openai.Responses,
 
   implements root.ai.Provider {
     function name(self) -> string throws never { self.label }
@@ -97,7 +96,10 @@ implements root.ai.tools.ToolCallingProvider for NamedOpenAiToolProvider {
     conversation: root.ai.Conversation,
     results: root.ai.tools.ToolResult[],
   ) -> root.ai.Conversation throws root.ai.Failure | baml.errors.UnknownError {
-    self.inner.submit(conversation, results)
+    self
+      .inner
+      .as<root.ai.tools.ToolCallingProvider>
+      .submit(conversation, results)
   }
 }
 

@@ -81,8 +81,8 @@ test "guide 02.01: ModelStep preserves a union task result" {
 testset "integ-test-guide-02-one-tool" {
   test "guide 02.01 live OpenAI: tool call and final typed value" {
     //# Configure native OpenAI tool calling
-    let provider = root.openai.Chat {
-      ...root.openai.chat(),
+    let provider = root.openai.Responses {
+      ...root.openai.responses(),
       model: "gpt-5.6-luna",
       api_key: baml.env.get_or_panic("OPENAI_API_KEY"),
     };

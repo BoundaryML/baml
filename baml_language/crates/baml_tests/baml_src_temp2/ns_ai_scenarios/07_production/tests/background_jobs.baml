@@ -20,6 +20,7 @@ testset "integ-test-guide-07-background" {
             _ => null
         };
         let provider = root.openai.Responses {
+            ...root.openai.responses(),
             model: "gpt-5.6-luna",
             api_key: baml.env.get_or_panic("OPENAI_API_KEY"),
             base_url: null,
@@ -33,7 +34,7 @@ testset "integ-test-guide-07-background" {
                     .new(idempotency_key = "guide-07-01-T-100-" + baml.sys.now_ms().to_string()),
             );
         let persisted = submitted.token();
-        assert.equal(persisted.provider, "openai-background");
+        assert.equal(persisted.provider, "openai");
         assert.is_true(persisted.id.length() > 0);
         // A fresh handle models another process using only the token and its own
         // configured provider.
@@ -84,7 +85,7 @@ testset "integ-test-guide-07-background" {
         );
         assert.equal(resumed.status(), root.ai.jobs.JobStatus.Complete);
         assert.equal(response.metadata.request_id, persisted.id);
-        assert.equal(response.metadata.provider, "openai-background");
+        assert.equal(response.metadata.provider, "openai");
         assert.is_true(response.value.reply.length() > 0)
     }
 }

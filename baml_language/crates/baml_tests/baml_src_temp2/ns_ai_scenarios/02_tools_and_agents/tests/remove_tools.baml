@@ -112,9 +112,9 @@ testset "integ-test-guide-02-remove-tools" {
             );
         match (outcome) {
             let done: root.ai.Done<Resolution> => match (done.conversation) {
-                let conversation: root.openai.Conversation => {
-                    let names = conversation.tools_json.map((schema: json) -> string {
-                        baml.json.path_or<string>(schema, ".function.name", "")
+                let conversation: root.openai.internal.Conversation => {
+                    let names = conversation.active_tools.map((schema: json) -> string {
+                        baml.json.path_or<string>(schema, ".name", "")
                     });
                     log.info(
                         "live removed tools "

@@ -1,7 +1,11 @@
 test "guide 02.03: one model step may dispatch multiple tool calls" {
     let calls = [
         one_knowledge_call(),
-        root.ai.tools.ToolCall { id: "call-2", name: "lookup_account", args: { "customer_id": "C-1" } },
+        root.ai.tools.ToolCall {
+            id: "call-2",
+            name: "lookup_account",
+            args: { "customer_id": "C-1" },
+        },
     ];
     let provider = fake_tool_provider(calls);
     let task = ResolveTicketWithTools_task(sample_ticket(), provider, [search_knowledge, lookup_account]);
@@ -34,20 +38,18 @@ testset "integ-test-guide-02-parallel-tools" {
             );
         match (outcome) {
             let done: root.ai.Done<Resolution> => match (done.conversation) {
-                let conversation: root.openai.Conversation => {
-                    let parallel_turns = conversation.wire_messages.filter((message: json) -> bool {
-                        baml.json.path_or<string>(message, ".role", "") == "assistant"
-                            && baml.json.path_or<json[]>(message, ".tool_calls", []).length() == 2
-                    });
+                let conversation: root.openai.internal.Conversation => {
+                    let parallel_turns = if (conversation.last_output.length() == 2) {
+                        1
+                    } else {
+                        0
+                    };
                     log.info(
                         "live parallel tools "
-                            + {
-                                "dispatched": trace.after_calls,
-                                "parallel_turns": parallel_turns.length(),
-                            }
-                            .to_string(),
+                            + { "dispatched": trace.after_calls, "parallel_turns": parallel_turns }
+                                .to_string(),
                     );
-                    assert.equal(parallel_turns.length(), 1);
+                    assert.equal(parallel_turns, 1);
                     assert.equal(trace.after_calls.length(), 2);
                     assert.contains(trace.after_calls.join(","), "search_knowledge");
                     assert.contains(trace.after_calls.join(","), "lookup_account");

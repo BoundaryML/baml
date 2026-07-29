@@ -66,8 +66,12 @@ test "guide 05.06: the task owns both call-center instructions and its opening t
     assert.contains(messages[0].content, "You are Maya");
     assert.equal(messages[1].role, "user");
     assert.equal(messages[1].content, "Say hello.");
-    assert.equal(root.openai._openai_realtime_task_instructions(task.prompt), messages[0].content);
-    assert.equal(root.openai._openai_realtime_task_input(task.prompt), "Say hello.")
+    assert
+        .equal(
+            root.openai.internal._openai_realtime_task_instructions(task.prompt),
+            messages[0].content,
+        );
+    assert.equal(root.openai.internal._openai_realtime_task_input(task.prompt), "Say hello.")
 }
 
 test "guide 05.06: a duplex voice agent pumps microphone input beside session events" {
@@ -86,13 +90,19 @@ test "guide 05.06: a duplex voice agent pumps microphone input beside session ev
             root.ai.testing.FakeRealtimeProvider { transcript: "hello" },
             "Say hello.",
         );
-    task.run(runner = root.ai.run.VoiceAgent.new(audio, root.ai.testing.RecordingChannel { frames: [] }));
+    task.run(
+        runner = root.ai.run.VoiceAgent.new(audio, root.ai.testing.RecordingChannel { frames: [] }),
+    );
     assert.is_true(audio.is_closed)
 }
 
 test "guide 05.06: voice agent rejects an incompatible audio device" {
     let audio = root.ai.testing.BufferedRealtimeAudioDevice {
-        input_audio_format: root.ai.realtime.RealtimeAudioFormat { encoding: "other", sample_rate_hz: 8_000, channels: 1 },
+        input_audio_format: root.ai.realtime.RealtimeAudioFormat {
+            encoding: "other",
+            sample_rate_hz: 8_000,
+            channels: 1,
+        },
         output_audio_format: root.ai.testing.fake_realtime_audio_format(),
         input_chunks: [],
         next_input_index: 0,
@@ -107,7 +117,9 @@ test "guide 05.06: voice agent rejects an incompatible audio device" {
             "Say hello.",
         );
     let rejected = false;
-    task.run(runner = root.ai.run.VoiceAgent.new(audio, root.ai.testing.RecordingChannel { frames: [] })) catch (e) {
+    task.run(
+        runner = root.ai.run.VoiceAgent.new(audio, root.ai.testing.RecordingChannel { frames: [] }),
+    ) catch (e) {
         let unsupported: baml.errors.Unsupported => {
             rejected = unsupported.message.includes("input format mismatch");
             null
@@ -168,7 +180,9 @@ test "guide 05.06: a newer assistant item replaces queued older audio" {
     };
     let task = root.ai_scenarios._realtime_call_center_task(provider, "Say two things.");
 
-    task.run(runner = root.ai.run.VoiceAgent.new(audio, root.ai.testing.RecordingChannel { frames: [] }));
+    task.run(
+        runner = root.ai.run.VoiceAgent.new(audio, root.ai.testing.RecordingChannel { frames: [] }),
+    );
 
     assert.equal(audio.output_chunks, [latest_audio])
 }
@@ -219,9 +233,9 @@ test "guide 05.06: sustained server-VAD speech stops playback, cancels, then tru
 }
 
 test "guide 05.06: truncation cannot exceed the exact assistant item's audio" {
-    assert.equal(root.openai._realtime_audio_end_ms(9475, 8950 * 48), 8950);
-    assert.equal(root.openai._realtime_audio_end_ms(4000, 8950 * 48), 4000);
-    assert.equal(root.openai._realtime_audio_end_ms(-1, 8950 * 48), 0)
+    assert.equal(root.openai.internal._realtime_audio_end_ms(9475, 8950 * 48), 8950);
+    assert.equal(root.openai.internal._realtime_audio_end_ms(4000, 8950 * 48), 4000);
+    assert.equal(root.openai.internal._realtime_audio_end_ms(-1, 8950 * 48), 0)
 }
 
 test "guide 05.06: speech stopped before the threshold does not interrupt" {
@@ -263,6 +277,7 @@ test "guide 05.06: server VAD is realtime session configuration" {
         .json
         .parse(
             root.openai
+                .internal
                 ._openai_realtime_session_update(
                     "schedule meetings",
                     "marin",

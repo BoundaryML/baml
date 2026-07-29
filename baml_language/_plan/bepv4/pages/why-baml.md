@@ -141,7 +141,7 @@ const lookupAccount = tool({
 });
 
 const supportAgent = new ToolLoopAgent({
-  model: "openai/gpt-5.6-luna",
+  model: "openai-responses/gpt-5.6-luna",
   instructions:
     "Resolve the ticket. Use the " +
     "available tools before answering.",

@@ -38,7 +38,7 @@ class Resolution {
 }
 
 function ResolveTicket(ticket: SupportTicket) -> Resolution {
-  provider: "openai/gpt-5.6-luna"
+  provider: "openai-responses/gpt-5.6-luna"
   prompt: `
     Resolve this support ticket.
     Subject: ${ticket.subject}

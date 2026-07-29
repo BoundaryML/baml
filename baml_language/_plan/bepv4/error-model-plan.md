@@ -165,7 +165,7 @@ When the alias-in-throws bug is fixed, this becomes `throws root.ai.FailureChann
 ### Layer 5 — concrete providers (openai, anthropic, google, claude_code)
 
 Every `throw baml.errors.UnknownError { message: ["openai http ..."] }` site in
-`ns_openai/internal/client.baml` (and siblings) becomes:
+`ns_openai/ns_internal/client.baml` (and siblings) becomes:
 
 ```baml
 if (!http_response.ok()) {

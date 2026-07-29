@@ -67,7 +67,7 @@ testset "integ-test-guide-05-barge-in" {
         // Drain the provider's cancellation boundary.
         live_session.receive();
         match (live_session) {
-            let session: root.openai.RealtimeSession => {
+            let session: root.openai.internal.RealtimeSession => {
                 log.info(
                     baml.json
                         .stringify(

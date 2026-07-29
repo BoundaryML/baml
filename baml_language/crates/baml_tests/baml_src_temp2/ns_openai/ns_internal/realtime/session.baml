@@ -42,7 +42,10 @@ class RealtimeSession {
         }
     }
 
-    function remember(self, batch: root.ai.realtime.LiveEvent[]) -> root.ai.realtime.LiveEvent[] throws never {
+    function remember(
+        self,
+        batch: root.ai.realtime.LiveEvent[],
+    ) -> root.ai.realtime.LiveEvent[] throws never {
         for (let item in batch) {
             self.items.push(item);
         }
@@ -311,11 +314,11 @@ class RealtimeSession {
         }
 
         function input_audio_format(self) -> root.ai.realtime.RealtimeAudioFormat throws never {
-            realtime_audio_format()
+            root.openai.realtime_audio_format()
         }
 
         function output_audio_format(self) -> root.ai.realtime.RealtimeAudioFormat throws never {
-            realtime_audio_format()
+            root.openai.realtime_audio_format()
         }
 
         function send_audio(

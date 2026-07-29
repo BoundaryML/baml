@@ -261,6 +261,56 @@ impl<T> io::IoClassLlmPrimitiveClient for T {
         })
     }
 
+    fn authenticate_request(
+        &self,
+        _heap: &std::sync::Arc<BexHeap>,
+        _call_id: CallId,
+        client: io::owned::llm::PrimitiveClient,
+        request: BexExternalValue,
+        ctx: &SysOpContext,
+    ) -> SysOpOutput<BexExternalValue> {
+        let old_client = match convert_io_primitive_client(&client) {
+            Ok(c) => c,
+            Err(e) => {
+                return SysOpOutput::err(VmBamlError::InvalidArgument {
+                    message: e.to_string(),
+                });
+            }
+        };
+        let request = match io::owned::http::Request::from_external(request) {
+            Ok(request) => request,
+            Err(e) => {
+                return SysOpOutput::err(VmBamlError::InvalidArgument {
+                    message: e.to_string(),
+                });
+            }
+        };
+        let io = ctx.runtime_io.clone();
+        SysOpOutput::async_op(async move {
+            sys_llm::execute_authenticate_request_from_owned(
+                &old_client,
+                sys_llm::baml_std::HttpRequest {
+                    method: request.method,
+                    url: request.url,
+                    headers: request.headers,
+                    body: request.body,
+                },
+                io,
+            )
+            .await
+            .map(|req| {
+                io::owned::http::Request {
+                    method: req.method,
+                    url: req.url,
+                    headers: req.headers,
+                    body: req.body,
+                }
+                .into_bex_external_value()
+            })
+            .map_err(VmRustFnError::from)
+        })
+    }
+
     fn parse(
         &self,
         _heap: &std::sync::Arc<BexHeap>,

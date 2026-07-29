@@ -1,5 +1,5 @@
 class LiveCostedToolProvider {
-    inner: root.openai.Chat,
+    inner: root.openai.Responses,
     cost_per_step_usd: float,
 
     implements root.ai.Provider {
@@ -33,6 +33,9 @@ implements root.ai.tools.ToolCallingProvider for LiveCostedToolProvider {
     conversation: root.ai.Conversation,
     results: root.ai.tools.ToolResult[],
   ) -> root.ai.Conversation throws root.ai.Failure | baml.errors.UnknownError {
-    self.inner.submit(conversation, results)
+    self
+      .inner
+      .as<root.ai.tools.ToolCallingProvider>
+      .submit(conversation, results)
   }
 }

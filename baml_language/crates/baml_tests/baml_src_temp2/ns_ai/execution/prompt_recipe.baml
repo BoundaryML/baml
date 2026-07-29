@@ -9,9 +9,10 @@ class PromptRenderRecipe {
         self.render_with_output_format(provider, output_type, "")
     }
 
-    // Runners that add another model-visible result branch, such as the
-    // prompt/SAP tool fallback, extend ctx.output_format here. The LLM function
-    // still owns where that contract appears in its prompt.
+    // Runners that add another model-visible result branch extend
+    // ctx.output_format here. Full prompt/SAP tool fallback renders the
+    // combined T | ToolCalls type, then appends the active tool catalog. The
+    // LLM function still owns where that complete contract appears.
     function render_with_output_format(
         self,
         provider: Provider,

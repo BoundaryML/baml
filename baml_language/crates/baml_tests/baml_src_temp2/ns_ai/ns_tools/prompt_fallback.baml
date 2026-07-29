@@ -1,6 +1,12 @@
-// Tool-loop fallback for providers that can generate typed values but do not
-// expose a native tool-calling wire protocol. Each provider turn asks for
-// either the final T or ToolCalls and SAP parses that union.
+// Internal prompt-tool fallback for generation providers. Provider
+// configuration (for example OpenAI's ToolMode.Prompt) may select it without
+// exposing the adapter in user code. This adapter never sends
+// provider-native application tools. Instead, each turn renders one typed
+// contract for T | ToolCalls and delegates that choice to the inner generation
+// provider. Pair it with a text/SAP generation mode when neither application
+// calls nor the combined result should use a provider tool API. If T is already
+// A | B, the model-visible choice is (A | B) | ToolCalls; the original union is
+// not converted into one tool per branch.
 class PromptToolProvider {
     // A prompt adapter is deliberately backed by the one-turn generation
     // capability, never CompletionProvider. This keeps an internal agent loop
@@ -152,7 +158,10 @@ implements ToolCallingProvider for PromptToolProvider {
       };
       return ModelStep<T> { outcome: response.value, metadata: response.metadata };
     }
-    //# Ask for tool calls or the final value
+    //# Ask for the text choice T | ToolCalls
+    // render_with_output_format rebuilds ctx.output_format for the combined
+    // type. Tool schemas are prose in the same prompt; this adapter never
+    // passes them to the inner provider as native application tools.
     let suffix = _prompt_tool_output_suffix(tools);
     let response = self.inner.generate<T | ToolCalls>(
       _prompt_tool_turn<T | ToolCalls>(self, state, tools, suffix),

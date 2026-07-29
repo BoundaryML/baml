@@ -1,8 +1,8 @@
 // Tests for the save_and_resume scenario.
 test "guide 04.05: OpenAI seals and restores its exact provider conversation" {
   //# Begin a native provider conversation
-  let provider = root.openai.Chat {
-    ...root.openai.chat(),
+  let provider = root.openai.Responses {
+    ...root.openai.responses(),
     model: "gpt-5.6-luna",
     api_key: "unused",
   };
@@ -54,8 +54,8 @@ test "guide 04.05: an agent resumes the supplied conversation instead of startin
 
 test "guide 04.05: conversation tokens validate provider ownership" {
   //# Construct a token owned by another provider
-  let provider = root.openai.Chat {
-    ...root.openai.chat(),
+  let provider = root.openai.Responses {
+    ...root.openai.responses(),
     model: "gpt-5.6-luna",
     api_key: "unused",
   };
@@ -87,7 +87,9 @@ testset "integ-test-guide-04-save-and-resume" {
     let results = calls.calls.map((call: root.ai.tools.ToolCall) -> root.ai.tools.ToolResult {
       root.ai.tools.invoke_tool(tools[0], call)
     });
-    let resumed = provider.submit(restored, results);
+    let resumed = provider
+      .as<root.ai.tools.ToolCallingProvider>
+      .submit(restored, results);
     let dispatched: string[] = [];
     let outcome = task.run(
       runner = root.ai.run.Agent<Resolution>.new(

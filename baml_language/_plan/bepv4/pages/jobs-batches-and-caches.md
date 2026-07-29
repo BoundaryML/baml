@@ -32,6 +32,7 @@ class Resolution {
 
 function ResolveTicket(ticket: SupportTicket) -> Resolution {
   provider: openai.Responses {
+    ...openai.responses(),
     model: "gpt-5.6-luna",
     api_key: baml.env.get_or_panic("OPENAI_API_KEY"),
     base_url: null,

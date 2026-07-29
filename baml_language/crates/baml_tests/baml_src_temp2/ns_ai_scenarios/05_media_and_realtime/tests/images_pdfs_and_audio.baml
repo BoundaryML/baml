@@ -30,8 +30,8 @@ testset "integ-test-guide-05-image-input" {
   test "guide 05.01 live OpenAI: image input uses the same task abstraction" {
     let task = InspectImage_task(
       image.from_url("https://upload.wikimedia.org/wikipedia/commons/3/3f/Fronalpstock_big.jpg", "image/jpeg"),
-      root.openai.Chat {
-        ...root.openai.chat(),
+      root.openai.Responses {
+        ...root.openai.responses(),
         model: "gpt-5.6-luna",
         api_key: baml.env.get_or_panic("OPENAI_API_KEY"),
       },

@@ -13,8 +13,8 @@ test "guide 06.04: one task can be tested against multiple provider implementati
 testset "integ-test-guide-06-provider-matrix" {
   test "guide 06.04 live OpenAI" {
     //# Run the task against live OpenAI
-    let result = ResolveTicket_manual(sample_ticket(), root.openai.Chat {
-      ...root.openai.chat(),
+    let result = ResolveTicket_manual(sample_ticket(), root.openai.Responses {
+      ...root.openai.responses(),
       model: "gpt-5.6-luna",
       api_key: baml.env.get_or_panic("OPENAI_API_KEY"),
     });

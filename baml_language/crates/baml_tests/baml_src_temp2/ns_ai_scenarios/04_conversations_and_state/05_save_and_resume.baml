@@ -5,8 +5,8 @@ function save_and_resume(
     | baml.errors.UnknownError
     | baml.errors.Unsupported
 {
-  let provider = root.openai.Chat {
-    ...root.openai.chat(),
+  let provider = root.openai.Responses {
+    ...root.openai.responses(),
     model: "gpt-5.6-luna",
     api_key: "unused",
   };

@@ -770,6 +770,19 @@ class PrimitiveClient {
     $rust_io_function
   }
 
+  /// Apply this provider's authentication to an already-built HTTP request.
+  ///
+  /// Provider adapters use this for later turns whose wire-format conversation
+  /// is already provider-native. It refreshes short-lived credentials (for
+  /// example Vertex ADC), resolves auth-owned URL placeholders, and adds only
+  /// authentication headers. It does not rewrite the request body.
+  function authenticate_request(
+    self,
+    request: root.http.Request,
+  ) -> root.http.Request throws root.errors.LlmClient {
+    $rust_io_function
+  }
+
   function build_request_stream(
     self,
     prompt: PromptAst,

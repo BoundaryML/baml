@@ -32,8 +32,8 @@ testset "integ-test-guide-08-model-harness" {
   test "guide 08.01 live OpenAI: real model behind the harness contract" {
     //# Configure a live OpenAI-backed harness
     let harness = root.ai.harness.ModelHarness {
-      inner: root.openai.Chat {
-        ...root.openai.chat(),
+      inner: root.openai.Responses {
+        ...root.openai.responses(),
         model: "gpt-5.6-luna",
         api_key: baml.env.get_or_panic("OPENAI_API_KEY"),
       },
