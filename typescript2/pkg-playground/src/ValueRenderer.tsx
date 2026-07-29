@@ -8,7 +8,7 @@
  */
 
 import { ChevronRight } from 'lucide-react';
-import { type FC, type ReactNode, useState } from 'react';
+import { type FC, type ReactNode, useMemo, useState } from 'react';
 import { CopyButton } from './components/CopyButton';
 import type { DisplayMode, ResultRendererProps } from './result-renderers';
 import {
@@ -21,7 +21,6 @@ interface ValueRendererProps {
   value: unknown;
   customRenderers?: Record<string, FC<ResultRendererProps>>;
   depth?: number;
-  path?: string;
   displayMode?: DisplayMode;
 }
 
@@ -65,6 +64,12 @@ function stringifyValue(value: unknown, space?: number): string {
   } catch {
     return String(value);
   }
+}
+
+function visibleEntries(value: Record<string, unknown>): [string, unknown][] {
+  return Object.entries(value).filter(
+    ([key]) => key !== BAML_TYPE_KEY && key !== '$type',
+  );
 }
 
 function keyInlineArrayItems(
@@ -133,6 +138,14 @@ const InlineValue: FC<ValueRendererProps> = ({
   const Renderer = rendererFor(value, customRenderers);
   if (Renderer) return <Renderer displayMode="inline" value={value} />;
 
+  if (depth >= 2) {
+    return (
+      <span className="text-vsc-text-faint">
+        {Array.isArray(value) ? '[…]' : '{…}'}
+      </span>
+    );
+  }
+
   if (Array.isArray(value)) {
     return (
       <span className="text-vsc-text-faint">
@@ -152,17 +165,15 @@ const InlineValue: FC<ValueRendererProps> = ({
     );
   }
 
-  const entries = Object.entries(value as Record<string, unknown>).filter(
-    ([key]) => key !== BAML_TYPE_KEY,
-  );
-  const className =
+  const entries = visibleEntries(value as Record<string, unknown>);
+  const typeName =
     (value as Record<string, unknown>).$baml != null
       ? (getBamlType(value) ?? undefined)
       : undefined;
 
   return (
     <span className="text-vsc-text">
-      {className && `${className} `}
+      {typeName && `${typeName} `}
       {'{ '}
       {entries.map(([key, nested], index) => (
         <span key={key}>
@@ -185,11 +196,11 @@ const TreeNode: FC<TreeNodeProps> = ({
   value,
   customRenderers,
   depth = 0,
-  path = '$',
   displayMode = 'auto',
   keyName,
 }) => {
   const [collapsed, setCollapsed] = useState(depth >= 2);
+  const copyText = useMemo(() => stringifyValue(value, 2), [value]);
 
   if (value == null || typeof value !== 'object') {
     return (
@@ -211,9 +222,7 @@ const TreeNode: FC<TreeNodeProps> = ({
   const isArray = Array.isArray(value);
   const entries: [string | number, unknown][] = isArray
     ? value.map((nested, index) => [index, nested])
-    : Object.entries(value as Record<string, unknown>).filter(
-        ([key]) => key !== BAML_TYPE_KEY,
-      );
+    : visibleEntries(value as Record<string, unknown>);
   const open = isArray ? '[' : '{';
   const close = isArray ? ']' : '}';
   const kind = isArray ? 'array' : 'object';
@@ -234,7 +243,9 @@ const TreeNode: FC<TreeNodeProps> = ({
       <div className="flex min-w-0 items-start py-0.5 leading-4 hover:bg-vsc-surface">
         <button
           aria-expanded={!collapsed}
-          aria-label={`${collapsed ? 'Expand' : 'Collapse'} ${kind}`}
+          aria-label={`${collapsed ? 'Expand' : 'Collapse'} ${kind}${
+            keyName == null ? '' : ` ${keyName}`
+          }`}
           className="flex h-4 w-4 shrink-0 items-center justify-center p-0 text-vsc-text-muted hover:text-vsc-text"
           onClick={() => setCollapsed((current) => !current)}
           type="button"
@@ -250,7 +261,7 @@ const TreeNode: FC<TreeNodeProps> = ({
         <CopyButton
           className="-my-1.5 ml-0.5 h-7 w-7 opacity-0 group-hover/node:opacity-100"
           iconSize={11}
-          text={stringifyValue(value, 2)}
+          text={copyText}
         />
       </div>
       {!collapsed && (
@@ -263,11 +274,6 @@ const TreeNode: FC<TreeNodeProps> = ({
                 displayMode={displayMode}
                 key={childKey}
                 keyName={childKey}
-                path={
-                  isArray
-                    ? `${path}[${childKey}]`
-                    : `${path}.${String(childKey)}`
-                }
                 value={nested}
               />
             ))}
@@ -285,7 +291,6 @@ export const ValueRenderer: FC<ValueRendererProps> = ({
   value,
   customRenderers,
   depth = 0,
-  path = '$',
   displayMode = 'auto',
 }) => {
   if (displayMode === 'inline') {
@@ -305,7 +310,6 @@ export const ValueRenderer: FC<ValueRendererProps> = ({
       customRenderers={customRenderers}
       depth={depth}
       displayMode={displayMode}
-      path={path}
       value={value}
     />
   );

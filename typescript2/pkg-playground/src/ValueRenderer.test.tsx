@@ -22,38 +22,49 @@ describe('ValueRenderer', () => {
     );
 
     expect(markup).not.toMatch(/\d+ keys?/);
-    expect(markup).toContain('aria-label="Collapse object"');
-    expect(markup).toContain('aria-label="Expand object"');
+    expect(markup).toContain(
+      'aria-expanded="true" aria-label="Collapse object"',
+    );
+    expect(markup).toContain(
+      'aria-expanded="true" aria-label="Collapse object self"',
+    );
+    expect(markup).toContain(
+      'aria-expanded="false" aria-label="Expand object collector"',
+    );
     expect(markup).toContain('&quot;self&quot;');
     expect(markup).toContain('&quot;collector&quot;');
     expect(markup).not.toContain('&quot;expansions&quot;');
 
-    const rootToggle = markup.indexOf('aria-label="Collapse object"');
-    const selfToggle = markup.indexOf(
-      'aria-label="Collapse object"',
-      rootToggle + 1,
-    );
+    const selfToggle = markup.indexOf('aria-label="Collapse object self"');
     const selfKey = markup.indexOf('&quot;self&quot;');
-    const collectorToggle = markup.indexOf('aria-label="Expand object"');
+    const collectorToggle = markup.indexOf(
+      'aria-label="Expand object collector"',
+    );
     const collectorKey = markup.indexOf('&quot;collector&quot;');
     expect(selfToggle).toBeLessThan(selfKey);
     expect(selfKey).toBeLessThan(collectorToggle);
     expect(collectorToggle).toBeLessThan(collectorKey);
   });
 
-  it('keeps small nested collections expandable when initially collapsed', () => {
-    const objectMarkup = renderToStaticMarkup(
+  it('identifies initially collapsed nested collection toggles', () => {
+    const markup = renderToStaticMarkup(
       <ValueRenderer
         displayMode="expanded"
-        value={{ outer: { inner: { values: [1, 2] } } }}
+        value={{
+          outer: {
+            arrayChild: [1, 2],
+            objectChild: { value: true },
+          },
+        }}
       />,
     );
-    const arrayMarkup = renderToStaticMarkup(
-      <ValueRenderer depth={2} displayMode="expanded" value={[1, 2]} />,
-    );
 
-    expect(objectMarkup).toContain('aria-label="Expand object"');
-    expect(arrayMarkup).toContain('aria-label="Expand array"');
+    expect(markup).toContain(
+      'aria-expanded="false" aria-label="Expand array arrayChild"',
+    );
+    expect(markup).toContain(
+      'aria-expanded="false" aria-label="Expand object objectChild"',
+    );
   });
 
   it('uses custom renderers for typed values inside the JSON tree', () => {
@@ -81,5 +92,32 @@ describe('ValueRenderer', () => {
     expect(markup.indexOf('&quot;media&quot;')).toBeLessThan(
       markup.indexOf('data-testid="media-preview"'),
     );
+  });
+
+  it('hides unregistered type metadata in tree and inline modes', () => {
+    const value = { $type: '$unknown', visible: 'value' };
+    const treeMarkup = renderToStaticMarkup(
+      <ValueRenderer displayMode="expanded" value={value} />,
+    );
+    const inlineMarkup = renderToStaticMarkup(
+      <ValueRenderer displayMode="inline" value={value} />,
+    );
+
+    expect(treeMarkup).toContain('&quot;visible&quot;');
+    expect(inlineMarkup).toContain('&quot;visible&quot;');
+    expect(treeMarkup).not.toContain('&quot;$type&quot;');
+    expect(inlineMarkup).not.toContain('&quot;$type&quot;');
+  });
+
+  it('bounds deeply nested inline collections', () => {
+    const markup = renderToStaticMarkup(
+      <ValueRenderer
+        displayMode="inline"
+        value={{ outer: { nested: { value: true } } }}
+      />,
+    );
+
+    expect(markup).toContain('{…}');
+    expect(markup).not.toContain('&quot;value&quot;');
   });
 });
