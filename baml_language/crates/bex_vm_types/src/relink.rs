@@ -74,6 +74,8 @@ macro_rules! visit_bytecode_index_operands {
             // uses this bit to add its conservative layout dependency.
             I::LoadField(..)
             | I::StoreField(..)
+            | I::VirtualLoadField(..)
+            | I::VirtualStoreField(..)
             | I::InitField(..)
             | I::InitSpread(..)
             | I::InitInstance(..)
