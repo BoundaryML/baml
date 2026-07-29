@@ -49,7 +49,10 @@ struct RenderedHelp {
 }
 
 fn render(query: &[String]) -> Result<RenderedHelp> {
-    let mut root = RuntimeCli::command();
+    render_from(query, RuntimeCli::command())
+}
+
+fn render_from(query: &[String], mut root: clap::Command) -> Result<RenderedHelp> {
     root.build();
 
     let command = find_command(query, &root).map_err(|(unmatched, nearest)| {
@@ -151,11 +154,12 @@ fn split_examples(help: &str) -> Option<(&str, &str, &str)> {
 
 #[cfg(test)]
 pub(crate) fn render_for_test(query: &[&str]) -> String {
-    render(
+    render_from(
         &query
             .iter()
             .map(|part| (*part).to_string())
             .collect::<Vec<_>>(),
+        RuntimeCli::command_with_internal(false),
     )
     .unwrap()
     .help
@@ -195,7 +199,7 @@ mod tests {
 
     #[test]
     fn concise_and_detailed_help_are_snapshot_tested() {
-        let concise = normalize_snapshot(&render(&[]).unwrap().help.to_string());
+        let concise = normalize_snapshot(&render_for_test(&[]));
         insta::assert_snapshot!("root_concise_help", concise);
         insta::assert_snapshot!(
             "describe_detailed_help",

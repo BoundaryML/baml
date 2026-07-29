@@ -237,10 +237,14 @@ pub(crate) enum Commands {
 
 impl RuntimeCli {
     pub(crate) fn command() -> clap::Command {
+        Self::command_with_internal(baml_internal_env_is_truthy())
+    }
+
+    pub(crate) fn command_with_internal(include_internal: bool) -> clap::Command {
         let mut command = <Self as CommandFactory>::command();
         configure_help_hints(&mut command, &[]);
 
-        if baml_internal_env_is_truthy() {
+        if include_internal {
             for subcommand in command
                 .get_subcommands_mut()
                 .filter(|subcommand| subcommand.is_hide_set())
