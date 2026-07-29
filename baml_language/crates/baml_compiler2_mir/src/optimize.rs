@@ -410,12 +410,33 @@ fn collect_place_index_locals(body: &MirFunctionBody) -> HashSet<Local> {
 
     for block in &body.blocks {
         for stmt in &block.statements {
-            if let crate::StatementKind::Assign {
-                destination, value, ..
-            } = &stmt.kind
-            {
-                scan_place(destination, &mut set);
-                scan_rvalue(value, &mut set);
+            match &stmt.kind {
+                crate::StatementKind::Assign { destination, value } => {
+                    scan_place(destination, &mut set);
+                    scan_rvalue(value, &mut set);
+                }
+                crate::StatementKind::VirtualFieldStore {
+                    receiver, value, ..
+                } => {
+                    scan_operand(receiver, &mut set);
+                    scan_operand(value, &mut set);
+                }
+                crate::StatementKind::Intrinsic { args, .. } => {
+                    for arg in args {
+                        scan_operand(arg, &mut set);
+                    }
+                }
+                crate::StatementKind::Drop(p) => scan_place(p, &mut set),
+                // Exhaustive for the same reason the substitution walk is: a
+                // projected operand missed here lets copy propagation pick a
+                // constant for a local that `apply_subst_to_place_locals` then
+                // declines to write into the `Local`-typed position, while the
+                // defining assignment is dropped regardless — leaving the
+                // projection pointing at a local nothing defines.
+                crate::StatementKind::FreshCell(_)
+                | crate::StatementKind::VizEnter(_)
+                | crate::StatementKind::VizExit(_)
+                | crate::StatementKind::Nop => {}
             }
         }
         if let Some(term) = &block.terminator {
@@ -1609,9 +1630,25 @@ fn verify_mir(body: &MirFunctionBody, name: &crate::ItemRef) {
                         }
                     }
                 }
+                crate::StatementKind::VirtualFieldStore {
+                    receiver, value, ..
+                } => {
+                    check_operand(receiver, &blk);
+                    check_operand(value, &blk);
+                }
+                crate::StatementKind::Intrinsic { args, .. } => {
+                    for arg in args {
+                        check_operand(arg, &blk);
+                    }
+                }
                 crate::StatementKind::Drop(p) => check_place(p, &blk),
                 crate::StatementKind::FreshCell(l) => check_local(*l, &blk),
-                _ => {}
+                // Exhaustive rather than wildcarded: an operand-carrying
+                // statement kind that skips this check loses the one cheap
+                // tripwire for a reference to a retired local.
+                crate::StatementKind::VizEnter(_)
+                | crate::StatementKind::VizExit(_)
+                | crate::StatementKind::Nop => {}
             }
         }
     }

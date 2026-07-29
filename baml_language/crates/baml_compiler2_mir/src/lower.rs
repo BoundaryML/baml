@@ -1020,6 +1020,22 @@ type ClassFieldIndices = IndexMap<TypeName, IndexMap<String, usize>>;
 type ClassFieldTypes = IndexMap<TypeName, IndexMap<String, RuntimeTy>>;
 type EnumVariantIndices = IndexMap<QualifiedTypeName, IndexMap<String, usize>>;
 type InterfaceTypeView = (TypeName, Vec<Tir2Ty>, Vec<(Name, Tir2Ty)>);
+
+/// A virtual field access resolved down to what the instruction actually carries:
+/// the receiver, the interface the access travels on the wire, and the field's index
+/// in *that* interface's own declared field list.
+///
+/// Holding these together is what lets the write path resolve every fallible step
+/// before it lowers a single operand — see [`LoweringContext::virtual_field_assign_target`].
+struct VirtualFieldTarget {
+    receiver: Local,
+    field: Name,
+    /// The interface that *declares* `field`, realized at the receiver — never the
+    /// child interface a `requires` closure was entered through.
+    iface: TyTemplateInterface,
+    field_index: u32,
+}
+
 /// Lower the generic arguments of an interface target held as a `TypeRefId` in
 /// `store` (e.g. the `<int>` in `implements Slot<int>`). Non-`Path` targets
 /// contribute no arguments.
@@ -10224,19 +10240,50 @@ impl<'db> LoweringContext<'db> {
             iface_type_args.to_vec(),
             iface_assoc.to_vec(),
         );
-        let Some(((decl_tn, decl_args, decl_assoc), field_index)) =
-            self.interface_view_declaring_field(&view, field)
-        else {
+        let Some((iface, field_index)) = self.virtual_field_wire_target(&view, field) else {
             return false;
         };
+        self.emit_virtual_field_access(recv_local, iface, field_index, field, dest);
+        true
+    }
+
+    /// What a virtual access to `field` through `view` puts on the wire: `view` narrowed
+    /// to the interface that *declares* `field`, lowered to the constraint template the
+    /// instruction carries, paired with the field's index in that interface.
+    ///
+    /// `None` when no interface in the view's `requires` closure declares `field`. This
+    /// is the only fallible step in a virtual field access, which is why both the read
+    /// and the write path funnel through it — the write path calls it before lowering
+    /// any operand so its fall-through stays side-effect-free.
+    fn virtual_field_wire_target(
+        &mut self,
+        view: &InterfaceTypeView,
+        field: &Name,
+    ) -> Option<(TyTemplateInterface, u32)> {
+        let ((decl_tn, decl_args, decl_assoc), field_index) =
+            self.interface_view_declaring_field(view, field)?;
         let generic_params = self.enclosing_generic_params();
-        let iface = tir2_interface_to_template(
-            &decl_tn,
-            &decl_args,
-            &decl_assoc,
-            self.resolved_aliases,
-            &generic_params,
-        );
+        Some((
+            tir2_interface_to_template(
+                &decl_tn,
+                &decl_args,
+                &decl_assoc,
+                self.resolved_aliases,
+                &generic_params,
+            ),
+            field_index,
+        ))
+    }
+
+    /// Emit the open-world read of `field` off `recv_local` through `iface`.
+    fn emit_virtual_field_access(
+        &mut self,
+        recv_local: Local,
+        iface: TyTemplateInterface,
+        field_index: u32,
+        field: &Name,
+        dest: &Place,
+    ) {
         self.builder.assign(
             dest.clone(),
             Rvalue::VirtualFieldAccess {
@@ -10246,7 +10293,6 @@ impl<'db> LoweringContext<'db> {
                 field: field.clone(),
             },
         );
-        true
     }
 
     /// The interface view an assignment *target* `recv.field` resolves through, when
@@ -10270,21 +10316,30 @@ impl<'db> LoweringContext<'db> {
         self.interface_receiver_for_field_access(base, &base_ty)
     }
 
-    /// The `(receiver local, field, interface view)` an assignment target denotes when
-    /// it is an interface-field access, for either spelling: `a.b` reaches MIR as a
+    /// The [`VirtualFieldTarget`] an assignment target denotes when it is an
+    /// interface-field access, for either spelling: `a.b` reaches MIR as a
     /// multi-segment `Path` when its root is a local, and as a `MemberAccess` when the
     /// base is a general expression. `None` for an ordinary place.
-    fn virtual_field_assign_target(
-        &mut self,
-        target: AstExprId,
-    ) -> Option<(Local, Name, InterfaceTypeView)> {
+    ///
+    /// Every fallible step runs *before* any operand is lowered, so a `None` leaves no
+    /// emitted code behind. That ordering is load-bearing: the caller falls through to
+    /// `lower_lvalue` + `lower_expr`, which re-lower the target and the value from the
+    /// AST, so a receiver materialized here would be a side-effecting expression
+    /// evaluated twice plus a block of dead statements.
+    fn virtual_field_assign_target(&mut self, target: AstExprId) -> Option<VirtualFieldTarget> {
         match &self.body.exprs[target] {
             AstExpr::MemberAccess { base, member } => {
-                let (base, member) = (*base, member.clone());
+                let (base, field) = (*base, member.clone());
                 let view = self.virtual_field_assign_view(target, base)?;
+                let (iface, field_index) = self.virtual_field_wire_target(&view, &field)?;
                 let recv_op = self.lower_to_operand(base);
-                let recv_local = self.operand_to_local(recv_op, self.expr_ty(base));
-                Some((recv_local, member, view))
+                let receiver = self.operand_to_local(recv_op, self.expr_ty(base));
+                Some(VirtualFieldTarget {
+                    receiver,
+                    field,
+                    iface,
+                    field_index,
+                })
             }
             AstExpr::Path(segments) if segments.len() >= 2 => {
                 let segments = segments.clone();
@@ -10296,13 +10351,19 @@ impl<'db> LoweringContext<'db> {
                     .map(|t| self.convert_tir_ty_for_runtime(&t))?;
                 let view =
                     self.interface_receiver_for_path_prefix(target, prefix_idx, &prefix_ty)?;
+                let (iface, field_index) = self.virtual_field_wire_target(&view, &field)?;
                 let root_local = self.local_for_path(target, &segments[0])?;
-                let recv_local = self.lower_path_receiver_to_local(
+                let receiver = self.lower_path_receiver_to_local(
                     target,
                     &segments[..segments.len() - 1],
                     root_local,
                 );
-                Some((recv_local, field, view))
+                Some(VirtualFieldTarget {
+                    receiver,
+                    field,
+                    iface,
+                    field_index,
+                })
             }
             _ => None,
         }
@@ -10317,7 +10378,7 @@ impl<'db> LoweringContext<'db> {
     /// target fell through to a dynamic map-key store and the VM rejected it with
     /// `expected Map, got Instance`.
     fn try_lower_virtual_field_assign(&mut self, target: AstExprId, value: AstExprId) -> bool {
-        let Some((recv_local, member, view)) = self.virtual_field_assign_target(target) else {
+        let Some(field_target) = self.virtual_field_assign_target(target) else {
             return false;
         };
         // Take the value as an operand rather than parking it in a temp: a temp
@@ -10325,7 +10386,8 @@ impl<'db> LoweringContext<'db> {
         // and drop the store for, while this statement still emits a plain load of
         // it — reading an uninitialized slot.
         let value_op = self.lower_to_operand(value);
-        self.try_lower_interface_field_store(recv_local, &view, &member, value_op)
+        self.emit_interface_field_store(&field_target, value_op);
+        true
     }
 
     /// `recv.field op= value` on an interface field: read through the virtual
@@ -10338,62 +10400,40 @@ impl<'db> LoweringContext<'db> {
         op: AstAssignOp,
         value: AstExprId,
     ) -> bool {
-        let Some((recv_local, member, view)) = self.virtual_field_assign_target(target) else {
+        let Some(field_target) = self.virtual_field_assign_target(target) else {
             return false;
         };
         let current = self.builder.temp(self.expr_ty(target));
-        if !self.try_lower_interface_field_access(
-            recv_local,
-            &view.0,
-            &view.1,
-            &view.2,
-            &member,
+        self.emit_virtual_field_access(
+            field_target.receiver,
+            field_target.iface.clone(),
+            field_target.field_index,
+            &field_target.field,
             &Place::local(current),
-        ) {
-            return false;
-        }
+        );
         // Apply the operator to the temp through the ordinary path, so union
         // operator drivers and overload dispatch behave exactly as they do for a
         // class field; only the read and the write-back are virtual.
         self.emit_assign_op(Place::local(current), target, op, value);
-        self.try_lower_interface_field_store(
-            recv_local,
-            &view,
-            &member,
-            Operand::Copy(Place::Local(current)),
-        )
+        self.emit_interface_field_store(&field_target, Operand::Copy(Place::Local(current)));
+        true
     }
 
     /// Write `value` to `field` through an interface view — the store counterpart of
-    /// [`Self::try_lower_interface_field_access`].
-    fn try_lower_interface_field_store(
-        &mut self,
-        recv_local: Local,
-        view: &InterfaceTypeView,
-        field: &Name,
-        value: Operand,
-    ) -> bool {
-        let Some(((decl_tn, decl_args, decl_assoc), field_index)) =
-            self.interface_view_declaring_field(view, field)
-        else {
-            return false;
-        };
-        let generic_params = self.enclosing_generic_params();
-        let iface = tir2_interface_to_template(
-            &decl_tn,
-            &decl_args,
-            &decl_assoc,
-            self.resolved_aliases,
-            &generic_params,
-        );
+    /// [`Self::emit_virtual_field_access`].
+    ///
+    /// Infallible, like `emit_virtual_call`: the wire interface and field index were
+    /// resolved by [`Self::virtual_field_assign_target`] before any operand was
+    /// lowered, so nothing is left to fail on and there is no fall-through to leave
+    /// half-emitted.
+    fn emit_interface_field_store(&mut self, target: &VirtualFieldTarget, value: Operand) {
         self.builder.virtual_field_store(
-            iface,
-            Operand::Copy(Place::Local(recv_local)),
-            field_index,
-            field.clone(),
+            target.iface.clone(),
+            Operand::Copy(Place::Local(target.receiver)),
+            target.field_index,
+            target.field.clone(),
             value,
         );
-        true
     }
 
     /// The package this lowering context is lowering into — the "local" package for the
