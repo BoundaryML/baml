@@ -7,10 +7,24 @@ use clap::Args;
 
 use crate::reporter::Reporter;
 
+/// Check BAML source files for compiler errors.
+///
+/// Discovers the nearest BAML project from the search path, checks every
+/// source file in that project, and prints compiler errors and warnings.
 #[derive(Args, Debug)]
+#[command(after_long_help = "\
+Examples:
+  Check the nearest project:
+    baml check
+
+  Check a specific project:
+    baml check --project ./my-project")]
 pub struct CheckArgs {
-    /// Project search starting point. Defaults to the current directory.
-    #[arg(long, value_name = "PATH")]
+    #[command(flatten)]
+    pub compiler: crate::commands::CompilerArgs,
+
+    /// Deprecated alias for `--project`.
+    #[arg(long, value_name = "PATH", hide = true)]
     pub from: Option<PathBuf>,
 }
 

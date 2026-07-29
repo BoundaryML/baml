@@ -35,23 +35,32 @@ fn posthog_host() -> String {
         .unwrap_or_else(|| crate::telemetry::posthog_host().to_string())
 }
 
+/// Report an issue or improvement to Boundary.
+///
+/// Reports can be anonymous or associated with the email from `baml login`.
+/// Without an identity flag, interactive sessions prompt before sending.
 #[derive(Args, Debug)]
-#[command(after_help = "\
+#[command(after_long_help = "\
 Examples:
-  baml feedback --issue \"parser panics on nested unions\"
-  baml feedback --anonymous --issue \"...\" --repro \"class A { ... }\"
-  echo '{\"issue\": \"...\", \"repro\": \"...\"}' | baml feedback --anonymous -")]
+  Report an issue:
+    baml feedback --issue \"parser panics on nested unions\"
+
+  Submit an anonymous report with a reproduction:
+    baml feedback --anonymous --issue \"...\" --repro \"class A { ... }\"
+
+  Submit an anonymous JSON report from standard input:
+    echo '{\"issue\": \"...\", \"repro\": \"...\"}' | baml feedback --anonymous -")]
 pub(crate) struct FeedbackArgs {
     /// The issue or improvement you found.
-    #[arg(long)]
+    #[arg(long, help_heading = "Report options")]
     pub issue: Option<String>,
 
     /// Steps or a snippet that reproduces it.
-    #[arg(long)]
+    #[arg(long, help_heading = "Report options")]
     pub repro: Option<String>,
 
     /// Anything else useful (versions, environment, what you were doing).
-    #[arg(long)]
+    #[arg(long, help_heading = "Report options")]
     pub context: Option<String>,
 
     /// Advanced: supply the fields as JSON instead of flags (an inline
@@ -60,11 +69,11 @@ pub(crate) struct FeedbackArgs {
     pub input: Option<String>,
 
     /// Report anonymously without prompting.
-    #[arg(long, conflicts_with = "email")]
+    #[arg(long, conflicts_with = "email", help_heading = "Identity options")]
     pub anonymous: bool,
 
     /// Report with your email without prompting (requires `baml login`).
-    #[arg(long)]
+    #[arg(long, help_heading = "Identity options")]
     pub email: bool,
 }
 

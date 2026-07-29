@@ -9,41 +9,71 @@ use baml_db::baml_compiler_diagnostics::render::{DiagnosticFormat, RenderConfig}
 use clap::{Args, ValueEnum};
 
 #[derive(Args, Clone, Copy, Debug, Default, PartialEq, Eq)]
-#[command(next_help_heading = "Output options")]
 pub(crate) struct OutputArgs {
-    /// Output defaults: auto, human, or agent.
-    ///
-    /// `auto` selects the agent preset when a known coding-agent environment
-    /// is detected and the human preset otherwise.
     #[arg(
         long = "output-preset",
         env = "BAML_OUTPUT_PRESET",
         value_enum,
+        value_name = "PRESET",
+        help = "Select output defaults [default: auto] [possible values: auto, human, agent]",
+        hide_default_value = true,
+        hide_env = true,
+        hide_possible_values = true,
         default_value_t = OutputPreset::Auto,
-        global = true
+        global = true,
+        help_heading = "Global options",
+        display_order = 70
     )]
     pub preset: OutputPreset,
 
-    /// When to emit ANSI color: auto, always, or never.
-    ///
-    /// Overrides the selected output preset.
-    #[arg(long, env = "BAML_COLOR", value_enum, global = true)]
+    #[arg(
+        long,
+        env = "BAML_COLOR",
+        value_enum,
+        value_name = "WHEN",
+        help = "Control ANSI colors [possible values: auto, always, never]",
+        hide_env = true,
+        hide_possible_values = true,
+        global = true,
+        help_heading = "Global options",
+        display_order = 30
+    )]
     pub color: Option<ColorChoice>,
 
-    /// When to emit terminal hyperlinks: auto, always, or never.
-    ///
-    /// Overrides the selected output preset.
-    #[arg(long, env = "BAML_HYPERLINKS", value_enum, global = true)]
+    #[arg(
+        long,
+        global = true,
+        help = "Disable progress output",
+        help_heading = "Global options",
+        display_order = 40
+    )]
+    pub no_progress: bool,
+
+    #[arg(
+        long,
+        env = "BAML_HYPERLINKS",
+        value_enum,
+        value_name = "WHEN",
+        help = "Control terminal hyperlinks [possible values: auto, always, never]",
+        hide_env = true,
+        hide_possible_values = true,
+        global = true,
+        help_heading = "Global options",
+        display_order = 80
+    )]
     pub hyperlinks: Option<HyperlinkChoice>,
 
-    /// Compiler diagnostic format: human, agent, or concise.
-    ///
-    /// Overrides the selected output preset.
     #[arg(
         long = "diagnostic-format",
         env = "BAML_DIAGNOSTIC_FORMAT",
         value_enum,
-        global = true
+        value_name = "FORMAT",
+        help = "Select the diagnostic format [possible values: human, agent, concise]",
+        hide_env = true,
+        hide_possible_values = true,
+        global = true,
+        help_heading = "Global options",
+        display_order = 90
     )]
     pub diagnostic_format: Option<DiagnosticFormatChoice>,
 }
@@ -94,6 +124,7 @@ pub(crate) struct OutputPolicy {
     pub stdout: StreamPolicy,
     pub stderr: StreamPolicy,
     pub diagnostics: DiagnosticPolicy,
+    pub progress: bool,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -131,6 +162,7 @@ const DEFAULT_POLICY: OutputPolicy = OutputPolicy {
         format: DiagnosticFormat::Human,
         show_error_codes: true,
     },
+    progress: true,
 };
 
 static OUTPUT_POLICY: RwLock<OutputPolicy> = RwLock::new(DEFAULT_POLICY);
@@ -184,6 +216,9 @@ fn resolve(args: OutputArgs, signals: OutputSignals) -> OutputPolicy {
             DiagnosticFormatChoice::Concise => DiagnosticFormat::Concise,
         };
     }
+    if args.no_progress {
+        policy.progress = false;
+    }
 
     policy
 }
@@ -204,6 +239,7 @@ impl OutputPreset {
                     format: DiagnosticFormat::Agent,
                     show_error_codes: true,
                 },
+                progress: false,
             },
             Self::Human | Self::Auto => OutputPolicy {
                 stdout: StreamPolicy {
@@ -218,6 +254,7 @@ impl OutputPreset {
                     format: DiagnosticFormat::Human,
                     show_error_codes: true,
                 },
+                progress: true,
             },
         }
     }
@@ -296,6 +333,7 @@ mod tests {
         OutputArgs {
             preset,
             color: None,
+            no_progress: false,
             hyperlinks: None,
             diagnostic_format: None,
         }
@@ -316,6 +354,7 @@ mod tests {
         assert!(!policy.stdout.hyperlinks);
         assert!(!policy.stderr.hyperlinks);
         assert_eq!(policy.diagnostics.format, DiagnosticFormat::Agent);
+        assert!(!policy.progress);
     }
 
     #[test]
@@ -336,6 +375,7 @@ mod tests {
         assert!(!policy.stdout.hyperlinks);
         assert!(policy.stderr.hyperlinks);
         assert_eq!(policy.diagnostics.format, DiagnosticFormat::Human);
+        assert!(policy.progress);
     }
 
     #[test]
@@ -352,6 +392,17 @@ mod tests {
         assert!(policy.stdout.hyperlinks);
         assert!(policy.stderr.hyperlinks);
         assert_eq!(policy.diagnostics.format, DiagnosticFormat::Human);
+        assert!(!policy.progress);
+    }
+
+    #[test]
+    fn no_progress_overrides_human_preset() {
+        let mut output_args = args(OutputPreset::Human);
+        output_args.no_progress = true;
+
+        let policy = resolve(output_args, INTERACTIVE);
+
+        assert!(!policy.progress);
     }
 
     #[test]
