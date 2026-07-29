@@ -44,7 +44,7 @@ sys_native = { workspace = true }
 anyhow = { workspace = true }
 base64 = { workspace = true }
 borsh = { workspace = true }
-clap = { workspace = true, features = [ "color", "env" ] }
+clap = { workspace = true, features = [ "color", "env", "wrap_help" ] }
 console = { workspace = true }
 ctrlc = { workspace = true }
 flate2 = { workspace = true }

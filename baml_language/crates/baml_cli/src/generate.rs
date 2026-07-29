@@ -24,17 +24,41 @@ use toml_edit::{DocumentMut, Item, Table, value};
 
 use crate::{commands::release_version, reporter::Reporter};
 
+/// Generate client code from BAML definitions.
+///
+/// Reads every `[generator.<name>]` section in `baml.toml`, validates the
+/// project, and writes each configured client. Use `--output-dir` to override the
+/// configured output directory for every generator in this invocation.
 #[derive(Args, Clone, Debug)]
+#[command(after_long_help = "\
+Examples:
+  Generate clients for the nearest project:
+    baml generate
+
+  Generate clients for a specific project:
+    baml generate --project ./my-project
+
+  Override the output directory:
+    baml generate --output-dir ./generated")]
 pub struct GenerateArgs {
     #[command(subcommand)]
     pub command: Option<GenerateCommand>,
 
-    /// Project search starting point. Defaults to the current directory.
-    #[arg(long, value_name = "PATH")]
+    #[command(flatten)]
+    pub compiler: crate::commands::CompilerArgs,
+
+    /// Deprecated alias for `--project`.
+    #[arg(long, value_name = "PATH", hide = true)]
     pub from: Option<PathBuf>,
 
     /// Output directory override (takes precedence over generator config)
-    #[arg(long, short = 'o')]
+    #[arg(
+        long = "output-dir",
+        alias = "output",
+        short = 'o',
+        value_name = "PATH",
+        help_heading = "Generation options"
+    )]
     pub output: Option<PathBuf>,
 }
 

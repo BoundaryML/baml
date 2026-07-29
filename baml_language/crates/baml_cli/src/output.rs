@@ -9,41 +9,62 @@ use baml_db::baml_compiler_diagnostics::render::{DiagnosticFormat, RenderConfig}
 use clap::{Args, ValueEnum};
 
 #[derive(Args, Clone, Copy, Debug, Default, PartialEq, Eq)]
-#[command(next_help_heading = "Output options")]
 pub(crate) struct OutputArgs {
-    /// Output defaults: auto, human, or agent.
-    ///
-    /// `auto` selects the agent preset when a known coding-agent environment
-    /// is detected and the human preset otherwise.
     #[arg(
         long = "output-preset",
         env = "BAML_OUTPUT_PRESET",
         value_enum,
+        value_name = "PRESET",
+        help = "Select output defaults [default: auto] [possible values: auto, human, agent]",
+        hide_default_value = true,
+        hide_env = true,
+        hide_possible_values = true,
         default_value_t = OutputPreset::Auto,
-        global = true
+        global = true,
+        help_heading = "Global options",
+        display_order = 70
     )]
     pub preset: OutputPreset,
 
-    /// When to emit ANSI color: auto, always, or never.
-    ///
-    /// Overrides the selected output preset.
-    #[arg(long, env = "BAML_COLOR", value_enum, global = true)]
+    #[arg(
+        long,
+        env = "BAML_COLOR",
+        value_enum,
+        value_name = "WHEN",
+        help = "Control ANSI colors [possible values: auto, always, never]",
+        hide_env = true,
+        hide_possible_values = true,
+        global = true,
+        help_heading = "Global options",
+        display_order = 30
+    )]
     pub color: Option<ColorChoice>,
 
-    /// When to emit terminal hyperlinks: auto, always, or never.
-    ///
-    /// Overrides the selected output preset.
-    #[arg(long, env = "BAML_HYPERLINKS", value_enum, global = true)]
+    #[arg(
+        long,
+        env = "BAML_HYPERLINKS",
+        value_enum,
+        value_name = "WHEN",
+        help = "Control terminal hyperlinks [possible values: auto, always, never]",
+        hide_env = true,
+        hide_possible_values = true,
+        global = true,
+        help_heading = "Global options",
+        display_order = 80
+    )]
     pub hyperlinks: Option<HyperlinkChoice>,
 
-    /// Compiler diagnostic format: human, agent, or concise.
-    ///
-    /// Overrides the selected output preset.
     #[arg(
         long = "diagnostic-format",
         env = "BAML_DIAGNOSTIC_FORMAT",
         value_enum,
-        global = true
+        value_name = "FORMAT",
+        help = "Select the diagnostic format [possible values: human, agent, concise]",
+        hide_env = true,
+        hide_possible_values = true,
+        global = true,
+        help_heading = "Global options",
+        display_order = 90
     )]
     pub diagnostic_format: Option<DiagnosticFormatChoice>,
 }
