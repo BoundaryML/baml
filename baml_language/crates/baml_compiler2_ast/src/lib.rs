@@ -17,6 +17,7 @@ pub(crate) mod lower_cst;
 pub(crate) mod lower_expr_body;
 pub(crate) mod lower_type_expr;
 pub mod lowering_diagnostic;
+pub mod traverse;
 
 pub use ast::*;
 /// Decode common escape sequences in a quoted string literal body.
@@ -36,6 +37,7 @@ pub use lowering_diagnostic::LoweringDiagnostic;
 // Re-exported so callers of `TypeExprKind::at(span)` can name the span type
 // without depending on `text_size` directly.
 pub use text_size::TextRange;
+pub use traverse::BodyNode;
 
 /// The BEP-044 `default` receiver keyword. Inside an `implements` block,
 /// `default.method(...)` invokes the interface's *default* method body,
@@ -432,7 +434,7 @@ mod tests {
     }
 
     /// Parse BAML source and lower to AST items.
-    fn parse_and_lower(source: &str) -> Vec<Item> {
+    pub(super) fn parse_and_lower(source: &str) -> Vec<Item> {
         let root = parse(source);
         let (items, diags, _env_var_refs) = lower_file(&root);
         assert!(diags.is_empty(), "expected no diagnostics, got: {diags:#?}");
@@ -2504,5 +2506,86 @@ function Demo(name: string) -> string {
             &body.exprs[*lhs2],
             Expr::Literal(baml_base::Literal::String(s)) if s == "Hello, "
         ));
+    }
+}
+
+#[cfg(test)]
+mod traverse_coverage_tests {
+    use crate::{
+        ast::{Expr, FunctionBodyDef, Item},
+        traverse::BodyNode,
+    };
+
+    /// Every expression and statement a lambda-free body allocates must be
+    /// reachable from its root. A child this walker forgets would be silently
+    /// dropped by every analysis built on it — an unwalked `throw` simply
+    /// vanishes from the function's effect set.
+    #[test]
+    fn every_allocated_node_is_reachable_from_the_root() {
+        let sources = [
+            r#"function f(a: int, b: int) -> int throws string {
+  let m = { "k": a + b }
+  let arr = [a, b, m["k"]]
+  for (let x in arr) { if (x > 0) { throw "pos" } }
+  let i = 0
+  while (i < 3) { i = i + 1 }
+  match (a) { 1 => { throw "one" }, _ if b > 0 => { b }, _ => { 0 } }
+}"#,
+            r#"function g(o: int?, cb: () -> int) -> int throws never {
+  defer { let z = 1 }
+  let v = o?.to_string()
+  let c = cb() catch (e) { _ => 0 }
+  return c
+}"#,
+            r#"function h(xs: int[]) -> int throws never {
+  let s = spawn { 1 }
+  let t = await s
+  if let [first, ..rest] = xs { return first }
+  return t
+}"#,
+        ];
+        for source in sources {
+            for item in super::tests::parse_and_lower(source) {
+                let Item::Function(f) = item else { continue };
+                let Some(FunctionBodyDef::Expr(body, _)) = &f.body else {
+                    continue;
+                };
+                // Skip bodies containing lambdas: their nodes live in a nested
+                // arena, so arena membership and reachability legitimately differ.
+                if body.exprs.iter().any(|(_, e)| matches!(e, Expr::Lambda(_))) {
+                    continue;
+                }
+                let Some(root) = body.root_expr else { continue };
+                let reached: std::collections::HashSet<BodyNode> =
+                    body.reachable_excluding_lambdas(root).into_iter().collect();
+
+                let missed_exprs: Vec<_> = body
+                    .exprs
+                    .iter()
+                    .map(|(id, _)| id)
+                    .filter(|id| !reached.contains(&BodyNode::Expr(*id)))
+                    .collect();
+                let missed_stmts: Vec<_> = body
+                    .stmts
+                    .iter()
+                    .map(|(id, _)| id)
+                    .filter(|id| !reached.contains(&BodyNode::Stmt(*id)))
+                    .collect();
+
+                assert!(
+                    missed_exprs.is_empty() && missed_stmts.is_empty(),
+                    "unreachable nodes in `{}`:\n  exprs: {:?}\n  stmts: {:?}\nsource:\n{source}",
+                    f.name,
+                    missed_exprs
+                        .iter()
+                        .map(|id| (*id, &body.exprs[*id]))
+                        .collect::<Vec<_>>(),
+                    missed_stmts
+                        .iter()
+                        .map(|id| (*id, &body.stmts[*id]))
+                        .collect::<Vec<_>>(),
+                );
+            }
+        }
     }
 }

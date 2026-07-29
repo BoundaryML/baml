@@ -8,7 +8,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use baml_base::Name;
-use baml_compiler2_ast::{AstSourceMap, Expr, ExprBody, Literal};
+use baml_compiler2_ast::{AstSourceMap, BodyNode, Expr, ExprBody, Literal};
 use baml_compiler2_hir::{
     contributions::Definition,
     package::{PackageId, PackageItems, package_dependencies},
@@ -416,30 +416,27 @@ pub fn collect_direct_throws<'db>(
         .then(|| baml_compiler2_ppir::function_body_source_map(db, func_loc))
         .flatten();
 
-    for (_, expr) in body.exprs.iter() {
-        if let Expr::Throw { value } = expr
-            && !is_catch_rethrow(*value, body, source_map.as_ref(), &catch_arm_bodies)
-        {
+    // Walk the body structurally rather than scanning the arena: a `throw`
+    // written inside a lambda belongs to that lambda's throw set, not to this
+    // function's. Only calling the lambda transfers the effect.
+    for node in body_nodes(body) {
+        let value = match node {
+            BodyNode::Expr(id) => match &body.exprs[id] {
+                Expr::Throw { value } => *value,
+                _ => continue,
+            },
+            BodyNode::Stmt(id) => match &body.stmts[id] {
+                baml_compiler2_ast::Stmt::Throw { value } => *value,
+                _ => continue,
+            },
+        };
+        if !is_catch_rethrow(value, body, source_map.as_ref(), &catch_arm_bodies) {
             facts.insert(throw_fact_from_expr(
                 db,
                 pkg_items,
                 ns_context,
                 param_types,
-                *value,
-                body,
-            ));
-        }
-    }
-    for (_, stmt) in body.stmts.iter() {
-        if let baml_compiler2_ast::Stmt::Throw { value } = stmt
-            && !is_catch_rethrow(*value, body, source_map.as_ref(), &catch_arm_bodies)
-        {
-            facts.insert(throw_fact_from_expr(
-                db,
-                pkg_items,
-                ns_context,
-                param_types,
-                *value,
+                value,
                 body,
             ));
         }
@@ -518,12 +515,16 @@ fn is_catch_rethrow(
 
 pub fn collect_call_targets(body: &ExprBody) -> BTreeSet<Name> {
     let mut targets = BTreeSet::new();
-    for (_, expr) in body.exprs.iter() {
-        if let Expr::Call { callee, .. } = expr {
-            if let Some(path) = expr_to_path(*callee, body) {
-                let joined = path.iter().map(Name::as_str).collect::<Vec<_>>().join(".");
-                targets.insert(Name::new(joined));
-            }
+    // Structural, not a flat arena scan: a call made inside a lambda body is an
+    // edge from the *lambda*, so charging it to the enclosing function would
+    // give the function the callee's throws without it ever calling anything.
+    for node in body_nodes(body) {
+        let BodyNode::Expr(id) = node else { continue };
+        if let Expr::Call { callee, .. } = &body.exprs[id]
+            && let Some(path) = expr_to_path(*callee, body)
+        {
+            let joined = path.iter().map(Name::as_str).collect::<Vec<_>>().join(".");
+            targets.insert(Name::new(joined));
         }
     }
     targets
@@ -692,8 +693,10 @@ fn lookup_type_in_scope<'db>(
 /// pairs whose arm-body span scopes the rethrows of that binding.
 fn collect_catch_arm_bodies(body: &ExprBody) -> Vec<(&str, baml_compiler2_ast::ExprId)> {
     let mut arms = Vec::new();
-    for (_, expr) in body.exprs.iter() {
-        if let Expr::Catch { clauses, .. } = expr {
+    // Structural: a `catch` inside a lambda scopes only that lambda's rethrows.
+    for node in body_nodes(body) {
+        let BodyNode::Expr(id) = node else { continue };
+        if let Expr::Catch { clauses, .. } = &body.exprs[id] {
             for clause in clauses {
                 if let Some(name) = body.patterns[clause.binding].binding_name(&body.patterns) {
                     for &arm_id in &clause.arms {
@@ -704,6 +707,16 @@ fn collect_catch_arm_bodies(body: &ExprBody) -> Vec<(&str, baml_compiler2_ast::E
         }
     }
     arms
+}
+
+/// Every node of `body` that belongs to *this* function, in pre-order.
+///
+/// Empty when the body has no root expression (a parse failure), which is the
+/// same set a flat arena scan would have found meaningful.
+fn body_nodes(body: &ExprBody) -> Vec<BodyNode> {
+    body.root_expr
+        .map(|root| body.reachable_excluding_lambdas(root))
+        .unwrap_or_default()
 }
 
 fn expr_to_path(expr_id: baml_compiler2_ast::ExprId, body: &ExprBody) -> Option<Vec<Name>> {
