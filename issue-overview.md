@@ -14,4 +14,6 @@ Linear: https://linear.app/boundaryml2/issue/B-1056/monaco-dropdown-has-bad-spac
 - 2026-07-28: Captured the identically framed after image at `typescript2/pkg-editor/docs/B-1056-after.png`; both before and after artifacts are genuine 300x210 PNG files.
 - 2026-07-28: Automated validation passed with `pnpm --filter app-promptfiddle typecheck`, `pnpm --filter app-promptfiddle build`, and `pnpm exec biome check pkg-editor/src/views-workbench.css`.
 - 2026-07-28: The narrower `pnpm --filter @b/pkg-editor typecheck` entry point cannot run in the clean workspace because that package's TypeScript configuration requests the undeclared `@types/node`; the Prompt Fiddle typecheck and production build both compile the shared editor successfully.
-- 2026-07-28: PR creation, CI monitoring, and CodeRabbit approval are pending.
+- 2026-07-28: Committed the fix as `ed08692198cae2c729d024477fab2d12cdfbae5e` and pushed branch `sam/b-1056`.
+- 2026-07-28: Opened ready-for-review PR https://github.com/BoundaryML/baml/pull/4272 against `canary`; its description embeds the durable before and after PNGs from the branch.
+- 2026-07-28: CI monitoring and CodeRabbit approval are pending.
