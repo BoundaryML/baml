@@ -99,8 +99,8 @@ enum Command {
     ///
     /// Writes `.ci/size-gate/<platform>.toml` from each report's measured
     /// sizes and rewrites the per-platform ceilings in `.cargo/size-gate.toml`
-    /// to `--margin-pct` above them (comments preserved). Idempotent: when the
-    /// sizes already match, nothing is written.
+    /// to `--margin-pct` above them as human-readable KiB/MiB/GiB values.
+    /// Idempotent: when the sizes already match, nothing is written.
     Bake {
         /// JSON report files produced by `check --format json`. When omitted,
         /// reports are fetched from `--branch` instead.
