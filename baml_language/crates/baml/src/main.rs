@@ -87,8 +87,8 @@ struct ProjectConfig {
 struct ProjectToolchain {
     version: Option<String>,
     channel: Option<String>,
-    /// Path to a `baml-cli` binary, relative to this `baml.toml` unless
-    /// absolute. Mutually exclusive with `version` and `channel`.
+    /// Rejected rather than ignored, so the refusal is explained where someone
+    /// would otherwise sit and wonder why their setting does nothing.
     path: Option<String>,
 }
 
@@ -125,12 +125,14 @@ Commands:
 
 Local toolchains:
   A selector containing a path separator is a baml-cli binary the wrapper does
-  not manage, for running a local build. It is accepted anywhere a selector is,
-  including $BAML_VERSION and [toolchain] path in baml.toml (resolved relative
-  to that file). install, update, and uninstall do not apply to it.
+  not manage, for running a local build. install, update, and uninstall do not
+  apply to it, and `baml ide install` needs a managed toolchain.
 
     baml toolchain use ~/repos/baml/target/debug/baml-cli
     BAML_VERSION=./target/debug/baml-cli baml check
+
+  It is deliberately not settable from baml.toml: a checked-out repository must
+  not be able to choose which binary runs on your machine.
 
 Network behavior:
   list is local-only.
@@ -459,24 +461,32 @@ fn pass_through(args: Vec<String>) -> Result<i32> {
 /// and no background manifest refresh. That also keeps the exec fast path
 /// unconditional, so a local build costs nothing extra to launch.
 fn exec_path_toolchain(cli: &Path, selector: &ResolvedSelector, args: Vec<String>) -> Result<i32> {
-    verify_path_toolchain(cli, &path_selector_origin(&selector.source))?;
+    let origin = path_selector_origin(&selector.source);
+    verify_path_toolchain(cli, &origin)?;
+    reject_self_exec(cli, &origin)?;
 
     let mut command = Command::new(cli);
     command.args(args);
     command.env("BAML_WRAPPER_EXEC", "1");
-    command.env("BAML_WRAPPER_RESOLVED_TOOLCHAIN", cli);
+    // Deliberately not BAML_WRAPPER_RESOLVED_TOOLCHAIN: that carries a version,
+    // and a local build has none. A separate variable also lets the toolchain
+    // binary tell the two situations apart, which `baml ide install` needs.
+    command.env("BAML_WRAPPER_LOCAL_TOOLCHAIN", cli);
 
+    // Anything verify_path_toolchain could not rule out (wrong architecture,
+    // a noexec mount, a missing interpreter) surfaces here, so this message
+    // carries the attribution too.
     #[cfg(unix)]
     {
         use std::os::unix::process::CommandExt;
         let err = command.exec();
-        Err(anyhow!("failed to exec {}: {err}", cli.display()))
+        Err(anyhow!("failed to exec {}: {err}{origin}", cli.display()))
     }
     #[cfg(not(unix))]
     {
         let status = command
             .status()
-            .with_context(|| format!("failed to run {}", cli.display()))?;
+            .map_err(|err| anyhow!("failed to run {}: {err}{origin}", cli.display()))?;
         Ok(status.code().unwrap_or(1))
     }
 }
@@ -497,9 +507,21 @@ fn active_selector() -> Result<ResolvedSelector> {
         });
     }
     let config = read_config();
-    if !config.default.selector.trim().is_empty() {
+    let selector = config.default.selector.trim();
+    if !selector.is_empty() {
+        // A machine-global default resolved against cwd would run a different
+        // binary from each directory, so it has to stand on its own.
+        if is_path_selector(selector)
+            && !selector.starts_with('~')
+            && !Path::new(selector).is_absolute()
+        {
+            return Err(anyhow!(
+                "{} sets default.selector to a relative path ({selector}), which would depend on the current directory.\nUse an absolute path, or run: baml toolchain use <path>",
+                config_path().display()
+            ));
+        }
         return Ok(ResolvedSelector {
-            selector: normalize_selector(config.default.selector.trim(), &env::current_dir()?),
+            selector: normalize_selector(selector, &env::current_dir()?),
             source: SelectorSource::Config,
         });
     }
@@ -519,24 +541,11 @@ fn project_toolchain_selector() -> Result<Option<(PathBuf, String)>> {
             let config = toml::from_str::<ProjectConfig>(&text)
                 .with_context(|| format!("failed to parse {}", candidate.display()))?;
             if let Some(toolchain) = config.toolchain {
-                let declared: Vec<&str> = [
-                    ("path", toolchain.path.is_some()),
-                    ("version", toolchain.version.is_some()),
-                    ("channel", toolchain.channel.is_some()),
-                ]
-                .into_iter()
-                .filter_map(|(key, set)| set.then_some(key))
-                .collect();
-                if declared.len() > 1 {
+                if toolchain.path.is_some() {
                     return Err(anyhow!(
-                        "{} [toolchain] sets {}, which are mutually exclusive",
-                        candidate.display(),
-                        declared.join(" and ")
+                        "{} sets [toolchain] path, which is not supported.\nA checked-out repository must not be able to choose which binary runs on your machine.\nTo use a local build, run: baml toolchain use <path>\nOr set $BAML_VERSION to it for a single command.",
+                        candidate.display()
                     ));
-                }
-                if let Some(path) = toolchain.path {
-                    let selector = resolve_selector_path(&path, &dir).display().to_string();
-                    return Ok(Some((candidate, selector)));
                 }
                 if let Some(version) = toolchain.version {
                     return Ok(Some((candidate, version)));
@@ -678,10 +687,8 @@ fn path_selector(selector: &str) -> Option<&Path> {
     is_path_selector(selector).then(|| Path::new(selector))
 }
 
-/// Expand a leading `~` and absolutize against `base`, the directory that
-/// declared the path (the containing `baml.toml` for project config, the cwd
-/// otherwise). Relative paths are what make a committed `[toolchain] path`
-/// usable by everyone on a team.
+/// Expand a leading `~` and absolutize against `base`, the directory the path
+/// was written in.
 fn resolve_selector_path(raw: &str, base: &Path) -> PathBuf {
     let home = env::var_os("HOME")
         .or_else(|| env::var_os("USERPROFILE"))
@@ -691,11 +698,61 @@ fn resolve_selector_path(raw: &str, base: &Path) -> PathBuf {
 
 fn resolve_selector_path_with_home(raw: &str, base: &Path, home: Option<&Path>) -> PathBuf {
     let joined = join_selector_path(raw, base, home);
-    // Collapse the `..` segments a relative selector leaves behind, so the path
-    // reads cleanly everywhere it is echoed back. Done through the filesystem
-    // rather than lexically so it stays correct across symlinks; a path that
-    // does not exist yet keeps its joined form for the error message.
-    joined.canonicalize().unwrap_or(joined)
+    let normalized = lexically_normalize(&joined);
+    // Lexical `..` removal disagrees with the filesystem only when a symlinked
+    // directory is followed by `..`. Keep the joined form in that case, so
+    // tidying a path can never turn a working one into a broken one.
+    let tidy = if normalized.exists() || !joined.exists() {
+        normalized
+    } else {
+        joined
+    };
+    with_exe_suffix(tidy)
+}
+
+/// Collapse `.` and `..` without consulting the filesystem, so the path reads
+/// cleanly wherever it is echoed back while any symlink in it survives.
+/// Canonicalizing instead would resolve a `current -> release-N` symlink down
+/// to its physical target, freezing the selector on whatever it pointed at the
+/// day it was set, and on Windows would hand back a `\\?\C:\...` verbatim path.
+fn lexically_normalize(path: &Path) -> PathBuf {
+    use std::path::Component;
+
+    let mut out = PathBuf::new();
+    for component in path.components() {
+        match component {
+            Component::CurDir => {}
+            Component::ParentDir => match out.components().next_back() {
+                Some(Component::Normal(_)) => {
+                    out.pop();
+                }
+                // `..` above the root is the root.
+                Some(Component::RootDir | Component::Prefix(_)) => {}
+                _ => out.push(component),
+            },
+            other => out.push(other),
+        }
+    }
+    if out.as_os_str().is_empty() {
+        PathBuf::from(".")
+    } else {
+        out
+    }
+}
+
+/// Windows developers type `baml-cli`; the file on disk is `baml-cli.exe`.
+#[cfg(windows)]
+fn with_exe_suffix(path: PathBuf) -> PathBuf {
+    if path.extension().is_some() || path.exists() {
+        return path;
+    }
+    let candidate = path.with_extension("exe");
+    if candidate.is_file() { candidate } else { path }
+}
+
+#[cfg(not(windows))]
+fn with_exe_suffix(path: PathBuf) -> PathBuf {
+    path
 }
 
 fn join_selector_path(raw: &str, base: &Path, home: Option<&Path>) -> PathBuf {
@@ -734,6 +791,28 @@ fn path_selector_origin(source: &SelectorSource) -> String {
             format!("\n  set by default.selector in {}", config_path().display())
         }
     }
+}
+
+/// Refuse to exec the wrapper itself. `baml` and `baml-cli` are built into the
+/// same directory, so pointing at the wrapper is a one-character slip; without
+/// this it re-resolves the same selector and execs itself forever, silently on
+/// unix and as an unbounded process tree everywhere else.
+fn reject_self_exec(cli: &Path, origin: &str) -> Result<()> {
+    let Ok(current) = env::current_exe() else {
+        return Ok(());
+    };
+    let same = match (current.canonicalize(), cli.canonicalize()) {
+        (Ok(current), Ok(cli)) => current == cli,
+        _ => current == cli,
+    };
+    if same {
+        return Err(anyhow!(
+            "toolchain path points at the baml wrapper itself: {}{origin}\nPoint at the {} binary instead, which is built alongside it.",
+            cli.display(),
+            cli_exe_name()
+        ));
+    }
+    Ok(())
 }
 
 /// Check that a path selector points at something runnable. `origin` is a
@@ -1226,13 +1305,18 @@ fn list_toolchains() {
     let config = read_config();
     let state = read_state();
     println!("default selector: {}", config.default.selector);
-    if let Ok(active) = active_selector() {
-        if active.selector != config.default.selector {
-            println!(
-                "active selector: {}{}",
-                active.selector,
-                selector_annotation(&active)
-            );
+    // `list` is what a user runs to work out why nothing runs, so a broken
+    // baml.toml or config has to show up here rather than be swallowed.
+    match active_selector() {
+        Ok(active) if active.selector != config.default.selector => println!(
+            "active selector: {}{}",
+            active.selector,
+            selector_annotation(&active)
+        ),
+        Ok(_) => {}
+        Err(err) => {
+            println!("active selector: (unresolved)");
+            println!("{err:#}");
         }
     }
     for (channel, state) in state.channels {
@@ -1547,9 +1631,10 @@ mod tests {
 
     #[test]
     fn relative_path_resolves_against_the_declaring_directory() {
+        let base = Path::new(TEST_BASE);
         assert_eq!(
-            resolve_selector_path("../baml/target/debug/baml-cli", Path::new(TEST_BASE)),
-            Path::new(TEST_BASE).join("../baml/target/debug/baml-cli")
+            resolve_selector_path("../baml/target/debug/baml-cli", base),
+            base.parent().unwrap().join("baml/target/debug/baml-cli")
         );
     }
 
@@ -1573,10 +1658,10 @@ mod tests {
         );
     }
 
-    /// An existing target loses its `..` segments, so the path reads cleanly in
-    /// `--version`, `status`, and the config file it gets written to.
+    /// `..` is collapsed so the path reads cleanly in `--version`, `status`,
+    /// and the config file it gets written to.
     #[test]
-    fn existing_path_is_canonicalized() {
+    fn resolved_path_loses_its_parent_segments() {
         let tmp = tempfile::tempdir().unwrap();
         let build = tmp.path().join("build");
         let proj = tmp.path().join("proj");
@@ -1586,17 +1671,56 @@ mod tests {
         fs::write(&cli, "").unwrap();
 
         let resolved = resolve_selector_path(&format!("../build/{}", cli_exe_name()), &proj);
-        assert_eq!(resolved, cli.canonicalize().unwrap());
+        assert_eq!(resolved, cli);
         assert!(!resolved.to_string_lossy().contains(".."), "{resolved:?}");
     }
 
-    /// A path that does not exist yet keeps its joined form, so the error names
-    /// what the developer actually asked for.
+    /// A path that does not exist yet is still tidied, so the error names a
+    /// readable path rather than one full of `..`.
     #[test]
-    fn missing_path_keeps_its_joined_form() {
+    fn missing_path_is_still_tidied() {
         let tmp = tempfile::tempdir().unwrap();
         let resolved = resolve_selector_path("../build/baml-cli", tmp.path());
-        assert_eq!(resolved, tmp.path().join("../build/baml-cli"));
+        assert_eq!(
+            resolved,
+            tmp.path().parent().unwrap().join("build/baml-cli")
+        );
+    }
+
+    /// Tidying must not resolve symlinks. A `current -> release-N` indirection
+    /// has to keep following repoints instead of being frozen to whatever it
+    /// pointed at when the selector was set.
+    #[test]
+    #[cfg(unix)]
+    fn symlinked_path_is_preserved() {
+        let tmp = tempfile::tempdir().unwrap();
+        let release = tmp.path().join("release-1");
+        fs::create_dir_all(&release).unwrap();
+        fs::write(release.join("baml-cli"), "").unwrap();
+        let current = tmp.path().join("current");
+        std::os::unix::fs::symlink(&release, &current).unwrap();
+
+        let resolved = resolve_selector_path("current/baml-cli", tmp.path());
+        assert_eq!(resolved, current.join("baml-cli"));
+        assert!(
+            !resolved.starts_with(&release),
+            "symlink was resolved away: {resolved:?}"
+        );
+    }
+
+    #[test]
+    fn parent_segments_above_the_root_are_dropped() {
+        let root = Path::new(TEST_BASE)
+            .components()
+            .next()
+            .unwrap()
+            .as_os_str();
+        let mut deep = PathBuf::from(root);
+        deep.push("a");
+        deep.push("..");
+        deep.push("..");
+        deep.push("b");
+        assert_eq!(lexically_normalize(&deep), Path::new(root).join("b"));
     }
 
     /// Without a home directory the `~` stays literal rather than silently

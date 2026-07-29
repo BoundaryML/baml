@@ -191,6 +191,14 @@ fn active_toolchain_vsix() -> Result<PathBuf> {
         .ok_or_else(|| anyhow!("failed to determine active BAML toolchain root"))?;
     let vsix = toolchain_root.join("assets").join("baml-vscode.vsix");
     if !vsix.exists() {
+        // A local build has no assets/ next to it, so say that plainly rather
+        // than reporting a missing file the developer never expected to exist.
+        if let Some(local) = env::var_os("BAML_WRAPPER_LOCAL_TOOLCHAIN") {
+            anyhow::bail!(
+                "baml ide install needs a managed BAML toolchain, but the active one is a local binary at {}.\nThe VS Code extension ships with released toolchains only.\nRun: baml toolchain use canary",
+                Path::new(&local).display()
+            );
+        }
         anyhow::bail!(
             "active BAML toolchain does not include assets/baml-vscode.vsix at {}",
             vsix.display()
