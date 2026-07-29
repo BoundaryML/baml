@@ -19,4 +19,6 @@ Linear: https://linear.app/boundaryml2/issue/B-1055/error-nodes-in-graph-are-for
 - `pnpm --filter app-vscode-webview build` passed.
 - `pnpm --filter app-vscode-webview typecheck` remains blocked by the worktree's absent generated `@b/bridge_wasm` module and its resulting pre-existing implicit-any errors in `src/bridge_wasm.test.ts`.
 - Opened ready-for-review PR https://github.com/BoundaryML/baml/pull/4271 against `canary` with before/after playground images in the description.
-- CI monitoring and CodeRabbit approval are in progress; Vercel checks are intentionally ignored.
+- Non-Vercel CI passed, including Biome, generated-artifact typecheck, jsdom unit tests, and Playwright browser tests.
+- CodeRabbit initially deferred review because of its temporary review limit; an explicit review will be requested when the stated cooldown expires.
+- CodeRabbit approval is pending; Vercel checks are intentionally ignored.
