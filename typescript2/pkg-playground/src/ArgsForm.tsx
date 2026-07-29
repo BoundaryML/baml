@@ -223,7 +223,13 @@ const ParamRow: FC<{
           depth={0}
           disabled={omitted}
           onChange={onChange}
-          placeholder={param.defaultExpression}
+          placeholder={
+            param.hasDefault
+              ? omitted
+                ? param.defaultExpression
+                : ''
+              : undefined
+          }
           schema={param.schema}
           value={value}
         />
