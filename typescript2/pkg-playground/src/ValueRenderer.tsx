@@ -1,3 +1,4 @@
+// biome-ignore-all lint/style/useFilenamingConvention: Preserve the existing exported component path.
 /**
  * Shared value renderer for Playground output.
  *
@@ -6,15 +7,15 @@
  * The displayMode prop controls rendering context (inline, expanded, auto).
  */
 
-import { useState, type FC, type ReactNode } from 'react';
 import { ChevronRight } from 'lucide-react';
+import { type FC, type ReactNode, useState } from 'react';
 import { CopyButton } from './components/CopyButton';
+import type { DisplayMode, ResultRendererProps } from './result-renderers';
 import {
+  BAML_TYPE_KEY,
   getBamlType,
   getResultRenderer,
-  BAML_TYPE_KEY,
 } from './result-renderers';
-import type { ResultRendererProps, DisplayMode } from './result-renderers';
 
 interface ValueRendererProps {
   value: unknown;
@@ -66,6 +67,18 @@ function stringifyValue(value: unknown, space?: number): string {
   }
 }
 
+function keyInlineArrayItems(
+  values: unknown[],
+): { key: string; value: unknown }[] {
+  const occurrences = new Map<string, number>();
+  return values.map((value) => {
+    const serialized = stringifyValue(value);
+    const occurrence = occurrences.get(serialized) ?? 0;
+    occurrences.set(serialized, occurrence + 1);
+    return { key: `${serialized}:${occurrence}`, value };
+  });
+}
+
 const PrimitiveValue: FC<{ value: unknown }> = ({ value }) => {
   if (value == null) {
     return <span className="text-vsc-text-faint">null</span>;
@@ -102,7 +115,7 @@ const TreeRow: FC<{
   children: ReactNode;
 }> = ({ keyName, children }) => (
   <div className="flex min-w-0 items-start py-0.5 font-vsc-mono text-xs leading-4">
-    <span className="h-4 w-4 shrink-0" aria-hidden="true" />
+    <span aria-hidden="true" className="h-4 w-4 shrink-0" />
     <KeyName value={keyName} />
     <div className="min-w-0 flex-1">{children}</div>
   </div>
@@ -118,19 +131,19 @@ const InlineValue: FC<ValueRendererProps> = ({
   }
 
   const Renderer = rendererFor(value, customRenderers);
-  if (Renderer) return <Renderer value={value} displayMode="inline" />;
+  if (Renderer) return <Renderer displayMode="inline" value={value} />;
 
   if (Array.isArray(value)) {
     return (
       <span className="text-vsc-text-faint">
         {'['}
-        {value.map((item, index) => (
-          <span key={index}>
+        {keyInlineArrayItems(value).map(({ key, value: item }, index) => (
+          <span key={key}>
             {index > 0 && ', '}
             <InlineValue
-              value={item}
               customRenderers={customRenderers}
               depth={depth + 1}
+              value={item}
             />
           </span>
         ))}
@@ -157,9 +170,9 @@ const InlineValue: FC<ValueRendererProps> = ({
           <span className="text-vsc-text-muted">{JSON.stringify(key)}</span>
           {': '}
           <InlineValue
-            value={nested}
             customRenderers={customRenderers}
             depth={depth + 1}
+            value={nested}
           />
         </span>
       ))}
@@ -190,7 +203,7 @@ const TreeNode: FC<TreeNodeProps> = ({
   if (Renderer) {
     return (
       <TreeRow keyName={keyName}>
-        <Renderer value={value} displayMode={displayMode} />
+        <Renderer displayMode={displayMode} value={value} />
       </TreeRow>
     );
   }
@@ -220,28 +233,24 @@ const TreeNode: FC<TreeNodeProps> = ({
     <div className="group/node min-w-0 font-vsc-mono text-xs">
       <div className="flex min-w-0 items-start py-0.5 leading-4 hover:bg-vsc-surface">
         <button
-          type="button"
           aria-expanded={!collapsed}
           aria-label={`${collapsed ? 'Expand' : 'Collapse'} ${kind}`}
-          onClick={() => setCollapsed((current) => !current)}
           className="flex h-4 w-4 shrink-0 items-center justify-center p-0 text-vsc-text-muted hover:text-vsc-text"
+          onClick={() => setCollapsed((current) => !current)}
+          type="button"
         >
           <ChevronRight
-            size={12}
             className={`transition-transform ${collapsed ? '' : 'rotate-90'}`}
+            size={12}
           />
         </button>
         <KeyName value={keyName} />
         <span className="text-vsc-text-faint">{open}</span>
-        {collapsed && (
-          <span className="text-vsc-text-faint">
-            …{close}
-          </span>
-        )}
+        {collapsed && <span className="text-vsc-text-faint">…{close}</span>}
         <CopyButton
-          text={stringifyValue(value, 2)}
           className="-my-1.5 ml-0.5 h-7 w-7 opacity-0 group-hover/node:opacity-100"
           iconSize={11}
+          text={stringifyValue(value, 2)}
         />
       </div>
       {!collapsed && (
@@ -249,17 +258,17 @@ const TreeNode: FC<TreeNodeProps> = ({
           <div className="ml-4 border-l border-vsc-border-subtle pl-1">
             {entries.map(([childKey, nested]) => (
               <TreeNode
-                key={childKey}
-                keyName={childKey}
-                value={nested}
                 customRenderers={customRenderers}
                 depth={depth + 1}
+                displayMode={displayMode}
+                key={childKey}
+                keyName={childKey}
                 path={
                   isArray
                     ? `${path}[${childKey}]`
                     : `${path}.${String(childKey)}`
                 }
-                displayMode={displayMode}
+                value={nested}
               />
             ))}
           </div>
@@ -283,9 +292,9 @@ export const ValueRenderer: FC<ValueRendererProps> = ({
     return (
       <span className="font-vsc-mono text-xs">
         <InlineValue
-          value={value}
           customRenderers={customRenderers}
           depth={depth}
+          value={value}
         />
       </span>
     );
@@ -293,11 +302,11 @@ export const ValueRenderer: FC<ValueRendererProps> = ({
 
   return (
     <TreeNode
-      value={value}
       customRenderers={customRenderers}
       depth={depth}
-      path={path}
       displayMode={displayMode}
+      path={path}
+      value={value}
     />
   );
 };

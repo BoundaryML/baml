@@ -1,3 +1,4 @@
+// biome-ignore-all lint/style/useFilenamingConvention: Keep the test beside the existing component path.
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import { ValueRenderer } from './ValueRenderer';
@@ -58,17 +59,17 @@ describe('ValueRenderer', () => {
   it('uses custom renderers for typed values inside the JSON tree', () => {
     const markup = renderToStaticMarkup(
       <ValueRenderer
+        customRenderers={{
+          $media: () => <span data-testid="media-preview">image preview</span>,
+        }}
         displayMode="expanded"
         value={{
           media: {
             $type: '$media',
-            media_type: 'image',
             content_type: 'url',
+            media_type: 'image',
             url: 'https://example.com/image.png',
           },
-        }}
-        customRenderers={{
-          $media: () => <span data-testid="media-preview">image preview</span>,
         }}
       />,
     );
