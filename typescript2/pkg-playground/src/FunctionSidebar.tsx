@@ -47,6 +47,8 @@ interface TestTreeNodeProps {
   depth?: number;
   /** Disable run/retry actions while the runtime is unavailable. */
   disabled?: boolean;
+  selectedTestName?: string | null;
+  onSelectTest?: (name: string) => void;
   onRunTest?: (name: string) => void;
   testRunResults?: Map<string, unknown>;
   failedExpands?: Set<string>;
@@ -57,6 +59,8 @@ function TestTreeNode({
   def,
   depth = 0,
   disabled = false,
+  selectedTestName,
+  onSelectTest,
   onRunTest,
   testRunResults,
   failedExpands,
@@ -114,10 +118,29 @@ function TestTreeNode({
         : null;
     const outcome =
       typeof reportObj?.outcome === 'string' ? reportObj.outcome : undefined;
+    const isSelected = selectedTestName === def.name;
     return (
       <div
-        className={cn(SIDEBAR_LEAF_ROW_CLASS, 'text-vsc-text-muted')}
+        role={onSelectTest ? 'button' : undefined}
+        tabIndex={onSelectTest ? 0 : undefined}
+        aria-pressed={onSelectTest ? isSelected : undefined}
+        className={cn(
+          SIDEBAR_LEAF_ROW_CLASS,
+          onSelectTest && 'cursor-pointer',
+          isSelected
+            ? 'bg-vsc-accent/15 text-vsc-text font-semibold'
+            : 'text-vsc-text-muted hover:bg-vsc-hover',
+        )}
         style={{ paddingLeft: leafIndent }}
+        onClick={() => onSelectTest?.(def.name)}
+        onKeyDown={(event) => {
+          if (!onSelectTest || (event.key !== 'Enter' && event.key !== ' ')) {
+            return;
+          }
+          event.preventDefault();
+          onSelectTest(def.name);
+        }}
+        title={`Show workflow for test: ${def.name}`}
       >
         <FlaskConical className={SIDEBAR_LEAF_ICON_CLASS} />
         <span className="truncate">{def.name.split('/').pop()}</span>
@@ -181,6 +204,8 @@ function TestTreeNode({
             def={child}
             depth={depth + 1}
             disabled={disabled}
+            selectedTestName={selectedTestName}
+            onSelectTest={onSelectTest}
             onRunTest={onRunTest}
             testRunResults={testRunResults}
             failedExpands={failedExpands}
@@ -209,6 +234,8 @@ export interface FunctionSidebarProps {
   previewTests?: TestInfo[];
   selectedPreviewTestKey?: string | null;
   onSelectPreviewTest?: (test: TestInfo) => void;
+  selectedTestName?: string | null;
+  onSelectTest?: (name: string) => void;
   selectedFn: string | null;
   onSelectFn: (name: string | null) => void;
   onRefreshTests: () => void;
@@ -354,6 +381,8 @@ export const FunctionSidebar: FC<FunctionSidebarProps> = ({
   previewTests = [],
   selectedPreviewTestKey,
   onSelectPreviewTest,
+  selectedTestName,
+  onSelectTest,
   selectedFn,
   onSelectFn,
   onRefreshTests,
@@ -552,6 +581,8 @@ export const FunctionSidebar: FC<FunctionSidebarProps> = ({
                   key={`${'name' in def ? def.name : i}-${i}`}
                   def={def}
                   disabled={runtimeControlsDisabled}
+                  selectedTestName={selectedTestName}
+                  onSelectTest={onSelectTest}
                   onRunTest={onRunTest}
                   testRunResults={testRunResults}
                   failedExpands={failedExpands}
