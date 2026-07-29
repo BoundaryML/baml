@@ -97,9 +97,8 @@ pub(crate) struct InterfaceMethodSpec<'db> {
     return_type: SigTypeRef,
     throws: SigTypeRef,
     /// Method generic params with their interface-bound *conjunction* (`T extends A & B`),
-    /// unified. Currently at most one element per param — the parser surfaces only the first
-    /// conjunct — but a list so an override's bounds compare correctly once §3.6 lands.
-    generics: Vec<(Name, Vec<baml_compiler2_hir::type_ref::TypeRefId>)>,
+    /// unified — every conjunct is kept, so an override's bounds compare as sets.
+    generics: Vec<baml_compiler2_ppir::item_data::GenericParamData>,
 }
 
 impl<'db> InterfaceMethodSpec<'db> {
@@ -124,17 +123,9 @@ impl<'db> InterfaceMethodSpec<'db> {
                 SigTypeRef::Id(p.type_ref),
             )
         }));
-        let generics = sig
-            .user_generic_params
-            .iter()
-            .cloned()
-            .zip(
-                func_data
-                    .generic_param_bounds
-                    .iter()
-                    .map(|bound| bound.iter().copied().collect()),
-            )
-            .collect();
+        // `user_generic_params` is the elaborated view of the same declaration
+        // list, so the declaration's params carry the bounds in the same order.
+        let generics = func_data.generic_params.clone();
         Self {
             sig_refs: &sig.type_refs,
             bound_refs: &func_data.type_refs,
@@ -155,16 +146,7 @@ impl<'db> InterfaceMethodSpec<'db> {
             let ty = p.type_ref.map_or(SigTypeRef::Missing, SigTypeRef::Id);
             (is_self, p.has_default, p.name.clone(), ty)
         }));
-        let generics = sig
-            .generic_params
-            .iter()
-            .cloned()
-            .zip(
-                sig.generic_param_bounds
-                    .iter()
-                    .map(|bound| bound.iter().copied().collect()),
-            )
-            .collect();
+        let generics = sig.generic_params.clone();
         Self {
             sig_refs: &iface_data.type_refs,
             bound_refs: &iface_data.type_refs,
@@ -179,14 +161,17 @@ impl<'db> InterfaceMethodSpec<'db> {
     /// The method's own generic parameter names — in scope (as free type variables) when
     /// lowering this spec's signature through a context.
     pub(crate) fn generic_param_names(&self) -> Vec<Name> {
-        self.generics.iter().map(|(name, _)| name.clone()).collect()
+        self.generics
+            .iter()
+            .map(|param| param.name.clone())
+            .collect()
     }
 
     /// The method's generic parameters paired with their interface-bound conjunction
     /// (declaration order, ids into [`Self::bound_store`]) — so an override's bounds can be
     /// checked against the interface method's (an implementation may not add a requirement
     /// the interface does not declare).
-    pub(crate) fn generic_bounds(&self) -> &[(Name, Vec<baml_compiler2_hir::type_ref::TypeRefId>)] {
+    pub(crate) fn generic_bounds(&self) -> &[baml_compiler2_ppir::item_data::GenericParamData] {
         &self.generics
     }
 
@@ -1268,7 +1253,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             SelfReceiver::RigidVar(pin) => Some(pin.clone()),
             _ => None,
         };
-        let generic_names: Vec<Name> = spec.generics.iter().map(|(name, _)| name.clone()).collect();
+        let generic_names: Vec<Name> = spec.generic_param_names();
 
         let symbolic_receiver =
             !access.bound && !matches!(recv, SelfReceiver::ExactTy(_) | SelfReceiver::Union(_));
@@ -1365,10 +1350,10 @@ impl<'db> TypeInferenceBuilder<'db> {
         // enforcement works without the function type carrying them: the receiver generic
         // is bounded by the interface, the method's own params by their declared bounds.
         let mut function_generic_params = Vec::new();
-        let mut function_generic_param_bounds: Vec<Option<Ty>> = Vec::new();
+        let mut function_generic_param_bounds: Vec<Vec<Ty>> = Vec::new();
         if let Some(receiver_generic) = &receiver_generic {
             function_generic_params.push(receiver_generic.clone());
-            function_generic_param_bounds.push(Some(iface_ty.clone()));
+            function_generic_param_bounds.push(vec![iface_ty.clone()]);
             // The synthetic receiver bound is an interface; store it as the conjunction.
             self.generic_param_bounds.insert(
                 receiver_generic.clone(),
@@ -1376,19 +1361,10 @@ impl<'db> TypeInferenceBuilder<'db> {
             );
         }
         function_generic_params.extend(method_generic_params);
-        // Call-site bound enforcement (`function_generic_param_bounds: Vec<Option<Ty>>`) is still
-        // single-bound; take the first conjunct until that path is retyped to a conjunction
-        // (currently a no-op — the parser surfaces at most one). Conformance (E0120) reads the
-        // full conjunction via `generic_bounds()`.
-        let bound_ids: Vec<Option<baml_compiler2_hir::type_ref::TypeRefId>> = spec
-            .generics
-            .iter()
-            .map(|(_, bound)| bound.first().copied())
-            .collect();
         function_generic_param_bounds.extend(lower_generic_param_bound_refs(
             db,
             spec.bound_store(),
-            &bound_ids,
+            spec.generic_bounds(),
             pkg_items,
             &ns,
             &all_generic_params,
@@ -1429,8 +1405,8 @@ impl<'db> TypeInferenceBuilder<'db> {
         let owner_type_arg_bindings = data
             .generic_params
             .iter()
-            .filter_map(|name| {
-                let param = interface_env.resolve_param(name)?;
+            .filter_map(|declared| {
+                let param = interface_env.resolve_param(&declared.name)?;
                 bindings.get(param).cloned().map(|ty| (param.clone(), ty))
             })
             .collect::<Vec<_>>();

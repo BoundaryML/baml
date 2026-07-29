@@ -469,7 +469,6 @@ pub fn ppir_expansion_items(db: &dyn Db, file: SourceFile) -> PpirExpansionItems
                     let companion = ast::FunctionDef {
                         name: SmolStr::new(format!("{}$stream", func.name)),
                         generic_params: func.generic_params.clone(),
-                        generic_param_bounds: func.generic_param_bounds.clone(),
                         params: func.params.clone(),
                         defaults: func.defaults.clone(),
                         return_type: Some(companion_stream_return_type.clone()),
@@ -532,7 +531,6 @@ pub fn ppir_expansion_items(db: &dyn Db, file: SourceFile) -> PpirExpansionItems
                     let companion = ast::FunctionDef {
                         name: SmolStr::new(format!("{}$parse_stream", func.name)),
                         generic_params: func.generic_params.clone(),
-                        generic_param_bounds: func.generic_param_bounds.clone(),
                         params,
                         defaults: func.defaults.clone(),
                         return_type: Some(companion_stream_return_type),
@@ -742,14 +740,20 @@ pub fn elaborated_function_signature<'db>(
 
     let return_type = func_data.return_type.clone();
     let throws = func_data.throws.clone();
-    let reserved_effect_param_names = item_tree
+    let reserved_effect_param_names: Vec<Name> = item_tree
         .enclosing_type_generic_params(function.id(db))
-        .to_vec();
+        .iter()
+        .map(|param| param.name.clone())
+        .collect();
 
     Arc::new(
         baml_compiler2_hir::signature::elaborate_function_signature_parts(
             func_data.name.clone(),
-            func_data.generic_params.clone(),
+            func_data
+                .generic_params
+                .iter()
+                .map(|param| param.name.clone())
+                .collect(),
             &reserved_effect_param_names,
             params,
             return_type,

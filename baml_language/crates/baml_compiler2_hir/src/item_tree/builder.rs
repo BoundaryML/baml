@@ -74,7 +74,6 @@ impl ItemTreeBuilder {
             Function {
                 name: f.name.clone(),
                 generic_params: f.generic_params.clone(),
-                generic_param_bounds: f.generic_param_bounds.clone(),
                 params,
                 defaults: f.defaults.clone(),
                 return_type: f.return_type.clone(),
@@ -126,7 +125,6 @@ impl ItemTreeBuilder {
             Class {
                 name: c.name.clone(),
                 generic_params: c.generic_params.clone(),
-                generic_param_bounds: c.generic_param_bounds.clone(),
                 fields,
                 methods: Vec::new(),
                 implements,
@@ -274,7 +272,6 @@ impl ItemTreeBuilder {
             .map(|m| InterfaceMethodSig {
                 name: m.name.clone(),
                 generic_params: m.generic_params.clone(),
-                generic_param_bounds: m.generic_param_bounds.clone(),
                 params: m
                     .params
                     .iter()
@@ -297,7 +294,6 @@ impl ItemTreeBuilder {
             Interface {
                 name: i.name.clone(),
                 generic_params: i.generic_params.clone(),
-                generic_param_bounds: i.generic_param_bounds.clone(),
                 requires: i.requires.clone(),
                 fields,
                 associated_types: i.associated_types.clone(),

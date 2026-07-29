@@ -432,6 +432,24 @@ pub struct AssociatedTypeBinding {
     pub ty: Box<TypeExpr>,
 }
 
+/// A generic type parameter declaration, paired with the `&`-separated bounds
+/// it was declared with (`<T>` → `bounds = []`; `<T extends A & B>` → `bounds =
+/// [A, B]`).
+///
+/// The bound set is a **conjunction**: an argument for this parameter must
+/// satisfy every entry. Holding the name and its bounds together makes a length
+/// mismatch between the two unrepresentable.
+///
+/// Bounds are `TypeExpr`s so generic parents like `Container<int>` round-trip;
+/// that each must denote an *interface* — never an interface-existential type,
+/// see `TYPE_SYSTEM.md` "Generics on Functions" — is enforced where they are
+/// lowered to constraints.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GenericParam {
+    pub name: Name,
+    pub bounds: Vec<TypeExpr>,
+}
+
 // ── Expression Bodies ───────────────────────────────────────────
 //
 // Full expression/statement arena — modeled after the existing
@@ -1491,11 +1509,7 @@ pub enum DeclarativeMeta {
 pub struct FunctionDef {
     pub name: Name,
     /// Generic type parameters (e.g., `["T", "U"]`). Empty for non-generic functions.
-    pub generic_params: Vec<Name>,
-    /// BEP-044 generic bounds: parallel to `generic_params`. Each entry
-    /// is the `TypeExpr` after `extends` (e.g. `T extends Named` stores
-    /// `Some(Path(["Named"]))`); `None` for unbounded parameters.
-    pub generic_param_bounds: Vec<Option<TypeExpr>>,
+    pub generic_params: Vec<GenericParam>,
     pub params: Vec<Param>,
     pub defaults: FunctionDefaults,
     pub return_type: Option<TypeExpr>,
@@ -1672,11 +1686,7 @@ impl DefaultExprId {
 pub struct ClassDef {
     pub name: Name,
     /// Generic type parameters (e.g., `["T"]` for `Array<T>`). Empty for non-generic classes.
-    pub generic_params: Vec<Name>,
-    /// Generic bounds parallel to `generic_params`. `Some(te)` means the
-    /// parameter at the matching index was declared with `T extends <te>`;
-    /// `None` means unbounded.
-    pub generic_param_bounds: Vec<Option<TypeExpr>>,
+    pub generic_params: Vec<GenericParam>,
     pub fields: Vec<FieldDef>,
     pub methods: Vec<FunctionDef>,
     /// `implements I { ... }` blocks declared inside the class body (BEP-044).
@@ -1696,11 +1706,7 @@ pub struct ClassDef {
 pub struct InterfaceDef {
     pub name: Name,
     /// Generic type parameters (e.g., `["T"]` for `Container<T>`). Empty for non-generic interfaces.
-    pub generic_params: Vec<Name>,
-    /// BEP-044 generic bounds parallel to `generic_params`. `Some(te)`
-    /// means the parameter at the matching index was declared with
-    /// `T extends <te>`; `None` means unbounded.
-    pub generic_param_bounds: Vec<Option<TypeExpr>>,
+    pub generic_params: Vec<GenericParam>,
     /// Required interfaces from `requires I1, I2, ...`. Each is parsed as a
     /// `TypeExpr` so we can accept generic requirements like `Container<int>`.
     pub requires: Vec<TypeExpr>,
@@ -1724,9 +1730,7 @@ pub struct InterfaceDef {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MethodSigDef {
     pub name: Name,
-    pub generic_params: Vec<Name>,
-    /// BEP-044 generic bounds parallel to `generic_params`.
-    pub generic_param_bounds: Vec<Option<TypeExpr>>,
+    pub generic_params: Vec<GenericParam>,
     pub params: Vec<Param>,
     pub defaults: FunctionDefaults,
     pub return_type: Option<TypeExpr>,
@@ -1771,7 +1775,7 @@ pub struct ImplementsForDef {
     /// Generic type parameters on the implements block, each with its set of
     /// `&`-separated interface bounds (`<T>` → `(T, [])`; `<T extends A & B>` →
     /// `(T, [A, B])`). Empty bound list = unbounded.
-    pub generic_params: Vec<(Name, Vec<TypeExpr>)>,
+    pub generic_params: Vec<GenericParam>,
     /// The interface being implemented.
     pub interface_target: TypeExpr,
     /// The type the interface is being implemented for.

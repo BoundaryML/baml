@@ -111,7 +111,6 @@ pub fn llm_parse(parent: &FunctionDef, type_args: Vec<TypeExpr>) -> Option<Funct
     Some(FunctionDef {
         name,
         generic_params: parent.generic_params.clone(),
-        generic_param_bounds: parent.generic_param_bounds.clone(),
         params,
         defaults: parent.defaults.clone(),
         return_type,
@@ -173,7 +172,6 @@ fn make_llm_companion(
     FunctionDef {
         name,
         generic_params: parent.generic_params.clone(),
-        generic_param_bounds: parent.generic_param_bounds.clone(),
         params: parent.params.clone(),
         defaults: parent.defaults.clone(),
         return_type: Some(return_type),

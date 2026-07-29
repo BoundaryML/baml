@@ -715,8 +715,7 @@ fn validate_associated_type_bindings_in_items(
                 );
             }
             baml_compiler2_ast::Item::Class(class) => {
-                let outer_bounds =
-                    generic_bound_expr_map(&class.generic_params, &class.generic_param_bounds);
+                let outer_bounds = generic_bound_expr_map(&class.generic_params);
                 for method in &class.methods {
                     validate_associated_type_bindings_in_function(
                         db,
@@ -744,8 +743,7 @@ fn validate_associated_type_bindings_in_items(
             }
             baml_compiler2_ast::Item::Interface(iface) => {
                 validate_associated_type_declaration_names(file_id, iface, &mut diagnostics);
-                let iface_bounds =
-                    generic_bound_expr_map(&iface.generic_params, &iface.generic_param_bounds);
+                let iface_bounds = generic_bound_expr_map(&iface.generic_params);
                 for method in &iface.required_methods {
                     validate_associated_type_bindings_in_method_sig(
                         db,
@@ -770,19 +768,7 @@ fn validate_associated_type_bindings_in_items(
                 }
             }
             baml_compiler2_ast::Item::ImplementsFor(imp) => {
-                let impl_generics: Vec<Name> = imp
-                    .generic_params
-                    .iter()
-                    .map(|(name, _)| name.clone())
-                    .collect();
-                // Single-bound view (first `&`-bound only) — unchanged behavior;
-                // the full bound set lives on the new HIR `ImplBlock`.
-                let impl_bound_exprs: Vec<Option<baml_compiler2_ast::TypeExpr>> = imp
-                    .generic_params
-                    .iter()
-                    .map(|(_, bounds)| bounds.first().cloned())
-                    .collect();
-                let impl_bounds = generic_bound_expr_map(&impl_generics, &impl_bound_exprs);
+                let impl_bounds = generic_bound_expr_map(&imp.generic_params);
                 for method in &imp.methods {
                     validate_associated_type_bindings_in_function(
                         db,
@@ -811,7 +797,7 @@ fn validate_associated_type_declaration_names(
         if iface
             .generic_params
             .iter()
-            .any(|param| param == &assoc.name)
+            .any(|param| param.name == assoc.name)
         {
             diagnostics.push(
                 Diagnostic::error(
@@ -831,26 +817,25 @@ fn validate_associated_type_declaration_names(
     }
 }
 
-type GenericBoundExprMap = std::collections::HashMap<Name, baml_compiler2_ast::TypeExpr>;
+/// Each in-scope type variable's declared bound *conjunction* — `T extends A & B`
+/// maps `T` to `[A, B]`, so a `T.member` projection is resolved against all of
+/// them (and reports ambiguity when more than one supplies `member`).
+type GenericBoundExprMap = std::collections::HashMap<Name, Vec<baml_compiler2_ast::TypeExpr>>;
 
-fn generic_bound_expr_map(
-    params: &[Name],
-    bounds: &[Option<baml_compiler2_ast::TypeExpr>],
-) -> GenericBoundExprMap {
+fn generic_bound_expr_map(params: &[baml_compiler2_ast::GenericParam]) -> GenericBoundExprMap {
     params
         .iter()
-        .zip(bounds.iter())
-        .filter_map(|(name, bound)| bound.as_ref().map(|bound| (name.clone(), bound.clone())))
+        .filter(|param| !param.bounds.is_empty())
+        .map(|param| (param.name.clone(), param.bounds.clone()))
         .collect()
 }
 
 fn extend_generic_bound_expr_map(
     outer: &GenericBoundExprMap,
-    params: &[Name],
-    bounds: &[Option<baml_compiler2_ast::TypeExpr>],
+    params: &[baml_compiler2_ast::GenericParam],
 ) -> GenericBoundExprMap {
     let mut merged = outer.clone();
-    merged.extend(generic_bound_expr_map(params, bounds));
+    merged.extend(generic_bound_expr_map(params));
     merged
 }
 
@@ -863,11 +848,8 @@ fn validate_associated_type_bindings_in_function(
     namespace_path: &[Name],
     diagnostics: &mut Vec<Diagnostic>,
 ) {
-    let generic_bounds = extend_generic_bound_expr_map(
-        outer_generic_bounds,
-        &function.generic_params,
-        &function.generic_param_bounds,
-    );
+    let generic_bounds =
+        extend_generic_bound_expr_map(outer_generic_bounds, &function.generic_params);
     for param in &function.params {
         if let Some(te) = &param.type_expr {
             validate_ambiguous_typevar_associated_projection_in_type_expr(
@@ -917,11 +899,8 @@ fn validate_associated_type_bindings_in_method_sig(
     namespace_path: &[Name],
     diagnostics: &mut Vec<Diagnostic>,
 ) {
-    let generic_bounds = extend_generic_bound_expr_map(
-        outer_generic_bounds,
-        &method.generic_params,
-        &method.generic_param_bounds,
-    );
+    let generic_bounds =
+        extend_generic_bound_expr_map(outer_generic_bounds, &method.generic_params);
     for param in &method.params {
         if let Some(te) = &param.type_expr {
             validate_ambiguous_typevar_associated_projection_in_type_expr(
@@ -970,7 +949,7 @@ fn validate_ambiguous_typevar_associated_projection_in_type_expr(
     span: TextRange,
     pkg_items: &baml_compiler2_hir::package::PackageItems<'_>,
     namespace_path: &[Name],
-    generic_bounds: &std::collections::HashMap<Name, baml_compiler2_ast::TypeExpr>,
+    generic_bounds: &GenericBoundExprMap,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
     use baml_compiler2_ast::TypeExprKind;
@@ -986,19 +965,34 @@ fn validate_ambiguous_typevar_associated_projection_in_type_expr(
             {
                 let base = &segments[0];
                 let member = &segments[1];
-                if let Some(bound) = generic_bounds.get(base) {
-                    let sources = associated_type_projection_sources_for_interface_bound(
-                        db,
-                        bound,
-                        member,
-                        pkg_items,
-                        namespace_path,
-                    );
+                if let Some(bounds) = generic_bounds.get(base) {
+                    // `T extends A & B` — the member may come from any conjunct,
+                    // so the sources are pooled: none means unknown, and two or
+                    // more (whether from one bound or across bounds) is ambiguous.
+                    let sources: Vec<_> = bounds
+                        .iter()
+                        .flat_map(|bound| {
+                            associated_type_projection_sources_for_interface_bound(
+                                db,
+                                bound,
+                                member,
+                                pkg_items,
+                                namespace_path,
+                            )
+                        })
+                        .collect();
                     if sources.is_empty() {
+                        let rendered = bounds
+                            .iter()
+                            .map(ToString::to_string)
+                            .collect::<Vec<_>>()
+                            .join(" & ");
                         diagnostics.push(
                             Diagnostic::error(
                                 DiagnosticId::UnknownType,
-                                format!("unknown associated type `{member}` for bound `{bound}`"),
+                                format!(
+                                    "unknown associated type `{member}` for bound `{rendered}`"
+                                ),
                             )
                             .with_primary_span(Span {
                                 file_id,

@@ -306,7 +306,11 @@ pub fn build_symbol_pool(db: &ProjectDatabase) -> SymbolPool {
                 cg_name.clone(),
                 cg::Symbol::Class(cg::Class {
                     name: cg_name,
-                    generic_params: class.generic_params.clone(),
+                    generic_params: class
+                        .generic_params
+                        .iter()
+                        .map(|param| param.name.clone())
+                        .collect(),
                     docstring: class.docstring.clone(),
                     properties,
                     static_methods: Vec::new(),

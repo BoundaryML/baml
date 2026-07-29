@@ -96,13 +96,10 @@ fn with_global_ctx<R>(
     db: &dyn baml_compiler2_tir::Db,
     pkg_id: baml_compiler2_hir::package::PackageId<'_>,
     aliases: &HashMap<QualifiedTypeName, Tir2Ty>,
-    bounds: &FxHashMap<ParamTy, Tir2Ty>,
+    bounds: &FxHashMap<ParamTy, Vec<baml_type::Interface>>,
     f: impl FnOnce(&baml_compiler2_tir::type_context::GlobalTypeContext<'_, '_>) -> R,
 ) -> R {
-    let bounds_map: baml_compiler2_tir::lower_type_expr::TypeVarBoundsMap = bounds
-        .iter()
-        .filter_map(|(name, ty)| ty.as_interface().map(|iface| (name.clone(), vec![iface])))
-        .collect();
+    let bounds_map: baml_compiler2_tir::lower_type_expr::TypeVarBoundsMap = bounds.clone();
     let res_ctx = baml_compiler2_tir::package_interface::package_resolution_context(db, pkg_id);
     let ctx = baml_compiler2_tir::type_context::GlobalTypeContext {
         db,
@@ -1341,8 +1338,13 @@ struct LoweringContext<'db> {
         FxHashMap<FileScopeId, &'db baml_compiler2_tir::inference::ScopeInference<'db>>,
     // Function generic bounds, lowered in TIR space. MIR uses these to keep
     // bounded type variables ABI-erased while still lowering bound-member
-    // access through the interface dispatch machinery.
-    generic_param_bounds: FxHashMap<ParamTy, Tir2Ty>,
+    // access through the interface dispatch machinery. A bound *is* an interface
+    // constraint, never a type (`TYPE_SYSTEM.md` "Interfaces"), so it is held as
+    // `baml_type::Interface` — a non-interface bound is rejected at its
+    // declaration and never reaches here. One entry per parameter holding its
+    // full `extends A & B` conjunction: a member may be provided by any
+    // conjunct, so dispatch searches them in declaration order.
+    generic_param_bounds: FxHashMap<ParamTy, Vec<baml_type::Interface>>,
 
     // Package-shared memo for interface-dispatch candidate resolution. Shared
     // across every function the emit driver lowers in one package (fresh and
@@ -1627,7 +1629,9 @@ impl<'db> LoweringContext<'db> {
             Tir2Ty::TypeVar(name, _) => self
                 .generic_param_bounds
                 .get(name)
-                .and_then(|bound| self.interface_view_for_tir_ty(bound, target_tn)),
+                .into_iter()
+                .flatten()
+                .find_map(|bound| self.interface_view_for_tir_ty(&bound.to_ty(), target_tn)),
             Tir2Ty::AssociatedTypeProjection { .. } => {
                 let resolved = self.resolve_ty_projections(ty);
                 if &resolved != ty {
@@ -1909,9 +1913,10 @@ impl<'db> LoweringContext<'db> {
         // Each source item owns its own `TypeRef` arena, so bounds are collected as
         // `(store, id)` pairs — index-aligned with `bound_param_names` — and lowered
         // together below once every sibling param name is in scope (a bound may
-        // reference a sibling type var).
+        // reference a sibling type var). One inner `Vec` per parameter: `T extends
+        // A & B` keeps both conjuncts.
         let mut bound_refs: Vec<
-            Option<(
+            Vec<(
                 &baml_compiler2_hir::type_ref::TypeRefStore,
                 baml_compiler2_hir::type_ref::TypeRefId,
             )>,
@@ -1925,7 +1930,7 @@ impl<'db> LoweringContext<'db> {
             {
                 for g in generics {
                     bound_param_names.push(g.name.clone());
-                    bound_refs.push(g.bounds.first().copied().map(|id| (&imp.type_refs, id)));
+                    bound_refs.push(g.bounds.iter().map(|&id| (&imp.type_refs, id)).collect());
                 }
             }
         } else if let Some(parent_idx) = func_scope.parent {
@@ -1941,9 +1946,15 @@ impl<'db> LoweringContext<'db> {
                     })
                 {
                     let class_data = baml_compiler2_ppir::item_data::class_data(db, class_loc);
-                    bound_param_names.extend(class_data.generic_params.iter().cloned());
-                    for bound in &class_data.generic_param_bounds {
-                        bound_refs.push(bound.map(|id| (&class_data.type_refs, id)));
+                    for param in &class_data.generic_params {
+                        bound_param_names.push(param.name.clone());
+                        bound_refs.push(
+                            param
+                                .bounds
+                                .iter()
+                                .map(|&id| (&class_data.type_refs, id))
+                                .collect(),
+                        );
                     }
                 } else if let Some(iface_loc) =
                     baml_compiler2_ppir::item_data::file_interfaces(db, file)
@@ -1955,56 +1966,81 @@ impl<'db> LoweringContext<'db> {
                         })
                 {
                     let iface_data = baml_compiler2_ppir::item_data::interface_data(db, iface_loc);
-                    bound_param_names.extend(iface_data.generic_params.iter().cloned());
-                    for bound in &iface_data.generic_param_bounds {
-                        bound_refs.push(bound.map(|id| (&iface_data.type_refs, id)));
+                    for param in &iface_data.generic_params {
+                        bound_param_names.push(param.name.clone());
+                        bound_refs.push(
+                            param
+                                .bounds
+                                .iter()
+                                .map(|&id| (&iface_data.type_refs, id))
+                                .collect(),
+                        );
                     }
-                    bound_param_names.extend(
-                        iface_data
-                            .associated_types
-                            .iter()
-                            .map(|assoc| assoc.name.clone()),
-                    );
                     for assoc in &iface_data.associated_types {
-                        bound_refs.push(assoc.bound.map(|id| (&iface_data.type_refs, id)));
+                        bound_param_names.push(assoc.name.clone());
+                        bound_refs.push(
+                            assoc
+                                .bound
+                                .map(|id| (&iface_data.type_refs, id))
+                                .into_iter()
+                                .collect(),
+                        );
                     }
                 }
             }
         }
-        bound_param_names.extend(func_data.generic_params.iter().cloned());
-        for bound in &func_data.generic_param_bounds {
-            bound_refs.push(bound.map(|id| (&func_data.type_refs, id)));
+        for param in &func_data.generic_params {
+            bound_param_names.push(param.name.clone());
+            bound_refs.push(
+                param
+                    .bounds
+                    .iter()
+                    .map(|&id| (&func_data.type_refs, id))
+                    .collect(),
+            );
         }
         let all_generic_params = baml_compiler2_tir::function_generic_params(db, func_loc);
-        let mut generic_param_bounds: FxHashMap<ParamTy, Tir2Ty> = FxHashMap::default();
+        let mut generic_param_bounds: FxHashMap<ParamTy, Vec<baml_type::Interface>> =
+            FxHashMap::default();
         for (idx, name) in bound_param_names.iter().enumerate() {
-            let Some(Some((store, id))) = bound_refs.get(idx).copied() else {
+            let Some(refs) = bound_refs.get(idx) else {
                 continue;
             };
-            let mut diags = Vec::new();
-            // A bound pins only what it writes, so a rigid receiver's dispatch
-            // view keeps unpinned members symbolic and realizes them
-            // per-receiver.
-            let bound_ty = baml_compiler2_tir::lower_type_expr::lower_constraint_head_type_ref(
-                store,
-                id,
-                &baml_compiler2_tir::lower_type_expr::ScopeCtx {
-                    db,
-                    package_items: pkg_items_for_bounds,
-                    ns_context: &pkg_info.namespace_path,
-                    generic_params: &all_generic_params,
-                    // Lowering a bound expression itself: the sibling type-var *names* are in
-                    // scope, but their bounds are not needed (a bound is an interface resolved by
-                    // name), matching tir's own `lower_generic_param_bounds`.
-                    bounds: &baml_compiler2_tir::lower_type_expr::TypeVarBoundsMap::default(),
-                    self_ty: None,
-                },
-                &mut diags,
-            );
-            if diags.is_empty()
-                && let Some(param) = all_generic_params.iter().find(|param| param.name() == name)
-            {
-                generic_param_bounds.insert(param.clone(), bound_ty);
+            let Some(param) = all_generic_params.iter().find(|param| param.name() == name) else {
+                continue;
+            };
+            for &(store, id) in refs {
+                let mut diags = Vec::new();
+                // A bound pins only what it writes, so a rigid receiver's dispatch
+                // view keeps unpinned members symbolic and realizes them
+                // per-receiver.
+                let bound_ty = baml_compiler2_tir::lower_type_expr::lower_constraint_head_type_ref(
+                    store,
+                    id,
+                    &baml_compiler2_tir::lower_type_expr::ScopeCtx {
+                        db,
+                        package_items: pkg_items_for_bounds,
+                        ns_context: &pkg_info.namespace_path,
+                        generic_params: &all_generic_params,
+                        // Lowering a bound expression itself: the sibling type-var *names* are in
+                        // scope, but their bounds are not needed (a bound is an interface resolved
+                        // by name), matching tir's own `lower_generic_param_bounds`.
+                        bounds: &baml_compiler2_tir::lower_type_expr::TypeVarBoundsMap::default(),
+                        self_ty: None,
+                    },
+                    &mut diags,
+                );
+                // A bound that failed to lower, or that named something other
+                // than an interface, is a declaration error reported at its own
+                // site; it contributes no constraint here.
+                if diags.is_empty()
+                    && let Some(constraint) = bound_ty.as_interface()
+                {
+                    generic_param_bounds
+                        .entry(param.clone())
+                        .or_default()
+                        .push(constraint);
+                }
             }
         }
         // BEP-044 Self-as-type-variable: an interface default method's `self` is
@@ -2024,10 +2060,10 @@ impl<'db> LoweringContext<'db> {
                 let args = iface
                     .generic_params
                     .iter()
-                    .map(|name| {
+                    .map(|declared| {
                         let param = all_generic_params
                             .iter()
-                            .find(|param| param.name() == name)
+                            .find(|param| param.name() == &declared.name)
                             .expect("interface generic parameter is in the function environment");
                         Tir2Ty::TypeVar(param.clone(), baml_compiler2_tir::ty::TyAttr::default())
                     })
@@ -2055,12 +2091,7 @@ impl<'db> LoweringContext<'db> {
                     .expect("interface method environment contains Self");
                 generic_param_bounds.insert(
                     self_param.clone(),
-                    Tir2Ty::Interface(
-                        qtn,
-                        args,
-                        associated_bindings,
-                        baml_compiler2_tir::ty::TyAttr::default(),
-                    ),
+                    vec![baml_type::Interface::new(qtn, args, associated_bindings)],
                 );
             }
         }
@@ -2786,7 +2817,9 @@ impl<'db> LoweringContext<'db> {
             Tir2Ty::TypeVar(name, _) => self
                 .generic_param_bounds
                 .get(name)
-                .and_then(|bound| self.interface_dispatch_target_for_tir_ty(bound)),
+                .into_iter()
+                .flatten()
+                .find_map(|bound| self.interface_dispatch_target_for_tir_ty(&bound.to_ty())),
             Tir2Ty::AssociatedTypeProjection { .. } => {
                 let resolved = self.resolve_ty_projections(ty);
                 if &resolved != ty {
@@ -2941,10 +2974,6 @@ impl<'db> LoweringContext<'db> {
                     .map(|arg| self.convert_tir_ty_for_runtime(arg))
                     .collect(),
             )),
-            Tir2Ty::TypeVar(name, _) => self
-                .generic_param_bounds
-                .get(name)
-                .and_then(|bound| self.class_dispatch_target_for_tir_ty(bound)),
             Tir2Ty::AssociatedTypeProjection { .. } => {
                 let resolved = self.resolve_ty_projections(ty);
                 if &resolved != ty {
@@ -2953,6 +2982,9 @@ impl<'db> LoweringContext<'db> {
                 self.resolve_projection_bound(ty)
                     .and_then(|bound| self.class_dispatch_target_for_tir_ty(&bound))
             }
+            // A type variable has no class dispatch target: its bounds are
+            // interface constraints, and an interface is never a class.
+            Tir2Ty::TypeVar(..) => None,
             _ => None,
         }
     }

@@ -1155,7 +1155,8 @@ pub(crate) mod support {
                     let generics_display = if gp.is_empty() {
                         String::new()
                     } else {
-                        let names: Vec<String> = gp.iter().map(|n| n.to_string()).collect();
+                        let names: Vec<String> =
+                            gp.iter().map(|param| param.name.to_string()).collect();
                         format!("<{}>", names.join(", "))
                     };
 

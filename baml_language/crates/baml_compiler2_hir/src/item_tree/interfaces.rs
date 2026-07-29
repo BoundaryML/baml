@@ -4,7 +4,7 @@ use text_size::TextRange;
 
 use crate::{
     ids::{ClassMarker, FunctionMarker, LocalItemId},
-    item_tree::{Attribute, ClassField, FunctionParam},
+    item_tree::{Attribute, ClassField, FunctionParam, GenericParam},
 };
 
 /// An interface (BEP-044) stored in the `ItemTree`.
@@ -14,10 +14,8 @@ use crate::{
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Interface {
     pub name: Name,
-    /// Generic type parameters declared on the interface.
-    pub generic_params: Vec<Name>,
-    /// BEP-044 generic bounds parallel to `generic_params`.
-    pub generic_param_bounds: Vec<Option<ast::TypeExpr>>,
+    /// Generic type parameters declared on the interface, each with its bounds.
+    pub generic_params: Vec<GenericParam>,
     /// Required interfaces from `requires I1, I2, …`.
     pub requires: Vec<ast::TypeExpr>,
     /// Field signatures declared on the interface. Interface fields cannot
@@ -38,10 +36,8 @@ pub struct Interface {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct InterfaceMethodSig {
     pub name: Name,
-    /// Generic type parameters local to this method.
-    pub generic_params: Vec<Name>,
-    /// BEP-044 generic bounds parallel to `generic_params`.
-    pub generic_param_bounds: Vec<Option<ast::TypeExpr>>,
+    /// Generic type parameters local to this method, each with its bounds.
+    pub generic_params: Vec<GenericParam>,
     pub params: Vec<FunctionParam>,
     pub return_type: Option<ast::TypeExpr>,
     pub throws: Option<ast::TypeExpr>,
@@ -92,17 +88,6 @@ pub struct ImplementsBlock {
     pub associated_type_bindings: Vec<ast::AssociatedTypeBindingDef>,
     pub is_out_of_body: bool,
     pub span: TextRange,
-}
-
-/// A generic parameter on an out-of-body `implements` block, paired with its set
-/// of `&`-separated interface bounds (`<T>` → `bounds = []`; `<T extends A & B>`
-/// → `bounds = [A, B]`). Pairing name and bounds makes a length mismatch between
-/// the two unrepresentable. Bounds are unresolved `TypeExpr`s here; they resolve
-/// to `baml_type::Interface` constraints downstream.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct GenericParam {
-    pub name: Name,
-    pub bounds: Vec<ast::TypeExpr>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
