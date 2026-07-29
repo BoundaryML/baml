@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { ValueRenderer } from './ValueRenderer';
 
 describe('ValueRenderer', () => {
-  it('renders nested objects as compact expandable rows without key counts', () => {
+  it('renders JSON tree rows with each key beside its collection toggle', () => {
     const markup = renderToStaticMarkup(
       <ValueRenderer
         displayMode="expanded"
@@ -23,9 +23,21 @@ describe('ValueRenderer', () => {
     expect(markup).not.toMatch(/\d+ keys?/);
     expect(markup).toContain('aria-label="Collapse object"');
     expect(markup).toContain('aria-label="Expand object"');
-    expect(markup).toContain('self:');
-    expect(markup).toContain('collector:');
-    expect(markup).not.toContain('expansions:');
+    expect(markup).toContain('&quot;self&quot;');
+    expect(markup).toContain('&quot;collector&quot;');
+    expect(markup).not.toContain('&quot;expansions&quot;');
+
+    const rootToggle = markup.indexOf('aria-label="Collapse object"');
+    const selfToggle = markup.indexOf(
+      'aria-label="Collapse object"',
+      rootToggle + 1,
+    );
+    const selfKey = markup.indexOf('&quot;self&quot;');
+    const collectorToggle = markup.indexOf('aria-label="Expand object"');
+    const collectorKey = markup.indexOf('&quot;collector&quot;');
+    expect(selfToggle).toBeLessThan(selfKey);
+    expect(selfKey).toBeLessThan(collectorToggle);
+    expect(collectorToggle).toBeLessThan(collectorKey);
   });
 
   it('keeps small nested collections expandable when initially collapsed', () => {
@@ -41,5 +53,32 @@ describe('ValueRenderer', () => {
 
     expect(objectMarkup).toContain('aria-label="Expand object"');
     expect(arrayMarkup).toContain('aria-label="Expand array"');
+  });
+
+  it('uses custom renderers for typed values inside the JSON tree', () => {
+    const markup = renderToStaticMarkup(
+      <ValueRenderer
+        displayMode="expanded"
+        value={{
+          media: {
+            $type: '$media',
+            media_type: 'image',
+            content_type: 'url',
+            url: 'https://example.com/image.png',
+          },
+        }}
+        customRenderers={{
+          $media: () => <span data-testid="media-preview">image preview</span>,
+        }}
+      />,
+    );
+
+    expect(markup).toContain('&quot;media&quot;');
+    expect(markup).toContain('data-testid="media-preview"');
+    expect(markup).toContain('image preview');
+    expect(markup).not.toContain('&quot;$type&quot;');
+    expect(markup.indexOf('&quot;media&quot;')).toBeLessThan(
+      markup.indexOf('data-testid="media-preview"'),
+    );
   });
 });
