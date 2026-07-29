@@ -17,7 +17,7 @@ use std::{
 
 use baml_base::{Name, SourceFile};
 use baml_compiler2_ast::{
-    self as ast, AstSourceMap, Expr as AstExpr, ExprBody, ExprId, FunctionDef, PatId,
+    self as ast, AstSourceMap, Expr as AstExpr, ExprBody, ExprId, LambdaDef, PatId,
 };
 use baml_compiler2_hir::{
     body::{FunctionBody, LetBody},
@@ -629,11 +629,15 @@ fn validate_type_ref_generic_bounds_at_span(
     builder.validate_type_generic_bounds_at_span(span, &ty);
 }
 
-fn extend_env_with_lambda_generics<'db>(
-    env: &GenericEnv<'db>,
-    func_def: &FunctionDef,
-) -> GenericEnv<'db> {
-    env.child_unique_ast(&func_def.generic_params, &func_def.generic_param_bounds)
+/// The generic environment a lambda body is inferred in.
+///
+/// A lambda declares no generic parameters of its own (the parser rejects
+/// them), so this adds none. The child environment is still created rather than
+/// reusing the parent directly: building a child resets `self_bound` to `None`,
+/// so collapsing this call would silently change what `Self` resolves to inside
+/// a lambda body.
+fn lambda_body_env<'db>(env: &GenericEnv<'db>) -> GenericEnv<'db> {
+    env.child_unique_ast(&[], &[])
 }
 
 fn add_lambda_params_to_builder(
@@ -642,7 +646,7 @@ fn add_lambda_params_to_builder(
     pkg_items: &PackageItems<'_>,
     ns_context: &[Name],
     env: &GenericEnv,
-    func_def: &FunctionDef,
+    func_def: &LambdaDef,
     contextual_param_tys: Option<&[FunctionParamTy]>,
 ) {
     // The lambda's own generic bounds (its env extends the enclosing scope's) let a
@@ -1242,33 +1246,24 @@ fn seed_template_body_params(
 /// Search for a `Lambda` expression whose source span matches `target_span` in
 /// `body`/`source_map`, recursively descending into nested lambda bodies.
 ///
-/// Returns `Some((func_def, lambda_body, lambda_source_map, lambda_expr_id))` when
+/// Returns `Some((lambda, lambda_body, lambda_source_map, lambda_expr_id))` when
 /// found; `None` otherwise.
 fn find_lambda_by_span<'a>(
     body: &'a ExprBody,
     source_map: &AstSourceMap,
     target_span: TextRange,
-) -> Option<(&'a FunctionDef, &'a ExprBody, &'a AstSourceMap, ExprId)> {
+) -> Option<(&'a LambdaDef, &'a ExprBody, &'a AstSourceMap, ExprId)> {
     for (expr_id, expr) in body.exprs.iter() {
-        if let AstExpr::Lambda(ref func_def) = *expr {
-            let span = source_map.expr_span(expr_id);
-            if span == target_span {
-                // Found the matching lambda
-                if let Some(baml_compiler2_ast::FunctionBodyDef::Expr(
-                    ref lambda_body,
-                    ref lambda_sm,
-                )) = func_def.body
-                {
-                    return Some((func_def, lambda_body, lambda_sm, expr_id));
-                }
+        if let AstExpr::Lambda(ref lambda) = *expr {
+            let Some((ref lambda_body, ref lambda_sm)) = lambda.body else {
+                continue;
+            };
+            if source_map.expr_span(expr_id) == target_span {
+                return Some((lambda, lambda_body, lambda_sm, expr_id));
             }
             // Recurse into nested lambda bodies
-            if let Some(baml_compiler2_ast::FunctionBodyDef::Expr(ref nested_body, ref nested_sm)) =
-                func_def.body
-            {
-                if let Some(found) = find_lambda_by_span(nested_body, nested_sm, target_span) {
-                    return Some(found);
-                }
+            if let Some(found) = find_lambda_by_span(lambda_body, lambda_sm, target_span) {
+                return Some(found);
             }
         }
     }
@@ -2040,8 +2035,7 @@ pub fn infer_scope_types<'db>(
 
                                     let parent_env =
                                         crate::generic_env::function_generic_env(db, ancestor_func);
-                                    let env =
-                                        extend_env_with_lambda_generics(&parent_env, func_def);
+                                    let env = lambda_body_env(&parent_env);
                                     apply_generic_env(
                                         db,
                                         &mut builder,
@@ -2107,8 +2101,7 @@ pub fn infer_scope_types<'db>(
                                         ancestor_scope,
                                     )
                                     .unwrap_or_default();
-                                    let env =
-                                        extend_env_with_lambda_generics(&parent_env, func_def);
+                                    let env = lambda_body_env(&parent_env);
                                     apply_generic_env(
                                         db,
                                         &mut builder,

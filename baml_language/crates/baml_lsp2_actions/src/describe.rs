@@ -706,11 +706,7 @@ fn descend_into_lambdas<'a>(
         if let baml_compiler2_ast::Expr::Lambda(func_def) = expr {
             let expr_span = source_map.expr_span(expr_id);
             if expr_span == target_range {
-                if let Some(baml_compiler2_ast::FunctionBodyDef::Expr(
-                    ref nested_body,
-                    ref nested_source_map,
-                )) = func_def.body
-                {
+                if let Some((ref nested_body, ref nested_source_map)) = func_def.body {
                     return descend_into_lambdas(
                         nested_body,
                         nested_source_map,

@@ -1667,20 +1667,16 @@ impl<'db> TypeInferenceBuilder<'db> {
         ty
     }
 
-    fn lower_lambda_return_annotation(&mut self, func_def: &ast::FunctionDef) -> Option<Ty> {
-        let te = func_def.return_type.as_ref()?;
-        let all_generic_params =
-            Self::params_with_names(&self.generic_params, &func_def.generic_params);
-        Some(self.lower_lambda_type_expr(te, &all_generic_params, te.span))
-    }
-
-    fn params_with_names(parent: &[crate::ty::ParamTy], names: &[Name]) -> Vec<crate::ty::ParamTy> {
-        crate::generic_env::append_params(parent, names)
+    fn lower_lambda_return_annotation(&mut self, lambda: &ast::LambdaDef) -> Option<Ty> {
+        let te = lambda.return_type.as_ref()?;
+        // A lambda declares no generics of its own, so the enclosing scope's
+        // parameters are the whole environment.
+        Some(self.lower_lambda_type_expr(te, &self.generic_params.clone(), te.span))
     }
 
     fn choose_lambda_throws_surface(
         &mut self,
-        func_def: &baml_compiler2_ast::FunctionDef,
+        func_def: &baml_compiler2_ast::LambdaDef,
         generic_params: &[crate::ty::ParamTy],
         contextual_throws: Option<&Ty>,
     ) -> (Ty, TextRange, bool) {
@@ -1689,7 +1685,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             (ty, throws.span, true)
         } else if let Some(contextual) = contextual_throws {
             (contextual.clone(), func_def.span, false)
-        } else if Self::is_spawn_body_lambda(func_def) {
+        } else if func_def.kind == baml_compiler2_ast::LambdaKind::Spawn {
             // BEP-034: a `spawn { body }` body is wrapped in a synthetic
             // 0-arg lambda whose throws are captured into the resulting
             // `Future<T, E>`'s E parameter, not propagated to the
@@ -1714,14 +1710,6 @@ impl<'db> TypeInferenceBuilder<'db> {
                 false,
             )
         }
-    }
-
-    /// Synthetic lambda produced by `lower_spawn_expr` carries the name
-    /// `<spawn>`. The marker is the only safe way to distinguish a
-    /// user-written `() => { ... }` from spawn's body wrapper at this
-    /// layer (their `FunctionDef`s are otherwise identical).
-    fn is_spawn_body_lambda(func_def: &baml_compiler2_ast::FunctionDef) -> bool {
-        func_def.name.as_str() == "<spawn>"
     }
 
     fn throws_surface_has_open_slot(throws_facts: &BTreeSet<Ty>) -> bool {
@@ -3388,7 +3376,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                         );
                     }
                 }
-                if let Some(ast::FunctionBodyDef::Expr(lambda_body, _)) = &func_def.body
+                if let Some((lambda_body, _)) = &func_def.body
                     && let Some(root_expr) = lambda_body.root_expr
                 {
                     Self::collect_default_expr_forward_references(
@@ -5689,7 +5677,7 @@ impl<'db> TypeInferenceBuilder<'db> {
     }
 
     #[inline(never)]
-    fn infer_lambda_expr(&mut self, expr_id: ExprId, func_def: &ast::FunctionDef) -> Ty {
+    fn infer_lambda_expr(&mut self, expr_id: ExprId, func_def: &ast::LambdaDef) -> Ty {
         // Synthesis mode: no expected type available.
         // All param types MUST be annotated; unannotated params produce an error.
 
@@ -5736,7 +5724,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         // middleware body wrap `() -> { original() * 2 }` where `original:
         // () -> T throws E` types as `() -> T throws E`, not `throws never`.
         let infer_throws_from_body =
-            func_def.throws.is_none() && !Self::is_spawn_body_lambda(func_def);
+            func_def.throws.is_none() && func_def.kind != baml_compiler2_ast::LambdaKind::Spawn;
         let throws_ty = if infer_throws_from_body {
             Ty::Unknown {
                 attr: TyAttr::default(),
@@ -6740,7 +6728,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         expr_id: ExprId,
         body: &ExprBody,
         expected: &Ty,
-        func_def: &ast::FunctionDef,
+        func_def: &ast::LambdaDef,
     ) -> Ty {
         let expected_function = self.expected_lambda_function_ty(expected);
         match expected_function.as_ref() {
@@ -6764,8 +6752,9 @@ impl<'db> TypeInferenceBuilder<'db> {
                     );
                 }
 
-                let all_generic_params =
-                    Self::params_with_names(&self.generic_params, &func_def.generic_params);
+                // Lambdas cannot declare generic parameters (rejected by the
+                // parser), so they only see the enclosing generic scope.
+                let all_generic_params = self.generic_params.clone();
 
                 // Determine param types: annotation takes precedence, else use expected
                 let mut param_tys: Vec<FunctionParamTy> = Vec::new();
@@ -14867,17 +14856,15 @@ impl<'db> TypeInferenceBuilder<'db> {
     /// Returns `(inferred_return_ty, lambda_file_scope_id, effective_throws)`.
     pub fn infer_lambda_body(
         &mut self,
-        func_def: &baml_compiler2_ast::FunctionDef,
+        func_def: &baml_compiler2_ast::LambdaDef,
         param_tys: &[FunctionParamTy],
         expected_ret: Option<&Ty>,
         chosen_throws: &Ty,
         throws_report_span: TextRange,
         warn_extraneous_throws: bool,
     ) -> (Ty, Option<FileScopeId>, Ty) {
-        use baml_compiler2_ast::FunctionBodyDef;
-
         // Get the lambda's ExprBody
-        let Some(FunctionBodyDef::Expr(lambda_body, lambda_source_map)) = &func_def.body else {
+        let Some((lambda_body, lambda_source_map)) = &func_def.body else {
             return (
                 Ty::Unknown {
                     attr: TyAttr::default(),
@@ -14942,9 +14929,8 @@ impl<'db> TypeInferenceBuilder<'db> {
         // rendered with the enclosing scope's map (see `freeze_diagnostic_spans_from`).
         let lambda_diag_start = self.context.diagnostic_count();
 
-        // Extend generic params with the lambda's own generic params
-        self.generic_params =
-            Self::params_with_names(&self.generic_params, &func_def.generic_params);
+        // A lambda declares no generics of its own, so `self.generic_params`
+        // already holds the whole environment its body sees.
 
         // Seed lambda params (captures remain accessible via parent locals).
         //

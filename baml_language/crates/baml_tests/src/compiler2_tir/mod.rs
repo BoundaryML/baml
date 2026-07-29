@@ -334,7 +334,7 @@ pub(crate) mod support {
         }
     }
 
-    fn format_lambda_signature(func_def: &baml_compiler2_ast::FunctionDef) -> String {
+    fn format_lambda_signature(func_def: &baml_compiler2_ast::LambdaDef) -> String {
         let params: Vec<String> = func_def
             .params
             .iter()
@@ -357,28 +357,13 @@ pub(crate) mod support {
             .as_ref()
             .map(|te| format!(" throws {}", te))
             .unwrap_or_default();
-        let generics = if func_def.generic_params.is_empty() {
-            String::new()
-        } else {
-            format!(
-                "<{}>",
-                func_def
-                    .generic_params
-                    .iter()
-                    .map(|n| n.as_str())
-                    .collect::<Vec<_>>()
-                    .join(", ")
-            )
-        };
-        format!(
-            "{generics}({}) ->{ret}{throws} {{ ... }}",
-            params.join(", ")
-        )
+        // A lambda never declares generics, so the signature has no `<…>`.
+        format!("({}) ->{ret}{throws} {{ ... }}", params.join(", "))
     }
 
     /// HIR-aware version of `format_lambda_signature` that qualifies type names.
     fn format_lambda_signature_hir(
-        func_def: &baml_compiler2_ast::FunctionDef,
+        func_def: &baml_compiler2_ast::LambdaDef,
         prefix: &str,
         local_type_names: &std::collections::HashSet<&str>,
     ) -> String {
@@ -412,23 +397,8 @@ pub(crate) mod support {
             .as_ref()
             .map(|te| format!(" throws {}", qualify(te)))
             .unwrap_or_default();
-        let generics = if func_def.generic_params.is_empty() {
-            String::new()
-        } else {
-            format!(
-                "<{}>",
-                func_def
-                    .generic_params
-                    .iter()
-                    .map(|n| n.as_str())
-                    .collect::<Vec<_>>()
-                    .join(", ")
-            )
-        };
-        format!(
-            "{generics}({}) ->{ret}{throws} {{ ... }}",
-            params.join(", ")
-        )
+        // A lambda never declares generics, so the signature has no `<…>`.
+        format!("({}) ->{ret}{throws} {{ ... }}", params.join(", "))
     }
 
     /// Like `expr_desc` but enriches Call expressions with type params from inference.
@@ -561,8 +531,7 @@ pub(crate) mod support {
                 let desc = expr_desc(expr_id, body);
                 writeln!(output, "{pad}{desc} : {ty}").ok();
                 // Recursively render the lambda's own ExprBody
-                if let Some(baml_compiler2_ast::FunctionBodyDef::Expr(lambda_body, _)) =
-                    &func_def.body
+                if let Some((lambda_body, _)) = &func_def.body
                     && let Some(root) = lambda_body.root_expr
                 {
                     render_expr_body_untyped(lambda_body, root, indent + 2, output);
@@ -647,7 +616,7 @@ pub(crate) mod support {
             Expr::Lambda(func_def) => {
                 let desc = expr_desc(expr_id, body);
                 writeln!(output, "{pad}{desc}").ok();
-                if let Some(baml_compiler2_ast::FunctionBodyDef::Expr(lb, _)) = &func_def.body
+                if let Some((lb, _)) = &func_def.body
                     && let Some(root) = lb.root_expr
                 {
                     render_expr_body_untyped(lb, root, indent + 2, output);
@@ -1974,12 +1943,10 @@ pub(crate) mod support {
                     let body_desc = func_def
                         .body
                         .as_ref()
-                        .map(|b| match b {
-                            baml_compiler2_ast::FunctionBodyDef::Expr(lb, _) => lb
-                                .root_expr
+                        .map(|(lb, _)| {
+                            lb.root_expr
                                 .map(|root| expr_desc_hir(root, lb, prefix, local_type_names))
-                                .unwrap_or_else(|| "<empty>".into()),
-                            _ => "<non-expr>".into(),
+                                .unwrap_or_else(|| "<empty>".into())
                         })
                         .unwrap_or_else(|| "<no body>".into());
                     // Replace "{ ... }" placeholder with actual body

@@ -14,9 +14,9 @@ use crate::{
     LoweringDiagnostic,
     ast::{
         ArrayRestPat, AssignOp, AstSourceMap, BinaryOp, CallArg, CatchArm, CatchArmId, CatchClause,
-        CatchClauseKind, DefaultExprId, Expr, ExprBody, ExprId, FieldPat, FunctionBodyDef,
-        FunctionDef, FunctionDefaults, LetOrigin, Literal, LoopOrigin, MatchArm, MatchArmId, Param,
-        PatId, Pattern, SpreadField, Stmt, StmtId, TemplateIfBranch, TemplateSegment, TemplateTag,
+        CatchClauseKind, DefaultExprId, Expr, ExprBody, ExprId, FieldPat, FunctionDefaults,
+        LambdaDef, LambdaKind, LetOrigin, Literal, LoopOrigin, MatchArm, MatchArmId, Param, PatId,
+        Pattern, SpreadField, Stmt, StmtId, TemplateIfBranch, TemplateSegment, TemplateTag,
         TypeAnnotId, TypeExpr, TypeExprKind, UnaryOp,
     },
 };
@@ -919,24 +919,14 @@ impl LoweringContext {
                         lambda_ctx.finish(Some(root_expr));
                     self.diags.extend(lambda_diags);
                     self.env_var_refs.extend(lambda_env_refs);
-                    FunctionDef {
-                        name: Name::new("<spawn>"),
-                        generic_params: Vec::new(),
-                        generic_param_bounds: Vec::new(),
+                    LambdaDef {
+                        kind: LambdaKind::Spawn,
                         params: Vec::new(),
                         defaults: crate::ast::FunctionDefaults::empty(),
                         return_type: None,
                         throws: None,
-                        body: Some(FunctionBodyDef::Expr(lbody, source_map)),
-                        declarative_meta: None,
-                        metadata: crate::ast::FunctionMetadata::language_internal(
-                            crate::ast::FunctionOrigin::Internal,
-                        ),
-                        attributes: Vec::new(),
-                        docstring: None,
-                        is_tagged_template_tag: false,
+                        body: Some((lbody, source_map)),
                         span: child.span_range(),
-                        name_span: child.span_range(),
                     }
                 });
                 if let Some(fd) = func_def {
@@ -4302,8 +4292,7 @@ impl LoweringContext {
 
         // A lambda is a function *value* and cannot declare generic parameters
         // (rejected by the parser). Any leading `<...>` is left in the CST for
-        // recovery and ignored here, so the lambda carries no generics.
-        let generic_params = Vec::new();
+        // recovery and ignored here — `LambdaDef` has nowhere to put them.
 
         // Lower parameter list — gives us Vec<Param>
         let (params, defaults) = node
@@ -4373,30 +4362,20 @@ impl LoweringContext {
                     lambda_ctx.finish(Some(root_expr));
                 self.diags.extend(lambda_diags);
                 self.env_var_refs.extend(lambda_env_refs);
-                FunctionBodyDef::Expr(body, source_map)
+                (body, source_map)
             });
 
-        let func_def = FunctionDef {
-            name: Name::new("<anonymous function>"),
-            generic_params,
-            generic_param_bounds: Vec::new(),
+        let lambda_def = LambdaDef {
+            kind: LambdaKind::Anonymous,
             params,
             defaults,
             return_type,
             throws,
             body,
-            declarative_meta: None,
-            metadata: crate::ast::FunctionMetadata::user_facing(
-                crate::ast::FunctionOrigin::UserDefined,
-            ),
-            attributes: Vec::new(),
-            docstring: None,
-            is_tagged_template_tag: false,
             span: node.span_range(),
-            name_span: node.span_range(), // synthetic: use the lambda span
         };
 
-        self.alloc_expr(Expr::Lambda(Box::new(func_def)), node.span_range())
+        self.alloc_expr(Expr::Lambda(Box::new(lambda_def)), node.span_range())
     }
 
     fn try_lower_paren_token_content(&mut self, node: &SyntaxNode) -> Option<ExprId> {
@@ -4900,24 +4879,14 @@ impl LoweringContext {
         self.diags.extend(lambda_diags);
         self.env_var_refs.extend(lambda_env_refs);
 
-        let lambda_def = FunctionDef {
-            name: Name::new("<test body>"),
-            generic_params: vec![],
-            generic_param_bounds: vec![],
+        let lambda_def = LambdaDef {
+            kind: LambdaKind::Anonymous,
             params: vec![],
             defaults: FunctionDefaults::empty(),
             return_type: None,
             throws: None,
-            body: Some(FunctionBodyDef::Expr(lambda_body, lambda_source_map)),
-            declarative_meta: None,
-            metadata: crate::ast::FunctionMetadata::language_internal(
-                crate::ast::FunctionOrigin::Internal,
-            ),
-            attributes: vec![],
-            docstring: None,
-            is_tagged_template_tag: false,
+            body: Some((lambda_body, lambda_source_map)),
             span,
-            name_span: span,
         };
 
         // <collector>.register_test(name_expr, lambda, runner_or_null)
@@ -4997,24 +4966,14 @@ impl LoweringContext {
             name_span: span,
         };
 
-        let sub_collector_def = FunctionDef {
-            name: Name::new("<testset collector>"),
-            generic_params: vec![],
-            generic_param_bounds: vec![],
+        let sub_collector_def = LambdaDef {
+            kind: LambdaKind::Anonymous,
             params: vec![sub_param],
             defaults: FunctionDefaults::empty(),
             return_type: None,
             throws: None,
-            body: Some(FunctionBodyDef::Expr(sub_body, sub_source_map)),
-            declarative_meta: None,
-            metadata: crate::ast::FunctionMetadata::language_internal(
-                crate::ast::FunctionOrigin::Internal,
-            ),
-            attributes: vec![],
-            docstring: None,
-            is_tagged_template_tag: false,
+            body: Some((sub_body, sub_source_map)),
             span,
-            name_span: span,
         };
 
         // <collector>.register_test_set(name_expr, sub_collector_lambda, runner_or_null)

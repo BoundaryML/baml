@@ -8,8 +8,8 @@
 //!   type annotations inside expression bodies (let, patterns, lambdas)
 
 use crate::ast::{
-    ClassDef, Expr, ExprBody, FunctionBodyDef, FunctionDef, Item, LetDef, TypeAliasDef, TypeExpr,
-    TypeExprKind,
+    ClassDef, Expr, ExprBody, FunctionBodyDef, FunctionDef, Item, LambdaDef, LetDef, TypeAliasDef,
+    TypeExpr, TypeExprKind,
 };
 
 /// The canonical set of field attribute names.
@@ -97,11 +97,28 @@ fn validate_expr_body(body: &ExprBody, diagnostics: &mut Vec<(String, text_size:
         }
     }
 
-    // Recurse into lambda bodies — they have their own FunctionDef with nested ExprBody.
+    // Recurse into lambda bodies — each has its own nested `ExprBody`.
     for (_, expr) in body.exprs.iter() {
-        if let Expr::Lambda(func_def) = expr {
-            validate_function(func_def, diagnostics);
+        if let Expr::Lambda(lambda) = expr {
+            validate_lambda(lambda, diagnostics);
         }
+    }
+}
+
+fn validate_lambda(lambda: &LambdaDef, diagnostics: &mut Vec<(String, text_size::TextRange)>) {
+    for param in &lambda.params {
+        if let Some(ref spanned) = param.type_expr {
+            validate_type_expr_tree(spanned, diagnostics);
+        }
+    }
+    if let Some(ref spanned) = lambda.return_type {
+        validate_type_expr_tree(spanned, diagnostics);
+    }
+    if let Some(ref spanned) = lambda.throws {
+        validate_type_expr_tree(spanned, diagnostics);
+    }
+    if let Some((ref body, _)) = lambda.body {
+        validate_expr_body(body, diagnostics);
     }
 }
 

@@ -18,9 +18,9 @@ use crate::{
         AssociatedTypeBindingDef, AssociatedTypeDef, AstSourceMap, BuiltinKind, CallArg, EnumDef,
         Expr, ExprBody, ExprId, FieldDef, FunctionBodyDef, FunctionDef, FunctionDefaults,
         ImplementsBlockDef, ImplementsForDef, InterfaceDef, InterfaceFieldLinkDef, Interpolation,
-        Item, LetDef, LetOrigin, LlmBodyDef, MethodSigDef, Param, RawAttribute, RawAttributeArg,
-        RawPrompt, TemplateStringDef, TestArgValue, TestDef, TypeAliasDef, TypeExpr, TypeExprKind,
-        VariantDef,
+        Item, LambdaDef, LambdaKind, LetDef, LetOrigin, LlmBodyDef, MethodSigDef, Param,
+        RawAttribute, RawAttributeArg, RawPrompt, TemplateStringDef, TestArgValue, TestDef,
+        TypeAliasDef, TypeExpr, TypeExprKind, VariantDef,
     },
     companions::expand_companions,
     lower_expr_body, lower_type_expr,
@@ -2265,24 +2265,14 @@ fn synthesize_register_call(
             diags.extend(lambda_diags);
             env_var_refs.extend(lambda_env_refs);
 
-            let lambda_def = FunctionDef {
-                name: Name::new("<test body>"),
-                generic_params: vec![],
-                generic_param_bounds: vec![],
+            let lambda_def = LambdaDef {
+                kind: LambdaKind::Anonymous,
                 params: vec![],
                 defaults: FunctionDefaults::empty(),
                 return_type: Some(crate::ast::TypeExprKind::Void { attrs: vec![] }.at(span)),
                 throws: None,
-                body: Some(FunctionBodyDef::Expr(lambda_body, lambda_source_map)),
-                declarative_meta: None,
-                metadata: crate::ast::FunctionMetadata::language_internal(
-                    crate::ast::FunctionOrigin::Internal,
-                ),
-                attributes: vec![],
-                docstring: None,
-                is_tagged_template_tag: false,
+                body: Some((lambda_body, lambda_source_map)),
                 span,
-                name_span: span,
             };
 
             // registry.register_test_at(owner, ...)
@@ -2351,24 +2341,14 @@ fn synthesize_register_call(
                 name_span: span,
             };
 
-            let collector_def = FunctionDef {
-                name: Name::new("<testset collector>"),
-                generic_params: vec![],
-                generic_param_bounds: vec![],
+            let collector_def = LambdaDef {
+                kind: LambdaKind::Anonymous,
                 params: vec![testset_param],
                 defaults: FunctionDefaults::empty(),
                 return_type: Some(crate::ast::TypeExprKind::Void { attrs: vec![] }.at(span)),
                 throws: None,
-                body: Some(FunctionBodyDef::Expr(collector_exprs, collector_source_map)),
-                declarative_meta: None,
-                metadata: crate::ast::FunctionMetadata::language_internal(
-                    crate::ast::FunctionOrigin::Internal,
-                ),
-                attributes: vec![],
-                docstring: None,
-                is_tagged_template_tag: false,
+                body: Some((collector_exprs, collector_source_map)),
                 span,
-                name_span: span,
             };
 
             // registry.register_test_set_at(owner, ...)

@@ -749,9 +749,7 @@ impl ProjectDatabase {
                     let Expr::Lambda(test_lambda) = &registration_body.exprs[args[2].expr] else {
                         continue;
                     };
-                    let Some(FunctionBodyDef::Expr(test_body, test_source_map)) =
-                        test_lambda.body.as_ref()
-                    else {
+                    let Some((test_body, test_source_map)) = test_lambda.body.as_ref() else {
                         continue;
                     };
 

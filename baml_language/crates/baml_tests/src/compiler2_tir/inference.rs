@@ -721,8 +721,7 @@ fn lambda_scope_retypes_capture_from_function_parameter() {
         .iter()
         .find_map(|(_, expr)| {
             if let baml_compiler2_ast::Expr::Lambda(func_def) = expr
-                && let Some(baml_compiler2_ast::FunctionBodyDef::Expr(lambda_body, _)) =
-                    &func_def.body
+                && let Some((lambda_body, _)) = &func_def.body
             {
                 Some(lambda_body)
             } else {

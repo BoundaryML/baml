@@ -281,9 +281,7 @@ impl LocalUsageCollector<'_, '_> {
                         &func_def.defaults.source_map,
                     );
 
-                    if let Some(baml_compiler2_ast::FunctionBodyDef::Expr(body, body_source_map)) =
-                        &func_def.body
-                    {
+                    if let Some((body, body_source_map)) = &func_def.body {
                         self.collect(
                             lambda_scope,
                             body,

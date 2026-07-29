@@ -3878,7 +3878,7 @@ impl<'db> LoweringContext<'db> {
     #[allow(clippy::cast_possible_truncation)]
     fn lower_lambda(
         &mut self,
-        func_def: &baml_compiler2_ast::FunctionDef,
+        func_def: &baml_compiler2_ast::LambdaDef,
         expr_id: AstExprId,
         dest: Place,
     ) {
@@ -3915,9 +3915,7 @@ impl<'db> LoweringContext<'db> {
 
         // Pull out the lambda's body and source map.
         let (lambda_body, lambda_source_map) = match func_def.body.as_ref() {
-            Some(baml_compiler2_ast::FunctionBodyDef::Expr(body, sm)) => {
-                (body.clone(), Some(sm.clone()))
-            }
+            Some((body, sm)) => (body.clone(), Some(sm.clone())),
             _ => {
                 // No body — emit a panic stub and return.
                 self.emit_panic_call("lambda without body", expr_id);
@@ -3960,17 +3958,10 @@ impl<'db> LoweringContext<'db> {
         let saved_defer_stack = std::mem::take(&mut self.defer_stack);
         let saved_current_scope = self.current_scope;
         let saved_metadata_scope = self.current_metadata_scope;
-        // Extend the enclosing-lambda generic params with this lambda's own
-        // params for the duration of its body, so `reflect.type_of<T>` (and any
-        // type-arg resolution) inside resolves `T` to the right frame slot.
-        // Appended after the enclosing params, matching the runtime layout:
-        // frame.type_args = [captured enclosing params..., this lambda's args...].
+        // A lambda declares no generic parameters of its own, so its frame is
+        // exactly the enclosing one and nothing is appended for the body. The
+        // save/restore stays because the body may itself contain lambdas.
         let saved_lambda_generic_params = self.lambda_generic_params.clone();
-        let mut all_generic_params = self.enclosing_generic_params();
-        let inherited_count = all_generic_params.len();
-        ParamTy::extend_frame(&mut all_generic_params, &func_def.generic_params);
-        self.lambda_generic_params
-            .extend_from_slice(&all_generic_params[inherited_count..]);
         // NOTE: synthetic_name_counts is intentionally NOT saved — its counter
         // keeps incrementing across the whole function for uniqueness.
         //
@@ -4216,12 +4207,9 @@ impl<'db> LoweringContext<'db> {
             // A lambda has no source-level name; its `Function::name` is a
             // synthetic debug identity.
             name: None,
-            docstring: func_def.docstring.clone(),
-            display_type_params: func_def
-                .generic_params
-                .iter()
-                .map(std::string::ToString::to_string)
-                .collect(),
+            // A lambda carries neither a docstring nor generic parameters.
+            docstring: None,
+            display_type_params: Vec::new(),
             display_param_types: sig_display_param_types,
             display_return_type: sig_display_return_type,
             param_names: func_def.params.iter().map(|p| p.name.to_string()).collect(),

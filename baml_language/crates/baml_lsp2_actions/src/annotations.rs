@@ -55,7 +55,7 @@
 use baml_base::SourceFile;
 use baml_compiler2_ast::{
     Expr, ExprId, Stmt,
-    ast::{AstSourceMap, ExprBody, FunctionBodyDef, FunctionOrigin},
+    ast::{AstSourceMap, ExprBody, FunctionOrigin},
 };
 use baml_compiler2_hir::{body::FunctionBody, scope::FileScopeId};
 use baml_compiler2_tir::{inference::infer_scope_types, ty::Ty};
@@ -309,7 +309,7 @@ fn process_body(
             // Lambdas (including desugared `test` / `testset` bodies) carry their
             // own body + source map — recurse so their lets and calls get hints.
             Expr::Lambda(func_def) => {
-                if let Some(FunctionBodyDef::Expr(lbody, lsmap)) = &func_def.body {
+                if let Some((lbody, lsmap)) = &func_def.body {
                     let lambda_scope = index
                         .lambda_scope_for_within(owner_scope, source_map.expr_span(expr_id))
                         .unwrap_or(owner_scope);

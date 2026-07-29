@@ -348,17 +348,14 @@ impl<'db> SemanticIndexBuilder<'db> {
         debug_assert_eq!(popped, Some(metadata_scope));
     }
 
-    fn walk_parameter_defaults(&mut self, function: &ast::FunctionDef) {
+    /// Takes the parameter list and default arena separately so it serves both
+    /// declared functions and lambdas, which no longer share a type.
+    fn walk_parameter_defaults(&mut self, params: &[ast::Param], defaults: &ast::FunctionDefaults) {
         let metadata_scope = ExprMetadataScope::ParameterDefault(self.current_scope_id());
         self.expr_metadata_scope_stack.push(metadata_scope);
-        for param in &function.params {
+        for param in params {
             if let Some(default) = param.default {
-                self.walk_expr(
-                    default.expr(),
-                    &function.defaults.exprs,
-                    &function.defaults.source_map,
-                    true,
-                );
+                self.walk_expr(default.expr(), &defaults.exprs, &defaults.source_map, true);
             }
         }
         let popped = self.expr_metadata_scope_stack.pop();
@@ -1113,20 +1110,20 @@ impl<'db> SemanticIndexBuilder<'db> {
     fn walk_lambda_expr(
         &mut self,
         expr_id: ast::ExprId,
-        func_def: &ast::FunctionDef,
+        lambda: &ast::LambdaDef,
         source_map: &ast::AstSourceMap,
     ) {
         self.push_scope(ScopeKind::Lambda, None, source_map.expr_span(expr_id));
         let scope_id = self.current_scope_id();
-        for (idx, param) in func_def.params.iter().enumerate() {
+        for (idx, param) in lambda.params.iter().enumerate() {
             self.scope_bindings[scope_id.index() as usize]
                 .params
                 .push((param.name.clone(), idx));
         }
-        self.emit_duplicate_param_diagnostics(&func_def.params);
+        self.emit_duplicate_param_diagnostics(&lambda.params);
         self.lambda_stack.push(scope_id);
-        self.walk_parameter_defaults(func_def);
-        if let Some(ast::FunctionBodyDef::Expr(lambda_body, lambda_source_map)) = &func_def.body {
+        self.walk_parameter_defaults(&lambda.params, &lambda.defaults);
+        if let Some((lambda_body, lambda_source_map)) = &lambda.body {
             self.walk_expr_body(lambda_body, lambda_source_map);
             self.analyze_lambda_captures(scope_id, lambda_body, lambda_source_map);
         }
@@ -1266,7 +1263,7 @@ impl<'db> SemanticIndexBuilder<'db> {
                 .push((param.name.clone(), idx));
         }
         self.emit_duplicate_param_diagnostics(&f.params);
-        self.walk_parameter_defaults(f);
+        self.walk_parameter_defaults(&f.params, &f.defaults);
 
         if let Some(ast::FunctionBodyDef::Expr(ref body, ref source_map)) = f.body {
             self.walk_expr_body(body, source_map);
