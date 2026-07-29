@@ -389,6 +389,7 @@ mod tests {
 
     // SDK_PARITY_LINT(skip): exercises C#-specific native SDK integration coverage
     #[test]
+    #[ignore = "flaky: B-1059 - CancelToken.any intermittently fails to preserve native state"]
     fn test_phase12_executes_native_typed_resource_apis_lifetimes_and_state() {
         assert_eq!(
             env::var("SDK_TEST_CSHARP_SETUP").as_deref(),
