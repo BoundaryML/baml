@@ -17,8 +17,9 @@ vi.mock('@xyflow/react', () => ({
 
 const label = 'build_parity_report_with_tests_sdk_envs_inventories';
 const reactGlobal = globalThis as typeof globalThis & {
-  IS_REACT_ACT_ENVIRONMENT: boolean;
+  IS_REACT_ACT_ENVIRONMENT?: boolean;
 };
+const previousActEnvironment = reactGlobal.IS_REACT_ACT_ENVIRONMENT;
 
 reactGlobal.IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -41,7 +42,11 @@ afterEach(() => {
 });
 
 afterAll(() => {
-  reactGlobal.IS_REACT_ACT_ENVIRONMENT = false;
+  if (previousActEnvironment === undefined) {
+    delete reactGlobal.IS_REACT_ACT_ENVIRONMENT;
+  } else {
+    reactGlobal.IS_REACT_ACT_ENVIRONMENT = previousActEnvironment;
+  }
 });
 
 describe('GroupNode', () => {
@@ -51,6 +56,7 @@ describe('GroupNode', () => {
     expect(markup).toContain('class="baml-graph-group-label"');
     expect(markup).toContain('class="baml-graph-group-label__text"');
     expect(markup).toContain(`title="${label} (3 iterations)"`);
+    expect(markup).toContain(`>${label}</span>`);
     expect(markup).toContain('max-width:calc(100% - 28px)');
     expect(markup).toContain('text-overflow:ellipsis');
     expect(markup).toContain('title="Click to collapse"');
@@ -77,6 +83,7 @@ describe('GroupNode', () => {
 
     expect(chip).not.toBeNull();
     expect(text).not.toBeNull();
+    expect(text?.textContent).toBe(label);
     expect(collapseBadge?.textContent).toBe('−');
     expect(chip?.style.maxWidth).toBe('calc(100% - 28px)');
     expect(text?.style.textOverflow).toBe('ellipsis');
@@ -89,6 +96,7 @@ describe('GroupNode', () => {
     expect(chip?.style.overflow).toBe('visible');
     expect(text?.style.overflow).toBe('visible');
     expect(text?.style.textOverflow).toBe('clip');
+    expect(text?.textContent).toBe(label);
     expect(collapseBadge?.textContent).toBe('−');
 
     act(() => {
@@ -99,6 +107,7 @@ describe('GroupNode', () => {
     expect(chip?.style.overflow).toBe('hidden');
     expect(text?.style.overflow).toBe('hidden');
     expect(text?.style.textOverflow).toBe('ellipsis');
+    expect(text?.textContent).toBe(label);
 
     act(() => root.unmount());
   });
