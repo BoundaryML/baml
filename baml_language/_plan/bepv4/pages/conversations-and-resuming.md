@@ -16,8 +16,8 @@ continue. Pass it back to `Agent.new` when the next run uses the same provider.
 
 The example uses the shared support-ticket models (`SupportTicket`,
 `Resolution`, `sample_ticket()`), the shared tool `search_knowledge`, and the
-shared provider values `fast_model()` (an `openai.Responses`) and `careful_model()`
-(an `anthropic.Messages`).
+shared provider values `fast_model()` (an `openai.OpenAIProvider`) and `careful_model()`
+(an `anthropic.AnthropicProvider`).
 
 ```baml
 function ResolveTicketWithTools(ticket: SupportTicket) -> Resolution {
@@ -89,9 +89,10 @@ same-named type whose structure changed before sending another request.
 ## Save it for another process
 
 `save_conversation` and `restore_conversation` come from
-`ai.ResumableAgentProvider`. OpenAI Responses, Anthropic Messages, and both
-Gemini adapters implement the flat Agent conversation protocol for their
-native modes. A provider can seal and reopen only conversations it owns:
+`ai.ResumableAgentProvider`. `openai.OpenAIProvider`,
+`anthropic.AnthropicProvider`, and both Gemini adapters implement the flat
+Agent conversation protocol for their native modes. A provider can seal and
+reopen only conversations it owns:
 
 ```baml
 let model = fast_model();
@@ -127,12 +128,12 @@ that mode. Use `ToolMode.Native`, or start a new task from portable messages.
 
 A conversation belongs to one provider. To switch, export portable messages
 and let the destination provider import them. The destination must implement
-`ai.ConversationImportProvider`. OpenAI Responses, Anthropic Messages, and
-both Gemini adapters provide message import for supported native
-conversations:
+`ai.ConversationImportProvider`. `openai.OpenAIProvider`,
+`anthropic.AnthropicProvider`, and both Gemini adapters provide message import
+for supported native conversations:
 
 ```baml
-let destination = openai.Responses {
+let destination = openai.OpenAIProvider {
   ...openai.responses(),
   model: "gpt-5.6-luna",
   api_key: baml.env.get_or_panic("OPENAI_API_KEY"),

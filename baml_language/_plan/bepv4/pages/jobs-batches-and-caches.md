@@ -12,7 +12,7 @@ or deleted.
 | `ai.run.Batch<T>` | Submits homogeneous tasks together as one `ai.jobs.Batch<T>` |
 | `google.CreateCache` | Explicit named caches (Gemini-specific) |
 | `google.Gemini` | Implements Gemini managed caches |
-| `openai.Responses` | Implements durable OpenAI background jobs |
+| `openai.OpenAIProvider` | Implements durable OpenAI background jobs |
 | `defer` | Cleans up a resource on every scope exit |
 
 A `Task<T>` is work that has not started; an `ai.jobs.Job<T>` is a handle to
@@ -31,7 +31,7 @@ class Resolution {
 }
 
 function ResolveTicket(ticket: SupportTicket) -> Resolution {
-  provider: openai.Responses {
+  provider: openai.OpenAIProvider {
     ...openai.responses(),
     model: "gpt-5.6-luna",
     api_key: baml.env.get_or_panic("OPENAI_API_KEY"),

@@ -47,24 +47,24 @@ function fake_resolution() -> root.ai.testing.FakeProvider throws never {
 // Named model values used throughout the BEP pages: the fast default and the
 // careful escalation target. Thin aliases over the live constructors so doc
 // snippets and scenarios share one vocabulary.
-function fast_model() -> root.openai.Responses throws baml.errors.Io | baml.errors.ParseError {
+function fast_model() -> root.openai.OpenAIProvider throws baml.errors.Io | baml.errors.ParseError {
   live_openai()
 }
 
-function careful_model() -> root.anthropic.Messages throws baml.errors.Io | baml.errors.ParseError {
+function careful_model() -> root.anthropic.AnthropicProvider throws baml.errors.Io | baml.errors.ParseError {
   live_anthropic()
 }
 
-function live_openai() -> root.openai.Responses throws baml.errors.Io | baml.errors.ParseError {
-  root.openai.Responses {
+function live_openai() -> root.openai.OpenAIProvider throws baml.errors.Io | baml.errors.ParseError {
+  root.openai.OpenAIProvider {
     ...root.openai.responses(),
     model: "gpt-5.6-luna",
     api_key: baml.env.get_or_panic("OPENAI_API_KEY"),
   }
 }
 
-function live_anthropic() -> root.anthropic.Messages throws baml.errors.Io | baml.errors.ParseError {
-  root.anthropic.Messages {
+function live_anthropic() -> root.anthropic.AnthropicProvider throws baml.errors.Io | baml.errors.ParseError {
+  root.anthropic.AnthropicProvider {
     ...root.anthropic.messages(),
     model: "claude-sonnet-4-6",
     api_key: baml.env.get_or_panic("ANTHROPIC_API_KEY"),

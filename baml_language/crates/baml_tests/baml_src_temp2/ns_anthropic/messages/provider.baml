@@ -17,7 +17,7 @@ enum ToolMode {
 
 // Anthropic's Messages API adapter. Initial requests are rendered through the
 // primitive client so BAML media becomes Anthropic image/audio/document blocks.
-class Messages {
+class AnthropicProvider {
     model: string,
     api_key: string?,
     base_url: string?,
@@ -34,7 +34,7 @@ class Messages {
     parallel_tool_calls: bool,
 }
 
-implements root.ai.Provider for Messages {
+implements root.ai.Provider for AnthropicProvider {
   function name(self) -> string throws never { "anthropic" }
 
   function render_shorthand(self) -> string throws never {
@@ -42,7 +42,7 @@ implements root.ai.Provider for Messages {
   }
 }
 
-implements root.ai.StreamingProvider for Messages {
+implements root.ai.StreamingProvider for AnthropicProvider {
   function stream<TPartial, T>(
     self,
     task: root.ai.Task<T>,
@@ -65,8 +65,8 @@ function messages(
     tool_mode: ToolMode = ToolMode.Native,
     strict_tool_inputs: bool = false,
     parallel_tool_calls: bool = true,
-) -> Messages throws never {
-    Messages {
+) -> AnthropicProvider throws never {
+    AnthropicProvider {
         model: model,
         api_key: api_key,
         base_url: base_url,

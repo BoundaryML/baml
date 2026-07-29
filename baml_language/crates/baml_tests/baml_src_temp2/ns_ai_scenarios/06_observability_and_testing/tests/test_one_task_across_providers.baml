@@ -13,7 +13,7 @@ test "guide 06.04: one task can be tested against multiple provider implementati
 testset "integ-test-guide-06-provider-matrix" {
   test "guide 06.04 live OpenAI" {
     //# Run the task against live OpenAI
-    let result = ResolveTicket_manual(sample_ticket(), root.openai.Responses {
+    let result = ResolveTicket_manual(sample_ticket(), root.openai.OpenAIProvider {
       ...root.openai.responses(),
       model: "gpt-5.6-luna",
       api_key: baml.env.get_or_panic("OPENAI_API_KEY"),
@@ -25,7 +25,7 @@ testset "integ-test-guide-06-provider-matrix" {
 
   test "guide 06.04 live Anthropic" {
     //# Run the task against live Anthropic
-    let result = ResolveTicket_manual(sample_ticket(), root.anthropic.Messages {
+    let result = ResolveTicket_manual(sample_ticket(), root.anthropic.AnthropicProvider {
       ...root.anthropic.messages(),
       model: "claude-sonnet-4-6",
       api_key: baml.env.get_or_panic("ANTHROPIC_API_KEY"),

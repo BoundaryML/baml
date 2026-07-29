@@ -1,5 +1,5 @@
 function _responses_built_request<T>(
-    provider: root.openai.Responses,
+    provider: root.openai.OpenAIProvider,
     task: root.ai.Task<T>,
     background: bool,
     log_shape: bool = true,

@@ -1,5 +1,5 @@
 function _primitive_headers(
-    provider: root.anthropic.Messages,
+    provider: root.anthropic.AnthropicProvider,
 ) -> map<string, string> throws never {
     let headers: map<string, string> = {};
     match (provider.extra_headers) {
@@ -16,7 +16,7 @@ function _primitive_headers(
 }
 
 function _extra_body(
-    provider: root.anthropic.Messages,
+    provider: root.anthropic.AnthropicProvider,
 ) -> map<string, unknown> throws never {
     let body: map<string, unknown> = {};
     match (provider.extra_body) {
@@ -44,7 +44,7 @@ function _extra_body(
 }
 
 function _configured_primitive(
-    provider: root.anthropic.Messages,
+    provider: root.anthropic.AnthropicProvider,
 ) -> baml.llm.PrimitiveClient throws baml.errors.UnknownError {
     let base = baml.llm.from_shorthand(provider.render_shorthand()) catch (e) {
         _ => {
@@ -71,7 +71,7 @@ function _configured_primitive(
 }
 
 function _messages_built_request<T>(
-    provider: root.anthropic.Messages,
+    provider: root.anthropic.AnthropicProvider,
     task: root.ai.Task<T>,
     log_shape: bool = true,
 ) -> baml.http.Request throws root.ai.Failure | baml.errors.UnknownError {
@@ -148,7 +148,7 @@ function _messages_built_request<T>(
 }
 
 function _messages_generate<T>(
-    provider: root.anthropic.Messages,
+    provider: root.anthropic.AnthropicProvider,
     task: root.ai.Task<T>,
 ) -> root.ai.ResponseWithMetadata<T> throws root.ai.Failure | baml.errors.UnknownError {
     let request = _messages_built_request(provider, task);
@@ -209,7 +209,7 @@ function _messages_generate<T>(
 }
 
 function _messages_stream<TPartial, T>(
-    provider: root.anthropic.Messages,
+    provider: root.anthropic.AnthropicProvider,
     task: root.ai.Task<T>,
 ) -> baml.llm.Stream<TPartial, T> throws baml.errors.UnknownError {
     let primitive = _configured_primitive(provider);

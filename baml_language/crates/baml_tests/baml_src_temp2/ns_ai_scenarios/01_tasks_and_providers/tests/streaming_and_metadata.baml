@@ -9,7 +9,7 @@ test "guide 01.03: an Agent-only fake does not claim streaming" {
 
 testset "integ-test-guide-01-streaming" {
   test "guide 01.03 live Anthropic: same stream consumer" {
-    let value = drain_resolution_interface_stream(ResolveTicket_task(sample_ticket(), root.anthropic.Messages {
+    let value = drain_resolution_interface_stream(ResolveTicket_task(sample_ticket(), root.anthropic.AnthropicProvider {
       ...root.anthropic.messages(),
       model: "claude-sonnet-4-6",
       api_key: baml.env.get_or_panic("ANTHROPIC_API_KEY"),

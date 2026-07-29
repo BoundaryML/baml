@@ -1,4 +1,4 @@
-implements root.ai.jobs.BackgroundProvider for Responses {
+implements root.ai.jobs.BackgroundProvider for OpenAIProvider {
   function submit<T>(
     self,
     task: root.ai.Task<T>,

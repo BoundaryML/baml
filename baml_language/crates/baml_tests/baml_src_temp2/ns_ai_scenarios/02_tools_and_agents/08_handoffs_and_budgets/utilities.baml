@@ -1,5 +1,5 @@
 class LiveCostedToolProvider {
-    inner: root.openai.Responses,
+    inner: root.openai.OpenAIProvider,
     cost_per_step_usd: float,
 
     implements root.ai.Provider {

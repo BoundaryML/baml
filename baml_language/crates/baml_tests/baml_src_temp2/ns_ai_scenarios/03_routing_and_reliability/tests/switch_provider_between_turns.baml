@@ -34,7 +34,7 @@ test "guide 03.04: prepare_step can switch providers through conversation import
 }
 
 test "guide 03.04: OpenAI Responses imports portable message text" {
-  let provider = root.openai.Responses { ...root.openai.responses(), api_key: "unused" };
+  let provider = root.openai.OpenAIProvider { ...root.openai.responses(), api_key: "unused" };
   let calls: json[] = [{
     "id": "call-1",
     "type": "function",
@@ -72,7 +72,7 @@ test "guide 03.04: OpenAI Responses imports portable message text" {
 
 class NamedOpenAiToolProvider {
   label: string,
-  inner: root.openai.Responses,
+  inner: root.openai.OpenAIProvider,
 
   implements root.ai.Provider {
     function name(self) -> string throws never { self.label }

@@ -20,7 +20,7 @@ enum ToolMode {
 // OpenAI's Responses API adapter. The output and application-tool protocols
 // are configured independently. The default uses Responses function tools for
 // both. Sap + Native is hybrid; Sap + Prompt uses text for the whole agent turn.
-class Responses {
+class OpenAIProvider {
     model: string,
     api_key: string?,
     base_url: string?,
@@ -33,7 +33,7 @@ class Responses {
     parallel_tool_calls: bool,
 }
 
-implements root.ai.Provider for Responses {
+implements root.ai.Provider for OpenAIProvider {
   function name(self) -> string throws never { "openai" }
   function render_shorthand(self) -> string throws never {
     "openai-responses/" + self.model
@@ -49,8 +49,8 @@ function responses(
     output_mode: OutputMode = OutputMode.Native,
     tool_mode: ToolMode = ToolMode.Native,
     parallel_tool_calls: bool = true,
-) -> Responses throws never {
-    Responses {
+) -> OpenAIProvider throws never {
+    OpenAIProvider {
         model: model,
         api_key: api_key,
         base_url: base_url,

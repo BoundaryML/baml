@@ -5,16 +5,16 @@ function _output_tool_name() -> string throws never {
     "__baml_return_output"
 }
 
-function _is_strict(provider: root.openai.Responses) -> bool throws never {
+function _is_strict(provider: root.openai.OpenAIProvider) -> bool throws never {
     provider.output_mode == root.openai.OutputMode.Strict
 }
 
-function _uses_sap(provider: root.openai.Responses) -> bool throws never {
+function _uses_sap(provider: root.openai.OpenAIProvider) -> bool throws never {
     provider.output_mode == root.openai.OutputMode.Sap
 }
 
 function _validate_output_config(
-    provider: root.openai.Responses,
+    provider: root.openai.OpenAIProvider,
 ) -> null throws root.ai.InvalidRequest {
     if (
         provider.tool_mode == root.openai.ToolMode.Prompt

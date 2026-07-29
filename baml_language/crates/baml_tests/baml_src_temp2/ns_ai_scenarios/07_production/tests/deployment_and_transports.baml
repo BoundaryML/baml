@@ -1,6 +1,6 @@
 
 test "guide 07.03: transport configuration stays on the provider" {
-  let provider = root.openai.Responses {
+  let provider = root.openai.OpenAIProvider {
     ...root.openai.responses(),
     model: "gpt-5.6-luna",
     api_key: "gateway-token",
@@ -16,7 +16,7 @@ test "guide 07.03: transport configuration stays on the provider" {
 testset "integ-test-guide-07-transport-config" {
   test "guide 07.03 live OpenAI: provider transport options reach a real request" {
     //# Configure deployment-specific transport state on the provider
-    let provider = root.openai.Responses {
+    let provider = root.openai.OpenAIProvider {
       ...live_openai(),
       base_url: "https://api.openai.com/v1",
       extra_headers: { "X-Baml-Guide": "07.03" },

@@ -1,5 +1,5 @@
 class Conversation {
-    owner: root.openai.Responses,
+    owner: root.openai.OpenAIProvider,
     history: root.ai.MessageHistory,
     declared_output_type: string,
     // Initial Responses input items, or function_call_output items waiting for
@@ -29,7 +29,7 @@ class Conversation {
 // Prompt tool mode keeps the task recipe because each turn renders a fresh
 // T | ToolCalls output contract. It never sends OpenAI function tools.
 class PromptConversation {
-    owner: root.openai.Responses,
+    owner: root.openai.OpenAIProvider,
     history: root.ai.MessageHistory,
     declared_output_type: string,
     recipe: root.ai.PromptRenderRecipe,
@@ -138,7 +138,7 @@ function _headers_without_auth(headers: map<string, string>) -> map<string, stri
 }
 
 function _provider_base_request(
-    provider: root.openai.Responses,
+    provider: root.openai.OpenAIProvider,
 ) -> baml.http.Request throws baml.errors.UnknownError {
     let primitive = _configured_primitive(
         provider.render_shorthand(),

@@ -1,9 +1,9 @@
-function _uses_sap(provider: root.anthropic.Messages) -> bool throws never {
+function _uses_sap(provider: root.anthropic.AnthropicProvider) -> bool throws never {
     provider.output_mode == root.anthropic.OutputMode.Sap
 }
 
 function _validate_output_config(
-    provider: root.anthropic.Messages,
+    provider: root.anthropic.AnthropicProvider,
 ) -> null throws root.ai.InvalidRequest {
     if (
         provider.tool_mode == root.anthropic.ToolMode.Prompt

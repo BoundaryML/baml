@@ -3,7 +3,7 @@
 // request boundary, and re-entering it would recurse. This state instead calls
 // Anthropic's private one-turn request helper directly.
 class PromptConversation {
-    owner: root.anthropic.Messages,
+    owner: root.anthropic.AnthropicProvider,
     history: root.ai.MessageHistory,
     declared_output_type: string,
     recipe: root.ai.PromptRenderRecipe,
@@ -113,7 +113,7 @@ function _prompt_turn<T>(
 }
 
 function _prompt_begin<T>(
-    provider: root.anthropic.Messages,
+    provider: root.anthropic.AnthropicProvider,
     task: root.ai.Task<T>,
 ) -> root.ai.Conversation throws never {
     PromptConversation {
@@ -129,7 +129,7 @@ function _prompt_begin<T>(
 }
 
 function _prompt_step<T>(
-    provider: root.anthropic.Messages,
+    provider: root.anthropic.AnthropicProvider,
     conversation: root.ai.Conversation,
     tools: root.ai.tools.Tool[],
 ) -> root.ai.ModelStep<T> throws root.ai.Failure | baml.errors.UnknownError {
@@ -220,7 +220,7 @@ function _prompt_step<T>(
 }
 
 function _prompt_submit(
-    provider: root.anthropic.Messages,
+    provider: root.anthropic.AnthropicProvider,
     conversation: root.ai.Conversation,
     results: root.ai.tools.ToolResult[],
 ) -> root.ai.Conversation throws root.ai.Failure {

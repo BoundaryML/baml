@@ -20,7 +20,7 @@ function _prompt_tool_output_suffix(tools: root.ai.tools.Tool[]) -> string throw
 }
 
 function _prompt_turn_task<T>(
-    provider: root.openai.Responses,
+    provider: root.openai.OpenAIProvider,
     state: PromptConversation,
     output_suffix: string,
 ) -> root.ai.Task<T> throws never {
@@ -42,7 +42,7 @@ function _prompt_turn_task<T>(
 }
 
 function _prompt_turn<T>(
-    provider: root.openai.Responses,
+    provider: root.openai.OpenAIProvider,
     state: PromptConversation,
     output_suffix: string,
 ) -> root.ai.ResponseWithMetadata<T> throws root.ai.Failure | baml.errors.UnknownError {
@@ -125,7 +125,7 @@ function _prompt_turn<T>(
 }
 
 function _prompt_step<T>(
-    provider: root.openai.Responses,
+    provider: root.openai.OpenAIProvider,
     conversation: root.ai.Conversation,
     tools: root.ai.tools.Tool[],
 ) -> root.ai.ModelStep<T> throws root.ai.Failure | baml.errors.UnknownError {
@@ -184,7 +184,7 @@ function _prompt_step<T>(
 }
 
 function _prompt_submit(
-    provider: root.openai.Responses,
+    provider: root.openai.OpenAIProvider,
     conversation: root.ai.Conversation,
     results: root.ai.tools.ToolResult[],
 ) -> root.ai.Conversation throws root.ai.Failure {

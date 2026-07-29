@@ -80,7 +80,7 @@ test "guide 02.01: ModelStep preserves a union task result" {
 testset "integ-test-guide-02-one-tool" {
   test "guide 02.01 live OpenAI: tool call and final typed value" {
     //# Configure native OpenAI tool calling
-    let provider = root.openai.Responses {
+    let provider = root.openai.OpenAIProvider {
       ...root.openai.responses(),
       model: "gpt-5.6-luna",
       api_key: baml.env.get_or_panic("OPENAI_API_KEY"),
@@ -99,7 +99,7 @@ testset "integ-test-guide-02-one-tool" {
 
   test "guide 02.01 live Anthropic: native tools and strict output" {
     //# Configure native Anthropic tool calling with structured output
-    let provider = root.anthropic.Messages {
+    let provider = root.anthropic.AnthropicProvider {
       ...root.anthropic.messages(),
       model: "claude-sonnet-4-6",
       api_key: baml.env.get_or_panic("ANTHROPIC_API_KEY"),
@@ -131,7 +131,7 @@ testset "integ-test-guide-02-one-tool" {
 
   test "guide 02.01 live Anthropic: prompt and SAP tool fallback" {
     //# Configure Anthropic's provider-owned prompt-tool mode
-    let provider = root.anthropic.Messages {
+    let provider = root.anthropic.AnthropicProvider {
       ...root.anthropic.messages(),
       model: "claude-sonnet-4-6",
       api_key: baml.env.get_or_panic("ANTHROPIC_API_KEY"),

@@ -1,4 +1,4 @@
-implements root.ai.AgentProvider for Responses {
+implements root.ai.AgentProvider for OpenAIProvider {
   function begin<T>(
     self,
     task: root.ai.Task<T>,

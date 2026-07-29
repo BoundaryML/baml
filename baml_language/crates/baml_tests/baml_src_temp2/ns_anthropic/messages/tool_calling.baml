@@ -1,4 +1,4 @@
-implements root.ai.AgentProvider for Messages {
+implements root.ai.AgentProvider for AnthropicProvider {
   function begin<T>(
     self,
     task: root.ai.Task<T>,

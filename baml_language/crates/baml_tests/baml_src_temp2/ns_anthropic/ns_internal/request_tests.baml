@@ -24,7 +24,7 @@ function _anthropic_image_fixture_task(
 }
 
 function _anthropic_pending_conversation(
-    provider: root.anthropic.Messages,
+    provider: root.anthropic.AnthropicProvider,
 ) -> root.ai.Conversation throws never {
     let pending: json[] = [
         { "type": "tool_use", "id": "first", "name": "first_tool", "input": {} },
@@ -52,7 +52,7 @@ function _anthropic_pending_conversation(
 }
 
 function _anthropic_submit_result(
-    provider: root.anthropic.Messages,
+    provider: root.anthropic.AnthropicProvider,
     results: root.ai.tools.ToolResult[],
 ) -> string throws never {
     provider.submit(_anthropic_pending_conversation(provider), results) catch (e) {

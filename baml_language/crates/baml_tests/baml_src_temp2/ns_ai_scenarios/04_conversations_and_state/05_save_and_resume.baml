@@ -5,7 +5,7 @@ function save_and_resume(
     | baml.errors.UnknownError
     | baml.errors.Unsupported
 {
-  let provider = root.openai.Responses {
+  let provider = root.openai.OpenAIProvider {
     ...root.openai.responses(),
     model: "gpt-5.6-luna",
     api_key: "unused",

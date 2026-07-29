@@ -44,8 +44,8 @@ namespace.
 Provider namespaces expose configuration-sized APIs:
 
 ```text
-openai.Responses / openai.responses(...)
-anthropic.Messages / anthropic.messages(...)
+openai.OpenAIProvider / openai.responses(...)
+anthropic.AnthropicProvider / anthropic.messages(...)
 google.vertex.Gemini / google.vertex.gemini(...)
 google.ai.Gemini / google.ai.gemini(...)
 claude_code.ClaudeCodeCli

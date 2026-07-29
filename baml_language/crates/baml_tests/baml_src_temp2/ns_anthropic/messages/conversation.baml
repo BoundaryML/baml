@@ -1,4 +1,4 @@
-implements root.ai.ConversationImportProvider for Messages {
+implements root.ai.ConversationImportProvider for AnthropicProvider {
   function import_messages<T>(
     self,
     messages: root.ai.Messages,
@@ -46,7 +46,7 @@ implements root.ai.ConversationImportProvider for Messages {
   }
 }
 
-implements root.ai.ResumableAgentProvider for Messages {
+implements root.ai.ResumableAgentProvider for AnthropicProvider {
   function save_conversation(
     self,
     conversation: root.ai.Conversation,

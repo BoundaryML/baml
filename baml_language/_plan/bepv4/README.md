@@ -192,11 +192,11 @@ ai
 ├── tools, observe, jobs, realtime, transcription, harness, testing
 │
 openai
-├── Responses, responses(...)
+├── OpenAIProvider, responses(...)
 └── Realtime
 
 anthropic
-└── Messages, messages(...)
+└── AnthropicProvider, messages(...)
 
 google
 ├── vertex.Gemini, vertex.gemini(...)

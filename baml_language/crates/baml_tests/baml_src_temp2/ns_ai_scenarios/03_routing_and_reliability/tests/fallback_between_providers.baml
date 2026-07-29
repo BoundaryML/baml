@@ -53,7 +53,7 @@ testset "integ-test-guide-03-fallback" {
       {
         root.ai.testing.FakeProvider { ...fake_resolution(), failures_remaining: 1 }
       },
-      root.anthropic.Messages {
+      root.anthropic.AnthropicProvider {
         ...root.anthropic.messages(),
         model: "claude-sonnet-4-6",
         api_key: baml.env.get_or_panic("ANTHROPIC_API_KEY"),

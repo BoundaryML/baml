@@ -1,4 +1,4 @@
-function _request_headers(provider: root.openai.Responses) -> map<string, string> throws never {
+function _request_headers(provider: root.openai.OpenAIProvider) -> map<string, string> throws never {
     let headers: map<string, string> = { "Content-Type": "application/json" };
     match (provider.api_key) {
         let key: string => {
@@ -18,7 +18,7 @@ function _request_headers(provider: root.openai.Responses) -> map<string, string
 }
 
 function _authenticated_request(
-    provider: root.openai.Responses,
+    provider: root.openai.OpenAIProvider,
     method: string,
     url: string,
     headers: map<string, string>,
@@ -46,7 +46,7 @@ function _authenticated_request(
 }
 
 function _authenticated_continuation_request(
-    provider: root.openai.Responses,
+    provider: root.openai.OpenAIProvider,
     state: Conversation,
     body: map<string, json>,
 ) -> baml.http.Request throws baml.errors.UnknownError {
@@ -58,7 +58,7 @@ function _authenticated_continuation_request(
 }
 
 function _request_body(
-    provider: root.openai.Responses,
+    provider: root.openai.OpenAIProvider,
     input: json[],
 ) -> map<string, json> throws baml.errors.UnknownError {
     let body: map<string, json> = {};
@@ -118,7 +118,7 @@ function _application_calls(
 }
 
 function _allow_parallel_tool_calls(
-    provider: root.openai.Responses,
+    provider: root.openai.OpenAIProvider,
     application_tool_count: int,
 ) -> bool throws never {
     provider.parallel_tool_calls && !_is_strict(provider) && application_tool_count > 1

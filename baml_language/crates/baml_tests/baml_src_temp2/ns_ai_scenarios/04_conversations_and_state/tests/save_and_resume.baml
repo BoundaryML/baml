@@ -242,7 +242,7 @@ test "guide 04.05: output fingerprints include nominal and structural identity" 
 
 test "guide 04.05: OpenAI seals and restores its exact provider conversation" {
   //# Begin a native provider conversation
-  let provider = root.openai.Responses {
+  let provider = root.openai.OpenAIProvider {
     ...root.openai.responses(),
     model: "gpt-5.6-luna",
     api_key: "unused",
@@ -295,7 +295,7 @@ test "guide 04.05: an agent resumes the supplied conversation instead of startin
 
 test "guide 04.05: conversation tokens validate provider ownership" {
   //# Construct a token owned by another provider
-  let provider = root.openai.Responses {
+  let provider = root.openai.OpenAIProvider {
     ...root.openai.responses(),
     model: "gpt-5.6-luna",
     api_key: "unused",

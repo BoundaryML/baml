@@ -108,7 +108,7 @@ settings out of the resolution prompt.
 `ai.transcription.TranscriptionProvider` is the portable capability. A
 concrete provider owns its audio encoding, endpoint, response parsing, and
 usage fields. BEP-064 does not propose an OpenAI transcription adapter:
-`openai.Responses` uses the Responses API only, where audio is one possible
+`openai.OpenAIProvider` uses the Responses API only, where audio is one possible
 LLM input modality rather than the old Chat Completions transcription shim.
 
 ```baml

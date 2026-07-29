@@ -1,4 +1,4 @@
-implements root.ai.ConversationImportProvider for Responses {
+implements root.ai.ConversationImportProvider for OpenAIProvider {
   function import_messages<T>(
     self,
     messages: root.ai.Messages,
@@ -39,7 +39,7 @@ implements root.ai.ConversationImportProvider for Responses {
   }
 }
 
-implements root.ai.ResumableAgentProvider for Responses {
+implements root.ai.ResumableAgentProvider for OpenAIProvider {
   function save_conversation(
     self,
     conversation: root.ai.Conversation,

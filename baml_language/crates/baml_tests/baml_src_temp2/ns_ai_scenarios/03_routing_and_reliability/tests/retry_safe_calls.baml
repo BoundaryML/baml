@@ -31,7 +31,7 @@ test "guide 03.01: retry conversations require the exact wrapper instance" {
 }
 
 class FlakyOnceLiveAgent {
-  inner: root.openai.Responses,
+  inner: root.openai.OpenAIProvider,
   attempts: int,
 
   implements root.ai.Provider {

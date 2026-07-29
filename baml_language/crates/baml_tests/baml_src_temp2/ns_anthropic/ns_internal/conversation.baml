@@ -1,5 +1,5 @@
 class Conversation {
-    owner: root.anthropic.Messages,
+    owner: root.anthropic.AnthropicProvider,
     history: root.ai.MessageHistory,
     declared_output_type: string,
     // Anthropic is stateless: every step resends these provider-native blocks.
@@ -28,7 +28,7 @@ class Conversation {
     }
 }
 
-function _provider_url(provider: root.anthropic.Messages) -> string throws never {
+function _provider_url(provider: root.anthropic.AnthropicProvider) -> string throws never {
     (provider.base_url ?? "https://api.anthropic.com") + "/v1/messages"
 }
 
@@ -44,7 +44,7 @@ function _headers_without_auth(headers: map<string, string>) -> map<string, stri
 }
 
 function _provider_base_request(
-    provider: root.anthropic.Messages,
+    provider: root.anthropic.AnthropicProvider,
 ) -> baml.http.Request throws baml.errors.UnknownError {
     let primitive = _configured_primitive(provider);
     let prompt = baml.llm.assemble_prompt_ast(["Restored conversation"], []);
@@ -131,7 +131,7 @@ function _conversation_history_from_json(encoded: json[]) -> root.ai.MessageHist
 }
 
 function _continuation_headers(
-    provider: root.anthropic.Messages,
+    provider: root.anthropic.AnthropicProvider,
     state_headers: map<string, string>,
 ) -> map<string, string> throws never {
     let headers: map<string, string> = {};
@@ -146,7 +146,7 @@ function _continuation_headers(
 }
 
 function _conversation_body<T>(
-    provider: root.anthropic.Messages,
+    provider: root.anthropic.AnthropicProvider,
     state: Conversation,
     tools: json[],
 ) -> map<string, json> throws baml.errors.UnknownError | baml.errors.Unsupported {
@@ -188,7 +188,7 @@ function _conversation_body<T>(
 }
 
 function _authenticated_continuation_request(
-    provider: root.anthropic.Messages,
+    provider: root.anthropic.AnthropicProvider,
     state: Conversation,
     body: map<string, json>,
 ) -> baml.http.Request throws baml.errors.UnknownError {

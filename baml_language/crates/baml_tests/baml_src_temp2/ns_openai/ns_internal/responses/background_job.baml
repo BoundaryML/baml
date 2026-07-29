@@ -3,7 +3,7 @@
 // plus a separately configured provider are needed to resume it.
 
 class BackgroundJob<T> {
-    owner: root.openai.Responses,
+    owner: root.openai.OpenAIProvider,
     id: string,
     last_status: root.ai.jobs.JobStatus,
     polls: int,
