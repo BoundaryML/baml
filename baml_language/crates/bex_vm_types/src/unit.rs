@@ -152,6 +152,9 @@ pub struct ProgramImplRuleFrag {
     pub interface_assoc: Vec<(Name, TyTemplate)>,
     /// Method name to its symbolic implementation.
     pub methods: Vec<(Name, ProgramMethodImplFrag)>,
+    /// See [`RuntimeImplRule::field_links`](crate::types::RuntimeImplRule::field_links).
+    /// Slot indices are layout, not symbols, so they survive relinking unchanged.
+    pub field_links: Box<[u32]>,
 }
 
 /// Symbolic twin of `ProgramMethodImpl`: `fqn` is the callee function's

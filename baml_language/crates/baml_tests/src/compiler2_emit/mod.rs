@@ -563,3 +563,108 @@ function main() -> int { 0 }
         iface.fields[2].ty,
     );
 }
+
+/// `RuntimeImplRule::field_links` is the interface-field-index → class-slot table a
+/// virtual field access indexes. It must be ordered by the *interface's* field
+/// declarations — not by the class's field order, and not by the order the
+/// `field as class_field` links happen to be written.
+#[test]
+fn impl_rule_field_links_are_ordered_by_the_interface() {
+    let mut db = make_db();
+    db.add_file(
+        "test.baml",
+        r#"
+interface Shelf {
+  label: string
+  count: int
+}
+
+class Book {
+  // Deliberately declared in a different order than `Shelf` lists them, and
+  // with an unrelated field first, so a table built from the class's layout or
+  // from the link order would disagree with one built from the interface's.
+  isbn: string
+  count: int
+  title: string
+
+  implements Shelf {
+    count as count
+    label as title
+  }
+}
+
+function main() -> int { 0 }
+"#,
+    );
+    let program = compile(&db);
+
+    let class = (*program.objects)
+        .iter()
+        .find_map(|obj| match obj {
+            bex_vm_types::Object::Class(c) if c.name.name().as_str() == "Book" => Some(c),
+            _ => None,
+        })
+        .expect("Book class object should be emitted");
+    let slot = |name: &str| {
+        class
+            .fields
+            .iter()
+            .position(|f| f.name == name)
+            .unwrap_or_else(|| panic!("Book should have a `{name}` field"))
+    };
+
+    let rules: Vec<_> = program
+        .packages
+        .values()
+        .flat_map(|pkg| pkg.impl_rules.values().flatten())
+        .filter(|rule| !rule.field_links.is_empty())
+        .collect();
+    assert_eq!(
+        rules.len(),
+        1,
+        "expected exactly one field-bearing impl rule"
+    );
+
+    // Positional over `Shelf`'s declarations: index 0 is `label` (linked to
+    // `title`), index 1 is `count` (same-named).
+    assert_eq!(
+        rules[0].field_links.as_ref(),
+        [slot("title") as u32, slot("count") as u32],
+        "field_links must be indexed by the interface's field order",
+    );
+}
+
+/// The same-name default is applied at bake time, so an `implements` block that
+/// writes no links at all still produces a complete table.
+#[test]
+fn impl_rule_field_links_fill_the_same_name_default() {
+    let mut db = make_db();
+    db.add_file(
+        "test.baml",
+        r#"
+interface Named {
+  name: string
+}
+
+class Person {
+  age: int
+  name: string
+
+  implements Named {}
+}
+
+function main() -> int { 0 }
+"#,
+    );
+    let program = compile(&db);
+
+    let rule = program
+        .packages
+        .values()
+        .flat_map(|pkg| pkg.impl_rules.values().flatten())
+        .find(|rule| !rule.field_links.is_empty())
+        .expect("expected a field-bearing impl rule");
+    // `name` is `Person`'s second field, so an unlinked interface field must still
+    // resolve to slot 1 rather than defaulting to 0.
+    assert_eq!(rule.field_links.as_ref(), [1]);
+}

@@ -115,4 +115,20 @@ pub struct RuntimeImplRule {
     /// merges them in, an override winning over the default), so a lookup resolves
     /// any interface method.
     pub methods: IndexMap<baml_type::Name, MethodImpl>,
+    /// Interface field index → the implementor's physical slot in
+    /// [`Instance::fields`](super::Instance::fields). Indexed by position in the
+    /// implemented [`InterfaceDef::fields`], so a virtual field access carries only
+    /// that index — no name on the operand stack, no lookup at dispatch.
+    ///
+    /// **Positional and total**: exactly one entry per field the interface declares,
+    /// with the explicit `field as class_field` link applied and the same-name
+    /// default filled in. E0124 (every interface field covered) is what makes
+    /// totality a fact about well-formed programs rather than a runtime check, so
+    /// resolution is an in-bounds index and never fails.
+    ///
+    /// A class slot index is well-defined here because E0126 confines every
+    /// field-bearing impl to an in-body `implements` block: `for_ty_pattern`'s head
+    /// is then exactly one class, whose layout is fixed and lives in the same
+    /// package as this rule. Empty for an impl of a field-less interface.
+    pub field_links: Box<[u32]>,
 }
