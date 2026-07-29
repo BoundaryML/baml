@@ -8,7 +8,7 @@
  */
 
 import { ChevronRight } from 'lucide-react';
-import { type FC, type ReactNode, useMemo, useState } from 'react';
+import { type FC, type ReactNode, useCallback, useState } from 'react';
 import { CopyButton } from './components/CopyButton';
 import type { DisplayMode, ResultRendererProps } from './result-renderers';
 import {
@@ -25,7 +25,10 @@ interface ValueRendererProps {
 }
 
 interface TreeNodeProps extends ValueRendererProps {
+  collapsedByPath: Readonly<Record<string, boolean>>;
   keyName?: string | number;
+  onCollapsedChange: (path: string, collapsed: boolean) => void;
+  path: string;
 }
 
 function resolve(
@@ -197,10 +200,12 @@ const TreeNode: FC<TreeNodeProps> = ({
   customRenderers,
   depth = 0,
   displayMode = 'auto',
+  collapsedByPath,
   keyName,
+  onCollapsedChange,
+  path,
 }) => {
-  const [collapsed, setCollapsed] = useState(depth >= 2);
-  const copyText = useMemo(() => stringifyValue(value, 2), [value]);
+  const collapsed = collapsedByPath[path] ?? depth >= 2;
 
   if (value == null || typeof value !== 'object') {
     return (
@@ -247,7 +252,7 @@ const TreeNode: FC<TreeNodeProps> = ({
             keyName == null ? '' : ` ${keyName}`
           }`}
           className="flex h-4 w-4 shrink-0 items-center justify-center p-0 text-vsc-text-muted hover:text-vsc-text"
-          onClick={() => setCollapsed((current) => !current)}
+          onClick={() => onCollapsedChange(path, !collapsed)}
           type="button"
         >
           <ChevronRight
@@ -260,8 +265,8 @@ const TreeNode: FC<TreeNodeProps> = ({
         {collapsed && <span className="text-vsc-text-faint">…{close}</span>}
         <CopyButton
           className="-my-1.5 ml-0.5 h-7 w-7 opacity-0 group-hover/node:opacity-100"
+          getText={() => stringifyValue(value, 2)}
           iconSize={11}
-          text={copyText}
         />
       </div>
       {!collapsed && (
@@ -269,11 +274,14 @@ const TreeNode: FC<TreeNodeProps> = ({
           <div className="ml-4 border-l border-vsc-border-subtle pl-1">
             {entries.map(([childKey, nested]) => (
               <TreeNode
+                collapsedByPath={collapsedByPath}
                 customRenderers={customRenderers}
                 depth={depth + 1}
                 displayMode={displayMode}
                 key={childKey}
                 keyName={childKey}
+                onCollapsedChange={onCollapsedChange}
+                path={`${path}/${JSON.stringify(childKey)}`}
                 value={nested}
               />
             ))}
@@ -293,6 +301,16 @@ export const ValueRenderer: FC<ValueRendererProps> = ({
   depth = 0,
   displayMode = 'auto',
 }) => {
+  const [collapsedByPath, setCollapsedByPath] = useState<
+    Record<string, boolean>
+  >({});
+  const handleCollapsedChange = useCallback(
+    (path: string, collapsed: boolean) => {
+      setCollapsedByPath((current) => ({ ...current, [path]: collapsed }));
+    },
+    [],
+  );
+
   if (displayMode === 'inline') {
     return (
       <span className="font-vsc-mono text-xs">
@@ -307,9 +325,12 @@ export const ValueRenderer: FC<ValueRendererProps> = ({
 
   return (
     <TreeNode
+      collapsedByPath={collapsedByPath}
       customRenderers={customRenderers}
       depth={depth}
       displayMode={displayMode}
+      onCollapsedChange={handleCollapsedChange}
+      path="$"
       value={value}
     />
   );
