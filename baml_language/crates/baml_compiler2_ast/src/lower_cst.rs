@@ -435,9 +435,7 @@ fn lower_function(
         if let Some(builtin_kind) = check_builtin_body(expr.syntax()) {
             (Some(FunctionBodyDef::Builtin(builtin_kind)), None)
         } else {
-            let param_names: Vec<Name> = params.iter().map(|p| p.name.clone()).collect();
-            let (expr_body, source_map) =
-                lower_expr_body::lower(&expr, &param_names, diags, env_var_refs);
+            let (expr_body, source_map) = lower_expr_body::lower(&expr, diags, env_var_refs);
             (Some(FunctionBodyDef::Expr(expr_body, source_map)), None)
         }
     } else {
@@ -560,13 +558,8 @@ pub(crate) fn lower_params_with_defaults(
         }
     }
 
-    let param_names: Vec<Name> = params.iter().map(|p| p.name.clone()).collect();
-    let (defaults, default_ids) = lower_expr_body::lower_default_expr_nodes(
-        &default_nodes,
-        &param_names,
-        diags,
-        env_var_refs,
-    );
+    let (defaults, default_ids) =
+        lower_expr_body::lower_default_expr_nodes(&default_nodes, diags, env_var_refs);
     for (idx, default_id) in default_ids {
         if let Some(param) = params.get_mut(idx) {
             param.default = Some(default_id);
@@ -2268,7 +2261,7 @@ fn synthesize_register_call(
         } => {
             // Lower the test block body into a fresh ExprBody (lambda body)
             let (lambda_body, lambda_source_map, lambda_diags, lambda_env_refs) =
-                lower_expr_body::lower_block_node(body_node, &[Name::new("registry")]);
+                lower_expr_body::lower_block_node(body_node);
             diags.extend(lambda_diags);
             env_var_refs.extend(lambda_env_refs);
 
@@ -2337,11 +2330,7 @@ fn synthesize_register_call(
         } => {
             // Lower the testset body into a collector lambda using the full testset lowering.
             let (collector_exprs, collector_source_map, collector_diags, collector_env_refs) =
-                lower_expr_body::lower_testset_block_node(
-                    body_node,
-                    &Name::new("testset"),
-                    &[Name::new("registry")],
-                );
+                lower_expr_body::lower_testset_block_node(body_node, &Name::new("testset"));
             diags.extend(collector_diags);
             env_var_refs.extend(collector_env_refs);
 

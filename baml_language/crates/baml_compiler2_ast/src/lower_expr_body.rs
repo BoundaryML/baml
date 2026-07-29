@@ -101,16 +101,10 @@ fn find_callee_generic_args(callee_node: &SyntaxNode) -> Option<SyntaxNode> {
 /// Lower a CST `ExprFunctionBody` to an owned `ExprBody` + parallel `AstSourceMap`.
 pub(crate) fn lower(
     expr_body: &baml_compiler_syntax::ast::ExprFunctionBody,
-    param_names: &[Name],
     diags: &mut Vec<LoweringDiagnostic>,
     env_var_refs: &mut Vec<EnvVarRef>,
 ) -> (ExprBody, AstSourceMap) {
     let mut ctx = LoweringContext::new();
-
-    // Add function parameters to scope tracking (for gensym avoidance)
-    for name in param_names {
-        ctx.names_in_scope.insert(name.to_string());
-    }
 
     // The EXPR_FUNCTION_BODY contains a BLOCK_EXPR as its child
     let root_expr = expr_body
@@ -131,7 +125,6 @@ pub(crate) fn lower(
 /// blocks, where there is no wrapping `EXPR_FUNCTION_BODY` node.
 pub(crate) fn lower_block_node(
     block_node: &SyntaxNode,
-    param_names: &[Name],
 ) -> (
     ExprBody,
     AstSourceMap,
@@ -139,9 +132,6 @@ pub(crate) fn lower_block_node(
     Vec<EnvVarRef>,
 ) {
     let mut ctx = LoweringContext::new();
-    for name in param_names {
-        ctx.names_in_scope.insert(name.to_string());
-    }
     let root_expr = baml_compiler_syntax::ast::BlockExpr::cast(block_node.clone())
         .map(|block| ctx.lower_block_expr(&block));
     ctx.finish(root_expr)
@@ -149,14 +139,10 @@ pub(crate) fn lower_block_node(
 
 pub(crate) fn lower_default_expr_nodes(
     defaults: &[(usize, baml_compiler_syntax::SyntaxElement)],
-    param_names: &[Name],
     diags: &mut Vec<LoweringDiagnostic>,
     env_var_refs: &mut Vec<EnvVarRef>,
 ) -> (FunctionDefaults, Vec<(usize, DefaultExprId)>) {
     let mut ctx = LoweringContext::new();
-    for name in param_names {
-        ctx.names_in_scope.insert(name.to_string());
-    }
 
     let mut lowered = Vec::with_capacity(defaults.len());
     for (idx, element) in defaults {
@@ -184,14 +170,12 @@ pub(crate) fn lower_default_expr_nodes(
 /// so that the resulting body is a valid expression body for the testset collector lambda.
 ///
 /// `collector_var` is the name of the `testing.TestSetCollector` parameter in scope.
-/// `param_names` are additional parameters to seed `names_in_scope` (e.g. the parent scope).
 ///
 /// The returned body always has a `null` tail expression so the collector lambda satisfies
 /// the type checker's expectation that the body evaluates to `null`.
 pub(crate) fn lower_testset_block_node(
     block_node: &SyntaxNode,
     collector_var: &Name,
-    param_names: &[Name],
 ) -> (
     ExprBody,
     AstSourceMap,
@@ -199,10 +183,6 @@ pub(crate) fn lower_testset_block_node(
     Vec<EnvVarRef>,
 ) {
     let mut ctx = LoweringContext::new_testset_collector(collector_var.clone());
-    ctx.names_in_scope.insert(collector_var.to_string());
-    for name in param_names {
-        ctx.names_in_scope.insert(name.to_string());
-    }
     let range = block_node.span_range();
     let root_expr = baml_compiler_syntax::ast::BlockExpr::cast(block_node.clone()).map(|block| {
         let inner_block_id = ctx.lower_block_expr(&block);
@@ -260,9 +240,9 @@ pub(crate) struct InitTestContext {
 
 impl InitTestContext {
     pub(crate) fn new() -> Self {
-        let mut inner = LoweringContext::new();
-        inner.names_in_scope.insert("registry".to_string());
-        Self { inner }
+        Self {
+            inner: LoweringContext::new(),
+        }
     }
 
     pub(crate) fn alloc_expr(&mut self, expr: Expr, span: text_size::TextRange) -> ExprId {
@@ -408,8 +388,6 @@ struct LoweringContext {
     type_annotations: Arena<TypeExpr>,
     /// Parallel span storage
     source_map: AstSourceMap,
-    /// All names used, for generating unique synthetic variable names.
-    names_in_scope: std::collections::HashSet<String>,
     /// When set, `TEST_EXPR_DEF` and `TESTSET_DEF` nodes encountered during block
     /// lowering are converted to `<var>.register_test(...)` / `<var>.register_test_set(...)`
     /// calls using this variable name. This supports dynamic test generation inside
@@ -457,7 +435,6 @@ impl LoweringContext {
             catch_arms: Arena::new(),
             type_annotations: Arena::new(),
             source_map: AstSourceMap::new(),
-            names_in_scope: std::collections::HashSet::new(),
             testset_collector_var: None,
             diags: Vec::new(),
             env_var_refs: Vec::new(),
@@ -4345,8 +4322,6 @@ impl LoweringContext {
             })
             .unwrap_or_else(|| (Vec::new(), FunctionDefaults::empty()));
 
-        let param_names: Vec<Name> = params.iter().map(|p| p.name.clone()).collect();
-
         // Lower optional return type: the TYPE_EXPR that is a direct child of the
         // lambda node, appearing after PARAMETER_LIST but before THROWS_CLAUSE/BLOCK_EXPR.
         // We scan children in order, skipping items until after PARAMETER_LIST.
@@ -4393,9 +4368,6 @@ impl LoweringContext {
             .and_then(ast::BlockExpr::cast)
             .map(|block| {
                 let mut lambda_ctx = LoweringContext::new();
-                for name in &param_names {
-                    lambda_ctx.names_in_scope.insert(name.to_string());
-                }
                 let root_expr = lambda_ctx.lower_block_expr(&block);
                 let (body, source_map, lambda_diags, lambda_env_refs) =
                     lambda_ctx.finish(Some(root_expr));
@@ -4918,10 +4890,7 @@ impl LoweringContext {
         let (lambda_body, lambda_source_map, lambda_diags, lambda_env_refs) =
             if let Some(body_node) = body_node_opt {
                 // Lower the body using a fresh context (no collector var — test bodies don't nest)
-                crate::lower_expr_body::lower_block_node(
-                    &body_node,
-                    std::slice::from_ref(&collector_name),
-                )
+                crate::lower_expr_body::lower_block_node(&body_node)
             } else {
                 // Empty body: produce null
                 let mut sub_ctx = LoweringContext::new();
@@ -5003,11 +4972,7 @@ impl LoweringContext {
 
         let (sub_body, sub_source_map, sub_diags, sub_env_refs) =
             if let Some(body_node) = body_node_opt {
-                crate::lower_expr_body::lower_testset_block_node(
-                    &body_node,
-                    &Name::new("testset"),
-                    std::slice::from_ref(&collector_name),
-                )
+                crate::lower_expr_body::lower_testset_block_node(&body_node, &Name::new("testset"))
             } else {
                 let mut sub_ctx = LoweringContext::new();
                 let null_expr = sub_ctx.alloc_expr(Expr::Null, span);
