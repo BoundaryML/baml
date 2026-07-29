@@ -121,9 +121,24 @@ function TestTreeNode({
       >
         <FlaskConical className={SIDEBAR_LEAF_ICON_CLASS} />
         <span className="truncate">{def.name.split('/').pop()}</span>
+        {outcome && (
+          <span
+            className={cn(
+              'ml-auto text-[9px] shrink-0',
+              outcome === 'pass' ? 'text-green-500' : 'text-red-500',
+            )}
+            aria-label={`Latest test run status: ${outcome}`}
+            title={`Latest test run status: ${outcome}`}
+          >
+            {outcome}
+          </span>
+        )}
         {onRunTest && (
           <button
-            className="ml-auto text-[9px] text-vsc-text-faint hover:text-vsc-text px-1 shrink-0 disabled:cursor-not-allowed disabled:opacity-50"
+            className={cn(
+              'text-[9px] text-vsc-text-faint hover:text-vsc-text px-1 shrink-0 disabled:cursor-not-allowed disabled:opacity-50',
+              !outcome && 'ml-auto',
+            )}
             disabled={disabled}
             onClick={(e) => {
               e.stopPropagation();
@@ -133,16 +148,6 @@ function TestTreeNode({
           >
             run
           </button>
-        )}
-        {outcome && (
-          <span
-            className={cn(
-              'text-[9px] shrink-0',
-              outcome === 'pass' ? 'text-green-500' : 'text-red-500',
-            )}
-          >
-            {outcome}
-          </span>
         )}
       </div>
     );
