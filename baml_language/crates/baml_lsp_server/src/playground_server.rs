@@ -1609,6 +1609,9 @@ async fn playground_ws_session(socket: WebSocket, state: WsState) {
     // round-trip (playground_env.rs).
     {
         let names = state.bex.all_env_var_names();
+        // Only these keys are worth blocking a run to prompt for; everything
+        // else resolves to unset without stalling. See `playground_env`.
+        state.env_state.set_declared_keys(&names);
         let vars = collect_referenced_env_vars(&names, |name| std::env::var(name).ok());
         if let Some(msg) = to_ws_text(&WsOutMessage::ProcessEnvVars { vars })
             && sink.send(msg).await.is_err()

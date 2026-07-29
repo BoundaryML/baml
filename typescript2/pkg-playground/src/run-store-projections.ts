@@ -21,6 +21,7 @@ export type RunStoreDisplayRun = {
   testName?: string;
   argsJson: string;
   fetchLogs: FetchLogEntry[];
+  outputChunks: RunOutputChunk[];
   inputRequests: Array<{ id: string; prompt: string | null }>;
   rootInput: BamlJsValue | null;
   result: BamlJsValue | null;
@@ -70,6 +71,24 @@ export type RunTraceLog = {
 
 type LogPayloadEvent = PayloadEvent & {
   kind: Extract<PayloadEvent['kind'], { type: 'log' }>;
+};
+
+/**
+ * One `baml.io` stream write, exactly as the VM produced it.
+ *
+ * Deliberately not split into lines or otherwise reshaped. The text may carry
+ * ANSI escape sequences, and a single sequence can straddle two chunks, so the
+ * only safe consumer is a terminal emulator fed the chunks in order.
+ */
+export type RunOutputChunk = {
+  id: string;
+  stream: 'stdout' | 'stderr';
+  text: string;
+  timestampMs: number;
+};
+
+type OutputPayloadEvent = PayloadEvent & {
+  kind: Extract<PayloadEvent['kind'], { type: 'output' }>;
 };
 
 export type RunTraceCallValueRole = 'callInput' | 'callOutput' | 'callError';
@@ -162,6 +181,7 @@ export function runToDisplayRun(
     testName: identity.testName,
     argsJson: argsJsonByBoundaryId[run.boundaryId] ?? run.request.argsSummary ?? '',
     fetchLogs: payloadsToFetchLogs(run.payloads),
+    outputChunks: runToOutputChunks(run),
     inputRequests: payloadsToPendingInputs(run.payloads),
     rootInput: decodeRootInputValue(run, valueBodyCache),
     result: decodeRunResultValue(run, valueBodyCache),
@@ -828,6 +848,27 @@ function traceLogsByCallId(
   return logsByCallId;
 }
 
+/**
+ * Ordered `baml.io` stream writes for a run.
+ *
+ * stdout and stderr stay interleaved in emission order, the way a real
+ * terminal shows them. The `stream` tag is kept for filtering, not for
+ * reordering: pulling one stream out on its own would scramble the sequence.
+ */
+export function runToOutputChunks(run: Run): RunOutputChunk[] {
+  const chunks: RunOutputChunk[] = [];
+  for (const payload of run.payloads) {
+    if (!isOutputPayload(payload)) continue;
+    chunks.push({
+      id: payload.id,
+      stream: payload.kind.stream,
+      text: payload.kind.text,
+      timestampMs: payload.timestampMs,
+    });
+  }
+  return chunks;
+}
+
 function traceCallValuesByCallId(
   run: Run,
   valueBodyCache?: ValueBodyCache,
@@ -1066,6 +1107,10 @@ function projectPayloadBodyState(
 
 function isLogPayload(payload: PayloadEvent): payload is LogPayloadEvent {
   return payload.kind.type === 'log';
+}
+
+function isOutputPayload(payload: PayloadEvent): payload is OutputPayloadEvent {
+  return payload.kind.type === 'output';
 }
 
 function isCallValuePayload(payload: PayloadEvent): payload is CallValuePayloadEvent {

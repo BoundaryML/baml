@@ -8,6 +8,7 @@ import {
   filterExecutionProfileProjection,
   runToGraphNodeValues,
   runToDisplayRun,
+  runToOutputChunks,
   runToTraceRows,
 } from './run-store-projections';
 import type { GraphRuntimeOverlay, Run, ValueRef } from './worker-protocol';
@@ -1244,6 +1245,51 @@ describe('run-store-projections', () => {
     );
     expect(executionProfileColorKey(block, 'origin')).toBe('user');
     expect(executionProfileColorKey(block, 'thread')).toBe('thread-a');
+  });
+
+  it('keeps baml.io output chunks verbatim, in order, with streams interleaved', () => {
+    const run = runFixture({
+      payloads: [
+        payloadFixture({
+          id: 'out-1',
+          timestampMs: 100,
+          // An escape sequence split across two print calls: reshaping or
+          // reordering chunks would corrupt it.
+          kind: { type: 'output', stream: 'stdout', text: '[3' },
+        }),
+        payloadFixture({
+          id: 'out-2',
+          timestampMs: 101,
+          kind: { type: 'output', stream: 'stderr', text: 'warn\n' },
+        }),
+        payloadFixture({
+          id: 'out-3',
+          timestampMs: 102,
+          kind: { type: 'output', stream: 'stdout', text: '1mred[0m' },
+        }),
+        payloadFixture({
+          id: 'log-1',
+          timestampMs: 103,
+          kind: {
+            type: 'log',
+            level: 'info',
+            message: 'not output',
+            source: null,
+            valueRef: null,
+          },
+        }),
+      ],
+    });
+
+    expect(runToOutputChunks(run)).toEqual([
+      { id: 'out-1', stream: 'stdout', text: '[3', timestampMs: 100 },
+      { id: 'out-2', stream: 'stderr', text: 'warn\n', timestampMs: 101 },
+      { id: 'out-3', stream: 'stdout', text: '1mred[0m', timestampMs: 102 },
+    ]);
+  });
+
+  it('returns no output chunks for a run that never printed', () => {
+    expect(runToOutputChunks(runFixture({ payloads: [] }))).toEqual([]);
   });
 });
 
