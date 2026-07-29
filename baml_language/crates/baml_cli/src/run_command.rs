@@ -1279,7 +1279,9 @@ impl RunArgs {
             OutputFormat::Debug => {
                 Self::print_list_debug(&functions, scripts, namespaces, self.include_generated);
             }
-            OutputFormat::Json => Self::print_list_json(&functions, scripts, namespaces),
+            OutputFormat::Json => {
+                Self::print_list_json(&functions, scripts, namespaces, self.include_generated)
+            }
         }
 
         Ok(crate::ExitCode::Success)
@@ -1403,8 +1405,9 @@ impl RunArgs {
         functions: &[UserFunctionInfo],
         scripts: &HashMap<String, Vec<String>>,
         namespaces: &HashSet<String>,
+        include_generated: bool,
     ) {
-        let output = Self::build_list_json_value(functions, scripts, namespaces);
+        let output = Self::build_list_json_value(functions, scripts, namespaces, include_generated);
         println!(
             "{}",
             serde_json::to_string_pretty(&output).unwrap_or_else(|_| "{}".to_string())
@@ -1422,9 +1425,15 @@ impl RunArgs {
         functions: &[UserFunctionInfo],
         scripts: &HashMap<String, Vec<String>>,
         namespaces: &HashSet<String>,
+        include_generated: bool,
     ) -> serde_json::Value {
+        use bex_vm_types::FunctionOrigin;
+
         let function_items: Vec<serde_json::Value> = functions
             .iter()
+            .filter(|function| {
+                include_generated || matches!(function.origin, FunctionOrigin::UserDefined)
+            })
             .map(|f| {
                 let params: Vec<serde_json::Value> = f
                     .param_names
@@ -1463,6 +1472,9 @@ impl RunArgs {
         let namespace_mains_items: Vec<serde_json::Value> = {
             let mut namespace_mains: Vec<String> = functions
                 .iter()
+                .filter(|function| {
+                    include_generated || matches!(function.origin, FunctionOrigin::UserDefined)
+                })
                 .filter(|f| f.display_name.ends_with(".main"))
                 .filter_map(|f| {
                     f.display_name
@@ -2071,7 +2083,7 @@ mod tests {
         let namespaces: HashSet<String> = HashSet::new();
         let functions: Vec<UserFunctionInfo> = vec![];
 
-        let value = RunArgs::build_list_json_value(&functions, &scripts, &namespaces);
+        let value = RunArgs::build_list_json_value(&functions, &scripts, &namespaces, false);
 
         let obj = value.as_object().expect("top-level must be an object");
         assert!(
@@ -2088,6 +2100,38 @@ mod tests {
         // consumers rely on.
         let s = serde_json::to_string(&value).unwrap();
         let _: serde_json::Value = serde_json::from_str(&s).expect("must parse");
+    }
+
+    #[test]
+    fn list_json_filters_generated_functions_unless_requested() {
+        use bex_vm_types::FunctionOrigin;
+
+        let function = |name: &str, origin| UserFunctionInfo {
+            qualified_name: format!("user.{name}"),
+            display_name: name.to_string(),
+            origin,
+            param_names: Vec::new(),
+            param_types: Vec::new(),
+            param_has_default: Vec::new(),
+            return_type: ty_string(),
+            display_type_params: Vec::new(),
+            display_param_types: Vec::new(),
+            display_return_type: "string".to_string(),
+            source_file: String::new(),
+            is_llm: false,
+        };
+        let functions = vec![
+            function("main", FunctionOrigin::UserDefined),
+            function("Generated", FunctionOrigin::AutoDerive),
+        ];
+        let scripts = HashMap::new();
+        let namespaces = HashSet::new();
+
+        let filtered = RunArgs::build_list_json_value(&functions, &scripts, &namespaces, false);
+        let complete = RunArgs::build_list_json_value(&functions, &scripts, &namespaces, true);
+
+        assert_eq!(filtered["functions"].as_array().unwrap().len(), 1);
+        assert_eq!(complete["functions"].as_array().unwrap().len(), 2);
     }
 
     // ── `parse_scripts` warning behavior ───────────────────────────────

@@ -50,8 +50,8 @@ PROFILES:
   Profile includes establish the initial candidates; direct CLI includes narrow
   them. Excludes accumulate and always win. Direct scalar options override
   profile scalar options. Profile args cannot contain --profile, --no-profile,
-  --project, --directory, --from, or --help. With no default profile, all tests
-  are selected.
+  --project, --directory, --from, --features, or --help. With no default profile,
+  all tests are selected.
 
 Examples:
   List available tests:
@@ -857,15 +857,17 @@ impl TestArgs {
                     | "--project"
                     | "--directory"
                     | "--from"
+                    | "--features"
                     | "--help"
                     | "-h"
             ) || token.starts_with("--profile=")
                 || token.starts_with("--project=")
                 || token.starts_with("--directory=")
-                || token.starts_with("--from=");
+                || token.starts_with("--from=")
+                || token.starts_with("--features=");
             if bootstrap {
                 anyhow::bail!(
-                    "invalid argument `{token}` in test profile `{name}`: profile args cannot contain --profile, --no-profile, --project, --directory, --from, or --help"
+                    "invalid argument `{token}` in test profile `{name}`: profile args cannot contain --profile, --no-profile, --project, --directory, --from, --features, or --help"
                 );
             }
         }
@@ -1609,9 +1611,6 @@ mod tests {
                 "--color".to_string(),
                 "never".to_string(),
                 "--no-progress".to_string(),
-                "--features".to_string(),
-                "beta".to_string(),
-                "--features=display_all_warnings".to_string(),
             ],
         )
         .unwrap()
@@ -1621,6 +1620,14 @@ mod tests {
             Some(crate::output::ColorChoice::Never)
         );
         assert_eq!(globals.output.no_progress, Some(true));
+
+        let error = TestArgs::parse_profile_args("bad_features", &["--features=beta".to_string()])
+            .unwrap_err()
+            .to_string();
+        assert!(
+            error.contains("cannot contain") && error.contains("--features"),
+            "{error}"
+        );
 
         let error = TestArgs::parse_profile_args("bad", &["--profile=other".to_string()])
             .unwrap_err()

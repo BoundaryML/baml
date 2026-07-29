@@ -1,6 +1,6 @@
 ---
 source: crates/baml_cli/src/help_command.rs
-expression: "render_for_test(&[\"test\"])"
+expression: "normalize_snapshot(&render_for_test(&[\"test\"]))"
 ---
 Run BAML tests.
 
@@ -100,5 +100,5 @@ PROFILES:
   Profile includes establish the initial candidates; direct CLI includes narrow
   them. Excludes accumulate and always win. Direct scalar options override
   profile scalar options. Profile args cannot contain --profile, --no-profile,
-  --project, --directory, --from, or --help. With no default profile, all tests
-  are selected.
+  --project, --directory, --from, --features, or --help. With no default profile,
+  all tests are selected.

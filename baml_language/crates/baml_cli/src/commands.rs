@@ -292,10 +292,6 @@ impl RuntimeCli {
             Err(err) => err.exit(),
         };
 
-        if let Err(err) = RuntimeCli::update_from_arg_matches(&mut cli, &matches) {
-            err.exit();
-        }
-
         if cli.global.project.is_some() && cli.command.has_legacy_project() {
             RuntimeCli::command()
                 .error(
@@ -407,7 +403,7 @@ impl Commands {
             Self::Check(args) => args.from.is_some(),
             Self::Format(args) => args.from.is_some(),
             Self::Describe(args) => args.from.is_some(),
-            Self::Generate(args) => args.from.is_some(),
+            Self::Generate(args) => args.has_legacy_project(),
             Self::Test(args) => args.from.is_some(),
             Self::Run(args) => args.from.is_some(),
             Self::Playground(args) => args.from.is_some(),
@@ -423,19 +419,19 @@ impl Commands {
         let Some(project) = project else {
             return;
         };
-        let project = Some(project.to_path_buf());
+        let project = project.to_path_buf();
         match self {
-            Self::Check(args) => args.from.clone_from(&project),
-            Self::Format(args) => args.from.clone_from(&project),
-            Self::Describe(args) => args.from.clone_from(&project),
-            Self::Generate(args) => args.from.clone_from(&project),
-            Self::Test(args) => args.from.clone_from(&project),
-            Self::Run(args) => args.from.clone_from(&project),
-            Self::Playground(args) => args.from.clone_from(&project),
-            Self::Pack(args) => args.from.clone_from(&project),
+            Self::Check(args) => args.from = Some(project.clone()),
+            Self::Format(args) => args.from = Some(project.clone()),
+            Self::Describe(args) => args.from = Some(project.clone()),
+            Self::Generate(args) => args.apply_project(&project),
+            Self::Test(args) => args.from = Some(project.clone()),
+            Self::Run(args) => args.from = Some(project.clone()),
+            Self::Playground(args) => args.from = Some(project.clone()),
+            Self::Pack(args) => args.from = Some(project.clone()),
             Self::Agent(crate::agent_command::AgentArgs {
                 command: crate::agent_command::AgentCommand::Install(args),
-            }) => args.dir.clone_from(&project),
+            }) => args.dir = Some(project),
             _ => {}
         }
     }
@@ -622,6 +618,8 @@ mod tests {
             "generate".into(),
             "add".into(),
             "python/pydantic2".into(),
+            "--project".into(),
+            "workspace".into(),
         ]);
         let Commands::Generate(args) = cli.command else {
             panic!("expected generate command");
@@ -633,6 +631,7 @@ mod tests {
             args.output_type,
             baml_codegen_types::OutputType::PythonPydantic
         );
+        assert_eq!(args.from, Some(PathBuf::from("workspace")));
     }
 
     #[test]

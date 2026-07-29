@@ -62,12 +62,19 @@ fn render(query: &[String]) -> Result<RenderedHelp> {
             .get_subcommands()
             .filter(|command| !command.is_hide_set() && command.get_name() != "help")
             .map(clap::Command::get_name)
-            .collect::<Vec<_>>()
-            .join("\n    ");
-        anyhow!(
-            "no command `{}` for `{prefix}`. Available commands:\n    {choices}",
-            unmatched.join(" ")
-        )
+            .collect::<Vec<_>>();
+        if choices.is_empty() {
+            anyhow!(
+                "no command `{}` for `{prefix}`; `{prefix}` has no subcommands",
+                unmatched.join(" ")
+            )
+        } else {
+            anyhow!(
+                "no command `{}` for `{prefix}`. Available commands:\n    {}",
+                unmatched.join(" "),
+                choices.join("\n    ")
+            )
+        }
     })?;
 
     let is_root = query.is_empty();
@@ -223,6 +230,17 @@ mod tests {
         assert!(message.contains("no command `missing` for `baml auth`"));
         assert!(message.contains("whoami"));
         assert!(message.contains("logout"));
+    }
+
+    #[test]
+    fn unknown_child_of_leaf_reports_that_it_has_no_subcommands() {
+        let error = render(&["run".to_string(), "missing".to_string()]).unwrap_err();
+        let message = error.to_string();
+        assert!(
+            message.contains("`baml run` has no subcommands"),
+            "{message}"
+        );
+        assert!(!message.contains("Available commands"), "{message}");
     }
 
     #[test]

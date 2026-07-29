@@ -17,9 +17,6 @@ Examples:
   Add a workspace root:
     baml lsp --workspace ./my-project")]
 pub struct LanguageServerArgs {
-    #[command(flatten)]
-    pub compiler: crate::commands::CompilerArgs,
-
     /// Workspace root to discover BAML projects from when running the LSP
     /// outside an editor client. May be passed more than once.
     #[clap(long, value_name = "PATH", help_heading = "Workspace options")]

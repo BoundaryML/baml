@@ -73,8 +73,8 @@ pub struct AddGeneratorArgs {
     #[arg(value_name = "OUTPUT_TYPE", value_parser = add_output_type_parser())]
     pub output_type: OutputType,
 
-    /// Project search starting point. Defaults to the current directory.
-    #[arg(long, value_name = "PATH")]
+    /// Deprecated alias for `--project`.
+    #[arg(long, value_name = "PATH", hide = true)]
     pub from: Option<PathBuf>,
 
     /// Go module import path for the generated baml_sdk package.
@@ -211,6 +211,21 @@ fn add_generator_to_manifest(content: &str, generator: &Generator) -> Result<(St
 }
 
 impl GenerateArgs {
+    pub(crate) fn has_legacy_project(&self) -> bool {
+        self.from.is_some()
+            || matches!(
+                &self.command,
+                Some(GenerateCommand::Add(args)) if args.from.is_some()
+            )
+    }
+
+    pub(crate) fn apply_project(&mut self, project: &Path) {
+        self.from = Some(project.to_path_buf());
+        if let Some(GenerateCommand::Add(args)) = &mut self.command {
+            args.from = Some(project.to_path_buf());
+        }
+    }
+
     pub fn run(&self) -> Result<crate::ExitCode> {
         match &self.command {
             Some(GenerateCommand::Add(args)) => args.run(),
