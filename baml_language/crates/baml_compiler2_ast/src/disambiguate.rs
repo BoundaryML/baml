@@ -117,9 +117,8 @@ fn validate_lambda(lambda: &LambdaDef, diagnostics: &mut Vec<(String, text_size:
     if let Some(ref spanned) = lambda.throws {
         validate_type_expr_tree(spanned, diagnostics);
     }
-    if let Some((ref body, _)) = lambda.body {
-        validate_expr_body(body, diagnostics);
-    }
+    // The body lives in the arena this walk is already covering, so there is
+    // nothing further to recurse into.
 }
 
 fn validate_type_alias(

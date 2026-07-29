@@ -3913,14 +3913,12 @@ impl<'db> LoweringContext<'db> {
             self.current_scope
         };
 
-        // Pull out the lambda's body and source map.
-        let (lambda_body, lambda_source_map) = match func_def.body.as_ref() {
-            Some((body, sm)) => (body.clone(), Some(sm.clone())),
-            _ => {
-                // No body — emit a panic stub and return.
-                self.emit_panic_call("lambda without body", expr_id);
-                return;
-            }
+        // The body is an expression in the arena already installed — a lambda
+        // owns no `ExprBody`, so there is nothing to swap in.
+        let Some(lambda_root) = func_def.body else {
+            // No body — emit a panic stub and return.
+            self.emit_panic_call("lambda without body", expr_id);
+            return;
         };
 
         // Read HIR captures for this lambda scope.
@@ -3946,8 +3944,6 @@ impl<'db> LoweringContext<'db> {
             &mut self.builder,
             MirBuilder::new(Name::new(&lambda_name), 0),
         );
-        let saved_body = std::mem::replace(&mut self.body, lambda_body);
-        let saved_source_map = std::mem::replace(&mut self.source_map, lambda_source_map);
         let saved_locals = std::mem::take(&mut self.locals);
         let saved_binding_locals = std::mem::take(&mut self.binding_locals);
         let saved_exit_block = self.exit_block;
@@ -4163,15 +4159,8 @@ impl<'db> LoweringContext<'db> {
         self.exit_block = exit_blk;
         self.builder.set_current_block(entry);
 
-        // Lower the root expression into the return place.
-        if let Some(root) = self.body.root_expr {
-            self.lower_expr(root, Place::local(ret));
-        } else {
-            self.builder.assign(
-                Place::local(ret),
-                Rvalue::Use(Operand::Constant(Constant::Null)),
-            );
-        }
+        // Lower the body expression into the return place.
+        self.lower_expr(lambda_root, Place::local(ret));
 
         // Terminate: goto exit, then return.
         if !self.builder.is_current_terminated() {
@@ -4231,8 +4220,6 @@ impl<'db> LoweringContext<'db> {
         // Restore parent state.
         self.lambda_param_tir_types = saved_lambda_param_tir_types;
         self.builder = saved_builder;
-        self.body = saved_body;
-        self.source_map = saved_source_map;
         self.locals = saved_locals;
         self.binding_locals = saved_binding_locals;
         self.exit_block = saved_exit_block;

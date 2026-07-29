@@ -547,7 +547,7 @@ fn describe_locals(db: &dyn Db, files: &[SourceFile], name: &str) -> Vec<SymbolD
 
                     let type_str = match def_site {
                         baml_compiler2_hir::semantic_index::DefinitionSite::Statement(stmt_id) => {
-                            pattern_from_owner_body(db, func_loc, index, owner_scope, stmt_id)
+                            pattern_from_owner_body(db, func_loc, stmt_id)
                                 .and_then(|pattern| inference.binding_type(pattern))
                                 .map(crate::utils::display_ty)
                                 .unwrap_or_else(|| "unknown".to_string())
@@ -633,43 +633,20 @@ fn body_owner_scope(
     }
 }
 
-/// Extract the binding pattern for a statement from the body that owns it.
+/// The binding pattern for `stmt_id`, resolved against the function's body.
 ///
-/// `StmtId` is arena-local to an `ExprBody`. For ordinary function/block scopes,
-/// that owner is the enclosing function body. For lambda scopes, including block
-/// descendants inside lambdas, the owner is the matched lambda body.
+/// Lambda bodies share that arena, so a `StmtId` resolves against it whatever
+/// scope owns the statement.
 fn pattern_from_owner_body(
     db: &dyn Db,
     func_loc: baml_compiler2_hir::loc::FunctionLoc<'_>,
-    index: &baml_compiler2_hir::semantic_index::FileSemanticIndex<'_>,
-    owner_scope: FileScopeId,
     stmt_id: baml_compiler2_ast::StmtId,
 ) -> Option<baml_compiler2_ast::PatId> {
     let body = baml_compiler2_hir::body::function_body(db, func_loc);
     let baml_compiler2_hir::body::FunctionBody::Expr(top_body) = body.as_ref() else {
         return None;
     };
-
-    match index.scopes[owner_scope.index() as usize].kind {
-        ScopeKind::Lambda => {
-            let source_map = baml_compiler2_hir::body::function_body_source_map(db, func_loc)?;
-            let mut lambda_ranges = Vec::new();
-
-            for ancestor_id in index.ancestor_scopes(owner_scope) {
-                let scope = &index.scopes[ancestor_id.index() as usize];
-                match scope.kind {
-                    ScopeKind::Lambda => lambda_ranges.push(scope.range),
-                    ScopeKind::Function => break,
-                    _ => {}
-                }
-            }
-
-            lambda_ranges.reverse();
-            let owner_body = descend_into_lambdas(top_body, &source_map, &lambda_ranges)?;
-            extract_pat_from_stmt(owner_body, stmt_id)
-        }
-        _ => extract_pat_from_stmt(top_body, stmt_id),
-    }
+    extract_pat_from_stmt(top_body, stmt_id)
 }
 
 /// Extract the binding pattern from a let/for statement in a specific body.
@@ -692,34 +669,6 @@ fn extract_pat_from_stmt(
 }
 
 /// Descend through nested lambda bodies using scope ranges as stable anchors.
-fn descend_into_lambdas<'a>(
-    body: &'a baml_compiler2_ast::ExprBody,
-    source_map: &baml_compiler2_ast::AstSourceMap,
-    lambda_ranges: &[TextRange],
-) -> Option<&'a baml_compiler2_ast::ExprBody> {
-    if lambda_ranges.is_empty() {
-        return Some(body);
-    }
-
-    let target_range = lambda_ranges[0];
-    for (expr_id, expr) in body.exprs.iter() {
-        if let baml_compiler2_ast::Expr::Lambda(func_def) = expr {
-            let expr_span = source_map.expr_span(expr_id);
-            if expr_span == target_range {
-                if let Some((ref nested_body, ref nested_source_map)) = func_def.body {
-                    return descend_into_lambdas(
-                        nested_body,
-                        nested_source_map,
-                        &lambda_ranges[1..],
-                    );
-                }
-            }
-        }
-    }
-
-    None
-}
-
 /// Build a `DepRef` pointing to a function.
 fn make_function_dep(
     db: &dyn crate::Db,

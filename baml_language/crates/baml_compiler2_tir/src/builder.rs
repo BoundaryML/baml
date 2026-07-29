@@ -1937,6 +1937,7 @@ impl<'db> TypeInferenceBuilder<'db> {
     fn check_throws_surface(
         &mut self,
         body: &ExprBody,
+        root: Option<ExprId>,
         throws_ty: &Ty,
         span: TextRange,
         warn_extraneous: bool,
@@ -1949,7 +1950,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         // stays a fact — correctly, since the body genuinely throws it.
         let declared = crate::throw_inference::flatten_ty_to_facts(&self.normalize(throws_ty));
         let effective: BTreeSet<Ty> = self
-            .collect_effective_throws(body)
+            .collect_effective_throws(body, root)
             .iter()
             .flat_map(|fact| crate::throw_inference::flatten_ty_to_facts(&self.normalize(fact)))
             .collect();
@@ -3376,12 +3377,10 @@ impl<'db> TypeInferenceBuilder<'db> {
                         );
                     }
                 }
-                if let Some((lambda_body, _)) = &func_def.body
-                    && let Some(root_expr) = lambda_body.root_expr
-                {
+                if let Some(lambda_root) = func_def.body {
                     Self::collect_default_expr_forward_references(
-                        root_expr,
-                        lambda_body,
+                        lambda_root,
+                        body,
                         later_params,
                         shadowed,
                         refs,
@@ -4923,7 +4922,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 self.in_optional_chain -= 1;
                 ty
             }
-            Expr::Lambda(func_def) => self.infer_lambda_expr(expr_id, func_def),
+            Expr::Lambda(func_def) => self.infer_lambda_expr(expr_id, body, func_def),
             Expr::Spawn {
                 name,
                 with_exprs,
@@ -5677,7 +5676,12 @@ impl<'db> TypeInferenceBuilder<'db> {
     }
 
     #[inline(never)]
-    fn infer_lambda_expr(&mut self, expr_id: ExprId, func_def: &ast::LambdaDef) -> Ty {
+    fn infer_lambda_expr(
+        &mut self,
+        expr_id: ExprId,
+        body: &ExprBody,
+        func_def: &ast::LambdaDef,
+    ) -> Ty {
         // Synthesis mode: no expected type available.
         // All param types MUST be annotated; unannotated params produce an error.
 
@@ -5736,6 +5740,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         // Infer the lambda body using save/restore approach
         let (ret_ty, lambda_fsi, lambda_effective_throws) = self.infer_lambda_body(
             func_def,
+            body,
             &param_tys,
             return_annotation.as_ref(),
             &throws_ty,
@@ -6806,6 +6811,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 // Infer/check the lambda body using save/restore approach
                 let (ret_ty, lambda_fsi, lambda_effective_throws) = self.infer_lambda_body(
                     func_def,
+                    body,
                     &param_tys,
                     effective_ret,
                     &throws_ty,
@@ -8662,7 +8668,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             self.context.report_at_span(diag, span);
         }
         self.validate_type_generic_bounds_at_span(span, &declared_ty);
-        self.check_throws_surface(body, &declared_ty, span, warn_extraneous);
+        self.check_throws_surface(body, body.root_expr, &declared_ty, span, warn_extraneous);
     }
 
     // ====================================================================
@@ -9335,10 +9341,11 @@ impl<'db> TypeInferenceBuilder<'db> {
         out
     }
 
-    fn collect_effective_throws(&self, body: &ExprBody) -> BTreeSet<Ty> {
-        crate::throws_analysis::collect_escaping_throws(
+    fn collect_effective_throws(&self, body: &ExprBody, root: Option<ExprId>) -> BTreeSet<Ty> {
+        crate::throws_analysis::collect_escaping_throws_from(
             &BuilderThrowsAnalysis { builder: self },
             body,
+            root,
         )
     }
 
@@ -14854,31 +14861,25 @@ impl<'db> TypeInferenceBuilder<'db> {
     /// body (which also stops its diagnostics from being reported twice).
     ///
     /// Returns `(inferred_return_ty, lambda_file_scope_id, effective_throws)`.
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "the lambda, the body it was written in, and its inferred signature parts"
+    )]
     pub fn infer_lambda_body(
         &mut self,
         func_def: &baml_compiler2_ast::LambdaDef,
+        lambda_body: &ExprBody,
         param_tys: &[FunctionParamTy],
         expected_ret: Option<&Ty>,
         chosen_throws: &Ty,
         throws_report_span: TextRange,
         warn_extraneous_throws: bool,
     ) -> (Ty, Option<FileScopeId>, Ty) {
-        // Get the lambda's ExprBody
-        let Some((lambda_body, lambda_source_map)) = &func_def.body else {
+        // The body is an expression in the enclosing arena, so `lambda_body` is
+        // the body this lambda was written in — there is no arena to switch to.
+        let Some(root_expr) = func_def.body else {
             return (
                 Ty::Unknown {
-                    attr: TyAttr::default(),
-                },
-                None,
-                Ty::Never {
-                    attr: TyAttr::default(),
-                },
-            );
-        };
-
-        let Some(root_expr) = lambda_body.root_expr else {
-            return (
-                Ty::Void {
                     attr: TyAttr::default(),
                 },
                 None,
@@ -14921,13 +14922,6 @@ impl<'db> TypeInferenceBuilder<'db> {
         // in. Reset the counters for the body and restore them afterwards.
         let saved_loop_depth = std::mem::take(&mut self.loop_depth);
         let saved_defer_loop_floors = std::mem::take(&mut self.defer_loop_floors);
-        let saved_body_source_map = self.body_source_map.clone();
-        self.body_source_map = Some(lambda_source_map.clone());
-        // Diagnostics emitted below carry THIS lambda's arena IDs but are
-        // recorded in the enclosing scope's set; freeze their spans against the
-        // lambda's source map at the end so they don't collapse to `0..0` when
-        // rendered with the enclosing scope's map (see `freeze_diagnostic_spans_from`).
-        let lambda_diag_start = self.context.diagnostic_count();
 
         // A lambda declares no generics of its own, so `self.generic_params`
         // already holds the whole environment its body sees.
@@ -14991,9 +14985,10 @@ impl<'db> TypeInferenceBuilder<'db> {
             // (or reported) twice.
             let key_fsi = index.lambda_scope_for(func_def.span);
             let seed_fsi = key_fsi.or_else(|| {
-                lambda_body
-                    .root_expr
-                    .and_then(|root| index.lambda_scope_for(lambda_source_map.expr_span(root)))
+                self.body_source_map
+                    .as_ref()
+                    .map(|sm| sm.expr_span(root_expr))
+                    .and_then(|span| index.lambda_scope_for(span))
             });
             if let Some(fsi) = seed_fsi {
                 let captures_to_seed: Vec<(Name, baml_compiler2_hir::semantic_index::BindingId)> =
@@ -15021,8 +15016,6 @@ impl<'db> TypeInferenceBuilder<'db> {
             self.declared_return_ty = None;
         }
 
-        let lambda_diagnostics_start = self.context.diagnostic_count();
-
         // Infer or check the lambda body
         let ret_ty = if let Some(expected) = expected_ret {
             if matches!(expected, Ty::Unknown { .. } | Ty::TypeVar(_, _)) {
@@ -15037,14 +15030,13 @@ impl<'db> TypeInferenceBuilder<'db> {
 
         self.check_throws_surface(
             lambda_body,
+            Some(root_expr),
             chosen_throws,
             throws_report_span,
             warn_extraneous_throws,
         );
-        self.context
-            .freeze_diagnostic_spans_from(lambda_diagnostics_start, lambda_source_map);
 
-        let effective_facts = self.collect_effective_throws(lambda_body);
+        let effective_facts = self.collect_effective_throws(lambda_body, Some(root_expr));
         let lambda_effective_throws = Self::ty_from_concrete_facts(&effective_facts)
             .or_else(|| {
                 // A rigid TypeVar fact — an ENCLOSING function's generic param,
@@ -15160,11 +15152,6 @@ impl<'db> TypeInferenceBuilder<'db> {
         self.loop_depth = saved_loop_depth;
         self.defer_loop_floors = saved_defer_loop_floors;
         self.expr_metadata_scope = saved_expr_metadata_scope;
-        // Freeze this lambda's diagnostic spans against its own source map
-        // before restoring the enclosing map (otherwise they render at `0..0`).
-        self.context
-            .freeze_diagnostic_spans_from(lambda_diag_start, lambda_source_map);
-        self.body_source_map = saved_body_source_map;
 
         (ret_ty, lambda_file_scope_id, lambda_effective_throws)
     }

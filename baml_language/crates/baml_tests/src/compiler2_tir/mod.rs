@@ -530,11 +530,9 @@ pub(crate) mod support {
             Expr::Lambda(func_def) => {
                 let desc = expr_desc(expr_id, body);
                 writeln!(output, "{pad}{desc} : {ty}").ok();
-                // Recursively render the lambda's own ExprBody
-                if let Some((lambda_body, _)) = &func_def.body
-                    && let Some(root) = lambda_body.root_expr
-                {
-                    render_expr_body_untyped(lambda_body, root, indent + 2, output);
+                // The body is an expression in this same arena.
+                if let Some(root) = func_def.body {
+                    render_expr_body_untyped(body, root, indent + 2, output);
                 }
             }
             Expr::Call { callee, args, .. } => {
@@ -577,8 +575,10 @@ pub(crate) mod support {
         }
     }
 
-    /// Render a lambda's ExprBody without type information (since lambda bodies
-    /// have their own ExprBody arena and we don't have a ScopeInference for them).
+    /// Render a lambda's body without type information.
+    ///
+    /// The body shares the enclosing function's arena, but its types live in
+    /// the lambda's own `ScopeInference`, which this renderer does not hold.
     fn render_expr_body_untyped(
         body: &ExprBody,
         expr_id: ExprId,
@@ -616,10 +616,8 @@ pub(crate) mod support {
             Expr::Lambda(func_def) => {
                 let desc = expr_desc(expr_id, body);
                 writeln!(output, "{pad}{desc}").ok();
-                if let Some((lb, _)) = &func_def.body
-                    && let Some(root) = lb.root_expr
-                {
-                    render_expr_body_untyped(lb, root, indent + 2, output);
+                if let Some(root) = func_def.body {
+                    render_expr_body_untyped(body, root, indent + 2, output);
                 }
             }
             _ => {
@@ -1940,15 +1938,10 @@ pub(crate) mod support {
                 ),
                 Expr::Lambda(func_def) => {
                     let sig = format_lambda_signature_hir(func_def, prefix, local_type_names);
-                    let body_desc = func_def
-                        .body
-                        .as_ref()
-                        .map(|(lb, _)| {
-                            lb.root_expr
-                                .map(|root| expr_desc_hir(root, lb, prefix, local_type_names))
-                                .unwrap_or_else(|| "<empty>".into())
-                        })
-                        .unwrap_or_else(|| "<no body>".into());
+                    let body_desc = func_def.body.map_or_else(
+                        || "<no body>".into(),
+                        |root| expr_desc_hir(root, body, prefix, local_type_names),
+                    );
                     // Replace "{ ... }" placeholder with actual body
                     sig.replace("{ ... }", &format!("{{ {body_desc} }}"))
                 }

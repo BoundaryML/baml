@@ -2187,7 +2187,7 @@ fn synthesize_init_test_function(
     // Build statements: one per registration
     let mut stmt_ids: Vec<crate::ast::StmtId> = Vec::with_capacity(registrations.len());
     for reg in registrations {
-        let stmt_expr = synthesize_register_call(reg, &test_owner, &mut ctx, diags, env_var_refs);
+        let stmt_expr = synthesize_register_call(reg, &test_owner, &mut ctx);
         stmt_ids.push(ctx.alloc_stmt(crate::ast::Stmt::Expr(stmt_expr), span));
     }
 
@@ -2249,8 +2249,6 @@ fn synthesize_register_call(
     reg: &TestRegistrationItem,
     test_owner: &str,
     ctx: &mut lower_expr_body::InitTestContext,
-    diags: &mut Vec<LoweringDiagnostic>,
-    env_var_refs: &mut Vec<crate::EnvVarRef>,
 ) -> ExprId {
     let span = text_size::TextRange::default();
     match reg {
@@ -2259,11 +2257,8 @@ fn synthesize_register_call(
             body_node,
             runner_element,
         } => {
-            // Lower the test block body into a fresh ExprBody (lambda body)
-            let (lambda_body, lambda_source_map, lambda_diags, lambda_env_refs) =
-                lower_expr_body::lower_block_node(body_node);
-            diags.extend(lambda_diags);
-            env_var_refs.extend(lambda_env_refs);
+            // The body lowers into `$init_test`'s own arena.
+            let lambda_body = ctx.lower_test_body(body_node, span);
 
             let lambda_def = LambdaDef {
                 kind: LambdaKind::Anonymous,
@@ -2271,7 +2266,7 @@ fn synthesize_register_call(
                 defaults: FunctionDefaults::empty(),
                 return_type: Some(crate::ast::TypeExprKind::Void { attrs: vec![] }.at(span)),
                 throws: None,
-                body: Some((lambda_body, lambda_source_map)),
+                body: Some(lambda_body),
                 span,
             };
 
@@ -2318,11 +2313,7 @@ fn synthesize_register_call(
             body_node,
             runner_element,
         } => {
-            // Lower the testset body into a collector lambda using the full testset lowering.
-            let (collector_exprs, collector_source_map, collector_diags, collector_env_refs) =
-                lower_expr_body::lower_testset_block_node(body_node, &Name::new("testset"));
-            diags.extend(collector_diags);
-            env_var_refs.extend(collector_env_refs);
+            let collector_exprs = ctx.lower_testset_body(body_node, Name::new("testset"), span);
 
             // Collector lambda parameter: `testset`
             let testset_param = Param {
@@ -2347,7 +2338,7 @@ fn synthesize_register_call(
                 defaults: FunctionDefaults::empty(),
                 return_type: Some(crate::ast::TypeExprKind::Void { attrs: vec![] }.at(span)),
                 throws: None,
-                body: Some((collector_exprs, collector_source_map)),
+                body: Some(collector_exprs),
                 span,
             };
 

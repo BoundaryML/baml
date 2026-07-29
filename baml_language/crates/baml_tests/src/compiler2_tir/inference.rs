@@ -716,20 +716,18 @@ fn lambda_scope_retypes_capture_from_function_parameter() {
     let baml_compiler2_hir::body::FunctionBody::Expr(main_expr_body) = main_body.as_ref() else {
         panic!("main expression body");
     };
-    let lambda_body = main_expr_body
+    // The lambda's body is an expression in `main`'s own arena.
+    let root_expr = main_expr_body
         .exprs
         .iter()
         .find_map(|(_, expr)| {
-            if let baml_compiler2_ast::Expr::Lambda(func_def) = expr
-                && let Some((lambda_body, _)) = &func_def.body
-            {
-                Some(lambda_body)
+            if let baml_compiler2_ast::Expr::Lambda(func_def) = expr {
+                func_def.body
             } else {
                 None
             }
         })
         .expect("lambda body");
-    let root_expr = lambda_body.root_expr.expect("lambda root expr");
 
     assert_eq!(
         lambda_inference

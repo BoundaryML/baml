@@ -119,24 +119,6 @@ pub(crate) fn lower(
     (body, source_map)
 }
 
-/// Lower a `BLOCK_EXPR` node directly to an owned `ExprBody` + parallel `AstSourceMap`.
-///
-/// Used by `lower_cst` when synthesizing lambda bodies from `TEST_EXPR_DEF` / `TESTSET_DEF`
-/// blocks, where there is no wrapping `EXPR_FUNCTION_BODY` node.
-pub(crate) fn lower_block_node(
-    block_node: &SyntaxNode,
-) -> (
-    ExprBody,
-    AstSourceMap,
-    Vec<LoweringDiagnostic>,
-    Vec<EnvVarRef>,
-) {
-    let mut ctx = LoweringContext::new();
-    let root_expr = baml_compiler_syntax::ast::BlockExpr::cast(block_node.clone())
-        .map(|block| ctx.lower_block_expr(&block));
-    ctx.finish(root_expr)
-}
-
 pub(crate) fn lower_default_expr_nodes(
     defaults: &[(usize, baml_compiler_syntax::SyntaxElement)],
     diags: &mut Vec<LoweringDiagnostic>,
@@ -160,35 +142,6 @@ pub(crate) fn lower_default_expr_nodes(
     diags.extend(ctx_diags);
     env_var_refs.extend(ctx_env_refs);
     (FunctionDefaults { exprs, source_map }, lowered)
-}
-
-/// Lower a testset `BLOCK_EXPR` body node to an owned `ExprBody` + `AstSourceMap`.
-///
-/// The body may contain a mix of regular statements (let bindings, for loops, if conditions)
-/// and `TEST_EXPR_DEF` / `TESTSET_DEF` nodes. The latter are converted to
-/// `<collector_var>.register_test(...)` / `<collector_var>.register_test_set(...)` calls
-/// so that the resulting body is a valid expression body for the testset collector lambda.
-///
-/// `collector_var` is the name of the `testing.TestSetCollector` parameter in scope.
-///
-/// The returned body always has a `null` tail expression so the collector lambda satisfies
-/// the type checker's expectation that the body evaluates to `null`.
-pub(crate) fn lower_testset_block_node(
-    block_node: &SyntaxNode,
-    collector_var: &Name,
-) -> (
-    ExprBody,
-    AstSourceMap,
-    Vec<LoweringDiagnostic>,
-    Vec<EnvVarRef>,
-) {
-    let mut ctx = LoweringContext::new_testset_collector(collector_var.clone());
-    let range = block_node.span_range();
-    let root_expr = baml_compiler_syntax::ast::BlockExpr::cast(block_node.clone()).map(|block| {
-        let inner_block_id = ctx.lower_block_expr(&block);
-        ctx.ensure_null_tail(inner_block_id, range)
-    });
-    ctx.finish(root_expr)
 }
 
 /// Lower a runner `SyntaxElement` (node or token) into an `ExprId` within the given context.
@@ -255,6 +208,36 @@ impl InitTestContext {
         span: text_size::TextRange,
     ) -> crate::ast::StmtId {
         self.inner.alloc_stmt(stmt, span)
+    }
+
+    /// Lower a top-level `test`'s body into the `$init_test` arena, as the body
+    /// of the lambda that gets registered.
+    ///
+    /// The nodes carry their real source offsets even though `$init_test`'s own
+    /// synthesized nodes carry empty ranges — both live in one source map, and
+    /// HIR resolves names inside the body by offset.
+    pub(crate) fn lower_test_body(&mut self, block_node: &SyntaxNode, span: TextRange) -> ExprId {
+        match baml_compiler_syntax::ast::BlockExpr::cast(block_node.clone()) {
+            Some(block) => self.inner.lower_lambda_body(&block),
+            None => self.inner.alloc_expr(Expr::Null, span),
+        }
+    }
+
+    /// Lower a top-level `testset`'s body into the `$init_test` arena, as the
+    /// body of the collector lambda that gets registered.
+    pub(crate) fn lower_testset_body(
+        &mut self,
+        block_node: &SyntaxNode,
+        collector: Name,
+        span: TextRange,
+    ) -> ExprId {
+        match baml_compiler_syntax::ast::BlockExpr::cast(block_node.clone()) {
+            Some(block) => {
+                self.inner
+                    .lower_testset_collector_body(&block, collector, block_node.span_range())
+            }
+            None => self.inner.alloc_expr(Expr::Null, span),
+        }
     }
 
     pub(crate) fn finish(
@@ -444,12 +427,6 @@ impl LoweringContext {
         }
     }
 
-    fn new_testset_collector(collector_var: Name) -> Self {
-        let mut ctx = Self::new();
-        ctx.testset_collector_var = Some(collector_var);
-        ctx
-    }
-
     fn warn_const_introducer(&mut self, span: TextRange) {
         self.diags
             .push(LoweringDiagnostic::ConstBindingIntroducer { span });
@@ -565,6 +542,39 @@ impl LoweringContext {
         }
     }
 
+    /// Lower a lambda's `BLOCK_EXPR` into this arena.
+    ///
+    /// Clears `testset_collector_var` for the duration: a `test` / `testset`
+    /// written inside a lambda body is not in a collector's scope, so it must
+    /// lower to `Stmt::Missing` rather than a registration call. Before lambda
+    /// bodies shared this arena that fell out of building them in a fresh
+    /// `LoweringContext`; now it has to be said.
+    fn lower_lambda_body(&mut self, block: &baml_compiler_syntax::ast::BlockExpr) -> ExprId {
+        let saved_collector = self.testset_collector_var.take();
+        let body = self.lower_block_expr(block);
+        self.testset_collector_var = saved_collector;
+        body
+    }
+
+    /// Lower a testset's `BLOCK_EXPR` into this arena as a collector-lambda body.
+    ///
+    /// Sets `testset_collector_var` for the duration — the exact inverse of
+    /// [`Self::lower_lambda_body`] — so a `test` written inside registers
+    /// against `collector`. The body always ends in a `null` tail, which is what
+    /// the collector lambda's `-> void` signature expects.
+    fn lower_testset_collector_body(
+        &mut self,
+        block: &baml_compiler_syntax::ast::BlockExpr,
+        collector: Name,
+        range: TextRange,
+    ) -> ExprId {
+        let saved_collector = self.testset_collector_var.replace(collector);
+        let inner = self.lower_block_expr(block);
+        let body = self.ensure_null_tail(inner, range);
+        self.testset_collector_var = saved_collector;
+        body
+    }
+
     /// Ensure a block expression ends with a `null` tail.
     ///
     /// If `block_id` refers to a `Block` with no tail expression, this adds a `null` tail
@@ -664,12 +674,23 @@ impl LoweringContext {
                             self.alloc_stmt(Stmt::Continue, node.span_range())
                         }
                         SyntaxKind::DEFER_STMT => self.lower_defer_stmt(node),
+                        // A nested `test` / `testset` registers against the
+                        // enclosing `testset`'s collector, so it only means
+                        // something where `testset_collector_var` is set — i.e.
+                        // directly inside a `testset` body. Everywhere else there
+                        // is nothing to register against and the declaration is
+                        // dropped: inside a `test` body (which clears the var, so
+                        // tests don't nest), inside a lambda, or in an ordinary
+                        // function.
+                        //
+                        // BUG: it is dropped *silently* — neither the parser nor
+                        // this lowering reports it. `testset "A" { test "B" { test
+                        // "C" {} } }` compiles clean while `test "C"` never runs.
                         SyntaxKind::TEST_EXPR_DEF => {
                             if self.testset_collector_var.is_some() {
                                 let expr_id = self.lower_test_expr_as_register_call(node);
                                 self.alloc_stmt(Stmt::Expr(expr_id), node.span_range())
                             } else {
-                                // Invalid context — parser already emitted a diagnostic
                                 self.alloc_stmt(Stmt::Missing, node.span_range())
                             }
                         }
@@ -678,7 +699,6 @@ impl LoweringContext {
                                 let expr_id = self.lower_testset_as_register_call(node);
                                 self.alloc_stmt(Stmt::Expr(expr_id), node.span_range())
                             } else {
-                                // Invalid context — parser already emitted a diagnostic
                                 self.alloc_stmt(Stmt::Missing, node.span_range())
                             }
                         }
@@ -913,19 +933,14 @@ impl LoweringContext {
                 // capture / scope / MIR plumbing applies unchanged.
                 let block = cst_ast::BlockExpr::cast(child.clone());
                 let func_def = block.map(|block| {
-                    let mut lambda_ctx = LoweringContext::new();
-                    let root_expr = lambda_ctx.lower_block_expr(&block);
-                    let (lbody, source_map, lambda_diags, lambda_env_refs) =
-                        lambda_ctx.finish(Some(root_expr));
-                    self.diags.extend(lambda_diags);
-                    self.env_var_refs.extend(lambda_env_refs);
+                    let body = self.lower_lambda_body(&block);
                     LambdaDef {
                         kind: LambdaKind::Spawn,
                         params: Vec::new(),
                         defaults: crate::ast::FunctionDefaults::empty(),
                         return_type: None,
                         throws: None,
-                        body: Some((lbody, source_map)),
+                        body: Some(body),
                         span: child.span_range(),
                     }
                 });
@@ -4350,20 +4365,12 @@ impl LoweringContext {
                     .with_span(te.syntax().span_range())
             });
 
-        // Lower body via a FRESH LoweringContext — lambda gets its own ExprBody.
+        // The body lowers into *this* arena — a lambda owns no `ExprBody`.
         let body = node
             .children()
             .find(|n| n.kind() == SyntaxKind::BLOCK_EXPR)
             .and_then(ast::BlockExpr::cast)
-            .map(|block| {
-                let mut lambda_ctx = LoweringContext::new();
-                let root_expr = lambda_ctx.lower_block_expr(&block);
-                let (body, source_map, lambda_diags, lambda_env_refs) =
-                    lambda_ctx.finish(Some(root_expr));
-                self.diags.extend(lambda_diags);
-                self.env_var_refs.extend(lambda_env_refs);
-                (body, source_map)
-            });
+            .map(|block| self.lower_lambda_body(&block));
 
         let lambda_def = LambdaDef {
             kind: LambdaKind::Anonymous,
@@ -4866,18 +4873,11 @@ impl LoweringContext {
         // Find the BLOCK_EXPR child (the test body)
         let body_node_opt = node.children().find(|c| c.kind() == SyntaxKind::BLOCK_EXPR);
 
-        let (lambda_body, lambda_source_map, lambda_diags, lambda_env_refs) =
-            if let Some(body_node) = body_node_opt {
-                // Lower the body using a fresh context (no collector var — test bodies don't nest)
-                crate::lower_expr_body::lower_block_node(&body_node)
-            } else {
-                // Empty body: produce null
-                let mut sub_ctx = LoweringContext::new();
-                let null_expr = sub_ctx.alloc_expr(Expr::Null, span);
-                sub_ctx.finish(Some(null_expr))
-            };
-        self.diags.extend(lambda_diags);
-        self.env_var_refs.extend(lambda_env_refs);
+        // `lower_lambda_body` clears the collector — test bodies don't nest.
+        let lambda_body = match body_node_opt.and_then(baml_compiler_syntax::ast::BlockExpr::cast) {
+            Some(block) => self.lower_lambda_body(&block),
+            None => self.alloc_expr(Expr::Null, span),
+        };
 
         let lambda_def = LambdaDef {
             kind: LambdaKind::Anonymous,
@@ -4885,7 +4885,7 @@ impl LoweringContext {
             defaults: FunctionDefaults::empty(),
             return_type: None,
             throws: None,
-            body: Some((lambda_body, lambda_source_map)),
+            body: Some(lambda_body),
             span,
         };
 
@@ -4939,16 +4939,15 @@ impl LoweringContext {
         // Find the BLOCK_EXPR child (the testset body)
         let body_node_opt = node.children().find(|c| c.kind() == SyntaxKind::BLOCK_EXPR);
 
-        let (sub_body, sub_source_map, sub_diags, sub_env_refs) =
-            if let Some(body_node) = body_node_opt {
-                crate::lower_expr_body::lower_testset_block_node(&body_node, &Name::new("testset"))
-            } else {
-                let mut sub_ctx = LoweringContext::new();
-                let null_expr = sub_ctx.alloc_expr(Expr::Null, span);
-                sub_ctx.finish(Some(null_expr))
-            };
-        self.diags.extend(sub_diags);
-        self.env_var_refs.extend(sub_env_refs);
+        let sub_body = match body_node_opt.as_ref().and_then(|body_node| {
+            baml_compiler_syntax::ast::BlockExpr::cast(body_node.clone())
+                .map(|block| (block, body_node.span_range()))
+        }) {
+            Some((block, range)) => {
+                self.lower_testset_collector_body(&block, Name::new("testset"), range)
+            }
+            None => self.alloc_expr(Expr::Null, span),
+        };
 
         let sub_param = Param {
             name: Name::new("testset"),
@@ -4972,7 +4971,7 @@ impl LoweringContext {
             defaults: FunctionDefaults::empty(),
             return_type: None,
             throws: None,
-            body: Some((sub_body, sub_source_map)),
+            body: Some(sub_body),
             span,
         };
 

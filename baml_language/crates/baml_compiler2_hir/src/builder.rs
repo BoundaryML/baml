@@ -389,7 +389,7 @@ impl<'db> SemanticIndexBuilder<'db> {
             }
             ast::Expr::Lambda(func_def) => {
                 self.record_expr_scope(expr_id);
-                self.walk_lambda_expr(expr_id, func_def, source_map);
+                self.walk_lambda_expr(expr_id, func_def, body, source_map);
             }
             _ => {
                 self.record_expr_scope(expr_id);
@@ -1111,6 +1111,7 @@ impl<'db> SemanticIndexBuilder<'db> {
         &mut self,
         expr_id: ast::ExprId,
         lambda: &ast::LambdaDef,
+        body: &ast::ExprBody,
         source_map: &ast::AstSourceMap,
     ) {
         self.push_scope(ScopeKind::Lambda, None, source_map.expr_span(expr_id));
@@ -1123,9 +1124,20 @@ impl<'db> SemanticIndexBuilder<'db> {
         self.emit_duplicate_param_diagnostics(&lambda.params);
         self.lambda_stack.push(scope_id);
         self.walk_parameter_defaults(&lambda.params, &lambda.defaults);
-        if let Some((lambda_body, lambda_source_map)) = &lambda.body {
-            self.walk_expr_body(lambda_body, lambda_source_map);
-            self.analyze_lambda_captures(scope_id, lambda_body, lambda_source_map);
+        if let Some(lambda_body) = lambda.body {
+            // The body shares this arena, but it still gets its own metadata
+            // namespace keyed by the lambda's scope. That keeps HIR agreeing
+            // with TIR's `infer_lambda_body` and MIR's `lower_lambda`, both of
+            // which look expression metadata up under the lambda scope. A
+            // mismatch here does not fail loudly: `path_resolution` simply
+            // misses, flow narrowing silently stops inside every lambda, and
+            // reconstructed closure signatures silently degrade to `unknown`.
+            let metadata_scope = ExprMetadataScope::Body(scope_id);
+            self.expr_metadata_scope_stack.push(metadata_scope);
+            self.walk_expr(lambda_body, body, source_map, false);
+            let popped = self.expr_metadata_scope_stack.pop();
+            debug_assert_eq!(popped, Some(metadata_scope));
+            self.analyze_lambda_captures(scope_id, body, source_map);
         }
         self.lambda_stack.pop();
         self.pop_scope();

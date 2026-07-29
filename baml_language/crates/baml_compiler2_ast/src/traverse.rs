@@ -17,7 +17,9 @@
 //! }
 //! ```
 
-use crate::ast::{Expr, ExprBody, ExprId, Stmt, StmtId, TemplateSegment};
+use std::collections::HashSet;
+
+use crate::ast::{Expr, ExprBody, ExprId, Stmt, StmtId, TemplateSegment, TemplateTag};
 
 /// A direct child of an expression or statement.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -29,9 +31,10 @@ pub enum BodyNode {
 impl ExprBody {
     /// Append the direct children of `id` to `out`, in source order.
     ///
-    /// A `Expr::Lambda`'s body is *not* a child: it lives in the lambda's own
-    /// arena and is not addressable by an `ExprId` in this one. Callers that
-    /// want to descend into it must reach it through the [`crate::ast::LambdaDef`].
+    /// A lambda's body is deliberately *not* a child. It is an `ExprId` in this
+    /// same arena, reachable through [`crate::ast::LambdaDef::body`] — but a
+    /// lambda is a value, so what its body does belongs to the lambda. Callers
+    /// that want it ask for it explicitly.
     pub fn expr_children(&self, id: ExprId, out: &mut Vec<BodyNode>) {
         match &self.exprs[id] {
             Expr::Literal(_)
@@ -132,7 +135,22 @@ impl ExprBody {
                 out.extend(stmts.iter().copied().map(BodyNode::Stmt));
                 out.extend(tail_expr.map(BodyNode::Expr));
             }
-            Expr::Template { segments, .. } => {
+            Expr::Template { tag, segments } => {
+                // Both representations, because they carry different things and
+                // HIR/TIR each read only one: `segments` holds the user's
+                // `${…}` expressions (what diagnostics and name resolution
+                // point at), while the tag payload holds the desugared
+                // realization — the concat chain, its `.to_string()` calls, the
+                // `${for}` accumulators. Effect and call-graph analysis need the
+                // latter. The two share `ExprId`s by construction, which is why
+                // `reachable_excluding_lambdas` must de-duplicate.
+                match tag {
+                    TemplateTag::Default { elaborated } => out.push(BodyNode::Expr(*elaborated)),
+                    TemplateTag::Custom { tag, body } => {
+                        out.push(BodyNode::Expr(*tag));
+                        out.push(BodyNode::Expr(*body));
+                    }
+                }
                 for segment in segments {
                     template_segment_children(segment, out);
                 }
@@ -192,10 +210,20 @@ impl ExprBody {
     /// what its body throws or calls belongs to the lambda, not to the code that
     /// defines it. Only invoking it transfers those effects.
     pub fn reachable_excluding_lambdas(&self, root: ExprId) -> Vec<BodyNode> {
+        // The arena is a DAG, not a tree: a template's `segments` and its
+        // desugared tag payload are built from the *same* `ExprId`s, so a
+        // subtree is reachable by more than one path. Without this set the walk
+        // re-visits shared nodes once per path — exponential in template
+        // nesting — and callers that push per visit (find-references,
+        // call-site collection) report duplicates.
+        let mut seen: HashSet<BodyNode> = HashSet::new();
         let mut stack = vec![BodyNode::Expr(root)];
         let mut visited = Vec::new();
         let mut children = Vec::new();
         while let Some(node) = stack.pop() {
+            if !seen.insert(node) {
+                continue;
+            }
             visited.push(node);
             children.clear();
             // `expr_children` yields nothing for a lambda, so a lambda node is

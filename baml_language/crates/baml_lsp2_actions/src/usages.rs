@@ -214,18 +214,25 @@ fn find_local_usages(
     };
     collector.collect(
         enclosing_func_scope,
+        expr_body.root_expr,
         expr_body,
         ExprMetadataScope::Body(enclosing_func_scope),
         &source_map,
     );
 
+    // A defaults arena is a *forest* — one root per defaulted parameter, and
+    // `root_expr` is always `None` for it (`lower_default_expr_nodes` finishes
+    // with `None`). Walk each parameter's default separately.
     let defaults = baml_compiler2_ppir::function_parameter_defaults(db, func_loc);
-    collector.collect(
-        enclosing_func_scope,
-        &defaults.defaults.exprs,
-        ExprMetadataScope::ParameterDefault(enclosing_func_scope),
-        &defaults.defaults.source_map,
-    );
+    for default in defaults.params.iter().flatten() {
+        collector.collect(
+            enclosing_func_scope,
+            Some(default.expr.expr()),
+            &defaults.defaults.exprs,
+            ExprMetadataScope::ParameterDefault(enclosing_func_scope),
+            &defaults.defaults.source_map,
+        );
+    }
 
     collector.results
 }
@@ -239,15 +246,28 @@ struct LocalUsageCollector<'index, 'db> {
 }
 
 impl LocalUsageCollector<'_, '_> {
-    /// Walk one expression arena and recurse into nested lambda arenas.
+    /// Walk the expressions belonging to `owner_scope`, recursing into lambda
+    /// bodies under *their* scope.
+    ///
+    /// Structural rather than a flat arena scan: lambda bodies share this arena
+    /// but are recorded under their own metadata namespace, so visiting them
+    /// here would look them up under the wrong key and silently find nothing.
     fn collect(
         &mut self,
         owner_scope: FileScopeId,
+        root: Option<baml_compiler2_ast::ExprId>,
         expr_body: &ExprBody,
         metadata_scope: ExprMetadataScope,
         source_map: &baml_compiler2_ast::AstSourceMap,
     ) {
-        for (expr_id, expr) in expr_body.exprs.iter() {
+        let nodes = root
+            .map(|root| expr_body.reachable_excluding_lambdas(root))
+            .unwrap_or_default();
+        for node in nodes {
+            let baml_compiler2_ast::BodyNode::Expr(expr_id) = node else {
+                continue;
+            };
+            let expr = &expr_body.exprs[expr_id];
             match expr {
                 Expr::Path(segments) if segments.first() == Some(&self.name) => {
                     let segment_range = source_map.path_segment_span(expr_id, 0);
@@ -274,21 +294,27 @@ impl LocalUsageCollector<'_, '_> {
                         continue;
                     };
 
-                    self.collect(
-                        lambda_scope,
-                        &func_def.defaults.exprs,
-                        ExprMetadataScope::ParameterDefault(lambda_scope),
-                        &func_def.defaults.source_map,
-                    );
-
-                    if let Some((body, body_source_map)) = &func_def.body {
+                    // One root per defaulted parameter — see above.
+                    for param in &func_def.params {
+                        let Some(default) = param.default else {
+                            continue;
+                        };
                         self.collect(
                             lambda_scope,
-                            body,
-                            ExprMetadataScope::Body(lambda_scope),
-                            body_source_map,
+                            Some(default.expr()),
+                            &func_def.defaults.exprs,
+                            ExprMetadataScope::ParameterDefault(lambda_scope),
+                            &func_def.defaults.source_map,
                         );
                     }
+
+                    self.collect(
+                        lambda_scope,
+                        func_def.body,
+                        expr_body,
+                        ExprMetadataScope::Body(lambda_scope),
+                        source_map,
+                    );
                 }
                 _ => {}
             }
