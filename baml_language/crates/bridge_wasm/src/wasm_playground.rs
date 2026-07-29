@@ -27,6 +27,8 @@ pub struct FunctionInfo {
 pub struct ParamSchema {
     pub name: String,
     pub has_default: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub default_expression: Option<String>,
     pub schema: FieldSchema,
 }
 
@@ -99,6 +101,7 @@ impl From<bex_project::ParamSchema> for ParamSchema {
         ParamSchema {
             name: p.name,
             has_default: p.has_default,
+            default_expression: p.default_expression,
             schema: p.schema.into(),
         }
     }
@@ -489,6 +492,7 @@ mod tests {
         let src = SrcParam {
             name: "p".to_string(),
             has_default: true,
+            default_expression: Some("constants.DEFAULT".to_string()),
             schema: Src::Union {
                 variants: vec![
                     Src::String,

@@ -69,6 +69,8 @@ export interface ParamSchema {
    *  from a nullable type, which appears as `{ type: 'optional' }` in
    *  `schema`. */
   hasDefault: boolean;
+  /** Exact, unevaluated source text for the declared default expression. */
+  defaultExpression?: string;
   schema: FieldSchema;
 }
 
@@ -331,7 +333,11 @@ export type RunTarget =
   | { kind: 'function'; functionName: string }
   | { kind: 'test'; generation: number; testName: string }
   | { kind: 'preview'; parentFunctionName: string; helper: string }
-  | { kind: 'companion'; parentBoundaryId: BoundaryId | null; functionName: string }
+  | {
+      kind: 'companion';
+      parentBoundaryId: BoundaryId | null;
+      functionName: string;
+    }
   | { kind: 'internal'; name: string };
 
 export type RunVisibility =
@@ -394,7 +400,13 @@ export interface CallNode {
   parentId: string | null;
   functionId: number;
   functionName: string | null;
-  functionOrigin: 'user' | 'builtin' | 'companion' | 'internal' | 'unknown' | null;
+  functionOrigin:
+    | 'user'
+    | 'builtin'
+    | 'companion'
+    | 'internal'
+    | 'unknown'
+    | null;
   calleeSource: RunSourceLocation | null;
   callSiteSource: RunSourceLocation | null;
   startedAtNs: string | null;
@@ -633,7 +645,12 @@ export type WebSocketOutMessage =
   | { type: 'commandError'; requestId: number; code: string; message: string }
   | { type: 'runList'; requestId: number; runs: RunSummary[] }
   | { type: 'historyList'; requestId: number; runs: RunSummary[] }
-  | { type: 'runSnapshot'; requestId?: number; boundaryId: BoundaryId; snapshot: Run }
+  | {
+      type: 'runSnapshot';
+      requestId?: number;
+      boundaryId: BoundaryId;
+      snapshot: Run;
+    }
   | ({ type: 'valueBody' } & ValueBodyResponse)
   | {
       type: 'runCursorExpired';
@@ -788,7 +805,12 @@ export type WorkerOutMessage =
   | { type: 'commandError'; requestId: number; code: string; message: string }
   | { type: 'runList'; requestId: number; runs: RunSummary[] }
   | { type: 'historyList'; requestId: number; runs: RunSummary[] }
-  | { type: 'runSnapshot'; requestId?: number; boundaryId: BoundaryId; snapshot: Run }
+  | {
+      type: 'runSnapshot';
+      requestId?: number;
+      boundaryId: BoundaryId;
+      snapshot: Run;
+    }
   | ({ type: 'valueBody' } & ValueBodyResponse)
   | {
       type: 'runCursorExpired';

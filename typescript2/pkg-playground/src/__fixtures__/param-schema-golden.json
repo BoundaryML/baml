@@ -1,64 +1,64 @@
 {
   "params": [
     {
+      "hasDefault": false,
       "name": "p",
-      "hasDefault": false,
       "schema": {
-        "type": "ref",
-        "name": "user.Person"
+        "name": "user.Person",
+        "type": "ref"
       }
     },
     {
+      "hasDefault": false,
       "name": "c",
-      "hasDefault": false,
       "schema": {
-        "type": "ref",
-        "name": "user.Color"
+        "name": "user.Color",
+        "type": "ref"
       }
     },
     {
+      "hasDefault": false,
       "name": "j",
-      "hasDefault": false,
       "schema": {
-        "type": "ref",
-        "name": "user.JSON"
+        "name": "user.JSON",
+        "type": "ref"
       }
     },
     {
-      "name": "s",
       "hasDefault": false,
+      "name": "s",
       "schema": {
-        "type": "enumVariant",
         "name": "user.Status",
+        "type": "enumVariant",
         "value": "Active"
       }
     },
     {
-      "name": "l",
       "hasDefault": false,
+      "name": "l",
       "schema": {
-        "type": "list",
         "item": {
           "type": "string"
-        }
+        },
+        "type": "list"
       }
     },
     {
-      "name": "m",
       "hasDefault": false,
+      "name": "m",
       "schema": {
-        "type": "map",
         "key": {
           "type": "string"
         },
+        "type": "map",
         "value": {
           "type": "float"
         }
       }
     },
     {
-      "name": "u",
       "hasDefault": false,
+      "name": "u",
       "schema": {
         "type": "union",
         "variants": [
@@ -72,16 +72,17 @@
       }
     },
     {
-      "name": "i",
       "hasDefault": false,
+      "name": "i",
       "schema": {
-        "type": "media",
-        "kind": "image"
+        "kind": "image",
+        "type": "media"
       }
     },
     {
-      "name": "x",
+      "defaultExpression": "3",
       "hasDefault": true,
+      "name": "x",
       "schema": {
         "type": "int"
       }
@@ -90,11 +91,7 @@
   "types": {
     "user.Color": {
       "kind": "enum",
-      "values": [
-        "Red",
-        "Green",
-        "Blue"
-      ]
+      "values": ["Red", "Green", "Blue"]
     },
     "user.JSON": {
       "kind": "alias",
@@ -105,17 +102,16 @@
             "type": "string"
           },
           {
-            "type": "list",
             "item": {
-              "type": "ref",
-              "name": "user.JSON"
-            }
+              "name": "user.JSON",
+              "type": "ref"
+            },
+            "type": "list"
           }
         ]
       }
     },
     "user.Nested": {
-      "kind": "class",
       "fields": [
         {
           "name": "x",
@@ -123,10 +119,10 @@
             "type": "int"
           }
         }
-      ]
+      ],
+      "kind": "class"
     },
     "user.Person": {
-      "kind": "class",
       "fields": [
         {
           "name": "name",
@@ -137,27 +133,28 @@
         {
           "name": "age",
           "schema": {
-            "type": "optional",
             "inner": {
               "type": "int"
-            }
+            },
+            "type": "optional"
           }
         },
         {
           "name": "color",
           "schema": {
-            "type": "ref",
-            "name": "user.Color"
+            "name": "user.Color",
+            "type": "ref"
           }
         },
         {
           "name": "nested",
           "schema": {
-            "type": "ref",
-            "name": "user.Nested"
+            "name": "user.Nested",
+            "type": "ref"
           }
         }
-      ]
+      ],
+      "kind": "class"
     }
   }
 }

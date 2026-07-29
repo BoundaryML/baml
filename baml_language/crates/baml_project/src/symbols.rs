@@ -136,6 +136,7 @@ pub fn list_functions_with_metadata(db: &ProjectDatabase) -> FunctionListing {
                 } else {
                     param_schema::function_param_schemas(
                         db,
+                        *func_loc,
                         iface,
                         namespace_path,
                         name,
