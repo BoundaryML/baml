@@ -19,7 +19,7 @@
 
 use std::collections::BTreeMap;
 
-use baml_compiler2_hir::package::PackageId;
+use baml_compiler2_hir::{loc::FunctionLoc, package::PackageId};
 use baml_compiler2_tir::{
     package_interface::{ExportedType, PackageInterface, package_interface},
     ty::{FunctionParamMode, LiteralValue, QualifiedTypeName, Ty},
@@ -53,6 +53,9 @@ pub struct ParamSchema {
     /// ([`FunctionParamMode::Optional`]). Distinct from a nullable type, which
     /// shows up as [`FieldSchema::Optional`] in `schema`.
     pub has_default: bool,
+    /// The exact, unevaluated source text of the parameter's default expression.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub default_expression: Option<String>,
     pub schema: FieldSchema,
 }
 
@@ -135,6 +138,7 @@ pub enum FieldSchema {
 /// `Some(vec![])` ("takes no arguments").
 pub(crate) fn function_param_schemas(
     db: &ProjectDatabase,
+    function: FunctionLoc<'_>,
     iface: &PackageInterface,
     namespace_path: &[Name],
     name: &Name,
@@ -159,6 +163,8 @@ pub(crate) fn function_param_schemas(
         user_iface: iface,
         table,
     };
+    let parameter_defaults = baml_compiler2_ppir::function_parameter_defaults(db, function);
+    let source = function.file(db).text(db);
     let params = params
         .iter()
         .enumerate()
@@ -168,6 +174,13 @@ pub(crate) fn function_param_schemas(
                 .as_ref()
                 .map_or_else(|| format!("arg{i}"), ToString::to_string),
             has_default: matches!(param.mode, FunctionParamMode::Optional),
+            default_expression: parameter_defaults.param_default(i).map(|default_ref| {
+                let range = parameter_defaults
+                    .defaults
+                    .source_map
+                    .expr_span(default_ref.expr.expr());
+                source[usize::from(range.start())..usize::from(range.end())].to_owned()
+            }),
             schema: cx.field_schema(&param.ty, 0),
         })
         .collect();
@@ -786,11 +799,15 @@ mod tests {
 
     #[test]
     fn param_with_default_sets_has_default() {
-        let db = db_with(&[("main.baml", "function Def(x: int, y: int = 3) -> int { 1 }")]);
+        let db = db_with(&[(
+            "main.baml",
+            "function pair(a: int, b: int) -> int { a + b }\nfunction Def(x: int, y: int = pair(b = 2, a = 1)) -> int { 1 }",
+        )]);
         let listing = list_functions_with_metadata(&db);
         let params = params_json(&listing, "Def");
         assert_eq!(params[0]["hasDefault"], false);
         assert_eq!(params[1]["hasDefault"], true);
+        assert_eq!(params[1]["defaultExpression"], "pair(b = 2, a = 1)");
         assert_eq!(params[1]["schema"], json!({ "type": "int" }));
     }
 

@@ -136,9 +136,13 @@ const ParamRow: FC<{
         schema={param.schema}
         extra={
           param.hasDefault && (
-            <label className="ml-auto flex items-center gap-1 text-[10px] text-vsc-description">
-              set
+            <label
+              className="flex items-center gap-1 text-[10px] text-vsc-description"
+              htmlFor={`override-${param.name}`}
+            >
               <Switch
+                id={`override-${param.name}`}
+                aria-label={`Override ${param.name}`}
                 checked={!omitted}
                 onCheckedChange={(on) =>
                   on
@@ -146,22 +150,24 @@ const ParamRow: FC<{
                     : onOmit()
                 }
               />
+              override
             </label>
           )
         }
       />
-      {omitted ? (
-        <div className="text-[10px] text-vsc-text-faint pl-0.5">
-          omitted — uses the declared default
-        </div>
-      ) : (
+      <fieldset
+        className="m-0 min-w-0 border-0 p-0 disabled:opacity-60"
+        disabled={omitted}
+      >
         <FieldInput
           schema={param.schema}
           value={value}
           onChange={onChange}
           depth={0}
+          disabled={omitted}
+          placeholder={param.defaultExpression}
         />
-      )}
+      </fieldset>
     </div>
   );
 };
@@ -171,6 +177,10 @@ interface FieldInputProps {
   value: unknown;
   onChange: (v: unknown) => void;
   depth: number;
+  /** Whether this field is inside a disabled default-argument control. */
+  disabled?: boolean;
+  /** Placeholder for a top-level declared default expression. */
+  placeholder?: string;
   /** Ref names already unwrapped without descending into a child value —
    *  guards self-referential alias schemas (`type A = A | int` compiles
    *  clean) from recursing the render unboundedly. Same-value hops
@@ -272,11 +282,15 @@ function useDraft(canonical: string) {
   return [draft, setDraft] as const;
 }
 
-const StringField: FC<FieldInputProps> = ({ value, onChange }) => (
+const StringField: FC<FieldInputProps> = ({
+  value,
+  onChange,
+  placeholder = 'text',
+}) => (
   <Input
     className="h-7 text-xs font-vsc-mono"
     value={typeof value === 'string' ? value : ''}
-    placeholder="text"
+    placeholder={placeholder}
     onChange={(e) => onChange(e.target.value)}
   />
 );
@@ -285,6 +299,8 @@ const NumberField: FC<FieldInputProps & { integer?: boolean }> = ({
   value,
   onChange,
   integer,
+  disabled,
+  placeholder,
 }) => {
   const canonical =
     typeof value === 'number' || typeof value === 'bigint'
@@ -307,8 +323,8 @@ const NumberField: FC<FieldInputProps & { integer?: boolean }> = ({
       className="h-7 text-xs font-vsc-mono"
       inputMode={integer ? 'numeric' : 'decimal'}
       value={draft}
-      placeholder={integer ? '0' : '0.0'}
-      aria-invalid={parse(draft) === null}
+      placeholder={placeholder ?? (integer ? '0' : '0.0')}
+      aria-invalid={!disabled && parse(draft) === null}
       onChange={(e) => {
         setDraft(e.target.value);
         const num = parse(e.target.value);
@@ -537,7 +553,7 @@ const MapField: FC<
 
 const OptionalField: FC<
   FieldInputProps & { schema: Extract<FieldSchema, { type: 'optional' }> }
-> = ({ schema, value, onChange, depth, refPath }) => {
+> = ({ schema, value, onChange, depth, refPath, placeholder }) => {
   const lookup = useContext(TypeLookupContext);
   const isSet = value !== null && value !== undefined;
   return (
@@ -558,6 +574,7 @@ const OptionalField: FC<
           onChange={onChange}
           depth={depth}
           refPath={refPath}
+          placeholder={placeholder}
         />
       )}
     </div>
@@ -566,7 +583,7 @@ const OptionalField: FC<
 
 const UnionField: FC<
   FieldInputProps & { schema: Extract<FieldSchema, { type: 'union' }> }
-> = ({ schema, value, onChange, depth, refPath }) => {
+> = ({ schema, value, onChange, depth, refPath, placeholder }) => {
   const lookup = useContext(TypeLookupContext);
   const detected = activeUnionVariant(value, schema.variants, lookup);
   const [chosen, setChosen] = useState(0);
@@ -603,6 +620,7 @@ const UnionField: FC<
           onChange={onChange}
           depth={depth}
           refPath={refPath}
+          placeholder={placeholder}
         />
       )}
     </div>
@@ -614,7 +632,13 @@ const UnionField: FC<
  *  draft is an error state, not a deletion — the last committed value stays
  *  in place (so e.g. emptying a map value doesn't delete the row) and the
  *  invalid style flags the draft. */
-const RawJsonField: FC<FieldInputProps> = ({ schema, value, onChange }) => {
+const RawJsonField: FC<FieldInputProps> = ({
+  schema,
+  value,
+  onChange,
+  disabled,
+  placeholder,
+}) => {
   const canonical = value === undefined ? '' : JSON.stringify(value);
   const [draft, setDraft] = useDraft(canonical);
   const parse = (text: string): { ok: true; value: unknown } | { ok: false } => {
@@ -630,8 +654,8 @@ const RawJsonField: FC<FieldInputProps> = ({ schema, value, onChange }) => {
       className="min-h-[28px] px-2 py-1 font-vsc-mono text-xs resize-y"
       rows={1}
       value={draft}
-      placeholder={`JSON (${schemaLabel(schema)})`}
-      aria-invalid={!parse(draft).ok}
+      placeholder={placeholder ?? `JSON (${schemaLabel(schema)})`}
+      aria-invalid={!disabled && !parse(draft).ok}
       onChange={(e) => {
         setDraft(e.target.value);
         const parsed = parse(e.target.value);

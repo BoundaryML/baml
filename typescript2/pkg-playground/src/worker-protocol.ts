@@ -69,6 +69,8 @@ export interface ParamSchema {
    *  from a nullable type, which appears as `{ type: 'optional' }` in
    *  `schema`. */
   hasDefault: boolean;
+  /** Exact, unevaluated source text for the declared default expression. */
+  defaultExpression?: string;
   schema: FieldSchema;
 }
 

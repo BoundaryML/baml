@@ -82,6 +82,7 @@
     {
       "name": "x",
       "hasDefault": true,
+      "defaultExpression": "3",
       "schema": {
         "type": "int"
       }
