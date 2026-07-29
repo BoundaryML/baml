@@ -108,6 +108,7 @@ import {
   type SerializedTestDef,
   type SerializedTestSet,
 } from './serialized-test-tree';
+import { collectLatestTestRunResults } from './test-run-results';
 
 registerBuiltinResultRenderers();
 
@@ -823,26 +824,10 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
       ),
     [displayRuns, generation, selectedProject],
   );
-  const testRunResults = useMemo(() => {
-    const results = new Map<string, unknown>();
-    for (const [testName, error] of testStartErrors) {
-      results.set(testName, { outcome: 'error', error });
-    }
-    for (const run of testRuns) {
-      if (!run.testName) continue;
-      if (run.result != null) {
-        results.set(run.testName, run.result);
-      } else if (run.error) {
-        results.set(run.testName, { outcome: 'error', error: run.error });
-      } else if (run.status === 'cancelled') {
-        results.set(run.testName, {
-          outcome: 'error',
-          error: 'Cancelled',
-        });
-      }
-    }
-    return results;
-  }, [testRuns, testStartErrors]);
+  const testRunResults = useMemo(
+    () => collectLatestTestRunResults(testRuns, testStartErrors),
+    [testRuns, testStartErrors],
+  );
   const [expandedLogId, setExpandedLogId] = useState<number | null>(null);
   const outputRef = useRef<HTMLDivElement>(null);
   const promptContentRef = useRef<HTMLDivElement>(null);
