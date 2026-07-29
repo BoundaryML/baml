@@ -26,12 +26,10 @@ const VERB_COLOR: Color = Color::TrueColor(0xA8, 0x55, 0xF7);
 
 static QUIET: AtomicBool = AtomicBool::new(false);
 static VERBOSE: AtomicU8 = AtomicU8::new(0);
-static NO_PROGRESS: AtomicBool = AtomicBool::new(false);
 
-pub(crate) fn init(quiet: u8, verbose: u8, no_progress: bool) {
+pub(crate) fn init(quiet: u8, verbose: u8) {
     QUIET.store(quiet > 0, Ordering::Relaxed);
     VERBOSE.store(verbose, Ordering::Relaxed);
-    NO_PROGRESS.store(no_progress, Ordering::Relaxed);
 }
 
 pub(crate) fn verbose() -> bool {
@@ -84,7 +82,7 @@ impl Reporter {
 
     /// Mark a new phase with a persistent cargo-style line.
     pub fn spin(&self, verb: &str, msg: impl AsRef<str>) {
-        if QUIET.load(Ordering::Relaxed) || NO_PROGRESS.load(Ordering::Relaxed) {
+        if QUIET.load(Ordering::Relaxed) || !crate::output::policy().progress {
             return;
         }
         eprintln!("{}", format_status(verb, msg.as_ref()));

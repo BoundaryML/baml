@@ -88,15 +88,6 @@ pub(crate) struct GlobalArgs {
     )]
     pub verbose: u8,
 
-    /// Disable progress output.
-    #[arg(
-        long,
-        global = true,
-        help_heading = "Global options",
-        display_order = 40
-    )]
-    pub no_progress: bool,
-
     /// Change to this directory before running the command.
     #[arg(
         long,
@@ -341,11 +332,7 @@ impl RuntimeCli {
                 format!("failed to change directory to {}", directory.display())
             })?;
         }
-        crate::reporter::init(
-            self.global.quiet,
-            self.global.verbose,
-            self.global.no_progress,
-        );
+        crate::reporter::init(self.global.quiet, self.global.verbose);
 
         // The detached telemetry flush child must run before (and without)
         // `record_invocation` below: recording its own invocation would

@@ -42,6 +42,15 @@ pub(crate) struct OutputArgs {
 
     #[arg(
         long,
+        global = true,
+        help = "Disable progress output",
+        help_heading = "Global options",
+        display_order = 40
+    )]
+    pub no_progress: bool,
+
+    #[arg(
+        long,
         env = "BAML_HYPERLINKS",
         value_enum,
         value_name = "WHEN",
@@ -115,6 +124,7 @@ pub(crate) struct OutputPolicy {
     pub stdout: StreamPolicy,
     pub stderr: StreamPolicy,
     pub diagnostics: DiagnosticPolicy,
+    pub progress: bool,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -152,6 +162,7 @@ const DEFAULT_POLICY: OutputPolicy = OutputPolicy {
         format: DiagnosticFormat::Human,
         show_error_codes: true,
     },
+    progress: true,
 };
 
 static OUTPUT_POLICY: RwLock<OutputPolicy> = RwLock::new(DEFAULT_POLICY);
@@ -205,6 +216,9 @@ fn resolve(args: OutputArgs, signals: OutputSignals) -> OutputPolicy {
             DiagnosticFormatChoice::Concise => DiagnosticFormat::Concise,
         };
     }
+    if args.no_progress {
+        policy.progress = false;
+    }
 
     policy
 }
@@ -225,6 +239,7 @@ impl OutputPreset {
                     format: DiagnosticFormat::Agent,
                     show_error_codes: true,
                 },
+                progress: false,
             },
             Self::Human | Self::Auto => OutputPolicy {
                 stdout: StreamPolicy {
@@ -239,6 +254,7 @@ impl OutputPreset {
                     format: DiagnosticFormat::Human,
                     show_error_codes: true,
                 },
+                progress: true,
             },
         }
     }
@@ -317,6 +333,7 @@ mod tests {
         OutputArgs {
             preset,
             color: None,
+            no_progress: false,
             hyperlinks: None,
             diagnostic_format: None,
         }
@@ -337,6 +354,7 @@ mod tests {
         assert!(!policy.stdout.hyperlinks);
         assert!(!policy.stderr.hyperlinks);
         assert_eq!(policy.diagnostics.format, DiagnosticFormat::Agent);
+        assert!(!policy.progress);
     }
 
     #[test]
@@ -357,6 +375,7 @@ mod tests {
         assert!(!policy.stdout.hyperlinks);
         assert!(policy.stderr.hyperlinks);
         assert_eq!(policy.diagnostics.format, DiagnosticFormat::Human);
+        assert!(policy.progress);
     }
 
     #[test]
@@ -373,6 +392,17 @@ mod tests {
         assert!(policy.stdout.hyperlinks);
         assert!(policy.stderr.hyperlinks);
         assert_eq!(policy.diagnostics.format, DiagnosticFormat::Human);
+        assert!(!policy.progress);
+    }
+
+    #[test]
+    fn no_progress_overrides_human_preset() {
+        let mut output_args = args(OutputPreset::Human);
+        output_args.no_progress = true;
+
+        let policy = resolve(output_args, INTERACTIVE);
+
+        assert!(!policy.progress);
     }
 
     #[test]

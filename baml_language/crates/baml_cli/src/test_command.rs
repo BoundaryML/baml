@@ -150,6 +150,7 @@ struct ParsedProfileArgs {
 pub(crate) struct TestOutputOverrides {
     pub(crate) preset: Option<crate::output::OutputPreset>,
     pub(crate) color: Option<crate::output::ColorChoice>,
+    pub(crate) no_progress: Option<bool>,
     pub(crate) hyperlinks: Option<crate::output::HyperlinkChoice>,
     pub(crate) diagnostic_format: Option<crate::output::DiagnosticFormatChoice>,
 }
@@ -167,6 +168,7 @@ impl TestOutputOverrides {
         Self {
             preset: explicitly_set("preset").then_some(output.preset),
             color: explicitly_set("color").then_some(output.color).flatten(),
+            no_progress: explicitly_set("no_progress").then_some(output.no_progress),
             hyperlinks: explicitly_set("hyperlinks")
                 .then_some(output.hyperlinks)
                 .flatten(),
@@ -182,6 +184,7 @@ impl TestOutputOverrides {
         Self {
             preset: supplied("preset").then_some(output.preset),
             color: supplied("color").then_some(output.color).flatten(),
+            no_progress: supplied("no_progress").then_some(output.no_progress),
             hyperlinks: supplied("hyperlinks")
                 .then_some(output.hyperlinks)
                 .flatten(),
@@ -197,6 +200,9 @@ impl TestOutputOverrides {
         }
         if let Some(color) = self.color {
             output.color = Some(color);
+        }
+        if let Some(no_progress) = self.no_progress {
+            output.no_progress = no_progress;
         }
         if let Some(hyperlinks) = self.hyperlinks {
             output.hyperlinks = Some(hyperlinks);
@@ -1602,6 +1608,7 @@ mod tests {
             &[
                 "--color".to_string(),
                 "never".to_string(),
+                "--no-progress".to_string(),
                 "--features".to_string(),
                 "beta".to_string(),
                 "--features=display_all_warnings".to_string(),
@@ -1613,6 +1620,7 @@ mod tests {
             globals.output.color,
             Some(crate::output::ColorChoice::Never)
         );
+        assert_eq!(globals.output.no_progress, Some(true));
 
         let error = TestArgs::parse_profile_args("bad", &["--profile=other".to_string()])
             .unwrap_err()
