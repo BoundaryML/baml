@@ -16,7 +16,7 @@
  * degrade to a per-field raw-JSON textarea.
  */
 
-import { ChevronRight, Plus, Trash2 } from 'lucide-react';
+import { ChevronRight, Plus, SquarePen, Trash2 } from 'lucide-react';
 import {
   createContext,
   type FC,
@@ -123,7 +123,7 @@ export const ArgsForm: FC<ArgsFormProps> = ({
   }
   return (
     <TypeLookupContext.Provider value={lookup}>
-      <div className="flex flex-col gap-1.5">
+      <div className="grid grid-cols-[minmax(8rem,max-content)_minmax(0,1fr)] items-start gap-x-2 gap-y-1.5">
         {params.map((param) => (
           <ParamRow
             key={param.name}
@@ -148,7 +148,7 @@ const FieldLabel: FC<{
   schema: FieldSchema;
   extra?: ReactNode;
 }> = ({ name, schema, extra }) => (
-  <div className="flex items-center gap-1.5">
+  <div className="flex min-h-7 items-center gap-1.5">
     <span className="font-vsc-mono text-xs text-foreground">{name}</span>
     <span className="font-vsc-mono text-[10px] text-vsc-text-faint">
       {schemaLabel(schema)}
@@ -171,26 +171,33 @@ const ParamRow: FC<{
     param.defaultExpression !== undefined &&
     !rendersDefaultPlaceholder(param.schema, lookup);
   return (
-    <div className="flex flex-col gap-0.5">
+    <div className="contents">
       <FieldLabel
         extra={
           param.hasDefault && (
-            <label
-              className="flex items-center gap-1 text-[10px] text-vsc-description"
-              htmlFor={`override-${param.name}`}
+            <Button
+              aria-label={
+                omitted
+                  ? `Set explicit value for ${param.name}`
+                  : `Use default value for ${param.name}`
+              }
+              aria-pressed={!omitted}
+              className="text-vsc-description aria-pressed:bg-accent aria-pressed:text-foreground"
+              onClick={() =>
+                omitted
+                  ? onChange(defaultValueForSchema(param.schema, lookup))
+                  : onOmit()
+              }
+              size="icon-xs"
+              title={
+                omitted
+                  ? `Set explicit value for ${param.name}`
+                  : `Use default value for ${param.name}`
+              }
+              variant="ghost"
             >
-              <Switch
-                aria-label={`Override ${param.name}`}
-                checked={!omitted}
-                id={`override-${param.name}`}
-                onCheckedChange={(on) =>
-                  on
-                    ? onChange(defaultValueForSchema(param.schema, lookup))
-                    : onOmit()
-                }
-              />
-              override
-            </label>
+              <SquarePen aria-hidden="true" />
+            </Button>
           )
         }
         name={param.name}
