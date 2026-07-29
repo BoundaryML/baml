@@ -321,6 +321,20 @@ pub enum StatementKind {
     /// Lowered from calls to `$compiler_intrinsic` functions.
     Intrinsic { op: IntrinsicOp, args: Vec<Operand> },
 
+    /// Write an interface field on a receiver whose concrete type is not known
+    /// statically — the store counterpart of [`Rvalue::VirtualFieldAccess`], with
+    /// the same operand meaning and the same resolution.
+    ///
+    /// A statement rather than an `Assign` to a `Place`, because the destination
+    /// slot is only known once the receiver's impl is resolved at run time.
+    VirtualFieldStore {
+        iface: TyTemplateInterface,
+        receiver: Operand,
+        field_index: u32,
+        field: Name,
+        value: Operand,
+    },
+
     /// No-op (placeholder for removed statements).
     Nop,
 }
@@ -828,6 +842,31 @@ pub enum Rvalue {
         /// Appended to the resolved impl frame by the VM — dropping them would
         /// lose the method's own generics.
         type_args: Vec<TyTemplate>,
+    },
+
+    /// Read an interface field from a receiver whose concrete type is not known
+    /// statically — the field analogue of [`Terminator::VirtualCall`], and the
+    /// structural twin of [`Rvalue::MakeVirtualBoundMethod`].
+    ///
+    /// A `Place::Field` cannot express this: its index is a slot in the receiver's
+    /// own layout, and two classes implementing the same interface link the same
+    /// interface field to different slots. `field_index` is instead the field's
+    /// position in the *interface's* declared field list, which the VM maps to a
+    /// slot through the resolved impl's `field_links`.
+    VirtualFieldAccess {
+        /// The interface resolved through, pushed by the emitter with `LoadType` —
+        /// so an interface argument that is an enclosing generic (`Slot<T>`)
+        /// arrives at the resolver realized against the caller's frame, which is
+        /// what discriminates a class implementing one interface family at several
+        /// instantiations with different links.
+        iface: TyTemplateInterface,
+        /// The receiver whose runtime concrete type is the `Self` to resolve on.
+        receiver: Operand,
+        /// Index into `iface`'s declared fields.
+        field_index: u32,
+        /// The field's name — for the pretty-printer and the emitter's
+        /// `OperandMeta` only. Dispatch reads `field_index`.
+        field: Name,
     },
 
     /// Create a generic-function value (`foo<T>`) whose type arguments depend on

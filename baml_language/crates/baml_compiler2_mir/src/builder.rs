@@ -206,6 +206,27 @@ impl MirBuilder {
         self.push_statement(StatementKind::Assign { destination, value }, Some(span));
     }
 
+    /// Emit an open-world interface-field store.
+    pub(crate) fn virtual_field_store(
+        &mut self,
+        iface: baml_type::TyTemplateInterface,
+        receiver: Operand,
+        field_index: u32,
+        field: baml_base::Name,
+        value: Operand,
+    ) {
+        self.push_statement(
+            StatementKind::VirtualFieldStore {
+                iface,
+                receiver,
+                field_index,
+                field,
+                value,
+            },
+            None,
+        );
+    }
+
     /// Emit a drop statement.
     pub(crate) fn drop(&mut self, place: Place) {
         self.push_statement(StatementKind::Drop(place), None);

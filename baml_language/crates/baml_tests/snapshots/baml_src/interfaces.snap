@@ -1220,26 +1220,16 @@ function interfaces.BsmvAcc.BsmvAdder.addOne(self: interfaces.BsmvAcc, other: in
 
 function interfaces.BtviPrintable$for$T.display(self: #0) -> string {
     load_var self
-    is_type interfaces.BtviPerson
-    pop_jump_if_false L0
-    load_var self
-    load_field .0
+    load_type interfaces.BtviNamed
+    virtual_load_field .name
     return
-
-  L0:
-    unreachable
 }
 
 function interfaces.BtvsPrintable$for$T.display(self: #0) -> string {
     load_var self
-    is_type interfaces.BtvsPerson
-    pop_jump_if_false L0
-    load_var self
-    load_field .0
+    load_type interfaces.BtvsNamed
+    virtual_load_field .name
     return
-
-  L0:
-    unreachable
 }
 
 function interfaces.CimdGreeter.greet(self: interfaces.CimdGreeter) -> string {
@@ -1492,19 +1482,12 @@ function interfaces.DkslLogger.log(self: interfaces.DkslLogger, msg: string) -> 
 }
 
 function interfaces.DmdtAnimal.describe(self: interfaces.DmdtAnimal) -> string {
-    load_var self
-    is_type interfaces.DmdtDog
-    pop_jump_if_false L0
-    load_var self
-    load_field .0
-    store_var _2
     load_const "animal: "
-    load_var _2
+    load_var self
+    load_type interfaces.DmdtAnimal
+    virtual_load_field .name
     bin_op +
     return
-
-  L0:
-    unreachable
 }
 
 function interfaces.DmdtDog.DmdtAnimal.speak(self: interfaces.DmdtDog) -> string {
@@ -1609,15 +1592,9 @@ function interfaces.DwoaTip.name(self: interfaces.DwoaTip) -> string {
 function interfaces.F1bgPrintable$for$F1bgWrapper<T>.display(self: interfaces.F1bgWrapper<#0>) -> string {
     load_var self
     load_field .inner
-    store_var_load_var _2
-    is_type interfaces.F1bgPerson
-    pop_jump_if_false L0
-    load_var _2
-    load_field .0
+    load_type interfaces.F1bgNamed
+    virtual_load_field .name
     return
-
-  L0:
-    unreachable
 }
 
 function interfaces.F1dPrintable$for$F1dBox<T>.display(self: interfaces.F1dBox<#0>) -> string {
@@ -1644,92 +1621,39 @@ function interfaces.F1saDescribable$for$F1saPair<T>.describe(self: interfaces.F1
 
 function interfaces.F2amPrintable$for$T.display(self: #0) -> string {
     load_var self
-    is_type interfaces.F2amTeam
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
-    load_var self
-    is_type interfaces.F2amPerson
-    pop_jump_if_false L3
-    load_var self
-    load_field .0
-    jump L2
-
-  L1:
-    load_var self
-    load_field .0
-
-  L2:
+    load_type interfaces.F2amNamed
+    virtual_load_field .name
     return
-
-  L3:
-    unreachable
 }
 
 function interfaces.F2dPrintable$for$T.display(self: #0) -> string {
-    load_var self
-    is_type interfaces.F2dPerson
-    pop_jump_if_false L0
-    load_var self
-    load_field .0
-    store_var _2
     load_const "named:"
-    load_var _2
+    load_var self
+    load_type interfaces.F2dNamed
+    virtual_load_field .name
     bin_op +
     return
-
-  L0:
-    unreachable
 }
 
 function interfaces.F2riPrintable$for$T.display(self: #0) -> string {
     load_var self
-    is_type interfaces.F2riPerson
-    pop_jump_if_false L0
-    load_var self
-    load_field .0
+    load_type interfaces.F2riNamed
+    virtual_load_field .name
     return
-
-  L0:
-    unreachable
 }
 
 function interfaces.F2rsPrintable$for$T.display(self: #0) -> string {
     load_var self
-    is_type interfaces.F2rsPerson
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
-    load_var self
-    is_type interfaces.F2rsTeam
-    pop_jump_if_false L3
-    load_var self
-    load_field .0
-    jump L2
-
-  L1:
-    load_var self
-    load_field .0
-
-  L2:
+    load_type interfaces.F2rsNamed
+    virtual_load_field .name
     return
-
-  L3:
-    unreachable
 }
 
 function interfaces.F2saLabeled$for$T.label(self: #0) -> string {
     load_var self
-    is_type interfaces.F2saProject
-    pop_jump_if_false L0
-    load_var self
-    load_field .0
+    load_type interfaces.F2saNamed
+    virtual_load_field .name
     return
-
-  L0:
-    unreachable
 }
 
 function interfaces.Fz03Dog.Fz03Animal.speak(self: interfaces.Fz03Dog) -> string {
@@ -2145,19 +2069,12 @@ function interfaces.MsmaBox.MsmaEquatable.same(self: interfaces.MsmaBox, other: 
 }
 
 function interfaces.OdndAnimal.describe(self: interfaces.OdndAnimal) -> string {
-    load_var self
-    is_type interfaces.OdndCat
-    pop_jump_if_false L0
-    load_var self
-    load_field .0
-    store_var _2
     load_const "default:"
-    load_var _2
+    load_var self
+    load_type interfaces.OdndAnimal
+    virtual_load_field .name
     bin_op +
     return
-
-  L0:
-    unreachable
 }
 
 function interfaces.OdndCat.OdndAnimal.describe(self: interfaces.OdndCat) -> string {
@@ -2193,38 +2110,15 @@ function interfaces.RcflLeaf.RcflA.tag(self: interfaces.RcflLeaf) -> string {
 
 function interfaces.RcpfPerson.introduce(self: interfaces.RcpfPerson) -> string {
     load_var self
-    is_type interfaces.RcpfEmployee
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
-    load_var self
-    is_type interfaces.RcpfEmployee
-    pop_jump_if_false L3
-    load_var self
-    load_field .0
-    jump L2
-
-  L1:
-    load_var self
-    load_field .0
-
-  L2:
+    load_type interfaces.RcpfNamed
+    virtual_load_field .name
     load_const " the "
     bin_op +
-    store_var _2
     load_var self
-    is_type interfaces.RcpfEmployee
-    pop_jump_if_false L3
-    load_var self
-    load_field .1
-    store_var _6
-    load_var2 2 3
+    load_type interfaces.RcpfPerson
+    virtual_load_field .occupation
     bin_op +
     return
-
-  L3:
-    unreachable
 }
 
 function interfaces.RcpmBox.RcpmParent<int>.describe(self: interfaces.RcpmBox) -> string {
@@ -2441,14 +2335,9 @@ function interfaces.W302Loud$for$T.shout(self: #0) -> string {
 
 function interfaces.W302Printable$for$T.display(self: #0) -> string {
     load_var self
-    is_type interfaces.W302Person
-    pop_jump_if_false L0
-    load_var self
-    load_field .0
+    load_type interfaces.W302Named
+    virtual_load_field .name
     return
-
-  L0:
-    unreachable
 }
 
 function interfaces.W304Named.describe(self: interfaces.W304Named) -> string {
@@ -2457,20 +2346,10 @@ function interfaces.W304Named.describe(self: interfaces.W304Named) -> string {
 }
 
 function interfaces.W304P.W304Named.describe(self: interfaces.W304P) -> string {
-    load_var self
-    is_type interfaces.W304P
-    pop_jump_if_false L0
-    load_var self
-    load_field .name
-    store_var _7
-    load_var self
-    is_type interfaces.W304P
-    pop_jump_if_false L0
-    load_var self
-    load_field .0
-    store_var _10
     load_const "default.name=["
-    load_var _7
+    load_var self
+    load_type interfaces.W304Named
+    virtual_load_field .name
     bin_op +
     load_const "] self.name=["
     bin_op +
@@ -2479,14 +2358,13 @@ function interfaces.W304P.W304Named.describe(self: interfaces.W304P) -> string {
     bin_op +
     load_const "] as=["
     bin_op +
-    load_var _10
+    load_var self
+    load_type interfaces.W304Named
+    virtual_load_field .name
     bin_op +
     load_const "]"
     bin_op +
     return
-
-  L0:
-    unreachable
 }
 
 function interfaces.W307IntBox.W307Box<int>.get(self: interfaces.W307IntBox) -> int {
@@ -2545,19 +2423,12 @@ function interfaces.W3ooDebuggable$for$int.debugW3oo(self: int) -> string {
 }
 
 function interfaces.W3spPerson.W3spNamed.greet(self: interfaces.W3spPerson) -> string {
-    load_var self
-    is_type interfaces.W3spPerson
-    pop_jump_if_false L0
-    load_var self
-    load_field .0
-    store_var _2
     load_const "Hi "
-    load_var _2
+    load_var self
+    load_type interfaces.W3spNamed
+    virtual_load_field .name
     bin_op +
     return
-
-  L0:
-    unreachable
 }
 
 function interfaces.W3umCat.W3umAnimal.speak(self: interfaces.W3umCat) -> string {
@@ -2594,35 +2465,21 @@ function interfaces.ausi_main() -> bool {
     load_const "widget"
     load_const "WIDGET-001"
     init_instance user.interfaces.AusiItem .named_name, .labeled_name
-    store_var i
-    load_var i
-    store_var_load_var _4
-    is_type interfaces.AusiItem
-    pop_jump_if_false L1
-    load_var _4
-    load_field .0
-    store_var _3
-    load_var _3
+    store_var_load_var i
+    load_type interfaces.AusiNamed
+    virtual_load_field .name
     load_const "widget"
     cmp_op ==
     jump_if_false L0
     pop 1
     load_var i
-    store_var_load_var _7
-    is_type interfaces.AusiItem
-    pop_jump_if_false L1
-    load_var _7
-    load_field .1
-    store_var _6
-    load_var _6
+    load_type interfaces.AusiLabeled
+    virtual_load_field .name
     load_const "WIDGET-001"
     cmp_op ==
 
   L0:
     return
-
-  L1:
-    unreachable
 }
 
 function interfaces.bgfb_forward(x: #0) -> bool {
@@ -2770,30 +2627,20 @@ function interfaces.cofs_main() -> bool {
     load_const 0
     load_const "localhost"
     init_instance user.interfaces.CofsServer .host, .config_host
-    store_var s
-    load_var s
-    store_var c
-    load_var s
+    store_var_load_var s
     load_field .host
     load_const 0
     cmp_int_op ==
     jump_if_false L0
     pop 1
-    load_var c
-    is_type interfaces.CofsServer
-    pop_jump_if_false L1
-    load_var c
-    load_field .1
-    store_var _5
-    load_var _5
+    load_var s
+    load_type interfaces.CofsConfig
+    virtual_load_field .host
     load_const "localhost"
     cmp_op ==
 
   L0:
     return
-
-  L1:
-    unreachable
 }
 
 function interfaces.comc_main() -> string {
@@ -2823,28 +2670,9 @@ function interfaces.crid_main() -> bool {
 function interfaces.ctpi_main() -> string {
     load_const "Alice"
     init_instance user.interfaces.CtpiEmployee .name
-    store_var_load_var n
-    is_type interfaces.CtpiEmployee
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
-    load_var n
-    is_type interfaces.CtpiEmployee
-    pop_jump_if_false L3
-    load_var n
-    load_field .0
-    jump L2
-
-  L1:
-    load_var n
-    load_field .0
-
-  L2:
+    load_type interfaces.CtpiNamed
+    virtual_load_field .name
     return
-
-  L3:
-    unreachable
 }
 
 function interfaces.dapc_main() -> string {
@@ -3156,15 +2984,9 @@ function interfaces.dtai_main() -> string {
     alloc_array 1
     load_const 0
     load_array_element
-    store_var_load_var _3
-    is_type interfaces.DtaiCat
-    pop_jump_if_false L0
-    load_var _3
-    load_field .0
+    load_type interfaces.DtaiAnimal
+    virtual_load_field .name
     return
-
-  L0:
-    unreachable
 }
 
 function interfaces.dtba_main() -> string {
@@ -3652,79 +3474,29 @@ function interfaces.fz20_main() -> string {
     init_instance user.interfaces.Fz20D .a_label, .b_label
     store_var d
     load_var d
-    store_var_load_var _3
-    is_type interfaces.Fz20D
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
-    load_var _3
-    is_type interfaces.Fz20D
-    pop_jump_if_false L3
-    load_var _3
-    load_field .1
-    store_var a_val
-    jump L2
-
-  L1:
-    load_var _3
-    load_field .0
-    store_var a_val
-
-  L2:
-    load_var d
-    store_var_load_var _7
-    is_type interfaces.Fz20D
-    pop_jump_if_false L3
-    load_var _7
-    load_field .1
-    store_var b_val
-    load_var a_val
+    load_type interfaces.Fz20A
+    virtual_load_field .label
     load_const "|"
     bin_op +
-    load_var b_val
+    load_var d
+    load_type interfaces.Fz20B
+    virtual_load_field .label
     bin_op +
     return
-
-  L3:
-    unreachable
 }
 
 function interfaces.fz21_get_from_a(a: interfaces.Fz21A) -> string {
     load_var a
-    is_type interfaces.Fz21D
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
-    load_var a
-    is_type interfaces.Fz21D
-    pop_jump_if_false L3
-    load_var a
-    load_field .1
-    jump L2
-
-  L1:
-    load_var a
-    load_field .0
-
-  L2:
+    load_type interfaces.Fz21A
+    virtual_load_field .label
     return
-
-  L3:
-    unreachable
 }
 
 function interfaces.fz21_get_from_b(b: interfaces.Fz21B) -> string {
     load_var b
-    is_type interfaces.Fz21D
-    pop_jump_if_false L0
-    load_var b
-    load_field .1
+    load_type interfaces.Fz21B
+    virtual_load_field .label
     return
-
-  L0:
-    unreachable
 }
 
 function interfaces.fz21_main() -> string {
@@ -4130,15 +3902,9 @@ function interfaces.gben_first_name(items: #0[]) -> string {
     load_var items
     load_const 0
     load_array_element
-    store_var_load_var _2
-    is_type interfaces.GbenDog
-    pop_jump_if_false L0
-    load_var _2
-    load_field .0
+    load_type interfaces.GbenNamed
+    virtual_load_field .name
     return
-
-  L0:
-    unreachable
 }
 
 function interfaces.gben_main() -> string {
@@ -4157,15 +3923,9 @@ function interfaces.gbr_first_name(items: #0[]) -> string {
     load_var items
     load_const 0
     load_array_element
-    store_var_load_var _2
-    is_type interfaces.GbrDog
-    pop_jump_if_false L0
-    load_var _2
-    load_field .0
+    load_type interfaces.GbrNamed
+    virtual_load_field .name
     return
-
-  L0:
-    unreachable
 }
 
 function interfaces.gbr_main() -> string {
@@ -4204,44 +3964,18 @@ function interfaces.gbsp_same(x: #0, y: #0) -> bool {
 }
 
 function interfaces.gbte_greet(p: #0) -> string {
-    load_var p
-    is_type interfaces.GbteEmployee
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
-    load_var p
-    is_type interfaces.GbteEmployee
-    pop_jump_if_false L3
-    load_var p
-    load_field .0
-    store_var _4
-    jump L2
-
-  L1:
-    load_var p
-    load_field .0
-    store_var _4
-
-  L2:
     load_const "Hi, "
-    load_var _4
+    load_var p
+    load_type interfaces.GbteNamed
+    virtual_load_field .name
     bin_op +
     load_const " the "
     bin_op +
-    store_var _2
     load_var p
-    is_type interfaces.GbteEmployee
-    pop_jump_if_false L3
-    load_var p
-    load_field .1
-    store_var _7
-    load_var2 2 4
+    load_type interfaces.GbtePerson
+    virtual_load_field .occupation
     bin_op +
     return
-
-  L3:
-    unreachable
 }
 
 function interfaces.gbte_main() -> string {
@@ -4346,42 +4080,17 @@ function interfaces.grpa_main() -> string {
 function interfaces.grpf_main() -> int {
     load_const 42
     init_instance user.interfaces.GrpfBox .value
-    store_var_load_var child
-    is_type interfaces.GrpfBox
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
-    load_var child
-    is_type interfaces.GrpfBox
-    pop_jump_if_false L3
-    load_var child
-    load_field .0
-    jump L2
-
-  L1:
-    load_var child
-    load_field .0
-
-  L2:
+    load_type interfaces.GrpfParent<int>
+    virtual_load_field .value
     return
-
-  L3:
-    unreachable
 }
 
 function interfaces.grpl_main() -> int {
     load_const 42
     init_instance user.interfaces.GrplBox .stored
-    store_var_load_var child
-    is_type interfaces.GrplBox
-    pop_jump_if_false L0
-    load_var child
-    load_field .0
+    load_type interfaces.GrplParent<int>
+    virtual_load_field .value
     return
-
-  L0:
-    unreachable
 }
 
 function interfaces.grpt_main() -> string {
@@ -4452,23 +4161,15 @@ function interfaces.ifcc_main() -> bool {
     store_var s
     load_var s
     store_var_load_var c
-    is_type interfaces.IfccServer
-    pop_jump_if_false L3
-    load_var c
-    load_field .0
-    store_var _6
-    load_var _6
+    load_type interfaces.IfccConfig
+    virtual_load_field .host
     load_const "localhost"
     cmp_op ==
     jump_if_false L0
     pop 1
     load_var c
-    is_type interfaces.IfccServer
-    pop_jump_if_false L3
-    load_var c
-    load_field .1
-    store_var _8
-    load_var _8
+    load_type interfaces.IfccConfig
+    virtual_load_field .port
     load_const 8080
     cmp_int_op ==
 
@@ -4490,9 +4191,6 @@ function interfaces.ifcc_main() -> bool {
 
   L2:
     return
-
-  L3:
-    unreachable
 }
 
 function interfaces.ifvr_main() -> int {
@@ -4501,28 +4199,9 @@ function interfaces.ifvr_main() -> int {
     load_const "PM"
     load_const 1.0
     init_instance user.interfaces.IfvrEmployee .name, .age, .occupation, .salary
-    store_var_load_var a
-    is_type interfaces.IfvrEmployee
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
-    load_var a
-    is_type interfaces.IfvrEmployee
-    pop_jump_if_false L3
-    load_var a
-    load_field .1
-    jump L2
-
-  L1:
-    load_var a
-    load_field .1
-
-  L2:
+    load_type interfaces.IfvrAged
+    virtual_load_field .age
     return
-
-  L3:
-    unreachable
 }
 
 function interfaces.itic_main() -> string {
@@ -4605,33 +4284,12 @@ function interfaces.mdci_main() -> string {
 }
 
 function interfaces.mdid_describe(a: interfaces.MdidAnimal) -> string {
-    load_var a
-    is_type interfaces.MdidCat
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
-    load_var a
-    is_type interfaces.MdidDog
-    pop_jump_if_false L3
-    load_var a
-    load_field .0
-    store_var _2
-    jump L2
-
-  L1:
-    load_var a
-    load_field .0
-    store_var _2
-
-  L2:
     load_const "animal: "
-    load_var _2
+    load_var a
+    load_type interfaces.MdidAnimal
+    virtual_load_field .name
     bin_op +
     return
-
-  L3:
-    unreachable
 }
 
 function interfaces.mdid_main() -> string {
@@ -4677,35 +4335,22 @@ function interfaces.midr_describe(s: interfaces.MidrSwitch) -> string {
     is_type interfaces.MidrSwitch
     pop_jump_if_false L0
     load_var s
-    is_type interfaces.MidrLamp
-    pop_jump_if_false L3
-    load_var s
-    load_field .0
-    store_var _3
-    load_var _3
+    load_type interfaces.MidrSwitch
+    virtual_load_field .active
     load_const true
     cmp_op ==
     pop_jump_if_false L0
     jump L1
 
   L0:
-    load_var s
-    is_type interfaces.MidrLamp
-    pop_jump_if_false L3
     load_const "off"
     jump L2
 
   L1:
-    load_var s
-    is_type interfaces.MidrLamp
-    pop_jump_if_false L3
     load_const "on"
 
   L2:
     return
-
-  L3:
-    unreachable
 }
 
 function interfaces.midr_main() -> string {
@@ -4846,28 +4491,9 @@ function interfaces.rcep_main() -> string {
     load_const "Alice"
     load_const "PM"
     init_instance user.interfaces.RcepEmployee .name, .occupation
-    store_var_load_var p
-    is_type interfaces.RcepEmployee
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
-    load_var p
-    is_type interfaces.RcepEmployee
-    pop_jump_if_false L3
-    load_var p
-    load_field .0
-    jump L2
-
-  L1:
-    load_var p
-    load_field .0
-
-  L2:
+    load_type interfaces.RcepNamed
+    virtual_load_field .name
     return
-
-  L3:
-    unreachable
 }
 
 function interfaces.rcfl_main() -> string {
@@ -5050,37 +4676,21 @@ function interfaces.sfnd_main() -> bool {
     load_const "abc"
     load_const 42
     init_instance user.interfaces.SfndThing .text_id, .numeric_id
-    store_var t
-    load_var t
-    store_var text
-    load_var t
-    store_var numeric
-    load_var text
-    is_type interfaces.SfndThing
-    pop_jump_if_false L1
-    load_var text
-    load_field .0
-    store_var _5
-    load_var _5
+    store_var_load_var t
+    load_type interfaces.SfndHasId
+    virtual_load_field .id
     load_const "abc"
     cmp_op ==
     jump_if_false L0
     pop 1
-    load_var numeric
-    is_type interfaces.SfndThing
-    pop_jump_if_false L1
-    load_var numeric
-    load_field .1
-    store_var _7
-    load_var _7
+    load_var t
+    load_type interfaces.SfndHasNumId
+    virtual_load_field .id
     load_const 42
     cmp_int_op ==
 
   L0:
     return
-
-  L1:
-    unreachable
 }
 
 function interfaces.sgid_main() -> bool {
@@ -5128,37 +4738,21 @@ function interfaces.sgif_main() -> bool {
     load_const 7
     load_const "seven"
     init_instance user.interfaces.SgifPair .int_value, .string_value
-    store_var p
-    load_var p
-    store_var i
-    load_var p
-    store_var s
-    load_var i
-    is_type interfaces.SgifPair
-    pop_jump_if_false L1
-    load_var i
-    load_field .0
-    store_var _5
-    load_var _5
+    store_var_load_var p
+    load_type interfaces.SgifSlot<int>
+    virtual_load_field .value
     load_const 7
     cmp_int_op ==
     jump_if_false L0
     pop 1
-    load_var s
-    is_type interfaces.SgifPair
-    pop_jump_if_false L1
-    load_var s
-    load_field .1
-    store_var _7
-    load_var _7
+    load_var p
+    load_type interfaces.SgifSlot<string>
+    virtual_load_field .value
     load_const "seven"
     cmp_op ==
 
   L0:
     return
-
-  L1:
-    unreachable
 }
 
 function interfaces.spma_combine(x: #0, ys: #0[]) -> int {
@@ -5191,14 +4785,9 @@ function interfaces.srit_main() -> int {
     virtual_call nargs=1 ntypeargs=0
     store_var cloned
     load_var cloned
-    is_type interfaces.SritBox
-    pop_jump_if_false L0
-    load_var cloned
-    load_field .0
+    load_type interfaces.SritCloneable
+    virtual_load_field .value
     return
-
-  L0:
-    unreachable
 }
 
 function interfaces.srtc_main() -> int {
@@ -5245,37 +4834,21 @@ function interfaces.tisf_main() -> bool {
     load_const "widget"
     load_const "WIDGET-001"
     init_instance user.interfaces.TisfItem .named_name, .labeled_name
-    store_var i
-    load_var i
-    store_var n
-    load_var i
-    store_var l
-    load_var n
-    is_type interfaces.TisfItem
-    pop_jump_if_false L1
-    load_var n
-    load_field .0
-    store_var _5
-    load_var _5
+    store_var_load_var i
+    load_type interfaces.TisfNamed
+    virtual_load_field .name
     load_const "widget"
     cmp_op ==
     jump_if_false L0
     pop 1
-    load_var l
-    is_type interfaces.TisfItem
-    pop_jump_if_false L1
-    load_var l
-    load_field .1
-    store_var _7
-    load_var _7
+    load_var i
+    load_type interfaces.TisfLabeled
+    virtual_load_field .name
     load_const "WIDGET-001"
     cmp_op ==
 
   L0:
     return
-
-  L1:
-    unreachable
 }
 
 function interfaces.uf01_main() -> string {
@@ -5287,14 +4860,9 @@ function interfaces.uf01_main() -> string {
 
 function interfaces.uf01_readName(x: interfaces.Uf01Dog | interfaces.Uf01Named) -> string {
     load_var x
-    is_type interfaces.Uf01Dog
-    pop_jump_if_false L0
-    load_var x
-    load_field .0
+    load_type interfaces.Uf01Named
+    virtual_load_field .name
     return
-
-  L0:
-    unreachable
 }
 
 function interfaces.uf02_addOne(x: interfaces.Uf02Slot<int> | interfaces.Uf02Slot<string>) -> int {
@@ -5311,21 +4879,13 @@ function interfaces.uf02_addOne(x: interfaces.Uf02Slot<int> | interfaces.Uf02Slo
 
   L1:
     load_var _2
-    store_var_load_var a
-    is_type interfaces.Uf02IntSlot
-    pop_jump_if_false L3
-    load_var a
-    load_field .0
-    store_var _4
-    load_var _4
+    load_type interfaces.Uf02Slot<int>
+    virtual_load_field .value
     load_const 1
     add_int
 
   L2:
     return
-
-  L3:
-    unreachable
 }
 
 function interfaces.uf02_main() -> int {
@@ -5592,14 +5152,9 @@ function interfaces.ufp2_main() -> int {
 
 function interfaces.ufp3_getHandler(x: interfaces.Ufp3HasHandler | interfaces.Ufp3A) -> (int) -> string throws never {
     load_var x
-    is_type interfaces.Ufp3A
-    pop_jump_if_false L0
-    load_var x
-    load_field .0
+    load_type interfaces.Ufp3HasHandler
+    virtual_load_field .handler
     return
-
-  L0:
-    unreachable
 }
 
 function interfaces.ufp3_main() -> string {
@@ -5630,10 +5185,8 @@ function interfaces.ufp4_readName(x: interfaces.Ufp4Dog | interfaces.Ufp4Named |
 
   L0:
     load_var x
-    is_type interfaces.Ufp4Dog
-    pop_jump_if_false L3
-    load_var x
-    load_field .0
+    load_type interfaces.Ufp4Named
+    virtual_load_field .name
     jump L2
 
   L1:
@@ -5641,9 +5194,6 @@ function interfaces.ufp4_readName(x: interfaces.Ufp4Dog | interfaces.Ufp4Named |
 
   L2:
     return
-
-  L3:
-    unreachable
 }
 
 function interfaces.ufp5_main() -> int {

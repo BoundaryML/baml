@@ -280,30 +280,18 @@ function null_handling.nh_multi_union_optional_access(animal: null_handling.NhCa
     load_const null
     cmp_op ==
     pop_jump_if_false L0
-    jump L3
+    jump L1
 
   L0:
     load_var animal
-    type_tag
-    load_const NhCat
-    cmp_int_op ==
-    pop_jump_if_false L1
+    load_type null_handling.NhHasSound
+    virtual_load_field .sound
     jump L2
 
   L1:
-    load_var animal
-    load_field .0
-    jump L4
-
-  L2:
-    load_var animal
-    load_field .0
-    jump L4
-
-  L3:
     load_const null
 
-  L4:
+  L2:
     return
 }
 

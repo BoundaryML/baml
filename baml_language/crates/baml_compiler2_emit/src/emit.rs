@@ -818,6 +818,9 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             }
             | Rvalue::MakeVirtualBoundMethod {
                 receiver: operand, ..
+            }
+            | Rvalue::VirtualFieldAccess {
+                receiver: operand, ..
             } => self.operand_reads_spawn_captured_local(operand, seen),
             Rvalue::MakeClosure { captures, .. } => captures
                 .iter()
@@ -1432,6 +1435,23 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                     Place::Field { .. } | Place::Index { .. } => unreachable!(),
                 }
             }
+            StatementKind::VirtualFieldStore {
+                iface,
+                receiver,
+                field_index,
+                field,
+                value,
+            } => {
+                // Stack: receiver, value, then the interface type — the opcode pops
+                // the interface, the value, and the receiver in that order.
+                self.emit_operand_pull(receiver);
+                self.emit_operand_pull(value);
+                let iface_const = self.add_constant(ConstValue::Type(iface.to_template()));
+                let inst = self.emit(Instruction::LoadType(iface_const));
+                self.set_operand(inst, OperandMeta::Const(iface.to_string()));
+                let inst = self.emit(Instruction::VirtualStoreField(*field_index as usize));
+                self.set_operand(inst, OperandMeta::Field(field.to_string()));
+            }
             StatementKind::Drop(place) => {
                 unwrap_infallible(pull_semantics::walk_drop_statement(self, place));
             }
@@ -1865,6 +1885,23 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                 ntypeargs: u16::try_from(type_args.len()).expect("ntypeargs fits in u16"),
             });
             self.set_operand(inst, OperandMeta::Callable(method.clone()));
+            return;
+        }
+        if let Rvalue::VirtualFieldAccess {
+            iface,
+            receiver,
+            field_index,
+            field,
+        } = rvalue
+        {
+            // Stack: receiver, then the interface type (resolved against the frame
+            // by `LoadType`) — the opcode pops the interface, then the receiver.
+            self.emit_operand_pull(receiver);
+            let iface_const = self.add_constant(ConstValue::Type(iface.to_template()));
+            let inst = self.emit(Instruction::LoadType(iface_const));
+            self.set_operand(inst, OperandMeta::Const(iface.to_string()));
+            let inst = self.emit(Instruction::VirtualLoadField(*field_index as usize));
+            self.set_operand(inst, OperandMeta::Field(field.to_string()));
             return;
         }
         // `MakeGenericFunction` needs no special handling here (it has no value
@@ -3099,9 +3136,9 @@ impl PullSink for StackifyCodegen<'_, '_> {
                 // cell pointers (LoadVar) not cell values (LoadDeref). We intercept
                 // here so that `emit_rvalue_pull` (which sets loading_for_closure_capture)
                 // is called rather than the generic `walk_rvalue_pull` inlining path.
-                // MakeBoundMethod / MakeVirtualBoundMethod must also be handled specially:
-                // neither is handled by `walk_rvalue_pull` (which panics on them), so route
-                // through `emit_rvalue_pull`.
+                // MakeBoundMethod / MakeVirtualBoundMethod / VirtualFieldAccess must
+                // also be handled specially: none is handled by `walk_rvalue_pull`
+                // (which panics on them), so route through `emit_rvalue_pull`.
                 // BinaryOp must be routed through `emit_rvalue_pull` so that the
                 // type-aware specialization in `try_specialize_binary_op` can fire
                 // (e.g. emitting `CmpBigintOp` instead of the generic `CmpOp`).
@@ -3112,6 +3149,7 @@ impl PullSink for StackifyCodegen<'_, '_> {
                     Rvalue::MakeClosure { .. }
                         | Rvalue::MakeBoundMethod { .. }
                         | Rvalue::MakeVirtualBoundMethod { .. }
+                        | Rvalue::VirtualFieldAccess { .. }
                         | Rvalue::BinaryOp { .. }
                         | Rvalue::Aggregate {
                             kind: baml_compiler2_mir::AggregateKind::Class { .. },

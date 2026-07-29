@@ -157,6 +157,18 @@ fn write_statement(f: &mut impl Write, stmt: &Statement) -> fmt::Result {
             write_rvalue(f, value)?;
             write!(f, ";")
         }
+        StatementKind::VirtualFieldStore {
+            iface,
+            receiver,
+            field_index,
+            field,
+            value,
+        } => {
+            write_operand(f, receiver)?;
+            write!(f, ".{field}#{field_index} as {iface} = ")?;
+            write_operand(f, value)?;
+            write!(f, ";")
+        }
         StatementKind::Drop(place) => {
             write!(f, "drop({place});")
         }
@@ -448,6 +460,15 @@ fn write_runtime_id_arg(
 fn write_rvalue(f: &mut impl Write, rvalue: &Rvalue) -> fmt::Result {
     match rvalue {
         Rvalue::Use(operand) => write_operand(f, operand),
+        Rvalue::VirtualFieldAccess {
+            iface,
+            receiver,
+            field_index,
+            field,
+        } => {
+            write_operand(f, receiver)?;
+            write!(f, ".{field}#{field_index} as {iface}")
+        }
         Rvalue::BinaryOp { op, left, right } => {
             write_operand(f, left)?;
             write!(f, " {op} ")?;
