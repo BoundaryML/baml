@@ -16,6 +16,8 @@ VERSION_TOOL = ROOT / "scripts" / "baml-language-version"
 GO_RELEASE_SMOKE = ROOT / "scripts" / "smoke-go-release.py"
 PLATFORMS = ROOT / "release" / "platforms.json"
 RELEASE_WORKFLOW = ROOT / ".github" / "workflows" / "release-baml-language.yml"
+SIZE_GATE_WORKFLOW = ROOT / ".github" / "workflows" / "size-gate.reusable.yaml"
+RELEASE_RUSTFLAGS = ROOT / "scripts" / "baml-release-rustflags"
 CI_WORKFLOW = ROOT / ".github" / "workflows" / "ci.yaml"
 SIZE_POLICY = ROOT / "release" / "csharp-package-size-policy.json"
 BRIDGE_CFFI_PUBLIC_EXPORTS = (
@@ -651,6 +653,20 @@ def step_inputs(step: str) -> dict[str, str]:
 
 
 class WorkflowGraphTests(unittest.TestCase):
+    def test_unix_toolchain_releases_and_size_gates_enable_safe_icf(
+        self,
+    ) -> None:
+        release = RELEASE_WORKFLOW.read_text(encoding="utf-8")
+        size_gate = SIZE_GATE_WORKFLOW.read_text(encoding="utf-8")
+        rustflags = RELEASE_RUSTFLAGS.read_text(encoding="utf-8")
+
+        self.assertIn("-fuse-ld=lld", rustflags)
+        self.assertIn("-Wl,--icf=safe", rustflags)
+        self.assertIn("gcc-ld", rustflags)
+        self.assertIn("!contains(matrix.target, 'windows-msvc')", release)
+        self.assertEqual(release.count("scripts/baml-release-rustflags"), 1)
+        self.assertEqual(size_gate.count("scripts/baml-release-rustflags"), 2)
+
     def test_cffi_hygiene_is_enforced_at_production_and_package_boundaries(
         self,
     ) -> None:

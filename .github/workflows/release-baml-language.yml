@@ -339,6 +339,9 @@ jobs:
         uses: ./.github/actions/setup-musl-cross
         with:
           target: ${{ matrix.target }}
+      - name: Enable safe ICF
+        if: ${{ !contains(matrix.target, 'windows-msvc') }}
+        run: echo "RUSTFLAGS=$(scripts/baml-release-rustflags)" >> "$GITHUB_ENV"
       - name: Build CLI and pack host
         run: cargo build --manifest-path baml_language/Cargo.toml --release --bin baml-cli --bin baml-pack-host --target "${{ matrix.target }}"
       - name: Archive layout smoke

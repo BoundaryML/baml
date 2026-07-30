@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+host="$(rustc -vV | sed -n 's/^host: //p')"
+test -n "$host"
+
+lld_dir="$(rustc --print sysroot)/lib/rustlib/$host/bin/gcc-ld"
+case "$(uname -s)" in
+  Darwin) lld="$lld_dir/ld64.lld" ;;
+  Linux) lld="$lld_dir/ld.lld" ;;
+  *) echo "safe ICF release flags are only supported on macOS and Linux" >&2; exit 1 ;;
+esac
+
+test -x "$lld" || { echo "bundled LLD not found at $lld" >&2; exit 1; }
+printf '%s\n' "${RUSTFLAGS:+$RUSTFLAGS }-C link-arg=-B$lld_dir -C link-arg=-fuse-ld=lld -C link-arg=-Wl,--icf=safe"
