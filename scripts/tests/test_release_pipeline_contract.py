@@ -3,6 +3,7 @@ from __future__ import annotations
 import copy
 import hashlib
 import json
+import re
 import subprocess
 import tempfile
 import unittest
@@ -17,6 +18,7 @@ GO_RELEASE_SMOKE = ROOT / "scripts" / "smoke-go-release.py"
 PLATFORMS = ROOT / "release" / "platforms.json"
 RELEASE_WORKFLOW = ROOT / ".github" / "workflows" / "release-baml-language.yml"
 CI_WORKFLOW = ROOT / ".github" / "workflows" / "ci.yaml"
+NIGHTLY_WORKFLOW = ROOT / ".github" / "workflows" / "nightly-release.yml"
 SIZE_POLICY = ROOT / "release" / "csharp-package-size-policy.json"
 BRIDGE_CFFI_PUBLIC_EXPORTS = (
     ROOT / "release" / "bridge-cffi-public-exports.txt"
@@ -784,7 +786,7 @@ class WorkflowGraphTests(unittest.TestCase):
         manifest = job_block(release, "publish-pkg-boundaryml-com")
         channel = job_block(release, "publish-pkg-channel")
         dry_run = job_block(release, "dry-run-artifacts")
-        nightly = job_block(release, "dispatch-nightly-after-canary")
+        nightly = NIGHTLY_WORKFLOW.read_text(encoding="utf-8")
 
         self.assertIn("source_ci_run_id:", release)
         self.assertIn("Attest production source CI run", plan)
@@ -830,16 +832,18 @@ class WorkflowGraphTests(unittest.TestCase):
             '-f source_ci_run_id="$GITHUB_RUN_ID"',
             job_block(ci, "dispatch-release"),
         )
+        # The nightly scheduler is the other production dispatcher, and is held
+        # to the same trust chain: attested CI run, dispatched at the source tag.
         self.assertIn(
             '-f source_ci_run_id="$SOURCE_CI_RUN_ID"',
             nightly,
         )
         self.assertIn(
-            'SOURCE_WORKFLOW_REF: ${{ github.ref_name }}',
+            'release_ref="baml-language-source-$SOURCE_SHA"',
             nightly,
         )
         self.assertIn(
-            '--ref "$SOURCE_WORKFLOW_REF"',
+            '--ref "$release_ref"',
             nightly,
         )
         self.assertNotIn("--ref canary", nightly)
@@ -859,6 +863,120 @@ class WorkflowGraphTests(unittest.TestCase):
             "`repo:${GITHUB_REPO}:ref:*`",
             pkg_stack,
         )
+
+    def test_nightly_is_scheduled_and_pushes_only_cut_canary(self) -> None:
+        release = RELEASE_WORKFLOW.read_text(encoding="utf-8")
+        ci_dispatch = job_block(CI_WORKFLOW.read_text(encoding="utf-8"), "dispatch-release")
+        nightly_workflow = NIGHTLY_WORKFLOW.read_text(encoding="utf-8")
+        dispatch_job = job_block(nightly_workflow, "dispatch-nightly")
+        toolchain = job_block(release, "publish-toolchain-release")
+        cffi = job_block(release, "publish-bridge-cffi-release")
+
+        # A push to canary cuts the canary channel only, and only when
+        # release.toml asks for it. Nothing else releases on merge.
+        self.assertIn("-f channel=canary", ci_dispatch)
+        self.assertNotIn("-f channel=nightly", ci_dispatch)
+        # Bound the slice to the channel input itself rather than a character
+        # count, so it cannot drift into a neighbouring input's description.
+        # `auto` used to let CI defer the channel choice to the release.
+        channel_input = release[
+            release.index("      channel:") : release.index("      dry_run:")
+        ]
+        self.assertIn("options: [nightly, canary]", channel_input)
+        self.assertNotIn("auto", channel_input)
+        self.assertIn(
+            "git diff --quiet HEAD^ HEAD -- baml_language/release.toml",
+            ci_dispatch,
+        )
+        # The file changing is only the fast path; the cut turns on the parsed
+        # [release].canary_version differing, so that an edit to anything else
+        # in release.toml cannot dispatch a release.
+        self.assertIn('git show "HEAD^:baml_language/release.toml"', ci_dispatch)
+        self.assertIn(
+            'if [[ "$canary_version" == "$previous_version" ]]', ci_dispatch
+        )
+        self.assertIn("steps.canary-cut.outputs.cut == 'true'", ci_dispatch)
+        # The source tag is minted for EVERY green canary push, not just the
+        # cuts: the scheduled nightly dispatches at a tag CI may have created
+        # days earlier, and the release refuses any other ref.
+        tag_step = step_block(ci_dispatch, "Create immutable release workflow ref")
+        self.assertIn('release_ref="baml-language-source-$GITHUB_SHA"', tag_step)
+        self.assertNotIn("if:", tag_step)
+
+        # Two crons bracket both DST offsets; the gate keeps whichever one is
+        # local midnight. Both halves matter: dropping the gate double-cuts, and
+        # inverting it cuts at the wrong hour.
+        crons = re.findall(r"- cron: ['\"](\S+) (\S+) [^'\"]*['\"]", nightly_workflow)
+        self.assertEqual(len(crons), 2, nightly_workflow)
+        self.assertEqual({hour for _, hour in crons}, {"7", "8"}, crons)
+        for minute, _ in crons:
+            # Not on the hour: GitHub delays scheduled runs most at :00, and a
+            # delay past 01:00 local forfeits the night.
+            self.assertNotEqual(minute, "0", crons)
+        self.assertIn('local_hour="$(TZ=America/Los_Angeles date +%H)"', nightly_workflow)
+        # Assert the gate's POLARITY, not just that both words appear: the
+        # midnight branch proceeds and the off-hour branch stands down. Swapping
+        # the two would cut at 23:00 or 01:00 and still contain both strings.
+        gate = re.search(
+            r'if \[\[ "\$local_hour" == "00" \]\]; then(.*?)\belse\b(.*?)\bfi\b',
+            step_block(dispatch_job, "Gate on local midnight in Seattle"),
+            flags=re.DOTALL,
+        )
+        self.assertIsNotNone(gate, dispatch_job)
+        at_midnight, off_hour = gate.groups()
+        self.assertIn("proceed=true", at_midnight)
+        self.assertNotIn("proceed=false", at_midnight)
+        self.assertIn("proceed=false", off_hour)
+        self.assertNotIn("proceed=true", off_hour)
+
+        # One cut per commit, and the guard must observe the EFFECT -- a release
+        # run at the candidate's source tag -- rather than this workflow's own
+        # conclusion. The clock gate skips steps, not the job, so the cron entry
+        # that loses the gate concludes `success` too; a self-referential guard
+        # would read that no-op as "tonight is handled" and stand the real cut
+        # down every night for the whole PST half of the year.
+        self.assertIn("gh run list --workflow release-baml-language.yml", dispatch_job)
+        self.assertIn("baml-language-source-$CANDIDATE_SHA", dispatch_job)
+        self.assertIn('if [[ "$existing" != "0"', dispatch_job)
+        self.assertNotIn("--workflow nightly-release.yml", dispatch_job)
+
+        # A fork inherits the schedule and must never cut releases upstream.
+        self.assertIn("github.repository == 'BoundaryML/baml'", dispatch_job)
+
+        # Only a CI-attested canary commit is releasable, dispatched at its own
+        # immutable tag with the run that attests it.
+        self.assertIn(
+            "gh run list --workflow ci.yaml --branch canary --event push",
+            nightly_workflow,
+        )
+        self.assertIn("commits?sha=canary", nightly_workflow)
+        self.assertIn('release_ref="baml-language-source-$SOURCE_SHA"', nightly_workflow)
+        self.assertIn('--ref "$release_ref"', nightly_workflow)
+        self.assertNotIn("--ref canary", nightly_workflow)
+        self.assertIn("-f channel=nightly", nightly_workflow)
+        self.assertIn('-f source_ci_run_id="$SOURCE_CI_RUN_ID"', nightly_workflow)
+        # The dispatch verifies the tag resolves to exactly the attested commit.
+        self.assertIn('"$ref_sha" != "$SOURCE_SHA"', nightly_workflow)
+
+        # The schedule is the ONLY nightly cut site. A canary release used to
+        # chain one, which meant two sites racing to name the same night.
+        self.assertNotIn("dispatch-nightly-after-canary", release)
+        self.assertNotIn("dispatch_nightly_after_canary", release)
+        self.assertNotIn("nightly-slot", release + nightly_workflow)
+        self.assertNotIn("nightly_date", release + nightly_workflow)
+
+        # `force` must not reach the rollback guard: re-running with it is the
+        # obvious reaction to that failure, and would publish the rollback.
+        rollback_arm = re.search(
+            r"behind\s*\|\s*diverged\)(.*?);;", nightly_workflow, flags=re.DOTALL
+        )
+        self.assertIsNotNone(rollback_arm, nightly_workflow)
+        self.assertNotIn("FORCE", rollback_arm.group(1))
+
+        # The release tag must name the commit the artifacts were built from:
+        # the scheduler reads it to decide whether canary moved.
+        self.assertIn('--target "$SOURCE_SHA"', toolchain)
+        self.assertIn('--target "$SOURCE_SHA"', cffi)
 
     def test_release_graph_has_early_preflight_parallel_producers_and_complete_fanin(
         self,
@@ -951,10 +1069,8 @@ class WorkflowGraphTests(unittest.TestCase):
 
         swift_verify = job_block(workflow, "verify-swift-sdk")
         swift_smoke = job_block(workflow, "smoke-swift-release")
-        dispatch = job_block(workflow, "dispatch-nightly-after-canary")
         self.assertIn("BamlRuntime.nativeVersion()", swift_verify)
         self.assertIn("BamlRuntime.nativeVersion()", swift_smoke)
-        self.assertIn("publish-pkg-channel", dispatch)
         self.assertIn(
             '--cfg=getrandom_backend=\\"wasm_js\\"',
             CFFI_BUILDER.read_text(encoding="utf-8"),
@@ -967,7 +1083,6 @@ class WorkflowGraphTests(unittest.TestCase):
         go_publisher = job_block(workflow, "publish-go-sdk")
         go_smoke = job_block(workflow, "smoke-go-release")
         channel = job_block(workflow, "publish-pkg-channel")
-        nightly = job_block(workflow, "dispatch-nightly-after-canary")
 
         self.assertIn(
             'require_skipped Gradle-Plugin-Portal "$GRADLE_PLUGIN"',
@@ -1006,13 +1121,6 @@ class WorkflowGraphTests(unittest.TestCase):
                     "needs.release-complete.result == 'success'",
                     "needs.smoke-go-release.result == 'success'",
                     "needs.smoke-swift-release.result == 'success'",
-                ),
-            ),
-            (
-                nightly,
-                (
-                    "needs.plan.result == 'success'",
-                    "needs.publish-pkg-channel.result == 'success'",
                 ),
             ),
         )
