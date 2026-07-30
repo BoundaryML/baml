@@ -48,4 +48,52 @@ mod tests {
         rotated.rotate_left(7);
         assert_eq!(namespace_iteration_order(&rotated), expected);
     }
+
+    /// The unified body-owner queries (`body`/`body_source_map`/`body_scope`/
+    /// `file_body_owners`) must agree with the per-kind queries they dispatch
+    /// to.
+    #[test]
+    fn body_owner_queries_match_per_kind_queries() {
+        use baml_compiler2_hir::body::{BodyOwnerId, FunctionBody, OwnerBody};
+
+        let mut db = ProjectDatabase::new();
+        db.set_project_root(std::path::Path::new("."));
+        let file = db.add_file(
+            "test.baml",
+            "function f() -> int { 1 }\n\nfunction g() -> int { f() }\n",
+        );
+
+        let owners = baml_compiler2_ppir::file_body_owners(&db, file);
+        let functions = baml_compiler2_ppir::item_data::file_functions(&db, file);
+        assert_eq!(owners.len(), functions.len());
+
+        for (&func_loc, &owner) in functions.iter().zip(owners.iter()) {
+            assert_eq!(owner, BodyOwnerId::Function(func_loc));
+            assert!(owner.file(&db) == file);
+
+            let unified = baml_compiler2_ppir::body(&db, owner);
+            let direct = baml_compiler2_ppir::function_body(&db, func_loc);
+            assert!(matches!(direct.as_ref(), FunctionBody::Expr(_)));
+            let OwnerBody::Function(unified_body) = &unified else {
+                panic!("function owner must dispatch to the function body query");
+            };
+            assert_eq!(unified_body, &direct);
+            assert_eq!(
+                unified.expr_body(),
+                match direct.as_ref() {
+                    FunctionBody::Expr(body) => Some(body),
+                    _ => None,
+                }
+            );
+
+            assert_eq!(
+                baml_compiler2_ppir::body_source_map(&db, owner),
+                baml_compiler2_ppir::function_body_source_map(&db, func_loc)
+            );
+            assert!(
+                baml_compiler2_ppir::body_scope(&db, owner)
+                    == baml_compiler2_ppir::item_data::function_scope(&db, func_loc)
+            );
+        }
+    }
 }

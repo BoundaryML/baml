@@ -174,9 +174,16 @@ pointed at the error channel:
    stay excluded). NOTE: rulings 2 and 3 assert diagnostics, which the
    fixture harness cannot express yet - an expected-diagnostic fixture
    class arrives with the S17 harness extension.
-3. MOSTLY SETTLED - Query shape: `infer_body(owner)` keyed by the S1
-   body-owner ID, with the lambda-projection pattern preserved and
-   cycle-recovery parity with `infer_scope_types`. Blocked on S1.
+3. SETTLED - Query shape: `infer_body(owner)` keyed by the S1 body-owner
+   ID (`Function(FunctionLoc) | Let(LetLoc)`, rust-analyzer's
+   `DefWithBodyId` shape; lambdas stay inside their owner's body and
+   table per #4282), with the lambda-projection pattern preserved and
+   cycle-recovery parity with `infer_scope_types`. Like rust-analyzer's
+   extra roots (`for_signature` for signature-embedded const exprs), a
+   SECOND inference root joins later for parameter default expressions
+   (their own arena; TIR's `DefaultParameterInference`) - same result
+   shape, different entry point; the body-owner enum is not widened for
+   it.
 
 ## Testing
 

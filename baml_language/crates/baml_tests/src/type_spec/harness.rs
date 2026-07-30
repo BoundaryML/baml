@@ -44,11 +44,11 @@ use std::{collections::BTreeMap, fmt::Write as _};
 
 use baml_compiler2_ast::AstSourceMap;
 use baml_compiler2_hir::{
-    body::FunctionBody,
+    body::{FunctionBody, OwnerBody},
     scope::{FileScopeId, ScopeKind},
     semantic_index::FileSemanticIndex,
 };
-use baml_compiler2_hir_ty::infer::{InferenceResult, infer_function};
+use baml_compiler2_hir_ty::infer::{InferenceResult, infer_body};
 use baml_compiler2_tir::{
     infer_context::DiagnosticSeverity,
     inference::{infer_scope_types, render_scope_diagnostics},
@@ -329,15 +329,15 @@ struct TypedNode {
     ty: String,
 }
 
-/// Per-function hir_ty inference state paired with the maps needed to
+/// Per-body-owner hir_ty inference state paired with the maps needed to
 /// resolve arena ids to source ranges.
-struct FunctionInference {
-    body: std::sync::Arc<FunctionBody>,
+struct OwnerInference {
+    body: OwnerBody,
     source_map: AstSourceMap,
     result: InferenceResult,
 }
 
-/// Runs the hir_ty engine over every function in `file` and renders each
+/// Runs the hir_ty engine over every body owner in `file` and renders each
 /// inferred expression and binding with its source range.
 /// Compiler-synthesized nodes are skipped: fixtures assert what the user
 /// wrote.
@@ -348,53 +348,53 @@ fn collect_hir_ty_nodes(
 ) -> Vec<TypedNode> {
     let index = baml_compiler2_ppir::file_semantic_index(db, file);
 
-    // Inference results per function, keyed by the function's scope so
+    // Inference results per body owner, keyed by the owner's scope so
     // binding lookups (which start from arbitrary child scopes) can find the
     // arena owner's result.
-    let mut functions: BTreeMap<u32, FunctionInference> = BTreeMap::new();
-    for &func_loc in baml_compiler2_ppir::item_data::file_functions(db, file).iter() {
-        let Some(scope_id) = baml_compiler2_ppir::item_data::function_scope(db, func_loc) else {
+    let mut owners: BTreeMap<u32, OwnerInference> = BTreeMap::new();
+    for owner in baml_compiler2_ppir::file_body_owners(db, file) {
+        let Some(scope_id) = baml_compiler2_ppir::body_scope(db, owner) else {
             continue;
         };
-        let body = baml_compiler2_ppir::function_body(db, func_loc);
-        if !matches!(body.as_ref(), FunctionBody::Expr(_)) {
+        let body = baml_compiler2_ppir::body(db, owner);
+        if body.expr_body().is_none() {
             continue;
         }
-        let Some(source_map) = baml_compiler2_ppir::function_body_source_map(db, func_loc) else {
+        let Some(source_map) = baml_compiler2_ppir::body_source_map(db, owner) else {
             continue;
         };
-        functions.insert(
+        owners.insert(
             scope_id.file_scope_id(db).index(),
-            FunctionInference {
+            OwnerInference {
                 body,
                 source_map,
-                result: infer_function(db, func_loc),
+                result: infer_body(db, owner),
             },
         );
     }
 
     let mut nodes = Vec::new();
-    for func in functions.values() {
-        for (&expr_id, ty) in &func.result.type_of_expr {
-            if func.source_map.is_synthetic_expr(expr_id) {
+    for owner in owners.values() {
+        for (&expr_id, ty) in &owner.result.type_of_expr {
+            if owner.source_map.is_synthetic_expr(expr_id) {
                 continue;
             }
             nodes.push(TypedNode {
-                range: func.source_map.expr_span(expr_id),
+                range: owner.source_map.expr_span(expr_id),
                 kind: NodeKind::Expr,
                 ty: ty.to_plain().render_canonical(),
             });
         }
-        let FunctionBody::Expr(body) = func.body.as_ref() else {
+        let Some(body) = owner.body.expr_body() else {
             continue;
         };
         for (pat_id, _) in body.patterns.iter() {
-            if func.source_map.synthetic_patterns.contains(&pat_id) {
+            if owner.source_map.synthetic_patterns.contains(&pat_id) {
                 continue;
             }
-            if let Some(ty) = func.result.type_of_binding.get(&pat_id) {
+            if let Some(ty) = owner.result.type_of_binding.get(&pat_id) {
                 nodes.push(TypedNode {
-                    range: func.source_map.pattern_span(pat_id),
+                    range: owner.source_map.pattern_span(pat_id),
                     kind: NodeKind::Pattern,
                     ty: ty.to_plain().render_canonical(),
                 });
@@ -404,19 +404,19 @@ fn collect_hir_ty_nodes(
 
     // Bindings again, keyed by just the introduced name, which is the natural
     // caret target. A binding lives in the scope that declares it (often a
-    // Block), so resolve through the enclosing function's result.
+    // Block), so resolve through the enclosing body owner's result.
     for (idx, bindings) in index.scope_bindings.iter().enumerate() {
         if bindings.bindings.is_empty() {
             continue;
         }
-        let Some(owner) = enclosing_function_scope(index, FileScopeId::new(idx as u32)) else {
+        let Some(owner_scope) = enclosing_owner_scope(index, FileScopeId::new(idx as u32)) else {
             continue;
         };
-        let Some(func) = functions.get(&owner.index()) else {
+        let Some(owner) = owners.get(&owner_scope.index()) else {
             continue;
         };
         for binding in &bindings.bindings {
-            if let Some(ty) = func.result.type_of_binding.get(&binding.pattern) {
+            if let Some(ty) = owner.result.type_of_binding.get(&binding.pattern) {
                 nodes.push(TypedNode {
                     range: binding_name_range(fixture, binding),
                     kind: NodeKind::BindingName,
@@ -451,7 +451,7 @@ fn collect_tir_nodes(
         }
         // Lambdas share the enclosing function's expression arena and source
         // map; resolve to the scope that owns the arena.
-        let Some(owner) = enclosing_function_scope(index, FileScopeId::new(idx as u32)) else {
+        let Some(owner) = enclosing_owner_scope(index, FileScopeId::new(idx as u32)) else {
             continue;
         };
         let owner_scope_id = index.scope_ids[owner.index() as usize];
@@ -577,16 +577,17 @@ fn binding_name_range(
     binding.name_range
 }
 
-/// Walks to the enclosing scope (self included) whose kind is Function --
-/// the arena owner for everything nested in it, lambdas included.
-fn enclosing_function_scope(
+/// Walks to the enclosing scope (self included) that belongs to a body owner
+/// (function or top-level let) -- the arena owner for everything nested in
+/// it, lambdas included.
+fn enclosing_owner_scope(
     index: &FileSemanticIndex<'_>,
     mut fsi: FileScopeId,
 ) -> Option<FileScopeId> {
     loop {
         let scope = &index.scopes[fsi.index() as usize];
         match scope.kind {
-            ScopeKind::Function => return Some(fsi),
+            ScopeKind::Function | ScopeKind::Let => return Some(fsi),
             _ => fsi = scope.parent?,
         }
     }

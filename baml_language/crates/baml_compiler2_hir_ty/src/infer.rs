@@ -3,7 +3,7 @@
 //! from day one. Every fixture is expected to fail until slices land.
 
 use baml_compiler2_ast::{ExprId, PatId};
-use baml_compiler2_hir::loc::FunctionLoc;
+use baml_compiler2_hir::body::BodyOwnerId;
 use baml_type::interned::Ty;
 use rustc_hash::FxHashMap;
 
@@ -20,14 +20,16 @@ pub struct InferenceResult {
     pub type_of_binding: FxHashMap<PatId, Ty>,
 }
 
-/// Infers types for one function body.
+/// Infers types for one body owner (function or top-level let), keyed by the
+/// S1 `BodyOwnerId` (rust-analyzer's `DefWithBodyId` shape). Lambdas are
+/// typed inside their owner's run; parameter defaults get their own
+/// inference root later.
 ///
 /// S0 stub: returns empty tables. S5 replaces this with an
-/// `InferenceContext` walk; the S1 body-owner ID will widen the key from
-/// `FunctionLoc` to all body owners and make this a salsa query.
-pub fn infer_function<'db>(
+/// `InferenceContext` walk and makes it a salsa query.
+pub fn infer_body<'db>(
     _db: &'db dyn baml_compiler2_ppir::Db,
-    _function: FunctionLoc<'db>,
+    _owner: BodyOwnerId<'db>,
 ) -> InferenceResult {
     InferenceResult::default()
 }

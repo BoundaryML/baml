@@ -680,6 +680,66 @@ pub fn function_body_source_map<'db>(
     }
 }
 
+/// Canonical body for any body owner (rust-analyzer's `DefWithBodyId`
+/// pattern). Functions go through PPIR's item tree so synthetic companions
+/// are found; PPIR never synthesizes lets, so HIR's `let_body` is canonical
+/// for them.
+pub fn body<'db>(
+    db: &'db dyn Db,
+    owner: baml_compiler2_hir::body::BodyOwnerId<'db>,
+) -> baml_compiler2_hir::body::OwnerBody {
+    use baml_compiler2_hir::body::{BodyOwnerId, OwnerBody};
+    match owner {
+        BodyOwnerId::Function(function) => OwnerBody::Function(function_body(db, function)),
+        BodyOwnerId::Let(let_binding) => {
+            OwnerBody::Let(baml_compiler2_hir::body::let_body(db, let_binding))
+        }
+    }
+}
+
+/// Canonical body source map for any body owner (spans only).
+pub fn body_source_map<'db>(
+    db: &'db dyn Db,
+    owner: baml_compiler2_hir::body::BodyOwnerId<'db>,
+) -> Option<ast::AstSourceMap> {
+    use baml_compiler2_hir::body::BodyOwnerId;
+    match owner {
+        BodyOwnerId::Function(function) => function_body_source_map(db, function),
+        BodyOwnerId::Let(let_binding) => {
+            baml_compiler2_hir::body::let_body_source_map(db, let_binding)
+        }
+    }
+}
+
+/// The scope opened for a body owner's body.
+pub fn body_scope<'db>(
+    db: &'db dyn Db,
+    owner: baml_compiler2_hir::body::BodyOwnerId<'db>,
+) -> Option<baml_compiler2_hir::scope::ScopeId<'db>> {
+    use baml_compiler2_hir::body::BodyOwnerId;
+    match owner {
+        BodyOwnerId::Function(function) => item_data::function_scope(db, function),
+        BodyOwnerId::Let(let_binding) => item_data::let_scope(db, let_binding),
+    }
+}
+
+/// Every body owner in `file`: functions (methods and synthetic companions
+/// included), then top-level lets, each group in source order.
+pub fn file_body_owners(
+    db: &dyn Db,
+    file: baml_base::SourceFile,
+) -> Vec<baml_compiler2_hir::body::BodyOwnerId<'_>> {
+    let functions = item_data::file_functions(db, file)
+        .iter()
+        .copied()
+        .map(Into::into);
+    let lets = item_data::file_lets(db, file)
+        .iter()
+        .copied()
+        .map(Into::into);
+    functions.chain(lets).collect()
+}
+
 /// Canonical function signature — uses PPIR's item tree.
 pub fn function_signature<'db>(
     db: &'db dyn Db,

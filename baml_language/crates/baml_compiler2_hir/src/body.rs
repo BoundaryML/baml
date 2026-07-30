@@ -109,3 +109,63 @@ pub fn let_body_source_map<'db>(
         .as_ref()
         .map(|(_body, source_map)| source_map.clone())
 }
+
+/// A definition that owns an expression body - the key type for body queries
+/// and (in `baml_compiler2_hir_ty`) inference, mirroring rust-analyzer's
+/// `DefWithBodyId`.
+///
+/// Lambdas are deliberately not members: a lambda's body lives in its owner's
+/// arena and is typed by the owner's inference pass. Parameter-default
+/// expressions get their own inference root later (rust-analyzer's signature
+/// root pattern); this enum does not widen for them.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, salsa::Update)]
+pub enum BodyOwnerId<'db> {
+    Function(FunctionLoc<'db>),
+    Let(LetLoc<'db>),
+}
+
+impl<'db> BodyOwnerId<'db> {
+    pub fn file(self, db: &'db dyn crate::Db) -> baml_base::SourceFile {
+        match self {
+            BodyOwnerId::Function(function) => function.file(db),
+            BodyOwnerId::Let(let_binding) => let_binding.file(db),
+        }
+    }
+}
+
+impl<'db> From<FunctionLoc<'db>> for BodyOwnerId<'db> {
+    fn from(function: FunctionLoc<'db>) -> BodyOwnerId<'db> {
+        BodyOwnerId::Function(function)
+    }
+}
+
+impl<'db> From<LetLoc<'db>> for BodyOwnerId<'db> {
+    fn from(let_binding: LetLoc<'db>) -> BodyOwnerId<'db> {
+        BodyOwnerId::Let(let_binding)
+    }
+}
+
+/// A body owner's body, borrowing the per-kind query results without cloning
+/// the arenas out of them.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum OwnerBody {
+    Function(Arc<FunctionBody>),
+    Let(Arc<LetBody>),
+}
+
+impl OwnerBody {
+    /// The expression body, if the owner has one (`None` for builtin and
+    /// missing bodies).
+    pub fn expr_body(&self) -> Option<&ExprBody> {
+        match self {
+            OwnerBody::Function(body) => match body.as_ref() {
+                FunctionBody::Expr(expr_body) => Some(expr_body),
+                FunctionBody::Builtin(_) | FunctionBody::Missing => None,
+            },
+            OwnerBody::Let(body) => match body.as_ref() {
+                LetBody::Expr(expr_body) => Some(expr_body),
+                LetBody::Missing => None,
+            },
+        }
+    }
+}
