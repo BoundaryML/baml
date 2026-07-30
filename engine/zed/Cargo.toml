@@ -4,7 +4,7 @@ edition = "2024"
 # Both Cargo.toml and extension.toml's version strings
 # are consumed by the Zed extension publishing logic
 version = "0.224.0"
-description = "BAML language support for Zed"
+description = "BAML v0 — Zed extension"
 
 [lib]
 crate-type = ["cdylib"]

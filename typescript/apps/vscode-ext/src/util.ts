@@ -28,10 +28,10 @@ export function checkForOtherPrismaExtension(): void {
   if (files.length !== 0) {
     // eslint-disable-next-line @typescript-eslint/no-floating-promises
     window.showInformationMessage(
-      'You have both both versions (Insider and Stable) of the Baml VS Code extension enabled in your workspace. Please uninstall or disable one of them for a better experience.',
+      'You have both both versions (Insider and Stable) of the BAML v0 VS Code extension enabled in your workspace. Please uninstall or disable one of them for a better experience.',
     );
     console.log(
-      'Both versions (Insider and Stable) of the Baml VS Code extension are enabled.',
+      'Both versions (Insider and Stable) of the BAML v0 VS Code extension are enabled.',
     );
   }
 }
@@ -123,7 +123,7 @@ export function createLanguageServer(
 ): LanguageClient {
   return new LanguageClient(
     'baml',
-    'Baml Language Server',
+    'BAML v0 Language Server',
     serverOptions,
     clientOptions,
   );
