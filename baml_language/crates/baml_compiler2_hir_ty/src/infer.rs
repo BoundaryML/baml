@@ -4,12 +4,16 @@
 
 use baml_compiler2_ast::{ExprId, PatId};
 use baml_compiler2_hir::loc::FunctionLoc;
-use baml_type::Ty;
+use baml_type::interned::Ty;
 use rustc_hash::FxHashMap;
 
 /// Inference side tables for one body owner, keyed by arena ids, mirroring
-/// rust-analyzer's `InferenceResult`. Grows one map per slice; consumers must
-/// treat a missing entry as "not inferred", never as an error.
+/// rust-analyzer's `InferenceResult`. Types are the hash-consed
+/// `baml_type::interned` representation (this crate's native vocabulary);
+/// they are materialized to plain `baml_type::Ty` only at consumer
+/// boundaries, after resolve-all guarantees no inference variables remain.
+/// Grows one map per slice; consumers must treat a missing entry as "not
+/// inferred", never as an error.
 #[derive(Debug, Default, Clone, PartialEq)]
 pub struct InferenceResult {
     pub type_of_expr: FxHashMap<ExprId, Ty>,

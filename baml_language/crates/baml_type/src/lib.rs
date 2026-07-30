@@ -34,6 +34,7 @@ mod attr;
 mod codegen_ty;
 mod defs;
 mod family;
+pub mod interned;
 mod names;
 pub mod normalize;
 mod param;

@@ -382,7 +382,7 @@ fn collect_hir_ty_nodes(
             nodes.push(TypedNode {
                 range: func.source_map.expr_span(expr_id),
                 kind: NodeKind::Expr,
-                ty: ty.render_canonical(),
+                ty: ty.to_plain().render_canonical(),
             });
         }
         let FunctionBody::Expr(body) = func.body.as_ref() else {
@@ -396,7 +396,7 @@ fn collect_hir_ty_nodes(
                 nodes.push(TypedNode {
                     range: func.source_map.pattern_span(pat_id),
                     kind: NodeKind::Pattern,
-                    ty: ty.render_canonical(),
+                    ty: ty.to_plain().render_canonical(),
                 });
             }
         }
@@ -420,7 +420,7 @@ fn collect_hir_ty_nodes(
                 nodes.push(TypedNode {
                     range: binding_name_range(fixture, binding),
                     kind: NodeKind::BindingName,
-                    ty: ty.render_canonical(),
+                    ty: ty.to_plain().render_canonical(),
                 });
             }
         }

@@ -1,6 +1,8 @@
 # baml_compiler2_hir_ty: rust-analyzer-style type inference
 
-Status: slice S0 (harness) in progress. No inference engine exists yet.
+Status: S0 (harness + engine stub) shipped; the interned type representation
+(S4a, `baml_type::interned`) shipped. No inference engine exists yet; the
+next engine slices are gated on the subtyping-in-the-table decision below.
 
 `baml_language/TYPE_SYSTEM.md` is the correctness authority. It is
 prescriptive: where the current TIR implementation disagrees with it, the spec
@@ -62,7 +64,9 @@ cutover. "Tested by" is the merge gate for the slice.
 | S1  | HIR: unified body-owner ID + `body(owner)` queries                   | unit tests; downstream snapshots byte-identical        |
 | S2  | HIR: span-free body `TypeRefStore` + source map                      | parity with spanned annotations; snapshots identical   |
 | S3  | HIR: per-body semantic-index projections (PartialEq cutoff)          | IncrementalTestDb: comment edit re-runs nothing        |
+| S4a | Interned recursive `Ty` (`baml_type::interned`): global hash-cons pool, `TyKind` with handle children, O(1) `TypeFlags`, plain conversions | round-trip / sharing / flags / ordering / eviction unit tests |
 | S4  | Decl lowering: `TypeRef -> Ty`, generic frames, item-sig queries     | lowering unit tests + differential vs TIR lowering     |
+| S4b | Normalize port: `NormalTy::from_interned` entry (or fork) so subtyping is native to the interned repr | ported normalize test suite; verdict parity vs plain entry |
 | S5  | InferenceTable: vars, unify, occurs, snapshot/rollback; ctx skeleton | table unit tests; harness runs end to end              |
 | S6  | Core exprs: literals+freshness, let/locals, blocks, `_` holes        | simple-tier fixtures; wildcard-hole spec tests         |
 | S7  | Expectation + canonicalizing union-join + Diverges/never             | coercion/never-tier fixtures                           |
@@ -116,23 +120,37 @@ pointed at the error channel:
   defaulting rule). Interface method signatures must declare `throws`, so no
   effect vars cross the virtual-dispatch boundary.
 
-## Open decisions (settle before S5)
+## Decisions
 
-1. Ty interning. rust-analyzer uses word-sized interned types with a cached
-   flags bitmask (`has_infer()` in O(1)) and a hot/stored split for salsa
-   results, and reports that retrofitting is painful. BAML's `Ty` is a plain
-   deep-cloned enum produced by the `ty_family!` transmute machinery.
-   Options: (a) crate-local interned inference type converting to
-   `baml_type::Ty` at boundaries; (b) plain `Ty` with the existing `Infer`
-   variant, accept later retrofit cost.
-2. Subtyping in the table. (a) rustc-style eq-unification with subsumption
-   checks at check sites and recorded sub-obligations for deferred cases;
-   (b) bounds-propagating vars (biunification-style lower/upper bound sets),
-   more natural for subset subtyping. Shapes unify, Expectation, and the S7
-   join machinery.
-3. Query shape. `infer_body(owner)` keyed by the S1 body-owner ID, with the
-   lambda-projection pattern preserved and cycle-recovery parity with
-   `infer_scope_types`. Mostly settled; blocked on S1.
+1. SETTLED - Ty representation: recursive hash-consed interning, implemented
+   in `baml_type::interned` (S4a). One-word handles, children are handles
+   (shallow pool operations, automatic substructure sharing), `TypeFlags`
+   cached at intern time, structural `Ord` with a pointer fast path,
+   entries evicted on last drop. The pool is global, NOT salsa: types must
+   outlive any database (runtime, serialization, FFI) - the same reason
+   rust-analyzer interns its types outside salsa. It mirrors the plain
+   master enum (exhaustive conversions make drift a compile error), with
+   spec-driven deltas: `Infer` gains an optional `InferVar`; TIR's internal
+   recovery sentinels are deliberately unrepresentable -
+   `EvolvingList`/`EvolvingMap` (the new engine models empty-container
+   refinement with inference variables) and the plain enum's `Unknown` (the
+   new engine has exactly one error sentinel, `Error`, rust-analyzer style;
+   TIR's other two uses of `Unknown` become `Expectation::None` and fresh
+   infer vars); and the top type takes its spec name `Unknown` (the plain
+   enum's `BuiltinUnknown`, so prefixed only because the sentinel had
+   claimed the shorter name). The plain enum and
+   all downstream consumers are untouched; TIR is never migrated (it is
+   deleted at cutover); MIR/emit/runtime and the family axes migrate to
+   this representation at cutover. Until S4b lands, subtype checks
+   materialize via `to_plain` (cheap at BAML type sizes).
+2. OPEN - Subtyping in the table. (a) rustc-style eq-unification with
+   subsumption checks at check sites and recorded sub-obligations for
+   deferred cases (recommended); (b) bounds-propagating vars
+   (biunification-style lower/upper bound sets). Shapes unify, Expectation,
+   and the S7 join machinery.
+3. MOSTLY SETTLED - Query shape: `infer_body(owner)` keyed by the S1
+   body-owner ID, with the lambda-projection pattern preserved and
+   cycle-recovery parity with `infer_scope_types`. Blocked on S1.
 
 ## Testing
 
