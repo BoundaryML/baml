@@ -61,12 +61,13 @@ function trophy_spec() -> string {
           ]
         }
 
-        Catch ALL of it. Report every baml error, every non-zero `baml` command, every confusing or unhelpful compiler/CLI message (even when the command exited 0), every stdlib or doc gap, every workaround you had to invent, EVEN IF you recovered and the final result works. Succeeding does NOT mean `issues` is empty.
+        Catch ALL of it. Report every baml error, every non-zero `baml` command, every confusing or unhelpful compiler/CLI message (even when the command exited 0), every stdlib gap, every workaround you had to invent, EVEN IF you recovered and the final result works. Succeeding does NOT mean `issues` is empty.
 
-        issue kinds:
-        - "skill": the BAML skill docs (installed skills / SKILL.md) are wrong, missing, or unclear.
-        - "language": the BAML compiler / CLI / language itself has a bug or limitation.
+        issue kinds (LANGUAGE ISSUES ARE THE PRODUCT OF THIS RUN):
+        - "language": the BAML compiler / CLI / language itself has a bug or limitation. This is what the run exists to find. Hunt for these actively: when something surprises you, spend a few extra commands isolating whether it is the language misbehaving, and report it with a repro.
+        - "skill": the BAML skill docs (installed skills / SKILL.md) are wrong, missing, or unclear. HIGH BAR: file a skill issue only when the docs actively misled you or their gap demonstrably cost you turns. Do NOT file doc wording nits, "the skill could also mention X" ideas, or restatements of things you figured out easily.
         - If fixing the language would obviate the skill change, it is a language issue.
+        - Before filing anything as "skill", ask whether the underlying cause is really the language or CLI behaving badly; if so, file it as "language" instead.
 
         repro rules: EVERY `kind="language"` issue MUST carry a `repro`. Before you report it, actually RUN the exact `command` on that minimal `baml_src` yourself and confirm it produces the problem. Give the SMALLEST `baml_src/*.baml` that triggers the issue. A baml.toml and a generator block are auto-provided by the verifier, so do NOT include them. "should_fail" is true if the command should error, false if it should succeed but misbehaves. Omit "repro" ONLY for a pure skill/docs-wording gap that no baml command can demonstrate.
 
