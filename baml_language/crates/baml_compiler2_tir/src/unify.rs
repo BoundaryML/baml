@@ -1404,14 +1404,15 @@ mod tests {
     }
 
     #[test]
-    fn distinct_recursive_alias_subjects_terminate_not_overflow() {
+    fn distinct_recursive_alias_subjects_overlap() {
         // Two *distinct* recursive aliases as impl subjects — `type R = Box<R>` and
-        // `type S = Box<S>` — expand head-first forever: `Box<R>` and `Box<S>` never
-        // normalize equal (their Mu binders carry the distinct alias names), so the
-        // structural `Class` arm keeps descending on the args. The depth backstop must
-        // catch this and fail closed to `Overlap::Unknown` ("too complex to prove
-        // disjoint"), rather than overflowing the stack — which is sound: the pair is
-        // rejected, and these aliases in fact denote the same type.
+        // `type S = Box<S>` — denote the same type: recursive aliases are
+        // equirecursive, and the canonical algebra's de Bruijn μ-binders make
+        // `equivalent` α-invariant, so the alias-equality check inside `unify_into`
+        // answers before the structural `Class` arm would descend head-first into
+        // the expansions. Coherence therefore reports the overlap precisely
+        // (`Overlap::Yes`) instead of failing closed on a depth backstop — the same
+        // rejection, now for the right reason.
         let r = TypeName::local(Name::new("R"));
         let s = TypeName::local(Name::new("S"));
         let mut aliases = std::collections::HashMap::default();
@@ -1432,7 +1433,7 @@ mod tests {
                 &aliases,
                 &mut bindings,
             ),
-            Overlap::Unknown,
+            Overlap::Yes,
         );
     }
 
