@@ -778,7 +778,12 @@ impl ProjectDatabase {
                             .or_else(|| self.source_span_for_range(source_file, test_lambda.span));
                     }
 
-                    self.expand_user_function_calls_in_graph(&mut graph, test_body, ctx);
+                    self.expand_user_function_calls_in_graph(
+                        &mut graph,
+                        test_body,
+                        source_file,
+                        ctx,
+                    );
                     result = Some(graph);
                     break 'files;
                 }
