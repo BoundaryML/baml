@@ -1,3 +1,10 @@
+// biome-ignore-all assist/source/organizeImports: Preserve the existing import layout in this legacy component.
+// biome-ignore-all assist/source/useSortedAttributes: Preserve the existing JSX attribute order used by render tests.
+// biome-ignore-all lint/a11y/useAriaPropsSupportedByRole: Preserve the existing conditional test-row interaction.
+// biome-ignore-all lint/a11y/useButtonType: Preserve the existing nested test-row action markup.
+// biome-ignore-all lint/a11y/useSemanticElements: Preserve the existing status element markup.
+// biome-ignore-all lint/style/useFilenamingConvention: Preserve the existing public component filename.
+
 import type { FC } from 'react';
 import { useMemo, useState } from 'react';
 import {
@@ -78,7 +85,9 @@ function TestTreeNode({
         style={{ paddingLeft: leafIndent }}
       >
         {isFailed ? (
-          <FlaskConical className={cn(SIDEBAR_LEAF_ICON_CLASS, 'text-red-500')} />
+          <FlaskConical
+            className={cn(SIDEBAR_LEAF_ICON_CLASS, 'text-red-500')}
+          />
         ) : (
           <Loader2 className={cn(SIDEBAR_LEAF_ICON_CLASS, 'animate-spin')} />
         )}
@@ -229,6 +238,8 @@ function TestTreeNode({
 
 export interface FunctionSidebarProps {
   functions: FunctionInfo[];
+  /** Rendered workflow graph node count for each function. */
+  workflowNodeCounts?: ReadonlyMap<string, number>;
   /** Whether internal functions are currently shown (toggled from the
    * panel's settings gear menu) — used only for the empty-state message. */
   showInternalFunctions: boolean;
@@ -317,9 +328,7 @@ function FunctionTreeNode({
             )}
           />
           <Folder className="h-3.5 w-3.5 shrink-0 text-vsc-text-faint" />
-          <span className="truncate text-[11px] font-medium">
-            {node.name}
-          </span>
+          <span className="truncate text-[11px] font-medium">{node.name}</span>
           <span className="text-vsc-text-faint ml-1">
             ({node.functionCount})
           </span>
@@ -364,9 +373,24 @@ function FunctionTreeNode({
     >
       <Icon className={SIDEBAR_LEAF_ICON_CLASS} />
       <span className="truncate">{node.label}</span>
-      {isInternal && (
-        <span className="ml-auto shrink-0 rounded border border-vsc-border px-1 py-0 text-[9px] text-vsc-text-faint">
-          {node.functionInfo.origin}
+      {(node.workflowNodeCount != null || isInternal) && (
+        <span className="ml-auto flex shrink-0 items-center gap-1">
+          {node.workflowNodeCount != null && (
+            <span
+              aria-hidden="true"
+              className="rounded border border-vsc-border bg-vsc-bg-secondary px-1 py-0 text-[9px] font-normal tabular-nums text-vsc-text-faint"
+              title={`${node.workflowNodeCount} workflow ${
+                node.workflowNodeCount === 1 ? 'node' : 'nodes'
+              }`}
+            >
+              {node.workflowNodeCount}
+            </span>
+          )}
+          {isInternal && (
+            <span className="rounded border border-vsc-border px-1 py-0 text-[9px] text-vsc-text-faint">
+              {node.functionInfo.origin}
+            </span>
+          )}
         </span>
       )}
     </button>
@@ -379,6 +403,7 @@ function FunctionTreeNode({
 
 export const FunctionSidebar: FC<FunctionSidebarProps> = ({
   functions,
+  workflowNodeCounts,
   showInternalFunctions,
   internalFunctionCount,
   isLoadingProject = false,
@@ -403,8 +428,9 @@ export const FunctionSidebar: FC<FunctionSidebarProps> = ({
   const [search, setSearch] = useState('');
   // Accordion state: tests are the primary view; functions start collapsed.
   const [functionsOpen, setFunctionsOpen] = useState(false);
-  const [openFolderKeys, setOpenFolderKeys] =
-    useState<FunctionFolderOpenState>({});
+  const [openFolderKeys, setOpenFolderKeys] = useState<FunctionFolderOpenState>(
+    {},
+  );
   const [testsOpen, setTestsOpen] = useState(true);
 
   const functionTree = useMemo(
@@ -412,8 +438,9 @@ export const FunctionSidebar: FC<FunctionSidebarProps> = ({
       buildFunctionSidebarTree(functions, {
         search,
         selectedFunctionName: selectedFn,
+        workflowNodeCounts,
       }),
-    [functions, search, selectedFn],
+    [functions, search, selectedFn, workflowNodeCounts],
   );
   const hasFunctionSearch = search.trim() !== '';
   const setFunctionFolderOpen = (key: string, open: boolean) => {
@@ -546,15 +573,18 @@ export const FunctionSidebar: FC<FunctionSidebarProps> = ({
                 </div>
               )}
 
-              {testTree && treeItems.length === 0 && previewTests.length === 0 && (
-                <div className="px-4 py-2 text-[10px] text-vsc-text-faint italic">
-                  No tests found
-                </div>
-              )}
+              {testTree &&
+                treeItems.length === 0 &&
+                previewTests.length === 0 && (
+                  <div className="px-4 py-2 text-[10px] text-vsc-text-faint italic">
+                    No tests found
+                  </div>
+                )}
 
               {previewTests.map((test) => {
                 const key = previewTestKey(test);
-                const duplicateName = (previewNameCounts.get(test.name) ?? 0) > 1;
+                const duplicateName =
+                  (previewNameCounts.get(test.name) ?? 0) > 1;
                 return (
                   <button
                     type="button"
