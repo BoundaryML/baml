@@ -1,0 +1,14 @@
+[package]
+name = "baml_compiler2_hir_ty"
+version = "0.1.0"
+edition = "2024"
+
+[lints]
+workspace = true
+
+[dependencies]
+baml_compiler2_ast = { workspace = true }
+baml_compiler2_hir = { workspace = true }
+baml_compiler2_ppir = { workspace = true }
+baml_type = { workspace = true }
+rustc-hash = { workspace = true }

@@ -234,6 +234,9 @@ pub mod compiler2_emit;
 pub mod incremental;
 
 #[cfg(test)]
+pub mod type_spec;
+
+#[cfg(test)]
 pub mod string_literals;
 
 #[cfg(test)]

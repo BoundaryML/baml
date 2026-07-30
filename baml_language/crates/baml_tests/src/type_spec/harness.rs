@@ -1,0 +1,605 @@
+//! `//^^^ ty` annotation checks and `check_infer`-style dumps, after
+//! rust-analyzer's `check_types` / `check_infer`
+//! (`crates/hir-ty/src/tests.rs` there), run DIFFERENTIALLY against both
+//! engines: `baml_compiler2_hir_ty` (the one being built) and TIR (the one
+//! being replaced). The annotation check runs per engine so a fixture can
+//! encode which engine satisfies the spec; the dump merges both engines per
+//! node so every snapshot is a live diff of the two systems.
+//!
+//! A fixture is a single BAML file. Annotation lines are comments whose first
+//! non-space content after `//` is a caret run; the carets select a byte range
+//! on the nearest preceding non-annotation line, and the rest of the line is
+//! the expected type in `Ty::render_canonical` syntax:
+//!
+//! ```text
+//! function f() -> int {
+//!     let x = 1;
+//!      // ^ int
+//!     x
+//! //  ^ int
+//! }
+//! ```
+//!
+//! A caret range matches an expression span or a binding-pattern span. The
+//! check is strict in both directions: an annotation that matches nothing
+//! fails, an annotation whose type differs fails, and a fixture with no
+//! annotations fails. For TIR, error-severity diagnostics also fail (the
+//! hir_ty engine has no diagnostics yet; the plan's S17 adds them and the
+//! gate). Annotation lines are ordinary comments to the compiler, so ranges
+//! are computed against the exact text that gets compiled. Fixtures must be
+//! ASCII (caret columns are byte offsets).
+//!
+//! The dump side renders one line per inferred node, sorted by range:
+//! `start..end 'text': ty` where the engines agree, and
+//! `start..end 'text': hir_ty=[..] tir=[..]` where they differ (with
+//! `<missing>` for an engine that inferred nothing there). Counting
+//! difference lines across snapshots is the progress metric; at cutover the
+//! only ones left should be the spec-mandated improvements.
+//!
+//! Not yet supported (add when a fixture needs it): multi-file fixtures,
+//! `|` continuation lines, `^file` whole-file annotations, top-level `let`
+//! bodies, and parameter annotations (parameters are not `PatId`-backed).
+
+use std::{collections::BTreeMap, fmt::Write as _};
+
+use baml_compiler2_ast::AstSourceMap;
+use baml_compiler2_hir::{
+    body::FunctionBody,
+    scope::{FileScopeId, ScopeKind},
+    semantic_index::FileSemanticIndex,
+};
+use baml_compiler2_hir_ty::infer::{InferenceResult, infer_function};
+use baml_compiler2_tir::{
+    infer_context::DiagnosticSeverity,
+    inference::{infer_scope_types, render_scope_diagnostics},
+};
+use baml_project::ProjectDatabase;
+use text_size::{TextRange, TextSize};
+
+/// One caret annotation: the source range it selects, the expected rendered
+/// type, and the 1-based line of the annotated code (for error messages).
+struct Annotation {
+    range: TextRange,
+    expected: String,
+    code_line: usize,
+}
+
+/// Per-engine annotation-check results plus the merged infer-dump.
+pub(crate) struct DifferentialOutcome {
+    pub(crate) hir_ty: Result<(), String>,
+    pub(crate) tir: Result<(), String>,
+    pub(crate) dump: String,
+}
+
+/// Runs both engines over `fixture` (as `test.baml`), checks the caret
+/// annotations against each, and renders the merged dump.
+pub(crate) fn run_differential(fixture: &str) -> DifferentialOutcome {
+    assert!(fixture.is_ascii(), "fixtures must be ASCII");
+    let annotations = extract_annotations(fixture);
+    assert!(
+        !annotations.is_empty(),
+        "fixture has no //^ annotations; check_types requires at least one"
+    );
+
+    let mut db = crate::compiler2_tir::support::make_db();
+    let file = db.add_file("test.baml", fixture);
+
+    let hir_ty_nodes = collect_hir_ty_nodes(&db, file, fixture);
+    let tir_nodes = collect_tir_nodes(&db, file, fixture);
+
+    let hir_ty_failures = check_annotations(&hir_ty_nodes, fixture, &annotations);
+    let mut tir_failures = check_annotations(&tir_nodes, fixture, &annotations);
+    for diag in tir_error_diagnostics(&db, file) {
+        tir_failures.push(format!("error diagnostic: {diag}"));
+    }
+
+    DifferentialOutcome {
+        hir_ty: to_result(hir_ty_failures),
+        tir: to_result(tir_failures),
+        dump: render_infer_diff(&hir_ty_nodes, &tir_nodes, fixture),
+    }
+}
+
+/// Checks `fixture`'s annotations against the hir_ty engine only, panicking
+/// on failure. Inline-test entry point; fixtures use the runner.
+#[track_caller]
+#[allow(dead_code, reason = "inline-test entry point; fixtures use the runner")]
+pub(crate) fn check_types(fixture: &str) {
+    if let Err(report) = run_differential(fixture).hir_ty {
+        panic!("check_types failed:\n  {report}");
+    }
+}
+
+fn to_result(failures: Vec<String>) -> Result<(), String> {
+    if failures.is_empty() {
+        Ok(())
+    } else {
+        Err(failures.join("\n  "))
+    }
+}
+
+/// Checks every annotation against one engine's typed nodes.
+fn check_annotations(
+    nodes: &[TypedNode],
+    fixture: &str,
+    annotations: &[Annotation],
+) -> Vec<String> {
+    let mut types: BTreeMap<(u32, u32), Vec<String>> = BTreeMap::new();
+    for node in nodes {
+        let entry = types.entry(range_key(node.range)).or_default();
+        if !entry.contains(&node.ty) {
+            entry.push(node.ty.clone());
+        }
+    }
+
+    let mut failures = Vec::new();
+    for ann in annotations {
+        match types.get(&range_key(ann.range)) {
+            None => {
+                let mut msg = format!(
+                    "line {}: no inferred type at {:?} (`{}`); expected `{}`",
+                    ann.code_line, ann.range, &fixture[ann.range], ann.expected
+                );
+                write_candidates_on_line(&mut msg, fixture, &types, ann);
+                failures.push(msg);
+            }
+            Some(rendered) if !rendered.contains(&ann.expected) => {
+                failures.push(format!(
+                    "line {}: `{}` expected `{}`, inferred `{}`",
+                    ann.code_line,
+                    &fixture[ann.range],
+                    ann.expected,
+                    rendered.join("` / `")
+                ));
+            }
+            Some(_) => {}
+        }
+    }
+    failures
+}
+
+/// Merges both engines' nodes into one dump line per source range:
+/// `start..end 'text': ty` on agreement, `hir_ty=[..] tir=[..]` on
+/// difference. The name-narrowed binding entries used by caret matching are
+/// excluded: the dump reflects real node spans only.
+fn render_infer_diff(hir_ty: &[TypedNode], tir: &[TypedNode], fixture: &str) -> String {
+    let mut merged: BTreeMap<(u32, u32), (Vec<String>, Vec<String>)> = BTreeMap::new();
+    for (nodes, side) in [(hir_ty, 0usize), (tir, 1usize)] {
+        for node in nodes {
+            if node.kind == NodeKind::BindingName {
+                continue;
+            }
+            let entry = merged.entry(range_key(node.range)).or_default();
+            let list = if side == 0 {
+                &mut entry.0
+            } else {
+                &mut entry.1
+            };
+            if !list.contains(&node.ty) {
+                list.push(node.ty.clone());
+            }
+        }
+    }
+
+    let mut out = String::new();
+    for (&(start, end), (h, t)) in &mut merged {
+        h.sort();
+        t.sort();
+        let text = ellipsize(
+            &fixture[TextRange::new(TextSize::new(start), TextSize::new(end))],
+            15,
+        );
+        if h == t {
+            for ty in h.iter() {
+                let _ = writeln!(out, "{start}..{end} '{text}': {ty}");
+            }
+        } else {
+            let _ = writeln!(
+                out,
+                "{start}..{end} '{text}': hir_ty=[{}] tir=[{}]",
+                render_side(h),
+                render_side(t)
+            );
+        }
+    }
+    out
+}
+
+fn render_side(tys: &[String]) -> String {
+    if tys.is_empty() {
+        "<missing>".to_owned()
+    } else {
+        tys.join(" / ")
+    }
+}
+
+/// Shortens `text` to at most `max` bytes with a `...` midsection, escaping
+/// newlines so every dump entry stays on one line.
+fn ellipsize(text: &str, max: usize) -> String {
+    debug_assert!(max >= 5);
+    let flat = text.replace('\n', "\\n");
+    if flat.len() <= max {
+        return flat;
+    }
+    let prefix = (max - 3) / 2;
+    let suffix = max - 3 - prefix;
+    format!("{}...{}", &flat[..prefix], &flat[flat.len() - suffix..])
+}
+
+fn range_key(range: TextRange) -> (u32, u32) {
+    (range.start().into(), range.end().into())
+}
+
+/// Lists the ranges on the annotated line that DO have types, so a
+/// misaligned caret fails with the nearby candidates instead of nothing.
+fn write_candidates_on_line(
+    msg: &mut String,
+    fixture: &str,
+    types: &BTreeMap<(u32, u32), Vec<String>>,
+    ann: &Annotation,
+) {
+    let line_start = fixture[..u32::from(ann.range.start()) as usize]
+        .rfind('\n')
+        .map_or(0, |idx| idx + 1);
+    let line_end = fixture[line_start..]
+        .find('\n')
+        .map_or(fixture.len(), |idx| line_start + idx);
+    let mut candidates = types
+        .range((line_start as u32, 0)..(line_end as u32, u32::MAX))
+        .peekable();
+    if candidates.peek().is_some() {
+        let _ = write!(msg, "; typed ranges on that line:");
+        for (&(start, end), rendered) in candidates {
+            let _ = write!(
+                msg,
+                " `{}`: `{}`",
+                &fixture[start as usize..end as usize],
+                rendered.join("` / `")
+            );
+        }
+    }
+}
+
+/// Extracts caret annotations. Stacked annotation lines all target the same
+/// (nearest preceding non-annotation) line.
+fn extract_annotations(text: &str) -> Vec<Annotation> {
+    let mut annotations = Vec::new();
+    // (byte offset, byte length, 1-based line number) of the target line.
+    let mut target: Option<(usize, usize, usize)> = None;
+    let mut offset = 0usize;
+    for (idx, line) in text.split('\n').enumerate() {
+        if let Some((caret_col, caret_len, content)) = parse_annotation_line(line) {
+            let (t_offset, t_len, t_line) = target.unwrap_or_else(|| {
+                panic!("line {}: annotation has no preceding code line", idx + 1)
+            });
+            assert!(
+                caret_col + caret_len <= t_len,
+                "line {}: carets extend past the annotated line {}",
+                idx + 1,
+                t_line
+            );
+            let start = t_offset + caret_col;
+            annotations.push(Annotation {
+                range: TextRange::new(
+                    TextSize::new(start as u32),
+                    TextSize::new((start + caret_len) as u32),
+                ),
+                expected: content.to_owned(),
+                code_line: t_line,
+            });
+        } else {
+            target = Some((offset, line.len(), idx + 1));
+        }
+        offset += line.len() + 1;
+    }
+    annotations
+}
+
+/// Parses `  // ^^^ expected` into (caret start column, caret run length,
+/// expected text). Returns `None` for non-annotation lines. Columns are byte
+/// offsets into the whole line so they align with the code line above.
+fn parse_annotation_line(line: &str) -> Option<(usize, usize, &str)> {
+    let rest = line.trim_start().strip_prefix("//")?;
+    let after = rest.trim_start();
+    if !after.starts_with('^') {
+        return None;
+    }
+    let caret_col = line.len() - after.len();
+    let caret_len = after.bytes().take_while(|&b| b == b'^').count();
+    let content = after[caret_len..].trim();
+    assert!(
+        !content.is_empty(),
+        "annotation line `{line}` has no expected type after the carets"
+    );
+    Some((caret_col, caret_len, content))
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum NodeKind {
+    Expr,
+    Pattern,
+    /// A binding re-keyed to just its introduced name (`x`, not `let x`) --
+    /// the natural caret target. Excluded from the dump.
+    BindingName,
+}
+
+struct TypedNode {
+    range: TextRange,
+    kind: NodeKind,
+    ty: String,
+}
+
+/// Per-function hir_ty inference state paired with the maps needed to
+/// resolve arena ids to source ranges.
+struct FunctionInference {
+    body: std::sync::Arc<FunctionBody>,
+    source_map: AstSourceMap,
+    result: InferenceResult,
+}
+
+/// Runs the hir_ty engine over every function in `file` and renders each
+/// inferred expression and binding with its source range.
+/// Compiler-synthesized nodes are skipped: fixtures assert what the user
+/// wrote.
+fn collect_hir_ty_nodes(
+    db: &ProjectDatabase,
+    file: baml_base::SourceFile,
+    fixture: &str,
+) -> Vec<TypedNode> {
+    let index = baml_compiler2_ppir::file_semantic_index(db, file);
+
+    // Inference results per function, keyed by the function's scope so
+    // binding lookups (which start from arbitrary child scopes) can find the
+    // arena owner's result.
+    let mut functions: BTreeMap<u32, FunctionInference> = BTreeMap::new();
+    for &func_loc in baml_compiler2_ppir::item_data::file_functions(db, file).iter() {
+        let Some(scope_id) = baml_compiler2_ppir::item_data::function_scope(db, func_loc) else {
+            continue;
+        };
+        let body = baml_compiler2_ppir::function_body(db, func_loc);
+        if !matches!(body.as_ref(), FunctionBody::Expr(_)) {
+            continue;
+        }
+        let Some(source_map) = baml_compiler2_ppir::function_body_source_map(db, func_loc) else {
+            continue;
+        };
+        functions.insert(
+            scope_id.file_scope_id(db).index(),
+            FunctionInference {
+                body,
+                source_map,
+                result: infer_function(db, func_loc),
+            },
+        );
+    }
+
+    let mut nodes = Vec::new();
+    for func in functions.values() {
+        for (&expr_id, ty) in &func.result.type_of_expr {
+            if func.source_map.is_synthetic_expr(expr_id) {
+                continue;
+            }
+            nodes.push(TypedNode {
+                range: func.source_map.expr_span(expr_id),
+                kind: NodeKind::Expr,
+                ty: ty.render_canonical(),
+            });
+        }
+        let FunctionBody::Expr(body) = func.body.as_ref() else {
+            continue;
+        };
+        for (pat_id, _) in body.patterns.iter() {
+            if func.source_map.synthetic_patterns.contains(&pat_id) {
+                continue;
+            }
+            if let Some(ty) = func.result.type_of_binding.get(&pat_id) {
+                nodes.push(TypedNode {
+                    range: func.source_map.pattern_span(pat_id),
+                    kind: NodeKind::Pattern,
+                    ty: ty.render_canonical(),
+                });
+            }
+        }
+    }
+
+    // Bindings again, keyed by just the introduced name, which is the natural
+    // caret target. A binding lives in the scope that declares it (often a
+    // Block), so resolve through the enclosing function's result.
+    for (idx, bindings) in index.scope_bindings.iter().enumerate() {
+        if bindings.bindings.is_empty() {
+            continue;
+        }
+        let Some(owner) = enclosing_function_scope(index, FileScopeId::new(idx as u32)) else {
+            continue;
+        };
+        let Some(func) = functions.get(&owner.index()) else {
+            continue;
+        };
+        for binding in &bindings.bindings {
+            if let Some(ty) = func.result.type_of_binding.get(&binding.pattern) {
+                nodes.push(TypedNode {
+                    range: binding_name_range(fixture, binding),
+                    kind: NodeKind::BindingName,
+                    ty: ty.render_canonical(),
+                });
+            }
+        }
+    }
+
+    nodes.retain(|node| !node.range.is_empty());
+    nodes
+}
+
+/// Runs TIR's `infer_scope_types` over every inference-owner scope in `file`
+/// (functions and their lambdas, via the same per-scope projections the LSP
+/// uses) and renders each inferred expression and binding with its source
+/// range.
+fn collect_tir_nodes(
+    db: &ProjectDatabase,
+    file: baml_base::SourceFile,
+    fixture: &str,
+) -> Vec<TypedNode> {
+    let index = baml_compiler2_ppir::file_semantic_index(db, file);
+    let mut nodes = Vec::new();
+
+    for (idx, scope) in index.scopes.iter().enumerate() {
+        if !matches!(
+            scope.kind,
+            ScopeKind::Function | ScopeKind::Let | ScopeKind::Lambda
+        ) {
+            continue;
+        }
+        // Lambdas share the enclosing function's expression arena and source
+        // map; resolve to the scope that owns the arena.
+        let Some(owner) = enclosing_function_scope(index, FileScopeId::new(idx as u32)) else {
+            continue;
+        };
+        let owner_scope_id = index.scope_ids[owner.index() as usize];
+        let Some(baml_compiler2_ppir::item_data::ScopeOwner::Function(func_loc)) =
+            baml_compiler2_ppir::item_data::scope_owner(db, owner_scope_id)
+        else {
+            continue;
+        };
+        let body_arc = baml_compiler2_ppir::function_body(db, func_loc);
+        let FunctionBody::Expr(body) = body_arc.as_ref() else {
+            continue;
+        };
+        let Some(source_map) = baml_compiler2_ppir::function_body_source_map(db, func_loc) else {
+            continue;
+        };
+
+        let inference = infer_scope_types(db, index.scope_ids[idx]);
+        for (&expr_id, ty) in inference.iter_expressions() {
+            if source_map.is_synthetic_expr(expr_id) {
+                continue;
+            }
+            nodes.push(TypedNode {
+                range: source_map.expr_span(expr_id),
+                kind: NodeKind::Expr,
+                ty: ty.render_canonical(),
+            });
+        }
+        for (pat_id, _) in body.patterns.iter() {
+            if source_map.synthetic_patterns.contains(&pat_id) {
+                continue;
+            }
+            if let Some(ty) = inference.binding_type(pat_id) {
+                nodes.push(TypedNode {
+                    range: source_map.pattern_span(pat_id),
+                    kind: NodeKind::Pattern,
+                    ty: ty.render_canonical(),
+                });
+            }
+        }
+        for binding in &index.scope_bindings[idx].bindings {
+            if let Some(ty) = inference.binding_type(binding.pattern) {
+                nodes.push(TypedNode {
+                    range: binding_name_range(fixture, binding),
+                    kind: NodeKind::BindingName,
+                    ty: ty.render_canonical(),
+                });
+            }
+        }
+    }
+
+    // Bindings declared in non-owner scopes (blocks, match arms): resolve
+    // through the nearest enclosing inference owner.
+    for (idx, bindings) in index.scope_bindings.iter().enumerate() {
+        if bindings.bindings.is_empty()
+            || matches!(
+                index.scopes[idx].kind,
+                ScopeKind::Function | ScopeKind::Let | ScopeKind::Lambda
+            )
+        {
+            continue;
+        }
+        let Some(owner) = tir_inference_owner(index, FileScopeId::new(idx as u32)) else {
+            continue;
+        };
+        let inference = infer_scope_types(db, index.scope_ids[owner.index() as usize]);
+        for binding in &bindings.bindings {
+            if let Some(ty) = inference.binding_type(binding.pattern) {
+                nodes.push(TypedNode {
+                    range: binding_name_range(fixture, binding),
+                    kind: NodeKind::BindingName,
+                    ty: ty.render_canonical(),
+                });
+            }
+        }
+    }
+
+    nodes.retain(|node| !node.range.is_empty());
+    nodes
+}
+
+/// TIR error-severity diagnostics for `file`, rendered one per line.
+fn tir_error_diagnostics(db: &ProjectDatabase, file: baml_base::SourceFile) -> Vec<String> {
+    let index = baml_compiler2_ppir::file_semantic_index(db, file);
+    let mut out = Vec::new();
+    for scope_id in &index.scope_ids {
+        for diag in render_scope_diagnostics(db, *scope_id) {
+            if diag.severity == DiagnosticSeverity::Error {
+                out.push(format!("{:?}: {}", diag.range, diag.message));
+            }
+        }
+    }
+    out
+}
+
+/// The range of just the introduced identifier. A `let x` / `let x: T` Bind
+/// pattern's `name_range` currently spans the whole pattern including the
+/// keyword and annotation, so narrow to the first word-boundary occurrence of
+/// the name; ranges that already are the bare name pass through unchanged.
+fn binding_name_range(
+    fixture: &str,
+    binding: &baml_compiler2_hir::semantic_index::LocalBinding,
+) -> TextRange {
+    let name = binding.name.as_str();
+    let text = &fixture[binding.name_range];
+    if text == name {
+        return binding.name_range;
+    }
+    let is_ident = |b: u8| b.is_ascii_alphanumeric() || b == b'_';
+    let mut search_from = 0;
+    while let Some(idx) = text[search_from..].find(name).map(|i| search_from + i) {
+        let before_ok = idx == 0 || !is_ident(text.as_bytes()[idx - 1]);
+        let after = idx + name.len();
+        let after_ok = after == text.len() || !is_ident(text.as_bytes()[after]);
+        if before_ok && after_ok {
+            let start = u32::from(binding.name_range.start()) + idx as u32;
+            return TextRange::new(
+                TextSize::new(start),
+                TextSize::new(start + name.len() as u32),
+            );
+        }
+        search_from = idx + 1;
+    }
+    binding.name_range
+}
+
+/// Walks to the enclosing scope (self included) whose kind is Function --
+/// the arena owner for everything nested in it, lambdas included.
+fn enclosing_function_scope(
+    index: &FileSemanticIndex<'_>,
+    mut fsi: FileScopeId,
+) -> Option<FileScopeId> {
+    loop {
+        let scope = &index.scopes[fsi.index() as usize];
+        match scope.kind {
+            ScopeKind::Function => return Some(fsi),
+            _ => fsi = scope.parent?,
+        }
+    }
+}
+
+/// Walks to the innermost scope (self included) that owns a TIR inference
+/// run (function, top-level let, or lambda).
+fn tir_inference_owner(index: &FileSemanticIndex<'_>, mut fsi: FileScopeId) -> Option<FileScopeId> {
+    loop {
+        let scope = &index.scopes[fsi.index() as usize];
+        match scope.kind {
+            ScopeKind::Function | ScopeKind::Let | ScopeKind::Lambda => return Some(fsi),
+            _ => fsi = scope.parent?,
+        }
+    }
+}

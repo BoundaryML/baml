@@ -1,0 +1,9 @@
+---
+source: crates/baml_tests/src/type_spec/fixtures.rs
+expression: outcome.dump
+---
+79..157 '{\n   ...int\n}': hir_ty=[<missing>] tir=[int]
+85..90 'let b': hir_ty=[<missing>] tir=[user.Box<int>]
+93..110 'Box<in...v: 5 }': hir_ty=[<missing>] tir=[user.Box<int>]
+107..108 '5': hir_ty=[<missing>] tir=[5]
+140..143 'b.v': hir_ty=[<missing>] tir=[int]
