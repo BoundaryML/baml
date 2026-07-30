@@ -54,6 +54,7 @@ import { useEnvVars } from './envAtoms';
 import type { ExecutionStoreSnapshot } from './execution-store';
 import { createExecutionStore, type ExecutionStore } from './execution-store';
 import { FunctionSidebar } from './FunctionSidebar';
+import { topologicallySortFunctions } from './function-topological-sort';
 import { setGatewayEnabled } from './gateway';
 import { GraphView } from './graph/GraphView';
 import { findLatestGraphRunSnapshot } from './graph-run-selection';
@@ -2441,6 +2442,23 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
     return callers;
   }, [workflowCacheVersion, functionNames]);
 
+  const sidebarFunctions = useMemo(() => {
+    void workflowCacheVersion;
+    const hasCurrentGraphResponses =
+      prefetchedCfgRef.current.version === projectUpdateVersion &&
+      functionNames.every((name) => workflowCfgResponsesRef.current.has(name));
+    if (!hasCurrentGraphResponses) return visibleFunctions;
+    return topologicallySortFunctions(
+      visibleFunctions,
+      workflowCfgCacheRef.current,
+    );
+  }, [
+    functionNames,
+    projectUpdateVersion,
+    visibleFunctions,
+    workflowCacheVersion,
+  ]);
+
   // The topmost workflows containing fn: walk the caller chain upward to
   // functions nobody else calls. Tests never appear — they are not in the
   // function list, so their call sites are not in the cache. The input may
@@ -2991,7 +3009,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
                 <FunctionSidebar
                   collectionLogCount={collectionDebug?.fetchLogs.length ?? 0}
                   failedExpands={failedExpands}
-                  functions={visibleFunctions}
+                  functions={sidebarFunctions}
                   internalFunctionCount={internalFunctionCount}
                   isLoadingProject={isLoadingProject}
                   onRefreshTests={handleRefreshTests}
