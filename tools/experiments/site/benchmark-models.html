@@ -1,152 +1,159 @@
 <!doctype html>
 <html lang="en">
 <head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Which models write real BAML?</title>
-<link rel="stylesheet" href="./style.css" />
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="description" content="A describe-only experiment measuring how GPT and Claude models write BAML." />
+  <title>Can models learn BAML from describe alone?</title>
+  <link rel="stylesheet" href="./dhilan-style.css" />
 </head>
 <body>
+  <nav class="crumbs">
+    <a href="./index.html">baml experiments</a><span>/ describe-only builders</span>
+  </nav>
 
-<nav class="crumbs"><a href="./index.html">baml experiments</a> <span>/ benchmark-models</span></nav>
+  <header>
+    <p class="eyebrow">intentionbench · 9 July 2026</p>
+    <h1>Can models learn BAML from <code>describe</code> alone?</h1>
+    <p class="lede">Six models received an empty project, a writing tool, and the real
+      <code>baml describe</code> command as their only language documentation. None
+      produced a project that compiled.</p>
+    <div class="headlines" aria-label="Experiment headlines">
+      <div><span class="k">models</span><span class="v" id="model-count">6</span></div>
+      <div><span class="k">compiled</span><span class="v" id="compile-count">0</span></div>
+      <div><span class="k">budget reserved</span><span class="v" id="budget">$9.55</span></div>
+    </div>
+  </header>
 
-<section class="section">
-  <p class="eyebrow">agent tries baml · adherence by model</p>
-  <h1>Which models write real BAML?</h1>
+  <main>
+    <section>
+      <h2>Results</h2>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>model</th>
+              <th>status</th>
+              <th class="num">adherence</th>
+              <th class="num">commission</th>
+              <th class="num">slop</th>
+              <th class="num">errors</th>
+              <th class="num">valid score</th>
+            </tr>
+          </thead>
+          <tbody id="results-body">
+            <tr><td colspan="7" class="dim">loading results…</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="caption">The valid score is adherence gated by compilation. A fluent
+        non-program scores zero. “Slop” counts evidence-verified findings that survived
+        the skeptic pass.</p>
+    </section>
 
-  <p>Five models got the same job: build a small BAML project from nothing. A receipt
-  extractor: types, one LLM function, a couple of pure helpers, and tests. None of them had
-  seen the language before. Each got a live <code>baml</code> CLI and 25 turns to learn
-  it: <code>baml describe String</code> to read the stdlib, <code>baml check</code> to
-  find out what the compiler thinks.</p>
+    <section>
+      <h2>The result</h2>
+      <p>There is no winner. Claude Sonnet came closest, ending with three compiler
+        errors. Haiku was recognizably BAML-shaped but never checked its final file.
+        GPT-5.1 and GPT-5 Mini committed early to coherent languages of their own
+        invention. Opus and GPT-5 Nano never crossed from reading into writing.</p>
+      <p>Intentionbench still assigned scores above five to both invalid projects.
+        That is useful evidence about the grader: adherence measures whether source
+        text resembles the design, not whether the source is executable. Compilation
+        therefore remains a hard gate, not another weighted feature.</p>
+    </section>
 
-  <p>Then one grader scored every project. <code>baml-bench</code> chunks the code, routes
-  each chunk against 127 design-principle cards distilled from all 50 BAML Enhancement
-  Proposals, and grades each pair on a 1 to 10 scale: does this code use the language the way
-  we designed it? Evidence quotes get checked against the source before a grade counts,
-  and every low grade survives a skeptic pass before it reaches this page. Total builder
-  cost for all five runs: $2.24.</p>
-</section>
+    <section>
+      <h2>Model notes</h2>
+      <div id="model-notes"></div>
+    </section>
 
-<section class="section">
-  <h2>Scoreboard</h2>
-  <div id="scoreboard"><p class="dim">loading…</p></div>
-  <p class="dim">Adherence is the weighted 1 to 10 mean over graded (chunk, card) pairs.
-  Slop counts findings that survived both the evidence check and the skeptic.
-  Live data from the <code>experiments</code> Convex project.</p>
-</section>
+    <section>
+      <h2>Method</h2>
+      <ol class="method">
+        <li>Give every model the same receipt-extractor task and an empty anchored BAML project.</li>
+        <li>Expose typed actions for <code>describe</code>, file writes, formatting, checks, and tests—no shell.</li>
+        <li>Limit each builder to twelve turns and 2,048 output tokens per turn; Opus received eight turns to remain under budget.</li>
+        <li>Run an independent <code>baml check</code> and test pass after the builder stops.</li>
+        <li>Grade every non-empty project with the same 127-card intentionbench catalog.</li>
+      </ol>
+    </section>
 
-<section class="section">
-  <h2>The scoreboard lies if you read it alone</h2>
+    <section>
+      <h2>Cost boundary</h2>
+      <div class="budget-rule" id="budget-rule">
+        hard cap&nbsp;&nbsp;$10.00<br />
+        worst-case reserved&nbsp;&nbsp;$9.55<br />
+        accounting&nbsp;&nbsp;40k input + 2,048 output tokens per possible call
+      </div>
+      <p class="caption">Reservations use deliberately pessimistic token bounds and
+        persist across failed runs. The grader ran through the local subscription proxy,
+        outside metered builder API spend.</p>
+    </section>
+  </main>
 
-  <p>gpt-5-nano took first place. 8.71, zero slop findings, the most code of any model.
-  Its project has <strong>407 compile errors</strong>.</p>
+  <footer>
+    Raw projects, transcripts, compiler logs, and intentionbench reports live under
+    <code>tools/experiments/benchmark-models/runs</code>.
+  </footer>
 
-  <p>It wrote fluent pseudo-BAML. The shapes match what the design cards want, so the
-  grader had nothing to object to, and almost none of it parses. Meanwhile claude-haiku-4-5
-  came fourth. haiku is also the only model in the table whose project compiles.</p>
+  <script>
+    const esc = (value) => String(value).replace(/[&<>"]/g, (char) => ({
+      "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;",
+    }[char]));
+    const score = (value) => value == null ? "—" : Number(value).toFixed(2);
 
-  <p>So the two numbers measure different skills. Adherence tells you whether the text
-  respects the language's design; whether the code is real is the compiler's question,
-  and it turns out a model can fake the first one a lot more easily than the second.
-  Our takeaway for the benchmark itself: the headline metric should be adherence gated
-  by compilation. That change is on the baml-bench roadmap now.</p>
-</section>
+    fetch("./data/intentionbench-results.json")
+      .then((response) => {
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        return response.json();
+      })
+      .then(({ run, results }) => {
+        document.getElementById("model-count").textContent = results.length;
+        document.getElementById("compile-count").textContent =
+          results.filter((result) => result.compileOk).length;
+        document.getElementById("budget").textContent =
+          `$${Number(run.worstCaseReservedUsd).toFixed(2)}`;
 
-<section class="section">
-  <h2>How each model behaved</h2>
-  <div id="models"></div>
-</section>
+        document.getElementById("results-body").innerHTML = results.map((result) => {
+          const status = result.compileOk
+            ? '<span class="statpill passed">passed</span>'
+            : result.blocks == null
+              ? '<span class="statpill partial">no output</span>'
+              : '<span class="statpill failed">failed</span>';
+          return `<tr>
+            <td class="model-name">${esc(result.provider)}/${esc(result.model)}</td>
+            <td>${status}</td>
+            <td class="num">${score(result.adherence)}</td>
+            <td class="num">${score(result.commission)}</td>
+            <td class="num">${result.slop == null ? "—" : result.slop}</td>
+            <td class="num">${result.compileErrors}</td>
+            <td class="num">${score(result.validityAdjusted)}</td>
+          </tr>`;
+        }).join("");
 
-<section class="section">
-  <h2>Method, briefly</h2>
-  <p>The builder loop gives each model two tools: <code>baml &lt;args&gt;</code> (a real
-  CLI in its project directory) and <code>write_file</code>. The task prompt says the
-  model has never seen BAML and should learn it from the CLI before writing code. A hard
-  $10 spend meter prices every API call from actual token usage and kills the whole sweep
-  if crossed. It never got close.</p>
-  <p>The grader is the same for every model: Sonnet judgments behind a content-addressed
-  cache, temperature 0, evidence quotes verified mechanically against the chunk source.
-  Grader bias is constant across rows, so differences between models are differences in
-  what they wrote.</p>
-  <p>Caveats worth keeping: one build per model, one task, and every model ran out of
-  turns rather than declaring itself done. Orderings within a point of each other are
-  noise until we run repetitions. The harness makes that cheap, since judgments are cached and
-  a rerun only pays for what changed.</p>
-  <p class="dim">Harness: <code>tools/experiments/benchmark-models/run_models.py</code>.
-  Grader: <code>tools/baml-bench</code>. Full per-model reports live next to each run.</p>
-</section>
+        document.getElementById("model-notes").innerHTML = results.map((result) => `
+          <article class="finding">
+            <p class="finding-meta">${esc(result.provider)}/${esc(result.model)}
+              · ${result.blocks == null ? "no gradable blocks" : `${result.blocks} blocks · ${result.pairs} graded pairs`}
+            </p>
+            <h3>${esc(result.failure)}</h3>
+            <details class="blurb">
+              <summary>What happened</summary>
+              <p>${esc(result.summary)}</p>
+            </details>
+          </article>
+        `).join("");
 
-<script>
-const FALLBACK_URL = "./data/model-benchmarking.json";
-const CONVEX_URL = "https://giddy-coyote-574.convex.cloud/api/query";
-
-async function loadRows() {
-  try {
-    const r = await fetch(CONVEX_URL, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ path: "modelBenchmarking:list", args: {}, format: "json" }),
-    });
-    const j = await r.json();
-    if (j.status === "success" && Array.isArray(j.value) && j.value.length) return j.value;
-  } catch {}
-  return (await fetch(FALLBACK_URL)).json();
-}
-
-const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
-const f2 = (x) => (Math.round(x * 100) / 100).toFixed(2);
-
-loadRows().then((rows) => {
-  const board = document.getElementById("scoreboard");
-  board.innerHTML = "";
-  const table = document.createElement("table");
-  table.insertAdjacentHTML("beforeend",
-    "<tr><th>model</th><th class='num'>adherence</th><th class='num'>commission</th><th class='num'>chunks</th><th class='num'>slop</th><th>compiles</th></tr>");
-  for (const r of rows) {
-    const compiles = r.compileErrors === 0
-      ? '<span class="ok">yes</span>'
-      : `<span class="bad">no</span> <span class="ms">${r.compileErrors} errors</span>`;
-    table.insertAdjacentHTML("beforeend",
-      `<tr${r.compileErrors === 0 ? ' class="winner"' : ""}><td class="case">${esc(r.provider)}/${esc(r.model)}</td>` +
-      `<td class="num">${f2(r.adherence)}</td><td class="num">${f2(r.commission)}</td>` +
-      `<td class="num">${r.chunks}</td><td class="num">${r.slop}</td><td>${compiles}</td></tr>`);
-  }
-  board.appendChild(table);
-
-  const chart = document.createElement("div");
-  chart.className = "chart";
-  chart.insertAdjacentHTML("beforeend", '<p class="chart-cap">adherence, 1 to 10 · purple = project compiles</p>');
-  for (const r of rows) {
-    chart.insertAdjacentHTML("beforeend",
-      `<div class="chart-row"><span class="chart-name">${esc(r.model)}</span><span class="chart-track">` +
-      `<span class="chart-fill${r.compileErrors === 0 ? " chart-fill--accent" : ""}" style="--w:${Math.round(r.adherence * 10)}%"></span>` +
-      `<span class="chart-val">${f2(r.adherence)}</span></span></div>`);
-  }
-  board.appendChild(chart);
-
-  const models = document.getElementById("models");
-  for (const r of rows) {
-    const sec = document.createElement("div");
-    let html = `<h3>${esc(r.provider)}/${esc(r.model)} · ${f2(r.adherence)}</h3><p>${esc(r.summary)}</p>`;
-    if (r.slopFindings.length) {
-      html += `<p class="dim">What the grader flagged (grade ≤ 4, evidence verified against the source):</p>`;
-      for (const f of r.slopFindings.slice(0, 4)) {
-        html += `<p class="finding-head">${esc(f.chunkId)} × ${esc(f.cardId)} · <span class="grade">grade ${f.grade}</span></p>` +
-                `<div class="evidence">${esc(f.evidence)}</div>`;
-      }
-    }
-    if (r.omissions.length) {
-      html += `<p class="dim">Omissions, meaning primitives the goals called for that never appear:</p><ul style="margin:0 0 1rem 1.2rem; font-size:14px; color:var(--muted)">`;
-      for (const o of r.omissions.slice(0, 4)) html += `<li><code>${esc(o.cardId)}</code> ${esc(o.description)}</li>`;
-      html += "</ul>";
-    }
-    sec.innerHTML = html;
-    models.appendChild(sec);
-  }
-}).catch((e) => {
-  document.getElementById("scoreboard").innerHTML = `<p class="dim">could not load results: ${esc(e)}</p>`;
-});
-</script>
+        document.getElementById("budget-rule").innerHTML =
+          `hard cap&nbsp;&nbsp;$${Number(run.budgetLimitUsd).toFixed(2)}<br />` +
+          `worst-case reserved&nbsp;&nbsp;$${Number(run.worstCaseReservedUsd).toFixed(2)}<br />` +
+          `turn limit&nbsp;&nbsp;${run.turnLimit} per model`;
+      })
+      .catch((error) => {
+        document.getElementById("results-body").innerHTML =
+          `<tr><td colspan="7" class="dim">could not load results: ${esc(error.message)}</td></tr>`;
+      });
+  </script>
 </body>
 </html>

@@ -1,2 +1,6 @@
+baml-bench-experiment
 runs/
 results.json
+budget.json
+full-run.log
+.baml/
