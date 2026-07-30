@@ -53,6 +53,7 @@
       "devDependencies": {
         "@eslint/eslintrc": "^3.3.5",
         "@types/file-saver": "^2.0.7",
+        "@types/hast": "^3.0.4",
         "@types/node": "^20",
         "@types/react": "19.2.14",
         "@types/react-dom": "^19",
