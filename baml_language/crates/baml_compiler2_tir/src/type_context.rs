@@ -197,9 +197,12 @@ impl baml_type::normalize::TypeContext for GlobalTypeContext<'_, '_> {
 ///
 /// Alias expansion *is* supplied, because two spellings that differ only by an alias
 /// (`type BI = Box<int>` vs `Box<int>`) genuinely denote the same type. Recursive
-/// aliases are handled by the canonicalizer's own μ-folding (an alias re-encountered
-/// mid-expansion becomes a recursion variable), so no precomputed recursive-alias set
-/// is needed here.
+/// aliases are handled by the canonicalizer's own μ-canonicalization (an alias
+/// re-encountered mid-expansion becomes a recursion variable; α-invariant de Bruijn
+/// binders plus automaton minimization make the canonical form equirecursively
+/// unique — `type A = int | A[]` ≡ `type B = int | B[]` at any unfolding depth, per
+/// `TYPE_SYSTEM.md` §Type Aliases and Recursive Types), so no precomputed
+/// recursive-alias set is needed here.
 ///
 /// The result is *canonical structural* equivalence: it applies the set-theoretic
 /// simplifications that hold regardless of nominal facts (`never` removal,

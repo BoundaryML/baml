@@ -13,7 +13,7 @@ use crate::{
     interfaces::{ImplData, impl_data, impl_data_source_map, interface_loc_qtn, package_impl_locs},
     unify::{
         EnumVariants, Overlap, TypeBindings, chase_var, contains_bound_typevar, enum_variant_names,
-        expand_alias_head, nf, normalized_alias_map, unify_into, var_under_union,
+        nf, normalized_alias_map, unify_into, var_under_union,
     },
 };
 
@@ -158,14 +158,26 @@ pub fn impls_conflict<'db>(
     // An impl whose for-target is not a valid implementor (rejected by the E0138
     // concreteness gate — union, interface, literal, enum variant, or an error
     // type) must not contribute a coherence overlap, or it would stack a spurious
-    // E0132 on top of that rejection. The gate is applied to the *alias-expanded*
-    // for-type: a bare `type AliasC = C` for-type lowers to `Ty::TypeAlias` (not itself
-    // a valid subject), but E0138 expands it and accepts it, so coherence must expand it
-    // too — otherwise `impl I for C` + `impl I for AliasC` would slip past both gates,
-    // leaving two impls for the same concrete type. (Aliases *under* a constructor are
-    // resolved later by `is_same_normalized_type`; only the head matters here.)
-    if !expand_alias_head(&a.for_ty_pattern, aliases).is_valid_impl_subject()
-        || !expand_alias_head(&b.for_ty_pattern, aliases).is_valid_impl_subject()
+    // E0132 on top of that rejection. The gate MUST judge the same spelling
+    // E0138 judges — the fully *normalized* for-type under the same fact
+    // context — or the two gates disagree and an overlap escapes both: E0138
+    // accepts `implements I for true | false` (it normalizes to the valid
+    // subject `bool`) and `implements I for E.A | E.B` (a complete variant set
+    // normalizes to `E`), so coherence rejecting those spellings on their raw
+    // union heads would wave the pair `impl for bool` + `impl for true | false`
+    // through with no E0132 — and at runtime both fully-realized patterns match
+    // every `bool` receiver: ambiguous dispatch with no diagnostic. (Aliases and
+    // collapses *under* a constructor are resolved later by
+    // `is_same_normalized_type`; only the head matters here.)
+    let bounds = crate::lower_type_expr::TypeVarBoundsMap::default();
+    let ctx = crate::type_context::GlobalTypeContext {
+        db,
+        res_ctx: crate::package_interface::package_resolution_context(db, pkg_id),
+        aliases,
+        bounds: &bounds,
+    };
+    if !baml_type::normalize::normalize(&a.for_ty_pattern, &ctx).is_valid_impl_subject()
+        || !baml_type::normalize::normalize(&b.for_ty_pattern, &ctx).is_valid_impl_subject()
     {
         return Overlap::No;
     }

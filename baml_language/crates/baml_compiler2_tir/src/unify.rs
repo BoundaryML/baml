@@ -1438,6 +1438,67 @@ mod tests {
     }
 
     #[test]
+    fn complete_bool_literal_union_subject_overlaps_bool() {
+        // `implements I for true | false` and `implements I for bool` name the
+        // same subject: `nf` folds the complete literal pair, so unification
+        // reports the overlap that the (normalize-aligned) coherence gate now
+        // forwards here instead of dropping on the raw union head.
+        let aliases = std::collections::HashMap::default();
+        let mut bindings = TypeBindings::default();
+        assert_eq!(
+            unify_into(
+                &Ty::bool(),
+                &Ty::Union(
+                    vec![bool_literal(true), bool_literal(false)],
+                    TyAttr::default(),
+                ),
+                &[],
+                &aliases,
+                &mut bindings,
+            ),
+            Overlap::Yes,
+        );
+    }
+
+    #[test]
+    fn distinct_recursive_alias_subjects_are_disjoint() {
+        // Genuinely different recursive trees (`type R = Box<R>` vs
+        // `type S = Box<Pair<S, int>>`) differ at a finite depth, so the
+        // structural descent expands through the aliases and proves
+        // disjointness without needing the depth backstop — the α-equivalent
+        // same-tree case is answered by `equivalent` before any descent (see
+        // `distinct_recursive_alias_subjects_overlap`).
+        let r = TypeName::local(Name::new("R"));
+        let s = TypeName::local(Name::new("S"));
+        let mut aliases = std::collections::HashMap::default();
+        aliases.insert(
+            r.clone(),
+            Ty::user_class_with_args("Box", vec![Ty::TypeAlias(r.clone(), TyAttr::default())]),
+        );
+        aliases.insert(
+            s.clone(),
+            Ty::user_class_with_args(
+                "Box",
+                vec![Ty::user_class_with_args(
+                    "Pair",
+                    vec![Ty::TypeAlias(s.clone(), TyAttr::default()), Ty::int()],
+                )],
+            ),
+        );
+        let mut bindings = TypeBindings::default();
+        assert_eq!(
+            unify_into(
+                &Ty::TypeAlias(r, TyAttr::default()),
+                &Ty::TypeAlias(s, TyAttr::default()),
+                &[],
+                &aliases,
+                &mut bindings,
+            ),
+            Overlap::No,
+        );
+    }
+
+    #[test]
     fn cover_distinct_interface_binding_is_not_conservative() {
         // Same-name interfaces are decided precisely by `unify_into`, so `cover` does not
         // fall back to the conservative `Yes` — `I<Item=int>` does not cover `I<Item=string>`.

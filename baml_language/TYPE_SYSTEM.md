@@ -152,6 +152,8 @@ type B = B         // denotes `never` (and is a compile error, E0068)
 
 Two types are **equivalent** if and only if they are mutual subtypes — they denote the same set of values. The canonical type algebra decides equivalence by structural equality of canonical forms, and for the algebra's rules these provably coincide with mutual subtyping (canonical forms are unique representatives of the equirecursive equivalence class).
 
+Two deliberate carve-outs qualify the "if and only if" (both are compiler devices, not value-set semantics): the error-recovery sentinel types are bidirectionally *compatible* with everything to suppress diagnostic cascades but equivalent only to themselves, and a fact set containing a mutual `requires` cycle between distinct interfaces would make them mutual subtypes while remaining nominally distinct — such cycles are rejected at declaration (E0118), so the case arises only for artificially constructed fact sets.
+
 `normalize` renders the canonical form back as surface syntax, with the following contract: the output is idempotent (`normalize(normalize(t)) == normalize(t)`), always equivalent to its input, and head-exposed (the root of a recursive alias is unfolded once; nested recursion stays folded as an alias name). Because surface syntax spells recursion via alias names, the rendering is canonical only up to the naming of recursion back-references: `normalize(A)` and `normalize(B)` above are equivalent but each spells back-references with its own name. Canonical *identity* is the equivalence judgment, not syntactic equality of rendered output.
 
 ## Pattern Matching

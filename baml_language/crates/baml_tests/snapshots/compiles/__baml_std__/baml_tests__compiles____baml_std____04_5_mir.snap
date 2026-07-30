@@ -5391,7 +5391,7 @@ fn baml.json.path(j: int | float | string | bool | null | baml.json.json[] | map
     let _6: baml.json.JsonPathError
     let _7: string
     let _8: string
-    let _9: int | float | string | bool | null | (int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>)[] | map<string, int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>> // current
+    let _9: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json> // current
     let _10: int // i
     let _11: bool
     let _12: int
@@ -5419,7 +5419,7 @@ fn baml.json.path(j: int | float | string | bool | null | baml.json.json[] | map
     let _34: bool
     let _35: int
     let _36: int
-    let _37: int | float | string | bool | null | (int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>)[] | map<string, int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>>
+    let _37: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>
     let _38: string
     let _39: int
     let _40: int
@@ -11907,7 +11907,7 @@ fn baml.toml.Table.baml.ToJson.to_json(self: baml.toml.Table) -> int | float | s
     // Locals:
     let _0: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json> // _0 // return
     let _1: baml.toml.Table // self // param
-    let _2: map<string, int | float | string | bool | baml.time.PlainDate | baml.time.PlainDateTime | baml.time.PlainTime | baml.time.ZonedDateTime | baml.toml.Table | baml.toml.Item[]>
+    let _2: map<string, baml.toml.Item>
     let _3: type
 
     bb0: {
@@ -11942,7 +11942,7 @@ fn baml.toml.table_from_json(j: int | float | string | bool | null | baml.json.j
     let _0: baml.toml.Table // _0 // return
     let _1: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json> // j // param
     let _2: bool
-    let _3: map<string, int | float | string | bool | baml.time.PlainDate | baml.time.PlainDateTime | baml.time.PlainTime | baml.time.ZonedDateTime | baml.toml.Table | baml.toml.Item[]> // items
+    let _3: map<string, baml.toml.Item> // items
     let _4: string[]
     let _5: type
     let _6: type
@@ -11953,13 +11953,13 @@ fn baml.toml.table_from_json(j: int | float | string | bool | null | baml.json.j
     let _11: string // key
     let _12: string
     let _13: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>
-    let _14: map<string, int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>>
+    let _14: map<string, baml.json.json>
     let _15: string
     let _16: bool
     let _17: baml.json.json // item
     let _18: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>
     let _19: int | float | string | bool | baml.time.PlainDate | baml.time.PlainDateTime | baml.time.PlainTime | baml.time.ZonedDateTime | baml.toml.Table | baml.toml.Item[]
-    let _20: map<string, int | float | string | bool | baml.time.PlainDate | baml.time.PlainDateTime | baml.time.PlainTime | baml.time.ZonedDateTime | baml.toml.Table | baml.toml.Item[]>
+    let _20: map<string, baml.toml.Item>
     let _21: baml.json.JsonDecodeError
 
     bb0: {
