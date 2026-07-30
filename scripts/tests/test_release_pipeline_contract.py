@@ -653,7 +653,7 @@ def step_inputs(step: str) -> dict[str, str]:
 
 
 class WorkflowGraphTests(unittest.TestCase):
-    def test_unix_toolchain_releases_and_size_gates_enable_safe_icf(
+    def test_macos_toolchain_releases_and_size_gate_enable_safe_icf(
         self,
     ) -> None:
         release = RELEASE_WORKFLOW.read_text(encoding="utf-8")
@@ -666,9 +666,9 @@ class WorkflowGraphTests(unittest.TestCase):
         self.assertIn("-dead_strip_dylibs", rustflags)
         self.assertIn("-no_function_starts", rustflags)
         self.assertIn("gcc-ld", rustflags)
-        self.assertIn("!contains(matrix.target, 'windows-msvc')", release)
+        self.assertIn("contains(matrix.target, 'apple-darwin')", release)
         self.assertEqual(release.count("scripts/baml-release-rustflags"), 1)
-        self.assertEqual(size_gate.count("scripts/baml-release-rustflags"), 2)
+        self.assertEqual(size_gate.count("scripts/baml-release-rustflags"), 1)
 
     def test_cffi_hygiene_is_enforced_at_production_and_package_boundaries(
         self,

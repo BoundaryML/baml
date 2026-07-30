@@ -10,11 +10,7 @@ case "$(uname -s)" in
     lld="$lld_dir/ld64.lld"
     linker_flags="--icf=safe,-dead_strip_dylibs,-no_function_starts"
     ;;
-  Linux)
-    lld="$lld_dir/ld.lld"
-    linker_flags="--icf=safe"
-    ;;
-  *) echo "safe ICF release flags are only supported on macOS and Linux" >&2; exit 1 ;;
+  *) echo "release size flags are only supported on macOS" >&2; exit 1 ;;
 esac
 
 test -x "$lld" || { echo "bundled LLD not found at $lld" >&2; exit 1; }

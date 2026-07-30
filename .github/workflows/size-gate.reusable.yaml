@@ -88,9 +88,6 @@ jobs:
         run: cargo fetch
         working-directory: baml_language
 
-      - name: "Enable safe ICF"
-        run: echo "RUSTFLAGS=$(scripts/baml-release-rustflags)" >> "$GITHUB_ENV"
-
       - name: "Run size-gate check"
         id: check
         working-directory: baml_language
