@@ -38,6 +38,9 @@ CSHARP_VERIFIER = (
     / "verify-csharp-product-slice.reusable.yaml"
 )
 CARGO_TESTS = ROOT / ".github" / "workflows" / "cargo-tests.reusable.yaml"
+PACK_E2E = (
+    ROOT / "baml_language" / "crates" / "baml_cli" / "tests" / "pack_e2e.rs"
+)
 CFFI_BUILDER = (
     ROOT / ".github" / "workflows" / "build2-bridge-cffi.reusable.yaml"
 )
@@ -651,6 +654,30 @@ def step_inputs(step: str) -> dict[str, str]:
 
 
 class WorkflowGraphTests(unittest.TestCase):
+    def test_cargo_jobs_name_targets_and_run_pack_e2e_on_musl(self) -> None:
+        workflow = CARGO_TESTS.read_text(encoding="utf-8")
+        for target in (
+            "x86_64-unknown-linux-gnu",
+            "x86_64-unknown-linux-musl",
+            "aarch64-apple-darwin",
+            "x86_64-pc-windows-msvc",
+            "wasm32-unknown-unknown",
+        ):
+            self.assertIn(f'name: "cargo test ({target})"', workflow)
+
+        musl = job_block(workflow, "cargo-test-linux-musl")
+        self.assertIn("CARGO_BUILD_TARGET: x86_64-unknown-linux-musl", musl)
+        self.assertIn("uses: ./.github/actions/setup-musl-cross", musl)
+        self.assertIn("cargo nextest run --workspace", musl)
+        self.assertIn("cargo test -p baml_cli --test pack_e2e", musl)
+        self.assertNotIn("--all-features", musl)
+        self.assertEqual(workflow.count("- cargo-test-linux-musl"), 2)
+
+        pack_e2e = PACK_E2E.read_text(encoding="utf-8")
+        self.assertIn("function main() -> never", pack_e2e)
+        self.assertIn("baml.sys.exit(42)", pack_e2e)
+        self.assertIn("Some(42)", pack_e2e)
+
     def test_cffi_hygiene_is_enforced_at_production_and_package_boundaries(
         self,
     ) -> None:

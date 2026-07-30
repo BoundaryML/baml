@@ -33,7 +33,6 @@ pub(crate) mod lsp;
 pub(crate) mod manifest;
 pub(crate) mod output;
 pub(crate) mod pack_command;
-pub(crate) mod pack_elf;
 pub(crate) mod paint;
 pub(crate) mod playground_command;
 pub(crate) mod project_load;

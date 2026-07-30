@@ -659,10 +659,8 @@ fn write_executable(
     target_triple: &str,
 ) -> Result<()> {
     if target_triple.contains("linux") {
-        // Not `libsui::Elf::append`: it places the embedded note at a virtual
-        // address that can overlap the host's `.bss`, corrupting the envelope
-        // (and the host's BSS globals) at startup. See `pack_elf`.
-        crate::pack_elf::append_note(host_bytes, PACK_SECTION_NAME, data, writer)
+        libsui::Elf::new(host_bytes)
+            .append(PACK_SECTION_NAME, data, writer)
             .context("failed to write ELF binary")?;
     } else if target_triple.contains("windows") {
         libsui::PortableExecutable::from(host_bytes)
