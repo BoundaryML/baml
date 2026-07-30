@@ -1,0 +1,40 @@
+// Words held back for future language surface (`baml_base::RESERVED_KEYWORDS`)
+// may not be introduced as a declared name. This project carries one occurrence
+// per declaration kind, so a lowering site that forgets to call
+// `check_reserved_name` shows up here as a missing E0158 rather than as silence.
+//
+// None of these are keywords yet — they still lex as ordinary identifier words,
+// so nothing here is a parse error.
+
+class do {
+    readonly int
+}
+
+enum gen {
+    yield
+}
+
+interface unsafe {
+    type priv;
+
+    function pub(self) -> int throws never
+}
+
+type import = int
+
+function macro(virtual: int) -> int throws never {
+    virtual
+}
+
+function generic_param_name<async>(x: async) -> async throws never {
+    x
+}
+
+// Words that merely *contain* a reserved word, or differ in case, are ordinary
+// identifiers — the reservation is an exact, case-sensitive match.
+class Import {
+    do_over int
+    constant int
+}
+
+type Async = int

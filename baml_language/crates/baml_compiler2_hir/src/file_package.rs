@@ -19,6 +19,13 @@ pub struct PackageInfo {
 /// Extract a namespace name from a path component if it has the `ns_` prefix
 /// and a valid BAML identifier suffix (starts with letter or `_`, rest is
 /// alphanumeric or `_`). Returns `None` for non-`ns_*` components or invalid suffixes.
+///
+// NOTE: this accepts words held back for future language surface
+// (`baml_base::RESERVED_KEYWORDS`), so an `ns_do/` directory still yields the
+// bare-resolvable namespace `do`. Declarations written in source are rejected
+// by `baml_compiler2_ast::check_reserved_name`, but a directory name has no
+// span and no file-level diagnostic channel to report against, so this path is
+// currently unchecked.
 fn extract_ns_name(component: &str) -> Option<Name> {
     let ns_name = component.strip_prefix("ns_")?;
     let mut chars = ns_name.chars();

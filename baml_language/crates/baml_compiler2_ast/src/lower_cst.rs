@@ -24,6 +24,7 @@ use crate::{
     },
     companions::expand_companions,
     lower_expr_body, lower_type_expr,
+    lowering_diagnostic::check_reserved_name,
 };
 
 // ── Test/Testset desugaring intermediate types ───────────────────
@@ -280,6 +281,7 @@ fn lower_function(
     if name.as_str() == "$id" {
         diags.push(LoweringDiagnostic::ReservedRuntimeIdBindingName { span: name_span });
     }
+    check_reserved_name(name.as_str(), name_span, "a function", diags);
 
     let generic_params = extract_generic_params_with_bounds(node, diags);
     let parameter_context = format!("function `{}`", name.as_str());
@@ -576,6 +578,12 @@ pub(crate) fn lower_param(
             span: name_token.text_range(),
         });
     }
+    check_reserved_name(
+        &param_name_str,
+        name_token.text_range(),
+        "a parameter",
+        diags,
+    );
     Some(Param {
         name: Name::new(&param_name_str),
         type_expr: param.ty().map(|te| {
@@ -1058,6 +1066,7 @@ fn lower_class(
 
     let generic_params = extract_generic_params_with_bounds(node, diags);
     let class_name = name_token.text().to_string();
+    check_reserved_name(&class_name, name_token.text_range(), "a class", diags);
 
     let fields = class
         .fields()
@@ -1070,6 +1079,7 @@ fn lower_class(
                 return None;
             };
             let field_name_str = fname.text().to_string();
+            check_reserved_name(&field_name_str, fname.text_range(), "a field", diags);
             let mut hoisted_field_attrs = Vec::new();
             // A field with no type is already reported by the parser ("field '<name>'
             // is missing a type annotation"), so recover with the error sentinel rather
@@ -1203,6 +1213,12 @@ pub(crate) fn extract_generic_params_with_bounds(
                     && token.kind() == SyntaxKind::WORD
                     && name.is_none()
                 {
+                    check_reserved_name(
+                        token.text(),
+                        token.text_range(),
+                        "a type parameter",
+                        diags,
+                    );
                     name = Some(Name::new(token.text()));
                 }
             }
@@ -1245,6 +1261,7 @@ fn lower_enum(node: &SyntaxNode, diags: &mut Vec<LoweringDiagnostic>) -> Option<
         return None;
     };
     let enum_name = name_token.text().to_string();
+    check_reserved_name(&enum_name, name_token.text_range(), "an enum", diags);
 
     let variants = enum_def
         .variants()
@@ -1256,6 +1273,7 @@ fn lower_enum(node: &SyntaxNode, diags: &mut Vec<LoweringDiagnostic>) -> Option<
                 });
                 return None;
             };
+            check_reserved_name(vname.text(), vname.text_range(), "an enum variant", diags);
             let variant_docstring = crate::docstring::extract_docstring(v.syntax());
             Some(VariantDef {
                 name: Name::new(vname.text()),
@@ -1291,6 +1309,7 @@ fn lower_interface(
         return None;
     };
     let iface_name = name_token.text().to_string();
+    check_reserved_name(&iface_name, name_token.text_range(), "an interface", diags);
     let generic_params = extract_generic_params_with_bounds(node, diags);
 
     let parent_type_nodes: Vec<baml_compiler_syntax::ast::TypeExpr> =
@@ -1331,6 +1350,7 @@ fn lower_interface(
                 return None;
             };
             let field_name_str = fname.text().to_string();
+            check_reserved_name(&field_name_str, fname.text_range(), "a field", diags);
             // See the class-field site: the parser already reports a missing type, so
             // recover with the error sentinel instead of an optional type.
             let type_expr = f.ty().map_or_else(
@@ -1413,6 +1433,12 @@ fn lower_associated_type_def(
         return None;
     };
     let name = Name::new(name_token.text());
+    check_reserved_name(
+        name.as_str(),
+        name_token.text_range(),
+        "an associated type",
+        diags,
+    );
     let bound = decl.bound().map(|te| {
         let expr = lower_type_expr::lower_type_expr_node(&te, diags);
         let span = te.syntax().span_range();
@@ -1456,6 +1482,12 @@ fn lower_associated_type_binding_def(
         return None;
     };
     let name = Name::new(name_token.text());
+    check_reserved_name(
+        name.as_str(),
+        name_token.text_range(),
+        "an associated type",
+        diags,
+    );
     let type_expr = decl.default_or_binding().map(|te| {
         let expr = lower_type_expr::lower_type_expr_node(&te, diags);
         let span = te.syntax().span_range();
@@ -1488,6 +1520,7 @@ fn lower_method_sig(
     };
     let name = Name::new(name_token.text());
     let name_span = name_token.text_range();
+    check_reserved_name(name.as_str(), name_span, "a function", diags);
     let generic_params = extract_generic_params_with_bounds(sig.syntax(), diags);
     let parameter_context = format!("method signature `{}`", name.as_str());
 
@@ -1728,6 +1761,7 @@ fn lower_type_alias(
     };
 
     let alias_name = name_token.text().to_string();
+    check_reserved_name(&alias_name, name_token.text_range(), "a type alias", diags);
     Some(TypeAliasDef {
         name: Name::new(&alias_name),
         type_expr: alias.ty().map(|te| {
@@ -1760,6 +1794,7 @@ fn lower_test(node: &SyntaxNode, diags: &mut Vec<LoweringDiagnostic>) -> Option<
     };
 
     let test_name = name_token.text().to_string();
+    check_reserved_name(&test_name, name_token.text_range(), "a test", diags);
     let config_block = test.config_block();
     if let Some(block) = &config_block {
         for item in block.items() {
@@ -2347,6 +2382,12 @@ fn lower_template_string(
     };
 
     let ts_name = name_token.text().to_string();
+    check_reserved_name(
+        &ts_name,
+        name_token.text_range(),
+        "a template_string",
+        diags,
+    );
     let context = format!("template_string `{ts_name}`");
     let params = ts
         .param_list()
@@ -2385,6 +2426,7 @@ fn synthesize_retry_policy_let(
     };
     let span = node.span_range();
     let rp_name = name_token.text().to_string();
+    check_reserved_name(&rp_name, name_token.text_range(), "a retry_policy", diags);
     let Some(config_block) = rp.config_block() else {
         diags.push(LoweringDiagnostic::MissingConfigBlock {
             block_kind: "retry_policy",
@@ -2479,6 +2521,7 @@ fn synthesize_client_items(
         return None;
     };
     let client_name = name_token.text().to_string();
+    check_reserved_name(&client_name, name_token.text_range(), "a client", diags);
     let span = node.span_range();
     let Some(config_block) = client.config_block() else {
         diags.push(LoweringDiagnostic::MissingConfigBlock {

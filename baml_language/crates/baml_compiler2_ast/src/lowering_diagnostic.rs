@@ -132,9 +132,14 @@ pub enum LoweringDiagnostic {
     /// `const` currently parses as a non-immutable alias for `let`.
     ConstBindingIntroducer { span: TextRange },
 
-    /// `const` is reserved as future language surface and cannot be used as a
-    /// binding name.
-    ReservedConstBindingName { span: TextRange },
+    /// A declaration introduced a name held back for future language surface
+    /// (`baml_base::RESERVED_KEYWORDS`). `kind` is the article plus the
+    /// source-level noun for the declaration ("a class", "an enum", …).
+    ReservedKeywordName {
+        keyword: String,
+        kind: &'static str,
+        span: TextRange,
+    },
 
     /// `$id` is the runtime-identity special form (reads lower to
     /// `baml.id.current()`, writes to `baml.id.set(...)`); a binding named
@@ -184,6 +189,34 @@ pub enum LoweringDiagnostic {
         error: baml_base::num_lit::IntLitError,
         span: TextRange,
     },
+}
+
+/// Emit `ReservedKeywordName` if `text` names a word held back for future
+/// language surface (`baml_base::RESERVED_KEYWORDS`).
+///
+/// Invariant: every site in this crate that turns a `SyntaxToken` into a
+/// *declared* name calls this. Callers keep lowering afterwards — the name is
+/// still bound, so references to it resolve and the reservation costs no
+/// cascade errors. Reading a member with a reserved name (`record.const`) is
+/// not a declaration and is deliberately untouched.
+///
+/// `kind` is the source-level noun for the declaration *with its article*
+/// ("a class", "an enum", "a binding", …) and is used verbatim in the message.
+/// Carrying the article at the call site keeps it correct without guessing one
+/// from the noun's first letter.
+pub fn check_reserved_name(
+    text: &str,
+    span: TextRange,
+    kind: &'static str,
+    diags: &mut Vec<LoweringDiagnostic>,
+) {
+    if baml_base::is_reserved_keyword(text) {
+        diags.push(LoweringDiagnostic::ReservedKeywordName {
+            keyword: text.to_string(),
+            kind,
+            span,
+        });
+    }
 }
 
 impl LoweringDiagnostic {
@@ -442,12 +475,14 @@ impl LoweringDiagnostic {
                 *span,
                 "`const` behaves like `let` for now",
             ),
-            LoweringDiagnostic::ReservedConstBindingName { span } => (
-                DiagnosticId::InvalidSyntax,
+            LoweringDiagnostic::ReservedKeywordName { keyword, kind, span } => (
+                DiagnosticId::ReservedKeyword,
                 Severity::Error,
-                "`const` is reserved and cannot be used as a binding name".to_string(),
+                format!(
+                    "`{keyword}` is reserved for future use and cannot be used as {kind} name"
+                ),
                 *span,
-                "`const` is reserved here",
+                "reserved for future use",
             ),
             LoweringDiagnostic::ReservedRuntimeIdBindingName { span } => (
                 DiagnosticId::InvalidSyntax,

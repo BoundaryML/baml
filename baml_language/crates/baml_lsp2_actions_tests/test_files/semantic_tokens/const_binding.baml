@@ -14,13 +14,13 @@ function ConstToken() -> int {
 //    ·   ──┬──
 //    ·     ╰── `const` behaves like `let` for now
 //    ╰────
-// E0010
+// E0158
 //
-//   × `const` is reserved and cannot be used as a binding name
+//   × `const` is reserved for future use and cannot be used as a binding name
 //    ╭─[const_binding.baml:3:7]
 //  3 │   let const = x;
 //    ·       ──┬──
-//    ·         ╰── `const` is reserved here
+//    ·         ╰── reserved for future use
 //    ╰────
 //
 //- semantic_tokens

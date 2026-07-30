@@ -1,0 +1,91 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== TIR2 ===
+function user.boom() -> int throws never {
+  { : never
+    throw "boom" : "boom"
+  }
+}
+function user.let_binding() -> int throws never {
+  { : int
+    let try = 1 : 1 -> int
+    try : int
+  }
+}
+function user.const_binding() -> int throws never {
+  { : int
+    let pub = 1 : 1 -> int
+    pub : int
+  }
+}
+function user.destructure_shorthand(d: user.do) -> int throws never {
+  { : int
+    let do { readonly: readonly } = d : user.do
+    readonly : int
+  }
+}
+function user.for_in_binding(items: int[]) -> int throws never {
+  { : int
+    let total = 0 : 0 -> int
+    for yield in items
+      { : void
+        total Add= yield : int
+      }
+    total : int
+  }
+}
+function user.match_arm_binding(v: int | string) -> int throws never {
+  { : int | 0
+    match (v : int | string) : int | 0
+      do: int =>
+        do : int
+      _ =>
+        0 : 0
+  }
+}
+function user.catch_bindings() -> int throws never {
+  { : int | 0
+    catch (boom() : int) : int | 0
+      catch (unsafe)
+        _ =>
+          0 : 0
+  }
+}
+function user.try$new(lenient: bool) -> ? throws never {
+  baml.llm.PrimitiveClient { name: "try", provider: "openai", options: baml.llm.PrimitiveClientOptions { model: "gpt-4o-mini", base_url: "http://localhost:...", allowed_role_metadata: null, finish_reason_allow_list: null, finish_reason_deny_list: null, supports_streaming: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: "test-key", provider_options: null, media_url_handler: null, headers: map {  }, query_params: map {  }, request_body: map {  } } } : baml.llm.PrimitiveClient
+}
+function user.TestTarget() -> int throws never {
+  { : 1
+    1 : 1
+  }
+}
+class user.do {
+  readonly: int
+}
+enum user.gen
+type user.import = int
+function user.macro(virtual: int) -> int throws never {
+  { : int
+    virtual : int
+  }
+}
+function user.generic_param_name<async>(x: async) -> async throws never {
+  { : async
+    x : async
+  }
+}
+class user.Import {
+  do_over: int
+  constant: int
+}
+type user.Async = int
+class user.do$stream {
+  readonly: int | null
+}
+type user.import$stream = int
+class user.Import$stream {
+  do_over: int | null
+  constant: int | null
+}
+type user.Async$stream = int

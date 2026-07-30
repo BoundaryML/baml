@@ -524,6 +524,71 @@ function Extract(client: string, text: string) -> string {
         );
     }
 
+    /// Every `ReservedKeywordName` reported for `source`, as
+    /// `(keyword, kind)` pairs in emission order.
+    fn reserved_keyword_names(source: &str) -> Vec<(String, &'static str)> {
+        let (_, diags) = parse_and_lower_with_diagnostics(source);
+        diags
+            .iter()
+            .filter_map(|diag| match diag {
+                crate::LoweringDiagnostic::ReservedKeywordName { keyword, kind, .. } => {
+                    Some((keyword.clone(), *kind))
+                }
+                _ => None,
+            })
+            .collect()
+    }
+
+    #[test]
+    fn reserved_keyword_rejected_at_declaration_sites() {
+        let reported = reserved_keyword_names(
+            r#"
+class do {
+  readonly int
+}
+
+function macro(virtual: int) -> int {
+  let try = 1;
+  virtual
+}
+"#,
+        );
+        assert_eq!(
+            reported,
+            vec![
+                ("do".to_string(), "a class"),
+                ("readonly".to_string(), "a field"),
+                ("macro".to_string(), "a function"),
+                ("virtual".to_string(), "a parameter"),
+                ("try".to_string(), "a binding"),
+            ]
+        );
+    }
+
+    #[test]
+    fn reserved_keyword_allowed_outside_declaration_position() {
+        // Reading a member is not a declaration, and the reservation is an
+        // exact, case-sensitive match — none of these are reported.
+        let reported = reserved_keyword_names(
+            r#"
+class Holder {
+  do_over int
+  constant int
+}
+
+type Async = int
+
+function reads(h: Holder) -> int {
+  h.do_over + h.constant
+}
+"#,
+        );
+        assert!(
+            reported.is_empty(),
+            "expected no reserved-keyword diagnostics, got: {reported:#?}"
+        );
+    }
+
     /// The synthesized `<Client>$new` constructor for `client_name`.
     fn client_new_companion(items: Vec<Item>, client_name: &str) -> crate::ast::FunctionDef {
         let target = format!("{client_name}$new");

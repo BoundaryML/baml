@@ -69,11 +69,11 @@ function ConstBindings(user: User, value: int | string) -> int {
 //     ·   ──┬──
 //     ·     ╰── `const` behaves like `let` for now
 //     ╰────
-// E0010
+// E0158
 //
-//   × `const` is reserved and cannot be used as a binding name
+//   × `const` is reserved for future use and cannot be used as a binding name
 //     ╭─[expr_const_binding.baml:18:7]
 //  18 │   let const = y;
 //     ·       ──┬──
-//     ·         ╰── `const` is reserved here
+//     ·         ╰── reserved for future use
 //     ╰────

@@ -367,6 +367,13 @@ pub enum DiagnosticId {
     /// the interface explicitly takes a qualified projection
     /// (`(Base as Iterator).Element`). Rust's E0223 analog.
     InterfaceProjectionBase,
+
+    // Reserved keywords (E0158)
+    /// A declaration introduced a name equal to a word BAML holds back for
+    /// future language surface (`baml_base::RESERVED_KEYWORDS`). These words
+    /// are not keywords yet, so reading a member with that name still parses —
+    /// only declaring one is rejected.
+    ReservedKeyword,
 }
 
 impl DiagnosticId {
@@ -588,6 +595,11 @@ impl DiagnosticId {
             DiagnosticId::BuiltinInterfaceNotImplementable => "E0153",
             DiagnosticId::BuiltinInterfaceNotABound => "E0154",
             DiagnosticId::InterfaceProjectionBase => "E0156",
+
+            // Reserved keywords. "E0155" is deliberately skipped: it belonged
+            // to `FunctionTypedPatternNotTestable` (#4203) until that check was
+            // removed (#4258), so reusing it would recycle a retired code.
+            DiagnosticId::ReservedKeyword => "E0158",
         }
     }
 }

@@ -1,0 +1,31 @@
+// Configuration declarations name-check like any other item: `client` and
+// `retry_policy` are lowered to synthesized top-level lets, and the check runs
+// against the name as written in source.
+
+template_string private(public: string) #"
+    {{ public }}
+"#
+
+retry_policy const {
+    max_retries 1
+}
+
+client<llm> try {
+    provider openai
+    options {
+        model "gpt-4o-mini"
+        api_key "test-key"
+        base_url "http://localhost:1234"
+    }
+}
+
+function TestTarget() -> int throws never {
+    1
+}
+
+test readonly {
+    functions [TestTarget]
+    args {
+
+    }
+}

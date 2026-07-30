@@ -1,0 +1,219 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [hir] E0158
+
+  × `try` is reserved for future use and cannot be used as a binding name
+    ╭─[bindings.baml:10:9]
+ 10 │     let try = 1;
+    ·         ─┬─
+    ·          ╰── reserved for future use
+    ╰────
+
+  [hir] E0010
+
+  ⚠ `const` is currently treated like `let`; BAML does not enforce immutability yet. Use `let` for current BAML semantics.
+    ╭─[bindings.baml:17:5]
+ 17 │     const pub = 1;
+    ·     ──┬──
+    ·       ╰── `const` behaves like `let` for now
+    ╰────
+
+  [hir] E0158
+
+  × `pub` is reserved for future use and cannot be used as a binding name
+    ╭─[bindings.baml:17:11]
+ 17 │     const pub = 1;
+    ·           ─┬─
+    ·            ╰── reserved for future use
+    ╰────
+
+  [hir] E0158
+
+  × `readonly` is reserved for future use and cannot be used as a binding name
+    ╭─[bindings.baml:24:14]
+ 24 │     let do { readonly } = d;
+    ·              ────┬───
+    ·                  ╰── reserved for future use
+    ╰────
+
+  [hir] E0158
+
+  × `yield` is reserved for future use and cannot be used as a binding name
+    ╭─[bindings.baml:30:14]
+ 30 │     for (let yield in items) {
+    ·              ──┬──
+    ·                ╰── reserved for future use
+    ╰────
+
+  [hir] E0158
+
+  × `do` is reserved for future use and cannot be used as a binding name
+    ╭─[bindings.baml:38:13]
+ 38 │         let do: int => do,
+    ·             ─┬
+    ·              ╰── reserved for future use
+    ╰────
+
+  [hir] E0158
+
+  × `unsafe` is reserved for future use and cannot be used as a binding name
+    ╭─[bindings.baml:44:19]
+ 44 │     boom() catch (unsafe, virtual) {
+    ·                   ───┬──
+    ·                      ╰── reserved for future use
+    ╰────
+
+  [hir] E0158
+
+  × `virtual` is reserved for future use and cannot be used as a binding name
+    ╭─[bindings.baml:44:27]
+ 44 │     boom() catch (unsafe, virtual) {
+    ·                           ───┬───
+    ·                              ╰── reserved for future use
+    ╰────
+
+  [hir] E0158
+
+  × `private` is reserved for future use and cannot be used as a template_string name
+   ╭─[config_decls.baml:5:17]
+ 5 │ template_string private(public: string) #"
+   ·                 ───┬───
+   ·                    ╰── reserved for future use
+   ╰────
+
+  [hir] E0158
+
+  × `public` is reserved for future use and cannot be used as a parameter name
+   ╭─[config_decls.baml:5:25]
+ 5 │ template_string private(public: string) #"
+   ·                         ───┬──
+   ·                            ╰── reserved for future use
+   ╰────
+
+  [hir] E0158
+
+  × `const` is reserved for future use and cannot be used as a retry_policy name
+   ╭─[config_decls.baml:9:14]
+ 9 │ retry_policy const {
+   ·              ──┬──
+   ·                ╰── reserved for future use
+   ╰────
+
+  [hir] E0158
+
+  × `try` is reserved for future use and cannot be used as a client name
+    ╭─[config_decls.baml:13:13]
+ 13 │ client<llm> try {
+    ·             ─┬─
+    ·              ╰── reserved for future use
+    ╰────
+
+  [hir] E0158
+
+  × `readonly` is reserved for future use and cannot be used as a test name
+    ╭─[config_decls.baml:26:6]
+ 26 │ test readonly {
+    ·      ────┬───
+    ·          ╰── reserved for future use
+    ╰────
+
+  [hir] E0158
+
+  × `do` is reserved for future use and cannot be used as a class name
+   ╭─[decls.baml:9:7]
+ 9 │ class do {
+   ·       ─┬
+   ·        ╰── reserved for future use
+   ╰────
+
+  [hir] E0158
+
+  × `readonly` is reserved for future use and cannot be used as a field name
+    ╭─[decls.baml:10:5]
+ 10 │     readonly int
+    ·     ────┬───
+    ·         ╰── reserved for future use
+    ╰────
+
+  [hir] E0158
+
+  × `gen` is reserved for future use and cannot be used as an enum name
+    ╭─[decls.baml:13:6]
+ 13 │ enum gen {
+    ·      ─┬─
+    ·       ╰── reserved for future use
+    ╰────
+
+  [hir] E0158
+
+  × `yield` is reserved for future use and cannot be used as an enum variant name
+    ╭─[decls.baml:14:5]
+ 14 │     yield
+    ·     ──┬──
+    ·       ╰── reserved for future use
+    ╰────
+
+  [hir] E0158
+
+  × `unsafe` is reserved for future use and cannot be used as an interface name
+    ╭─[decls.baml:17:11]
+ 17 │ interface unsafe {
+    ·           ───┬──
+    ·              ╰── reserved for future use
+    ╰────
+
+  [hir] E0158
+
+  × `priv` is reserved for future use and cannot be used as an associated type name
+    ╭─[decls.baml:18:10]
+ 18 │     type priv;
+    ·          ──┬─
+    ·            ╰── reserved for future use
+    ╰────
+
+  [hir] E0158
+
+  × `pub` is reserved for future use and cannot be used as a function name
+    ╭─[decls.baml:20:14]
+ 20 │     function pub(self) -> int throws never
+    ·              ─┬─
+    ·               ╰── reserved for future use
+    ╰────
+
+  [hir] E0158
+
+  × `import` is reserved for future use and cannot be used as a type alias name
+    ╭─[decls.baml:23:6]
+ 23 │ type import = int
+    ·      ───┬──
+    ·         ╰── reserved for future use
+    ╰────
+
+  [hir] E0158
+
+  × `macro` is reserved for future use and cannot be used as a function name
+    ╭─[decls.baml:25:10]
+ 25 │ function macro(virtual: int) -> int throws never {
+    ·          ──┬──
+    ·            ╰── reserved for future use
+    ╰────
+
+  [hir] E0158
+
+  × `virtual` is reserved for future use and cannot be used as a parameter name
+    ╭─[decls.baml:25:16]
+ 25 │ function macro(virtual: int) -> int throws never {
+    ·                ───┬───
+    ·                   ╰── reserved for future use
+    ╰────
+
+  [hir] E0158
+
+  × `async` is reserved for future use and cannot be used as a type parameter name
+    ╭─[decls.baml:29:29]
+ 29 │ function generic_param_name<async>(x: async) -> async throws never {
+    ·                             ──┬──
+    ·                               ╰── reserved for future use
+    ╰────

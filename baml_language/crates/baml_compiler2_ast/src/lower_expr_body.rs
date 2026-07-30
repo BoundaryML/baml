@@ -19,6 +19,7 @@ use crate::{
         Pattern, SpreadField, Stmt, StmtId, TemplateIfBranch, TemplateSegment, TemplateTag,
         TypeAnnotId, TypeExpr, TypeExprKind, UnaryOp,
     },
+    lowering_diagnostic::check_reserved_name,
 };
 
 /// A reference to an environment variable found in source code (`env.VAR_NAME`).
@@ -1863,21 +1864,19 @@ impl LoweringContext {
             .filter_map(rowan::NodeOrToken::into_token)
             .find(|t| t.kind() == SyntaxKind::WORD);
 
-        if let Some(token) = &name_token
-            && token.text() == "const"
-        {
-            self.diags
-                .push(LoweringDiagnostic::ReservedConstBindingName {
-                    span: token.text_range(),
-                });
-        }
-        if let Some(token) = &name_token
-            && token.text() == "$id"
-        {
-            self.diags
-                .push(LoweringDiagnostic::ReservedRuntimeIdBindingName {
-                    span: token.text_range(),
-                });
+        if let Some(token) = &name_token {
+            check_reserved_name(
+                token.text(),
+                token.text_range(),
+                "a binding",
+                &mut self.diags,
+            );
+            if token.text() == "$id" {
+                self.diags
+                    .push(LoweringDiagnostic::ReservedRuntimeIdBindingName {
+                        span: token.text_range(),
+                    });
+            }
         }
 
         let name = name_token.map(|t| Name::new(t.text()));
@@ -2065,6 +2064,12 @@ impl LoweringContext {
                             span: field_span,
                         });
                 }
+                check_reserved_name(
+                    field_name.as_str(),
+                    field_span,
+                    "a binding",
+                    &mut self.diags,
+                );
                 let synth = if field_name.as_str() == "_" {
                     Pattern::Wildcard
                 } else {
@@ -2159,6 +2164,23 @@ impl LoweringContext {
         self.alloc_expr(Expr::Catch { base, clauses }, node.span_range())
     }
 
+    /// Read the identifier out of a `CATCH_BINDING` /
+    /// `CATCH_STACK_TRACE_BINDING` node, rejecting reserved words. A malformed
+    /// binding with no identifier recovers as `_`.
+    fn lower_catch_binding_name(&mut self, node: &SyntaxNode) -> Name {
+        let name_token = node.children_with_tokens().find_map(|t| match t {
+            rowan::NodeOrToken::Token(tok) if tok.kind() == SyntaxKind::WORD => Some(tok),
+            rowan::NodeOrToken::Token(_) | rowan::NodeOrToken::Node(_) => None,
+        });
+        match name_token {
+            Some(tok) => {
+                check_reserved_name(tok.text(), tok.text_range(), "a binding", &mut self.diags);
+                Name::new(tok.text())
+            }
+            None => Name::new("_"),
+        }
+    }
+
     fn lower_catch_clause(&mut self, node: &SyntaxNode) -> CatchClause {
         use baml_compiler_syntax::SyntaxKind;
 
@@ -2179,35 +2201,14 @@ impl LoweringContext {
                 },
                 rowan::NodeOrToken::Node(child) => match child.kind() {
                     SyntaxKind::CATCH_BINDING => {
-                        let name = child
-                            .children_with_tokens()
-                            .find_map(|t| match t {
-                                rowan::NodeOrToken::Token(tok)
-                                    if tok.kind() == SyntaxKind::WORD =>
-                                {
-                                    Some(Name::new(tok.text()))
-                                }
-                                _ => None,
-                            })
-                            .unwrap_or_else(|| Name::new("_"));
+                        let name = self.lower_catch_binding_name(&child);
                         binding = Some(self.alloc_pattern(
                             Pattern::Bind { name, subpat: None },
                             child.span_range(),
                         ));
                     }
                     SyntaxKind::CATCH_STACK_TRACE_BINDING => {
-                        // Extract the identifier name from the node.
-                        let name = child
-                            .children_with_tokens()
-                            .find_map(|t| match t {
-                                rowan::NodeOrToken::Token(tok)
-                                    if tok.kind() == SyntaxKind::WORD =>
-                                {
-                                    Some(Name::new(tok.text()))
-                                }
-                                _ => None,
-                            })
-                            .unwrap_or_else(|| Name::new("_"));
+                        let name = self.lower_catch_binding_name(&child);
                         stack_trace_binding = Some(self.alloc_pattern(
                             Pattern::Bind { name, subpat: None },
                             child.span_range(),

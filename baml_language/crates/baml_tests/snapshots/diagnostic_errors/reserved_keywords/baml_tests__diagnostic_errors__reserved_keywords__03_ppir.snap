@@ -1,0 +1,56 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== PPIR ===
+function user.boom() -> int  [expr] {
+  { throw "boom" }
+}
+function user.catch_bindings() -> int  [expr] {
+  {  } boom() catch (unsafe) { _ => 0 }
+}
+function user.const_binding() -> int  [expr] {
+  { let pub = 1 } pub
+}
+function user.destructure_shorthand(d: do) -> int  [expr] {
+  { let do { readonly: readonly } = d } readonly
+}
+function user.for_in_binding(items: int[]) -> int  [expr] {
+  { let total = 0; for yield in items { total Add= yield } } total
+}
+function user.let_binding() -> int  [expr] {
+  { let try = 1 } try
+}
+function user.match_arm_binding(v: int | string) -> int  [expr] {
+  {  } match (v) { do: int => do, _ => 0 }
+}
+function user.TestTarget() -> int  [expr] {
+  {  } 1
+}
+function user.try$new(lenient: bool) -> ?  [expr] {
+  baml.llm.PrimitiveClient { name: "try", provider: "openai", options: baml.llm.PrimitiveClientOptions { model: "gpt-4o-mini", base_url: "http://localhost:...", allowed_role_metadata: null, finish_reason_allow_list: null, finish_reason_deny_list: null, supports_streaming: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: "test-key", provider_options: null, media_url_handler: null, headers: map {  }, query_params: map {  }, request_body: map {  } } }
+}
+class user.Import {
+  do_over: int
+  constant: int
+}
+class user.Import$stream {
+  do_over: int | null
+  constant: int | null
+}
+class user.do {
+  readonly: int
+}
+class user.do$stream {
+  readonly: int | null
+}
+enum user.gen {yield}
+type user.Async = int
+type user.Async$stream = int
+type user.import = int
+type user.import$stream = int
+function user.generic_param_name(x: async) -> async  [expr] {
+  {  } x
+}
+function user.macro(virtual: int) -> int  [expr] {
+  {  } virtual
+}
