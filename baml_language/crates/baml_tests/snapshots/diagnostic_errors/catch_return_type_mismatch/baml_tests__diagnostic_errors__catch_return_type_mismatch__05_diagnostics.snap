@@ -4,7 +4,7 @@ source: crates/baml_tests/src/generated_tests.rs
 === COMPILER2 DIAGNOSTICS ===
   [type] E0097
 
-  ⚠ extraneous throws declaration: Errors
+  ⚠ Unnecessary throws declaration: this function cannot throw Errors.
     ╭─[catch_return_type_mismatch.baml:10:34]
  10 │ function callee() -> bool throws Errors {
     ·                                  ──────

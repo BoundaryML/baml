@@ -29,7 +29,7 @@ function Caller(x: int) -> string {
 //    ╰────
 // E0097
 //
-//   ⚠ extraneous throws declaration: Errors
+//   ⚠ Unnecessary throws declaration: this function cannot throw Errors.
 //    ╭─[throw_throws_caller_sees_contract.baml:9:43]
 //  9 │ function MayFail(x: int) -> string throws Errors {
 //    ·                                           ──────

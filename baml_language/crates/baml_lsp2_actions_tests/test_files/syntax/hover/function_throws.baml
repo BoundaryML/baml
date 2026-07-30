@@ -18,7 +18,7 @@ function MayFail<[CURSOR](x: int) -> string throws Errors {
 //    ╰────
 // E0097
 //
-//   ⚠ extraneous throws declaration: Errors
+//   ⚠ Unnecessary throws declaration: this function cannot throw Errors.
 //    ╭─[hover_function_throws.baml:6:43]
 //  6 │ function MayFail(x: int) -> string throws Errors {
 //    ·                                           ──────

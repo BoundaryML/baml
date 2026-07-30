@@ -24,7 +24,7 @@ function ThrowsMixed(x: int) -> string throws string | Errors {
 //    ╰────
 // E0097
 //
-//   ⚠ extraneous throws declaration: Errors
+//   ⚠ Unnecessary throws declaration: this function cannot throw Errors.
 //    ╭─[throw_throws_mixed.baml:9:47]
 //  9 │ function ThrowsMixed(x: int) -> string throws string | Errors {
 //    ·                                               ───────────────

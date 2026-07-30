@@ -35,7 +35,7 @@ function getProfile(req: int) -> bool throws Errors {
 //     ╰────
 // E0097
 //
-//   ⚠ extraneous throws declaration: AuthenticationError, AuthorizationError
+//   ⚠ Unnecessary throws declaration: this function cannot throw AuthenticationError, AuthorizationError.
 //     ╭─[hover_catch_rethrow_caller.baml:23:46]
 //  23 │ function getProfile(req: int) -> bool throws Errors {
 //     ·                                              ──────

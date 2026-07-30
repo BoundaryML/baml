@@ -29,7 +29,7 @@ function MayThrowMultiple(x: int) -> string throws string | int {
 //- diagnostics
 // E0097
 //
-//   ⚠ extraneous throws declaration: int
+//   ⚠ Unnecessary throws declaration: this function cannot throw int.
 //     ╭─[throws_clause.baml:21:52]
 //  21 │ function MayThrowMultiple(x: int) -> string throws string | int {
 //     ·                                                    ────────────

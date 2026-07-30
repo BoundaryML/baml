@@ -1214,7 +1214,7 @@ impl fmt::Display for TirTypeError {
             TirTypeError::ExtraneousThrowsDeclaration { extra_types } => {
                 write!(
                     f,
-                    "extraneous throws declaration: {}",
+                    "Unnecessary throws declaration: this function cannot throw {}.",
                     extra_types.join(", ")
                 )
             }

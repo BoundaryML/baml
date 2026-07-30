@@ -9,7 +9,7 @@ function user.Box.from_json(j: baml.json.json) -> user.Box<T> throws baml.json.J
   { : user.Box<T>
     Box { value: baml.json.from_json<T>(baml.json.field(j, "value")) } : user.Box<T>
   }
-  ?? 956..1008: extraneous throws declaration: baml.json.JsonParseError
+  ?? 956..1008: Unnecessary throws declaration: this function cannot throw baml.json.JsonParseError.
 }
 function user.bad_missing(j: baml.json.json) -> user.Box<int> throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   { : user.Box<int>

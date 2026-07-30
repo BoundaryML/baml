@@ -13,7 +13,7 @@ source: crates/baml_tests/src/generated_tests.rs
 
   [type] E0097
 
-  ⚠ extraneous throws declaration: baml.json.JsonParseError
+  ⚠ Unnecessary throws declaration: this function cannot throw baml.json.JsonParseError.
     ╭─[json_static_method_arity.baml:23:60]
  23 │     function from_json(j: baml.json.json) -> Box<T> throws baml.json.JsonParseError | baml.json.JsonDecodeError {
     ·                                                            ────────────────────────────────────────────────────

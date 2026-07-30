@@ -7,7 +7,7 @@ function user.callee() -> bool throws user.Errors {
   { : never
     return true : true
   }
-  ?? 219..225: extraneous throws declaration: Errors
+  ?? 219..225: Unnecessary throws declaration: this function cannot throw Errors.
 }
 function user.caller() -> bool throws never {
   { : bool

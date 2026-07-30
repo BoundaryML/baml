@@ -27,7 +27,7 @@ function ThrowsVariantExact(x: int) -> string throws Errors {
 //     ╰────
 // E0097
 //
-//   ⚠ extraneous throws declaration: Errors
+//   ⚠ Unnecessary throws declaration: this function cannot throw Errors.
 //     ╭─[throw_throws_enum_variant_precise.baml:12:54]
 //  12 │ function ThrowsVariantExact(x: int) -> string throws Errors {
 //     ·                                                      ──────

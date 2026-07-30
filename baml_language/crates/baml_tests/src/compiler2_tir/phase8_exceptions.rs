@@ -97,11 +97,11 @@ fn extraneous_throws_declaration_is_warning() {
     let output = render_tir(&db, file);
     assert!(
         output.contains("??"),
-        "expected warning marker for extraneous throws declaration, got:\n{output}"
+        "expected warning marker for unnecessary throws declaration, got:\n{output}"
     );
     assert!(
-        output.contains("extraneous throws declaration"),
-        "expected extraneous throws diagnostic, got:\n{output}"
+        output.contains("Unnecessary throws declaration: this function cannot throw string."),
+        "expected unnecessary throws diagnostic, got:\n{output}"
     );
 }
 

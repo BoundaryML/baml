@@ -21,7 +21,7 @@ function ThrowsEnumExtraneous(x: int) -> string throws Errors {
 //    ╰────
 // E0097
 //
-//   ⚠ extraneous throws declaration: Errors
+//   ⚠ Unnecessary throws declaration: this function cannot throw Errors.
 //    ╭─[throw_throws_enum_extraneous.baml:9:56]
 //  9 │ function ThrowsEnumExtraneous(x: int) -> string throws Errors {
 //    ·                                                        ──────

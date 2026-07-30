@@ -32,7 +32,7 @@ function CallerGood(x: int) -> string {
 //     ╰────
 // E0097
 //
-//   ⚠ extraneous throws declaration: Errors
+//   ⚠ Unnecessary throws declaration: this function cannot throw Errors.
 //     ╭─[throw_throws_caller_variant_contract.baml:10:43]
 //  10 │ function MayFail(x: int) -> string throws Errors {
 //     ·                                           ──────

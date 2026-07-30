@@ -25,7 +25,7 @@ function ThrowsVariantViolation(x: int) -> string throws Errors {
 //     ╰────
 // E0097
 //
-//   ⚠ extraneous throws declaration: Errors
+//   ⚠ Unnecessary throws declaration: this function cannot throw Errors.
 //     ╭─[throw_throws_enum_variant_violation.baml:10:58]
 //  10 │ function ThrowsVariantViolation(x: int) -> string throws Errors {
 //     ·                                                          ──────

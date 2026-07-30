@@ -39,7 +39,7 @@ function getProfile(req: Request) -> bool throws Errors {
 //     ╰────
 // E0097
 //
-//   ⚠ extraneous throws declaration: AuthenticationError, AuthorizationError, InternalServerError, NotFoundError
+//   ⚠ Unnecessary throws declaration: this function cannot throw AuthenticationError, AuthorizationError, InternalServerError, NotFoundError.
 //     ╭─[throw_throws_type_alias_repro.baml:27:50]
 //  27 │ function getProfile(req: Request) -> bool throws Errors {
 //     ·                                                  ──────
