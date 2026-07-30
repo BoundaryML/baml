@@ -17,6 +17,8 @@ allowBuilds:
   '@vercel/speed-insights': false
   # postinstall only prints a funding banner
   core-js: false
+  # postinstall only prints an informational message in Russian time zones
+  es5-ext: false
   esbuild: true
   msw: true
   # native build needs system liblzma headers, which CI/Vercel images lack.
