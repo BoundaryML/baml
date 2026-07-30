@@ -171,6 +171,7 @@ bitflags = "2"
 # HeapPtr) that need to refuse or proxy their on-disk form.
 borsh = { version = "1.5", features = [ "derive", "indexmap" ] }
 bytes = "1"
+bytesize = "2.4.2"
 cargo_metadata = { version = "0.23.1" }
 cbindgen = "=0.29.0"
 clap = { version = "4.4.6", features = [ "cargo", "derive" ] }
