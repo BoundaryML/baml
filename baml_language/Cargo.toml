@@ -204,7 +204,7 @@ jiff = { version = "0.2" }
 la-arena = { version = "0.3" }
 libc = "0.2.169"
 libloading = "0.8"
-libsui = { version = "0.14" }
+libsui = { version = "0.16.4" }
 log = "0.4.20"
 logos = { version = "0.15" }
 # Concurrency model checker for the profiling ring (bex_events::prof). Only a
@@ -214,10 +214,6 @@ loom = { version = "0.7" }
 lsp-server = "0.7.6"
 lsp-types = "0.95.0"
 notify = "7.0"
-# Pinned to the exact version libsui depends on so `baml pack`'s ELF note
-# writer (crates/baml_cli/src/pack_elf.rs) and libsui's reader share one
-# `object` build. See pack_elf.rs for why we don't use `libsui::Elf::append`.
-object = { version = "=0.36.3", default-features = false, features = [ "build", "read_core", "elf", "std" ] }
 once_cell = "1.19"
 ouroboros = "0.18.5"
 parking_lot = { version = "0.12" }
