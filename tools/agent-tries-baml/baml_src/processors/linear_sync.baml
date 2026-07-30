@@ -581,7 +581,7 @@ function dispatch_set_linear(linear_issue_id: string?) -> int {
 // no uuid stdlib + Math.random is unavailable, so we read /proc/sys/kernel/random/uuid.
 // Returns "" if unavailable (caller then lets Cursor assign the id).
 function mint_agent_id() -> string {
-    let res = run_capture("cat", ["/proc/sys/kernel/random/uuid"], "/tmp", null, 5000, null, false, null);
+    let res = run_capture("cat", ["/proc/sys/kernel/random/uuid"], "/tmp", null, 5000, null, false, null, null);
     let u = res.stdout.trim();
     if (u == "") {
         return "";

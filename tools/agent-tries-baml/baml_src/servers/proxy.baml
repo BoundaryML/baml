@@ -173,7 +173,7 @@ function run_check(cr: CheckBamlRequest) -> baml.http.Response {
         };
     }
 
-    let res = run_capture("sh", ["-c", cr.command], staging, null, cr.timeout_secs * 1000, null, false, null);
+    let res = run_capture("sh", ["-c", cr.command], staging, null, cr.timeout_secs * 1000, null, false, null, null);
     let result = CheckBamlResult {
         check_id: cr.check_id,
         exit_code: res.exit_code,
@@ -248,8 +248,15 @@ function run_agent(rr: RunAgentRequest) -> baml.http.Response {
 
     // OAuth mode: scrub ANTHROPIC_API_KEY so the CLI uses its persisted login.
     let scrub = anthropic_api_key() == "";
+    // Env-sandbox the agent: fresh per-run HOME; cold starts also hide the
+    // image's preinstalled baml (PATH reset + BAML_* unset).
+    let cold = match (rr.cold_start) {
+        let c: bool => c,
+        null => false,
+    };
+    let sandbox = agent_sandbox_opts(staging, cold);
     let t0 = baml.sys.now_ms();
-    let res = run_capture(claude_bin(), args, staging, null, timeout_ms, rr.prompt, scrub, agent_baml);
+    let res = run_capture(claude_bin(), args, staging, null, timeout_ms, rr.prompt, scrub, agent_baml, sandbox);
     let wall_ms = baml.sys.now_ms() - t0;
 
     let session = parse_claude_session(res.stdout);
@@ -351,7 +358,7 @@ function ensure_agent_baml(spec: string) -> string {
     let _ = baml.fs.mkdir(cache, baml.fs.MkdirOptions { recursive: true }) catch (_) {
         _ => null
     };
-    let res = run_capture("baml", ["toolchain", "install", s], cache, null, 300000, null, false, null);
+    let res = run_capture("baml", ["toolchain", "install", s], cache, null, 300000, null, false, null, null);
     let out = res.stdout + "\n" + res.stderr;
     // A pinned concrete version resolves to itself; a channel resolves to whatever
     // `install` reported it downloaded.
@@ -481,7 +488,7 @@ function claude_messages(req: baml.http.Request) -> baml.http.Response {
             // error_max_turns -> garbage). OAuth (scrub key), schema-bearing prompt
             // on stdin. No --permission-mode (bypassPermissions is rejected as root).
             let args = ["-p", "-", "--output-format", "json", "--model", mr.model, "--max-turns", "1", "--tools", ""];
-            let res = run_capture(claude_bin(), args, staging, null, 300000, prompt, anthropic_api_key() == "", null);
+            let res = run_capture(claude_bin(), args, staging, null, 300000, prompt, anthropic_api_key() == "", null, null);
             let line = find_last_json_line(res.stdout);
             let out = baml.json.from_string<ClaudeOut>(line) catch (_) {
                 _ => ClaudeOut { result: null }
@@ -545,7 +552,7 @@ function cleanup_staging(staging: string, session_id: string?) -> int {
         // Exactly one path segment under the root — never the root itself.
         return 0;
     }
-    let _ = run_capture("rm", ["-rf", staging], "/tmp", null, 30000, null, false, null);
+    let _ = run_capture("rm", ["-rf", staging], "/tmp", null, 30000, null, false, null, null);
     // The claude session jsonl for this staging dir.
     match (session_id) {
         let sid: string => {
@@ -573,7 +580,7 @@ function sweep_staging_root() -> int {
     };
     let n = 0;
     for (let e in entries) {
-        let _ = run_capture("rm", ["-rf", root + "/" + e.name], "/tmp", null, 30000, null, false, null);
+        let _ = run_capture("rm", ["-rf", root + "/" + e.name], "/tmp", null, 30000, null, false, null, null);
         n = n + 1;
     }
     if (n > 0) {

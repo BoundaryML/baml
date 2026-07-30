@@ -173,6 +173,13 @@ function claude_bin() -> string {
     return env_or("CLAUDE_BIN", "claude");
 }
 
+// Claude OAuth + session jsonl store (mounted on the proxy image at /root/.claude).
+// Agent runs export this as CLAUDE_CONFIG_DIR while HOME is redirected to the
+// per-run staging dir, so sessions stay readable via session_log_path.
+function claude_config_dir() -> string {
+    return env_or("CLAUDE_CONFIG_DIR", env_or("HOME", "/root") + "/.claude");
+}
+
 function proxy_listen_port() -> string {
     return env_or("PROXY_LISTEN_PORT", "9090");
 }

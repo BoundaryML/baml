@@ -24,6 +24,58 @@ class ExecResult {
     timed_out: bool,
 }
 
+// Per-run environment sandbox for agent subprocesses. The agent's shell tools
+// inherit the proxy's env, so without this a run can read AND mutate machine
+// state: a cold-start agent once ran the quickstart installer with the image's
+// BAML_HOME=/opt/baml inherited, overwriting the SERVICE's own wrapper +
+// default-toolchain selection and appending to the real /root/.bashrc.
+class SandboxOpts {
+    // Fresh per-run HOME (under the staging dir, so cleanup_staging wipes it).
+    // Installer/profile writes land here instead of the machine's /root.
+    home: string,
+    // The real Claude auth/session store. Exported as CLAUDE_CONFIG_DIR so the
+    // CLI keeps its OAuth login and still writes the session jsonl where
+    // session_log_path looks (verified live: sessions land under
+    // $CLAUDE_CONFIG_DIR/projects even with HOME overridden).
+    claude_config_dir: string,
+    // Cold start: also strip the image's baml wrapper (PATH reset to the
+    // system default) and unset every BAML_* var, so "BAML is NOT installed"
+    // is actually true and installers can't be redirected into /opt/baml.
+    hide_baml: bool,
+}
+
+// The env-sandbox prelude of the wrapper script ("" when no sandbox). Pure,
+// unit-tested; paths are our own controlled staging/config dirs.
+function sandbox_script(sandbox: SandboxOpts?) -> string {
+    return match (sandbox) {
+        null => "",
+        let s: SandboxOpts => {
+            let base = "export HOME=\""
+                + s.home
+                + "\"; mkdir -p \"$HOME\"; export CLAUDE_CONFIG_DIR=\""
+                + s.claude_config_dir
+                + "\"; ";
+            if (s.hide_baml) {
+                base
+                    + "unset BAML_HOME BAML_VERSION BAML_CACHE_DIR BAML_WRAPPER_EXEC BAML_WRAPPER_RESOLVED_TOOLCHAIN; "
+                    + "export PATH=\"/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin\"; "
+            } else {
+                base
+            }
+        },
+    };
+}
+
+// Per-run agent sandbox: isolate HOME (installer/profile writes) and, on cold
+// start, strip the image's preinstalled baml wrapper from the agent's PATH.
+function agent_sandbox_opts(staging: string, cold: bool) -> SandboxOpts {
+    return SandboxOpts {
+        home: staging + "/.home",
+        claude_config_dir: claude_config_dir(),
+        hide_baml: cold,
+    };
+}
+
 // Run `program` + `args` (or `sh -c <command>` — pass program="sh",
 // args=["-c", command]) in `cwd`, with `baml_bin_dir` prepended to PATH and the
 // API key optionally scrubbed (OAuth mode). stdout/stderr are captured via files
@@ -42,6 +94,7 @@ function run_capture(
     stdin: string?,
     scrub_api_key: bool,
     baml_version: string?,
+    sandbox: SandboxOpts?,
 ) -> ExecResult {
     let out_file = cwd + "/.atb_stdout";
     let err_file = cwd + "/.atb_stderr";
@@ -68,7 +121,17 @@ function run_capture(
     } else {
         ""
     };
-    let script = scrub_line + version_line + path_line + "exec \"$@\" >\"" + out_file + "\" 2>\"" + err_file + "\"";
+    // Sandbox first (it may reset PATH/HOME), then version/path adjustments on
+    // top so an explicit baml_bin_dir still wins for sandboxed warm runs.
+    let script = scrub_line
+        + sandbox_script(sandbox)
+        + version_line
+        + path_line
+        + "exec \"$@\" >\""
+        + out_file
+        + "\" 2>\""
+        + err_file
+        + "\"";
 
     // sh -c '<script>' atb <program> <args...>  ($0=atb, "$@"=program+args)
     let argv = ["-c", script, "atb", program].concat(args);

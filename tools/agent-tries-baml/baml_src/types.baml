@@ -30,6 +30,7 @@ class RunAgentRequest {
     files: map<string, string>,
     prices: Prices?,
     baml_version: string?, // sha of the baml CLI to place on PATH
+    cold_start: bool?, // true => proxy sandboxes HOME and hides preinstalled baml
     install_skill: bool, // run `baml agent install` before the agent
     post_file_patterns: string[],
     max_file_bytes: int, // default 256*1024

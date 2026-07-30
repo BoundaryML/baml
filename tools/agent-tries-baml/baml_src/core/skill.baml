@@ -30,6 +30,7 @@ function fetch_latest_skill() -> string {
             null,
             false,
             null,
+            null,
         );
     } else {
         let _ = run_capture(
@@ -40,6 +41,7 @@ function fetch_latest_skill() -> string {
             120000,
             null,
             false,
+            null,
             null,
         );
     }
@@ -103,6 +105,6 @@ function skill_main_sha() -> string {
 // Current baml-skill commit sha (so a run records exactly which skill it read).
 function skill_version() -> string {
     let cache = skill_cache_dir();
-    let res = run_capture("git", ["-C", cache, "rev-parse", "--short", "HEAD"], "/tmp", null, 15000, null, false, null);
+    let res = run_capture("git", ["-C", cache, "rev-parse", "--short", "HEAD"], "/tmp", null, 15000, null, false, null, null);
     return res.stdout.trim();
 }

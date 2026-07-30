@@ -138,6 +138,7 @@ class WorkerProcessor {
                 files: files,
                 prices: prices_for(self.model),
                 baml_version: baml_version,
+                cold_start: cold,
                 install_skill: cold == false,
                 post_file_patterns: ["**/*.baml", "*.md", "trophy.json"],
                 max_file_bytes: 262144,

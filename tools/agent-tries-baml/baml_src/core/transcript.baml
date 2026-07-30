@@ -103,9 +103,8 @@ function find_last_json_line(stdout: string) -> string {
 // where <encoded> is the staging path with every "/" replaced by "-".
 
 function session_log_path(staging: string, session_id: string) -> string {
-    let home = env_or("HOME", "/root");
     let encoded = staging.replace_all("/", "-");
-    return home + "/.claude/projects/" + encoded + "/" + session_id + ".jsonl";
+    return claude_config_dir() + "/projects/" + encoded + "/" + session_id + ".jsonl";
 }
 
 // Read claude's session jsonl for a run and render it to a terminal transcript.
