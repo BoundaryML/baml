@@ -661,9 +661,14 @@ class WorkflowGraphTests(unittest.TestCase):
         rustflags = RELEASE_RUSTFLAGS.read_text(encoding="utf-8")
 
         self.assertIn("-fuse-ld=lld", rustflags)
-        self.assertIn("-Wl,--icf=safe", rustflags)
+        self.assertIn("--icf=safe", rustflags)
+        self.assertIn("-Wl,$linker_flags", rustflags)
+        self.assertIn("-dead_strip_dylibs", rustflags)
+        self.assertIn("-no_function_starts", rustflags)
+        self.assertIn("pack-relative-relocs", rustflags)
         self.assertIn("gcc-ld", rustflags)
         self.assertIn("!contains(matrix.target, 'windows-msvc')", release)
+        self.assertIn("baml-release-rustflags '${{ matrix.target }}'", release)
         self.assertEqual(release.count("scripts/baml-release-rustflags"), 1)
         self.assertEqual(size_gate.count("scripts/baml-release-rustflags"), 2)
 
