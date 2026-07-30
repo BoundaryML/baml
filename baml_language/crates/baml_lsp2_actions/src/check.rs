@@ -30,7 +30,7 @@ use baml_compiler2_hir::{file_semantic_index, scope::ScopeKind};
 use baml_compiler2_tir::{
     infer_context::{DiagnosticLocation, TirTypeError},
     inference::render_scope_diagnostics,
-    ty::{ParamTy, QualifiedTypeName, Ty, TyAttr},
+    ty::{ParamTy, Ty, TyAttr},
 };
 use indexmap::IndexMap;
 use text_size::{TextRange, TextSize};
@@ -644,51 +644,23 @@ fn impl_diagnostic_spans(
 ///
 /// Returns `None` if the path doesn't name an interface (including: name
 /// doesn't exist, or resolves to a class/enum/etc.).
-#[derive(Debug, Clone)]
-struct ResolvedInterfaceData<'db> {
-    loc: baml_compiler2_hir::loc::InterfaceLoc<'db>,
-    qtn: QualifiedTypeName,
-}
-
+/// The interface an `extends` bound names, or `None` when it does not resolve to
+/// one (diagnosed elsewhere). Only the `loc` is needed: rendering a declarer's
+/// name goes through the compiler's `interface_loc_qtn`, so this does not carry
+/// a second copy of the identity.
 fn resolve_interface_path<'db>(
     db: &'db dyn Db,
     target: &baml_compiler2_ast::TypeExpr,
     pkg_items: &baml_compiler2_hir::package::PackageItems<'db>,
     namespace_path: &[Name],
-) -> Option<ResolvedInterfaceData<'db>> {
-    let resolved = baml_compiler2_tir::interfaces::resolve_path_to_interface_identity(
+) -> Option<baml_compiler2_hir::loc::InterfaceLoc<'db>> {
+    baml_compiler2_tir::interfaces::resolve_path_to_interface_identity(
         db,
         target,
         pkg_items,
         namespace_path,
-    )?;
-    Some(ResolvedInterfaceData {
-        loc: resolved.loc,
-        qtn: resolved.qtn,
-    })
-}
-
-/// The `TypeRef`-arena twin of [`resolve_interface_path`], for walking a
-/// `requires` target held as firewall data (`interface_data(…).type_refs` plus a
-/// `TypeRefId`) rather than an AST node.
-fn resolve_interface_ref<'db>(
-    db: &'db dyn Db,
-    store: &baml_compiler2_hir::type_ref::TypeRefStore,
-    target: baml_compiler2_hir::type_ref::TypeRefId,
-    pkg_items: &baml_compiler2_hir::package::PackageItems<'db>,
-    namespace_path: &[Name],
-) -> Option<ResolvedInterfaceData<'db>> {
-    let resolved = baml_compiler2_tir::interfaces::resolve_ref_to_interface_identity(
-        db,
-        store,
-        target,
-        pkg_items,
-        namespace_path,
-    )?;
-    Some(ResolvedInterfaceData {
-        loc: resolved.loc,
-        qtn: resolved.qtn,
-    })
+    )
+    .map(|resolved| resolved.loc)
 }
 
 fn validate_associated_type_bindings_in_items(
@@ -967,18 +939,22 @@ fn validate_ambiguous_typevar_associated_projection_in_type_expr(
                 let member = &segments[1];
                 if let Some(bounds) = generic_bounds.get(base) {
                     // `T extends A & B` — the member may come from any conjunct,
-                    // so the sources are pooled: none means unknown, and two or
-                    // more (whether from one bound or across bounds) is ambiguous.
-                    let sources: Vec<_> = bounds
-                        .iter()
-                        .flat_map(|bound| {
-                            associated_type_projection_sources_for_interface_bound(
-                                db,
-                                bound,
-                                member,
-                                pkg_items,
-                                namespace_path,
-                            )
+                    // so the declarers are collected across the whole conjunction:
+                    // none means unknown, two or more is ambiguous. The compiler
+                    // owns that walk (and its cross-conjunct deduplication, without
+                    // which two bounds reaching the same declarer through `requires`
+                    // would look like an ambiguity); this only renders the result.
+                    let roots = bounds.iter().filter_map(|bound| {
+                        resolve_interface_path(db, bound, pkg_items, namespace_path)
+                    });
+                    let sources: Vec<String> =
+                        baml_compiler2_tir::interfaces::interfaces_declaring_associated_type(
+                            db, roots, member,
+                        )
+                        .into_iter()
+                        .filter_map(|loc| {
+                            baml_compiler2_tir::interfaces::interface_loc_qtn(db, loc)
+                                .map(|qtn| qtn.render_user_facing())
                         })
                         .collect();
                     if sources.is_empty() {
@@ -1164,53 +1140,6 @@ fn validate_ambiguous_typevar_associated_projection_in_type_expr(
         }
         _ => {}
     }
-}
-
-fn associated_type_projection_sources_for_interface_bound(
-    db: &dyn Db,
-    bound: &baml_compiler2_ast::TypeExpr,
-    member: &Name,
-    pkg_items: &baml_compiler2_hir::package::PackageItems<'_>,
-    namespace_path: &[Name],
-) -> Vec<String> {
-    let Some(root) = resolve_interface_path(db, bound, pkg_items, namespace_path) else {
-        return Vec::new();
-    };
-    let mut out = Vec::new();
-    let mut visited = HashSet::new();
-    let mut stack = vec![root];
-
-    while let Some(current) = stack.pop() {
-        if !visited.insert(current.qtn.clone()) {
-            continue;
-        }
-        let iface = baml_compiler2_ppir::item_data::interface_data(db, current.loc);
-        if iface
-            .associated_types
-            .iter()
-            .any(|assoc| assoc.name == *member)
-        {
-            out.push(current.qtn.render_user_facing());
-        }
-        let current_file = current.loc.file(db);
-        let current_pkg = baml_compiler2_hir::file_package::file_package(db, current_file);
-        let current_pkg_id =
-            baml_compiler2_hir::package::PackageId::new(db, current_pkg.package.clone());
-        let current_pkg_items = baml_compiler2_hir::package::package_items(db, current_pkg_id);
-        for &parent in &iface.requires {
-            if let Some(parent) = resolve_interface_ref(
-                db,
-                &iface.type_refs,
-                parent,
-                current_pkg_items,
-                &current_pkg.namespace_path,
-            ) {
-                stack.push(parent);
-            }
-        }
-    }
-
-    out
 }
 
 fn check_jinja_templates(

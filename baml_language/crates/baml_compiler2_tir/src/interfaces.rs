@@ -934,6 +934,41 @@ pub fn interface_closure_locs<'db>(
     out
 }
 
+/// Every interface reachable from `roots` (each root plus its transitive
+/// `requires` closure) that declares an associated type named `member`.
+///
+/// `roots` is a *conjunction* — the bounds of one type variable (`T extends A &
+/// B`). Deduplication is shared across all of them, so a declarer two conjuncts
+/// both reach through `requires` is counted **once**: that is one declarer, not
+/// an ambiguity. Deduplicating per root and pooling afterwards is the bug this
+/// exists to prevent.
+///
+/// Order is stable — roots in the order given, each root's closure in BFS order
+/// — so a caller rendering these into a diagnostic gets a deterministic list.
+pub fn interfaces_declaring_associated_type<'db>(
+    db: &'db dyn crate::Db,
+    roots: impl IntoIterator<Item = baml_compiler2_hir::loc::InterfaceLoc<'db>>,
+    member: &baml_base::Name,
+) -> Vec<baml_compiler2_hir::loc::InterfaceLoc<'db>> {
+    let mut out = Vec::new();
+    let mut seen: FxHashSet<baml_compiler2_hir::loc::InterfaceLoc<'db>> = FxHashSet::default();
+    for root in roots {
+        for loc in interface_closure_locs(db, root) {
+            if !seen.insert(loc) {
+                continue;
+            }
+            if baml_compiler2_ppir::item_data::interface_data(db, loc)
+                .associated_types
+                .iter()
+                .any(|assoc| assoc.name == *member)
+            {
+                out.push(loc);
+            }
+        }
+    }
+    out
+}
+
 /// Walk the transitive `requires` closure of `root_iface`, carrying the concrete
 /// generic arguments for each interface in the closure. For example,
 /// `Child<int> requires Parent<T>` yields `(Child, [int])` and `(Parent, [int])`.
