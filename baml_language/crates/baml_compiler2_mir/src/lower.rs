@@ -1637,8 +1637,9 @@ impl<'db> LoweringContext<'db> {
                 if &resolved != ty {
                     return self.interface_view_for_tir_ty(&resolved, target_tn);
                 }
-                self.resolve_projection_bound(ty)
-                    .and_then(|bound| self.interface_view_for_tir_ty(&bound, target_tn))
+                self.resolve_projection_bounds(ty)
+                    .iter()
+                    .find_map(|bound| self.interface_view_for_tir_ty(bound, target_tn))
             }
             _ => self.realized_interface_view_for(ty, target_tn),
         }
@@ -2046,7 +2047,7 @@ impl<'db> LoweringContext<'db> {
         // BEP-044 Self-as-type-variable: an interface default method's `self` is
         // a `Self` type variable bound by the interface (matching the TIR
         // typing in `inference.rs`). Registering the bound lets member access on
-        // `self` dispatch through the interface — `interface_dispatch_target_for_tir_ty`
+        // `self` dispatch through the interface — `interface_dispatch_target_for_member`
         // already follows type-var bounds — so default methods keep dispatching
         // through the concrete implementor.
         if let Some(baml_compiler2_ppir::item_data::MethodOwner::Interface(iface_loc)) =
@@ -2805,49 +2806,118 @@ impl<'db> LoweringContext<'db> {
         self.convert_tir_ty_for_runtime(&tir_ty)
     }
 
-    /// The interface *view* a receiver of this static type dispatches through — its
-    /// own for an existential, its bound's for a type variable, its resolved bound's
-    /// for a projection. `None` for concrete receivers: their providing interface is
-    /// method-specific, resolved by [`Self::dispatch_target_for_concrete`].
-    fn interface_dispatch_target_for_tir_ty(&self, ty: &Tir2Ty) -> Option<InterfaceTypeView> {
+    /// The interface *view* a receiver of this static type dispatches through, for
+    /// the `member` being accessed — its own for an existential, its bound's for a
+    /// type variable, its resolved bound's for a projection. `None` for concrete
+    /// receivers: their providing interface is resolved by
+    /// [`Self::dispatch_target_for_concrete`].
+    ///
+    /// `member` is not optional: a dispatch view exists only to key a member access,
+    /// and which view is correct depends on the member. A bound list is a
+    /// *conjunction*, so under `T extends A & B` a member may be declared by either
+    /// conjunct while the emitted `virtual_call` names just one interface. Choosing
+    /// without the member — as this did while a bound could only be a single
+    /// interface — keys the call on an interface that need not declare it, which the
+    /// VM then cannot resolve.
+    fn interface_dispatch_target_for_member(
+        &self,
+        ty: &Tir2Ty,
+        member: &Name,
+    ) -> Option<InterfaceTypeView> {
         match ty {
             Tir2Ty::Interface(qtn, type_args, associated_bindings, _) => {
                 Some((qtn.clone(), type_args.clone(), associated_bindings.clone()))
             }
-            Tir2Ty::TypeVar(name, _) => self
-                .generic_param_bounds
-                .get(name)
-                .into_iter()
-                .flatten()
-                .find_map(|bound| self.interface_dispatch_target_for_tir_ty(&bound.to_ty())),
+            // `T extends A & B` — the generic-parameter axis.
+            Tir2Ty::TypeVar(name, _) => {
+                let conjuncts: Vec<Tir2Ty> = self
+                    .generic_param_bounds
+                    .get(name)
+                    .into_iter()
+                    .flatten()
+                    .map(baml_type::Interface::to_ty)
+                    .collect();
+                self.dispatch_view_over_conjunction(&conjuncts, member)
+            }
+            // `type Item extends A & B` — the associated-type axis, same rule.
             Tir2Ty::AssociatedTypeProjection { .. } => {
                 let resolved = self.resolve_ty_projections(ty);
                 if &resolved != ty {
-                    return self.interface_dispatch_target_for_tir_ty(&resolved);
+                    return self.interface_dispatch_target_for_member(&resolved, member);
                 }
-                self.resolve_projection_bound(ty)
-                    .and_then(|bound| self.interface_dispatch_target_for_tir_ty(&bound))
+                self.dispatch_view_over_conjunction(&self.resolve_projection_bounds(ty), member)
             }
             _ => None,
         }
     }
 
-    fn interface_dispatch_target_for_expr(&self, expr_id: AstExprId) -> Option<InterfaceTypeView> {
-        self.source_param_interface_view_for_expr(expr_id)
+    /// Pick which conjunct of a bound list a `member` access dispatches through: the
+    /// first whose `requires` closure declares it.
+    ///
+    /// Falls back to the first conjunct that yields a view at all when none declares
+    /// `member` — an access TIR has already rejected, so the choice only shapes the
+    /// code emitted for a program that will not run.
+    ///
+    /// Shared by both places a bound list is a conjunction — a generic parameter's
+    /// `T extends A & B` and an associated type's `type Item extends A & B` — so the
+    /// two cannot drift.
+    fn dispatch_view_over_conjunction(
+        &self,
+        bounds: &[Tir2Ty],
+        member: &Name,
+    ) -> Option<InterfaceTypeView> {
+        bounds
+            .iter()
+            .find_map(|bound| {
+                let view = self.interface_dispatch_target_for_member(bound, member)?;
+                self.interface_closure_declares_member(&view.0, member)
+                    .then_some(view)
+            })
+            .or_else(|| {
+                bounds
+                    .iter()
+                    .find_map(|bound| self.interface_dispatch_target_for_member(bound, member))
+            })
+    }
+
+    /// Whether `iface_tn`'s `requires` closure declares `member`, as either a method
+    /// or a field. Selects which conjunct of a bound list a member access dispatches
+    /// through.
+    fn interface_closure_declares_member(&self, iface_tn: &TypeName, member: &Name) -> bool {
+        if self.mir_interface_declares_method(iface_tn, member) {
+            return true;
+        }
+        self.interface_closure_type_name_views(iface_tn, &[], &[])
+            .is_some_and(|views| {
+                views
+                    .iter()
+                    .any(|(tn, _, _)| self.interface_field_index_directly(tn, member).is_some())
+            })
+    }
+
+    /// The interface view an *expression* receiver dispatches through for `member`
+    /// — see [`Self::interface_dispatch_target_for_member`].
+    fn interface_dispatch_target_for_expr_member(
+        &self,
+        expr_id: AstExprId,
+        member: &Name,
+    ) -> Option<InterfaceTypeView> {
+        self.source_param_interface_view_for_expr(expr_id, member)
             .or_else(|| {
                 self.tir_expr_type(self.expr_metadata_key(expr_id))
-                    .and_then(|ty| self.interface_dispatch_target_for_tir_ty(ty))
+                    .and_then(|ty| self.interface_dispatch_target_for_member(ty, member))
             })
             .or_else(|| {
                 self.self_typevar_for_expr(expr_id)
-                    .and_then(|ty| self.interface_dispatch_target_for_tir_ty(&ty))
+                    .and_then(|ty| self.interface_dispatch_target_for_member(&ty, member))
             })
-            .or_else(|| self.upcast_target_interface_view(expr_id))
+            .or_else(|| self.upcast_target_interface_view(expr_id, member))
     }
 
     fn source_param_interface_view_for_expr(
         &self,
         expr_id: AstExprId,
+        member: &Name,
     ) -> Option<InterfaceTypeView> {
         let AstExpr::Path(segments) = &self.body.exprs[expr_id] else {
             return None;
@@ -2855,25 +2925,27 @@ impl<'db> LoweringContext<'db> {
         if segments.len() != 1 {
             return None;
         }
-        self.source_param_interface_view_for_name_at(expr_id, &segments[0])
+        self.source_param_interface_view_for_name_at(expr_id, &segments[0], member)
     }
 
     fn source_param_interface_view_for_name_at(
         &self,
         expr_id: AstExprId,
         name: &Name,
+        member: &Name,
     ) -> Option<InterfaceTypeView> {
         let binding_id = self.binding_id_for_path(expr_id, name)?;
-        self.source_param_interface_view_for_binding(name, binding_id)
+        self.source_param_interface_view_for_binding(name, binding_id, member)
     }
 
     fn source_param_interface_view_for_binding(
         &self,
         name: &Name,
         binding_id: BindingId,
+        member: &Name,
     ) -> Option<InterfaceTypeView> {
         let ty = self.source_param_tir_ty_for_binding(name, binding_id)?;
-        self.interface_dispatch_target_for_tir_ty(&ty)
+        self.interface_dispatch_target_for_member(&ty, member)
     }
 
     fn source_param_tir_ty_for_binding(
@@ -2940,7 +3012,11 @@ impl<'db> LoweringContext<'db> {
         }
     }
 
-    fn upcast_target_interface_view(&self, expr_id: AstExprId) -> Option<InterfaceTypeView> {
+    fn upcast_target_interface_view(
+        &self,
+        expr_id: AstExprId,
+        member: &Name,
+    ) -> Option<InterfaceTypeView> {
         let AstExpr::Upcast { target, .. } = &self.body.exprs[expr_id] else {
             return None;
         };
@@ -2962,7 +3038,7 @@ impl<'db> LoweringContext<'db> {
             },
             &mut diags,
         );
-        self.interface_dispatch_target_for_tir_ty(&target_ty)
+        self.interface_dispatch_target_for_member(&target_ty, member)
     }
 
     fn class_dispatch_target_for_tir_ty(&self, ty: &Tir2Ty) -> Option<(TypeName, Vec<RuntimeTy>)> {
@@ -2979,8 +3055,10 @@ impl<'db> LoweringContext<'db> {
                 if &resolved != ty {
                     return self.class_dispatch_target_for_tir_ty(&resolved);
                 }
-                self.resolve_projection_bound(ty)
-                    .and_then(|bound| self.class_dispatch_target_for_tir_ty(&bound))
+                // An unreduced projection's bounds are interface constraints, and
+                // an interface is never a class, so only the reduction above can
+                // name one.
+                None
             }
             // A type variable has no class dispatch target: its bounds are
             // interface constraints, and an interface is never a class.
@@ -5657,7 +5735,7 @@ impl<'db> LoweringContext<'db> {
                     .cloned();
                 if let Some(view) = recv_tir_ty
                     .as_ref()
-                    .and_then(|ty| self.interface_dispatch_target_for_tir_ty(ty))
+                    .and_then(|ty| self.interface_dispatch_target_for_member(ty, &method_name))
                     .or_else(|| {
                         recv_tir_ty
                             .as_ref()
@@ -5842,7 +5920,7 @@ impl<'db> LoweringContext<'db> {
             let seg_idx = offset + 1;
             let is_last = seg_idx + 1 == segments.len();
             let interface_prefix =
-                self.interface_receiver_for_path_prefix(expr_id, seg_idx - 1, &current_ty);
+                self.interface_receiver_for_path_prefix(expr_id, seg_idx - 1, seg, &current_ty);
             if let Some((tn, class_type_args)) =
                 self.class_receiver_for_path_prefix(expr_id, seg_idx - 1, &current_ty)
             {
@@ -7574,16 +7652,16 @@ impl<'db> LoweringContext<'db> {
                         }
                     });
                 let iface_dispatch_opt: Option<InterfaceTypeView> = if segments.len() == 2 {
-                    self.source_param_interface_view_for_name_at(callee, &segments[0])
+                    self.source_param_interface_view_for_name_at(callee, &segments[0], &method_name)
                         .or_else(|| {
-                            recv_tir_ty
-                                .as_ref()
-                                .and_then(|ty| self.interface_dispatch_target_for_tir_ty(ty))
+                            recv_tir_ty.as_ref().and_then(|ty| {
+                                self.interface_dispatch_target_for_member(ty, &method_name)
+                            })
                         })
                 } else {
                     recv_tir_ty
                         .as_ref()
-                        .and_then(|ty| self.interface_dispatch_target_for_tir_ty(ty))
+                        .and_then(|ty| self.interface_dispatch_target_for_member(ty, &method_name))
                 }
                 // Concrete receiver whose method comes from an impl (blanket,
                 // out-of-body, or in-body) — the providing interface, resolved
@@ -9426,10 +9504,13 @@ impl<'db> LoweringContext<'db> {
         // declaring interface is resolved *before* lowering the receiver so a
         // field access (no such method) falls through to the field path below
         // without evaluating the receiver expression twice.
-        if let Some(view) = self.interface_dispatch_target_for_expr(base).or_else(|| {
-            self.tir_expr_type(self.expr_metadata_key(base))
-                .and_then(|ty| self.dispatch_target_for_concrete(ty, field))
-        }) && self.mir_interface_declares_method(&view.0, field)
+        if let Some(view) = self
+            .interface_dispatch_target_for_expr_member(base, field)
+            .or_else(|| {
+                self.tir_expr_type(self.expr_metadata_key(base))
+                    .and_then(|ty| self.dispatch_target_for_concrete(ty, field))
+            })
+            && self.mir_interface_declares_method(&view.0, field)
         {
             let recv_op = self.lower_to_operand(base);
             let recv_local = self.builder.temp(self.expr_ty(base));
@@ -9518,7 +9599,10 @@ impl<'db> LoweringContext<'db> {
             {
                 self.try_lower_interface_field_access(base_local, &tn, &args, &assoc, field, &dest)
             } else {
-                self.interface_receiver_for_field_access(base, &unwrapped_ty)
+                // Fallback for receivers TIR recorded no virtual-field resolution
+                // for. `field` selects among a bounded type variable's bound
+                // conjunction, where the field may come from any conjunct.
+                self.interface_receiver_for_field_access(base, field, &unwrapped_ty)
                     .is_some_and(|(iface_tn, iface_type_args, iface_assoc)| {
                         self.try_lower_interface_field_access(
                             base_local,
@@ -9577,9 +9661,10 @@ impl<'db> LoweringContext<'db> {
     fn interface_receiver_for_field_access(
         &self,
         base: AstExprId,
+        field: &Name,
         unwrapped_ty: &RuntimeTy,
     ) -> Option<InterfaceTypeView> {
-        if let Some(target) = self.interface_dispatch_target_for_expr(base) {
+        if let Some(target) = self.interface_dispatch_target_for_expr_member(base, field) {
             return Some(target);
         }
 
@@ -9598,18 +9683,19 @@ impl<'db> LoweringContext<'db> {
         &self,
         expr_id: AstExprId,
         prefix_idx: usize,
+        member: &Name,
         current_ty: &RuntimeTy,
     ) -> Option<InterfaceTypeView> {
         if let Some(target) = self
             .tir_path_segment_type((self.current_metadata_scope, expr_id, prefix_idx))
-            .and_then(|ty| self.interface_dispatch_target_for_tir_ty(ty))
+            .and_then(|ty| self.interface_dispatch_target_for_member(ty, member))
         {
             return Some(target);
         }
         if prefix_idx == 0
             && let Some(target) = self
                 .tir_path_root_type(self.expr_metadata_key(expr_id))
-                .and_then(|ty| self.interface_dispatch_target_for_tir_ty(ty))
+                .and_then(|ty| self.interface_dispatch_target_for_member(ty, member))
         {
             return Some(target);
         }
@@ -9834,10 +9920,12 @@ impl<'db> LoweringContext<'db> {
         runtime_id: Option<AstExprId>,
         dest: &Place,
     ) -> bool {
-        let dispatch_target = self.interface_dispatch_target_for_expr(base).or_else(|| {
-            self.tir_expr_type(self.expr_metadata_key(base))
-                .and_then(|ty| self.dispatch_target_for_concrete(ty, method))
-        });
+        let dispatch_target = self
+            .interface_dispatch_target_for_expr_member(base, method)
+            .or_else(|| {
+                self.tir_expr_type(self.expr_metadata_key(base))
+                    .and_then(|ty| self.dispatch_target_for_concrete(ty, method))
+            });
         let Some((iface_tn, iface_type_args, iface_assoc)) = dispatch_target else {
             return false;
         };
@@ -10128,7 +10216,7 @@ impl<'db> LoweringContext<'db> {
     ) -> Option<InterfaceTypeView> {
         let first = members.first()?;
         let view = self
-            .interface_dispatch_target_for_tir_ty(first)
+            .interface_dispatch_target_for_member(first, method)
             .or_else(|| self.dispatch_target_for_concrete(first, method))?;
         Some(self.interface_view_declaring_method(&view, method))
     }
@@ -10315,12 +10403,15 @@ impl<'db> LoweringContext<'db> {
         &mut self,
         target: AstExprId,
         base: AstExprId,
+        field: &Name,
     ) -> Option<InterfaceTypeView> {
         if let Some((view, _index)) = self.tir_virtual_field_view(self.expr_metadata_key(target)) {
             return Some(view);
         }
         let base_ty = self.expr_ty(base).strip_null();
-        self.interface_receiver_for_field_access(base, &base_ty)
+        // `field` selects among a bounded type variable's bound conjunction, where
+        // the field may be declared by any conjunct.
+        self.interface_receiver_for_field_access(base, field, &base_ty)
     }
 
     /// The [`VirtualFieldTarget`] an assignment target denotes when it is an
@@ -10337,7 +10428,7 @@ impl<'db> LoweringContext<'db> {
         match &self.body.exprs[target] {
             AstExpr::MemberAccess { base, member } => {
                 let (base, field) = (*base, member.clone());
-                let view = self.virtual_field_assign_view(target, base)?;
+                let view = self.virtual_field_assign_view(target, base, &field)?;
                 let (iface, field_index) = self.virtual_field_wire_target(&view, &field)?;
                 let recv_op = self.lower_to_operand(base);
                 let receiver = self.operand_to_local(recv_op, self.expr_ty(base));
@@ -10356,8 +10447,8 @@ impl<'db> LoweringContext<'db> {
                     .tir_path_segment_type((self.current_metadata_scope, target, prefix_idx))
                     .cloned()
                     .map(|t| self.convert_tir_ty_for_runtime(&t))?;
-                let view =
-                    self.interface_receiver_for_path_prefix(target, prefix_idx, &prefix_ty)?;
+                let view = self
+                    .interface_receiver_for_path_prefix(target, prefix_idx, &field, &prefix_ty)?;
                 let (iface, field_index) = self.virtual_field_wire_target(&view, &field)?;
                 let root_local = self.local_for_path(target, &segments[0])?;
                 let receiver = self.lower_path_receiver_to_local(
@@ -10462,10 +10553,12 @@ impl<'db> LoweringContext<'db> {
         )
     }
 
-    /// The declared bound of an *unreduced* (symbolic-base) projection `(base as I).member` —
-    /// interface `I`'s `type member extends J`, realized. `None` for a non-projection, an
+    /// The declared bounds of an *unreduced* (symbolic-base) projection
+    /// `(base as I).member` — interface `I`'s `type member extends J & K`, realized.
+    ///
+    /// A conjunction, like a generic parameter's: empty for a non-projection, an
     /// unqualified projection, or an unbounded associated type.
-    fn resolve_projection_bound(&self, ty: &Tir2Ty) -> Option<Tir2Ty> {
+    fn resolve_projection_bounds(&self, ty: &Tir2Ty) -> Vec<Tir2Ty> {
         use baml_type::normalize::TypeContext;
         let Tir2Ty::AssociatedTypeProjection {
             interface: iface,
@@ -10473,7 +10566,7 @@ impl<'db> LoweringContext<'db> {
             ..
         } = ty
         else {
-            return None;
+            return Vec::new();
         };
         with_global_ctx(
             self.db,
@@ -10482,9 +10575,9 @@ impl<'db> LoweringContext<'db> {
             &self.generic_param_bounds,
             |ctx| {
                 ctx.associated_type_bound(iface, member.clone())
-                    .into_iter()
-                    .next()
-                    .map(|bound| bound.to_ty())
+                    .iter()
+                    .map(baml_type::Interface::to_ty)
+                    .collect()
             },
         )
     }
@@ -12628,7 +12721,7 @@ impl LoweringContext<'_> {
             .tir_pat_type(self.pat_metadata_key(class_pat_id))?
             .clone();
         let (iface_tn, iface_args, iface_assoc) =
-            self.interface_dispatch_target_for_tir_ty(&tir_ty)?;
+            self.interface_dispatch_target_for_member(&tir_ty, field)?;
         let field_local = self.builder.temp(self.pat_ty(field_pat_id));
         self.try_lower_interface_field_access(
             scrutinee,
