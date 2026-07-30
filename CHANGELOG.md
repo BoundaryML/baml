@@ -4,15 +4,6 @@ All notable changes to this project will be documented in this file. See [conven
 
 ## [0.224.0](https://github.com/boundaryml/baml/compare/0.223.0..0.224.0) - 2026-07-30
 
-### Breaking changes
-
-- **(stdlib)** replace `baml.unstable.string` with `string.from` (#3856) - ([b617a67](https://github.com/boundaryml/baml/commit/b617a67be9ce56cba4277062f788cb435ae01617)) - Avery Townsend
-
-### Features
-
-- Add `float.to_fixed()` with JavaScript `toFixed` parity (#3862) - ([eb97766](https://github.com/boundaryml/baml/commit/eb977661c47e100a1b4467f509e995cfc153c5b2)) - Dhilan Shah
-- Slim the engine dependency graph and make AWS Bedrock optional (#3926) - ([594557a](https://github.com/boundaryml/baml/commit/594557a4ceece44e841acfee3eb1d052e696bd7f)) - hellovai
-
 ### Bug Fixes
 
 - **(python)** rebuild generated models so class order cannot break Pydantic (#793, #3819) - ([dce0e79](https://github.com/boundaryml/baml/commit/dce0e798727544293dbca1e7d9466c11700190ee)) - Gourav Singal
