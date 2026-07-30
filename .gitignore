@@ -194,3 +194,4 @@ rpi/
 !baml_language/sdks/typescript/bridge_typescript/dist/
 !baml_language/sdks/typescript/bridge_typescript/dist/**
 baml_language/sdks/typescript/bridge_typescript/dist/*.node
+tools/experiments/site/data/intentionbench-results.json
