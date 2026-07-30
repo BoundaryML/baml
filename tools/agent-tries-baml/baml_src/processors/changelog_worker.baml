@@ -1,6 +1,9 @@
 // Changelog worker — claims a changelogEntries row and runs the draft<->critique
 // loop (DraftEntry / CritiqueEntry LLM functions) until approval or an attempt
 // cap, then writes title/body/date/authors. Ports services/changelog_worker.
+// A revise request (reviseMode="revise" + reviseGuidance, stamped by the
+// bammy changelog_edit route / POST /entries/{version}/revise) is folded into
+// the drafting context via revise_context and cleared on completion.
 //
 // Context parity with v1 (bench_core.changelog_github.collect_context): the
 // release date, the predecessor release on the SAME channel, the commit log for
@@ -16,14 +19,21 @@ class ChangelogEntryDoc {
     fromRelease: string?,
     reviseMode: string?,
     reviseGuidance: string?,
+    title: string?,
+    body: string?,
 }
 
+// reviseMode/reviseGuidance are reset to "" on completion: they are one-shot
+// inputs (stamped by requeue_changelog / the revise endpoint) and must not
+// leak into a later unrelated regeneration of the same row.
 class ChangelogPatch {
     title: string,
     body: string,
     date: string,
     authors: string[],
     status: string,
+    reviseMode: string,
+    reviseGuidance: string,
 }
 
 class ChangelogWorkerProcessor {
@@ -71,7 +81,13 @@ class ChangelogWorkerProcessor {
                 },
             };
 
-            let context = self.build_context(entry);
+            let context = revise_context(
+                self.build_context(entry),
+                str_or(entry.reviseMode, ""),
+                str_or(entry.reviseGuidance, ""),
+                str_or(entry.title, ""),
+                str_or(entry.body, ""),
+            );
 
             // Draft -> critique loop.
             let draft = DraftEntry(context) catch (e) {
@@ -116,6 +132,8 @@ class ChangelogWorkerProcessor {
                         date: best.date,
                         authors: best.authors,
                         status: "done",
+                        reviseMode: "",
+                        reviseGuidance: "",
                     },
                 ) catch (_) {
                 _ => "{}"
@@ -273,6 +291,28 @@ class GhFileEntry {
 class RenderedLog {
     log: string,
     authors: string[],
+}
+
+// Fold a bammy/API revise request into the release context so DraftEntry
+// actually honors "@bammy fix the title of X". Shows the previous entry (when
+// the row has one) plus the operator's instruction; regenerate mode and empty
+// guidance leave the context untouched (those redraft from scratch). The
+// guidance lives in the BASE context, so it survives every critique round of
+// the draft<->critique loop.
+function revise_context(context: string, mode: string, guidance: string, title: string, body: string) -> string {
+    if (mode != "revise" || guidance == "") {
+        return context;
+    }
+    let prev = if (title == "" && body == "") {
+        "(previous entry unavailable)"
+    } else {
+        "title: " + title + "\n\n" + body
+    };
+    return context
+        + "\n\n# previous entry (the one being revised)\n"
+        + prev
+        + "\n\n# REVISE (operator instruction, apply it to the previous entry; every claim must stay grounded in the diff)\n"
+        + guidance;
 }
 
 // Reconstruct the GitHub tag from a stored (normalized) version + channel
