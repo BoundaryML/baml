@@ -28,8 +28,8 @@ export const runAnalysis = internalAction({
         jobId: args.jobId,
       });
 
-      // Import BAML client dynamically
-      const { b } = await import("../baml_client");
+      // Import the generated BAML v1 SDK dynamically
+      const { AnalyzeVersionChanges_async } = await import("../baml_sdk");
 
       // Build input for BAML function
       const input = {
@@ -114,7 +114,7 @@ export const runAnalysis = internalAction({
       }
 
       // Call BAML function
-      const result = await b.AnalyzeVersionChanges(input);
+      const result = await AnalyzeVersionChanges_async(input);
 
       // Update job with result
       await ctx.runMutation(internal.analysisJobs.updateStatus, {
