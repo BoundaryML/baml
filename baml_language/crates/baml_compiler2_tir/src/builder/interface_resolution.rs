@@ -873,8 +873,9 @@ impl<'db> TypeInferenceBuilder<'db> {
         let db = self.context.db();
         let iface_data = baml_compiler2_ppir::item_data::interface_data(db, view.loc);
 
-        // Field lookup: this interface's own fields (no closure).
-        for field in &iface_data.fields {
+        // Field lookup: this interface's own fields (no closure). The enumeration index
+        // *is* the field's dispatch index — see `MemberResolution::InterfaceVirtualField`.
+        for (field_index, field) in iface_data.fields.iter().enumerate() {
             if &field.name != access.member {
                 continue;
             }
@@ -890,47 +891,45 @@ impl<'db> TypeInferenceBuilder<'db> {
                     attr: TyAttr::default(),
                 });
             }
-            let ty = field
-                .type_ref
-                .map(|type_ref| {
-                    // A field lowers in the same environment as a method signature — so
-                    // `key: Self.Key` resolves through the receiver's pins/impls exactly
-                    // as a `-> Self.Key` return would. Fields require a bound receiver
-                    // (checked above), so no fresh receiver generic is ever needed.
-                    let env = self.interface_member_lowering_env(view, recv, &[], false);
-                    let mut diags = env.diags;
-                    let ns = view.namespace(db);
-                    let ty = crate::generics::substitute_ty(
-                        &crate::lower_type_expr::lower_type_ref(
-                            &iface_data.type_refs,
-                            type_ref,
-                            &crate::lower_type_expr::ScopeCtx {
-                                db,
-                                package_items: view.pkg_items(db),
-                                ns_context: &ns,
-                                generic_params: &env.all_generic_params,
-                                bounds: &env.bounds,
-                                self_ty: Some(env.self_ty.clone()),
-                            },
-                            &mut diags,
-                        ),
-                        &env.bindings,
-                    );
-                    let span = baml_compiler2_ppir::item_data::interface_source_map(db, view.loc)
-                        .type_refs
-                        .span(type_ref);
-                    for diag in diags {
-                        self.context.report_at_span(diag, span);
-                    }
-                    ty
-                })
-                .unwrap_or(Ty::Unknown {
-                    attr: TyAttr::default(),
-                });
+            let ty = {
+                // A field lowers in the same environment as a method signature — so
+                // `key: Self.Key` resolves through the receiver's pins/impls exactly
+                // as a `-> Self.Key` return would. Fields require a bound receiver
+                // (checked above), so no fresh receiver generic is ever needed.
+                let env = self.interface_member_lowering_env(view, recv, &[], false);
+                let mut diags = env.diags;
+                let ns = view.namespace(db);
+                let ty = crate::generics::substitute_ty(
+                    &crate::lower_type_expr::lower_type_ref(
+                        &iface_data.type_refs,
+                        field.type_ref,
+                        &crate::lower_type_expr::ScopeCtx {
+                            db,
+                            package_items: view.pkg_items(db),
+                            ns_context: &ns,
+                            generic_params: &env.all_generic_params,
+                            bounds: &env.bounds,
+                            self_ty: Some(env.self_ty.clone()),
+                        },
+                        &mut diags,
+                    ),
+                    &env.bindings,
+                );
+                let span = baml_compiler2_ppir::item_data::interface_source_map(db, view.loc)
+                    .type_refs
+                    .span(field.type_ref);
+                for diag in diags {
+                    self.context.report_at_span(diag, span);
+                }
+                ty
+            };
             self.resolutions.insert(
                 access.at,
                 crate::inference::MemberResolution::InterfaceVirtualField {
                     iface_loc: view.loc,
+                    interface: view.realized.to_ty(),
+                    field_index: u32::try_from(field_index)
+                        .expect("interface field count fits u32"),
                     field: access.member.clone(),
                 },
             );
@@ -1013,29 +1012,22 @@ impl<'db> TypeInferenceBuilder<'db> {
                 if !seen.insert(field.name.clone()) {
                     continue;
                 }
-                let ty = field
-                    .type_ref
-                    .map(|type_ref| {
-                        crate::generics::substitute_ty(
-                            &crate::lower_type_expr::lower_type_ref(
-                                &iface_data.type_refs,
-                                type_ref,
-                                &crate::lower_type_expr::ScopeCtx {
-                                    db,
-                                    package_items: view.pkg_items(db),
-                                    ns_context: &ns,
-                                    generic_params: &env.all_generic_params,
-                                    bounds: &env.bounds,
-                                    self_ty: Some(env.self_ty.clone()),
-                                },
-                                &mut diags,
-                            ),
-                            &env.bindings,
-                        )
-                    })
-                    .unwrap_or(Ty::Unknown {
-                        attr: TyAttr::default(),
-                    });
+                let ty = crate::generics::substitute_ty(
+                    &crate::lower_type_expr::lower_type_ref(
+                        &iface_data.type_refs,
+                        field.type_ref,
+                        &crate::lower_type_expr::ScopeCtx {
+                            db,
+                            package_items: view.pkg_items(db),
+                            ns_context: &ns,
+                            generic_params: &env.all_generic_params,
+                            bounds: &env.bounds,
+                            self_ty: Some(env.self_ty.clone()),
+                        },
+                        &mut diags,
+                    ),
+                    &env.bindings,
+                );
                 out.push((field.name.clone(), ty));
             }
         }

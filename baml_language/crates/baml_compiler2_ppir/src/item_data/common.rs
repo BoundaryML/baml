@@ -20,7 +20,12 @@ pub struct FunctionParamData {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FieldData {
     pub name: Name,
-    pub type_ref: Option<TypeRefId>,
+    /// Always present. A field written without a type is reported by the parser and
+    /// recovers as [`TypeRefKind::Error`](baml_compiler2_hir::type_ref::TypeRefKind::Error),
+    /// which suppresses follow-on diagnostics while the rest of the declaration still
+    /// type-checks. "No type" is not a kind of type, so it is not representable here —
+    /// otherwise every consumer has to invent its own stand-in, and they disagree.
+    pub type_ref: TypeRefId,
     pub attributes: Vec<Attribute>,
     pub docstring: Option<String>,
 }

@@ -413,7 +413,31 @@ impl TyTemplate {
     }
 }
 
+impl std::fmt::Display for TyTemplateInterface {
+    /// Renders as the existential template it denotes, so an interface constraint
+    /// and the type it lifts to print identically in diagnostics and MIR dumps.
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.to_template())
+    }
+}
+
 impl TyTemplateInterface {
+    /// The interface *existential* template ([`TyTemplate::Interface`]) denoted by
+    /// this constraint, with default attributes — the template-level counterpart of
+    /// [`Interface::to_ty`].
+    ///
+    /// Needed only at boundaries that carry a *type* rather than a constraint (the
+    /// bytecode constant pool a `LoadType` reads from). Prefer holding the
+    /// constraint itself wherever an interface is meant: a `TyTemplate` slot admits
+    /// non-interface types, which an interface position can never legitimately hold.
+    pub fn to_template(&self) -> TyTemplate {
+        TyTemplate::interface(
+            self.name.clone(),
+            self.generics.clone(),
+            self.associated_types.clone(),
+        )
+    }
+
     /// Substitute frame type args through the interface's generic and
     /// associated-binding positions, producing the realized [`Interface`]
     /// constraint used to reduce the enclosing projection (see

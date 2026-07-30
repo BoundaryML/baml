@@ -691,10 +691,7 @@ fn declaration_type_info_at(
                 continue;
             };
             if field.name == *name && range_contains(*name_span, offset) {
-                let ty = field
-                    .type_ref
-                    .map(|id| utils::display_type_ref(&class.type_refs, id))
-                    .unwrap_or_else(|| "unknown".to_string());
+                let ty = utils::display_type_ref(&class.type_refs, field.type_ref);
                 return Some(TypeInfo::LocalVar {
                     name: name.as_str().to_string(),
                     ty,
@@ -732,10 +729,7 @@ fn declaration_type_info_at(
                 continue;
             };
             if field.name == *name && range_contains(*name_span, offset) {
-                let ty = field
-                    .type_ref
-                    .map(|id| utils::display_type_ref(&iface.type_refs, id))
-                    .unwrap_or_else(|| "unknown".to_string());
+                let ty = utils::display_type_ref(&iface.type_refs, field.type_ref);
                 return Some(TypeInfo::LocalVar {
                     name: name.as_str().to_string(),
                     ty,

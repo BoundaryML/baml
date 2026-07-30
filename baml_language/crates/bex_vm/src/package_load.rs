@@ -43,6 +43,7 @@ fn placeholder() -> Object {
         interface_args: Vec::new(),
         interface_assoc: Vec::new(),
         methods: IndexMap::new(),
+        field_links: Box::default(),
     }))
 }
 
@@ -170,6 +171,7 @@ fn resolve_impl_rule(heap: &BexHeap, rule: &ProgramImplRule) -> RuntimeImplRule 
                 )
             })
             .collect(),
+        field_links: rule.field_links.clone(),
     }
 }
 

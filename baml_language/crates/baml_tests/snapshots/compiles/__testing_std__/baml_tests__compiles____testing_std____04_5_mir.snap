@@ -99,11 +99,11 @@ fn testing.TestCollector.register_test(self: testing.TestCollector, name: string
         _15 = copy _8;
         _14 = copy _15 + const "#";
         _16 = copy _1.1;
-        _17 = virtual_call iter as baml.iter.Iterable<Item = testing.TestRegistration, Error = never>(copy _16) -> [bb6];
+        _17 = virtual_call iter as baml.iter.Iterable<Error = never, Item = testing.TestRegistration>(copy _16) -> [bb6];
     }
 
     bb6: {
-        _18 = virtual_call next as baml.iter.Iterator<Item = testing.TestRegistration, Error = never>(copy _17) -> [bb7];
+        _18 = virtual_call next as baml.iter.Iterator<Error = never, Item = testing.TestRegistration>(copy _17) -> [bb7];
     }
 
     bb7: {
@@ -261,11 +261,11 @@ fn testing.TestCollector.register_test_set(self: testing.TestCollector, name: st
         _15 = copy _8;
         _14 = copy _15 + const "#";
         _16 = copy _1.2;
-        _17 = virtual_call iter as baml.iter.Iterable<Item = testing.TestSetRegistration, Error = never>(copy _16) -> [bb6];
+        _17 = virtual_call iter as baml.iter.Iterable<Error = never, Item = testing.TestSetRegistration>(copy _16) -> [bb6];
     }
 
     bb6: {
-        _18 = virtual_call next as baml.iter.Iterator<Item = testing.TestSetRegistration, Error = never>(copy _17) -> [bb7];
+        _18 = virtual_call next as baml.iter.Iterator<Error = never, Item = testing.TestSetRegistration>(copy _17) -> [bb7];
     }
 
     bb7: {
@@ -412,11 +412,11 @@ fn testing.TestCollector.find_testset(self: testing.TestCollector, name: string)
 
     bb0: {
         _3 = copy _1.2;
-        _4 = virtual_call iter as baml.iter.Iterable<Item = testing.TestSetRegistration, Error = never>(copy _3) -> [bb1];
+        _4 = virtual_call iter as baml.iter.Iterable<Error = never, Item = testing.TestSetRegistration>(copy _3) -> [bb1];
     }
 
     bb1: {
-        _5 = virtual_call next as baml.iter.Iterator<Item = testing.TestSetRegistration, Error = never>(copy _4) -> [bb2];
+        _5 = virtual_call next as baml.iter.Iterator<Error = never, Item = testing.TestSetRegistration>(copy _4) -> [bb2];
     }
 
     bb2: {
@@ -465,11 +465,11 @@ fn testing.TestCollector.find_test(self: testing.TestCollector, name: string) ->
 
     bb0: {
         _3 = copy _1.1;
-        _4 = virtual_call iter as baml.iter.Iterable<Item = testing.TestRegistration, Error = never>(copy _3) -> [bb1];
+        _4 = virtual_call iter as baml.iter.Iterable<Error = never, Item = testing.TestRegistration>(copy _3) -> [bb1];
     }
 
     bb1: {
-        _5 = virtual_call next as baml.iter.Iterator<Item = testing.TestRegistration, Error = never>(copy _4) -> [bb2];
+        _5 = virtual_call next as baml.iter.Iterator<Error = never, Item = testing.TestRegistration>(copy _4) -> [bb2];
     }
 
     bb2: {
@@ -571,11 +571,11 @@ fn testing.TestRegistry.serialize(self: testing.TestRegistry) -> (testing.Serial
     bb0: {
         _2 = []: testing.SerializedTest | testing.SerializedTestSet[];
         _3 = copy _1.0.1;
-        _4 = virtual_call iter as baml.iter.Iterable<Item = testing.TestRegistration, Error = never>(copy _3) -> [bb1];
+        _4 = virtual_call iter as baml.iter.Iterable<Error = never, Item = testing.TestRegistration>(copy _3) -> [bb1];
     }
 
     bb1: {
-        _5 = virtual_call next as baml.iter.Iterator<Item = testing.TestRegistration, Error = never>(copy _4) -> [bb2];
+        _5 = virtual_call next as baml.iter.Iterator<Error = never, Item = testing.TestRegistration>(copy _4) -> [bb2];
     }
 
     bb2: {
@@ -594,11 +594,11 @@ fn testing.TestRegistry.serialize(self: testing.TestRegistry) -> (testing.Serial
 
     bb4: {
         _12 = copy _1.0.2;
-        _13 = virtual_call iter as baml.iter.Iterable<Item = testing.TestSetRegistration, Error = never>(copy _12) -> [bb5];
+        _13 = virtual_call iter as baml.iter.Iterable<Error = never, Item = testing.TestSetRegistration>(copy _12) -> [bb5];
     }
 
     bb5: {
-        _14 = virtual_call next as baml.iter.Iterator<Item = testing.TestSetRegistration, Error = never>(copy _13) -> [bb6];
+        _14 = virtual_call next as baml.iter.Iterator<Error = never, Item = testing.TestSetRegistration>(copy _13) -> [bb6];
     }
 
     bb6: {
@@ -684,11 +684,11 @@ fn testing.TestRegistry.run_test(self: testing.TestRegistry, name: string) -> te
 
     bb0: {
         _3 = copy _1.0.1;
-        _4 = virtual_call iter as baml.iter.Iterable<Item = testing.TestRegistration, Error = never>(copy _3) -> [bb1];
+        _4 = virtual_call iter as baml.iter.Iterable<Error = never, Item = testing.TestRegistration>(copy _3) -> [bb1];
     }
 
     bb1: {
-        _5 = virtual_call next as baml.iter.Iterator<Item = testing.TestRegistration, Error = never>(copy _4) -> [bb2];
+        _5 = virtual_call next as baml.iter.Iterator<Error = never, Item = testing.TestRegistration>(copy _4) -> [bb2];
     }
 
     bb2: {
@@ -719,11 +719,11 @@ fn testing.TestRegistry.run_test(self: testing.TestRegistry, name: string) -> te
     }
 
     bb6: {
-        _17 = virtual_call iter as baml.iter.Iterable<Item = string, Error = never>(copy _13) -> [bb7];
+        _17 = virtual_call iter as baml.iter.Iterable<Error = never, Item = string>(copy _13) -> [bb7];
     }
 
     bb7: {
-        _18 = virtual_call next as baml.iter.Iterator<Item = string, Error = never>(copy _17) -> [bb8];
+        _18 = virtual_call next as baml.iter.Iterator<Error = never, Item = string>(copy _17) -> [bb8];
     }
 
     bb8: {
@@ -797,11 +797,11 @@ fn testing.TestRegistry.run_testset(self: testing.TestRegistry, name: string) ->
 
     bb0: {
         _3 = copy _1.0.2;
-        _4 = virtual_call iter as baml.iter.Iterable<Item = testing.TestSetRegistration, Error = never>(copy _3) -> [bb1];
+        _4 = virtual_call iter as baml.iter.Iterable<Error = never, Item = testing.TestSetRegistration>(copy _3) -> [bb1];
     }
 
     bb1: {
-        _5 = virtual_call next as baml.iter.Iterator<Item = testing.TestSetRegistration, Error = never>(copy _4) -> [bb2];
+        _5 = virtual_call next as baml.iter.Iterator<Error = never, Item = testing.TestSetRegistration>(copy _4) -> [bb2];
     }
 
     bb2: {
@@ -840,11 +840,11 @@ fn testing.TestRegistry.run_testset(self: testing.TestRegistry, name: string) ->
     }
 
     bb8: {
-        _19 = virtual_call iter as baml.iter.Iterable<Item = string, Error = never>(copy _15) -> [bb9];
+        _19 = virtual_call iter as baml.iter.Iterable<Error = never, Item = string>(copy _15) -> [bb9];
     }
 
     bb9: {
-        _20 = virtual_call next as baml.iter.Iterator<Item = string, Error = never>(copy _19) -> [bb10];
+        _20 = virtual_call next as baml.iter.Iterator<Error = never, Item = string>(copy _19) -> [bb10];
     }
 
     bb10: {
@@ -1071,11 +1071,11 @@ fn testing.TestRegistry.expand_set(self: testing.TestRegistry, name: string) -> 
 
     bb0: {
         _3 = copy _1.0.2;
-        _4 = virtual_call iter as baml.iter.Iterable<Item = testing.TestSetRegistration, Error = never>(copy _3) -> [bb1];
+        _4 = virtual_call iter as baml.iter.Iterable<Error = never, Item = testing.TestSetRegistration>(copy _3) -> [bb1];
     }
 
     bb1: {
-        _5 = virtual_call next as baml.iter.Iterator<Item = testing.TestSetRegistration, Error = never>(copy _4) -> [bb2];
+        _5 = virtual_call next as baml.iter.Iterator<Error = never, Item = testing.TestSetRegistration>(copy _4) -> [bb2];
     }
 
     bb2: {
@@ -1109,11 +1109,11 @@ fn testing.TestRegistry.expand_set(self: testing.TestRegistry, name: string) -> 
     }
 
     bb7: {
-        _17 = virtual_call iter as baml.iter.Iterable<Item = string, Error = never>(copy _13) -> [bb8];
+        _17 = virtual_call iter as baml.iter.Iterable<Error = never, Item = string>(copy _13) -> [bb8];
     }
 
     bb8: {
-        _18 = virtual_call next as baml.iter.Iterator<Item = string, Error = never>(copy _17) -> [bb9];
+        _18 = virtual_call next as baml.iter.Iterator<Error = never, Item = string>(copy _17) -> [bb9];
     }
 
     bb9: {
@@ -1276,11 +1276,11 @@ fn testing.testset_children(registry: testing.TestRegistry) -> testing.TestSetCh
     bb0: {
         _2 = []: testing.TestSetChild[];
         _3 = copy _1.0.1;
-        _4 = virtual_call iter as baml.iter.Iterable<Item = testing.TestRegistration, Error = never>(copy _3) -> [bb1];
+        _4 = virtual_call iter as baml.iter.Iterable<Error = never, Item = testing.TestRegistration>(copy _3) -> [bb1];
     }
 
     bb1: {
-        _5 = virtual_call next as baml.iter.Iterator<Item = testing.TestRegistration, Error = never>(copy _4) -> [bb2];
+        _5 = virtual_call next as baml.iter.Iterator<Error = never, Item = testing.TestRegistration>(copy _4) -> [bb2];
     }
 
     bb2: {
@@ -1304,11 +1304,11 @@ fn testing.testset_children(registry: testing.TestRegistry) -> testing.TestSetCh
 
     bb5: {
         _14 = copy _1.0.2;
-        _15 = virtual_call iter as baml.iter.Iterable<Item = testing.TestSetRegistration, Error = never>(copy _14) -> [bb6];
+        _15 = virtual_call iter as baml.iter.Iterable<Error = never, Item = testing.TestSetRegistration>(copy _14) -> [bb6];
     }
 
     bb6: {
-        _16 = virtual_call next as baml.iter.Iterator<Item = testing.TestSetRegistration, Error = never>(copy _15) -> [bb7];
+        _16 = virtual_call next as baml.iter.Iterator<Error = never, Item = testing.TestSetRegistration>(copy _15) -> [bb7];
     }
 
     bb7: {
@@ -1372,11 +1372,11 @@ fn testing.testset_children_selected(registry: testing.TestRegistry, names: stri
     bb0: {
         _3 = []: testing.TestSetChild[];
         _4 = copy _1.0.1;
-        _5 = virtual_call iter as baml.iter.Iterable<Item = testing.TestRegistration, Error = never>(copy _4) -> [bb1];
+        _5 = virtual_call iter as baml.iter.Iterable<Error = never, Item = testing.TestRegistration>(copy _4) -> [bb1];
     }
 
     bb1: {
-        _6 = virtual_call next as baml.iter.Iterator<Item = testing.TestRegistration, Error = never>(copy _5) -> [bb2];
+        _6 = virtual_call next as baml.iter.Iterator<Error = never, Item = testing.TestRegistration>(copy _5) -> [bb2];
     }
 
     bb2: {
@@ -1414,11 +1414,11 @@ fn testing.testset_children_selected(registry: testing.TestRegistry, names: stri
 
     bb8: {
         _17 = copy _1.0.2;
-        _18 = virtual_call iter as baml.iter.Iterable<Item = testing.TestSetRegistration, Error = never>(copy _17) -> [bb9];
+        _18 = virtual_call iter as baml.iter.Iterable<Error = never, Item = testing.TestSetRegistration>(copy _17) -> [bb9];
     }
 
     bb9: {
-        _19 = virtual_call next as baml.iter.Iterator<Item = testing.TestSetRegistration, Error = never>(copy _18) -> [bb10];
+        _19 = virtual_call next as baml.iter.Iterator<Error = never, Item = testing.TestSetRegistration>(copy _18) -> [bb10];
     }
 
     bb10: {
@@ -1658,11 +1658,11 @@ fn testing._name_selected(name: string, names: string[]) -> bool {
     let _9: string
 
     bb0: {
-        _3 = virtual_call iter as baml.iter.Iterable<Item = string, Error = never>(copy _2) -> [bb1];
+        _3 = virtual_call iter as baml.iter.Iterable<Error = never, Item = string>(copy _2) -> [bb1];
     }
 
     bb1: {
-        _4 = virtual_call next as baml.iter.Iterator<Item = string, Error = never>(copy _3) -> [bb2];
+        _4 = virtual_call next as baml.iter.Iterator<Error = never, Item = string>(copy _3) -> [bb2];
     }
 
     bb2: {
@@ -1710,11 +1710,11 @@ fn testing._has_selected_descendant(prefix: string, names: string[]) -> bool {
 
     bb0: {
         _3 = copy _1 + const "::";
-        _4 = virtual_call iter as baml.iter.Iterable<Item = string, Error = never>(copy _2) -> [bb1];
+        _4 = virtual_call iter as baml.iter.Iterable<Error = never, Item = string>(copy _2) -> [bb1];
     }
 
     bb1: {
-        _5 = virtual_call next as baml.iter.Iterator<Item = string, Error = never>(copy _4) -> [bb2];
+        _5 = virtual_call next as baml.iter.Iterator<Error = never, Item = string>(copy _4) -> [bb2];
     }
 
     bb2: {
@@ -1812,11 +1812,11 @@ fn testing.aggregate_reports(named_results: testing.NamedChildReport[]) -> testi
         _5 = []: string[];
         _6 = []: testing.TestReport | testing.TestSetReport[];
         _7 = []: string[];
-        _8 = virtual_call iter as baml.iter.Iterable<Item = testing.NamedChildReport, Error = never>(copy _1) -> [bb1];
+        _8 = virtual_call iter as baml.iter.Iterable<Error = never, Item = testing.NamedChildReport>(copy _1) -> [bb1];
     }
 
     bb1: {
-        _9 = virtual_call next as baml.iter.Iterator<Item = testing.NamedChildReport, Error = never>(copy _8) -> [bb2];
+        _9 = virtual_call next as baml.iter.Iterator<Error = never, Item = testing.NamedChildReport>(copy _8) -> [bb2];
     }
 
     bb2: {
@@ -1901,11 +1901,11 @@ fn testing.aggregate_reports(named_results: testing.NamedChildReport[]) -> testi
 
     bb16: {
         _32 = copy _24;
-        _33 = virtual_call iter as baml.iter.Iterable<Item = string, Error = never>(copy _32) -> [bb17];
+        _33 = virtual_call iter as baml.iter.Iterable<Error = never, Item = string>(copy _32) -> [bb17];
     }
 
     bb17: {
-        _34 = virtual_call next as baml.iter.Iterator<Item = string, Error = never>(copy _33) -> [bb18];
+        _34 = virtual_call next as baml.iter.Iterator<Error = never, Item = string>(copy _33) -> [bb18];
     }
 
     bb18: {
@@ -2010,11 +2010,11 @@ fn testing.run_children_parallel(children: testing.TestSetChild[]) -> testing.Te
 
     bb0: {
         _2 = []: future<testing.NamedChildReport, never>[];
-        _3 = virtual_call iter as baml.iter.Iterable<Item = testing.TestSetChild, Error = never>(copy _1) -> [bb1];
+        _3 = virtual_call iter as baml.iter.Iterable<Error = never, Item = testing.TestSetChild>(copy _1) -> [bb1];
     }
 
     bb1: {
-        _4 = virtual_call next as baml.iter.Iterator<Item = testing.TestSetChild, Error = never>(copy _3) -> [bb2];
+        _4 = virtual_call next as baml.iter.Iterator<Error = never, Item = testing.TestSetChild>(copy _3) -> [bb2];
     }
 
     bb2: {
@@ -2597,11 +2597,11 @@ fn testing.any_pattern_matches(pats: string[], canonical_id: string) -> bool {
     let _9: string
 
     bb0: {
-        _3 = virtual_call iter as baml.iter.Iterable<Item = string, Error = never>(copy _1) -> [bb1];
+        _3 = virtual_call iter as baml.iter.Iterable<Error = never, Item = string>(copy _1) -> [bb1];
     }
 
     bb1: {
-        _4 = virtual_call next as baml.iter.Iterator<Item = string, Error = never>(copy _3) -> [bb2];
+        _4 = virtual_call next as baml.iter.Iterator<Error = never, Item = string>(copy _3) -> [bb2];
     }
 
     bb2: {
@@ -2734,11 +2734,11 @@ fn testing.subtree_excluded(prefix: string, excludes: string[]) -> bool {
 
     bb0: {
         _3 = copy _1 + const "::";
-        _4 = virtual_call iter as baml.iter.Iterable<Item = string, Error = never>(copy _2) -> [bb1];
+        _4 = virtual_call iter as baml.iter.Iterable<Error = never, Item = string>(copy _2) -> [bb1];
     }
 
     bb1: {
-        _5 = virtual_call next as baml.iter.Iterator<Item = string, Error = never>(copy _4) -> [bb2];
+        _5 = virtual_call next as baml.iter.Iterator<Error = never, Item = string>(copy _4) -> [bb2];
     }
 
     bb2: {
@@ -2908,11 +2908,11 @@ fn testing.subtree_may_be_selected(prefix: string, include: string[], exclude: s
     }
 
     bb4: {
-        _7 = virtual_call iter as baml.iter.Iterable<Item = string, Error = never>(copy _2) -> [bb5];
+        _7 = virtual_call iter as baml.iter.Iterable<Error = never, Item = string>(copy _2) -> [bb5];
     }
 
     bb5: {
-        _8 = virtual_call next as baml.iter.Iterator<Item = string, Error = never>(copy _7) -> [bb6];
+        _8 = virtual_call next as baml.iter.Iterator<Error = never, Item = string>(copy _7) -> [bb6];
     }
 
     bb6: {
@@ -3000,11 +3000,11 @@ fn testing.select_names_layered(registry: testing.TestRegistry, profile_include:
     bb0: {
         _6 = []: string[];
         _7 = copy _1.0.1;
-        _8 = virtual_call iter as baml.iter.Iterable<Item = testing.TestRegistration, Error = never>(copy _7) -> [bb1];
+        _8 = virtual_call iter as baml.iter.Iterable<Error = never, Item = testing.TestRegistration>(copy _7) -> [bb1];
     }
 
     bb1: {
-        _9 = virtual_call next as baml.iter.Iterator<Item = testing.TestRegistration, Error = never>(copy _8) -> [bb2];
+        _9 = virtual_call next as baml.iter.Iterator<Error = never, Item = testing.TestRegistration>(copy _8) -> [bb2];
     }
 
     bb2: {
@@ -3036,11 +3036,11 @@ fn testing.select_names_layered(registry: testing.TestRegistry, profile_include:
 
     bb7: {
         _17 = copy _1.0.2;
-        _18 = virtual_call iter as baml.iter.Iterable<Item = testing.TestSetRegistration, Error = never>(copy _17) -> [bb8];
+        _18 = virtual_call iter as baml.iter.Iterable<Error = never, Item = testing.TestSetRegistration>(copy _17) -> [bb8];
     }
 
     bb8: {
-        _19 = virtual_call next as baml.iter.Iterator<Item = testing.TestSetRegistration, Error = never>(copy _18) -> [bb9];
+        _19 = virtual_call next as baml.iter.Iterator<Error = never, Item = testing.TestSetRegistration>(copy _18) -> [bb9];
     }
 
     bb9: {
@@ -3076,11 +3076,11 @@ fn testing.select_names_layered(registry: testing.TestRegistry, profile_include:
 
     bb15: {
         _29 = copy _27;
-        _30 = virtual_call iter as baml.iter.Iterable<Item = string, Error = never>(copy _29) -> [bb16];
+        _30 = virtual_call iter as baml.iter.Iterable<Error = never, Item = string>(copy _29) -> [bb16];
     }
 
     bb16: {
-        _31 = virtual_call next as baml.iter.Iterator<Item = string, Error = never>(copy _30) -> [bb17];
+        _31 = virtual_call next as baml.iter.Iterator<Error = never, Item = string>(copy _30) -> [bb17];
     }
 
     bb17: {
@@ -3158,11 +3158,11 @@ fn testing.collect_leaf_names(registry: testing.TestRegistry) -> string[] {
     bb0: {
         _2 = []: string[];
         _3 = copy _1.0.1;
-        _4 = virtual_call iter as baml.iter.Iterable<Item = testing.TestRegistration, Error = never>(copy _3) -> [bb1];
+        _4 = virtual_call iter as baml.iter.Iterable<Error = never, Item = testing.TestRegistration>(copy _3) -> [bb1];
     }
 
     bb1: {
-        _5 = virtual_call next as baml.iter.Iterator<Item = testing.TestRegistration, Error = never>(copy _4) -> [bb2];
+        _5 = virtual_call next as baml.iter.Iterator<Error = never, Item = testing.TestRegistration>(copy _4) -> [bb2];
     }
 
     bb2: {
@@ -3180,11 +3180,11 @@ fn testing.collect_leaf_names(registry: testing.TestRegistry) -> string[] {
 
     bb4: {
         _11 = copy _1.0.2;
-        _12 = virtual_call iter as baml.iter.Iterable<Item = testing.TestSetRegistration, Error = never>(copy _11) -> [bb5];
+        _12 = virtual_call iter as baml.iter.Iterable<Error = never, Item = testing.TestSetRegistration>(copy _11) -> [bb5];
     }
 
     bb5: {
-        _13 = virtual_call next as baml.iter.Iterator<Item = testing.TestSetRegistration, Error = never>(copy _12) -> [bb6];
+        _13 = virtual_call next as baml.iter.Iterator<Error = never, Item = testing.TestSetRegistration>(copy _12) -> [bb6];
     }
 
     bb6: {
@@ -3201,11 +3201,11 @@ fn testing.collect_leaf_names(registry: testing.TestRegistry) -> string[] {
     }
 
     bb8: {
-        _19 = virtual_call iter as baml.iter.Iterable<Item = string, Error = never>(copy _17) -> [bb9];
+        _19 = virtual_call iter as baml.iter.Iterable<Error = never, Item = string>(copy _17) -> [bb9];
     }
 
     bb9: {
-        _20 = virtual_call next as baml.iter.Iterator<Item = string, Error = never>(copy _19) -> [bb10];
+        _20 = virtual_call next as baml.iter.Iterator<Error = never, Item = string>(copy _19) -> [bb10];
     }
 
     bb10: {
@@ -3621,11 +3621,11 @@ fn testing.count_leaves(results: (testing.TestReport | testing.TestSetReport)[],
         _4 = const 0_i64;
         _5 = const 0_i64;
         _6 = const 0_i64;
-        _7 = virtual_call iter as baml.iter.Iterable<Item = testing.TestReport | testing.TestSetReport, Error = never>(copy _1) -> [bb1];
+        _7 = virtual_call iter as baml.iter.Iterable<Error = never, Item = testing.TestReport | testing.TestSetReport>(copy _1) -> [bb1];
     }
 
     bb1: {
-        _8 = virtual_call next as baml.iter.Iterator<Item = testing.TestReport | testing.TestSetReport, Error = never>(copy _7) -> [bb2];
+        _8 = virtual_call next as baml.iter.Iterator<Error = never, Item = testing.TestReport | testing.TestSetReport>(copy _7) -> [bb2];
     }
 
     bb2: {
@@ -4003,11 +4003,11 @@ fn testing.classify_selected_names(selected_names: string[], hard_failed_names: 
         _6 = []: string[];
         _7 = []: string[];
         _4 = testing.LeafIdentities { copy _5, copy _6, copy _7 };
-        _8 = virtual_call iter as baml.iter.Iterable<Item = string, Error = never>(copy _1) -> [bb1];
+        _8 = virtual_call iter as baml.iter.Iterable<Error = never, Item = string>(copy _1) -> [bb1];
     }
 
     bb1: {
-        _9 = virtual_call next as baml.iter.Iterator<Item = string, Error = never>(copy _8) -> [bb2];
+        _9 = virtual_call next as baml.iter.Iterator<Error = never, Item = string>(copy _8) -> [bb2];
     }
 
     bb2: {
@@ -4081,11 +4081,11 @@ fn testing.name_in(name: string, names: string[]) -> bool {
     let _9: string
 
     bb0: {
-        _3 = virtual_call iter as baml.iter.Iterable<Item = string, Error = never>(copy _2) -> [bb1];
+        _3 = virtual_call iter as baml.iter.Iterable<Error = never, Item = string>(copy _2) -> [bb1];
     }
 
     bb1: {
-        _4 = virtual_call next as baml.iter.Iterator<Item = string, Error = never>(copy _3) -> [bb2];
+        _4 = virtual_call next as baml.iter.Iterator<Error = never, Item = string>(copy _3) -> [bb2];
     }
 
     bb2: {
@@ -4172,11 +4172,11 @@ fn testing.failure_matches_selected(selected: string, failed_names: string[]) ->
 
     bb7: {
         _7 = copy _8 + const "::";
-        _12 = virtual_call iter as baml.iter.Iterable<Item = string, Error = never>(copy _2) -> [bb8];
+        _12 = virtual_call iter as baml.iter.Iterable<Error = never, Item = string>(copy _2) -> [bb8];
     }
 
     bb8: {
-        _13 = virtual_call next as baml.iter.Iterator<Item = string, Error = never>(copy _12) -> [bb9];
+        _13 = virtual_call next as baml.iter.Iterator<Error = never, Item = string>(copy _12) -> [bb9];
     }
 
     bb9: {
@@ -4523,11 +4523,11 @@ fn testing.collect_all_failed_names(report: testing.TestSetReport, out: string[]
 
     bb0: {
         _3 = copy _1.4;
-        _4 = virtual_call iter as baml.iter.Iterable<Item = string, Error = never>(copy _3) -> [bb1];
+        _4 = virtual_call iter as baml.iter.Iterable<Error = never, Item = string>(copy _3) -> [bb1];
     }
 
     bb1: {
-        _5 = virtual_call next as baml.iter.Iterator<Item = string, Error = never>(copy _4) -> [bb2];
+        _5 = virtual_call next as baml.iter.Iterator<Error = never, Item = string>(copy _4) -> [bb2];
     }
 
     bb2: {
@@ -4560,11 +4560,11 @@ fn testing.collect_all_failed_names(report: testing.TestSetReport, out: string[]
 
     bb7: {
         _14 = copy _1.5;
-        _15 = virtual_call iter as baml.iter.Iterable<Item = testing.TestReport | testing.TestSetReport, Error = never>(copy _14) -> [bb8];
+        _15 = virtual_call iter as baml.iter.Iterable<Error = never, Item = testing.TestReport | testing.TestSetReport>(copy _14) -> [bb8];
     }
 
     bb8: {
-        _16 = virtual_call next as baml.iter.Iterator<Item = testing.TestReport | testing.TestSetReport, Error = never>(copy _15) -> [bb9];
+        _16 = virtual_call next as baml.iter.Iterator<Error = never, Item = testing.TestReport | testing.TestSetReport>(copy _15) -> [bb9];
     }
 
     bb9: {
@@ -4632,11 +4632,11 @@ fn testing.collect_leaf_messages(results: (testing.TestReport | testing.TestSetR
     let _26: (testing.TestReport | testing.TestSetReport)[]
 
     bb0: {
-        _3 = virtual_call iter as baml.iter.Iterable<Item = testing.TestReport | testing.TestSetReport, Error = never>(copy _1) -> [bb1];
+        _3 = virtual_call iter as baml.iter.Iterable<Error = never, Item = testing.TestReport | testing.TestSetReport>(copy _1) -> [bb1];
     }
 
     bb1: {
-        _4 = virtual_call next as baml.iter.Iterator<Item = testing.TestReport | testing.TestSetReport, Error = never>(copy _3) -> [bb2];
+        _4 = virtual_call next as baml.iter.Iterator<Error = never, Item = testing.TestReport | testing.TestSetReport>(copy _3) -> [bb2];
     }
 
     bb2: {
@@ -4661,11 +4661,11 @@ fn testing.collect_leaf_messages(results: (testing.TestReport | testing.TestSetR
     bb5: {
         _9 = copy _8;
         _10 = copy _9.1;
-        _11 = virtual_call iter as baml.iter.Iterable<Item = testing.RunReport, Error = never>(copy _10) -> [bb6];
+        _11 = virtual_call iter as baml.iter.Iterable<Error = never, Item = testing.RunReport>(copy _10) -> [bb6];
     }
 
     bb6: {
-        _12 = virtual_call next as baml.iter.Iterator<Item = testing.RunReport, Error = never>(copy _11) -> [bb7];
+        _12 = virtual_call next as baml.iter.Iterator<Error = never, Item = testing.RunReport>(copy _11) -> [bb7];
     }
 
     bb7: {
@@ -4854,11 +4854,11 @@ fn .<lambda(<lambda(Quorum, 0)>, 1)>() -> testing.TestReport {
 
     bb8: {
         _9 = copy _7.1;
-        _10 = virtual_call iter as baml.iter.Iterable<Item = testing.RunReport, Error = never>(copy _9) -> [bb9];
+        _10 = virtual_call iter as baml.iter.Iterable<Error = never, Item = testing.RunReport>(copy _9) -> [bb9];
     }
 
     bb9: {
-        _11 = virtual_call next as baml.iter.Iterator<Item = testing.RunReport, Error = never>(copy _10) -> [bb10];
+        _11 = virtual_call next as baml.iter.Iterator<Error = never, Item = testing.RunReport>(copy _10) -> [bb10];
     }
 
     bb10: {
@@ -5028,11 +5028,11 @@ fn .<lambda(<lambda(Retry, 0)>, 1)>() -> testing.TestReport {
     bb10: {
         _3 = copy _3 + const 1_i64;
         _11 = copy _9.1;
-        _12 = virtual_call iter as baml.iter.Iterable<Item = testing.RunReport, Error = never>(copy _11) -> [bb11];
+        _12 = virtual_call iter as baml.iter.Iterable<Error = never, Item = testing.RunReport>(copy _11) -> [bb11];
     }
 
     bb11: {
-        _13 = virtual_call next as baml.iter.Iterator<Item = testing.RunReport, Error = never>(copy _12) -> [bb12];
+        _13 = virtual_call next as baml.iter.Iterator<Error = never, Item = testing.RunReport>(copy _12) -> [bb12];
     }
 
     bb12: {
@@ -5274,11 +5274,11 @@ fn testing.run_children_sequential(children: testing.TestSetChild[], fail_fast: 
 
     bb0: {
         _3 = []: testing.NamedChildReport[];
-        _4 = virtual_call iter as baml.iter.Iterable<Item = testing.TestSetChild, Error = never>(copy _1) -> [bb1];
+        _4 = virtual_call iter as baml.iter.Iterable<Error = never, Item = testing.TestSetChild>(copy _1) -> [bb1];
     }
 
     bb1: {
-        _5 = virtual_call next as baml.iter.Iterator<Item = testing.TestSetChild, Error = never>(copy _4) -> [bb2];
+        _5 = virtual_call next as baml.iter.Iterator<Error = never, Item = testing.TestSetChild>(copy _4) -> [bb2];
     }
 
     bb2: {

@@ -1103,50 +1103,60 @@ fn lower_class(
             };
             let field_name_str = fname.text().to_string();
             let mut hoisted_field_attrs = Vec::new();
-            let type_expr = f.ty().map(|te| {
-                let mut expr = lower_type_expr::lower_type_expr_node(&te, diags);
-                let te_span = te.syntax().span_range();
-                check_unknown_type(
-                    &expr,
-                    format!("field `{class_name}.{field_name_str}`"),
-                    te_span,
-                    diags,
-                );
-                lower_type_expr::check_void_type(
-                    &expr,
-                    "a class field type".to_string(),
-                    te_span,
-                    false,
-                    diags,
-                );
-                lower_type_expr::check_wildcard_type(
-                    &mut expr,
-                    "a class field type",
-                    te_span,
-                    diags,
-                );
+            // A field with no type is already reported by the parser ("field '<name>'
+            // is missing a type annotation"), so recover with the error sentinel rather
+            // than making the type optional: an absent type is not a kind of type, and
+            // leaving it representable downstream forces every consumer to invent its
+            // own stand-in. `Error` suppresses follow-on diagnostics while the rest of
+            // the declaration still type-checks.
+            let type_expr = f.ty().map_or_else(
+                || TypeExprKind::Error { attrs: Vec::new() }.at(f.syntax().span_range()),
+                |te| {
+                    let mut expr = lower_type_expr::lower_type_expr_node(&te, diags);
+                    let te_span = te.syntax().span_range();
+                    check_unknown_type(
+                        &expr,
+                        format!("field `{class_name}.{field_name_str}`"),
+                        te_span,
+                        diags,
+                    );
+                    lower_type_expr::check_void_type(
+                        &expr,
+                        "a class field type".to_string(),
+                        te_span,
+                        false,
+                        diags,
+                    );
+                    lower_type_expr::check_wildcard_type(
+                        &mut expr,
+                        "a class field type",
+                        te_span,
+                        diags,
+                    );
 
-                // Hoist field attrs from the outermost TypeExpr to FieldDef.
-                // Only attrs that are direct ATTRIBUTE children of the outermost
-                // CST TYPE_EXPR are hoistable — attrs nested inside parens or
-                // generics are not (and will be flagged by validate_field_attrs).
-                let direct_attr_spans: std::collections::HashSet<text_size::TextRange> = te
-                    .syntax()
-                    .children()
-                    .filter_map(ast::Attribute::cast)
-                    .map(|a| a.syntax().span_range())
-                    .collect();
+                    // Hoist field attrs from the outermost TypeExpr to FieldDef.
+                    // Only attrs that are direct ATTRIBUTE children of the outermost
+                    // CST TYPE_EXPR are hoistable — attrs nested inside parens or
+                    // generics are not (and will be flagged by validate_field_attrs).
+                    let direct_attr_spans: std::collections::HashSet<text_size::TextRange> = te
+                        .syntax()
+                        .children()
+                        .filter_map(ast::Attribute::cast)
+                        .map(|a| a.syntax().span_range())
+                        .collect();
 
-                let all_outer_attrs = std::mem::take(expr.attrs_mut());
-                let (hoist, keep): (Vec<_>, Vec<_>) = all_outer_attrs.into_iter().partition(|a| {
-                    crate::disambiguate::is_field_attr(a.name.as_str())
-                        && direct_attr_spans.contains(&a.span)
-                });
-                *expr.attrs_mut() = keep;
-                hoisted_field_attrs = hoist;
+                    let all_outer_attrs = std::mem::take(expr.attrs_mut());
+                    let (hoist, keep): (Vec<_>, Vec<_>) =
+                        all_outer_attrs.into_iter().partition(|a| {
+                            crate::disambiguate::is_field_attr(a.name.as_str())
+                                && direct_attr_spans.contains(&a.span)
+                        });
+                    *expr.attrs_mut() = keep;
+                    hoisted_field_attrs = hoist;
 
-                expr.with_span(te_span)
-            });
+                    expr.with_span(te_span)
+                },
+            );
             let field_docstring = crate::docstring::extract_docstring(f.syntax());
             Some(FieldDef {
                 name: Name::new(&field_name_str),
@@ -1409,30 +1419,35 @@ fn lower_interface(
                 return None;
             };
             let field_name_str = fname.text().to_string();
-            let type_expr = f.ty().map(|te| {
-                let mut expr = lower_type_expr::lower_type_expr_node(&te, diags);
-                let te_span = te.syntax().span_range();
-                check_unknown_type(
-                    &expr,
-                    format!("interface field `{iface_name}.{field_name_str}`"),
-                    te_span,
-                    diags,
-                );
-                lower_type_expr::check_void_type(
-                    &expr,
-                    "an interface field type".to_string(),
-                    te_span,
-                    false,
-                    diags,
-                );
-                lower_type_expr::check_wildcard_type(
-                    &mut expr,
-                    "an interface field type",
-                    te_span,
-                    diags,
-                );
-                expr.with_span(te_span)
-            });
+            // See the class-field site: the parser already reports a missing type, so
+            // recover with the error sentinel instead of an optional type.
+            let type_expr = f.ty().map_or_else(
+                || TypeExprKind::Error { attrs: Vec::new() }.at(f.syntax().span_range()),
+                |te| {
+                    let mut expr = lower_type_expr::lower_type_expr_node(&te, diags);
+                    let te_span = te.syntax().span_range();
+                    check_unknown_type(
+                        &expr,
+                        format!("interface field `{iface_name}.{field_name_str}`"),
+                        te_span,
+                        diags,
+                    );
+                    lower_type_expr::check_void_type(
+                        &expr,
+                        "an interface field type".to_string(),
+                        te_span,
+                        false,
+                        diags,
+                    );
+                    lower_type_expr::check_wildcard_type(
+                        &mut expr,
+                        "an interface field type",
+                        te_span,
+                        diags,
+                    );
+                    expr.with_span(te_span)
+                },
+            );
             Some(FieldDef {
                 name: Name::new(&field_name_str),
                 type_expr,

@@ -618,11 +618,11 @@ fn user.test_shadowing() -> string {
 
     bb1: {
         _8 = copy _3;
-        _9 = virtual_call iter as baml.iter.Iterable<Item = int, Error = never>(copy _8) -> [bb2];
+        _9 = virtual_call iter as baml.iter.Iterable<Error = never, Item = int>(copy _8) -> [bb2];
     }
 
     bb2: {
-        _10 = virtual_call next as baml.iter.Iterator<Item = int, Error = never>(copy _9) -> [bb3];
+        _10 = virtual_call next as baml.iter.Iterator<Error = never, Item = int>(copy _9) -> [bb3];
     }
 
     bb3: {

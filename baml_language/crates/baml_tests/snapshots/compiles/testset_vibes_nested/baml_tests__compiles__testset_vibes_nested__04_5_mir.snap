@@ -45,11 +45,11 @@ fn .<lambda($init_test_main, 0)>(testset: testing.TestCollector) -> void {
     bb0: {
         _2 = [const "happy", const "sad"]: string[];
         _3 = copy _2;
-        _4 = virtual_call iter as baml.iter.Iterable<Item = string, Error = never>(copy _3) -> [bb1];
+        _4 = virtual_call iter as baml.iter.Iterable<Error = never, Item = string>(copy _3) -> [bb1];
     }
 
     bb1: {
-        _5 = virtual_call next as baml.iter.Iterator<Item = string, Error = never>(copy _4) -> [bb2];
+        _5 = virtual_call next as baml.iter.Iterator<Error = never, Item = string>(copy _4) -> [bb2];
     }
 
     bb2: {
@@ -119,11 +119,11 @@ fn .<lambda(<lambda($init_test_main, 0)>, 1)>(testset: testing.TestCollector) ->
 
     bb3: {
         _8 = copy _6;
-        _9 = virtual_call iter as baml.iter.Iterable<Item = string, Error = never>(copy _8) -> [bb4];
+        _9 = virtual_call iter as baml.iter.Iterable<Error = never, Item = string>(copy _8) -> [bb4];
     }
 
     bb4: {
-        _10 = virtual_call next as baml.iter.Iterator<Item = string, Error = never>(copy _9) -> [bb5];
+        _10 = virtual_call next as baml.iter.Iterator<Error = never, Item = string>(copy _9) -> [bb5];
     }
 
     bb5: {
@@ -196,11 +196,11 @@ fn .<lambda(<lambda($init_test_main, 0)>, 3)>(testset: testing.TestCollector) ->
     bb0: {
         _2 = [const "happy", const "sad"]: string[];
         _3 = copy _2;
-        _4 = virtual_call iter as baml.iter.Iterable<Item = string, Error = never>(copy _3) -> [bb1];
+        _4 = virtual_call iter as baml.iter.Iterable<Error = never, Item = string>(copy _3) -> [bb1];
     }
 
     bb1: {
-        _5 = virtual_call next as baml.iter.Iterator<Item = string, Error = never>(copy _4) -> [bb2];
+        _5 = virtual_call next as baml.iter.Iterator<Error = never, Item = string>(copy _4) -> [bb2];
     }
 
     bb2: {
@@ -251,11 +251,11 @@ fn .<lambda(<lambda(<lambda($init_test_main, 0)>, 3)>, 4)>(testset: testing.Test
 
     bb1: {
         _4 = copy _2;
-        _5 = virtual_call iter as baml.iter.Iterable<Item = string, Error = never>(copy _4) -> [bb2];
+        _5 = virtual_call iter as baml.iter.Iterable<Error = never, Item = string>(copy _4) -> [bb2];
     }
 
     bb2: {
-        _6 = virtual_call next as baml.iter.Iterator<Item = string, Error = never>(copy _5) -> [bb3];
+        _6 = virtual_call next as baml.iter.Iterator<Error = never, Item = string>(copy _5) -> [bb3];
     }
 
     bb3: {

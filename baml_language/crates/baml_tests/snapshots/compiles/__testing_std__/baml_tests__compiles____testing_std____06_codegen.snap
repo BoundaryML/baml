@@ -110,14 +110,14 @@ function testing.Sequential() -> (testing.TestSetChild[]) -> testing.TestSetRepo
 function testing.TestCollector.find_test(self: testing.TestCollector, name: string) -> testing.TestRegistration {
     load_var self
     load_field .tests
-    load_type baml.iter.Iterable<Item = testing.TestRegistration, Error = never>
+    load_type baml.iter.Iterable<Error = never, Item = testing.TestRegistration>
     load_const "iter"
     virtual_call nargs=1 ntypeargs=0
     store_var _4
 
   L0:
     load_var _4
-    load_type baml.iter.Iterator<Item = testing.TestRegistration, Error = never>
+    load_type baml.iter.Iterator<Error = never, Item = testing.TestRegistration>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
     store_var _5
@@ -146,14 +146,14 @@ function testing.TestCollector.find_test(self: testing.TestCollector, name: stri
 function testing.TestCollector.find_testset(self: testing.TestCollector, name: string) -> testing.TestSetRegistration {
     load_var self
     load_field .testsets
-    load_type baml.iter.Iterable<Item = testing.TestSetRegistration, Error = never>
+    load_type baml.iter.Iterable<Error = never, Item = testing.TestSetRegistration>
     load_const "iter"
     virtual_call nargs=1 ntypeargs=0
     store_var _4
 
   L0:
     load_var _4
-    load_type baml.iter.Iterator<Item = testing.TestSetRegistration, Error = never>
+    load_type baml.iter.Iterator<Error = never, Item = testing.TestSetRegistration>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
     store_var _5
@@ -227,14 +227,14 @@ function testing.TestCollector.register_test(self: testing.TestCollector, name: 
     store_var hash_prefix
     load_var self
     load_field .tests
-    load_type baml.iter.Iterable<Item = testing.TestRegistration, Error = never>
+    load_type baml.iter.Iterable<Error = never, Item = testing.TestRegistration>
     load_const "iter"
     virtual_call nargs=1 ntypeargs=0
     store_var _17
 
   L4:
     load_var _17
-    load_type baml.iter.Iterator<Item = testing.TestRegistration, Error = never>
+    load_type baml.iter.Iterator<Error = never, Item = testing.TestRegistration>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
     store_var _18
@@ -364,14 +364,14 @@ function testing.TestCollector.register_test_set(self: testing.TestCollector, na
     store_var hash_prefix
     load_var self
     load_field .testsets
-    load_type baml.iter.Iterable<Item = testing.TestSetRegistration, Error = never>
+    load_type baml.iter.Iterable<Error = never, Item = testing.TestSetRegistration>
     load_const "iter"
     virtual_call nargs=1 ntypeargs=0
     store_var _17
 
   L4:
     load_var _17
-    load_type baml.iter.Iterator<Item = testing.TestSetRegistration, Error = never>
+    load_type baml.iter.Iterator<Error = never, Item = testing.TestSetRegistration>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
     store_var _18
@@ -467,14 +467,14 @@ function testing.TestRegistry.expand_set(self: testing.TestRegistry, name: strin
     load_var self
     load_field .collector
     load_field .testsets
-    load_type baml.iter.Iterable<Item = testing.TestSetRegistration, Error = never>
+    load_type baml.iter.Iterable<Error = never, Item = testing.TestSetRegistration>
     load_const "iter"
     virtual_call nargs=1 ntypeargs=0
     store_var _4
 
   L0:
     load_var _4
-    load_type baml.iter.Iterator<Item = testing.TestSetRegistration, Error = never>
+    load_type baml.iter.Iterator<Error = never, Item = testing.TestSetRegistration>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
     store_var _5
@@ -503,14 +503,14 @@ function testing.TestRegistry.expand_set(self: testing.TestRegistry, name: strin
     load_var self
     load_field .expansions
     call baml.Map.keys
-    load_type baml.iter.Iterable<Item = string, Error = never>
+    load_type baml.iter.Iterable<Error = never, Item = string>
     load_const "iter"
     virtual_call nargs=1 ntypeargs=0
     store_var _17
 
   L3:
     load_var _17
-    load_type baml.iter.Iterator<Item = string, Error = never>
+    load_type baml.iter.Iterator<Error = never, Item = string>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
     store_var _18
@@ -701,14 +701,14 @@ function testing.TestRegistry.run_test(self: testing.TestRegistry, name: string)
     load_var self
     load_field .collector
     load_field .tests
-    load_type baml.iter.Iterable<Item = testing.TestRegistration, Error = never>
+    load_type baml.iter.Iterable<Error = never, Item = testing.TestRegistration>
     load_const "iter"
     virtual_call nargs=1 ntypeargs=0
     store_var _4
 
   L0:
     load_var _4
-    load_type baml.iter.Iterator<Item = testing.TestRegistration, Error = never>
+    load_type baml.iter.Iterator<Error = never, Item = testing.TestRegistration>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
     store_var _5
@@ -737,14 +737,14 @@ function testing.TestRegistry.run_test(self: testing.TestRegistry, name: string)
     load_var self
     load_field .expansions
     call baml.Map.keys
-    load_type baml.iter.Iterable<Item = string, Error = never>
+    load_type baml.iter.Iterable<Error = never, Item = string>
     load_const "iter"
     virtual_call nargs=1 ntypeargs=0
     store_var _17
 
   L3:
     load_var _17
-    load_type baml.iter.Iterator<Item = string, Error = never>
+    load_type baml.iter.Iterator<Error = never, Item = string>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
     store_var _18
@@ -783,14 +783,14 @@ function testing.TestRegistry.run_testset(self: testing.TestRegistry, name: stri
     load_var self
     load_field .collector
     load_field .testsets
-    load_type baml.iter.Iterable<Item = testing.TestSetRegistration, Error = never>
+    load_type baml.iter.Iterable<Error = never, Item = testing.TestSetRegistration>
     load_const "iter"
     virtual_call nargs=1 ntypeargs=0
     store_var _4
 
   L0:
     load_var _4
-    load_type baml.iter.Iterator<Item = testing.TestSetRegistration, Error = never>
+    load_type baml.iter.Iterator<Error = never, Item = testing.TestSetRegistration>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
     store_var _5
@@ -820,14 +820,14 @@ function testing.TestRegistry.run_testset(self: testing.TestRegistry, name: stri
     load_var self
     load_field .expansions
     call baml.Map.keys
-    load_type baml.iter.Iterable<Item = string, Error = never>
+    load_type baml.iter.Iterable<Error = never, Item = string>
     load_const "iter"
     virtual_call nargs=1 ntypeargs=0
     store_var _19
 
   L3:
     load_var _19
-    load_type baml.iter.Iterator<Item = string, Error = never>
+    load_type baml.iter.Iterator<Error = never, Item = string>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
     store_var _20
@@ -869,14 +869,14 @@ function testing.TestRegistry.serialize(self: testing.TestRegistry) -> (testing.
     load_var self
     load_field .collector
     load_field .tests
-    load_type baml.iter.Iterable<Item = testing.TestRegistration, Error = never>
+    load_type baml.iter.Iterable<Error = never, Item = testing.TestRegistration>
     load_const "iter"
     virtual_call nargs=1 ntypeargs=0
     store_var _4
 
   L0:
     load_var _4
-    load_type baml.iter.Iterator<Item = testing.TestRegistration, Error = never>
+    load_type baml.iter.Iterator<Error = never, Item = testing.TestRegistration>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
     store_var _5
@@ -899,14 +899,14 @@ function testing.TestRegistry.serialize(self: testing.TestRegistry) -> (testing.
     load_var self
     load_field .collector
     load_field .testsets
-    load_type baml.iter.Iterable<Item = testing.TestSetRegistration, Error = never>
+    load_type baml.iter.Iterable<Error = never, Item = testing.TestSetRegistration>
     load_const "iter"
     virtual_call nargs=1 ntypeargs=0
     store_var _13
 
   L3:
     load_var _13
-    load_type baml.iter.Iterator<Item = testing.TestSetRegistration, Error = never>
+    load_type baml.iter.Iterator<Error = never, Item = testing.TestSetRegistration>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
     store_var _14
@@ -965,14 +965,14 @@ function testing.TestRegistry.serialize(self: testing.TestRegistry) -> (testing.
 
 function testing._has_selected_descendant(prefix: string, names: string[]) -> bool {
     load_var names
-    load_type baml.iter.Iterable<Item = string, Error = never>
+    load_type baml.iter.Iterable<Error = never, Item = string>
     load_const "iter"
     virtual_call nargs=1 ntypeargs=0
     store_var _4
 
   L0:
     load_var _4
-    load_type baml.iter.Iterator<Item = string, Error = never>
+    load_type baml.iter.Iterator<Error = never, Item = string>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
     store_var _5
@@ -1014,14 +1014,14 @@ function testing._int_to_float(value: int) -> float {
 
 function testing._name_selected(name: string, names: string[]) -> bool {
     load_var names
-    load_type baml.iter.Iterable<Item = string, Error = never>
+    load_type baml.iter.Iterable<Error = never, Item = string>
     load_const "iter"
     virtual_call nargs=1 ntypeargs=0
     store_var _3
 
   L0:
     load_var _3
-    load_type baml.iter.Iterator<Item = string, Error = never>
+    load_type baml.iter.Iterator<Error = never, Item = string>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
     store_var _4
@@ -1061,14 +1061,14 @@ function testing.aggregate_reports(named_results: testing.NamedChildReport[]) ->
     alloc_array 0
     store_var result_names
     load_var named_results
-    load_type baml.iter.Iterable<Item = testing.NamedChildReport, Error = never>
+    load_type baml.iter.Iterable<Error = never, Item = testing.NamedChildReport>
     load_const "iter"
     virtual_call nargs=1 ntypeargs=0
     store_var _8
 
   L0:
     load_var _8
-    load_type baml.iter.Iterator<Item = testing.NamedChildReport, Error = never>
+    load_type baml.iter.Iterator<Error = never, Item = testing.NamedChildReport>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
     store_var _9
@@ -1158,14 +1158,14 @@ function testing.aggregate_reports(named_results: testing.NamedChildReport[]) ->
     alloc_array 1
 
   L10:
-    load_type baml.iter.Iterable<Item = string, Error = never>
+    load_type baml.iter.Iterable<Error = never, Item = string>
     load_const "iter"
     virtual_call nargs=1 ntypeargs=0
     store_var _33
 
   L11:
     load_var _33
-    load_type baml.iter.Iterator<Item = string, Error = never>
+    load_type baml.iter.Iterator<Error = never, Item = string>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
     store_var _34
@@ -1238,14 +1238,14 @@ function testing.aggregate_reports(named_results: testing.NamedChildReport[]) ->
 
 function testing.any_pattern_matches(pats: string[], canonical_id: string) -> bool {
     load_var pats
-    load_type baml.iter.Iterable<Item = string, Error = never>
+    load_type baml.iter.Iterable<Error = never, Item = string>
     load_const "iter"
     virtual_call nargs=1 ntypeargs=0
     store_var _3
 
   L0:
     load_var _3
-    load_type baml.iter.Iterator<Item = string, Error = never>
+    load_type baml.iter.Iterator<Error = never, Item = string>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
     store_var _4
@@ -1278,14 +1278,14 @@ function testing.classify_selected_names(selected_names: string[], hard_failed_n
     init_instance testing.LeafIdentities .passed, .failed, .tolerated
     store_var out
     load_var selected_names
-    load_type baml.iter.Iterable<Item = string, Error = never>
+    load_type baml.iter.Iterable<Error = never, Item = string>
     load_const "iter"
     virtual_call nargs=1 ntypeargs=0
     store_var _8
 
   L0:
     load_var _8
-    load_type baml.iter.Iterator<Item = string, Error = never>
+    load_type baml.iter.Iterator<Error = never, Item = string>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
     store_var _9
@@ -1343,14 +1343,14 @@ function testing.classify_selected_names(selected_names: string[], hard_failed_n
 function testing.collect_all_failed_names(report: testing.TestSetReport, out: string[]) -> void {
     load_var report
     load_field .failed_names
-    load_type baml.iter.Iterable<Item = string, Error = never>
+    load_type baml.iter.Iterable<Error = never, Item = string>
     load_const "iter"
     virtual_call nargs=1 ntypeargs=0
     store_var _4
 
   L0:
     load_var _4
-    load_type baml.iter.Iterator<Item = string, Error = never>
+    load_type baml.iter.Iterator<Error = never, Item = string>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
     store_var _5
@@ -1374,14 +1374,14 @@ function testing.collect_all_failed_names(report: testing.TestSetReport, out: st
   L2:
     load_var report
     load_field .results
-    load_type baml.iter.Iterable<Item = testing.TestReport | testing.TestSetReport, Error = never>
+    load_type baml.iter.Iterable<Error = never, Item = testing.TestReport | testing.TestSetReport>
     load_const "iter"
     virtual_call nargs=1 ntypeargs=0
     store_var _15
 
   L3:
     load_var _15
-    load_type baml.iter.Iterator<Item = testing.TestReport | testing.TestSetReport, Error = never>
+    load_type baml.iter.Iterator<Error = never, Item = testing.TestReport | testing.TestSetReport>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
     store_var _16
@@ -1631,14 +1631,14 @@ function testing.collect_leaf_identities(report: testing.TestSetReport, tolerate
 
 function testing.collect_leaf_messages(results: (testing.TestReport | testing.TestSetReport)[], out: string[]) -> void {
     load_var results
-    load_type baml.iter.Iterable<Item = testing.TestReport | testing.TestSetReport, Error = never>
+    load_type baml.iter.Iterable<Error = never, Item = testing.TestReport | testing.TestSetReport>
     load_const "iter"
     virtual_call nargs=1 ntypeargs=0
     store_var _3
 
   L0:
     load_var _3
-    load_type baml.iter.Iterator<Item = testing.TestReport | testing.TestSetReport, Error = never>
+    load_type baml.iter.Iterator<Error = never, Item = testing.TestReport | testing.TestSetReport>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
     store_var _4
@@ -1668,14 +1668,14 @@ function testing.collect_leaf_messages(results: (testing.TestReport | testing.Te
   L3:
     load_var _8
     load_field .runs
-    load_type baml.iter.Iterable<Item = testing.RunReport, Error = never>
+    load_type baml.iter.Iterable<Error = never, Item = testing.RunReport>
     load_const "iter"
     virtual_call nargs=1 ntypeargs=0
     store_var _11
 
   L4:
     load_var _11
-    load_type baml.iter.Iterator<Item = testing.RunReport, Error = never>
+    load_type baml.iter.Iterator<Error = never, Item = testing.RunReport>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
     store_var _12
@@ -1715,14 +1715,14 @@ function testing.collect_leaf_names(registry: testing.TestRegistry) -> string[] 
     load_var registry
     load_field .collector
     load_field .tests
-    load_type baml.iter.Iterable<Item = testing.TestRegistration, Error = never>
+    load_type baml.iter.Iterable<Error = never, Item = testing.TestRegistration>
     load_const "iter"
     virtual_call nargs=1 ntypeargs=0
     store_var _4
 
   L0:
     load_var _4
-    load_type baml.iter.Iterator<Item = testing.TestRegistration, Error = never>
+    load_type baml.iter.Iterator<Error = never, Item = testing.TestRegistration>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
     store_var _5
@@ -1742,14 +1742,14 @@ function testing.collect_leaf_names(registry: testing.TestRegistry) -> string[] 
     load_var registry
     load_field .collector
     load_field .testsets
-    load_type baml.iter.Iterable<Item = testing.TestSetRegistration, Error = never>
+    load_type baml.iter.Iterable<Error = never, Item = testing.TestSetRegistration>
     load_const "iter"
     virtual_call nargs=1 ntypeargs=0
     store_var _12
 
   L3:
     load_var _12
-    load_type baml.iter.Iterator<Item = testing.TestSetRegistration, Error = never>
+    load_type baml.iter.Iterator<Error = never, Item = testing.TestSetRegistration>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
     store_var _13
@@ -1761,14 +1761,14 @@ function testing.collect_leaf_names(registry: testing.TestRegistry) -> string[] 
   L4:
     load_var2 1 6
     call testing.collect_subtree_names
-    load_type baml.iter.Iterable<Item = string, Error = never>
+    load_type baml.iter.Iterable<Error = never, Item = string>
     load_const "iter"
     virtual_call nargs=1 ntypeargs=0
     store_var _19
 
   L5:
     load_var _19
-    load_type baml.iter.Iterator<Item = string, Error = never>
+    load_type baml.iter.Iterator<Error = never, Item = string>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
     store_var _20
@@ -2100,14 +2100,14 @@ function testing.count_leaves(results: (testing.TestReport | testing.TestSetRepo
     load_const 0
     store_var total
     load_var results
-    load_type baml.iter.Iterable<Item = testing.TestReport | testing.TestSetReport, Error = never>
+    load_type baml.iter.Iterable<Error = never, Item = testing.TestReport | testing.TestSetReport>
     load_const "iter"
     virtual_call nargs=1 ntypeargs=0
     store_var _7
 
   L0:
     load_var _7
-    load_type baml.iter.Iterator<Item = testing.TestReport | testing.TestSetReport, Error = never>
+    load_type baml.iter.Iterator<Error = never, Item = testing.TestReport | testing.TestSetReport>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
     store_var _8
@@ -2297,14 +2297,14 @@ function testing.failure_matches_selected(selected: string, failed_names: string
     call baml.String.substring
     store_var _8
     load_var failed_names
-    load_type baml.iter.Iterable<Item = string, Error = never>
+    load_type baml.iter.Iterable<Error = never, Item = string>
     load_const "iter"
     virtual_call nargs=1 ntypeargs=0
     store_var _12
 
   L1:
     load_var _12
-    load_type baml.iter.Iterator<Item = string, Error = never>
+    load_type baml.iter.Iterator<Error = never, Item = string>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
     store_var _13
@@ -2682,14 +2682,14 @@ function testing.leaf_selected_layered(name: string, profile_include: string[], 
 
 function testing.name_in(name: string, names: string[]) -> bool {
     load_var names
-    load_type baml.iter.Iterable<Item = string, Error = never>
+    load_type baml.iter.Iterable<Error = never, Item = string>
     load_const "iter"
     virtual_call nargs=1 ntypeargs=0
     store_var _3
 
   L0:
     load_var _3
-    load_type baml.iter.Iterator<Item = string, Error = never>
+    load_type baml.iter.Iterator<Error = never, Item = string>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
     store_var _4
@@ -2759,14 +2759,14 @@ function testing.run_children_parallel(children: testing.TestSetChild[]) -> test
     alloc_array 0
     store_var futures
     load_var children
-    load_type baml.iter.Iterable<Item = testing.TestSetChild, Error = never>
+    load_type baml.iter.Iterable<Error = never, Item = testing.TestSetChild>
     load_const "iter"
     virtual_call nargs=1 ntypeargs=0
     store_var _3
 
   L0:
     load_var _3
-    load_type baml.iter.Iterator<Item = testing.TestSetChild, Error = never>
+    load_type baml.iter.Iterator<Error = never, Item = testing.TestSetChild>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
     store_var _4
@@ -2809,14 +2809,14 @@ function testing.run_children_sequential(children: testing.TestSetChild[], fail_
     alloc_array 0
     store_var named_results
     load_var children
-    load_type baml.iter.Iterable<Item = testing.TestSetChild, Error = never>
+    load_type baml.iter.Iterable<Error = never, Item = testing.TestSetChild>
     load_const "iter"
     virtual_call nargs=1 ntypeargs=0
     store_var _4
 
   L0:
     load_var _4
-    load_type baml.iter.Iterator<Item = testing.TestSetChild, Error = never>
+    load_type baml.iter.Iterator<Error = never, Item = testing.TestSetChild>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
     store_var _5
@@ -2943,14 +2943,14 @@ function testing.select_names_layered(registry: testing.TestRegistry, profile_in
     load_var registry
     load_field .collector
     load_field .tests
-    load_type baml.iter.Iterable<Item = testing.TestRegistration, Error = never>
+    load_type baml.iter.Iterable<Error = never, Item = testing.TestRegistration>
     load_const "iter"
     virtual_call nargs=1 ntypeargs=0
     store_var _8
 
   L0:
     load_var _8
-    load_type baml.iter.Iterator<Item = testing.TestRegistration, Error = never>
+    load_type baml.iter.Iterator<Error = never, Item = testing.TestRegistration>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
     store_var _9
@@ -2977,14 +2977,14 @@ function testing.select_names_layered(registry: testing.TestRegistry, profile_in
     load_var registry
     load_field .collector
     load_field .testsets
-    load_type baml.iter.Iterable<Item = testing.TestSetRegistration, Error = never>
+    load_type baml.iter.Iterable<Error = never, Item = testing.TestSetRegistration>
     load_const "iter"
     virtual_call nargs=1 ntypeargs=0
     store_var _18
 
   L3:
     load_var _18
-    load_type baml.iter.Iterator<Item = testing.TestSetRegistration, Error = never>
+    load_type baml.iter.Iterator<Error = never, Item = testing.TestSetRegistration>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
     store_var _19
@@ -3012,14 +3012,14 @@ function testing.select_names_layered(registry: testing.TestRegistry, profile_in
     load_var2 2 3
     load_var2 4 5
     call testing.collect_subtree_names_layered
-    load_type baml.iter.Iterable<Item = string, Error = never>
+    load_type baml.iter.Iterable<Error = never, Item = string>
     load_const "iter"
     virtual_call nargs=1 ntypeargs=0
     store_var _30
 
   L6:
     load_var _30
-    load_type baml.iter.Iterator<Item = string, Error = never>
+    load_type baml.iter.Iterator<Error = never, Item = string>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
     store_var _31
@@ -3045,14 +3045,14 @@ function testing.subtree_excluded(prefix: string, excludes: string[]) -> bool {
     bin_op +
     store_var descendant_prefix
     load_var excludes
-    load_type baml.iter.Iterable<Item = string, Error = never>
+    load_type baml.iter.Iterable<Error = never, Item = string>
     load_const "iter"
     virtual_call nargs=1 ntypeargs=0
     store_var _4
 
   L0:
     load_var _4
-    load_type baml.iter.Iterator<Item = string, Error = never>
+    load_type baml.iter.Iterator<Error = never, Item = string>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
     store_var _5
@@ -3124,14 +3124,14 @@ function testing.subtree_may_be_selected(prefix: string, include: string[], excl
 
   L1:
     load_var include
-    load_type baml.iter.Iterable<Item = string, Error = never>
+    load_type baml.iter.Iterable<Error = never, Item = string>
     load_const "iter"
     virtual_call nargs=1 ntypeargs=0
     store_var _7
 
   L2:
     load_var _7
-    load_type baml.iter.Iterator<Item = string, Error = never>
+    load_type baml.iter.Iterator<Error = never, Item = string>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
     store_var _8
@@ -3217,14 +3217,14 @@ function testing.testset_children(registry: testing.TestRegistry) -> testing.Tes
     load_var registry
     load_field .collector
     load_field .tests
-    load_type baml.iter.Iterable<Item = testing.TestRegistration, Error = never>
+    load_type baml.iter.Iterable<Error = never, Item = testing.TestRegistration>
     load_const "iter"
     virtual_call nargs=1 ntypeargs=0
     store_var _4
 
   L0:
     load_var _4
-    load_type baml.iter.Iterator<Item = testing.TestRegistration, Error = never>
+    load_type baml.iter.Iterator<Error = never, Item = testing.TestRegistration>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
     store_var _5
@@ -3252,14 +3252,14 @@ function testing.testset_children(registry: testing.TestRegistry) -> testing.Tes
     load_var registry
     load_field .collector
     load_field .testsets
-    load_type baml.iter.Iterable<Item = testing.TestSetRegistration, Error = never>
+    load_type baml.iter.Iterable<Error = never, Item = testing.TestSetRegistration>
     load_const "iter"
     virtual_call nargs=1 ntypeargs=0
     store_var _15
 
   L3:
     load_var _15
-    load_type baml.iter.Iterator<Item = testing.TestSetRegistration, Error = never>
+    load_type baml.iter.Iterator<Error = never, Item = testing.TestSetRegistration>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
     store_var _16
@@ -3289,14 +3289,14 @@ function testing.testset_children_selected(registry: testing.TestRegistry, names
     load_var registry
     load_field .collector
     load_field .tests
-    load_type baml.iter.Iterable<Item = testing.TestRegistration, Error = never>
+    load_type baml.iter.Iterable<Error = never, Item = testing.TestRegistration>
     load_const "iter"
     virtual_call nargs=1 ntypeargs=0
     store_var _5
 
   L0:
     load_var _5
-    load_type baml.iter.Iterator<Item = testing.TestRegistration, Error = never>
+    load_type baml.iter.Iterator<Error = never, Item = testing.TestRegistration>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
     store_var _6
@@ -3329,14 +3329,14 @@ function testing.testset_children_selected(registry: testing.TestRegistry, names
     load_var registry
     load_field .collector
     load_field .testsets
-    load_type baml.iter.Iterable<Item = testing.TestSetRegistration, Error = never>
+    load_type baml.iter.Iterable<Error = never, Item = testing.TestSetRegistration>
     load_const "iter"
     virtual_call nargs=1 ntypeargs=0
     store_var _18
 
   L3:
     load_var _18
-    load_type baml.iter.Iterator<Item = testing.TestSetRegistration, Error = never>
+    load_type baml.iter.Iterator<Error = never, Item = testing.TestSetRegistration>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
     store_var _19

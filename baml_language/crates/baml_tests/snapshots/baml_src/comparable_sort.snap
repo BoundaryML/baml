@@ -180,11 +180,8 @@ function comparable_sort.FirstNamed$for$T[].first_name(self: #0[]) -> string {
     load_var self
     load_const 0
     load_array_element
-    store_var_load_var _4
-    is_type comparable_sort.Person
-    pop_jump_if_false L3
-    load_var _4
-    load_field .0
+    load_type comparable_sort.Named
+    virtual_load_field .name
     jump L2
 
   L1:
@@ -192,9 +189,6 @@ function comparable_sort.FirstNamed$for$T[].first_name(self: #0[]) -> string {
 
   L2:
     return
-
-  L3:
-    unreachable
 }
 
 function comparable_sort.Num.Cmp.compare(self: comparable_sort.Num, other: comparable_sort.Num) -> int {

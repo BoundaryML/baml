@@ -1386,18 +1386,13 @@ fn build_jinja_types(
             .fields
             .iter()
             .map(|field| {
-                let ty = field
-                    .type_ref
-                    .map(|id| {
-                        jinja_type_from_type_ref(
-                            db,
-                            &class_data.type_refs,
-                            id,
-                            pkg_items,
-                            &class_namespace,
-                        )
-                    })
-                    .unwrap_or(sys_jinja_types::Type::Unknown);
+                let ty = jinja_type_from_type_ref(
+                    db,
+                    &class_data.type_refs,
+                    field.type_ref,
+                    pkg_items,
+                    &class_namespace,
+                );
                 (field.name.to_string(), ty)
             })
             .collect::<IndexMap<_, _>>();

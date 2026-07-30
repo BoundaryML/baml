@@ -561,11 +561,11 @@ fn user.iterator_style_for_loop() -> int {
     bb0: {
         _1 = const 0_i64;
         _2 = [const 1_i64, const 2_i64, const 3_i64]: int[];
-        _3 = virtual_call iter as baml.iter.Iterable<Item = int, Error = never>(copy _2) -> [bb1];
+        _3 = virtual_call iter as baml.iter.Iterable<Error = never, Item = int>(copy _2) -> [bb1];
     }
 
     bb1: {
-        _4 = virtual_call next as baml.iter.Iterator<Item = int, Error = never>(copy _3) -> [bb2];
+        _4 = virtual_call next as baml.iter.Iterator<Error = never, Item = int>(copy _3) -> [bb2];
     }
 
     bb2: {
@@ -615,11 +615,11 @@ fn user.nested_for_loop() -> int {
     bb0: {
         _1 = const 0_i64;
         _2 = [const 1_i64, const 2_i64, const 3_i64]: int[];
-        _3 = virtual_call iter as baml.iter.Iterable<Item = int, Error = never>(copy _2) -> [bb1];
+        _3 = virtual_call iter as baml.iter.Iterable<Error = never, Item = int>(copy _2) -> [bb1];
     }
 
     bb1: {
-        _4 = virtual_call next as baml.iter.Iterator<Item = int, Error = never>(copy _3) -> [bb2];
+        _4 = virtual_call next as baml.iter.Iterator<Error = never, Item = int>(copy _3) -> [bb2];
     }
 
     bb2: {
@@ -632,11 +632,11 @@ fn user.nested_for_loop() -> int {
         fresh_cell(_7);
         _7 = copy _6;
         _8 = [const 4_i64, const 5_i64, const 6_i64]: int[];
-        _9 = virtual_call iter as baml.iter.Iterable<Item = int, Error = never>(copy _8) -> [bb4];
+        _9 = virtual_call iter as baml.iter.Iterable<Error = never, Item = int>(copy _8) -> [bb4];
     }
 
     bb4: {
-        _10 = virtual_call next as baml.iter.Iterator<Item = int, Error = never>(copy _9) -> [bb5];
+        _10 = virtual_call next as baml.iter.Iterator<Error = never, Item = int>(copy _9) -> [bb5];
     }
 
     bb5: {

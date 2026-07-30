@@ -12450,57 +12450,61 @@ impl<'db> TypeInferenceBuilder<'db> {
         // in the field type resolves `T`'s declaring interface.
         let iface_bounds =
             crate::lower_type_expr::interface_generic_param_bounds(db, source.iface_loc);
-        let declared_ty = field
-            .type_ref
-            .map(|type_ref| {
-                let mut diags = Vec::new();
-                let ty = if bindings.is_empty() {
-                    crate::lower_type_expr::lower_type_ref(
+        // BUG(interface-field-self-scope): both branches below lower with `self_ty: None`,
+        // so a field type naming `Self`/`Self.Assoc` (`key: Self.Key`) takes the unresolved
+        // path and lands as an error-recovery type instead of a `TypeVar` /
+        // `AssociatedTypeProjection`. The fix is the scope emit's `build_interface_def`
+        // builds: `Self` as a rigid type variable bounded by the interface itself, so a
+        // projection through it resolves. Low impact here: the caller has already reported
+        // `InterfaceFieldRequiresQualifiedConstruction`, and this type only feeds the
+        // follow-on `check_expr` that suppresses cascading errors.
+        let declared_ty = {
+            let type_ref = field.type_ref;
+            let mut diags = Vec::new();
+            let ty = if bindings.is_empty() {
+                crate::lower_type_expr::lower_type_ref(
+                    &iface_data.type_refs,
+                    type_ref,
+                    &crate::lower_type_expr::ScopeCtx {
+                        db,
+                        package_items: iface_pkg_items,
+                        ns_context: &iface_ns,
+                        generic_params: iface_generic_params,
+                        bounds: iface_bounds,
+                        self_ty: None,
+                    },
+                    &mut diags,
+                )
+            } else {
+                let generic_params: Vec<_> = bindings.keys().cloned().collect();
+                crate::generics::substitute_ty(
+                    &crate::lower_type_expr::lower_type_ref(
                         &iface_data.type_refs,
                         type_ref,
                         &crate::lower_type_expr::ScopeCtx {
                             db,
                             package_items: iface_pkg_items,
                             ns_context: &iface_ns,
-                            generic_params: iface_generic_params,
+                            generic_params: &generic_params,
                             bounds: iface_bounds,
                             self_ty: None,
                         },
                         &mut diags,
-                    )
-                } else {
-                    let generic_params: Vec<_> = bindings.keys().cloned().collect();
-                    crate::generics::substitute_ty(
-                        &crate::lower_type_expr::lower_type_ref(
-                            &iface_data.type_refs,
-                            type_ref,
-                            &crate::lower_type_expr::ScopeCtx {
-                                db,
-                                package_items: iface_pkg_items,
-                                ns_context: &iface_ns,
-                                generic_params: &generic_params,
-                                bounds: iface_bounds,
-                                self_ty: None,
-                            },
-                            &mut diags,
-                        ),
-                        &bindings,
-                    )
-                };
-                if !diags.is_empty() {
-                    let span =
-                        baml_compiler2_ppir::item_data::interface_source_map(db, source.iface_loc)
-                            .type_refs
-                            .span(type_ref);
-                    for diag in diags {
-                        self.context.report_at_span(diag, span);
-                    }
+                    ),
+                    &bindings,
+                )
+            };
+            if !diags.is_empty() {
+                let span =
+                    baml_compiler2_ppir::item_data::interface_source_map(db, source.iface_loc)
+                        .type_refs
+                        .span(type_ref);
+                for diag in diags {
+                    self.context.report_at_span(diag, span);
                 }
-                ty
-            })
-            .unwrap_or(Ty::Unknown {
-                attr: TyAttr::default(),
-            });
+            }
+            ty
+        };
         Some((source.class_field, declared_ty))
     }
 
@@ -13217,30 +13221,23 @@ impl<'db> TypeInferenceBuilder<'db> {
         for field in &class_data.fields {
             if field.name == *member_name {
                 let mut diags = Vec::new();
-                let field_ty = field
-                    .type_ref
-                    .map(|type_ref| {
-                        let generic_params: Vec<_> = bindings.keys().cloned().collect();
-                        crate::generics::substitute_ty(
-                            &crate::lower_type_expr::lower_type_ref(
-                                &class_data.type_refs,
-                                type_ref,
-                                &crate::lower_type_expr::ScopeCtx {
-                                    db,
-                                    package_items: self.package_items,
-                                    ns_context: stub_ns,
-                                    generic_params: &generic_params,
-                                    bounds: class_bounds,
-                                    self_ty: None,
-                                },
-                                &mut diags,
-                            ),
-                            &bindings,
-                        )
-                    })
-                    .unwrap_or(Ty::Unknown {
-                        attr: TyAttr::default(),
-                    });
+                let generic_params: Vec<_> = bindings.keys().cloned().collect();
+                let field_ty = crate::generics::substitute_ty(
+                    &crate::lower_type_expr::lower_type_ref(
+                        &class_data.type_refs,
+                        field.type_ref,
+                        &crate::lower_type_expr::ScopeCtx {
+                            db,
+                            package_items: self.package_items,
+                            ns_context: stub_ns,
+                            generic_params: &generic_params,
+                            bounds: class_bounds,
+                            self_ty: None,
+                        },
+                        &mut diags,
+                    ),
+                    &bindings,
+                );
                 drop(diags);
                 return Some(BuiltinResolution::Field(field_ty));
             }

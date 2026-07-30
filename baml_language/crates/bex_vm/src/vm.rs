@@ -3409,6 +3409,64 @@ impl BexVm {
         }))
     }
 
+    /// Destructure a virtual-dispatch interface operand into the `(name, input args)`
+    /// pair the impl resolver selects on. Associated types are *outputs* of an impl,
+    /// so they are deliberately not part of the key.
+    fn pop_interface_operand(
+        &mut self,
+        iface_value: Value,
+    ) -> Result<(baml_type::TypeName, Vec<baml_type::RealizedTy>), VmError> {
+        let iface_ptr = self.as_object_ptr(iface_value, ObjectType::Type)?;
+        match self.get_object(iface_ptr) {
+            Object::Type(ty) => match ty.as_ref() {
+                baml_type::RealizedTy::Interface(qtn, args, _assoc, _attr) => {
+                    Ok((qtn.clone(), args.clone()))
+                }
+                other => unreachable!(
+                    "virtual field access interface operand must be an Interface type, \
+                     found {other:?}"
+                ),
+            },
+            other => unreachable!(
+                "as_object_ptr(Type) guarantees a Type object, found {:?}",
+                ObjectType::of(other)
+            ),
+        }
+    }
+
+    /// The receiver's physical field slot for interface field `field_index`: read
+    /// `Self` off the receiver's runtime concrete type, resolve its single
+    /// `implements` rule for the interface (coherence guarantees at most one), then
+    /// index the rule's baked `field_links`.
+    ///
+    /// Both failures are compiler/VM inconsistencies rather than user-reachable
+    /// conditions — the type checker proved the receiver implements the interface
+    /// before emitting the access, and `field_links` is total over the interface's
+    /// declared fields (E0124) — so they surface as internal errors.
+    fn resolve_virtual_field_slot(
+        &mut self,
+        receiver: Value,
+        iface_qtn: &baml_type::TypeName,
+        iface_args: &[baml_type::RealizedTy],
+        field_index: usize,
+    ) -> Result<usize, VmError> {
+        let self_ty =
+            baml_type::RealizedTy::from(self.value_concrete_ty(receiver).unwrap_or_else(|| {
+                unreachable!(
+                    "value of kind {:?} cannot be a virtual field-access receiver",
+                    self.type_of(&receiver)
+                )
+            }));
+        let slot = crate::package_baml::ImplResolver::new(self)
+            .resolve_implements_rule(&self_ty, iface_qtn, iface_args)
+            .and_then(|(rule, _bound_args)| rule.field_links.get(field_index).copied());
+        let slot = slot.ok_or_else(|| VmInternalError::UnresolvedVirtualFieldAccess {
+            interface: iface_qtn.to_string(),
+            field_index,
+        })?;
+        Ok(slot as usize)
+    }
+
     /// Encode an i64 arithmetic result into the i63 range, or throw
     /// `IntegerOverflow`.
     ///
@@ -5899,6 +5957,76 @@ impl BexVm {
                         unreachable!("already type-checked above");
                     };
                     instance.store_field(idx, new_value);
+                }
+
+                // ── VirtualLoadField / VirtualStoreField ──────────────────────
+                // The field analogue of `VirtualCall`: the operand indexes the
+                // *interface's* declared fields, and the receiver's resolved impl
+                // maps that to a physical slot. Open-world by construction — nothing
+                // here enumerates implementors, so a class from a later-loaded
+                // package resolves exactly like a local one.
+                OpCode::VirtualLoadField => {
+                    let field_index = { read_u32_unchecked(code, pc) as usize };
+                    let iface_value = self.stack.ensure_pop();
+                    let (iface_qtn, iface_args) = self.pop_interface_operand(iface_value)?;
+                    let receiver = self.stack.ensure_pop();
+                    let slot = self.resolve_virtual_field_slot(
+                        receiver,
+                        &iface_qtn,
+                        &iface_args,
+                        field_index,
+                    )?;
+                    let obj_ptr = self.as_object_ptr(receiver, ObjectType::Instance)?;
+                    let load_result = {
+                        let Object::Instance(instance) = self.get_object(obj_ptr) else {
+                            return Err(VmInternalError::TypeError {
+                                expected: ObjectType::Instance.into(),
+                                got: ObjectType::of(self.get_object(obj_ptr)).into(),
+                            }
+                            .into());
+                        };
+                        instance
+                            .try_load_field(slot)
+                            .ok_or_else(|| instance.field_len())
+                    };
+                    let value = match load_result {
+                        Ok(value) => value,
+                        Err(length) => return Err(self.invalid_field_access_error(slot, length)),
+                    };
+                    self.stack.push(value);
+                }
+
+                OpCode::VirtualStoreField => {
+                    let field_index = { read_u32_unchecked(code, pc) as usize };
+                    let iface_value = self.stack.ensure_pop();
+                    let (iface_qtn, iface_args) = self.pop_interface_operand(iface_value)?;
+                    let new_value = self.stack.ensure_pop();
+                    let receiver = self.stack.ensure_pop();
+                    let slot = self.resolve_virtual_field_slot(
+                        receiver,
+                        &iface_qtn,
+                        &iface_args,
+                        field_index,
+                    )?;
+                    let obj_ptr = self.as_object_ptr(receiver, ObjectType::Instance)?;
+                    let store_error = {
+                        let Object::Instance(instance) = self.get_object(obj_ptr) else {
+                            return Err(VmInternalError::TypeError {
+                                expected: ObjectType::Instance.into(),
+                                got: ObjectType::of(self.get_object(obj_ptr)).into(),
+                            }
+                            .into());
+                        };
+                        (slot >= instance.field_len()).then_some(instance.field_len())
+                    };
+                    if let Some(length) = store_error {
+                        return Err(self.invalid_field_access_error(slot, length));
+                    }
+                    self.heap.write_barrier(obj_ptr, new_value);
+                    let Object::Instance(instance) = self.get_object(obj_ptr) else {
+                        unreachable!("already type-checked above");
+                    };
+                    instance.store_field(slot, new_value);
                 }
 
                 OpCode::InitField => {

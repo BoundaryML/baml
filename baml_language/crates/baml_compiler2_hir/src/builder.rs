@@ -1706,9 +1706,8 @@ impl<'db> SemanticIndexBuilder<'db> {
                 );
                 self.validate_schema_attributes(&class.attributes);
                 for field in &class.fields {
-                    if let Some(type_expr) = &field.type_expr {
-                        self.validate_type_expr_phase1(type_expr, type_expr.span, is_builtin_file);
-                    }
+                    let type_expr = &field.type_expr;
+                    self.validate_type_expr_phase1(type_expr, type_expr.span, is_builtin_file);
                     self.validate_internal_attributes(
                         &field.attributes,
                         is_builtin_file,

@@ -142,7 +142,7 @@ fn lower<'db>(
         .iter()
         .map(|field| FieldData {
             name: field.name.clone(),
-            type_ref: field.type_expr.as_ref().map(|te| type_refs.lower(te)),
+            type_ref: type_refs.lower(&field.type_expr),
             attributes: field.attributes.clone(),
             docstring: field.docstring.clone(),
         })

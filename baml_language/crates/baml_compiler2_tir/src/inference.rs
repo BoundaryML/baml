@@ -751,6 +751,18 @@ pub enum MemberResolution<'db> {
     /// case needs its own variant.
     InterfaceVirtualField {
         iface_loc: InterfaceLoc<'db>,
+        /// The realized interface-existential this access resolves *through* — the
+        /// interface that declares `field` (which may be a `requires` parent of the
+        /// receiver's own interface), with its type args and associated bindings
+        /// realized at the receiver. This is the view the runtime resolver keys on:
+        /// a class may implement one interface family at several instantiations with
+        /// different field links, and only the requested view discriminates them.
+        interface: Ty,
+        /// `field`'s position in `interface`'s own declared field list
+        /// (`InterfaceData::fields`) — the index space every implementation of that
+        /// interface is baked against. Deliberately *not* a `requires`-closure
+        /// position: the closure flattening dedups by name and numbers differently.
+        field_index: u32,
         field: Name,
     },
 }
@@ -2152,10 +2164,10 @@ pub fn infer_scope_types<'db>(
                 );
                 let resolved = resolve_class_fields(db, class_loc);
                 for (field, (_, ty, _)) in class_data.fields.iter().zip(resolved.fields.iter()) {
-                    if let Some(id) = field.type_ref {
-                        builder
-                            .validate_type_generic_bounds_at_span(class_sm.type_refs.span(id), ty);
-                    }
+                    builder.validate_type_generic_bounds_at_span(
+                        class_sm.type_refs.span(field.type_ref),
+                        ty,
+                    );
                 }
             }
             if let Some(baml_compiler2_ppir::item_data::ScopeOwner::Interface(iface_loc)) =
@@ -2241,18 +2253,16 @@ pub fn infer_scope_types<'db>(
                 // once the implementor binds the associated type it denotes a concrete field
                 // type (`value: Self.Item` with `type Item = int` is an `int` field).
                 for field in &iface_data.fields {
-                    if let Some(type_ref) = field.type_ref
-                        && crate::builder::TypeInferenceBuilder::type_ref_contains_bare_self(
-                            &iface_data.type_refs,
-                            type_ref,
-                        )
-                    {
+                    if crate::builder::TypeInferenceBuilder::type_ref_contains_bare_self(
+                        &iface_data.type_refs,
+                        field.type_ref,
+                    ) {
                         builder.report_at_span(
                             crate::infer_context::TirTypeError::SelfInInterfaceField {
                                 interface: iface_qtn.clone(),
                                 field: field.name.clone(),
                             },
-                            iface_sm.type_refs.span(type_ref),
+                            iface_sm.type_refs.span(field.type_ref),
                         );
                     }
                 }
@@ -2397,20 +2407,18 @@ pub fn infer_scope_types<'db>(
                     }
                 }
                 for field in &iface_data.fields {
-                    if let Some(type_ref) = field.type_ref {
-                        validate_type_ref_generic_bounds_at_span(
-                            db,
-                            &mut builder,
-                            pkg_items,
-                            &pkg_info.namespace_path,
-                            &iface_env,
-                            &iface_env_bounds,
-                            &iface_data.type_refs,
-                            type_ref,
-                            iface_sm.type_refs.span(type_ref),
-                            Some(self_ty.clone()),
-                        );
-                    }
+                    validate_type_ref_generic_bounds_at_span(
+                        db,
+                        &mut builder,
+                        pkg_items,
+                        &pkg_info.namespace_path,
+                        &iface_env,
+                        &iface_env_bounds,
+                        &iface_data.type_refs,
+                        field.type_ref,
+                        iface_sm.type_refs.span(field.type_ref),
+                        Some(self_ty.clone()),
+                    );
                 }
                 for (sig_idx, sig) in iface_data.required_methods.iter().enumerate() {
                     let sig_span = iface_sm.required_method_spans[sig_idx].span;
@@ -2901,24 +2909,16 @@ pub fn resolve_class_fields<'db>(
         .fields
         .iter()
         .map(|f| {
-            let ty = f
-                .type_ref
-                .map(|id| {
-                    let mut diags = Vec::new();
-                    let ty = crate::lower_type_expr::lower_type_ref(
-                        &class_data.type_refs,
-                        id,
-                        &field_scope,
-                        &mut diags,
-                    );
-                    for d in diags {
-                        all_diags.push((d, class_spans.type_refs.span(id)));
-                    }
-                    ty
-                })
-                .unwrap_or(Ty::Unknown {
-                    attr: TyAttr::default(),
-                });
+            let mut diags = Vec::new();
+            let ty = crate::lower_type_expr::lower_type_ref(
+                &class_data.type_refs,
+                f.type_ref,
+                &field_scope,
+                &mut diags,
+            );
+            for d in diags {
+                all_diags.push((d, class_spans.type_refs.span(f.type_ref)));
+            }
             (f.name.clone(), ty, f.attributes.clone())
         })
         .collect();

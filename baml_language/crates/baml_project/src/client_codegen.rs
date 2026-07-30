@@ -169,7 +169,7 @@ pub fn build_symbol_pool(db: &ProjectDatabase) -> SymbolPool {
                     let ty = resolve_type_ref(
                         db,
                         &class.type_refs,
-                        field.type_ref,
+                        Some(field.type_ref),
                         pkg_items,
                         &pkg_info.namespace_path,
                         &class_generic_params,

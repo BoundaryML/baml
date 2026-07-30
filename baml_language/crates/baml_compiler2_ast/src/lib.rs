@@ -1143,14 +1143,7 @@ class InterfaceTwo {
 
         let field = class.fields.first().expect("expected field");
         assert_eq!(field.name.as_str(), "interface");
-        assert_eq!(
-            field
-                .type_expr
-                .as_ref()
-                .map(std::string::ToString::to_string)
-                .as_deref(),
-            Some("string")
-        );
+        assert_eq!(field.type_expr.to_string(), "string");
     }
 
     #[test]
@@ -1513,12 +1506,9 @@ class Media {
             .find(|f| f.name.as_str() == "_data")
             .expect("expected _data field");
 
-        match &field.type_expr {
-            Some(spanned) => match &spanned.kind {
-                TypeExprKind::Rust { .. } => {}
-                other => panic!("expected TypeExprKind::Rust, got {other:?}"),
-            },
-            None => panic!("expected a type expression for _data field"),
+        match &field.type_expr.kind {
+            TypeExprKind::Rust { .. } => {}
+            other => panic!("expected TypeExprKind::Rust, got {other:?}"),
         }
     }
 
@@ -1630,8 +1620,8 @@ class Media {
             assert!(data_field.is_some(), "expected _data field");
             assert!(
                 matches!(
-                    data_field.unwrap().type_expr.as_ref().map(|te| &te.kind),
-                    Some(TypeExprKind::Rust { .. })
+                    &data_field.unwrap().type_expr.kind,
+                    TypeExprKind::Rust { .. }
                 ),
                 "_data field should have TypeExprKind::Rust"
             );
@@ -2110,7 +2100,7 @@ class Foo {
         assert_eq!(field.attributes[0].name.as_str(), "alias");
 
         // Type attribute: @stream.done should be on the TypeExpr
-        let type_expr = &field.type_expr.as_ref().expect("expected type expr");
+        let type_expr = &field.type_expr;
         let type_attrs = type_expr.attrs();
         assert_eq!(
             type_attrs.len(),
@@ -2148,7 +2138,7 @@ class Foo {
 
         // Type attribute: @stream.done stays on the TypeExpr
         assert_eq!(
-            strip_spans(field.type_expr.as_ref().expect("expected type expr")),
+            strip_spans(&field.type_expr),
             type_expr!(Path("Fizz", Attr("stream.done")))
         );
     }
@@ -2167,7 +2157,7 @@ class Foo {
             .find(|f| f.name.as_str() == "bar")
             .expect("expected field 'bar'");
 
-        let type_expr = &field.type_expr.as_ref().expect("expected type expr");
+        let type_expr = &field.type_expr;
         // Type should be Optional(Int)
         assert!(
             matches!(type_expr.kind, TypeExprKind::Optional { .. }),
@@ -2197,7 +2187,7 @@ class Foo {
             .find(|f| f.name.as_str() == "items")
             .expect("expected field 'items'");
 
-        let type_expr = &field.type_expr.as_ref().expect("expected type expr");
+        let type_expr = &field.type_expr;
         assert!(
             matches!(type_expr.kind, TypeExprKind::List { .. }),
             "expected List type, got {type_expr:?}",
@@ -2211,7 +2201,7 @@ class Foo {
         assert_eq!(type_attrs[0].name.as_str(), "stream.done");
         // Type attribute: @stream.done stays on the TypeExpr
         assert_eq!(
-            strip_spans(field.type_expr.as_ref().expect("expected type expr")),
+            strip_spans(&field.type_expr),
             type_expr!(WithAttrs((List(String)), Attr("stream.done")))
         );
     }
@@ -2265,7 +2255,7 @@ class C {
         let field = &class.fields[0];
         assert_eq!(field.attributes.len(), 1);
         assert_eq!(field.attributes[0].name.as_str(), "alias");
-        let te = &field.type_expr.as_ref().unwrap();
+        let te = &field.type_expr;
         assert_eq!(te.attrs().len(), 1);
         assert_eq!(te.attrs()[0].name.as_str(), "stream.done");
     }
@@ -2285,7 +2275,7 @@ class C {
         assert_eq!(field.attributes.len(), 1);
         assert_eq!(field.attributes[0].name.as_str(), "alias");
         assert!(matches!(
-            &field.type_expr.as_ref().unwrap().kind,
+            &field.type_expr.kind,
             TypeExprKind::Union { attrs, .. } if attrs.is_empty()
         ));
     }
@@ -2315,7 +2305,7 @@ class C {
         let class = first_class(parse_and_lower(source));
         let field = &class.fields[0];
         assert_eq!(
-            strip_spans(field.type_expr.as_ref().expect("expected type expr")),
+            strip_spans(&field.type_expr),
             type_expr!(Union(
                 (Union((Path("A")), (Path("B", Attr("stream.done"))))),
                 (Path("C"))
@@ -2338,7 +2328,7 @@ class C {
         let field = &class.fields[0];
 
         assert_eq!(
-            strip_spans(field.type_expr.as_ref().expect("expected type expr")),
+            strip_spans(&field.type_expr),
             type_expr!(Union(
                 (Path("A")),
                 (Path("B")),

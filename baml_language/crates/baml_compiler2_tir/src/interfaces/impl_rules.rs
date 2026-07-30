@@ -1102,9 +1102,6 @@ pub fn validate_impl_signatures<'db>(
         let self_bound =
             baml_type::Interface::new(iface_qtn.clone(), data.interface_args.clone(), vec![]);
         for iface_field in &iface_data.fields {
-            let Some(iface_field_ref) = iface_field.type_ref else {
-                continue;
-            };
             // The satisfying class field: explicit link, else same name. Absent → E0124 (impl_data).
             let class_field_name = block
                 .field_links
@@ -1132,7 +1129,7 @@ pub fn validate_impl_signatures<'db>(
                 |scope| {
                     crate::lower_type_expr::lower_type_ref(
                         &iface_data.type_refs,
-                        iface_field_ref,
+                        iface_field.type_ref,
                         scope,
                         &mut lower_diags,
                     )

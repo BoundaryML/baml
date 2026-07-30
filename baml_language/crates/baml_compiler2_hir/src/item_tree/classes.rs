@@ -11,7 +11,9 @@ use crate::{
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ClassField {
     pub name: Name,
-    pub type_expr: Option<ast::TypeExpr>,
+    /// Always present — see [`ast::FieldDef::type_expr`]. A field written without a
+    /// type recovers as `TypeExprKind::Error`, not as an absent type.
+    pub type_expr: ast::TypeExpr,
     pub attributes: Vec<Attribute>,
     /// Joined `///` doc-comment lines preceding this declaration.
     pub docstring: Option<String>,

@@ -456,6 +456,10 @@ fn simulate_statement_stack(
                 pull_semantics::walk_projection_store(&mut sink, destination, value).is_ok()
             }
         },
+        // Receiver, value and the interface type are pushed then all consumed by the
+        // opcode. Rather than simulate that, opt out of stack carry across it — the
+        // statement is materialized correctly by `emit_statement`.
+        StatementKind::VirtualFieldStore { .. } => false,
         StatementKind::Drop(place) => {
             let mut sink = StackCarryPullSink {
                 sim,
@@ -914,7 +918,12 @@ fn simulate_rvalue_pull_stack(
     // type args + interface type + method name). Rather than simulate it, opt out of
     // the stack-carry optimization for it — `walk_rvalue_pull` panics on it, and it is
     // materialized correctly through `emit_rvalue_pull`.
-    if matches!(rvalue, Rvalue::MakeVirtualBoundMethod { .. }) {
+    // `VirtualFieldAccess` joins it: `walk_rvalue_pull` panics on both, and both are
+    // materialized correctly through `emit_rvalue_pull`.
+    if matches!(
+        rvalue,
+        Rvalue::MakeVirtualBoundMethod { .. } | Rvalue::VirtualFieldAccess { .. }
+    ) {
         return false;
     }
     let mut sink = StackCarryPullSink {

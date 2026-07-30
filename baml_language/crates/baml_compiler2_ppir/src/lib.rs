@@ -248,14 +248,7 @@ pub fn ppir_expansion_items(db: &dyn Db, file: SourceFile) -> PpirExpansionItems
 
                 // Transform each field in-place
                 stream_class.fields.retain_mut(|field| {
-                    let ppir_ty = field
-                        .type_expr
-                        .as_ref()
-                        .map(PpirTy::from_type_expr)
-                        .unwrap_or(PpirTy::CannotBeStreamed {
-                            origin: ty::CannotBeStreamedOrigin::Unknown,
-                            attrs: PpirTypeAttrs::default(),
-                        });
+                    let ppir_ty = PpirTy::from_type_expr(&field.type_expr);
                     let ctx = ExpandCtx {
                         package_name: &package_name,
                         namespace_path: &pkg_info.namespace_path,
@@ -287,22 +280,17 @@ pub fn ppir_expansion_items(db: &dyn Db, file: SourceFile) -> PpirExpansionItems
                     }
 
                     // Preserve non-stream type attributes from the original outermost TypeExpr
-                    if let Some(orig_spanned) = &field.type_expr {
-                        for attr in orig_spanned.attrs() {
-                            if !attr.name.starts_with("stream.") && !attr.name.starts_with("sap.") {
-                                type_expr.attrs_mut().push(attr.clone());
-                            }
+                    for attr in field.type_expr.attrs() {
+                        if !attr.name.starts_with("stream.") && !attr.name.starts_with("sap.") {
+                            type_expr.attrs_mut().push(attr.clone());
                         }
                     }
 
                     // Replace the field's type expr (preserves field.name, field.attributes, field.span, etc.)
-                    field.type_expr = Some(ast::TypeExpr {
-                        span: field
-                            .type_expr
-                            .as_ref()
-                            .map_or(TextRange::default(), |s| s.span),
+                    field.type_expr = ast::TypeExpr {
+                        span: field.type_expr.span,
                         ..type_expr
-                    });
+                    };
 
                     // Strip stream.* from field-level attributes (preserve @alias, @description, @skip, etc.)
                     field.attributes.retain(|a| !a.name.starts_with("stream."));

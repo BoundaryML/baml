@@ -235,7 +235,7 @@ function interfaces_associated_types.CaeIntDriver.CaeDriver<CaeTask<int>>.drive(
 
 function interfaces_associated_types.CaeTask.drive(self: interfaces_associated_types.CaeTask<#0>, driver: #3) -> #1 {
     load_var2 2 1
-    load_type interfaces_associated_types.CaeDriver<interfaces_associated_types.CaeTask<#0>, Output = #1, Error = #2>
+    load_type interfaces_associated_types.CaeDriver<interfaces_associated_types.CaeTask<#0>, Error = #2, Output = #1>
     load_const "drive"
     virtual_call nargs=2 ntypeargs=0
     store_var _0
@@ -320,52 +320,26 @@ function interfaces_associated_types.Ticket.Describable.value(self: interfaces_a
 function interfaces_associated_types.UpcSummarizes$for$UpcEntityBox<T>.key(self: interfaces_associated_types.UpcEntityBox<#0>) -> string {
     load_var self
     load_field .value
-    store_var_load_var _2
-    is_type interfaces_associated_types.UpcUser
-    pop_jump_if_false L0
-    load_var _2
-    load_field .0
+    load_type interfaces_associated_types.UpcHasKey<Key = string>
+    virtual_load_field .key
     return
-
-  L0:
-    unreachable
 }
 
 function interfaces_associated_types.UpcSummarizes$for$UpcEntityBox<T>.summary(self: interfaces_associated_types.UpcEntityBox<#0>) -> string {
     load_var self
-    load_field .value
-    store_var_load_var _4
-    is_type interfaces_associated_types.UpcUser
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
-    load_var _4
-    is_type interfaces_associated_types.UpcUser
-    pop_jump_if_false L3
-    load_var _4
-    load_field .1
-    jump L2
-
-  L1:
-    load_var _4
-    load_field .1
-
-  L2:
-    load_const ":"
-    bin_op +
-    store_var _2
-    load_var self
     load_type interfaces_associated_types.UpcSummarizes<Key = string>
     load_const "key"
     virtual_call nargs=1 ntypeargs=0
-    store_var _7
-    load_var2 2 4
+    store_var _5
+    load_var self
+    load_field .value
+    load_type interfaces_associated_types.UpcNamed
+    virtual_load_field .name
+    load_const ":"
+    bin_op +
+    load_var _5
     bin_op +
     return
-
-  L3:
-    unreachable
 }
 
 function interfaces_associated_types.adb_main() -> string {
@@ -658,21 +632,11 @@ function interfaces_associated_types.rdf_score(source: interfaces_associated_typ
 
   L1:
     load_var source
-    is_type interfaces_associated_types.RdfIntSource
-    pop_jump_if_false L3
-    load_var source
-    is_type interfaces_associated_types.RdfIntSource
-    pop_jump_if_false L3
-    load_var source
-    load_field .0
-    store_var _4
-    load_var _4
+    load_type interfaces_associated_types.RdfSource<Item = int>
+    virtual_load_field .value
 
   L2:
     return
-
-  L3:
-    unreachable
 }
 
 function interfaces_associated_types.rdn_main() -> int {
@@ -1046,14 +1010,9 @@ function interfaces_associated_types.rpa_main() -> int {
 
 function interfaces_associated_types.upc_entity_key(value: #0) -> string {
     load_var value
-    is_type interfaces_associated_types.UpcUser
-    pop_jump_if_false L0
-    load_var value
-    load_field .0
+    load_type interfaces_associated_types.UpcHasKey<Key = string>
+    virtual_load_field .key
     return
-
-  L0:
-    unreachable
 }
 
 function interfaces_associated_types.upc_main() -> string {

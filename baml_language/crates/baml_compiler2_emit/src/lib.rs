@@ -85,7 +85,7 @@ fn build_interface_def(
         ty,
     };
     use baml_type::RuntimeInterface;
-    use bex_vm_types::types::{InterfaceDef, InterfaceMethodDef};
+    use bex_vm_types::types::{InterfaceDef, InterfaceFieldDef, InterfaceMethodDef};
 
     let file = iface_loc.file(db);
     let interface = interface_data(db, iface_loc);
@@ -261,18 +261,15 @@ fn build_interface_def(
                 .map(|ri| (at.name.clone(), ri))
         })
         .collect();
-    // A field always carries a type — an untyped one is a syntax-level error that
-    // cannot reach emit — so every field appears here.
+    // This list is the interface's field *index space*: `RuntimeImplRule::field_links`
+    // is baked parallel to it, so every declared field keeps its slot. A field always
+    // carries a type — an untyped one is a syntax-level error that cannot reach emit.
     let fields = interface
         .fields
         .iter()
-        .filter_map(|f| {
-            f.type_ref.map(|id| {
-                (
-                    f.name.clone(),
-                    lower_rt(store, id, &interface_frame_params, &decl_bounds),
-                )
-            })
+        .map(|f| InterfaceFieldDef {
+            name: f.name.clone(),
+            ty: lower_rt(store, f.type_ref, &interface_frame_params, &decl_bounds),
         })
         .collect();
     let mut methods: Vec<InterfaceMethodDef> = interface
@@ -349,6 +346,11 @@ fn build_packages(
     alias_caches: &HashMap<Name, ResolvedAliases>,
     function_indices: &HashMap<String, usize>,
     interface_indices: &HashMap<baml_type::TypeName, usize>,
+    // Field-name → slot for every emitted class, keyed by rendered fully-qualified
+    // name. This is the *same* map the class pass built `Class::fields` from, threaded
+    // in rather than recomputed: a second derivation of the layout that drifted would
+    // make every virtual field access read the wrong slot, silently.
+    class_field_indices: &HashMap<String, HashMap<String, usize>>,
     program_packages: &mut indexmap::IndexMap<Name, bex_vm_types::types::ProgramPackage>,
 ) {
     use baml_compiler2_hir::type_ref::{TypeRefId, TypeRefStore};
@@ -435,10 +437,21 @@ fn build_packages(
     // binding in every slot.
     let mut iface_assoc_decls: indexmap::IndexMap<baml_type::TypeName, IfaceAssocDecls> =
         indexmap::IndexMap::new();
+    // Per field-bearing interface, its declared field names **in declaration order** —
+    // the index space `RuntimeImplRule::field_links` is baked against, and the same
+    // order `build_interface_def` gives `InterfaceDef::fields`. Interfaces with no
+    // fields are absent (their impls get an empty table).
+    let mut iface_field_decls: indexmap::IndexMap<baml_type::TypeName, Vec<Name>> =
+        indexmap::IndexMap::new();
     for file in all_files {
         for &iface_loc in file_interfaces(db, *file) {
             let iface_data = interface_data(db, iface_loc);
             let iface_tn = qualify_def(db, Definition::Interface(iface_loc), &iface_data.name);
+            if !iface_data.fields.is_empty() {
+                iface_field_decls
+                    .entry(iface_tn.clone())
+                    .or_insert_with(|| iface_data.fields.iter().map(|f| f.name.clone()).collect());
+            }
             if !iface_data.associated_types.is_empty() {
                 iface_assoc_decls
                     .entry(iface_tn.clone())
@@ -794,6 +807,17 @@ fn build_packages(
                     interface_args,
                     interface_assoc,
                     methods,
+                    // An out-of-body impl of a field-bearing interface is E0126, so a
+                    // rule built here never has fields to link — its `for` target need
+                    // not even be a class.
+                    field_links: {
+                        debug_assert!(
+                            !iface_field_decls.contains_key(&iface_tn),
+                            "out-of-body impl of field-bearing interface `{iface_tn}` should be \
+                             rejected by E0126",
+                        );
+                        Box::default()
+                    },
                 });
         }
 
@@ -948,6 +972,46 @@ fn build_packages(
                     &interface_assoc,
                 );
                 merge_defaults(&mut methods, &iface_tn, &iface_frame);
+                // The field table for this block, positional over the interface's own
+                // declared fields. Each entry is the class slot the interface field
+                // reads: the block's explicit `field as class_field` link, else the
+                // same-named class field (the default that
+                // `concrete_interface_field_sources` applies in TIR).
+                //
+                // A name that resolves to no class slot means the class does not cover
+                // the interface field — already E0124, so this program has diagnostics
+                // and cannot reach a runnable artifact. Drop the whole rule rather than
+                // bake a partial table: losing a dispatch is recoverable, a table whose
+                // positions no longer line up with the interface silently reads the
+                // wrong field. Matches the `resolve_fqn` convention above.
+                let field_links: Option<Box<[u32]>> = match iface_field_decls.get(&iface_tn) {
+                    None => Some(Box::default()),
+                    Some(declared) => {
+                        let class_slots = class_field_indices.get(&class_tn.to_string());
+                        declared
+                            .iter()
+                            .map(|iface_field| {
+                                let class_field = block
+                                    .field_links
+                                    .iter()
+                                    .find(|link| link.interface_field == *iface_field)
+                                    .map_or(iface_field, |link| &link.class_field);
+                                let slot = class_slots
+                                    .and_then(|slots| slots.get(class_field.as_str()))
+                                    .copied();
+                                debug_assert!(
+                                    slot.is_some(),
+                                    "interface `{iface_tn}` field `{iface_field}` links to \
+                                     `{class_tn}.{class_field}`, which has no runtime slot",
+                                );
+                                slot.map(|s| u32::try_from(s).expect("class field count fits u32"))
+                            })
+                            .collect()
+                    }
+                };
+                let Some(field_links) = field_links else {
+                    continue;
+                };
                 program_packages
                     .entry(pkg_info.package.clone())
                     .or_default()
@@ -961,6 +1025,7 @@ fn build_packages(
                         interface_args,
                         interface_assoc,
                         methods,
+                        field_links,
                     });
             }
         }
@@ -1151,7 +1216,7 @@ pub use bex_vm_types::Program as ProgramAlias;
 /// `TypeRefId` into the owning class's `TypeRefStore` (carried alongside).
 type MergedFieldEntry = (
     String,
-    Option<baml_compiler2_hir::type_ref::TypeRefId>,
+    baml_compiler2_hir::type_ref::TypeRefId,
     Vec<baml_compiler2_hir::item_tree::Attribute>,
     Vec<Name>,
     Vec<Name>,
@@ -2249,6 +2314,7 @@ fn build_package_fragment(
                 interface_args: rule.interface_args.clone(),
                 interface_assoc: rule.interface_assoc.clone(),
                 methods,
+                field_links: rule.field_links.clone(),
             });
         }
         frag.impl_rules.push((iface_fq, rule_frags));
@@ -2579,6 +2645,7 @@ fn generate_impl(
         &alias_caches,
         &program.function_indices,
         &tables.interface_object_indices,
+        &tables.classes,
         &mut tables.program_packages,
     );
     tables.program_packages.sort_keys();
@@ -2901,8 +2968,9 @@ fn emit_file_group(
             for (idx, (name, type_ref, attrs, _gen_params, ns)) in merged_fields.iter().enumerate()
             {
                 field_indices.insert(name.clone(), idx);
-                let (field_type, field_template) = match type_ref {
-                    Some(id) => {
+                let (field_type, field_template) = {
+                    let id = type_ref;
+                    {
                         let mut diags = Vec::new();
                         // Pass `class_generic_params` as the binding context so
                         // `T`-references inside `class Container<T> { item: T }`
@@ -2933,17 +3001,6 @@ fn emit_file_group(
                             &class_generic_params,
                         );
                         (resolved_ty, template)
-                    }
-                    None => {
-                        let null_ty = baml_type::RuntimeTy::Null {
-                            attr: baml_type::TyAttr::default(),
-                        };
-                        (
-                            null_ty.clone(),
-                            baml_type::TyTemplate::from(baml_type::RealizedTy::Null {
-                                attr: baml_type::TyAttr::default(),
-                            }),
-                        )
                     }
                 };
                 let (field_desc, field_alias, field_skip) = extract_schema_attrs(attrs.as_slice());
