@@ -216,16 +216,19 @@ jobs:
         run: cargo fetch
         working-directory: baml_language
 
+      # Enabling every feature turns on the optional native-tls backend, which
+      # needs a separate target-specific OpenSSL build. Default features match
+      # the rustls-based musl artifacts we ship.
       - name: "Build tests with --timings"
-        run: cargo test --no-run --all-features --timings --workspace --exclude baml_tests --exclude "sdk_test_*" --exclude baml_bridge
+        run: cargo test --no-run --timings --workspace --exclude baml_tests --exclude "sdk_test_*" --exclude baml_bridge
         working-directory: baml_language
 
       - name: "Run tests with nextest"
-        run: cargo nextest run --all-features --workspace --exclude baml_tests --exclude "sdk_test_*" --exclude baml_bridge -E 'not binary(=pack_e2e)'
+        run: cargo nextest run --workspace --exclude baml_tests --exclude "sdk_test_*" --exclude baml_bridge -E 'not binary(=pack_e2e)'
         working-directory: baml_language
 
       - name: "Run pack end-to-end tests"
-        run: cargo test -p baml_cli --test pack_e2e --all-features
+        run: cargo test -p baml_cli --test pack_e2e
         working-directory: baml_language
 
       - name: "Upload test results on failure"

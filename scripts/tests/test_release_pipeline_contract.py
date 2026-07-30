@@ -668,8 +668,9 @@ class WorkflowGraphTests(unittest.TestCase):
         musl = job_block(workflow, "cargo-test-linux-musl")
         self.assertIn("CARGO_BUILD_TARGET: x86_64-unknown-linux-musl", musl)
         self.assertIn("uses: ./.github/actions/setup-musl-cross", musl)
-        self.assertIn("cargo nextest run --all-features --workspace", musl)
+        self.assertIn("cargo nextest run --workspace", musl)
         self.assertIn("cargo test -p baml_cli --test pack_e2e", musl)
+        self.assertNotIn("--all-features", musl)
         self.assertEqual(workflow.count("- cargo-test-linux-musl"), 2)
 
         pack_e2e = PACK_E2E.read_text(encoding="utf-8")
