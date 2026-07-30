@@ -35,6 +35,7 @@ type MutableFolderNode = Omit<FunctionSidebarFolderNode, 'children'> & {
 type BuildFunctionSidebarTreeOptions = {
   search?: string;
   selectedFunctionName?: string | null;
+  workflowNodeCounts?: ReadonlyMap<string, number>;
 };
 
 export function buildFunctionSidebarTree(
@@ -47,7 +48,20 @@ export function buildFunctionSidebarTree(
   const forcedOpenFolderKeys = new Set<string>();
   let functionCount = 0;
 
-  for (const functionInfo of functions) {
+  const workflowNodeCounts = options.workflowNodeCounts;
+  const sortedFunctions = workflowNodeCounts
+    ? functions
+        .map((functionInfo, index) => ({ functionInfo, index }))
+        .sort(
+          (a, b) =>
+            (workflowNodeCounts.get(b.functionInfo.name) ?? 0) -
+              (workflowNodeCounts.get(a.functionInfo.name) ?? 0) ||
+            a.index - b.index,
+        )
+        .map(({ functionInfo }) => functionInfo)
+    : functions;
+
+  for (const functionInfo of sortedFunctions) {
     if (query && !functionInfo.name.toLowerCase().includes(query)) continue;
 
     const parts = functionInfo.name.split('.');

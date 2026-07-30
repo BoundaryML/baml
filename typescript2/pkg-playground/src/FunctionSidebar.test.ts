@@ -64,6 +64,61 @@ describe('function sidebar tree', () => {
 
     expect([...tree.forcedOpenFolderKeys]).toEqual(['demo']);
   });
+
+  it('sorts functions by rendered workflow node count while preserving ties', () => {
+    const tree = buildFunctionSidebarTree(
+      [
+        functionInfo('Small'),
+        functionInfo('LargeFirst'),
+        functionInfo('LargeSecond'),
+        functionInfo('Medium'),
+      ],
+      {
+        workflowNodeCounts: new Map([
+          ['Small', 2],
+          ['LargeFirst', 10],
+          ['LargeSecond', 10],
+          ['Medium', 5],
+        ]),
+      },
+    );
+
+    expect(tree.nodes.map(nodeLabel)).toEqual([
+      'function:LargeFirst',
+      'function:LargeSecond',
+      'function:Medium',
+      'function:Small',
+    ]);
+  });
+
+  it('orders namespace folders and their children by their largest workflows', () => {
+    const tree = buildFunctionSidebarTree(
+      [
+        functionInfo('small.One'),
+        functionInfo('large.Helper'),
+        functionInfo('small.Two'),
+        functionInfo('large.Entry'),
+      ],
+      {
+        workflowNodeCounts: new Map([
+          ['small.One', 2],
+          ['large.Helper', 7],
+          ['small.Two', 4],
+          ['large.Entry', 12],
+        ]),
+      },
+    );
+
+    expect(tree.nodes.map(nodeLabel)).toEqual(['folder:large', 'folder:small']);
+    expect(folder(tree.nodes, 'large').children.map(nodeLabel)).toEqual([
+      'function:Entry',
+      'function:Helper',
+    ]);
+    expect(folder(tree.nodes, 'small').children.map(nodeLabel)).toEqual([
+      'function:Two',
+      'function:One',
+    ]);
+  });
 });
 
 function functionInfo(name: string): FunctionInfo {

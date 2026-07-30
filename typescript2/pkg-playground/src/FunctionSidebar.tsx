@@ -78,7 +78,9 @@ function TestTreeNode({
         style={{ paddingLeft: leafIndent }}
       >
         {isFailed ? (
-          <FlaskConical className={cn(SIDEBAR_LEAF_ICON_CLASS, 'text-red-500')} />
+          <FlaskConical
+            className={cn(SIDEBAR_LEAF_ICON_CLASS, 'text-red-500')}
+          />
         ) : (
           <Loader2 className={cn(SIDEBAR_LEAF_ICON_CLASS, 'animate-spin')} />
         )}
@@ -229,6 +231,8 @@ function TestTreeNode({
 
 export interface FunctionSidebarProps {
   functions: FunctionInfo[];
+  /** Rendered workflow graph node count for each function. */
+  workflowNodeCounts?: ReadonlyMap<string, number>;
   /** Whether internal functions are currently shown (toggled from the
    * panel's settings gear menu) — used only for the empty-state message. */
   showInternalFunctions: boolean;
@@ -317,9 +321,7 @@ function FunctionTreeNode({
             )}
           />
           <Folder className="h-3.5 w-3.5 shrink-0 text-vsc-text-faint" />
-          <span className="truncate text-[11px] font-medium">
-            {node.name}
-          </span>
+          <span className="truncate text-[11px] font-medium">{node.name}</span>
           <span className="text-vsc-text-faint ml-1">
             ({node.functionCount})
           </span>
@@ -379,6 +381,7 @@ function FunctionTreeNode({
 
 export const FunctionSidebar: FC<FunctionSidebarProps> = ({
   functions,
+  workflowNodeCounts,
   showInternalFunctions,
   internalFunctionCount,
   isLoadingProject = false,
@@ -403,8 +406,9 @@ export const FunctionSidebar: FC<FunctionSidebarProps> = ({
   const [search, setSearch] = useState('');
   // Accordion state: tests are the primary view; functions start collapsed.
   const [functionsOpen, setFunctionsOpen] = useState(false);
-  const [openFolderKeys, setOpenFolderKeys] =
-    useState<FunctionFolderOpenState>({});
+  const [openFolderKeys, setOpenFolderKeys] = useState<FunctionFolderOpenState>(
+    {},
+  );
   const [testsOpen, setTestsOpen] = useState(true);
 
   const functionTree = useMemo(
@@ -412,8 +416,9 @@ export const FunctionSidebar: FC<FunctionSidebarProps> = ({
       buildFunctionSidebarTree(functions, {
         search,
         selectedFunctionName: selectedFn,
+        workflowNodeCounts,
       }),
-    [functions, search, selectedFn],
+    [functions, search, selectedFn, workflowNodeCounts],
   );
   const hasFunctionSearch = search.trim() !== '';
   const setFunctionFolderOpen = (key: string, open: boolean) => {
@@ -546,15 +551,18 @@ export const FunctionSidebar: FC<FunctionSidebarProps> = ({
                 </div>
               )}
 
-              {testTree && treeItems.length === 0 && previewTests.length === 0 && (
-                <div className="px-4 py-2 text-[10px] text-vsc-text-faint italic">
-                  No tests found
-                </div>
-              )}
+              {testTree &&
+                treeItems.length === 0 &&
+                previewTests.length === 0 && (
+                  <div className="px-4 py-2 text-[10px] text-vsc-text-faint italic">
+                    No tests found
+                  </div>
+                )}
 
               {previewTests.map((test) => {
                 const key = previewTestKey(test);
-                const duplicateName = (previewNameCounts.get(test.name) ?? 0) > 1;
+                const duplicateName =
+                  (previewNameCounts.get(test.name) ?? 0) > 1;
                 return (
                   <button
                     type="button"

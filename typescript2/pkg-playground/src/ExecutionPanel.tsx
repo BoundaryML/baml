@@ -2405,6 +2405,24 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
     }
   }, [functionNames, selectedProject, projectUpdateVersion, port]);
 
+  const workflowNodeCounts = useMemo(() => {
+    void workflowCacheVersion;
+    if (
+      prefetchedCfgRef.current.version !== projectUpdateVersion ||
+      !functionNames.every((name) => workflowCfgResponsesRef.current.has(name))
+    ) {
+      return undefined;
+    }
+
+    return new Map(
+      functionNames.map((name) => [
+        name,
+        Object.keys(workflowCfgResponsesRef.current.get(name)?.nodes ?? {})
+          .length,
+      ]),
+    );
+  }, [functionNames, projectUpdateVersion, workflowCacheVersion]);
+
   // Reverse call map over the cached CFGs: callee -> the functions that
   // call it. calleeName may be bare while function names are qualified
   // (`main.illustrate`), so resolve by exact match or trailing segment.
@@ -3023,6 +3041,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
                   testRunResults={testRunResults}
                   testTree={testTree}
                   viewingCollection={viewingCollection}
+                  workflowNodeCounts={workflowNodeCounts}
                 />
               </div>
               <div
