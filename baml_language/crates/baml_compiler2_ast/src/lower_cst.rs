@@ -18,9 +18,9 @@ use crate::{
         AssociatedTypeBindingDef, AssociatedTypeDef, AstSourceMap, BuiltinKind, CallArg, EnumDef,
         Expr, ExprBody, ExprId, FieldDef, FunctionBodyDef, FunctionDef, FunctionDefaults,
         ImplementsBlockDef, ImplementsForDef, InterfaceDef, InterfaceFieldLinkDef, Interpolation,
-        Item, LetDef, LetOrigin, LlmBodyDef, MethodSigDef, Param, RawAttribute, RawAttributeArg,
-        RawPrompt, TemplateStringDef, TestArgValue, TestDef, TypeAliasDef, TypeExpr, TypeExprKind,
-        VariantDef,
+        Item, LambdaDef, LambdaKind, LetDef, LetOrigin, LlmBodyDef, MethodSigDef, Param,
+        RawAttribute, RawAttributeArg, RawPrompt, TemplateStringDef, TestArgValue, TestDef,
+        TypeAliasDef, TypeExpr, TypeExprKind, VariantDef,
     },
     companions::expand_companions,
     lower_expr_body, lower_type_expr,
@@ -435,9 +435,7 @@ fn lower_function(
         if let Some(builtin_kind) = check_builtin_body(expr.syntax()) {
             (Some(FunctionBodyDef::Builtin(builtin_kind)), None)
         } else {
-            let param_names: Vec<Name> = params.iter().map(|p| p.name.clone()).collect();
-            let (expr_body, source_map) =
-                lower_expr_body::lower(&expr, &param_names, diags, env_var_refs);
+            let (expr_body, source_map) = lower_expr_body::lower(&expr, diags, env_var_refs);
             (Some(FunctionBodyDef::Expr(expr_body, source_map)), None)
         }
     } else {
@@ -560,13 +558,8 @@ pub(crate) fn lower_params_with_defaults(
         }
     }
 
-    let param_names: Vec<Name> = params.iter().map(|p| p.name.clone()).collect();
-    let (defaults, default_ids) = lower_expr_body::lower_default_expr_nodes(
-        &default_nodes,
-        &param_names,
-        diags,
-        env_var_refs,
-    );
+    let (defaults, default_ids) =
+        lower_expr_body::lower_default_expr_nodes(&default_nodes, diags, env_var_refs);
     for (idx, default_id) in default_ids {
         if let Some(param) = params.get_mut(idx) {
             param.default = Some(default_id);
@@ -2194,7 +2187,7 @@ fn synthesize_init_test_function(
     // Build statements: one per registration
     let mut stmt_ids: Vec<crate::ast::StmtId> = Vec::with_capacity(registrations.len());
     for reg in registrations {
-        let stmt_expr = synthesize_register_call(reg, &test_owner, &mut ctx, diags, env_var_refs);
+        let stmt_expr = synthesize_register_call(reg, &test_owner, &mut ctx);
         stmt_ids.push(ctx.alloc_stmt(crate::ast::Stmt::Expr(stmt_expr), span));
     }
 
@@ -2256,8 +2249,6 @@ fn synthesize_register_call(
     reg: &TestRegistrationItem,
     test_owner: &str,
     ctx: &mut lower_expr_body::InitTestContext,
-    diags: &mut Vec<LoweringDiagnostic>,
-    env_var_refs: &mut Vec<crate::EnvVarRef>,
 ) -> ExprId {
     let span = text_size::TextRange::default();
     match reg {
@@ -2266,30 +2257,17 @@ fn synthesize_register_call(
             body_node,
             runner_element,
         } => {
-            // Lower the test block body into a fresh ExprBody (lambda body)
-            let (lambda_body, lambda_source_map, lambda_diags, lambda_env_refs) =
-                lower_expr_body::lower_block_node(body_node, &[Name::new("registry")]);
-            diags.extend(lambda_diags);
-            env_var_refs.extend(lambda_env_refs);
+            // The body lowers into `$init_test`'s own arena.
+            let lambda_body = ctx.lower_test_body(body_node, span);
 
-            let lambda_def = FunctionDef {
-                name: Name::new("<test body>"),
-                generic_params: vec![],
-                generic_param_bounds: vec![],
+            let lambda_def = LambdaDef {
+                kind: LambdaKind::Anonymous,
                 params: vec![],
                 defaults: FunctionDefaults::empty(),
                 return_type: Some(crate::ast::TypeExprKind::Void { attrs: vec![] }.at(span)),
                 throws: None,
-                body: Some(FunctionBodyDef::Expr(lambda_body, lambda_source_map)),
-                declarative_meta: None,
-                metadata: crate::ast::FunctionMetadata::language_internal(
-                    crate::ast::FunctionOrigin::Internal,
-                ),
-                attributes: vec![],
-                docstring: None,
-                is_tagged_template_tag: false,
+                body: Some(lambda_body),
                 span,
-                name_span: span,
             };
 
             // registry.register_test_at(owner, ...)
@@ -2335,15 +2313,7 @@ fn synthesize_register_call(
             body_node,
             runner_element,
         } => {
-            // Lower the testset body into a collector lambda using the full testset lowering.
-            let (collector_exprs, collector_source_map, collector_diags, collector_env_refs) =
-                lower_expr_body::lower_testset_block_node(
-                    body_node,
-                    &Name::new("testset"),
-                    &[Name::new("registry")],
-                );
-            diags.extend(collector_diags);
-            env_var_refs.extend(collector_env_refs);
+            let collector_exprs = ctx.lower_testset_body(body_node, Name::new("testset"), span);
 
             // Collector lambda parameter: `testset`
             let testset_param = Param {
@@ -2362,24 +2332,14 @@ fn synthesize_register_call(
                 name_span: span,
             };
 
-            let collector_def = FunctionDef {
-                name: Name::new("<testset collector>"),
-                generic_params: vec![],
-                generic_param_bounds: vec![],
+            let collector_def = LambdaDef {
+                kind: LambdaKind::Anonymous,
                 params: vec![testset_param],
                 defaults: FunctionDefaults::empty(),
                 return_type: Some(crate::ast::TypeExprKind::Void { attrs: vec![] }.at(span)),
                 throws: None,
-                body: Some(FunctionBodyDef::Expr(collector_exprs, collector_source_map)),
-                declarative_meta: None,
-                metadata: crate::ast::FunctionMetadata::language_internal(
-                    crate::ast::FunctionOrigin::Internal,
-                ),
-                attributes: vec![],
-                docstring: None,
-                is_tagged_template_tag: false,
+                body: Some(collector_exprs),
                 span,
-                name_span: span,
             };
 
             // registry.register_test_set_at(owner, ...)

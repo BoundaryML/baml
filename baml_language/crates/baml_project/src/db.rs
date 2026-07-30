@@ -682,7 +682,7 @@ impl ProjectDatabase {
     ) -> Option<baml_compiler2_visualization::control_flow::ControlFlowGraph> {
         use baml_compiler2_ast::{Expr, FunctionBodyDef, Item};
         use baml_compiler2_visualization::control_flow::{
-            NodeType, build_control_flow_graph_from_ast,
+            NodeType, build_control_flow_graph_from_expr,
         };
         use baml_type::Literal;
 
@@ -749,14 +749,16 @@ impl ProjectDatabase {
                     let Expr::Lambda(test_lambda) = &registration_body.exprs[args[2].expr] else {
                         continue;
                     };
-                    let Some(FunctionBodyDef::Expr(test_body, test_source_map)) =
-                        test_lambda.body.as_ref()
-                    else {
-                        continue;
-                    };
-
-                    let mut graph = build_control_flow_graph_from_ast(test_name, test_body);
-                    self.attach_source_spans_to_graph(&mut graph, source_file, test_source_map);
+                    // The test body is an expression in the registration body's
+                    // own arena, so it shares that body's source map.
+                    let test_body = registration_body;
+                    let mut graph =
+                        build_control_flow_graph_from_expr(test_name, test_body, test_lambda.body);
+                    self.attach_source_spans_to_graph(
+                        &mut graph,
+                        source_file,
+                        registration_source_map,
+                    );
 
                     let test_name_span =
                         Self::source_map_expr_range(registration_source_map, args[1].expr)

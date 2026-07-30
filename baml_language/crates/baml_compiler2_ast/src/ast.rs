@@ -667,27 +667,35 @@ impl AstSourceMap {
         self.property_shorthand_exprs.contains(&id)
     }
 
+    /// Look up a span in an arena that is index-parallel to the arena `id`
+    /// indexes.
+    ///
+    /// Every `alloc_*` in lowering pushes the node and its span together, so the
+    /// two arenas always have matching indices and this is a direct index rather
+    /// than a search. An out-of-range id means `id` came from a *different*
+    /// arena — a parameter-default id used against a body's map, say. That
+    /// yields an empty range rather than a panic: this runs in the LSP, which is
+    /// compiled to wasm, where a panic aborts the whole runtime.
+    fn span_at<U>(spans: &Arena<TextRange>, id: Idx<U>) -> TextRange {
+        let raw = id.into_raw();
+        if (raw.into_u32() as usize) < spans.len() {
+            spans[Idx::from_raw(raw)]
+        } else {
+            TextRange::default()
+        }
+    }
+
     /// Look up the source span of a statement by its `StmtId`.
     ///
     /// The `stmt_spans` arena is parallel to `ExprBody::stmts` — same indices,
     /// different element type. We convert via raw index.
     pub fn stmt_span(&self, id: StmtId) -> TextRange {
-        let raw: u32 = id.into_raw().into_u32();
-        self.stmt_spans
-            .iter()
-            .nth(raw as usize)
-            .map(|(_, &span)| span)
-            .unwrap_or_default()
+        Self::span_at(&self.stmt_spans, id)
     }
 
     /// Look up the source span of an expression by its `ExprId`.
     pub fn expr_span(&self, id: ExprId) -> TextRange {
-        let raw: u32 = id.into_raw().into_u32();
-        self.expr_spans
-            .iter()
-            .nth(raw as usize)
-            .map(|(_, &span)| span)
-            .unwrap_or_default()
+        Self::span_at(&self.expr_spans, id)
     }
 
     /// Look up the member-name span for a `MemberAccess` expression.
@@ -720,42 +728,22 @@ impl AstSourceMap {
 
     /// Look up the source span of a pattern by its `PatId`.
     pub fn pattern_span(&self, id: PatId) -> TextRange {
-        let raw: u32 = id.into_raw().into_u32();
-        self.pattern_spans
-            .iter()
-            .nth(raw as usize)
-            .map(|(_, &span)| span)
-            .unwrap_or_default()
+        Self::span_at(&self.pattern_spans, id)
     }
 
     /// Look up the source span of a match arm by its `MatchArmId`.
     pub fn match_arm_span(&self, id: MatchArmId) -> TextRange {
-        let raw: u32 = id.into_raw().into_u32();
-        self.match_arm_spans
-            .iter()
-            .nth(raw as usize)
-            .map(|(_, &span)| span)
-            .unwrap_or_default()
+        Self::span_at(&self.match_arm_spans, id)
     }
 
     /// Look up the source span of a type annotation by its `TypeAnnotId`.
     pub fn type_annotation_span(&self, id: TypeAnnotId) -> TextRange {
-        let raw: u32 = id.into_raw().into_u32();
-        self.type_annotation_spans
-            .iter()
-            .nth(raw as usize)
-            .map(|(_, &span)| span)
-            .unwrap_or_default()
+        Self::span_at(&self.type_annotation_spans, id)
     }
 
     /// Look up the source span of a catch arm by its `CatchArmId`.
     pub fn catch_arm_span(&self, id: CatchArmId) -> TextRange {
-        let raw: u32 = id.into_raw().into_u32();
-        self.catch_arm_spans
-            .iter()
-            .nth(raw as usize)
-            .map(|(_, &span)| span)
-            .unwrap_or_default()
+        Self::span_at(&self.catch_arm_spans, id)
     }
 }
 
@@ -915,7 +903,7 @@ pub enum Expr {
     /// Lambda expression: anonymous function in expression position.
     /// Reuses `FunctionDef` with synthetic name `"<anonymous function>"`.
     /// The lambda's body gets its own `ExprBody` via `FunctionBodyDef::Expr`.
-    Lambda(Box<FunctionDef>),
+    Lambda(Box<LambdaDef>),
     /// Optional index: `obj?.[expr]` — short-circuits to null if base is null.
     OptionalIndex {
         base: ExprId,
@@ -1525,6 +1513,52 @@ pub struct FunctionDef {
     pub is_tagged_template_tag: bool,
     pub span: TextRange,
     pub name_span: TextRange,
+}
+
+/// What produced a [`LambdaDef`], where that changes how TIR types it.
+///
+/// Replaces matching on a synthetic `name` string, which could not distinguish
+/// the cases without agreeing on a magic constant at a distance.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LambdaKind {
+    /// Written in source as `(x) -> { … }`, or synthesized to behave exactly
+    /// like one — the wrappers `lower_cst` builds around `test` / `testset`
+    /// bodies so they can be passed to a registration call.
+    Anonymous,
+    /// The body wrapper `lower_spawn_expr` synthesizes for `spawn { … }`.
+    /// Its throws surface is left open rather than defaulting to `never`,
+    /// because the spawned body's errors surface through the `Future`.
+    Spawn,
+}
+
+/// An anonymous function *value*, written inside an expression body.
+///
+/// Distinct from [`FunctionDef`], which describes a declared item. A lambda has
+/// no name, no generic parameters (the parser rejects them), no attributes, no
+/// docstring and no declarative metadata, and its body is always an expression
+/// body — never a `$rust_function` builtin. Carrying only those fields keeps
+/// those states unrepresentable rather than filling them with synthetic values
+/// that every reader then has to know to ignore.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LambdaDef {
+    pub kind: LambdaKind,
+    pub params: Vec<Param>,
+    /// The lambda's parameter-default expressions, in their own arena.
+    pub defaults: FunctionDefaults,
+    pub return_type: Option<TypeExpr>,
+    pub throws: Option<TypeExpr>,
+    /// The lambda's body, as an expression in the *enclosing* body's arena.
+    ///
+    /// A lambda does not own an arena: its body is lowered into the body that
+    /// contains it, exactly as rust-analyzer's `Expr::Closure { body: ExprId }`
+    /// does. `None` when the lambda has no `BLOCK_EXPR` child (a parse failure).
+    pub body: Option<ExprId>,
+    /// The lambda's *declaration* span, which is not always the span its
+    /// enclosing body records for the `Expr::Lambda` node: the synthetic
+    /// lambdas that `lower_cst` builds for top-level `test` / `testset`
+    /// registration carry an empty range here while their expression node
+    /// carries the test block's real range.
+    pub span: TextRange,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

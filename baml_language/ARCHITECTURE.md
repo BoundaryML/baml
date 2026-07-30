@@ -140,7 +140,7 @@ The parser produces a **CST** (Concrete Syntax Tree), which is a lossless, error
 **What lives here:**
 - **Companion function expansion** — LLM functions are expanded into the base function plus generated companions (`render_prompt`, `build_request`, `parse`).
 - **Client desugaring** — `client<llm>` blocks are desugared into a top-level `Let` binding (the `Client` object) plus an optional `$new` companion function (the `PrimitiveClient` constructor).
-- **Lambda expression body extraction** — Lambda bodies are lifted into their own scope-addressable units for downstream analysis.
+- **Lambda expression bodies** — A lambda's body is lowered into the enclosing function's arena and referenced by `ExprId`; the lambda gets its own scope, not its own arena.
 - **LLM function normalization** — There is no concept of "LLM function" downstream. LLM functions become regular functions with declarative metadata attached.
 - **Type expression lowering** — Source-level type syntax is converted to `TypeExpr` nodes.
 - **Config item lowering** — Config block syntax (used in clients, generators, etc.) is lowered to AST expressions.
@@ -239,7 +239,7 @@ The parser produces a **CST** (Concrete Syntax Tree), which is a lossless, error
 5. This recursively resolves until a leaf type is reached.
 
 **Key Salsa queries:**
-- `infer_scope_types(db, scope_id)` — Per-scope type inference. This is the main query. It returns types for a single scope, NOT a monolithic per-function result. This gives fine-grained incrementality: editing a lambda body only recomputes that lambda's types, not the enclosing function's.
+- `infer_scope_types(db, scope_id)` — Per-scope type inference. This is the main query. It returns types for a single scope, NOT a monolithic per-function result. Note that a lambda body is *not* independently incremental: it lives in the enclosing function's `ExprBody`, so editing it invalidates that function's body query and hence its inference.
 - `resolve_name_at(db, file, offset, name)` — On-demand name resolution with type information.
 
 ---
@@ -433,9 +433,24 @@ A `client<llm>` block desugars into **two AST items**:
 
 ### Lambda Expression Bodies
 
-Lambda bodies are extracted into their own scope-addressable AST units during CST→AST lowering. This is necessary because:
-- Lambdas need their own scope for per-scope incremental inference.
-- Capture analysis (which happens in HIR) needs each lambda to be a distinct scope.
+A lambda's body is lowered into the **enclosing function's** `ExprBody`, and the
+lambda holds an `ExprId` pointing at it — the same shape as rust-analyzer's
+`Expr::Closure { body: ExprId }`. One arena per function (or top-level `let`),
+never one per lambda.
+
+Lambdas still get their own `ScopeKind::Lambda` scope, because both of the
+reasons they need one are about *scopes*, not arenas:
+- per-scope incremental inference,
+- capture analysis in HIR, which needs each lambda to be a distinct scope.
+
+Scopes and arenas are therefore orthogonal. Two consequences worth knowing:
+- An `ExprId` is unambiguous within a function but **not** within a file, so
+  file-level maps key on `ExprMetadataKey` (arena owner + id), which is rustc's
+  `HirId { owner, local_id }`.
+- Analyses that must not attribute a lambda's behaviour to its definer — effect
+  (`throws`) inference, call-graph edges — cannot scan the arena flatly, because
+  a lambda's expressions are siblings of the function's own. They walk
+  structurally via `ExprBody::reachable_excluding_lambdas`.
 
 ---
 

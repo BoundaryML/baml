@@ -17,6 +17,7 @@ pub(crate) mod lower_cst;
 pub(crate) mod lower_expr_body;
 pub(crate) mod lower_type_expr;
 pub mod lowering_diagnostic;
+pub mod traverse;
 
 pub use ast::*;
 /// Decode common escape sequences in a quoted string literal body.
@@ -36,6 +37,7 @@ pub use lowering_diagnostic::LoweringDiagnostic;
 // Re-exported so callers of `TypeExprKind::at(span)` can name the span type
 // without depending on `text_size` directly.
 pub use text_size::TextRange;
+pub use traverse::BodyNode;
 
 /// The BEP-044 `default` receiver keyword. Inside an `implements` block,
 /// `default.method(...)` invokes the interface's *default* method body,
@@ -432,7 +434,7 @@ mod tests {
     }
 
     /// Parse BAML source and lower to AST items.
-    fn parse_and_lower(source: &str) -> Vec<Item> {
+    pub(super) fn parse_and_lower(source: &str) -> Vec<Item> {
         let root = parse(source);
         let (items, diags, _env_var_refs) = lower_file(&root);
         assert!(diags.is_empty(), "expected no diagnostics, got: {diags:#?}");
@@ -2504,5 +2506,254 @@ function Demo(name: string) -> string {
             &body.exprs[*lhs2],
             Expr::Literal(baml_base::Literal::String(s)) if s == "Hello, "
         ));
+    }
+}
+
+#[cfg(test)]
+mod traverse_coverage_tests {
+    use crate::{
+        ast::{Expr, FunctionBodyDef, Item},
+        traverse::BodyNode,
+    };
+
+    /// Every expression and statement a lambda-free body allocates must be
+    /// reachable from its root. A child this walker forgets would be silently
+    /// dropped by every analysis built on it — an unwalked `throw` simply
+    /// vanishes from the function's effect set.
+    #[test]
+    fn every_allocated_node_is_reachable_from_the_root() {
+        let sources = [
+            r#"function f(a: int, b: int) -> int throws string {
+  let m = { "k": a + b }
+  let arr = [a, b, m["k"]]
+  for (let x in arr) { if (x > 0) { throw "pos" } }
+  let i = 0
+  while (i < 3) { i = i + 1 }
+  match (a) { 1 => { throw "one" }, _ if b > 0 => { b }, _ => { 0 } }
+}"#,
+            r#"function g(o: int?, cb: () -> int) -> int throws never {
+  defer { let z = 1 }
+  let v = o?.to_string()
+  let c = cb() catch (e) { _ => 0 }
+  return c
+}"#,
+            r#"function h(xs: int[]) -> int throws never {
+  if let [first, ..rest] = xs { return first }
+  return 0
+}"#,
+            // Backtick templates carry their expressions twice — once in
+            // `segments`, once in the desugared tag payload — from the same
+            // `ExprId`s. Both must be walked, and neither may be walked twice.
+            r#"function t(a: string, n: int) -> string throws never {
+  let plain = `hi ${a} there`
+  let looped = `${for (let i in [1, 2])}x${a}${endfor}`
+  let branched = `${if (n > 0)}pos${else}neg${endif}`
+  return plain + looped + branched
+}"#,
+        ];
+        for source in sources {
+            for item in super::tests::parse_and_lower(source) {
+                let Item::Function(f) = item else { continue };
+                let Some(FunctionBodyDef::Expr(body, _)) = &f.body else {
+                    continue;
+                };
+                // Skip bodies containing lambdas: their nodes live in a nested
+                // arena, so arena membership and reachability legitimately differ.
+                if body.exprs.iter().any(|(_, e)| matches!(e, Expr::Lambda(_))) {
+                    continue;
+                }
+                let Some(root) = body.root_expr else { continue };
+                let reached: std::collections::HashSet<BodyNode> =
+                    body.reachable_excluding_lambdas(root).into_iter().collect();
+
+                let missed_exprs: Vec<_> = body
+                    .exprs
+                    .iter()
+                    .map(|(id, _)| id)
+                    .filter(|id| !reached.contains(&BodyNode::Expr(*id)))
+                    .collect();
+                let missed_stmts: Vec<_> = body
+                    .stmts
+                    .iter()
+                    .map(|(id, _)| id)
+                    .filter(|id| !reached.contains(&BodyNode::Stmt(*id)))
+                    .collect();
+
+                // The arena is a DAG (templates share ids between their two
+                // representations), so the walk must also not repeat itself:
+                // callers that push per visit would report duplicates.
+                let walked = body.reachable_excluding_lambdas(root);
+                assert_eq!(
+                    walked.len(),
+                    reached.len(),
+                    "`{}` visited {} nodes for {} unique — the walk must de-duplicate",
+                    f.name,
+                    walked.len(),
+                    reached.len(),
+                );
+
+                assert!(
+                    missed_exprs.is_empty() && missed_stmts.is_empty(),
+                    "unreachable nodes in `{}`:\n  exprs: {:?}\n  stmts: {:?}\nsource:\n{source}",
+                    f.name,
+                    missed_exprs
+                        .iter()
+                        .map(|id| (*id, &body.exprs[*id]))
+                        .collect::<Vec<_>>(),
+                    missed_stmts
+                        .iter()
+                        .map(|id| (*id, &body.stmts[*id]))
+                        .collect::<Vec<_>>(),
+                );
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod testset_nesting_tests {
+    use crate::ast::{Expr, FunctionBodyDef, Item, Stmt};
+
+    /// Count `<collector>.register_test` / `register_test_set` calls in a body.
+    ///
+    /// Lambda bodies share this arena, so the flat scan already covers the
+    /// registration lambdas the test/testset wrappers introduce.
+    fn count_registrations(body: &crate::ast::ExprBody) -> usize {
+        let mut n = 0;
+        for (_, expr) in body.exprs.iter() {
+            if let Expr::Call { callee, .. } = expr {
+                if let Expr::MemberAccess { member, .. } = &body.exprs[*callee]
+                    && matches!(member.as_str(), "register_test" | "register_test_set")
+                {
+                    n += 1;
+                }
+                if let Expr::Path(segments) = &body.exprs[*callee]
+                    && segments.last().is_some_and(|s| {
+                        matches!(s.as_str(), "register_test_at" | "register_test_set_at")
+                    })
+                {
+                    n += 1;
+                }
+            }
+        }
+        n
+    }
+
+    fn count_missing_stmts(body: &crate::ast::ExprBody) -> usize {
+        body.stmts
+            .iter()
+            .filter(|(_, s)| matches!(s, Stmt::Missing))
+            .count()
+    }
+
+    /// A `test` nested inside a `testset` registers; a `test` nested inside a
+    /// `test` does not.
+    ///
+    /// The distinction is carried entirely by `LoweringContext::testset_collector_var`:
+    /// a testset body sets it, a test body clears it. Both intents are currently
+    /// expressed by *which constructor* builds the body's context, so anything
+    /// that changes how those bodies are lowered has to reproduce both — set and
+    /// clear. Getting only the "set" half right makes `test` silently nest.
+    #[test]
+    fn a_test_inside_a_test_does_not_register() {
+        let items = super::tests::parse_and_lower(
+            r#"testset "Outer" {
+  test "Middle" {
+    test "Inner" {
+      assert.is_true(true)
+    }
+  }
+}"#,
+        );
+
+        let init = items
+            .iter()
+            .find_map(|item| match item {
+                Item::Function(f) if f.name.as_str().starts_with("$init_test") => Some(f),
+                _ => None,
+            })
+            .expect("expected a synthesized $init_test function");
+        let Some(FunctionBodyDef::Expr(body, _)) = &init.body else {
+            panic!("expected an expression body for $init_test");
+        };
+
+        // Outer testset + Middle test = 2. `Inner` sits in a test body, where
+        // the collector is cleared, so it lowers to `Stmt::Missing` instead.
+        //
+        // This pins the *registration* behaviour, not the diagnostic story:
+        // dropping `Inner` silently is a separate known bug (see the `// BUG:`
+        // note on the `TEST_EXPR_DEF` arm in `lower_expr_body.rs`).
+        assert_eq!(
+            count_registrations(body),
+            2,
+            "expected exactly the testset and the test it contains to register"
+        );
+        assert!(
+            count_missing_stmts(body) >= 1,
+            "expected the doubly-nested `test` to lower to `Stmt::Missing`"
+        );
+    }
+}
+
+#[cfg(test)]
+mod lambda_arena_tests {
+    use crate::ast::{Expr, FunctionBodyDef, Item, Stmt};
+
+    /// A lambda's body is allocated in the enclosing function's arena, and is
+    /// *not* reachable from that function's root.
+    ///
+    /// This is why effect analyses cannot scan the arena flatly: a `throw`
+    /// written inside a lambda is a sibling of the function's own statements,
+    /// indistinguishable from one the function wrote itself.
+    #[test]
+    fn a_lambdas_throw_is_in_the_enclosing_arena_but_not_reachable_from_its_root() {
+        let items = super::tests::parse_and_lower(
+            r#"function defines(value: int) -> int throws never {
+  let risky = (n: int) -> int {
+    throw "boom"
+  }
+  return value
+}"#,
+        );
+        let Some(Item::Function(f)) = items.into_iter().next() else {
+            panic!("expected a function item");
+        };
+        let Some(FunctionBodyDef::Expr(body, _)) = &f.body else {
+            panic!("expected an expression body");
+        };
+
+        let throw_stmts: Vec<_> = body
+            .stmts
+            .iter()
+            .filter(|(_, s)| matches!(s, Stmt::Throw { .. }))
+            .map(|(id, _)| id)
+            .collect();
+        assert_eq!(
+            throw_stmts.len(),
+            1,
+            "the lambda's `throw` must live in the enclosing function's arena"
+        );
+
+        let root = body.root_expr.expect("root");
+        let reached = body.reachable_excluding_lambdas(root);
+        assert!(
+            !reached.contains(&crate::traverse::BodyNode::Stmt(throw_stmts[0])),
+            "a structural walk that stops at lambdas must not reach the lambda's `throw`"
+        );
+
+        // And the lambda really does own it.
+        let lambda_root = body
+            .exprs
+            .iter()
+            .find_map(|(_, e)| match e {
+                Expr::Lambda(l) => l.body,
+                _ => None,
+            })
+            .expect("lambda body");
+        assert!(
+            body.reachable_excluding_lambdas(lambda_root)
+                .contains(&crate::traverse::BodyNode::Stmt(throw_stmts[0])),
+            "walking from the lambda's own root must reach its `throw`"
+        );
     }
 }

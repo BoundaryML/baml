@@ -3878,7 +3878,7 @@ impl<'db> LoweringContext<'db> {
     #[allow(clippy::cast_possible_truncation)]
     fn lower_lambda(
         &mut self,
-        func_def: &baml_compiler2_ast::FunctionDef,
+        func_def: &baml_compiler2_ast::LambdaDef,
         expr_id: AstExprId,
         dest: Place,
     ) {
@@ -3913,16 +3913,12 @@ impl<'db> LoweringContext<'db> {
             self.current_scope
         };
 
-        // Pull out the lambda's body and source map.
-        let (lambda_body, lambda_source_map) = match func_def.body.as_ref() {
-            Some(baml_compiler2_ast::FunctionBodyDef::Expr(body, sm)) => {
-                (body.clone(), Some(sm.clone()))
-            }
-            _ => {
-                // No body — emit a panic stub and return.
-                self.emit_panic_call("lambda without body", expr_id);
-                return;
-            }
+        // The body is an expression in the arena already installed — a lambda
+        // owns no `ExprBody`, so there is nothing to swap in.
+        let Some(lambda_root) = func_def.body else {
+            // No body — emit a panic stub and return.
+            self.emit_panic_call("lambda without body", expr_id);
+            return;
         };
 
         // Read HIR captures for this lambda scope.
@@ -3948,8 +3944,6 @@ impl<'db> LoweringContext<'db> {
             &mut self.builder,
             MirBuilder::new(Name::new(&lambda_name), 0),
         );
-        let saved_body = std::mem::replace(&mut self.body, lambda_body);
-        let saved_source_map = std::mem::replace(&mut self.source_map, lambda_source_map);
         let saved_locals = std::mem::take(&mut self.locals);
         let saved_binding_locals = std::mem::take(&mut self.binding_locals);
         let saved_exit_block = self.exit_block;
@@ -3960,17 +3954,10 @@ impl<'db> LoweringContext<'db> {
         let saved_defer_stack = std::mem::take(&mut self.defer_stack);
         let saved_current_scope = self.current_scope;
         let saved_metadata_scope = self.current_metadata_scope;
-        // Extend the enclosing-lambda generic params with this lambda's own
-        // params for the duration of its body, so `reflect.type_of<T>` (and any
-        // type-arg resolution) inside resolves `T` to the right frame slot.
-        // Appended after the enclosing params, matching the runtime layout:
-        // frame.type_args = [captured enclosing params..., this lambda's args...].
+        // A lambda declares no generic parameters of its own, so its frame is
+        // exactly the enclosing one and nothing is appended for the body. The
+        // save/restore stays because the body may itself contain lambdas.
         let saved_lambda_generic_params = self.lambda_generic_params.clone();
-        let mut all_generic_params = self.enclosing_generic_params();
-        let inherited_count = all_generic_params.len();
-        ParamTy::extend_frame(&mut all_generic_params, &func_def.generic_params);
-        self.lambda_generic_params
-            .extend_from_slice(&all_generic_params[inherited_count..]);
         // NOTE: synthetic_name_counts is intentionally NOT saved — its counter
         // keeps incrementing across the whole function for uniqueness.
         //
@@ -4172,15 +4159,8 @@ impl<'db> LoweringContext<'db> {
         self.exit_block = exit_blk;
         self.builder.set_current_block(entry);
 
-        // Lower the root expression into the return place.
-        if let Some(root) = self.body.root_expr {
-            self.lower_expr(root, Place::local(ret));
-        } else {
-            self.builder.assign(
-                Place::local(ret),
-                Rvalue::Use(Operand::Constant(Constant::Null)),
-            );
-        }
+        // Lower the body expression into the return place.
+        self.lower_expr(lambda_root, Place::local(ret));
 
         // Terminate: goto exit, then return.
         if !self.builder.is_current_terminated() {
@@ -4216,12 +4196,9 @@ impl<'db> LoweringContext<'db> {
             // A lambda has no source-level name; its `Function::name` is a
             // synthetic debug identity.
             name: None,
-            docstring: func_def.docstring.clone(),
-            display_type_params: func_def
-                .generic_params
-                .iter()
-                .map(std::string::ToString::to_string)
-                .collect(),
+            // A lambda carries neither a docstring nor generic parameters.
+            docstring: None,
+            display_type_params: Vec::new(),
             display_param_types: sig_display_param_types,
             display_return_type: sig_display_return_type,
             param_names: func_def.params.iter().map(|p| p.name.to_string()).collect(),
@@ -4243,8 +4220,6 @@ impl<'db> LoweringContext<'db> {
         // Restore parent state.
         self.lambda_param_tir_types = saved_lambda_param_tir_types;
         self.builder = saved_builder;
-        self.body = saved_body;
-        self.source_map = saved_source_map;
         self.locals = saved_locals;
         self.binding_locals = saved_binding_locals;
         self.exit_block = saved_exit_block;

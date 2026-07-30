@@ -11,10 +11,10 @@ source: crates/baml_tests/src/generated_tests.rs
     ·          ─────────────────────────────────────────
     ╰────
   ╰─▶   ☞ this call forwards whatever callback `handler` throws
-         ╭─[function_type_throws.baml:1:1]
-       1 │ // Function types outside immediate callback-parameter position must declare
-         · ▲
-         ╰────
+          ╭─[function_type_throws.baml:31:35]
+       31 │   return (value: int) -> string { handler(value) }
+          ·                                   ──────────────
+          ╰────
 
   [type] E0001
 

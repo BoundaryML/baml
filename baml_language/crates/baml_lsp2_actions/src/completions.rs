@@ -1337,9 +1337,9 @@ fn local_variable_ty(
             }
         }
         baml_compiler2_hir::semantic_index::DefinitionSite::Statement(_) => {
-            // Search all scopes for the binding type. This handles variables
-            // inside lambdas (test bodies, closures) where the variable's
-            // StmtId is in a nested ExprBody, not the outer function's body.
+            // Handles variables declared inside lambdas (test bodies,
+            // closures) as well as directly in the function body — both index
+            // the same arena.
             find_binding_ty_for_local(db, file, at_offset, site)
         }
         baml_compiler2_hir::semantic_index::DefinitionSite::PatternBinding(_)
@@ -1353,12 +1353,9 @@ fn local_variable_ty(
 /// (which may be a nested lambda body for test/testset code) and looking up the
 /// binding type from TIR inference.
 ///
-/// For `Statement` bindings, we walk the scope tree to build a nesting path from
-/// the cursor's innermost Lambda scope up to the enclosing Function scope, then
-/// descend through the `ExprBody` tree using each body's source map to match
-/// lambda expression spans against scope ranges. This ensures we find the correct
-/// `ExprBody` even for deeply nested testset/test lambdas, where `func_def.span`
-/// may not match the scope range set by the HIR builder.
+/// For `Statement` bindings, the `StmtId` indexes the enclosing function's
+/// `ExprBody`. Lambda bodies are lowered into that same arena, so the statement
+/// resolves against it however deeply the cursor sits inside nested lambdas.
 fn find_binding_ty_for_local(
     db: &dyn Db,
     file: SourceFile,
@@ -1369,23 +1366,17 @@ fn find_binding_ty_for_local(
 
     let pat_id = match site {
         baml_compiler2_hir::semantic_index::DefinitionSite::Statement(stmt_id) => {
-            // 1. Build the scope nesting path from cursor to enclosing Function.
-            //    lambda_ranges: innermost-first Lambda scope ranges.
-            //    func_range: the enclosing Function scope range.
+            // Walk out to the enclosing Function scope, which owns the arena
+            // every statement in it — lambda bodies included — lives in.
             let scope_id = index.scope_at_offset(at_offset, None);
             let ancestors = index.ancestor_scopes(scope_id);
 
-            let mut lambda_ranges_rev: Vec<text_size::TextRange> = Vec::new();
             let mut func_range: Option<text_size::TextRange> = None;
             for ancestor_id in &ancestors {
                 let s = &index.scopes[ancestor_id.index() as usize];
-                match s.kind {
-                    ScopeKind::Lambda => lambda_ranges_rev.push(s.range),
-                    ScopeKind::Function => {
-                        func_range = Some(s.range);
-                        break;
-                    }
-                    _ => {}
+                if s.kind == ScopeKind::Function {
+                    func_range = Some(s.range);
+                    break;
                 }
             }
 
@@ -1397,21 +1388,7 @@ fn find_binding_ty_for_local(
                 return None;
             };
 
-            // 3. If cursor is directly in the Function (no lambda nesting), use it.
-            if lambda_ranges_rev.is_empty() {
-                extract_pat_from_stmt(top_body, stmt_id)
-            } else {
-                // Get the top-level source map and descend through nested lambdas.
-                let top_source_map =
-                    baml_compiler2_hir::body::function_body_source_map(db, func_loc)?;
-
-                // Reverse to get outermost→innermost order for descent.
-                lambda_ranges_rev.reverse();
-
-                let target_body =
-                    descend_into_lambdas(top_body, &top_source_map, &lambda_ranges_rev)?;
-                extract_pat_from_stmt(target_body, stmt_id)
-            }
+            extract_pat_from_stmt(top_body, stmt_id)
         }
         baml_compiler2_hir::semantic_index::DefinitionSite::PatternBinding(pat_id)
         | baml_compiler2_hir::semantic_index::DefinitionSite::CatchBinding(pat_id) => Some(pat_id),
@@ -1448,39 +1425,6 @@ fn extract_pat_from_stmt(
         } => Some(*pattern),
         _ => None,
     }
-}
-
-/// Descend through nested lambda bodies following the given scope ranges.
-///
-/// `lambda_ranges` is ordered outermost→innermost. At each level, finds the
-/// `Expr::Lambda` whose expression span (from the current body's source map)
-/// matches the target range, then recurses into that lambda's body. This uses
-/// the **same** source map the HIR builder used when creating scope ranges,
-/// guaranteeing a match even for deeply nested testset/test lambdas.
-fn descend_into_lambdas<'a>(
-    body: &'a baml_compiler2_ast::ExprBody,
-    source_map: &baml_compiler2_ast::AstSourceMap,
-    lambda_ranges: &[text_size::TextRange],
-) -> Option<&'a baml_compiler2_ast::ExprBody> {
-    if lambda_ranges.is_empty() {
-        return Some(body);
-    }
-    let target_range = lambda_ranges[0];
-    for (expr_id, expr) in body.exprs.iter() {
-        if let baml_compiler2_ast::Expr::Lambda(func_def) = expr {
-            let expr_span = source_map.expr_span(expr_id);
-            if expr_span == target_range {
-                if let Some(baml_compiler2_ast::FunctionBodyDef::Expr(
-                    ref nested_body,
-                    ref nested_sm,
-                )) = func_def.body
-                {
-                    return descend_into_lambdas(nested_body, nested_sm, &lambda_ranges[1..]);
-                }
-            }
-        }
-    }
-    None
 }
 
 // ── Value-position completions ────────────────────────────────────────────────
