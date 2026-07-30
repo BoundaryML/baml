@@ -142,6 +142,15 @@ impl Reporter {
         print_error(msg);
     }
 
+    /// Print a fatal error and hand back the terminal exit code, so
+    /// command handlers can `return Ok(reporter.fatal(...))` instead of
+    /// printing through `eprintln!` and constructing the code by hand.
+    #[must_use]
+    pub fn fatal(&self, msg: impl std::fmt::Display) -> crate::ExitCode {
+        self.error(msg);
+        crate::ExitCode::Other
+    }
+
     /// Print a warning. Mirrors the formatting of [`print_warning`].
     pub fn warning(&self, msg: impl std::fmt::Display) {
         let line = format!(

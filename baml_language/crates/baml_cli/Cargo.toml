@@ -53,6 +53,7 @@ indexmap = { workspace = true }
 indicatif = { workspace = true }
 libsui = { workspace = true }
 mimalloc = { workspace = true }
+mime_guess = { workspace = true }
 rayon = { workspace = true }
 regex = { workspace = true }
 reqwest = { workspace = true, features = [ "blocking", "json", "rustls" ] }
