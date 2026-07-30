@@ -2,6 +2,7 @@
   "name": "baml-language",
   "displayName": "BAML",
   "description": "BAML language support — syntax highlighting, hover, completions, diagnostics, go-to-definition",
+  "icon": "baml-logo.png",
   "version": "0.15.0",
   "publisher": "Boundary",
   "private": true,
@@ -22,7 +23,11 @@
         "id": "baml",
         "aliases": ["BAML", "baml"],
         "extensions": [".baml"],
-        "configuration": "./language-configuration.json"
+        "configuration": "./language-configuration.json",
+        "icon": {
+          "light": "./baml-logo.png",
+          "dark": "./baml-logo.png"
+        }
       }
     ],
     "grammars": [
