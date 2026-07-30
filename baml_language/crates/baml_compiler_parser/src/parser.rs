@@ -4152,8 +4152,8 @@ impl<'a> Parser<'a> {
     }
 
     /// Scan tokens to detect if this looks like a declarative model function body.
-    /// Legacy LLM functions contain `client` / `prompt`; AI functions contain
-    /// `provider` / `prompt` (and may also contain `tools`).
+    /// The model source may be spelled `client` or `provider`; either form may
+    /// also contain `prompt` and optional `tools`.
     /// Expression functions contain `let`, `return`, `if`, `while`, `for`.
     fn looks_like_llm_function_body(&self) -> bool {
         let mut i = self.current;
@@ -4188,7 +4188,7 @@ impl<'a> Parser<'a> {
                         return false;
                     }
                     if matches!(text.as_str(), "provider" | "tools") {
-                        // New AI fields require a colon. This avoids
+                        // Expression-valued declarative fields require a colon. This avoids
                         // misclassifying ordinary expression bodies which call
                         // a local named `provider` or `tools`.
                         let j = self.skip_trivia_and_comments_from(i + 1);
@@ -4254,7 +4254,6 @@ impl<'a> Parser<'a> {
             let mut has_provider = false;
             let mut has_prompt = false;
             let mut has_tools = false;
-            let mut prompt_uses_backticks = false;
 
             while !p.at(TokenKind::RBrace) && !p.at_end() {
                 // Error recovery: if we see a top-level keyword (except Client and TypeBuilder)
@@ -4277,7 +4276,8 @@ impl<'a> Parser<'a> {
                 } else if p.at(TokenKind::Client) {
                     if has_provider {
                         p.error_unexpected_token(
-                            "AI function cannot declare both 'client' and 'provider'".to_string(),
+                            "declarative function cannot declare both 'client' and 'provider'"
+                                .to_string(),
                         );
                     }
                     if has_client {
@@ -4288,7 +4288,8 @@ impl<'a> Parser<'a> {
                 } else if p.at_word("provider") {
                     if has_client {
                         p.error_unexpected_token(
-                            "AI function cannot declare both 'client' and 'provider'".to_string(),
+                            "declarative function cannot declare both 'client' and 'provider'"
+                                .to_string(),
                         );
                     }
                     if has_provider {
@@ -4303,7 +4304,7 @@ impl<'a> Parser<'a> {
                         p.error_unexpected_token("Duplicate 'prompt' field".to_string());
                     }
                     has_prompt = true;
-                    prompt_uses_backticks = p.parse_prompt_field();
+                    p.parse_prompt_field();
                 } else if p.at_word("tools") {
                     if has_tools {
                         p.error_unexpected_token("Duplicate 'tools' field".to_string());
@@ -4339,10 +4340,8 @@ impl<'a> Parser<'a> {
                 );
             }
             if !has_prompt {
-                p.error_unexpected_token("LLM function missing 'prompt' field".to_string());
-            } else if has_provider && !prompt_uses_backticks {
                 p.error_unexpected_token(
-                    "AI function prompt must use a backtick template".to_string(),
+                    "declarative model function missing 'prompt' field".to_string(),
                 );
             }
 
@@ -4424,7 +4423,7 @@ impl<'a> Parser<'a> {
                 .unwrap_or(false)
     }
 
-    /// Parse an expression-valued AI function field. `parse_expr` naturally
+    /// Parse an expression-valued declarative model-function field. `parse_expr` naturally
     /// stops at the next declarative field token after the expression, while
     /// still admitting calls, object literals, arrays, and parameter-dependent
     /// expressions.
@@ -4444,8 +4443,7 @@ impl<'a> Parser<'a> {
         });
     }
 
-    fn parse_prompt_field(&mut self) -> bool {
-        let mut uses_backticks = false;
+    fn parse_prompt_field(&mut self) {
         self.with_node(SyntaxKind::PROMPT_FIELD, |p| {
             // Expect 'prompt' keyword (as Word token)
             if p.at(TokenKind::Word) && p.current().map(|t| t.text == "prompt").unwrap_or(false) {
@@ -4458,12 +4456,10 @@ impl<'a> Parser<'a> {
             p.eat(TokenKind::Colon);
 
             // Prompt value (usually a raw string)
-            uses_backticks = p.at(TokenKind::Backtick);
             if !p.parse_any_string() {
                 p.error_unexpected_token("prompt string".to_string());
             }
         });
-        uses_backticks
     }
 
     /// Parse a lambda expression:
@@ -10965,7 +10961,7 @@ function Search(query: string, max_results: int = 10, filter: string = "none") -
     }
 
     #[test]
-    fn parses_ai_function_fields_and_task_access() {
+    fn parses_declarative_model_function_fields_and_task_access() {
         let source = r#"
 function Ask(prefix: string, question: string) -> string {
   provider: prefix
@@ -10989,20 +10985,15 @@ function main() -> ai.Task<string> {
     }
 
     #[test]
-    fn ai_function_requires_a_backtick_prompt() {
+    fn provider_source_accepts_a_registered_jinja_prompt() {
         let source = r##"
 function Ask(provider: Provider) -> string {
   provider: provider
-  prompt: #"not a prompt closure"#
+  prompt: #"Answer {{ ctx.output_format }}"#
 }
 "##;
         let (_root, errors) = parse_source(source);
-        assert!(
-            errors
-                .iter()
-                .any(|error| format!("{error:?}").contains("backtick template")),
-            "expected a targeted backtick diagnostic, got: {errors:#?}"
-        );
+        assert!(errors.is_empty(), "unexpected parse errors: {errors:#?}");
     }
 
     #[test]

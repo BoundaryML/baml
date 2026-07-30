@@ -179,9 +179,9 @@ pub enum SyntaxKind {
     EXPR_FUNCTION_BODY, // Function body with expressions/statements
     PROMPT_FIELD,
     CLIENT_REFERENCE,
-    CLIENT_FIELD,   // 'client' field in LLM function
-    PROVIDER_FIELD, // 'provider' expression in an AI function
-    TOOLS_FIELD,    // optional 'tools' expression in an AI function
+    CLIENT_FIELD,   // named-client source in a declarative model function
+    PROVIDER_FIELD, // provider source expression in a declarative model function
+    TOOLS_FIELD,    // optional tools expression in a declarative model function
     DEFAULT_IMPL,
 
     // Class components

@@ -170,6 +170,7 @@ pub const ALL: &[BuiltinFile] = &[
     builtin!("ai", "ns_harness/model_harness.baml"),
     builtin!("ai", "ns_harness/models.baml"),
     builtin!("ai", "ns_internal/agent.baml"),
+    builtin!("ai", "ns_internal/client_provider.baml"),
     builtin!("ai", "ns_internal/conversation_append.baml"),
     builtin!("ai", "ns_internal/http.baml"),
     builtin!("ai", "ns_internal/replay.baml"),
@@ -250,7 +251,7 @@ mod tests {
             .filter(|file| file.package == PACKAGE_AI)
             .collect::<Vec<_>>();
 
-        assert_eq!(ai_files.len(), 53);
+        assert_eq!(ai_files.len(), 54);
         assert!(ai_files.iter().all(|file| !file.contents.is_empty()));
         assert!(ai_files.iter().any(|file| {
             file.relative_path == "execution/task.baml" && file.namespace_path().is_empty()

@@ -96,11 +96,11 @@ function _prompt_turn<T>(
                 [ai.messages._prompt_text_content(rendered), prior],
             )
     };
-    let recipe = ai.PromptRenderRecipe {
-        template: (ctx: baml.llm.Context) -> baml.llm.PromptAst {
+    let recipe = ai._prompt_recipe(
+        (ctx: baml.llm.Context) -> baml.llm.PromptAst {
             prompt
         },
-    };
+    );
     ai.Task<T> {
         provider: state.owner,
         prompt: prompt,

@@ -435,7 +435,7 @@ class Client {
         let primitive = self.to_primitive_client()
         let return_type = reflect.type_of<T>()
 
-        // Render (new-mode closure or legacy Jinja) + specialize via the shared
+        // Render (backtick closure or raw Jinja template) + specialize via the shared
         // `render_specialized_prompt`, the same path the static `build_request`
         // companion uses — so execution and preview never drift.
         let specialized = primitive.render_specialized_prompt(
@@ -741,9 +741,9 @@ class PrimitiveClient {
   }
 
   /// BEP-049 M5: turn a function's prompt into a request-ready (specialized)
-  /// `PromptAst`, dispatching on mode. A new-mode `prompt`…`` compiles to a
+  /// `PromptAst`, dispatching on prompt syntax. A backtick `prompt`…`` compiles to a
   /// `(Context) -> PromptAst` closure rendered against a per-attempt `Context`;
-  /// a legacy `#"..."#` function (null closure) renders the stored Jinja
+  /// a raw Jinja `#"..."#` prompt (null closure) renders the stored
   /// `template`. This is the SINGLE source of truth for prompt rendering: the
   /// orchestrator (`execute_once_oneshot` / `execute_stream`) and the static
   /// `render_prompt` / `build_request` companions both call it, so the playground
@@ -868,7 +868,7 @@ function render_prompt_values(values: unknown[]) -> unknown[] throws never {
 /// BEP-049 §10 (M5b). Render `return_type`'s schema with default options — the
 /// string `ctx.output_format` exposes to a `prompt` body. The orchestrator
 /// calls this with the call's return type to populate `Context.output_format`,
-/// producing output byte-equivalent to the legacy Jinja `{{ ctx.output_format }}`.
+/// producing output byte-equivalent to raw Jinja `{{ ctx.output_format }}`.
 function render_output_format(return_type: type) -> string throws never {
   $rust_io_function
 }

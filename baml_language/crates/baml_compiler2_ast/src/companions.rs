@@ -12,7 +12,7 @@ use baml_base::Name;
 
 use crate::{
     DeclarativeMeta,
-    ast::{DeclarativeExecution, FunctionBodyDef, FunctionDef, Param, TypeExpr, TypeExprKind},
+    ast::{FunctionBodyDef, FunctionDef, Param, TypeExpr, TypeExprKind},
     lower_cst::{synthesize_llm_builtin_call, synthesize_llm_parse_call},
 };
 
@@ -40,12 +40,10 @@ pub(crate) fn expand_companions(func: &FunctionDef) -> Vec<FunctionDef> {
 }
 
 fn llm_render_prompt(parent: &FunctionDef) -> Option<FunctionDef> {
-    // Only LLM functions get render_prompt / build_request companions.
-    if !matches!(
-        &parent.declarative_meta,
-        Some(DeclarativeMeta::Llm(llm))
-            if llm.execution == DeclarativeExecution::LegacyClient
-    ) {
+    // Client-sourced declarations retain the established request-inspection
+    // companions for compatibility. Normal execution still goes through Task.
+    if !matches!(&parent.declarative_meta, Some(DeclarativeMeta::Llm(llm)) if llm.client.is_some())
+    {
         return None;
     }
     Some(make_llm_companion(
@@ -56,12 +54,8 @@ fn llm_render_prompt(parent: &FunctionDef) -> Option<FunctionDef> {
 }
 
 fn llm_build_request(parent: &FunctionDef) -> Option<FunctionDef> {
-    // Only LLM functions get render_prompt / build_request companions.
-    if !matches!(
-        &parent.declarative_meta,
-        Some(DeclarativeMeta::Llm(llm))
-            if llm.execution == DeclarativeExecution::LegacyClient
-    ) {
+    if !matches!(&parent.declarative_meta, Some(DeclarativeMeta::Llm(llm)) if llm.client.is_some())
+    {
         return None;
     }
     Some(make_llm_companion(
@@ -72,11 +66,8 @@ fn llm_build_request(parent: &FunctionDef) -> Option<FunctionDef> {
 }
 
 fn llm_build_request_stream(parent: &FunctionDef) -> Option<FunctionDef> {
-    if !matches!(
-        &parent.declarative_meta,
-        Some(DeclarativeMeta::Llm(llm))
-            if llm.execution == DeclarativeExecution::LegacyClient
-    ) {
+    if !matches!(&parent.declarative_meta, Some(DeclarativeMeta::Llm(llm)) if llm.client.is_some())
+    {
         return None;
     }
     Some(make_llm_companion(
@@ -87,12 +78,9 @@ fn llm_build_request_stream(parent: &FunctionDef) -> Option<FunctionDef> {
 }
 
 fn ai_task(parent: &FunctionDef) -> Option<FunctionDef> {
-    let Some(DeclarativeMeta::Llm(llm)) = &parent.declarative_meta else {
+    let Some(DeclarativeMeta::Llm(_)) = &parent.declarative_meta else {
         return None;
     };
-    if llm.execution != DeclarativeExecution::AiProvider {
-        return None;
-    }
     let (body, source_map) = llm_companion_body(parent, "task")?;
     let output = parent.return_type.clone()?;
     let return_type = (TypeExprKind::Path {
@@ -131,12 +119,10 @@ fn ai_task(parent: &FunctionDef) -> Option<FunctionDef> {
 /// only computable with PPIR context (package items, block attrs, alias
 /// bodies) — hence the extra `type_args` parameter.
 pub fn llm_parse(parent: &FunctionDef, type_args: Vec<TypeExpr>) -> Option<FunctionDef> {
-    // Only LLM functions get a parse companion.
-    if !matches!(
-        &parent.declarative_meta,
-        Some(DeclarativeMeta::Llm(llm))
-            if llm.execution == DeclarativeExecution::LegacyClient
-    ) {
+    // Client-sourced declarations retain the established local parser
+    // companion for compatibility. Parsing is not part of model execution.
+    if !matches!(&parent.declarative_meta, Some(DeclarativeMeta::Llm(llm)) if llm.client.is_some())
+    {
         return None;
     }
 
@@ -209,10 +195,8 @@ fn make_llm_companion(
         Some(DeclarativeMeta::Llm(llm)) => llm.client.as_ref().map(smol_str::SmolStr::as_str),
         _ => None,
     };
-    // New-mode (backtick) parents stashed a closure-carrying companion body for
-    // this target during CST lowering (the backtick CST isn't reachable here);
-    // use it so the companion renders the prompt through its closure — matching
-    // execution. Legacy Jinja parents fall back to the plain 3-arg builtin call.
+    // Backtick-prompt parents stash a closure-carrying companion body while the
+    // CST is available. Raw Jinja prompts use the registered-template fallback.
     let (body, source_map) = llm_companion_body(parent, target).unwrap_or_else(|| {
         synthesize_llm_builtin_call(
             target,
@@ -242,10 +226,10 @@ fn make_llm_companion(
     }
 }
 
-/// The pre-lowered, closure-carrying companion body for `target` that a new-mode
-/// (backtick) LLM parent stashed during CST lowering (see
+/// The pre-lowered, closure-carrying companion body for `target` that a
+/// backtick-prompt parent stashed during CST lowering (see
 /// [`LlmBodyDef::companion_bodies`](crate::ast::LlmBodyDef::companion_bodies)),
-/// or `None` for a legacy Jinja parent (which renders via the 3-arg builtin).
+/// or `None` for a raw Jinja prompt (which renders via the 3-arg builtin).
 fn llm_companion_body(
     parent: &FunctionDef,
     target: &str,

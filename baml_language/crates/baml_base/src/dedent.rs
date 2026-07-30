@@ -13,10 +13,10 @@
 //!    line as-is (its content is whitespace-only).
 //! 3. Trim leading/trailing whitespace from the overall result.
 //!
-//! Used by BEP-049 backtick string literals (multi-line auto-dedent, §12). The
-//! legacy Jinja prompt pipeline (`sys_llm::preprocess_template`) keeps the older
-//! byte-count-min variant until that path is removed (M6) — they intentionally
-//! diverge on mixed tab/space indentation, which only the new backtick form specs.
+//! Used by BEP-049 backtick string literals (multi-line auto-dedent, §12). Raw
+//! Jinja prompts still use `sys_llm::preprocess_template` and its older
+//! byte-count-min rule, so the two prompt syntaxes intentionally differ on mixed
+//! tab/space indentation.
 // Walk leading whitespace by *char* so we never split a multi-byte
 // Unicode whitespace codepoint (NBSP U+00A0 = 2 bytes, LINE SEPARATOR
 // U+2028 = 3 bytes, etc.). A naive `line.len() - line.trim_start().len()`

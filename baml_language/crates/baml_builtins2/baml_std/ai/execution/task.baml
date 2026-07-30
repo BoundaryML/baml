@@ -4,7 +4,7 @@ class TaskIdentity {
 }
 
 /// A typed, inspectable model call recipe. Constructed automatically through
-/// `F@task(...)` for declarative AI functions.
+/// `F@task(...)` for declarative model functions.
 class Task<T> {
     provider: Provider,
     prompt: baml.llm.PromptAst,
@@ -71,6 +71,12 @@ function task<T>(
     _task_named<T>(provider, "anonymous", {}, [], template)
 }
 
+/// Compiler bridge for the `client:` spelling. The returned value is an
+/// ordinary Provider and follows the same Task + Agent path as `provider:`.
+function _provider_from_client(client: baml.llm.Client) -> Provider throws never {
+    ai.internal.ClientProvider { client: client }
+}
+
 /// Compiler entry point for constructing a named generated task.
 function _task_named<T>(
     provider: Provider,
@@ -80,7 +86,29 @@ function _task_named<T>(
     template: (baml.llm.Context) -> baml.llm.PromptAst throws never,
 ) -> Task<T> throws never {
     //# Capture the reusable prompt recipe
-    let recipe = PromptRenderRecipe { template: template };
+    let recipe = _prompt_recipe(template);
+    //# Render the task for its initial provider
+    Task<T> {
+        provider: provider,
+        prompt: recipe.render(provider, reflect.type_of<T>()),
+        identity: TaskIdentity { name: name, package: "user" },
+        arguments: arguments,
+        tools: ai.tools.normalize_tools(tools),
+        tags: {},
+        _render: recipe,
+    }
+}
+
+/// Compiler entry point for a raw Jinja prompt registered under the generated
+/// function name. It constructs the same Task<T> as a backtick prompt.
+function _task_named_from_registered_prompt<T>(
+    provider: Provider,
+    name: string,
+    arguments: map<string, unknown>,
+    tools: ai.tools.ToolInput[],
+) -> Task<T> throws never {
+    //# Capture the registered prompt as a reusable recipe
+    let recipe = _registered_prompt_recipe(name, arguments);
     //# Render the task for its initial provider
     Task<T> {
         provider: provider,

@@ -307,9 +307,9 @@ pub struct UserFunctionInfo {
     /// Exposed for BEP-027 §"`baml.argv`": `argv[1]` under root-main `baml run`
     /// is the path to the file containing `main`.
     pub source_file: String,
-    /// `true` when the function carries `FunctionMeta::Llm` — i.e. it
-    /// was declared with `client X { ... } prompt #"..."#` and the
-    /// compiler synthesized the LLM dispatch body. Surfaced here so
+    /// `true` when the function carries `FunctionMeta::Llm`—i.e. it is a
+    /// declarative model function with either a client or provider source.
+    /// Surfaced here so
     /// `baml run --list` can annotate LLM functions inline without
     /// reaching back into the heap to inspect `body_meta`.
     pub is_llm: bool,
@@ -2026,16 +2026,11 @@ impl BexEngine {
             // SAFETY: ptr is from resolved_function_names, a compile-time object
             let obj = unsafe { ptr.get() };
             if let Object::Function(func) = obj {
-                if let Some(FunctionMeta::Llm {
-                    prompt_template,
-                    client,
-                }) = &func.body_meta
-                {
+                if let Some(FunctionMeta::Llm { prompt_template }) = &func.body_meta {
                     llm_functions.insert(
                         name.clone(),
                         sys_types::LlmFunctionInfo {
                             prompt_template: prompt_template.clone(),
-                            client_name: client.clone(),
                             return_type: declared_symbolic(&func.return_type, func),
                         },
                     );

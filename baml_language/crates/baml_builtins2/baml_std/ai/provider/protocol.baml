@@ -3,10 +3,16 @@
 // background jobs remain separate.
 interface Provider {
   function name(self) -> string throws never { "provider" }
-  // The provider owns the primitive client used to render its prompt. There is
-  // no portable default because role, media, and schema behavior vary by
-  // provider.
   function render_shorthand(self) -> string throws never
+
+  // Prompt rendering always resolves through a primitive client. Most
+  // providers derive one from their shorthand; the compiler's client adapter
+  // overrides this to retain exact named-client role and media settings.
+  function _render_client(self) -> baml.llm.PrimitiveClient throws never {
+    baml.llm.from_shorthand(self.render_shorthand()) catch (e) {
+      _ => baml.sys.panic("ai: invalid provider render shorthand")
+    }
+  }
 }
 
 // The result of exactly one provider turn. Application ToolCalls ask the

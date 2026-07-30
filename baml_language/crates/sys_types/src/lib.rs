@@ -697,8 +697,6 @@ pub struct EngineSysOpContext {
 pub struct LlmFunctionInfo {
     /// The Jinja prompt template for this function.
     pub prompt_template: String,
-    /// The client name (e.g., `"MyClient"`) declared in the function.
-    pub client_name: String,
     /// The expected return type, used for response parsing.
     pub return_type: baml_type::RuntimeTy,
 }

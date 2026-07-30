@@ -5227,8 +5227,8 @@ impl LoweringContext<'_> {
             let span = sm.expr_span(expr_id);
             let index = file_semantic_index(self.db, self.file);
             // Two functions can carry a tagged template at the *same* source
-            // span — notably a new-mode LLM function and its `$stream`
-            // companion, both synthesized from the one `prompt`…`` at
+            // span—notably a backtick-prompt model function and its `$stream`
+            // compatibility companion, both synthesized from one `prompt`…`` at
             // `llm_body_def.span`. A bare range match would pick whichever
             // lambda scope appears first in the file (the oneshot body's),
             // binding the companion's `${param}` interps to the *other*

@@ -290,11 +290,11 @@ impl InitTestContext {
     }
 }
 
-/// BEP-049 §10 (M5f). Synthesize a NEW-MODE (backtick) LLM function body:
+/// BEP-049 §10 (M5f). Synthesize the compatibility call body for a backtick prompt:
 /// `baml.llm.<builtin>(<client>, "Fn", {params}, <prompt-tag closure>)`.
 /// Identical to `lower_cst::synthesize_llm_builtin_call` except it appends the
 /// synthesized prompt-tag closure as a 4th argument (the orchestrator invokes it
-/// per attempt; legacy Jinja prompts pass 3 args and a `null` closure). Built in one
+/// per attempt; raw Jinja prompts pass 3 args and a `null` closure). Built in one
 /// `LoweringContext` so the closure shares the call's arena; the closure's
 /// `${…}` interps keep their real source spans, so interp diagnostics point at
 /// the user's prompt. Lowering diagnostics / `env.X` refs from the prompt are
@@ -399,20 +399,77 @@ pub(crate) fn synthesize_llm_call_with_prompt(
     ctx.finish(Some(call))
 }
 
-/// Synthesize the zero-model-I/O body of an AI function's `$task` companion:
+/// Synthesize the zero-model-I/O body of a declarative model function's `$task` companion:
 ///
 /// `ai._task_named<T>(provider, "F", { "arg": arg }, tools, (ctx) -> prompt)`
 ///
 /// Provider and tool declarations are ordinary source expressions and are
 /// lowered in the same arena as the prompt closure, so they may reference the
-/// AI function's parameters.
+/// model function's parameters.
 pub(crate) fn synthesize_ai_task_with_prompt(
     function_name: &str,
     param_names: &[Name],
     return_type: crate::ast::TypeExpr,
-    provider: &baml_compiler_syntax::SyntaxElement,
+    provider: Option<&baml_compiler_syntax::SyntaxElement>,
+    client_arg_name: Option<&str>,
     tools: Option<&baml_compiler_syntax::SyntaxElement>,
     prompt_backtick: &baml_compiler_syntax::BacktickStringLiteral,
+    span: TextRange,
+) -> (
+    ExprBody,
+    AstSourceMap,
+    Vec<LoweringDiagnostic>,
+    Vec<EnvVarRef>,
+) {
+    synthesize_ai_task(
+        function_name,
+        param_names,
+        return_type,
+        provider,
+        client_arg_name,
+        tools,
+        Some(prompt_backtick),
+        span,
+    )
+}
+
+/// Synthesize a task companion for a raw Jinja prompt registered under the
+/// declarative function's name. Prompt syntax does not select an execution
+/// engine: this produces the same Task<T> as the backtick form.
+pub(crate) fn synthesize_ai_task_with_registered_prompt(
+    function_name: &str,
+    param_names: &[Name],
+    return_type: crate::ast::TypeExpr,
+    provider: Option<&baml_compiler_syntax::SyntaxElement>,
+    client_arg_name: Option<&str>,
+    tools: Option<&baml_compiler_syntax::SyntaxElement>,
+    span: TextRange,
+) -> (
+    ExprBody,
+    AstSourceMap,
+    Vec<LoweringDiagnostic>,
+    Vec<EnvVarRef>,
+) {
+    synthesize_ai_task(
+        function_name,
+        param_names,
+        return_type,
+        provider,
+        client_arg_name,
+        tools,
+        None,
+        span,
+    )
+}
+
+fn synthesize_ai_task(
+    function_name: &str,
+    param_names: &[Name],
+    return_type: crate::ast::TypeExpr,
+    provider: Option<&baml_compiler_syntax::SyntaxElement>,
+    client_arg_name: Option<&str>,
+    tools: Option<&baml_compiler_syntax::SyntaxElement>,
+    prompt_backtick: Option<&baml_compiler_syntax::BacktickStringLiteral>,
     span: TextRange,
 ) -> (
     ExprBody,
@@ -426,6 +483,9 @@ pub(crate) fn synthesize_ai_task_with_prompt(
     for name in param_names {
         ctx.names_in_scope.insert(name.to_string());
     }
+    if let Some(client) = client_arg_name {
+        ctx.names_in_scope.insert(client.to_string());
+    }
 
     let lower_element = |element: &baml_compiler_syntax::SyntaxElement,
                          ctx: &mut LoweringContext| match element {
@@ -436,7 +496,25 @@ pub(crate) fn synthesize_ai_task_with_prompt(
         }
     };
 
-    let provider = lower_element(provider, &mut ctx);
+    let provider = if let Some(provider) = provider {
+        lower_element(provider, &mut ctx)
+    } else if let Some(client) = client_arg_name {
+        let client = ctx.alloc_expr(Expr::Path(vec![Name::new(client)]), span);
+        let adapter = ctx.alloc_expr(
+            Expr::Path(vec![Name::new("ai"), Name::new("_provider_from_client")]),
+            span,
+        );
+        ctx.alloc_expr(
+            Expr::Call {
+                callee: adapter,
+                type_args: vec![],
+                args: vec![CallArg::positional(client)],
+            },
+            span,
+        )
+    } else {
+        ctx.alloc_expr(Expr::Missing, span)
+    };
     let tools = if let Some(element) = tools {
         lower_element(element, &mut ctx)
     } else {
@@ -458,29 +536,38 @@ pub(crate) fn synthesize_ai_task_with_prompt(
         })
         .collect();
     let arguments = ctx.alloc_expr(Expr::Map { entries }, span);
-    let prompt = ctx.build_prompt_tag_closure(prompt_backtick, span);
+    let (callee_name, prompt) = match prompt_backtick {
+        Some(backtick) => (
+            "_task_named",
+            Some(ctx.build_prompt_tag_closure(backtick, span)),
+        ),
+        None => ("_task_named_from_registered_prompt", None),
+    };
     let callee = ctx.alloc_expr(
-        Expr::Path(vec![Name::new("ai"), Name::new("_task_named")]),
+        Expr::Path(vec![Name::new("ai"), Name::new(callee_name)]),
         span,
     );
+    let mut args = vec![
+        CallArg::positional(provider),
+        CallArg::positional(function_name_expr),
+        CallArg::positional(arguments),
+        CallArg::positional(tools),
+    ];
+    if let Some(prompt) = prompt {
+        args.push(CallArg::positional(prompt));
+    }
     let call = ctx.alloc_expr(
         Expr::Call {
             callee,
             type_args: vec![return_type],
-            args: vec![
-                CallArg::positional(provider),
-                CallArg::positional(function_name_expr),
-                CallArg::positional(arguments),
-                CallArg::positional(tools),
-                CallArg::positional(prompt),
-            ],
+            args,
         },
         span,
     );
     ctx.finish(Some(call))
 }
 
-/// Synthesize an AI function's direct-call body:
+/// Synthesize a declarative model function's direct-call body:
 ///
 /// `ai.internal._run_agent_to_response<T>(F$task(arg = arg, ...)).value`
 pub(crate) fn synthesize_ai_direct_call(
@@ -3680,7 +3767,7 @@ impl LoweringContext {
     }
 
     /// BEP-049 §10 (M5f). Build a `baml.llm.prompt`-tagged closure over the
-    /// segments for a new-mode LLM prompt — a *bare* backtick literal (no written tag), so the
+    /// segments for a backtick model prompt — a *bare* backtick literal (no written tag), so the
     /// `baml.llm.prompt` tag is synthesized here. Mirrors `lower_tagged_template_expr`
     /// but with the synthetic tag; the segment interps keep their real source
     /// spans (so `${…}` diagnostics point at the user's prompt). The result is a

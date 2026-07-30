@@ -5014,7 +5014,10 @@ fn attach_function_metadata<'db>(
     apply_signature_metadata(compiled_fn, &signature_metadata);
     compiled_fn.origin = emitted_function_origin(fq_name, is_builtin_file, func.metadata.origin);
 
-    // Set LLM-specific body_meta if this is an LLM function with a client.
+    // Every declarative model function needs registry metadata. Raw Jinja
+    // prompts read the template from it, while both prompt syntaxes use its
+    // declared return type. Model-source selection is deliberately absent:
+    // `client:` has already desugared into a provider before execution.
     //
     // NOTE (canary merge): canary removed the runtime `Function.stream_return_type`
     // field and its plumbing (the pre-existing streaming infra from PRs #3362/#3755).
@@ -5022,11 +5025,9 @@ fn attach_function_metadata<'db>(
     // own `return_type` (see ppir's `companion_stream_return_type`), so the old
     // emit-side pre-computation block was dropped. BEP-049 M5e stream-path rendering
     // of `ctx.output_format` should be re-verified against canary's streaming.
-    if let Some(llm_meta) = function_llm_meta(db, func_loc)
-        && let Some(client) = &llm_meta.client_name
-    {
-        // New-mode (BEP-049 M5) functions have no Jinja `prompt` text — the compiled
-        // closure renders it — but they still need a registry entry so
+    if function_llm_meta(db, func_loc).is_some() {
+        // Backtick prompts have no Jinja `prompt` text—the compiled closure
+        // renders them—but still need a registry entry so
         // `get_return_type` / `get_stream_return_type` (used by `__make_stream` and
         // the streaming `Context`) resolve by name. The empty template is never read
         // for them (their `prompt_closure` is non-null, so the Jinja
@@ -5036,10 +5037,7 @@ fn attach_function_metadata<'db>(
             .as_ref()
             .map(|p| p.text.clone())
             .unwrap_or_default();
-        compiled_fn.body_meta = Some(FunctionMeta::Llm {
-            prompt_template,
-            client: client.to_string(),
-        });
+        compiled_fn.body_meta = Some(FunctionMeta::Llm { prompt_template });
         compiled_fn.capture = FunctionCaptureProps::disabled()
             .with_auto(CaptureCategory::Input)
             .with_auto(CaptureCategory::Output)

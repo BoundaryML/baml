@@ -7,9 +7,9 @@ class ExecutionContext {
   jinja_string string
   args map<string, unknown>
   function_name string
-  /// BEP-049 §10 (M5e/M5f). For new-mode (backtick) LLM functions, the compiled
+  /// BEP-049 §10 (M5e/M5f). For backtick prompts, the compiled
   /// `prompt`…`` closure the orchestrator invokes per attempt with a built
-  /// `Context`, replacing the Jinja render. `null` for legacy `#"..."#` functions.
+  /// `Context`. `null` for raw Jinja `#"..."#` prompts.
   prompt_closure ((Context) -> PromptAst throws never)?
 }
 
@@ -35,9 +35,9 @@ class PlannerState {
 
 /// Renders the Jinja prompt template for `function_name` with the given `args` using `client`'s configuration.
 /// Returns the specialized `PromptAst` ready to be sent to the LLM provider.
-/// The Jinja template to render for `function_name`. New-mode (BEP-049 M5)
-/// functions have no template registered — their compiled `prompt`…`` closure
-/// renders the prompt — so only look one up for the legacy `#"..."#` path.
+/// The Jinja template to render for `function_name`. Backtick prompts have no
+/// template registered—their compiled `prompt`…`` closure renders the prompt—
+/// so only look one up for the raw Jinja `#"..."#` syntax.
 function prompt_template_for(function_name: string, prompt_closure: ((Context) -> PromptAst throws never)?) -> string throws root.errors.InvalidArgument {
   match (prompt_closure) {
     null => get_jinja_template(function_name),
@@ -109,7 +109,7 @@ function __new_stream_cache<TStream, TFinal>() -> StreamCache<TStream, TFinal> t
 ///
 /// Call an LLM function and return its full result.
 function call_llm_function<T>(client: Client, function_name: string, args: map<string, unknown>, prompt_closure: ((Context) -> PromptAst throws never)? = null) -> T {
-  // New-mode (backtick) functions have no Jinja template registered; the
+  // Backtick prompts have no Jinja template registered; the
   // closure renders the prompt, so only look one up for the legacy path.
   let jinja_string = match (prompt_closure) {
     null => get_jinja_template(function_name),
@@ -133,7 +133,7 @@ function call_llm_function<T>(client: Client, function_name: string, args: map<s
 ///
 /// Sends the request and returns a `Stream<TStream, TFinal>` which can be used to consume the data as it arrives.
 function stream_llm_function<TStream, TFinal>(client: Client, function_name: string, args: map<string, unknown>, prompt_closure: ((Context) -> PromptAst throws never)? = null) -> Stream<TStream, TFinal> {
-    // New-mode (backtick) functions have no Jinja template registered; the
+    // Backtick prompts have no Jinja template registered; the
     // closure renders the prompt, so only look one up for the legacy path.
     let jinja_string = match (prompt_closure) {
         null => get_jinja_template(function_name),

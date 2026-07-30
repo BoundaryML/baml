@@ -1,7 +1,7 @@
-//! BEP-049 M5e/M5f end-to-end: a new-mode (backtick) `prompt` is compiled into
+//! BEP-049 M5e/M5f end-to-end: a backtick `prompt` is compiled into
 //! a closure that the orchestrator invokes per attempt, producing a `PromptAst`
 //! that flows into the real provider request — byte-for-byte the same path a
-//! legacy Jinja `#"..."#` prompt takes, just rendered by the closure instead of
+//! raw Jinja `#"..."#` prompt takes, just rendered by the closure instead of
 //! the Jinja engine.
 //!
 //! These tests drive the **companion** function (`Greet("World")`), not the raw
@@ -200,8 +200,8 @@ async fn backtick_prompt_streams_through_orchestrator() {
 }
 
 /// Golden parity: a backtick prompt and the equivalent Jinja prompt must put the
-/// **same** messages on the wire. This pins that new-mode lowering produces a
-/// request indistinguishable from the legacy path it replaces.
+/// **same** messages on the wire. This pins that the two prompt syntaxes produce
+/// indistinguishable requests.
 #[tokio::test]
 async fn backtick_and_jinja_prompts_produce_identical_messages() {
     let server = MockServer::start().await;
@@ -216,7 +216,7 @@ async fn backtick_and_jinja_prompts_produce_identical_messages() {
         .await;
     let uri = server.uri();
 
-    // Backtick (new-mode) function.
+    // Backtick-prompt function.
     let backtick_src = format!(
         r#"
         {client}

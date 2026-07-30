@@ -655,7 +655,7 @@ pub struct LlmFunctionBody {
     pub open_brace: t::LBrace,
     /// Legacy declarative model source.
     pub client: Option<ClientField>,
-    /// AI function model source.
+    /// Declarative model-function provider source.
     pub provider: Option<AiProviderField>,
     pub prompt: PromptField,
     pub tools: Option<AiToolsField>,

@@ -11,11 +11,17 @@ baml run --from crates/baml_tests/baml_src_temp2 \
   ai_scenarios.<example>
 ```
 
-The corpus uses compiler-generated task companions. A declarative AI function
-with `provider:`, `prompt:`, and optional `tools:` fields gets a zero-I/O
-`F@task(...)` form that captures its arguments, output type, provider, prompt
-recipe, default tools, and identity in `ai.Task<T>`. A direct `F(...)` call runs
-that same task through the bounded default `ai.run.Agent`.
+The corpus uses compiler-generated task companions. There is one declarative
+model-function kind. It selects its model source with either `provider:` or
+`client:` and may declare `prompt:` and `tools:`. `client:` is source-level
+sugar: the compiler wraps the selected `baml.llm.Client` as an `ai.Provider`,
+then continues through exactly the same lowering used by `provider:`.
+
+Both source spellings get a zero-I/O `F@task(...)` form that captures the
+arguments, output type, provider, prompt recipe, default tools, and identity in
+`ai.Task<T>`. A direct `F(...)` call runs that same task through the bounded
+default `ai.run.Agent`. Backtick and raw Jinja prompts are two prompt syntaxes,
+not two function or execution models.
 
 The framework itself is the built-in `ai` package. Scenario and provider code
 must use `ai.Task`, `ai.Provider`, `ai.run.Agent`, and the other `ai.*` names;

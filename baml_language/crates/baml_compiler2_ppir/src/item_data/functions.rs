@@ -67,10 +67,10 @@ pub fn function_source_map<'db>(
     lower(db, function).1
 }
 
-/// The span-free facts a function's `declarative_meta` exposes for an LLM
-/// (`{ client …; prompt … }`) function: its declared client name (itself optional).
-/// [`function_llm_meta`] wraps this in an `Option`, where `None` marks a non-LLM
-/// function — so a client name can never be attached to one.
+/// The span-free facts exposed by a declarative model function. `client_name`
+/// records only whether the source used `client:` sugar; provider-sourced
+/// declarations leave it unset. [`function_llm_meta`] wraps this in an `Option`,
+/// where `None` marks an ordinary expression function.
 ///
 /// The full [`ast::LlmBodyDef`] (prompt template, interpolation spans, companion
 /// bodies) carries spans, so it stays behind a body-ish read. Metadata consumers
@@ -81,8 +81,9 @@ pub struct FunctionLlmMeta {
     pub client_name: Option<Name>,
 }
 
-/// The [`FunctionLlmMeta`] projection for one function, or `None` when it is not an
-/// LLM function. See [`FunctionLlmMeta`] for why the full LLM body is excluded.
+/// The [`FunctionLlmMeta`] projection for one function, or `None` when it is not
+/// a declarative model function. See [`FunctionLlmMeta`] for why the full body
+/// is excluded.
 #[salsa::tracked(returns(ref))]
 pub fn function_llm_meta<'db>(
     db: &'db dyn crate::Db,
@@ -97,8 +98,8 @@ pub fn function_llm_meta<'db>(
         })
 }
 
-/// The span-carrying Jinja prompt of an LLM (`{ client …; prompt … }`) function,
-/// for prompt-template validation.
+/// The span-carrying raw Jinja prompt of a declarative model function, for
+/// prompt-template validation.
 ///
 /// This is the body-ish sibling of [`function_llm_meta`]: because its value
 /// carries the prompt's source span, it re-runs whenever the prompt text *or its
@@ -107,14 +108,14 @@ pub fn function_llm_meta<'db>(
 /// span-carrying tracked shape and exists so prompt validation can front the item
 /// tree without reading it directly.
 ///
-/// `None` for a non-LLM function or an LLM function without a `prompt`.
+/// `None` for an ordinary function or a backtick-prompt model function.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LlmPromptBody {
     pub text: String,
     pub span: TextRange,
 }
 
-/// The [`LlmPromptBody`] for one function, or `None` when it has no LLM prompt.
+/// The [`LlmPromptBody`] for one function, or `None` when it has no raw Jinja prompt.
 #[salsa::tracked]
 pub fn function_llm_prompt<'db>(
     db: &'db dyn crate::Db,

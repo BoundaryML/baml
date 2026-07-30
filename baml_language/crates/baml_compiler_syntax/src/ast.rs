@@ -984,7 +984,7 @@ impl LlmFunctionBody {
         self.syntax.children().find_map(ClientField::cast)
     }
 
-    /// Get the AI provider expression if this is an AI function.
+    /// Get the provider source expression if this is a declarative model function.
     pub fn provider_field(&self) -> Option<ProviderField> {
         self.syntax.children().find_map(ProviderField::cast)
     }
@@ -1039,13 +1039,13 @@ impl ClientField {
 impl PromptField {
     /// Get the raw string literal node containing the prompt.
     ///
-    /// For `prompt #"Hello {{ name }}"#`, returns the `#"Hello {{ name }}"#` node
-    /// (the legacy Jinja form). Returns `None` for a new-mode backtick prompt.
+    /// For `prompt #"Hello {{ name }}"#`, returns the `#"Hello {{ name }}"#` node.
+    /// Returns `None` for a backtick prompt.
     pub fn raw_string(&self) -> Option<RawStringLiteral> {
         self.syntax.children().find_map(RawStringLiteral::cast)
     }
 
-    /// Get the backtick string literal node containing a new-mode prompt.
+    /// Get the backtick string literal node containing a prompt.
     ///
     /// For `` prompt `Hello ${name}` ``, returns the `` `Hello ${name}` `` node.
     /// BEP-049 (M5f): a backtick prompt compiles to a prompt-tag closure instead

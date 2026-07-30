@@ -380,11 +380,12 @@ pub fn ppir_expansion_items(db: &dyn Db, file: SourceFile) -> PpirExpansionItems
                 synthetic_items.push(ast::Item::TypeAlias(stream_alias));
             }
             ast::Item::Function(func) => {
-                // Only LLM functions get $parse_stream companions.
+                // Streaming compatibility companions currently require a
+                // client source. Direct calls for every declarative function
+                // use the same generated Task + Agent path.
                 if !matches!(
                     &func.declarative_meta,
-                    Some(ast::DeclarativeMeta::Llm(llm))
-                        if llm.execution == ast::DeclarativeExecution::LegacyClient
+                    Some(ast::DeclarativeMeta::Llm(llm)) if llm.client.is_some()
                 ) {
                     continue;
                 }
@@ -460,14 +461,14 @@ pub fn ppir_expansion_items(db: &dyn Db, file: SourceFile) -> PpirExpansionItems
                     } else {
                         client_name.as_deref()
                     };
-                    // BEP-049 M5e: a new-mode (backtick) function threads the
+                    // BEP-049 M5e: a backtick prompt threads the
                     // same `prompt`…`` closure into `stream_llm_function` that
                     // the oneshot path threads into `call_llm_function`, so the
                     // orchestrator renders via the closure instead of looking up
                     // a (nonexistent) Jinja template. `lower_cst` pre-built this
                     // body while the CST was still in hand (the closure captures
                     // this function's params, hence a dedicated arena); reuse it.
-                    // Legacy Jinja prompts keep the 3-arg path.
+                    // Raw Jinja prompts keep the registered-template path.
                     let stream_body = match &func.declarative_meta {
                         Some(ast::DeclarativeMeta::Llm(llm)) => llm.stream_body.clone(),
                         _ => None,

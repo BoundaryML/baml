@@ -12,6 +12,37 @@ use bex_engine::BexExternalValue;
 use bex_external_types::BexExternalAdt;
 
 #[tokio::test]
+async fn provider_source_with_raw_jinja_builds_the_same_task() {
+    let output = baml_test!(
+        r##"
+function Registered(provider: ai.Provider, input: string) -> string {
+  provider: provider
+  prompt: #"Input: {{ input }}. {{ ctx.output_format }}"#
+}
+
+function main() -> string {
+  let provider = ai.testing.FakeProvider {
+    provider_name: "fake",
+    output: "unused",
+    calls: 0,
+    failures_remaining: 0,
+    failure_mode: ai.testing.FakeFailureMode.Terminal,
+  }
+  Registered@task(provider, "hello").prompt.text()
+}
+"##
+    );
+    let rendered = match &output.result {
+        Ok(BexExternalValue::String(s)) => s.to_string(),
+        other => panic!("expected a rendered task prompt, got {other:?}"),
+    };
+    assert!(
+        rendered.contains("Input: hello."),
+        "provider-sourced raw Jinja prompt was not registered and rendered: {rendered:?}"
+    );
+}
+
+#[tokio::test]
 async fn role_construction_isolation() {
     // Isolation: does constructing a `Role { name, metadata }` even type-check?
     let output = baml_test!(

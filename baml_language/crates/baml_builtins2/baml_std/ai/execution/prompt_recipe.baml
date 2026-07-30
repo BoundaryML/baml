@@ -1,5 +1,7 @@
 class PromptRenderRecipe {
-    template: (baml.llm.Context) -> baml.llm.PromptAst throws never,
+    template: ((baml.llm.Context) -> baml.llm.PromptAst throws never)?,
+    registered_function: string?,
+    arguments: map<string, unknown>,
 
     function render(
         self,
@@ -19,11 +21,52 @@ class PromptRenderRecipe {
         output_type: type,
         suffix: string,
     ) -> baml.llm.PromptAst throws never {
-        let primitive = baml.llm.from_shorthand(provider.render_shorthand()) catch (e) {
-            _ => baml.sys.panic("ai: invalid provider render shorthand"),
-        };
-        let base = baml.llm.build_prompt_context(primitive, output_type);
-        base.output_format += suffix;
-        self.template(base)
+        let primitive = provider._render_client();
+        match (self.template) {
+            let template: ((baml.llm.Context) -> baml.llm.PromptAst throws never) => {
+                let context = baml.llm.build_prompt_context(primitive, output_type);
+                context.output_format += suffix;
+                template(context)
+            },
+            null => {
+                let function_name = self.registered_function ?? baml.sys.panic(
+                    "ai: prompt recipe has neither a template nor a registered function",
+                );
+                let jinja = baml.llm.get_jinja_template(function_name) catch (e) {
+                    _ => baml.sys.panic("ai: registered prompt template is missing")
+                };
+                primitive
+                    .render_specialized_prompt(
+                        jinja + suffix,
+                        self.arguments,
+                        output_type,
+                        null,
+                    )
+                    catch (e) {
+                        _ => baml.sys.panic("ai: registered prompt could not be rendered")
+                    }
+            },
+        }
+    }
+}
+
+function _prompt_recipe(
+    template: (baml.llm.Context) -> baml.llm.PromptAst throws never,
+) -> PromptRenderRecipe throws never {
+    PromptRenderRecipe {
+        template: template,
+        registered_function: null,
+        arguments: {},
+    }
+}
+
+function _registered_prompt_recipe(
+    function_name: string,
+    arguments: map<string, unknown>,
+) -> PromptRenderRecipe throws never {
+    PromptRenderRecipe {
+        template: null,
+        registered_function: function_name,
+        arguments: arguments,
     }
 }

@@ -545,11 +545,11 @@ function _claude_code_agent_turn<T>(
         arguments: state.arguments,
         tools: [],
         tags: state.tags,
-        _render: ai.PromptRenderRecipe {
-            template: (ctx: baml.llm.Context) -> baml.llm.PromptAst {
+        _render: ai._prompt_recipe(
+            (ctx: baml.llm.Context) -> baml.llm.PromptAst {
                 prompt
             },
-        },
+        ),
     }
 }
 

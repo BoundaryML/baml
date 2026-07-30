@@ -15,12 +15,12 @@ use rowan::ast::AstNode;
 use crate::{
     DeclarativeMeta, LoweringDiagnostic,
     ast::{
-        AssociatedTypeBindingDef, AssociatedTypeDef, AstSourceMap, BuiltinKind, CallArg,
-        DeclarativeExecution, EnumDef, Expr, ExprBody, ExprId, FieldDef, FunctionBodyDef,
-        FunctionDef, FunctionDefaults, ImplementsBlockDef, ImplementsForDef, InterfaceDef,
-        InterfaceFieldLinkDef, Interpolation, Item, LetDef, LetOrigin, LlmBodyDef, MethodSigDef,
-        Param, RawAttribute, RawAttributeArg, RawPrompt, TemplateStringDef, TestArgValue, TestDef,
-        TypeAliasDef, TypeExpr, TypeExprKind, VariantDef,
+        AssociatedTypeBindingDef, AssociatedTypeDef, AstSourceMap, BuiltinKind, CallArg, EnumDef,
+        Expr, ExprBody, ExprId, FieldDef, FunctionBodyDef, FunctionDef, FunctionDefaults,
+        ImplementsBlockDef, ImplementsForDef, InterfaceDef, InterfaceFieldLinkDef, Interpolation,
+        Item, LetDef, LetOrigin, LlmBodyDef, MethodSigDef, Param, RawAttribute, RawAttributeArg,
+        RawPrompt, TemplateStringDef, TestArgValue, TestDef, TypeAliasDef, TypeExpr, TypeExprKind,
+        VariantDef,
     },
     companions::expand_companions,
     lower_expr_body, lower_type_expr,
@@ -338,12 +338,12 @@ fn lower_function(
 
     let (body, declarative_meta) = if let Some(llm) = func.llm_body() {
         let mut llm_body_def = lower_llm_body(&llm);
-        let is_ai = llm_body_def.execution == DeclarativeExecution::AiProvider;
-        if !is_ai {
+        let uses_client_sugar = llm_body_def.client.is_some();
+        if uses_client_sugar {
             reject_reserved_llm_client_params(&mut params, name.as_str(), diags);
         }
         let client_name = llm_body_def.client.as_ref().map(|n| n.as_str().to_string());
-        if !is_ai {
+        if uses_client_sugar {
             if let Some(client_name) = client_name.as_deref() {
                 append_default_client_param(
                     &mut params,
@@ -353,130 +353,102 @@ fn lower_function(
                 );
             }
         }
-        let param_names: Vec<Name> = params
+        // The implicit client parameter remains part of the generated
+        // companion's call signature so `client = ...` overrides keep working,
+        // but it is source-selection configuration rather than a model input.
+        let argument_names: Vec<Name> = params
             .iter()
-            .filter(|p| is_ai || p.name.as_str() != "client")
+            .filter(|p| !uses_client_sugar || p.name.as_str() != "client")
             .map(|p| p.name.clone())
             .collect();
-        let client_arg_name = (!is_ai)
-            .then(|| client_name.as_ref().map(|_| "client"))
-            .flatten();
-        // Pass the LLM function's declared return type as the explicit `<T>`
-        // type argument to `baml.llm.call_llm_function<T>`. This is required
-        // for the runtime type-arg threading: without it, `T` falls back to
-        // inferred-only and resolves to BuiltinUnknown inside the stdlib's
-        // `primitive.parse<T>(body)` call, surfacing as a "Non-parsable type:
-        // BuiltinUnknown" error from the LLM client.
-        let call_type_args: Vec<crate::ast::TypeExpr> = return_type
-            .as_ref()
-            .map(|rt| vec![rt.clone()])
-            .unwrap_or_default();
-        // New-mode (BEP-049 M5f): a backtick prompt compiles to a `prompt`…``
-        // closure passed as the 4th arg to `call_llm_function`; the orchestrator
-        // invokes it per attempt. Legacy `#"..."#` Jinja prompts keep the 3-arg
-        // path (the closure defaults to `null`, so the Jinja render runs).
+        let call_param_names: Vec<Name> = params.iter().map(|p| p.name.clone()).collect();
+        let client_arg_name = client_name.as_ref().map(|_| "client");
         let prompt_backtick = llm.prompt_field().and_then(|pf| pf.backtick_string());
-        let (expr_body, source_map) = if is_ai {
-            let provider = llm
-                .provider_field()
-                .and_then(|field| declarative_field_value(field.syntax(), "provider"));
-            let tools = llm
-                .tools_field()
-                .and_then(|field| declarative_field_value(field.syntax(), "tools"));
-            let task_body =
-                provider
-                    .as_ref()
-                    .zip(prompt_backtick.as_ref())
-                    .map(|(provider, backtick)| {
-                        lower_expr_body::synthesize_ai_task_with_prompt(
-                            name.as_str(),
-                            &param_names,
-                            return_type.clone().unwrap_or_else(|| {
-                                TypeExprKind::Unknown { attrs: vec![] }.at(llm_body_def.span)
-                            }),
-                            provider,
-                            tools.as_ref(),
-                            backtick,
-                            llm_body_def.span,
-                        )
-                    });
-            if let Some((task_body, task_map, mut task_diags, mut task_env_refs)) = task_body {
-                diags.append(&mut task_diags);
-                env_var_refs.append(&mut task_env_refs);
-                llm_body_def
-                    .companion_bodies
-                    .push(("task".to_string(), (task_body, task_map)));
-            }
-            lower_expr_body::synthesize_ai_direct_call(
+        let provider = llm
+            .provider_field()
+            .and_then(|field| declarative_field_value(field.syntax()));
+        let tools = llm
+            .tools_field()
+            .and_then(|field| declarative_field_value(field.syntax()));
+        let output_type = return_type
+            .clone()
+            .unwrap_or_else(|| TypeExprKind::Unknown { attrs: vec![] }.at(llm_body_def.span));
+
+        // Both `client:` and `provider:` declarations construct the same
+        // Task<T>. `client:` only inserts an ai.Provider adapter around the
+        // selected baml.llm.Client.
+        let task_body = if let Some(backtick) = &prompt_backtick {
+            Some(lower_expr_body::synthesize_ai_task_with_prompt(
                 name.as_str(),
-                &param_names,
-                return_type.clone().unwrap_or_else(|| {
-                    TypeExprKind::Unknown { attrs: vec![] }.at(llm_body_def.span)
-                }),
+                &argument_names,
+                output_type.clone(),
+                provider.as_ref(),
+                client_arg_name,
+                tools.as_ref(),
+                backtick,
                 llm_body_def.span,
-            )
-        } else if let Some(backtick) = &prompt_backtick {
-            let (body, sm, mut closure_diags, mut closure_env_refs) =
-                lower_expr_body::synthesize_llm_call_with_prompt(
-                    "call_llm_function",
-                    name.as_str(),
-                    &param_names,
-                    client_arg_name,
-                    call_type_args,
-                    backtick,
-                    llm_body_def.span,
-                );
-            diags.append(&mut closure_diags);
-            env_var_refs.append(&mut closure_env_refs);
-            // BEP-049 M5e: pre-build the streaming companion's body from the
-            // same backtick now, while the CST is in hand, and stash it for
-            // PPIR (which materializes the `$stream` companion but no longer has
-            // the CST). The closure captures this function's params, so it's a
-            // separate arena from the oneshot body above. Its prompt diagnostics
-            // / `env.X` refs duplicate the oneshot body's — drop them.
-            let (stream_body, stream_sm, _diags, _env_refs) =
-                lower_expr_body::synthesize_llm_call_with_prompt(
-                    "stream_llm_function",
-                    name.as_str(),
-                    &param_names,
-                    client_arg_name,
-                    Vec::new(),
-                    backtick,
-                    llm_body_def.span,
-                );
-            llm_body_def.stream_body = Some((stream_body, stream_sm));
-            // BEP-049 M5: pre-build the render_prompt / build_request /
-            // build_request_stream companion bodies from the same backtick, each
-            // carrying the prompt closure, so the playground preview/cURL render
-            // through the closure exactly like execution. Built here while the CST
-            // is in hand; read back by `make_llm_companion`. Their prompt diags /
-            // `env.X` refs duplicate the oneshot body's — drop them.
-            for target in ["render_prompt", "build_request", "build_request_stream"] {
-                let (c_body, c_sm, _diags, _env_refs) =
+            ))
+        } else if llm_body_def.prompt.is_some() {
+            Some(lower_expr_body::synthesize_ai_task_with_registered_prompt(
+                name.as_str(),
+                &argument_names,
+                output_type.clone(),
+                provider.as_ref(),
+                client_arg_name,
+                tools.as_ref(),
+                llm_body_def.span,
+            ))
+        } else {
+            None
+        };
+        if let Some((task_body, task_map, mut task_diags, mut task_env_refs)) = task_body {
+            diags.append(&mut task_diags);
+            env_var_refs.append(&mut task_env_refs);
+            llm_body_def
+                .companion_bodies
+                .push(("task".to_string(), (task_body, task_map)));
+        }
+
+        // Client-sourced functions retain request-inspection and streaming
+        // companions. These are compatibility surfaces; normal execution is
+        // the same generated Task + Agent call used by provider-sourced code.
+        if uses_client_sugar {
+            if let Some(backtick) = &prompt_backtick {
+                let (stream_body, stream_sm, _diags, _env_refs) =
                     lower_expr_body::synthesize_llm_call_with_prompt(
-                        target,
+                        "stream_llm_function",
                         name.as_str(),
-                        &param_names,
+                        &argument_names,
                         client_arg_name,
                         Vec::new(),
                         backtick,
                         llm_body_def.span,
                     );
-                llm_body_def
-                    .companion_bodies
-                    .push((target.to_string(), (c_body, c_sm)));
+                llm_body_def.stream_body = Some((stream_body, stream_sm));
+                for target in ["render_prompt", "build_request", "build_request_stream"] {
+                    let (c_body, c_sm, _diags, _env_refs) =
+                        lower_expr_body::synthesize_llm_call_with_prompt(
+                            target,
+                            name.as_str(),
+                            &argument_names,
+                            client_arg_name,
+                            Vec::new(),
+                            backtick,
+                            llm_body_def.span,
+                        );
+                    llm_body_def
+                        .companion_bodies
+                        .push((target.to_string(), (c_body, c_sm)));
+                }
             }
-            (body, sm)
-        } else {
-            synthesize_llm_builtin_call(
-                "call_llm_function",
-                name.as_str(),
-                &param_names,
-                client_arg_name,
-                call_type_args,
-                llm_body_def.span,
-            )
-        };
+        }
+
+        let (expr_body, source_map) = lower_expr_body::synthesize_ai_direct_call(
+            name.as_str(),
+            &call_param_names,
+            output_type,
+            llm_body_def.span,
+        );
         (
             Some(FunctionBodyDef::Expr(expr_body, source_map)),
             Some(DeclarativeMeta::Llm(llm_body_def)),
@@ -779,11 +751,6 @@ fn alloc_client_override_default_expr(
 fn lower_llm_body(llm_body: &ast::LlmFunctionBody) -> LlmBodyDef {
     let span = llm_body.syntax().span_range();
 
-    let execution = if llm_body.provider_field().is_some() {
-        DeclarativeExecution::AiProvider
-    } else {
-        DeclarativeExecution::LegacyClient
-    };
     let client = llm_body
         .client_field()
         .and_then(|cf| cf.value())
@@ -795,7 +762,6 @@ fn lower_llm_body(llm_body: &ast::LlmFunctionBody) -> LlmBodyDef {
         .map(|raw_str| lower_raw_prompt(&raw_str));
 
     LlmBodyDef {
-        execution,
         client,
         prompt,
         // Filled in by the LLM-function branch once param names are known.
@@ -808,10 +774,7 @@ fn lower_llm_body(llm_body: &ast::LlmFunctionBody) -> LlmBodyDef {
 /// Return the expression payload of a `provider:` or `tools:` field. The field
 /// name and optional colon are direct tokens; the value is the first remaining
 /// significant node/token.
-fn declarative_field_value(
-    field: &SyntaxNode,
-    _field_name: &str,
-) -> Option<baml_compiler_syntax::SyntaxElement> {
+fn declarative_field_value(field: &SyntaxNode) -> Option<baml_compiler_syntax::SyntaxElement> {
     let mut saw_colon = false;
     field.children_with_tokens().find(|element| match element {
         rowan::NodeOrToken::Node(_) => saw_colon,

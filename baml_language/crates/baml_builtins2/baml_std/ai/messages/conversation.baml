@@ -5,7 +5,7 @@ interface Conversation {
   function provider(self) -> Provider throws never
   function messages(self) -> Messages throws never
   // Concrete providers record a versioned nominal + structural fingerprint
-  // for the Task<T> they were created for. Legacy/application conversations
+  // for the Task<T> they were created for. Application-defined conversations
   // may return null.
   function output_type_fingerprint(self) -> string? throws never { null }
 

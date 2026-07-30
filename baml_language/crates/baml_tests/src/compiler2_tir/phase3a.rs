@@ -158,11 +158,9 @@ function main(id: boundary.LocalId) -> string {
 }
 
 #[test]
-fn backtick_llm_function_compiles_to_prompt_closure() {
-    // BEP-049 M5f: a backtick prompt in an LLM function compiles to a
-    // `call_llm_function(client, "Fn", args, prompt`…`)` body — the 4th arg is
-    // the synthesized `(Context) -> PromptAst` closure (legacy Jinja prompts
-    // keep the 3-arg form). The `${name}` interp captures the function param.
+fn client_sugar_compiles_to_the_same_task_and_agent_path() {
+    // `client:` selects a baml.llm.Client, then adapts it to ai.Provider.
+    // Execution and @task are otherwise identical to a `provider:` function.
     let mut db = make_db();
     let file = db.add_file(
         "test.baml",
@@ -175,26 +173,39 @@ client<llm> MyClient {
   }
 }
 
+function lookup(query: string) -> string throws never {
+  query
+}
+
 function Greet(name: string) -> string {
   client MyClient
   prompt `Hello ${name}!`
+  tools: [lookup]
 }
 "#,
     );
     let tir = render_tir(&db, file);
     assert!(
         !tir.contains("!!"),
-        "backtick LLM function should compile clean, got:\n{tir}"
+        "client-sourced declarative function should compile clean, got:\n{tir}"
     );
     assert!(
-        tir.contains("call_llm_function") && tir.contains("prompt`"),
-        "body should call call_llm_function with a `prompt`…`` closure, got:\n{tir}"
+        tir.contains(
+            "ai.internal._run_agent_to_response<string>(Greet$task(name = name, client = client)).value"
+        ),
+        "direct calls must use the shared Task + Agent path:\n{tir}"
+    );
+    assert!(
+        tir.contains(
+            "ai._task_named(ai._provider_from_client(client), \"Greet\", map { \"name\": name }, [lookup], baml.llm.prompt`...`)"
+        ),
+        "client sugar and tools must adapt into the same generated task constructor:\n{tir}"
     );
 }
 
 #[test]
-fn new_mode_failures_have_good_diagnostics() {
-    // BEP-049 M5: every way a new-mode (backtick) `prompt` can go wrong must
+fn backtick_prompt_failures_have_good_diagnostics() {
+    // Every way a backtick `prompt` can go wrong must
     // surface a diagnostic that points at the user's `${…}` source with a
     // user-facing message — never a `0..0` span and never a leaked internal
     // desugaring type. The prompt body is lowered into a synthesized
@@ -673,6 +684,12 @@ function call_overrides() -> string {
         "{tir}"
     );
     assert!(
+        tir.contains(
+            "ai._task_named_from_registered_prompt(ai._provider_from_client(client), \"Ask\", map { \"input\": input }, [])"
+        ),
+        "raw Jinja and backtick prompts must construct the same Task shape:\n{tir}"
+    );
+    assert!(
         tir.contains(r#"Ask$build_request("hello", client = OverrideClient).url : string"#),
         "{tir}"
     );
@@ -712,7 +729,7 @@ function make(
 
     assert!(
         tir.contains("function user.demo.TypedTask$task<T>"),
-        "AI functions must expose a generated task companion:\n{tir}"
+        "declarative model functions must expose a generated task companion:\n{tir}"
     );
     assert!(
         tir.contains("-> ai.Task<T>"),
@@ -721,6 +738,48 @@ function make(
     assert!(
         tir.contains("TypedTask$task<T>(provider, [lookup], \"number\", value) : ai.Task<int>"),
         "`@task` must resolve to the generated companion in a namespace:\n{tir}"
+    );
+    assert!(!tir.contains("!!"), "unexpected diagnostics:\n{tir}");
+}
+
+#[test]
+fn provider_source_accepts_registered_jinja_and_tools_on_the_same_task_path() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "ns_demo/registered.baml",
+        r##"
+function lookup(query: string) -> json throws never {
+  { "query": query }
+}
+
+function Registered(provider: ai.Provider, input: string) -> string {
+  provider: provider
+  prompt: #"{{ input }} {{ ctx.output_format }}"#
+  tools: [lookup]
+}
+
+function make(provider: ai.Provider) -> ai.Task<string> {
+  Registered@task(provider, "hello")
+}
+"##,
+    );
+    let tir = render_tir(&db, file);
+
+    assert!(
+        tir.contains("function user.demo.Registered$task"),
+        "every declarative function must expose @task:\n{tir}"
+    );
+    assert!(
+        tir.contains(
+            "ai._task_named_from_registered_prompt(provider, \"Registered\", map { \"provider\": provider, \"input\": input }, [lookup])"
+        ),
+        "provider source, raw prompt, and tools must share one task constructor:\n{tir}"
+    );
+    assert!(
+        tir.contains(
+            "ai.internal._run_agent_to_response<string>(Registered$task(provider = provider, input = input)).value"
+        ),
+        "direct execution must use the shared Agent path:\n{tir}"
     );
     assert!(!tir.contains("!!"), "unexpected diagnostics:\n{tir}");
 }

@@ -25,11 +25,11 @@ function _prompt_turn_task<T>(
     output_suffix: string,
 ) -> ai.Task<T> throws never {
     let prompt = state.recipe.render_with_output_format(provider, reflect.type_of<T>(), output_suffix);
-    let recipe = ai.PromptRenderRecipe {
-        template: (ctx: baml.llm.Context) -> baml.llm.PromptAst {
+    let recipe = ai._prompt_recipe(
+        (ctx: baml.llm.Context) -> baml.llm.PromptAst {
             prompt
         },
-    };
+    );
     ai.Task<T> {
         provider: provider,
         prompt: prompt,
