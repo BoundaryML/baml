@@ -3,7 +3,6 @@ set -euo pipefail
 
 host="$(rustc -vV | sed -n 's/^host: //p')"
 test -n "$host"
-target="${1:-$host}"
 
 lld_dir="$(rustc --print sysroot)/lib/rustlib/$host/bin/gcc-ld"
 case "$(uname -s)" in
@@ -13,10 +12,7 @@ case "$(uname -s)" in
     ;;
   Linux)
     lld="$lld_dir/ld.lld"
-    case "$target" in
-      *-linux-gnu) linker_flags="--icf=safe,-z,pack-relative-relocs" ;;
-      *) linker_flags="--icf=safe" ;;
-    esac
+    linker_flags="--icf=safe"
     ;;
   *) echo "safe ICF release flags are only supported on macOS and Linux" >&2; exit 1 ;;
 esac
