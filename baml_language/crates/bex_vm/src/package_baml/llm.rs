@@ -1,0 +1,213 @@
+use std::{collections::HashMap, sync::Arc};
+
+use baml_builtins2::{PromptAst, PromptAstSimple};
+use bex_heap::TlabHolder;
+use bex_vm_types::{
+    HeapPtr,
+    types::{Object, Value},
+};
+
+use super::{
+    BamlNamespaceLlm, Continuation, NativeCallResult, PackageBamlImpl, make_to_string_callee,
+    root::{StringRenderState, StructuralRenderSink, collect_to_string_overrides, render_to_sink},
+};
+use crate::BexVm;
+
+#[derive(Default)]
+struct PromptContentSink {
+    parts: Vec<Arc<PromptAstSimple>>,
+}
+
+impl PromptContentSink {
+    fn into_content(mut self) -> Arc<PromptAstSimple> {
+        match self.parts.len() {
+            0 => Arc::new(PromptAstSimple::String(String::new())),
+            1 => self.parts.pop().unwrap(),
+            _ => Arc::new(PromptAstSimple::Multiple(self.parts)),
+        }
+    }
+}
+
+impl StructuralRenderSink for PromptContentSink {
+    fn push_text(&mut self, text: &str) {
+        if text.is_empty() {
+            return;
+        }
+
+        if let Some(last) = self.parts.pop() {
+            match Arc::try_unwrap(last) {
+                Ok(PromptAstSimple::String(mut current)) => {
+                    current.push_str(text);
+                    self.parts.push(Arc::new(PromptAstSimple::String(current)));
+                    return;
+                }
+                Ok(other) => self.parts.push(Arc::new(other)),
+                Err(last) => self.parts.push(last),
+            }
+        }
+        self.parts
+            .push(Arc::new(PromptAstSimple::String(text.to_string())));
+    }
+
+    fn try_push_special(&mut self, vm: &BexVm, value: Value) -> bool {
+        let Some(media) = super::json::read_media_value(vm, value) else {
+            return false;
+        };
+        self.parts.push(Arc::new(PromptAstSimple::Media(media)));
+        true
+    }
+}
+
+fn prompt_role_name(vm: &BexVm, value: Value) -> Option<String> {
+    let ptr = value.as_object_ptr()?;
+    let (class_ptr, fields) = match vm.get_object(ptr) {
+        Object::Instance(instance) => (
+            instance.class,
+            instance.field_values().collect::<Vec<Value>>(),
+        ),
+        _ => return None,
+    };
+    let name_index = match vm.get_object(class_ptr) {
+        Object::Class(class) if class.name.render_dotted(false) == "baml.llm.Role" => {
+            class.fields.iter().position(|field| field.name == "name")?
+        }
+        _ => return None,
+    };
+    vm.as_string(fields.get(name_index)?)
+        .ok()
+        .map(|name| name.as_str().to_string())
+}
+
+struct PromptAssembly {
+    parts: Vec<Value>,
+    values: Vec<Value>,
+    pending: Vec<HeapPtr>,
+    results: Vec<String>,
+}
+
+impl PromptAssembly {
+    fn finish(self, vm: &mut BexVm) -> NativeCallResult {
+        let mut render_state = StringRenderState::with_overrides(&self.pending, &self.results);
+        let mut messages: Vec<Arc<PromptAst>> = Vec::new();
+        let mut current_role: Option<String> = None;
+        let mut content = PromptContentSink::default();
+
+        for (index, value) in self.values.iter().copied().enumerate() {
+            if let Some(part) = self.parts.get(index)
+                && let Ok(part) = vm.as_string(part)
+            {
+                content.push_text(part.as_str());
+            }
+
+            if let Some(role) = prompt_role_name(vm, value) {
+                if let Some(previous_role) = current_role.replace(role) {
+                    messages.push(Arc::new(PromptAst::Message {
+                        role: previous_role,
+                        content: std::mem::take(&mut content).into_content(),
+                        metadata: serde_json::Value::Null,
+                    }));
+                }
+            } else {
+                render_to_sink(vm, value, false, 0, &mut render_state, &mut content);
+            }
+        }
+
+        if let Some(part) = self.parts.get(self.values.len())
+            && let Ok(part) = vm.as_string(part)
+        {
+            content.push_text(part.as_str());
+        }
+
+        let ast = match current_role {
+            Some(role) => {
+                messages.push(Arc::new(PromptAst::Message {
+                    role,
+                    content: content.into_content(),
+                    metadata: serde_json::Value::Null,
+                }));
+                if messages.len() == 1 {
+                    messages.pop().unwrap()
+                } else {
+                    Arc::new(PromptAst::Vec(messages))
+                }
+            }
+            None => Arc::new(PromptAst::Simple(content.into_content())),
+        }
+        .merge_adjacent();
+
+        let prompt_ast_class = vm.resolve_class("baml.llm.PromptAst");
+        let data = Value::object(vm.alloc_rust_data(ast));
+        NativeCallResult::Done(Value::object(
+            vm.alloc_instance(prompt_ast_class, vec![data]),
+        ))
+    }
+
+    fn dispatch_next(self, vm: &mut BexVm) -> NativeCallResult {
+        let Some(&next_ptr) = self.pending.get(self.results.len()) else {
+            return self.finish(vm);
+        };
+        let Some(callee) = make_to_string_callee(vm, Value::object(next_ptr)) else {
+            return self.finish(vm);
+        };
+        NativeCallResult::YieldToCall {
+            callee,
+            args: vec![],
+            type_args: vec![],
+            continuation: Box::new(self),
+        }
+    }
+}
+
+impl Continuation for PromptAssembly {
+    fn call(mut self: Box<Self>, vm: &mut BexVm, value: Value) -> NativeCallResult {
+        self.results.push(
+            vm.as_string(&value)
+                .map(|result| result.as_str().to_string())
+                .unwrap_or_default(),
+        );
+        self.dispatch_next(vm)
+    }
+
+    fn gc_roots(&self) -> Vec<HeapPtr> {
+        self.parts
+            .iter()
+            .chain(&self.values)
+            .filter_map(Value::as_object_ptr)
+            .chain(self.pending.iter().copied())
+            .collect()
+    }
+
+    fn apply_forwarding(&mut self, forwarding: &HashMap<HeapPtr, HeapPtr>) {
+        for value in self.parts.iter_mut().chain(&mut self.values) {
+            if let Some(ptr) = value.as_object_ptr()
+                && let Some(&new_ptr) = forwarding.get(&ptr)
+            {
+                *value = Value::object(new_ptr);
+            }
+        }
+        for ptr in &mut self.pending {
+            if let Some(&new_ptr) = forwarding.get(ptr) {
+                *ptr = new_ptr;
+            }
+        }
+    }
+}
+
+impl BamlNamespaceLlm for PackageBamlImpl {
+    fn assemble_prompt_ast(vm: &mut BexVm, parts: &[Value], values: &[Value]) -> NativeCallResult {
+        let mut pending = Vec::new();
+        for value in values.iter().copied() {
+            if prompt_role_name(vm, value).is_none() {
+                collect_to_string_overrides(vm, value, &mut pending);
+            }
+        }
+
+        PromptAssembly {
+            parts: parts.to_vec(),
+            values: values.to_vec(),
+            pending,
+            results: Vec::new(),
+        }
+        .dispatch_next(vm)
+    }
+}

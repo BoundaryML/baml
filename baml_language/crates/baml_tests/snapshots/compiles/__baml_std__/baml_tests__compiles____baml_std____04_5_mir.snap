@@ -8093,70 +8093,7 @@ fn baml.llm.from_shorthand = builtin(io)
 
 fn baml.llm.get_jinja_template = builtin(io)
 
-fn baml.llm.assemble_prompt_ast = builtin(io)
-
-fn baml.llm.render_prompt_values(values: unknown[]) -> unknown[] {
-    // Locals:
-    let _0: unknown[] // _0 // return
-    let _1: unknown[] // values // param
-    let _2: unknown[] // rendered
-    let _3: baml.iter.Iterator<Error = never, Item = unknown>
-    let _4: unknown
-    let _5: bool
-    let _6: unknown
-    let _7: unknown // value
-    let _8: void
-    let _9: string | baml.llm.Role
-    let _10: bool
-    let _11: unknown
-    let _12: type
-
-    bb0: {
-        _2 = []: unknown[];
-        _3 = virtual_call iter as baml.iter.Iterable<Error = never, Item = unknown>(copy _1) -> [bb1];
-    }
-
-    bb1: {
-        _4 = virtual_call next as baml.iter.Iterator<Error = never, Item = unknown>(copy _3) -> [bb2];
-    }
-
-    bb2: {
-        _5 = is_type(copy _4, baml.iter.Done);
-        branch copy _5 -> [bb7, bb3];
-    }
-
-    bb3: {
-        _6 = copy _4;
-        fresh_cell(_7);
-        _7 = copy _6;
-        _10 = is_type(copy _7, baml.llm.Role);
-        branch copy _10 -> [bb5, bb4];
-    }
-
-    bb4: {
-        _11 = copy _7;
-        _12 = load_type(unknown);
-        _9 = call const fn baml.String.from<copy _12>(copy _11) -> [bb6];
-    }
-
-    bb5: {
-        _9 = copy _7;
-        goto -> bb6;
-    }
-
-    bb6: {
-        _8 = call const fn baml.Array.push(copy _2, copy _9) -> [bb1];
-    }
-
-    bb7: {
-        _0 = copy _2;
-        goto -> bb8;
-    }
-
-    bb8: {
-        return;
-    }
-}
+fn baml.llm.assemble_prompt_ast = builtin(vm)
 
 fn baml.llm.render_output_format = builtin(io)
 
@@ -8269,7 +8206,6 @@ fn .<lambda(prompt, 0)>(ctx: baml.llm.Context) -> baml.llm.PromptAst {
     let _3: ((string) -> baml.llm.Role throws never, baml.llm.Context) -> baml.TaggedString throws never
     let _4: string[]
     let _5: unknown[]
-    let _6: unknown[]
 
     bb0: {
         _3 = copy capture[0];
@@ -8278,15 +8214,11 @@ fn .<lambda(prompt, 0)>(ctx: baml.llm.Context) -> baml.llm.PromptAst {
 
     bb1: {
         _4 = copy _2.0;
-        _6 = copy _2.1;
-        _5 = call const fn baml.llm.render_prompt_values(copy _6) -> [bb2];
+        _5 = copy _2.1;
+        _0 = call const fn baml.llm.assemble_prompt_ast(copy _4, copy _5) -> [bb2];
     }
 
     bb2: {
-        _0 = sys_op const fn baml.llm.assemble_prompt_ast(copy _4, copy _5) -> bb3;
-    }
-
-    bb3: {
         return;
     }
 }

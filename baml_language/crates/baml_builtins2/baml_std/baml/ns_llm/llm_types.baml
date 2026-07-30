@@ -815,33 +815,14 @@ function get_jinja_template(function_name: string) -> string throws root.errors.
 
 /// BEP-049 §10 (M5d). Assemble a `PromptAst` from a tagged template's flattened
 /// `parts`/`values`. A `Role` value (from `${role("system")}`) starts a new chat
-/// message; strings — and other scalar values via their string form — accumulate
-/// into the current message's content. With no `Role` values the whole template
-/// becomes a single `PromptAst::Simple`. This replaces the magic-delimiter role
-/// mechanism of the Jinja path with direct structural assembly.
+/// message. Other values use the same recursive rendering and `baml.ToString`
+/// overrides as `string.from`, except nested media stays structural instead of
+/// becoming text. With no `Role` values the whole template becomes a simple
+/// prompt.
+//baml:mut_vm
+//baml:may_yield
 function assemble_prompt_ast(parts: string[], values: unknown[]) -> PromptAst throws never {
-  $rust_io_function
-}
-
-/// BEP-049 §11. Coerce a tagged prompt's interpolated `values` for assembly so
-/// composites render the same as they do in an ordinary backtick string. The
-/// template desugaring pushes each `${expr}` into `values` *raw* (uncoerced),
-/// which is the right contract for a general tagged template — but the built-in
-/// `prompt` tag stringifies its content, so a class/array/map value reaching the
-/// assembler unrendered would silently produce an empty string (B-563). Route
-/// every value through `string.from` — BAML's implicit `to_string`, the exact
-/// conversion an ordinary `${expr}` applies (honoring `baml.ToString` overrides)
-/// — except a `Role` marker (from `${role(...)}`), which stays raw so
-/// `assemble_prompt_ast` can still use it to split the prompt into chat messages.
-function render_prompt_values(values: unknown[]) -> unknown[] throws never {
-  let rendered: unknown[] = []
-  for (let value in values) {
-    rendered.push(match (value) {
-      Role => value,
-      _ => string.from(value),
-    })
-  }
-  rendered
+  $rust_function
 }
 
 /// BEP-049 §10 (M5b). Render `return_type`'s schema with default options — the
@@ -897,7 +878,7 @@ function prompt(
 ) -> (Context) -> PromptAst throws never {
   let render = (ctx: Context) -> {
     let t = body(make_role, ctx)
-    assemble_prompt_ast(t.parts, render_prompt_values(t.values))
+    assemble_prompt_ast(t.parts, t.values)
   }
   render
 }

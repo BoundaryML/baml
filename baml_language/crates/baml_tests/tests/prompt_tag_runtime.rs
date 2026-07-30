@@ -7,9 +7,46 @@
 //! schema (M5b). Orchestrator wiring (auto-building `Context` per attempt) is
 //! a later slice; here we build a `Context` by hand and inspect the result.
 
+use baml_builtins2::{PromptAst, PromptAstSimple};
 use baml_tests::baml_test;
 use bex_engine::BexExternalValue;
 use bex_external_types::BexExternalAdt;
+
+fn unwrap_prompt_ast(value: &BexExternalValue) -> std::sync::Arc<PromptAst> {
+    match value {
+        BexExternalValue::Instance {
+            class_name, fields, ..
+        } if class_name == "baml.llm.PromptAst" => match fields.get("_data") {
+            Some(BexExternalValue::Adt(BexExternalAdt::PromptAst(ast))) => ast.clone(),
+            other => panic!("expected `_data` to hold a PromptAst ADT, got {other:?}"),
+        },
+        other => panic!("expected a baml.llm.PromptAst instance, got {other:?}"),
+    }
+}
+
+fn collect_media_kinds(ast: &PromptAst, out: &mut Vec<baml_base::MediaKind>) {
+    fn collect_content(content: &PromptAstSimple, out: &mut Vec<baml_base::MediaKind>) {
+        match content {
+            PromptAstSimple::String(_) => {}
+            PromptAstSimple::Media(media) => out.push(media.kind),
+            PromptAstSimple::Multiple(parts) => {
+                for part in parts {
+                    collect_content(part, out);
+                }
+            }
+        }
+    }
+
+    match ast {
+        PromptAst::Simple(content) => collect_content(content, out),
+        PromptAst::Message { content, .. } => collect_content(content, out),
+        PromptAst::Vec(items) => {
+            for item in items {
+                collect_media_kinds(item, out);
+            }
+        }
+    }
+}
 
 #[tokio::test]
 async fn role_construction_isolation() {
@@ -177,6 +214,78 @@ function main() -> string {
         rendered, "[system]\nhead LBL<hi>\n\n[user]\ntail LBL<hi>",
         "override must apply in every message and roles must still split"
     );
+}
+
+#[tokio::test]
+async fn prompt_preserves_media_nested_in_classes_arrays_and_maps() {
+    let output = baml_test!(
+        r#"
+class MediaLeaf {
+  picture image
+  sound audio
+  clip video
+  document pdf
+}
+
+class MediaEnvelope {
+  primary MediaLeaf
+  gallery MediaLeaf[]
+  lookup map<string, MediaLeaf>
+}
+
+function main() -> baml.llm.PromptAst {
+  let leaf = MediaLeaf {
+    picture: image.from_url("https://example.com/picture.png", "image/png"),
+    sound: audio.from_url("https://example.com/sound.wav", "audio/wav"),
+    clip: video.from_url("https://example.com/clip.mp4", "video/mp4"),
+    document: pdf.from_url("https://example.com/document.pdf", "application/pdf"),
+  }
+  let envelope = MediaEnvelope {
+    primary: leaf,
+    gallery: [leaf],
+    lookup: { "copy": leaf },
+  }
+  let cc = baml.llm.ContextClient { name: "c", provider: "openai", default_role: "user", allowed_roles: ["user"] }
+  let ctx = baml.llm.Context { client: cc, tags: {} }
+  let render = prompt`${role("user")}Inspect ${envelope}`
+  render(ctx)
+}
+"#
+    );
+
+    let ast = unwrap_prompt_ast(
+        output
+            .result
+            .as_ref()
+            .unwrap_or_else(|error| panic!("prompt rendering failed: {error:?}")),
+    );
+    let mut media_kinds = Vec::new();
+    collect_media_kinds(&ast, &mut media_kinds);
+    assert_eq!(
+        media_kinds,
+        vec![
+            baml_base::MediaKind::Image,
+            baml_base::MediaKind::Audio,
+            baml_base::MediaKind::Video,
+            baml_base::MediaKind::Pdf,
+            baml_base::MediaKind::Image,
+            baml_base::MediaKind::Audio,
+            baml_base::MediaKind::Video,
+            baml_base::MediaKind::Pdf,
+            baml_base::MediaKind::Image,
+            baml_base::MediaKind::Audio,
+            baml_base::MediaKind::Video,
+            baml_base::MediaKind::Pdf,
+        ],
+        "each nested occurrence must remain a structural media node: {ast:?}"
+    );
+    let rendered = ast.render_text();
+    assert!(rendered.starts_with("[user]\nInspect MediaEnvelope"));
+    assert!(rendered.contains("image::url(https://example.com/picture.png, loaded=false)"));
+    assert!(rendered.contains("audio::url(https://example.com/sound.wav, loaded=false)"));
+    assert!(rendered.contains("video::url(https://example.com/clip.mp4, loaded=false)"));
+    assert!(rendered.contains("pdf::url(https://example.com/document.pdf, loaded=false)"));
+    assert!(!rendered.contains("rust_data"));
 }
 
 #[tokio::test]
