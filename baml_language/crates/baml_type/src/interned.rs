@@ -459,6 +459,101 @@ pub fn for_each_child(kind: &TyKind, mut visit: impl FnMut(&Ty)) {
     }
 }
 
+impl TyKind {
+    /// Rebuilds this kind with every direct child type replaced by
+    /// `f(child)` (satellite-nested children included) - the rebuild dual of
+    /// [`for_each_child`]. Leaf kinds clone unchanged. Callers intern the
+    /// result; short-circuit on [`Ty::flags`] first when the fold cannot
+    /// apply (e.g. no `HAS_INFER`).
+    pub fn map_children(&self, mut f: impl FnMut(&Ty) -> Ty) -> TyKind {
+        match self {
+            TyKind::Int { .. }
+            | TyKind::Bigint { .. }
+            | TyKind::Float { .. }
+            | TyKind::String { .. }
+            | TyKind::Bool { .. }
+            | TyKind::Null { .. }
+            | TyKind::Uint8Array { .. }
+            | TyKind::Media(..)
+            | TyKind::Literal(..)
+            | TyKind::Enum(..)
+            | TyKind::EnumVariant(..)
+            | TyKind::RustType { .. }
+            | TyKind::Type { .. }
+            | TyKind::Resource { .. }
+            | TyKind::PromptAst { .. }
+            | TyKind::Void { .. }
+            | TyKind::TypeAlias(..)
+            | TyKind::TypeVar(..)
+            | TyKind::Unknown { .. }
+            | TyKind::Never { .. }
+            | TyKind::Error { .. }
+            | TyKind::Infer { .. } => self.clone(),
+            TyKind::Class(name, args, attr) => TyKind::Class(
+                name.clone(),
+                args.iter().map(&mut f).collect(),
+                attr.clone(),
+            ),
+            TyKind::Interface(name, args, assoc, attr) => TyKind::Interface(
+                name.clone(),
+                args.iter().map(&mut f).collect(),
+                assoc
+                    .iter()
+                    .map(|(name, ty)| (name.clone(), f(ty)))
+                    .collect(),
+                attr.clone(),
+            ),
+            TyKind::List(inner, attr) => TyKind::List(f(inner), attr.clone()),
+            TyKind::Map { key, value, attr } => TyKind::Map {
+                key: f(key),
+                value: f(value),
+                attr: attr.clone(),
+            },
+            TyKind::Union(members, attr) => {
+                TyKind::Union(members.iter().map(&mut f).collect(), attr.clone())
+            }
+            TyKind::Function {
+                params,
+                ret,
+                throws,
+                attr,
+            } => TyKind::Function {
+                params: params
+                    .iter()
+                    .map(|param| FunctionParam {
+                        name: param.name.clone(),
+                        ty: f(&param.ty),
+                        mode: param.mode,
+                    })
+                    .collect(),
+                ret: f(ret),
+                throws: f(throws),
+                attr: attr.clone(),
+            },
+            TyKind::Future(value, error, attr) => TyKind::Future(f(value), f(error), attr.clone()),
+            TyKind::AssociatedTypeProjection {
+                base,
+                interface,
+                member,
+                attr,
+            } => TyKind::AssociatedTypeProjection {
+                base: f(base),
+                interface: InterfaceRef {
+                    name: interface.name.clone(),
+                    generics: interface.generics.iter().map(&mut f).collect(),
+                    associated_types: interface
+                        .associated_types
+                        .iter()
+                        .map(|(name, ty)| (name.clone(), f(ty)))
+                        .collect(),
+                },
+                member: member.clone(),
+                attr: attr.clone(),
+            },
+        }
+    }
+}
+
 fn compute_flags(kind: &TyKind) -> TypeFlags {
     let own = match kind {
         TyKind::Literal(_, Freshness::Fresh, _) => TypeFlags::HAS_FRESH_LITERAL,
@@ -872,6 +967,29 @@ mod tests {
         assert!(!deep.has_error());
         assert!(!Ty::list(Ty::int()).has_infer());
         assert!(Ty::list(Ty::error()).has_error());
+    }
+
+    #[test]
+    fn map_children_rebuilds_nested_structure() {
+        let var = Ty::infer_var(InferVar::new(7));
+        let nested = Ty::list(Ty::union([Ty::int(), var.clone()]));
+
+        fn substitute(ty: &Ty, from: &Ty, to: &Ty) -> Ty {
+            if ty == from {
+                return to.clone();
+            }
+            if !ty.has_infer() {
+                return ty.clone();
+            }
+            Ty::intern(ty.kind().map_children(|child| substitute(child, from, to)))
+        }
+
+        let resolved = substitute(&nested, &var, &Ty::string());
+        assert!(resolved == Ty::list(Ty::union([Ty::int(), Ty::string()])));
+        assert!(!resolved.has_infer());
+        // Untouched subtrees keep their identity.
+        let unchanged = substitute(&nested, &Ty::infer_var(InferVar::new(8)), &Ty::string());
+        assert!(unchanged == nested);
     }
 
     #[test]

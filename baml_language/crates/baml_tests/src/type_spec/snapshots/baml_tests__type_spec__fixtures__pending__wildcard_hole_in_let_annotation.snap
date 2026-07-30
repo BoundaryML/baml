@@ -2,8 +2,8 @@
 source: crates/baml_tests/src/type_spec/fixtures.rs
 expression: outcome.dump
 ---
-203..254 '{\n   ...int\n}': hir_ty=[<missing>] tir=[int]
-209..217 'let x: _': hir_ty=[<missing>] tir=[int]
-216..217 '_': hir_ty=[<missing>] tir=[int]
-220..221 '1': hir_ty=[<missing>] tir=[1]
-241..242 'x': hir_ty=[<missing>] tir=[int]
+203..254 '{\n   ...int\n}': hir_ty=[!error] tir=[int]
+209..217 'let x: _': hir_ty=[!error] tir=[int]
+216..217 '_': hir_ty=[!error] tir=[int]
+220..221 '1': hir_ty=[!error] tir=[1]
+241..242 'x': hir_ty=[!error] tir=[int]

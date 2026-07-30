@@ -2,10 +2,10 @@
 source: crates/baml_tests/src/type_spec/fixtures.rs
 expression: outcome.dump
 ---
-430..486 '{\n   ...t[]\n}': hir_ty=[<missing>] tir=[int[]]
-436..442 'let xs': hir_ty=[<missing>] tir=[int[] (evolving)]
-445..447 '[]': hir_ty=[<missing>] tir=[_[]]
-453..460 'xs.push': hir_ty=[<missing>] tir=[(self: int[], item: int) -> int throws never]
-453..463 'xs.push(1)': hir_ty=[<missing>] tir=[int]
-461..462 '1': hir_ty=[<missing>] tir=[1]
-469..471 'xs': hir_ty=[<missing>] tir=[int[]]
+430..486 '{\n   ...t[]\n}': hir_ty=[!error] tir=[int[]]
+436..442 'let xs': hir_ty=[!error] tir=[int[] (evolving)]
+445..447 '[]': hir_ty=[!error] tir=[_[]]
+453..460 'xs.push': hir_ty=[!error] tir=[(self: int[], item: int) -> int throws never]
+453..463 'xs.push(1)': hir_ty=[!error] tir=[int]
+461..462 '1': hir_ty=[!error] tir=[1]
+469..471 'xs': hir_ty=[!error] tir=[int[]]

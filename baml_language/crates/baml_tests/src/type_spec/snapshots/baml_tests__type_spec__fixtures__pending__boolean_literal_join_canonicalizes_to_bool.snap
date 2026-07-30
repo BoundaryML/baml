@@ -2,12 +2,12 @@
 source: crates/baml_tests/src/type_spec/fixtures.rs
 expression: outcome.dump
 ---
-450..547 '{\n   ...  v\n}': hir_ty=[<missing>] tir=[bool]
-456..461 'let v': hir_ty=[<missing>] tir=[bool]
-464..492 'if c {...alse }': hir_ty=[<missing>] tir=[true | false]
-467..468 'c': hir_ty=[<missing>] tir=[bool]
-469..477 '{ true }': hir_ty=[<missing>] tir=[true]
-471..475 'true': hir_ty=[<missing>] tir=[true]
-483..492 '{ false }': hir_ty=[<missing>] tir=[false]
-485..490 'false': hir_ty=[<missing>] tir=[false]
-544..545 'v': hir_ty=[<missing>] tir=[bool]
+450..547 '{\n   ...  v\n}': hir_ty=[!error] tir=[bool]
+456..461 'let v': hir_ty=[!error] tir=[bool]
+464..492 'if c {...alse }': hir_ty=[!error] tir=[true | false]
+467..468 'c': hir_ty=[!error] tir=[bool]
+469..477 '{ true }': hir_ty=[!error] tir=[true]
+471..475 'true': hir_ty=[!error] tir=[true]
+483..492 '{ false }': hir_ty=[!error] tir=[false]
+485..490 'false': hir_ty=[!error] tir=[false]
+544..545 'v': hir_ty=[!error] tir=[bool]

@@ -2,8 +2,8 @@
 source: crates/baml_tests/src/type_spec/fixtures.rs
 expression: outcome.dump
 ---
-473..537 '{\n   ...b.v\n}': hir_ty=[<missing>] tir=[!error]
-479..484 'let b': hir_ty=[<missing>] tir=[user.Box<!error>]
-487..502 'Box<_> { v: 5 }': hir_ty=[<missing>] tir=[user.Box<!error>]
-499..500 '5': hir_ty=[<missing>] tir=[5]
-532..535 'b.v': hir_ty=[<missing>] tir=[!error]
+473..537 '{\n   ...b.v\n}': !error
+479..484 'let b': hir_ty=[!error] tir=[user.Box<!error>]
+487..502 'Box<_> { v: 5 }': hir_ty=[!error] tir=[user.Box<!error>]
+499..500 '5': hir_ty=[!error] tir=[5]
+532..535 'b.v': !error

@@ -2,11 +2,11 @@
 source: crates/baml_tests/src/type_spec/fixtures.rs
 expression: outcome.dump
 ---
-71..199 '{\n   ...msg\n}': hir_ty=[<missing>] tir=[string]
-77..84 'let msg': hir_ty=[<missing>] tir=[string]
-87..91 '"hi"': hir_ty=[<missing>] tir=["hi"]
-116..124 'let flag': hir_ty=[<missing>] tir=[bool]
-127..131 'true': hir_ty=[<missing>] tir=[true]
-155..163 'let half': hir_ty=[<missing>] tir=[float]
-166..169 '0.5': hir_ty=[<missing>] tir=[0.5]
-194..197 'msg': hir_ty=[<missing>] tir=[string]
+71..199 '{\n   ...msg\n}': hir_ty=[!error] tir=[string]
+77..84 'let msg': hir_ty=[!error] tir=[string]
+87..91 '"hi"': hir_ty=[!error] tir=["hi"]
+116..124 'let flag': hir_ty=[!error] tir=[bool]
+127..131 'true': hir_ty=[!error] tir=[true]
+155..163 'let half': hir_ty=[!error] tir=[float]
+166..169 '0.5': hir_ty=[!error] tir=[0.5]
+194..197 'msg': hir_ty=[!error] tir=[string]

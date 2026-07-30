@@ -860,6 +860,7 @@ dependencies = [
  "baml_compiler2_hir",
  "baml_compiler2_ppir",
  "baml_type",
+ "ena",
  "rustc-hash 2.1.2",
 ]
 
@@ -2792,6 +2793,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "491bdf728bf25ddd9ad60d4cf1c48588fa82c013a2440b91aa7fc43e34a07c32"
 dependencies = [
  "bytemuck",
+]
+
+[[package]]
+name = "ena"
+version = "0.14.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "eabffdaee24bd1bf95c5ef7cec31260444317e72ea56c4c91750e8b7ee58d5f1"
+dependencies = [
+ "log",
 ]
 
 [[package]]

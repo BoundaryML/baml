@@ -1,0 +1,449 @@
+//! The inference table: an ena union-find over [`InferVar`]s with
+//! snapshot/rollback and eager, occurs-checked `Eq` unification - the
+//! rust-analyzer `InferenceTable` shape, per the constraint-system design in
+//! this crate's README.
+//!
+//! S5 scope: equality only. The settled `VarData` bounds
+//! (lowers/uppers/obligations for `Sub` constraints and the obligation
+//! worklist) join with the first `Sub` constraints; until then a variable's
+//! class is solved or not ([`VarValue`]). Kind/policy metadata for variables
+//! (effect vars, diverging vars) also lives here when it arrives - the
+//! representation carries identity only.
+//!
+//! Unification discipline (rustc's `TypeVariableValue` model): both sides are
+//! shallow-resolved before relating, so two `Known` roots never merge inside
+//! ena's pure value-merge - a known root is unified structurally against the
+//! other side instead. `Error` unifies with everything (a diagnostic was
+//! already emitted; never cascade). Unions unify positionally for now: the
+//! ACI-equality cases (reordered/var-bearing unions in invariant positions)
+//! are the deferred-with-budget class that arrives with `Sub` constraints.
+
+use baml_type::interned::{InferVar, Ty, TyKind, for_each_child};
+use ena::unify as ut;
+
+/// Local ena key for [`InferVar`] (orphan rules keep `UnifyKey` out of
+/// `baml_type`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+struct VarKey(InferVar);
+
+impl ut::UnifyKey for VarKey {
+    type Value = VarValue;
+
+    fn index(&self) -> u32 {
+        self.0.index()
+    }
+
+    fn from_index(index: u32) -> VarKey {
+        VarKey(InferVar::new(index))
+    }
+
+    fn tag() -> &'static str {
+        "VarKey"
+    }
+}
+
+/// Solver state of a variable's equivalence class.
+#[derive(Debug, Clone, PartialEq)]
+enum VarValue {
+    Unknown,
+    Known(Ty),
+}
+
+impl ut::UnifyValue for VarValue {
+    type Error = ut::NoError;
+
+    fn unify_values(a: &VarValue, b: &VarValue) -> Result<VarValue, ut::NoError> {
+        match (a, b) {
+            (VarValue::Known(_), VarValue::Known(_)) => unreachable!(
+                "unify shallow-resolves before relating, so two known roots never merge"
+            ),
+            (VarValue::Known(ty), _) | (_, VarValue::Known(ty)) => Ok(VarValue::Known(ty.clone())),
+            (VarValue::Unknown, VarValue::Unknown) => Ok(VarValue::Unknown),
+        }
+    }
+}
+
+/// A structural mismatch: the innermost pair of types that failed to unify.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct UnifyError {
+    pub left: Ty,
+    pub right: Ty,
+}
+
+/// A revertible point in the table's history; see
+/// [`InferenceTable::snapshot`].
+pub struct Snapshot(ut::Snapshot<ut::InPlace<VarKey>>);
+
+#[derive(Default)]
+pub struct InferenceTable {
+    vars: ut::InPlaceUnificationTable<VarKey>,
+}
+
+impl InferenceTable {
+    pub fn new() -> InferenceTable {
+        InferenceTable::default()
+    }
+
+    /// Allocates a fresh, unconstrained inference variable.
+    pub fn new_var(&mut self) -> InferVar {
+        self.vars.new_key(VarValue::Unknown).0
+    }
+
+    /// [`InferenceTable::new_var`] wrapped as a type.
+    pub fn new_var_ty(&mut self) -> Ty {
+        Ty::infer_var(self.new_var())
+    }
+
+    /// Replaces a solved variable at the ROOT of `ty` with its solution,
+    /// repeatedly; never descends into children.
+    pub fn shallow_resolve(&mut self, ty: &Ty) -> Ty {
+        let mut ty = ty.clone();
+        loop {
+            let TyKind::Infer { var: Some(var), .. } = ty.kind() else {
+                return ty;
+            };
+            match self.vars.probe_value(VarKey(*var)) {
+                VarValue::Known(solution) => ty = solution,
+                VarValue::Unknown => return ty,
+            }
+        }
+    }
+
+    /// Substitutes every solved variable in `ty`, at any depth. Unresolved
+    /// variables remain as `Infer` nodes (`resolve_all` at finalization is
+    /// what forbids them).
+    pub fn resolve_completely(&mut self, ty: &Ty) -> Ty {
+        if !ty.has_infer() {
+            return ty.clone();
+        }
+        let ty = self.shallow_resolve(ty);
+        if !ty.has_infer() {
+            return ty;
+        }
+        Ty::intern(
+            ty.kind()
+                .map_children(|child| self.resolve_completely(child)),
+        )
+    }
+
+    /// Eagerly unifies `left` and `right` structurally, solving variables.
+    /// Symmetric; errors carry the innermost mismatching pair.
+    pub fn unify(&mut self, left: &Ty, right: &Ty) -> Result<(), UnifyError> {
+        let left = self.shallow_resolve(left);
+        let right = self.shallow_resolve(right);
+        // Interning makes structural equality pointer equality.
+        if left == right {
+            return Ok(());
+        }
+        // Error unifies with everything: a diagnostic was already emitted.
+        if matches!(left.kind(), TyKind::Error { .. })
+            || matches!(right.kind(), TyKind::Error { .. })
+        {
+            return Ok(());
+        }
+        match (left.kind(), right.kind()) {
+            (TyKind::Infer { var: Some(a), .. }, TyKind::Infer { var: Some(b), .. }) => {
+                self.vars.union(VarKey(*a), VarKey(*b));
+                Ok(())
+            }
+            (TyKind::Infer { var: Some(var), .. }, _) => self.bind(*var, &right, &left),
+            (_, TyKind::Infer { var: Some(var), .. }) => self.bind(*var, &left, &right),
+            _ => self.unify_kinds(&left, &right),
+        }
+    }
+
+    /// Runs `f` inside a snapshot: rolled back on `Err`, committed on `Ok` -
+    /// the probing primitive method resolution and call checking build on.
+    pub fn commit_if_ok<T, E>(
+        &mut self,
+        f: impl FnOnce(&mut InferenceTable) -> Result<T, E>,
+    ) -> Result<T, E> {
+        let snapshot = self.snapshot();
+        match f(self) {
+            Ok(value) => {
+                self.commit(snapshot);
+                Ok(value)
+            }
+            Err(err) => {
+                self.rollback_to(snapshot);
+                Err(err)
+            }
+        }
+    }
+
+    pub fn snapshot(&mut self) -> Snapshot {
+        Snapshot(self.vars.snapshot())
+    }
+
+    pub fn rollback_to(&mut self, snapshot: Snapshot) {
+        self.vars.rollback_to(snapshot.0);
+    }
+
+    pub fn commit(&mut self, snapshot: Snapshot) {
+        self.vars.commit(snapshot.0);
+    }
+
+    /// Solves `var := ty` after the occurs check. `var_ty` is the variable as
+    /// a type, for the error value.
+    fn bind(&mut self, var: InferVar, ty: &Ty, var_ty: &Ty) -> Result<(), UnifyError> {
+        if self.occurs(VarKey(var), ty) {
+            return Err(UnifyError {
+                left: var_ty.clone(),
+                right: ty.clone(),
+            });
+        }
+        self.vars
+            .union_value(VarKey(var), VarValue::Known(ty.clone()));
+        Ok(())
+    }
+
+    /// Whether `root`'s equivalence class occurs anywhere inside `ty`
+    /// (resolving through solved variables). Binding on occurrence would
+    /// build an infinite type.
+    fn occurs(&mut self, root: VarKey, ty: &Ty) -> bool {
+        if !ty.has_infer() {
+            return false;
+        }
+        if let TyKind::Infer { var: Some(var), .. } = ty.kind() {
+            if self.vars.unioned(VarKey(*var), root) {
+                return true;
+            }
+            let resolved = self.shallow_resolve(ty);
+            if &resolved == ty {
+                return false;
+            }
+            return self.occurs(root, &resolved);
+        }
+        let mut found = false;
+        let mut children = Vec::new();
+        for_each_child(ty.kind(), |child| children.push(child.clone()));
+        for child in children {
+            if self.occurs(root, &child) {
+                found = true;
+                break;
+            }
+        }
+        found
+    }
+
+    /// Structural unification of two non-var, non-equal heads: same head with
+    /// identical non-child payload recurses on children; anything else is a
+    /// mismatch. Leaf pairs never match here - equal leaves were caught by
+    /// pointer equality in [`InferenceTable::unify`].
+    fn unify_kinds(&mut self, left: &Ty, right: &Ty) -> Result<(), UnifyError> {
+        let mismatch = || UnifyError {
+            left: left.clone(),
+            right: right.clone(),
+        };
+        let pairs: Vec<(Ty, Ty)> = match (left.kind(), right.kind()) {
+            (TyKind::Class(ln, la, lat), TyKind::Class(rn, ra, rat))
+                if ln == rn && la.len() == ra.len() && lat == rat =>
+            {
+                la.iter().cloned().zip(ra.iter().cloned()).collect()
+            }
+            (TyKind::List(li, lat), TyKind::List(ri, rat)) if lat == rat => {
+                vec![(li.clone(), ri.clone())]
+            }
+            (
+                TyKind::Map {
+                    key: lk,
+                    value: lv,
+                    attr: lat,
+                },
+                TyKind::Map {
+                    key: rk,
+                    value: rv,
+                    attr: rat,
+                },
+            ) if lat == rat => {
+                vec![(lk.clone(), rk.clone()), (lv.clone(), rv.clone())]
+            }
+            (TyKind::Future(lv, le, lat), TyKind::Future(rv, re, rat)) if lat == rat => {
+                vec![(lv.clone(), rv.clone()), (le.clone(), re.clone())]
+            }
+            (TyKind::Union(lm, lat), TyKind::Union(rm, rat))
+                if lm.len() == rm.len() && lat == rat =>
+            {
+                // Positional; the ACI (reorder/absorb) equality class defers
+                // to the budgeted machinery that lands with Sub constraints.
+                lm.iter().cloned().zip(rm.iter().cloned()).collect()
+            }
+            (TyKind::Interface(ln, la, lassoc, lat), TyKind::Interface(rn, ra, rassoc, rat))
+                if ln == rn
+                    && la.len() == ra.len()
+                    && lassoc.len() == rassoc.len()
+                    && lassoc
+                        .iter()
+                        .zip(rassoc.iter())
+                        .all(|((lname, _), (rname, _))| lname == rname)
+                    && lat == rat =>
+            {
+                la.iter()
+                    .cloned()
+                    .zip(ra.iter().cloned())
+                    .chain(
+                        lassoc
+                            .iter()
+                            .map(|(_, ty)| ty.clone())
+                            .zip(rassoc.iter().map(|(_, ty)| ty.clone())),
+                    )
+                    .collect()
+            }
+            (
+                TyKind::Function {
+                    params: lp,
+                    ret: lr,
+                    throws: le,
+                    attr: lat,
+                },
+                TyKind::Function {
+                    params: rp,
+                    ret: rr,
+                    throws: re,
+                    attr: rat,
+                },
+            ) if lp.len() == rp.len()
+                && lp
+                    .iter()
+                    .zip(rp.iter())
+                    .all(|(l, r)| l.name == r.name && l.mode == r.mode)
+                && lat == rat =>
+            {
+                lp.iter()
+                    .map(|p| p.ty.clone())
+                    .zip(rp.iter().map(|p| p.ty.clone()))
+                    .chain([(lr.clone(), rr.clone()), (le.clone(), re.clone())])
+                    .collect()
+            }
+            _ => return Err(mismatch()),
+        };
+        for (l, r) in pairs {
+            self.unify(&l, &r)?;
+        }
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn fresh_vars_are_distinct_and_unsolved() {
+        let mut table = InferenceTable::new();
+        let a = table.new_var_ty();
+        let b = table.new_var_ty();
+        assert!(a != b);
+        assert!(table.shallow_resolve(&a) == a);
+    }
+
+    #[test]
+    fn binding_a_var_solves_it() {
+        let mut table = InferenceTable::new();
+        let a = table.new_var_ty();
+        table.unify(&a, &Ty::int()).unwrap();
+        assert!(table.shallow_resolve(&a) == Ty::int());
+    }
+
+    #[test]
+    fn var_var_union_shares_the_solution() {
+        let mut table = InferenceTable::new();
+        let a = table.new_var_ty();
+        let b = table.new_var_ty();
+        table.unify(&a, &b).unwrap();
+        table.unify(&b, &Ty::string()).unwrap();
+        assert!(table.shallow_resolve(&a) == Ty::string());
+    }
+
+    #[test]
+    fn structural_unification_decomposes_and_solves() {
+        let mut table = InferenceTable::new();
+        let elem = table.new_var_ty();
+        table
+            .unify(&Ty::list(elem.clone()), &Ty::list(Ty::int()))
+            .unwrap();
+        assert!(table.shallow_resolve(&elem) == Ty::int());
+
+        let err = table
+            .unify(&Ty::list(Ty::int()), &Ty::list(Ty::string()))
+            .unwrap_err();
+        assert_eq!(
+            err,
+            UnifyError {
+                left: Ty::int(),
+                right: Ty::string()
+            }
+        );
+    }
+
+    #[test]
+    fn known_var_unifies_through_its_solution() {
+        let mut table = InferenceTable::new();
+        let a = table.new_var_ty();
+        let b = table.new_var_ty();
+        table.unify(&a, &Ty::int()).unwrap();
+        table.unify(&b, &Ty::int()).unwrap();
+        // Both known: relate the solutions, never merge known roots.
+        table.unify(&a, &b).unwrap();
+        assert!(table.unify(&a, &Ty::string()).is_err());
+    }
+
+    #[test]
+    fn occurs_check_rejects_infinite_types() {
+        let mut table = InferenceTable::new();
+        let a = table.new_var_ty();
+        assert!(table.unify(&a, &Ty::list(a.clone())).is_err());
+        // Also through a chain: ?b := ?a, ?a = List(?b).
+        let b = table.new_var_ty();
+        table.unify(&a, &b).unwrap();
+        assert!(table.unify(&a, &Ty::list(b.clone())).is_err());
+    }
+
+    #[test]
+    fn error_unifies_with_anything() {
+        let mut table = InferenceTable::new();
+        let a = table.new_var_ty();
+        table.unify(&Ty::error(), &Ty::int()).unwrap();
+        table.unify(&a, &Ty::error()).unwrap();
+        // The var stays unsolved rather than being poisoned with Error.
+        assert!(table.shallow_resolve(&a) == a);
+    }
+
+    #[test]
+    fn resolve_completely_folds_nested_solutions() {
+        let mut table = InferenceTable::new();
+        let elem = table.new_var_ty();
+        let ty = Ty::list(Ty::union([Ty::int(), elem.clone()]));
+        table.unify(&elem, &Ty::string()).unwrap();
+        let resolved = table.resolve_completely(&ty);
+        assert!(resolved == Ty::list(Ty::union([Ty::int(), Ty::string()])));
+        assert!(!resolved.has_infer());
+    }
+
+    #[test]
+    fn rollback_undoes_and_commit_keeps() {
+        let mut table = InferenceTable::new();
+        let a = table.new_var_ty();
+
+        let snapshot = table.snapshot();
+        table.unify(&a, &Ty::int()).unwrap();
+        table.rollback_to(snapshot);
+        assert!(table.shallow_resolve(&a) == a, "rollback must unsolve");
+
+        let outcome: Result<(), ()> =
+            table.commit_if_ok(|table| table.unify(&a, &Ty::string()).map_err(|_| ()));
+        outcome.unwrap();
+        assert!(
+            table.shallow_resolve(&a) == Ty::string(),
+            "commit must keep"
+        );
+
+        let failed: Result<(), ()> = table.commit_if_ok(|table| {
+            let b = table.new_var_ty();
+            table.unify(&b, &Ty::int()).map_err(|_| ())?;
+            Err(())
+        });
+        assert!(failed.is_err());
+        assert!(table.shallow_resolve(&a) == Ty::string());
+    }
+}
