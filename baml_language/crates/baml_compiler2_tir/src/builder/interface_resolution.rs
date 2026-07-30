@@ -340,21 +340,71 @@ impl<'db> TypeInferenceBuilder<'db> {
         recv: SelfReceiver<'_>,
         access: MemberAccess<'_>,
     ) -> Option<Ty> {
-        let pkg_items = self.resolve_class_pkg_items(bound.name.package())?;
-        let def = pkg_items.lookup_type(bound.name.namespace(), bound.name.name())?;
+        let declarers = self.member_declarers_for_bound(bound, access.member);
+        self.arbitrate_member_declarers(&declarers, recv, access)
+    }
+
+    /// Resolve `access.member` on a receiver bounded by a **conjunction** of interfaces
+    /// (`T extends A & B`, `type Assoc extends J & K`).
+    ///
+    /// Unlike a single bound's `requires` closure, the conjuncts are siblings: none
+    /// shadows another, so a member declared by two of them is ambiguous exactly as two
+    /// incomparable interfaces within one closure are. Collecting every conjunct's
+    /// declarers before arbitrating is what makes that visible — resolving conjunct by
+    /// conjunct and taking the first hit silently picks one.
+    ///
+    /// Each conjunct still applies its own root-wins tiering first, and the union is
+    /// deduped by realized identity, so overlaps that denote the *same* interface (`B`
+    /// requiring `A` with the member on `A`) stay unambiguous.
+    pub(super) fn resolve_interface_member_over_conjunction(
+        &mut self,
+        bounds: &[baml_type::Interface],
+        recv: SelfReceiver<'_>,
+        access: MemberAccess<'_>,
+    ) -> Option<Ty> {
+        let mut declarers: Vec<InterfaceView<'db>> = Vec::new();
+        for iface in bounds {
+            for view in self.member_declarers_for_bound(
+                InterfaceBound {
+                    name: &iface.name,
+                    type_args: &iface.generics,
+                    associated_bindings: &iface.associated_types,
+                },
+                access.member,
+            ) {
+                if !declarers.iter().any(|v| v.realized == view.realized) {
+                    declarers.push(view);
+                }
+            }
+        }
+        self.arbitrate_member_declarers(&declarers, recv, access)
+    }
+
+    /// Every interface in `bound`'s `requires` closure that declares `member`.
+    ///
+    /// Existential / type-var receiver: the concrete type is unknown, so a member may
+    /// come from `bound.name` OR any interface it transitively `requires`. Resolution
+    /// is *tiered*, matching the associated-type resolver `resolve_through_roots`: the
+    /// directly-named interface shadows the ones it requires (root-wins), but two
+    /// *incomparable* interfaces declaring the same member are ambiguous and must be
+    /// qualified (`recv.as<I>.member`). So resolve through the root when it declares
+    /// `member`; otherwise collect the closure interfaces that declare it.
+    fn member_declarers_for_bound(
+        &mut self,
+        bound: InterfaceBound<'_>,
+        member: &Name,
+    ) -> Vec<InterfaceView<'db>> {
+        let Some(pkg_items) = self.resolve_class_pkg_items(bound.name.package()) else {
+            return Vec::new();
+        };
+        let Some(def) = pkg_items.lookup_type(bound.name.namespace(), bound.name.name()) else {
+            return Vec::new();
+        };
         let Definition::Interface(root_loc) = def else {
-            return None;
+            return Vec::new();
         };
         let db = self.context.db();
 
-        // Existential / type-var receiver: the concrete type is unknown, so a member may
-        // come from `bound.name` OR any interface it transitively `requires`. Resolution
-        // is *tiered*, matching the associated-type resolver `resolve_through_roots`: the
-        // directly-named interface shadows the ones it requires (root-wins), but two
-        // *incomparable* interfaces declaring the same member are ambiguous and must be
-        // qualified (`recv.as<I>.member`). So resolve through the root when it declares
-        // `member`; otherwise collect the closure interfaces that declare it — one
-        // resolves, ≥2 are ambiguous, none is unresolved.
         // A rigid `Self` receiver resolves associated types symbolically — do NOT fill
         // an unbound associated type with its interface default (the implementor may
         // override it); the default is applied for concrete/existential receivers by
@@ -368,10 +418,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             false,
         );
         let mut declarers: Vec<InterfaceView<'db>> = Vec::new();
-        if self
-            .interface_member_kind(root_loc, access.member)
-            .is_some()
-        {
+        if self.interface_member_kind(root_loc, member).is_some() {
             // Direct tier: the root shadows everything it transitively requires.
             if let Some((loc, args, assoc)) = closure.iter().find(|(loc, _, _)| *loc == root_loc)
                 && let Some(qtn) = crate::interfaces::interface_loc_qtn(db, *loc)
@@ -388,7 +435,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 if *loc == root_loc {
                     continue;
                 }
-                if self.interface_member_kind(*loc, access.member).is_some()
+                if self.interface_member_kind(*loc, member).is_some()
                     && let Some(qtn) = crate::interfaces::interface_loc_qtn(db, *loc)
                 {
                     let realized = baml_type::Interface::new(qtn, args.clone(), assoc.clone());
@@ -401,8 +448,18 @@ impl<'db> TypeInferenceBuilder<'db> {
                 }
             }
         }
+        declarers
+    }
 
-        match declarers.as_slice() {
+    /// One declarer resolves; ≥2 are ambiguous; none is unresolved (`None`, so the
+    /// caller can fall through to its own not-found handling).
+    fn arbitrate_member_declarers(
+        &mut self,
+        declarers: &[InterfaceView<'db>],
+        recv: SelfReceiver<'_>,
+        access: MemberAccess<'_>,
+    ) -> Option<Ty> {
+        match declarers {
             [] => None,
             [one] => self.resolve_member_on_one_interface(one, recv, &access),
             // ≥2 incomparable interfaces declare `member`: resolving it would silently pick

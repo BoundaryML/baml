@@ -91,3 +91,25 @@ class WideningReader {
         }
     }
 }
+
+// Two conjuncts declaring the same member are siblings — neither shadows the
+// other — so the access is ambiguous and must be qualified with `.as<I>`.
+// Resolving conjunct-by-conjunct and taking the first hit would silently pick
+// `Sized` here, and which one it picked would depend on the order written.
+interface OtherSized {
+    function size(self) -> int throws never
+}
+
+function ambiguous_across_conjuncts<T extends Sized & OtherSized>(item: T) -> int {
+    item.size()
+}
+
+// A conjunct overlapping through `requires` is NOT ambiguous: both reach the
+// same realized interface, so it dedupes to one declarer.
+interface NamedAndSized requires Named {
+    function extra(self) -> int throws never
+}
+
+function overlap_through_requires<T extends Named & NamedAndSized>(item: T) -> string {
+    item.name
+}

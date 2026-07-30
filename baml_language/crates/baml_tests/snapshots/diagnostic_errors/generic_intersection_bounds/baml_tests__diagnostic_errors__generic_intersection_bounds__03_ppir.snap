@@ -22,6 +22,9 @@ class user.WideningReader {
 }
 class user.WideningReader$stream {
 }
+function user.ambiguous_across_conjuncts(item: T) -> int  [expr] {
+  {  } item.size()
+}
 function user.blanket_impl_needs_every_conjunct() -> string  [expr] {
   { let p: Printable = user.OnlyNamed { name: "n" } } p.display()
 }
@@ -42,6 +45,9 @@ function user.missing_leading_conjunct() -> string  [expr] {
 }
 function user.missing_trailing_conjunct() -> string  [expr] {
   {  } describe(user.OnlyNamed { name: "n" })
+}
+function user.overlap_through_requires(item: T) -> string  [expr] {
+  {  } item.name
 }
 function user.read(self: ?, value: T) -> string  [expr] {
   {  } value.name

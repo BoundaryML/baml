@@ -54,3 +54,11 @@ source: crates/baml_tests/src/generated_tests.rs
  85 │ │               value.name
  86 │ ╰─▶         }
     ╰────
+
+  [type] E0121
+
+  × method `size` on class `T` is declared by multiple interfaces: `Sized`, `OtherSized`; unqualified calls will be ambiguous — use obj.as<Sized>.size() or obj.as<OtherSized>.size()
+    ╭─[generic_intersection_bounds.baml:99:5]
+ 99 │     item.size()
+    ·     ─────────
+    ╰────

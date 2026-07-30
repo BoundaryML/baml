@@ -60,6 +60,17 @@ function user.WideningReader.read<T>(self: user.WideningReader, value: T) -> str
     value.name : string
   }
 }
+function user.ambiguous_across_conjuncts<T>(item: T) -> int throws never {
+  { : unknown
+    item.size() : unknown
+  }
+  !! 3044..3053: method `size` on class `T` is declared by multiple interfaces: `Sized`, `OtherSized`; unqualified calls will be ambiguous — use obj.as<Sized>.size() or obj.as<OtherSized>.size()
+}
+function user.overlap_through_requires<T>(item: T) -> string throws never {
+  { : string
+    item.name : string
+  }
+}
 function user.T.display(self: unknown) -> string throws never {
   { : string
     self.name : string

@@ -11398,22 +11398,27 @@ impl<'db> TypeInferenceBuilder<'db> {
                 // own `self`) call `Self`-param methods, while a bare interface
                 // (existential) receiver still cannot. Each bound of an
                 // intersection (`T: A & B`) is tried in turn.
-                for iface in &bounds {
-                    if let Some(ty) = self.resolve_interface_member(
-                        InterfaceBound {
-                            name: &iface.name,
-                            type_args: &iface.generics,
-                            associated_bindings: &iface.associated_types,
-                        },
-                        SelfReceiver::RigidVar(name),
-                        MemberAccess { member, at, bound },
-                    ) {
-                        return ty;
-                    }
+                if let Some(ty) = self.resolve_interface_member_over_conjunction(
+                    &bounds,
+                    SelfReceiver::RigidVar(name),
+                    MemberAccess { member, at, bound },
+                ) {
+                    return ty;
                 }
-                // No bound declares the member — fall back to general member resolution
-                // on the first bound's existential view (single-bound today).
-                self.resolve_member(&bounds[0].to_ty(), member, at, bound)
+                // No conjunct declares the member. Reporting it here — rather than
+                // re-resolving against one arbitrarily chosen conjunct's existential
+                // view — keeps the answer independent of the order the bounds were
+                // written, and matches the projection arm below.
+                self.context.report_at_member_simple(
+                    TirTypeError::UnresolvedMember {
+                        base_type: base_ty.clone(),
+                        member: member.clone(),
+                    },
+                    at,
+                );
+                Ty::Error {
+                    attr: TyAttr::default(),
+                }
             }
             Ty::TypeVar(name, _) if member.as_str() == "from_json" => {
                 // Type-check: every BAML type has `from_json(j: json) -> Self` after Phase 5b.1.
@@ -11454,18 +11459,12 @@ impl<'db> TypeInferenceBuilder<'db> {
                     projection_iface,
                     assoc,
                 );
-                for bound_iface in &bounds {
-                    if let Some(ty) = self.resolve_interface_member(
-                        InterfaceBound {
-                            name: &bound_iface.name,
-                            type_args: &bound_iface.generics,
-                            associated_bindings: &bound_iface.associated_types,
-                        },
-                        SelfReceiver::ExactTy(base_ty),
-                        MemberAccess { member, at, bound },
-                    ) {
-                        return ty;
-                    }
+                if let Some(ty) = self.resolve_interface_member_over_conjunction(
+                    &bounds,
+                    SelfReceiver::ExactTy(base_ty),
+                    MemberAccess { member, at, bound },
+                ) {
+                    return ty;
                 }
                 // No declared bound resolves the member — an unbounded (or wrongly
                 // bounded) projection has no members, same as any receiver missing it.
