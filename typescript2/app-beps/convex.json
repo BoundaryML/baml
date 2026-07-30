@@ -1,7 +1,7 @@
 {
   "node": {
     "externalPackages": [
-      "@boundaryml/baml"
+      "@boundaryml/baml-bridge"
     ]
   }
 }

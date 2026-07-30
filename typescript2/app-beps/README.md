@@ -132,6 +132,7 @@ A standalone web application for managing BAML Enhancement Proposals (BEPs) and 
 ### Prerequisites
 
 - [Bun](https://bun.sh/) (recommended) or Node.js 18+
+- [BAML](https://boundaryml.com/quickstart) toolchain
 - A [Convex](https://convex.dev/) account
 - An [Anthropic API key](https://console.anthropic.com/) (for AI features)
 
@@ -908,6 +909,12 @@ bun run start
 
 # Run linting
 bun run lint
+
+# Check the BAML project
+bun run baml:check
+
+# Regenerate the ignored BAML v1 TypeScript SDK
+bun run baml:generate
 ```
 
 ### Adding shadcn/ui Components
