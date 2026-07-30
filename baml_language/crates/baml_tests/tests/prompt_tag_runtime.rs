@@ -66,6 +66,57 @@ function main() -> baml.llm.Role {
 }
 
 #[tokio::test]
+async fn prompt_role_metadata_is_preserved() {
+    let output = baml_test!(
+        r#"
+function main() -> baml.llm.PromptAst {
+  let system = baml.llm.Role {
+    name: "system",
+    metadata: {
+      "cache_control": { "type": "ephemeral" },
+    },
+  }
+  let user = baml.llm.Role {
+    name: "user",
+    metadata: { "priority": 3 },
+  }
+  let cc = baml.llm.ContextClient { name: "c", provider: "openai", default_role: "user", allowed_roles: ["system", "user"] }
+  let ctx = baml.llm.Context { client: cc, tags: {} }
+  let render = prompt`${system}Rules${user}Hello`
+  render(ctx)
+}
+"#
+    );
+    let ast = unwrap_prompt_ast(
+        output
+            .result
+            .as_ref()
+            .unwrap_or_else(|error| panic!("prompt rendering failed: {error:?}")),
+    );
+    let PromptAst::Vec(messages) = ast.as_ref() else {
+        panic!("expected two prompt messages, got {ast:?}");
+    };
+    let [system, user] = messages.as_slice() else {
+        panic!("expected two prompt messages, got {ast:?}");
+    };
+    let PromptAst::Message { role, metadata, .. } = system.as_ref() else {
+        panic!("expected a system message, got {system:?}");
+    };
+    assert_eq!(role, "system");
+    assert_eq!(
+        metadata,
+        &serde_json::json!({
+            "cache_control": { "type": "ephemeral" },
+        })
+    );
+    let PromptAst::Message { role, metadata, .. } = user.as_ref() else {
+        panic!("expected a user message, got {user:?}");
+    };
+    assert_eq!(role, "user");
+    assert_eq!(metadata, &serde_json::json!({ "priority": 3 }));
+}
+
+#[tokio::test]
 async fn prompt_tag_builds_promptast_with_role_messages() {
     let output = baml_test!(
         r#"

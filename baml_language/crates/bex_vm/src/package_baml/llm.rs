@@ -58,7 +58,12 @@ impl StructuralRenderSink for PromptContentSink {
     }
 }
 
-fn prompt_role_name(vm: &BexVm, value: Value) -> Option<String> {
+struct PromptRole {
+    name: String,
+    metadata: serde_json::Value,
+}
+
+fn prompt_role(vm: &BexVm, value: Value) -> Option<PromptRole> {
     let ptr = value.as_object_ptr()?;
     let (class_ptr, fields) = match vm.get_object(ptr) {
         Object::Instance(instance) => (
@@ -67,15 +72,22 @@ fn prompt_role_name(vm: &BexVm, value: Value) -> Option<String> {
         ),
         _ => return None,
     };
-    let name_index = match vm.get_object(class_ptr) {
-        Object::Class(class) if class.name.render_dotted(false) == "baml.llm.Role" => {
-            class.fields.iter().position(|field| field.name == "name")?
-        }
+    let (name_index, metadata_index) = match vm.get_object(class_ptr) {
+        Object::Class(class) if class.name.render_dotted(false) == "baml.llm.Role" => (
+            class.fields.iter().position(|field| field.name == "name")?,
+            class
+                .fields
+                .iter()
+                .position(|field| field.name == "metadata")?,
+        ),
         _ => return None,
     };
-    vm.as_string(fields.get(name_index)?)
-        .ok()
-        .map(|name| name.as_str().to_string())
+    let name = vm.as_string(fields.get(name_index)?).ok()?;
+    let metadata = super::json::value_to_serde(vm, *fields.get(metadata_index)?);
+    Some(PromptRole {
+        name: name.as_str().to_string(),
+        metadata,
+    })
 }
 
 struct PromptAssembly {
@@ -89,7 +101,7 @@ impl PromptAssembly {
     fn finish(self, vm: &mut BexVm) -> NativeCallResult {
         let mut render_state = StringRenderState::with_overrides(&self.pending, &self.results);
         let mut messages: Vec<Arc<PromptAst>> = Vec::new();
-        let mut current_role: Option<String> = None;
+        let mut current_role: Option<PromptRole> = None;
         let mut content = PromptContentSink::default();
 
         for (index, value) in self.values.iter().copied().enumerate() {
@@ -99,12 +111,12 @@ impl PromptAssembly {
                 content.push_text(part.as_str());
             }
 
-            if let Some(role) = prompt_role_name(vm, value) {
+            if let Some(role) = prompt_role(vm, value) {
                 if let Some(previous_role) = current_role.replace(role) {
                     messages.push(Arc::new(PromptAst::Message {
-                        role: previous_role,
+                        role: previous_role.name,
                         content: std::mem::take(&mut content).into_content(),
-                        metadata: serde_json::Value::Null,
+                        metadata: previous_role.metadata,
                     }));
                 }
             } else {
@@ -121,9 +133,9 @@ impl PromptAssembly {
         let ast = match current_role {
             Some(role) => {
                 messages.push(Arc::new(PromptAst::Message {
-                    role,
+                    role: role.name,
                     content: content.into_content(),
-                    metadata: serde_json::Value::Null,
+                    metadata: role.metadata,
                 }));
                 if messages.len() == 1 {
                     messages.pop().unwrap()
@@ -197,7 +209,7 @@ impl BamlNamespaceLlm for PackageBamlImpl {
     fn assemble_prompt_ast(vm: &mut BexVm, parts: &[Value], values: &[Value]) -> NativeCallResult {
         let mut pending = Vec::new();
         for value in values.iter().copied() {
-            if prompt_role_name(vm, value).is_none() {
+            if prompt_role(vm, value).is_none() {
                 collect_to_string_overrides(vm, value, &mut pending);
             }
         }
