@@ -34,16 +34,11 @@ impl StructuralRenderSink for PromptContentSink {
             return;
         }
 
-        if let Some(last) = self.parts.pop() {
-            match Arc::try_unwrap(last) {
-                Ok(PromptAstSimple::String(mut current)) => {
-                    current.push_str(text);
-                    self.parts.push(Arc::new(PromptAstSimple::String(current)));
-                    return;
-                }
-                Ok(other) => self.parts.push(Arc::new(other)),
-                Err(last) => self.parts.push(last),
-            }
+        if let Some(last) = self.parts.last_mut()
+            && let Some(PromptAstSimple::String(current)) = Arc::get_mut(last)
+        {
+            current.push_str(text);
+            return;
         }
         self.parts
             .push(Arc::new(PromptAstSimple::String(text.to_string())));
@@ -61,6 +56,14 @@ impl StructuralRenderSink for PromptContentSink {
 struct PromptRole {
     name: String,
     metadata: serde_json::Value,
+}
+
+fn message(role: PromptRole, content: PromptContentSink) -> Arc<PromptAst> {
+    Arc::new(PromptAst::Message {
+        role: role.name,
+        content: content.into_content(),
+        metadata: role.metadata,
+    })
 }
 
 fn prompt_role(vm: &BexVm, value: Value) -> Option<PromptRole> {
@@ -113,11 +116,7 @@ impl PromptAssembly {
 
             if let Some(role) = prompt_role(vm, value) {
                 if let Some(previous_role) = current_role.replace(role) {
-                    messages.push(Arc::new(PromptAst::Message {
-                        role: previous_role.name,
-                        content: std::mem::take(&mut content).into_content(),
-                        metadata: previous_role.metadata,
-                    }));
+                    messages.push(message(previous_role, std::mem::take(&mut content)));
                 }
             } else {
                 render_to_sink(vm, value, false, 0, &mut render_state, &mut content);
@@ -132,11 +131,7 @@ impl PromptAssembly {
 
         let ast = match current_role {
             Some(role) => {
-                messages.push(Arc::new(PromptAst::Message {
-                    role: role.name,
-                    content: content.into_content(),
-                    metadata: role.metadata,
-                }));
+                messages.push(message(role, content));
                 if messages.len() == 1 {
                     messages.pop().unwrap()
                 } else {
