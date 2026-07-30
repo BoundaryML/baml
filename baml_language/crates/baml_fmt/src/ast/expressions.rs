@@ -87,9 +87,9 @@ pub enum Expression {
 #[derive(Debug)]
 pub struct VerbatimSpan {
     /// Range of the first non-trivia token — the leading-trivia anchor.
-    first_token: TextRange,
+    pub(crate) first_token: TextRange,
     /// Range of the last non-trivia token — the trailing-trivia anchor.
-    last_token: TextRange,
+    pub(crate) last_token: TextRange,
 }
 
 impl VerbatimSpan {
@@ -97,7 +97,7 @@ impl VerbatimSpan {
     /// last non-trivia token ranges. Any leading/trailing trivia that the CST
     /// attaches inside the node is skipped so the anchors line up with the
     /// classifier's per-token comment keys.
-    fn from_element(elem: &SyntaxElement) -> Self {
+    pub(crate) fn from_element(elem: &SyntaxElement) -> Self {
         if let Some(node) = elem.as_node() {
             let mut tokens = node
                 .descendants_with_tokens()
@@ -122,7 +122,7 @@ impl VerbatimSpan {
 
     /// The verbatim source span to print: from the first token to the last,
     /// excluding any leading/trailing trivia the CST folded into the node.
-    fn content_range(&self) -> TextRange {
+    pub(crate) fn content_range(&self) -> TextRange {
         TextRange::new(self.first_token.start(), self.last_token.end())
     }
 }

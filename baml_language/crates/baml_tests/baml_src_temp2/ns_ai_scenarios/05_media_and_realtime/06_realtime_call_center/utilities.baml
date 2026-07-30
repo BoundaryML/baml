@@ -121,24 +121,10 @@ function _realtime_call_center_instructions() -> string throws never {
   "
 }
 
-function _realtime_call_center_task(
-    provider: root.ai.Provider,
-    first_turn: string,
-) -> root.ai.Task<null> throws never {
-    root.ai.task_named<null>(provider, "RealtimeCallCenter", { "first_turn": first_turn }, [schedule_meeting, check_weather, mark_conversation_complete], (
-        ctx: baml.llm.Context,
-    ) -> baml.llm.PromptAst {
-        baml.llm
-            .assemble_prompt_ast(
-                ["", "", "", "", ""],
-                [
-                    baml.llm.Role { name: "system", metadata: {} },
-                    _realtime_call_center_instructions(),
-                    baml.llm.Role { name: "user", metadata: {} },
-                    first_turn,
-                ],
-            )
-    })
+function RealtimeCallCenter(first_turn: string) -> null {
+    provider: ai.testing.fake_output_provider("null")
+    prompt: `${baml.llm.Role { name: "system", metadata: {} }}${_realtime_call_center_instructions()}${baml.llm.Role { name: "user", metadata: {} }}${first_turn}`
+    tools: [schedule_meeting, check_weather, mark_conversation_complete]
 }
 
 function realtime_audio_helper_path() -> string throws baml.errors.UnknownError {
@@ -203,12 +189,12 @@ class MacRealtimeAudioDevice {
         }
     }
 
-    implements root.ai.realtime.RealtimeAudioDevice {
-        function input_format(self) -> root.ai.realtime.RealtimeAudioFormat throws never {
+    implements ai.realtime.RealtimeAudioDevice {
+        function input_format(self) -> ai.realtime.RealtimeAudioFormat throws never {
             root.openai.realtime_audio_format()
         }
 
-        function output_format(self) -> root.ai.realtime.RealtimeAudioFormat throws never {
+        function output_format(self) -> ai.realtime.RealtimeAudioFormat throws never {
             root.openai.realtime_audio_format()
         }
 
@@ -294,13 +280,13 @@ class MacRealtimeAudioDevice {
             null
         }
     }
-    implements root.ai.Resource {}
+    implements ai.Resource {}
 }
 
 // Run from the repository root:
 //   baml run ai_scenarios.openai_realtime_call_center \
 //     --from crates/baml_tests/baml_src_temp2
-function openai_realtime_call_center() -> null throws root.ai.Failure | baml.errors.UnknownError {
+function openai_realtime_call_center() -> null throws ai.Failure | baml.errors.UnknownError {
     let provider = root.openai.Realtime {
         model: "gpt-realtime-2.1",
         voice: "marin",
@@ -320,15 +306,14 @@ function openai_realtime_call_center() -> null throws root.ai.Failure | baml.err
         },
         keep_open: true,
     };
-    let channel = root.ai.testing.RecordingChannel { frames: [] };
-    let task = _realtime_call_center_task(provider, "Begin the call now: introduce yourself and ask what meeting I want to schedule.");
+    let channel = ai.testing.RecordingChannel { frames: [] };
+    let task = RealtimeCallCenter@task("Begin the call now: introduce yourself and ask what meeting I want to schedule.").with_provider(provider);
     baml.io
         .println(
             "\nMicrophone is live with macOS echo cancellation. OpenAI server VAD detects each turn; press Ctrl+C to hang up.",
         );
     task.run(
-        runner = root
-            .ai
+        runner = ai
             .run
             .VoiceAgent
             .new(

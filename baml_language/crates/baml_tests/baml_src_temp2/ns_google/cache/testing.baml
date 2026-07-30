@@ -10,26 +10,26 @@ class FakeCache {
 
         function run<T>(
             self,
-            task: root.ai.Task<T>,
-        ) -> root.ai.ResponseWithMetadata<T> throws root.ai.Failure | baml.errors.UnknownError {
+            task: ai.Task<T>,
+        ) -> ai.ResponseWithMetadata<T> throws ai.Failure | baml.errors.UnknownError {
             //# Record one execution through this cache resource
             self.runs = self.runs + 1;
             //# Resolve the task's one-turn agent capability
             match (task.provider) {
-                let provider: root.ai.AgentProvider => {
+                let provider: ai.AgentProvider => {
                     //## Execute one zero-tool turn while the cache is active
                     let conversation = provider.begin<T>(task.with_provider(provider));
                     let result = provider.step<T>(conversation, []);
                     match (result.outcome) {
                         let value: T => {
-                            root.ai.ResponseWithMetadata<T> {
+                            ai.ResponseWithMetadata<T> {
                                 value: value,
                                 metadata: result.metadata,
                                 conversation: conversation,
                             }
                         },
-                        let calls: root.ai.tools.ToolCalls => {
-                            throw root.ai.InvalidRequest {
+                        let calls: ai.tools.ToolCalls => {
+                            throw ai.InvalidRequest {
                                 provider: provider.name(),
                                 status_code: null,
                                 detail: "fake cache zero-tool turn returned tool calls",
@@ -54,13 +54,13 @@ class FakeCache {
         }
     }
 
-    implements root.ai.Resource {}
+    implements ai.Resource {}
 }
 
 class FakeCacheProvider {
-    inner: root.ai.AgentProvider,
+    inner: ai.AgentProvider,
 
-    implements root.ai.Provider {
+    implements ai.Provider {
         function name(self) -> string throws never {
             "fake-cache"
         }
@@ -69,27 +69,27 @@ class FakeCacheProvider {
         }
     }
 
-    implements root.ai.AgentProvider {
+    implements ai.AgentProvider {
         function begin<T>(
             self,
-            task: root.ai.Task<T>,
-        ) -> root.ai.Conversation throws root.ai.Failure | baml.errors.UnknownError {
+            task: ai.Task<T>,
+        ) -> ai.Conversation throws ai.Failure | baml.errors.UnknownError {
             self.inner.begin<T>(task.with_provider(self.inner))
         }
 
         function step<T>(
             self,
-            conversation: root.ai.Conversation,
-            tools: root.ai.tools.Tool[],
-        ) -> root.ai.ModelStep<T> throws root.ai.Failure | baml.errors.UnknownError {
+            conversation: ai.Conversation,
+            tools: ai.tools.Tool[],
+        ) -> ai.ModelStep<T> throws ai.Failure | baml.errors.UnknownError {
             self.inner.step<T>(conversation, tools)
         }
 
         function submit(
             self,
-            conversation: root.ai.Conversation,
-            results: root.ai.tools.ToolResult[],
-        ) -> root.ai.Conversation throws root.ai.Failure | baml.errors.UnknownError {
+            conversation: ai.Conversation,
+            results: ai.tools.ToolResult[],
+        ) -> ai.Conversation throws ai.Failure | baml.errors.UnknownError {
             self.inner.submit(conversation, results)
         }
     }
@@ -97,7 +97,7 @@ class FakeCacheProvider {
     implements ManagedCacheProvider {
         function create_cache(
             self,
-            messages: root.ai.Messages,
+            messages: ai.Messages,
             options: CacheOptions,
         ) -> Cache throws never {
             //# Allocate a provider-owned cache resource

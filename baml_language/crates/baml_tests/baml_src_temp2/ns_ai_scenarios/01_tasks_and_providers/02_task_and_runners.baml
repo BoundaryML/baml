@@ -1,7 +1,7 @@
 // Resolve a support ticket while retaining the provider metadata that explains
 // where the answer came from.
-function task_and_runners() -> root.ai.ResponseWithMetadata<Resolution> {
-    let task = ResolveTicket_task(sample_ticket(), fake_resolution());
+function task_and_runners() -> ai.ResponseWithMetadata<Resolution> {
+    let task = ResolveTicket@task(sample_ticket()).with_provider(fake_resolution());
     log.info(
         {
             "identity": task.identity?.name,
@@ -9,11 +9,10 @@ function task_and_runners() -> root.ai.ResponseWithMetadata<Resolution> {
             "tools": task.tools.length(),
         },
     );
-    let response = root
-        .ai
+    let response = ai
         .internal
         ._response_from_done(
-            root.ai.internal._require_done(task.run(runner = root.ai.run.Agent<Resolution>.new())),
+            ai.internal._require_done(task.run(runner = ai.run.Agent<Resolution>.new())),
         );
     log.info(response);
     response

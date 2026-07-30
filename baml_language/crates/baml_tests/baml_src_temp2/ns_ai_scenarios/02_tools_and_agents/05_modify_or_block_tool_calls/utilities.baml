@@ -1,5 +1,5 @@
-function account_alias_tool() -> root.ai.tools.Tool throws never {
-    root.ai
+function account_alias_tool() -> ai.tools.Tool throws never {
+    ai
         .tools
         .tool(
             lookup_account,

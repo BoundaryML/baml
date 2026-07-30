@@ -6,18 +6,18 @@ class McpLookupOrderArgs {
     order_id: string,
 }
 
-function add_mcp_server_tool(broker: McpServerBroker) -> root.ai.tools.Tool throws never {
-    root.ai.tools.tool(broker.request_server, name = "add_mcp_server")
+function add_mcp_server_tool(broker: McpServerBroker) -> ai.tools.Tool throws never {
+    ai.tools.tool(broker.request_server, name = "add_mcp_server")
 }
 
 class FakeMcpConnection {
     discoveries: int,
     looked_up_orders: string[],
 
-    function tools(self) -> root.ai.tools.Tool[] throws never {
+    function tools(self) -> ai.tools.Tool[] throws never {
         self.discoveries = self.discoveries + 1;
         [
-            root.ai
+            ai
                 .tools
                 .tool_from_json_schema(
                     "mcp__orders__lookup_order",
@@ -38,7 +38,7 @@ class FakeMcpConnection {
     }
 }
 
-// The bootstrap root.ai.tools.tool changes application state. The prepare-step callback turns
+// The bootstrap ai.tools.tool changes application state. The prepare-step callback turns
 // pending requests into a complete next roster, which the runner validates and
 // applies before the next provider step.
 class McpServerBroker {
@@ -73,8 +73,8 @@ class McpServerBroker {
 
     function activate_pending(
         self,
-        current_tools: root.ai.tools.Tool[],
-    ) -> root.ai.tools.Tool[]? throws never {
+        current_tools: ai.tools.Tool[],
+    ) -> ai.tools.Tool[]? throws never {
         let pending = self.pending_servers.slice(0, self.pending_servers.length());
         self.pending_servers = [];
         let next_tools = current_tools.slice(0, current_tools.length());
@@ -107,22 +107,15 @@ class McpServerBroker {
     }
 }
 
-function McpBootstrap_task(
-    provider: root.ai.Provider,
-    bootstrap_tool: root.ai.tools.Tool,
-) -> root.ai.Task<Resolution> throws never {
-    root.ai.task_named<Resolution>(provider, "McpBootstrap", { "order_id": "O-42" }, [bootstrap_tool], (
-        ctx: baml.llm.Context,
-    ) -> baml.llm.PromptAst {
-        baml.llm
-            .assemble_prompt_ast(
-                ["", "\n", ""],
-                [
-                    `Find the status of order O-42. You must first call add_mcp_server with server "orders". After that succeeds, call the newly available orders MCP lookup root.ai.tools.tool. Do not return the final answer until both root.ai.tools.tool calls have completed.`,
-                    ctx.output_format,
-                ],
-            )
-    })
+function McpBootstrap(order_id: string) -> Resolution {
+    provider: fake_tool_provider([])
+    prompt: `
+        Find the status of order ${order_id}. You must first call add_mcp_server
+        with server "orders". After that succeeds, call the newly available
+        orders MCP lookup tool. Do not return the final answer until both tool
+        calls have completed.
+        ${ctx.output_format}
+    `
 }
 
 function mcp_broker() -> McpServerBroker throws never {

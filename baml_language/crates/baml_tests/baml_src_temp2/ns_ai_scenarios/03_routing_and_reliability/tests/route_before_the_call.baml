@@ -1,9 +1,9 @@
 // Tests for the route_before_the_call scenario.
 test "guide 03.03: routing selects a provider before execution" {
-  let fast = root.ai.testing.FakeProvider { ...fake_resolution(), provider_name: "fast" };
-  let careful = root.ai.testing.FakeProvider { ...fake_resolution(), provider_name: "careful" };
-  let task = root.ai.Task<Resolution> {
-    ...ResolveTicket_task(sample_ticket(), fast),
+  let fast = ai.testing.FakeProvider { ...fake_resolution(), provider_name: "fast" };
+  let careful = ai.testing.FakeProvider { ...fake_resolution(), provider_name: "careful" };
+  let task = ai.Task<Resolution> {
+    ...ResolveTicket@task(sample_ticket()).with_provider(fast),
     tags: { "tier": "pro" },
   };
   let selected = if (task.tags.get("tier") == "pro") { careful } else { fast };
@@ -15,16 +15,16 @@ testset "integ-test-guide-03-route-before-call" {
   test "guide 03.03 live Anthropic: routing selects the tagged provider before I/O" {
     let fast = live_openai();
     let careful = live_anthropic();
-    let task = root.ai.Task<Resolution> {
-      ...ResolveTicket_task(sample_ticket(), fast),
+    let task = ai.Task<Resolution> {
+      ...ResolveTicket@task(sample_ticket()).with_provider(fast),
       tags: { "tier": "pro" },
     };
     let selected = if (task.tags.get("tier") == "pro") { careful } else { fast };
     let routed = task.with_provider(selected);
     assert.equal(routed.provider_name(), "anthropic")
-    let response = root.ai.internal._response_from_done(
-      root.ai.internal._require_done(
-        routed.run(runner = root.ai.run.Agent<Resolution>.new()),
+    let response = ai.internal._response_from_done(
+      ai.internal._require_done(
+        routed.run(runner = ai.run.Agent<Resolution>.new()),
       ),
     );
     log.info("live route " + {

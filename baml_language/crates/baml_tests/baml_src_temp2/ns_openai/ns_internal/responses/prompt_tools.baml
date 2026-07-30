@@ -1,9 +1,9 @@
-function _prompt_tool_schema(tool: root.ai.tools.Tool) -> json throws never {
+function _prompt_tool_schema(tool: ai.tools.Tool) -> json throws never {
     { "name": tool.name, "description": tool.description, "parameters": tool.input_schema }
 }
 
-function _prompt_tool_output_suffix(tools: root.ai.tools.Tool[]) -> string throws never {
-    let schemas = tools.map((tool: root.ai.tools.Tool) -> json {
+function _prompt_tool_output_suffix(tools: ai.tools.Tool[]) -> string throws never {
+    let schemas = tools.map((tool: ai.tools.Tool) -> json {
         _prompt_tool_schema(tool)
     });
     "\n\n"
@@ -23,14 +23,14 @@ function _prompt_turn_task<T>(
     provider: root.openai.OpenAIProvider,
     state: PromptConversation,
     output_suffix: string,
-) -> root.ai.Task<T> throws never {
+) -> ai.Task<T> throws never {
     let prompt = state.recipe.render_with_output_format(provider, reflect.type_of<T>(), output_suffix);
-    let recipe = root.ai.PromptRenderRecipe {
+    let recipe = ai.PromptRenderRecipe {
         template: (ctx: baml.llm.Context) -> baml.llm.PromptAst {
             prompt
         },
     };
-    root.ai.Task<T> {
+    ai.Task<T> {
         provider: provider,
         prompt: prompt,
         identity: state.identity,
@@ -45,7 +45,7 @@ function _prompt_turn<T>(
     provider: root.openai.OpenAIProvider,
     state: PromptConversation,
     output_suffix: string,
-) -> root.ai.ResponseWithMetadata<T> throws root.ai.Failure | baml.errors.UnknownError {
+) -> ai.ResponseWithMetadata<T> throws ai.Failure | baml.errors.UnknownError {
     let request = if (state.input.length() == 0) {
         let built = _responses_built_request(provider, _prompt_turn_task<T>(provider, state, output_suffix), false);
         let body = baml.json.parse(built.body) catch (e) {
@@ -84,7 +84,7 @@ function _prompt_turn<T>(
     );
     let response = baml.http.send(request) catch (e) {
         _ => {
-            throw root.ai.NetworkFailure {
+            throw ai.NetworkFailure {
                 provider: "openai-responses",
                 detail: "baml.http.send failed before a Responses API prompt-tool response arrived",
             }
@@ -92,14 +92,14 @@ function _prompt_turn<T>(
     };
     let text = response.text() catch (e) {
         _ => {
-            throw root.ai.NetworkFailure {
+            throw ai.NetworkFailure {
                 provider: "openai-responses",
                 detail: "the Responses API prompt-tool body could not be read completely",
             }
         },
     };
     if (!response.ok()) {
-        throw root.ai.internal.classify_http(
+        throw ai.internal._classify_http(
             "openai-responses",
             response.status_code,
             text,
@@ -107,7 +107,7 @@ function _prompt_turn<T>(
     }
     let raw = baml.json.parse(text) catch (e) {
         _ => {
-            throw root.ai.ParseFailed {
+            throw ai.ParseFailed {
                 provider: "openai-responses",
                 raw_output: text,
             }
@@ -116,8 +116,8 @@ function _prompt_turn<T>(
     let value = _parse_response_value<T>(raw, text, true);
     let content = _response_output_text(raw) ?? "";
     state.input.push({ "role": "assistant", "content": content });
-    state.history.entries.push(root.ai.ChatMessage.assistant(content));
-    root.ai.ResponseWithMetadata<T> {
+    state.history.entries.push(ai.ChatMessage.assistant(content));
+    ai.ResponseWithMetadata<T> {
         value: value,
         metadata: _response_metadata(raw, provider.model),
         conversation: state,
@@ -126,28 +126,28 @@ function _prompt_turn<T>(
 
 function _prompt_step<T>(
     provider: root.openai.OpenAIProvider,
-    conversation: root.ai.Conversation,
-    tools: root.ai.tools.Tool[],
-) -> root.ai.ModelStep<T> throws root.ai.Failure | baml.errors.UnknownError {
+    conversation: ai.Conversation,
+    tools: ai.tools.Tool[],
+) -> ai.ModelStep<T> throws ai.Failure | baml.errors.UnknownError {
     let state = match (conversation) {
         let value: PromptConversation => value,
         _ => {
-            throw root.ai.InvalidRequest {
+            throw ai.InvalidRequest {
                 provider: "openai-responses",
                 status_code: null,
                 detail: "OpenAI prompt tool mode received another conversation type",
             }
         },
     };
-    if (!root.ai.internal._same_provider_instance(state.owner, provider)) {
-        throw root.ai.InvalidRequest {
+    if (!ai.internal._same_provider_instance(state.owner, provider)) {
+        throw ai.InvalidRequest {
             provider: "openai-responses",
             status_code: null,
             detail: "OpenAI prompt tool mode received a conversation owned by another provider instance",
         };
     }
     if (state.pending_call_ids.length() != 0) {
-        throw root.ai.InvalidRequest {
+        throw ai.InvalidRequest {
             provider: "openai-responses",
             status_code: null,
             detail: "submit tool results before requesting the next OpenAI prompt-tool step",
@@ -155,19 +155,19 @@ function _prompt_step<T>(
     }
     if (tools.length() == 0) {
         let response = _prompt_turn<T>(provider, state, "");
-        return root.ai.ModelStep<T> { outcome: response.value, metadata: response.metadata };
+        return ai.ModelStep<T> { outcome: response.value, metadata: response.metadata };
     }
-    let response = _prompt_turn<T | root.ai.tools.ToolCalls>(provider, state, _prompt_tool_output_suffix(tools));
+    let response = _prompt_turn<T | ai.tools.ToolCalls>(provider, state, _prompt_tool_output_suffix(tools));
     match (response.value) {
-        let calls: root.ai.tools.ToolCalls => {
+        let calls: ai.tools.ToolCalls => {
             state.pending_call_ids
-                = calls.calls.map((call: root.ai.tools.ToolCall) -> string {
+                = calls.calls.map((call: ai.tools.ToolCall) -> string {
                     call.id
                 });
             let unique: string[] = [];
             for (let id in state.pending_call_ids) {
                 if (id.length() == 0 || unique.includes(id)) {
-                    throw root.ai.InvalidRequest {
+                    throw ai.InvalidRequest {
                         provider: "openai-responses",
                         status_code: null,
                         detail: "prompt tool calls must have unique, non-empty call IDs",
@@ -175,38 +175,38 @@ function _prompt_step<T>(
                 }
                 unique.push(id);
             }
-            root.ai.ModelStep<T> { outcome: calls, metadata: response.metadata }
+            ai.ModelStep<T> { outcome: calls, metadata: response.metadata }
         },
         let value: T => {
-            root.ai.ModelStep<T> { outcome: value, metadata: response.metadata }
+            ai.ModelStep<T> { outcome: value, metadata: response.metadata }
         },
     }
 }
 
 function _prompt_submit(
     provider: root.openai.OpenAIProvider,
-    conversation: root.ai.Conversation,
-    results: root.ai.tools.ToolResult[],
-) -> root.ai.Conversation throws root.ai.Failure {
+    conversation: ai.Conversation,
+    results: ai.tools.ToolResult[],
+) -> ai.Conversation throws ai.Failure {
     let state = match (conversation) {
         let value: PromptConversation => value,
         _ => {
-            throw root.ai.InvalidRequest {
+            throw ai.InvalidRequest {
                 provider: "openai-responses",
                 status_code: null,
                 detail: "OpenAI prompt tool mode received another conversation type",
             }
         },
     };
-    if (!root.ai.internal._same_provider_instance(state.owner, provider)) {
-        throw root.ai.InvalidRequest {
+    if (!ai.internal._same_provider_instance(state.owner, provider)) {
+        throw ai.InvalidRequest {
             provider: "openai-responses",
             status_code: null,
             detail: "OpenAI prompt tool mode received a conversation owned by another provider instance",
         };
     }
     let ordered = _correlate_tool_results(state.pending_call_ids, results);
-    let wire_results = ordered.map((result: root.ai.tools.ToolResult) -> json {
+    let wire_results = ordered.map((result: ai.tools.ToolResult) -> json {
         { "id": result.id, "output": result.output, "is_error": result.is_error }
     });
     let content = "Tool results:\n" + baml.json.stringify(wire_results);
@@ -215,9 +215,9 @@ function _prompt_submit(
         .history
         .entries
         .push(
-            root.ai.ChatMessage {
-                message_role: root.ai.MessageRole.Tool,
-                content: [root.ai.messages.TextPart { value: content, metadata: {} }],
+            ai.ChatMessage {
+                message_role: ai.MessageRole.Tool,
+                content: [ai.messages.TextPart { value: content, metadata: {} }],
                 metadata: null,
             },
         );

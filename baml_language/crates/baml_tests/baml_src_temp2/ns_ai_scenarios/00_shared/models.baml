@@ -35,8 +35,8 @@ function sample_ticket() -> SupportTicket throws never {
   }
 }
 
-function fake_resolution() -> root.ai.testing.FakeProvider throws never {
-  root.ai.testing.fake_output_provider(`{
+function fake_resolution() -> ai.testing.FakeProvider throws never {
+  ai.testing.fake_output_provider(`{
     "category": "billing",
     "priority": "Urgent",
     "summary": "Duplicate charge",
@@ -71,50 +71,22 @@ function live_anthropic() -> root.anthropic.AnthropicProvider throws baml.errors
   }
 }
 
-// Future compiler lowering:
-//   ResolveTicket.task(ticket, $provider = provider)
-// becomes this hand-written ResolveTicket_task companion. It creates a task
-// and performs no model I/O.
-function ResolveTicket_task(
-  ticket: SupportTicket,
-  provider: root.ai.Provider,
-) -> root.ai.Task<Resolution> throws never {
-  root.ai.task_named<Resolution>(
-    provider,
-    "ResolveTicket",
-    { "ticket": ticket },
-    [],
-    (ctx: baml.llm.Context) -> baml.llm.PromptAst {
-      baml.llm.assemble_prompt_ast(
-        ["", "\n", ""],
-        [
-          `Resolve this support ticket.\nSubject: ${ticket.subject}\nBody: ${ticket.body}`,
-          ctx.output_format,
-        ],
-      )
-    },
-  )
-}
-
-// Future compiler lowering:
-//   ResolveTicket(ticket, $provider = provider)
-// becomes an ordinary bounded Agent run over ResolveTicket_task(ticket, provider).
-function ResolveTicket_manual(
-  ticket: SupportTicket,
-  provider: root.ai.Provider,
-) -> Resolution throws root.ai.Failure | baml.errors.UnknownError {
-  root.ai.internal._require_done(
-    ResolveTicket_task(ticket, provider)
-      .run(runner = root.ai.run.Agent<Resolution>.new()),
-  ).value
+function ResolveTicket(ticket: SupportTicket) -> Resolution {
+  provider: fake_resolution()
+  prompt: `
+    Resolve this support ticket.
+    Subject: ${ticket.subject}
+    Body: ${ticket.body}
+    ${ctx.output_format}
+  `
 }
 
 function drain_resolution_stream(
-  task: root.ai.Task<Resolution>,
-) -> Resolution throws baml.errors.UnknownError | root.ai.Failure
+  task: ai.Task<Resolution>,
+) -> Resolution throws baml.errors.UnknownError | ai.Failure
     | baml.errors.Unsupported | baml.errors.Io | baml.errors.LlmClient {
   let stream = task.run(
-    runner = root.ai.run.Stream<Resolution$stream, Resolution>.new(),
+    runner = ai.run.Stream<Resolution$stream, Resolution>.new(),
   );
   // final() drains the provider's SSE response and validates the typed result.
   stream.final()

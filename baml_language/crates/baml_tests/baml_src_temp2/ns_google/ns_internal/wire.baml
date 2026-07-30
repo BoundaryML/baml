@@ -6,10 +6,10 @@ function _candidate(
     raw: json,
     raw_output: string,
     provider_name: string,
-) -> json throws root.ai.ParseFailed {
+) -> json throws ai.ParseFailed {
     let candidates = baml.json.path_or<json[]>(raw, ".candidates", []);
     if (candidates.length() != 1) {
-        throw root.ai.ParseFailed {
+        throw ai.ParseFailed {
             provider: provider_name,
             raw_output: raw_output,
         };
@@ -21,11 +21,11 @@ function _candidate_content(
     raw: json,
     raw_output: string,
     provider_name: string,
-) -> json throws root.ai.ParseFailed {
+) -> json throws ai.ParseFailed {
     let candidate = _candidate(raw, raw_output, provider_name);
     baml.json.path<json>(candidate, ".content") catch (e) {
         _ => {
-            throw root.ai.ParseFailed {
+            throw ai.ParseFailed {
             provider: provider_name,
             raw_output: raw_output,
         }
@@ -66,10 +66,10 @@ function _validate_response(
     raw: json,
     raw_output: string,
     provider_name: string,
-) -> null throws root.ai.Failure {
+) -> null throws ai.Failure {
     match (_refusal_reason(raw)) {
         let reason: string => {
-            throw root.ai.Refused {
+            throw ai.Refused {
             provider: provider_name,
             reason: reason,
         }
@@ -78,7 +78,7 @@ function _validate_response(
     }
     match (_finish_reason(raw)) {
         "MAX_TOKENS" | "MALFORMED_FUNCTION_CALL" | "UNEXPECTED_TOOL_CALL" => {
-            throw root.ai.ParseFailed {
+            throw ai.ParseFailed {
                 provider: provider_name,
                 raw_output: raw_output,
             }
@@ -87,7 +87,7 @@ function _validate_response(
     }
     let candidates = baml.json.path_or<json[]>(raw, ".candidates", []);
     if (candidates.length() != 1) {
-        throw root.ai.ParseFailed {
+        throw ai.ParseFailed {
             provider: provider_name,
             raw_output: raw_output,
         };
@@ -127,16 +127,16 @@ function _output_call_value(
     call: json,
     raw_output: string,
     provider_name: string,
-) -> json throws root.ai.ParseFailed {
+) -> json throws ai.ParseFailed {
     if (baml.json.path_or(call, ".name", "") != _output_tool_name()) {
-        throw root.ai.ParseFailed {
+        throw ai.ParseFailed {
             provider: provider_name,
             raw_output: raw_output,
         };
     }
     baml.json.path<json>(call, ".args.value") catch (e) {
         _ => {
-            throw root.ai.ParseFailed {
+            throw ai.ParseFailed {
             provider: provider_name,
             raw_output: raw_output,
         }
@@ -148,10 +148,10 @@ function _parse_output_call<T>(
     call: json,
     raw_output: string,
     provider_name: string,
-) -> T throws root.ai.ParseFailed {
+) -> T throws ai.ParseFailed {
     baml.json.from_json<T>(_output_call_value(call, raw_output, provider_name)) catch (e) {
         _ => {
-            throw root.ai.ParseFailed {
+            throw ai.ParseFailed {
             provider: provider_name,
             raw_output: raw_output,
         }
@@ -164,12 +164,12 @@ function _parse_generation_value<T>(
     raw_output: string,
     provider_name: string,
     use_sap: bool,
-) -> T throws root.ai.Failure {
+) -> T throws ai.Failure {
     _validate_response(raw, raw_output, provider_name);
     let text = match (_response_text(raw)) {
         let value: string => value,
         null => {
-            throw root.ai.ParseFailed {
+            throw ai.ParseFailed {
             provider: provider_name,
             raw_output: raw_output,
         }
@@ -178,7 +178,7 @@ function _parse_generation_value<T>(
     if (use_sap) {
         return baml.sap.parse<T>(text) catch (e) {
             _ => {
-                throw root.ai.ParseFailed {
+                throw ai.ParseFailed {
                 provider: provider_name,
                 raw_output: text,
             }
@@ -187,7 +187,7 @@ function _parse_generation_value<T>(
     }
     let value_json = baml.json.parse(text) catch (e) {
         _ => {
-            throw root.ai.ParseFailed {
+            throw ai.ParseFailed {
             provider: provider_name,
             raw_output: text,
         }
@@ -195,7 +195,7 @@ function _parse_generation_value<T>(
     };
     baml.json.from_json<T>(value_json) catch (e) {
         _ => {
-            throw root.ai.ParseFailed {
+            throw ai.ParseFailed {
             provider: provider_name,
             raw_output: text,
         }
@@ -207,7 +207,7 @@ function _response_metadata(
     raw: json,
     fallback_model: string,
     provider_name: string,
-) -> root.ai.ResponseMetadata throws never {
+) -> ai.ResponseMetadata throws never {
     let usage_json = baml.json.path_or<json>(raw, ".usageMetadata", null);
     let attributes: map<string, unknown> = {};
     match (baml.json.path_or<map<string, json>?>(raw, ".promptFeedback", null)) {
@@ -218,14 +218,14 @@ function _response_metadata(
         let ratings: json[] => attributes.set("safety_ratings", ratings),
         null => {},
     }
-    root.ai.ResponseMetadata {
+    ai.ResponseMetadata {
         provider: provider_name,
         model: baml.json.path_or<string?>(raw, ".modelVersion", fallback_model),
         request_id: baml.json.path_or<string?>(raw, ".responseId", null),
         finish_reason: _finish_reason(raw),
         usage: match (usage_json) {
             let usage: map<string, json> => {
-                root.ai.Usage {
+                ai.Usage {
                     input_tokens: baml.json.path_or(usage, ".promptTokenCount", 0),
                     output_tokens: baml.json.path_or(usage, ".candidatesTokenCount", 0),
                     cached_input_tokens: baml.json.path_or<int?>(usage, ".cachedContentTokenCount", null),

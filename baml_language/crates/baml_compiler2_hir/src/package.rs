@@ -261,7 +261,9 @@ mod tests {
     use baml_workspace::{Compiler2ExtraFiles, Project};
     use salsa::Setter;
 
-    use super::{PackageId, is_allowed_builtin_namespace_shadow, package_items};
+    use super::{
+        PackageId, is_allowed_builtin_namespace_shadow, package_dependencies, package_items,
+    };
     use crate::Db;
 
     #[salsa::db]
@@ -366,6 +368,51 @@ mod tests {
             id_def
         ));
     }
+
+    #[test]
+    fn ai_builtin_package_exposes_root_and_nested_api() {
+        let db = TestDb::with_builtins();
+        let ai = baml_base::Name::new("ai");
+        let package = package_items(&db, PackageId::new(&db, ai));
+
+        let root = package
+            .namespaces
+            .get(&Vec::new())
+            .expect("ai root namespace");
+        assert!(
+            root.types.contains_key(&baml_base::Name::new("Task")),
+            "ai.Task should be exported from the package root"
+        );
+        assert!(
+            package
+                .namespaces
+                .contains_key(&vec![baml_base::Name::new("run")]),
+            "ai.run should be derived from ns_run"
+        );
+        assert!(
+            package
+                .namespaces
+                .contains_key(&vec![baml_base::Name::new("tools")]),
+            "ai.tools should be derived from ns_tools"
+        );
+    }
+
+    #[test]
+    fn user_packages_depend_on_ai_without_ai_self_dependency() {
+        let db = TestDb::with_builtins();
+        let ai = PackageId::new(&db, baml_base::Name::new("ai"));
+        let user = PackageId::new(&db, baml_base::Name::new("user"));
+
+        let ai_deps = package_dependencies(&db, ai);
+        assert!(
+            !ai_deps.contains(&ai),
+            "the builtin ai package must not depend on itself"
+        );
+        assert!(
+            package_dependencies(&db, user).contains(&ai),
+            "user code must be able to resolve ai.*"
+        );
+    }
 }
 
 /// The *direct* dependencies of `package_id` (hardcoded for now).
@@ -397,6 +444,17 @@ pub fn package_dependencies<'db>(
         ],
         // The "testing" and "assert" packages depend on "baml" only.
         "testing" | "assert" => vec![PackageId::new(db, Name::new("baml"))],
+        // The AI framework is implemented in BAML. It calls the core stdlib,
+        // reflection, testing helpers, assertions, and logging directly.
+        // Keep this arm separate from the user-package fallback below so adding
+        // `ai` to public builtins does not create an `ai -> ai` dependency.
+        "ai" => vec![
+            PackageId::new(db, Name::new("baml")),
+            PackageId::new(db, Name::new("testing")),
+            PackageId::new(db, Name::new("assert")),
+            PackageId::new(db, Name::new("log")),
+            PackageId::new(db, Name::new("reflect")),
+        ],
         // User packages depend on public builtin packages.
         _ => vec![
             PackageId::new(db, Name::new("baml")),
@@ -405,6 +463,7 @@ pub fn package_dependencies<'db>(
             PackageId::new(db, Name::new("assert")),
             PackageId::new(db, Name::new("log")),
             PackageId::new(db, Name::new("reflect")),
+            PackageId::new(db, Name::new("ai")),
         ],
     }
 }

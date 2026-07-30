@@ -1,20 +1,20 @@
 class RealtimeSession {
     socket: baml.ws.WsStream?,
-    channel: root.ai.realtime.Channel,
-    tools: root.ai.tools.Tool[],
+    channel: ai.realtime.Channel,
+    tools: ai.tools.Tool[],
     voice: string,
     output_audio: bool,
     keep_open: bool,
     input_transcription_enabled: bool,
     automatic_turn_detection: bool,
-    items: root.ai.realtime.LiveEvent[],
-    submitted_results: root.ai.tools.ToolResult[],
+    items: ai.realtime.LiveEvent[],
+    submitted_results: ai.tools.ToolResult[],
     is_closed: bool,
     audio_boundary_emitted: bool,
     awaiting_input_transcript: bool,
     last_assistant_item_id: string?,
     assistant_audio_bytes_by_item_id: map<string, int>,
-    pending_tool_calls: root.ai.tools.ToolCall[],
+    pending_tool_calls: ai.tools.ToolCall[],
     response_finished: bool,
     cancel_requests: int,
     truncate_positions_ms: int[],
@@ -44,8 +44,8 @@ class RealtimeSession {
 
     function remember(
         self,
-        batch: root.ai.realtime.LiveEvent[],
-    ) -> root.ai.realtime.LiveEvent[] throws never {
+        batch: ai.realtime.LiveEvent[],
+    ) -> ai.realtime.LiveEvent[] throws never {
         for (let item in batch) {
             self.items.push(item);
         }
@@ -62,24 +62,24 @@ class RealtimeSession {
         )
     }
 
-    function finish_response_batch(self, batch: root.ai.realtime.LiveEvent[]) -> null throws never {
+    function finish_response_batch(self, batch: ai.realtime.LiveEvent[]) -> null throws never {
         if (self.pending_tool_calls.length() > 0) {
-            batch.push(root.ai.realtime.LiveToolCalls { calls: self.pending_tool_calls });
+            batch.push(ai.realtime.LiveToolCalls { calls: self.pending_tool_calls });
             self.pending_tool_calls = [];
         } else if (self.keep_open) {
-            batch.push(root.ai.realtime.LiveTurnCompleted {  });
+            batch.push(ai.realtime.LiveTurnCompleted {  });
         } else {
             self.close();
-            batch.push(root.ai.realtime.LiveClosed {  });
+            batch.push(ai.realtime.LiveClosed {  });
         }
         null
     }
 
-    implements root.ai.realtime.LiveSession {
+    implements ai.realtime.LiveSession {
         // Return the next meaningful normalized event batch. Text/audio deltas
         // yield immediately so callers can log and play them while the response is
         // still in flight. Tool calls yield together at the response boundary.
-        function receive(self) -> root.ai.realtime.LiveEvent[] throws baml.errors.UnknownError {
+        function receive(self) -> ai.realtime.LiveEvent[] throws baml.errors.UnknownError {
             if (self.is_closed) {
                 return [];
             }
@@ -87,10 +87,10 @@ class RealtimeSession {
                 let value: baml.ws.WsStream => value,
                 null => {
                     self.is_closed = true;
-                    return self.remember([root.ai.realtime.LiveClosed {  }]);
+                    return self.remember([ai.realtime.LiveClosed {  }]);
                 },
             };
-            let batch: root.ai.realtime.LiveEvent[] = [];
+            let batch: ai.realtime.LiveEvent[] = [];
             let batch_done = false;
             //# Receive one realtime event batch
             while (!batch_done) {
@@ -104,7 +104,7 @@ class RealtimeSession {
                 match (next) {
                     null => {
                         self.close();
-                        batch.push(root.ai.realtime.LiveClosed {  });
+                        batch.push(ai.realtime.LiveClosed {  });
                         batch_done = true;
                     },
                     let raw: string => {
@@ -134,7 +134,7 @@ class RealtimeSession {
                         ) {
                             batch
                                 .push(
-                                    root.ai.realtime.TranscriptDelta {
+                                    ai.realtime.TranscriptDelta {
                                         text: baml.json.path_or(event, ".delta", ""),
                                     },
                                 );
@@ -157,7 +157,7 @@ class RealtimeSession {
                                             + audio.length(),
                                     );
                             }
-                            batch.push(root.ai.realtime.AssistantAudioDelta { audio: audio });
+                            batch.push(ai.realtime.AssistantAudioDelta { audio: audio });
                             batch_done = true;
                         }
                         //### Input transcription is asynchronous and may follow response.done
@@ -165,7 +165,7 @@ class RealtimeSession {
                             self.awaiting_input_transcript = false;
                             batch
                                 .push(
-                                    root.ai.realtime.UserTranscript {
+                                    ai.realtime.UserTranscript {
                                         item_id: baml.json.path_or(event, ".item_id", ""),
                                         text: baml.json.path_or(event, ".transcript", ""),
                                     },
@@ -176,7 +176,7 @@ class RealtimeSession {
                             self.awaiting_input_transcript = false;
                             batch
                                 .push(
-                                    root.ai.realtime.UserTranscriptFailed {
+                                    ai.realtime.UserTranscriptFailed {
                                         item_id: baml.json.path_or(event, ".item_id", ""),
                                         message: baml
                                             .json
@@ -194,7 +194,7 @@ class RealtimeSession {
                             self.awaiting_input_transcript = self.input_transcription_enabled;
                             batch
                                 .push(
-                                    root.ai.realtime.UserSpeechStarted {
+                                    ai.realtime.UserSpeechStarted {
                                         item_id: baml.json.path_or(event, ".item_id", ""),
                                         audio_start_ms: baml.json.path_or(event, ".audio_start_ms", 0),
                                     },
@@ -205,7 +205,7 @@ class RealtimeSession {
                         if (kind == "input_audio_buffer.speech_stopped") {
                             batch
                                 .push(
-                                    root.ai.realtime.UserSpeechStopped {
+                                    ai.realtime.UserSpeechStopped {
                                         item_id: baml.json.path_or(event, ".item_id", ""),
                                         audio_end_ms: baml.json.path_or(event, ".audio_end_ms", 0),
                                     },
@@ -228,7 +228,7 @@ class RealtimeSession {
                                     self.audio_boundary_emitted = true;
                                     batch
                                         .push(
-                                            root.ai.realtime.AssistantAudioStarted {
+                                            ai.realtime.AssistantAudioStarted {
                                                 item_id: self.last_assistant_item_id ?? "",
                                             },
                                         );
@@ -246,7 +246,7 @@ class RealtimeSession {
                             };
                             self.pending_tool_calls
                                 .push(
-                                    root.ai.tools.ToolCall {
+                                    ai.tools.ToolCall {
                                         id: baml.json.path_or(event, ".call_id", ""),
                                         name: baml.json.path_or(event, ".name", ""),
                                         args: args,
@@ -313,11 +313,11 @@ class RealtimeSession {
             self.start_response()
         }
 
-        function input_audio_format(self) -> root.ai.realtime.RealtimeAudioFormat throws never {
+        function input_audio_format(self) -> ai.realtime.RealtimeAudioFormat throws never {
             root.openai.realtime_audio_format()
         }
 
-        function output_audio_format(self) -> root.ai.realtime.RealtimeAudioFormat throws never {
+        function output_audio_format(self) -> ai.realtime.RealtimeAudioFormat throws never {
             root.openai.realtime_audio_format()
         }
 
@@ -378,7 +378,7 @@ class RealtimeSession {
 
         function submit_tool_results(
             self,
-            results: root.ai.tools.ToolResult[],
+            results: ai.tools.ToolResult[],
         ) -> null throws baml.errors.UnknownError {
             //# Splice correlated tool outputs into the open conversation
             for (let result in results) {
@@ -400,7 +400,7 @@ class RealtimeSession {
             }
             //## Request the provider's continuation separately
             self.start_response();
-            self.remember([root.ai.realtime.LiveToolResults { results: results }]);
+            self.remember([ai.realtime.LiveToolResults { results: results }]);
             null
         }
 
@@ -465,5 +465,5 @@ class RealtimeSession {
         }
     }
 
-    implements root.ai.Resource {}
+    implements ai.Resource {}
 }

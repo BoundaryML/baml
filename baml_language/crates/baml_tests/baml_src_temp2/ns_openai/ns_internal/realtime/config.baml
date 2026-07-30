@@ -14,8 +14,8 @@ function _openai_realtime_turn_detection(vad: root.openai.RealtimeServerVad?) ->
     }
 }
 
-function _openai_realtime_tool_schemas(tools: root.ai.tools.Tool[]) -> json[] throws never {
-    tools.map((tool: root.ai.tools.Tool) -> json {
+function _openai_realtime_tool_schemas(tools: ai.tools.Tool[]) -> json[] throws never {
+    tools.map((tool: ai.tools.Tool) -> json {
         {
             "type": "function",
             "name": tool.name,
@@ -55,7 +55,7 @@ function _openai_realtime_task_input(rendered_prompt: baml.llm.PromptAst) -> str
 }
 
 function _openai_realtime_response_create(
-    tools: root.ai.tools.Tool[],
+    tools: ai.tools.Tool[],
     output_audio: bool,
     voice: string,
 ) -> string throws never {

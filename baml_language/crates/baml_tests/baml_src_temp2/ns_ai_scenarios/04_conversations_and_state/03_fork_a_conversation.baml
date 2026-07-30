@@ -2,16 +2,13 @@
 // either branch changing the other.
 function fork_a_conversation() -> ConversationProbe[] {
     let base = sample_history();
-    let billing = base.append(root.ai.ChatMessage.user("Please refund it.")).to_history();
-    let fraud = base.append(root.ai.ChatMessage.user("Could this be fraud?")).to_history();
+    let billing = base.append(ai.ChatMessage.user("Please refund it.")).to_history();
+    let fraud = base.append(ai.ChatMessage.user("Could this be fraud?")).to_history();
 
-    let billing_result = root
-        .ai
+    let billing_result = ai
         .internal
         ._require_done(
-            ConversationProbe_task(
-                billing,
-                root.ai
+            ProbeConversation@task(billing).with_provider(ai
                     .testing
                     .fake_output_provider(
                         `
@@ -20,18 +17,14 @@ function fork_a_conversation() -> ConversationProbe[] {
                                     "evidence": "Please refund it."
                                   }
                         `,
-                    ),
-            )
-            .run(runner = root.ai.run.Agent<ConversationProbe>.new()),
+                    ))
+            .run(runner = ai.run.Agent<ConversationProbe>.new()),
         )
         .value;
-    let fraud_result = root
-        .ai
+    let fraud_result = ai
         .internal
         ._require_done(
-            ConversationProbe_task(
-                fraud,
-                root.ai
+            ProbeConversation@task(fraud).with_provider(ai
                     .testing
                     .fake_output_provider(
                         `
@@ -40,9 +33,8 @@ function fork_a_conversation() -> ConversationProbe[] {
                                     "evidence": "Could this be fraud?"
                                   }
                         `,
-                    ),
-            )
-            .run(runner = root.ai.run.Agent<ConversationProbe>.new()),
+                    ))
+            .run(runner = ai.run.Agent<ConversationProbe>.new()),
         )
         .value;
 

@@ -6,17 +6,17 @@ test "guide 02.11: full SAP chooses between T and ToolCalls as text" {
             output_mode = root.openai.OutputMode.Sap,
             tool_mode = root.openai.ToolMode.Prompt,
         );
-    let task = _sap_resolution_task(provider, [search_knowledge]);
+    let task = SapResolution@task().with_provider(provider).with_tools([search_knowledge]);
     let conversation = provider.begin<Resolution>(task);
     let state = match (conversation) {
         let value: root.openai.internal.PromptConversation => value,
         _ => baml.sys.panic("expected OpenAI prompt-tool conversation"),
     };
-    let tools = root.ai.tools.normalize_tools([search_knowledge]);
+    let tools = ai.tools.normalize_tools([search_knowledge]);
     let rendered = root
         .openai
         .internal
-        ._prompt_turn_task<Resolution | root.ai.tools.ToolCalls>(
+        ._prompt_turn_task<Resolution | ai.tools.ToolCalls>(
             provider,
             state,
             root.openai.internal._prompt_tool_output_suffix(tools),
@@ -36,17 +36,17 @@ test "guide 02.11: a union T remains distinct from the ToolCalls branch" {
             output_mode = root.openai.OutputMode.Sap,
             tool_mode = root.openai.ToolMode.Prompt,
         );
-    let task = _sap_union_task(provider, [search_knowledge]);
+    let task = SapUnionDecision@task().with_provider(provider).with_tools([search_knowledge]);
     let conversation = provider.begin<SapSupportDecision>(task);
     let state = match (conversation) {
         let value: root.openai.internal.PromptConversation => value,
         _ => baml.sys.panic("expected OpenAI prompt-tool conversation"),
     };
-    let tools = root.ai.tools.normalize_tools([search_knowledge]);
+    let tools = ai.tools.normalize_tools([search_knowledge]);
     let rendered = root
         .openai
         .internal
-        ._prompt_turn_task<SapSupportDecision | root.ai.tools.ToolCalls>(
+        ._prompt_turn_task<SapSupportDecision | ai.tools.ToolCalls>(
             provider,
             state,
             root.openai.internal._prompt_tool_output_suffix(tools),
@@ -70,10 +70,10 @@ testset "integ-test-guide-02-sap-text-tools" {
             );
         // OpenAI selects its prompt-tool adapter internally. Every turn is
         // output_text parsed as T | ToolCalls.
-        let task = _sap_union_task(provider, [search_knowledge]);
-        let outcome = task.run(runner = root.ai.run.Agent<SapSupportDecision>.new(tools = [search_knowledge]));
+        let task = SapUnionDecision@task().with_provider(provider).with_tools([search_knowledge]);
+        let outcome = task.run(runner = ai.run.Agent<SapSupportDecision>.new(tools = [search_knowledge]));
         match (outcome) {
-            let done: root.ai.Done<SapSupportDecision> => {
+            let done: ai.Done<SapSupportDecision> => {
                 match (done.value) {
                     let answer: SapAnswer => assert.is_true(answer.message.length() > 0),
                     let escalation: SapEscalation => assert.is_true(false),
@@ -91,10 +91,10 @@ testset "integ-test-guide-02-sap-text-tools" {
                 api_key = baml.env.get_or_panic("OPENAI_API_KEY"),
                 output_mode = root.openai.OutputMode.Sap,
             );
-        let task = _sap_union_task(provider, [search_knowledge]);
-        let outcome = task.run(runner = root.ai.run.Agent<SapSupportDecision>.new(tools = [search_knowledge]));
+        let task = SapUnionDecision@task().with_provider(provider).with_tools([search_knowledge]);
+        let outcome = task.run(runner = ai.run.Agent<SapSupportDecision>.new(tools = [search_knowledge]));
         match (outcome) {
-            let done: root.ai.Done<SapSupportDecision> => {
+            let done: ai.Done<SapSupportDecision> => {
                 let state = match (done.conversation) {
                     let value: root.openai.internal.Conversation => value,
                     _ => baml.sys.panic("expected OpenAI Responses conversation"),

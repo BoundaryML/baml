@@ -7,20 +7,20 @@ testset "integ-test-guide-02-agent-capabilities" {
       api_key: baml.env.get_or_panic("OPENAI_API_KEY"),
     };
     //# Build a dynamic registry, callbacks, and observer
-    let registry = root.ai.tools.ToolRegistry.new([search_knowledge]);
-    let account_tool = root.ai.tools.normalize_tool(lookup_account);
+    let registry = ai.tools.ToolRegistry.new([search_knowledge]);
+    let account_tool = ai.tools.normalize_tool(lookup_account);
     let trace = guide_agent_trace();
     let observer = GuideObserver { kinds: [] };
-    let runner = root.ai.run.Agent<Resolution>.new(
+    let runner = ai.run.Agent<Resolution>.new(
       tools = [],
       tool_registry = registry,
       prepare_step = (context) -> {
         if (context.step == 0) {
           let next_tools = context.tools.slice(0, context.tools.length());
           next_tools.push(account_tool);
-          root.ai.tools.StepPlan { provider: null, tools: next_tools, stop: null }
+          ai.tools.StepPlan { provider: null, tools: next_tools, stop: null }
         } else {
-          root.ai.tools.StepPlan { provider: null, tools: null, stop: null }
+          ai.tools.StepPlan { provider: null, tools: null, stop: null }
         }
       },
       on_event = (event) -> {
@@ -30,13 +30,13 @@ testset "integ-test-guide-02-agent-capabilities" {
       observers = [observer],
     );
     //# Run the live agent with dynamic capabilities
-    let task = ResolveTicketWithTools_task(sample_ticket(), provider, []);
+    let task = ResolveTicketWithTools@task(sample_ticket()).with_provider(provider).with_tools([]);
     let outcome = task.run(
       runner = runner,
     );
     //# Inspect the provider conversation and emitted events
     match (outcome) {
-      let done: root.ai.Done<Resolution> => match (done.conversation) {
+      let done: ai.Done<Resolution> => match (done.conversation) {
         let conversation: root.openai.internal.Conversation => assert.equal(
           conversation.active_tools.length(),
           2,
@@ -56,15 +56,15 @@ testset "integ-test-guide-02-agent-capabilities" {
       model: "gpt-5.6-luna",
       api_key: baml.env.get_or_panic("OPENAI_API_KEY"),
     };
-    let handoff = root.ai.tools.tool(lookup_account).as_handoff();
+    let handoff = ai.tools.tool(lookup_account).as_handoff();
     //# Run until the handoff boundary
-    let task = ResolveTicketWithTools_task(sample_ticket(), provider, [handoff]);
+    let task = ResolveTicketWithTools@task(sample_ticket()).with_provider(provider).with_tools([handoff]);
     let outcome = task.run(
-      runner = root.ai.run.Agent<Resolution>.new(tools = [handoff]),
+      runner = ai.run.Agent<Resolution>.new(tools = [handoff]),
     );
     //# Verify control was transferred
     match (outcome) {
-      let value: root.ai.Handoff => assert.equal(value.call.name, "lookup_account"),
+      let value: ai.Handoff => assert.equal(value.call.name, "lookup_account"),
       _ => assert.is_true(false),
     }
   }

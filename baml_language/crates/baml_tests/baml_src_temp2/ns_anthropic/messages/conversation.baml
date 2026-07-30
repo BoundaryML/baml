@@ -1,8 +1,8 @@
-implements root.ai.ConversationImportProvider for AnthropicProvider {
+implements ai.ConversationImportProvider for AnthropicProvider {
   function import_messages<T>(
     self,
-    messages: root.ai.Messages,
-  ) -> root.ai.ConversationImport throws baml.errors.UnknownError {
+    messages: ai.Messages,
+  ) -> ai.ConversationImport throws baml.errors.UnknownError {
     if (self.tool_mode == root.anthropic.ToolMode.Prompt) {
       throw baml.errors.UnknownError.with_message<never>(
         null,
@@ -15,7 +15,7 @@ implements root.ai.ConversationImportProvider for AnthropicProvider {
     let wire_messages: json[] = [];
     for (let message in history.entries) {
       let text = root.anthropic.internal._message_text(message);
-      if (message.role() == root.ai.MessageRole.System) {
+      if (message.role() == ai.MessageRole.System) {
         let system_part: json = { "type": "text", "text": text };
         system.push(system_part);
       } else {
@@ -26,11 +26,11 @@ implements root.ai.ConversationImportProvider for AnthropicProvider {
         wire_messages.push(wire_message);
       }
     }
-    root.ai.ConversationImport {
+    ai.ConversationImport {
       conversation: root.anthropic.internal.Conversation {
         owner: self,
         history: history,
-        declared_output_type: root.ai.internal._output_type_fingerprint<T>(),
+        declared_output_type: ai.internal._output_type_fingerprint<T>(),
         system: system,
         messages: wire_messages,
         request_url: base_request.url,
@@ -38,7 +38,7 @@ implements root.ai.ConversationImportProvider for AnthropicProvider {
         active_tools: [],
         last_assistant_content: [],
       },
-      fidelity: root.ai.ConversationFidelity.MessagesOnly,
+      fidelity: ai.ConversationFidelity.MessagesOnly,
       warnings: [
         "message import keeps text only; media, tool IDs, and opaque thinking signatures are not reconstructed",
       ],
@@ -46,21 +46,21 @@ implements root.ai.ConversationImportProvider for AnthropicProvider {
   }
 }
 
-implements root.ai.ConversationAppendProvider for AnthropicProvider {
+implements ai.ConversationAppendProvider for AnthropicProvider {
   function append_messages(
     self,
-    conversation: root.ai.Conversation,
-    messages: root.ai.Messages,
-  ) -> root.ai.Conversation throws root.ai.Failure {
+    conversation: ai.Conversation,
+    messages: ai.Messages,
+  ) -> ai.Conversation throws ai.Failure {
     // Validate the entire portable batch before mutating either projection.
-    let _ = root.ai.internal._conversation_append_user_texts(
+    let _ = ai.internal._conversation_append_user_texts(
       messages,
       "anthropic",
     );
     match (conversation) {
       let state: root.anthropic.internal.Conversation => {
-        if (!root.ai.internal._same_provider_instance(state.owner, self)) {
-          throw root.ai.InvalidRequest {
+        if (!ai.internal._same_provider_instance(state.owner, self)) {
+          throw ai.InvalidRequest {
             provider: "anthropic",
             status_code: null,
             detail: "Anthropic cannot append to a conversation owned by another provider instance",
@@ -71,7 +71,7 @@ implements root.ai.ConversationAppendProvider for AnthropicProvider {
             root.anthropic.internal._is_tool_use(part)
           })
         ) {
-          throw root.ai.InvalidRequest {
+          throw ai.InvalidRequest {
             provider: "anthropic",
             status_code: null,
             detail: "finish the pending Anthropic tool exchange before appending a user message",
@@ -92,15 +92,15 @@ implements root.ai.ConversationAppendProvider for AnthropicProvider {
         state
       },
       let state: root.anthropic.internal.PromptConversation => {
-        if (!root.ai.internal._same_provider_instance(state.owner, self)) {
-          throw root.ai.InvalidRequest {
+        if (!ai.internal._same_provider_instance(state.owner, self)) {
+          throw ai.InvalidRequest {
             provider: "anthropic",
             status_code: null,
             detail: "Anthropic prompt mode cannot append to a conversation owned by another provider instance",
           };
         }
         if (state.pending_calls.length() != 0) {
-          throw root.ai.InvalidRequest {
+          throw ai.InvalidRequest {
             provider: "anthropic",
             status_code: null,
             detail: "finish the pending Anthropic prompt-tool exchange before appending a user message",
@@ -111,7 +111,7 @@ implements root.ai.ConversationAppendProvider for AnthropicProvider {
         }
         state
       },
-      _ => throw root.ai.InvalidRequest {
+      _ => throw ai.InvalidRequest {
         provider: "anthropic",
         status_code: null,
         detail: "Anthropic received another provider's conversation",
@@ -120,11 +120,11 @@ implements root.ai.ConversationAppendProvider for AnthropicProvider {
   }
 }
 
-implements root.ai.ResumableAgentProvider for AnthropicProvider {
+implements ai.ResumableAgentProvider for AnthropicProvider {
   function save_conversation(
     self,
-    conversation: root.ai.Conversation,
-  ) -> root.ai.ConversationToken throws baml.errors.UnknownError {
+    conversation: ai.Conversation,
+  ) -> ai.ConversationToken throws baml.errors.UnknownError {
     if (self.tool_mode == root.anthropic.ToolMode.Prompt) {
       throw baml.errors.UnknownError.with_message<never>(
         null,
@@ -140,7 +140,7 @@ implements root.ai.ResumableAgentProvider for AnthropicProvider {
         )
       },
     };
-    if (!root.ai.internal._same_provider_instance(state.owner, self)) {
+    if (!ai.internal._same_provider_instance(state.owner, self)) {
       throw baml.errors.UnknownError.with_message<never>(
         null,
         "Anthropic cannot save a conversation owned by another provider instance",
@@ -155,7 +155,7 @@ implements root.ai.ResumableAgentProvider for AnthropicProvider {
       "strict_tool_inputs": self.strict_tool_inputs,
       "parallel_tool_calls": self.parallel_tool_calls,
     });
-    root.ai.ConversationToken {
+    ai.ConversationToken {
       provider: self.name(),
       version: 1,
       sealed: baml.json.stringify({
@@ -173,8 +173,8 @@ implements root.ai.ResumableAgentProvider for AnthropicProvider {
 
   function restore_conversation(
     self,
-    token: root.ai.ConversationToken,
-  ) -> root.ai.Conversation throws baml.errors.UnknownError {
+    token: ai.ConversationToken,
+  ) -> ai.Conversation throws baml.errors.UnknownError {
     if (self.tool_mode == root.anthropic.ToolMode.Prompt) {
       throw baml.errors.UnknownError.with_message<never>(
         null,

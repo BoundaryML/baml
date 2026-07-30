@@ -1,21 +1,21 @@
 // Send one support ticket to a different provider without changing the reusable
 // task definition or its typed result.
-function provider_overrides() -> root.ai.ResponseWithMetadata<Resolution> {
-    let fast = root.ai.testing.FakeProvider {
-        ...root.ai.testing.fake_output_provider(`{
+function provider_overrides() -> ai.ResponseWithMetadata<Resolution> {
+    let fast = ai.testing.FakeProvider {
+        ...ai.testing.fake_output_provider(`{
             "category":"billing","priority":"Normal","summary":"fast","reply":"fast reply"
         }`),
         provider_name: "fast",
     };
-    let careful = root.ai.testing.FakeProvider {
+    let careful = ai.testing.FakeProvider {
         ...fake_resolution(),
         provider_name: "careful",
     };
-    let original = ResolveTicket_task(sample_ticket(), fast);
+    let original = ResolveTicket@task(sample_ticket()).with_provider(fast);
     let overridden = original.with_provider(careful);
-    let response = root.ai.internal._response_from_done(
-      root.ai.internal._require_done(
-        overridden.run(runner = root.ai.run.Agent<Resolution>.new()),
+    let response = ai.internal._response_from_done(
+      ai.internal._require_done(
+        overridden.run(runner = ai.run.Agent<Resolution>.new()),
       ),
     );
     log.info(

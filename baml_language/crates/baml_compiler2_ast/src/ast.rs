@@ -1573,6 +1573,9 @@ pub enum BuiltinKind {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LlmBodyDef {
+    /// Legacy `client:` functions use the built-in LLM executor. AI
+    /// `provider:` functions lower through `ai.Task<T>` and an Agent.
+    pub execution: DeclarativeExecution,
     pub client: Option<Name>,
     pub prompt: Option<RawPrompt>,
     /// BEP-049 M5e: for a new-mode (backtick) prompt, the pre-lowered body of
@@ -1595,6 +1598,12 @@ pub struct LlmBodyDef {
     /// Jinja `#"..."#` prompts (their companions use the 3-arg Jinja path).
     pub companion_bodies: Vec<(std::string::String, (ExprBody, AstSourceMap))>,
     pub span: TextRange,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DeclarativeExecution {
+    LegacyClient,
+    AiProvider,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

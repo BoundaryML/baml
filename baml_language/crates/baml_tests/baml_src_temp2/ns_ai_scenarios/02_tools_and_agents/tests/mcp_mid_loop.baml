@@ -2,15 +2,15 @@ test "guide 02.07: a bootstrap tool adds an MCP server between model steps" {
   //# Start with only the MCP bootstrap tool
   let broker = mcp_broker();
   let bootstrap_tool = add_mcp_server_tool(broker);
-  let registry = root.ai.tools.ToolRegistry.new([bootstrap_tool]);
-  let provider = root.ai.testing.ScriptedToolProvider {
+  let registry = ai.tools.ToolRegistry.new([bootstrap_tool]);
+  let provider = ai.testing.ScriptedToolProvider {
     turns: [
-      root.ai.tools.ToolCalls { calls: [root.ai.tools.ToolCall {
+      ai.tools.ToolCalls { calls: [ai.tools.ToolCall {
         id: "call-1",
         name: "add_mcp_server",
         args: { "server": "orders" },
       }] },
-      root.ai.tools.ToolCalls { calls: [root.ai.tools.ToolCall {
+      ai.tools.ToolCalls { calls: [ai.tools.ToolCall {
         id: "call-2",
         name: "mcp__orders__lookup_order",
         args: { "order_id": "O-42" },
@@ -24,18 +24,18 @@ test "guide 02.07: a bootstrap tool adds an MCP server between model steps" {
     }`,
     usage_per_step: null,
   };
-  let runner = root.ai.run.Agent<Resolution>.new(
+  let runner = ai.run.Agent<Resolution>.new(
     tools = [],
     tool_registry = registry,
     prepare_step = (context) -> {
       //# Apply bootstrap requests before the next model step
       let next_tools = broker.activate_pending(context.tools);
-      root.ai.tools.StepPlan { provider: null, tools: next_tools, stop: null }
+      ai.tools.StepPlan { provider: null, tools: next_tools, stop: null }
     },
   );
 
   //# Run across bootstrap, discovery, MCP execution, and completion
-  let task = McpBootstrap_task(provider, bootstrap_tool);
+  let task = McpBootstrap@task("O-42").with_provider(provider).with_tools([bootstrap_tool]);
   let outcome = task.run(runner = runner);
 
   //# Verify the model caused discovery rather than a step-number rule
@@ -43,8 +43,8 @@ test "guide 02.07: a bootstrap tool adds an MCP server between model steps" {
   assert.equal(broker.connection.discoveries, 1)
   assert.equal(broker.connection.looked_up_orders, ["O-42"])
   match (outcome) {
-    let done: root.ai.Done<Resolution> => match (done.conversation) {
-      let conversation: root.ai.testing.ScriptedToolConversation => {
+    let done: ai.Done<Resolution> => match (done.conversation) {
+      let conversation: ai.testing.ScriptedToolConversation => {
         assert.equal(conversation.observed_tool_rosters[0], ["add_mcp_server"]);
         assert.equal(
           conversation.observed_tool_rosters[1],
@@ -62,22 +62,22 @@ testset "integ-test-guide-02-mcp-bootstrap" {
   test "guide 02.07 live OpenAI: the model adds and uses an MCP server" {
     let broker = mcp_broker();
     let bootstrap_tool = add_mcp_server_tool(broker);
-    let registry = root.ai.tools.ToolRegistry.new([bootstrap_tool]);
+    let registry = ai.tools.ToolRegistry.new([bootstrap_tool]);
     let observer = GuideObserver { kinds: [] };
     let provider = root.openai.OpenAIProvider {
       ...root.openai.responses(),
       model: "gpt-5.6-luna",
       api_key: baml.env.get_or_panic("OPENAI_API_KEY"),
     };
-    let task = McpBootstrap_task(provider, bootstrap_tool);
+    let task = McpBootstrap@task("O-42").with_provider(provider).with_tools([bootstrap_tool]);
     let outcome = task.run(
-      runner = root.ai.run.Agent<Resolution>.new(
+      runner = ai.run.Agent<Resolution>.new(
         tools = [],
         tool_registry = registry,
         prepare_step = (context) -> {
           //# Apply bootstrap requests before the next model step
           let next_tools = broker.activate_pending(context.tools);
-          root.ai.tools.StepPlan { provider: null, tools: next_tools, stop: null }
+          ai.tools.StepPlan { provider: null, tools: next_tools, stop: null }
         },
         observers = [observer],
       ),
@@ -91,7 +91,7 @@ testset "integ-test-guide-02-mcp-bootstrap" {
     assert.equal(broker.connection.looked_up_orders, ["O-42"])
     assert.contains(observer.kinds.join(","), "tool_roster_changed")
     match (outcome) {
-      let done: root.ai.Done<Resolution> => assert.contains(done.value.reply, "O-42"),
+      let done: ai.Done<Resolution> => assert.contains(done.value.reply, "O-42"),
       _ => assert.is_true(false),
     }
   }

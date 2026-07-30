@@ -4,12 +4,12 @@ function _uses_sap(provider: root.anthropic.AnthropicProvider) -> bool throws ne
 
 function _validate_output_config(
     provider: root.anthropic.AnthropicProvider,
-) -> null throws root.ai.InvalidRequest {
+) -> null throws ai.InvalidRequest {
     if (
         provider.tool_mode == root.anthropic.ToolMode.Prompt
             && provider.output_mode != root.anthropic.OutputMode.Sap
     ) {
-        throw root.ai.InvalidRequest {
+        throw ai.InvalidRequest {
             provider: "anthropic",
             status_code: null,
             detail: "`tool_mode = Prompt` requires `output_mode = Sap`",
@@ -167,16 +167,16 @@ function _response_tool_uses(raw: json) -> json[] throws never {
 function _response_metadata(
     raw: json,
     fallback_model: string,
-) -> root.ai.ResponseMetadata throws never {
+) -> ai.ResponseMetadata throws never {
     let usage_json = baml.json.path_or<json>(raw, ".usage", null);
-    root.ai.ResponseMetadata {
+    ai.ResponseMetadata {
         provider: "anthropic",
         model: baml.json.path_or<string?>(raw, ".model", fallback_model),
         request_id: baml.json.path_or<string?>(raw, ".id", null),
         finish_reason: baml.json.path_or<string?>(raw, ".stop_reason", null),
         usage: match (usage_json) {
             let usage: map<string, json> => {
-                root.ai.Usage {
+                ai.Usage {
                     input_tokens: baml.json.path_or(usage, ".input_tokens", 0),
                     output_tokens: baml.json.path_or(usage, ".output_tokens", 0),
                     cached_input_tokens: baml.json.path_or<int?>(usage, ".cache_read_input_tokens", null),
@@ -195,10 +195,10 @@ function _parse_response_value<T>(
     raw: json,
     raw_output: string,
     use_sap: bool,
-) -> T throws root.ai.Failure {
+) -> T throws ai.Failure {
     let stop_reason = baml.json.path_or(raw, ".stop_reason", "");
     if (stop_reason == "refusal") {
-        throw root.ai.Refused {
+        throw ai.Refused {
             provider: "anthropic",
             reason: _response_text(raw) ?? "Anthropic refused the request",
         };
@@ -208,7 +208,7 @@ function _parse_response_value<T>(
             || stop_reason == "model_context_window_exceeded"
             || stop_reason == "tool_use"
     ) {
-        throw root.ai.ParseFailed {
+        throw ai.ParseFailed {
             provider: "anthropic",
             raw_output: raw_output,
         };
@@ -216,7 +216,7 @@ function _parse_response_value<T>(
     let text = match (_response_text(raw)) {
         let value: string => value,
         null => {
-            throw root.ai.ParseFailed {
+            throw ai.ParseFailed {
                 provider: "anthropic",
                 raw_output: raw_output,
             }
@@ -225,7 +225,7 @@ function _parse_response_value<T>(
     if (use_sap) {
         return baml.sap.parse<T>(text) catch (e) {
             _ => {
-                throw root.ai.ParseFailed {
+                throw ai.ParseFailed {
                     provider: "anthropic",
                     raw_output: text,
                 }
@@ -234,7 +234,7 @@ function _parse_response_value<T>(
     }
     let value = baml.json.parse(text) catch (e) {
         _ => {
-            throw root.ai.ParseFailed {
+            throw ai.ParseFailed {
                 provider: "anthropic",
                 raw_output: text,
             }
@@ -242,7 +242,7 @@ function _parse_response_value<T>(
     };
     baml.json.from_json<T>(value) catch (e) {
         _ => {
-            throw root.ai.ParseFailed {
+            throw ai.ParseFailed {
                 provider: "anthropic",
                 raw_output: text,
             }

@@ -2,9 +2,9 @@ class OpenAIEmptyStrictFixture {
 }
 
 function _openai_state_machine_task(
-    provider: root.ai.Provider,
-) -> root.ai.Task<string> throws never {
-    root.ai.task<string>(provider, (ctx: baml.llm.Context) -> baml.llm.PromptAst {
+    provider: ai.Provider,
+) -> ai.Task<string> throws never {
+    ai.task<string>(provider, (ctx: baml.llm.Context) -> baml.llm.PromptAst {
         baml.llm.assemble_prompt_ast(["Return ok.\n", ""], [ctx.output_format])
     })
 }
@@ -21,8 +21,8 @@ test "OpenAI tool results are correlated and ordered by pending call ID" {
     let ordered = _correlate_tool_results(
         ["call-a", "call-b"],
         [
-            root.ai.tools.ToolResult { id: "call-b", output: { "value": "b" }, is_error: false },
-            root.ai.tools.ToolResult { id: "call-a", output: { "value": "a" }, is_error: false },
+            ai.tools.ToolResult { id: "call-b", output: { "value": "b" }, is_error: false },
+            ai.tools.ToolResult { id: "call-a", output: { "value": "a" }, is_error: false },
         ],
     );
     assert.equal(ordered[0].id, "call-a");
@@ -44,11 +44,11 @@ test "OpenAI prompt mode requires pending results before another step" {
     state.pending_call_ids = ["call-a"];
     let rejected = false;
     let _ = _prompt_step<string>(provider, state, []) catch (e) {
-        let invalid: root.ai.InvalidRequest => {
+        let invalid: ai.InvalidRequest => {
             rejected = true;
-            root.ai.ModelStep<string> {
+            ai.ModelStep<string> {
                 outcome: "unreachable",
-                metadata: root.ai.ResponseMetadata {
+                metadata: ai.ResponseMetadata {
                     provider: "test",
                     model: null,
                     request_id: null,
@@ -82,11 +82,11 @@ test "OpenAI prompt submit rejects duplicate result IDs" {
         provider,
         state,
         [
-            root.ai.tools.ToolResult { id: "call-a", output: "a", is_error: false },
-            root.ai.tools.ToolResult { id: "call-a", output: "duplicate", is_error: false },
+            ai.tools.ToolResult { id: "call-a", output: "a", is_error: false },
+            ai.tools.ToolResult { id: "call-a", output: "duplicate", is_error: false },
         ],
     ) catch (e) {
-        let invalid: root.ai.InvalidRequest => {
+        let invalid: ai.InvalidRequest => {
             rejected = true;
             state
         },
@@ -111,8 +111,8 @@ test "OpenAI appends a fresh user message without losing exact response state" {
                 "output": `{"value":"first answer"}`,
             },
         ];
-    state.history.entries.push(root.ai.ChatMessage.assistant("first answer"));
-    let appended = provider.append_message(state, root.ai.ChatMessage.user("second turn"));
+    state.history.entries.push(ai.ChatMessage.assistant("first answer"));
+    let appended = provider.append_message(state, ai.ChatMessage.user("second turn"));
     match (appended) {
         let exact: Conversation => {
             assert.equal(exact.previous_response_id, "resp_exact_123");
@@ -121,7 +121,7 @@ test "OpenAI appends a fresh user message without losing exact response state" {
             let wire = baml.json.stringify(exact.input);
             assert.contains(wire, "reserved_result_call");
             assert.contains(wire, "second turn");
-            assert.equal(root.ai.message_text(exact.history.entries[2]), "second turn")
+            assert.equal(ai.message_text(exact.history.entries[2]), "second turn")
         },
         _ => assert.is_true(false),
     }
@@ -135,8 +135,8 @@ test "OpenAI rejects append from another provider instance and while tools are p
         _ => baml.sys.panic("expected OpenAI conversation"),
     };
     let wrong_owner_rejected = false;
-    let _wrong = other.append_message(state, root.ai.ChatMessage.user("wrong owner")) catch (e) {
-        let invalid: root.ai.InvalidRequest => {
+    let _wrong = other.append_message(state, ai.ChatMessage.user("wrong owner")) catch (e) {
+        let invalid: ai.InvalidRequest => {
             wrong_owner_rejected = true;
             state
         },
@@ -147,8 +147,8 @@ test "OpenAI rejects append from another provider instance and while tools are p
 
     state.last_output = [{ "type": "function_call", "call_id": "pending" }];
     let pending_rejected = false;
-    let _pending = owner.append_message(state, root.ai.ChatMessage.user("too soon")) catch (e) {
-        let invalid: root.ai.InvalidRequest => {
+    let _pending = owner.append_message(state, ai.ChatMessage.user("too soon")) catch (e) {
+        let invalid: ai.InvalidRequest => {
             pending_rejected = true;
             state
         },
@@ -177,13 +177,13 @@ test "OpenAI appends after submitted tool results without replaying them" {
         .history
         .entries
         .push(
-            root.ai.ChatMessage {
-                message_role: root.ai.MessageRole.Tool,
-                content: [root.ai.messages.TextPart { value: "already committed", metadata: {} }],
+            ai.ChatMessage {
+                message_role: ai.MessageRole.Tool,
+                content: [ai.messages.TextPart { value: "already committed", metadata: {} }],
                 metadata: null,
             },
         );
-    let appended = state.append_message(root.ai.ChatMessage.user("continue after cancellation"));
+    let appended = state.append_message(ai.ChatMessage.user("continue after cancellation"));
     match (appended) {
         let exact: Conversation => {
             assert.equal(exact.previous_response_id, "resp_with_tool_call");
@@ -210,12 +210,12 @@ test "OpenAI prompt-tool conversations append locally after a completed turn" {
         _ => baml.sys.panic("expected OpenAI prompt conversation"),
     };
     state.input = [{ "role": "assistant", "content": "first answer" }];
-    let appended = provider.append_message(state, root.ai.ChatMessage.user("follow up"));
+    let appended = provider.append_message(state, ai.ChatMessage.user("follow up"));
     match (appended) {
         let exact: PromptConversation => {
             assert.equal(exact.input.length(), 2);
             assert.equal(baml.json.path<string>(exact.input[1], ".content"), "follow up");
-            assert.equal(root.ai.message_text(exact.history.entries[1]), "follow up")
+            assert.equal(ai.message_text(exact.history.entries[1]), "follow up")
         },
         _ => assert.is_true(false),
     }

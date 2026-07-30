@@ -15,12 +15,12 @@ use rowan::ast::AstNode;
 use crate::{
     DeclarativeMeta, LoweringDiagnostic,
     ast::{
-        AssociatedTypeBindingDef, AssociatedTypeDef, AstSourceMap, BuiltinKind, CallArg, EnumDef,
-        Expr, ExprBody, ExprId, FieldDef, FunctionBodyDef, FunctionDef, FunctionDefaults,
-        ImplementsBlockDef, ImplementsForDef, InterfaceDef, InterfaceFieldLinkDef, Interpolation,
-        Item, LetDef, LetOrigin, LlmBodyDef, MethodSigDef, Param, RawAttribute, RawAttributeArg,
-        RawPrompt, TemplateStringDef, TestArgValue, TestDef, TypeAliasDef, TypeExpr, TypeExprKind,
-        VariantDef,
+        AssociatedTypeBindingDef, AssociatedTypeDef, AstSourceMap, BuiltinKind, CallArg,
+        DeclarativeExecution, EnumDef, Expr, ExprBody, ExprId, FieldDef, FunctionBodyDef,
+        FunctionDef, FunctionDefaults, ImplementsBlockDef, ImplementsForDef, InterfaceDef,
+        InterfaceFieldLinkDef, Interpolation, Item, LetDef, LetOrigin, LlmBodyDef, MethodSigDef,
+        Param, RawAttribute, RawAttributeArg, RawPrompt, TemplateStringDef, TestArgValue, TestDef,
+        TypeAliasDef, TypeExpr, TypeExprKind, VariantDef,
     },
     companions::expand_companions,
     lower_expr_body, lower_type_expr,
@@ -338,17 +338,29 @@ fn lower_function(
 
     let (body, declarative_meta) = if let Some(llm) = func.llm_body() {
         let mut llm_body_def = lower_llm_body(&llm);
-        reject_reserved_llm_client_params(&mut params, name.as_str(), diags);
+        let is_ai = llm_body_def.execution == DeclarativeExecution::AiProvider;
+        if !is_ai {
+            reject_reserved_llm_client_params(&mut params, name.as_str(), diags);
+        }
         let client_name = llm_body_def.client.as_ref().map(|n| n.as_str().to_string());
-        if let Some(client_name) = client_name.as_deref() {
-            append_default_client_param(&mut params, &mut defaults, client_name, llm_body_def.span);
+        if !is_ai {
+            if let Some(client_name) = client_name.as_deref() {
+                append_default_client_param(
+                    &mut params,
+                    &mut defaults,
+                    client_name,
+                    llm_body_def.span,
+                );
+            }
         }
         let param_names: Vec<Name> = params
             .iter()
-            .filter(|p| p.name.as_str() != "client")
+            .filter(|p| is_ai || p.name.as_str() != "client")
             .map(|p| p.name.clone())
             .collect();
-        let client_arg_name = client_name.as_ref().map(|_| "client");
+        let client_arg_name = (!is_ai)
+            .then(|| client_name.as_ref().map(|_| "client"))
+            .flatten();
         // Pass the LLM function's declared return type as the explicit `<T>`
         // type argument to `baml.llm.call_llm_function<T>`. This is required
         // for the runtime type-arg threading: without it, `T` falls back to
@@ -364,7 +376,46 @@ fn lower_function(
         // invokes it per attempt. Legacy `#"..."#` Jinja prompts keep the 3-arg
         // path (the closure defaults to `null`, so the Jinja render runs).
         let prompt_backtick = llm.prompt_field().and_then(|pf| pf.backtick_string());
-        let (expr_body, source_map) = if let Some(backtick) = &prompt_backtick {
+        let (expr_body, source_map) = if is_ai {
+            let provider = llm
+                .provider_field()
+                .and_then(|field| declarative_field_value(field.syntax(), "provider"));
+            let tools = llm
+                .tools_field()
+                .and_then(|field| declarative_field_value(field.syntax(), "tools"));
+            let task_body =
+                provider
+                    .as_ref()
+                    .zip(prompt_backtick.as_ref())
+                    .map(|(provider, backtick)| {
+                        lower_expr_body::synthesize_ai_task_with_prompt(
+                            name.as_str(),
+                            &param_names,
+                            return_type.clone().unwrap_or_else(|| {
+                                TypeExprKind::Unknown { attrs: vec![] }.at(llm_body_def.span)
+                            }),
+                            provider,
+                            tools.as_ref(),
+                            backtick,
+                            llm_body_def.span,
+                        )
+                    });
+            if let Some((task_body, task_map, mut task_diags, mut task_env_refs)) = task_body {
+                diags.append(&mut task_diags);
+                env_var_refs.append(&mut task_env_refs);
+                llm_body_def
+                    .companion_bodies
+                    .push(("task".to_string(), (task_body, task_map)));
+            }
+            lower_expr_body::synthesize_ai_direct_call(
+                name.as_str(),
+                &param_names,
+                return_type.clone().unwrap_or_else(|| {
+                    TypeExprKind::Unknown { attrs: vec![] }.at(llm_body_def.span)
+                }),
+                llm_body_def.span,
+            )
+        } else if let Some(backtick) = &prompt_backtick {
             let (body, sm, mut closure_diags, mut closure_env_refs) =
                 lower_expr_body::synthesize_llm_call_with_prompt(
                     "call_llm_function",
@@ -728,6 +779,11 @@ fn alloc_client_override_default_expr(
 fn lower_llm_body(llm_body: &ast::LlmFunctionBody) -> LlmBodyDef {
     let span = llm_body.syntax().span_range();
 
+    let execution = if llm_body.provider_field().is_some() {
+        DeclarativeExecution::AiProvider
+    } else {
+        DeclarativeExecution::LegacyClient
+    };
     let client = llm_body
         .client_field()
         .and_then(|cf| cf.value())
@@ -739,6 +795,7 @@ fn lower_llm_body(llm_body: &ast::LlmFunctionBody) -> LlmBodyDef {
         .map(|raw_str| lower_raw_prompt(&raw_str));
 
     LlmBodyDef {
+        execution,
         client,
         prompt,
         // Filled in by the LLM-function branch once param names are known.
@@ -746,6 +803,33 @@ fn lower_llm_body(llm_body: &ast::LlmFunctionBody) -> LlmBodyDef {
         companion_bodies: Vec::new(),
         span,
     }
+}
+
+/// Return the expression payload of a `provider:` or `tools:` field. The field
+/// name and optional colon are direct tokens; the value is the first remaining
+/// significant node/token.
+fn declarative_field_value(
+    field: &SyntaxNode,
+    _field_name: &str,
+) -> Option<baml_compiler_syntax::SyntaxElement> {
+    let mut saw_colon = false;
+    field.children_with_tokens().find(|element| match element {
+        rowan::NodeOrToken::Node(_) => saw_colon,
+        rowan::NodeOrToken::Token(token) => {
+            if token.kind() == SyntaxKind::COLON {
+                saw_colon = true;
+                return false;
+            }
+            saw_colon
+                && !matches!(
+                    token.kind(),
+                    SyntaxKind::WHITESPACE
+                        | SyntaxKind::NEWLINE
+                        | SyntaxKind::LINE_COMMENT
+                        | SyntaxKind::BLOCK_COMMENT
+                )
+        }
+    })
 }
 
 /// Build a synthetic expression body equivalent to:

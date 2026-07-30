@@ -1,9 +1,9 @@
 function _responses_built_request<T>(
     provider: root.openai.OpenAIProvider,
-    task: root.ai.Task<T>,
+    task: ai.Task<T>,
     background: bool,
     log_shape: bool = true,
-) -> baml.http.Request throws root.ai.Failure | baml.errors.UnknownError {
+) -> baml.http.Request throws ai.Failure | baml.errors.UnknownError {
     _validate_output_config(provider);
     let strict = _is_strict(provider);
     let use_sap = _uses_sap(provider);

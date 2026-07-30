@@ -1,9 +1,8 @@
 test "guide 08.06: a custom harness composes through out-of-body implements" {
     let harness = NamedHarness { inner: fake_model_harness() };
-    let run = InvestigateRepository_task(sample_ticket(), harness.inner.inner)
+    let run = InvestigateRepository@task(sample_ticket()).with_provider(harness.inner.inner)
         .run(
-            runner = root
-                .ai
+            runner = ai
                 .run
                 .Harness<Resolution>
                 .new(
@@ -23,10 +22,9 @@ testset "integ-test-guide-08-custom-harness" {
         let inner = live_openai_model_harness();
         let harness = NamedHarness { inner: inner };
         //# Execute a real provider through the custom out-of-body Harness impl
-        let run = InvestigateRepository_task(sample_ticket(), inner.inner)
+        let run = InvestigateRepository@task(sample_ticket()).with_provider(inner.inner)
             .run(
-                runner = root
-                    .ai
+                runner = ai
                     .run
                     .Harness<Resolution>
                     .new(

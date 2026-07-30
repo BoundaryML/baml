@@ -5,7 +5,7 @@ test "guide 07.02: managed cache lifetime is explicit" {
     assert
         .equal(
             cache
-                .run<Resolution>(ResolveTicket_task(sample_ticket(), fake_resolution()))
+                .run<Resolution>(ResolveTicket@task(sample_ticket()).with_provider(fake_resolution()))
                 .value
                 .category,
             "billing",
@@ -20,7 +20,7 @@ test "guide 07.02: managed cache lifetime is explicit" {
 
 test "guide 07.02: a custom runner owns the complete cache lifecycle" {
     let provider = root.google.FakeCacheProvider { inner: fake_resolution() };
-    let response = ResolveTicket_task(sample_ticket(), provider)
+    let response = ResolveTicket@task(sample_ticket()).with_provider(provider)
         .run(
             runner = ManagedCacheRunner<Resolution>.new(sample_history(), baml.time.Duration.from_minutes(5)),
         );
@@ -36,7 +36,7 @@ testset "integ-test-guide-07-managed-cache" {
             created_keys: [],
             deleted_keys: [],
         };
-        let response = ResolveTicket_task(sample_ticket(), provider)
+        let response = ResolveTicket@task(sample_ticket()).with_provider(provider)
             .run(
                 runner = ManagedCacheRunner<Resolution>
                     .new(_managed_cache_policy_corpus(), baml.time.Duration.from_minutes(5)),

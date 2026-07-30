@@ -1,8 +1,8 @@
 // Tests for the streaming_failure_boundaries scenario.
 test "guide 03.07: an Agent retry wrapper does not invent stream replay" {
-    let provider: root.ai.Provider = root.ai.retry(fake_resolution(), 2);
+    let provider: ai.Provider = ai.retry(fake_resolution(), 2);
     let capability = match (provider) {
-        let streaming: root.ai.StreamingProvider => "streaming",
+        let streaming: ai.StreamingProvider => "streaming",
         _ => "not-streaming",
     };
     assert.equal(capability, "not-streaming")
@@ -11,10 +11,10 @@ test "guide 03.07: an Agent retry wrapper does not invent stream replay" {
 testset "integ-test-guide-03-streaming-failure-boundary" {
     test "guide 03.07 live OpenAI: streaming works directly but retry does not claim it" {
         let provider = live_openai();
-        let value = drain_resolution_stream(ResolveTicket_task(sample_ticket(), provider));
-        let wrapped: root.ai.Provider = root.ai.retry(provider, 2);
+        let value = drain_resolution_stream(ResolveTicket@task(sample_ticket()).with_provider(provider));
+        let wrapped: ai.Provider = ai.retry(provider, 2);
         let capability = match (wrapped) {
-            let streaming: root.ai.StreamingProvider => "streaming",
+            let streaming: ai.StreamingProvider => "streaming",
             _ => "not-streaming",
         };
         log.info(

@@ -48,7 +48,7 @@ function _output_declaration(output_type: type) -> json throws baml.errors.Unsup
     }
 }
 
-function _application_declaration(tool: root.ai.tools.Tool) -> json throws never {
+function _application_declaration(tool: ai.tools.Tool) -> json throws never {
     {
         "name": tool.name,
         "description": tool.description,
@@ -57,15 +57,15 @@ function _application_declaration(tool: root.ai.tools.Tool) -> json throws never
 }
 
 function _validate_application_tool_names(
-    tools: root.ai.tools.Tool[],
+    tools: ai.tools.Tool[],
     provider_name: string,
-) -> null throws root.ai.InvalidRequest {
+) -> null throws ai.InvalidRequest {
     if (
-        tools.some((tool: root.ai.tools.Tool) -> bool {
+        tools.some((tool: ai.tools.Tool) -> bool {
             tool.name == _output_tool_name()
         })
     ) {
-        throw root.ai.InvalidRequest {
+        throw ai.InvalidRequest {
             provider: provider_name,
             status_code: null,
             detail: "Gemini reserves the tool name " + _output_tool_name(),
@@ -76,14 +76,14 @@ function _validate_application_tool_names(
 
 function _agent_declarations(
     output_type: type,
-    tools: root.ai.tools.Tool[],
+    tools: ai.tools.Tool[],
     use_sap: bool,
     provider_name: string,
-) -> json[] throws baml.errors.Unsupported | root.ai.InvalidRequest {
+) -> json[] throws baml.errors.Unsupported | ai.InvalidRequest {
     // Reserve the result name in every output mode. This keeps an application
     // tool from changing meaning when a provider switches between Native/SAP.
     _validate_application_tool_names(tools, provider_name);
-    let declarations = tools.map((tool: root.ai.tools.Tool) -> json {
+    let declarations = tools.map((tool: ai.tools.Tool) -> json {
         _application_declaration(tool)
     });
     if (!use_sap) {

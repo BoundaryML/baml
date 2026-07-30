@@ -1,10 +1,10 @@
 test "guide 08.02: one harness run delivers callbacks and preserves its event history" {
     let harness = fake_model_harness();
     let observed: string[] = [];
-    let run = InvestigateRepository_task(sample_ticket(), harness.inner)
+    let run = InvestigateRepository@task(sample_ticket()).with_provider(harness.inner)
         .run(
-            runner = root.ai.run.Harness<Resolution>.new(harness, cwd = "/workspace", permission_mode = "read-only", sandbox = "workspace", attributes = { "team": "support" }, on_event = (
-                event: root.ai.observe.AgentEvent,
+            runner = ai.run.Harness<Resolution>.new(harness, cwd = "/workspace", permission_mode = "read-only", sandbox = "workspace", attributes = { "team": "support" }, on_event = (
+                event: ai.observe.AgentEvent,
             ) -> null {
                 observed.push(event.kind());
                 null
@@ -12,7 +12,7 @@ test "guide 08.02: one harness run delivers callbacks and preserves its event hi
         );
     assert
         .equal(
-            run.events.map((event: root.ai.observe.AgentEvent) -> string {
+            run.events.map((event: ai.observe.AgentEvent) -> string {
                 event.kind()
             }),
             ["model_started", "usage_updated", "run_finished"],
@@ -25,17 +25,17 @@ testset "integ-test-guide-08-harness-events" {
         let harness = live_openai_model_harness();
         let kinds: string[] = [];
         //# Observe normalized events without changing the runner or result type
-        let run = InvestigateRepository_task(sample_ticket(), harness.inner)
+        let run = InvestigateRepository@task(sample_ticket()).with_provider(harness.inner)
             .run(
-                runner = root.ai.run.Harness<Resolution>.new(harness, cwd = "/workspace", permission_mode = "read-only", sandbox = "workspace", attributes = { "team": "support" }, on_event = (
-                    event: root.ai.observe.AgentEvent,
+                runner = ai.run.Harness<Resolution>.new(harness, cwd = "/workspace", permission_mode = "read-only", sandbox = "workspace", attributes = { "team": "support" }, on_event = (
+                    event: ai.observe.AgentEvent,
                 ) -> null {
                     kinds.push(event.kind());
                     log.info("harness event: " + event.kind());
                     null
                 }),
             );
-        let retained = run.events.map((event: root.ai.observe.AgentEvent) -> string {
+        let retained = run.events.map((event: ai.observe.AgentEvent) -> string {
             event.kind()
         });
         log.info(

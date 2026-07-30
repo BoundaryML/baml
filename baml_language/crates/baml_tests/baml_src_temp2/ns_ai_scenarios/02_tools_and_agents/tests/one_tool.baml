@@ -2,13 +2,13 @@ test "guide 02.01: one tool call is dispatched and the model finishes" {
   //# Configure a provider with one tool call
   let provider = fake_tool_provider([one_knowledge_call()]);
   //# Run the tool-enabled agent
-  let task = ResolveTicketWithTools_task(sample_ticket(), provider, [search_knowledge]);
+  let task = ResolveTicketWithTools@task(sample_ticket()).with_provider(provider).with_tools([search_knowledge]);
   let outcome = task.run(
-    runner = root.ai.run.Agent<Resolution>.new(tools = [search_knowledge]),
+    runner = ai.run.Agent<Resolution>.new(tools = [search_knowledge]),
   );
   //# Verify the typed final value
   match (outcome) {
-    let done: root.ai.Done<Resolution> => assert.equal(done.value.category, "billing"),
+    let done: ai.Done<Resolution> => assert.equal(done.value.category, "billing"),
     _ => assert.is_true(false),
   }
 }
@@ -21,15 +21,15 @@ test "guide 02.01: OpenAI prompt mode extends ctx.output_format with active tool
     tool_mode = root.openai.ToolMode.Prompt,
   );
   let conversation = provider.begin<Resolution>(
-    ResolveTicketWithTools_task(sample_ticket(), provider, [search_knowledge]),
+    ResolveTicketWithTools@task(sample_ticket()).with_provider(provider).with_tools([search_knowledge]),
   );
   let state = match (conversation) {
     let value: root.openai.internal.PromptConversation => value,
     _ => baml.sys.panic("expected OpenAI prompt-tool conversation"),
   };
-  let tools = root.ai.tools.normalize_tools([search_knowledge]);
+  let tools = ai.tools.normalize_tools([search_knowledge]);
   //# Render active tools into the output contract
-  let rendered = root.openai.internal._prompt_turn_task<Resolution | root.ai.tools.ToolCalls>(
+  let rendered = root.openai.internal._prompt_turn_task<Resolution | ai.tools.ToolCalls>(
     provider,
     state,
     root.openai.internal._prompt_tool_output_suffix(tools),
@@ -48,7 +48,7 @@ test "guide 02.01: ModelStep preserves a union task result" {
     output_mode = root.openai.OutputMode.Sap,
     tool_mode = root.openai.ToolMode.Prompt,
   );
-  let task = root.ai.task<Resolution | string>(
+  let task = ai.task<Resolution | string>(
     provider,
     (ctx: baml.llm.Context) -> baml.llm.PromptAst {
       baml.llm.assemble_prompt_ast(
@@ -63,9 +63,9 @@ test "guide 02.01: ModelStep preserves a union task result" {
     let value: root.openai.internal.PromptConversation => value,
     _ => baml.sys.panic("expected OpenAI prompt-tool conversation"),
   };
-  let tools = root.ai.tools.normalize_tools([search_knowledge]);
+  let tools = ai.tools.normalize_tools([search_knowledge]);
   let rendered = root.openai.internal._prompt_turn_task<
-    Resolution | string | root.ai.tools.ToolCalls
+    Resolution | string | ai.tools.ToolCalls
   >(
     provider,
     state,
@@ -86,13 +86,13 @@ testset "integ-test-guide-02-one-tool" {
       api_key: baml.env.get_or_panic("OPENAI_API_KEY"),
     };
     //# Run the live tool loop
-    let task = ResolveTicketWithTools_task(sample_ticket(), provider, [search_knowledge]);
+    let task = ResolveTicketWithTools@task(sample_ticket()).with_provider(provider).with_tools([search_knowledge]);
     let outcome = task.run(
-      runner = root.ai.run.Agent<Resolution>.new(tools = [search_knowledge]),
+      runner = ai.run.Agent<Resolution>.new(tools = [search_knowledge]),
     );
     //# Verify the live typed result
     match (outcome) {
-      let done: root.ai.Done<Resolution> => assert.is_true(done.value.reply.length() > 0),
+      let done: ai.Done<Resolution> => assert.is_true(done.value.reply.length() > 0),
       _ => assert.is_true(false),
     }
   }
@@ -105,13 +105,9 @@ testset "integ-test-guide-02-one-tool" {
       api_key: baml.env.get_or_panic("ANTHROPIC_API_KEY"),
     };
     let trace = guide_agent_trace();
-    let task = ToolInstructions_task(
-      provider,
-      [search_knowledge],
-      `Call search_knowledge exactly once with query "duplicate charge". After its result, return a final resolution with a non-empty summary and reply.`,
-    );
+    let task = ToolInstructions@task(`Call search_knowledge exactly once with query "duplicate charge". After its result, return a final resolution with a non-empty summary and reply.`).with_provider(provider).with_tools([search_knowledge]);
     let outcome = task.run(
-      runner = root.ai.run.Agent<Resolution>.new(
+      runner = ai.run.Agent<Resolution>.new(
         tools = [search_knowledge],
         after_tool_call = (event) -> {
           trace.after_calls.push(event.call.name);
@@ -121,7 +117,7 @@ testset "integ-test-guide-02-one-tool" {
     );
     assert.equal(trace.after_calls, ["search_knowledge"]);
     match (outcome) {
-      let done: root.ai.Done<Resolution> => {
+      let done: ai.Done<Resolution> => {
         assert.is_true(done.value.summary.length() > 0);
         assert.is_true(done.value.reply.length() > 0)
       },
@@ -139,13 +135,13 @@ testset "integ-test-guide-02-one-tool" {
       tool_mode: root.anthropic.ToolMode.Prompt,
     };
     //# Run the live prompt-tool loop
-    let task = ResolveTicketWithTools_task(sample_ticket(), provider, [search_knowledge]);
+    let task = ResolveTicketWithTools@task(sample_ticket()).with_provider(provider).with_tools([search_knowledge]);
     let outcome = task.run(
-      runner = root.ai.run.Agent<Resolution>.new(tools = [search_knowledge]),
+      runner = ai.run.Agent<Resolution>.new(tools = [search_knowledge]),
     );
     //# Verify the live typed result
     match (outcome) {
-      let done: root.ai.Done<Resolution> => assert.is_true(done.value.reply.length() > 0),
+      let done: ai.Done<Resolution> => assert.is_true(done.value.reply.length() > 0),
       _ => assert.is_true(false),
     }
   }
@@ -156,12 +152,12 @@ testset "integ-test-guide-02-one-tool" {
       output_mode = root.google.ai.OutputMode.Native,
       tool_mode = root.google.ai.ToolMode.Native,
     );
-    let task = ResolveTicketWithTools_task(sample_ticket(), provider, [search_knowledge]);
+    let task = ResolveTicketWithTools@task(sample_ticket()).with_provider(provider).with_tools([search_knowledge]);
     let outcome = task.run(
-      runner = root.ai.run.Agent<Resolution>.new(tools = [search_knowledge]),
+      runner = ai.run.Agent<Resolution>.new(tools = [search_knowledge]),
     );
     match (outcome) {
-      let done: root.ai.Done<Resolution> => assert.is_true(done.value.reply.length() > 0),
+      let done: ai.Done<Resolution> => assert.is_true(done.value.reply.length() > 0),
       _ => assert.is_true(false),
     }
   }
@@ -172,12 +168,12 @@ testset "integ-test-guide-02-one-tool" {
       output_mode = root.google.ai.OutputMode.Sap,
       tool_mode = root.google.ai.ToolMode.Prompt,
     );
-    let task = ResolveTicketWithTools_task(sample_ticket(), provider, [search_knowledge]);
+    let task = ResolveTicketWithTools@task(sample_ticket()).with_provider(provider).with_tools([search_knowledge]);
     let outcome = task.run(
-      runner = root.ai.run.Agent<Resolution>.new(tools = [search_knowledge]),
+      runner = ai.run.Agent<Resolution>.new(tools = [search_knowledge]),
     );
     match (outcome) {
-      let done: root.ai.Done<Resolution> => assert.is_true(done.value.reply.length() > 0),
+      let done: ai.Done<Resolution> => assert.is_true(done.value.reply.length() > 0),
       _ => assert.is_true(false),
     }
   }

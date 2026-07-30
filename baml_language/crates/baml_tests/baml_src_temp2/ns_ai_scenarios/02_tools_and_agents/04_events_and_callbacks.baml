@@ -3,11 +3,10 @@
 function events_and_callbacks() -> null {
     let observer = GuideObserver { kinds: [] };
     let trace = guide_agent_trace();
-    let task = ResolveTicketWithTools_task(sample_ticket(), fake_tool_provider([one_knowledge_call()]), [search_knowledge]);
+    let task = ResolveTicketWithTools@task(sample_ticket()).with_provider(fake_tool_provider([one_knowledge_call()])).with_tools([search_knowledge]);
     let outcome = task
         .run(
-            runner = root
-                .ai
+            runner = ai
                 .run
                 .Agent<Resolution>
                 .new(

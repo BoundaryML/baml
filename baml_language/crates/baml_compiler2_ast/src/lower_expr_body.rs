@@ -399,6 +399,145 @@ pub(crate) fn synthesize_llm_call_with_prompt(
     ctx.finish(Some(call))
 }
 
+/// Synthesize the zero-model-I/O body of an AI function's `$task` companion:
+///
+/// `ai._task_named<T>(provider, "F", { "arg": arg }, tools, (ctx) -> prompt)`
+///
+/// Provider and tool declarations are ordinary source expressions and are
+/// lowered in the same arena as the prompt closure, so they may reference the
+/// AI function's parameters.
+pub(crate) fn synthesize_ai_task_with_prompt(
+    function_name: &str,
+    param_names: &[Name],
+    return_type: crate::ast::TypeExpr,
+    provider: &baml_compiler_syntax::SyntaxElement,
+    tools: Option<&baml_compiler_syntax::SyntaxElement>,
+    prompt_backtick: &baml_compiler_syntax::BacktickStringLiteral,
+    span: TextRange,
+) -> (
+    ExprBody,
+    AstSourceMap,
+    Vec<LoweringDiagnostic>,
+    Vec<EnvVarRef>,
+) {
+    use crate::ast::{CallArg, Literal};
+
+    let mut ctx = LoweringContext::new();
+    for name in param_names {
+        ctx.names_in_scope.insert(name.to_string());
+    }
+
+    let lower_element = |element: &baml_compiler_syntax::SyntaxElement,
+                         ctx: &mut LoweringContext| match element {
+        rowan::NodeOrToken::Node(node) => ctx.lower_expr(node),
+        rowan::NodeOrToken::Token(token) => {
+            let expr = lower_bare_token_expr(ctx, token);
+            ctx.alloc_expr(expr, token.text_range())
+        }
+    };
+
+    let provider = lower_element(provider, &mut ctx);
+    let tools = if let Some(element) = tools {
+        lower_element(element, &mut ctx)
+    } else {
+        ctx.alloc_expr(Expr::Array { elements: vec![] }, span)
+    };
+    let function_name_expr = ctx.alloc_expr(
+        Expr::Literal(Literal::String(function_name.to_string())),
+        span,
+    );
+    let entries = param_names
+        .iter()
+        .map(|name| {
+            let key = ctx.alloc_expr(
+                Expr::Literal(Literal::String(name.as_str().to_string())),
+                span,
+            );
+            let value = ctx.alloc_expr(Expr::Path(vec![name.clone()]), span);
+            (key, value)
+        })
+        .collect();
+    let arguments = ctx.alloc_expr(Expr::Map { entries }, span);
+    let prompt = ctx.build_prompt_tag_closure(prompt_backtick, span);
+    let callee = ctx.alloc_expr(
+        Expr::Path(vec![Name::new("ai"), Name::new("_task_named")]),
+        span,
+    );
+    let call = ctx.alloc_expr(
+        Expr::Call {
+            callee,
+            type_args: vec![return_type],
+            args: vec![
+                CallArg::positional(provider),
+                CallArg::positional(function_name_expr),
+                CallArg::positional(arguments),
+                CallArg::positional(tools),
+                CallArg::positional(prompt),
+            ],
+        },
+        span,
+    );
+    ctx.finish(Some(call))
+}
+
+/// Synthesize an AI function's direct-call body:
+///
+/// `ai.internal._run_agent_to_response<T>(F$task(arg = arg, ...)).value`
+pub(crate) fn synthesize_ai_direct_call(
+    function_name: &str,
+    param_names: &[Name],
+    return_type: crate::ast::TypeExpr,
+    span: TextRange,
+) -> (ExprBody, AstSourceMap) {
+    use crate::ast::CallArg;
+
+    let mut ctx = LoweringContext::new();
+    let task_callee = ctx.alloc_expr(
+        Expr::Path(vec![Name::new(format!("{function_name}$task"))]),
+        span,
+    );
+    let task_args = param_names
+        .iter()
+        .map(|name| {
+            let value = ctx.alloc_expr(Expr::Path(vec![name.clone()]), span);
+            CallArg::named(name.clone(), value)
+        })
+        .collect();
+    let task = ctx.alloc_expr(
+        Expr::Call {
+            callee: task_callee,
+            type_args: vec![],
+            args: task_args,
+        },
+        span,
+    );
+    let run_callee = ctx.alloc_expr(
+        Expr::Path(vec![
+            Name::new("ai"),
+            Name::new("internal"),
+            Name::new("_run_agent_to_response"),
+        ]),
+        span,
+    );
+    let response = ctx.alloc_expr(
+        Expr::Call {
+            callee: run_callee,
+            type_args: vec![return_type],
+            args: vec![CallArg::positional(task)],
+        },
+        span,
+    );
+    let value = ctx.alloc_expr(
+        Expr::MemberAccess {
+            base: response,
+            member: Name::new("value"),
+        },
+        span,
+    );
+    let (body, source_map, _, _) = ctx.finish(Some(value));
+    (body, source_map)
+}
+
 struct LoweringContext {
     exprs: Arena<Expr>,
     stmts: Arena<Stmt>,
@@ -818,6 +957,7 @@ impl LoweringContext {
             }
             SyntaxKind::PATH_EXPR => self.lower_path_expr(node),
             SyntaxKind::FIELD_ACCESS_EXPR => self.lower_field_access_expr(node),
+            SyntaxKind::TASK_ACCESS_EXPR => self.lower_task_access_expr(node),
             SyntaxKind::UPCAST_EXPR => self.lower_upcast_expr(node),
             SyntaxKind::OPTIONAL_FIELD_ACCESS_EXPR => self.lower_optional_field_access_expr(node),
             SyntaxKind::ENV_ACCESS_EXPR => self.lower_env_access_expr(node),
@@ -2761,6 +2901,36 @@ impl LoweringContext {
             self.needs_chain_wrap.insert(id);
         }
         id
+    }
+
+    /// Lower the reader-facing `F@task` spelling to the generated `F$task`
+    /// companion symbol. Keeping this as a path rewrite means every later
+    /// compiler phase sees an ordinary function reference/call and companion
+    /// name resolution, generics, defaults, and diagnostics all stay shared.
+    fn lower_task_access_expr(&mut self, node: &SyntaxNode) -> ExprId {
+        let base = if let Some(child) = node.children().next() {
+            self.lower_expr_in_chain(&child)
+        } else {
+            node.children_with_tokens()
+                .filter_map(rowan::NodeOrToken::into_token)
+                .find(|token| is_ident_token(token.kind()) && token.text() != "task")
+                .map(|token| {
+                    self.alloc_expr(
+                        Expr::Path(vec![Name::new(token.text())]),
+                        token.text_range(),
+                    )
+                })
+                .unwrap_or_else(|| self.alloc_expr(Expr::Missing, node.span_range()))
+        };
+
+        let Expr::Path(mut path) = self.exprs[base].clone() else {
+            return self.alloc_expr(Expr::Missing, node.span_range());
+        };
+        let Some(last) = path.last_mut() else {
+            return self.alloc_expr(Expr::Missing, node.span_range());
+        };
+        *last = Name::new(format!("{}$task", last.as_str()));
+        self.alloc_expr(Expr::Path(path), node.span_range())
     }
 
     fn lower_upcast_expr(&mut self, node: &SyntaxNode) -> ExprId {

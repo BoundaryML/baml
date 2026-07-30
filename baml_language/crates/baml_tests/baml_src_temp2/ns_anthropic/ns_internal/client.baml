@@ -72,9 +72,9 @@ function _configured_primitive(
 
 function _messages_built_request<T>(
     provider: root.anthropic.AnthropicProvider,
-    task: root.ai.Task<T>,
+    task: ai.Task<T>,
     log_shape: bool = true,
-) -> baml.http.Request throws root.ai.Failure | baml.errors.UnknownError {
+) -> baml.http.Request throws ai.Failure | baml.errors.UnknownError {
     _validate_output_config(provider);
     let primitive = _configured_primitive(provider);
     let specialized = primitive.specialize_prompt(task.prompt) catch (e) {
@@ -149,8 +149,8 @@ function _messages_built_request<T>(
 
 function _messages_generate<T>(
     provider: root.anthropic.AnthropicProvider,
-    task: root.ai.Task<T>,
-) -> root.ai.ResponseWithMetadata<T> throws root.ai.Failure | baml.errors.UnknownError {
+    task: ai.Task<T>,
+) -> ai.ResponseWithMetadata<T> throws ai.Failure | baml.errors.UnknownError {
     let request = _messages_built_request(provider, task);
     log.info(
         baml.json.stringify({
@@ -163,7 +163,7 @@ function _messages_generate<T>(
     );
     let response = baml.http.send(request) catch (e) {
         _ => {
-            throw root.ai.NetworkFailure {
+            throw ai.NetworkFailure {
                 provider: "anthropic",
                 detail: "baml.http.send failed before an Anthropic Messages response arrived",
             }
@@ -171,7 +171,7 @@ function _messages_generate<T>(
     };
     let text = response.text() catch (e) {
         _ => {
-            throw root.ai.NetworkFailure {
+            throw ai.NetworkFailure {
                 provider: "anthropic",
                 detail: "the Anthropic Messages body could not be read completely",
             }
@@ -187,7 +187,7 @@ function _messages_generate<T>(
         }),
     );
     if (!response.ok()) {
-        throw root.ai.internal.classify_http(
+        throw ai.internal._classify_http(
             "anthropic",
             response.status_code,
             text,
@@ -195,13 +195,13 @@ function _messages_generate<T>(
     }
     let raw = baml.json.parse(text) catch (e) {
         _ => {
-            throw root.ai.ParseFailed {
+            throw ai.ParseFailed {
                 provider: "anthropic",
                 raw_output: text,
             }
         },
     };
-    root.ai.ResponseWithMetadata<T> {
+    ai.ResponseWithMetadata<T> {
         value: _parse_response_value<T>(raw, text, _uses_sap(provider)),
         metadata: _response_metadata(raw, provider.model),
         conversation: null,
@@ -210,7 +210,7 @@ function _messages_generate<T>(
 
 function _messages_stream<TPartial, T>(
     provider: root.anthropic.AnthropicProvider,
-    task: root.ai.Task<T>,
+    task: ai.Task<T>,
 ) -> baml.llm.Stream<TPartial, T> throws baml.errors.UnknownError {
     let primitive = _configured_primitive(provider);
     let specialized = primitive.specialize_prompt(task.prompt) catch (e) {

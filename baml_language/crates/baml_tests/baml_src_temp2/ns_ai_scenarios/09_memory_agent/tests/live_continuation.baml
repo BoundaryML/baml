@@ -2,33 +2,26 @@
 // memory-agent session. These tests make two model requests and verify that the
 // second request sees information retained only by the first provider turn.
 
-function _memory_agent_live_continuation_task(
-    provider: root.ai.Provider,
+function _MemoryAgentLiveContinuation(
+    provider: ai.Provider,
     nonce: string,
-) -> root.ai.Task<string> throws never {
-    root.ai.task<string>(provider, (ctx: baml.llm.Context) -> baml.llm.PromptAst {
-        baml.llm
-            .assemble_prompt_ast(
-                [
-                    `Remember the exact nonce ${nonce}. Reply with only ACK.\n`,
-                    "",
-                ],
-                [ctx.output_format],
-            )
-    })
+) -> string {
+    provider: provider
+    prompt: `
+        Remember the exact nonce ${nonce}. Reply with only ACK.
+        ${ctx.output_format}
+    `
 }
 
 function _memory_agent_live_exact_follow_up(
-    task: root.ai.Task<string>,
+    task: ai.Task<string>,
 ) -> string {
-    let first = root
-        .ai
+    let first = ai
         .internal
         ._require_done(
             task
                 .run(
-                    runner = root
-                        .ai
+                    runner = ai
                         .run
                         .Agent<string>
                         .new(max_tool_calls_per_step = 0),
@@ -37,18 +30,16 @@ function _memory_agent_live_exact_follow_up(
     let continued = first
         .conversation
         .append_message(
-            root.ai.ChatMessage.user(
+            ai.ChatMessage.user(
                 "What exact nonce did I ask you to remember? Reply with only that nonce.",
             ),
         );
-    let second = root
-        .ai
+    let second = ai
         .internal
         ._require_done(
             task
                 .run(
-                    runner = root
-                        .ai
+                    runner = ai
                         .run
                         .Agent<string>
                         .new(
@@ -64,7 +55,7 @@ testset "integ-test-memory-agent-exact-continuation" {
     test "memory agent live OpenAI: fresh user message keeps Responses state" {
         let nonce = "cobalt-417";
         let answer = _memory_agent_live_exact_follow_up(
-            _memory_agent_live_continuation_task(_memory_agent_openai_provider(), nonce),
+            _MemoryAgentLiveContinuation@task(_memory_agent_openai_provider(), nonce),
         );
         assert.contains(answer.to_lower_case(), nonce)
     }
@@ -72,7 +63,7 @@ testset "integ-test-memory-agent-exact-continuation" {
     test "memory agent live Google AI: fresh user message keeps Gemini state" {
         let nonce = "saffron-928";
         let answer = _memory_agent_live_exact_follow_up(
-            _memory_agent_live_continuation_task(
+            _MemoryAgentLiveContinuation@task(
                 _memory_agent_live_google_provider(),
                 nonce,
             ),

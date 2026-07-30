@@ -1396,3 +1396,23 @@ mod return_comment_tests {
         assert_formats_to(source, expected);
     }
 }
+
+#[cfg(test)]
+mod ai_task_format_tests {
+    use super::*;
+
+    #[test]
+    fn ai_declaration_and_task_access_round_trip() {
+        let source = "function Ask(provider: ai.Provider, text: string) -> string {\n    provider: provider\n    prompt: `Answer ${text}: ${ctx.output_format}`\n    tools: []\n}\n\nfunction make(provider: ai.Provider) -> ai.Task<string> {\n    Ask@task(provider, \"hello\")\n}\n";
+        let options = FormatOptions::default();
+        let formatted = format(source, &options).expect("formatter should accept AI declarations");
+        assert!(
+            formatted.contains("Ask@task(provider, \"hello\")"),
+            "@task spelling must survive formatting:\n{formatted}"
+        );
+        assert!(formatted.contains("provider: provider"));
+        assert!(formatted.contains("tools: []"));
+        let second = format(&formatted, &options).expect("formatted source must parse again");
+        assert_eq!(formatted, second, "formatter should be idempotent");
+    }
+}

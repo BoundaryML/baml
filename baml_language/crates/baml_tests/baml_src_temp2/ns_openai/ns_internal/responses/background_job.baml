@@ -5,24 +5,24 @@
 class BackgroundJob<T> {
     owner: root.openai.OpenAIProvider,
     id: string,
-    last_status: root.ai.jobs.JobStatus,
+    last_status: ai.jobs.JobStatus,
     polls: int,
 
     // function cleanup(self) -> void throws never {
-    //   if (self.last_status == root.ai.jobs.JobStatus.Pending) {
+    //   if (self.last_status == ai.jobs.JobStatus.Pending) {
     //     self.cancel() catch (e) { _ => null };
     //   }
     // }
 
-    implements root.ai.jobs.Job<T> {
-        function status(self) -> root.ai.jobs.JobStatus throws never {
+    implements ai.jobs.Job<T> {
+        function status(self) -> ai.jobs.JobStatus throws never {
             self.last_status
         }
 
         function poll(
             self,
-        ) -> root.ai.ResponseWithMetadata<T>? throws root.ai.Failure | baml.errors.UnknownError {
-            if (self.last_status == root.ai.jobs.JobStatus.Cancelled) {
+        ) -> ai.ResponseWithMetadata<T>? throws ai.Failure | baml.errors.UnknownError {
+            if (self.last_status == ai.jobs.JobStatus.Cancelled) {
                 return null;
             }
             self.polls = self.polls + 1;
@@ -45,7 +45,7 @@ class BackgroundJob<T> {
                 },
             };
             if (!response.ok()) {
-                throw root.ai.internal.classify_http("openai", response.status_code, body);
+                throw ai.internal._classify_http("openai", response.status_code, body);
             }
             let raw = baml.json.parse(body) catch (e) {
                 _ => {
@@ -54,28 +54,28 @@ class BackgroundJob<T> {
             };
             let remote_status = baml.json.path_or(raw, ".status", "");
             if (remote_status == "cancelled") {
-                self.last_status = root.ai.jobs.JobStatus.Cancelled;
+                self.last_status = ai.jobs.JobStatus.Cancelled;
                 return null;
             }
             if (remote_status == "failed" || remote_status == "incomplete") {
-                self.last_status = root.ai.jobs.JobStatus.Failed;
+                self.last_status = ai.jobs.JobStatus.Failed;
                 throw baml.errors.UnknownError.with_message<never>(raw, "background response " + remote_status);
             }
             if (remote_status != "completed") {
-                self.last_status = root.ai.jobs.JobStatus.Pending;
+                self.last_status = ai.jobs.JobStatus.Pending;
                 return null;
             }
             //## Parse the same native result-tool or SAP mode selected at submission
             let value = _parse_response_value<T>(raw, body, _uses_sap(self.owner));
-            self.last_status = root.ai.jobs.JobStatus.Complete;
-            root.ai.ResponseWithMetadata<T> {
+            self.last_status = ai.jobs.JobStatus.Complete;
+            ai.ResponseWithMetadata<T> {
                 value: value,
-                metadata: root.ai.ResponseMetadata {
+                metadata: ai.ResponseMetadata {
                     provider: self.owner.name(),
                     model: baml.json.path_or<string?>(raw, ".model", self.owner.model),
                     request_id: self.id,
                     finish_reason: remote_status,
-                    usage: root.ai.Usage {
+                    usage: ai.Usage {
                         input_tokens: baml.json.path_or(raw, ".usage.input_tokens", 0),
                         output_tokens: baml.json.path_or(raw, ".usage.output_tokens", 0),
                         cached_input_tokens: baml
@@ -97,8 +97,8 @@ class BackgroundJob<T> {
             }
         }
 
-        function cancel(self) -> null throws root.ai.Failure | baml.errors.UnknownError {
-            if (self.last_status == root.ai.jobs.JobStatus.Cancelled) {
+        function cancel(self) -> null throws ai.Failure | baml.errors.UnknownError {
+            if (self.last_status == ai.jobs.JobStatus.Cancelled) {
                 return null;
             }
             //# Cancel remote work without discarding its resume coordinates
@@ -120,17 +120,17 @@ class BackgroundJob<T> {
             let body = response.text() catch (e) {
                 _ => ""
             };
-            if (!response.ok() && self.last_status != root.ai.jobs.JobStatus.Complete) {
-                throw root.ai.internal.classify_http("openai", response.status_code, body);
+            if (!response.ok() && self.last_status != ai.jobs.JobStatus.Complete) {
+                throw ai.internal._classify_http("openai", response.status_code, body);
             }
-            self.last_status = root.ai.jobs.JobStatus.Cancelled;
+            self.last_status = ai.jobs.JobStatus.Cancelled;
             null
         }
 
-        function token(self) -> root.ai.jobs.JobToken throws never {
-            root.ai.jobs.JobToken { provider: self.owner.name(), id: self.id, sealed: null }
+        function token(self) -> ai.jobs.JobToken throws never {
+            ai.jobs.JobToken { provider: self.owner.name(), id: self.id, sealed: null }
         }
     }
 
-    implements root.ai.Resource {}
+    implements ai.Resource {}
 }

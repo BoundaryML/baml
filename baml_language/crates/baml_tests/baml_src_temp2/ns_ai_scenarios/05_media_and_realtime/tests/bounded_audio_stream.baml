@@ -1,18 +1,18 @@
 // Tests for the bounded_audio_stream scenario.
 test "guide 05.02: AudioStream means finite input, not a live channel" {
-    let stream = root.ai.transcription.AudioStream {
+    let stream = ai.transcription.AudioStream {
         chunks: [audio.from_url("https://example.com/one.wav", "audio/wav")],
         sample_rate_hz: 24000,
         channels: 1,
     };
-    let provider = root.ai.testing.FakeTranscriptionProvider {
+    let provider = ai.testing.FakeTranscriptionProvider {
         output: "hello",
         received_chunks: [],
         received_options: null,
     };
     //# Execute the transcription task with metadata-preserving policy
     let response = TranscribeCall_task(stream, provider)
-        .run(runner = root.ai.run.TranscribeWithMeta.new(language = "en"));
+        .run(runner = ai.run.TranscribeWithMeta.new(language = "en"));
     assert.equal(response.value, "hello");
     assert.equal(provider.received_chunks.length(), 1);
     assert

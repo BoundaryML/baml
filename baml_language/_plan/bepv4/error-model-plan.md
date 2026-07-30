@@ -9,7 +9,7 @@ closed-`ai.Error` alternative in [error-redesign.md](error-redesign.md).
 Capability-specific protocols may narrow it:
 
 ```baml
-throws root.ai.Failure | baml.errors.UnknownError
+throws ai.Failure | baml.errors.UnknownError
 ```
 
 `Failure` is open so applications and provider packages can define statically
@@ -50,7 +50,7 @@ A blind layer uses `with_message<never>`. It does not construct
 
 ```baml
 } catch (e) {
-  let known: root.ai.Failure => throw known,
+  let known: ai.Failure => throw known,
   _ => throw baml.errors.UnknownError.with_message<never>(e, "openai step"),
 }
 ```
@@ -86,21 +86,21 @@ Normal model execution uses one protocol:
 ```baml
 interface AgentProvider requires Provider {
   function begin<T>(self, task: Task<T>) -> Conversation
-    throws root.ai.Failure | baml.errors.UnknownError
+    throws ai.Failure | baml.errors.UnknownError
 
   function step<T>(
     self,
     conversation: Conversation,
-    tools: root.ai.tools.Tool[],
+    tools: ai.tools.Tool[],
   ) -> ModelStep<T>
-    throws root.ai.Failure | baml.errors.UnknownError
+    throws ai.Failure | baml.errors.UnknownError
 
   function submit(
     self,
     conversation: Conversation,
-    results: root.ai.tools.ToolResult[],
+    results: ai.tools.ToolResult[],
   ) -> Conversation
-    throws root.ai.Failure | baml.errors.UnknownError
+    throws ai.Failure | baml.errors.UnknownError
 }
 ```
 
@@ -122,14 +122,14 @@ tools.
 The private retry predicate is:
 
 ```baml
-function _may_retry_model_step(failure: root.ai.Failure) -> bool throws never {
+function _may_retry_model_step(failure: ai.Failure) -> bool throws never {
   if (!failure.is_transient()) {
     return false;
   }
   match (failure.effects()) {
-    root.ai.Effects.Committed => return false,
-    root.ai.Effects.Unknown => return false,
-    root.ai.Effects.None => {},
+    ai.Effects.Committed => return false,
+    ai.Effects.Unknown => return false,
+    ai.Effects.None => {},
   }
   true
 }
@@ -156,8 +156,8 @@ Catch most-specific first:
 ```baml
 provider.step<Invoice>(conversation, tools) catch (e) {
   let quota: MyQuotaError => handle_quota(quota.quota_name),
-  let limited: root.ai.RateLimited => backoff(limited.retry_after_ms ?? 1000),
-  let failure: root.ai.Failure => {
+  let limited: ai.RateLimited => backoff(limited.retry_after_ms ?? 1000),
+  let failure: ai.Failure => {
     if (failure.is_transient()) { handle_transient(failure) }
     else { throw failure }
   },

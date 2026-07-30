@@ -33,7 +33,7 @@ class Gemini {
     parallel_tool_calls: bool,
 }
 
-implements root.ai.Provider for Gemini {
+implements ai.Provider for Gemini {
   function name(self) -> string throws never { "google-vertex" }
   function render_shorthand(self) -> string throws never {
     "vertex-ai/" + self.model

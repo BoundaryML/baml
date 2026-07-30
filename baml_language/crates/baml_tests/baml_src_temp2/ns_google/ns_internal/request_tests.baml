@@ -3,9 +3,9 @@ class RequestFixture {
 }
 
 function _request_fixture_task(
-    provider: root.ai.Provider,
-) -> root.ai.Task<RequestFixture> throws never {
-    root.ai.task<RequestFixture>(provider, (ctx: baml.llm.Context) -> baml.llm.PromptAst {
+    provider: ai.Provider,
+) -> ai.Task<RequestFixture> throws never {
+    ai.task<RequestFixture>(provider, (ctx: baml.llm.Context) -> baml.llm.PromptAst {
         baml.llm.assemble_prompt_ast(["Return the fixture.\n", ""], [ctx.output_format])
     })
 }
@@ -158,11 +158,11 @@ test "Google message import rebuilds Gemini user and model contents" {
             api_key = "test-google-key",
             base_url = "https://example.test/v1beta",
         );
-    let messages = root.ai.MessageHistory {
-        entries: [root.ai.ChatMessage.user("hello"), root.ai.ChatMessage.assistant("hi")],
+    let messages = ai.MessageHistory {
+        entries: [ai.ChatMessage.user("hello"), ai.ChatMessage.assistant("hi")],
     };
     let imported = provider.import_messages<RequestFixture>(messages);
-    assert.equal(imported.fidelity, root.ai.ConversationFidelity.MessagesOnly);
+    assert.equal(imported.fidelity, ai.ConversationFidelity.MessagesOnly);
     match (imported.conversation) {
         let state: Conversation => {
             assert.equal(state.contents.length(), 2);
@@ -195,8 +195,8 @@ test "Google submit rejects duplicate or missing result ids" {
     let _duplicate = _submit(
         state,
         [
-            root.ai.tools.ToolResult { id: "id1", output: { "value": "one" }, is_error: false },
-            root.ai.tools.ToolResult {
+            ai.tools.ToolResult { id: "id1", output: { "value": "one" }, is_error: false },
+            ai.tools.ToolResult {
                 id: "id1",
                 output: { "value": "duplicate" },
                 is_error: false,
@@ -204,7 +204,7 @@ test "Google submit rejects duplicate or missing result ids" {
         ],
         provider.name(),
     ) catch (e) {
-        let invalid: root.ai.InvalidRequest => {
+        let invalid: ai.InvalidRequest => {
             duplicate_rejected = true;
             state
         },
@@ -215,10 +215,10 @@ test "Google submit rejects duplicate or missing result ids" {
     let missing_rejected = false;
     let _missing = _submit(
         state,
-        [root.ai.tools.ToolResult { id: "id1", output: { "value": "one" }, is_error: false }],
+        [ai.tools.ToolResult { id: "id1", output: { "value": "one" }, is_error: false }],
         provider.name(),
     ) catch (e) {
-        let invalid: root.ai.InvalidRequest => {
+        let invalid: ai.InvalidRequest => {
             missing_rejected = true;
             state
         },
@@ -248,8 +248,8 @@ test "Google submit emits function responses in provider call order" {
     _submit(
         state,
         [
-            root.ai.tools.ToolResult { id: "id2", output: { "value": "two" }, is_error: false },
-            root.ai.tools.ToolResult { id: "id1", output: { "value": "one" }, is_error: false },
+            ai.tools.ToolResult { id: "id2", output: { "value": "two" }, is_error: false },
+            ai.tools.ToolResult { id: "id1", output: { "value": "one" }, is_error: false },
         ],
         provider.name(),
     );
@@ -259,10 +259,10 @@ test "Google submit emits function responses in provider call order" {
 }
 
 test "Google reserves its typed-output tool name in SAP and Native modes" {
-    let reserved = root.ai.tools.tool(_reserved_tool_handler, name = "__baml_return_output");
+    let reserved = ai.tools.tool(_reserved_tool_handler, name = "__baml_return_output");
     let rejected = false;
     let _ = _validate_application_tool_names([reserved], "google-ai") catch (e) {
-        let invalid: root.ai.InvalidRequest => {
+        let invalid: ai.InvalidRequest => {
             rejected = true;
             null
         },
@@ -285,14 +285,14 @@ test "Google prompt mode requires pending results before another step" {
         let value: PromptConversation => value,
         _ => baml.sys.panic("expected Google prompt conversation"),
     };
-    state.last_calls = [root.ai.tools.ToolCall { id: "pending", name: "lookup", args: {} }];
+    state.last_calls = [ai.tools.ToolCall { id: "pending", name: "lookup", args: {} }];
     let rejected = false;
     let _ = provider.step<RequestFixture>(state, []) catch (e) {
-        let invalid: root.ai.InvalidRequest => {
+        let invalid: ai.InvalidRequest => {
             rejected = true;
-            root.ai.ModelStep<RequestFixture> {
+            ai.ModelStep<RequestFixture> {
                 outcome: RequestFixture { answer: "unreachable" },
-                metadata: root.ai.ResponseMetadata {
+                metadata: ai.ResponseMetadata {
                     provider: "test",
                     model: null,
                     request_id: null,
@@ -327,7 +327,7 @@ test "Google AI appends a fresh user message without losing thought signatures" 
             },
         );
     let original_wire_length = state.contents.length();
-    let appended = provider.append_message(state, root.ai.ChatMessage.user("second turn"));
+    let appended = provider.append_message(state, ai.ChatMessage.user("second turn"));
     match (appended) {
         let exact: Conversation => {
             assert.equal(exact.declared_output_type, output_type);
@@ -346,7 +346,7 @@ test "Google AI appends a fresh user message without losing thought signatures" 
                     baml.json.path<string>(exact.contents[original_wire_length], ".parts[0].text"),
                     "second turn",
                 );
-            assert.equal(root.ai.message_text(exact.history.entries[1]), "second turn")
+            assert.equal(ai.message_text(exact.history.entries[1]), "second turn")
         },
         _ => assert.is_true(false),
     }
@@ -359,12 +359,12 @@ test "Google Vertex append retains backend ownership and output type" {
         _ => baml.sys.panic("expected Vertex conversation"),
     };
     let output_type = state.declared_output_type;
-    let appended = provider.append_message(state, root.ai.ChatMessage.user("vertex follow up"));
+    let appended = provider.append_message(state, ai.ChatMessage.user("vertex follow up"));
     match (appended) {
         let exact: Conversation => {
             assert.equal(exact.provider_name, "google-vertex");
             assert.equal(exact.declared_output_type, output_type);
-            assert.equal(root.ai.message_text(exact.history.entries[1]), "vertex follow up")
+            assert.equal(ai.message_text(exact.history.entries[1]), "vertex follow up")
         },
         _ => assert.is_true(false),
     }
@@ -384,8 +384,8 @@ test "Google rejects append from another instance and while calls are pending" {
         _ => baml.sys.panic("expected Google conversation"),
     };
     let wrong_owner_rejected = false;
-    let _wrong = other.append_message(state, root.ai.ChatMessage.user("wrong owner")) catch (e) {
-        let invalid: root.ai.InvalidRequest => {
+    let _wrong = other.append_message(state, ai.ChatMessage.user("wrong owner")) catch (e) {
+        let invalid: ai.InvalidRequest => {
             wrong_owner_rejected = true;
             state
         },
@@ -395,8 +395,8 @@ test "Google rejects append from another instance and while calls are pending" {
 
     state.last_calls = [{ "id": "pending", "name": "lookup", "args": {} }];
     let pending_rejected = false;
-    let _pending = owner.append_message(state, root.ai.ChatMessage.user("too soon")) catch (e) {
-        let invalid: root.ai.InvalidRequest => {
+    let _pending = owner.append_message(state, ai.ChatMessage.user("too soon")) catch (e) {
+        let invalid: ai.InvalidRequest => {
             pending_rejected = true;
             state
         },
@@ -421,10 +421,10 @@ test "Google prompt-tool conversations append locally after a completed turn" {
         let value: PromptConversation => value,
         _ => baml.sys.panic("expected Google prompt conversation"),
     };
-    let appended = provider.append_message(state, root.ai.ChatMessage.user("follow up"));
+    let appended = provider.append_message(state, ai.ChatMessage.user("follow up"));
     match (appended) {
         let exact: PromptConversation => {
-            assert.equal(root.ai.message_text(exact.history.entries[1]), "follow up");
+            assert.equal(ai.message_text(exact.history.entries[1]), "follow up");
             assert.equal(exact.last_calls.length(), 0)
         },
         _ => assert.is_true(false),

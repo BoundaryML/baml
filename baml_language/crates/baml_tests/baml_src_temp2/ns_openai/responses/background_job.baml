@@ -1,9 +1,9 @@
-implements root.ai.jobs.BackgroundProvider for OpenAIProvider {
+implements ai.jobs.BackgroundProvider for OpenAIProvider {
   function submit<T>(
     self,
-    task: root.ai.Task<T>,
-    options: root.ai.jobs.BackgroundOptions,
-  ) -> root.ai.jobs.Job<T> throws root.ai.Failure | baml.errors.UnknownError {
+    task: ai.Task<T>,
+    options: ai.jobs.BackgroundOptions,
+  ) -> ai.jobs.Job<T> throws ai.Failure | baml.errors.UnknownError {
     let request = root.openai.internal._responses_built_request(self, task, true);
     let headers = request.headers;
     match (options.idempotency_key) {
@@ -31,7 +31,7 @@ implements root.ai.jobs.BackgroundProvider for OpenAIProvider {
       ),
     };
     if (!response.ok()) {
-      throw root.ai.internal.classify_http(
+      throw ai.internal._classify_http(
         "openai",
         response.status_code,
         body,
@@ -54,9 +54,9 @@ implements root.ai.jobs.BackgroundProvider for OpenAIProvider {
       owner: self,
       id: id,
       last_status: if (baml.json.path_or(raw, ".status", "") == "completed") {
-        root.ai.jobs.JobStatus.Complete
+        ai.jobs.JobStatus.Complete
       } else {
-        root.ai.jobs.JobStatus.Pending
+        ai.jobs.JobStatus.Pending
       },
       polls: 0,
     }
@@ -64,8 +64,8 @@ implements root.ai.jobs.BackgroundProvider for OpenAIProvider {
 
   function resume_job<T>(
     self,
-    token: root.ai.jobs.JobToken,
-  ) -> root.ai.jobs.Job<T> throws baml.errors.UnknownError {
+    token: ai.jobs.JobToken,
+  ) -> ai.jobs.Job<T> throws baml.errors.UnknownError {
     if (token.provider != self.name()) {
       throw baml.errors.UnknownError.with_message<never>(
         token,
@@ -75,7 +75,7 @@ implements root.ai.jobs.BackgroundProvider for OpenAIProvider {
     root.openai.internal.BackgroundJob<T> {
       owner: self,
       id: token.id,
-      last_status: root.ai.jobs.JobStatus.Pending,
+      last_status: ai.jobs.JobStatus.Pending,
       polls: 0,
     }
   }

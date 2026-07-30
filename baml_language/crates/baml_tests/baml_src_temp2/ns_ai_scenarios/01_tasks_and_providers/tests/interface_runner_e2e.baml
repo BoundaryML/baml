@@ -8,13 +8,12 @@
 
 test "interface runner e2e: typed Agent result with metadata" {
     let fake = fake_resolution();
-    let task = ResolveTicket_task(sample_ticket(), fake);
+    let task = ResolveTicket@task(sample_ticket()).with_provider(fake);
 
-    let response = root
-        .ai
+    let response = ai
         .internal
         ._response_from_done(
-            root.ai.internal._require_done(task.run(runner = root.ai.run.Agent<Resolution>.new())),
+            ai.internal._require_done(task.run(runner = ai.run.Agent<Resolution>.new())),
         );
 
     assert.equal(response.value.category, "billing");
@@ -23,29 +22,28 @@ test "interface runner e2e: typed Agent result with metadata" {
 }
 
 test "interface runner e2e: typed value projection" {
-    let task = ResolveTicket_task(sample_ticket(), fake_resolution());
-    let resolution: Resolution = root.ai.internal._require_done(task.run(runner = root.ai.run.Agent<Resolution>.new())).value;
+    let task = ResolveTicket@task(sample_ticket()).with_provider(fake_resolution());
+    let resolution: Resolution = ai.internal._require_done(task.run(runner = ai.run.Agent<Resolution>.new())).value;
 
     assert.equal(resolution.priority, TicketPriority.Urgent)
 }
 
 test "interface runner e2e: provider-backed Agent result" {
-    let task = ResolveTicket_task(sample_ticket(), fake_resolution());
-    let resolution: Resolution = root.ai.internal._require_done(task.run(runner = root.ai.run.Agent<Resolution>.new())).value;
+    let task = ResolveTicket@task(sample_ticket()).with_provider(fake_resolution());
+    let resolution: Resolution = ai.internal._require_done(task.run(runner = ai.run.Agent<Resolution>.new())).value;
 
     assert.equal(resolution.summary, "Duplicate charge")
 }
 
 testset "integ-test-interface-runner-e2e" {
     test "interface runner live OpenAI Agent" {
-        let task = ResolveTicket_task(sample_ticket(), live_openai());
-        let response = root
-            .ai
+        let task = ResolveTicket@task(sample_ticket()).with_provider(live_openai());
+        let response = ai
             .internal
             ._response_from_done(
-                root.ai
+                ai
                     .internal
-                    ._require_done(task.run(runner = root.ai.run.Agent<Resolution>.new())),
+                    ._require_done(task.run(runner = ai.run.Agent<Resolution>.new())),
             );
 
         log.info(

@@ -1,13 +1,12 @@
 test "guide 06.01: ResponseWithMetadata keeps value and provider metadata together" {
-    let response = root
-        .ai
+    let response = ai
         .internal
         ._response_from_done(
-            root.ai
+            ai
                 .internal
                 ._require_done(
-                    ResolveTicket_task(sample_ticket(), fake_resolution())
-                        .run(runner = root.ai.run.Agent<Resolution>.new()),
+                    ResolveTicket@task(sample_ticket()).with_provider(fake_resolution())
+                        .run(runner = ai.run.Agent<Resolution>.new()),
                 ),
         );
     assert.equal(response.metadata.provider, "fake");
@@ -17,15 +16,14 @@ test "guide 06.01: ResponseWithMetadata keeps value and provider metadata togeth
 
 testset "integ-test-guide-06-observe-call" {
     test "guide 06.01 live OpenAI: typed value stays attached to request and usage metadata" {
-        let response = root
-            .ai
+        let response = ai
             .internal
             ._response_from_done(
-                root.ai
+                ai
                     .internal
                     ._require_done(
-                        ResolveTicket_task(sample_ticket(), live_openai())
-                            .run(runner = root.ai.run.Agent<Resolution>.new()),
+                        ResolveTicket@task(sample_ticket()).with_provider(live_openai())
+                            .run(runner = ai.run.Agent<Resolution>.new()),
                     ),
             );
         log.info(

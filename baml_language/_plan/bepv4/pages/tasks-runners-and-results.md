@@ -250,8 +250,7 @@ let outcome = ResolveTicket@task(sample_ticket())
 Rebinding a task re-renders provider-sensitive prompt material. The original
 task is unchanged.
 
-For a direct generated call, `$provider` is the equivalent call-site
-override:
+The proposed direct-call equivalent is a reserved `$provider` argument:
 
 ```baml
 let value = ResolveTicket(
@@ -259,6 +258,10 @@ let value = ResolveTicket(
   $provider = provider,
 )
 ```
+
+That reserved argument is not implemented in the executable corpus yet. Use
+the `F@task(...).with_provider(provider)` form above when running these
+examples.
 
 ## Provider versus runner
 

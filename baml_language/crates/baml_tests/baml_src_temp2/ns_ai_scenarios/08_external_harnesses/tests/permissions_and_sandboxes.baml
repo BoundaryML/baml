@@ -1,5 +1,5 @@
 test "guide 08.03: permissions and sandbox are explicit open-session options" {
-    let options = root.ai.harness.HarnessOptions {
+    let options = ai.harness.HarnessOptions {
         cwd: "/workspace",
         permission_mode: "read-only",
         sandbox: "workspace",
@@ -10,7 +10,7 @@ test "guide 08.03: permissions and sandbox are explicit open-session options" {
     let session = fake_model_harness().open(options);
     assert.is_true(session.id().length() > 0);
     match (session) {
-        let local: root.ai.harness.LocalHarnessSession => {
+        let local: ai.harness.LocalHarnessSession => {
             assert.equal(local.options.permission_mode, "read-only");
             assert.equal(local.options.sandbox, "workspace")
         },
@@ -21,7 +21,7 @@ test "guide 08.03: permissions and sandbox are explicit open-session options" {
 testset "integ-test-guide-08-harness-isolation" {
     test "guide 08.03 live OpenAI: permission and sandbox policy stay attached to the session" {
         let harness = live_openai_model_harness();
-        let options = root.ai.harness.HarnessOptions {
+        let options = ai.harness.HarnessOptions {
             cwd: "/workspace",
             permission_mode: "read-only",
             sandbox: "workspace",
@@ -30,7 +30,7 @@ testset "integ-test-guide-08-harness-isolation" {
         //# Open a session with two distinct isolation controls
         let session = harness.open(options);
         let local = match (session) {
-            let value: root.ai.harness.LocalHarnessSession => value,
+            let value: ai.harness.LocalHarnessSession => value,
             _ => baml.sys.panic("expected local model harness session"),
         };
         assert.equal(local.options.permission_mode, "read-only");
@@ -40,7 +40,7 @@ testset "integ-test-guide-08-harness-isolation" {
         let run = harness
             .run<Resolution>(
                 session,
-                InvestigateRepository_task(sample_ticket(), harness.inner),
+                InvestigateRepository@task(sample_ticket()).with_provider(harness.inner),
                 null,
             );
         log.info(

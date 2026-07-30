@@ -1,8 +1,8 @@
-implements root.ai.ResumableAgentProvider for Gemini {
+implements ai.ResumableAgentProvider for Gemini {
   function save_conversation(
     self,
-    conversation: root.ai.Conversation,
-  ) -> root.ai.ConversationToken throws baml.errors.UnknownError {
+    conversation: ai.Conversation,
+  ) -> ai.ConversationToken throws baml.errors.UnknownError {
     if (self.tool_mode == ToolMode.Prompt) {
       throw baml.errors.UnknownError.with_message<never>(
         null,
@@ -14,8 +14,8 @@ implements root.ai.ResumableAgentProvider for Gemini {
 
   function restore_conversation(
     self,
-    token: root.ai.ConversationToken,
-  ) -> root.ai.Conversation throws baml.errors.UnknownError {
+    token: ai.ConversationToken,
+  ) -> ai.Conversation throws baml.errors.UnknownError {
     if (self.tool_mode == ToolMode.Prompt) {
       throw baml.errors.UnknownError.with_message<never>(
         null,
@@ -26,11 +26,11 @@ implements root.ai.ResumableAgentProvider for Gemini {
   }
 }
 
-implements root.ai.ConversationImportProvider for Gemini {
+implements ai.ConversationImportProvider for Gemini {
   function import_messages<T>(
     self,
-    messages: root.ai.Messages,
-  ) -> root.ai.ConversationImport throws baml.errors.UnknownError {
+    messages: ai.Messages,
+  ) -> ai.ConversationImport throws baml.errors.UnknownError {
     if (self.tool_mode == ToolMode.Prompt) {
       throw baml.errors.UnknownError.with_message<never>(
         null,
@@ -41,12 +41,12 @@ implements root.ai.ConversationImportProvider for Gemini {
   }
 }
 
-implements root.ai.ConversationAppendProvider for Gemini {
+implements ai.ConversationAppendProvider for Gemini {
   function append_messages(
     self,
-    conversation: root.ai.Conversation,
-    messages: root.ai.Messages,
-  ) -> root.ai.Conversation throws root.ai.Failure {
+    conversation: ai.Conversation,
+    messages: ai.Messages,
+  ) -> ai.Conversation throws ai.Failure {
     root.google.internal._append_messages(
       self,
       conversation,

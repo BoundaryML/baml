@@ -3,17 +3,17 @@ class AgentCancellationObserver {
     interrupted_reasons: string[],
     finished_outcomes: string[],
 
-    implements root.ai.observe.AgentObserver {
+    implements ai.observe.AgentObserver {
         function on_event(
             self,
-            event: root.ai.observe.AgentEvent,
+            event: ai.observe.AgentEvent,
         ) -> null throws never {
             self.kinds.push(event.kind());
             match (event) {
-                let interrupted: root.ai.observe.RunInterruptedEvent => {
+                let interrupted: ai.observe.RunInterruptedEvent => {
                     self.interrupted_reasons.push(interrupted.reason);
                 },
-                let finished: root.ai.observe.RunFinishedEvent => {
+                let finished: ai.observe.RunFinishedEvent => {
                     self.finished_outcomes.push(finished.outcome);
                 },
                 _ => {},
@@ -60,27 +60,26 @@ test "guide 02: a pre-cancelled Agent returns a resumable zero-step checkpoint" 
     let cancel = baml.spawn.CancelToken.new();
     let _ = cancel.cancel();
     let observer = _agent_cancellation_observer();
-    let provider = root.ai.testing.ScriptedToolProvider {
+    let provider = ai.testing.ScriptedToolProvider {
         turns: [],
         final_output: _agent_cancellation_final_output(),
         usage_per_step: null,
     };
-    let task = ResolveTicketWithTools_task(sample_ticket(), provider, []);
+    let task = ResolveTicketWithTools@task(sample_ticket()).with_provider(provider).with_tools([]);
     let outcome = task
         .run(
-            runner = root
-                .ai
+            runner = ai
                 .run
                 .Agent<Resolution>
                 .new(cancel = cancel, observers = [observer]),
         );
 
     match (outcome) {
-        let interrupted: root.ai.Interrupted => {
+        let interrupted: ai.Interrupted => {
             assert.equal(interrupted.steps_taken, 0);
             assert.equal(interrupted.reason, "cancelled");
             match (interrupted.conversation) {
-                let state: root.ai.testing.ScriptedToolConversation => {
+                let state: ai.testing.ScriptedToolConversation => {
                     assert.equal(state.turn, 0);
                     assert.equal(state.submitted_results.length(), 0)
                 },
@@ -97,23 +96,22 @@ test "guide 02: a pre-cancelled Agent returns a resumable zero-step checkpoint" 
 test "guide 02: cancellation during step preparation prevents the provider request" {
     let cancel = baml.spawn.CancelToken.new();
     let observer = _agent_cancellation_observer();
-    let provider = root.ai.testing.ScriptedToolProvider {
+    let provider = ai.testing.ScriptedToolProvider {
         turns: [],
         final_output: _agent_cancellation_final_output(),
         usage_per_step: null,
     };
-    let task = ResolveTicketWithTools_task(sample_ticket(), provider, []);
+    let task = ResolveTicketWithTools@task(sample_ticket()).with_provider(provider).with_tools([]);
     let outcome = task
         .run(
-            runner = root
-                .ai
+            runner = ai
                 .run
                 .Agent<Resolution>
                 .new(
                     cancel = cancel,
                     prepare_step = (context) -> {
                         let _ = cancel.cancel();
-                        root.ai.tools.StepPlan {
+                        ai.tools.StepPlan {
                             provider: null,
                             tools: null,
                             stop: null,
@@ -124,10 +122,10 @@ test "guide 02: cancellation during step preparation prevents the provider reque
         );
 
     match (outcome) {
-        let interrupted: root.ai.Interrupted => {
+        let interrupted: ai.Interrupted => {
             assert.equal(interrupted.steps_taken, 0);
             match (interrupted.conversation) {
-                let state: root.ai.testing.ScriptedToolConversation => {
+                let state: ai.testing.ScriptedToolConversation => {
                     assert.equal(state.turn, 0)
                 },
                 _ => assert.is_true(false),
@@ -142,19 +140,18 @@ test "guide 02: cancellation during step preparation prevents the provider reque
 test "guide 02: cancellation during a tool effect commits results before interruption" {
     let cancel = baml.spawn.CancelToken.new();
     let probe = AgentCancellationProbe { cancel: cancel, effects: [] };
-    let tool = root
-        .ai
+    let tool = ai
         .tools
         .tool(
             probe.invoke,
             name = "cancel_after_effect",
             description = "Record one effect and request cooperative cancellation.",
         );
-    let provider = root.ai.testing.ScriptedToolProvider {
+    let provider = ai.testing.ScriptedToolProvider {
         turns: [
-            root.ai.tools.ToolCalls {
+            ai.tools.ToolCalls {
                 calls: [
-                    root.ai.tools.ToolCall {
+                    ai.tools.ToolCall {
                         id: "cancel-one",
                         name: "cancel_after_effect",
                         args: { "label": "one" },
@@ -165,22 +162,21 @@ test "guide 02: cancellation during a tool effect commits results before interru
         final_output: _agent_cancellation_final_output(),
         usage_per_step: null,
     };
-    let task = ResolveTicketWithTools_task(sample_ticket(), provider, [tool]);
+    let task = ResolveTicketWithTools@task(sample_ticket()).with_provider(provider).with_tools([tool]);
     let observer = _agent_cancellation_observer();
     let outcome = task
         .run(
-            runner = root
-                .ai
+            runner = ai
                 .run
                 .Agent<Resolution>
                 .new(tools = [tool], cancel = cancel, observers = [observer]),
         );
 
     let checkpoint = match (outcome) {
-        let interrupted: root.ai.Interrupted => {
+        let interrupted: ai.Interrupted => {
             assert.equal(interrupted.steps_taken, 1);
             match (interrupted.conversation) {
-                let state: root.ai.testing.ScriptedToolConversation => {
+                let state: ai.testing.ScriptedToolConversation => {
                     assert.equal(state.turn, 1);
                     assert.equal(state.submitted_results.length(), 1);
                     assert.equal(state.submitted_results[0].length(), 1);
@@ -200,14 +196,13 @@ test "guide 02: cancellation during a tool effect commits results before interru
     // not replayed because submit completed before Interrupted was returned.
     let resumed = task
         .run(
-            runner = root
-                .ai
+            runner = ai
                 .run
                 .Agent<Resolution>
                 .new(tools = [tool], conversation = checkpoint),
         );
     match (resumed) {
-        let done: root.ai.Done<Resolution> => {
+        let done: ai.Done<Resolution> => {
             assert.equal(done.value.summary, "Resumed without replay")
         },
         _ => assert.is_true(false),
@@ -218,24 +213,23 @@ test "guide 02: cancellation during a tool effect commits results before interru
 test "guide 02: cooperative cancellation drains a parallel tool batch" {
     let cancel = baml.spawn.CancelToken.new();
     let probe = AgentCancellationProbe { cancel: cancel, effects: [] };
-    let tool = root
-        .ai
+    let tool = ai
         .tools
         .tool(
             probe.invoke,
             name = "parallel_cancel_probe",
             description = "Record an effect and request cooperative cancellation.",
         );
-    let provider = root.ai.testing.ScriptedToolProvider {
+    let provider = ai.testing.ScriptedToolProvider {
         turns: [
-            root.ai.tools.ToolCalls {
+            ai.tools.ToolCalls {
                 calls: [
-                    root.ai.tools.ToolCall {
+                    ai.tools.ToolCall {
                         id: "parallel-one",
                         name: "parallel_cancel_probe",
                         args: { "label": "one" },
                     },
-                    root.ai.tools.ToolCall {
+                    ai.tools.ToolCall {
                         id: "parallel-two",
                         name: "parallel_cancel_probe",
                         args: { "label": "two" },
@@ -246,21 +240,20 @@ test "guide 02: cooperative cancellation drains a parallel tool batch" {
         final_output: _agent_cancellation_final_output(),
         usage_per_step: null,
     };
-    let task = ResolveTicketWithTools_task(sample_ticket(), provider, [tool]);
+    let task = ResolveTicketWithTools@task(sample_ticket()).with_provider(provider).with_tools([tool]);
     let outcome = task
         .run(
-            runner = root
-                .ai
+            runner = ai
                 .run
                 .Agent<Resolution>
                 .new(tools = [tool], cancel = cancel),
         );
 
     match (outcome) {
-        let interrupted: root.ai.Interrupted => {
+        let interrupted: ai.Interrupted => {
             assert.equal(interrupted.steps_taken, 1);
             match (interrupted.conversation) {
-                let state: root.ai.testing.ScriptedToolConversation => {
+                let state: ai.testing.ScriptedToolConversation => {
                     assert.equal(state.submitted_results.length(), 1);
                     assert.equal(state.submitted_results[0].length(), 2)
                 },
@@ -277,22 +270,21 @@ test "guide 02: cooperative cancellation drains a parallel tool batch" {
 test "guide 02: a final value wins a cancellation race" {
     let cancel = baml.spawn.CancelToken.new();
     let observer = _agent_cancellation_observer();
-    let provider = root.ai.testing.ScriptedToolProvider {
+    let provider = ai.testing.ScriptedToolProvider {
         turns: [],
         final_output: _agent_cancellation_final_output(),
         usage_per_step: null,
     };
-    let task = ResolveTicketWithTools_task(sample_ticket(), provider, []);
+    let task = ResolveTicketWithTools@task(sample_ticket()).with_provider(provider).with_tools([]);
     let outcome = task
         .run(
-            runner = root
-                .ai
+            runner = ai
                 .run
                 .Agent<Resolution>
                 .new(
                     cancel = cancel,
                     on_event = (event) -> {
-                        if (event is root.ai.observe.ModelStartedEvent) {
+                        if (event is ai.observe.ModelStartedEvent) {
                             let _ = cancel.cancel();
                         };
                         null
@@ -302,7 +294,7 @@ test "guide 02: a final value wins a cancellation race" {
         );
 
     match (outcome) {
-        let done: root.ai.Done<Resolution> => {
+        let done: ai.Done<Resolution> => {
             assert.equal(done.value.summary, "Resumed without replay")
         },
         _ => assert.is_true(false),
@@ -315,12 +307,12 @@ test "guide 02: a final value wins a cancellation race" {
 test "guide 02: a handoff wins a cancellation race" {
     let cancel = baml.spawn.CancelToken.new();
     let observer = _agent_cancellation_observer();
-    let handoff_tool = root.ai.tools.tool(search_knowledge).as_handoff();
-    let provider = root.ai.testing.ScriptedToolProvider {
+    let handoff_tool = ai.tools.tool(search_knowledge).as_handoff();
+    let provider = ai.testing.ScriptedToolProvider {
         turns: [
-            root.ai.tools.ToolCalls {
+            ai.tools.ToolCalls {
                 calls: [
-                    root.ai.tools.ToolCall {
+                    ai.tools.ToolCall {
                         id: "handoff-cancel-race",
                         name: "search_knowledge",
                         args: { "query": "duplicate charge" },
@@ -331,18 +323,17 @@ test "guide 02: a handoff wins a cancellation race" {
         final_output: _agent_cancellation_final_output(),
         usage_per_step: null,
     };
-    let task = ResolveTicketWithTools_task(sample_ticket(), provider, [handoff_tool]);
+    let task = ResolveTicketWithTools@task(sample_ticket()).with_provider(provider).with_tools([handoff_tool]);
     let outcome = task
         .run(
-            runner = root
-                .ai
+            runner = ai
                 .run
                 .Agent<Resolution>
                 .new(
                     tools = [handoff_tool],
                     cancel = cancel,
                     on_event = (event) -> {
-                        if (event is root.ai.observe.ModelStartedEvent) {
+                        if (event is ai.observe.ModelStartedEvent) {
                             let _ = cancel.cancel();
                         };
                         null
@@ -352,7 +343,7 @@ test "guide 02: a handoff wins a cancellation race" {
         );
 
     match (outcome) {
-        let handoff: root.ai.Handoff => {
+        let handoff: ai.Handoff => {
             assert.equal(handoff.call.id, "handoff-cancel-race");
             assert.equal(handoff.steps_taken, 1)
         },
@@ -366,23 +357,22 @@ test "guide 02: a handoff wins a cancellation race" {
 test "guide 02: an unfired cooperative token does not change normal execution" {
     let cancel = baml.spawn.CancelToken.new();
     let observer = _agent_cancellation_observer();
-    let provider = root.ai.testing.ScriptedToolProvider {
+    let provider = ai.testing.ScriptedToolProvider {
         turns: [],
         final_output: _agent_cancellation_final_output(),
         usage_per_step: null,
     };
-    let task = ResolveTicketWithTools_task(sample_ticket(), provider, []);
+    let task = ResolveTicketWithTools@task(sample_ticket()).with_provider(provider).with_tools([]);
     let outcome = task
         .run(
-            runner = root
-                .ai
+            runner = ai
                 .run
                 .Agent<Resolution>
                 .new(cancel = cancel, observers = [observer]),
         );
 
     match (outcome) {
-        let done: root.ai.Done<Resolution> => {
+        let done: ai.Done<Resolution> => {
             assert.equal(done.value.summary, "Resumed without replay")
         },
         _ => assert.is_true(false),

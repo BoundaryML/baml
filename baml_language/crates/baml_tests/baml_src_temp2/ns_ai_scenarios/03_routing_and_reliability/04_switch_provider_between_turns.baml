@@ -2,21 +2,17 @@
 // without restarting the workflow.
 function switch_provider_between_turns() -> null {
   let first = fake_tool_provider([one_knowledge_call()]);
-  let second = root.ai.testing.FakeToolProvider {
+  let second = ai.testing.FakeToolProvider {
     ...fake_tool_provider([]),
     provider_name: "fake-tools-secondary",
   };
   let trace = guide_agent_trace();
-  let task = ResolveTicketWithTools_task(
-    sample_ticket(),
-    first,
-    [search_knowledge],
-  );
+  let task = ResolveTicketWithTools@task(sample_ticket()).with_provider(first).with_tools([search_knowledge]);
   let outcome = task.run(
-    runner = root.ai.run.Agent<Resolution>.new(
+    runner = ai.run.Agent<Resolution>.new(
       tools = [search_knowledge],
       prepare_step = (context) -> {
-        root.ai.tools.StepPlan {
+        ai.tools.StepPlan {
           provider: if (context.step == 1) { second } else { null },
           tools: null,
           stop: null,

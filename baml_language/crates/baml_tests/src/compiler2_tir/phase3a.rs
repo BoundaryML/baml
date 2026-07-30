@@ -680,6 +680,52 @@ function call_overrides() -> string {
 }
 
 #[test]
+fn ai_task_companion_captures_provider_tools_arguments_and_generic_output() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "ns_demo/task.baml",
+        r#"
+function lookup(query: string) -> json throws never {
+  { "query": query }
+}
+
+function TypedTask<T>(
+  provider: ai.Provider,
+  roster: ai.tools.ToolInput[],
+  prefix: string,
+  value: T,
+) -> T {
+  provider: provider
+  prompt: `${prefix}: ${value} ${ctx.output_format}`
+  tools: roster
+}
+
+function make(
+  provider: ai.Provider,
+) -> ai.Task<int> {
+  let value: int = 42
+  TypedTask@task(provider, [lookup], "number", value)
+}
+"#,
+    );
+    let tir = render_tir(&db, file);
+
+    assert!(
+        tir.contains("function user.demo.TypedTask$task<T>"),
+        "AI functions must expose a generated task companion:\n{tir}"
+    );
+    assert!(
+        tir.contains("-> ai.Task<T>"),
+        "the companion must preserve the declared generic output:\n{tir}"
+    );
+    assert!(
+        tir.contains("TypedTask$task<T>(provider, [lookup], \"number\", value) : ai.Task<int>"),
+        "`@task` must resolve to the generated companion in a namespace:\n{tir}"
+    );
+    assert!(!tir.contains("!!"), "unexpected diagnostics:\n{tir}");
+}
+
+#[test]
 fn raw_generic_constructor_infers_typevar_from_field_value() {
     let mut db = make_db();
     let file = db.add_file(

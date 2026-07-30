@@ -11,40 +11,40 @@ class CapabilityNegotiationRunner {
         CapabilityNegotiationRunner {  }
     }
 
-    implements root.ai.Runner<root.ai.Task<Resolution>> {
+    implements ai.Runner<ai.Task<Resolution>> {
         type Output = NegotiatedRun
-        type Error = root.ai.Failure
+        type Error = ai.Failure
             | baml.errors.UnknownError
-            | root.ai.Failure
+            | ai.Failure
             | baml.errors.Unsupported
             | baml.errors.Io
             | baml.errors.LlmClient
 
         function run(
             self,
-            task: root.ai.Task<Resolution>,
-        ) -> NegotiatedRun throws root.ai.Failure
+            task: ai.Task<Resolution>,
+        ) -> NegotiatedRun throws ai.Failure
             | baml.errors.UnknownError
-            | root.ai.Failure
+            | ai.Failure
             | baml.errors.Unsupported
             | baml.errors.Io
             | baml.errors.LlmClient
 {
             //# Narrow the erased provider to the strongest supported interaction
             match (task.provider) {
-                let realtime: root.ai.realtime.RealtimeProvider => {
+                let realtime: ai.realtime.RealtimeProvider => {
                     let live_session = realtime
                         .open_live<Resolution>(
                             task,
-                            root.ai.testing.RecordingChannel { frames: [] },
+                            ai.testing.RecordingChannel { frames: [] },
                         );
                     NegotiatedRun {
                         provider: realtime.name(),
                         mode: "realtime",
-                        output: root.ai.realtime.collect_live_text(live_session),
+                        output: ai.realtime.collect_live_text(live_session),
                     }
                 },
-                let stream: root.ai.StreamingProvider => {
+                let stream: ai.StreamingProvider => {
                     let resolution = stream.stream<Resolution$stream, Resolution>(task).final();
                     NegotiatedRun {
                         provider: stream.name(),
@@ -52,13 +52,12 @@ class CapabilityNegotiationRunner {
                         output: resolution.reply,
                     }
                 },
-                let agent: root.ai.AgentProvider => {
-                    let resolution = root
-                        .ai
+                let agent: ai.AgentProvider => {
+                    let resolution = ai
                         .internal
                         ._require_done(
                             task.with_provider(agent)
-                                .run(runner = root.ai.run.Agent<Resolution>.new()),
+                                .run(runner = ai.run.Agent<Resolution>.new()),
                         )
                         .value;
                     NegotiatedRun {

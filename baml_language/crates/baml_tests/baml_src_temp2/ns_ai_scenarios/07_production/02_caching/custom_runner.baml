@@ -1,24 +1,24 @@
 // Custom runner that creates a provider-owned cache, runs one Task through it,
 // and deletes the cache on every exit path.
 class ManagedCacheRunner<T> {
-    messages: root.ai.Messages,
+    messages: ai.Messages,
     ttl: baml.time.Duration,
 
     function new(
-        messages: root.ai.Messages,
+        messages: ai.Messages,
         ttl: baml.time.Duration,
     ) -> ManagedCacheRunner<T> throws never {
         ManagedCacheRunner<T> { messages: messages, ttl: ttl }
     }
 
-    implements root.ai.Runner<root.ai.Task<T>> {
-        type Output = root.ai.ResponseWithMetadata<T>
-        type Error = root.ai.Failure | baml.errors.UnknownError
+    implements ai.Runner<ai.Task<T>> {
+        type Output = ai.ResponseWithMetadata<T>
+        type Error = ai.Failure | baml.errors.UnknownError
 
         function run(
             self,
-            task: root.ai.Task<T>,
-        ) -> root.ai.ResponseWithMetadata<T> throws root.ai.Failure | baml.errors.UnknownError {
+            task: ai.Task<T>,
+        ) -> ai.ResponseWithMetadata<T> throws ai.Failure | baml.errors.UnknownError {
             //# Require the task's provider to own managed-cache resources
             let provider = match (task.provider) {
                 let managed: root.google.ManagedCacheProvider => managed,

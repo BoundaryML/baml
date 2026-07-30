@@ -1,15 +1,15 @@
 test "guide 07.04: erased providers can be negotiated explicitly" {
-    let providers: root.ai.Provider[] = [fake_resolution(), root.ai.testing.FakeRealtimeProvider { transcript: "hello" }];
-    let capabilities = providers.map((provider: root.ai.Provider) -> string {
+    let providers: ai.Provider[] = [fake_resolution(), ai.testing.FakeRealtimeProvider { transcript: "hello" }];
+    let capabilities = providers.map((provider: ai.Provider) -> string {
         match (provider) {
-            let realtime: root.ai.realtime.RealtimeProvider => "realtime",
-            let agent: root.ai.AgentProvider => "agent",
+            let realtime: ai.realtime.RealtimeProvider => "realtime",
+            let agent: ai.AgentProvider => "agent",
             _ => "provider-only",
         }
     });
     assert.equal(capabilities, ["agent", "realtime"]);
-    let runs = providers.map((provider: root.ai.Provider) -> NegotiatedRun {
-        ResolveTicket_task(sample_ticket(), provider)
+    let runs = providers.map((provider: ai.Provider) -> NegotiatedRun {
+        ResolveTicket@task(sample_ticket()).with_provider(provider)
             .run(runner = CapabilityNegotiationRunner.new())
     });
     assert
@@ -23,7 +23,7 @@ test "guide 07.04: erased providers can be negotiated explicitly" {
 
 testset "integ-test-guide-07-capability-negotiation" {
     test "guide 07.04 live providers: erased configuration selects stream and realtime paths" {
-        let providers: root.ai.Provider[] = [
+        let providers: ai.Provider[] = [
             live_openai(),
             root.openai.Realtime {
                 model: "gpt-realtime",
@@ -36,8 +36,8 @@ testset "integ-test-guide-07-capability-negotiation" {
             },
         ];
         //# Run each erased provider only after its capability match succeeds
-        let runs = providers.map((provider: root.ai.Provider) -> NegotiatedRun {
-            ResolveTicket_task(sample_ticket(), provider)
+        let runs = providers.map((provider: ai.Provider) -> NegotiatedRun {
+            ResolveTicket@task(sample_ticket()).with_provider(provider)
                 .run(runner = CapabilityNegotiationRunner.new())
         });
         log.info(

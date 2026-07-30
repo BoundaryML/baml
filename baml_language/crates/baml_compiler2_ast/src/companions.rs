@@ -12,7 +12,7 @@ use baml_base::Name;
 
 use crate::{
     DeclarativeMeta,
-    ast::{FunctionBodyDef, FunctionDef, Param, TypeExpr, TypeExprKind},
+    ast::{DeclarativeExecution, FunctionBodyDef, FunctionDef, Param, TypeExpr, TypeExprKind},
     lower_cst::{synthesize_llm_builtin_call, synthesize_llm_parse_call},
 };
 
@@ -24,6 +24,7 @@ type CompanionExpander = fn(&FunctionDef) -> Option<FunctionDef>;
 // `$parse` (below) is defined here but likewise *invoked* from PPIR, with the
 // stream-expanded type passed in.
 const COMPANIONS: &[CompanionExpander] = &[
+    ai_task,
     llm_render_prompt,
     llm_build_request,
     llm_build_request_stream,
@@ -40,7 +41,11 @@ pub(crate) fn expand_companions(func: &FunctionDef) -> Vec<FunctionDef> {
 
 fn llm_render_prompt(parent: &FunctionDef) -> Option<FunctionDef> {
     // Only LLM functions get render_prompt / build_request companions.
-    if !matches!(&parent.declarative_meta, Some(DeclarativeMeta::Llm(_))) {
+    if !matches!(
+        &parent.declarative_meta,
+        Some(DeclarativeMeta::Llm(llm))
+            if llm.execution == DeclarativeExecution::LegacyClient
+    ) {
         return None;
     }
     Some(make_llm_companion(
@@ -52,7 +57,11 @@ fn llm_render_prompt(parent: &FunctionDef) -> Option<FunctionDef> {
 
 fn llm_build_request(parent: &FunctionDef) -> Option<FunctionDef> {
     // Only LLM functions get render_prompt / build_request companions.
-    if !matches!(&parent.declarative_meta, Some(DeclarativeMeta::Llm(_))) {
+    if !matches!(
+        &parent.declarative_meta,
+        Some(DeclarativeMeta::Llm(llm))
+            if llm.execution == DeclarativeExecution::LegacyClient
+    ) {
         return None;
     }
     Some(make_llm_companion(
@@ -63,7 +72,11 @@ fn llm_build_request(parent: &FunctionDef) -> Option<FunctionDef> {
 }
 
 fn llm_build_request_stream(parent: &FunctionDef) -> Option<FunctionDef> {
-    if !matches!(&parent.declarative_meta, Some(DeclarativeMeta::Llm(_))) {
+    if !matches!(
+        &parent.declarative_meta,
+        Some(DeclarativeMeta::Llm(llm))
+            if llm.execution == DeclarativeExecution::LegacyClient
+    ) {
         return None;
     }
     Some(make_llm_companion(
@@ -71,6 +84,42 @@ fn llm_build_request_stream(parent: &FunctionDef) -> Option<FunctionDef> {
         "build_request_stream",
         &["baml", "http", "Request"],
     ))
+}
+
+fn ai_task(parent: &FunctionDef) -> Option<FunctionDef> {
+    let Some(DeclarativeMeta::Llm(llm)) = &parent.declarative_meta else {
+        return None;
+    };
+    if llm.execution != DeclarativeExecution::AiProvider {
+        return None;
+    }
+    let (body, source_map) = llm_companion_body(parent, "task")?;
+    let output = parent.return_type.clone()?;
+    let return_type = (TypeExprKind::Path {
+        segments: vec![Name::new("ai"), Name::new("Task")],
+        generic_args: vec![output],
+        associated_type_bindings: vec![],
+        attrs: vec![],
+    })
+    .at(parent.span);
+
+    Some(FunctionDef {
+        name: Name::new(format!("{}$task", parent.name)),
+        generic_params: parent.generic_params.clone(),
+        generic_param_bounds: parent.generic_param_bounds.clone(),
+        params: parent.params.clone(),
+        defaults: parent.defaults.clone(),
+        return_type: Some(return_type),
+        throws: None,
+        body: Some(FunctionBodyDef::Expr(body, source_map)),
+        declarative_meta: None,
+        metadata: crate::ast::FunctionMetadata::user_facing(crate::ast::FunctionOrigin::Companion),
+        attributes: vec![],
+        docstring: parent.docstring.clone(),
+        is_tagged_template_tag: false,
+        span: parent.span,
+        name_span: parent.name_span,
+    })
 }
 
 /// Build the `$parse` companion for an LLM function.
@@ -83,7 +132,11 @@ fn llm_build_request_stream(parent: &FunctionDef) -> Option<FunctionDef> {
 /// bodies) — hence the extra `type_args` parameter.
 pub fn llm_parse(parent: &FunctionDef, type_args: Vec<TypeExpr>) -> Option<FunctionDef> {
     // Only LLM functions get a parse companion.
-    if !matches!(&parent.declarative_meta, Some(DeclarativeMeta::Llm(_))) {
+    if !matches!(
+        &parent.declarative_meta,
+        Some(DeclarativeMeta::Llm(llm))
+            if llm.execution == DeclarativeExecution::LegacyClient
+    ) {
         return None;
     }
 

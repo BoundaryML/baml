@@ -1,11 +1,10 @@
 test "guide 02.04: observers and agent callbacks see the run" {
     let observer = GuideObserver { kinds: [] };
     let trace = guide_agent_trace();
-    let task = ResolveTicketWithTools_task(sample_ticket(), fake_tool_provider([one_knowledge_call()]), [search_knowledge]);
+    let task = ResolveTicketWithTools@task(sample_ticket()).with_provider(fake_tool_provider([one_knowledge_call()])).with_tools([search_knowledge]);
     let outcome = task
         .run(
-            runner = root
-                .ai
+            runner = ai
                 .run
                 .Agent<Resolution>
                 .new(
@@ -31,15 +30,10 @@ testset "integ-test-guide-02-events-and-callbacks" {
         let observer = GuideObserver { kinds: [] };
         let trace = guide_agent_trace();
         let provider = live_openai();
-        let task = ToolInstructions_task(
-            provider,
-            [search_knowledge],
-            `Call search_knowledge exactly once with query "duplicate charge", then use its result to return the final resolution.`,
-        );
+        let task = ToolInstructions@task(`Call search_knowledge exactly once with query "duplicate charge", then use its result to return the final resolution.`).with_provider(provider).with_tools([search_knowledge]);
         let outcome = task
             .run(
-                runner = root
-                    .ai
+                runner = ai
                     .run
                     .Agent<Resolution>
                     .new(
@@ -71,7 +65,7 @@ testset "integ-test-guide-02-events-and-callbacks" {
         assert.contains(observer.kinds.join(","), "usage_updated");
         assert.contains(observer.kinds.join(","), "run_finished");
         match (outcome) {
-            let done: root.ai.Done<Resolution> => assert.is_true(done.value.reply.length() > 0),
+            let done: ai.Done<Resolution> => assert.is_true(done.value.reply.length() > 0),
             _ => assert.is_true(false),
         }
     }

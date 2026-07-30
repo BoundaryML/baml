@@ -3,9 +3,7 @@
 function compaction_and_memory() -> ConversationProbe {
     let source = sample_history();
     let compacted = compact_history(source);
-    let task = ConversationProbe_task(
-        compacted,
-        root.ai
+    let task = ProbeConversation@task(compacted).with_provider(ai
             .testing
             .fake_output_provider(
                 `
@@ -14,12 +12,10 @@ function compaction_and_memory() -> ConversationProbe {
                           "evidence": "Summary: customer reports a duplicate charge; support acknowledged it."
                         }
                 `,
-            ),
-    );
-    let result = root
-        .ai
+            ));
+    let result = ai
         .internal
-        ._require_done(task.run(runner = root.ai.run.Agent<ConversationProbe>.new()))
+        ._require_done(task.run(runner = ai.run.Agent<ConversationProbe>.new()))
         .value;
     log.info(
         {

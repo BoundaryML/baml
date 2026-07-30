@@ -1,5 +1,5 @@
 function _application_tool(
-    tool: root.ai.tools.Tool,
+    tool: ai.tools.Tool,
     strict: bool,
 ) -> json throws baml.errors.Unsupported {
     {
@@ -11,10 +11,10 @@ function _application_tool(
 }
 
 function _application_tools(
-    tools: root.ai.tools.Tool[],
+    tools: ai.tools.Tool[],
     strict: bool,
 ) -> json[] throws baml.errors.Unsupported {
-    tools.map((tool: root.ai.tools.Tool) -> json {
+    tools.map((tool: ai.tools.Tool) -> json {
         _application_tool(tool, strict)
     })
 }
@@ -22,19 +22,19 @@ function _application_tools(
 function _application_calls(
     raw_calls: json[],
     raw_output: string,
-) -> root.ai.tools.ToolCalls throws root.ai.ParseFailed {
-    root.ai.tools.ToolCalls {
-        calls: raw_calls.map((raw: json) -> root.ai.tools.ToolCall {
+) -> ai.tools.ToolCalls throws ai.ParseFailed {
+    ai.tools.ToolCalls {
+        calls: raw_calls.map((raw: json) -> ai.tools.ToolCall {
             let id = baml.json.path_or(raw, ".id", "");
             let name = baml.json.path_or(raw, ".name", "");
             let args = baml.json.path_or<json>(raw, ".input", null);
             if (id.length() == 0 || name.length() == 0) {
-                throw root.ai.ParseFailed {
+                throw ai.ParseFailed {
                     provider: "anthropic",
                     raw_output: raw_output,
                 };
             }
-            root.ai.tools.ToolCall { id: id, name: name, args: args }
+            ai.tools.ToolCall { id: id, name: name, args: args }
         }),
     }
 }

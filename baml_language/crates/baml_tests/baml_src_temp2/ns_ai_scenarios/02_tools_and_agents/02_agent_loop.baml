@@ -2,16 +2,15 @@
 // to return a complete support resolution.
 function agent_loop() -> null {
     let provider = fake_tool_provider([one_knowledge_call()]);
-    let task = ResolveTicketWithTools_task(sample_ticket(), provider, [search_knowledge]);
+    let task = ResolveTicketWithTools@task(sample_ticket()).with_provider(provider).with_tools([search_knowledge]);
     let outcome = task
         .run(
-            runner = root
-                .ai
+            runner = ai
                 .run
                 .Agent<Resolution>
                 .new(
                     tools = [search_knowledge],
-                    budget = root.ai.Budget { max_steps: 3, max_cost_usd: null },
+                    budget = ai.Budget { max_steps: 3, max_cost_usd: null },
                 ),
         );
     log.info(outcome);

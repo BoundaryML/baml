@@ -1,16 +1,15 @@
 // Inspect which provider and model produced a support resolution, including
 // request and token-usage metadata.
 function observe_a_call(
-) -> root.ai.ResponseWithMetadata<Resolution> throws root.ai.Failure | baml.errors.UnknownError {
-    let response = root
-        .ai
+) -> ai.ResponseWithMetadata<Resolution> throws ai.Failure | baml.errors.UnknownError {
+    let response = ai
         .internal
         ._response_from_done(
-            root.ai
+            ai
                 .internal
                 ._require_done(
-                    ResolveTicket_task(sample_ticket(), fake_resolution())
-                        .run(runner = root.ai.run.Agent<Resolution>.new()),
+                    ResolveTicket@task(sample_ticket()).with_provider(fake_resolution())
+                        .run(runner = ai.run.Agent<Resolution>.new()),
                 ),
         );
     log.info(response);

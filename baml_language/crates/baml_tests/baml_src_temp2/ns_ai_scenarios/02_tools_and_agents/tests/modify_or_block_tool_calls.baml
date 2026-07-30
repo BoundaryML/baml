@@ -1,17 +1,16 @@
 test "guide 02.05: before-tool callbacks may rewrite a call" {
     let trace = guide_agent_trace();
-    let runner = root
-        .ai
+    let runner = ai
         .run
         .Agent<Resolution>
         .new(
             tools = [search_knowledge, lookup_account],
             before_tool_call = (event) -> {
-                root.ai
+                ai
                     .tools
                     .ToolDecision
                     .replace(
-                        root.ai.tools.ToolCall {
+                        ai.tools.ToolCall {
                             id: event.call.id,
                             name: "lookup_account",
                             args: event.call.args,
@@ -23,28 +22,23 @@ test "guide 02.05: before-tool callbacks may rewrite a call" {
                 null
             },
         );
-    let task = ResolveTicketWithTools_task(
-        sample_ticket(),
-        fake_tool_provider([one_knowledge_call()]),
-        [search_knowledge, lookup_account],
-    );
+    let task = ResolveTicketWithTools@task(sample_ticket()).with_provider(fake_tool_provider([one_knowledge_call()])).with_tools([search_knowledge, lookup_account]);
     task.run(runner = runner);
     assert.equal(trace.after_calls, ["lookup_account"])
 }
 
 test "guide 02.05: before-tool callbacks may block a call" {
     let trace = guide_agent_trace();
-    let runner = root
-        .ai
+    let runner = ai
         .run
         .Agent<Resolution>
         .new(
             tools = [search_knowledge],
             before_tool_call = (event) -> {
                 if (event.call.name == "search_knowledge") {
-                    root.ai.tools.ToolDecision.block("blocked by policy")
+                    ai.tools.ToolDecision.block("blocked by policy")
                 } else {
-                    root.ai.tools.ToolDecision.allow(event.call)
+                    ai.tools.ToolDecision.allow(event.call)
                 }
             },
             after_tool_call = (event) -> {
@@ -52,7 +46,7 @@ test "guide 02.05: before-tool callbacks may block a call" {
                 null
             },
         );
-    let task = ResolveTicketWithTools_task(sample_ticket(), fake_tool_provider([one_knowledge_call()]), [search_knowledge]);
+    let task = ResolveTicketWithTools@task(sample_ticket()).with_provider(fake_tool_provider([one_knowledge_call()])).with_tools([search_knowledge]);
     task.run(runner = runner);
     assert.equal(trace.after_calls.length(), 0)
 }
@@ -61,25 +55,20 @@ testset "integ-test-guide-02-modify-or-block-tools" {
     test "guide 02.05 live OpenAI: a callback rewrites a real tool call before dispatch" {
         let trace = guide_agent_trace();
         let provider = live_openai();
-        let task = ToolInstructions_task(
-            provider,
-            [account_alias_tool(), lookup_account],
-            `Call search_knowledge exactly once with customer_id "C-1". After its result, return the final resolution.`,
-        );
+        let task = ToolInstructions@task(`Call search_knowledge exactly once with customer_id "C-1". After its result, return the final resolution.`).with_provider(provider).with_tools([account_alias_tool(), lookup_account]);
         let outcome = task
             .run(
-                runner = root
-                    .ai
+                runner = ai
                     .run
                     .Agent<Resolution>
                     .new(
                         tools = [account_alias_tool(), lookup_account],
                         before_tool_call = (event) -> {
-                            root.ai
+                            ai
                                 .tools
                                 .ToolDecision
                                 .replace(
-                                    root.ai.tools.ToolCall {
+                                    ai.tools.ToolCall {
                                         id: event.call.id,
                                         name: "lookup_account",
                                         args: event.call.args,
@@ -95,7 +84,7 @@ testset "integ-test-guide-02-modify-or-block-tools" {
         log.info("live rewritten tool call " + { "after_calls": trace.after_calls }.to_string());
         assert.equal(trace.after_calls, ["lookup_account"]);
         match (outcome) {
-            let done: root.ai.Done<Resolution> => assert.is_true(done.value.reply.length() > 0),
+            let done: ai.Done<Resolution> => assert.is_true(done.value.reply.length() > 0),
             _ => assert.is_true(false),
         }
     }
@@ -104,24 +93,19 @@ testset "integ-test-guide-02-modify-or-block-tools" {
         let trace = guide_agent_trace();
         let observer = GuideObserver { kinds: [] };
         let provider = live_openai();
-        let task = ToolInstructions_task(
-            provider,
-            [search_knowledge],
-            `Call search_knowledge once with query "duplicate charge". If policy blocks it, do not retry the tool; return a final resolution explaining that the lookup was unavailable.`,
-        );
+        let task = ToolInstructions@task(`Call search_knowledge once with query "duplicate charge". If policy blocks it, do not retry the tool; return a final resolution explaining that the lookup was unavailable.`).with_provider(provider).with_tools([search_knowledge]);
         let outcome = task
             .run(
-                runner = root
-                    .ai
+                runner = ai
                     .run
                     .Agent<Resolution>
                     .new(
                         tools = [search_knowledge],
                         before_tool_call = (event) -> {
                             if (event.call.name == "search_knowledge") {
-                                root.ai.tools.ToolDecision.block("blocked by policy")
+                                ai.tools.ToolDecision.block("blocked by policy")
                             } else {
-                                root.ai.tools.ToolDecision.allow(event.call)
+                                ai.tools.ToolDecision.allow(event.call)
                             }
                         },
                         after_tool_call = (event) -> {
@@ -138,7 +122,7 @@ testset "integ-test-guide-02-modify-or-block-tools" {
         assert.equal(trace.after_calls.length(), 0);
         assert.contains(observer.kinds.join(","), "tool_call_blocked");
         match (outcome) {
-            let done: root.ai.Done<Resolution> => assert.is_true(done.value.reply.length() > 0),
+            let done: ai.Done<Resolution> => assert.is_true(done.value.reply.length() > 0),
             _ => assert.is_true(false),
         }
     }

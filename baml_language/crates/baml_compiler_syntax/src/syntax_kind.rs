@@ -179,7 +179,9 @@ pub enum SyntaxKind {
     EXPR_FUNCTION_BODY, // Function body with expressions/statements
     PROMPT_FIELD,
     CLIENT_REFERENCE,
-    CLIENT_FIELD, // 'client' field in LLM function
+    CLIENT_FIELD,   // 'client' field in LLM function
+    PROVIDER_FIELD, // 'provider' expression in an AI function
+    TOOLS_FIELD,    // optional 'tools' expression in an AI function
     DEFAULT_IMPL,
 
     // Class components
@@ -255,6 +257,8 @@ pub enum SyntaxKind {
     ///   module item, or function reference
     /// - `FIELD_ACCESS_EXPR` is always a field/method access on a computed value
     FIELD_ACCESS_EXPR,
+    /// Compiler-generated AI task companion access: `F@task`.
+    TASK_ACCESS_EXPR,
     /// Explicit interface/static upcast projection: `<expr>.as<T>`.
     UPCAST_EXPR,
     /// Optional field access: `obj?.field` — short-circuits to null if base is null.

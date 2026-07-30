@@ -492,6 +492,19 @@ fn render_describe_log_info_builtin() {
     insta::assert_snapshot!(output);
 }
 
+/// `ai` is a standalone builtin package, not a namespace under `baml` or the
+/// user package.
+#[test]
+fn render_describe_ai_task_builtin() {
+    let db = simple_project();
+    let output = describe_via_dispatch(&db, "ai.Task");
+    assert!(output.contains("class Task  (ai.Task)"), "{output}");
+    assert!(
+        output.contains("<builtin>/ai/execution/task.baml"),
+        "{output}"
+    );
+}
+
 /// Describe a builtin item via describe_by_definition (baml.String).
 #[test]
 fn render_describe_builtin_item_by_definition() {
@@ -515,6 +528,7 @@ fn non_user_package_names_includes_builtins() {
     let db = simple_project();
     let names = baml_lsp2_actions::non_user_package_names(&db);
     assert!(names.contains("baml"), "expected 'baml' in {names:?}");
+    assert!(names.contains("ai"), "expected 'ai' in {names:?}");
     assert!(names.contains("testing"), "expected 'testing' in {names:?}");
     assert!(names.contains("assert"), "expected 'assert' in {names:?}");
     assert!(!names.contains("user"), "should not contain 'user'");

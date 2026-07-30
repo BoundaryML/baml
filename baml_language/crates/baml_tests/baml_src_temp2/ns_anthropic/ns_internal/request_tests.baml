@@ -6,18 +6,18 @@ class AnthropicRequestFixture {
 }
 
 function _anthropic_request_fixture_task(
-    provider: root.ai.Provider,
-) -> root.ai.Task<AnthropicRequestFixture> throws never {
-    root.ai.task<AnthropicRequestFixture>(provider, (ctx: baml.llm.Context) -> baml.llm.PromptAst {
+    provider: ai.Provider,
+) -> ai.Task<AnthropicRequestFixture> throws never {
+    ai.task<AnthropicRequestFixture>(provider, (ctx: baml.llm.Context) -> baml.llm.PromptAst {
         baml.llm.assemble_prompt_ast(["Return the fixture.\n", ""], [ctx.output_format])
     })
 }
 
 function _anthropic_image_fixture_task(
-    provider: root.ai.Provider,
-) -> root.ai.Task<string> throws never {
+    provider: ai.Provider,
+) -> ai.Task<string> throws never {
     let value = image.from_base64("iVBORw0KGgo=", "image/png");
-    root.ai.task<string>(provider, (ctx: baml.llm.Context) -> baml.llm.PromptAst {
+    ai.task<string>(provider, (ctx: baml.llm.Context) -> baml.llm.PromptAst {
         baml.llm
             .assemble_prompt_ast(["Describe this image: ", "\n", ""], [value, ctx.output_format])
     })
@@ -25,15 +25,15 @@ function _anthropic_image_fixture_task(
 
 function _anthropic_pending_conversation(
     provider: root.anthropic.AnthropicProvider,
-) -> root.ai.Conversation throws never {
+) -> ai.Conversation throws never {
     let pending: json[] = [
         { "type": "tool_use", "id": "first", "name": "first_tool", "input": {} },
         { "type": "tool_use", "id": "second", "name": "second_tool", "input": {} },
     ];
     Conversation {
         owner: provider,
-        history: root.ai.MessageHistory.empty(),
-        declared_output_type: root.ai.internal._output_type_fingerprint<AnthropicRequestFixture>(),
+        history: ai.MessageHistory.empty(),
+        declared_output_type: ai.internal._output_type_fingerprint<AnthropicRequestFixture>(),
         system: [],
         messages: [
             {
@@ -53,10 +53,10 @@ function _anthropic_pending_conversation(
 
 function _anthropic_submit_result(
     provider: root.anthropic.AnthropicProvider,
-    results: root.ai.tools.ToolResult[],
+    results: ai.tools.ToolResult[],
 ) -> string throws never {
     provider.submit(_anthropic_pending_conversation(provider), results) catch (e) {
-        let invalid: root.ai.InvalidRequest => {
+        let invalid: ai.InvalidRequest => {
             return "invalid";
         },
         _ => {
@@ -131,12 +131,12 @@ test "Anthropic submit rejects duplicate results for parallel tool calls" {
             _anthropic_submit_result(
                 provider,
                 [
-                    root.ai.tools.ToolResult {
+                    ai.tools.ToolResult {
                         id: "first",
                         output: { "value": 1 },
                         is_error: false,
                     },
-                    root.ai.tools.ToolResult {
+                    ai.tools.ToolResult {
                         id: "first",
                         output: { "value": 2 },
                         is_error: false,
@@ -160,11 +160,11 @@ test "Anthropic submit leaves conversation unchanged when a later result is inva
         .submit(
             state,
             [
-                root.ai.tools.ToolResult { id: "first", output: { "value": 1 }, is_error: false },
-                root.ai.tools.ToolResult { id: "unknown", output: { "value": 2 }, is_error: false },
+                ai.tools.ToolResult { id: "first", output: { "value": 1 }, is_error: false },
+                ai.tools.ToolResult { id: "unknown", output: { "value": 2 }, is_error: false },
             ],
         ) catch (e) {
-        let invalid: root.ai.InvalidRequest => {
+        let invalid: ai.InvalidRequest => {
             rejected = true;
             state
         },
@@ -183,8 +183,8 @@ test "Anthropic submit restores provider tool order" {
         .submit(
             conversation,
             [
-                root.ai.tools.ToolResult { id: "second", output: { "value": 2 }, is_error: false },
-                root.ai.tools.ToolResult { id: "first", output: { "value": 1 }, is_error: false },
+                ai.tools.ToolResult { id: "second", output: { "value": 2 }, is_error: false },
+                ai.tools.ToolResult { id: "first", output: { "value": 1 }, is_error: false },
             ],
         );
     match (submitted) {
@@ -219,19 +219,19 @@ test "Anthropic prompt submit correlates every pending call exactly once" {
     };
     state.pending_calls
         = [
-            root.ai.tools.ToolCall { id: "first", name: "lookup", args: {} },
-            root.ai.tools.ToolCall { id: "second", name: "lookup", args: {} },
+            ai.tools.ToolCall { id: "first", name: "lookup", args: {} },
+            ai.tools.ToolCall { id: "second", name: "lookup", args: {} },
         ];
     let rejected = false;
     let _ = _prompt_submit(
         provider,
         state,
         [
-            root.ai.tools.ToolResult { id: "first", output: "one", is_error: false },
-            root.ai.tools.ToolResult { id: "first", output: "duplicate", is_error: false },
+            ai.tools.ToolResult { id: "first", output: "one", is_error: false },
+            ai.tools.ToolResult { id: "first", output: "duplicate", is_error: false },
         ],
     ) catch (e) {
-        let invalid: root.ai.InvalidRequest => {
+        let invalid: ai.InvalidRequest => {
             rejected = true;
             state
         },
@@ -253,7 +253,7 @@ test "Anthropic appends a fresh user message without losing exact assistant bloc
     state.last_assistant_content = [opaque];
     state.messages.push({ "role": "assistant", "content": [opaque] });
     let original_wire_length = state.messages.length();
-    let appended = provider.append_message(state, root.ai.ChatMessage.user("second turn"));
+    let appended = provider.append_message(state, ai.ChatMessage.user("second turn"));
     match (appended) {
         let exact: Conversation => {
             assert.equal(exact.declared_output_type, output_type);
@@ -272,7 +272,7 @@ test "Anthropic appends a fresh user message without losing exact assistant bloc
                     baml.json.path<string>(exact.messages[original_wire_length], ".content[0].text"),
                     "second turn",
                 );
-            assert.equal(root.ai.message_text(exact.history.entries[1]), "second turn")
+            assert.equal(ai.message_text(exact.history.entries[1]), "second turn")
         },
         _ => assert.is_true(false),
     }
@@ -282,8 +282,8 @@ test "Anthropic rejects append while native or prompt tool calls are pending" {
     let provider = root.anthropic.messages(api_key = "unused", base_url = "https://example.test");
     let native = _anthropic_pending_conversation(provider);
     let native_rejected = false;
-    let _native = provider.append_message(native, root.ai.ChatMessage.user("too soon")) catch (e) {
-        let invalid: root.ai.InvalidRequest => {
+    let _native = provider.append_message(native, ai.ChatMessage.user("too soon")) catch (e) {
+        let invalid: ai.InvalidRequest => {
             native_rejected = true;
             native
         },
@@ -305,10 +305,10 @@ test "Anthropic rejects append while native or prompt tool calls are pending" {
         let value: PromptConversation => value,
         _ => baml.sys.panic("expected Anthropic prompt conversation"),
     };
-    prompt.pending_calls = [root.ai.tools.ToolCall { id: "pending", name: "lookup", args: {} }];
+    prompt.pending_calls = [ai.tools.ToolCall { id: "pending", name: "lookup", args: {} }];
     let prompt_rejected = false;
-    let _prompt = prompt_provider.append_message(prompt, root.ai.ChatMessage.user("too soon")) catch (e) {
-        let invalid: root.ai.InvalidRequest => {
+    let _prompt = prompt_provider.append_message(prompt, ai.ChatMessage.user("too soon")) catch (e) {
+        let invalid: ai.InvalidRequest => {
             prompt_rejected = true;
             prompt
         },

@@ -33,7 +33,7 @@ class OpenAIProvider {
     parallel_tool_calls: bool,
 }
 
-implements root.ai.Provider for OpenAIProvider {
+implements ai.Provider for OpenAIProvider {
   function name(self) -> string throws never { "openai" }
   function render_shorthand(self) -> string throws never {
     "openai-responses/" + self.model

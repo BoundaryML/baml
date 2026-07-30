@@ -1,29 +1,27 @@
 // Tests for the fork_a_conversation scenario.
 test "guide 04.03: two conversation branches can diverge independently" {
     let base = sample_history();
-    let billing = base.append(root.ai.ChatMessage.user("Please refund it."));
-    let fraud = base.append(root.ai.ChatMessage.user("Could this be fraud?"));
-    assert.contains(root.ai.message_text(billing.items()[2]), "refund");
-    assert.contains(root.ai.message_text(fraud.items()[2]), "fraud")
+    let billing = base.append(ai.ChatMessage.user("Please refund it."));
+    let fraud = base.append(ai.ChatMessage.user("Could this be fraud?"));
+    assert.contains(ai.message_text(billing.items()[2]), "refund");
+    assert.contains(ai.message_text(fraud.items()[2]), "fraud")
 }
 
 testset "integ-test-guide-04-fork-conversation" {
     test "guide 04.03 live OpenAI: independent branches produce branch-specific results" {
         let base = sample_history();
-        let billing = base.append(root.ai.ChatMessage.user("Please refund it.")).to_history();
-        let fraud = base.append(root.ai.ChatMessage.user("Could this be fraud?")).to_history();
+        let billing = base.append(ai.ChatMessage.user("Please refund it.")).to_history();
+        let fraud = base.append(ai.ChatMessage.user("Could this be fraud?")).to_history();
         let provider = live_openai();
-        let billing_task = ConversationProbe_task(billing, provider);
-        let fraud_task = ConversationProbe_task(fraud, provider);
-        let billing_result = root
-            .ai
+        let billing_task = ProbeConversation@task(billing).with_provider(provider);
+        let fraud_task = ProbeConversation@task(fraud).with_provider(provider);
+        let billing_result = ai
             .internal
-            ._require_done(billing_task.run(runner = root.ai.run.Agent<ConversationProbe>.new()))
+            ._require_done(billing_task.run(runner = ai.run.Agent<ConversationProbe>.new()))
             .value;
-        let fraud_result = root
-            .ai
+        let fraud_result = ai
             .internal
-            ._require_done(fraud_task.run(runner = root.ai.run.Agent<ConversationProbe>.new()))
+            ._require_done(fraud_task.run(runner = ai.run.Agent<ConversationProbe>.new()))
             .value;
         log.info(
             "live conversation forks "

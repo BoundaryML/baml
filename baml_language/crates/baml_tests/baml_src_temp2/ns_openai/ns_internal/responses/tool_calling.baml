@@ -89,12 +89,12 @@ function _request_body(
 function _application_calls(
     raw_calls: json[],
     raw_output: string,
-) -> root.ai.tools.ToolCalls throws root.ai.ParseFailed {
-    root.ai.tools.ToolCalls {
-        calls: raw_calls.map((raw: json) -> root.ai.tools.ToolCall {
+) -> ai.tools.ToolCalls throws ai.ParseFailed {
+    ai.tools.ToolCalls {
+        calls: raw_calls.map((raw: json) -> ai.tools.ToolCall {
             let args_text = baml.json.path<string>(raw, ".arguments") catch (e) {
                 _ => {
-                    throw root.ai.ParseFailed {
+                    throw ai.ParseFailed {
                     provider: "openai-responses",
                     raw_output: raw_output,
                 }
@@ -102,13 +102,13 @@ function _application_calls(
             };
             let args = baml.json.parse(args_text) catch (e) {
                 _ => {
-                    throw root.ai.ParseFailed {
+                    throw ai.ParseFailed {
                     provider: "openai-responses",
                     raw_output: raw_output,
                 }
                 },
             };
-            root.ai.tools.ToolCall {
+            ai.tools.ToolCall {
                 id: baml.json.path_or(raw, ".call_id", baml.json.path_or(raw, ".id", "")),
                 name: baml.json.path_or(raw, ".name", ""),
                 args: args,
@@ -124,12 +124,12 @@ function _allow_parallel_tool_calls(
     provider.parallel_tool_calls && !_is_strict(provider) && application_tool_count > 1
 }
 
-function _pending_call_ids(raw_calls: json[]) -> string[] throws root.ai.InvalidRequest {
+function _pending_call_ids(raw_calls: json[]) -> string[] throws ai.InvalidRequest {
     let ids: string[] = [];
     for (let call in raw_calls) {
         let id = baml.json.path_or(call, ".call_id", baml.json.path_or(call, ".id", ""));
         if (id.length() == 0 || ids.includes(id)) {
-            throw root.ai.InvalidRequest {
+            throw ai.InvalidRequest {
                 provider: "openai-responses",
                 status_code: null,
                 detail: "pending OpenAI tool calls must have unique, non-empty call IDs",
@@ -142,22 +142,22 @@ function _pending_call_ids(raw_calls: json[]) -> string[] throws root.ai.Invalid
 
 function _correlate_tool_results(
     pending_ids: string[],
-    results: root.ai.tools.ToolResult[],
-) -> root.ai.tools.ToolResult[] throws root.ai.InvalidRequest {
+    results: ai.tools.ToolResult[],
+) -> ai.tools.ToolResult[] throws ai.InvalidRequest {
     if (pending_ids.length() == 0 || pending_ids.length() != results.length()) {
-        throw root.ai.InvalidRequest {
+        throw ai.InvalidRequest {
             provider: "openai-responses",
             status_code: null,
             detail: "tool results must match every pending OpenAI function call",
         };
     }
-    let ordered: root.ai.tools.ToolResult[] = [];
+    let ordered: ai.tools.ToolResult[] = [];
     for (let call_id in pending_ids) {
-        let matching = results.filter((result: root.ai.tools.ToolResult) -> bool {
+        let matching = results.filter((result: ai.tools.ToolResult) -> bool {
             result.id == call_id
         });
         if (matching.length() != 1) {
-            throw root.ai.InvalidRequest {
+            throw ai.InvalidRequest {
                 provider: "openai-responses",
                 status_code: null,
                 detail: "tool result IDs must match pending OpenAI call IDs exactly once",

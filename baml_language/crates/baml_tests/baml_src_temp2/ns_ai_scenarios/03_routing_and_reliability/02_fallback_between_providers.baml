@@ -1,21 +1,18 @@
 // Still resolve a support ticket when the preferred provider is temporarily
 // unavailable.
-function fallback_between_providers() -> root.ai.ResponseWithMetadata<Resolution> {
-  let failed = root.ai.testing.FakeProvider {
+function fallback_between_providers() -> ai.ResponseWithMetadata<Resolution> {
+  let failed = ai.testing.FakeProvider {
     ...fake_resolution(),
     provider_name: "primary",
     failures_remaining: 1,
   };
-  let fallback = root.ai.testing.FakeProvider {
+  let fallback = ai.testing.FakeProvider {
     ...fake_resolution(),
     provider_name: "fallback",
   };
-  let response = root.ai.internal._response_from_done(
-    root.ai.internal._require_done(
-      ResolveTicket_task(
-        sample_ticket(),
-        root.ai.fallback([failed, fallback]),
-      ).run(runner = root.ai.run.Agent<Resolution>.new()),
+  let response = ai.internal._response_from_done(
+    ai.internal._require_done(
+      ResolveTicket@task(sample_ticket()).with_provider(ai.fallback([failed, fallback])).run(runner = ai.run.Agent<Resolution>.new()),
     ),
   );
   log.info({

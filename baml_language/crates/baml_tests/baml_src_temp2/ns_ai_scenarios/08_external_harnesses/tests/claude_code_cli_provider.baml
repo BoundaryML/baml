@@ -1,7 +1,7 @@
 test "guide 08.07: Claude Code JSONL becomes typed output and normalized events" {
     let run = root
         .claude_code
-        .parse_claude_code_cli_output<ClaudeCodePing>(
+        .parse_claude_code_cli_output<ClaudeCodePingResult>(
             root.claude_code.claude_code_cli(),
             claude_code_cli_fixture(),
         );
@@ -11,7 +11,7 @@ test "guide 08.07: Claude Code JSONL becomes typed output and normalized events"
     assert.equal(run.event_delivery, "streaming_jsonl");
     assert
         .equal(
-            run.events.map((event: root.ai.observe.AgentEvent) -> string {
+            run.events.map((event: ai.observe.AgentEvent) -> string {
                 event.kind()
             }),
             ["model_started", "text_delta", "usage_updated", "run_finished"],
@@ -20,8 +20,8 @@ test "guide 08.07: Claude Code JSONL becomes typed output and normalized events"
 
 test "guide 08.07: Claude Code is a literal local-process agent provider" {
     let provider = root.claude_code.claude_code_cli();
-    let task = ClaudeCodePing_task(provider);
-    let schema = baml.schema.json_schema(reflect.type_of<ClaudeCodePing>());
+    let task = ClaudeCodePing@task().with_provider(provider);
+    let schema = baml.schema.json_schema(reflect.type_of<ClaudeCodePingResult>());
     let args = provider.command_args(task.prompt.text(), baml.json.stringify(schema));
     assert.equal(provider.name(), "claude-code-cli");
     assert.is_true(args.includes("-p"));
@@ -35,7 +35,7 @@ test "guide 08.07: Claude Code keeps interactive control on a separate HarnessSe
     let harness = root.claude_code.claude_code_cli();
     let session = harness
         .open(
-            root.ai.harness.HarnessOptions {
+            ai.harness.HarnessOptions {
                 cwd: "/tmp",
                 permission_mode: "dontAsk",
                 sandbox: "safe-mode",
@@ -55,17 +55,17 @@ testset "integ-test-guide-08-claude-code-cli" {
         let provider = live_claude_code_with_web_fetch();
         let callback_kinds: string[] = [];
         //# Run the real Claude Code harness with a per-run event listener
-        let run = ClaudeCodeWebFetch_task(provider)
+        let run = ClaudeCodeWebFetch@task().with_provider(provider)
             .run(
-                runner = root.ai.run.Harness<HackerNewsTopStory>.new(provider, cwd = "/tmp", permission_mode = "dontAsk", sandbox = "safe-mode", on_event = (
-                    event: root.ai.observe.AgentEvent,
+                runner = ai.run.Harness<HackerNewsTopStory>.new(provider, cwd = "/tmp", permission_mode = "dontAsk", sandbox = "safe-mode", on_event = (
+                    event: ai.observe.AgentEvent,
                 ) -> null {
                     callback_kinds.push(event.kind());
                     log.info("Claude Code harness event: " + event.kind());
                     null
                 }),
             );
-        let kinds = run.events.map((event: root.ai.observe.AgentEvent) -> string {
+        let kinds = run.events.map((event: ai.observe.AgentEvent) -> string {
             event.kind()
         });
         log.info(run.value);
@@ -86,7 +86,7 @@ testset "integ-test-guide-08-claude-code-cli" {
 
     test "guide 08.07 live Claude Code: direct call composes native WebFetch with one BAML tool" {
         //# Run the LLM function through its direct-call stand-in
-        let story = ClaudeCodeWebFetchWithBamlTool_manual(live_claude_code_with_web_fetch());
+        let story = ai.internal._require_done(ClaudeCodeWebFetchWithBamlTool@task().with_provider(live_claude_code_with_web_fetch()).run(runner = ai.run.Agent<HackerNewsTopStoryWithBamlTool>.new())).value;
 
         log.info("Claude Code plus BAML tool completed: " + story.to_string());
         assert.is_true(story.title.length() > 0);

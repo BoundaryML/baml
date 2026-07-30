@@ -5,7 +5,7 @@ use crate::{
     EmittableTrivia,
     ast::{
         Attribute, BlockAttribute, BlockExpr, Expression, FromCST, KnownKind, PathExpr,
-        StrongAstError, SyntaxNodeIter, ThrowsClause, Token, Type, tokens as t,
+        StrongAstError, SyntaxNodeIter, ThrowsClause, Token, Type, VerbatimSpan, tokens as t,
     },
     printer::{PrintInfo, PrintMultiLine, Printable, Printer, Shape},
     trivia_classifier::TriviaSliceExt as _,
@@ -653,10 +653,12 @@ impl Printable for FunctionDeclBody {
 #[derive(Debug)]
 pub struct LlmFunctionBody {
     pub open_brace: t::LBrace,
-    /// Not guaranteed that client is before prompt in the input.
-    pub client: ClientField,
-    /// Not guaranteed that client is before prompt in the input.
+    /// Legacy declarative model source.
+    pub client: Option<ClientField>,
+    /// AI function model source.
+    pub provider: Option<AiProviderField>,
     pub prompt: PromptField,
+    pub tools: Option<AiToolsField>,
     /// Optional `type_builder { ... }` block for inline schema overrides.
     pub type_builder: Option<TypeBuilderBlock>,
     pub close_brace: t::RBrace,
@@ -670,40 +672,42 @@ impl FromCST for LlmFunctionBody {
 
         let open_brace = it.expect_parse()?;
 
-        let first = it.expect_node("CLIENT_FIELD or PROMPT_FIELD")?;
-        let (client, prompt) = match first.kind() {
-            SyntaxKind::CLIENT_FIELD => {
-                let client = ClientField::from_cst(SyntaxElement::Node(first))?;
-                let prompt: PromptField = it.expect_parse()?;
-                (client, prompt)
-            }
-            SyntaxKind::PROMPT_FIELD => {
-                let prompt = PromptField::from_cst(SyntaxElement::Node(first))?;
-                let client: ClientField = it.expect_parse()?;
-                (client, prompt)
-            }
-            found => {
-                return Err(StrongAstError::UnexpectedKindDesc {
-                    expected_desc: "CLIENT_FIELD or PROMPT_FIELD".into(),
-                    found,
-                    at: first.text_range(),
-                });
+        let mut client = None;
+        let mut provider = None;
+        let mut prompt = None;
+        let mut tools = None;
+        let mut type_builder = None;
+        let close_brace = loop {
+            let next = it.expect_next("declarative model field or '}'")?;
+            match next.kind() {
+                SyntaxKind::CLIENT_FIELD => client = Some(ClientField::from_cst(next)?),
+                SyntaxKind::PROVIDER_FIELD => provider = Some(AiProviderField::from_cst(next)?),
+                SyntaxKind::PROMPT_FIELD => prompt = Some(PromptField::from_cst(next)?),
+                SyntaxKind::TOOLS_FIELD => tools = Some(AiToolsField::from_cst(next)?),
+                SyntaxKind::TYPE_BUILDER_BLOCK => {
+                    type_builder = Some(TypeBuilderBlock::from_cst(next)?)
+                }
+                SyntaxKind::R_BRACE => break t::RBrace::from_cst(next)?,
+                found => {
+                    return Err(StrongAstError::UnexpectedKindDesc {
+                        expected_desc: "client/provider, prompt, tools, type_builder, or '}'"
+                            .into(),
+                        found,
+                        at: next.text_range(),
+                    });
+                }
             }
         };
-
-        let type_builder = it
-            .next_if_kind(SyntaxKind::TYPE_BUILDER_BLOCK)
-            .map(TypeBuilderBlock::from_cst)
-            .transpose()?;
-
-        let close_brace = it.expect_parse()?;
-
+        let prompt = prompt
+            .ok_or_else(|| StrongAstError::missing(SyntaxKind::PROMPT_FIELD, node.text_range()))?;
         it.expect_end()?;
 
         Ok(LlmFunctionBody {
             open_brace,
             client,
+            provider,
             prompt,
+            tools,
             type_builder,
             close_brace,
         })
@@ -724,16 +728,22 @@ impl Printable for LlmFunctionBody {
         printer.print_trivia_all_trailing_for(self.open_brace.span());
         printer.print_newline();
 
-        let (client_leading, client_trailing) = printer.trivia.get_for_element(&self.client);
-        printer.print_trivia_with_newline(client_leading.trim_leading_blanks(), inner_indent);
-        printer.print_spaces(inner_indent);
-        let inner_shape = Shape::standalone(printer.config.line_width, inner_indent);
-        self.client.print(inner_shape, printer);
-        printer.print_trivia_trailing(client_trailing);
-        printer.print_newline();
+        if let Some(client) = &self.client {
+            printer.print_standalone_with_trivia(client, inner_indent);
+            printer.print_newline();
+        }
+        if let Some(provider) = &self.provider {
+            printer.print_standalone_with_trivia(provider, inner_indent);
+            printer.print_newline();
+        }
 
         printer.print_standalone_with_trivia(&self.prompt, inner_indent);
         printer.print_newline();
+
+        if let Some(tools) = &self.tools {
+            printer.print_standalone_with_trivia(tools, inner_indent);
+            printer.print_newline();
+        }
 
         if let Some(type_builder) = &self.type_builder {
             printer.print_standalone_with_trivia(type_builder, inner_indent);
@@ -754,6 +764,57 @@ impl Printable for LlmFunctionBody {
         self.close_brace.span()
     }
 }
+
+macro_rules! ai_declarative_field {
+    ($name:ident, $kind:ident) => {
+        #[derive(Debug)]
+        pub struct $name {
+            verbatim: VerbatimSpan,
+        }
+
+        impl FromCST for $name {
+            fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
+                if elem.kind() != SyntaxKind::$kind {
+                    return Err(StrongAstError::UnexpectedKind {
+                        expected: SyntaxKind::$kind,
+                        found: elem.kind(),
+                        at: elem.text_range(),
+                    });
+                }
+                Ok(Self {
+                    verbatim: VerbatimSpan::from_element(&elem),
+                })
+            }
+        }
+
+        impl KnownKind for $name {
+            fn kind() -> SyntaxKind {
+                SyntaxKind::$kind
+            }
+        }
+
+        impl Printable for $name {
+            fn print(&self, _shape: Shape, printer: &mut Printer) -> PrintInfo {
+                let range = self.verbatim.content_range();
+                printer.print_input_range_trimmed_start(range);
+                PrintInfo {
+                    multi_lined: printer.input[range].contains('\n'),
+                }
+            }
+
+            fn leftmost_token(&self) -> TextRange {
+                self.verbatim.first_token
+            }
+
+            fn rightmost_token(&self) -> TextRange {
+                self.verbatim.last_token
+            }
+        }
+    };
+}
+
+ai_declarative_field!(AiProviderField, PROVIDER_FIELD);
+ai_declarative_field!(AiToolsField, TOOLS_FIELD);
 
 /// Corresponds to a [`SyntaxKind::CLIENT_FIELD`] node.
 #[derive(Debug)]

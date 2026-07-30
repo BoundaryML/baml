@@ -8,8 +8,8 @@ function sap_text_tool_choice() -> null {
             output_mode = root.openai.OutputMode.Sap,
             tool_mode = root.openai.ToolMode.Prompt,
         );
-    let task = _sap_resolution_task(provider, [search_knowledge]);
-    let outcome = task.run(runner = root.ai.run.Agent<Resolution>.new(tools = [search_knowledge]));
+    let task = SapResolution@task().with_provider(provider).with_tools([search_knowledge]);
+    let outcome = task.run(runner = ai.run.Agent<Resolution>.new(tools = [search_knowledge]));
     log.info(outcome);
     null
 }
@@ -24,8 +24,8 @@ function sap_text_union_choice() -> null {
             output_mode = root.openai.OutputMode.Sap,
             tool_mode = root.openai.ToolMode.Prompt,
         );
-    let task = _sap_union_task(provider, [search_knowledge]);
-    let outcome = task.run(runner = root.ai.run.Agent<SapSupportDecision>.new(tools = [search_knowledge]));
+    let task = SapUnionDecision@task().with_provider(provider).with_tools([search_knowledge]);
+    let outcome = task.run(runner = ai.run.Agent<SapSupportDecision>.new(tools = [search_knowledge]));
     log.info(outcome);
     null
 }

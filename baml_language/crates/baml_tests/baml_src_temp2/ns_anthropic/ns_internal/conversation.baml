@@ -1,6 +1,6 @@
 class Conversation {
     owner: root.anthropic.AnthropicProvider,
-    history: root.ai.MessageHistory,
+    history: ai.MessageHistory,
     declared_output_type: string,
     // Anthropic is stateless: every step resends these provider-native blocks.
     // Keeping them intact preserves image/document blocks, thinking signatures,
@@ -14,12 +14,12 @@ class Conversation {
     active_tools: json[],
     last_assistant_content: json[],
 
-    implements root.ai.Conversation {
-        function provider(self) -> root.ai.Provider throws never {
+    implements ai.Conversation {
+        function provider(self) -> ai.Provider throws never {
             self.owner
         }
 
-        function messages(self) -> root.ai.Messages throws never {
+        function messages(self) -> ai.Messages throws never {
             self.history
         }
         function output_type_fingerprint(self) -> string? throws never {
@@ -66,60 +66,60 @@ function _provider_base_request(
     }
 }
 
-function _message_role_name(role: root.ai.MessageRole) -> string throws never {
+function _message_role_name(role: ai.MessageRole) -> string throws never {
     match (role) {
-        root.ai.MessageRole.System => "system",
-        root.ai.MessageRole.User => "user",
-        root.ai.MessageRole.Assistant => "assistant",
-        root.ai.MessageRole.Tool => "user",
+        ai.MessageRole.System => "system",
+        ai.MessageRole.User => "user",
+        ai.MessageRole.Assistant => "assistant",
+        ai.MessageRole.Tool => "user",
     }
 }
 
-function _message_text(message: root.ai.Message) -> string throws never {
+function _message_text(message: ai.Message) -> string throws never {
     message
         .parts()
-        .map((part: root.ai.MessagePart) -> string {
+        .map((part: ai.MessagePart) -> string {
             part.text() ?? ""
         })
         .join("")
 }
 
-function _conversation_role_name(role: root.ai.MessageRole) -> string throws never {
+function _conversation_role_name(role: ai.MessageRole) -> string throws never {
     match (role) {
-        root.ai.MessageRole.System => "system",
-        root.ai.MessageRole.User => "user",
-        root.ai.MessageRole.Assistant => "assistant",
-        root.ai.MessageRole.Tool => "tool",
+        ai.MessageRole.System => "system",
+        ai.MessageRole.User => "user",
+        ai.MessageRole.Assistant => "assistant",
+        ai.MessageRole.Tool => "tool",
     }
 }
 
-function _conversation_role(value: string) -> root.ai.MessageRole throws never {
+function _conversation_role(value: string) -> ai.MessageRole throws never {
     if (value == "system") {
-        return root.ai.MessageRole.System;
+        return ai.MessageRole.System;
     }
     if (value == "assistant") {
-        return root.ai.MessageRole.Assistant;
+        return ai.MessageRole.Assistant;
     }
     if (value == "tool") {
-        return root.ai.MessageRole.Tool;
+        return ai.MessageRole.Tool;
     }
-    root.ai.MessageRole.User
+    ai.MessageRole.User
 }
 
 // Tokens retain this portable text projection beside exact Anthropic blocks.
-function _conversation_history_json(history: root.ai.MessageHistory) -> json[] throws never {
-    history.entries.map((message: root.ai.Message) -> json {
+function _conversation_history_json(history: ai.MessageHistory) -> json[] throws never {
+    history.entries.map((message: ai.Message) -> json {
         { "role": _conversation_role_name(message.role()), "text": _message_text(message) }
     })
 }
 
-function _conversation_history_from_json(encoded: json[]) -> root.ai.MessageHistory throws never {
-    root.ai.MessageHistory {
-        entries: encoded.map((message: json) -> root.ai.Message {
-            root.ai.ChatMessage {
+function _conversation_history_from_json(encoded: json[]) -> ai.MessageHistory throws never {
+    ai.MessageHistory {
+        entries: encoded.map((message: json) -> ai.Message {
+            ai.ChatMessage {
                 message_role: _conversation_role(baml.json.path_or(message, ".role", "user")),
                 content: [
-                    root.ai.messages.TextPart {
+                    ai.messages.TextPart {
                         value: baml.json.path_or(message, ".text", ""),
                         metadata: {},
                     },

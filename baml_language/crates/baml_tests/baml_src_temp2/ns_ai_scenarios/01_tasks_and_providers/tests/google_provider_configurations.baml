@@ -2,21 +2,13 @@
 // Task through the ordinary Agent runner; provider internals are not part
 // of this contract.
 
-function _google_resolution_array_task(
-    provider: root.ai.Provider,
-) -> root.ai.Task<Resolution[]> throws never {
-    root.ai.task_named<Resolution[]>(provider, "GoogleResolutionArray", {}, [], (
-        ctx: baml.llm.Context,
-    ) -> baml.llm.PromptAst {
-        baml.llm
-            .assemble_prompt_ast(
-                ["", "\n", ""],
-                [
-                    "Return exactly two support resolutions for a duplicate charge. Give each a non-empty reply.",
-                    ctx.output_format,
-                ],
-            )
-    })
+function GoogleResolutionArray() -> Resolution[] {
+    provider: ai.testing.fake_output_provider("[]")
+    prompt: `
+        Return exactly two support resolutions for a duplicate charge. Give
+        each a non-empty reply.
+        ${ctx.output_format}
+    `
 }
 
 test "Google AI public configuration owns its request-facing options" {
@@ -30,7 +22,7 @@ test "Google AI public configuration owns its request-facing options" {
             output_mode = root.google.ai.OutputMode.Sap,
             tool_mode = root.google.ai.ToolMode.Prompt,
         );
-    let task = ResolveTicket_task(sample_ticket(), provider);
+    let task = ResolveTicket@task(sample_ticket()).with_provider(provider);
     assert.equal(provider.model, "fixture-model");
     assert.equal(provider.api_key, "fixture-key");
     assert.equal(provider.base_url, "https://example.invalid/v1beta");
@@ -51,7 +43,7 @@ test "Google Vertex public configuration owns its backend selection" {
             output_mode = root.google.vertex.OutputMode.Native,
             tool_mode = root.google.vertex.ToolMode.Native,
         );
-    let task = ResolveTicket_task(sample_ticket(), provider);
+    let task = ResolveTicket@task(sample_ticket()).with_provider(provider);
     assert.equal(provider.model, "fixture-model");
     assert.equal(provider.project_id, "fixture-project");
     assert.equal(provider.location, "us-central1");
@@ -78,12 +70,11 @@ testset "integ-test-google-vertex-configurations" {
                     location = location,
                     output_mode = root.google.vertex.OutputMode.Native,
                 );
-            let value = root
-                .ai
+            let value = ai
                 .internal
                 ._require_done(
-                    ResolveTicket_task(sample_ticket(), provider)
-                        .run(runner = root.ai.run.Agent<Resolution>.new()),
+                    ResolveTicket@task(sample_ticket()).with_provider(provider)
+                        .run(runner = ai.run.Agent<Resolution>.new()),
                 )
                 .value;
             assert.is_true(value.reply.length() > 0)
@@ -106,12 +97,11 @@ testset "integ-test-google-vertex-configurations" {
                     location = location,
                     output_mode = root.google.vertex.OutputMode.Sap,
                 );
-            let value = root
-                .ai
+            let value = ai
                 .internal
                 ._require_done(
-                    ResolveTicket_task(sample_ticket(), provider)
-                        .run(runner = root.ai.run.Agent<Resolution>.new()),
+                    ResolveTicket@task(sample_ticket()).with_provider(provider)
+                        .run(runner = ai.run.Agent<Resolution>.new()),
                 )
                 .value;
             assert.is_true(value.summary.length() > 0)
@@ -128,12 +118,11 @@ testset "integ-test-google-ai-configurations" {
                 api_key = baml.env.get_or_panic("GOOGLE_API_KEY"),
                 output_mode = root.google.ai.OutputMode.Native,
             );
-        let value = root
-            .ai
+        let value = ai
             .internal
             ._require_done(
-                ResolveTicket_task(sample_ticket(), provider)
-                    .run(runner = root.ai.run.Agent<Resolution>.new()),
+                ResolveTicket@task(sample_ticket()).with_provider(provider)
+                    .run(runner = ai.run.Agent<Resolution>.new()),
             )
             .value;
         assert.is_true(value.reply.length() > 0)
@@ -147,12 +136,11 @@ testset "integ-test-google-ai-configurations" {
                 api_key = baml.env.get_or_panic("GOOGLE_API_KEY"),
                 output_mode = root.google.ai.OutputMode.Native,
             );
-        let value = root
-            .ai
+        let value = ai
             .internal
             ._require_done(
-                _google_resolution_array_task(provider)
-                    .run(runner = root.ai.run.Agent<Resolution[]>.new()),
+                GoogleResolutionArray@task().with_provider(provider)
+                    .run(runner = ai.run.Agent<Resolution[]>.new()),
             )
             .value;
         assert.equal(value.length(), 2);
@@ -168,12 +156,11 @@ testset "integ-test-google-ai-configurations" {
                 api_key = baml.env.get_or_panic("GOOGLE_API_KEY"),
                 output_mode = root.google.ai.OutputMode.Sap,
             );
-        let value = root
-            .ai
+        let value = ai
             .internal
             ._require_done(
-                ResolveTicket_task(sample_ticket(), provider)
-                    .run(runner = root.ai.run.Agent<Resolution>.new()),
+                ResolveTicket@task(sample_ticket()).with_provider(provider)
+                    .run(runner = ai.run.Agent<Resolution>.new()),
             )
             .value;
         assert.is_true(value.summary.length() > 0)
@@ -187,15 +174,12 @@ testset "integ-test-google-ai-configurations" {
                 api_key = baml.env.get_or_panic("GOOGLE_API_KEY"),
                 output_mode = root.google.ai.OutputMode.Sap,
             );
-        let task = InspectImage_task(
-            image
+        let task = InspectImage@task(image
                 .from_url(
                     "https://storage.googleapis.com/cloud-samples-data/generative-ai/image/scones.jpg",
                     "image/jpeg",
-                ),
-            provider,
-        );
-        let value = root.ai.internal._require_done(task.run(runner = root.ai.run.Agent<string>.new())).value;
+                )).with_provider(provider);
+        let value = ai.internal._require_done(task.run(runner = ai.run.Agent<string>.new())).value;
         assert.is_true(value.length() > 0)
     }
 }

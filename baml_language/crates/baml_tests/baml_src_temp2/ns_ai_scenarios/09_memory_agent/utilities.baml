@@ -575,37 +575,37 @@ function _memory_agent_run_bash(command: string, summary: string = "") -> string
     rendered
 }
 
-function _memory_agent_main_tools() -> root.ai.tools.ToolInput[] throws never {
+function _memory_agent_main_tools() -> ai.tools.ToolInput[] throws never {
     [
-        root.ai
+        ai
             .tools
             .tool(
                 _memory_agent_read_file,
                 name = "read_file",
                 description = "Read a text file with line numbers. Set summary to one short sentence explaining why.",
             ),
-        root.ai
+        ai
             .tools
             .tool(
                 _memory_agent_write_file,
                 name = "write_file",
                 description = "Create or overwrite a text file. Set summary to one short sentence explaining why.",
             ),
-        root.ai
+        ai
             .tools
             .tool(
                 _memory_agent_edit_file,
                 name = "edit_file",
                 description = "Replace the first exact old_str occurrence. Set summary to one short sentence explaining why.",
             ),
-        root.ai
+        ai
             .tools
             .tool(
                 _memory_agent_list_dir,
                 name = "list_dir",
                 description = "List a directory, using an empty path for the current directory. Set summary to one short sentence explaining why.",
             ),
-        root.ai
+        ai
             .tools
             .tool(
                 _memory_agent_run_bash,
@@ -667,69 +667,43 @@ function _memory_agent_live_google_provider() -> root.google.ai.Gemini {
         )
 }
 
-function _memory_agent_task_from_transcript(
-    transcript: string,
-) -> root.ai.Task<string> throws never {
-    let tools = _memory_agent_main_tools();
-    root.ai.task_named<string>(_memory_agent_openai_provider(), "MemoryAgentTurn", { "transcript": transcript }, tools, (
-        ctx: baml.llm.Context,
-    ) -> baml.llm.PromptAst {
-        baml.llm
-            .assemble_prompt_ast(
-                ["", "\n\n", "\n\n", ""],
-                [
-                    "You are bamlcode, a CLI coding agent operating inside the user's current working directory.",
-                    (
-                        #"
-                            Complete software tasks by taking one application tool action at a time.
+function _MemoryAgentTurn(transcript: string) -> string {
+    provider: _memory_agent_openai_provider()
+    tools: _memory_agent_main_tools()
+    prompt: `
+        You are bamlcode, a CLI coding agent operating inside the user's current working directory.
 
-                            Available tools:
-                              - read_file: read a file with line numbers
-                              - write_file: create or overwrite a file
-                              - edit_file: replace the first exact text occurrence
-                              - list_dir: list a directory
-                              - run_bash: run a /bin/sh command
+        Complete software tasks by taking one application tool action at a time.
 
-                            Put a short action summary in each tool call's `summary` argument.
+        Available tools:
+          - read_file: read a file with line numbers
+          - write_file: create or overwrite a file
+          - edit_file: replace the first exact text occurrence
+          - list_dir: list a directory
+          - run_bash: run a /bin/sh command
 
-                            Memory:
-                              - Durable facts may appear under [RECALLED MEMORY].
-                              - Trust recalled facts unless the user contradicts them.
-                              - You do not manage memory. A separate curator runs after the turn.
+        Put a short action summary in each tool call's \`summary\` argument.
 
-                            Operating rules:
-                              - Inspect before changing files.
-                              - Make old_str unique and copy it byte-for-byte before edit_file.
-                              - Use run_bash for search, tests, git, mkdir, and unsupported operations.
-                              - Do not repeat an action that already succeeded.
-                              - When complete, or when user input is required, return the final answer.
-                              - Never call more than one tool in a model step.
+        Memory:
+          - Durable facts may appear under [RECALLED MEMORY].
+          - Trust recalled facts unless the user contradicts them.
+          - You do not manage memory. A separate curator runs after the turn.
 
-                            Application transcript:
-                            ----------------------------------------------------------------------
-                        "#
-                            + transcript
-                            + "\n----------------------------------------------------------------------"
-                    ),
-                    ctx.output_format,
-                ],
-            )
-    })
-}
+        Operating rules:
+          - Inspect before changing files.
+          - Make old_str unique and copy it byte-for-byte before edit_file.
+          - Use run_bash for search, tests, git, mkdir, and unsupported operations.
+          - Do not repeat an action that already succeeded.
+          - When complete, or when user input is required, return the final answer.
+          - Never call more than one tool in a model step.
 
-function _memory_agent_task(
-    history: string,
-    user_msg: string,
-) -> root.ai.Task<string> throws never {
-    _memory_agent_task_from_transcript(_memory_agent_opening_transcript(history, "", user_msg))
-}
+        Application transcript:
+        ----------------------------------------------------------------------
+        ${transcript}
+        ----------------------------------------------------------------------
 
-function _memory_agent_google_task(
-    history: string,
-    user_msg: string,
-) -> root.ai.Task<string> throws never {
-    //# Re-render the same Task recipe for Google without changing its contract
-    _memory_agent_task(history, user_msg).with_provider(_memory_agent_google_provider())
+        ${ctx.output_format}
+    `
 }
 
 function _memory_agent_curator_provider() -> root.openai.OpenAIProvider throws never {
@@ -741,54 +715,35 @@ function _memory_agent_curator_provider() -> root.openai.OpenAIProvider throws n
         )
 }
 
-function _memory_agent_curator_task(
+function _MemoryAgentCurator(
     turn: string,
     index: string,
-) -> root.ai.Task<MemoryAgentEdit[]> throws never {
-    root.ai.task_named<MemoryAgentEdit[]>(_memory_agent_curator_provider(), "MemoryAgentCurator", { "turn": turn, "index": index }, [], (
-        ctx: baml.llm.Context,
-    ) -> baml.llm.PromptAst {
-        baml.llm
-            .assemble_prompt_ast(
-                ["", "\n\n", ""],
-                [
-                    (
-                        #"
-                            You maintain the long-term memory of a coding agent. You are not the coding agent.
-                            Read only the completed turn below and decide what, if anything, is durable enough
-                            to affect future sessions.
+) -> MemoryAgentEdit[] {
+    provider: _memory_agent_curator_provider()
+    prompt: `
+        You maintain the long-term memory of a coding agent. You are not the coding agent.
+        Read only the completed turn below and decide what, if anything, is durable enough
+        to affect future sessions.
 
-                            Save only confirmed preferences, project conventions and invariants, commands known
-                            to work, important locations, and decisions with their reasons.
+        Save only confirmed preferences, project conventions and invariants, commands known
+        to work, important locations, and decisions with their reasons.
 
-                            Never save transient task state, progress, code that can be reread, secrets, personal
-                            data, or guesses. Use delete when an existing memory is obsolete. Correct a memory by
-                            saving under the same name. Empty output is normally correct. Return at most five edits.
+        Never save transient task state, progress, code that can be reread, secrets, personal
+        data, or guesses. Use delete when an existing memory is obsolete. Correct a memory by
+        saving under the same name. Empty output is normally correct. Return at most five edits.
 
-                            Existing memory index:
-                            ----------------------------------------------------------------------
-                        "#
-                            + index
-                            + #"
-                                ----------------------------------------------------------------------
+        Existing memory index:
+        ----------------------------------------------------------------------
+        ${index}
+        ----------------------------------------------------------------------
 
-                                Just-completed turn:
-                                ----------------------------------------------------------------------
-                            "#
-                            + turn
-                            + "\n----------------------------------------------------------------------"
-                    ),
-                    ctx.output_format,
-                ],
-            )
-    })
-}
+        Just-completed turn:
+        ----------------------------------------------------------------------
+        ${turn}
+        ----------------------------------------------------------------------
 
-function _memory_agent_google_curator_task(
-    turn: string,
-    index: string,
-) -> root.ai.Task<MemoryAgentEdit[]> throws never {
-    _memory_agent_curator_task(turn, index).with_provider(_memory_agent_google_curator_provider())
+        ${ctx.output_format}
+    `
 }
 
 function _memory_agent_google_curator_provider() -> root.google.ai.Gemini throws never {
@@ -812,21 +767,20 @@ function _memory_agent_live_google_curator_provider() -> root.google.ai.Gemini {
         )
 }
 
-function _memory_agent_main_budget() -> root.ai.Budget throws never {
-    root.ai.Budget { max_steps: 30, max_cost_usd: null }
+function _memory_agent_main_budget() -> ai.Budget throws never {
+    ai.Budget { max_steps: 30, max_cost_usd: null }
 }
 
-function _memory_agent_curator_budget() -> root.ai.Budget throws never {
-    root.ai.Budget { max_steps: 1, max_cost_usd: null }
+function _memory_agent_curator_budget() -> ai.Budget throws never {
+    ai.Budget { max_steps: 1, max_cost_usd: null }
 }
 
 function _memory_agent_runner(
-    conversation: root.ai.Conversation? = null,
+    conversation: ai.Conversation? = null,
     cancel: baml.spawn.CancelToken? = null,
-    observers: root.ai.observe.AgentObserver[] = [],
-) -> root.ai.run.Agent<string> throws never {
-    root
-        .ai
+    observers: ai.observe.AgentObserver[] = [],
+) -> ai.run.Agent<string> throws never {
+    ai
         .run
         .Agent<string>
         .new(
@@ -850,7 +804,7 @@ enum MemoryAgentBackend {
 class MemoryAgentTurn {
     answer: string,
     transcript: string,
-    conversation: root.ai.Conversation?,
+    conversation: ai.Conversation?,
     steps: int,
     interrupted: bool,
     queued: string[],
@@ -858,7 +812,7 @@ class MemoryAgentTurn {
 
 class MemoryAgentSession {
     transcript: string,
-    conversation: root.ai.Conversation?,
+    conversation: ai.Conversation?,
 }
 
 class MemoryAgentInterrupt {
@@ -880,13 +834,13 @@ class MemoryAgentObserver {
     trace: MemoryAgentTrace,
     live: bool,
 
-    implements root.ai.observe.AgentObserver {
-        function on_event(self, event: root.ai.observe.AgentEvent) -> null throws never {
+    implements ai.observe.AgentObserver {
+        function on_event(self, event: ai.observe.AgentEvent) -> null throws never {
             match (event) {
-                let started: root.ai.observe.ModelStartedEvent => {
+                let started: ai.observe.ModelStartedEvent => {
                     self.trace.steps = self.trace.steps + 1;
                 },
-                let tool_event: root.ai.observe.ToolCallEvent => {
+                let tool_event: ai.observe.ToolCallEvent => {
                     if (tool_event.phase == "proposed") {
                         let summary = _memory_agent_call_summary(tool_event.call);
                         let label = _memory_agent_describe_call(tool_event.call);
@@ -903,7 +857,7 @@ class MemoryAgentObserver {
                         };
                     } else if (tool_event.phase == "finished" || tool_event.phase == "blocked") {
                         match (tool_event.result) {
-                            let result: root.ai.tools.ToolResult => {
+                            let result: ai.tools.ToolResult => {
                                 let rendered = _memory_agent_render_tool_result(result);
                                 self.trace.transcript
                                     = self.trace.transcript
@@ -928,13 +882,13 @@ class MemoryAgentObserver {
     }
 }
 
-function _memory_agent_call_summary(call: root.ai.tools.ToolCall) -> string throws never {
+function _memory_agent_call_summary(call: ai.tools.ToolCall) -> string throws never {
     baml.json.path<string>(call.args, ".summary") catch_all (error) {
         _ => ""
     }
 }
 
-function _memory_agent_describe_call(call: root.ai.tools.ToolCall) -> string throws never {
+function _memory_agent_describe_call(call: ai.tools.ToolCall) -> string throws never {
     match (call.name) {
         "read_file" => {
             "read "
@@ -981,7 +935,7 @@ function _memory_agent_describe_call(call: root.ai.tools.ToolCall) -> string thr
     }
 }
 
-function _memory_agent_render_tool_result(result: root.ai.tools.ToolResult) -> string throws never {
+function _memory_agent_render_tool_result(result: ai.tools.ToolResult) -> string throws never {
     baml.json.from_json<string>(result.output) catch_all (decode_error) {
         _ => baml.json.stringify(result.output),
     }
@@ -1015,16 +969,16 @@ function _memory_agent_continuation_text(
 }
 
 function _memory_agent_append_user_message(
-    conversation: root.ai.Conversation,
+    conversation: ai.Conversation,
     text: string,
-) -> root.ai.Conversation throws root.ai.Failure | baml.errors.UnknownError | baml.errors.Unsupported {
+) -> ai.Conversation throws ai.Failure | baml.errors.UnknownError | baml.errors.Unsupported {
     //# Preserve opaque provider state while adding the next application turn
-    conversation.append_message(root.ai.ChatMessage.user(text))
+    conversation.append_message(ai.ChatMessage.user(text))
 }
 
 function _memory_agent_run_turn(
     history: string,
-    conversation: root.ai.Conversation?,
+    conversation: ai.Conversation?,
     user_msg: string,
     backend: MemoryAgentBackend,
     cancel: baml.spawn.CancelToken? = null,
@@ -1042,7 +996,7 @@ function _memory_agent_run_turn(
     let trace = MemoryAgentTrace { transcript: opening, steps: 0 };
     let observer = MemoryAgentObserver { trace: trace, live: true };
     let continued = match (conversation) {
-        let existing: root.ai.Conversation => {
+        let existing: ai.Conversation => {
             _memory_agent_append_user_message(
                 existing,
                 _memory_agent_continuation_text(recall.block, user_msg),
@@ -1050,7 +1004,7 @@ function _memory_agent_run_turn(
         },
         null => null,
     };
-    let base_task = _memory_agent_task_from_transcript(opening);
+    let base_task = _MemoryAgentTurn@task(opening);
     let task = match (backend) {
         MemoryAgentBackend.OpenAI => base_task,
         MemoryAgentBackend.Google => {
@@ -1068,22 +1022,22 @@ function _memory_agent_run_turn(
             ),
         );
     let answer = "";
-    let final_conversation: root.ai.Conversation? = null;
+    let final_conversation: ai.Conversation? = null;
     let interrupted = false;
     match (outcome) {
-        let done: root.ai.Done<string> => {
+        let done: ai.Done<string> => {
             answer = done.value;
             final_conversation = done.conversation;
         },
-        let budget: root.ai.BudgetReached => {
+        let budget: ai.BudgetReached => {
             answer = `(stopped after ${budget.steps_taken} steps: ${budget.reason})`;
             final_conversation = budget.conversation;
         },
-        let handoff: root.ai.Handoff => {
+        let handoff: ai.Handoff => {
             answer = `(unexpected handoff to ${handoff.call.name})`;
             final_conversation = handoff.conversation;
         },
-        let stopped: root.ai.Interrupted => {
+        let stopped: ai.Interrupted => {
             answer = "⨂ interrupted.";
             final_conversation = stopped.conversation;
             interrupted = true;
@@ -1116,18 +1070,17 @@ function _memory_agent_curate_turn_unchecked(
     };
     let task = match (backend) {
         MemoryAgentBackend.OpenAI => {
-            _memory_agent_curator_task(turn, store.index())
+            _MemoryAgentCurator@task(turn, store.index())
         },
         MemoryAgentBackend.Google => {
             //# Apply the Google override to the independent curator Task too
-            _memory_agent_curator_task(turn, store.index())
+            _MemoryAgentCurator@task(turn, store.index())
                 .with_provider(_memory_agent_live_google_curator_provider())
         },
     };
     let outcome = task
         .run(
-            runner = root
-                .ai
+            runner = ai
                 .run
                 .Agent<MemoryAgentEdit[]>
                 .new(
@@ -1136,16 +1089,16 @@ function _memory_agent_curate_turn_unchecked(
                 ),
         );
     let edits: MemoryAgentEdit[] = match (outcome) {
-        let done: root.ai.Done<MemoryAgentEdit[]> => done.value,
-        let budget: root.ai.BudgetReached => {
+        let done: ai.Done<MemoryAgentEdit[]> => done.value,
+        let budget: ai.BudgetReached => {
             let empty: MemoryAgentEdit[] = [];
             empty
         },
-        let handoff: root.ai.Handoff => {
+        let handoff: ai.Handoff => {
             let empty: MemoryAgentEdit[] = [];
             empty
         },
-        let stopped: root.ai.Interrupted => {
+        let stopped: ai.Interrupted => {
             let empty: MemoryAgentEdit[] = [];
             empty
         },
@@ -1209,7 +1162,7 @@ function _memory_agent_classify_interrupt(raw: string) -> MemoryAgentInterrupt t
 
 function _memory_agent_run_supervised(
     history: string,
-    conversation: root.ai.Conversation?,
+    conversation: ai.Conversation?,
     message: string,
     backend: MemoryAgentBackend,
 ) -> MemoryAgentTurn {

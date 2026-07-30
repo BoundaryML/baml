@@ -8,7 +8,7 @@ test "guide 07.03: transport configuration stays on the provider" {
     extra_headers: { "X-Tenant": "acme" },
     extra_body: { "region": "us-west" },
   };
-  let task = ResolveTicket_task(sample_ticket(), provider);
+  let task = ResolveTicket@task(sample_ticket()).with_provider(provider);
   assert.equal(task.provider_name(), "openai")
   assert.equal(provider.base_url, "https://gateway.example/v1")
 }
@@ -23,11 +23,11 @@ testset "integ-test-guide-07-transport-config" {
       extra_body: { "user": "bepv2-guide-07-03" },
     };
     //# Execute an unchanged task through that configured transport
-    let task = ResolveTicket_task(sample_ticket(), provider);
-    let response = root.ai.internal._response_from_done(
-      root.ai.internal._require_done(
+    let task = ResolveTicket@task(sample_ticket()).with_provider(provider);
+    let response = ai.internal._response_from_done(
+      ai.internal._require_done(
         task.run(
-          runner = root.ai.run.Agent<Resolution>.new(),
+          runner = ai.run.Agent<Resolution>.new(),
         ),
       ),
     );

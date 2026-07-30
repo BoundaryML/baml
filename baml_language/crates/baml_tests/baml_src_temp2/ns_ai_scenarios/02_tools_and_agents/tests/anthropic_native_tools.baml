@@ -11,14 +11,10 @@ testset "integ-test-anthropic-native-tools" {
                 tool_mode = root.anthropic.ToolMode.Native,
             );
         let trace = guide_agent_trace();
-        let task = ToolInstructions_task(
-            provider,
-            [search_knowledge],
-            `Call search_knowledge exactly once with query "duplicate charge". After its result, return a final resolution with a non-empty summary and reply.`,
-        );
+        let task = ToolInstructions@task(`Call search_knowledge exactly once with query "duplicate charge". After its result, return a final resolution with a non-empty summary and reply.`).with_provider(provider).with_tools([search_knowledge]);
         let outcome = task
             .run(
-                runner = root.ai.run.Agent<Resolution>.new(tools = [search_knowledge], after_tool_call = (event) -> {
+                runner = ai.run.Agent<Resolution>.new(tools = [search_knowledge], after_tool_call = (event) -> {
                     trace.after_calls.push(event.call.name);
                     null
                 }),
@@ -33,7 +29,7 @@ testset "integ-test-anthropic-native-tools" {
         };
         assert.equal(trace.after_calls, ["search_knowledge"]);
         match (outcome) {
-            let done: root.ai.Done<Resolution> => {
+            let done: ai.Done<Resolution> => {
                 assert.is_true(done.value.summary.length() > 0);
                 assert.is_true(done.value.reply.length() > 0)
             },

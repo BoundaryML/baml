@@ -5,9 +5,10 @@
 //!
 //! # Layout: folder tree = package + ns_* subfolders = namespace
 //!
-//! Everything lives under `baml_std/baml/` → package **baml**.
-//! Sub-namespaces (env, llm, http, etc.) are expressed via `ns_*` subdirectories
-//! on disk, and namespace is derived from path segments at runtime.
+//! Each first-level directory under `baml_std/` is a package (`baml`, `ai`,
+//! `testing`, `assert`, etc.). Sub-namespaces are expressed via `ns_*`
+//! subdirectories on disk, and namespace is derived from path segments at
+//! runtime.
 //!
 //! # Virtual path
 //!
@@ -51,6 +52,8 @@ impl BuiltinFile {
 pub const PACKAGE_BAML: &str = "baml";
 /// Package name for boundary identity and capture helpers.
 pub const PACKAGE_BOUNDARY: &str = "boundary";
+/// Package name for typed AI tasks, providers, agents, tools, and sessions.
+pub const PACKAGE_AI: &str = "ai";
 
 /// Absolute path to the `baml_std/` source tree, captured at compile time via
 /// `CARGO_MANIFEST_DIR`. Used by `baml_builtins2_codegen` to produce clickable
@@ -145,6 +148,62 @@ pub const ALL: &[BuiltinFile] = &[
     builtin!("assert", "assert.baml"),
     // --- log package ---
     builtin!("log", "log.baml"),
+    // --- ai package ---
+    // Root namespace. Non-`ns_*` directories are organizational only.
+    builtin!("ai", "execution/agent_budget.baml"),
+    builtin!("ai", "execution/agent_outcome.baml"),
+    builtin!("ai", "execution/prompt_recipe.baml"),
+    builtin!("ai", "execution/resource.baml"),
+    builtin!("ai", "execution/runner.baml"),
+    builtin!("ai", "execution/task.baml"),
+    builtin!("ai", "failures/defaults.baml"),
+    builtin!("ai", "failures/protocol.baml"),
+    builtin!("ai", "failures/unsupported.baml"),
+    builtin!("ai", "messages/conversation.baml"),
+    builtin!("ai", "messages/history.baml"),
+    builtin!("ai", "messages/protocol.baml"),
+    builtin!("ai", "provider/protocol.baml"),
+    builtin!("ai", "provider/response.baml"),
+    builtin!("ai", "reliability/fallback.baml"),
+    builtin!("ai", "reliability/retry.baml"),
+    // Namespaced public and internal modules.
+    builtin!("ai", "ns_harness/model_harness.baml"),
+    builtin!("ai", "ns_harness/models.baml"),
+    builtin!("ai", "ns_internal/agent.baml"),
+    builtin!("ai", "ns_internal/conversation_append.baml"),
+    builtin!("ai", "ns_internal/http.baml"),
+    builtin!("ai", "ns_internal/replay.baml"),
+    builtin!("ai", "ns_jobs/background.baml"),
+    builtin!("ai", "ns_jobs/batch.baml"),
+    builtin!("ai", "ns_messages/parts.baml"),
+    builtin!("ai", "ns_messages/prompt_adapter.baml"),
+    builtin!("ai", "ns_observe/events.baml"),
+    builtin!("ai", "ns_observe/usage.baml"),
+    builtin!("ai", "ns_realtime/audio.baml"),
+    builtin!("ai", "ns_realtime/automatic_tools.baml"),
+    builtin!("ai", "ns_realtime/collect.baml"),
+    builtin!("ai", "ns_realtime/protocol.baml"),
+    builtin!("ai", "ns_realtime/provider.baml"),
+    builtin!("ai", "ns_run/agent.baml"),
+    builtin!("ai", "ns_run/background.baml"),
+    builtin!("ai", "ns_run/batch.baml"),
+    builtin!("ai", "ns_run/harness.baml"),
+    builtin!("ai", "ns_run/sessions.baml"),
+    builtin!("ai", "ns_run/streaming.baml"),
+    builtin!("ai", "ns_run/transcription.baml"),
+    builtin!("ai", "ns_run/voice_agent.baml"),
+    builtin!("ai", "ns_sessions/protocol.baml"),
+    builtin!("ai", "ns_testing/background.baml"),
+    builtin!("ai", "ns_testing/batch.baml"),
+    builtin!("ai", "ns_testing/fake_tools.baml"),
+    builtin!("ai", "ns_testing/fakes.baml"),
+    builtin!("ai", "ns_testing/realtime.baml"),
+    builtin!("ai", "ns_testing/sessions.baml"),
+    builtin!("ai", "ns_testing/transcription.baml"),
+    builtin!("ai", "ns_tools/callbacks.baml"),
+    builtin!("ai", "ns_tools/models.baml"),
+    builtin!("ai", "ns_transcription/audio_stream.baml"),
+    builtin!("ai", "ns_transcription/protocol.baml"),
 ];
 
 /// The distinct standard-library / builtin package names, derived from the
@@ -179,3 +238,36 @@ mod adt;
 mod media;
 pub use adt::*;
 pub use media::{MediaContent, MediaValue};
+
+#[cfg(test)]
+mod tests {
+    use super::{ALL, PACKAGE_AI, stdlib_package_names};
+
+    #[test]
+    fn ai_package_is_embedded_with_expected_namespaces() {
+        let ai_files = ALL
+            .iter()
+            .filter(|file| file.package == PACKAGE_AI)
+            .collect::<Vec<_>>();
+
+        assert_eq!(ai_files.len(), 53);
+        assert!(ai_files.iter().all(|file| !file.contents.is_empty()));
+        assert!(ai_files.iter().any(|file| {
+            file.relative_path == "execution/task.baml" && file.namespace_path().is_empty()
+        }));
+        assert!(ai_files.iter().any(|file| {
+            file.relative_path == "ns_run/agent.baml" && file.namespace_path() == ["run"]
+        }));
+        assert!(ai_files.iter().any(|file| {
+            file.relative_path == "ns_realtime/protocol.baml"
+                && file.namespace_path() == ["realtime"]
+        }));
+    }
+
+    #[test]
+    fn ai_is_a_stdlib_package() {
+        let names = stdlib_package_names();
+        assert!(names.contains(&PACKAGE_AI));
+        assert_eq!(names.iter().filter(|name| **name == PACKAGE_AI).count(), 1);
+    }
+}

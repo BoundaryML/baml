@@ -1,9 +1,9 @@
-implements root.ai.AgentProvider for Gemini {
+implements ai.AgentProvider for Gemini {
   function begin<T>(
     self,
-    task: root.ai.Task<T>,
-  ) -> root.ai.Conversation
-      throws root.ai.Failure | baml.errors.UnknownError {
+    task: ai.Task<T>,
+  ) -> ai.Conversation
+      throws ai.Failure | baml.errors.UnknownError {
     root.google.vertex.internal._validate(self);
     if (self.tool_mode == ToolMode.Prompt) {
       return root.google.internal._new_prompt_conversation(
@@ -19,17 +19,17 @@ implements root.ai.AgentProvider for Gemini {
 
   function step<T>(
     self,
-    conversation: root.ai.Conversation,
-    tools: root.ai.tools.Tool[],
-  ) -> root.ai.ModelStep<T>
-      throws root.ai.Failure | baml.errors.UnknownError {
+    conversation: ai.Conversation,
+    tools: ai.tools.Tool[],
+  ) -> ai.ModelStep<T>
+      throws ai.Failure | baml.errors.UnknownError {
     root.google.vertex.internal._validate(self);
-    root.ai.internal._require_conversation_output_type<T>(
+    ai.internal._require_conversation_output_type<T>(
       conversation,
       self.name(),
     );
-    if (!root.ai.internal._same_provider_instance(conversation.provider(), self)) {
-      throw root.ai.InvalidRequest {
+    if (!ai.internal._same_provider_instance(conversation.provider(), self)) {
+      throw ai.InvalidRequest {
         provider: self.name(),
         status_code: null,
         detail: "Google Vertex received a conversation owned by another provider instance",
@@ -54,13 +54,13 @@ implements root.ai.AgentProvider for Gemini {
 
   function submit(
     self,
-    conversation: root.ai.Conversation,
-    results: root.ai.tools.ToolResult[],
-  ) -> root.ai.Conversation
-      throws root.ai.Failure {
+    conversation: ai.Conversation,
+    results: ai.tools.ToolResult[],
+  ) -> ai.Conversation
+      throws ai.Failure {
     root.google.vertex.internal._validate(self);
-    if (!root.ai.internal._same_provider_instance(conversation.provider(), self)) {
-      throw root.ai.InvalidRequest {
+    if (!ai.internal._same_provider_instance(conversation.provider(), self)) {
+      throw ai.InvalidRequest {
         provider: self.name(),
         status_code: null,
         detail: "Google Vertex received a conversation owned by another provider instance",

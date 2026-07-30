@@ -25,62 +25,27 @@ class BoundAccountTools {
     }
 }
 
-// Future compiler lowering:
-//   ResolveTicketWithTools.task(ticket, $provider = provider)
-// becomes this hand-written ResolveTicketWithTools_task companion.
-function ResolveTicketWithTools_task(
-    ticket: SupportTicket,
-    provider: root.ai.Provider,
-    tools: root.ai.tools.ToolInput[],
-) -> root.ai.Task<Resolution> throws never {
-    root.ai.task_named<Resolution>(provider, "ResolveTicketWithTools", { "ticket": ticket }, tools, (
-        ctx: baml.llm.Context,
-    ) -> baml.llm.PromptAst {
-        baml.llm
-            .assemble_prompt_ast(
-                ["", "\n", ""],
-                [
-                    `Resolve ticket ${ticket.id}. Use the available tools before answering.`,
-                    ctx.output_format,
-                ],
-            )
-    })
+function ResolveTicketWithTools(ticket: SupportTicket) -> Resolution {
+    provider: fake_tool_provider([])
+    prompt: `
+        Resolve ticket ${ticket.id}. Use the available tools before answering.
+        ${ctx.output_format}
+    `
+    tools: [search_knowledge]
 }
 
-function ToolInstructions_task(
-    provider: root.ai.Provider,
-    tools: root.ai.tools.ToolInput[],
-    instructions: string,
-) -> root.ai.Task<Resolution> throws never {
-    root.ai.task_named<Resolution>(provider, "ToolInstructions", { "instructions": instructions }, tools, (
-        ctx: baml.llm.Context,
-    ) -> baml.llm.PromptAst {
-        baml.llm.assemble_prompt_ast(["", "\n", ""], [instructions, ctx.output_format])
-    })
-}
-
-// Future compiler lowering:
-//   ResolveTicketWithTools(ticket, $provider = agent)
-// becomes a bounded Agent run over ResolveTicketWithTools_task(...). The
-// AgentProvider owns model turns; the Agent runner owns tool execution.
-function ResolveTicketWithTools_manual(
-    ticket: SupportTicket,
-    agent: root.ai.Provider,
-    tools: root.ai.tools.Tool[],
-) -> Resolution throws root.ai.Failure | baml.errors.UnknownError {
-    root.ai
-        .internal
-        ._require_done(
-            ResolveTicketWithTools_task(ticket, agent, root.ai.tools._tool_inputs_from_tools(tools))
-                .run(runner = root.ai.run.Agent<Resolution>.new()),
-        )
-        .value
+function ToolInstructions(instructions: string) -> Resolution {
+    provider: fake_tool_provider([])
+    prompt: `
+        ${instructions}
+        ${ctx.output_format}
+    `
 }
 
 class GuideObserver {
     kinds: string[],
-    implements root.ai.observe.AgentObserver {
-        function on_event(self, event: root.ai.observe.AgentEvent) -> null throws never {
+    implements ai.observe.AgentObserver {
+        function on_event(self, event: ai.observe.AgentEvent) -> null throws never {
             self.kinds.push(event.kind());
             null
         }
@@ -97,10 +62,10 @@ function guide_agent_trace() -> GuideAgentTrace throws never {
 }
 
 function fake_tool_provider(
-    calls: root.ai.tools.ToolCall[],
-    provider_tools: root.ai.tools.ProviderTool[] = [],
-) -> root.ai.testing.FakeToolProvider throws never {
-    root.ai.testing.FakeToolProvider {
+    calls: ai.tools.ToolCall[],
+    provider_tools: ai.tools.ProviderTool[] = [],
+) -> ai.testing.FakeToolProvider throws never {
+    ai.testing.FakeToolProvider {
         provider_name: "fake-tools",
         tool_calls: calls,
         provider_tools: provider_tools,
@@ -116,14 +81,14 @@ function fake_tool_provider(
 }
 
 function fake_tool_provider_with_builtins(
-    calls: root.ai.tools.ToolCall[],
-    provider_tools: root.ai.tools.ProviderTool[],
-) -> root.ai.testing.FakeToolProvider throws never {
+    calls: ai.tools.ToolCall[],
+    provider_tools: ai.tools.ProviderTool[],
+) -> ai.testing.FakeToolProvider throws never {
     fake_tool_provider(calls, provider_tools = provider_tools)
 }
 
-function one_knowledge_call() -> root.ai.tools.ToolCall throws never {
-    root.ai.tools.ToolCall {
+function one_knowledge_call() -> ai.tools.ToolCall throws never {
+    ai.tools.ToolCall {
         id: "call-1",
         name: "search_knowledge",
         args: { "query": "duplicate charge" },

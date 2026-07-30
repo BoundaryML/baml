@@ -4,12 +4,14 @@
 // memory store, recall injection, curator edit application, and provider
 // selection without making any model requests.
 
-function _memory_agent_test_task(
-    provider: root.ai.Provider,
-) -> root.ai.Task<string> throws never {
-    root.ai.task<string>(provider, (ctx: baml.llm.Context) -> baml.llm.PromptAst {
-        baml.llm.assemble_prompt_ast(["memory agent test\n", ""], [ctx.output_format])
-    })
+function _MemoryAgentTest(
+    provider: ai.Provider,
+) -> string {
+    provider: provider
+    prompt: `
+        memory agent test
+        ${ctx.output_format}
+    `
 }
 
 testset "memory-agent-tools" {
@@ -65,8 +67,8 @@ testset "memory-agent-tools" {
     }
 
     test "main tool roster contains filesystem tools but no memory mutations" {
-        let tools = root.ai.tools.normalize_tools(_memory_agent_main_tools());
-        let names = tools.map((tool: root.ai.tools.Tool) -> string {
+        let tools = ai.tools.normalize_tools(_memory_agent_main_tools());
+        let names = tools.map((tool: ai.tools.Tool) -> string {
             tool.name
         });
         assert.equal(names, ["read_file", "write_file", "edit_file", "list_dir", "run_bash"]);
@@ -169,21 +171,19 @@ testset "memory-agent-transcript" {
 
 testset "memory-agent-exact-conversation" {
     test "a fresh user turn preserves and resumes the exact provider conversation" {
-        let provider = root.ai.testing.FakeToolProvider {
+        let provider = ai.testing.FakeToolProvider {
             provider_name: "memory-agent-exact",
             tool_calls: [],
             final_output: `"done"`,
             provider_tools: [],
         };
-        let task = _memory_agent_test_task(provider);
-        let first = root
-            .ai
+        let task = _MemoryAgentTest@task(provider);
+        let first = ai
             .internal
             ._require_done(
                 task
                     .run(
-                        runner = root
-                            .ai
+                        runner = ai
                             .run
                             .Agent<string>
                             .new(max_tool_calls_per_step = 1),
@@ -199,18 +199,16 @@ testset "memory-agent-exact-conversation" {
         assert.equal(continued.provider().name(), "memory-agent-exact");
         assert.equal(continued.messages().items().length(), 2);
         assert.equal(
-            root.ai.message_text(continued.messages().items()[1]),
+            ai.message_text(continued.messages().items()[1]),
             "inspect one more file",
         );
 
-        let resumed = root
-            .ai
+        let resumed = ai
             .internal
             ._require_done(
                 task
                     .run(
-                        runner = root
-                            .ai
+                        runner = ai
                             .run
                             .Agent<string>
                             .new(
@@ -486,12 +484,12 @@ testset "memory-agent-curator" {
 
 testset "memory-agent-providers" {
     test "task defaults to OpenAI and carries the main tool roster" {
-        let task = _memory_agent_task("", "hello");
+        let task = _MemoryAgentTurn@task(_memory_agent_opening_transcript("", "", "hello"));
         assert.equal(task.provider_name(), "openai");
         assert.contains(task.prompt.text(), "USER: hello");
         assert
             .equal(
-                task.tools.map((tool: root.ai.tools.Tool) -> string {
+                task.tools.map((tool: ai.tools.Tool) -> string {
                     tool.name
                 }),
                 ["read_file", "write_file", "edit_file", "list_dir", "run_bash"],
@@ -499,17 +497,19 @@ testset "memory-agent-providers" {
     }
 
     test "Google entrypoint overrides the same task contract" {
-        let openai = _memory_agent_task("EARLIER\n", "hello");
-        let google = _memory_agent_google_task("EARLIER\n", "hello");
+        let transcript = _memory_agent_opening_transcript("EARLIER\n", "", "hello");
+        let openai = _MemoryAgentTurn@task(transcript);
+        let google = _MemoryAgentTurn@task(transcript)
+            .with_provider(_memory_agent_google_provider());
         assert.equal(openai.provider_name(), "openai");
         assert.equal(google.provider_name(), "google-ai");
         assert.equal(openai.identity?.name, google.identity?.name);
         assert
             .equal(
-                openai.tools.map((tool: root.ai.tools.Tool) -> string {
+                openai.tools.map((tool: ai.tools.Tool) -> string {
                     tool.name
                 }),
-                google.tools.map((tool: root.ai.tools.Tool) -> string {
+                google.tools.map((tool: ai.tools.Tool) -> string {
                     tool.name
                 }),
             )
@@ -557,8 +557,9 @@ testset "memory-agent-providers" {
     }
 
     test "Google override also applies to the isolated curator task" {
-        let openai = _memory_agent_curator_task("USER: hi", "(memory is empty)");
-        let google = _memory_agent_google_curator_task("USER: hi", "(memory is empty)");
+        let openai = _MemoryAgentCurator@task("USER: hi", "(memory is empty)");
+        let google = _MemoryAgentCurator@task("USER: hi", "(memory is empty)")
+            .with_provider(_memory_agent_google_curator_provider());
         assert.equal(openai.provider_name(), "openai");
         assert.equal(google.provider_name(), "google-ai");
         assert.equal(openai.identity?.name, google.identity?.name);
@@ -569,11 +570,11 @@ testset "memory-agent-providers" {
 
 testset "memory-agent-framework" {
     test "Task run Agent executes and correlates one coding tool" {
-        let provider = root.ai.testing.ScriptedToolProvider {
+        let provider = ai.testing.ScriptedToolProvider {
             turns: [
-                root.ai.tools.ToolCalls {
+                ai.tools.ToolCalls {
                     calls: [
-                        root.ai.tools.ToolCall {
+                        ai.tools.ToolCall {
                             id: "memory-call-1",
                             name: "list_dir",
                             args: { "path": "/tmp", "summary": "Inspect the temporary directory." },
@@ -586,23 +587,24 @@ testset "memory-agent-framework" {
         };
         let trace = MemoryAgentTrace { transcript: "USER: inspect /tmp\n", steps: 0 };
         let observer = MemoryAgentObserver { trace: trace, live: false };
-        let outcome = _memory_agent_task("", "inspect /tmp")
+        let outcome = _MemoryAgentTurn@task(
+            _memory_agent_opening_transcript("", "", "inspect /tmp"),
+        )
             .with_provider(provider)
             .run(
-                runner = root
-                    .ai
+                runner = ai
                     .run
                     .Agent<string>
                     .new(
-                        budget = root.ai.Budget { max_steps: 3, max_cost_usd: null },
+                        budget = ai.Budget { max_steps: 3, max_cost_usd: null },
                         observers = [observer],
                     ),
             );
         match (outcome) {
-            let done: root.ai.Done<string> => {
+            let done: ai.Done<string> => {
                 assert.equal(done.value, "inspection complete");
                 match (done.conversation) {
-                    let state: root.ai.testing.ScriptedToolConversation => {
+                    let state: ai.testing.ScriptedToolConversation => {
                         assert.equal(state.submitted_results.length(), 1);
                         assert.equal(state.submitted_results.at(0)?.at(0)?.id, "memory-call-1");
                         assert.is_true(!(state.submitted_results.at(0)?.at(0)?.is_error ?? true))
@@ -619,20 +621,20 @@ testset "memory-agent-framework" {
     }
 
     test "Agent budget stops before an additional provider step" {
-        let provider = root.ai.testing.ScriptedToolProvider {
+        let provider = ai.testing.ScriptedToolProvider {
             turns: [
-                root.ai.tools.ToolCalls {
+                ai.tools.ToolCalls {
                     calls: [
-                        root.ai.tools.ToolCall {
+                        ai.tools.ToolCall {
                             id: "budget-call-1",
                             name: "list_dir",
                             args: { "path": "/tmp", "summary": "Inspect once." },
                         },
                     ],
                 },
-                root.ai.tools.ToolCalls {
+                ai.tools.ToolCalls {
                     calls: [
-                        root.ai.tools.ToolCall {
+                        ai.tools.ToolCall {
                             id: "budget-call-2",
                             name: "list_dir",
                             args: { "path": ".", "summary": "Inspect twice." },
@@ -643,17 +645,18 @@ testset "memory-agent-framework" {
             final_output: "never reached",
             usage_per_step: null,
         };
-        let outcome = _memory_agent_task("", "inspect")
+        let outcome = _MemoryAgentTurn@task(
+            _memory_agent_opening_transcript("", "", "inspect"),
+        )
             .with_provider(provider)
             .run(
-                runner = root
-                    .ai
+                runner = ai
                     .run
                     .Agent<string>
-                    .new(budget = root.ai.Budget { max_steps: 1, max_cost_usd: null }),
+                    .new(budget = ai.Budget { max_steps: 1, max_cost_usd: null }),
             );
         match (outcome) {
-            let budget: root.ai.BudgetReached => {
+            let budget: ai.BudgetReached => {
                 assert.equal(budget.steps_taken, 1);
                 assert.equal(budget.reason, "max_steps")
             },
@@ -670,19 +673,19 @@ testset "memory-agent-framework" {
     }
 
     test "memory-agent runner rejects a parallel tool batch before dispatch" {
-        let provider = root.ai.testing.FakeToolProvider {
+        let provider = ai.testing.FakeToolProvider {
             provider_name: "memory-agent-limit",
             tool_calls: [
-                root.ai.tools.ToolCall { id: "one", name: "read_file", args: {} },
-                root.ai.tools.ToolCall { id: "two", name: "list_dir", args: {} },
+                ai.tools.ToolCall { id: "one", name: "read_file", args: {} },
+                ai.tools.ToolCall { id: "two", name: "list_dir", args: {} },
             ],
             final_output: `"unreachable"`,
             provider_tools: [],
         };
         let limited = false;
-        let _ = _memory_agent_test_task(provider)
+        let _ = _MemoryAgentTest@task(provider)
             .run(runner = _memory_agent_runner()) catch (e) {
-            let failure: root.ai.ToolCallLimitExceeded => {
+            let failure: ai.ToolCallLimitExceeded => {
                 limited = true;
                 assert.equal(failure.max_tool_calls_per_step, 1);
                 assert.equal(failure.actual_tool_calls, 2);

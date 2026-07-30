@@ -1,17 +1,17 @@
 // Tests for the switch_provider_between_turns scenario.
 test "guide 03.04: prepare_step can switch providers through conversation import" {
   let first = fake_tool_provider([one_knowledge_call()]);
-  let second = root.ai.testing.FakeToolProvider {
+  let second = ai.testing.FakeToolProvider {
     ...fake_tool_provider([]),
     provider_name: "fake-tools-secondary",
   };
   let trace = guide_agent_trace();
-  let task = ResolveTicketWithTools_task(sample_ticket(), first, [search_knowledge]);
+  let task = ResolveTicketWithTools@task(sample_ticket()).with_provider(first).with_tools([search_knowledge]);
   let outcome = task.run(
-    runner = root.ai.run.Agent<Resolution>.new(
+    runner = ai.run.Agent<Resolution>.new(
       tools = [search_knowledge],
       prepare_step = (context) -> {
-        root.ai.tools.StepPlan {
+        ai.tools.StepPlan {
           provider: if (context.step == 1) { second } else { null },
           tools: null,
           stop: null,
@@ -24,7 +24,7 @@ test "guide 03.04: prepare_step can switch providers through conversation import
     ),
   );
   match (outcome) {
-    let done: root.ai.Done<Resolution> => assert.equal(
+    let done: ai.Done<Resolution> => assert.equal(
       done.conversation.provider().name(),
       "fake-tools-secondary",
     ),
@@ -40,18 +40,18 @@ test "guide 03.04: OpenAI Responses imports portable message text" {
     "type": "function",
     "function": { "name": "search_knowledge", "arguments": "{}" },
   }];
-  let history = root.ai.MessageHistory { entries: [
-    root.ai.ChatMessage {
-      message_role: root.ai.MessageRole.Assistant,
-      content: [root.ai.messages.ProviderDataPart {
+  let history = ai.MessageHistory { entries: [
+    ai.ChatMessage {
+      message_role: ai.MessageRole.Assistant,
+      content: [ai.messages.ProviderDataPart {
         provider: "openai",
         data: { "tool_calls": calls },
       }],
       metadata: null,
     },
-    root.ai.ChatMessage {
-      message_role: root.ai.MessageRole.Tool,
-      content: [root.ai.messages.ProviderDataPart {
+    ai.ChatMessage {
+      message_role: ai.MessageRole.Tool,
+      content: [ai.messages.ProviderDataPart {
         provider: "openai",
         data: { "tool_call_id": "call-1", "output": { "ok": true } },
       }],
@@ -74,38 +74,38 @@ class NamedOpenAiToolProvider {
   label: string,
   inner: root.openai.OpenAIProvider,
 
-  implements root.ai.Provider {
+  implements ai.Provider {
     function name(self) -> string throws never { self.label }
     function render_shorthand(self) -> string throws never { self.inner.render_shorthand() }
   }
 }
 
-implements root.ai.AgentProvider for NamedOpenAiToolProvider {
-  function begin<T>(self, task: root.ai.Task<T>) -> root.ai.Conversation
-      throws root.ai.Failure | baml.errors.UnknownError {
+implements ai.AgentProvider for NamedOpenAiToolProvider {
+  function begin<T>(self, task: ai.Task<T>) -> ai.Conversation
+      throws ai.Failure | baml.errors.UnknownError {
     self.inner.begin<T>(task.with_provider(self.inner))
   }
 
-  function step<T>(self, conversation: root.ai.Conversation, tools: root.ai.tools.Tool[])
-      -> root.ai.ModelStep<T> throws root.ai.Failure | baml.errors.UnknownError {
+  function step<T>(self, conversation: ai.Conversation, tools: ai.tools.Tool[])
+      -> ai.ModelStep<T> throws ai.Failure | baml.errors.UnknownError {
     self.inner.step<T>(conversation, tools)
   }
 
   function submit(
     self,
-    conversation: root.ai.Conversation,
-    results: root.ai.tools.ToolResult[],
-  ) -> root.ai.Conversation throws root.ai.Failure | baml.errors.UnknownError {
+    conversation: ai.Conversation,
+    results: ai.tools.ToolResult[],
+  ) -> ai.Conversation throws ai.Failure | baml.errors.UnknownError {
     self
       .inner
-      .as<root.ai.AgentProvider>
+      .as<ai.AgentProvider>
       .submit(conversation, results)
   }
 }
 
-implements root.ai.ConversationImportProvider for NamedOpenAiToolProvider {
-  function import_messages<T>(self, messages: root.ai.Messages)
-      -> root.ai.ConversationImport throws baml.errors.UnknownError {
+implements ai.ConversationImportProvider for NamedOpenAiToolProvider {
+  function import_messages<T>(self, messages: ai.Messages)
+      -> ai.ConversationImport throws baml.errors.UnknownError {
     self.inner.import_messages<T>(messages)
   }
 }
@@ -119,16 +119,12 @@ testset "integ-test-guide-03-switch-between-turns" {
     };
     let trace = guide_agent_trace();
     let observer = GuideObserver { kinds: [] };
-    let task = ToolInstructions_task(
-      first,
-      [search_knowledge],
-      `Call search_knowledge with query "duplicate charge". After its result the run will move to another provider; that provider must return the final resolution from the imported conversation.`,
-    );
+    let task = ToolInstructions@task(`Call search_knowledge with query "duplicate charge". After its result the run will move to another provider; that provider must return the final resolution from the imported conversation.`).with_provider(first).with_tools([search_knowledge]);
     let outcome = task.run(
-      runner = root.ai.run.Agent<Resolution>.new(
+      runner = ai.run.Agent<Resolution>.new(
         tools = [search_knowledge],
         prepare_step = (context) -> {
-          root.ai.tools.StepPlan {
+          ai.tools.StepPlan {
             provider: if (context.step == 1) { second } else { null },
             tools: null,
             stop: null,
@@ -147,7 +143,7 @@ testset "integ-test-guide-03-switch-between-turns" {
     }.to_string());
     assert.contains(observer.kinds.join(","), "provider_changed")
     match (outcome) {
-      let done: root.ai.Done<Resolution> => {
+      let done: ai.Done<Resolution> => {
         assert.equal(done.metadata.provider, "openai-secondary");
         assert.is_true(done.value.reply.length() > 0);
       },

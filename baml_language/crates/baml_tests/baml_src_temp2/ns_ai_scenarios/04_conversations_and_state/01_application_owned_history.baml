@@ -2,10 +2,8 @@
 // reason over the updated conversation.
 function application_owned_history() -> ConversationProbe {
     let original = sample_history();
-    let updated = original.append(root.ai.ChatMessage.user("The order is O-42.")).to_history();
-    let task = ConversationProbe_task(
-        updated,
-        root.ai
+    let updated = original.append(ai.ChatMessage.user("The order is O-42.")).to_history();
+    let task = ProbeConversation@task(updated).with_provider(ai
             .testing
             .fake_output_provider(
                 `
@@ -14,12 +12,10 @@ function application_owned_history() -> ConversationProbe {
                           "evidence": "The order is O-42."
                         }
                 `,
-            ),
-    );
-    let result = root
-        .ai
+            ));
+    let result = ai
         .internal
-        ._require_done(task.run(runner = root.ai.run.Agent<ConversationProbe>.new()))
+        ._require_done(task.run(runner = ai.run.Agent<ConversationProbe>.new()))
         .value;
     log.info(
         {

@@ -15,12 +15,12 @@ function _uses_sap(provider: root.openai.OpenAIProvider) -> bool throws never {
 
 function _validate_output_config(
     provider: root.openai.OpenAIProvider,
-) -> null throws root.ai.InvalidRequest {
+) -> null throws ai.InvalidRequest {
     if (
         provider.tool_mode == root.openai.ToolMode.Prompt
             && provider.output_mode != root.openai.OutputMode.Sap
     ) {
-        throw root.ai.InvalidRequest {
+        throw ai.InvalidRequest {
             provider: "openai-responses",
             status_code: null,
             detail: "`tool_mode = Prompt` requires `output_mode = Sap`",
@@ -180,7 +180,7 @@ function _output_tool(
 }
 
 function _application_tool(
-    tool: root.ai.tools.Tool,
+    tool: ai.tools.Tool,
     strict: bool,
 ) -> json throws baml.errors.Unsupported {
     {
@@ -197,17 +197,17 @@ function _application_tool(
 }
 
 function _application_tools(
-    tools: root.ai.tools.Tool[],
+    tools: ai.tools.Tool[],
     strict: bool,
 ) -> json[] throws baml.errors.Unsupported {
-    tools.map((tool: root.ai.tools.Tool) -> json {
+    tools.map((tool: ai.tools.Tool) -> json {
         _application_tool(tool, strict)
     })
 }
 
 function _agent_tools(
     output_type: type,
-    tools: root.ai.tools.Tool[],
+    tools: ai.tools.Tool[],
     strict: bool,
     use_sap: bool,
 ) -> json[] throws baml.errors.Unsupported {
@@ -218,7 +218,7 @@ function _agent_tools(
     // adapter before this helper; it encodes T | ToolCalls in the prompt.
     if (
         !use_sap
-            && tools.some((tool: root.ai.tools.Tool) -> bool {
+            && tools.some((tool: ai.tools.Tool) -> bool {
                 tool.name == _output_tool_name()
             })
     ) {
@@ -233,16 +233,16 @@ function _agent_tools(
     encoded
 }
 
-function _output_call_value(call: json, raw_output: string) -> json throws root.ai.ParseFailed {
+function _output_call_value(call: json, raw_output: string) -> json throws ai.ParseFailed {
     if (baml.json.path_or(call, ".name", "") != _output_tool_name()) {
-        throw root.ai.ParseFailed {
+        throw ai.ParseFailed {
             provider: "openai-responses",
             raw_output: raw_output,
         };
     }
     let arguments = baml.json.path<string>(call, ".arguments") catch (e) {
         _ => {
-            throw root.ai.ParseFailed {
+            throw ai.ParseFailed {
             provider: "openai-responses",
             raw_output: raw_output,
         }
@@ -250,7 +250,7 @@ function _output_call_value(call: json, raw_output: string) -> json throws root.
     };
     let wrapper = baml.json.parse(arguments) catch (e) {
         _ => {
-            throw root.ai.ParseFailed {
+            throw ai.ParseFailed {
             provider: "openai-responses",
             raw_output: raw_output,
         }
@@ -258,7 +258,7 @@ function _output_call_value(call: json, raw_output: string) -> json throws root.
     };
     baml.json.path<json>(wrapper, ".value") catch (e) {
         _ => {
-            throw root.ai.ParseFailed {
+            throw ai.ParseFailed {
             provider: "openai-responses",
             raw_output: raw_output,
         }
@@ -266,10 +266,10 @@ function _output_call_value(call: json, raw_output: string) -> json throws root.
     }
 }
 
-function _parse_output_call<T>(call: json, raw_output: string) -> T throws root.ai.ParseFailed {
+function _parse_output_call<T>(call: json, raw_output: string) -> T throws ai.ParseFailed {
     baml.json.from_json<T>(_output_call_value(call, raw_output)) catch (e) {
         _ => {
-            throw root.ai.ParseFailed {
+            throw ai.ParseFailed {
             provider: "openai-responses",
             raw_output: raw_output,
         }
@@ -312,16 +312,16 @@ function _response_refusal(raw: json) -> string? throws never {
 function _response_metadata(
     raw: json,
     fallback_model: string,
-) -> root.ai.ResponseMetadata throws never {
+) -> ai.ResponseMetadata throws never {
     let usage_json = baml.json.path_or<json>(raw, ".usage", null);
-    root.ai.ResponseMetadata {
+    ai.ResponseMetadata {
         provider: "openai",
         model: baml.json.path_or<string?>(raw, ".model", fallback_model),
         request_id: baml.json.path_or<string?>(raw, ".id", null),
         finish_reason: baml.json.path_or<string?>(raw, ".status", null),
         usage: match (usage_json) {
             let usage: map<string, json> => {
-                root.ai.Usage {
+                ai.Usage {
                     input_tokens: baml.json.path_or(usage, ".input_tokens", 0),
                     output_tokens: baml.json.path_or(usage, ".output_tokens", 0),
                     cached_input_tokens: baml.json.path_or<int?>(usage, ".input_tokens_details.cached_tokens", null),
@@ -340,10 +340,10 @@ function _parse_response_value<T>(
     raw: json,
     raw_output: string,
     use_sap: bool,
-) -> T throws root.ai.Failure {
+) -> T throws ai.Failure {
     match (_response_refusal(raw)) {
         let refusal: string => {
-            throw root.ai.Refused {
+            throw ai.Refused {
             provider: "openai-responses",
             reason: refusal,
         }
@@ -352,7 +352,7 @@ function _parse_response_value<T>(
     }
     let status = baml.json.path_or(raw, ".status", "");
     if (status == "failed" || status == "cancelled" || status == "incomplete") {
-        throw root.ai.ParseFailed {
+        throw ai.ParseFailed {
             provider: "openai-responses",
             raw_output: raw_output,
         };
@@ -364,7 +364,7 @@ function _parse_response_value<T>(
         let text = match (_response_output_text(raw)) {
             let value: string => value,
             null => {
-                throw root.ai.ParseFailed {
+                throw ai.ParseFailed {
                 provider: "openai-responses",
                 raw_output: raw_output,
             }
@@ -372,7 +372,7 @@ function _parse_response_value<T>(
         };
         return baml.sap.parse<T>(text) catch (e) {
             _ => {
-                throw root.ai.ParseFailed {
+                throw ai.ParseFailed {
                 provider: "openai-responses",
                 raw_output: text,
             }
@@ -381,7 +381,7 @@ function _parse_response_value<T>(
     }
     let calls = _response_function_calls(raw);
     if (calls.length() != 1) {
-        throw root.ai.ParseFailed {
+        throw ai.ParseFailed {
             provider: "openai-responses",
             raw_output: raw_output,
         };

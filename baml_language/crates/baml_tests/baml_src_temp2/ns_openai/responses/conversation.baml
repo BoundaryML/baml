@@ -1,8 +1,8 @@
-implements root.ai.ConversationImportProvider for OpenAIProvider {
+implements ai.ConversationImportProvider for OpenAIProvider {
   function import_messages<T>(
     self,
-    messages: root.ai.Messages,
-  ) -> root.ai.ConversationImport throws baml.errors.UnknownError {
+    messages: ai.Messages,
+  ) -> ai.ConversationImport throws baml.errors.UnknownError {
     if (self.tool_mode == root.openai.ToolMode.Prompt) {
       throw baml.errors.UnknownError.with_message<never>(
         self.tool_mode,
@@ -19,11 +19,11 @@ implements root.ai.ConversationImportProvider for OpenAIProvider {
       };
       input.push(item);
     }
-    root.ai.ConversationImport {
+    ai.ConversationImport {
       conversation: root.openai.internal.Conversation {
         owner: self,
         history: history,
-        declared_output_type: root.ai.internal._output_type_fingerprint<T>(),
+        declared_output_type: ai.internal._output_type_fingerprint<T>(),
         input: input,
         previous_response_id: null,
         request_url: request.url,
@@ -31,7 +31,7 @@ implements root.ai.ConversationImportProvider for OpenAIProvider {
         active_tools: [],
         last_output: [],
       },
-      fidelity: root.ai.ConversationFidelity.MessagesOnly,
+      fidelity: ai.ConversationFidelity.MessagesOnly,
       warnings: [
         "message import does not retain OpenAI response IDs or opaque reasoning items",
       ],
@@ -39,28 +39,28 @@ implements root.ai.ConversationImportProvider for OpenAIProvider {
   }
 }
 
-implements root.ai.ConversationAppendProvider for OpenAIProvider {
+implements ai.ConversationAppendProvider for OpenAIProvider {
   function append_messages(
     self,
-    conversation: root.ai.Conversation,
-    messages: root.ai.Messages,
-  ) -> root.ai.Conversation throws root.ai.Failure {
+    conversation: ai.Conversation,
+    messages: ai.Messages,
+  ) -> ai.Conversation throws ai.Failure {
     // Validate the entire portable batch before mutating either projection.
-    let _ = root.ai.internal._conversation_append_user_texts(
+    let _ = ai.internal._conversation_append_user_texts(
       messages,
       "openai-responses",
     );
     match (conversation) {
       let state: root.openai.internal.Conversation => {
-        if (!root.ai.internal._same_provider_instance(state.owner, self)) {
-          throw root.ai.InvalidRequest {
+        if (!ai.internal._same_provider_instance(state.owner, self)) {
+          throw ai.InvalidRequest {
             provider: "openai-responses",
             status_code: null,
             detail: "OpenAI Responses cannot append to a conversation owned by another provider instance",
           };
         }
         if (state.last_output.length() != 0) {
-          throw root.ai.InvalidRequest {
+          throw ai.InvalidRequest {
             provider: "openai-responses",
             status_code: null,
             detail: "finish the pending OpenAI tool exchange before appending a user message",
@@ -76,15 +76,15 @@ implements root.ai.ConversationAppendProvider for OpenAIProvider {
         state
       },
       let state: root.openai.internal.PromptConversation => {
-        if (!root.ai.internal._same_provider_instance(state.owner, self)) {
-          throw root.ai.InvalidRequest {
+        if (!ai.internal._same_provider_instance(state.owner, self)) {
+          throw ai.InvalidRequest {
             provider: "openai-responses",
             status_code: null,
             detail: "OpenAI prompt tool mode cannot append to a conversation owned by another provider instance",
           };
         }
         if (state.pending_call_ids.length() != 0) {
-          throw root.ai.InvalidRequest {
+          throw ai.InvalidRequest {
             provider: "openai-responses",
             status_code: null,
             detail: "finish the pending OpenAI prompt-tool exchange before appending a user message",
@@ -99,7 +99,7 @@ implements root.ai.ConversationAppendProvider for OpenAIProvider {
         }
         state
       },
-      _ => throw root.ai.InvalidRequest {
+      _ => throw ai.InvalidRequest {
         provider: "openai-responses",
         status_code: null,
         detail: "OpenAI Responses received another provider's conversation",
@@ -108,11 +108,11 @@ implements root.ai.ConversationAppendProvider for OpenAIProvider {
   }
 }
 
-implements root.ai.ResumableAgentProvider for OpenAIProvider {
+implements ai.ResumableAgentProvider for OpenAIProvider {
   function save_conversation(
     self,
-    conversation: root.ai.Conversation,
-  ) -> root.ai.ConversationToken throws baml.errors.UnknownError {
+    conversation: ai.Conversation,
+  ) -> ai.ConversationToken throws baml.errors.UnknownError {
     if (self.tool_mode == root.openai.ToolMode.Prompt) {
       throw baml.errors.UnknownError.with_message<never>(
         self.tool_mode,
@@ -126,7 +126,7 @@ implements root.ai.ResumableAgentProvider for OpenAIProvider {
         "wrong OpenAI Responses conversation",
       ),
     };
-    if (!root.ai.internal._same_provider_instance(state.owner, self)) {
+    if (!ai.internal._same_provider_instance(state.owner, self)) {
       throw baml.errors.UnknownError.with_message<never>(
         null,
         "OpenAI Responses cannot save a conversation owned by another provider instance",
@@ -139,7 +139,7 @@ implements root.ai.ResumableAgentProvider for OpenAIProvider {
       "tool_mode": self.tool_mode.to_string(),
       "parallel_tool_calls": self.parallel_tool_calls,
     });
-    root.ai.ConversationToken {
+    ai.ConversationToken {
       provider: self.name(),
       version: 1,
       sealed: baml.json.stringify({
@@ -157,8 +157,8 @@ implements root.ai.ResumableAgentProvider for OpenAIProvider {
 
   function restore_conversation(
     self,
-    token: root.ai.ConversationToken,
-  ) -> root.ai.Conversation throws baml.errors.UnknownError {
+    token: ai.ConversationToken,
+  ) -> ai.Conversation throws baml.errors.UnknownError {
     if (self.tool_mode == root.openai.ToolMode.Prompt) {
       throw baml.errors.UnknownError.with_message<never>(
         self.tool_mode,

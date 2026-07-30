@@ -1,15 +1,15 @@
-implements root.ai.AgentProvider for OpenAIProvider {
+implements ai.AgentProvider for OpenAIProvider {
   function begin<T>(
     self,
-    task: root.ai.Task<T>,
-  ) -> root.ai.Conversation
-      throws root.ai.Failure | baml.errors.UnknownError {
+    task: ai.Task<T>,
+  ) -> ai.Conversation
+      throws ai.Failure | baml.errors.UnknownError {
     root.openai.internal._validate_output_config(self);
     if (self.tool_mode == root.openai.ToolMode.Prompt) {
       return root.openai.internal.PromptConversation {
         owner: self,
         history: task.messages().to_history(),
-        declared_output_type: root.ai.internal._output_type_fingerprint<T>(),
+        declared_output_type: ai.internal._output_type_fingerprint<T>(),
         recipe: task._render,
         identity: task.identity,
         arguments: task.arguments,
@@ -36,7 +36,7 @@ implements root.ai.AgentProvider for OpenAIProvider {
     root.openai.internal.Conversation {
       owner: self,
       history: task.messages().to_history(),
-      declared_output_type: root.ai.internal._output_type_fingerprint<T>(),
+      declared_output_type: ai.internal._output_type_fingerprint<T>(),
       input: baml.json.path_or<json[]>(request_body, ".input", []),
       previous_response_id: null,
       request_url: request.url,
@@ -48,12 +48,12 @@ implements root.ai.AgentProvider for OpenAIProvider {
 
   function step<T>(
     self,
-    conversation: root.ai.Conversation,
-    tools: root.ai.tools.Tool[],
-  ) -> root.ai.ModelStep<T>
-      throws root.ai.Failure | baml.errors.UnknownError {
+    conversation: ai.Conversation,
+    tools: ai.tools.Tool[],
+  ) -> ai.ModelStep<T>
+      throws ai.Failure | baml.errors.UnknownError {
     root.openai.internal._validate_output_config(self);
-    root.ai.internal._require_conversation_output_type<T>(
+    ai.internal._require_conversation_output_type<T>(
       conversation,
       self.name(),
     );
@@ -65,21 +65,21 @@ implements root.ai.AgentProvider for OpenAIProvider {
     //# Recover the Responses continuation owned by this provider
     let state = match (conversation) {
       let value: root.openai.internal.Conversation => value,
-      _ => throw root.ai.InvalidRequest {
+      _ => throw ai.InvalidRequest {
         provider: "openai-responses",
         status_code: null,
         detail: "OpenAI Responses received another provider's conversation",
       },
     };
-    if (!root.ai.internal._same_provider_instance(state.owner, self)) {
-      throw root.ai.InvalidRequest {
+    if (!ai.internal._same_provider_instance(state.owner, self)) {
+      throw ai.InvalidRequest {
         provider: "openai-responses",
         status_code: null,
         detail: "OpenAI Responses received a conversation owned by another provider instance",
       };
     }
     if (state.last_output.length() != 0) {
-      throw root.ai.InvalidRequest {
+      throw ai.InvalidRequest {
         provider: "openai-responses",
         status_code: null,
         detail: "submit tool results before requesting the next OpenAI Responses step",
@@ -139,19 +139,19 @@ implements root.ai.AgentProvider for OpenAIProvider {
       body,
     );
     let response = baml.http.send(request) catch (e) {
-      _ => throw root.ai.NetworkFailure {
+      _ => throw ai.NetworkFailure {
         provider: "openai-responses",
         detail: "baml.http.send failed before a Responses API response arrived",
       },
     };
     let text = response.text() catch (e) {
-      _ => throw root.ai.NetworkFailure {
+      _ => throw ai.NetworkFailure {
         provider: "openai-responses",
         detail: "the Responses API body could not be read completely",
       },
     };
     if (!response.ok()) {
-      throw root.ai.internal.classify_http(
+      throw ai.internal._classify_http(
         "openai-responses",
         response.status_code,
         text,
@@ -159,13 +159,13 @@ implements root.ai.AgentProvider for OpenAIProvider {
     }
     //# Decode the provider envelope without repairing wire errors
     let raw = baml.json.parse(text) catch (e) {
-      _ => throw root.ai.ParseFailed {
+      _ => throw ai.ParseFailed {
         provider: "openai-responses",
         raw_output: text,
       },
     };
     match (root.openai.internal._response_refusal(raw)) {
-      let refusal: string => throw root.ai.Refused {
+      let refusal: string => throw ai.Refused {
         provider: "openai-responses",
         reason: refusal,
       },
@@ -173,7 +173,7 @@ implements root.ai.AgentProvider for OpenAIProvider {
     }
     let status = baml.json.path_or(raw, ".status", "");
     if (status == "failed" || status == "cancelled" || status == "incomplete") {
-      throw root.ai.ParseFailed {
+      throw ai.ParseFailed {
         provider: "openai-responses",
         raw_output: text,
       };
@@ -185,7 +185,7 @@ implements root.ai.AgentProvider for OpenAIProvider {
     let metadata = root.openai.internal._response_metadata(raw, self.model);
     let response_id = baml.json.path_or(raw, ".id", "");
     if (response_id.length() == 0) {
-      throw root.ai.ParseFailed {
+      throw ai.ParseFailed {
         provider: "openai-responses",
         raw_output: text,
       };
@@ -197,7 +197,7 @@ implements root.ai.AgentProvider for OpenAIProvider {
     if (!use_sap && output_calls.length() > 0) {
       if (calls.length() != 1 || output_calls.length() != 1) {
         // A final result cannot be mixed with application side effects.
-        throw root.ai.ParseFailed {
+        throw ai.ParseFailed {
           provider: "openai-responses",
           raw_output: text,
         };
@@ -208,7 +208,7 @@ implements root.ai.AgentProvider for OpenAIProvider {
         text,
       );
       state.history.entries.push(
-        root.ai.ChatMessage.assistant(
+        ai.ChatMessage.assistant(
           baml.json.stringify(
             root.openai.internal._output_call_value(output_calls[0], text),
           ),
@@ -226,7 +226,7 @@ implements root.ai.AgentProvider for OpenAIProvider {
           ),
         },
       ];
-      return root.ai.ModelStep<T> {
+      return ai.ModelStep<T> {
         outcome: value,
         metadata: metadata,
       };
@@ -238,15 +238,15 @@ implements root.ai.AgentProvider for OpenAIProvider {
       state.last_output = calls;
       state.previous_response_id = response_id;
       state.input = [];
-      state.history.entries.push(root.ai.ChatMessage {
-        message_role: root.ai.MessageRole.Assistant,
-        content: [root.ai.messages.ProviderDataPart {
+      state.history.entries.push(ai.ChatMessage {
+        message_role: ai.MessageRole.Assistant,
+        content: [ai.messages.ProviderDataPart {
           provider: "openai-responses",
           data: { "output": calls },
         }],
         metadata: null,
       });
-      return root.ai.ModelStep<T> {
+      return ai.ModelStep<T> {
         outcome: root.openai.internal._application_calls(calls, text),
         metadata: metadata,
       };
@@ -256,28 +256,28 @@ implements root.ai.AgentProvider for OpenAIProvider {
     // chooses among those T branches after the application-call branch is
     // ruled out by the Responses envelope.
     if (!use_sap) {
-      throw root.ai.ParseFailed {
+      throw ai.ParseFailed {
         provider: "openai-responses",
         raw_output: text,
       };
     }
     let content = match (root.openai.internal._response_output_text(raw)) {
       let value: string => value,
-      null => throw root.ai.ParseFailed {
+      null => throw ai.ParseFailed {
         provider: "openai-responses",
         raw_output: text,
       },
     };
-    state.history.entries.push(root.ai.ChatMessage.assistant(content));
+    state.history.entries.push(ai.ChatMessage.assistant(content));
     let value = baml.sap.parse<T>(content) catch (e) {
-      _ => throw root.ai.ParseFailed {
+      _ => throw ai.ParseFailed {
         provider: "openai-responses",
         raw_output: content,
       },
     };
     state.previous_response_id = response_id;
     state.input = [];
-    root.ai.ModelStep<T> {
+    ai.ModelStep<T> {
       outcome: value,
       metadata: metadata,
     }
@@ -285,9 +285,9 @@ implements root.ai.AgentProvider for OpenAIProvider {
 
   function submit(
     self,
-    conversation: root.ai.Conversation,
-    results: root.ai.tools.ToolResult[],
-  ) -> root.ai.Conversation throws root.ai.Failure {
+    conversation: ai.Conversation,
+    results: ai.tools.ToolResult[],
+  ) -> ai.Conversation throws ai.Failure {
     root.openai.internal._validate_output_config(self);
     if (self.tool_mode == root.openai.ToolMode.Prompt) {
       return root.openai.internal._prompt_submit(self, conversation, results);
@@ -295,14 +295,14 @@ implements root.ai.AgentProvider for OpenAIProvider {
     //# Recover the continuation that produced these call IDs
     let state = match (conversation) {
       let value: root.openai.internal.Conversation => value,
-      _ => throw root.ai.InvalidRequest {
+      _ => throw ai.InvalidRequest {
         provider: "openai-responses",
         status_code: null,
         detail: "OpenAI Responses received another provider's conversation",
       },
     };
-    if (!root.ai.internal._same_provider_instance(state.owner, self)) {
-      throw root.ai.InvalidRequest {
+    if (!ai.internal._same_provider_instance(state.owner, self)) {
+      throw ai.InvalidRequest {
         provider: "openai-responses",
         status_code: null,
         detail: "OpenAI Responses received a conversation owned by another provider instance",
@@ -314,7 +314,7 @@ implements root.ai.AgentProvider for OpenAIProvider {
       pending_ids,
       results,
     );
-    state.input = ordered.map((result: root.ai.tools.ToolResult) -> json {
+    state.input = ordered.map((result: ai.tools.ToolResult) -> json {
       {
         "type": "function_call_output",
         "call_id": result.id,
@@ -322,9 +322,9 @@ implements root.ai.AgentProvider for OpenAIProvider {
       }
     });
     for (let result in ordered) {
-      state.history.entries.push(root.ai.ChatMessage {
-        message_role: root.ai.MessageRole.Tool,
-        content: [root.ai.messages.ProviderDataPart {
+      state.history.entries.push(ai.ChatMessage {
+        message_role: ai.MessageRole.Tool,
+        content: [ai.messages.ProviderDataPart {
           provider: "openai-responses",
           data: {
             "call_id": result.id,

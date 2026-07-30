@@ -4,8 +4,8 @@ class ClaudeCodeProviderFixture {
 
 function _claude_code_provider_fixture_task(
     provider: ClaudeCodeCli,
-) -> root.ai.Task<ClaudeCodeProviderFixture> throws never {
-    root.ai.task<ClaudeCodeProviderFixture>(provider, (ctx: baml.llm.Context) -> baml.llm.PromptAst {
+) -> ai.Task<ClaudeCodeProviderFixture> throws never {
+    ai.task<ClaudeCodeProviderFixture>(provider, (ctx: baml.llm.Context) -> baml.llm.PromptAst {
         baml.llm.assemble_prompt_ast(["ORIGINAL_CLAUDE_CODE_PROMPT\n", ""], [ctx.output_format])
     })
 }
@@ -24,9 +24,9 @@ function _claude_code_provider_fixture_run(
     assistant_text: string,
 ) -> ClaudeCodeCliRun<ClaudeCodeProviderFixture> throws never {
     ClaudeCodeCliRun<ClaudeCodeProviderFixture> {
-        response: root.ai.ResponseWithMetadata<ClaudeCodeProviderFixture> {
+        response: ai.ResponseWithMetadata<ClaudeCodeProviderFixture> {
             value: value,
-            metadata: root.ai.ResponseMetadata {
+            metadata: ai.ResponseMetadata {
                 provider: "claude-code-cli",
                 model: "test",
                 request_id: "test-request",
@@ -46,10 +46,10 @@ function _claude_code_provider_fixture_run(
 
 function _claude_code_wrong_owner_step(
     provider: ClaudeCodeCli,
-    conversation: root.ai.Conversation,
+    conversation: ai.Conversation,
 ) -> string throws never {
     provider.step<ClaudeCodeProviderFixture>(conversation, []) catch (e) {
-        let invalid: root.ai.InvalidRequest => {
+        let invalid: ai.InvalidRequest => {
             return "invalid";
         },
         _ => {
@@ -61,10 +61,10 @@ function _claude_code_wrong_owner_step(
 
 function _claude_code_wrong_owner_submit(
     provider: ClaudeCodeCli,
-    conversation: root.ai.Conversation,
+    conversation: ai.Conversation,
 ) -> string throws never {
     provider.submit(conversation, []) catch (e) {
-        let invalid: root.ai.InvalidRequest => {
+        let invalid: ai.InvalidRequest => {
             return "invalid";
         },
         _ => {
@@ -90,11 +90,11 @@ test "Claude Code portable history includes the task and one final assistant mes
     let original = task.messages().to_history();
     assert
         .equal(
-            state.history.entries.map((message: root.ai.Message) -> string {
-                root.ai.message_text(message)
+            state.history.entries.map((message: ai.Message) -> string {
+                ai.message_text(message)
             }),
-            original.entries.map((message: root.ai.Message) -> string {
-                root.ai.message_text(message)
+            original.entries.map((message: ai.Message) -> string {
+                ai.message_text(message)
             }),
         );
     let request = _claude_code_agent_turn<ClaudeCodeProviderFixture>(provider, state, "");
@@ -108,7 +108,7 @@ test "Claude Code portable history includes the task and one final assistant mes
     assert.equal(state.history.entries.length(), original.entries.length() + 1);
     assert
         .contains(
-            root.ai.message_text(state.history.entries[state.history.entries.length() - 1]),
+            ai.message_text(state.history.entries[state.history.entries.length() - 1]),
             "FINAL_CLAUDE_CODE_ASSISTANT_TEXT",
         )
 }
@@ -118,8 +118,8 @@ test "Claude Code submit is atomic when a later result ID is invalid" {
     let state = _claude_code_provider_fixture_state(provider);
     state.pending_calls
         = [
-            root.ai.tools.ToolCall { id: "first", name: "first_tool", args: {} },
-            root.ai.tools.ToolCall { id: "second", name: "second_tool", args: {} },
+            ai.tools.ToolCall { id: "first", name: "first_tool", args: {} },
+            ai.tools.ToolCall { id: "second", name: "second_tool", args: {} },
         ];
     let original_history_length = state.history.entries.length();
     let rejected = false;
@@ -127,11 +127,11 @@ test "Claude Code submit is atomic when a later result ID is invalid" {
         .submit(
             state,
             [
-                root.ai.tools.ToolResult { id: "first", output: { "value": 1 }, is_error: false },
-                root.ai.tools.ToolResult { id: "unknown", output: { "value": 2 }, is_error: false },
+                ai.tools.ToolResult { id: "first", output: { "value": 1 }, is_error: false },
+                ai.tools.ToolResult { id: "unknown", output: { "value": 2 }, is_error: false },
             ],
         ) catch (e) {
-        let invalid: root.ai.InvalidRequest => {
+        let invalid: ai.InvalidRequest => {
             rejected = true;
             state
         },
@@ -146,28 +146,28 @@ test "Claude Code submit records valid parallel results in provider call order" 
     let state = _claude_code_provider_fixture_state(provider);
     state.pending_calls
         = [
-            root.ai.tools.ToolCall { id: "first", name: "first_tool", args: {} },
-            root.ai.tools.ToolCall { id: "second", name: "second_tool", args: {} },
+            ai.tools.ToolCall { id: "first", name: "first_tool", args: {} },
+            ai.tools.ToolCall { id: "second", name: "second_tool", args: {} },
         ];
     let original_history_length = state.history.entries.length();
     let _ = provider
         .submit(
             state,
             [
-                root.ai.tools.ToolResult { id: "second", output: { "value": 2 }, is_error: false },
-                root.ai.tools.ToolResult { id: "first", output: { "value": 1 }, is_error: false },
+                ai.tools.ToolResult { id: "second", output: { "value": 2 }, is_error: false },
+                ai.tools.ToolResult { id: "first", output: { "value": 1 }, is_error: false },
             ],
         );
     assert.equal(state.pending_calls.length(), 0);
     assert.equal(state.history.entries.length(), original_history_length + 2);
     assert
         .contains(
-            root.ai.message_text(state.history.entries[original_history_length]),
+            ai.message_text(state.history.entries[original_history_length]),
             "\"id\":\"first\"",
         );
     assert
         .contains(
-            root.ai.message_text(state.history.entries[original_history_length + 1]),
+            ai.message_text(state.history.entries[original_history_length + 1]),
             "\"id\":\"second\"",
         )
 }

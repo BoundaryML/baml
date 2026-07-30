@@ -1,17 +1,16 @@
 // Tests for the barge_in scenario.
 test "guide 05.04: interruption belongs to the opened live resource" {
-    let live_session = root
-        .ai
+    let live_session = ai
         .realtime
         .open_live(
-            VoiceSupport_task("talk", root.ai.testing.FakeRealtimeProvider { transcript: "hello" }),
-            root.ai.testing.RecordingChannel { frames: [] },
+            VoiceSupport@task("talk").with_provider(ai.testing.FakeRealtimeProvider { transcript: "hello" }),
+            ai.testing.RecordingChannel { frames: [] },
         );
     live_session.cancel_response();
     live_session.truncate_assistant_audio(250);
-    assert.equal(root.ai.realtime.collect_live_text(live_session), "hello");
+    assert.equal(ai.realtime.collect_live_text(live_session), "hello");
     match (live_session) {
-        let buffered: root.ai.testing.BufferedLiveSession => {
+        let buffered: ai.testing.BufferedLiveSession => {
             // assert.is_true(buffered.is_closed);
             assert.equal(buffered.control_frames.length(), 2);
             assert
@@ -32,14 +31,11 @@ test "guide 05.04: interruption belongs to the opened live resource" {
 
 testset "integ-test-guide-05-barge-in" {
     test "guide 05.04 live OpenAI: cancel precedes played-position truncation on one session" {
-        let channel = root.ai.testing.RecordingChannel { frames: [] };
-        let live_session = root
-            .ai
+        let channel = ai.testing.RecordingChannel { frames: [] };
+        let live_session = ai
             .realtime
             .open_live(
-                VoiceSupport_task(
-                    "Begin a spoken explanation of why duplicate card charges can appear.",
-                    root.openai.Realtime {
+                VoiceSupport@task("Begin a spoken explanation of why duplicate card charges can appear.").with_provider(root.openai.Realtime {
                         model: "gpt-realtime",
                         voice: "alloy",
                         api_key: baml.env.get_or_panic("OPENAI_API_KEY"),
@@ -47,8 +43,7 @@ testset "integ-test-guide-05-barge-in" {
                         input_transcription_model: null,
                         server_vad: null,
                         keep_open: false,
-                    },
-                ),
+                    }),
                 channel,
             );
         // Wait only until an assistant audio item exists; the response remains in flight.
@@ -56,7 +51,7 @@ testset "integ-test-guide-05-barge-in" {
         assert
             .is_true(
                 started
-                    .filter((event: root.ai.realtime.LiveEvent) -> bool {
+                    .filter((event: ai.realtime.LiveEvent) -> bool {
                         event.kind() == "assistant_audio_started"
                     })
                     .length()

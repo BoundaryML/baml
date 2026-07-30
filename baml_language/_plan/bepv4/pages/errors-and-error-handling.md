@@ -63,6 +63,11 @@ triage, the wrapper as the escape hatch. The example uses the shared
 support-ticket fixtures: `ResolveTicket`, `sample_ticket()`, and the
 `careful_model()` escalation target.
 
+The `$provider` arguments below show the proposed reserved direct-call
+override. In the executable scenarios, the equivalent provider rebinding is
+`ResolveTicket@task(ticket).with_provider(careful_model())` followed by an
+explicit `ai.run.Agent`.
+
 ```baml
 let ticket = sample_ticket();
 let resolution = ResolveTicket(ticket) catch (e) {

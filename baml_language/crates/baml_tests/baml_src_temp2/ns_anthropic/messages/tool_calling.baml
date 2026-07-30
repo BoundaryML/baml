@@ -1,9 +1,9 @@
-implements root.ai.AgentProvider for AnthropicProvider {
+implements ai.AgentProvider for AnthropicProvider {
   function begin<T>(
     self,
-    task: root.ai.Task<T>,
-  ) -> root.ai.Conversation
-      throws root.ai.Failure | baml.errors.UnknownError {
+    task: ai.Task<T>,
+  ) -> ai.Conversation
+      throws ai.Failure | baml.errors.UnknownError {
     root.anthropic.internal._validate_output_config(self);
     if (self.tool_mode == root.anthropic.ToolMode.Prompt) {
       // Prompt mode uses Anthropic's private T | ToolCalls text protocol.
@@ -26,7 +26,7 @@ implements root.ai.AgentProvider for AnthropicProvider {
     root.anthropic.internal.Conversation {
       owner: self,
       history: task.messages().to_history(),
-      declared_output_type: root.ai.internal._output_type_fingerprint<T>(),
+      declared_output_type: ai.internal._output_type_fingerprint<T>(),
       system: baml.json.path_or<json[]>(request_body, ".system", []),
       messages: baml.json.path_or<json[]>(request_body, ".messages", []),
       request_url: request.url,
@@ -38,12 +38,12 @@ implements root.ai.AgentProvider for AnthropicProvider {
 
   function step<T>(
     self,
-    conversation: root.ai.Conversation,
-    tools: root.ai.tools.Tool[],
-  ) -> root.ai.ModelStep<T>
-      throws root.ai.Failure | baml.errors.UnknownError {
+    conversation: ai.Conversation,
+    tools: ai.tools.Tool[],
+  ) -> ai.ModelStep<T>
+      throws ai.Failure | baml.errors.UnknownError {
     root.anthropic.internal._validate_output_config(self);
-    root.ai.internal._require_conversation_output_type<T>(
+    ai.internal._require_conversation_output_type<T>(
       conversation,
       self.name(),
     );
@@ -54,15 +54,15 @@ implements root.ai.AgentProvider for AnthropicProvider {
     let state = match (conversation) {
       let value: root.anthropic.internal.Conversation => value,
       _ => {
-        throw root.ai.InvalidRequest {
+        throw ai.InvalidRequest {
           provider: "anthropic",
           status_code: null,
           detail: "Anthropic received another provider's conversation",
         }
       },
     };
-    if (!root.ai.internal._same_provider_instance(state.owner, self)) {
-      throw root.ai.InvalidRequest {
+    if (!ai.internal._same_provider_instance(state.owner, self)) {
+      throw ai.InvalidRequest {
         provider: "anthropic",
         status_code: null,
         detail: "Anthropic received a conversation owned by another provider instance",
@@ -73,7 +73,7 @@ implements root.ai.AgentProvider for AnthropicProvider {
         root.anthropic.internal._is_tool_use(part)
       })
     ) {
-      throw root.ai.InvalidRequest {
+      throw ai.InvalidRequest {
         provider: "anthropic",
         status_code: null,
         detail: "submit tool results before requesting the next Anthropic step",
@@ -114,7 +114,7 @@ implements root.ai.AgentProvider for AnthropicProvider {
     );
     let response = baml.http.send(request) catch (e) {
       _ => {
-        throw root.ai.NetworkFailure {
+        throw ai.NetworkFailure {
           provider: "anthropic",
           detail: "baml.http.send failed before an Anthropic Messages response arrived",
         }
@@ -122,14 +122,14 @@ implements root.ai.AgentProvider for AnthropicProvider {
     };
     let text = response.text() catch (e) {
       _ => {
-        throw root.ai.NetworkFailure {
+        throw ai.NetworkFailure {
           provider: "anthropic",
           detail: "the Anthropic Messages body could not be read completely",
         }
       },
     };
     if (!response.ok()) {
-      throw root.ai.internal.classify_http(
+      throw ai.internal._classify_http(
         "anthropic",
         response.status_code,
         text,
@@ -138,7 +138,7 @@ implements root.ai.AgentProvider for AnthropicProvider {
     //# Decode the provider envelope without repairing wire errors
     let raw = baml.json.parse(text) catch (e) {
       _ => {
-        throw root.ai.ParseFailed {
+        throw ai.ParseFailed {
           provider: "anthropic",
           raw_output: text,
         }
@@ -146,7 +146,7 @@ implements root.ai.AgentProvider for AnthropicProvider {
     };
     let stop_reason = baml.json.path_or(raw, ".stop_reason", "");
     if (stop_reason == "refusal") {
-      throw root.ai.Refused {
+      throw ai.Refused {
         provider: "anthropic",
         reason: root.anthropic.internal._response_text(raw)
           ?? "Anthropic refused the request",
@@ -156,7 +156,7 @@ implements root.ai.AgentProvider for AnthropicProvider {
       stop_reason == "max_tokens"
         || stop_reason == "model_context_window_exceeded"
     ) {
-      throw root.ai.ParseFailed {
+      throw ai.ParseFailed {
         provider: "anthropic",
         raw_output: text,
       };
@@ -169,7 +169,7 @@ implements root.ai.AgentProvider for AnthropicProvider {
     //# Yield native tool_use blocks so the runner can execute them
     if (raw_calls.length() > 0) {
       if (stop_reason != "tool_use") {
-        throw root.ai.ParseFailed {
+        throw ai.ParseFailed {
           provider: "anthropic",
           raw_output: text,
         };
@@ -180,15 +180,15 @@ implements root.ai.AgentProvider for AnthropicProvider {
         "role": "assistant",
         "content": content,
       });
-      state.history.entries.push(root.ai.ChatMessage {
-        message_role: root.ai.MessageRole.Assistant,
-        content: [root.ai.messages.ProviderDataPart {
+      state.history.entries.push(ai.ChatMessage {
+        message_role: ai.MessageRole.Assistant,
+        content: [ai.messages.ProviderDataPart {
           provider: "anthropic",
           data: { "content": content },
         }],
         metadata: null,
       });
-      return root.ai.ModelStep<T> {
+      return ai.ModelStep<T> {
         outcome: root.anthropic.internal._application_calls(raw_calls, text),
         metadata: metadata,
       };
@@ -206,11 +206,11 @@ implements root.ai.AgentProvider for AnthropicProvider {
       "content": content,
     });
     state.history.entries.push(
-      root.ai.ChatMessage.assistant(
+      ai.ChatMessage.assistant(
         root.anthropic.internal._response_text(raw) ?? "",
       ),
     );
-    root.ai.ModelStep<T> {
+    ai.ModelStep<T> {
       outcome: value,
       metadata: metadata,
     }
@@ -218,10 +218,10 @@ implements root.ai.AgentProvider for AnthropicProvider {
 
   function submit(
     self,
-    conversation: root.ai.Conversation,
-    results: root.ai.tools.ToolResult[],
-  ) -> root.ai.Conversation
-      throws root.ai.Failure {
+    conversation: ai.Conversation,
+    results: ai.tools.ToolResult[],
+  ) -> ai.Conversation
+      throws ai.Failure {
     root.anthropic.internal._validate_output_config(self);
     if (self.tool_mode == root.anthropic.ToolMode.Prompt) {
       return root.anthropic.internal._prompt_submit(self, conversation, results);
@@ -230,15 +230,15 @@ implements root.ai.AgentProvider for AnthropicProvider {
     let state = match (conversation) {
       let value: root.anthropic.internal.Conversation => value,
       _ => {
-        throw root.ai.InvalidRequest {
+        throw ai.InvalidRequest {
           provider: "anthropic",
           status_code: null,
           detail: "Anthropic received another provider's conversation",
         }
       },
     };
-    if (!root.ai.internal._same_provider_instance(state.owner, self)) {
-      throw root.ai.InvalidRequest {
+    if (!ai.internal._same_provider_instance(state.owner, self)) {
+      throw ai.InvalidRequest {
         provider: "anthropic",
         status_code: null,
         detail: "Anthropic received a conversation owned by another provider instance",
@@ -253,7 +253,7 @@ implements root.ai.AgentProvider for AnthropicProvider {
       }
     }
     if (pending.length() == 0 || pending.length() != results.length()) {
-      throw root.ai.InvalidRequest {
+      throw ai.InvalidRequest {
         provider: "anthropic",
         status_code: null,
         detail: "tool results must match every pending Anthropic tool_use block",
@@ -261,7 +261,7 @@ implements root.ai.AgentProvider for AnthropicProvider {
     }
     // Validate and order the complete result set before mutating either
     // portable or provider-native conversation history.
-    let ordered_results: root.ai.tools.ToolResult[] = [];
+    let ordered_results: ai.tools.ToolResult[] = [];
     for (let call in pending) {
       let call_id = root.anthropic.internal._tool_use_id(call) ?? "";
       let pending_with_id: json[] = [];
@@ -270,7 +270,7 @@ implements root.ai.AgentProvider for AnthropicProvider {
           pending_with_id.push(candidate);
         }
       }
-      let matching: root.ai.tools.ToolResult[] = [];
+      let matching: ai.tools.ToolResult[] = [];
       for (let candidate in results) {
         if (candidate.id == call_id) {
           matching.push(candidate);
@@ -282,7 +282,7 @@ implements root.ai.AgentProvider for AnthropicProvider {
           || pending_with_id.length() != 1
           || matching.length() != 1
       ) {
-        throw root.ai.InvalidRequest {
+        throw ai.InvalidRequest {
           provider: "anthropic",
           status_code: null,
           detail: "tool result IDs must match pending Anthropic tool_use IDs exactly once",
@@ -293,7 +293,7 @@ implements root.ai.AgentProvider for AnthropicProvider {
     // All correlations are valid. Build the two history projections, then
     // commit them together so a late invalid ID cannot leave partial state.
     let tool_results: json[] = [];
-    let history_entries: root.ai.Message[] = [];
+    let history_entries: ai.Message[] = [];
     for (let result in ordered_results) {
       let result_block: json = {
         "type": "tool_result",
@@ -302,9 +302,9 @@ implements root.ai.AgentProvider for AnthropicProvider {
         "is_error": result.is_error,
       };
       tool_results.push(result_block);
-      history_entries.push(root.ai.ChatMessage {
-        message_role: root.ai.MessageRole.Tool,
-        content: [root.ai.messages.ProviderDataPart {
+      history_entries.push(ai.ChatMessage {
+        message_role: ai.MessageRole.Tool,
+        content: [ai.messages.ProviderDataPart {
           provider: "anthropic",
           data: {
             "tool_use_id": result.id,

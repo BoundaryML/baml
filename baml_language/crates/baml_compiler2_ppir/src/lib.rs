@@ -381,7 +381,11 @@ pub fn ppir_expansion_items(db: &dyn Db, file: SourceFile) -> PpirExpansionItems
             }
             ast::Item::Function(func) => {
                 // Only LLM functions get $parse_stream companions.
-                if !matches!(&func.declarative_meta, Some(ast::DeclarativeMeta::Llm(_))) {
+                if !matches!(
+                    &func.declarative_meta,
+                    Some(ast::DeclarativeMeta::Llm(llm))
+                        if llm.execution == ast::DeclarativeExecution::LegacyClient
+                ) {
                     continue;
                 }
                 // Skip companions (contain $) to avoid recursive generation.

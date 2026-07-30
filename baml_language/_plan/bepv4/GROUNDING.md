@@ -11,10 +11,21 @@ baml run --from crates/baml_tests/baml_src_temp2 \
   ai_scenarios.<example>
 ```
 
-The corpus uses manual `*_task` helpers where compiler-generated `@task`
-lowering is not yet available in the prototype. Reader-facing docs use the
-intended `F@task(...)` syntax and must preserve the same task fields and
-behavior.
+The corpus uses compiler-generated task companions. A declarative AI function
+with `provider:`, `prompt:`, and optional `tools:` fields gets a zero-I/O
+`F@task(...)` form that captures its arguments, output type, provider, prompt
+recipe, default tools, and identity in `ai.Task<T>`. A direct `F(...)` call runs
+that same task through the bounded default `ai.run.Agent`.
+
+The framework itself is the built-in `ai` package. Scenario and provider code
+must use `ai.Task`, `ai.Provider`, `ai.run.Agent`, and the other `ai.*` names;
+`root.ai` is not a second framework namespace.
+
+The reserved direct-call override `F(..., $provider = provider)` remains proposed
+syntax. The executable equivalent today is
+`F@task(...).with_provider(provider)`, followed by an explicit runner. Built-in
+`ai` source is production code and contains no `test` declarations; its BAML
+behavior tests live in `ns_ai_scenarios`.
 
 ## Normative names
 
@@ -47,6 +58,7 @@ conversation unchanged so retry sees the same pre-attempt state.
 | Observability and testing | `ns_ai_scenarios/06_observability_and_testing` |
 | Production resources | `ns_ai_scenarios/07_production` |
 | External harnesses | `ns_ai_scenarios/08_external_harnesses` |
+| Stateful memory agent | `ns_ai_scenarios/09_memory_agent` |
 
 Provider request-shape tests live beside their private request builders:
 

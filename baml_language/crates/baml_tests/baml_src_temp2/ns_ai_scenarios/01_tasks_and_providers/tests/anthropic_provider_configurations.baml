@@ -1,21 +1,13 @@
 // Live public-API coverage for Anthropic structured output and SAP. Each case
 // executes a typed Task through the normal Agent runner.
 
-function _anthropic_resolution_array_task(
-    provider: root.ai.Provider,
-) -> root.ai.Task<Resolution[]> throws never {
-    root.ai.task_named<Resolution[]>(provider, "AnthropicResolutionArray", {}, [], (
-        ctx: baml.llm.Context,
-    ) -> baml.llm.PromptAst {
-        baml.llm
-            .assemble_prompt_ast(
-                ["", "\n", ""],
-                [
-                    "Return exactly two support resolutions for a duplicate charge. Give each a non-empty reply.",
-                    ctx.output_format,
-                ],
-            )
-    })
+function AnthropicResolutionArray() -> Resolution[] {
+    provider: ai.testing.fake_output_provider("[]")
+    prompt: `
+        Return exactly two support resolutions for a duplicate charge. Give
+        each a non-empty reply.
+        ${ctx.output_format}
+    `
 }
 
 testset "integ-test-anthropic-messages-configurations" {
@@ -26,12 +18,11 @@ testset "integ-test-anthropic-messages-configurations" {
                 api_key = baml.env.get_or_panic("ANTHROPIC_API_KEY"),
                 output_mode = root.anthropic.OutputMode.Strict,
             );
-        let value = root
-            .ai
+        let value = ai
             .internal
             ._require_done(
-                ResolveTicket_task(sample_ticket(), provider)
-                    .run(runner = root.ai.run.Agent<Resolution>.new()),
+                ResolveTicket@task(sample_ticket()).with_provider(provider)
+                    .run(runner = ai.run.Agent<Resolution>.new()),
             )
             .value;
         assert.is_true(value.reply.length() > 0)
@@ -44,12 +35,11 @@ testset "integ-test-anthropic-messages-configurations" {
                 api_key = baml.env.get_or_panic("ANTHROPIC_API_KEY"),
                 output_mode = root.anthropic.OutputMode.Strict,
             );
-        let value = root
-            .ai
+        let value = ai
             .internal
             ._require_done(
-                _anthropic_resolution_array_task(provider)
-                    .run(runner = root.ai.run.Agent<Resolution[]>.new()),
+                AnthropicResolutionArray@task().with_provider(provider)
+                    .run(runner = ai.run.Agent<Resolution[]>.new()),
             )
             .value;
         assert.equal(value.length(), 2);
@@ -64,12 +54,11 @@ testset "integ-test-anthropic-messages-configurations" {
                 api_key = baml.env.get_or_panic("ANTHROPIC_API_KEY"),
                 output_mode = root.anthropic.OutputMode.Sap,
             );
-        let value = root
-            .ai
+        let value = ai
             .internal
             ._require_done(
-                ResolveTicket_task(sample_ticket(), provider)
-                    .run(runner = root.ai.run.Agent<Resolution>.new()),
+                ResolveTicket@task(sample_ticket()).with_provider(provider)
+                    .run(runner = ai.run.Agent<Resolution>.new()),
             )
             .value;
         assert.is_true(value.summary.length() > 0)
@@ -82,7 +71,7 @@ testset "integ-test-anthropic-messages-configurations" {
                 api_key = baml.env.get_or_panic("ANTHROPIC_API_KEY"),
                 output_mode = root.anthropic.OutputMode.Strict,
             );
-        let value = drain_resolution_stream(ResolveTicket_task(sample_ticket(), provider));
+        let value = drain_resolution_stream(ResolveTicket@task(sample_ticket()).with_provider(provider));
         assert.is_true(value.reply.length() > 0)
     }
 }

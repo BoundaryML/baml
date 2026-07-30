@@ -51,7 +51,7 @@ function _clone_body(
 
 function _built_request<T>(
     primitive: baml.llm.PrimitiveClient,
-    task: root.ai.Task<T>,
+    task: ai.Task<T>,
     provider_name: string,
 ) -> baml.http.Request throws baml.errors.UnknownError {
     let specialized = primitive.specialize_prompt(task.prompt) catch (e) {
@@ -75,10 +75,10 @@ function _built_request<T>(
 function _send_json(
     request: baml.http.Request,
     provider_name: string,
-) -> HttpResult throws root.ai.Failure {
+) -> HttpResult throws ai.Failure {
     let response = baml.http.send(request) catch (e) {
         _ => {
-            throw root.ai.NetworkFailure {
+            throw ai.NetworkFailure {
                 provider: provider_name,
                 detail: "baml.http.send failed before a Gemini response arrived",
             }
@@ -86,18 +86,18 @@ function _send_json(
     };
     let text = response.text() catch (e) {
         _ => {
-            throw root.ai.NetworkFailure {
+            throw ai.NetworkFailure {
                 provider: provider_name,
                 detail: "the Gemini response body could not be read completely",
             }
         },
     };
     if (!response.ok()) {
-        throw root.ai.internal.classify_http(provider_name, response.status_code, text);
+        throw ai.internal._classify_http(provider_name, response.status_code, text);
     }
     let raw = baml.json.parse(text) catch (e) {
         _ => {
-            throw root.ai.ParseFailed {
+            throw ai.ParseFailed {
             provider: provider_name,
             raw_output: text,
         }
@@ -143,11 +143,11 @@ function _generation_body(
 
 function _generate<T>(
     primitive: baml.llm.PrimitiveClient,
-    task: root.ai.Task<T>,
+    task: ai.Task<T>,
     provider_name: string,
     model: string,
     use_sap: bool,
-) -> root.ai.ResponseWithMetadata<T> throws root.ai.Failure | baml.errors.UnknownError {
+) -> ai.ResponseWithMetadata<T> throws ai.Failure | baml.errors.UnknownError {
     let request = _generation_request(primitive, task, provider_name, use_sap);
     log.info(
         baml.json
@@ -167,7 +167,7 @@ function _generate<T>(
     );
     let result = _send_json(request, provider_name);
     _validate_response(result.raw, result.text, provider_name);
-    root.ai.ResponseWithMetadata<T> {
+    ai.ResponseWithMetadata<T> {
         value: _parse_generation_value<T>(result.raw, result.text, provider_name, use_sap),
         metadata: _response_metadata(result.raw, model, provider_name),
         conversation: null,
@@ -178,10 +178,10 @@ function _generate<T>(
 // exact authenticated REST request without sending it.
 function _generation_request<T>(
     primitive: baml.llm.PrimitiveClient,
-    task: root.ai.Task<T>,
+    task: ai.Task<T>,
     provider_name: string,
     use_sap: bool,
-) -> baml.http.Request throws root.ai.Failure | baml.errors.UnknownError {
+) -> baml.http.Request throws ai.Failure | baml.errors.UnknownError {
     let built = _built_request(primitive, task, provider_name);
     let body = _generation_body(_body_object(built, provider_name), task.output_type(), use_sap);
     baml.http.Request {

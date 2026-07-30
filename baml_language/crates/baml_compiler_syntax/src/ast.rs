@@ -881,6 +881,7 @@ ast_node!(ContinueStmt, CONTINUE_STMT);
 ast_node!(DeferStmt, DEFER_STMT);
 ast_node!(PathExpr, PATH_EXPR);
 ast_node!(FieldAccessExpr, FIELD_ACCESS_EXPR);
+ast_node!(TaskAccessExpr, TASK_ACCESS_EXPR);
 ast_node!(UpcastExpr, UPCAST_EXPR);
 ast_node!(EnvAccessExpr, ENV_ACCESS_EXPR);
 ast_node!(MatchExpr, MATCH_EXPR);
@@ -983,6 +984,16 @@ impl LlmFunctionBody {
         self.syntax.children().find_map(ClientField::cast)
     }
 
+    /// Get the AI provider expression if this is an AI function.
+    pub fn provider_field(&self) -> Option<ProviderField> {
+        self.syntax.children().find_map(ProviderField::cast)
+    }
+
+    /// Get the declared tool expression, if present.
+    pub fn tools_field(&self) -> Option<ToolsField> {
+        self.syntax.children().find_map(ToolsField::cast)
+    }
+
     /// Get the prompt field if present.
     ///
     /// For `function Foo() -> string { ... prompt #"..."# }`, returns the `prompt #"..."#` field.
@@ -990,6 +1001,9 @@ impl LlmFunctionBody {
         self.syntax.children().find_map(PromptField::cast)
     }
 }
+
+ast_node!(ProviderField, PROVIDER_FIELD);
+ast_node!(ToolsField, TOOLS_FIELD);
 
 impl ClientField {
     /// Get the client name token if it's a simple identifier.
@@ -2541,6 +2555,7 @@ impl BlockExpr {
                         | SyntaxKind::BLOCK_EXPR
                         | SyntaxKind::PATH_EXPR
                         | SyntaxKind::FIELD_ACCESS_EXPR
+                        | SyntaxKind::TASK_ACCESS_EXPR
                         | SyntaxKind::UPCAST_EXPR
                         | SyntaxKind::OPTIONAL_FIELD_ACCESS_EXPR
                         | SyntaxKind::ENV_ACCESS_EXPR

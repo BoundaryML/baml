@@ -3,8 +3,8 @@ test "guide 08.01: a harness owns its session while returning typed output" {
   //# Configure an in-process model harness
   let harness = fake_model_harness();
   //# Submit a typed task through a harness session
-  let run = InvestigateRepository_task(sample_ticket(), harness.inner).run(
-    runner = root.ai.run.Harness<Resolution>.new(
+  let run = InvestigateRepository@task(sample_ticket()).with_provider(harness.inner).run(
+    runner = ai.run.Harness<Resolution>.new(
       harness,
       cwd = "/workspace",
       permission_mode = "read-only",
@@ -19,7 +19,7 @@ test "guide 08.01: a harness owns its session while returning typed output" {
 
 test "guide 08.01: the harness task carries the evidence needed by the model" {
   //# Render the harness investigation task
-  let task = InvestigateRepository_task(sample_ticket(), fake_resolution());
+  let task = InvestigateRepository@task(sample_ticket()).with_provider(fake_resolution());
   let prompt = task.prompt.text();
   //# Verify the task carries repository evidence
   assert.contains(prompt, "Ticket: T-100")
@@ -31,7 +31,7 @@ test "guide 08.01: the harness task carries the evidence needed by the model" {
 testset "integ-test-guide-08-model-harness" {
   test "guide 08.01 live OpenAI: real model behind the harness contract" {
     //# Configure a live OpenAI-backed harness
-    let harness = root.ai.harness.ModelHarness {
+    let harness = ai.harness.ModelHarness {
       inner: root.openai.OpenAIProvider {
         ...root.openai.responses(),
         model: "gpt-5.6-luna",
@@ -40,8 +40,8 @@ testset "integ-test-guide-08-model-harness" {
       sessions: [],
     };
     //# Execute a typed harness run
-    let run = InvestigateRepository_task(sample_ticket(), harness.inner).run(
-      runner = root.ai.run.Harness<Resolution>.new(
+    let run = InvestigateRepository@task(sample_ticket()).with_provider(harness.inner).run(
+      runner = ai.run.Harness<Resolution>.new(
         harness,
         cwd = "/workspace",
         permission_mode = "read-only",
@@ -55,7 +55,7 @@ testset "integ-test-guide-08-model-harness" {
 
   test "guide 08.01 live Anthropic: same harness adapter" {
     //# Configure a live Anthropic-backed harness
-    let harness = root.ai.harness.ModelHarness {
+    let harness = ai.harness.ModelHarness {
       inner: root.anthropic.AnthropicProvider {
         ...root.anthropic.messages(),
         model: "claude-sonnet-4-6",
@@ -64,8 +64,8 @@ testset "integ-test-guide-08-model-harness" {
       sessions: [],
     };
     //# Execute through the same harness contract
-    let run = InvestigateRepository_task(sample_ticket(), harness.inner).run(
-      runner = root.ai.run.Harness<Resolution>.new(
+    let run = InvestigateRepository@task(sample_ticket()).with_provider(harness.inner).run(
+      runner = ai.run.Harness<Resolution>.new(
         harness,
         cwd = "/workspace",
         permission_mode = "read-only",

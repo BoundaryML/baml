@@ -34,7 +34,7 @@ class AnthropicProvider {
     parallel_tool_calls: bool,
 }
 
-implements root.ai.Provider for AnthropicProvider {
+implements ai.Provider for AnthropicProvider {
   function name(self) -> string throws never { "anthropic" }
 
   function render_shorthand(self) -> string throws never {
@@ -42,10 +42,10 @@ implements root.ai.Provider for AnthropicProvider {
   }
 }
 
-implements root.ai.StreamingProvider for AnthropicProvider {
+implements ai.StreamingProvider for AnthropicProvider {
   function stream<TPartial, T>(
     self,
-    task: root.ai.Task<T>,
+    task: ai.Task<T>,
   ) -> baml.llm.Stream<TPartial, T> throws baml.errors.UnknownError {
     // The primitive owns SSE accumulation. The adapter still applies the
     // selected Strict or SAP wire configuration before opening the stream.

@@ -1,9 +1,9 @@
-implements root.ai.realtime.RealtimeProvider for Realtime {
+implements ai.realtime.RealtimeProvider for Realtime {
   function open_live<T>(
     self,
-    task: root.ai.Task<T>,
-    channel: root.ai.realtime.Channel,
-  ) -> root.ai.realtime.LiveSession
+    task: ai.Task<T>,
+    channel: ai.realtime.Channel,
+  ) -> ai.realtime.LiveSession
       throws baml.errors.UnknownError {
     //# Open and retain the realtime WebSocket
     let ws = baml.ws.connect(

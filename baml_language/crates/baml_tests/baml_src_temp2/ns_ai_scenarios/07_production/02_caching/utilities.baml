@@ -1,7 +1,7 @@
-function _managed_cache_policy_corpus() -> root.ai.MessageHistory throws never {
-    root.ai.MessageHistory {
+function _managed_cache_policy_corpus() -> ai.MessageHistory throws never {
+    ai.MessageHistory {
         entries: [
-            root.ai
+            ai
                 .ChatMessage
                 .user(
                     "Support policy: duplicate card charges are usually pending authorizations. "

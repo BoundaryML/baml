@@ -1,18 +1,18 @@
-function _cache_messages_text(messages: root.ai.Messages) -> string throws never {
+function _cache_messages_text(messages: ai.Messages) -> string throws never {
     messages
         .items()
-        .map((message: root.ai.Message) -> string {
+        .map((message: ai.Message) -> string {
             let role = match (message.role()) {
-                root.ai.MessageRole.System => "system",
-                root.ai.MessageRole.User => "user",
-                root.ai.MessageRole.Assistant => "assistant",
-                root.ai.MessageRole.Tool => "tool",
+                ai.MessageRole.System => "system",
+                ai.MessageRole.User => "user",
+                ai.MessageRole.Assistant => "assistant",
+                ai.MessageRole.Tool => "tool",
             };
             role
                 + ": "
                 + message
                     .parts()
-                    .map((part: root.ai.MessagePart) -> string {
+                    .map((part: ai.MessagePart) -> string {
                         part.text() ?? ""
                     })
                     .join("")
@@ -29,7 +29,7 @@ class Gemini {
     created_keys: string[],
     deleted_keys: string[],
 
-    implements root.ai.Provider {
+    implements ai.Provider {
         function name(self) -> string throws never {
             "gemini-managed-cache"
         }
@@ -41,7 +41,7 @@ class Gemini {
     function cache_exists(
         self,
         key: string,
-    ) -> bool throws root.ai.Failure | baml.errors.UnknownError {
+    ) -> bool throws ai.Failure | baml.errors.UnknownError {
         let response = baml
             .http
             .send(
@@ -71,7 +71,7 @@ class Gemini {
             let body = response.text() catch (e) {
                 _ => ""
             };
-            throw root.ai.internal.classify_http("google", response.status_code, body);
+            throw ai.internal._classify_http("google", response.status_code, body);
         }
         true
     }
@@ -95,8 +95,8 @@ class ManagedCache {
 
         function run<T>(
             self,
-            task: root.ai.Task<T>,
-        ) -> root.ai.ResponseWithMetadata<T> throws root.ai.Failure | baml.errors.UnknownError {
+            task: ai.Task<T>,
+        ) -> ai.ResponseWithMetadata<T> throws ai.Failure | baml.errors.UnknownError {
             if (self.deleted) {
                 throw baml.errors.UnknownError.with_message<never>(self.cache_key, "cannot run a deleted Gemini cache");
             }
@@ -119,7 +119,7 @@ class ManagedCache {
                                     "cachedContent": self.cache_key,
                                     "contents": task.prompt.messages().map((message: baml.llm.PromptMessage) -> json {
                                         {
-                                            "role": root.ai.messages._prompt_role_or_user(message.role),
+                                            "role": ai.messages._prompt_role_or_user(message.role),
                                             "parts": [{ "text": message.content }],
                                         }
                                     }),
@@ -137,7 +137,7 @@ class ManagedCache {
                 },
             };
             if (!response.ok()) {
-                throw root.ai.internal.classify_http("google", response.status_code, body);
+                throw ai.internal._classify_http("google", response.status_code, body);
             }
             let raw = baml.json.parse(body) catch (e) {
                 _ => {
@@ -151,14 +151,14 @@ class ManagedCache {
                 },
             };
             self.runs = self.runs + 1;
-            root.ai.ResponseWithMetadata<T> {
+            ai.ResponseWithMetadata<T> {
                 value: value,
-                metadata: root.ai.ResponseMetadata {
+                metadata: ai.ResponseMetadata {
                     provider: self.owner.name(),
                     model: self.owner.model,
                     request_id: baml.json.path_or<string?>(raw, ".responseId", null),
                     finish_reason: baml.json.path_or<string?>(raw, ".candidates[0].finishReason", null),
-                    usage: root.ai.Usage {
+                    usage: ai.Usage {
                         input_tokens: baml.json.path_or(raw, ".usageMetadata.promptTokenCount", 0),
                         output_tokens: baml.json.path_or(raw, ".usageMetadata.candidatesTokenCount", 0),
                         cached_input_tokens: baml.json.path_or<int?>(raw, ".usageMetadata.cachedContentTokenCount", null),
@@ -176,7 +176,7 @@ class ManagedCache {
             }
         }
 
-        function delete(self) -> null throws root.ai.Failure | baml.errors.UnknownError {
+        function delete(self) -> null throws ai.Failure | baml.errors.UnknownError {
             if (self.deleted) {
                 return null;
             }
@@ -203,7 +203,7 @@ class ManagedCache {
                 _ => ""
             };
             if (!response.ok() && response.status_code != 404) {
-                throw root.ai.internal.classify_http("google", response.status_code, body);
+                throw ai.internal._classify_http("google", response.status_code, body);
             }
             self.deleted = true;
             self.owner.deleted_keys.push(self.cache_key);
@@ -211,15 +211,15 @@ class ManagedCache {
         }
     }
 
-    implements root.ai.Resource {}
+    implements ai.Resource {}
 }
 
 implements root.google.ManagedCacheProvider for Gemini {
   function create_cache(
     self,
-    messages: root.ai.Messages,
+    messages: ai.Messages,
     options: root.google.CacheOptions,
-  ) -> root.google.Cache throws root.ai.Failure | baml.errors.UnknownError {
+  ) -> root.google.Cache throws ai.Failure | baml.errors.UnknownError {
     let source = _cache_messages_text(messages);
     //# Create a remote cache with explicit model ownership and TTL
     let response = baml.http.send(baml.http.Request {
@@ -242,7 +242,7 @@ implements root.google.ManagedCacheProvider for Gemini {
       _ => throw baml.errors.UnknownError.with_message<never>(e, "Gemini cache create body failed"),
     };
     if (!response.ok()) {
-      throw root.ai.internal.classify_http("google", response.status_code, body);
+      throw ai.internal._classify_http("google", response.status_code, body);
     }
     let raw = baml.json.parse(body) catch (e) {
       _ => throw baml.errors.UnknownError.with_message<never>(e, "Gemini cache create JSON failed"),

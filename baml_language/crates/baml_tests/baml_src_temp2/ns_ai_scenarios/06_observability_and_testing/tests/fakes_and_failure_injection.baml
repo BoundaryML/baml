@@ -1,18 +1,18 @@
 
 test "guide 06.06: fakes can inject failures before a valid typed output" {
-  let fake = root.ai.testing.FakeProvider { ...fake_resolution(), failures_remaining: 1 };
-  let failed = root.ai.internal._require_done(
-    ResolveTicket_task(sample_ticket(), fake).run(
-      runner = root.ai.run.Agent<Resolution>.new(),
+  let fake = ai.testing.FakeProvider { ...fake_resolution(), failures_remaining: 1 };
+  let failed = ai.internal._require_done(
+    ResolveTicket@task(sample_ticket()).with_provider(fake).run(
+      runner = ai.run.Agent<Resolution>.new(),
     ),
   ).value catch (e) {
     _ => "failed",
   };
   assert.equal(failed, "failed")
   assert.equal(
-    root.ai.internal._require_done(
-      ResolveTicket_task(sample_ticket(), fake).run(
-        runner = root.ai.run.Agent<Resolution>.new(),
+    ai.internal._require_done(
+      ResolveTicket@task(sample_ticket()).with_provider(fake).run(
+        runner = ai.run.Agent<Resolution>.new(),
       ),
     ).value.category,
     "billing",
@@ -21,17 +21,17 @@ test "guide 06.06: fakes can inject failures before a valid typed output" {
 
 testset "integ-test-guide-06-failure-injection" {
   test "guide 06.06 live OpenAI: one classified fake failure selects the real fallback exactly once" {
-    let injected = root.ai.testing.FakeProvider {
+    let injected = ai.testing.FakeProvider {
       ...fake_resolution(),
       provider_name: "injected-primary",
       failures_remaining: 1,
-      failure_mode: root.ai.testing.FakeFailureMode.Retryable,
+      failure_mode: ai.testing.FakeFailureMode.Retryable,
     };
-    let chain = root.ai.fallback([injected, live_openai()]);
-    let response = root.ai.internal._response_from_done(
-      root.ai.internal._require_done(
-        ResolveTicket_task(sample_ticket(), chain).run(
-          runner = root.ai.run.Agent<Resolution>.new(),
+    let chain = ai.fallback([injected, live_openai()]);
+    let response = ai.internal._response_from_done(
+      ai.internal._require_done(
+        ResolveTicket@task(sample_ticket()).with_provider(chain).run(
+          runner = ai.run.Agent<Resolution>.new(),
         ),
       ),
     );

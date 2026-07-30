@@ -11,10 +11,10 @@ testset "integ-test-google-ai-native-tools" {
                 output_mode = root.google.ai.OutputMode.Native,
                 tool_mode = root.google.ai.ToolMode.Native,
             );
-        let task = ResolveTicketWithTools_task(sample_ticket(), provider, [search_knowledge]);
-        let outcome = task.run(runner = root.ai.run.Agent<Resolution>.new(tools = [search_knowledge]));
+        let task = ResolveTicketWithTools@task(sample_ticket()).with_provider(provider).with_tools([search_knowledge]);
+        let outcome = task.run(runner = ai.run.Agent<Resolution>.new(tools = [search_knowledge]));
         match (outcome) {
-            let done: root.ai.Done<Resolution> => assert.is_true(done.value.reply.length() > 0),
+            let done: ai.Done<Resolution> => assert.is_true(done.value.reply.length() > 0),
             _ => assert.is_true(false),
         }
     }
@@ -38,10 +38,10 @@ testset "integ-test-google-vertex-native-tools" {
                     output_mode = root.google.vertex.OutputMode.Native,
                     tool_mode = root.google.vertex.ToolMode.Native,
                 );
-            let task = ResolveTicketWithTools_task(sample_ticket(), provider, [search_knowledge]);
-            let outcome = task.run(runner = root.ai.run.Agent<Resolution>.new(tools = [search_knowledge]));
+            let task = ResolveTicketWithTools@task(sample_ticket()).with_provider(provider).with_tools([search_knowledge]);
+            let outcome = task.run(runner = ai.run.Agent<Resolution>.new(tools = [search_knowledge]));
             match (outcome) {
-                let done: root.ai.Done<Resolution> => assert.is_true(done.value.reply.length() > 0),
+                let done: ai.Done<Resolution> => assert.is_true(done.value.reply.length() > 0),
                 _ => assert.is_true(false),
             }
         }

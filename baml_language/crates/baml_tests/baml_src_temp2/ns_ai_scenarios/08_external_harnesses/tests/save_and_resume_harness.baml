@@ -2,7 +2,7 @@ test "guide 08.05: harness sessions save and resume with opaque tokens" {
     let harness = fake_model_harness();
     let session = harness
         .open(
-            root.ai.harness.HarnessOptions {
+            ai.harness.HarnessOptions {
                 cwd: "/workspace",
                 permission_mode: "read-only",
                 sandbox: "workspace",
@@ -15,7 +15,7 @@ test "guide 08.05: harness sessions save and resume with opaque tokens" {
     // session.cleanup();
     // session.cleanup();
     // match (session) {
-    //   let local: root.ai.LocalHarnessSession => assert.equal(local.cleanup_count, 1),
+    //   let local: ai.LocalHarnessSession => assert.equal(local.cleanup_count, 1),
     //   _ => assert.is_true(false),
     // }
 }
@@ -25,7 +25,7 @@ testset "integ-test-guide-08-harness-resume" {
         let harness = live_openai_model_harness();
         let session = harness
             .open(
-                root.ai.harness.HarnessOptions {
+                ai.harness.HarnessOptions {
                     cwd: "/workspace",
                     permission_mode: "read-only",
                     sandbox: "workspace",
@@ -35,14 +35,14 @@ testset "integ-test-guide-08-harness-resume" {
         let first = harness
             .run<Resolution>(
                 session,
-                InvestigateRepository_task(sample_ticket(), harness.inner),
+                InvestigateRepository@task(sample_ticket()).with_provider(harness.inner),
                 null,
             );
         //# Cross a request-shaped serialization boundary with no credentials
         let encoded = baml.json.to_string(first.token) catch (e) {
             _ => baml.sys.panic("harness token serialization failed"),
         };
-        let token = baml.sap.parse<root.ai.harness.HarnessSessionToken>(encoded) catch (e) {
+        let token = baml.sap.parse<ai.harness.HarnessSessionToken>(encoded) catch (e) {
             _ => baml.sys.panic("harness token parse failed"),
         };
         let restored = harness.restore_session(token);
@@ -56,7 +56,7 @@ testset "integ-test-guide-08-harness-resume" {
         let second = harness
             .run<Resolution>(
                 restored,
-                InvestigateRepository_task(sample_ticket(), harness.inner),
+                InvestigateRepository@task(sample_ticket()).with_provider(harness.inner),
                 null,
             );
         log.info(

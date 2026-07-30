@@ -4151,8 +4151,9 @@ impl<'a> Parser<'a> {
         }
     }
 
-    /// Scan tokens to detect if this looks like an LLM function body.
-    /// LLM functions contain `client` and `prompt` keywords at brace depth 1.
+    /// Scan tokens to detect if this looks like a declarative model function body.
+    /// Legacy LLM functions contain `client` / `prompt`; AI functions contain
+    /// `provider` / `prompt` (and may also contain `tools`).
     /// Expression functions contain `let`, `return`, `if`, `while`, `for`.
     fn looks_like_llm_function_body(&self) -> bool {
         let mut i = self.current;
@@ -4186,8 +4187,16 @@ impl<'a> Parser<'a> {
                     if text == "const" {
                         return false;
                     }
-                    if text == "client" || text == "prompt" {
-                        // An LLM field is `client <value>` / `prompt <template>`.
+                    if matches!(text.as_str(), "provider" | "tools") {
+                        // New AI fields require a colon. This avoids
+                        // misclassifying ordinary expression bodies which call
+                        // a local named `provider` or `tools`.
+                        let j = self.skip_trivia_and_comments_from(i + 1);
+                        if self.tokens.get(j).map(|t| t.kind) == Some(TokenKind::Colon) {
+                            return true;
+                        }
+                    } else if matches!(text.as_str(), "client" | "prompt") {
+                        // A declarative field is `name: value`.
                         // A following `=`, `,`, or `)` means a named call arg
                         // or plain identifier use, so this is an expression body.
                         let j = self.skip_trivia_and_comments_from(i + 1);
@@ -4242,7 +4251,10 @@ impl<'a> Parser<'a> {
             p.expect(TokenKind::LBrace);
 
             let mut has_client = false;
+            let mut has_provider = false;
             let mut has_prompt = false;
+            let mut has_tools = false;
+            let mut prompt_uses_backticks = false;
 
             while !p.at(TokenKind::RBrace) && !p.at_end() {
                 // Error recovery: if we see a top-level keyword (except Client and TypeBuilder)
@@ -4263,11 +4275,27 @@ impl<'a> Parser<'a> {
                     );
                     p.consume_header_comment();
                 } else if p.at(TokenKind::Client) {
+                    if has_provider {
+                        p.error_unexpected_token(
+                            "AI function cannot declare both 'client' and 'provider'".to_string(),
+                        );
+                    }
                     if has_client {
                         p.error_unexpected_token("Duplicate 'client' field".to_string());
                     }
                     has_client = true;
                     p.parse_client_field();
+                } else if p.at_word("provider") {
+                    if has_client {
+                        p.error_unexpected_token(
+                            "AI function cannot declare both 'client' and 'provider'".to_string(),
+                        );
+                    }
+                    if has_provider {
+                        p.error_unexpected_token("Duplicate 'provider' field".to_string());
+                    }
+                    has_provider = true;
+                    p.parse_ai_expression_field(SyntaxKind::PROVIDER_FIELD, "provider");
                 } else if p.at(TokenKind::Word)
                     && p.current().map(|t| t.text == "prompt").unwrap_or(false)
                 {
@@ -4275,7 +4303,13 @@ impl<'a> Parser<'a> {
                         p.error_unexpected_token("Duplicate 'prompt' field".to_string());
                     }
                     has_prompt = true;
-                    p.parse_prompt_field();
+                    prompt_uses_backticks = p.parse_prompt_field();
+                } else if p.at_word("tools") {
+                    if has_tools {
+                        p.error_unexpected_token("Duplicate 'tools' field".to_string());
+                    }
+                    has_tools = true;
+                    p.parse_ai_expression_field(SyntaxKind::TOOLS_FIELD, "tools");
                 } else if p.at(TokenKind::TypeBuilder) {
                     // Parse type_builder block - HIR will emit proper error for non-test context
                     p.parse_type_builder_block();
@@ -4292,18 +4326,24 @@ impl<'a> Parser<'a> {
                 } else {
                     // Unexpected token in LLM function
                     p.error_unexpected_token(format!(
-                        "Only 'client' and 'prompt' allowed in LLM function, found '{}'",
+                        "Only 'client' or 'provider', 'prompt', and 'tools' are allowed in a declarative model function, found '{}'",
                         p.current().map(|t| t.text.as_str()).unwrap_or("EOF")
                     ));
                     p.bump();
                 }
             }
 
-            if !has_client {
-                p.error_unexpected_token("LLM function missing 'client' field".to_string());
+            if !has_client && !has_provider {
+                p.error_unexpected_token(
+                    "Declarative model function missing 'client' or 'provider' field".to_string(),
+                );
             }
             if !has_prompt {
                 p.error_unexpected_token("LLM function missing 'prompt' field".to_string());
+            } else if has_provider && !prompt_uses_backticks {
+                p.error_unexpected_token(
+                    "AI function prompt must use a backtick template".to_string(),
+                );
             }
 
             p.expect(TokenKind::RBrace);
@@ -4371,11 +4411,41 @@ impl<'a> Parser<'a> {
     fn at_llm_field_start(&self) -> bool {
         self.at(TokenKind::Client)
             || self.at(TokenKind::TypeBuilder)
-            || (self.at(TokenKind::Word)
-                && self.current().map(|t| t.text == "prompt").unwrap_or(false))
+            || self.at_word("provider")
+            || self.at_word("prompt")
+            || self.at_word("tools")
     }
 
-    fn parse_prompt_field(&mut self) {
+    fn at_word(&self, expected: &str) -> bool {
+        self.at(TokenKind::Word)
+            && self
+                .current()
+                .map(|token| token.text == expected)
+                .unwrap_or(false)
+    }
+
+    /// Parse an expression-valued AI function field. `parse_expr` naturally
+    /// stops at the next declarative field token after the expression, while
+    /// still admitting calls, object literals, arrays, and parameter-dependent
+    /// expressions.
+    fn parse_ai_expression_field(&mut self, kind: SyntaxKind, name: &str) {
+        self.with_node(kind, |p| {
+            if p.at_word(name) {
+                p.bump();
+            } else {
+                p.error_unexpected_token(format!("'{name}' keyword"));
+            }
+            p.expect(TokenKind::Colon);
+            if p.at(TokenKind::RBrace) || p.at_end() {
+                p.error_unexpected_token(format!("{name} expression"));
+            } else {
+                p.parse_expr();
+            }
+        });
+    }
+
+    fn parse_prompt_field(&mut self) -> bool {
+        let mut uses_backticks = false;
         self.with_node(SyntaxKind::PROMPT_FIELD, |p| {
             // Expect 'prompt' keyword (as Word token)
             if p.at(TokenKind::Word) && p.current().map(|t| t.text == "prompt").unwrap_or(false) {
@@ -4388,10 +4458,12 @@ impl<'a> Parser<'a> {
             p.eat(TokenKind::Colon);
 
             // Prompt value (usually a raw string)
+            uses_backticks = p.at(TokenKind::Backtick);
             if !p.parse_any_string() {
                 p.error_unexpected_token("prompt string".to_string());
             }
         });
+        uses_backticks
     }
 
     /// Parse a lambda expression:
@@ -6089,6 +6161,23 @@ impl<'a> Parser<'a> {
                 self.bump(); // .
                 self.bump_contextual_kw_as("as", SyntaxKind::KW_AS);
                 self.parse_generic_args();
+                self.finish_node();
+            } else if op == TokenKind::At {
+                // AI-task companion access. This is deliberately a dedicated
+                // postfix rather than ordinary member access: `F@task(args)`
+                // resolves to the compiler-generated `F$task` function while
+                // preserving `@task` as the reader-facing spelling.
+                let lhs_start = self.find_previous_expr_start_after(expr_start);
+                self.wrap_events_in_node(lhs_start, SyntaxKind::TASK_ACCESS_EXPR);
+                self.bump(); // @
+                if self.at_word("task") {
+                    self.bump();
+                } else {
+                    self.error_unexpected_token("'task' after '@'".to_string());
+                    if self.at(TokenKind::Word) {
+                        self.bump();
+                    }
+                }
                 self.finish_node();
             } else if op == TokenKind::Dot || op == TokenKind::Dollar {
                 // Field access on a complex expression.
@@ -10872,6 +10961,72 @@ function Search(query: string, max_results: int = 10, filter: string = "none") -
                 |it| matches!(it, rowan::NodeOrToken::Token(t) if t.kind() == SyntaxKind::EQUALS)
             ),
             "expected third parameter to preserve default equals token"
+        );
+    }
+
+    #[test]
+    fn parses_ai_function_fields_and_task_access() {
+        let source = r#"
+function Ask(prefix: string, question: string) -> string {
+  provider: prefix
+  prompt: `Answer ${question}`
+  tools: question
+}
+
+function main() -> ai.Task<string> {
+  Ask@task("brief", "where?")
+}
+"#;
+        let (root, errors) = parse_source(source);
+        assert!(errors.is_empty(), "unexpected parse errors: {errors:#?}");
+        let kinds = root
+            .descendants()
+            .map(|node| node.kind())
+            .collect::<Vec<_>>();
+        assert!(kinds.contains(&SyntaxKind::PROVIDER_FIELD));
+        assert!(kinds.contains(&SyntaxKind::TOOLS_FIELD));
+        assert!(kinds.contains(&SyntaxKind::TASK_ACCESS_EXPR));
+    }
+
+    #[test]
+    fn ai_function_requires_a_backtick_prompt() {
+        let source = r##"
+function Ask(provider: Provider) -> string {
+  provider: provider
+  prompt: #"not a prompt closure"#
+}
+"##;
+        let (_root, errors) = parse_source(source);
+        assert!(
+            errors
+                .iter()
+                .any(|error| format!("{error:?}").contains("backtick template")),
+            "expected a targeted backtick diagnostic, got: {errors:#?}"
+        );
+    }
+
+    #[test]
+    fn provider_and_tools_identifiers_do_not_make_an_expression_function_declarative() {
+        let source = r#"
+function provider() -> string { "provider" }
+function tools() -> string[] { [] }
+function ordinary() -> string {
+  let selected = provider()
+  let roster = tools()
+  selected
+}
+"#;
+        let (root, errors) = parse_source(source);
+        assert!(errors.is_empty(), "unexpected parse errors: {errors:#?}");
+        let ordinary = root
+            .descendants()
+            .filter(|node| node.kind() == SyntaxKind::FUNCTION_DEF)
+            .find(|node| node.text().to_string().contains("function ordinary"))
+            .expect("ordinary function");
+        assert!(
+            ordinary
+                .children()
+                .any(|node| node.kind() == SyntaxKind::EXPR_FUNCTION_BODY)
         );
     }
 

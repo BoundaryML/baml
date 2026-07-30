@@ -1,4 +1,4 @@
-class ClaudeCodePing {
+class ClaudeCodePingResult {
     answer: string,
 }
 
@@ -19,83 +19,45 @@ function record_claude_code_story(title: string, url: string) -> string throws n
     "baml-tool-receipt-7f3c"
 }
 
-function ClaudeCodePing_task(
-    provider: root.ai.Provider,
-) -> root.ai.Task<ClaudeCodePing> throws never {
-    root.ai.task_named<ClaudeCodePing>(provider, "ClaudeCodePing", {}, [], (ctx: baml.llm.Context) -> baml.llm.PromptAst {
-        baml.llm
-            .assemble_prompt_ast(
-                ["", "\n", ""],
-                ["Set answer to the exact string PONG.", ctx.output_format],
-            )
-    })
+function ClaudeCodePing() -> ClaudeCodePingResult {
+    provider: ai.testing.fake_output_provider(`{"answer":"PONG"}`)
+    prompt: `
+        Set answer to the exact string PONG.
+        ${ctx.output_format}
+    `
 }
 
-function ClaudeCodeWebFetch_task(
-    provider: root.ai.Provider,
-) -> root.ai.Task<HackerNewsTopStory> throws never {
-    root.ai.task_named<HackerNewsTopStory>(provider, "ClaudeCodeWebFetch", {}, [], (
-        ctx: baml.llm.Context,
-    ) -> baml.llm.PromptAst {
-        baml.llm
-            .assemble_prompt_ast(
-                ["", "\n", ""],
-                [
-                    "Use WebFetch to inspect https://news.ycombinator.com/ and return the current number-one story. You must use WebFetch before answering. Return its title and absolute destination URL.",
-                    ctx.output_format,
-                ],
-            )
-    })
+function ClaudeCodeWebFetch() -> HackerNewsTopStory {
+    provider: ai.testing.fake_output_provider(
+        `{"title":"fixture","url":"https://example.com"}`
+    )
+    prompt: `
+        Use WebFetch to inspect https://news.ycombinator.com/ and return the
+        current number-one story. You must use WebFetch before answering.
+        Return its title and absolute destination URL.
+        ${ctx.output_format}
+    `
 }
 
-// Future compiler lowering:
-//
-//   function ClaudeCodeWebFetchWithBamlTool() -> HackerNewsTopStoryWithBamlTool {
-//     client: claude_code_cli
-//     prompt: `
-//       Use Claude Code's WebFetch tool to inspect Hacker News.
-//       Then call record_claude_code_story with the selected story.
-//       ${ctx.output_format}
-//     `
-//     tools: [record_claude_code_story]
-//   }
-//
+function ClaudeCodeWebFetchWithBamlTool() -> HackerNewsTopStoryWithBamlTool {
+    provider: ai.testing.fake_output_provider(
+        `{"title":"fixture","url":"https://example.com","baml_receipt":"baml-tool-receipt-7f3c"}`
+    )
+    prompt: `
+        Use your native WebFetch tool to inspect https://news.ycombinator.com/
+        and find the current number-one story. Then call the BAML application
+        tool record_claude_code_story exactly once with that story's title and
+        absolute destination URL. After receiving its result, return the same
+        title and URL and copy the tool result exactly into baml_receipt. Do not
+        invent the receipt.
+        ${ctx.output_format}
+    `
+    tools: [record_claude_code_story]
+}
+
 // The provider keeps its native WebFetch tool while the task captures the BAML
 // application tool. The Agent runner owns the bounded loop needed to finish the
 // complete task as T.
-function ClaudeCodeWebFetchWithBamlTool_task(
-    provider: root.ai.Provider,
-) -> root.ai.Task<HackerNewsTopStoryWithBamlTool> throws never {
-    root.ai.task_named<HackerNewsTopStoryWithBamlTool>(provider, "ClaudeCodeWebFetchWithBamlTool", {}, [record_claude_code_story], (
-        ctx: baml.llm.Context,
-    ) -> baml.llm.PromptAst {
-        baml.llm
-            .assemble_prompt_ast(
-                ["", "\n", ""],
-                [
-                    "Use your native WebFetch tool to inspect https://news.ycombinator.com/ and find the current number-one story. Then call the BAML application tool record_claude_code_story exactly once with that story's title and absolute destination URL. After receiving its result, return the same title and URL and copy the tool result exactly into baml_receipt. Do not invent the receipt.",
-                    ctx.output_format,
-                ],
-            )
-    })
-}
-
-// This is the hand-written stand-in for:
-//
-//   ClaudeCodeWebFetchWithBamlTool()
-//
-function ClaudeCodeWebFetchWithBamlTool_manual(
-    provider: root.claude_code.ClaudeCodeCli,
-) -> HackerNewsTopStoryWithBamlTool throws root.ai.Failure | baml.errors.UnknownError | baml.errors.Unsupported {
-    root.ai
-        .internal
-        ._require_done(
-            ClaudeCodeWebFetchWithBamlTool_task(provider)
-                .run(runner = root.ai.run.Agent<HackerNewsTopStoryWithBamlTool>.new()),
-        )
-        .value
-}
-
 function live_claude_code_with_web_fetch() -> root.claude_code.ClaudeCodeCli throws never {
     root.claude_code.ClaudeCodeCli {
         _instance_id: baml.id.new(),

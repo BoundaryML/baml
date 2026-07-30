@@ -93,12 +93,12 @@ function _use_sap(provider: root.google.ai.Gemini) -> bool throws never {
 }
 
 function _validate(provider: root.google.ai.Gemini) -> null
-    throws root.ai.InvalidRequest {
+    throws ai.InvalidRequest {
     if (
         provider.tool_mode == root.google.ai.ToolMode.Prompt
             && provider.output_mode != root.google.ai.OutputMode.Sap
     ) {
-        throw root.ai.InvalidRequest {
+        throw ai.InvalidRequest {
             provider: provider.name(),
             status_code: null,
             detail: "`tool_mode = Prompt` requires `output_mode = Sap`",
@@ -111,8 +111,8 @@ function _validate(provider: root.google.ai.Gemini) -> null
 // the complete request but does not send it.
 function _build_request<T>(
     provider: root.google.ai.Gemini,
-    task: root.ai.Task<T>,
-) -> baml.http.Request throws root.ai.Failure | baml.errors.UnknownError {
+    task: ai.Task<T>,
+) -> baml.http.Request throws ai.Failure | baml.errors.UnknownError {
     _validate(provider);
     root.google.internal._generation_request(
         _primitive(provider),
@@ -124,8 +124,8 @@ function _build_request<T>(
 
 function _begin<T>(
     provider: root.google.ai.Gemini,
-    task: root.ai.Task<T>,
-) -> root.ai.Conversation throws root.ai.Failure | baml.errors.UnknownError {
+    task: ai.Task<T>,
+) -> ai.Conversation throws ai.Failure | baml.errors.UnknownError {
     _validate(provider);
     root.google.internal._new_conversation(
         provider,
@@ -138,8 +138,8 @@ function _begin<T>(
 
 function _save(
     provider: root.google.ai.Gemini,
-    conversation: root.ai.Conversation,
-) -> root.ai.ConversationToken throws baml.errors.UnknownError {
+    conversation: ai.Conversation,
+) -> ai.ConversationToken throws baml.errors.UnknownError {
     root.google.internal._save_conversation(
         conversation,
         provider,
@@ -150,8 +150,8 @@ function _save(
 
 function _restore(
     provider: root.google.ai.Gemini,
-    token: root.ai.ConversationToken,
-) -> root.ai.Conversation throws baml.errors.UnknownError {
+    token: ai.ConversationToken,
+) -> ai.Conversation throws baml.errors.UnknownError {
     root.google.internal._restore_conversation(
         provider,
         _primitive(provider),
@@ -177,8 +177,8 @@ function _resume_identity(provider: root.google.ai.Gemini) -> string throws neve
 
 function _import<T>(
     provider: root.google.ai.Gemini,
-    messages: root.ai.Messages,
-) -> root.ai.ConversationImport throws baml.errors.UnknownError {
+    messages: ai.Messages,
+) -> ai.ConversationImport throws baml.errors.UnknownError {
     root.google.internal._import_messages<T>(
         provider,
         _primitive(provider),

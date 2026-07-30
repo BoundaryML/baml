@@ -842,15 +842,23 @@ function assemble_prompt_ast(parts: string[], values: unknown[]) -> PromptAst th
 /// which is the right contract for a general tagged template — but the built-in
 /// `prompt` tag stringifies its content, so a class/array/map value reaching the
 /// assembler unrendered would silently produce an empty string (B-563). Route
-/// every value through `string.from` — BAML's implicit `to_string`, the exact
-/// conversion an ordinary `${expr}` applies (honoring `baml.ToString` overrides)
-/// — except a `Role` marker (from `${role(...)}`), which stays raw so
-/// `assemble_prompt_ast` can still use it to split the prompt into chat messages.
+/// every non-structural value through `string.from` — BAML's implicit
+/// `to_string`, the exact conversion an ordinary `${expr}` applies (honoring
+/// `baml.ToString` overrides). Role markers and media stay raw so
+/// `assemble_prompt_ast` can preserve chat boundaries and provider-native media.
 function render_prompt_values(values: unknown[]) -> unknown[] throws never {
   let rendered: unknown[] = []
   for (let value in values) {
     rendered.push(match (value) {
       Role => value,
+      let media: baml.media.Image => media,
+      let media: baml.media.Pdf => media,
+      let media: baml.media.Audio => media,
+      let media: baml.media.Video => media,
+      let media: image => media,
+      let media: pdf => media,
+      let media: audio => media,
+      let media: video => media,
       _ => string.from(value),
     })
   }

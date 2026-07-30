@@ -1,14 +1,14 @@
 test "guide 01.02: task construction is inspectable and side-effect free" {
     let fake = fake_resolution();
-    let task = ResolveTicket_task(sample_ticket(), fake);
+    let task = ResolveTicket@task(sample_ticket()).with_provider(fake);
     assert.equal(fake.calls, 0);
     assert.equal(task.identity?.name, "ResolveTicket");
+    assert.equal(task.identity?.package, "user");
     assert.equal(task.provider_name(), "fake");
-    let response = root
-        .ai
+    let response = ai
         .internal
         ._response_from_done(
-            root.ai.internal._require_done(task.run(runner = root.ai.run.Agent<Resolution>.new())),
+            ai.internal._require_done(task.run(runner = ai.run.Agent<Resolution>.new())),
         );
     assert.equal(response.value.category, "billing");
     assert.equal(fake.calls, 1)
@@ -16,7 +16,7 @@ test "guide 01.02: task construction is inspectable and side-effect free" {
 
 testset "integ-test-guide-01-task-and-runners" {
     test "guide 01.02 live OpenAI: inspect the task before explicit execution" {
-        let task = ResolveTicket_task(sample_ticket(), live_openai());
+        let task = ResolveTicket@task(sample_ticket()).with_provider(live_openai());
         assert.equal(task.identity?.name, "ResolveTicket");
         assert.equal(task.provider_name(), "openai");
         assert.contains(task.prompt.text(), "Charged twice");
@@ -29,13 +29,12 @@ testset "integ-test-guide-01-task-and-runners" {
                 }
                 .to_string(),
         );
-        let response = root
-            .ai
+        let response = ai
             .internal
             ._response_from_done(
-                root.ai
+                ai
                     .internal
-                    ._require_done(task.run(runner = root.ai.run.Agent<Resolution>.new())),
+                    ._require_done(task.run(runner = ai.run.Agent<Resolution>.new())),
             );
         log.info(
             "live task executed "
