@@ -1,0 +1,15 @@
+---
+source: crates/baml_tests/src/type_spec/fixtures.rs
+expression: outcome.dump
+---
+395..409 '{\n   ... b]\n}': hir_ty=[<missing>] tir=[T[]]
+401..407 '[a, b]': hir_ty=[<missing>] tir=[T[]]
+402..403 'a': hir_ty=[<missing>] tir=[T]
+405..406 'b': hir_ty=[<missing>] tir=[T]
+433..482 '{\n   ...  p\n}': hir_ty=[<missing>] tir=[int[]]
+439..444 'let p': hir_ty=[<missing>] tir=[int[]]
+447..451 'pair': hir_ty=[<missing>] tir=[(a: T, b: T) -> T[] throws never]
+447..457 'pair(1, 2)': hir_ty=[<missing>] tir=[(1 | 2)[]]
+452..453 '1': hir_ty=[<missing>] tir=[1]
+455..456 '2': hir_ty=[<missing>] tir=[2]
+479..480 'p': hir_ty=[<missing>] tir=[int[]]

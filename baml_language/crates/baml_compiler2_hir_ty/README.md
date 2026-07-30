@@ -143,11 +143,37 @@ pointed at the error channel:
    deleted at cutover); MIR/emit/runtime and the family axes migrate to
    this representation at cutover. Until S4b lands, subtype checks
    materialize via `to_plain` (cheap at BAML type sizes).
-2. OPEN - Subtyping in the table. (a) rustc-style eq-unification with
-   subsumption checks at check sites and recorded sub-obligations for
-   deferred cases (recommended); (b) bounds-propagating vars
-   (biunification-style lower/upper bound sets). Shapes unify, Expectation,
-   and the S7 join machinery.
+2. SETTLED - Constraint system, per the 2026-07-10 unified-inference
+   investigation (doc-inference.md; its section 7 rulings are adopted
+   verbatim). Eager `Eq` unification (occurs-checked union-find) plus `Sub`
+   constraints that DECOMPOSE BY HEAD: invariant constructors decay
+   `Sub` to `Eq` of arguments (killing most subtyping depth), var-headed
+   cases record lower/upper bounds in per-root
+   `VarData { lowers, uppers, known, obligations }`, and ground cases check
+   via canonical `normalize::is_subtype`. Obligations
+   (`Implements`/`Projects`/`Concrete`) sit on a worklist retried on each
+   resolution event; ONE step budget threads through the whole solve
+   (fail closed, "annotate here" - the coherence discipline). Joins happen
+   only at syntactic join SITES (container literals, branch arms, throws
+   accumulation), arriving at vars as single pre-joined bounds; var
+   RESOLUTION is Rust-parity equality - all lower bounds must be equal
+   after fresh-literal widening (`pair(1, 2)` gives `T = int`;
+   `pair(1, "a")` errors), else `meet(uppers)`, else defaulting, else
+   error. Defaulting rounds: (1) fresh-literal widening, (2) throws vars
+   with no lowers become `never`, (3) nothing else is silent - an
+   unconstrained var is a hard error recorded as `Error` (never the top
+   type). Two reversibility knobs stay centralized: `resolve_var` (the
+   join-vs-equality policy) and `finalize_var` (the unresolved-var
+   policy). Inspection sites (member access, calls, scrutinees,
+   narrowing) force resolution rustc-`structurally_resolve` style - this
+   is what replaces the Evolving* mutation interception, and it works
+   through aliases and fields because identity lives in the union-find.
+   Section 7 rulings adopted: no join for generic params; unconstrained
+   `let a = []` is an error; unresolved type args are hard errors; `_`
+   expands to every expression-position type slot (declaration signatures
+   stay excluded). NOTE: rulings 2 and 3 assert diagnostics, which the
+   fixture harness cannot express yet - an expected-diagnostic fixture
+   class arrives with the S17 harness extension.
 3. MOSTLY SETTLED - Query shape: `infer_body(owner)` keyed by the S1
    body-owner ID, with the lambda-projection pattern preserved and
    cycle-recovery parity with `infer_scope_types`. Blocked on S1.
