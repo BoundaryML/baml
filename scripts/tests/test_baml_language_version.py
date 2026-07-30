@@ -1,16 +1,40 @@
 from __future__ import annotations
 
+import datetime as dt
+import functools
+import importlib.machinery
+import importlib.util
 import json
 import os
 import re
 import subprocess
+import sys
 import tempfile
 import unittest
+import unittest.mock
+import zoneinfo
 from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[2]
 VERSION_TOOL = ROOT / "scripts" / "baml-language-version"
+
+
+@functools.cache
+def version_tool_module():
+    """Import the tool for tests that exercise a pure function directly.
+
+    It has no `.py` suffix, so it needs an explicit source loader, and it must
+    be in `sys.modules` before it executes for its dataclasses to resolve.
+    """
+    loader = importlib.machinery.SourceFileLoader(
+        "baml_language_version", str(VERSION_TOOL)
+    )
+    spec = importlib.util.spec_from_loader(loader.name, loader)
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[loader.name] = module
+    loader.exec_module(module)
+    return module
 
 
 class VersionToolTests(unittest.TestCase):
@@ -269,6 +293,163 @@ if "build:debug" in sys.argv:
         result = self.run_tool("check", check=False)
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("C# NuGet project version", result.stderr)
+
+    def test_nightly_letter_advances_past_the_nights_published_tags(self) -> None:
+        # `already_cut` used to sit on top of this; the letter scan is what it
+        # was really made of, and it is the only thing keeping two cuts on one
+        # night from colliding.
+        module = version_tool_module()
+        base = module.Version.parse("1.2.4")
+        env = {key: value for key, value in self.env.items() if "NIGHTLY_LETTER" not in key}
+        with unittest.mock.patch.dict(os.environ, env, clear=True):
+            letter = module.next_nightly_letter
+            self.assertEqual(letter(base, "20260723", []), "a")
+            self.assertEqual(
+                letter(base, "20260723", ["baml-language-1.2.4-nightly.20260723.a"]), "b"
+            )
+            # Gaps do not reset it, and other bases/nights are not this night's.
+            self.assertEqual(
+                letter(
+                    base,
+                    "20260723",
+                    [
+                        "baml-language-1.2.4-nightly.20260723.a",
+                        "baml-language-1.2.4-nightly.20260723.c",
+                        "baml-language-1.2.4-nightly.20260722.z",
+                        "baml-language-9.9.9-nightly.20260723.z",
+                        "baml-language-1.2.4",
+                    ],
+                ),
+                "d",
+            )
+
+    def test_nightly_refuses_to_plan_below_a_published_night(self) -> None:
+        # The registries mostly resolve by highest version, but the nightly npm
+        # dist-tag and the channel manifest are last-writer-wins, so a version
+        # below the live one walks consumers backwards.
+        module = version_tool_module()
+        base = module.Version.parse("1.2.4")
+        newest = module.newest_nightly_stamp
+        self.assertIsNone(newest(base, ["baml-language-1.2.4"]))
+        self.assertEqual(
+            newest(
+                base,
+                [
+                    "baml-language-1.2.4-nightly.20260722.b",
+                    "baml-language-1.2.4-nightly.20260723.a",
+                    "baml-language-9.9.9-nightly.20260830.a",
+                ],
+            ),
+            ("20260723", "a"),
+        )
+        # The comparison the planner makes: night first, then letter.
+        self.assertLess(("20260723", "a"), ("20260723", "b"))
+        self.assertLess(("20260722", "z"), ("20260723", "a"))
+
+    def test_tag_lookup_failure_is_loud_rather_than_an_empty_list(self) -> None:
+        # Failing open here restarts lettering at `a` and re-mints a published
+        # version, whose release assets the toolchain publisher then clobbers.
+        stub = self.write("bin/gh", "#!/bin/sh\nexit 1\n")
+        stub.chmod(0o755)
+        stub = self.write("bin/git", "#!/bin/sh\nexit 1\n")
+        stub.chmod(0o755)
+        env = {
+            key: value
+            for key, value in self.env.items()
+            if "NIGHTLY_LETTER" not in key and "VERSION_DATE" not in key
+        }
+        env["PATH"] = f"{self.bin}:/usr/bin:/bin"
+        result = subprocess.run(
+            [str(VERSION_TOOL), "compute", "--channel", "nightly"],
+            cwd=self.root,
+            env=env,
+            check=False,
+            text=True,
+            capture_output=True,
+        )
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("could not list release tags", result.stderr)
+
+    def test_nightly_date_override_must_be_a_real_ascii_date(self) -> None:
+        for value in ("20261345", "99999999", "٢٠٢٦٠٧٣٠", "2026073"):
+            env = dict(self.env)
+            env["BAML_LANGUAGE_VERSION_DATE"] = value
+            result = subprocess.run(
+                [str(VERSION_TOOL), "compute", "--channel", "nightly"],
+                cwd=self.root,
+                env=env,
+                check=False,
+                text=True,
+                capture_output=True,
+            )
+            self.assertNotEqual(result.returncode, 0, value)
+            self.assertIn("BAML_LANGUAGE_VERSION_DATE", result.stderr, value)
+
+
+class NightNamingTests(unittest.TestCase):
+    """The rule that decides which day a nightly cut is named for.
+
+    Every nightly is a midnight cut, so it closes out the day that just ended.
+    Deriving that from the local *date* rather than the local time makes the
+    answer independent of how late in the slot the cut actually runs.
+    """
+
+    @staticmethod
+    def night(utc: str) -> str:
+        return version_tool_module().night_for(dt.datetime.fromisoformat(utc))
+
+    def test_midnight_cut_closes_out_the_day_that_just_ended(self) -> None:
+        # 07:00 UTC is midnight in Seattle while PDT, 08:00 UTC while PST; the
+        # cron entry that is not local midnight never reaches this rule.
+        self.assertEqual(self.night("2026-07-30T07:00:00+00:00"), "20260729")
+        self.assertEqual(self.night("2026-01-15T08:00:00+00:00"), "20260114")
+
+    def test_a_late_cut_still_names_the_night_it_was_scheduled_for(self) -> None:
+        # The gate reads the clock in the first step and the release names the
+        # night in a later job, so those two reads can straddle 01:00. Naming by
+        # local date means they cannot disagree: only crossing the *next* local
+        # midnight would change the answer.
+        for utc in (
+            "2026-07-30T07:59:00+00:00",  # 00:59 local, still in the slot
+            "2026-07-30T09:30:00+00:00",  # 02:30 local, well past it
+            "2026-07-30T22:00:00+00:00",  # 15:00 local, a manual repair run
+        ):
+            self.assertEqual(self.night(utc), "20260729", utc)
+
+    def test_dst_transitions_keep_one_night_per_day(self) -> None:
+        # Spring forward: 02:00 PST becomes 03:00 PDT on 2026-03-08, so the
+        # 08:00 UTC entry is that night's local midnight.
+        self.assertEqual(self.night("2026-03-08T08:00:00+00:00"), "20260307")
+        # Fall back: 02:00 PDT becomes 01:00 PST on 2026-11-01, so the 07:00 UTC
+        # entry is local midnight.
+        self.assertEqual(self.night("2026-11-01T07:00:00+00:00"), "20261031")
+
+    def test_a_naive_moment_is_rejected_rather_than_read_as_machine_local(self) -> None:
+        with self.assertRaises(SystemExit):
+            version_tool_module().night_for(dt.datetime(2026, 7, 30, 0, 30))
+
+    def test_every_night_of_the_next_five_years_is_named_exactly_once(self) -> None:
+        seattle = zoneinfo.ZoneInfo("America/Los_Angeles")
+        day = dt.date(2026, 1, 1)
+        named: list[str] = []
+        while day < dt.date(2031, 1, 1):
+            midnight_slots = [
+                dt.datetime(day.year, day.month, day.day, hour, tzinfo=dt.timezone.utc)
+                for hour in (7, 8)
+                if dt.datetime(
+                    day.year, day.month, day.day, hour, tzinfo=dt.timezone.utc
+                )
+                .astimezone(seattle)
+                .hour
+                == 0
+            ]
+            # Exactly one cron entry lands in the midnight hour, every day,
+            # including the two DST transition days.
+            self.assertEqual(len(midnight_slots), 1, day)
+            named.append(self.night(midnight_slots[0].isoformat()))
+            day += dt.timedelta(days=1)
+        self.assertEqual(named, sorted(named))
+        self.assertEqual(len(named), len(set(named)))
 
 
 if __name__ == "__main__":

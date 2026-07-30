@@ -10,6 +10,7 @@ import os
 import re
 import subprocess
 import sys
+import zoneinfo
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -273,13 +274,47 @@ def previous_release_toml() -> str | None:
     return None
 
 
-def today_utc() -> str:
-    override = os.environ.get("BAML_LANGUAGE_VERSION_DATE")
+SEATTLE = "America/Los_Angeles"
+
+# Determinism knobs for fixture builds. No release path sets either one.
+NIGHTLY_DATE_ENV = "BAML_LANGUAGE_VERSION_DATE"
+NIGHTLY_LETTER_ENV = "BAML_LANGUAGE_VERSION_NIGHTLY_LETTER"
+
+
+def night_for(moment: dt.datetime) -> str:
+    """The Seattle day a nightly cut made at `moment` is named for.
+
+    A nightly closes out a day, and .github/workflows/nightly-release.yml cuts it
+    in the midnight hour that follows, so the cut is named for the day that just
+    ended. Deriving that from the local *date* rather than the local time keeps
+    the answer stable however late the cut runs: a release that is dispatched at
+    00:05 and only reaches its plan step at 02:30 still names the same night.
+
+    Cuts are ordered by this date and then by letter, so the pair rises
+    monotonically as long as cuts happen in time order.
+    """
+    if moment.tzinfo is None:
+        fail("night_for requires a timezone-aware moment")
+    # ZoneInfo is built lazily: only version computation needs the tz database,
+    # while `stamp` runs on every build runner, including Windows.
+    local_date = moment.astimezone(zoneinfo.ZoneInfo(SEATTLE)).date()
+    return (local_date - dt.timedelta(days=1)).strftime("%Y%m%d")
+
+
+def nightly_date() -> str:
+    override = os.environ.get(NIGHTLY_DATE_ENV)
     if override:
-        if not re.fullmatch(r"\d{8}", override):
-            fail("BAML_LANGUAGE_VERSION_DATE must be YYYYMMDD")
+        # `\d` would accept non-ASCII digits, and an 8-digit string is not
+        # necessarily a date; this value ends up in irreversible registry
+        # publishes, so require a real one.
+        if not re.fullmatch(r"[0-9]{8}", override):
+            fail(f"{NIGHTLY_DATE_ENV} must be YYYYMMDD")
+        try:
+            dt.datetime.strptime(override, "%Y%m%d")
+        except ValueError:
+            fail(f"{NIGHTLY_DATE_ENV} {override!r} is not a real date")
         return override
-    return dt.datetime.now(dt.timezone.utc).strftime("%Y%m%d")
+    return night_for(dt.datetime.now(dt.timezone.utc))
 
 
 def command_output(command: list[str]) -> str | None:
@@ -296,6 +331,15 @@ def command_output(command: list[str]) -> str | None:
 
 
 def release_tags() -> list[str]:
+    """Every release tag, or a hard failure -- never a silent empty list.
+
+    The nightly letter is allocated by looking for the tags a night already has,
+    so "the lookup failed" and "this night has no tags yet" must not collapse
+    into the same answer: doing so restarts lettering at `a` and re-mints an
+    already-published version, whose release assets the toolchain publisher then
+    overwrites. `command_output` returns None on failure and "" on success with
+    no output, which is exactly the distinction needed here.
+    """
     output = command_output(
         [
             "gh",
@@ -311,26 +355,57 @@ def release_tags() -> list[str]:
             ".[].tagName",
         ]
     )
-    if output:
-        return [line.strip() for line in output.splitlines() if line.strip()]
-
-    output = command_output(["git", "ls-remote", "--tags", "https://github.com/BoundaryML/baml.git"])
-    if output:
-        tags: list[str] = []
-        for line in output.splitlines():
-            ref = line.rsplit("/", 1)[-1].removesuffix("^{}")
-            if ref:
-                tags.append(ref)
+    if output is None:
+        output = command_output(
+            ["git", "ls-remote", "--tags", "https://github.com/BoundaryML/baml.git"]
+        )
+        if output is None:
+            fail(
+                "could not list release tags (`gh release list` and `git ls-remote` "
+                "both failed); refusing to compute a version that could collide "
+                "with a published release"
+            )
+        tags = [
+            ref
+            for line in output.splitlines()
+            if (ref := line.rsplit("/", 1)[-1].removesuffix("^{}"))
+        ]
+        if not tags:
+            # Reached only because `gh` already failed. An empty answer from the
+            # fallback is far likelier to be a second symptom than a repository
+            # with no tags, and reading it as "no tags yet" is precisely the
+            # collapse this function exists to prevent.
+            fail(
+                "`git ls-remote --tags` returned no tags; refusing to compute a "
+                "version that could collide with a published release"
+            )
         return tags
 
-    return []
+    return [line.strip() for line in output.splitlines() if line.strip()]
+
+
+def newest_nightly_stamp(base: Version, tags: list[str]) -> tuple[str, str] | None:
+    """The (night, letter) of the newest nightly already published for `base`.
+
+    Nightlies sort by night and then by letter, so this pair is exactly what a
+    newly planned cut has to beat.
+    """
+    prefix = f"baml-language-{base}-nightly."
+    stamps = []
+    for tag in tags:
+        if not tag.startswith(prefix):
+            continue
+        night, _, letter = tag.removeprefix(prefix).partition(".")
+        if re.fullmatch(r"[0-9]{8}", night) and SHA_RE.fullmatch(letter):
+            stamps.append((night, letter))
+    return max(stamps, default=None)
 
 
 def next_nightly_letter(base: Version, date: str, tags: list[str] | None = None) -> str:
-    override = os.environ.get("BAML_LANGUAGE_VERSION_NIGHTLY_LETTER")
+    override = os.environ.get(NIGHTLY_LETTER_ENV)
     if override:
         if SHA_RE.fullmatch(override) is None:
-            fail("BAML_LANGUAGE_VERSION_NIGHTLY_LETTER must be one lowercase letter")
+            fail(f"{NIGHTLY_LETTER_ENV} must be one lowercase letter")
         return override
     prefix = f"baml-language-{base}-nightly.{date}."
     used = sorted(
@@ -344,7 +419,7 @@ def next_nightly_letter(base: Version, date: str, tags: list[str] | None = None)
     max_index = max(ord(letter) - ord("a") for letter in used)
     if max_index >= 25:
         fail(
-            f"26 nightly builds today for base {base}; wait for the next UTC day or cut a new canary release by bumping baml_language/release.toml [release].canary_version.",
+            f"26 nightly builds for base {base} on this night; wait for the next Seattle day or cut a new canary release by bumping baml_language/release.toml [release].canary_version.",
             code=2,
         )
     return chr(ord("a") + max_index + 1)
@@ -356,8 +431,25 @@ def compute_version(channel: str) -> str:
         return str(canary)
     if channel == "nightly":
         base = canary.next_patch()
-        date = today_utc()
-        letter = next_nightly_letter(base, date)
+        date = nightly_date()
+        # The two overrides exist to pin fixture builds to a fixed version.
+        # Those never publish, and a pinned past date is *expected* to sort under
+        # what is live, so they opt out of the ordering check below.
+        if os.environ.get(NIGHTLY_DATE_ENV) or os.environ.get(NIGHTLY_LETTER_ENV):
+            return f"{base}-nightly.{date}.{next_nightly_letter(base, date)}"
+        tags = release_tags()
+        letter = next_nightly_letter(base, date, tags)
+        # The registries mostly resolve by highest version, but the nightly npm
+        # dist-tag and the channel manifest are last-writer-wins: publishing a
+        # version below the live one walks every consumer backwards. Nothing
+        # downstream re-checks this, so refuse here rather than ship it.
+        published = newest_nightly_stamp(base, tags)
+        if published is not None and (date, letter) <= published:
+            fail(
+                f"planned nightly {base}-nightly.{date}.{letter} is not newer than the "
+                f"published {base}-nightly.{published[0]}.{published[1]}; refusing to "
+                "walk the nightly channel backwards"
+            )
         return f"{base}-nightly.{date}.{letter}"
     fail(f"unsupported channel {channel!r}")
 
