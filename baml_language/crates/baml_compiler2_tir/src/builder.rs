@@ -192,7 +192,9 @@ fn baml_iter_interface_qtn(name: &str) -> crate::ty::QualifiedTypeName {
 pub(crate) struct CalleeGenerics {
     pub(crate) class_params: Vec<crate::ty::ParamTy>,
     pub(crate) user_params: Vec<crate::ty::ParamTy>,
-    pub(crate) user_bounds: Vec<Option<Ty>>,
+    /// Parallel to `user_params`: each param's full `extends A & B` bound
+    /// conjunction, empty when the param is unbounded.
+    pub(crate) user_bounds: Vec<Vec<Ty>>,
     pub(crate) name: Name,
 }
 
@@ -271,7 +273,7 @@ pub(crate) fn callee_generics_for_func<'db>(
     let user_bounds = lower_generic_param_bound_refs(
         db,
         &func_data.type_refs,
-        &func_data.generic_param_bounds,
+        &func_data.generic_params,
         pkg_items,
         &pkg_info.namespace_path,
         &bound_scope,
@@ -287,61 +289,69 @@ pub(crate) fn callee_generics_for_func<'db>(
     }
 }
 
-/// Lower a declaration's generic-param bounds (`TypeRefId`s into `store`, from
-/// firewall data — `function_data` / `class_data` / …) to their `Ty`s, in
-/// declaration order (`None` for unbounded params).
+/// Lower each declared generic parameter's bound *conjunction* (`TypeRefId`s
+/// into `store`, from firewall data — `function_data` / `class_data` / …) to its
+/// `Ty`s, in declaration order.
+///
+/// The result is parallel to `params`; the inner `Vec` holds every
+/// `&`-separated conjunct the parameter declared and is empty when it is
+/// unbounded.
 #[expect(clippy::too_many_arguments)]
 pub(crate) fn lower_generic_param_bound_refs(
     db: &dyn crate::Db,
     store: &baml_compiler2_hir::type_ref::TypeRefStore,
-    bounds: &[Option<baml_compiler2_hir::type_ref::TypeRefId>],
+    params: &[baml_compiler2_ppir::item_data::GenericParamData],
     pkg_items: &PackageItems<'_>,
     ns_context: &[Name],
     generic_params: &[crate::ty::ParamTy],
     bindings: Option<&FxHashMap<crate::ty::ParamTy, Ty>>,
     diagnostics: &mut Vec<TirTypeError>,
-) -> Vec<Option<Ty>> {
+) -> Vec<Vec<Ty>> {
     // The in-scope names under `bindings` are the same for every bound — snapshot once.
     let binding_params: Vec<crate::ty::ParamTy> = bindings
         .map(|bindings| bindings.keys().cloned().collect())
         .unwrap_or_default();
-    bounds
+    params
         .iter()
-        .map(|bound| {
-            bound.map(|bound| {
-                if let Some(bindings) = bindings {
-                    crate::generics::substitute_ty(
-                        &crate::lower_type_expr::lower_constraint_head_type_ref(
+        .map(|param| {
+            param
+                .bounds
+                .iter()
+                .map(|&bound| {
+                    if let Some(bindings) = bindings {
+                        crate::generics::substitute_ty(
+                            &crate::lower_type_expr::lower_constraint_head_type_ref(
+                                store,
+                                bound,
+                                &crate::lower_type_expr::ScopeCtx {
+                                    db,
+                                    package_items: pkg_items,
+                                    ns_context,
+                                    generic_params: &binding_params,
+                                    bounds: &TypeVarBoundsMap::default(),
+                                    self_ty: None,
+                                },
+                                diagnostics,
+                            ),
+                            bindings,
+                        )
+                    } else {
+                        crate::lower_type_expr::lower_constraint_head_type_ref(
                             store,
                             bound,
                             &crate::lower_type_expr::ScopeCtx {
                                 db,
                                 package_items: pkg_items,
                                 ns_context,
-                                generic_params: &binding_params,
-                                bounds: &TypeVarBoundsMap::default(),
+                                generic_params,
+                                bounds: &crate::lower_type_expr::TypeVarBoundsMap::default(),
                                 self_ty: None,
                             },
                             diagnostics,
-                        ),
-                        bindings,
-                    )
-                } else {
-                    crate::lower_type_expr::lower_constraint_head_type_ref(
-                        store,
-                        bound,
-                        &crate::lower_type_expr::ScopeCtx {
-                            db,
-                            package_items: pkg_items,
-                            ns_context,
-                            generic_params,
-                            bounds: &crate::lower_type_expr::TypeVarBoundsMap::default(),
-                            self_ty: None,
-                        },
-                        diagnostics,
-                    )
-                }
-            })
+                        )
+                    }
+                })
+                .collect()
         })
         .collect()
 }
@@ -763,9 +773,10 @@ impl baml_type::normalize::TypeContext for TypeInferenceBuilder<'_> {
 
 /// A declared interface method's generics for call-site checking, keyed by the
 /// callee expression: the method name (for diagnostics), its generic-param names
-/// in declaration order, and their positional interface bounds (`None` for
-/// unbounded params, including the receiver/`Self` generic when it is unbounded).
-type InterfaceMethodGenerics = (Name, Vec<crate::ty::ParamTy>, Vec<Option<Ty>>);
+/// in declaration order, and their positional interface bounds — one entry per
+/// param holding the full `extends A & B` conjunction (empty for an unbounded
+/// param, including the receiver/`Self` generic when it is unbounded).
+type InterfaceMethodGenerics = (Name, Vec<crate::ty::ParamTy>, Vec<Vec<Ty>>);
 
 /// Per-scope inference builder.
 ///
@@ -2214,7 +2225,7 @@ impl<'db> TypeInferenceBuilder<'db> {
     fn callee_declared_generics(
         &self,
         callee_id: ExprId,
-    ) -> Option<(Vec<crate::ty::ParamTy>, Vec<Option<Ty>>, Name)> {
+    ) -> Option<(Vec<crate::ty::ParamTy>, Vec<Vec<Ty>>, Name)> {
         // Method calls on a local receiver (`rec.get<int>(...)`) parse as a
         // multi-segment Path callee, whose member resolution is recorded in
         // `path_member_resolutions` rather than `resolutions`. Only trust a
@@ -2293,7 +2304,7 @@ impl<'db> TypeInferenceBuilder<'db> {
 
         let mut declared_params: Vec<crate::ty::ParamTy> = class_params.to_vec();
         declared_params.extend(data.user_params.iter().cloned());
-        let mut declared_bounds: Vec<Option<Ty>> = vec![None; class_params.len()];
+        let mut declared_bounds: Vec<Vec<Ty>> = vec![Vec::new(); class_params.len()];
         declared_bounds.extend(data.user_bounds.iter().cloned());
         // A user bound that references an enclosing class param (`<U extends
         // Eq<C>>` on a method of `class Box<C>`) is lowered with `C` as a type
@@ -2355,10 +2366,10 @@ impl<'db> TypeInferenceBuilder<'db> {
         // generics, so the params to specialize — and their bounds — come from the
         // callee's *declaration* (resolved via the base expr). A non-declared
         // callee (a plain function value) has none.
-        let (generic_params, generic_param_bounds): (Vec<crate::ty::ParamTy>, Vec<Option<Ty>>) =
-            self.callee_declared_generics(base)
-                .map(|(params, bounds, _)| (params, bounds))
-                .unwrap_or_default();
+        let (generic_params, generic_param_bounds): (Vec<crate::ty::ParamTy>, Vec<Vec<Ty>>) = self
+            .callee_declared_generics(base)
+            .map(|(params, bounds, _)| (params, bounds))
+            .unwrap_or_default();
 
         if type_args.len() != generic_params.len() {
             self.context.report_simple(
@@ -2423,13 +2434,16 @@ impl<'db> TypeInferenceBuilder<'db> {
 
         let bindings = crate::generics::bind_type_vars(&generic_params, &resolved);
 
-        // Generic-bound enforcement: each supplied type arg must satisfy its
-        // param's declared bound. Substitute the bindings first so self-referential
-        // bounds (`<T extends Container<T>>`) resolve before the subtype check.
+        // Generic-bound enforcement: each supplied type arg must satisfy *every*
+        // bound its param declared (`T extends A & B` is a conjunction).
+        // Substitute the bindings first so self-referential bounds
+        // (`<T extends Container<T>>`) resolve before the subtype check.
         for (idx, resolved_arg) in resolved.iter().enumerate() {
-            if let Some(Some(bound)) = generic_param_bounds.get(idx)
-                && let Some(bound) = crate::generics::substitute_ty(bound, &bindings).as_interface()
-            {
+            for bound in generic_param_bounds.get(idx).into_iter().flatten() {
+                let Some(bound) = crate::generics::substitute_ty(bound, &bindings).as_interface()
+                else {
+                    continue;
+                };
                 if let Some(error) = self.bounded_type_arg_error(resolved_arg, &bound) {
                     self.context.report_simple(error, expr_id);
                 }
@@ -3803,7 +3817,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 // function value (lambda/local) has none.
                 let (generic_params, generic_param_bounds): (
                     Vec<crate::ty::ParamTy>,
-                    Vec<Option<Ty>>,
+                    Vec<Vec<Ty>>,
                 ) = callee_expr
                     .and_then(|id| self.callee_declared_generics(id))
                     .map(|(params, bounds, _)| (params, bounds))
@@ -4050,18 +4064,21 @@ impl<'db> TypeInferenceBuilder<'db> {
                             let Some(actual) = bindings.get(param).cloned() else {
                                 continue;
                             };
-                            let Some(bound) =
-                                generic_param_bounds.get(idx).and_then(Option::as_ref)
-                            else {
-                                continue;
-                            };
-                            let bound = crate::generics::substitute_ty(bound, &bindings);
-                            self.infer_call_bindings_rigid_self(
-                                &bound,
-                                &actual,
-                                &mut bindings,
-                                rigid_self_var.as_ref(),
-                            );
+                            // Every conjunct can contribute bindings, so drive
+                            // inference through each. Cloned up front: the loop
+                            // mutates `bindings`, which `generic_param_bounds`
+                            // does not borrow but `substitute_ty` reads.
+                            let declared: Vec<Ty> =
+                                generic_param_bounds.get(idx).cloned().unwrap_or_default();
+                            for bound in &declared {
+                                let bound = crate::generics::substitute_ty(bound, &bindings);
+                                self.infer_call_bindings_rigid_self(
+                                    &bound,
+                                    &actual,
+                                    &mut bindings,
+                                    rigid_self_var.as_ref(),
+                                );
+                            }
                         }
                         if bindings == before {
                             break;
@@ -11381,22 +11398,27 @@ impl<'db> TypeInferenceBuilder<'db> {
                 // own `self`) call `Self`-param methods, while a bare interface
                 // (existential) receiver still cannot. Each bound of an
                 // intersection (`T: A & B`) is tried in turn.
-                for iface in &bounds {
-                    if let Some(ty) = self.resolve_interface_member(
-                        InterfaceBound {
-                            name: &iface.name,
-                            type_args: &iface.generics,
-                            associated_bindings: &iface.associated_types,
-                        },
-                        SelfReceiver::RigidVar(name),
-                        MemberAccess { member, at, bound },
-                    ) {
-                        return ty;
-                    }
+                if let Some(ty) = self.resolve_interface_member_over_conjunction(
+                    &bounds,
+                    SelfReceiver::RigidVar(name),
+                    MemberAccess { member, at, bound },
+                ) {
+                    return ty;
                 }
-                // No bound declares the member — fall back to general member resolution
-                // on the first bound's existential view (single-bound today).
-                self.resolve_member(&bounds[0].to_ty(), member, at, bound)
+                // No conjunct declares the member. Reporting it here — rather than
+                // re-resolving against one arbitrarily chosen conjunct's existential
+                // view — keeps the answer independent of the order the bounds were
+                // written, and matches the projection arm below.
+                self.context.report_at_member_simple(
+                    TirTypeError::UnresolvedMember {
+                        base_type: base_ty.clone(),
+                        member: member.clone(),
+                    },
+                    at,
+                );
+                Ty::Error {
+                    attr: TyAttr::default(),
+                }
             }
             Ty::TypeVar(name, _) if member.as_str() == "from_json" => {
                 // Type-check: every BAML type has `from_json(j: json) -> Self` after Phase 5b.1.
@@ -11437,18 +11459,12 @@ impl<'db> TypeInferenceBuilder<'db> {
                     projection_iface,
                     assoc,
                 );
-                for bound_iface in &bounds {
-                    if let Some(ty) = self.resolve_interface_member(
-                        InterfaceBound {
-                            name: &bound_iface.name,
-                            type_args: &bound_iface.generics,
-                            associated_bindings: &bound_iface.associated_types,
-                        },
-                        SelfReceiver::ExactTy(base_ty),
-                        MemberAccess { member, at, bound },
-                    ) {
-                        return ty;
-                    }
+                if let Some(ty) = self.resolve_interface_member_over_conjunction(
+                    &bounds,
+                    SelfReceiver::ExactTy(base_ty),
+                    MemberAccess { member, at, bound },
+                ) {
+                    return ty;
                 }
                 // No declared bound resolves the member — an unbounded (or wrongly
                 // bounded) projection has no members, same as any receiver missing it.
@@ -12755,9 +12771,11 @@ impl<'db> TypeInferenceBuilder<'db> {
                             ..
                         } = &target.type_refs[target.target].kind
                         {
-                            for (name, &arg) in iface_data.generic_params.iter().zip(generic_args) {
+                            for (declared, &arg) in
+                                iface_data.generic_params.iter().zip(generic_args)
+                            {
                                 let param = iface_env
-                                    .resolve_param(name)
+                                    .resolve_param(&declared.name)
                                     .expect("interface generic parameter is in its environment")
                                     .clone();
                                 let ty = {
@@ -13697,21 +13715,22 @@ impl<'db> TypeInferenceBuilder<'db> {
         &mut self,
         expr_id: ExprId,
         generic_params: &[crate::ty::ParamTy],
-        generic_param_bounds: &[Option<Ty>],
+        generic_param_bounds: &[Vec<Ty>],
         bindings: &FxHashMap<crate::ty::ParamTy, Ty>,
     ) {
         for (idx, param) in generic_params.iter().enumerate() {
-            let Some(bound) = generic_param_bounds.get(idx).and_then(Option::as_ref) else {
-                continue;
-            };
             let Some(actual) = bindings.get(param) else {
                 continue;
             };
-            let Some(bound) = crate::generics::substitute_ty(bound, bindings).as_interface() else {
-                continue;
-            };
-            if let Some(error) = self.bounded_type_arg_error(actual, &bound) {
-                self.context.report(error, expr_id, Vec::new());
+            // Each conjunct is a separate requirement; report every violation.
+            for bound in generic_param_bounds.get(idx).into_iter().flatten() {
+                let Some(bound) = crate::generics::substitute_ty(bound, bindings).as_interface()
+                else {
+                    continue;
+                };
+                if let Some(error) = self.bounded_type_arg_error(actual, &bound) {
+                    self.context.report(error, expr_id, Vec::new());
+                }
             }
         }
     }
@@ -13814,7 +13833,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         self.collect_named_generic_bound_errors(
             generic_env.params(),
             &class_data.type_refs,
-            &class_data.generic_param_bounds,
+            &class_data.generic_params,
             class_loc.file(db),
             type_args,
             errors,
@@ -13837,7 +13856,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         self.collect_named_generic_bound_errors(
             generic_params,
             &interface_data.type_refs,
-            &interface_data.generic_param_bounds,
+            &interface_data.generic_params,
             interface_loc.file(db),
             type_args,
             errors,
@@ -13848,7 +13867,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         &mut self,
         generic_params: &[crate::ty::ParamTy],
         type_refs: &baml_compiler2_hir::type_ref::TypeRefStore,
-        generic_param_bounds: &[Option<baml_compiler2_hir::type_ref::TypeRefId>],
+        declared_params: &[baml_compiler2_ppir::item_data::GenericParamData],
         file: SourceFile,
         type_args: &[Ty],
         errors: &mut Vec<TirTypeError>,
@@ -13868,7 +13887,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         let lowered_bounds = lower_generic_param_bound_refs(
             db,
             type_refs,
-            generic_param_bounds,
+            declared_params,
             pkg_items,
             &pkg_info.namespace_path,
             generic_params,
@@ -13881,15 +13900,16 @@ impl<'db> TypeInferenceBuilder<'db> {
             let Some(actual) = type_args.get(idx) else {
                 continue;
             };
-            let Some(bound) = lowered_bounds.get(idx).and_then(Option::as_ref) else {
-                continue;
-            };
-            let Some(bound) = crate::generics::substitute_ty(bound, &bindings).as_interface()
-            else {
-                continue;
-            };
-            if let Some(error) = self.bounded_type_arg_error(actual, &bound) {
-                errors.push(error);
+            // `T extends A & B` is a conjunction — the argument must satisfy
+            // every conjunct, so each is checked and reported independently.
+            for bound in lowered_bounds.get(idx).into_iter().flatten() {
+                let Some(bound) = crate::generics::substitute_ty(bound, &bindings).as_interface()
+                else {
+                    continue;
+                };
+                if let Some(error) = self.bounded_type_arg_error(actual, &bound) {
+                    errors.push(error);
+                }
             }
         }
     }

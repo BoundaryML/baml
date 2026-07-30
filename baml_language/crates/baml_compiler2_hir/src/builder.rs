@@ -19,7 +19,7 @@ use crate::{
     diagnostic::{Hir2Diagnostic, MemberSite},
     file_package::file_package,
     ids::{FunctionMarker, LocalItemId},
-    item_tree::{GenericParam, ImplBlock, ImplSubject, InterfaceFieldLink},
+    item_tree::{ImplBlock, ImplSubject, InterfaceFieldLink},
     loc::{
         ClassLoc, ClientLoc, EnumLoc, FunctionLoc, InterfaceLoc, LetLoc, RetryPolicyLoc,
         TemplateStringLoc, TestLoc, TypeAliasLoc,
@@ -1450,14 +1450,7 @@ impl<'db> SemanticIndexBuilder<'db> {
         // Record this out-of-body impl under a stable `ImplId` in the unified `impls` store.
         let iface_head = impl_head_name(&imp.interface_target);
         let for_head = impl_head_name(&imp.for_target);
-        let generics = imp
-            .generic_params
-            .iter()
-            .map(|(name, bounds)| GenericParam {
-                name: name.clone(),
-                bounds: bounds.clone(),
-            })
-            .collect();
+        let generics = imp.generic_params.clone();
         let block = ImplBlock {
             subject: ImplSubject::Free {
                 for_target: imp.for_target.clone(),
@@ -1802,9 +1795,14 @@ impl<'db> SemanticIndexBuilder<'db> {
 
             if let Some(throws) = &function.throws {
                 let mut invalid = Vec::new();
+                let generic_param_names: Vec<Name> = function
+                    .generic_params
+                    .iter()
+                    .map(|param| param.name.clone())
+                    .collect();
                 Self::collect_invalid_builtin_throw_types(
                     throws,
-                    &function.generic_params,
+                    &generic_param_names,
                     &mut invalid,
                 );
                 if !invalid.is_empty() {

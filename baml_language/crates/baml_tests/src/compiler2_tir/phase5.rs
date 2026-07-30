@@ -22,6 +22,12 @@ fn make_db() -> ProjectDatabase {
     db
 }
 
+/// Declared generic parameter names, for assertions that care about the names
+/// rather than the bounds.
+fn generic_param_names(params: &[baml_compiler2_ppir::item_data::GenericParamData]) -> Vec<Name> {
+    params.iter().map(|param| param.name.clone()).collect()
+}
+
 /// Build a sorted, human-readable summary of what `package_items(db, "baml")`
 /// contains, separated by namespace.
 fn render_baml_package_items(db: &ProjectDatabase) -> String {
@@ -67,7 +73,7 @@ fn render_baml_package_items(db: &ProjectDatabase) -> String {
                             class_data
                                 .generic_params
                                 .iter()
-                                .map(|n| n.as_str())
+                                .map(|param| param.name.as_str())
                                 .collect::<Vec<_>>()
                                 .join(", ")
                         )
@@ -113,7 +119,7 @@ fn render_baml_package_items(db: &ProjectDatabase) -> String {
                             func_data
                                 .generic_params
                                 .iter()
-                                .map(|n| n.as_str())
+                                .map(|param| param.name.as_str())
                                 .collect::<Vec<_>>()
                                 .join(", ")
                         )
@@ -264,7 +270,7 @@ fn array_has_generic_param_t() {
     let class_data = baml_compiler2_ppir::item_data::class_data(&db, *class_loc);
 
     assert_eq!(
-        class_data.generic_params,
+        generic_param_names(&class_data.generic_params),
         vec![Name::new("T")],
         "Array should have generic_params [T]"
     );
@@ -285,7 +291,7 @@ fn map_has_generic_params_k_v() {
     let class_data = baml_compiler2_ppir::item_data::class_data(&db, *class_loc);
 
     assert_eq!(
-        class_data.generic_params,
+        generic_param_names(&class_data.generic_params),
         vec![Name::new("K"), Name::new("V")],
         "Map should have generic_params [K, V]"
     );

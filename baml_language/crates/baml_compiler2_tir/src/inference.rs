@@ -384,10 +384,12 @@ fn lower_env_interface_bounds(
         let mut diags = Vec::new();
         let bound_ty = lower_bound_source(bound, &scope, &mut diags);
         if let Some(constraint) = bound_ty.as_interface() {
-            // Inner declarations are visited after their parents. Shadowing is
-            // diagnosed separately, and the inner declaration remains the
-            // recovery binding used by the rest of inference.
-            bounds.insert(param.clone(), vec![constraint]);
+            // One predicate per conjunct, so `T extends A & B` visits `T` twice
+            // — accumulate rather than replace. Distinct parameters never
+            // collide here (`ParamTy` keys on index as well as name), so a
+            // shadowing inner declaration gets its own entry; the shadow itself
+            // is diagnosed separately.
+            bounds.entry(param.clone()).or_default().push(constraint);
         }
     });
     if include_concrete && let Some((param, constraint)) = env.self_bound() {
@@ -399,19 +401,22 @@ fn lower_env_interface_bounds(
 /// Report each generic parameter declared more than once in a single declaration
 /// list (`<T, T>`). A name reused across *nested* scopes is not a duplicate but a
 /// shadow, reported as `TypeParamShadowed` at the inner declaration instead.
-fn report_duplicate_generic_params(
+fn report_duplicate_generic_params<'a>(
     builder: &TypeInferenceBuilder<'_>,
-    params: &[Name],
+    params: impl IntoIterator<Item = &'a Name>,
     span: TextRange,
 ) {
-    for (idx, param) in params.iter().enumerate() {
-        if params[..idx].contains(param) {
+    let mut seen: Vec<&Name> = Vec::new();
+    for param in params {
+        if seen.contains(&param) {
             builder.report_at_span(
                 crate::infer_context::TirTypeError::DuplicateGenericParam {
                     name: param.clone(),
                 },
                 span,
             );
+        } else {
+            seen.push(param);
         }
     }
 }
@@ -582,7 +587,12 @@ fn install_generic_param_bounds(
             span,
             param.index() >= env.parent_count(),
         );
-        bounds.insert(param.clone(), constraint.into_vec());
+        // One predicate per conjunct — accumulate so `T extends A & B` enforces
+        // both, rather than only whichever was visited last.
+        bounds
+            .entry(param.clone())
+            .or_default()
+            .extend(constraint.into_vec());
     });
     if let Some((param, constraint)) = env.self_bound() {
         bounds.insert(param.clone(), vec![constraint.clone()]);
@@ -668,7 +678,7 @@ fn validate_type_ref_generic_bounds_at_span(
 /// so collapsing this call would silently change what `Self` resolves to inside
 /// a lambda body.
 fn lambda_body_env<'db>(env: &GenericEnv<'db>) -> GenericEnv<'db> {
-    env.child_unique_ast(&[], &[])
+    env.child_unique_ast(&[])
 }
 
 fn add_lambda_params_to_builder(
@@ -1385,9 +1395,13 @@ pub fn infer_scope_types<'db>(
 
                 let env = crate::generic_env::function_generic_env(db, func_loc).clone();
                 report_duplicate_generic_params(&builder, &sig.user_generic_params, func_span);
-                let report_type_shadowing = |owner, type_name: &Name, parent_params: &[Name]| {
+                let report_type_shadowing = |owner,
+                                             type_name: &Name,
+                                             parent_params: &[
+                    baml_compiler2_ppir::item_data::GenericParamData
+                ]| {
                     for param in &sig.user_generic_params {
-                        if !parent_params.contains(param) {
+                        if !parent_params.iter().any(|parent| &parent.name == param) {
                             continue;
                         }
                         builder.report_at_span(
@@ -1584,11 +1598,11 @@ pub fn infer_scope_types<'db>(
                                 ..
                             } = &target.type_refs[target.target].kind
                             {
-                                for (param, &arg) in
+                                for (declared, &arg) in
                                     iface_data.generic_params.iter().zip(generic_args.iter())
                                 {
                                     let param = iface_env
-                                        .resolve_param(param)
+                                        .resolve_param(&declared.name)
                                         .expect("interface generic parameter is in its environment")
                                         .clone();
                                     let mut arg_diags = Vec::new();
@@ -2169,7 +2183,11 @@ pub fn infer_scope_types<'db>(
                 let class_data = baml_compiler2_ppir::item_data::class_data(db, class_loc);
                 let class_sm = baml_compiler2_ppir::item_data::class_source_map(db, class_loc);
                 let class_span = class_sm.span;
-                report_duplicate_generic_params(&builder, &class_data.generic_params, class_span);
+                report_duplicate_generic_params(
+                    &builder,
+                    class_data.generic_params.iter().map(|param| &param.name),
+                    class_span,
+                );
                 let env = crate::generic_env::class_generic_env(db, class_loc).clone();
                 apply_generic_env(
                     db,
@@ -2195,14 +2213,22 @@ pub fn infer_scope_types<'db>(
                 let (_, iface_generic_params) = iface_env.interface_param_parts();
                 let iface_sm = baml_compiler2_ppir::item_data::interface_source_map(db, iface_loc);
                 let iface_span = iface_sm.span;
-                report_duplicate_generic_params(&builder, &iface_data.generic_params, iface_span);
+                report_duplicate_generic_params(
+                    &builder,
+                    iface_data.generic_params.iter().map(|param| &param.name),
+                    iface_span,
+                );
                 // Associated types share the interface's type-level namespace with its
                 // generic parameters (a bare `Assoc` reference lowers as a type variable),
                 // so a name collision — with a parameter or another associated type —
                 // would silently alias the two. Both are declaration errors.
                 for (idx, assoc) in iface_data.associated_types.iter().enumerate() {
                     let name_span = iface_sm.associated_type_spans[idx].name_span;
-                    if iface_data.generic_params.contains(&assoc.name) {
+                    if iface_data
+                        .generic_params
+                        .iter()
+                        .any(|param| param.name == assoc.name)
+                    {
                         builder.report_at_span(
                             crate::infer_context::TirTypeError::AssociatedTypeConflictsWithGenericParam {
                                 name: assoc.name.clone(),
@@ -2443,9 +2469,15 @@ pub fn infer_scope_types<'db>(
                     // hygiene checks that the function arm runs for default methods
                     // happen here: no `<T, T>`, and no shadowing of the interface's
                     // type-level parameters (generics and associated types alike).
-                    report_duplicate_generic_params(&builder, &sig.generic_params, sig_span);
-                    for mp in &sig.generic_params {
-                        if iface_params.iter().any(|ip| ip == mp) || iface_assoc_names.contains(mp)
+                    report_duplicate_generic_params(
+                        &builder,
+                        sig.generic_params.iter().map(|param| &param.name),
+                        sig_span,
+                    );
+                    for declared in &sig.generic_params {
+                        let mp = &declared.name;
+                        if iface_params.iter().any(|ip| &ip.name == mp)
+                            || iface_assoc_names.contains(mp)
                         {
                             builder.report_at_span(
                                 crate::infer_context::TirTypeError::TypeParamShadowed {
@@ -2457,11 +2489,7 @@ pub fn infer_scope_types<'db>(
                             );
                         }
                     }
-                    let sig_env = iface_env.child_refs(
-                        &sig.generic_params,
-                        &iface_data.type_refs,
-                        &sig.generic_param_bounds,
-                    );
+                    let sig_env = iface_env.child_refs(&sig.generic_params, &iface_data.type_refs);
                     apply_generic_env(
                         db,
                         &mut builder,

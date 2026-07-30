@@ -528,7 +528,7 @@ fn generic_type_parameter_info_at(
             continue;
         }
         let data = item_data::function_data(db, *func_loc);
-        if let Some(param_idx) = data.generic_params.iter().position(|param| param == name) {
+        if let Some(declared) = data.generic_params.iter().find(|param| &param.name == name) {
             let origin = item_data::file_classes(db, file)
                 .iter()
                 .find_map(|class_loc| {
@@ -549,11 +549,7 @@ fn generic_type_parameter_info_at(
                         })
                 })
                 .unwrap_or_else(|| format!("function {}", data.name.as_str()));
-            let bound = data
-                .generic_param_bounds
-                .get(param_idx)
-                .and_then(|bound| *bound)
-                .map(|id| data.type_refs.display(id).to_string());
+            let bound = render_generic_bounds(declared, &data.type_refs);
             candidates.push((source_map.span.len(), origin, bound));
         }
     }
@@ -564,16 +560,11 @@ fn generic_type_parameter_info_at(
             continue;
         }
         let data = item_data::class_data(db, *class_loc);
-        if let Some(param_idx) = data.generic_params.iter().position(|param| param == name) {
-            let bound = data
-                .generic_param_bounds
-                .get(param_idx)
-                .and_then(|bound| *bound)
-                .map(|id| data.type_refs.display(id).to_string());
+        if let Some(declared) = data.generic_params.iter().find(|param| &param.name == name) {
             candidates.push((
                 source_map.span.len(),
                 format!("class {}", data.name.as_str()),
-                bound,
+                render_generic_bounds(declared, &data.type_refs),
             ));
         }
     }
@@ -591,29 +582,23 @@ fn generic_type_parameter_info_at(
             if !range_contains(method_source_map.span, offset) {
                 continue;
             }
-            if let Some(param_idx) = method.generic_params.iter().position(|param| param == name) {
-                let bound = method
-                    .generic_param_bounds
-                    .get(param_idx)
-                    .and_then(|bound| *bound)
-                    .map(|id| data.type_refs.display(id).to_string());
+            if let Some(declared) = method
+                .generic_params
+                .iter()
+                .find(|param| &param.name == name)
+            {
                 candidates.push((
                     method_source_map.span.len(),
                     format!("method {}.{}", data.name.as_str(), method.name.as_str()),
-                    bound,
+                    render_generic_bounds(declared, &data.type_refs),
                 ));
             }
         }
-        if let Some(param_idx) = data.generic_params.iter().position(|param| param == name) {
-            let bound = data
-                .generic_param_bounds
-                .get(param_idx)
-                .and_then(|bound| *bound)
-                .map(|id| data.type_refs.display(id).to_string());
+        if let Some(declared) = data.generic_params.iter().find(|param| &param.name == name) {
             candidates.push((
                 source_map.span.len(),
                 format!("interface {}", data.name.as_str()),
-                bound,
+                render_generic_bounds(declared, &data.type_refs),
             ));
         }
     }
@@ -629,20 +614,34 @@ fn generic_type_parameter_info_at(
     })
 }
 
+/// A parameter's declared bounds rendered as source (`A & B`), or `None` when it
+/// is unbounded.
+fn render_generic_bounds(
+    param: &baml_compiler2_ppir::item_data::GenericParamData,
+    store: &baml_compiler2_hir::type_ref::TypeRefStore,
+) -> Option<String> {
+    if param.bounds.is_empty() {
+        return None;
+    }
+    Some(
+        param
+            .bounds
+            .iter()
+            .map(|&id| store.display(id).to_string())
+            .collect::<Vec<_>>()
+            .join(" & "),
+    )
+}
+
 fn render_generic_params(
-    names: &[Name],
-    bounds: &[Option<baml_compiler2_hir::type_ref::TypeRefId>],
+    params: &[baml_compiler2_ppir::item_data::GenericParamData],
     store: &baml_compiler2_hir::type_ref::TypeRefStore,
 ) -> Vec<String> {
-    names
+    params
         .iter()
-        .enumerate()
-        .map(|(idx, name)| {
-            bounds
-                .get(idx)
-                .and_then(|bound| *bound)
-                .map(|id| format!("{} extends {}", name.as_str(), store.display(id)))
-                .unwrap_or_else(|| name.as_str().to_string())
+        .map(|param| match render_generic_bounds(param, store) {
+            Some(bounds) => format!("{} extends {bounds}", param.name.as_str()),
+            None => param.name.as_str().to_string(),
         })
         .collect()
 }
@@ -799,11 +798,7 @@ fn declaration_type_info_at(
 fn render_function_data_signature(
     function: &baml_compiler2_ppir::item_data::FunctionData,
 ) -> String {
-    let generic_params = render_generic_params(
-        &function.generic_params,
-        &function.generic_param_bounds,
-        &function.type_refs,
-    );
+    let generic_params = render_generic_params(&function.generic_params, &function.type_refs);
     let generics = if generic_params.is_empty() {
         String::new()
     } else {
@@ -844,11 +839,7 @@ fn render_interface_method_signature(
     iface: &baml_compiler2_ppir::item_data::InterfaceData<'_>,
     method: &baml_compiler2_ppir::item_data::InterfaceMethodSigData,
 ) -> String {
-    let generic_params = render_generic_params(
-        &method.generic_params,
-        &method.generic_param_bounds,
-        &iface.type_refs,
-    );
+    let generic_params = render_generic_params(&method.generic_params, &iface.type_refs);
     let generics = if generic_params.is_empty() {
         String::new()
     } else {
@@ -1196,11 +1187,8 @@ pub fn type_info_for_definition(db: &dyn Db, def: Definition<'_>) -> TypeInfo {
             let canonical_fqn = utils::canonical_fqn_string(&qtn);
             let methods = crate::describe::class_method_sigs(db, class_loc);
 
-            let generic_params = render_generic_params(
-                &class_data.generic_params,
-                &class_data.generic_param_bounds,
-                &class_data.type_refs,
-            );
+            let generic_params =
+                render_generic_params(&class_data.generic_params, &class_data.type_refs);
 
             TypeInfo::Class {
                 name: class_name,
@@ -1228,11 +1216,7 @@ pub fn type_info_for_definition(db: &dyn Db, def: Definition<'_>) -> TypeInfo {
 
         Definition::Interface(iface_loc) => {
             let iface = baml_compiler2_ppir::item_data::interface_data(db, iface_loc);
-            let generic_params = render_generic_params(
-                &iface.generic_params,
-                &iface.generic_param_bounds,
-                &iface.type_refs,
-            );
+            let generic_params = render_generic_params(&iface.generic_params, &iface.type_refs);
             let generics = if generic_params.is_empty() {
                 String::new()
             } else {

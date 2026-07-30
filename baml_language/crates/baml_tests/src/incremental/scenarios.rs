@@ -479,7 +479,7 @@ fn function_loc<'db>(
 /// and carries no spans, so projecting it away loses nothing these tests check.
 type ClassFingerprint = (
     baml_base::Name,
-    Vec<Option<baml_compiler2_hir::type_ref::TypeRefId>>,
+    Vec<baml_compiler2_ppir::item_data::GenericParamData>,
     baml_compiler2_hir::type_ref::TypeRefStore,
     Vec<baml_compiler2_ppir::item_data::FieldData>,
     Vec<baml_compiler2_ppir::item_data::ImplementsData>,
@@ -494,7 +494,7 @@ fn class_fingerprint(
     let data = baml_compiler2_ppir::item_data::class_data(db, class_loc(db, file, name));
     (
         data.name.clone(),
-        data.generic_param_bounds.clone(),
+        data.generic_params.clone(),
         data.type_refs.clone(),
         data.fields.clone(),
         data.implements.clone(),

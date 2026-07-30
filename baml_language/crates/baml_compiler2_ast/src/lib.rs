@@ -449,6 +449,21 @@ mod tests {
         (items, diags)
     }
 
+    /// Generic parameters rendered back to source form (`T extends A & B`), so
+    /// one assertion covers both the names and the full conjunction of bounds.
+    fn rendered_generic_params(params: &[crate::ast::GenericParam]) -> Vec<String> {
+        params
+            .iter()
+            .map(|param| {
+                if param.bounds.is_empty() {
+                    return param.name.as_str().to_string();
+                }
+                let bounds: Vec<String> = param.bounds.iter().map(ToString::to_string).collect();
+                format!("{} extends {}", param.name.as_str(), bounds.join(" & "))
+            })
+            .collect()
+    }
+
     fn first_function(items: Vec<Item>) -> crate::ast::FunctionDef {
         items
             .into_iter()
@@ -583,7 +598,7 @@ function deep_copy<T>(value: T) -> T {
         let function = first_function(parse_and_lower(source));
 
         assert_eq!(function.generic_params.len(), 1);
-        assert_eq!(function.generic_params[0].as_str(), "T");
+        assert_eq!(function.generic_params[0].name.as_str(), "T");
     }
 
     #[test]
@@ -956,22 +971,55 @@ interface Box<T extends Named, E> {
             .expect("expected Box interface");
 
         assert_eq!(
-            interface
-                .generic_params
-                .iter()
-                .map(smol_str::SmolStr::as_str)
-                .collect::<Vec<_>>(),
-            vec!["T", "E"]
+            rendered_generic_params(&interface.generic_params),
+            vec!["T extends Named", "E"]
         );
-        assert_eq!(interface.generic_param_bounds.len(), 2);
+    }
+
+    /// `T extends A & B` is a conjunction — every bound must survive lowering.
+    #[test]
+    fn ast_preserves_every_bound_in_a_generic_param_intersection() {
+        let source = r#"
+interface Named {
+  name string
+}
+
+interface Sized {
+  size int
+}
+
+interface Box<T extends Named & Sized, E> {
+  value T
+}
+
+function pack<U extends Named & Sized>(value: U) -> U {
+  value
+}
+"#;
+        let items = parse_and_lower(source);
+        let interface = items
+            .iter()
+            .find_map(|item| match item {
+                Item::Interface(interface) if interface.name.as_str() == "Box" => Some(interface),
+                _ => None,
+            })
+            .expect("expected Box interface");
         assert_eq!(
-            interface.generic_param_bounds[0]
-                .as_ref()
-                .map(ToString::to_string)
-                .as_deref(),
-            Some("Named")
+            rendered_generic_params(&interface.generic_params),
+            vec!["T extends Named & Sized", "E"]
         );
-        assert!(interface.generic_param_bounds[1].is_none());
+
+        let function = items
+            .iter()
+            .find_map(|item| match item {
+                Item::Function(function) if function.name.as_str() == "pack" => Some(function),
+                _ => None,
+            })
+            .expect("expected pack function");
+        assert_eq!(
+            rendered_generic_params(&function.generic_params),
+            vec!["U extends Named & Sized"]
+        );
     }
 
     #[test]
@@ -1001,22 +1049,9 @@ interface Mapper {
             .expect("expected required method");
 
         assert_eq!(
-            method
-                .generic_params
-                .iter()
-                .map(smol_str::SmolStr::as_str)
-                .collect::<Vec<_>>(),
-            vec!["T", "E"]
+            rendered_generic_params(&method.generic_params),
+            vec!["T extends Named", "E"]
         );
-        assert_eq!(method.generic_param_bounds.len(), 2);
-        assert_eq!(
-            method.generic_param_bounds[0]
-                .as_ref()
-                .map(ToString::to_string)
-                .as_deref(),
-            Some("Named")
-        );
-        assert!(method.generic_param_bounds[1].is_none());
     }
 
     #[test]
@@ -1350,7 +1385,7 @@ class Array<T> {
             .expect("expected a ClassDef");
 
         assert_eq!(class.generic_params.len(), 1);
-        assert_eq!(class.generic_params[0].as_str(), "T");
+        assert_eq!(class.generic_params[0].name.as_str(), "T");
     }
 
     #[test]
@@ -1375,8 +1410,8 @@ class Map<K, V> {
             .expect("expected a ClassDef");
 
         assert_eq!(class.generic_params.len(), 2);
-        assert_eq!(class.generic_params[0].as_str(), "K");
-        assert_eq!(class.generic_params[1].as_str(), "V");
+        assert_eq!(class.generic_params[0].name.as_str(), "K");
+        assert_eq!(class.generic_params[1].name.as_str(), "V");
     }
 
     #[test]
@@ -1544,7 +1579,7 @@ class Array<T> {
         if let Item::Class(c) = &items[0] {
             assert_eq!(c.name.as_str(), "Array");
             assert_eq!(c.generic_params.len(), 1);
-            assert_eq!(c.generic_params[0].as_str(), "T");
+            assert_eq!(c.generic_params[0].name.as_str(), "T");
             // 4 user-defined stubs + 2 auto-derived (`to_json`, `from_json`).
             let stub_methods: Vec<_> = c
                 .methods

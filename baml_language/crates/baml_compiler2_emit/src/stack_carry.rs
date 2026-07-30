@@ -1245,9 +1245,17 @@ impl PullSink for StackCarryPullSink<'_> {
                     .get(&local)
                     .and_then(|du| du.def.as_ref())
                     .ok_or(())?;
+                // These are materialized only by `emit_rvalue_pull`, which
+                // intercepts them before the shared walker sees them — so
+                // inlining one here would hand `walk_rvalue_pull` an rvalue it
+                // asserts it never receives. Reject instead, which is also the
+                // honest answer: their stack effects are variable-arity and this
+                // simulator does not model them.
                 if matches!(
                     def.rvalue,
-                    Rvalue::MakeBoundMethod { .. } | Rvalue::MakeVirtualBoundMethod { .. }
+                    Rvalue::MakeBoundMethod { .. }
+                        | Rvalue::MakeVirtualBoundMethod { .. }
+                        | Rvalue::VirtualFieldAccess { .. }
                 ) {
                     return Err(());
                 }

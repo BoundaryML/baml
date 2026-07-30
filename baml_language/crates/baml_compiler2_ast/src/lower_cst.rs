@@ -281,19 +281,7 @@ fn lower_function(
         diags.push(LoweringDiagnostic::ReservedRuntimeIdBindingName { span: name_span });
     }
 
-    let generic_params_with_bounds = extract_generic_params_with_bounds(node, diags);
-    let generic_params: Vec<Name> = generic_params_with_bounds
-        .iter()
-        .map(|(n, _)| n.clone())
-        .collect();
-    let mut generic_param_bounds: Vec<Option<crate::ast::TypeExpr>> = generic_params_with_bounds
-        .into_iter()
-        .map(|(_, b)| b)
-        .collect();
-    for bound in generic_param_bounds.iter_mut().flatten() {
-        let bspan = bound.span;
-        lower_type_expr::check_wildcard_type(bound, "a generic type bound", bspan, diags);
-    }
+    let generic_params = extract_generic_params_with_bounds(node, diags);
     let parameter_context = format!("function `{}`", name.as_str());
 
     let (mut params, mut defaults) = func
@@ -449,7 +437,6 @@ fn lower_function(
     Some(FunctionDef {
         name,
         generic_params,
-        generic_param_bounds,
         params,
         defaults,
         return_type,
@@ -1069,19 +1056,7 @@ fn lower_class(
         return None;
     };
 
-    let generic_params_with_bounds = extract_generic_params_with_bounds(node, diags);
-    let generic_params: Vec<Name> = generic_params_with_bounds
-        .iter()
-        .map(|(n, _)| n.clone())
-        .collect();
-    let mut generic_param_bounds: Vec<Option<crate::ast::TypeExpr>> = generic_params_with_bounds
-        .into_iter()
-        .map(|(_, b)| b)
-        .collect();
-    for bound in generic_param_bounds.iter_mut().flatten() {
-        let bspan = bound.span;
-        lower_type_expr::check_wildcard_type(bound, "a generic type bound", bspan, diags);
-    }
+    let generic_params = extract_generic_params_with_bounds(node, diags);
     let class_name = name_token.text().to_string();
 
     let fields = class
@@ -1179,7 +1154,6 @@ fn lower_class(
     let mut class_def = crate::ast::ClassDef {
         name: Name::new(name_token.text()),
         generic_params,
-        generic_param_bounds,
         fields,
         methods,
         implements,
@@ -1201,71 +1175,20 @@ fn lower_class(
 }
 
 /// BEP-044 generic bounds: walk `GENERIC_PARAM_LIST` and return each
-/// parameter's `Name` paired with its optional `extends Iface` bound.
-/// The bound is captured as a `TypeExpr` so generic parents like
-/// `Container<int>` round-trip.
+/// parameter's `Name` paired with **every** `&`-separated bound it declares
+/// (`<T>` → `(T, [])`; `<T extends A & B>` → `(T, [A, B])`). The bound list is
+/// a conjunction: an argument for `T` must satisfy all of them.
+///
+/// Bounds are captured as `TypeExpr`s so generic parents like `Container<int>`
+/// round-trip; that they must denote *interfaces* (never interface-existential
+/// types) is enforced when they are lowered to constraints in TIR.
 pub(crate) fn extract_generic_params_with_bounds(
     node: &SyntaxNode,
     diags: &mut Vec<LoweringDiagnostic>,
-) -> Vec<(Name, Option<crate::ast::TypeExpr>)> {
+) -> Vec<crate::ast::GenericParam> {
     use baml_compiler_syntax::SyntaxKind;
 
-    let mut out: Vec<(Name, Option<crate::ast::TypeExpr>)> = Vec::new();
-    for child in node.children() {
-        let child_kind: SyntaxKind = child.kind();
-        if child_kind != SyntaxKind::GENERIC_PARAM_LIST {
-            continue;
-        }
-        for param_node in child.children() {
-            if param_node.kind() != SyntaxKind::GENERIC_PARAM {
-                continue;
-            }
-            let mut name: Option<Name> = None;
-            for elem in param_node.children_with_tokens() {
-                if let Some(token) = elem.as_token() {
-                    if token.kind() == SyntaxKind::WORD && name.is_none() {
-                        name = Some(Name::new(token.text()));
-                    }
-                }
-            }
-            let bound: Option<crate::ast::TypeExpr> = param_node
-                .children()
-                .find(|n| n.kind() == SyntaxKind::GENERIC_PARAM_BOUNDS)
-                .and_then(|bounds_node| {
-                    // BEP-044 only requires single-bound support; the
-                    // intersection form lexes as multiple `TypeExpr`
-                    // children separated by `&`. We surface the first
-                    // bound and let downstream check intersection in a
-                    // future pass.
-                    bounds_node
-                        .children()
-                        .find(|n| baml_compiler_syntax::ast::TypeExpr::cast(n.clone()).is_some())
-                })
-                .and_then(|n| {
-                    let te = baml_compiler_syntax::ast::TypeExpr::cast(n)?;
-                    Some(lower_type_expr::lower_type_expr_node(&te, diags))
-                });
-            if let Some(n) = name {
-                out.push((n, bound));
-            }
-        }
-    }
-    out
-}
-
-/// Like [`extract_generic_params_with_bounds`], but captures **every**
-/// `&`-separated bound on each generic param (`T extends A & B` → `[A, B]`)
-/// instead of just the first. Used for `implement` blocks (BEP-044), whose
-/// generic-param bounds are an interface intersection. The single-bound
-/// extractor remains for function/class/interface generic params, which do not
-/// yet carry multiple bounds.
-pub(crate) fn extract_generic_params_with_all_bounds(
-    node: &SyntaxNode,
-    diags: &mut Vec<LoweringDiagnostic>,
-) -> Vec<(Name, Vec<crate::ast::TypeExpr>)> {
-    use baml_compiler_syntax::SyntaxKind;
-
-    let mut out: Vec<(Name, Vec<crate::ast::TypeExpr>)> = Vec::new();
+    let mut out: Vec<crate::ast::GenericParam> = Vec::new();
     for child in node.children() {
         if child.kind() != SyntaxKind::GENERIC_PARAM_LIST {
             continue;
@@ -1291,13 +1214,21 @@ pub(crate) fn extract_generic_params_with_all_bounds(
                         .children()
                         .filter_map(|n| {
                             let te = baml_compiler_syntax::ast::TypeExpr::cast(n)?;
-                            Some(lower_type_expr::lower_type_expr_node(&te, diags))
+                            let mut bound = lower_type_expr::lower_type_expr_node(&te, diags);
+                            let span = bound.span;
+                            lower_type_expr::check_wildcard_type(
+                                &mut bound,
+                                "a generic type bound",
+                                span,
+                                diags,
+                            );
+                            Some(bound)
                         })
                         .collect()
                 })
                 .unwrap_or_default();
-            if let Some(n) = name {
-                out.push((n, bounds));
+            if let Some(name) = name {
+                out.push(crate::ast::GenericParam { name, bounds });
             }
         }
     }
@@ -1360,19 +1291,7 @@ fn lower_interface(
         return None;
     };
     let iface_name = name_token.text().to_string();
-    let generic_params_with_bounds = extract_generic_params_with_bounds(node, diags);
-    let generic_params: Vec<Name> = generic_params_with_bounds
-        .iter()
-        .map(|(n, _)| n.clone())
-        .collect();
-    let mut generic_param_bounds: Vec<Option<crate::ast::TypeExpr>> = generic_params_with_bounds
-        .into_iter()
-        .map(|(_, b)| b)
-        .collect();
-    for bound in generic_param_bounds.iter_mut().flatten() {
-        let bspan = bound.span;
-        lower_type_expr::check_wildcard_type(bound, "a generic type bound", bspan, diags);
-    }
+    let generic_params = extract_generic_params_with_bounds(node, diags);
 
     let parent_type_nodes: Vec<baml_compiler_syntax::ast::TypeExpr> =
         if let Some(c) = iface.requires_clause() {
@@ -1470,7 +1389,6 @@ fn lower_interface(
     Some(InterfaceDef {
         name: Name::new(&iface_name),
         generic_params,
-        generic_param_bounds,
         requires,
         fields,
         associated_types,
@@ -1570,19 +1488,7 @@ fn lower_method_sig(
     };
     let name = Name::new(name_token.text());
     let name_span = name_token.text_range();
-    let generic_params_with_bounds = extract_generic_params_with_bounds(sig.syntax(), diags);
-    let generic_params: Vec<Name> = generic_params_with_bounds
-        .iter()
-        .map(|(n, _)| n.clone())
-        .collect();
-    let mut generic_param_bounds: Vec<Option<crate::ast::TypeExpr>> = generic_params_with_bounds
-        .into_iter()
-        .map(|(_, b)| b)
-        .collect();
-    for bound in generic_param_bounds.iter_mut().flatten() {
-        let bspan = bound.span;
-        lower_type_expr::check_wildcard_type(bound, "a generic type bound", bspan, diags);
-    }
+    let generic_params = extract_generic_params_with_bounds(sig.syntax(), diags);
     let parameter_context = format!("method signature `{}`", name.as_str());
 
     let (params, defaults) = sig
@@ -1625,7 +1531,6 @@ fn lower_method_sig(
     Some(MethodSigDef {
         name,
         generic_params,
-        generic_param_bounds,
         params,
         defaults,
         return_type,
@@ -1707,7 +1612,7 @@ fn lower_implements_for(
 ) -> Option<ImplementsForDef> {
     let imp = ast::ImplementsFor::cast(node.clone())?;
 
-    let generic_params = extract_generic_params_with_all_bounds(node, diags);
+    let generic_params = extract_generic_params_with_bounds(node, diags);
 
     // Interface target (the `I` in `implements I for T`)
     let target_node = imp.target()?;
@@ -2225,7 +2130,6 @@ fn synthesize_init_test_function(
     FunctionDef {
         name: Name::new(&fn_name),
         generic_params: vec![],
-        generic_param_bounds: vec![],
         params: vec![registry_param],
         defaults: FunctionDefaults::empty(),
         return_type: None,
@@ -3058,7 +2962,6 @@ fn synthesize_client_new_companion(
     FunctionDef {
         name: Name::new(&func_name),
         generic_params: vec![],
-        generic_param_bounds: vec![],
         params: vec![lenient_param],
         defaults: FunctionDefaults::empty(),
         return_type: None,

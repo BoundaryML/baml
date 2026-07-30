@@ -5,8 +5,46 @@
 //! here rather than in `classes`/`functions`.
 
 use baml_base::Name;
-use baml_compiler2_hir::{item_tree::Attribute, type_ref::TypeRefId};
+use baml_compiler2_hir::{
+    item_tree::{Attribute, GenericParam},
+    type_ref::{TypeRefBuilder, TypeRefId},
+};
 use text_size::TextRange;
+
+/// A generic parameter on a function, class, interface, interface method
+/// signature, or out-of-body `implements` block, paired with its set of
+/// `&`-separated bounds. Mirrors
+/// [`item_tree::GenericParam`](baml_compiler2_hir::item_tree::GenericParam)
+/// with the bounds lowered into the owning item's type-ref arena.
+///
+/// The bound set is a **conjunction**: an argument for this parameter must
+/// satisfy every entry. Pairing the name with its bounds makes a length
+/// mismatch between the two unrepresentable.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GenericParamData {
+    pub name: Name,
+    pub bounds: Vec<TypeRefId>,
+}
+
+/// Lower a declaration's generic parameters into `type_refs`. Bounds are
+/// allocated in declaration order, so ids stay a pure function of the item's
+/// shape.
+pub(crate) fn lower_generic_params(
+    params: &[GenericParam],
+    type_refs: &mut TypeRefBuilder,
+) -> Vec<GenericParamData> {
+    params
+        .iter()
+        .map(|param| GenericParamData {
+            name: param.name.clone(),
+            bounds: param
+                .bounds
+                .iter()
+                .map(|bound| type_refs.lower(bound))
+                .collect(),
+        })
+        .collect()
+}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FunctionParamData {
