@@ -1494,6 +1494,11 @@ impl<'db> LoweringContext<'db> {
         Self::baml_iter_qtn(name)
     }
 
+    /// A `baml.ops.<name>` interface name (`Equals`, `Compare`, …).
+    fn baml_ops_qtn(name: &str) -> QualifiedTypeName {
+        QualifiedTypeName::new(Name::new("baml"), vec![Name::new("ops")], Name::new(name))
+    }
+
     fn baml_iter_done_ty() -> RuntimeTy {
         RuntimeTy::Class(Self::baml_iter_type_name("Done"), vec![], TyAttr::default())
     }
@@ -6232,6 +6237,19 @@ impl LoweringContext<'_> {
             return;
         }
 
+        // Ordering over operands the comparison opcodes cannot order (`bool`, an
+        // enum or class implementing `Compare`, or a type variable / `Self` /
+        // projection that realizes to one) dispatches through `baml.ops.Compare`,
+        // resolved at runtime from the receiver's concrete type. Unlike the
+        // arithmetic operators this needs no `__union_*` driver: `Compare` is
+        // *single* dispatch (`other: Self`), so the receiver alone picks the impl.
+        if let Some(method) = Self::ordering_method(op)
+            && !self.ordering_uses_primitive_opcode(lhs, rhs)
+        {
+            self.lower_ordering_via_virtual_call(method, lhs, rhs, dest);
+            return;
+        }
+
         // Mixed `int OP bigint` (or `bigint OP int`) operators resolve the
         // `int` operand to a small local `BigInt` in the VM (the specialized
         // `*Bigint`/`CmpBigint` opcodes accept a lone `int` operand), without
@@ -6282,6 +6300,14 @@ impl LoweringContext<'_> {
     /// case (concrete-type comparison + custom `Equals` dispatch). The driver may
     /// yield (it can call a user `eq`), so the call splits the block. `!=` negates
     /// the `==` result.
+    //
+    // BUG: `!=` never dispatches `Equals.neq`, so a type that overrides `neq`
+    // inconsistently with `eq` sees the override ignored by the operator (it is
+    // only reachable as `a.neq(b)`). Unlike ordering — which is gated on a single
+    // concrete `Compare` type and so can dispatch the interface method directly —
+    // `==`/`!=` accept arbitrary operand pairs, which have no shared `Equals` to
+    // dispatch through. Fixing it therefore means deciding what `!=` should mean
+    // across type boundaries, not just changing the lowering.
     fn lower_equality_via_driver(
         &mut self,
         op: AstBinaryOp,
@@ -6352,17 +6378,25 @@ impl LoweringContext<'_> {
         }
     }
 
-    /// Whether `ty` is a primitive the specialized arithmetic opcodes /
-    /// `exec_binop` handle directly — int/bigint/float, plus `string` when
-    /// `include_string` (binary `+` concatenates; unary `-` has no string form).
+    /// Whether `ty` is a primitive the specialized opcodes handle directly —
+    /// int/bigint/float, plus `string` when `include_string` (binary `+`
+    /// concatenates; unary `-` has no string form).
     /// A literal counts as its base; a union counts only when every member is
     /// the SAME primitive kind (`int | 3`): a mixed-kind union (`int | float`)
     /// would let emit pick a single-kind opcode for a value of the other kind —
-    /// UB in the specialized handlers — so it goes through the `__union_*`
-    /// interface driver, as does anything else (a user type, or a union /
-    /// existential / type variable involving one). TIR has already validated
-    /// the operation through the interface registry; this only chooses the
-    /// lowering route.
+    /// UB in the specialized handlers — so it takes the interface route instead,
+    /// as does anything else (a user type, or a union / existential / type
+    /// variable involving one). TIR has already validated the operation through
+    /// the interface registry; this only chooses the lowering route.
+    ///
+    /// Shared by three operator families, which reach different interface routes
+    /// when it says no: arithmetic and unary negation go to the `baml.ops`
+    /// `__union_*` drivers ([`Self::arithmetic_uses_primitive_opcode`],
+    /// [`Self::negate_uses_primitive_opcode`]), while ordering dispatches
+    /// `baml.ops.Compare` directly ([`Self::ordering_uses_primitive_opcode`],
+    /// which additionally rejects `null`). `exec_binop` and `exec_cmpop` are the
+    /// runtime counterparts; ordering is the narrower of the two, so a change to
+    /// either handler's supported set has to be reflected here.
     fn arith_primitive(ty: &RuntimeTy, include_string: bool) -> bool {
         /// The primitive kind of a non-union member, literal widened to base.
         /// The builtin wrapper classes (`baml.Float`, etc.) count as their
@@ -6439,6 +6473,129 @@ impl LoweringContext<'_> {
         let rhs_op = self.lower_to_operand(rhs);
         let result_ty = self.expr_ty(expr_id);
         self.lower_via_ops_driver(driver, vec![lhs_op, rhs_op], result_ty, dest);
+    }
+
+    /// Whether both ordering operands are primitives the comparison opcodes can
+    /// *order*: int, bigint, float, string. That reduces to
+    /// [`Self::arith_primitive`] with `include_string` — which also admits the
+    /// spellings of those four (a literal, a same-kind union like `int | 3`, and
+    /// the builtin companion classes) — so the predicate is shared rather than
+    /// duplicated. `exec_cmpop` orders exactly those four and treats every other
+    /// pair (`bool`, `uint8array`, enum variants, class instances, …) as
+    /// equality-only. `bool` falls out on its own — `PrimitiveType::Bool` is not
+    /// one of the arithmetic kinds — which is what routes it to the `Compare`
+    /// impl the stdlib declares for it.
+    ///
+    /// Preconditions, both owed by TIR's ordering check and *not* re-derived
+    /// here: the two operands have the same type, and that type implements
+    /// `baml.ops.Compare`. The second is what makes the interface route correct
+    /// for everything this predicate rejects. Note the predicate tests each
+    /// operand independently, so it leans on the first precondition — a mixed
+    /// pair such as `int < string` would take the opcode path and fault, but TIR
+    /// rejects it before lowering.
+    ///
+    /// The `null` guard is defense in depth rather than a fix: `null` has no
+    /// `Compare` impl, so neither route can order it and TIR rejects it outright.
+    /// It is here because [`Self::arith_primitive`] deliberately treats a `null`
+    /// union member as *transparent* — a carve-out for chain-narrowed
+    /// compound-assign targets, which ordering has no form of — and inheriting
+    /// that silently would make `int | null` look opcode-orderable.
+    ///
+    /// Reads `expr_ty` (TIR types), where a `Self`-annotated parameter in a
+    /// concrete `implements` block has already been resolved to the block's
+    /// subject — the *MIR local* type keeps the unresolved `Self` (see
+    /// `lower_signature_runtime_ty`), and reading that instead would deoptimize
+    /// `baml.Comparable$for$int.compare` and friends off the opcode path.
+    fn ordering_uses_primitive_opcode(&self, lhs: AstExprId, rhs: AstExprId) -> bool {
+        /// `arith_primitive`, minus the `null`-transparency carve-out.
+        fn orderable(ty: &RuntimeTy) -> bool {
+            let has_null = match ty {
+                RuntimeTy::Union(members, _) => {
+                    members.iter().any(|m| matches!(m, RuntimeTy::Null { .. }))
+                }
+                RuntimeTy::Null { .. } => true,
+                _ => false,
+            };
+            !has_null && LoweringContext::arith_primitive(ty, true)
+        }
+        orderable(&self.expr_ty(lhs)) && orderable(&self.expr_ty(rhs))
+    }
+
+    /// The `baml.ops.Compare` method an ordering operator dispatches, or `None`
+    /// for any other operator. Single source for both the route test in
+    /// [`Self::lower_binary`] and the dispatched method name, so the two cannot
+    /// disagree about which operators are orderings.
+    fn ordering_method(op: AstBinaryOp) -> Option<&'static str> {
+        match op {
+            AstBinaryOp::Lt => Some("lt"),
+            AstBinaryOp::Le => Some("le"),
+            AstBinaryOp::Gt => Some("gt"),
+            AstBinaryOp::Ge => Some("ge"),
+            _ => None,
+        }
+    }
+
+    /// Lower `a OP b` for `<`/`<=`/`>`/`>=` through `baml.ops.Compare`, resolving
+    /// the impl at runtime from the receiver's concrete type. Mirrors
+    /// [`Self::lower_arithmetic_via_driver`], but dispatches directly instead of
+    /// through a `baml.ops` driver function.
+    ///
+    /// A driver earns its keep when the compiler cannot *name* the interface to
+    /// dispatch on: `equals_equals` because `==` spans operand pairs that share
+    /// no interface at all, and `__union_add` and friends because `Add<Rhs>` is
+    /// generic in an `Rhs` that may be statically erased. `Compare` is neither —
+    /// it is single dispatch (`other: Self`), non-generic, and its methods return
+    /// plain `bool` rather than an associated type — so the interface, the
+    /// method, and the result type are all statically known and the receiver
+    /// alone picks the impl. (Single dispatch is necessary but not sufficient:
+    /// `Negate` is single dispatch too, yet returns `Self.Output`, which is why
+    /// it still goes through `__union_neg`.)
+    ///
+    /// Each operator dispatches its *own* method rather than deriving the other
+    /// three from `lt`. `implement Compare for float` overrides all four
+    /// natively so that NaN is unordered in every direction, which `ge = !lt`
+    /// would break; and rewriting `a > b` as `b.lt(a)` would ignore a user's
+    /// `gt` override. The interface's defaults still supply whichever methods an
+    /// impl leaves out — they are merged into the impl's method table when the
+    /// program is baked.
+    fn lower_ordering_via_virtual_call(
+        &mut self,
+        method: &str,
+        lhs: AstExprId,
+        rhs: AstExprId,
+        dest: Place,
+    ) {
+        let lhs_op = self.lower_to_operand(lhs);
+        let rhs_op = self.lower_to_operand(rhs);
+        // `Compare` is non-generic and declares no associated types, so the
+        // template carries neither; the receiver supplies `Self` at runtime.
+        // With no args or associated types to map onto frame slots, the
+        // enclosing generic params would never be consulted — pass none.
+        let iface = tir2_interface_to_template(
+            &Self::baml_ops_qtn("Compare"),
+            &[],
+            &[],
+            self.resolved_aliases,
+            &[],
+        );
+        // Ordering always produces `bool`: TIR's ordering arm types it that way,
+        // and the literal pairs `try_fold_binary` would fold instead are all
+        // opcode-orderable, so they never reach here. Name it directly rather
+        // than reading it back out of `expr_ty`.
+        let bool_ty = RuntimeTy::Bool {
+            attr: TyAttr::default(),
+        };
+        let unwind = self.catch_context.as_ref().map(|c| c.unwind_target);
+        self.emit_virtual_call_with_operands(
+            iface,
+            method,
+            vec![lhs_op, rhs_op],
+            /* ntypeargs */ 0,
+            /* runtime_id */ None,
+            bool_ty,
+            unwind,
+            dest,
+        );
     }
 
     /// Whether the negation operand is [`Self::arith_primitive`] (the `Neg`
@@ -10014,25 +10171,65 @@ impl<'db> LoweringContext<'db> {
         );
         let unwind = self.catch_context.as_ref().map(|c| c.unwind_target);
         let runtime_id_operand = self.lower_runtime_id_operand(runtime_id);
-        let resume = self.builder.create_block();
-        // `VirtualCall`'s destination must be a `Place::Local`. If the caller
-        // handed us a projection (field/index) or capture, dispatch into a temp
-        // local and assign through to the projection in the resume block —
-        // mirrors how `lower_call`/`lower_await` normalize their destinations.
-        let (call_dest, projection_dest) = match dest {
-            Place::Local(_) => (dest.clone(), None),
-            projection => {
-                let call_ty = self.expr_ty(expr_id);
-                let tmp = self.builder.temp(call_ty);
-                (Place::local(tmp), Some(projection.clone()))
-            }
-        };
-        self.builder.virtual_call_with_runtime_id(
+        let result_ty = self.expr_ty(expr_id);
+        self.emit_virtual_call_with_operands(
             iface_template,
-            method.to_string(),
+            method.as_str(),
             all_args,
             ntypeargs,
             runtime_id_operand,
+            result_ty,
+            unwind,
+            dest.clone(),
+        );
+        true
+    }
+
+    /// Emit the `VirtualCall` terminator itself, given operands that are already
+    /// lowered. Shared by the method-call funnel ([`Self::emit_virtual_call`],
+    /// which builds its operands from an AST call) and by operator lowering,
+    /// which has no call expression to read arguments from.
+    ///
+    /// `args` must be laid out as `[method_type_args… ++ receiver ++ value_args…]`
+    /// with exactly `ntypeargs` leading type args, mirroring `Call`. **The
+    /// receiver is `args[ntypeargs]`** — the VM reads its runtime concrete type
+    /// as `Self` and resolves the impl off that, so passing the operands in the
+    /// wrong order silently dispatches on the wrong value. `Self` is taken from
+    /// the value, not the operand form, so a receiver may be any `Operand`
+    /// (`emit_virtual_call` always passes a local; operator lowering may pass a
+    /// constant, as in `true < false`).
+    ///
+    /// The call splits the block — the resolved impl may be user bytecode — so
+    /// lowering resumes in a fresh one. `VirtualCall`'s destination must be a
+    /// `Place::Local`; a projection (field/index) or capture is dispatched into
+    /// a `result_ty`-typed temp and assigned through in the resume block,
+    /// mirroring how `lower_call`/`lower_await` normalize their destinations.
+    #[expect(clippy::too_many_arguments)]
+    fn emit_virtual_call_with_operands(
+        &mut self,
+        iface: TyTemplateInterface,
+        method: &str,
+        args: Vec<Operand>,
+        ntypeargs: usize,
+        runtime_id: Option<Operand>,
+        result_ty: RuntimeTy,
+        unwind: Option<BlockId>,
+        dest: Place,
+    ) {
+        let resume = self.builder.create_block();
+        let (call_dest, projection_dest) = match dest {
+            Place::Local(_) => (dest, None),
+            projection => {
+                let tmp = self.builder.temp(result_ty);
+                (Place::local(tmp), Some(projection))
+            }
+        };
+        self.builder.virtual_call_with_runtime_id(
+            iface,
+            method.to_string(),
+            args,
+            ntypeargs,
+            runtime_id,
             call_dest.clone(),
             resume,
             unwind,
@@ -10042,7 +10239,6 @@ impl<'db> LoweringContext<'db> {
             self.builder
                 .assign(projection, Rvalue::Use(Operand::Copy(call_dest)));
         }
-        true
     }
 
     /// Emit an [`Rvalue::MakeVirtualBoundMethod`] binding `method` of the interface
