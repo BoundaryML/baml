@@ -326,6 +326,8 @@ impl InferenceTable {
 
 #[cfg(test)]
 mod tests {
+    use baml_type::TyAttr;
+
     use super::*;
 
     #[test]
@@ -418,6 +420,240 @@ mod tests {
         let resolved = table.resolve_completely(&ty);
         assert!(resolved == Ty::list(Ty::union([Ty::int(), Ty::string()])));
         assert!(!resolved.has_infer());
+    }
+
+    fn class(name: &str, args: impl IntoIterator<Item = Ty>) -> Ty {
+        use baml_type::{Name, TypeName};
+        Ty::intern(TyKind::Class(
+            TypeName::local(Name::new(name)),
+            args.into_iter().collect(),
+            TyAttr::default(),
+        ))
+    }
+
+    fn map(key: Ty, value: Ty) -> Ty {
+        Ty::intern(TyKind::Map {
+            key,
+            value,
+            attr: TyAttr::default(),
+        })
+    }
+
+    fn func(params: impl IntoIterator<Item = Ty>, ret: Ty, throws: Ty) -> Ty {
+        use baml_type::interned::FunctionParam;
+        Ty::intern(TyKind::Function {
+            params: params
+                .into_iter()
+                .map(|ty| FunctionParam::required(None, ty))
+                .collect(),
+            ret,
+            throws,
+            attr: TyAttr::default(),
+        })
+    }
+
+    #[test]
+    fn vars_solve_through_deep_nesting() {
+        // Map<?k, List<Box<?e>>> = Map<string, List<Box<int | null>>>
+        let mut table = InferenceTable::new();
+        let k = table.new_var_ty();
+        let e = table.new_var_ty();
+        let left = map(k.clone(), Ty::list(class("Box", [e.clone()])));
+        let right = map(
+            Ty::string(),
+            Ty::list(class("Box", [Ty::union([Ty::int(), Ty::null()])])),
+        );
+        table.unify(&left, &right).unwrap();
+        assert!(table.shallow_resolve(&k) == Ty::string());
+        assert!(table.shallow_resolve(&e) == Ty::union([Ty::int(), Ty::null()]));
+        assert!(table.resolve_completely(&left) == right);
+    }
+
+    #[test]
+    fn union_members_solve_positionally() {
+        // (int | ?a | ?b) = (int | string | bool), including a nested union
+        // member: List(int | (string | ?x)) = List(int | (string | bool)).
+        let mut table = InferenceTable::new();
+        let a = table.new_var_ty();
+        let b = table.new_var_ty();
+        table
+            .unify(
+                &Ty::union([Ty::int(), a.clone(), b.clone()]),
+                &Ty::union([Ty::int(), Ty::string(), Ty::bool()]),
+            )
+            .unwrap();
+        assert!(table.shallow_resolve(&a) == Ty::string());
+        assert!(table.shallow_resolve(&b) == Ty::bool());
+
+        let x = table.new_var_ty();
+        let nested_left = Ty::list(Ty::union([Ty::int(), Ty::union([Ty::string(), x.clone()])]));
+        let nested_right = Ty::list(Ty::union([
+            Ty::int(),
+            Ty::union([Ty::string(), Ty::bool()]),
+        ]));
+        table.unify(&nested_left, &nested_right).unwrap();
+        assert!(table.shallow_resolve(&x) == Ty::bool());
+    }
+
+    /// Pins the S5 limitation: ground unions unify positionally, so a
+    /// reordered but ACI-equal union is a mismatch today. The budgeted ACI
+    /// machinery that lands with Sub constraints (README, constraint-system
+    /// decision) relaxes this; when it does, this test flips.
+    #[test]
+    fn reordered_unions_do_not_unify_yet() {
+        let mut table = InferenceTable::new();
+        assert!(
+            table
+                .unify(
+                    &Ty::union([Ty::int(), Ty::string()]),
+                    &Ty::union([Ty::string(), Ty::int()]),
+                )
+                .is_err()
+        );
+    }
+
+    #[test]
+    fn repeated_var_constrains_both_positions() {
+        // Pair<?a, ?a> = Pair<int, ?b>: the second position relates the
+        // now-solved ?a against ?b, so ?b := int.
+        let mut table = InferenceTable::new();
+        let a = table.new_var_ty();
+        let b = table.new_var_ty();
+        table
+            .unify(
+                &class("Pair", [a.clone(), a]),
+                &class("Pair", [Ty::int(), b.clone()]),
+            )
+            .unwrap();
+        assert!(table.shallow_resolve(&b) == Ty::int());
+        // And a later contradiction on either alias is caught.
+        assert!(table.unify(&b, &Ty::string()).is_err());
+    }
+
+    #[test]
+    fn diamond_of_var_unions_resolves_from_one_binding() {
+        let mut table = InferenceTable::new();
+        let vars: Vec<Ty> = (0..6).map(|_| table.new_var_ty()).collect();
+        // Chain pairs, then cross-link into a diamond, then bind one end.
+        table.unify(&vars[0], &vars[1]).unwrap();
+        table.unify(&vars[2], &vars[3]).unwrap();
+        table.unify(&vars[4], &vars[5]).unwrap();
+        table.unify(&vars[1], &vars[2]).unwrap();
+        table.unify(&vars[3], &vars[4]).unwrap();
+        table.unify(&vars[5], &Ty::never()).unwrap();
+        for var in &vars {
+            assert!(table.shallow_resolve(var) == Ty::never());
+        }
+    }
+
+    #[test]
+    fn var_bound_to_composite_containing_other_vars() {
+        // ?b = List(?a); ?b = List(int) => ?a := int, and a type mentioning
+        // ?b resolves through both hops.
+        let mut table = InferenceTable::new();
+        let a = table.new_var_ty();
+        let b = table.new_var_ty();
+        table.unify(&b, &Ty::list(a.clone())).unwrap();
+        table.unify(&b, &Ty::list(Ty::int())).unwrap();
+        assert!(table.shallow_resolve(&a) == Ty::int());
+        let wrapper = map(Ty::string(), Ty::union([b.clone(), Ty::null()]));
+        assert!(
+            table.resolve_completely(&wrapper)
+                == map(Ty::string(), Ty::union([Ty::list(Ty::int()), Ty::null()]))
+        );
+    }
+
+    #[test]
+    fn function_types_solve_params_ret_and_throws() {
+        let mut table = InferenceTable::new();
+        let p = table.new_var_ty();
+        let r = table.new_var_ty();
+        let e = table.new_var_ty();
+        table
+            .unify(
+                &func([p.clone(), Ty::string()], r.clone(), e.clone()),
+                &func([Ty::int(), Ty::string()], Ty::bool(), Ty::never()),
+            )
+            .unwrap();
+        assert!(table.shallow_resolve(&p) == Ty::int());
+        assert!(table.shallow_resolve(&r) == Ty::bool());
+        assert!(table.shallow_resolve(&e) == Ty::never());
+        // Arity mismatch is a head mismatch, not a partial solve.
+        assert!(
+            table
+                .unify(
+                    &func([Ty::int()], Ty::int(), Ty::never()),
+                    &func([Ty::int(), Ty::int()], Ty::int(), Ty::never())
+                )
+                .is_err()
+        );
+    }
+
+    #[test]
+    fn occurs_check_rejects_deeply_buried_cycles() {
+        // ?a = Map<string, List<(int | Box<?a>)>> must be rejected, however
+        // deep the occurrence and even through an aliased var.
+        let mut table = InferenceTable::new();
+        let a = table.new_var_ty();
+        let alias = table.new_var_ty();
+        table.unify(&a, &alias).unwrap();
+        let cyclic = map(
+            Ty::string(),
+            Ty::list(Ty::union([Ty::int(), class("Box", [alias.clone()])])),
+        );
+        assert!(table.unify(&a, &cyclic).is_err());
+    }
+
+    #[test]
+    fn hundred_levels_of_nesting_unify_and_resolve() {
+        let mut table = InferenceTable::new();
+        let core = table.new_var_ty();
+        let mut left = core.clone();
+        let mut right = Ty::union([Ty::int(), Ty::string()]);
+        let expected_core = right.clone();
+        for _ in 0..100 {
+            left = Ty::list(left);
+            right = Ty::list(right);
+        }
+        table.unify(&left, &right).unwrap();
+        assert!(table.shallow_resolve(&core) == expected_core);
+        assert!(table.resolve_completely(&left) == right);
+    }
+
+    #[test]
+    fn nested_probes_roll_back_independently() {
+        let mut table = InferenceTable::new();
+        let a = table.new_var_ty();
+        let b = table.new_var_ty();
+        let outer: Result<(), ()> = table.commit_if_ok(|table| {
+            table.unify(&a, &Ty::int()).map_err(|_| ())?;
+            // Inner probe fails and must roll back only its own work.
+            let inner: Result<(), ()> = table.commit_if_ok(|table| {
+                table.unify(&b, &Ty::string()).map_err(|_| ())?;
+                Err(())
+            });
+            assert!(inner.is_err());
+            assert!(table.shallow_resolve(&b) == b, "inner rollback");
+            assert!(table.shallow_resolve(&a) == Ty::int(), "outer intact");
+            Ok(())
+        });
+        outer.unwrap();
+        assert!(table.shallow_resolve(&a) == Ty::int());
+        assert!(table.shallow_resolve(&b) == b);
+    }
+
+    #[test]
+    fn resolution_is_idempotent_and_identity_on_var_free_types() {
+        let mut table = InferenceTable::new();
+        let e = table.new_var_ty();
+        let ty = Ty::list(Ty::union([Ty::int(), e.clone()]));
+        table.unify(&e, &Ty::string()).unwrap();
+        let once = table.resolve_completely(&ty);
+        let twice = table.resolve_completely(&once);
+        assert!(once == twice);
+        // Var-free input returns the same interned handle, no rebuild.
+        let ground = map(Ty::string(), Ty::list(Ty::bool()));
+        assert!(table.resolve_completely(&ground) == ground);
     }
 
     #[test]
