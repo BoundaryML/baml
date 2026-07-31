@@ -10,6 +10,21 @@
 //! retargeted per member: deep members (`child: Self`) recurse into themselves;
 //! the shallow `Concrete*` members nest their declared `child`.
 //!
+//! Every member is parameterized by `N`, the representation of a *nominal type
+//! head* — the name a `Class`, `Enum`, `Interface`, or `TypeAlias` refers to.
+//! It defaults to [`TypeName`], so `Ty` still means `Ty<TypeName>` wherever the
+//! compiler writes it bare; the parameter exists so the runtime can carry
+//! interned or heap-anchored heads instead, without a parallel type family.
+//! Note that `N` covers *heads only*: [`Name`] positions (a field, an enum
+//! variant, an associated-type binding) are member names, not type references,
+//! and stay concrete.
+//!
+//! `N: Clone` is required at the declaration because a family member is a
+//! cloneable value tree — the derived `Clone` needs it, and so does
+//! `BorshDeserialize` for the `Box<Ty<N>>` positions (via `ToOwned`). Any head
+//! representation worth having (a name, an interned id, a heap handle) is
+//! cloneable, so this rules out nothing real.
+//!
 //! The semantic impls (`render_with`, `Display`, `validate_runtime`, the
 //! conversions, and the `lower_to_runtime` boundary)
 //! stay hand-written in `lib.rs`, `runtime_ty.rs`, and `realized_ty.rs`.
@@ -42,12 +57,12 @@ ty_family! {
     // leaf survives), giving the "is fully realized" check for free.
     type TyTemplate         { includes: [concrete, abstract, literal, never, projection, special, frame],        child: Self }
 
-    satellite FunctionParamTy {
+    satellite FunctionParamTy<N: Clone = TypeName> {
         pub name: Option<Name>,
-        pub ty: Ty,
+        pub ty: Ty<N>,
         pub mode: FunctionParamMode,
     } methods {
-        pub fn required(name: Option<Name>, ty: Ty) -> Self {
+        pub fn required(name: Option<Name>, ty: Ty<N>) -> Self {
             Self {
                 name,
                 ty,
@@ -55,7 +70,7 @@ ty_family! {
             }
         }
 
-        pub fn optional(name: Option<Name>, ty: Ty) -> Self {
+        pub fn optional(name: Option<Name>, ty: Ty<N>) -> Self {
             Self {
                 name,
                 ty,
@@ -78,17 +93,17 @@ ty_family! {
     // generic bound — distinct from `Ty::Interface`, the interface *existential*
     // type, which requires every associated type to be specified. (A `//` comment,
     // not `///`: the `ty_family!` satellite grammar has no slot for a leading doc.)
-    satellite Interface {
-        pub name: TypeName,
+    satellite Interface<N: Clone = TypeName> {
+        pub name: N,
         /// The interface's generic *input* arguments, in declaration order.
         /// Resolved from context; never defaulted away — they are part of the
         /// interface's identity (`Converter<int>` ≠ `Converter<float>`).
-        pub generics: Vec<Ty>,
+        pub generics: Vec<Ty<N>>,
         /// Associated-type bindings that further constrain the implementor (the
         /// `Item = int` in `Iterator<Item = int>`). Real constraints carried as
         /// part of the interface, never stripped; sorted by name for a
         /// deterministic order.
-        pub associated_types: Vec<(Name, Ty)>,
+        pub associated_types: Vec<(Name, Ty<N>)>,
     } methods {
         /// Build an interface constraint, sorting `associated_types` by name so the
         /// invariant the field documents holds and the derived `Eq`/`Hash`/`Ord`
@@ -97,7 +112,7 @@ ty_family! {
         /// for every family member (`Interface`, `RuntimeInterface`, …), so every
         /// construction site — including the untrusted ctypes decode boundary —
         /// can route through it instead of sorting by hand.
-        pub fn new(name: TypeName, generics: Vec<Ty>, mut associated_types: Vec<(Name, Ty)>) -> Self {
+        pub fn new(name: N, generics: Vec<Ty<N>>, mut associated_types: Vec<(Name, Ty<N>)>) -> Self {
             associated_types.sort_by(|(a, _), (b, _)| a.cmp(b));
             Self {
                 name,
@@ -119,7 +134,7 @@ ty_family! {
     /// non-default values.
     #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, BorshSerialize, BorshDeserialize)]
     #[borsh(use_discriminant = true)]
-    pub enum Ty {
+    pub enum Ty<N: Clone = TypeName> {
         #[axis(concrete)]
         Int {
             attr: TyAttr,
@@ -156,33 +171,33 @@ ty_family! {
         #[axis(literal)]
         Literal(Literal, Freshness, TyAttr) = 8,
         #[axis(concrete)]
-        Class(TypeName, Vec<Ty>, TyAttr) = 9,
+        Class(N, Vec<Ty<N>>, TyAttr) = 9,
         /// An interface existential type, equivalent to Rust `dyn Trait`.
         /// Must specify all generic type args and all associated types.
         #[axis(abstract)]
-        Interface(TypeName, Vec<Ty>, Vec<(Name, Ty)>, TyAttr) = 10,
+        Interface(N, Vec<Ty<N>>, Vec<(Name, Ty<N>)>, TyAttr) = 10,
         #[axis(concrete)]
-        Enum(TypeName, TyAttr) = 11,
+        Enum(N, TyAttr) = 11,
         /// A specific enum variant — `Status.HttpError`.
         #[axis(literal)]
-        EnumVariant(TypeName, Name, TyAttr) = 12,
+        EnumVariant(N, Name, TyAttr) = 12,
         #[axis(concrete)]
-        List(Box<Ty>, TyAttr) = 13,
+        List(Box<Ty<N>>, TyAttr) = 13,
         #[axis(concrete)]
         Map {
-            key: Box<Ty>,
-            value: Box<Ty>,
+            key: Box<Ty<N>>,
+            value: Box<Ty<N>>,
             attr: TyAttr,
         } = 14,
         #[axis(abstract)]
-        Union(Vec<Ty>, TyAttr) = 15,
+        Union(Vec<Ty<N>>, TyAttr) = 15,
 
         /// Function/arrow type: `(T1, T2, ...) -> R throws E`.
         #[axis(concrete)]
         Function {
-            params: Vec<FunctionParamTy>,
-            ret: Box<Ty>,
-            throws: Box<Ty>,
+            params: Vec<FunctionParamTy<N>>,
+            ret: Box<Ty<N>>,
+            throws: Box<Ty<N>>,
             attr: TyAttr,
         } = 16,
         /// A future handle — the result of `schedule_future` or `spawn`
@@ -192,7 +207,7 @@ ty_family! {
         /// type the future may throw. A future whose body statically cannot
         /// throw has error type `never`.
         #[axis(concrete)]
-        Future(Box<Ty>, Box<Ty>, TyAttr) = 17,
+        Future(Box<Ty<N>>, Box<Ty<N>>, TyAttr) = 17,
         /// Opaque Rust-managed state (`$rust_type` fields in builtin class stubs,
         /// e.g. `Media._data`). A leaf concrete type with no inner structure.
         ///
@@ -236,7 +251,7 @@ ty_family! {
         // reserved = 23
         /// Only recursive aliases survive lower_ty; non-recursive are expanded.
         #[axis(special)]
-        TypeAlias(TypeName, TyAttr) = 24,
+        TypeAlias(N, TyAttr) = 24,
         /// A type variable (generic parameter) — e.g. `T` in `Array<T>`. Bound
         /// during inference; can survive at runtime only inside reflective generic
         /// metadata.
@@ -249,13 +264,13 @@ ty_family! {
         /// a name-based `TypeVar`.
         #[axis(projection)]
         AssociatedTypeProjection {
-            base: Box<Ty>,
+            base: Box<Ty<N>>,
             /// The declaring interface of this projection — always known: the TIR
             /// resolves `(base as I).member` to its interface `I` (or lowers to
             /// `Ty::Error` when it cannot be determined), so a resolved projection
             /// never lacks its qualifier. This is what lets a realized-base
             /// projection reduce to the impl's binding at substitution time.
-            interface: Box<Interface>,
+            interface: Box<Interface<N>>,
             member: Name,
             attr: TyAttr,
         } = 26,
@@ -296,10 +311,10 @@ ty_family! {
         /// Evolving list — an empty `[]` literal at a mutable binding whose element
         /// type is refined by mutations. Frozen to `List` at the runtime boundary.
         #[axis(tir)]
-        EvolvingList(Box<Ty>, TyAttr) = 31,
+        EvolvingList(Box<Ty<N>>, TyAttr) = 31,
         /// Evolving map — the map analogue of [`Ty::EvolvingList`].
         #[axis(tir)]
-        EvolvingMap(Box<Ty>, Box<Ty>, TyAttr) = 32,
+        EvolvingMap(Box<Ty<N>>, Box<Ty<N>>, TyAttr) = 32,
         /// Inference hole — the wildcard `_` written in a type-argument or
         /// `throws`-clause position. A leaf placeholder that asks the checker to
         /// infer the type at this slot from surrounding context (the initializer
@@ -373,6 +388,68 @@ mod tests {
             }),
             attr: a(),
         }
+    }
+
+    /// A stand-in for the interned/heap-anchored head the runtime will carry:
+    /// a `Copy` id, laid out nothing like the default [`TypeName`].
+    type Interned = Ty<u32>;
+
+    /// The family is genuinely parameterized, not `TypeName` with a parameter
+    /// bolted on. Worth its own test because the guarantees the generated code
+    /// rests on are *per monomorphization*: each conversion carries a `const`
+    /// size + align assert that is only evaluated at the instantiations actually
+    /// used, so a family that silently only worked at `TypeName` would look
+    /// perfectly healthy until the runtime introduced its own head. Exercising a
+    /// second `N` end-to-end — every conversion shape, in both directions — is
+    /// what makes that failure a compile error here rather than there.
+    #[test]
+    fn conversions_hold_at_a_non_default_head() {
+        let t: Interned = Ty::Map {
+            key: Box::new(Ty::Class(7, vec![Ty::Int { attr: a() }], a())),
+            value: Box::new(Ty::Function {
+                params: vec![FunctionParamTy::required(
+                    Some(Name::new("x")),
+                    Ty::Enum(9, a()),
+                )],
+                ret: Box::new(Ty::Interface(
+                    11,
+                    vec![Ty::Bool { attr: a() }],
+                    vec![(Name::new("Item"), Ty::String { attr: a() })],
+                    a(),
+                )),
+                throws: Box::new(Ty::Void { attr: a() }),
+                attr: a(),
+            }),
+            attr: a(),
+        };
+
+        // Deep, equal-size pairs: the reinterpreting conversions and the
+        // borrowed upcast.
+        let rt = RuntimeTy::<u32>::try_from(&t).unwrap();
+        let rz = RealizedTy::<u32>::try_from(&t).unwrap();
+        assert_eq!(Ty::from(&rt), t);
+        assert_eq!(Ty::from(rt.clone()), t);
+        assert_eq!(rt.as_ty(), &t);
+        assert_eq!(rz.as_runtime_ty(), &rt);
+        assert_eq!(<&RealizedTy<u32>>::try_from(&t), Ok(&rz));
+
+        // A shallow member, whose conversions take the structural walk instead.
+        let ct = ConcreteTy::<u32>::try_from(&rt).unwrap();
+        assert_eq!(RuntimeTy::from(&ct), rt);
+        assert_eq!(Ty::from(&ct), t);
+
+        // Narrowing still rejects by name at a nested depth.
+        let bad: Interned = Ty::List(Box::new(Ty::Unknown { attr: a() }), a());
+        assert_eq!(
+            RuntimeTy::<u32>::try_from(&bad),
+            Err(NotRuntimeTy { variant: "Unknown" })
+        );
+
+        // And the wire format round-trips over the substituted head.
+        assert_eq!(
+            Ty::<u32>::try_from_slice(&borsh::to_vec(&t).unwrap()).unwrap(),
+            t
+        );
     }
 
     /// A type variable nested inside a concrete container: representable in
@@ -493,49 +570,48 @@ mod tests {
         );
     }
 
+    /// Serialize at an explicitly named member. Variant construction alone
+    /// leaves the head parameter `N` open, and these assertions are about one
+    /// member at the default head — so each names the member it locks.
+    fn tag<T: borsh::BorshSerialize>(value: T) -> u8 {
+        borsh::to_vec(&value).unwrap()[0]
+    }
+
     /// Lock the Borsh wire format. Every family member uses the explicit master
     /// discriminants, with slot 23 reserved for the removed `WatchAccessor`.
     #[test]
     fn borsh_uses_explicit_discriminants() {
-        let tag = |bytes: Vec<u8>| bytes[0];
-        assert_eq!(tag(borsh::to_vec(&Ty::Int { attr: a() }).unwrap()), 0);
+        assert_eq!(tag::<Ty>(Ty::Int { attr: a() }), 0);
+        assert_eq!(tag::<Ty>(Ty::Media(MediaKind::Image, a())), 7);
         assert_eq!(
-            tag(borsh::to_vec(&Ty::Media(MediaKind::Image, a())).unwrap()),
-            7
-        );
-        assert_eq!(
-            tag(borsh::to_vec(&Ty::List(Box::new(Ty::Bool { attr: a() }), a())).unwrap()),
+            tag::<Ty>(Ty::List(Box::new(Ty::Bool { attr: a() }), a())),
             13
         );
         assert_eq!(
-            tag(borsh::to_vec(&Ty::EvolvingMap(
+            tag::<Ty>(Ty::EvolvingMap(
                 Box::new(Ty::Never { attr: a() }),
                 Box::new(Ty::Never { attr: a() }),
                 a()
-            ))
-            .unwrap()),
+            )),
             32
         );
-        assert_eq!(tag(borsh::to_vec(&Ty::Infer { attr: a() }).unwrap()), 33);
+        assert_eq!(tag::<Ty>(Ty::Infer { attr: a() }), 33);
         assert_eq!(
-            tag(borsh::to_vec(&RuntimeTy::TypeAlias(qtn("Alias"), a())).unwrap()),
+            tag::<RuntimeTy>(RuntimeTy::TypeAlias(qtn("Alias"), a())),
             24
         );
         // Filtered family members use the same master tags rather than local
         // declaration-order indices.
         assert_eq!(
-            tag(borsh::to_vec(&RealizedTy::BuiltinUnknown { attr: a() }).unwrap()),
+            tag::<RealizedTy>(RealizedTy::BuiltinUnknown { attr: a() }),
             27
         );
         assert_eq!(
-            tag(borsh::to_vec(&TyTemplate::TypeAlias(qtn("Alias"), a())).unwrap()),
+            tag::<TyTemplate>(TyTemplate::TypeAlias(qtn("Alias"), a())),
             24
         );
-        assert_eq!(tag(borsh::to_vec(&TyTemplate::TypeArgRef(0)).unwrap()), 34);
-        assert_eq!(
-            tag(borsh::to_vec(&ConcreteTy::Never { attr: a() }).unwrap()),
-            28
-        );
+        assert_eq!(tag::<TyTemplate>(TyTemplate::TypeArgRef(0)), 34);
+        assert_eq!(tag::<ConcreteTy>(ConcreteTy::Never { attr: a() }), 28);
     }
 
     /// The leading byte of a `#[repr(C, u8)]` value is its discriminant. Reading
@@ -552,21 +628,42 @@ mod tests {
     fn in_memory_discriminants_are_consistent_across_members() {
         // `BuiltinUnknown` is master variant #27; `RealizedTy` drops the
         // `typevar` and `projection` variants before it, yet its tag stays 27.
-        assert_eq!(in_memory_tag(&Ty::BuiltinUnknown { attr: a() }), 27);
-        assert_eq!(in_memory_tag(&RuntimeTy::BuiltinUnknown { attr: a() }), 27);
-        assert_eq!(in_memory_tag(&CodegenTy::BuiltinUnknown { attr: a() }), 27);
-        assert_eq!(in_memory_tag(&RealizedTy::BuiltinUnknown { attr: a() }), 27);
+        assert_eq!(in_memory_tag::<Ty>(&Ty::BuiltinUnknown { attr: a() }), 27);
+        assert_eq!(
+            in_memory_tag::<RuntimeTy>(&RuntimeTy::BuiltinUnknown { attr: a() }),
+            27
+        );
+        assert_eq!(
+            in_memory_tag::<CodegenTy>(&CodegenTy::BuiltinUnknown { attr: a() }),
+            27
+        );
+        assert_eq!(
+            in_memory_tag::<RealizedTy>(&RealizedTy::BuiltinUnknown { attr: a() }),
+            27
+        );
         // `Never` (#28) is shared and tag-stable across the deep members.
-        assert_eq!(in_memory_tag(&Ty::Never { attr: a() }), 28);
-        assert_eq!(in_memory_tag(&CodegenTy::Never { attr: a() }), 28);
-        assert_eq!(in_memory_tag(&RealizedTy::Never { attr: a() }), 28);
+        assert_eq!(in_memory_tag::<Ty>(&Ty::Never { attr: a() }), 28);
+        assert_eq!(
+            in_memory_tag::<CodegenTy>(&CodegenTy::Never { attr: a() }),
+            28
+        );
+        assert_eq!(
+            in_memory_tag::<RealizedTy>(&RealizedTy::Never { attr: a() }),
+            28
+        );
         // A leaf concrete variant present in every member, shallow ones included.
-        assert_eq!(in_memory_tag(&Ty::Int { attr: a() }), 0);
-        assert_eq!(in_memory_tag(&CodegenTy::Int { attr: a() }), 0);
-        assert_eq!(in_memory_tag(&ConcreteTy::Int { attr: a() }), 0);
-        assert_eq!(in_memory_tag(&ConcreteRealizedTy::Int { attr: a() }), 0);
+        assert_eq!(in_memory_tag::<Ty>(&Ty::Int { attr: a() }), 0);
+        assert_eq!(in_memory_tag::<CodegenTy>(&CodegenTy::Int { attr: a() }), 0);
+        assert_eq!(
+            in_memory_tag::<ConcreteTy>(&ConcreteTy::Int { attr: a() }),
+            0
+        );
+        assert_eq!(
+            in_memory_tag::<ConcreteRealizedTy>(&ConcreteRealizedTy::Int { attr: a() }),
+            0
+        );
         // The template-only frame leaf keeps its master tag.
-        assert_eq!(in_memory_tag(&TyTemplate::TypeArgRef(0)), 34);
+        assert_eq!(in_memory_tag::<TyTemplate>(&TyTemplate::TypeArgRef(0)), 34);
     }
 
     /// The borrowed upcast (`RuntimeTy::as_ty`, `RealizedTy::as_runtime_ty`, …)

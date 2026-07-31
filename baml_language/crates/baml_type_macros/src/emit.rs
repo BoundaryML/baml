@@ -7,12 +7,18 @@
 //! tuples and method bodies alike. Because the placeholder is the master ident
 //! itself, the master `enum` in the DSL is the ordinary `Ty` definition plus
 //! `#[axis(..)]` tags — no separate rewriting syntax is needed.
+//!
+//! Replacement is deliberately *ident-for-ident*, never ident-for-type: the DSL
+//! spells nested positions out in full (`Box<Ty<N>>`), so a generic argument
+//! list rides along as ordinary tokens and needs no context-sensitive splicing.
+//! That is what keeps method bodies — where a bare `Ty<N>` in expression
+//! position would need a turbofish — rewriting correctly.
 
 use std::collections::HashMap;
 
 use proc_macro2::{Group, Ident, Literal, TokenStream, TokenTree};
 use quote::{ToTokens, format_ident, quote};
-use syn::{Attribute, Fields};
+use syn::{Attribute, Fields, GenericParam, Generics, parse_quote};
 
 use crate::parse::{Family, MVariant, Member, Satellite};
 
@@ -61,6 +67,9 @@ fn gen_member_enum(family: &Family, member: &Member) -> TokenStream {
     let docs = member_docs(family, member);
     let derives = nondoc_attrs(&family.master_attrs);
     let name = &member.name;
+    // Declared with the master's generics *including* defaults, so a bare `Ty`
+    // in type position keeps meaning `Ty<TypeName>` at every existing use site.
+    let generics = &family.generics;
     quote! {
         #(#docs)*
         #(#derives)*
@@ -68,7 +77,7 @@ fn gen_member_enum(family: &Family, member: &Member) -> TokenStream {
         // identically across the family, so members with matching size/align are
         // mutually transmutable.
         #[repr(C, u8)]
-        pub enum #name {
+        pub enum #name #generics {
             #(#variants),*
         }
     }
@@ -94,8 +103,9 @@ fn gen_accessors(family: &Family, member: &Member) -> TokenStream {
     let name = &member.name;
     let attr_arms = member_variants(family, member).map(|v| attr_arm(name, v));
     let with_arms = member_variants(family, member).map(|v| with_attr_arm(name, v));
+    let (impl_g, ty_g, where_c) = family.generics.split_for_impl();
     quote! {
-        impl #name {
+        impl #impl_g #name #ty_g #where_c {
             #[doc = " Borrow this type's streaming/SAP attributes ([`TyAttr`])."]
             pub fn attr(&self) -> &TyAttr {
                 match self {
@@ -171,9 +181,11 @@ fn gen_satellite(family: &Family, member: &Member, sat: &Satellite) -> TokenStre
 
     let fields = replace_idents(sat.fields.to_token_stream(), &map);
     let derives = satellite_attrs(&family.master_attrs);
+    let generics = &sat.generics;
+    let (impl_g, ty_g, where_c) = sat.generics.split_for_impl();
     let methods = sat.methods.as_ref().map(|body| {
         let body = replace_idents(body.clone(), &map);
-        quote! { impl #sat_name { #body } }
+        quote! { impl #impl_g #sat_name #ty_g #where_c { #body } }
     });
 
     let doc = format!(
@@ -185,14 +197,30 @@ fn gen_satellite(family: &Family, member: &Member, sat: &Satellite) -> TokenStre
         #(#derives)*
         // `repr(C)`: a fixed field order shared across the family so a satellite
         // is layout-identical to its siblings (they differ only in the recursive
-        // field's member type), letting the enum-level transmute reinterpret a
+        // field's member type), letting the enum-level conversion reinterpret a
         // `Vec<FunctionParamTy>` field as `Vec<RuntimeFunctionParamTy>` soundly.
         #[repr(C)]
-        pub struct #sat_name {
+        pub struct #sat_name #generics {
             #fields
         }
         #methods
     }
+}
+
+/// `generics` with every type parameter additionally bounded by `Clone`.
+///
+/// The by-reference halves of the conversion matrix (`From<&Sub>`,
+/// `TryFrom<&Sup>`) clone the tree they convert, which the derived
+/// `Clone` supplies only under `N: Clone`. Emitted only on those impls, so the
+/// owned and borrow-to-borrow conversions stay bound-free.
+pub(crate) fn with_clone_bounds(generics: &Generics) -> Generics {
+    let mut bounded = generics.clone();
+    for param in &mut bounded.params {
+        if let GenericParam::Type(t) = param {
+            t.bounds.push(parse_quote!(::core::clone::Clone));
+        }
+    }
+    bounded
 }
 
 /// The idents to rewrite when generating for `target`: the master ident becomes

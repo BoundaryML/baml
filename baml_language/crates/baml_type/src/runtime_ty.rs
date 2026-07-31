@@ -521,7 +521,7 @@ mod tests {
     #[test]
     fn round_trip_nested_list_of_class() {
         // list<Class<int>>
-        let ty = Ty::List(
+        let ty: Ty = Ty::List(
             Box::new(Ty::Class(qtn("Box"), vec![Ty::Int { attr: def() }], def())),
             def(),
         );
@@ -530,7 +530,7 @@ mod tests {
 
     #[test]
     fn round_trip_map() {
-        let ty = Ty::Map {
+        let ty: Ty = Ty::Map {
             key: Box::new(Ty::String { attr: def() }),
             value: Box::new(Ty::List(Box::new(Ty::Bool { attr: def() }), def())),
             attr: def(),
@@ -540,7 +540,7 @@ mod tests {
 
     #[test]
     fn round_trip_union() {
-        let ty = Ty::Union(
+        let ty: Ty = Ty::Union(
             vec![
                 Ty::Int { attr: def() },
                 Ty::String { attr: def() },
@@ -553,7 +553,7 @@ mod tests {
 
     #[test]
     fn round_trip_function() {
-        let ty = Ty::Function {
+        let ty: Ty = Ty::Function {
             params: vec![
                 crate::FunctionParamTy::required(Some(Name::new("a")), Ty::Int { attr: def() }),
                 crate::FunctionParamTy::optional(
@@ -570,7 +570,7 @@ mod tests {
 
     #[test]
     fn round_trip_interface_with_associated_bindings() {
-        let ty = Ty::Interface(
+        let ty: Ty = Ty::Interface(
             qtn("Iterator"),
             vec![Ty::Int { attr: def() }],
             vec![(Name::new("Item"), Ty::String { attr: def() })],
@@ -581,7 +581,7 @@ mod tests {
 
     #[test]
     fn round_trip_associated_type_projection() {
-        let ty = Ty::AssociatedTypeProjection {
+        let ty: Ty = Ty::AssociatedTypeProjection {
             base: Box::new(Ty::type_var("T")),
             interface: Box::new(Interface {
                 name: qtn("Iterator"),
@@ -596,7 +596,7 @@ mod tests {
 
     #[test]
     fn nested_unknown_in_list_blocks_conversion() {
-        let ty = Ty::List(Box::new(Ty::Unknown { attr: def() }), def());
+        let ty: Ty = Ty::List(Box::new(Ty::Unknown { attr: def() }), def());
         assert_eq!(
             RuntimeTy::try_from(&ty),
             Err(NotRuntimeTy { variant: "Unknown" })
@@ -605,7 +605,7 @@ mod tests {
 
     #[test]
     fn nested_error_in_map_value_blocks_conversion() {
-        let ty = Ty::Map {
+        let ty: Ty = Ty::Map {
             key: Box::new(Ty::String { attr: def() }),
             value: Box::new(Ty::Error { attr: def() }),
             attr: def(),
@@ -618,7 +618,7 @@ mod tests {
 
     #[test]
     fn nested_evolving_list_in_union_blocks_conversion() {
-        let ty = Ty::Union(
+        let ty: Ty = Ty::Union(
             vec![
                 Ty::Int { attr: def() },
                 Ty::EvolvingList(Box::new(Ty::Never { attr: def() }), def()),
@@ -635,7 +635,7 @@ mod tests {
 
     #[test]
     fn nested_evolving_map_in_function_ret_blocks_conversion() {
-        let ty = Ty::Function {
+        let ty: Ty = Ty::Function {
             params: vec![],
             ret: Box::new(Ty::EvolvingMap(
                 Box::new(Ty::Never { attr: def() }),
