@@ -1619,6 +1619,7 @@ impl NormalTy {
         flat.dedup();
 
         Self::collapse_complete_enums(&mut flat, ctx);
+        Self::collapse_complete_bool(&mut flat);
         let mut flat = Self::absorb_subtypes(&flat, ctx);
 
         flat.sort();
@@ -1634,6 +1635,25 @@ impl NormalTy {
     /// (`E.A | E.B | … == E`). A bare `Enum(E)` already present absorbs its
     /// variants via the subtype pass, so this only handles the
     /// all-variants-no-enum case.
+    /// Replace the complete boolean literal set with `bool`
+    /// (`true | false == bool`, TYPE_SYSTEM.md's subtyping cases) - the
+    /// boolean analogue of [`NormalTy::collapse_complete_enums`]: `bool` is
+    /// exactly a two-variant complete set. An incomplete set (just `true`)
+    /// stays a literal; a `bool` already present absorbs its literals in the
+    /// subtype pass instead.
+    fn collapse_complete_bool(members: &mut Vec<NormalTy>) {
+        let has_true = members
+            .iter()
+            .any(|m| matches!(m, NormalTy::Literal(Literal::Bool(true))));
+        let has_false = members
+            .iter()
+            .any(|m| matches!(m, NormalTy::Literal(Literal::Bool(false))));
+        if has_true && has_false {
+            members.retain(|m| !matches!(m, NormalTy::Literal(Literal::Bool(_))));
+            members.push(NormalTy::Bool);
+        }
+    }
+
     fn collapse_complete_enums<C: TypeContext>(members: &mut Vec<NormalTy>, ctx: &C) {
         // Distinct enums that have at least one variant present.
         let mut enums: Vec<QualifiedTypeName> = members
@@ -1816,3 +1836,240 @@ impl NormalParam {
 
 #[cfg(test)]
 mod tests;
+
+// ═══════════════════════════════════════════════════════════════════════════
+// INTERNED ENTRY
+// ═══════════════════════════════════════════════════════════════════════════
+//
+// The hir_ty inference engine's ingestion path: interned types enter the
+// normalizer directly, at the same cost the plain enum pays via `from_ty`,
+// with no intermediate materialization. Facts still exchange plain types at
+// the `TypeContext` boundary (alias definitions, projection reductions) -
+// those are small and rare, and reduction results continue through the plain
+// path. Output-producing entries materialize once via `into_ty` and
+// re-intern.
+
+use crate::interned;
+
+impl NormalTy {
+    /// [`NormalTy::canonical`] for the interned representation.
+    fn canonical_interned<C: TypeContext>(ty: &interned::Ty, ctx: &C) -> NormalTy {
+        NormalTy::from_interned(ty, ctx, &mut HashSet::new(), PROJECTION_REDUCTION_FUEL)
+            .canonicalize(ctx)
+    }
+
+    /// [`NormalTy::from_ty`], mirrored over `interned::TyKind`. The one
+    /// naming trap: the interned `Unknown` is the TOP type (the plain enum's
+    /// `BuiltinUnknown`); TIR's `Unknown` recovery sentinel is
+    /// unrepresentable in the interned form by design.
+    fn from_interned<C: TypeContext>(
+        ty: &interned::Ty,
+        ctx: &C,
+        expanding: &mut HashSet<QualifiedTypeName>,
+        fuel: u32,
+    ) -> NormalTy {
+        use interned::TyKind as K;
+        match ty.kind() {
+            K::Int { .. } => NormalTy::Int,
+            K::Bigint { .. } => NormalTy::Bigint,
+            K::Float { .. } => NormalTy::Float,
+            K::String { .. } => NormalTy::String,
+            K::Bool { .. } => NormalTy::Bool,
+            K::Null { .. } => NormalTy::Null,
+            K::Uint8Array { .. } => NormalTy::Uint8Array,
+            K::Media(kind, _) => NormalTy::Media(*kind),
+            K::Void { .. } => NormalTy::Void,
+            K::RustType { .. } => NormalTy::RustType,
+            K::Type { .. } => NormalTy::Type,
+            K::Resource { .. } => NormalTy::Resource,
+            K::PromptAst { .. } => NormalTy::PromptAst,
+            K::Unknown { .. } => NormalTy::BuiltinUnknown,
+            K::Never { .. } => NormalTy::Never,
+            K::Error { .. } => NormalTy::Error,
+            // Same invariant as the plain arm: holes are filled (or made
+            // `Error`) and live variables are resolved or deferred BEFORE any
+            // oracle query; either reaching normalization is a compiler bug.
+            K::Infer { .. } => unreachable!(
+                "inference hole/variable reached type normalization; holes must \
+                 be instantiated and variables resolved (or the check deferred) \
+                 before any equivalence/subtype query"
+            ),
+            K::Literal(lit, _freshness, _) => NormalTy::Literal(lit.clone()),
+            K::Class(qn, args, _) => NormalTy::Class(
+                qn.clone(),
+                Self::from_interned_all(args, ctx, expanding, fuel),
+            ),
+            K::Interface(qn, args, bindings, _) => {
+                let mut bindings: Vec<_> = bindings
+                    .iter()
+                    .map(|(name, ty)| (name.clone(), Self::from_interned(ty, ctx, expanding, fuel)))
+                    .collect();
+                bindings.sort_by(|(a, _), (b, _)| a.cmp(b));
+                NormalTy::Interface(
+                    qn.clone(),
+                    Self::from_interned_all(args, ctx, expanding, fuel),
+                    bindings,
+                )
+            }
+            K::Enum(qn, _) => NormalTy::Enum(qn.clone()),
+            K::EnumVariant(qn, variant, _) => NormalTy::EnumVariant(qn.clone(), variant.clone()),
+            K::List(inner, _) => {
+                NormalTy::List(Box::new(Self::from_interned(inner, ctx, expanding, fuel)))
+            }
+            K::Map { key, value, .. } => NormalTy::Map {
+                key: Box::new(Self::from_interned(key, ctx, expanding, fuel)),
+                value: Box::new(Self::from_interned(value, ctx, expanding, fuel)),
+            },
+            K::Union(members, _) => {
+                NormalTy::Union(Self::from_interned_all(members, ctx, expanding, fuel))
+            }
+            K::Function {
+                params,
+                ret,
+                throws,
+                ..
+            } => NormalTy::Function {
+                params: params
+                    .iter()
+                    .map(|p| NormalParam {
+                        name: p.name.clone(),
+                        ty: Self::from_interned(&p.ty, ctx, expanding, fuel),
+                        mode: p.mode,
+                    })
+                    .collect(),
+                ret: Box::new(Self::from_interned(ret, ctx, expanding, fuel)),
+                throws: Box::new(Self::from_interned(throws, ctx, expanding, fuel)),
+            },
+            K::Future(value, error, _) => NormalTy::Future(
+                Box::new(Self::from_interned(value, ctx, expanding, fuel)),
+                Box::new(Self::from_interned(error, ctx, expanding, fuel)),
+            ),
+            K::TypeVar(param, _) => NormalTy::TypeVar(param.clone()),
+            K::AssociatedTypeProjection {
+                base,
+                interface,
+                member,
+                ..
+            } => {
+                // The fact boundary exchanges plain types; a projection's
+                // pieces are small. A reduction continues through the plain
+                // path, exactly like the plain arm.
+                let plain_base = base.to_plain();
+                let plain_interface = crate::Interface::new(
+                    interface.name.clone(),
+                    interface
+                        .generics
+                        .iter()
+                        .map(interned::Ty::to_plain)
+                        .collect(),
+                    interface
+                        .associated_types
+                        .iter()
+                        .map(|(name, ty)| (name.clone(), ty.to_plain()))
+                        .collect(),
+                );
+                if fuel > 0
+                    && let ProjectionStep::Reduced(reduced) =
+                        ctx.project(&plain_base, &plain_interface, member, fuel)
+                {
+                    return Self::from_ty(&reduced, ctx, expanding, fuel - 1);
+                }
+                let mut bindings: Vec<_> = interface
+                    .associated_types
+                    .iter()
+                    .map(|(name, ty)| (name.clone(), Self::from_interned(ty, ctx, expanding, fuel)))
+                    .collect();
+                bindings.sort_by(|(a, _), (b, _)| a.cmp(b));
+                NormalTy::AssociatedTypeProjection {
+                    base: Box::new(Self::from_interned(base, ctx, expanding, fuel)),
+                    interface: Box::new(NormalTy::Interface(
+                        interface.name.clone(),
+                        Self::from_interned_all(&interface.generics, ctx, expanding, fuel),
+                        bindings,
+                    )),
+                    member: member.clone(),
+                }
+            }
+            K::TypeAlias(qn, _) => {
+                if expanding.contains(qn) {
+                    return NormalTy::RecVar(qn.clone());
+                }
+                let Some(def) = ctx.alias_def(qn) else {
+                    return NormalTy::OpaqueAlias(qn.clone());
+                };
+                expanding.insert(qn.clone());
+                // The alias definition is a plain fact; its expansion
+                // continues through the plain path.
+                let body = Self::from_ty(&def, ctx, expanding, fuel);
+                expanding.remove(qn);
+                if body.mentions_rec_var(qn) {
+                    NormalTy::Mu {
+                        var: qn.clone(),
+                        body: Box::new(body),
+                    }
+                } else {
+                    body
+                }
+            }
+        }
+    }
+
+    fn from_interned_all<C: TypeContext>(
+        tys: &[interned::Ty],
+        ctx: &C,
+        expanding: &mut HashSet<QualifiedTypeName>,
+        fuel: u32,
+    ) -> Vec<NormalTy> {
+        tys.iter()
+            .map(|ty| Self::from_interned(ty, ctx, expanding, fuel))
+            .collect()
+    }
+}
+
+/// [`TypeContext::is_subtype`] for interned types: the subset relation,
+/// entered without materializing plain trees. Pointer identity is the
+/// reflexivity fast path.
+pub fn is_subtype_interned<C: TypeContext>(
+    sub: &interned::Ty,
+    sup: &interned::Ty,
+    ctx: &C,
+) -> bool {
+    if sub == sup {
+        return true;
+    }
+    let sub = NormalTy::canonical_interned(sub, ctx);
+    let sup = NormalTy::canonical_interned(sup, ctx);
+    sub.is_subtype_of(&sup, ctx, &mut HashSet::new())
+}
+
+/// [`TypeContext::equivalent`] for interned types.
+pub fn equivalent_interned<C: TypeContext>(a: &interned::Ty, b: &interned::Ty, ctx: &C) -> bool {
+    if a == b {
+        return true;
+    }
+    NormalTy::canonical_interned(a, ctx) == NormalTy::canonical_interned(b, ctx)
+}
+
+/// [`TypeContext::normalize`] for interned types. Materializes once on the
+/// way out (attrs erased, like the plain form).
+pub fn normalize_interned<C: TypeContext>(ty: &interned::Ty, ctx: &C) -> interned::Ty {
+    interned::Ty::from_plain(&NormalTy::canonical_interned(ty, ctx).into_ty())
+}
+
+/// The canonical union of `members` - the join operation for control-flow
+/// merge points and throws accumulation: flattens, dedups, absorbs subsumed
+/// members (`1 | int` collapses to `int`), and collapses complete sets
+/// (`true | false` to `bool`). An empty member list is `never` (the join
+/// identity).
+pub fn canonical_union_interned<C: TypeContext>(members: &[interned::Ty], ctx: &C) -> interned::Ty {
+    let normal = NormalTy::Union(
+        members
+            .iter()
+            .map(|member| {
+                NormalTy::from_interned(member, ctx, &mut HashSet::new(), PROJECTION_REDUCTION_FUEL)
+            })
+            .collect(),
+    )
+    .canonicalize(ctx);
+    interned::Ty::from_plain(&normal.into_ty())
+}
