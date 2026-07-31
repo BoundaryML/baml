@@ -36,9 +36,31 @@ use std::{
 };
 
 use crate::{
-    FunctionParamMode, FunctionParamTy, Interface, Literal, MediaKind, Name, ParamTy,
+    FunctionParamMode, FunctionParamTy, Head, Interface, Literal, MediaKind, Name, ParamTy,
     QualifiedTypeName, Ty, TyAttr,
 };
+
+/// The one declaration the algebra special-cases by identity: `AnyFunction`'s
+/// pins are covariant, unlike every other interface.
+///
+/// Built once rather than per comparison — the subtyping walk reaches the arms
+/// that consult it on every interface-vs-interface node. Resolving it to a head
+/// still goes through [`TypeContext::head_lookup`] per call, which is cheap for
+/// a name-based context and a registry hit for a runtime one.
+static ANY_FUNCTION: std::sync::LazyLock<QualifiedTypeName> = std::sync::LazyLock::new(|| {
+    QualifiedTypeName::new(Name::new("baml"), Vec::new(), Name::new("AnyFunction"))
+});
+
+/// Whether `head` is the [`ANY_FUNCTION`] declaration, decided by identity
+/// against the head `ctx` uses for it rather than by inspecting `head` itself.
+///
+/// An unknown declaration is not `AnyFunction` as far as this can tell, so the
+/// covariance special case does not fire — conservative, per the context's
+/// fail-safe contract.
+fn is_any_function<C: TypeContext>(head: &QualifiedTypeName, ctx: &C) -> bool {
+    ctx.head_lookup(&ANY_FUNCTION)
+        .is_some_and(|any_function| *head == any_function)
+}
 
 // ═══════════════════════════════════════════════════════════════════════════
 // CONTEXT
@@ -75,7 +97,28 @@ pub enum ProjectionStep {
 /// not" or merely "cannot determine") makes the algebra conservative — it will
 /// not collapse, absorb, or equate what it cannot confirm. A missing fact
 /// therefore degrades only to "not necessarily equivalent / subtype".
-pub trait TypeContext {
+pub trait TypeContext<H: Head = QualifiedTypeName> {
+    /// The head this context represents the declaration at `qtn` with.
+    ///
+    /// The algebra never inspects a head's spelling — heads are opaque values it
+    /// threads through — so recognizing a *particular* declaration is done by
+    /// obtaining its head here and comparing with `==`. That indirection is what
+    /// lets the question be answered by a representation with no name to
+    /// inspect: a name-based context returns the name itself (the identity,
+    /// always available), while a runtime context resolves the declaration on
+    /// its heap and hands back a handle — state only the context has, and the
+    /// reason this cannot live on [`Head`](crate::Head).
+    ///
+    /// Used for the algebra's one nominal special case, `baml.AnyFunction`,
+    /// whose pins are covariant unlike every other interface.
+    ///
+    /// `None` means the declaration could not be resolved *at all*, and fails
+    /// safe in the usual way: the special case does not fire, which is
+    /// conservative. Note this is about resolvability, not knowledge — a
+    /// name-based context answers unconditionally, since naming a declaration
+    /// asserts nothing about it.
+    fn head_lookup(&self, qtn: &QualifiedTypeName) -> Option<H>;
+
     /// The type a type alias expands to, or `None` if the alias is unknown.
     ///
     /// Recursion is discovered structurally (an alias that re-references itself
@@ -227,7 +270,9 @@ pub trait TypeContext {
     /// instead.
     fn normalize(&self, ty: &Ty) -> Ty
     where
-        Self: Sized,
+        // Scoped to the default head while `NormalTy` is still concrete;
+        // lifts to any `H` once the normalized form is threaded over it.
+        Self: Sized + TypeContext<QualifiedTypeName>,
     {
         NormalTy::canonical_render(ty, self)
     }
@@ -252,7 +297,9 @@ pub trait TypeContext {
     /// programs by the interface `requires`-cycle check).
     fn equivalent(&self, a: &Ty, b: &Ty) -> bool
     where
-        Self: Sized,
+        // Scoped to the default head while `NormalTy` is still concrete;
+        // lifts to any `H` once the normalized form is threaded over it.
+        Self: Sized + TypeContext<QualifiedTypeName>,
     {
         // Reflexivity fast path: structurally identical spellings (attrs
         // included) trivially canonicalize to the same form.
@@ -275,7 +322,9 @@ pub trait TypeContext {
     /// context (the subset relation).
     fn is_subtype(&self, sub: &Ty, sup: &Ty) -> bool
     where
-        Self: Sized,
+        // Scoped to the default head while `NormalTy` is still concrete;
+        // lifts to any `H` once the normalized form is threaded over it.
+        Self: Sized + TypeContext<QualifiedTypeName>,
     {
         // Reflexivity fast path: structurally identical spellings canonicalize
         // to the same form (canonicalization is deterministic and attr-erasure
@@ -340,7 +389,9 @@ pub trait TypeContext {
     ///   type variables, and a bare `unknown`.
     fn definitely_disjoint(&self, a: &Ty, b: &Ty) -> bool
     where
-        Self: Sized,
+        // Scoped to the default head while `NormalTy` is still concrete;
+        // lifts to any `H` once the normalized form is threaded over it.
+        Self: Sized + TypeContext<QualifiedTypeName>,
     {
         NormalTy::canonical(a, self).is_disjoint_from(&NormalTy::canonical(b, self))
     }
@@ -360,7 +411,9 @@ pub trait TypeContext {
     ///   orphan rule forbids overriding (primitives, `null`).
     fn definitely_equal(&self, a: &Ty, b: &Ty) -> bool
     where
-        Self: Sized,
+        // Scoped to the default head while `NormalTy` is still concrete;
+        // lifts to any `H` once the normalized form is threaded over it.
+        Self: Sized + TypeContext<QualifiedTypeName>,
     {
         let a = NormalTy::canonical(a, self);
         a.is_unoverridable_singleton() && a == NormalTy::canonical(b, self)
@@ -380,7 +433,9 @@ pub trait TypeContext {
     /// soundness.
     fn constant_equality(&self, a: &Ty, b: &Ty) -> Option<bool>
     where
-        Self: Sized,
+        // Scoped to the default head while `NormalTy` is still concrete;
+        // lifts to any `H` once the normalized form is threaded over it.
+        Self: Sized + TypeContext<QualifiedTypeName>,
     {
         let a = NormalTy::canonical(a, self);
         let b = NormalTy::canonical(b, self);
@@ -422,6 +477,14 @@ pub struct NoFacts;
               the type's definition, not a consumer site to migrate off it"
 )]
 impl TypeContext for NoFacts {
+    /// The identity, like every name-based context: naming a declaration is not
+    /// a *fact* about it, so this is answerable even here. Returning `None`
+    /// would silently disable the `AnyFunction` covariance rule, which used to
+    /// fire under this context on the name alone.
+    fn head_lookup(&self, qtn: &QualifiedTypeName) -> Option<QualifiedTypeName> {
+        Some(qtn.clone())
+    }
+
     fn alias_def(&self, _name: &QualifiedTypeName) -> Option<Ty> {
         None
     }
@@ -1999,7 +2062,7 @@ impl NormalTy {
             // existential was lowered; a pin missing anyway degrades to that
             // same top-type default (accepts everything).
             (NormalTy::Function { ret, throws, .. }, NormalTy::Interface(qn, _, bindings))
-                if qn.is_builtin_root_type("AnyFunction") =>
+                if is_any_function(qn, ctx) =>
             {
                 let pin = |name: &str| {
                     bindings
@@ -2025,9 +2088,7 @@ impl NormalTy {
             (
                 NormalTy::Interface(sub_qn, _, sub_bindings),
                 NormalTy::Interface(sup_qn, _, sup_bindings),
-            ) if sub_qn.is_builtin_root_type("AnyFunction")
-                && sup_qn.is_builtin_root_type("AnyFunction") =>
-            {
+            ) if is_any_function(sub_qn, ctx) && is_any_function(sup_qn, ctx) => {
                 sup_bindings.iter().all(|(name, sup_pin)| {
                     match sub_bindings.iter().find(|(n, _)| n == name) {
                         Some((_, sub_pin)) => sub_pin.is_subtype_of(sup_pin, ctx, assumptions),

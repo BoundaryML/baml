@@ -591,6 +591,12 @@ mod tests {
     /// safe (no aliases, memberships, bounds, or reducible projections).
     struct NoCtx;
     impl TypeContext for NoCtx {
+        /// A name-based context represents a declaration by its own name, so this
+        /// is the identity — no resolution step, and never `None`.
+        fn head_lookup(&self, qtn: &crate::QualifiedTypeName) -> Option<crate::QualifiedTypeName> {
+            Some(qtn.clone())
+        }
+
         fn alias_def(&self, _: &QualifiedTypeName) -> Option<Ty> {
             None
         }
@@ -703,6 +709,12 @@ mod tests {
     /// recurses forever; with it, the chain exhausts its budget and fails.
     struct CyclicCtx;
     impl TypeContext for CyclicCtx {
+        /// A name-based context represents a declaration by its own name, so this
+        /// is the identity — no resolution step, and never `None`.
+        fn head_lookup(&self, qtn: &crate::QualifiedTypeName) -> Option<crate::QualifiedTypeName> {
+            Some(qtn.clone())
+        }
+
         fn alias_def(&self, _: &QualifiedTypeName) -> Option<Ty> {
             None
         }

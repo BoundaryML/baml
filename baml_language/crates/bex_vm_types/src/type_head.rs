@@ -152,7 +152,13 @@ mod tests {
     fn head(slot: &mut crate::Object, tag: i64) -> TypeHead {
         // SAFETY: `slot` outlives the head in each test below, so the pointer
         // stays valid; these tests exercise the relations, never a deref.
-        let ptr = unsafe { HeapPtr::from_ptr(std::ptr::from_mut(slot)) };
+        // Under `heap_debug` the epoch is inert here — these pointers never
+        // reach a real heap — so 0, as the other reconstruction paths pass.
+        let raw = std::ptr::from_mut(slot);
+        #[cfg(feature = "heap_debug")]
+        let ptr = unsafe { HeapPtr::from_ptr(raw, 0) };
+        #[cfg(not(feature = "heap_debug"))]
+        let ptr = unsafe { HeapPtr::from_ptr(raw) };
         TypeHead::new(ptr, TypeTag::from_i64(tag))
     }
 
@@ -213,7 +219,12 @@ mod tests {
 
         let mut after = before;
         // SAFETY: `to_space` outlives `after`; no deref occurs.
-        after.forward_to(unsafe { HeapPtr::from_ptr(std::ptr::from_mut(&mut to_space)) });
+        let raw = std::ptr::from_mut(&mut to_space);
+        #[cfg(feature = "heap_debug")]
+        let moved = unsafe { HeapPtr::from_ptr(raw, 0) };
+        #[cfg(not(feature = "heap_debug"))]
+        let moved = unsafe { HeapPtr::from_ptr(raw) };
+        after.forward_to(moved);
 
         assert_eq!(after, before, "a moved head is still the same head");
         assert_eq!(after.tag(), before.tag());
@@ -261,7 +272,11 @@ mod tests {
 
         let mut definition = slot();
         // SAFETY: `definition` outlives every head below; nothing dereferences it.
-        let ptr = unsafe { HeapPtr::from_ptr(std::ptr::from_mut(&mut definition)) };
+        let raw = std::ptr::from_mut(&mut definition);
+        #[cfg(feature = "heap_debug")]
+        let ptr = unsafe { HeapPtr::from_ptr(raw, 0) };
+        #[cfg(not(feature = "heap_debug"))]
+        let ptr = unsafe { HeapPtr::from_ptr(raw) };
         let head = TypeHead::new(ptr, TypeTag::of_head("demo.Person"));
 
         let ty: RealizedTy<TypeHead> = RealizedTy::List(

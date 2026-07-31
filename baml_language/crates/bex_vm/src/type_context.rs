@@ -37,6 +37,15 @@ use bex_vm_types::types::Object;
 use crate::BexVm;
 
 impl TypeContext for BexVm {
+    /// A name-based context represents a declaration by its own name, so this
+    /// is the identity — no resolution step, and never `None`.
+    fn head_lookup(
+        &self,
+        qtn: &baml_type::QualifiedTypeName,
+    ) -> Option<baml_type::QualifiedTypeName> {
+        Some(qtn.clone())
+    }
+
     fn alias_def(&self, name: &QualifiedTypeName) -> Option<Ty> {
         // Only recursive aliases survive to runtime; non-recursive ones were
         // expanded inline at lowering. Widen the stored `RuntimeTy` up to `Ty`.
@@ -220,6 +229,15 @@ impl TypeContext for BexVm {
 pub(crate) struct StructuralEquivCtx<'a>(pub(crate) &'a BexVm);
 
 impl TypeContext for StructuralEquivCtx<'_> {
+    /// A name-based context represents a declaration by its own name, so this
+    /// is the identity — no resolution step, and never `None`.
+    fn head_lookup(
+        &self,
+        qtn: &baml_type::QualifiedTypeName,
+    ) -> Option<baml_type::QualifiedTypeName> {
+        Some(qtn.clone())
+    }
+
     fn alias_def(&self, name: &QualifiedTypeName) -> Option<Ty> {
         // Same alias facts as the full context — non-re-entrant, and required
         // for recursive-alias folding.

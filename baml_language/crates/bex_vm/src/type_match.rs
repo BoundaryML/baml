@@ -96,6 +96,15 @@ mod tests {
     /// interface) are validated by the VM-backed e2e tests.
     struct EmptyCtx;
     impl TypeContext for EmptyCtx {
+        /// A name-based context represents a declaration by its own name, so this
+        /// is the identity — no resolution step, and never `None`.
+        fn head_lookup(
+            &self,
+            qtn: &baml_type::QualifiedTypeName,
+        ) -> Option<baml_type::QualifiedTypeName> {
+            Some(qtn.clone())
+        }
+
         fn alias_def(&self, _: &QualifiedTypeName) -> Option<baml_type::Ty> {
             None
         }

@@ -173,6 +173,15 @@ struct PackageSubtypeContext<'a> {
 }
 
 impl TypeContext for PackageSubtypeContext<'_> {
+    /// A name-based context represents a declaration by its own name, so this
+    /// is the identity — no resolution step, and never `None`.
+    fn head_lookup(
+        &self,
+        qtn: &baml_type::QualifiedTypeName,
+    ) -> Option<baml_type::QualifiedTypeName> {
+        Some(qtn.clone())
+    }
+
     fn alias_def(&self, name: &baml_type::QualifiedTypeName) -> Option<Ty> {
         TypeContext::alias_def(self.vm, name)
     }
