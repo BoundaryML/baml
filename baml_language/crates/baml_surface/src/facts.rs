@@ -27,6 +27,19 @@
 //!
 //! The output vocabulary (`baml_type::Ty` and friends) is owned by
 //! `baml_type` and is not part of the rebuild.
+//!
+//! ## Known out-of-contract consumers
+//!
+//! `baml_project::client_codegen::build_symbol_pool` still performs its own
+//! raw lowering walk — `lower_type_expr::{ScopeCtx, lower_type_ref}`,
+//! `inference::collect_type_aliases`, `class_generic_params` /
+//! `function_generic_params`, `callable::callable_throws` — with codegen's
+//! *deliberately* divergent policies (empty bounds maps, alias inlining for
+//! non-recursive aliases). It is the one consumer the rebuild must either
+//! keep those entry points alive for, or migrate onto this contract as part
+//! of landing (at which point its policies need re-encoding against the new
+//! queries). Everything else that reads resolved types goes through this
+//! module.
 
 use baml_base::Name;
 use baml_compiler2_hir::loc::{ClassLoc, FunctionLoc, ImplLoc, InterfaceLoc, TypeAliasLoc};

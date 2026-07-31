@@ -1525,8 +1525,7 @@ impl ProjectDatabase {
         let offset = text_size::TextSize::from(byte_offset);
 
         // 2. Find CST token at offset
-        let Some(token) = baml_lsp2_actions::utils::find_token_at_offset(self, source_file, offset)
-        else {
+        let Some(token) = baml_lsp2_actions::find_token_at_offset(self, source_file, offset) else {
             return empty;
         };
 

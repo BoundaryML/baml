@@ -270,6 +270,8 @@ pub(crate) fn playground_function_name(namespace_path: &[Name], name: &Name) -> 
 }
 
 /// List tests with full metadata for the playground.
+// BUG: duplicated with different semantics in
+// `baml_cli::test_command::discover_legacy_tests` — see the note there.
 pub fn list_tests_with_metadata(db: &ProjectDatabase) -> Vec<TestSymbol> {
     let pkg_id = PackageId::new(db, Name::new("user"));
     let pkg = package_items(db, pkg_id);
