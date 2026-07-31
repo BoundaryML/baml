@@ -96,7 +96,7 @@ class VersionToolTests(unittest.TestCase):
         ):
             self.write(
                 package,
-                json.dumps({"version": version, "name": "fixture"}, indent=2)
+                json.dumps({"name": "fixture", "version": version}, indent=2)
                 + "\n",
             )
         self.write(
@@ -264,6 +264,27 @@ if "build:debug" in sys.argv:
         self.run_tool("sync")
         self.run_tool("check")
         self.assertEqual(set(self.surface_versions().values()), {"1.2.3"})
+
+    def test_replace_json_version_preserves_optional_comma(self) -> None:
+        package = self.write(
+            "package.json",
+            '{\n  "name": "fixture",\n  "version": "1.2.3",\n  "private": true\n}\n',
+        )
+        version_tool_module().replace_json_version(package, "2.3.4")
+        self.assertEqual(
+            package.read_text(encoding="utf-8"),
+            '{\n  "name": "fixture",\n  "version": "2.3.4",\n  "private": true\n}\n',
+        )
+
+        package.write_text(
+            '{\n  "name": "fixture",\n  "version": "1.2.3"\n}\n',
+            encoding="utf-8",
+        )
+        version_tool_module().replace_json_version(package, "2.3.4")
+        self.assertEqual(
+            package.read_text(encoding="utf-8"),
+            '{\n  "name": "fixture",\n  "version": "2.3.4"\n}\n',
+        )
 
     def test_exact_named_field_checks_reject_loose_version_text(self) -> None:
         rust_version = (

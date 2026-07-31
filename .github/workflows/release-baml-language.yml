@@ -414,11 +414,13 @@ jobs:
           if [[ "$vsix" != "$dest" ]]; then
             mv "$vsix" "$dest"
           fi
-      - name: Reject bundled native binaries
+      - name: Validate VSIX contents
         run: |
           set -euo pipefail
           vsix="typescript2/app-vscode-ext/baml-language-${{ needs.plan.outputs.version }}.vsix"
-          unzip -l "$vsix" | tee vsix-list.txt
+          unzip -Z1 "$vsix" | tee vsix-list.txt
+          grep -Fxq 'extension/readme.md' vsix-list.txt
+          grep -Fxq 'extension/baml-logo.png' vsix-list.txt
           ! grep -E 'dist/baml-cli|baml-cli|baml-pack-host' vsix-list.txt
       - uses: actions/upload-artifact@v4
         with:
