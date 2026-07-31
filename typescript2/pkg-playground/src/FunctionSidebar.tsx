@@ -397,7 +397,10 @@ function FunctionTreeNode({
                   </span>
                 )}
                 {isInternal && (
-                  <span className="rounded border border-vsc-border px-1 py-0 text-[9px] text-vsc-text-faint">
+                  <span
+                    aria-hidden="true"
+                    className="rounded border border-vsc-border px-1 py-0 text-[9px] text-vsc-text-faint"
+                  >
                     {node.functionInfo.origin}
                   </span>
                 )}

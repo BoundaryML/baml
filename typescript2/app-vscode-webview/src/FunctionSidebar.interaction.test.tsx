@@ -69,6 +69,26 @@ describe('FunctionSidebar folder disclosure', () => {
 });
 
 describe('FunctionSidebar function details and sorting', () => {
+  it('keeps internal-origin badges out of function accessible names', () => {
+    render(
+      <FunctionSidebar
+        functions={[{ kind: 'expr', name: 'BuiltIn', origin: 'internal' }]}
+        internalFunctionCount={1}
+        onRefreshTests={vi.fn()}
+        onSelectFn={vi.fn()}
+        selectedFn={null}
+        showInternalFunctions
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Functions (1)' }));
+
+    expect(screen.getByRole('button', { name: 'BuiltIn' })).toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: 'BuiltIn internal' }),
+    ).not.toBeInTheDocument();
+  });
+
   it('keeps older function metadata payloads usable', async () => {
     render(<SidebarHarness />);
 
