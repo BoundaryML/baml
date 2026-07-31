@@ -21,7 +21,7 @@
     "@baml/ui": "workspace:*",
     "@boundaryml/baml-nextjs-plugin": "workspace:*",
     "jotai": "2.12.2",
-    "js-yaml": "^4.1.0",
+    "js-yaml": "^4.3.0",
     "lucide-react": "^0.483.0",
     "marked": "^15.0.7",
     "next": "15.2.7",
