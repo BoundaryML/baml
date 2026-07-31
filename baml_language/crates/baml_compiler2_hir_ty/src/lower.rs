@@ -243,6 +243,30 @@ impl<'db> LowerCtx<'db> {
                     let value_ty = args.pop().expect("checked len");
                     return Ty::intern(TyKind::Future(value_ty, error_ty, attr()));
                 }
+                // B-1080: the builtin `baml.Array<T>` / `baml.Map<K, V>`
+                // class spellings ARE the structural types - lowering them
+                // to `List`/`Map` makes every algebra arm relate them for
+                // free, instead of TIR's one-directional argument-path
+                // patch. Keyed on the builtin package specifically: a
+                // user-defined `class Array<T>` stays nominal.
+                if !qtn.is_local()
+                    && qtn.package().as_str() == "baml"
+                    && qtn.namespace().is_empty()
+                {
+                    if qtn.name().as_str() == "Array" && args.len() == 1 {
+                        let element = args.pop().expect("checked len");
+                        return Ty::intern(TyKind::List(element, attr()));
+                    }
+                    if qtn.name().as_str() == "Map" && args.len() == 2 {
+                        let value = args.pop().expect("checked len");
+                        let key = args.pop().expect("checked len");
+                        return Ty::intern(TyKind::Map {
+                            key,
+                            value,
+                            attr: attr(),
+                        });
+                    }
+                }
                 Ty::intern(TyKind::Class(qtn, args.into(), attr()))
             }
             Definition::Interface(interface_loc) => {

@@ -1,0 +1,10 @@
+---
+source: crates/baml_tests/src/type_spec/fixtures.rs
+expression: outcome.dump
+---
+549..599 '{\n   ... ys\n}': hir_ty=[int[]] tir=[int[] | _[]]
+555..561 'let ys': hir_ty=[int[]] tir=[int[] | _[]]
+564..566 'xs': int[] | null
+564..572 'xs ?? []': hir_ty=[int[]] tir=[int[] | _[]]
+570..572 '[]': hir_ty=[int[]] tir=[_[]]
+595..597 'ys': hir_ty=[int[]] tir=[int[] | _[]]

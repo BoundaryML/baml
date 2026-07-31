@@ -5,10 +5,12 @@ repr, S4 declaration lowering, S4b oracle entry, S5 table, S6 core exprs,
 S7 bidirectional checking, S8 calls/constructors/fields, S9 lambdas +
 `resolve_value_path` consolidation + function values), plus operator
 dispatch through the `baml.ops` interfaces (decision 4; bitwise on the
-hack table until the stdlib grows its interfaces). 21 of 22 spec
-fixtures green, including three spec-ahead-of-TIR wins (canonicalized
+hack table until the stdlib grows its interfaces). 25 of 26 spec
+fixtures green, including six spec-ahead-of-TIR wins (canonicalized
 bool-join, expression-position `_` holes, equality-regime generic
-resolution). Pending: push-driven bounds (S11).
+resolution + coherent disagreement verdicts [B-932], `??` informing its
+right operand [B-1135], builtin `baml.Array`/`baml.Map` bridged to the
+structural types [B-1080]). Pending: push-driven bounds (S11).
 
 `baml_language/TYPE_SYSTEM.md` is the correctness authority. It is
 prescriptive: where the current TIR implementation disagrees with it, the spec

@@ -738,8 +738,15 @@ impl<'db> InferenceContext<'db> {
             }
             BinaryOp::NullCoalesce => {
                 let lhs_ty = self.infer_expr(body, lhs, &Expectation::None);
-                let rhs_ty = self.infer_expr(body, rhs, &Expectation::None);
-                self.null_coalesce(&lhs_ty, &rhs_ty)
+                // B-1135: the unwrapped lhs INFORMS the rhs, so `xs ?? []`
+                // adopts the element type instead of leaving a hole. It
+                // does not CONSTRAIN it - `v ?? "fallback"` is a join, not
+                // a mismatch - which is exactly Expectation's inform/
+                // constrain split (same as if-branches).
+                let inner = self.remove_null(&lhs_ty);
+                let rhs_ty =
+                    self.infer_expr(body, rhs, &Expectation::has_type(inner.clone()));
+                self.null_coalesce(inner, &rhs_ty)
             }
             BinaryOp::Add | BinaryOp::Sub | BinaryOp::Mul | BinaryOp::Div | BinaryOp::Mod => {
                 let lhs_ty = self.infer_expr(body, lhs, &Expectation::None);
@@ -832,29 +839,32 @@ impl<'db> InferenceContext<'db> {
         canonical_union_interned(&outputs, &self.facts)
     }
 
-    /// `a ?? b`: `remove_null(a)`, then the canonical-unwrap fast paths
-    /// (TIR's rule) - `rhs <: inner` keeps the unwrapped lhs, `inner <:
-    /// rhs` keeps rhs - else the freshness-preserving join.
-    fn null_coalesce(&mut self, lhs: &Ty, rhs: &Ty) -> Ty {
-        let inner = {
-            let resolved = self.table.resolve_completely(lhs);
-            match resolved.kind() {
-                TyKind::Null { .. } => Ty::never(),
-                TyKind::Union(members, _) => {
-                    let non_null: Vec<Ty> = members
-                        .iter()
-                        .filter(|member| !matches!(member.kind(), TyKind::Null { .. }))
-                        .cloned()
-                        .collect();
-                    if non_null.is_empty() {
-                        Ty::never()
-                    } else {
-                        canonical_union_interned(&non_null, &self.facts)
-                    }
+    /// The non-null part of a type: `Null` drops from unions (an all-null
+    /// type leaves `never`).
+    fn remove_null(&mut self, ty: &Ty) -> Ty {
+        let resolved = self.table.resolve_completely(ty);
+        match resolved.kind() {
+            TyKind::Null { .. } => Ty::never(),
+            TyKind::Union(members, _) => {
+                let non_null: Vec<Ty> = members
+                    .iter()
+                    .filter(|member| !matches!(member.kind(), TyKind::Null { .. }))
+                    .cloned()
+                    .collect();
+                if non_null.is_empty() {
+                    Ty::never()
+                } else {
+                    canonical_union_interned(&non_null, &self.facts)
                 }
-                _ => resolved,
             }
-        };
+            _ => resolved,
+        }
+    }
+
+    /// `a ?? b`: given the already-unwrapped lhs, the canonical-unwrap fast
+    /// paths (TIR's rule) - `rhs <: inner` keeps the unwrapped lhs, `inner
+    /// <: rhs` keeps rhs - else the freshness-preserving join.
+    fn null_coalesce(&mut self, inner: Ty, rhs: &Ty) -> Ty {
         let rhs = self.table.resolve_completely(rhs);
         let ground =
             |ty: &Ty| !ty.has_infer() && !ty.has_error() && !matches!(ty.kind(), TyKind::Never { .. });
