@@ -1,11 +1,13 @@
 # baml_compiler2_hir_ty: rust-analyzer-style type inference
 
-Status: shipped through S8 (S0 harness, S1 body-owner ID, S4a interned
+Status: shipped through S9 (S0 harness, S1 body-owner ID, S4a interned
 repr, S4 declaration lowering, S4b oracle entry, S5 table, S6 core exprs,
-S7 bidirectional checking, S8 calls/constructors/fields). 13 of 14 spec
+S7 bidirectional checking, S8 calls/constructors/fields, S9 lambdas +
+`resolve_value_path` consolidation + function values). 16 of 18 spec
 fixtures green, including three spec-ahead-of-TIR wins (canonicalized
 bool-join, expression-position `_` holes, equality-regime generic
-resolution). Pending: lambdas (S9), push-driven bounds (S11).
+resolution). Pending: operator dispatch through interfaces (with I1),
+push-driven bounds (S11).
 
 `baml_language/TYPE_SYSTEM.md` is the correctness authority. It is
 prescriptive: where the current TIR implementation disagrees with it, the spec

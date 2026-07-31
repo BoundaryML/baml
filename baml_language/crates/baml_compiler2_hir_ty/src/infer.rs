@@ -1,16 +1,19 @@
 //! Body type inference: `infer_body` walks one body owner's expression tree
 //! with an [`InferenceContext`] over an [`unify::InferenceTable`].
 //!
-//! S7 state: bidirectional checking. `infer_expr` synthesizes with an
+//! S9 state: bidirectional checking. `infer_expr` synthesizes with an
 //! [`Expectation`] flowing down (informing shape: container elements,
-//! if-branch pass-through); `check_expr` additionally emits a `Sub`
-//! constraint, discharged eagerly per the settled design - invariant heads
-//! decay to `Eq`, ground pairs ask the canonical oracle, var-headed pairs
-//! deposit bounds, the irreducible residue defers to finish. Control-flow
-//! merge points join through `canonical_union_interned` (never fabricated
-//! at variables - ruling 1); `Diverges` tracks never-propagation. Constructs
-//! the engine does not handle yet still record the `Error` sentinel and
-//! upgrade slice by slice.
+//! if-branch pass-through, lambda signature deduction); `check_expr`
+//! additionally emits a `Sub` constraint, discharged eagerly per the settled
+//! design - invariant heads decay to `Eq`, ground pairs ask the canonical
+//! oracle, var-headed pairs deposit bounds, the irreducible residue defers
+//! to finish. Control-flow merge points join through
+//! `canonical_union_interned` (never fabricated at variables - ruling 1);
+//! `Diverges` tracks never-propagation. Value paths resolve through one
+//! entry (`resolve_value_path`); lambdas deduce unwritten signature slots
+//! from the expected function type and their bodies type in the owner's
+//! table under the lambda's scope. Constructs the engine does not handle
+//! yet still record the `Error` sentinel and upgrade slice by slice.
 
 pub mod unify;
 
@@ -87,6 +90,7 @@ pub fn infer_body<'db>(
     };
     let lower = lower_ctx_for_file(db, owner.file(db)).with_frame(frame);
     let type_refs = baml_compiler2_ppir::body_type_refs(db, owner);
+    let source_map = baml_compiler2_ppir::body_source_map(db, owner);
     let mut ctx = InferenceContext::new(
         db,
         index,
@@ -95,6 +99,7 @@ pub fn infer_body<'db>(
         param_tys,
         return_ty,
         type_refs,
+        source_map,
     );
     if let Some(expr_body) = body.expr_body() {
         ctx.infer_expr_body(expr_body);
@@ -142,9 +147,12 @@ enum Expectation {
 }
 
 impl Expectation {
-    /// The `Error` sentinel is never propagated as context.
+    /// The `Error` sentinel is never propagated as context. Top-level only
+    /// (rust-analyzer's `Expectation::has_type` discipline): a nested
+    /// sentinel - e.g. the `throws Error` placeholder inside a function
+    /// type until S12 - must not discard the useful structure around it.
     fn has_type(ty: Ty) -> Expectation {
-        if ty.has_error() {
+        if matches!(ty.kind(), TyKind::Error { .. }) {
             Expectation::None
         } else {
             Expectation::HasType(ty)
@@ -186,6 +194,18 @@ struct InferenceContext<'db> {
     /// into the semantic index's per-file tables, and the guard that keeps
     /// parameter lookups from crossing into lambda scopes.
     owner_scope: Option<FileScopeId>,
+    /// The metadata scope expression lookups key under RIGHT NOW. Equal to
+    /// `owner_scope` except while walking a lambda body: the semantic index
+    /// keys a lambda body's expressions under the LAMBDA's scope even though
+    /// they share the owner's arena (`builder.rs::walk_lambda_expr`), so the
+    /// walk must swap this when it descends into one.
+    current_scope: Option<FileScopeId>,
+    /// Expression spans, for locating the `ScopeKind::Lambda` scope that a
+    /// `Expr::Lambda` node opened (scopes are keyed by source range).
+    source_map: Option<baml_compiler2_ast::AstSourceMap>,
+    /// Parameter types for each lambda scope this run has walked, deduced by
+    /// `infer_lambda`; the lambda-scope analog of `param_tys`.
+    lambda_params: FxHashMap<FileScopeId, Vec<Ty>>,
     /// Lowering for body-position type annotations, carrying the owner's
     /// generic frame.
     lower: LowerCtx<'db>,
@@ -207,6 +227,7 @@ struct InferenceContext<'db> {
 }
 
 impl<'db> InferenceContext<'db> {
+    #[allow(clippy::too_many_arguments)]
     fn new(
         db: &'db dyn baml_compiler2_ppir::Db,
         index: &'db FileSemanticIndex<'db>,
@@ -215,12 +236,16 @@ impl<'db> InferenceContext<'db> {
         param_tys: Vec<Ty>,
         return_ty: Option<Ty>,
         type_refs: Arc<BodyTypeRefs>,
+        source_map: Option<baml_compiler2_ast::AstSourceMap>,
     ) -> InferenceContext<'db> {
         InferenceContext {
             db,
             facts: Facts::new(db),
             index,
             owner_scope,
+            current_scope: owner_scope,
+            source_map,
+            lambda_params: FxHashMap::default(),
             lower,
             param_tys,
             type_refs,
@@ -274,16 +299,7 @@ impl<'db> InferenceContext<'db> {
                 TyAttr::default(),
             )),
             Expr::Null => Ty::null(),
-            Expr::Path(segments) => {
-                // The root resolves through the semantic index; the
-                // remaining segments are member accesses (the AST cannot
-                // split `b.v` into base+member before name resolution).
-                let root_ty = self.infer_path(expr);
-                segments
-                    .iter()
-                    .skip(1)
-                    .fold(root_ty, |ty, segment| self.field_access(&ty, segment))
-            }
+            Expr::Path(segments) => self.resolve_value_path(expr, segments),
             Expr::Block { stmts, tail_expr } => {
                 let entry_diverges = self.diverges;
                 for stmt in stmts {
@@ -419,14 +435,7 @@ impl<'db> InferenceContext<'db> {
                 let base_ty = self.infer_expr(body, *base, &Expectation::None);
                 self.field_access(&base_ty, member)
             }
-            Expr::Lambda(def) => {
-                // A lambda's body is not a traversal child but IS typed by
-                // the owner's run; the lambda's own type arrives in S9.
-                if let Some(lambda_body) = def.body {
-                    self.infer_expr(body, lambda_body, &Expectation::None);
-                }
-                Ty::error()
-            }
+            Expr::Lambda(def) => self.infer_lambda(body, expr, def, expected),
             // Not yet implemented: visit children generically, record the
             // sentinel.
             _ => {
@@ -495,8 +504,7 @@ impl<'db> InferenceContext<'db> {
                 });
                 match annotation {
                     Some(type_ref) => {
-                        let lowered = self.lower.lower_type_ref(&self.type_refs.store, type_ref);
-                        let annotation_ty = self.instantiate_holes(&lowered);
+                        let annotation_ty = self.lower_body_annotation(type_ref);
                         if let Some(init) = initializer {
                             self.check_expr(body, init, &annotation_ty);
                         }
@@ -736,15 +744,12 @@ impl<'db> InferenceContext<'db> {
         ret
     }
 
-    /// The callee's (instantiated) function type. Direct function
-    /// references are instantiated here; everything else is whatever the
-    /// expression infers to.
-    ///
-    /// TODO(S9/S10): consolidate into a single `resolve_value_path`-style
-    /// entry (rust-analyzer's `infer/path.rs` shape) once function VALUES
-    /// outside call position (`let c: (int) -> int = foo;`) and method
-    /// callees exist - path resolution should have one home, not
-    /// per-construct special cases accreting here.
+    /// The callee's (instantiated) function type. A direct function
+    /// reference is the one case that does not go through
+    /// `resolve_value_path`: its instantiation reads the CALL site's
+    /// turbofish, which a bare path value does not have. Everything else is
+    /// whatever the expression infers to (method callees arrive with
+    /// S10/S11).
     fn infer_callee(&mut self, body: &ExprBody, call: ExprId, callee: ExprId) -> Ty {
         // A path that names a function (and is not shadowed by a local)
         // is a direct call.
@@ -755,29 +760,161 @@ impl<'db> InferenceContext<'db> {
         {
             let signature = function_signature(self.db, function);
             let instantiation = self.instantiation_args(call, &signature.generic_params);
-            let params: Box<[baml_type::interned::FunctionParam]> = signature
-                .params
-                .iter()
-                .map(|param| baml_type::interned::FunctionParam {
-                    name: Some(param.name.clone()),
-                    ty: substitute_params(&param.ty, &instantiation),
-                    mode: if param.has_default {
-                        baml_type::FunctionParamMode::Optional
-                    } else {
-                        baml_type::FunctionParamMode::Required
-                    },
-                })
-                .collect();
-            let fn_ty = Ty::intern(TyKind::Function {
-                params,
-                ret: substitute_params(&signature.ret, &instantiation),
-                throws: substitute_params(&signature.throws, &instantiation),
-                attr: TyAttr::default(),
-            });
+            let fn_ty = function_value_ty(&signature, &instantiation);
             self.result.type_of_expr.insert(callee, fn_ty.clone());
             return fn_ty;
         }
         self.infer_expr(body, callee, &Expectation::None)
+    }
+
+    /// The one home for value-position path typing (rust-analyzer's
+    /// `infer/path.rs` shape): a local/parameter root followed by field
+    /// accesses, or a package-level FUNCTION as a first-class value (`let c:
+    /// (x: int) -> int throws never = inc;`), instantiated with fresh
+    /// variables per generic param - only a call site's turbofish can spell
+    /// arguments explicitly, and the expectation's bounds resolve them here.
+    /// Constants and enum variants join as later slices land.
+    fn resolve_value_path(&mut self, expr: ExprId, segments: &[baml_type::Name]) -> Ty {
+        if self.path_resolves_locally(expr) {
+            // The root resolves through the semantic index; the remaining
+            // segments are member accesses (the AST cannot split `b.v` into
+            // base+member before name resolution).
+            let root_ty = self.infer_path(expr);
+            return segments
+                .iter()
+                .skip(1)
+                .fold(root_ty, |ty, segment| self.field_access(&ty, segment));
+        }
+        if let Some(baml_compiler2_hir::contributions::Definition::Function(function)) =
+            self.lower.resolve_value(segments)
+        {
+            let signature = function_signature(self.db, function);
+            let instantiation: Vec<Ty> = signature
+                .generic_params
+                .iter()
+                .map(|_| self.table.new_var_ty())
+                .collect();
+            return function_value_ty(&signature, &instantiation);
+        }
+        Ty::error()
+    }
+
+    /// Lambda typing (rust-analyzer's `deduce_closure_signature` shape).
+    /// Written signature slots win; unannotated slots fill from the expected
+    /// function type flowing down. An unannotated parameter with no
+    /// expectation has no source of truth: the Error sentinel (TIR's
+    /// `CannotInferLambdaParamType`; the diagnostic is S17's). An omitted
+    /// `throws` stays the honest Error sentinel until S12 infers effects.
+    fn infer_lambda(
+        &mut self,
+        body: &ExprBody,
+        expr: ExprId,
+        def: &baml_compiler2_ast::LambdaDef,
+        expected: &Expectation,
+    ) -> Ty {
+        let signature = self.type_refs.lambda_signatures.get(&expr).cloned();
+        let expected_fn = expected
+            .only_has_type()
+            .map(|ty| self.table.shallow_resolve(ty))
+            .and_then(|ty| match ty.kind() {
+                TyKind::Function { params, ret, .. } => Some((params.clone(), ret.clone())),
+                _ => None,
+            });
+
+        let param_tys: Vec<Ty> = def
+            .params
+            .iter()
+            .enumerate()
+            .map(|(index, _)| {
+                let annotated = signature
+                    .as_ref()
+                    .and_then(|sig| sig.params.get(index).copied().flatten());
+                match annotated {
+                    Some(type_ref) => self.lower_body_annotation(type_ref),
+                    None => expected_fn
+                        .as_ref()
+                        .and_then(|(params, _)| params.get(index))
+                        .map(|param| param.ty.clone())
+                        .unwrap_or_else(Ty::error),
+                }
+            })
+            .collect();
+
+        let annotated_ret = signature
+            .as_ref()
+            .and_then(|sig| sig.return_type)
+            .map(|type_ref| self.lower_body_annotation(type_ref));
+        let ret_expectation =
+            annotated_ret.or_else(|| expected_fn.as_ref().map(|(_, ret)| ret.clone()));
+
+        let throws_ty = signature
+            .as_ref()
+            .and_then(|sig| sig.throws)
+            .map(|type_ref| self.lower_body_annotation(type_ref))
+            .unwrap_or_else(Ty::error);
+
+        // The scope the lambda opened, by source range (restricted to the
+        // enclosing scope's subtree to disambiguate synthetic companions
+        // sharing a span). Registering the deduced params there is what
+        // makes the body's parameter references resolve.
+        let lambda_scope = self.source_map.as_ref().and_then(|map| {
+            let span = map.expr_span(expr);
+            match self.current_scope {
+                Some(scope) => self.index.lambda_scope_for_within(scope, span),
+                None => self.index.lambda_scope_for(span),
+            }
+        });
+        if let Some(scope) = lambda_scope {
+            self.lambda_params.insert(scope, param_tys.clone());
+        }
+
+        // The body types in the owner's run and table, but under the
+        // lambda's metadata scope (the semantic index keys its expressions
+        // there), and its divergence is the lambda's, not the owner's.
+        let ret_ty = match def.body {
+            Some(lambda_body) => {
+                let saved_scope = self.current_scope;
+                if lambda_scope.is_some() {
+                    self.current_scope = lambda_scope;
+                }
+                let saved_diverges = std::mem::replace(&mut self.diverges, Diverges::Maybe);
+                let ret_ty = match &ret_expectation {
+                    Some(ret) if !ret.has_error() => {
+                        self.check_expr(body, lambda_body, ret);
+                        ret.clone()
+                    }
+                    _ => {
+                        let body_ty = self.infer_expr(body, lambda_body, &Expectation::None);
+                        self.widen_fresh(&body_ty)
+                    }
+                };
+                self.diverges = saved_diverges;
+                self.current_scope = saved_scope;
+                ret_ty
+            }
+            None => ret_expectation.unwrap_or_else(Ty::error),
+        };
+
+        let params: Box<[baml_type::interned::FunctionParam]> = def
+            .params
+            .iter()
+            .zip(&param_tys)
+            .map(|(param, ty)| baml_type::interned::FunctionParam {
+                name: Some(param.name.clone()),
+                ty: ty.clone(),
+                mode: if param.default.is_some() {
+                    baml_type::FunctionParamMode::Optional
+                } else {
+                    baml_type::FunctionParamMode::Required
+                },
+            })
+            .collect();
+        Ty::intern(TyKind::Function {
+            params,
+            ret: ret_ty,
+            throws: throws_ty,
+            attr: TyAttr::default(),
+        })
     }
 
     /// The instantiation vector for a generic item at a use site: explicit
@@ -888,10 +1025,12 @@ impl<'db> InferenceContext<'db> {
     }
 
     /// Whether a path expression names a local binding or parameter (which
-    /// shadows any package-level name at a call site).
+    /// shadows any package-level name at a call site). Keyed under
+    /// `current_scope`: a lambda body's expressions live in the semantic
+    /// index under the LAMBDA's scope, not the owner's.
     fn path_resolves_locally(&self, expr: ExprId) -> bool {
-        self.owner_scope.is_some_and(|owner_scope| {
-            let key = ExprMetadataKey::new(ExprMetadataScope::Body(owner_scope), expr);
+        self.current_scope.is_some_and(|scope| {
+            let key = ExprMetadataKey::new(ExprMetadataScope::Body(scope), expr);
             matches!(
                 self.index.path_resolution(key),
                 Some(PathResolution::Local(_))
@@ -899,14 +1038,15 @@ impl<'db> InferenceContext<'db> {
         })
     }
 
-    /// Resolves a path expression to a local binding or an owner parameter
-    /// through the semantic index. Non-local names (functions, constants)
-    /// resolve in later slices.
+    /// Resolves a path expression to a local binding or a parameter through
+    /// the semantic index. Owner parameters come from the lowered signature;
+    /// lambda parameters from the signatures `infer_lambda` deduced.
+    /// Non-local names go through `resolve_value_path`.
     fn infer_path(&mut self, expr: ExprId) -> Ty {
-        let Some(owner_scope) = self.owner_scope else {
+        let Some(scope) = self.current_scope else {
             return Ty::error();
         };
-        let key = ExprMetadataKey::new(ExprMetadataScope::Body(owner_scope), expr);
+        let key = ExprMetadataKey::new(ExprMetadataScope::Body(scope), expr);
         match self.index.path_resolution(key) {
             Some(PathResolution::Local(binding_id)) => match binding_id.kind {
                 BindingKind::Local(_) => self
@@ -915,18 +1055,28 @@ impl<'db> InferenceContext<'db> {
                     .and_then(|binding| self.result.type_of_binding.get(&binding.pattern))
                     .cloned()
                     .unwrap_or_else(Ty::error),
-                // Owner parameters only: a lambda scope's parameters are
-                // typed by the S9 expectation machinery, not the owner's
-                // signature.
-                BindingKind::Parameter(param_index) if binding_id.scope == owner_scope => self
-                    .param_tys
-                    .get(param_index)
-                    .cloned()
-                    .unwrap_or_else(Ty::error),
-                BindingKind::Parameter(_) => Ty::error(),
+                BindingKind::Parameter(param_index) => {
+                    let params = if Some(binding_id.scope) == self.owner_scope {
+                        Some(&self.param_tys)
+                    } else {
+                        self.lambda_params.get(&binding_id.scope)
+                    };
+                    params
+                        .and_then(|params| params.get(param_index))
+                        .cloned()
+                        .unwrap_or_else(Ty::error)
+                }
             },
             Some(PathResolution::Unknown) | None => Ty::error(),
         }
+    }
+
+    /// One body-position annotation, lowered and hole-instantiated - the
+    /// single entry for every type written inside a body (let ascriptions,
+    /// lambda signature slots, turbofish go through `instantiation_args`).
+    fn lower_body_annotation(&mut self, type_ref: baml_compiler2_hir::type_ref::TypeRefId) -> Ty {
+        let lowered = self.lower.lower_type_ref(&self.type_refs.store, type_ref);
+        self.instantiate_holes(&lowered)
     }
 
     /// The `process_user_written_ty` funnel (rust-analyzer's discipline):
@@ -1041,6 +1191,31 @@ impl<'db> InferenceContext<'db> {
             }
         }
     }
+}
+
+/// A resolved function as a first-class value: its signature instantiated
+/// into an interned function type. Shared by direct calls (turbofish-aware
+/// instantiation) and value-position references (fresh-var instantiation).
+fn function_value_ty(signature: &crate::lower::FunctionSignature, instantiation: &[Ty]) -> Ty {
+    let params: Box<[baml_type::interned::FunctionParam]> = signature
+        .params
+        .iter()
+        .map(|param| baml_type::interned::FunctionParam {
+            name: Some(param.name.clone()),
+            ty: substitute_params(&param.ty, instantiation),
+            mode: if param.has_default {
+                baml_type::FunctionParamMode::Optional
+            } else {
+                baml_type::FunctionParamMode::Required
+            },
+        })
+        .collect();
+    Ty::intern(TyKind::Function {
+        params,
+        ret: substitute_params(&signature.ret, instantiation),
+        throws: substitute_params(&signature.throws, instantiation),
+        attr: TyAttr::default(),
+    })
 }
 
 /// A fresh literal widens to its base primitive at binding sites (the spec's
