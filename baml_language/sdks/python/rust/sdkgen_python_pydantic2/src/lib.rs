@@ -3644,6 +3644,166 @@ mod tests {
         );
     }
 
+    /// 13a §4.4 — a generic name that collides with an ordinary symbol in
+    /// the same leaf allocates a distinct `TypeVar` binding. The class keeps
+    /// the plain name, annotations follow the allocated one in both `.py`
+    /// and `.pyi`, and the runtime `type_params` key stays the BAML
+    /// spelling.
+    #[test]
+    fn typevar_binding_avoids_same_leaf_symbol_name() {
+        let mut pool: SymbolPool = HashMap::new();
+        let t_name = cg_name("user", &["lorem"], "T");
+        let box_name = cg_name("user", &["lorem"], "Box");
+        let echo_name = cg_name("user", &["lorem"], "echo");
+
+        pool.insert(t_name.clone(), class_at(t_name, "generic.baml", 0));
+        pool.insert(
+            box_name.clone(),
+            Symbol::Class(Class {
+                name: box_name,
+                generic_params: vec![BaseName::new("T")],
+                docstring: None,
+                properties: vec![ClassProperty {
+                    name: BaseName::new("item"),
+                    docstring: None,
+                    ty: type_var(BaseName::new("T")),
+                }],
+                static_methods: vec![],
+                instance_methods: vec![],
+                origin: origin("generic.baml", 100),
+            }),
+        );
+        pool.insert(
+            echo_name,
+            Symbol::Function(Function {
+                name: BaseName::new("echo"),
+                generic_params: vec![BaseName::new("T")],
+                docstring: None,
+                arguments: vec![FunctionArgument {
+                    name: BaseName::new("value"),
+                    docstring: None,
+                    ty: type_var(BaseName::new("T")),
+                    default: None,
+                }],
+                return_type: type_var(BaseName::new("T")),
+                throws: None,
+                watchers: vec![],
+                origin: origin("generic.baml", 200),
+            }),
+        );
+
+        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
+        let py = &out[&PathBuf::from("lorem/__init__.py")];
+        assert!(
+            py.contains("T_ = typing.TypeVar(\"T\")"),
+            "py missing allocated TypeVar binding:\n{py}",
+        );
+        assert!(
+            !py.contains("\nT = typing.TypeVar(\"T\")"),
+            "py TypeVar must not shadow the class T binding:\n{py}",
+        );
+        assert!(
+            py.contains("class T(pydantic.BaseModel):"),
+            "py should preserve the class binding name:\n{py}",
+        );
+        assert!(
+            py.contains("class Box(pydantic.BaseModel, typing.Generic[T_]):"),
+            "py generic base should reference the allocated TypeVar name:\n{py}",
+        );
+        assert!(
+            py.contains("    item: T_\n"),
+            "py field annotation should reference the allocated TypeVar name:\n{py}",
+        );
+        assert!(
+            py.contains("type_params=[\"T\"]"),
+            "runtime TypeVar keys should remain source generic names:\n{py}",
+        );
+
+        let pyi = &out[&PathBuf::from("lorem/__init__.pyi")];
+        assert!(
+            pyi.contains("T_ = typing.TypeVar(\"T\")"),
+            "pyi missing allocated TypeVar binding:\n{pyi}",
+        );
+        assert!(
+            !pyi.contains("\nT = typing.TypeVar(\"T\")"),
+            "pyi TypeVar must not shadow the class T binding:\n{pyi}",
+        );
+        assert!(
+            pyi.contains("class Box(pydantic.BaseModel, typing.Generic[T_]):"),
+            "pyi generic base should reference the allocated TypeVar name:\n{pyi}",
+        );
+        assert!(
+            pyi.contains("    item: T_\n"),
+            "pyi field annotation should reference the allocated TypeVar name:\n{pyi}",
+        );
+        assert!(
+            pyi.contains("def echo(value: T_, *, _types: dict[str, type]) -> T_: ..."),
+            "pyi function signature should reference the allocated TypeVar name:\n{pyi}",
+        );
+    }
+
+    /// 13a §4.4 — allocation keeps appending `_` until the binding is free,
+    /// so a generic name escapes a whole chain of taken symbols (`T`, `T_`)
+    /// and also escapes the leaf's module imports, which bind names no
+    /// symbol owns (`import typing`).
+    #[test]
+    fn typevar_binding_escapes_chained_and_import_collisions() {
+        let mut pool: SymbolPool = HashMap::new();
+        let t_name = cg_name("user", &["lorem"], "T");
+        let t_underscore_name = cg_name("user", &["lorem"], "T_");
+        let box_name = cg_name("user", &["lorem"], "Box");
+
+        pool.insert(t_name.clone(), class_at(t_name, "generic.baml", 0));
+        pool.insert(
+            t_underscore_name.clone(),
+            class_at(t_underscore_name, "generic.baml", 100),
+        );
+        pool.insert(
+            box_name.clone(),
+            Symbol::Class(Class {
+                name: box_name,
+                generic_params: vec![BaseName::new("T"), BaseName::new("typing")],
+                docstring: None,
+                properties: vec![
+                    ClassProperty {
+                        name: BaseName::new("item"),
+                        docstring: None,
+                        ty: type_var(BaseName::new("T")),
+                    },
+                    ClassProperty {
+                        name: BaseName::new("tag"),
+                        docstring: None,
+                        ty: type_var(BaseName::new("typing")),
+                    },
+                ],
+                static_methods: vec![],
+                instance_methods: vec![],
+                origin: origin("generic.baml", 200),
+            }),
+        );
+
+        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
+        for suffix in ["py", "pyi"] {
+            let leaf = &out[&PathBuf::from(format!("lorem/__init__.{suffix}"))];
+            assert!(
+                leaf.contains("T__ = typing.TypeVar(\"T\")"),
+                "{suffix}: T should skip past the T and T_ classes:\n{leaf}",
+            );
+            assert!(
+                leaf.contains("typing_ = typing.TypeVar(\"typing\")"),
+                "{suffix}: typing should not rebind the typing import:\n{leaf}",
+            );
+            assert!(
+                leaf.contains("class Box(pydantic.BaseModel, typing.Generic[T__, typing_]):"),
+                "{suffix}: generic bases should use the allocated names:\n{leaf}",
+            );
+            assert!(
+                leaf.contains("    item: T__\n") && leaf.contains("    tag: typing_\n"),
+                "{suffix}: field annotations should use the allocated names:\n{leaf}",
+            );
+        }
+    }
+
     /// 13a §4.4 — a generic free function emits its `TypeVar`s at the leaf
     /// and the .pyi signature uses bare `TypeVar` identifiers.
     #[test]

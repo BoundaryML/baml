@@ -5,6 +5,8 @@
 //! - `.humanlayer/tasks/clientpython/09b-codegen-rules.md` §6, §9
 //! - `.humanlayer/tasks/clientpython/11e-phaseg3-ty-translator.md`
 
+use std::collections::BTreeMap;
+
 use baml_base::{Literal, MediaKind};
 use baml_codegen_types::{Name, Ty};
 use indexmap::IndexMap;
@@ -38,6 +40,13 @@ pub(crate) struct TranslateCtx {
     /// runtime `.py` path, where callable types fall back to
     /// `typing.Callable[..., R]` (Protocol classes are stub-only).
     pub(crate) callback_protocols: Option<std::rc::Rc<IndexMap<Ty, String>>>,
+    /// Leaf-global mapping from BAML generic names to the module-level
+    /// `TypeVar` bindings allocated for them
+    /// (`LeafBody::allocated_typevars`). The two differ whenever the
+    /// generic name would shadow another module global, so annotations
+    /// must reference the allocated identifier rather than the source
+    /// spelling. `None` for leaves that declare no `TypeVar`s.
+    pub(crate) typevars: Option<std::rc::Rc<BTreeMap<String, String>>>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -82,7 +91,12 @@ pub(crate) fn translate_ty(ty: &Ty, ctx: &TranslateCtx) -> String {
                 head
             }
         }
-        Ty::TypeVar(name, _) => name.as_str().to_string(),
+        Ty::TypeVar(name, _) => ctx
+            .typevars
+            .as_ref()
+            .and_then(|map| map.get(name.as_str()))
+            .cloned()
+            .unwrap_or_else(|| name.as_str().to_string()),
         Ty::List(inner, _) => format!("typing.List[{}]", translate_ty(inner, ctx)),
         Ty::Map { key, value, .. } => {
             format!(
@@ -241,6 +255,7 @@ mod tests {
             self_ref: None,
             defer_name_refs: false,
             callback_protocols: None,
+            typevars: None,
         }
     }
 
@@ -253,6 +268,7 @@ mod tests {
             current_leaf: leaf(current_segments),
             defer_name_refs: false,
             callback_protocols: None,
+            typevars: None,
             self_ref: Some(SelfRef {
                 routed_leaf: leaf(self_segments),
                 bare_name: bare_name.to_string(),
@@ -272,6 +288,7 @@ mod tests {
             current_leaf: leaf(current_segments),
             defer_name_refs: true,
             callback_protocols: None,
+            typevars: None,
             self_ref: Some(SelfRef {
                 routed_leaf: leaf(self_segments),
                 bare_name: bare_name.to_string(),

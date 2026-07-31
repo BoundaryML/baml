@@ -779,6 +779,19 @@ fn lower_path(
         }
         return ty;
     }
+    // A bare in-scope generic parameter wins over a same-named concrete type:
+    // `class T { … }` must not capture the `T` of `function echo<T>(value: T)`.
+    // Checked ahead of `resolve_type` because that lookup would succeed and
+    // hand back the class. A qualified path (`pkg.T`) still reaches the class
+    // through the namespace below, and a parameterized spelling (`T<int>`)
+    // falls through — a parameter takes no arguments of its own.
+    if segments.len() == 1
+        && generic_args.is_empty()
+        && associated_type_bindings.is_empty()
+        && let Some(param) = ctx.resolve_type_var(&segments[0])
+    {
+        return Ty::TypeVar(param, TyAttr::default());
+    }
     match ctx.resolve_type(segments) {
         Ok(def) => {
             let short = segments.last().expect("non-empty path");
@@ -1003,7 +1016,11 @@ fn lower_path(
         }
         Err(suggestions) => {
             // A single-segment name that is an in-scope type variable
-            // (e.g. T, K, V) lowers to `Ty::TypeVar`, not an error.
+            // (e.g. T, K, V) lowers to `Ty::TypeVar`, not an error. Bare
+            // spellings short-circuit above; a parameterized one (`T<int>`)
+            // reaches here only once `resolve_type` has confirmed no generic
+            // type owns the name, and resolves to the parameter with its
+            // stray arguments dropped.
             if segments.len() == 1
                 && let Some(param) = ctx.resolve_type_var(&segments[0])
             {

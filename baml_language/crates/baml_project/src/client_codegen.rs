@@ -845,6 +845,43 @@ mod tests {
     }
 
     #[test]
+    fn test_bare_generic_param_shadows_same_named_class_in_codegen() {
+        let root = Path::new("/tmp/generic_param_shadows_class");
+        let mut db = ProjectDatabase::new();
+        db.set_project_root(root);
+        db.add_or_update_file(
+            root.join("main.baml").as_path(),
+            "class T { label string }\nfunction echo<T>(value: T) -> T {\n  return value\n}\n",
+        );
+
+        let diagnostics = crate::collect_compiler2_diagnostics(&db);
+        assert!(
+            diagnostics.is_empty(),
+            "expected no diagnostics, got: {diagnostics:#?}"
+        );
+
+        let pool = build_symbol_pool(&db);
+        let key = pool
+            .keys()
+            .find(|k| k.name().as_str() == "echo")
+            .expect("echo function missing from pool");
+        let cg::Symbol::Function(function) = &pool[key] else {
+            panic!("echo must be a Function");
+        };
+        assert_eq!(function.generic_params, vec![Name::new("T")]);
+        assert!(
+            matches!(&function.arguments[0].ty, cg::Ty::TypeVar(param, _) if param.as_str() == "T"),
+            "argument type should be the generic T, got: {:#?}",
+            function.arguments[0].ty,
+        );
+        assert!(
+            matches!(&function.return_type, cg::Ty::TypeVar(param, _) if param.as_str() == "T"),
+            "return type should be the generic T, got: {:#?}",
+            function.return_type,
+        );
+    }
+
+    #[test]
     fn test_llm_functions_and_companions_get_default_client_argument() {
         let root = Path::new("/tmp/llm_default_client_arg");
         let mut db = ProjectDatabase::new();

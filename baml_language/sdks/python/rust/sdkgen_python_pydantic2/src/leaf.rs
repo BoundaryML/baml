@@ -22,6 +22,29 @@ use crate::{
     translate_ty::{SelfRef, TranslateCtx, translate_ty},
 };
 
+/// Module globals a leaf binds on its own, independent of its symbols:
+/// the stdlib and third-party modules `stdlib_imports` (and the `.pyi`
+/// header) may `import`, the `_`-aliased `baml_bridge` runtime imports,
+/// and the `baml` builtins re-exports. Reserved by
+/// `LeafBody::allocated_typevars` so a `TypeVar` can never rebind one.
+///
+/// This is the union across both output files. Codegen's own stub-only
+/// `_Baml…` Protocol names are deliberately left out: they exist in
+/// `.pyi` alone, so reserving them would let the two files disagree on
+/// a `TypeVar` spelling.
+const MODULE_BINDINGS: &[&str] = &[
+    "BamlError",
+    "BamlPanic",
+    "UNSET",
+    "_BamlPyHandle",
+    "_define_function",
+    "enum",
+    "importlib",
+    "pydantic",
+    "typing",
+    "typing_extensions",
+];
+
 /// All symbols that land in one leaf's body, in final render order.
 /// Each entry keeps its `SortKey` so the renderer can group function
 /// fan-out siblings tightly (they share their parent's sort key)
@@ -422,6 +445,50 @@ impl LeafBody {
             }
         }
         set.into_iter().collect()
+    }
+
+    /// Allocate the module-level Python binding for each source-level
+    /// `TypeVar`. Keys stay the BAML generic name — that spelling is the
+    /// runtime's `type_params` key and never changes; values are the
+    /// emitted Python identifiers that annotations must reference.
+    ///
+    /// A generic parameter and an ordinary definition can share a name
+    /// (`class T { … }` alongside `function echo<T>(…)`), and so can a
+    /// generic parameter and an import (`typing`, a cross-leaf class).
+    /// Either collision would leave `T = typing.TypeVar("T")` shadowing
+    /// the binding declared above it, so allocation walks
+    /// [`MODULE_BINDINGS`] plus this leaf's own symbols and imports and
+    /// appends `_` until the name is free.
+    ///
+    /// The reserved set is deliberately independent of which file is
+    /// being rendered: `.py` and `.pyi` emit slightly different import
+    /// blocks, and they must still agree on every `TypeVar` spelling.
+    pub(crate) fn allocated_typevars(&self) -> BTreeMap<String, String> {
+        let sources = self.generic_typevars();
+        if sources.is_empty() {
+            return BTreeMap::new();
+        }
+
+        let mut reserved: BTreeSet<String> =
+            MODULE_BINDINGS.iter().map(|n| (*n).to_string()).collect();
+        reserved.extend(
+            self.symbols
+                .iter()
+                .map(|(sym, _)| sym.py_name().to_string()),
+        );
+        reserved.extend(self.all_rel_imports_py().into_iter().map(|r| r.anchor));
+
+        let mut out = BTreeMap::new();
+        for source in sources {
+            let mut emitted = source.clone();
+            while reserved.contains(&emitted) {
+                emitted.push('_');
+            }
+            reserved.insert(emitted.clone());
+            out.insert(source, emitted);
+        }
+
+        out
     }
 }
 
@@ -847,10 +914,22 @@ fn collect_alias_dependencies(
 
 /// Non-generic: `pydantic.BaseModel`.
 /// Generic: `pydantic.BaseModel, typing.Generic[T, …]`.
-fn render_class_bases(generic_params: &[String]) -> String {
+fn render_class_bases(
+    generic_params: &[String],
+    typevars: Option<&BTreeMap<String, String>>,
+) -> String {
     if generic_params.is_empty() {
         "pydantic.BaseModel".to_string()
     } else {
+        let generic_params = generic_params
+            .iter()
+            .map(|name| {
+                typevars
+                    .and_then(|map| map.get(name))
+                    .map(String::as_str)
+                    .unwrap_or(name.as_str())
+            })
+            .collect::<Vec<_>>();
         format!(
             "pydantic.BaseModel, typing.Generic[{}]",
             generic_params.join(", ")
@@ -1034,7 +1113,11 @@ fn build_method_line_views(
 }
 
 /// Render one symbol into its `.py` source block, including trailing `\n`.
-fn render_symbol(s: &EmittedSymbol, leaf: &LeafPath) -> String {
+fn render_symbol(
+    s: &EmittedSymbol,
+    leaf: &LeafPath,
+    typevars: Option<&std::rc::Rc<BTreeMap<String, String>>>,
+) -> String {
     use askama::Template;
     let ctx = TranslateCtx {
         current_leaf: leaf.clone(),
@@ -1043,6 +1126,7 @@ fn render_symbol(s: &EmittedSymbol, leaf: &LeafPath) -> String {
         // Runtime `.py`: callback Protocols are stub-only, so optional-arg
         // callables widen to `typing.Callable[..., R]` here.
         callback_protocols: None,
+        typevars: typevars.cloned(),
     };
 
     match s {
@@ -1078,7 +1162,7 @@ fn render_symbol(s: &EmittedSymbol, leaf: &LeafPath) -> String {
             );
             let mut out = ClassBodyPy {
                 py_name: c.py_name.clone(),
-                bases: render_class_bases(&c.generic_params),
+                bases: render_class_bases(&c.generic_params, typevars.map(std::rc::Rc::as_ref)),
                 docstring,
                 properties,
                 static_methods: build_method_line_views(&c.static_methods, &c.generic_params),
@@ -1120,7 +1204,7 @@ fn render_symbol(s: &EmittedSymbol, leaf: &LeafPath) -> String {
             out
         }
         EmittedSymbol::TypeAlias(a) => {
-            let mut out = render_type_alias(a, leaf);
+            let mut out = render_type_alias(a, leaf, typevars);
             out.push('\n');
             out
         }
@@ -1157,7 +1241,11 @@ fn render_symbol(s: &EmittedSymbol, leaf: &LeafPath) -> String {
 /// Recursive aliases (18c) render via `typing_extensions.TypeAliasType`
 /// with inner self-references quoted, so Pydantic resolves them
 /// through its JSON-schema definitions machinery instead of recursing.
-fn render_type_alias(a: &crate::emit::type_alias::PyTypeAlias, leaf: &LeafPath) -> String {
+fn render_type_alias(
+    a: &crate::emit::type_alias::PyTypeAlias,
+    leaf: &LeafPath,
+    typevars: Option<&std::rc::Rc<BTreeMap<String, String>>>,
+) -> String {
     use askama::Template;
 
     // Special-case the stdlib `baml.json.json` alias.  Its expanded form is
@@ -1203,6 +1291,7 @@ fn render_type_alias(a: &crate::emit::type_alias::PyTypeAlias, leaf: &LeafPath) 
         // with optional params widens to `typing.Callable[..., R]` rather than
         // referencing a stub-only Protocol.
         callback_protocols: None,
+        typevars: typevars.cloned(),
     };
     let rhs = translate_ty(&a.resolves_to, &ctx);
     if a.recursive {
@@ -1381,6 +1470,8 @@ pub(crate) fn render_leaf_body(body: &LeafBody, callable_child_names: &BTreeSet<
     }
 
     let mut out = String::new();
+    let typevars = body.allocated_typevars();
+    let typevars_rc = (!typevars.is_empty()).then(|| std::rc::Rc::new(typevars.clone()));
 
     let mut stdlibs = body.stdlib_imports();
     if !callable_child_names.is_empty() && !stdlibs.contains(&"importlib") {
@@ -1398,7 +1489,7 @@ pub(crate) fn render_leaf_body(body: &LeafBody, callable_child_names: &BTreeSet<
     // Generic functions emit `T = typing.TypeVar("T")` lines below; the
     // `Class`/`TypeAlias` rule in `stdlib_imports` doesn't catch the
     // function-only-but-generic case (e.g. stdlib `string.from<T>`).
-    if !body.generic_typevars().is_empty() && !stdlibs.contains(&"typing") {
+    if !typevars.is_empty() && !stdlibs.contains(&"typing") {
         stdlibs.push("typing");
     }
     let needs_pydantic = body.needs_pydantic();
@@ -1497,11 +1588,10 @@ pub(crate) fn render_leaf_body(body: &LeafBody, callable_child_names: &BTreeSet<
         );
     }
 
-    let typevars = body.generic_typevars();
     if !typevars.is_empty() {
         out.push_str("\n\n");
-        for tv in &typevars {
-            writeln!(out, "{tv} = typing.TypeVar(\"{tv}\")").unwrap();
+        for (source, emitted) in &typevars {
+            writeln!(out, "{emitted} = typing.TypeVar({})", py_string(source)).unwrap();
         }
     }
 
@@ -1509,7 +1599,7 @@ pub(crate) fn render_leaf_body(body: &LeafBody, callable_child_names: &BTreeSet<
 
     let mut prev: Option<(&SortKey, &EmittedSymbol)> = None;
     for (sym, key) in &body.symbols {
-        let body_text = render_symbol(sym, &body.leaf);
+        let body_text = render_symbol(sym, &body.leaf, typevars_rc.as_ref());
         if body_text.is_empty() {
             continue;
         }
@@ -1703,6 +1793,7 @@ fn render_symbol_pyi(
     s: &EmittedSymbol,
     leaf: &LeafPath,
     callback_protocols: Option<&std::rc::Rc<IndexMap<Ty, String>>>,
+    typevars: Option<&std::rc::Rc<BTreeMap<String, String>>>,
 ) -> String {
     use askama::Template;
     let ctx = TranslateCtx {
@@ -1710,6 +1801,7 @@ fn render_symbol_pyi(
         self_ref: None,
         defer_name_refs: false,
         callback_protocols: callback_protocols.cloned(),
+        typevars: typevars.cloned(),
     };
 
     match s {
@@ -1730,7 +1822,7 @@ fn render_symbol_pyi(
                 .collect();
             let mut out = ClassBodyPyi {
                 py_name: c.py_name.clone(),
-                bases: render_class_bases(&c.generic_params),
+                bases: render_class_bases(&c.generic_params, typevars.map(std::rc::Rc::as_ref)),
                 properties,
                 static_methods: build_method_block_views(&c.static_methods, &ctx),
                 instance_methods: build_method_block_views(&c.instance_methods, &ctx),
@@ -1765,7 +1857,7 @@ fn render_symbol_pyi(
         }
         EmittedSymbol::TypeAlias(a) => {
             // Type alias is identical between `.py` and `.pyi`.
-            let mut out = render_type_alias(a, leaf);
+            let mut out = render_type_alias(a, leaf, typevars);
             out.push('\n');
             out
         }
@@ -1884,18 +1976,24 @@ fn render_callable_child_protocol_pyi(
     child_body: &LeafBody,
     parent_leaf: &LeafPath,
     callback_protocols: Option<&std::rc::Rc<IndexMap<Ty, String>>>,
+    typevars: Option<&std::rc::Rc<BTreeMap<String, String>>>,
 ) -> String {
     let parent_ctx = TranslateCtx {
         current_leaf: parent_leaf.clone(),
         self_ref: None,
         defer_name_refs: false,
         callback_protocols: callback_protocols.cloned(),
+        typevars: typevars.cloned(),
     };
+    // The child's methods render *into the parent's* `.pyi`, so they
+    // resolve against the parent's `TypeVar` bindings — the child leaf's
+    // own allocation belongs to the child file and isn't in scope here.
     let child_ctx = TranslateCtx {
         current_leaf: child_body.leaf.clone(),
         self_ref: None,
         defer_name_refs: false,
         callback_protocols: callback_protocols.cloned(),
+        typevars: typevars.cloned(),
     };
     let protocol_name = callable_child_protocol_name(name);
     let mut out = format!("class {protocol_name}(typing.Protocol):\n");
@@ -2072,6 +2170,8 @@ pub(crate) fn render_leaf_body_pyi(
     }
 
     let mut out = String::new();
+    let typevars = body.allocated_typevars();
+    let typevars_rc = (!typevars.is_empty()).then(|| std::rc::Rc::new(typevars.clone()));
 
     let needs_enum = body
         .symbols
@@ -2144,11 +2244,10 @@ pub(crate) fn render_leaf_body_pyi(
 
     // The `.pyi` re-declares TypeVars because stubs don't import from
     // sibling `.py` files.
-    let typevars = body.generic_typevars();
     if !typevars.is_empty() {
         out.push_str("\n\n");
-        for tv in &typevars {
-            writeln!(out, "{tv} = typing.TypeVar(\"{tv}\")").unwrap();
+        for (source, emitted) in &typevars {
+            writeln!(out, "{emitted} = typing.TypeVar({})", py_string(source)).unwrap();
         }
     }
 
@@ -2181,6 +2280,7 @@ pub(crate) fn render_leaf_body_pyi(
             self_ref: None,
             defer_name_refs: false,
             callback_protocols: Some(map.clone()),
+            typevars: typevars_rc.clone(),
         };
         for (ty, _base) in &protocol_tys {
             if let Ty::Function { params, ret, .. } = ty {
@@ -2204,6 +2304,7 @@ pub(crate) fn render_leaf_body_pyi(
                 child_body,
                 &body.leaf,
                 callback_protocols.as_ref(),
+                typevars_rc.as_ref(),
             ));
         }
     }
@@ -2218,7 +2319,12 @@ pub(crate) fn render_leaf_body_pyi(
         {
             continue;
         }
-        let body_text = render_symbol_pyi(sym, &body.leaf, callback_protocols.as_ref());
+        let body_text = render_symbol_pyi(
+            sym,
+            &body.leaf,
+            callback_protocols.as_ref(),
+            typevars_rc.as_ref(),
+        );
         if body_text.is_empty() {
             continue;
         }
