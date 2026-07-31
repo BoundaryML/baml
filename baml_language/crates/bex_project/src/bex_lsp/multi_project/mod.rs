@@ -1995,7 +1995,7 @@ impl super::BexLsp for BexMulitProject {
             .control_flow_graph_for_generation(generation, function_name)
     }
 
-    fn request_control_flow_graph(&self, function_name: &str) {
+    fn request_control_flow_graph(&self, function_name: &str, request_id: Option<u32>) {
         let graph = self.ast_control_flow_graph(function_name);
         let graph = graph.map(|g| {
             baml_compiler2_visualization::control_flow::prepare_control_flow_graph_for_visualization(&g)
@@ -2005,6 +2005,7 @@ impl super::BexLsp for BexMulitProject {
             crate::bex_lsp::PlaygroundNotification::ControlFlowGraphResult {
                 function_name: function_name.to_string(),
                 graph: graph_json,
+                request_id,
             },
         );
     }

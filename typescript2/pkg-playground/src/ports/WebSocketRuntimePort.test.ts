@@ -234,6 +234,56 @@ describe('WebSocketRuntimePort handshake and command gating', () => {
   });
 });
 
+describe('WebSocketRuntimePort control-flow graph correlation', () => {
+  afterEach(() => {
+    FakeWebSocket.instances = [];
+    vi.unstubAllGlobals();
+  });
+
+  it('preserves the optional request ID in both directions', () => {
+    vi.stubGlobal('WebSocket', FakeWebSocket);
+    const port = new WebSocketRuntimePort('ws://playground.test/api/ws');
+    const socket = FakeWebSocket.instances[0]!;
+    const received: WorkerOutMessage[] = [];
+    port.onMessage((message) => received.push(message));
+
+    socket.open();
+    compatibleHello(socket);
+    socket.sent.length = 0;
+
+    port.postMessage({
+      type: 'requestControlFlowGraph',
+      project: '/project',
+      functionName: 'Extract',
+      requestId: 17,
+    });
+    expect(socket.parsedSent()).toEqual([
+      {
+        type: 'requestControlFlowGraph',
+        project: '/project',
+        functionName: 'Extract',
+        requestId: 17,
+      },
+    ]);
+
+    socket.receive({
+      type: 'controlFlowGraphResult',
+      functionName: 'Extract',
+      graph: null,
+      requestId: 17,
+    });
+    expect(received).toEqual([
+      {
+        type: 'controlFlowGraphResult',
+        functionName: 'Extract',
+        graph: null,
+        requestId: 17,
+      },
+    ]);
+    port.dispose();
+  });
+});
+
 describe('WebSocketRuntimePort project-runtime lease', () => {
   afterEach(() => {
     FakeWebSocket.instances = [];

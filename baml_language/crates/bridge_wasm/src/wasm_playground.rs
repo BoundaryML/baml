@@ -259,6 +259,8 @@ pub enum PlaygroundNotification {
     ControlFlowGraphResult {
         function_name: String,
         graph: Option<serde_json::Value>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        request_id: Option<u32>,
     },
     #[serde(rename_all = "camelCase")]
     CursorContext { context: serde_json::Value },
@@ -428,9 +430,11 @@ impl From<bex_project::PlaygroundNotification> for PlaygroundNotification {
             bex_project::PlaygroundNotification::ControlFlowGraphResult {
                 function_name,
                 graph,
+                request_id,
             } => PlaygroundNotification::ControlFlowGraphResult {
                 function_name,
                 graph,
+                request_id,
             },
             bex_project::PlaygroundNotification::CursorContext { context } => {
                 PlaygroundNotification::CursorContext { context }

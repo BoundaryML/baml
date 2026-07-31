@@ -288,6 +288,8 @@ pub enum PlaygroundNotification {
     ControlFlowGraphResult {
         function_name: String,
         graph: Option<serde_json::Value>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        request_id: Option<u32>,
     },
     #[serde(rename_all = "camelCase")]
     CursorContext { context: serde_json::Value },
@@ -406,7 +408,7 @@ pub trait BexLsp: Send + Sync + notification::BexLspNotification + request::BexL
     ///
     /// Builds the graph and sends it back via the playground notification
     /// callback as a `PlaygroundNotification::ControlFlowGraphResult`.
-    fn request_control_flow_graph(&self, function_name: &str);
+    fn request_control_flow_graph(&self, function_name: &str, request_id: Option<u32>);
 
     /// Get cursor context for playground navigation.
     ///

@@ -383,6 +383,7 @@ export class WebSocketRuntimePort implements RuntimePort {
           type: 'requestControlFlowGraph',
           project: msg.project,
           functionName: msg.functionName,
+          ...(msg.requestId !== undefined ? { requestId: msg.requestId } : {}),
         };
       case 'cursorPosition':
         return {
@@ -578,6 +579,7 @@ export class WebSocketRuntimePort implements RuntimePort {
           graph: (raw.graph ?? null) as
             | import('../worker-protocol').ControlFlowGraph
             | null,
+          ...(raw.requestId !== undefined ? { requestId: raw.requestId } : {}),
         };
       case 'cursorContext':
         return {

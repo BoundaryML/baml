@@ -400,6 +400,9 @@ function onPlaygroundNotification(notification: PlaygroundNotification): void {
         type: "controlFlowGraphResult",
         functionName: notification.functionName,
         graph: notification.graph ?? null,
+        ...(notification.requestId !== undefined
+          ? { requestId: notification.requestId }
+          : {}),
       });
       break;
     case "cursorContext":
@@ -1036,7 +1039,11 @@ self.onmessage = async (event: MessageEvent) => {
       return;
 
     case "requestControlFlowGraph":
-      runtime?.requestControlFlowGraph(msg.project, msg.functionName);
+      runtime?.requestControlFlowGraph(
+        msg.project,
+        msg.functionName,
+        msg.requestId,
+      );
       return;
 
     case "cursorPosition":

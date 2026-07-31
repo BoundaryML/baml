@@ -180,6 +180,7 @@ export type PlaygroundNotification =
       type: 'controlFlowGraphResult';
       functionName: string;
       graph: ControlFlowGraph | null;
+      requestId?: number;
     }
   | { type: 'cursorContext'; context: CursorContext }
   | {
@@ -703,6 +704,7 @@ export type WebSocketOutMessage =
       type: 'controlFlowGraphResult';
       functionName: string;
       graph: ControlFlowGraph | null;
+      requestId?: number;
     }
   | { type: 'cursorContext'; context: CursorContext };
 
@@ -793,7 +795,12 @@ export type WebSocketInMessage =
       incarnation?: number;
     }
   | { type: 'requestCollectTests'; project: string }
-  | { type: 'requestControlFlowGraph'; project: string; functionName: string }
+  | {
+      type: 'requestControlFlowGraph';
+      project: string;
+      functionName: string;
+      requestId?: number;
+    }
   | { type: 'cursorPosition'; file: string; line: number; column: number };
 
 // ---------------------------------------------------------------------------
@@ -849,6 +856,7 @@ export type WorkerOutMessage =
       type: 'controlFlowGraphResult';
       functionName: string;
       graph: ControlFlowGraph | null;
+      requestId?: number;
     }
   | { type: 'cursorContext'; context: CursorContext }
   | { type: 'logDecorations'; decorations: LogDecoration[] }
@@ -942,7 +950,12 @@ export type WorkerInMessage =
       project: string;
       incarnation?: number;
     }
-  | { type: 'requestControlFlowGraph'; project: string; functionName: string }
+  | {
+      type: 'requestControlFlowGraph';
+      project: string;
+      functionName: string;
+      requestId?: number;
+    }
   | { type: 'cursorPosition'; file: string; line: number; column: number }
   | { type: 'requestCollectTests'; project: string }
   | {
