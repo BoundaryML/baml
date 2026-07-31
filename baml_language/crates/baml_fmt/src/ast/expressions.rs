@@ -1565,6 +1565,42 @@ impl Printable for IfLetExpr {
     }
 }
 
+/// An element of a match/catch arm list: an arm, or a `//#` header comment
+/// appearing between arms. Headers are legal arm-list elements (the parser
+/// consumes them there, mirroring statement blocks), so the strong AST must
+/// carry them through formatting.
+#[derive(Debug)]
+pub enum ArmListItem<A> {
+    Arm(A),
+    Header(t::HeaderComment),
+}
+
+impl<A: Printable> Printable for ArmListItem<A> {
+    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        match self {
+            Self::Arm(arm) => arm.print(shape, printer),
+            Self::Header(header) => {
+                printer.print_raw_token(header);
+                PrintInfo::default_single_line()
+            }
+        }
+    }
+
+    fn leftmost_token(&self) -> TextRange {
+        match self {
+            Self::Arm(arm) => arm.leftmost_token(),
+            Self::Header(header) => header.span(),
+        }
+    }
+
+    fn rightmost_token(&self) -> TextRange {
+        match self {
+            Self::Arm(arm) => arm.rightmost_token(),
+            Self::Header(header) => header.span(),
+        }
+    }
+}
+
 /// Corresponds to a [`SyntaxKind::MATCH_EXPR`] node.
 #[derive(Debug)]
 pub struct MatchExpr {
@@ -1573,7 +1609,7 @@ pub struct MatchExpr {
     pub scrutinee: Box<Expression>,
     pub close_paren: t::RParen,
     pub open_brace: t::LBrace,
-    pub arms: Vec<MatchArm>,
+    pub arms: Vec<ArmListItem<MatchArm>>,
     pub close_brace: t::RBrace,
 }
 
@@ -1612,11 +1648,14 @@ impl FromCST for MatchExpr {
                 }
                 SyntaxKind::MATCH_ARM => {
                     let arm = MatchArm::from_cst(elem)?;
-                    arms.push(arm);
+                    arms.push(ArmListItem::Arm(arm));
+                }
+                SyntaxKind::HEADER_COMMENT => {
+                    arms.push(ArmListItem::Header(t::HeaderComment::from_cst(elem)?));
                 }
                 _ => {
                     return Err(StrongAstError::UnexpectedKindDesc {
-                        expected_desc: "MATCH_ARM or R_BRACE".into(),
+                        expected_desc: "MATCH_ARM, HEADER_COMMENT, or R_BRACE".into(),
                         found: elem.kind(),
                         at: elem.text_range(),
                     });
@@ -2178,7 +2217,7 @@ pub struct CatchClause {
     pub stack_trace_binding: Option<(t::Comma, CatchBinding)>,
     pub close_paren: t::RParen,
     pub open_brace: t::LBrace,
-    pub arms: Vec<CatchArm>,
+    pub arms: Vec<ArmListItem<CatchArm>>,
     pub close_brace: t::RBrace,
 }
 
@@ -2216,10 +2255,13 @@ impl FromCST for CatchClause {
             };
             match elem.kind() {
                 SyntaxKind::R_BRACE => break t::RBrace::from_cst(elem)?,
-                SyntaxKind::CATCH_ARM => arms.push(CatchArm::from_cst(elem)?),
+                SyntaxKind::CATCH_ARM => arms.push(ArmListItem::Arm(CatchArm::from_cst(elem)?)),
+                SyntaxKind::HEADER_COMMENT => {
+                    arms.push(ArmListItem::Header(t::HeaderComment::from_cst(elem)?));
+                }
                 found => {
                     return Err(StrongAstError::UnexpectedKindDesc {
-                        expected_desc: "CATCH_ARM or R_BRACE".into(),
+                        expected_desc: "CATCH_ARM, HEADER_COMMENT, or R_BRACE".into(),
                         found,
                         at: elem.text_range(),
                     });

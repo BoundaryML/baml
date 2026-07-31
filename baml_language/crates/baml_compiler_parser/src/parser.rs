@@ -4851,19 +4851,28 @@ impl<'a> Parser<'a> {
             if p.at(TokenKind::LBrace) {
                 p.bump(); // {
 
-                // Parse at least one arm
-                if !p.at(TokenKind::RBrace) {
-                    p.parse_match_arm();
-
-                    // Parse additional arms
-                    while !p.at(TokenKind::RBrace) && !p.at_end() {
-                        // Error recovery: if we see a top-level keyword, assume we missed a closing brace
-                        if p.at_top_level_keyword_except_client() {
-                            break;
-                        }
-                        p.parse_match_arm();
+                let mut parsed_any_arm = false;
+                while !p.at(TokenKind::RBrace) && !p.at_end() {
+                    // Error recovery: if we see a top-level keyword, assume we missed a closing brace
+                    if p.at_top_level_keyword_except_client() {
+                        break;
                     }
-                } else {
+                    // Handle MDX-style header comments (//#...) between arms,
+                    // mirroring the statement-block loop.
+                    if p.at_header_comment_start() {
+                        p.consume_header_comment();
+                        continue;
+                    }
+                    let before = p.current;
+                    p.parse_match_arm();
+                    parsed_any_arm = true;
+                    // An arm that consumed nothing already emitted an error;
+                    // force progress so the loop cannot spin forever.
+                    if p.current == before {
+                        p.bump();
+                    }
+                }
+                if !parsed_any_arm {
                     p.error_unexpected_token("at least one match arm".to_string());
                 }
 
@@ -5506,16 +5515,29 @@ impl<'a> Parser<'a> {
 
             p.bump(); // {
 
-            if p.at(TokenKind::RBrace) {
-                p.error_unexpected_token("at least one catch arm".to_string());
-            } else {
-                p.parse_catch_arm();
-                while !p.at(TokenKind::RBrace) && !p.at_end() {
-                    if p.at_top_level_keyword_except_client() {
-                        break;
-                    }
-                    p.parse_catch_arm();
+            let mut parsed_any_arm = false;
+            while !p.at(TokenKind::RBrace) && !p.at_end() {
+                if p.at_top_level_keyword_except_client() {
+                    break;
                 }
+                // Handle MDX-style header comments (//#...) between arms,
+                // mirroring the statement-block loop.
+                if p.at_header_comment_start() {
+                    p.consume_header_comment();
+                    continue;
+                }
+                let before = p.current;
+                p.parse_catch_arm();
+                parsed_any_arm = true;
+                // An arm that consumed nothing already emitted an error (e.g.
+                // recovery bailed before advancing); force progress so the
+                // loop cannot spin forever.
+                if p.current == before {
+                    p.bump();
+                }
+            }
+            if !parsed_any_arm {
+                p.error_unexpected_token("at least one catch arm".to_string());
             }
 
             p.expect(TokenKind::RBrace);
