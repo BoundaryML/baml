@@ -319,6 +319,48 @@ impl<'db> LowerCtx<'db> {
         None
     }
 
+    /// Value-namespace resolution, mirroring [`LowerCtx::resolve_type`]'s
+    /// algorithm over `lookup_value` (functions, clients, lets). No
+    /// `$stream` fallback: companions are functions with their own names.
+    pub fn resolve_value(&self, segments: &[Name]) -> Option<Definition<'db>> {
+        let (item, seg_ns) = segments.split_last()?;
+        let relative_ns: Vec<Name> = if self.ns_context.is_empty() {
+            seg_ns.to_vec()
+        } else {
+            self.ns_context.iter().chain(seg_ns).cloned().collect()
+        };
+        if let Some(def) = self.package_items.lookup_value(&relative_ns, item) {
+            return Some(def);
+        }
+        if segments.len() >= 2 {
+            let prefix_ns = &segments[1..segments.len() - 1];
+            if segments[0].as_str() == "root" {
+                if let Some(def) = self.package_items.lookup_value(prefix_ns, item) {
+                    return Some(def);
+                }
+            } else {
+                let dep_items = baml_compiler2_ppir::package_items(
+                    self.db,
+                    PackageId::new(self.db, segments[0].clone()),
+                );
+                if let Some(def) = dep_items.lookup_value(prefix_ns, item) {
+                    return Some(def);
+                }
+            }
+        }
+        None
+    }
+
+    /// Type-namespace resolution, exposed for constructor and member typing.
+    pub fn resolve_type_definition(&self, segments: &[Name]) -> Option<Definition<'db>> {
+        self.resolve_type(segments)
+    }
+
+    /// [`LowerCtx::qualify`], exposed for constructor typing.
+    pub fn qualify_definition(&self, def: Definition<'db>, short: &Name) -> TypeName {
+        self.qualify(def, short)
+    }
+
     /// TIR's `qualify_def`: the qualified name comes from the DEFINITION's
     /// file, while the short name is what the user wrote (which is what
     /// keeps `$stream` companions distinct from their base).
@@ -326,6 +368,25 @@ impl<'db> LowerCtx<'db> {
         let info = baml_compiler2_hir::file_package::file_package(self.db, def.file(self.db));
         TypeName::new(info.package, info.namespace_path, short.clone())
     }
+}
+
+/// Substitutes generic parameters by FRAME INDEX: `TypeVar(p)` becomes
+/// `args[p.index()]` (absent slots stay symbolic). The instantiation fold
+/// for call sites and constructors; flag-short-circuited.
+pub fn substitute_params(ty: &baml_type::interned::Ty, args: &[baml_type::interned::Ty]) -> Ty {
+    use baml_type::interned::TypeFlags;
+    if !ty.flags().contains(TypeFlags::HAS_TYPEVAR) {
+        return ty.clone();
+    }
+    if let TyKind::TypeVar(param, _) = ty.kind()
+        && let Some(replacement) = args.get(param.index() as usize)
+    {
+        return replacement.clone();
+    }
+    Ty::intern(
+        ty.kind()
+            .map_children(|child| substitute_params(child, args)),
+    )
 }
 
 /// Generic-arity recovery without diagnostics (S17): extras truncated,

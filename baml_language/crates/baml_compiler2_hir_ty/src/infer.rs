@@ -37,7 +37,9 @@ use rustc_hash::FxHashMap;
 use crate::{
     facts::Facts,
     infer::unify::InferenceTable,
-    lower::{LowerCtx, function_generic_frame, function_signature, lower_ctx_for_file},
+    lower::{
+        LowerCtx, function_generic_frame, function_signature, lower_ctx_for_file, substitute_params,
+    },
 };
 
 /// Inference side tables for one body owner, keyed by arena ids, mirroring
@@ -51,6 +53,10 @@ use crate::{
 pub struct InferenceResult {
     pub type_of_expr: FxHashMap<ExprId, Ty>,
     pub type_of_binding: FxHashMap<PatId, Ty>,
+    /// Definite check failures, keyed by the checked expression:
+    /// `(expected, actual)`. Recorded always (rust-analyzer's discipline);
+    /// rendered as diagnostics in S17.
+    pub type_mismatches: FxHashMap<ExprId, (Ty, Ty)>,
 }
 
 /// Infers types for one body owner (function or top-level let), keyed by the
@@ -173,6 +179,7 @@ impl Expectation {
 /// One inference run over one body owner: the table, the accumulating
 /// result, and the bidirectional expression walk.
 struct InferenceContext<'db> {
+    db: &'db dyn baml_compiler2_ppir::Db,
     facts: Facts<'db>,
     index: &'db FileSemanticIndex<'db>,
     /// The owner body's scope: the key half mapping this body's `ExprId`s
@@ -210,6 +217,7 @@ impl<'db> InferenceContext<'db> {
         type_refs: Arc<BodyTypeRefs>,
     ) -> InferenceContext<'db> {
         InferenceContext {
+            db,
             facts: Facts::new(db),
             index,
             owner_scope,
@@ -246,10 +254,15 @@ impl<'db> InferenceContext<'db> {
     }
 
     /// Checking mode: infer with the expectation, then constrain -
-    /// `Sub(actual, expected)`, discharged eagerly.
+    /// `Sub(actual, expected)`, discharged eagerly. Definite failures are
+    /// recorded against the checked expression, never dropped.
     fn check_expr(&mut self, body: &ExprBody, expr: ExprId, expected: &Ty) -> Ty {
         let ty = self.infer_expr(body, expr, &Expectation::has_type(expected.clone()));
-        self.sub(&ty, expected);
+        if !self.sub(&ty, expected) {
+            self.result
+                .type_mismatches
+                .insert(expr, (expected.clone(), ty.clone()));
+        }
         ty
     }
 
@@ -261,7 +274,16 @@ impl<'db> InferenceContext<'db> {
                 TyAttr::default(),
             )),
             Expr::Null => Ty::null(),
-            Expr::Path(_) => self.infer_path(expr),
+            Expr::Path(segments) => {
+                // The root resolves through the semantic index; the
+                // remaining segments are member accesses (the AST cannot
+                // split `b.v` into base+member before name resolution).
+                let root_ty = self.infer_path(expr);
+                segments
+                    .iter()
+                    .skip(1)
+                    .fold(root_ty, |ty, segment| self.field_access(&ty, segment))
+            }
             Expr::Block { stmts, tail_expr } => {
                 let entry_diverges = self.diverges;
                 for stmt in stmts {
@@ -386,6 +408,17 @@ impl<'db> InferenceContext<'db> {
                 self.diverges = Diverges::Always;
                 Ty::never()
             }
+            Expr::Call { callee, args, .. } => self.infer_call(body, expr, *callee, args),
+            Expr::Object {
+                type_name,
+                fields,
+                spreads,
+                ..
+            } => self.infer_object(body, expr, type_name, fields, spreads),
+            Expr::MemberAccess { base, member } => {
+                let base_ty = self.infer_expr(body, *base, &Expectation::None);
+                self.field_access(&base_ty, member)
+            }
             Expr::Lambda(def) => {
                 // A lambda's body is not a traversal child but IS typed by
                 // the owner's run; the lambda's own type arrives in S9.
@@ -499,13 +532,13 @@ impl<'db> InferenceContext<'db> {
     /// `Sub(actual, expected)` - eager discharge per the settled design:
     /// invariant same-heads decay to `Eq`; function types relate contra/co;
     /// var-headed pairs deposit bounds; ground pairs ask the canonical
-    /// oracle; the irreducible residue defers to finish. Failures become
-    /// diagnostics in S17; until then they are silently conservative.
-    fn sub(&mut self, actual: &Ty, expected: &Ty) {
+    /// oracle; the irreducible residue defers to finish. Returns `false` on
+    /// a DEFINITE mismatch (callers record it); undecided is `true`.
+    fn sub(&mut self, actual: &Ty, expected: &Ty) -> bool {
         let actual = self.table.shallow_resolve(actual);
         let expected = self.table.shallow_resolve(expected);
         if actual == expected || actual.has_error() || expected.has_error() {
-            return;
+            return true;
         }
         match (actual.kind(), expected.kind()) {
             // A variable flowing into a context: upper bound. A value
@@ -519,9 +552,11 @@ impl<'db> InferenceContext<'db> {
                 {
                     self.table.add_lower_bound(*other, actual.clone());
                 }
+                true
             }
             (_, TyKind::Infer { var: Some(var), .. }) => {
                 self.table.add_lower_bound(*var, actual.clone());
+                true
             }
             // Invariant constructors: Sub decays to Eq of the pieces.
             (TyKind::Class(a_name, a_args, _), TyKind::Class(b_name, b_args, _))
@@ -529,13 +564,15 @@ impl<'db> InferenceContext<'db> {
             {
                 let pairs: Vec<(Ty, Ty)> =
                     a_args.iter().cloned().zip(b_args.iter().cloned()).collect();
+                let mut ok = true;
                 for (a, b) in pairs {
-                    let _ = self.table.unify(&a, &b);
+                    ok &= self.table.unify(&a, &b).is_ok();
                 }
+                ok
             }
             (TyKind::List(a, _), TyKind::List(b, _)) => {
                 let (a, b) = (a.clone(), b.clone());
-                let _ = self.table.unify(&a, &b);
+                self.table.unify(&a, &b).is_ok()
             }
             (
                 TyKind::Map {
@@ -546,13 +583,15 @@ impl<'db> InferenceContext<'db> {
                 },
             ) => {
                 let (ak, av, bk, bv) = (ak.clone(), av.clone(), bk.clone(), bv.clone());
-                let _ = self.table.unify(&ak, &bk);
-                let _ = self.table.unify(&av, &bv);
+                let key_ok = self.table.unify(&ak, &bk).is_ok();
+                let value_ok = self.table.unify(&av, &bv).is_ok();
+                key_ok && value_ok
             }
             (TyKind::Future(av, ae, _), TyKind::Future(bv, be, _)) => {
                 let (av, ae, bv, be) = (av.clone(), ae.clone(), bv.clone(), be.clone());
-                let _ = self.table.unify(&av, &bv);
-                let _ = self.table.unify(&ae, &be);
+                let value_ok = self.table.unify(&av, &bv).is_ok();
+                let error_ok = self.table.unify(&ae, &be).is_ok();
+                value_ok && error_ok
             }
             // Function types: contravariant params, covariant ret/throws.
             (
@@ -576,11 +615,13 @@ impl<'db> InferenceContext<'db> {
                     .collect();
                 let rets = (a_ret.clone(), b_ret.clone());
                 let throws = (a_throws.clone(), b_throws.clone());
+                let mut ok = true;
                 for (b, a) in param_pairs {
-                    self.sub(&b, &a);
+                    ok &= self.sub(&b, &a);
                 }
-                self.sub(&rets.0, &rets.1);
-                self.sub(&throws.0, &throws.1);
+                ok &= self.sub(&rets.0, &rets.1);
+                ok &= self.sub(&throws.0, &throws.1);
+                ok
             }
             _ => {
                 // Ground on both sides: one oracle verdict. Otherwise the
@@ -588,9 +629,10 @@ impl<'db> InferenceContext<'db> {
                 let actual = self.table.resolve_completely(&actual);
                 let expected = self.table.resolve_completely(&expected);
                 if !actual.has_infer() && !expected.has_infer() {
-                    let _ = is_subtype_interned(&actual, &expected, &self.facts);
+                    is_subtype_interned(&actual, &expected, &self.facts)
                 } else {
                     self.deferred_subs.push((actual, expected));
+                    true
                 }
             }
         }
@@ -647,6 +689,208 @@ impl<'db> InferenceContext<'db> {
             }
             _ => ty.clone(),
         }
+    }
+
+    /// Call typing: direct calls to resolved functions instantiate the
+    /// signature (explicit turbofish args, else fresh variables per generic
+    /// param - the equality regime resolves them from argument bounds);
+    /// calls through function-typed VALUES check against the value's type.
+    /// Two argument passes: non-lambda args first, so lambda signatures can
+    /// be deduced from already-resolved param types (S9).
+    fn infer_call(
+        &mut self,
+        body: &ExprBody,
+        call: ExprId,
+        callee: ExprId,
+        args: &[baml_compiler2_ast::CallArg],
+    ) -> Ty {
+        let callee_fn_ty = self.infer_callee(body, call, callee);
+        let TyKind::Function { params, ret, .. } = callee_fn_ty.kind() else {
+            // Not callable (or not yet typed): visit the args, sentinel out.
+            for arg in args {
+                self.infer_expr(body, arg.expr, &Expectation::None);
+            }
+            return Ty::error();
+        };
+        let params: Vec<Ty> = params.iter().map(|param| param.ty.clone()).collect();
+        let ret = ret.clone();
+        let is_lambda_arg =
+            |arg: &baml_compiler2_ast::CallArg| matches!(body.exprs[arg.expr], Expr::Lambda(_));
+        for pass in 0..2 {
+            for (index, arg) in args.iter().enumerate() {
+                if (pass == 0) == is_lambda_arg(arg) {
+                    continue;
+                }
+                match params.get(index) {
+                    Some(param_ty) => {
+                        let param_ty = param_ty.clone();
+                        self.check_expr(body, arg.expr, &param_ty);
+                    }
+                    None => {
+                        // Extra argument: the arity diagnostic is S17's.
+                        self.infer_expr(body, arg.expr, &Expectation::None);
+                    }
+                }
+            }
+        }
+        ret
+    }
+
+    /// The callee's (instantiated) function type. Direct function
+    /// references are instantiated here; everything else is whatever the
+    /// expression infers to.
+    fn infer_callee(&mut self, body: &ExprBody, call: ExprId, callee: ExprId) -> Ty {
+        // A path that names a function (and is not shadowed by a local)
+        // is a direct call.
+        if let Expr::Path(segments) = &body.exprs[callee]
+            && !self.path_resolves_locally(callee)
+            && let Some(baml_compiler2_hir::contributions::Definition::Function(function)) =
+                self.lower.resolve_value(segments)
+        {
+            let signature = function_signature(self.db, function);
+            let instantiation = self.instantiation_args(call, &signature.generic_params);
+            let params: Box<[baml_type::interned::FunctionParam]> = signature
+                .params
+                .iter()
+                .map(|param| baml_type::interned::FunctionParam {
+                    name: Some(param.name.clone()),
+                    ty: substitute_params(&param.ty, &instantiation),
+                    mode: if param.has_default {
+                        baml_type::FunctionParamMode::Optional
+                    } else {
+                        baml_type::FunctionParamMode::Required
+                    },
+                })
+                .collect();
+            let fn_ty = Ty::intern(TyKind::Function {
+                params,
+                ret: substitute_params(&signature.ret, &instantiation),
+                throws: substitute_params(&signature.throws, &instantiation),
+                attr: TyAttr::default(),
+            });
+            self.result.type_of_expr.insert(callee, fn_ty.clone());
+            return fn_ty;
+        }
+        self.infer_expr(body, callee, &Expectation::None)
+    }
+
+    /// The instantiation vector for a generic item at a use site: explicit
+    /// turbofish args (with `_` holes as fresh vars) where written, fresh
+    /// variables everywhere else.
+    fn instantiation_args(
+        &mut self,
+        site: ExprId,
+        generic_params: &[baml_type::ParamTy],
+    ) -> Vec<Ty> {
+        let explicit: Vec<Ty> = self
+            .type_refs
+            .expr_type_args
+            .get(&site)
+            .cloned()
+            .unwrap_or_default()
+            .iter()
+            .map(|&type_ref| {
+                let lowered = self.lower.lower_type_ref(&self.type_refs.store, type_ref);
+                self.instantiate_holes(&lowered)
+            })
+            .collect();
+        (0..generic_params.len())
+            .map(|index| {
+                explicit
+                    .get(index)
+                    .cloned()
+                    .unwrap_or_else(|| self.table.new_var_ty())
+            })
+            .collect()
+    }
+
+    /// Object-constructor typing: resolve the class, instantiate its
+    /// generics (explicit args or fresh vars - `Box<_> { .. }` holes are
+    /// vars too), check each written field against its substituted type.
+    fn infer_object(
+        &mut self,
+        body: &ExprBody,
+        object: ExprId,
+        type_name: &baml_base::TypePath,
+        fields: &[(baml_type::Name, ExprId)],
+        spreads: &[baml_compiler2_ast::SpreadField],
+    ) -> Ty {
+        let Some(baml_compiler2_hir::contributions::Definition::Class(class)) =
+            self.lower.resolve_type_definition(&type_name.0)
+        else {
+            for (_, value) in fields {
+                self.infer_expr(body, *value, &Expectation::None);
+            }
+            return Ty::error();
+        };
+        let db = self.db;
+        let generic_count = baml_compiler2_ppir::item_data::class_data(db, class)
+            .generic_params
+            .len();
+        let generic_names: Vec<baml_type::ParamTy> = crate::lower::class_generic_frame(db, class);
+        let instantiation = self.instantiation_args(object, &generic_names);
+        let mut instantiation = instantiation;
+        instantiation.truncate(generic_count);
+        while instantiation.len() < generic_count {
+            instantiation.push(self.table.new_var_ty());
+        }
+        let field_types = crate::lower::class_field_types(db, class);
+        for (name, value) in fields {
+            match field_types.iter().find(|(field, _)| field == name) {
+                Some((_, field_ty)) => {
+                    let field_ty = substitute_params(field_ty, &instantiation);
+                    self.check_expr(body, *value, &field_ty);
+                }
+                None => {
+                    // Unknown field: S17's diagnostic.
+                    self.infer_expr(body, *value, &Expectation::None);
+                }
+            }
+        }
+        for spread in spreads {
+            self.infer_expr(body, spread.expr, &Expectation::None);
+        }
+        let short = type_name.0.last().expect("type paths are never empty");
+        Ty::intern(TyKind::Class(
+            self.lower.qualify_definition(
+                baml_compiler2_hir::contributions::Definition::Class(class),
+                short,
+            ),
+            instantiation.into(),
+            TyAttr::default(),
+        ))
+    }
+
+    /// Class field access. Inspection site: the receiver must resolve
+    /// enough to look inside (rustc's `structurally_resolve` discipline).
+    /// Methods, builtins, and non-class receivers arrive with S10/S11.
+    fn field_access(&mut self, base_ty: &Ty, member: &baml_type::Name) -> Ty {
+        let resolved = self.table.resolve_completely(base_ty);
+        let TyKind::Class(qtn, args, _) = resolved.kind() else {
+            return Ty::error();
+        };
+        let Some(baml_compiler2_hir::contributions::Definition::Class(class)) =
+            self.facts.definition_of(qtn)
+        else {
+            return Ty::error();
+        };
+        crate::lower::class_field_types(self.db, class)
+            .iter()
+            .find(|(field, _)| field == member)
+            .map(|(_, field_ty)| substitute_params(field_ty, args))
+            .unwrap_or_else(Ty::error)
+    }
+
+    /// Whether a path expression names a local binding or parameter (which
+    /// shadows any package-level name at a call site).
+    fn path_resolves_locally(&self, expr: ExprId) -> bool {
+        self.owner_scope.is_some_and(|owner_scope| {
+            let key = ExprMetadataKey::new(ExprMetadataScope::Body(owner_scope), expr);
+            matches!(
+                self.index.path_resolution(key),
+                Some(PathResolution::Local(_))
+            )
+        })
     }
 
     /// Resolves a path expression to a local binding or an owner parameter

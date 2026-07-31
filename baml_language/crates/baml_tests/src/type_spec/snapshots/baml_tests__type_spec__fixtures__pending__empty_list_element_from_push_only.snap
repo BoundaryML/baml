@@ -5,7 +5,7 @@ expression: outcome.dump
 329..407 '{\n   ...ys;\n}': void
 335..341 'let xs': hir_ty=[_[]] tir=[int[] (evolving)]
 344..346 '[]': _[]
-352..359 'xs.push': hir_ty=[_[]] tir=[(self: int[], item: int) -> int throws never]
+352..359 'xs.push': hir_ty=[!error] tir=[(self: int[], item: int) -> int throws never]
 352..362 'xs.push(1)': hir_ty=[!error] tir=[int]
 360..361 '1': 1
 368..374 'let ys': hir_ty=[_[]] tir=[int[]]

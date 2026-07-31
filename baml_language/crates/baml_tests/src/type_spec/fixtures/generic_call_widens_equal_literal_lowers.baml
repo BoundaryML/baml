@@ -1,4 +1,3 @@
-// pending: S8 equality-regime generic instantiation
 // tir: fails
 //
 // doc-inference.md ruling 1: a generic-param var resolves Rust-style - all

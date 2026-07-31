@@ -2,13 +2,13 @@
 source: crates/baml_tests/src/type_spec/fixtures.rs
 expression: outcome.dump
 ---
-109..121 '{\n    f(v)\n}': hir_ty=[!error] tir=[int]
+109..121 '{\n    f(v)\n}': int
 115..116 'f': (x: int) -> int throws never
-115..119 'f(v)': hir_ty=[!error] tir=[int]
+115..119 'f(v)': int
 117..118 'v': int
-143..232 '{\n   ...int\n}': hir_ty=[!error] tir=[int]
-149..154 'apply': hir_ty=[!error] tir=[(f: (x: int) -> int throws never, v: int) -> int throws never]
-149..176 'apply(...}, 41)': hir_ty=[!error] tir=[int]
+143..232 '{\n   ...int\n}': int
+149..154 'apply': hir_ty=[(f: (x: int) -> int throws never, v: int) -> int throws !error] tir=[(f: (x: int) -> int throws never, v: int) -> int throws never]
+149..176 'apply(...}, 41)': int
 155..171 '(x) ->... + 1 }': hir_ty=[!error] tir=[(x: int) -> int throws never]
 162..171 '{ x + 1 }': hir_ty=[!error] tir=[int]
 164..165 'x': hir_ty=[!error] tir=[int]

@@ -26,7 +26,7 @@ impl<'db> Facts<'db> {
 
     /// Resolves a qualified name back to its definition through the owning
     /// package's canonical (ppir) items.
-    fn definition_of(&self, name: &QualifiedTypeName) -> Option<Definition<'db>> {
+    pub fn definition_of(&self, name: &QualifiedTypeName) -> Option<Definition<'db>> {
         let package = PackageId::new(self.db, name.package().clone());
         baml_compiler2_ppir::package_items(self.db, package)
             .lookup_type(name.namespace(), name.name())

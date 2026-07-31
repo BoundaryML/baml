@@ -1,4 +1,3 @@
-// pending: S8 generic instantiation
 class Box<T> { v T }
 
 function f() -> int {

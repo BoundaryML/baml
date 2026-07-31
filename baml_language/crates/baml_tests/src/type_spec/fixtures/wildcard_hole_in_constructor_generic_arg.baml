@@ -1,4 +1,3 @@
-// pending: S8 expression-position inference holes
 // tir: fails
 //
 // TYPE_SYSTEM.md (Interfaces section, `_` wildcard): a `_` generic arg is an

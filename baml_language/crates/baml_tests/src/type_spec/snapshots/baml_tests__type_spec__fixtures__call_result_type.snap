@@ -1,0 +1,15 @@
+---
+source: crates/baml_tests/src/type_spec/fixtures.rs
+expression: outcome.dump
+---
+36..49 '{\n    a + b\n}': hir_ty=[!error] tir=[int]
+42..43 'a': int
+42..47 'a + b': hir_ty=[!error] tir=[int]
+46..47 'b': int
+71..143 '{\n   ...  r\n}': int
+77..82 'let r': int
+85..88 'add': hir_ty=[(a: int, b: int) -> int throws !error] tir=[(a: int, b: int) -> int throws never]
+85..94 'add(1, 2)': int
+89..90 '1': 1
+92..93 '2': 2
+140..141 'r': int
