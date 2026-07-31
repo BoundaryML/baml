@@ -317,6 +317,80 @@ fn complete_interface_associated_bindings_from_tys<'db>(
         .collect()
 }
 
+/// Owned ingredients for lowering a type written inside an interface's own
+/// declaration: the interface's generic parameters as rigid type variables and
+/// a symbolic `Self` — a rigid `Self` type variable bounded by this interface
+/// at those parameters — so `Self.member` lowers to a projection over the
+/// symbolic `Self` instead of erroring for want of a receiver.
+///
+/// The one scope recipe behind [`interface_associated_type_default`],
+/// [`resolve_interface_fields`], and [`resolve_interface_required_methods`].
+struct InterfaceDeclScope<'db> {
+    db: &'db dyn crate::Db,
+    pkg_items: &'db baml_compiler2_hir::package::PackageItems<'db>,
+    ns: Vec<Name>,
+    /// The interface's in-scope generic parameters (its declared ones).
+    generics: Vec<ParamTy>,
+    /// The interface's declared bounds plus the `Self` bound.
+    bounds: crate::lower_type_expr::TypeVarBoundsMap,
+    self_param: ParamTy,
+}
+
+impl<'db> InterfaceDeclScope<'db> {
+    fn new(db: &'db dyn crate::Db, iface_loc: baml_compiler2_hir::loc::InterfaceLoc<'db>) -> Self {
+        let iface = baml_compiler2_ppir::item_data::interface_data(db, iface_loc);
+        let pkg_info = baml_compiler2_hir::file_package::file_package(db, iface_loc.file(db));
+        let pkg_items =
+            baml_compiler2_ppir::package_items(db, PackageId::new(db, pkg_info.package.clone()));
+
+        let generic_env = crate::generic_env::interface_generic_env(db, iface_loc);
+        let (self_param, generic_params) = generic_env.interface_param_parts();
+        let self_param = self_param.clone();
+        let self_constraint = baml_type::Interface::new(
+            qualify_def(db, Definition::Interface(iface_loc), &iface.name),
+            generic_params
+                .iter()
+                .map(|p| Ty::TypeVar(p.clone(), TyAttr::default()))
+                .collect(),
+            Vec::new(),
+        );
+        let mut bounds =
+            crate::lower_type_expr::interface_generic_param_bounds(db, iface_loc).clone();
+        bounds.insert(self_param.clone(), vec![self_constraint]);
+
+        Self {
+            db,
+            pkg_items,
+            ns: pkg_info.namespace_path,
+            generics: generic_env.source_params().to_vec(),
+            bounds,
+            self_param,
+        }
+    }
+
+    /// A lowering context over this scope's own generics and bounds.
+    fn ctx(&self) -> crate::lower_type_expr::ScopeCtx<'_, 'db> {
+        self.ctx_with(&self.generics, &self.bounds)
+    }
+
+    /// A lowering context with extended generics/bounds (a method's own
+    /// parameters appended); both must contain this scope's entries.
+    fn ctx_with<'a>(
+        &'a self,
+        generics: &'a [ParamTy],
+        bounds: &'a crate::lower_type_expr::TypeVarBoundsMap,
+    ) -> crate::lower_type_expr::ScopeCtx<'a, 'db> {
+        crate::lower_type_expr::ScopeCtx {
+            db: self.db,
+            package_items: self.pkg_items,
+            ns_context: &self.ns,
+            generic_params: generics,
+            bounds,
+            self_ty: Some(Ty::TypeVar(self.self_param.clone(), TyAttr::default())),
+        }
+    }
+}
+
 /// An associated type's `default` type, lowered ONCE against the interface's own scope.
 ///
 /// The default is lowered with the interface's generic parameters as rigid type variables
@@ -346,41 +420,179 @@ pub fn interface_associated_type_default<'db>(
     let assoc = iface.associated_types.iter().find(|a| a.name == name)?;
     let default = assoc.default?;
 
-    let pkg_info = baml_compiler2_hir::file_package::file_package(db, iface_loc.file(db));
-    let pkg_items =
-        baml_compiler2_ppir::package_items(db, PackageId::new(db, pkg_info.package.clone()));
-
-    // A symbolic `Self`: a rigid type variable bounded by this interface at its own generic
-    // parameters, so a `Self.Other` projection in the default resolves through the bound.
-    let generic_env = crate::generic_env::interface_generic_env(db, iface_loc);
-    let (self_param, generic_params) = generic_env.interface_param_parts();
-    let self_param = self_param.clone();
-    let self_constraint = baml_type::Interface::new(
-        crate::lower_type_expr::qualify_def(db, Definition::Interface(iface_loc), &iface.name),
-        generic_params
-            .iter()
-            .map(|p| Ty::TypeVar(p.clone(), TyAttr::default()))
-            .collect(),
-        Vec::new(),
-    );
-    let mut bounds = crate::lower_type_expr::interface_generic_param_bounds(db, iface_loc).clone();
-    bounds.insert(self_param.clone(), vec![self_constraint]);
-
+    let scope = InterfaceDeclScope::new(db, iface_loc);
     let mut diagnostics = Vec::new();
     let lowered = crate::lower_type_expr::lower_type_ref(
         &iface.type_refs,
         default,
-        &crate::lower_type_expr::ScopeCtx {
-            db,
-            package_items: pkg_items,
-            ns_context: &pkg_info.namespace_path,
-            generic_params: generic_env.source_params(),
-            bounds: &bounds,
-            self_ty: Some(Ty::TypeVar(self_param, TyAttr::default())),
-        },
+        &scope.ctx(),
         &mut diagnostics,
     );
     Some((lowered, diagnostics))
+}
+
+/// An interface's declared fields with their types resolved against the
+/// interface's own scope (symbolic `Self`, rigid generic parameters). The
+/// interface analogue of [`crate::inference::resolve_class_fields`].
+#[derive(Debug, Clone, PartialEq)]
+pub struct ResolvedInterfaceFields {
+    /// (field name, resolved type, field-level attributes)
+    pub fields: Vec<(Name, Ty, Vec<baml_compiler2_hir::item_tree::Attribute>)>,
+    /// Type lowering diagnostics: (error, span of the type annotation).
+    pub diagnostics: Vec<(crate::infer_context::TirTypeError, text_size::TextRange)>,
+}
+
+// Safety: contains `Ty` (which has `Name`, a Salsa interned type). Manual
+// `Update` impl uses `PartialEq` for early-cutoff.
+#[allow(unsafe_code)]
+unsafe impl salsa::Update for ResolvedInterfaceFields {
+    unsafe fn maybe_update(old_pointer: *mut Self, new_value: Self) -> bool {
+        #[allow(unsafe_code)]
+        let old_ref = unsafe { &*old_pointer };
+        if *old_ref == new_value {
+            false
+        } else {
+            #[allow(unsafe_code)]
+            unsafe {
+                std::ptr::drop_in_place(old_pointer);
+                std::ptr::write(old_pointer, new_value);
+            }
+            true
+        }
+    }
+}
+
+/// Resolve an interface's declared field types in its own scope.
+#[salsa::tracked(returns(ref))]
+pub fn resolve_interface_fields<'db>(
+    db: &'db dyn crate::Db,
+    iface_loc: baml_compiler2_hir::loc::InterfaceLoc<'db>,
+) -> ResolvedInterfaceFields {
+    let iface = baml_compiler2_ppir::item_data::interface_data(db, iface_loc);
+    let iface_spans = baml_compiler2_ppir::item_data::interface_source_map(db, iface_loc);
+    let scope = InterfaceDeclScope::new(db, iface_loc);
+
+    let mut fields = Vec::new();
+    let mut diagnostics = Vec::new();
+    for field in &iface.fields {
+        let mut field_diags = Vec::new();
+        let ty = crate::lower_type_expr::lower_type_ref(
+            &iface.type_refs,
+            field.type_ref,
+            &scope.ctx(),
+            &mut field_diags,
+        );
+        let span = iface_spans.type_refs.span(field.type_ref);
+        diagnostics.extend(field_diags.into_iter().map(|d| (d, span)));
+        fields.push((field.name.clone(), ty, field.attributes.clone()));
+    }
+
+    ResolvedInterfaceFields {
+        fields,
+        diagnostics,
+    }
+}
+
+/// A required interface method's declaration-site resolved signature.
+///
+/// `function_ty` keeps `Self` symbolic — the rigid `Self` type variable
+/// bounded by the declaring interface — exactly as written; an impl-site
+/// consumer realizes it by substituting a receiver (the conformance checker
+/// does this via its own path). A required method with no written `throws`
+/// clause carries `throws unknown` in `function_ty` — required signatures
+/// have no body to infer from, and the conformance checker shares that
+/// convention (see `signature::lower_signature`'s `Missing` slot handling).
+#[derive(Debug, Clone, PartialEq)]
+pub struct ResolvedInterfaceMethod {
+    pub name: Name,
+    /// The full `Ty::Function` (params with names/modes, return, declared throws).
+    pub function_ty: Ty,
+    /// The method's own generic parameters with their resolved interface
+    /// bounds — the same shape as [`ImplData::generic_params`]. Excludes the
+    /// interface's parameters and `Self`.
+    pub generic_params: Vec<(ParamTy, Vec<baml_type::Interface>)>,
+    /// Span-free lowering diagnostics; the declaration checker surfaces its
+    /// own copies, these travel with the surface for completeness.
+    pub diagnostics: Vec<crate::infer_context::TirTypeError>,
+}
+
+// Safety: contains `Ty` (which has `Name`, a Salsa interned type). Manual
+// `Update` impl uses `PartialEq` for early-cutoff.
+#[allow(unsafe_code)]
+unsafe impl salsa::Update for ResolvedInterfaceMethod {
+    unsafe fn maybe_update(old_pointer: *mut Self, new_value: Self) -> bool {
+        #[allow(unsafe_code)]
+        let old_ref = unsafe { &*old_pointer };
+        if *old_ref == new_value {
+            false
+        } else {
+            #[allow(unsafe_code)]
+            unsafe {
+                std::ptr::drop_in_place(old_pointer);
+                std::ptr::write(old_pointer, new_value);
+            }
+            true
+        }
+    }
+}
+
+/// Resolve every *required* method signature of an interface at its
+/// declaration site, in declaration order (parallel to
+/// `InterfaceData::required_methods`, whose entries carry the docstrings and
+/// whose source map carries the name spans).
+///
+/// Default methods are ordinary `FunctionLoc`s — their resolved signatures
+/// come from [`crate::callable::function_signature_ty`] instead.
+#[salsa::tracked(returns(ref))]
+pub fn resolve_interface_required_methods<'db>(
+    db: &'db dyn crate::Db,
+    iface_loc: baml_compiler2_hir::loc::InterfaceLoc<'db>,
+) -> Vec<ResolvedInterfaceMethod> {
+    use crate::builder::interface_resolution::InterfaceMethodSpec;
+
+    let iface = baml_compiler2_ppir::item_data::interface_data(db, iface_loc);
+    let scope = InterfaceDeclScope::new(db, iface_loc);
+
+    iface
+        .required_methods
+        .iter()
+        .map(|sig| {
+            let mut diagnostics = Vec::new();
+            let spec = InterfaceMethodSpec::from_required(iface, sig);
+
+            // The method's own generics join the interface's for lowering;
+            // its bounds resolve in the *interface* scope (a method-level
+            // bound may reference the interface's parameters).
+            let method_generics =
+                crate::generic_env::append_params(&scope.generics, &spec.generic_param_names());
+            let own_params = &method_generics[scope.generics.len()..];
+            let mut bounds = scope.bounds.clone();
+            let mut generic_params = Vec::new();
+            for (param, data) in own_params.iter().zip(spec.generic_bounds()) {
+                let ifaces = lower_generic_param_interface_bounds(
+                    db,
+                    spec.bound_store(),
+                    &data.bounds,
+                    scope.pkg_items,
+                    &scope.ns,
+                    &method_generics,
+                    &mut diagnostics,
+                );
+                bounds.insert(param.clone(), ifaces.clone());
+                generic_params.push((param.clone(), ifaces));
+            }
+
+            let function_ty =
+                spec.to_function_ty(&scope.ctx_with(&method_generics, &bounds), &mut diagnostics);
+
+            ResolvedInterfaceMethod {
+                name: sig.name.clone(),
+                function_ty,
+                generic_params,
+                diagnostics,
+            }
+        })
+        .collect()
 }
 
 /// Realize an interface associated type's default (from [`interface_associated_type_default`])
