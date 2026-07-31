@@ -146,7 +146,7 @@ fn runtime_package_mint_cycle_survives_when_rooted_and_collects_when_dropped() {
             alias: None,
             docstring: None,
             other: IndexMap::new(),
-            type_tag: baml_type::typetag::class_type_tag("RuntimeClass"),
+            type_tag: baml_type::typetag::TypeTag::of_head("RuntimeClass"),
             ty_attr: TyAttr::default(),
             has_cleanup: false,
             generic_param_count: 0,

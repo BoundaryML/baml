@@ -75,6 +75,9 @@ fn build_interface_def(
     db: &dyn baml_compiler2_mir::Db,
     iface_loc: baml_compiler2_hir::loc::InterfaceLoc<'_>,
     iface_tn: baml_type::TypeName,
+    // Minted by the caller through `claim_type_tag`, not derived here, so every
+    // head passes the one collision detector.
+    type_tag: baml_type::typetag::TypeTag,
     resolved: &ResolvedAliases,
 ) -> bex_vm_types::types::InterfaceDef {
     use baml_compiler2_hir::type_ref::{TypeRefId, TypeRefStore};
@@ -254,6 +257,7 @@ fn build_interface_def(
     }));
 
     InterfaceDef {
+        type_tag,
         name: iface_tn,
         args,
         requires,
@@ -1440,6 +1444,33 @@ fn collect_class_fields_with_implements(
 ///
 /// Emit always fully qualifies — `display_name` keeps the literal package
 /// prefix (`"user.Point"`, `"baml.http.Response"`, `"<vendor>.<…>"`). The
+/// Mint the head identity for the declaration named `fq_name`, rejecting a
+/// hash collision with any head already claimed.
+///
+/// Every declaration kind that can be the head of a nominal type — class, enum,
+/// interface — draws from one space, so the detector is shared rather than
+/// per-kind: fully-qualified names are unique *across* kinds, so a collision
+/// between a class and an enum is exactly as impossible-by-intent, and exactly
+/// as fatal, as one between two classes.
+fn claim_type_tag(
+    claimed: &mut HashMap<baml_type::typetag::TypeTag, String>,
+    fq_name: &str,
+) -> Result<baml_type::typetag::TypeTag, LoweringError> {
+    let tag = baml_type::typetag::TypeTag::of_head(fq_name);
+    if let Some(previous) = claimed.insert(tag, fq_name.to_string())
+        && previous != fq_name
+    {
+        return Err(LoweringError::Internal(format!(
+            "the fully-qualified type names `{previous}` and `{fq_name}` hash to \
+             the same 47-bit type tag. This is an extremely rare hash collision \
+             between two names, not a compiler bug; renaming either declaration \
+             (or moving one to a different namespace/package) resolves it. This \
+             is a known limitation of content-addressed type tags."
+        )));
+    }
+    Ok(tag)
+}
+
 /// codegen-output Python and the runtime see the same `<pkg>.<…>` form
 /// end-to-end. See `12a-namespace-rules.md §5` for the rationale.
 fn fq_to_type_name(fq: &str) -> baml_type::TypeName {
@@ -2953,12 +2984,14 @@ struct EmitTables {
     classes: HashMap<String, HashMap<String, usize>>,
     /// Class fq-name → `ObjectPool` index (Pass 2).
     class_object_indices: HashMap<String, usize>,
-    /// Collision detector for content-addressed class type tags (Pass 2):
-    /// tag → fq-name of the class that claimed it. Tags are a pure function
-    /// of the class's fully-qualified name (`typetag::class_type_tag`), so
-    /// MIR agrees by construction; a 47-bit hash collision between two
-    /// distinct classes is reported as a compile error here.
-    class_type_tags: HashMap<i64, String>,
+    /// Collision detector for content-addressed head type tags: tag → fq-name
+    /// of the declaration that claimed it. Shared across every kind that can
+    /// head a nominal type — classes (Pass 2), enums (Pass 3), interfaces —
+    /// since fq-names are unique across kinds and all three draw from one tag
+    /// space. Tags are a pure function of the fully-qualified name
+    /// (`typetag::TypeTag::of_head`), so MIR agrees by construction; a 47-bit
+    /// hash collision is reported as a compile error via [`claim_type_tag`].
+    type_tags: HashMap<baml_type::typetag::TypeTag, String>,
     /// Enum fq-name → (variant name → variant index) (Pass 3).
     enum_variants: HashMap<String, HashMap<String, usize>>,
     /// Enum fq-name → `ObjectPool` index (Pass 3).
@@ -3003,7 +3036,7 @@ impl EmitTables {
                         .collect();
                     tables.classes.insert(fq.clone(), field_indices);
                     tables.class_object_indices.insert(fq.clone(), idx);
-                    tables.class_type_tags.insert(class.type_tag, fq);
+                    tables.type_tags.insert(class.type_tag, fq);
                 }
                 Object::Enum(enum_def) => {
                     let fq = enum_def.name.to_string();
@@ -3116,7 +3149,7 @@ fn emit_file_group(
         globals,
         classes,
         class_object_indices,
-        class_type_tags,
+        type_tags,
         enum_variants,
         enum_object_indices,
         interface_object_indices,
@@ -3215,7 +3248,7 @@ fn emit_file_group(
             let class = class_data(db, class_loc);
             let store = &class.type_refs;
             // Build the fully-qualified name ("user.MyClass" / "baml.ns.MyClass")
-            // through the SAME renderer MIR uses in `build_class_type_tags`
+            // through the SAME renderer MIR uses in `class_type_tags_for_project`
             // (`QualifiedTypeName::render_dotted(false)`). The class type-tag is
             // derived from this string, so emit and MIR MUST produce
             // byte-identical output or `Switch`/`JumpTable` dispatch silently
@@ -3283,19 +3316,7 @@ fn emit_file_group(
 
             let class_meta = extract_schema_attrs(&class.attributes, class.docstring.as_deref());
 
-            let type_tag = bex_vm_types::type_tags::class_type_tag(&fq_name);
-            if let Some(previous) = class_type_tags.insert(type_tag, fq_name.clone())
-                && previous != fq_name
-            {
-                return Err(LoweringError::Internal(format!(
-                    "the fully-qualified class names `{previous}` and `{fq_name}` \
-                     hash to the same 47-bit class type-tag. This is an extremely \
-                     rare hash collision between two class names, not a compiler \
-                     bug; renaming either class (or moving one to a different \
-                     namespace/package) resolves it. This is a known limitation of \
-                     content-addressed class type tags."
-                )));
-            }
+            let type_tag = claim_type_tag(type_tags, &fq_name)?;
 
             // BEP-042: does this class define a magic `cleanup(self) -> void`
             // finalizer? This MUST stay in lockstep with the canonical
@@ -3443,6 +3464,7 @@ fn emit_file_group(
 
             let enum_obj_idx = program.add_object(Object::Enum(Box::new(Enum {
                 name: fq_to_type_name(&fq_name),
+                type_tag: claim_type_tag(type_tags, &fq_name)?,
                 variants,
                 description: enum_meta.description,
                 alias: enum_meta.alias,
@@ -3484,7 +3506,11 @@ fn emit_file_group(
                 Definition::Interface(iface_loc),
                 &iface_data.name,
             );
-            let iface_def = build_interface_def(db, iface_loc, iface_tn.clone(), resolved);
+            // Same single renderer as the class and enum passes, so a head's
+            // identity does not depend on which kind of declaration produced it.
+            let iface_tag = claim_type_tag(type_tags, &iface_tn.render_dotted(false))?;
+            let iface_def =
+                build_interface_def(db, iface_loc, iface_tn.clone(), iface_tag, resolved);
             let iface_obj_idx = program.add_object(Object::Interface(Box::new(iface_def)));
             interface_object_indices.insert(iface_tn, iface_obj_idx);
             program_packages
@@ -5947,6 +5973,7 @@ mod tests {
             &db,
             iface_loc,
             baml_type::TypeName::local(baml_base::Name::new(name)),
+            baml_type::typetag::TypeTag::of_head(name),
             &cache,
         )
     }

@@ -54,9 +54,10 @@ pub struct Class {
     pub docstring: Option<String>,
     pub other: IndexMap<String, String>,
 
-    /// Type tag for this class, used by `TypeTag` instruction for jump table dispatch.
-    /// Assigned during codegen as `CLASS_BASE + class_index`.
-    pub type_tag: i64,
+    /// This class's head identity, content-addressed from its fully-qualified
+    /// name at emit time. Both the `TypeTag` instruction's jump-table dispatch
+    /// value and the identity a `TypeHead` referring to this class compares by.
+    pub type_tag: baml_type::typetag::TypeTag,
 
     /// Class-level type attribute (e.g., from @@stream.done).
     pub ty_attr: baml_type::TyAttr,

@@ -21,6 +21,16 @@ pub struct Enum {
     /// Use `name.display_name` for the display string.
     pub name: baml_type::TypeName,
 
+    /// This enum's head identity, content-addressed from its fully-qualified
+    /// name at emit time — the identity a `TypeHead` referring to this enum
+    /// compares by.
+    ///
+    /// Distinct from the `TypeTag` instruction's dispatch value: every enum
+    /// *value* reports the shared `type_tags::ENUM`, since dispatch does not
+    /// currently discriminate between enums. Per-enum dispatch could use this,
+    /// but that is an emitter change and not what this field is for.
+    pub type_tag: baml_type::typetag::TypeTag,
+
     /// Enum variants with schema metadata.
     pub variants: Vec<EnumVariant>,
 

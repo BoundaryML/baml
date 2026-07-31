@@ -4511,6 +4511,7 @@ mod union_container_selection_tests {
         let mood = TypeName::from_dotted_path("user.callbacks.Mood");
         let mut tlab = Tlab::new(BexHeap::new(Vec::new()));
         let enum_ptr = tlab.alloc(Object::Enum(Box::new(Enum {
+            type_tag: baml_type::typetag::TypeTag::from_i64(200),
             name: mood.clone(),
             variants: vec![
                 EnumVariant {

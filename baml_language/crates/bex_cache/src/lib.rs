@@ -56,6 +56,12 @@ use sha2::{Digest, Sha256};
 ///
 /// Version 5: `FunctionMeta::Llm` removed the Borsh-serialized
 /// `prompt_template` field.
+///
+/// Version 6: `Enum` and `InterfaceDef` gained a borsh-serialized `type_tag`,
+/// so every declaration that can head a nominal type now carries its identity
+/// (previously only `Class` did). `Class::type_tag` changed from `i64` to the
+/// `TypeTag` newtype, which is wire-identical — the bump is for the two added
+/// fields.
 pub const FORMAT_VERSION: u32 = 5;
 
 const MAGIC: [u8; 4] = *b"BEXC";

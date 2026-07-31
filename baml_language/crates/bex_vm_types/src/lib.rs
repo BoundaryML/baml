@@ -20,6 +20,7 @@ pub mod relink;
 mod roots;
 pub mod runtime_compile;
 pub mod task_group;
+pub mod type_head;
 pub mod types;
 pub mod unit;
 
@@ -39,6 +40,7 @@ pub use runtime_compile::{
     SessionEvalLease, SessionVisibleKind, SessionVisibleSymbol,
 };
 pub use task_group::{TaskGroupInner, TaskGroupPermit, TaskGroupTicket};
+pub use type_head::TypeHead;
 pub use types::{
     ArrayContainer, ArrayReadGuard, ArrayWriteGuard, AtomicValueSlot, BoundMethod, CaptureCategory,
     CaptureOption, Class, ClassField, CleanupLatch, ClientBuildMeta, ClientBuildType, CollectorRef,

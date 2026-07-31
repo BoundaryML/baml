@@ -205,7 +205,7 @@ impl BexVm {
                 alias: class.metadata.alias.clone(),
                 docstring: class.metadata.docstring.clone(),
                 other: class.metadata.other.clone(),
-                type_tag: baml_type::typetag::class_type_tag(&class.name.to_string()),
+                type_tag: baml_type::typetag::TypeTag::of_head(&class.name.to_string()),
                 ty_attr: baml_type::TyAttr::default(),
                 has_cleanup: false,
                 generic_param_count: class.generic_param_count,
@@ -234,6 +234,7 @@ impl BexVm {
                 alias: enm.metadata.alias.clone(),
                 docstring: enm.metadata.docstring.clone(),
                 other: enm.metadata.other.clone(),
+                type_tag: baml_type::typetag::TypeTag::of_head(&enm.name.to_string()),
                 ty_attr: baml_type::TyAttr::default(),
                 runtime_type: None,
             })));
@@ -603,7 +604,7 @@ impl BamlNamespaceReflectClass for PackageBamlImpl {
             alias: None,
             docstring: None,
             other: IndexMap::new(),
-            type_tag: baml_type::typetag::class_type_tag(&type_name.to_string()),
+            type_tag: baml_type::typetag::TypeTag::of_head(&type_name.to_string()),
             ty_attr: baml_type::TyAttr::default(),
             has_cleanup: false,
             generic_param_count: 0,
@@ -809,6 +810,7 @@ impl BamlNamespaceReflectEnum for PackageBamlImpl {
             alias: None,
             docstring: None,
             other: IndexMap::new(),
+            type_tag: baml_type::typetag::TypeTag::of_head(&type_name.to_string()),
             ty_attr: baml_type::TyAttr::default(),
             runtime_type: Some(RuntimeTypeProvenance {
                 mint,

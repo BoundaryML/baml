@@ -7,6 +7,15 @@ use crate::HeapPtr;
 pub struct InterfaceDef {
     // Signature
     pub name: baml_type::TypeName,
+
+    /// This interface's head identity, content-addressed from its
+    /// fully-qualified name at emit time — the identity a `TypeHead` referring
+    /// to this interface compares by.
+    ///
+    /// Interfaces have no dispatch tag: an interface is an existential, so no
+    /// *value* is ever "of" an interface in the sense `TypeTag` reports. This is
+    /// identity only.
+    pub type_tag: baml_type::typetag::TypeTag,
     pub args: Vec<(baml_type::Name, Vec<baml_type::RuntimeInterface>)>,
     pub requires: Vec<baml_type::RuntimeInterface>,
 

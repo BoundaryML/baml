@@ -635,7 +635,7 @@ mod tests {
             alias: None,
             docstring: None,
             other: Default::default(),
-            type_tag: 100,
+            type_tag: baml_type::typetag::TypeTag::from_i64(100),
             ty_attr: baml_type::TyAttr::default(),
             has_cleanup: false,
             generic_param_count: 0,
@@ -667,6 +667,7 @@ mod tests {
 
         // Simulate an enum at index 0
         let enum_ptr = tlab.alloc(Object::Enum(Box::new(Enum {
+            type_tag: baml_type::typetag::TypeTag::from_i64(200),
             name: baml_type::TypeName::local(baml_type::Name::new("Color")),
             variants: vec![
                 bex_vm_types::EnumVariant {

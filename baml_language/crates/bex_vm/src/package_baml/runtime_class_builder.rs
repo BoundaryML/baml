@@ -830,7 +830,7 @@ fn build_group(
             alias: None,
             docstring: None,
             other: IndexMap::new(),
-            type_tag: baml_type::typetag::class_type_tag(&identity.name.to_string()),
+            type_tag: baml_type::typetag::TypeTag::of_head(&identity.name.to_string()),
             ty_attr: baml_type::TyAttr::default(),
             has_cleanup: false,
             generic_param_count: 0,
