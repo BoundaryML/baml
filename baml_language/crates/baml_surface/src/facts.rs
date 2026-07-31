@@ -38,7 +38,7 @@ pub use baml_compiler2_tir::{
     interfaces::{ImplData, ResolvedInterfaceFields, ResolvedInterfaceMethod},
     lower_type_expr::TypeVarBoundsMap,
 };
-use baml_type::Ty;
+use baml_type::{ParamTy, Ty};
 
 use crate::Db;
 
@@ -129,4 +129,11 @@ pub(crate) fn impl_data<'db>(db: &'db dyn Db, imp: ImplLoc<'db>) -> Option<&'db 
     baml_compiler2_tir::interfaces::impl_data(db, imp)
         .as_ref()
         .ok()
+}
+
+/// A class's declared generic parameters, in order. (Safe for classes: the
+/// class env has no interface parent, so the declared and in-scope views
+/// coincide.)
+pub(crate) fn class_generic_params<'db>(db: &'db dyn Db, class: ClassLoc<'db>) -> Vec<ParamTy> {
+    baml_compiler2_tir::class_generic_params(db, class)
 }

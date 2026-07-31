@@ -19,6 +19,6 @@ serde = { workspace = true, features = [ "derive" ] }
 text-size = { workspace = true }
 
 [dev-dependencies]
-serde_json = { workspace = true }
 baml_project = { workspace = true }
 insta = { workspace = true }
+serde_json = { workspace = true }

@@ -28,8 +28,7 @@
 //! prefixes, forgiving about `.` vs `::` for members); [`SymbolId::resolve`]
 //! is the precise, kind-directed one.
 
-use std::fmt;
-use std::str::FromStr;
+use std::{fmt, str::FromStr};
 
 use baml_base::Name;
 use serde::{Deserialize, Serialize};

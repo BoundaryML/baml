@@ -23,11 +23,15 @@
 //!   single file importing from `baml_compiler2_tir`, and its doc header is
 //!   the contract the type-system rework must keep answering.
 
+pub mod display;
+pub mod export;
 pub mod facts;
 pub mod handles;
 pub mod head;
 pub mod ids;
 
+#[cfg(test)]
+mod export_tests;
 #[cfg(test)]
 mod handles_tests;
 #[cfg(test)]
@@ -48,6 +52,8 @@ impl Db for baml_project::ProjectDatabase {}
 
 // ── Public API re-exports ─────────────────────────────────────────────────────
 
+pub use display::TyDisplayFormat;
+pub use export::{PackageExport, export_package};
 pub use handles::{
     AssocType, Class, Client, Enum, Field, FieldOwner, Function, FunctionOwner, Global, Impl,
     ImplMethod, Interface, Member, Namespace, Package, RequiredMethod, RetryPolicy, Symbol,

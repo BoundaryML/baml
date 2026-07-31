@@ -441,7 +441,7 @@ pub struct Throws<'db> {
 /// Whether a throws leaf is a panic: a class in the closed `baml.panics`
 /// namespace. Everything else — including generic leaves like `E` or
 /// `(Self as I).Error` — is treated as an ordinary error.
-fn is_panic_type(ty: &Ty) -> bool {
+pub(crate) fn is_panic_type(ty: &Ty) -> bool {
     match ty {
         Ty::Class(qtn, ..) => {
             qtn.package().as_str() == "baml"
@@ -486,10 +486,17 @@ impl<'db> Class<'db> {
     }
 
     /// The class's generic parameters with their resolved interface bounds,
-    /// in declaration order.
+    /// in declaration order. The bounds map is sparse — an unbounded
+    /// parameter has no entry and gets an empty conjunction.
     pub fn generic_params(self, db: &'db dyn Db) -> Vec<(ParamTy, Vec<InterfaceBound>)> {
         let bounds = facts::class_generic_bounds(db, self.0);
-        generic_params_with_bounds(&item_data::class_data(db, self.0).generic_params, bounds)
+        facts::class_generic_params(db, self.0)
+            .into_iter()
+            .map(|param| {
+                let ifaces = bounds.get(&param).cloned().unwrap_or_default();
+                (param, ifaces)
+            })
+            .collect()
     }
 
     /// Methods declared on the class — including in-body/merged `implements`
@@ -1083,35 +1090,13 @@ impl<'db> AssocType<'db> {
     }
 }
 
-/// Pair each declared generic parameter with its resolved bounds, preserving
-/// declaration order. `data_params` supplies the order; `bounds` is the
-/// in-scope map (matched by name — the map may also hold enclosing params).
-fn generic_params_with_bounds(
-    data_params: &[item_data::GenericParamData],
-    bounds: &facts::TypeVarBoundsMap,
-) -> Vec<(ParamTy, Vec<InterfaceBound>)> {
-    data_params
-        .iter()
-        .map(|param| {
-            let (param_ty, ifaces) = bounds
-                .iter()
-                .find(|(p, _)| p.name() == &param.name)
-                .map(|(p, i)| (p.clone(), i.clone()))
-                .unwrap_or_else(|| {
-                    unreachable!("declared generic param is in its in-scope bounds map")
-                });
-            (param_ty, ifaces)
-        })
-        .collect()
-}
-
 // ── Impl attachment (rustdoc-style, lossy head matching) ────────────────────
 
 /// Every impl block in the project — user package and builtins alike, in
 /// file order. Impl attachment must see the whole project because the orphan
 /// rule allows an impl to live downstream of the type it implements
 /// (`implements MyIface for int` in user code attaches to `baml.Int`).
-fn project_impls(db: &dyn Db) -> Vec<Impl<'_>> {
+pub(crate) fn project_impls(db: &dyn Db) -> Vec<Impl<'_>> {
     baml_compiler2_hir::compiler2_all_files(db)
         .into_iter()
         .flat_map(|file| item_data::file_impls(db, file).iter().copied())
