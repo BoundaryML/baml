@@ -78,5 +78,5 @@ function Bar(a: string, b: int | bool) -> int {
 //  7 │ │     client Bar
 //  8 │ │     prompt #"fa"#
 //  9 │ ├─▶ }
-//    · ╰──── expected `baml.llm.Client`, found `() -> unknown throws never`
+//    · ╰──── expected `baml.llm.Client`, found `() -> !error throws never`
 //    ╰────

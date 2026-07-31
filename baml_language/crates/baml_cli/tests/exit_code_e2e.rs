@@ -37,6 +37,10 @@ fn run_baml_cli(built: &Path, dir: &Path, args: &[&str]) -> Output {
     }
     cmd.current_dir(dir);
     cmd.env("BAML_CLI_ALLOW_DIRECT", "1");
+    // Pin the human output preset: under a coding agent the inherited
+    // CLAUDECODE/AI_AGENT/… environment flips `--output-preset auto` to
+    // `agent`, which disables the progress lines some assertions read.
+    cmd.env("BAML_OUTPUT_PRESET", "human");
     cmd.env("BAML_HOME", &home);
     // Share the bytecode cache across the suite so only the first invocation
     // pays the stdlib compile; see `common::shared_cache_dir`.
@@ -771,6 +775,9 @@ test "streams" {
         .args(["test", "--from", ".", "--logs", "INFO"])
         .current_dir(tmp.path())
         .env("BAML_CLI_ALLOW_DIRECT", "1")
+        // Pin the human preset so inherited agent env (CLAUDECODE/AI_AGENT/…)
+        // cannot flip `--output-preset auto` to `agent` and hide progress lines.
+        .env("BAML_OUTPUT_PRESET", "human")
         .env("BAML_HOME", &home)
         .env("BAML_CACHE_DIR", common::shared_cache_dir())
         .stdout(Stdio::piped())
