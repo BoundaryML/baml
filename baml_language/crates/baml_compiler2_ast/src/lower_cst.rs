@@ -1684,6 +1684,7 @@ fn lower_implements_for(
         associated_type_bindings,
         methods,
         span: node.span_range(),
+        docstring: crate::docstring::extract_docstring(node),
     })
 }
 
@@ -1746,6 +1747,7 @@ fn lower_type_alias(
         }),
         span: node.span_range(),
         name_span: name_token.text_range(),
+        docstring: crate::docstring::extract_docstring(node),
     })
 }
 
