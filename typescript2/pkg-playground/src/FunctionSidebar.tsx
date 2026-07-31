@@ -386,16 +386,18 @@ function FunctionTreeNode({
           >
             <Icon className={SIDEBAR_LEAF_ICON_CLASS} />
             <span className="truncate">{node.label}</span>
-            {(node.workflowNodeCount != null || isInternal) && (
+            {((node.workflowNodeCount != null && node.workflowNodeCount > 1) ||
+              isInternal) && (
               <span className="ml-auto flex shrink-0 items-center gap-1">
-                {node.workflowNodeCount != null && (
-                  <span
-                    aria-hidden="true"
-                    className="rounded border border-vsc-border bg-vsc-bg-secondary px-1 py-0 text-[9px] font-normal tabular-nums text-vsc-text-faint"
-                  >
-                    {node.workflowNodeCount}
-                  </span>
-                )}
+                {node.workflowNodeCount != null &&
+                  node.workflowNodeCount > 1 && (
+                    <span
+                      aria-hidden="true"
+                      className="rounded border border-vsc-border bg-vsc-bg-secondary px-1 py-0 text-[9px] font-normal tabular-nums text-vsc-text-faint"
+                    >
+                      {node.workflowNodeCount}
+                    </span>
+                  )}
                 {isInternal && (
                   <span
                     aria-hidden="true"
@@ -551,7 +553,7 @@ export const FunctionSidebar: FC<FunctionSidebarProps> = ({
                       aria-label={`Sort order: ${
                         functionSortOrder === 'workflowNodeCount'
                           ? 'Call graph node count'
-                          : 'Alphabetical'
+                          : 'Alphanumeric'
                       }`}
                       className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-md text-vsc-text-faint outline-none transition-colors hover:bg-vsc-hover hover:text-vsc-text focus-visible:ring-2 focus-visible:ring-ring/50"
                       onClick={() => setShowFunctionSortMenu((value) => !value)}
@@ -578,7 +580,7 @@ export const FunctionSidebar: FC<FunctionSidebarProps> = ({
                       {(
                         [
                           ['workflowNodeCount', 'Call graph node count'],
-                          ['alphabetical', 'Alphabetical'],
+                          ['alphanumeric', 'Alphanumeric'],
                         ] satisfies Array<[FunctionSortOrder, string]>
                       ).map(([value, label]) => (
                         <label

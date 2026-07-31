@@ -28,7 +28,12 @@ export type FunctionSidebarTree = {
   forcedOpenFolderKeys: Set<string>;
 };
 
-export type FunctionSortOrder = 'alphabetical' | 'workflowNodeCount';
+export type FunctionSortOrder = 'alphanumeric' | 'workflowNodeCount';
+
+const naturalFunctionNameCollator = new Intl.Collator('en', {
+  numeric: true,
+  sensitivity: 'base',
+});
 
 type MutableFolderNode = Omit<FunctionSidebarFolderNode, 'children'> & {
   children: Array<FunctionSidebarTreeNode | MutableFolderNode>;
@@ -57,10 +62,13 @@ export function buildFunctionSidebarTree(
   const sortedFunctions = functions
     .map((functionInfo, index) => ({ functionInfo, index }))
     .sort((a, b) => {
-      if (sortOrder === 'alphabetical') {
-        if (a.functionInfo.name < b.functionInfo.name) return -1;
-        if (a.functionInfo.name > b.functionInfo.name) return 1;
-        return a.index - b.index;
+      if (sortOrder === 'alphanumeric') {
+        return (
+          naturalFunctionNameCollator.compare(
+            a.functionInfo.name,
+            b.functionInfo.name,
+          ) || a.index - b.index
+        );
       }
       if (!workflowNodeCounts) return a.index - b.index;
       return (

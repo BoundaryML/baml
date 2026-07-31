@@ -49,21 +49,32 @@ describe('function sidebar workflow size', () => {
     expect(functionNode(tree.nodes, 'ManyNodes').workflowNodeCount).toBe(12);
   });
 
-  it('sorts alphabetically when requested without hiding node counts', () => {
+  it('sorts naturally by alphanumeric name while preserving source-order ties', () => {
     const tree = buildFunctionSidebarTree(
-      [functionInfo('Zulu'), functionInfo('Alpha'), functionInfo('Middle')],
+      [
+        functionInfo('Function10'),
+        functionInfo('function2'),
+        functionInfo('Function2'),
+        functionInfo('Function1'),
+      ],
       {
-        sortOrder: 'alphabetical',
+        sortOrder: 'alphanumeric',
         workflowNodeCounts: new Map([
-          ['Zulu', 20],
-          ['Alpha', 1],
-          ['Middle', 10],
+          ['Function10', 20],
+          ['function2', 1],
+          ['Function2', 10],
+          ['Function1', 5],
         ]),
       },
     );
 
-    expect(tree.nodes.map(nodeLabel)).toEqual(['Alpha', 'Middle', 'Zulu']);
-    expect(functionNode(tree.nodes, 'Zulu').workflowNodeCount).toBe(20);
+    expect(tree.nodes.map(nodeLabel)).toEqual([
+      'Function1',
+      'function2',
+      'Function2',
+      'Function10',
+    ]);
+    expect(functionNode(tree.nodes, 'Function10').workflowNodeCount).toBe(20);
   });
 });
 

@@ -1,6 +1,6 @@
 // biome-ignore-all lint/style/useFilenamingConvention: Preserve the existing test filename.
 
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import { useState } from 'react';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
@@ -78,6 +78,7 @@ describe('FunctionSidebar function details and sorting', () => {
         onSelectFn={vi.fn()}
         selectedFn={null}
         showInternalFunctions
+        workflowNodeCounts={new Map([['BuiltIn', 12]])}
       />,
     );
 
@@ -86,6 +87,9 @@ describe('FunctionSidebar function details and sorting', () => {
     expect(screen.getByRole('button', { name: 'BuiltIn' })).toBeInTheDocument();
     expect(
       screen.queryByRole('button', { name: 'BuiltIn internal' }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: 'BuiltIn 12' }),
     ).not.toBeInTheDocument();
   });
 
@@ -128,7 +132,10 @@ describe('FunctionSidebar function details and sorting', () => {
     render(<FunctionDetailsHarness />);
 
     fireEvent.click(screen.getByRole('button', { name: 'Functions (3)' }));
-    fireEvent.pointerMove(screen.getByRole('button', { name: 'Alpha' }), {
+    const alphaRow = screen.getByRole('button', { name: 'Alpha' });
+    expect(within(alphaRow).queryByText('1')).not.toBeInTheDocument();
+
+    fireEvent.pointerMove(alphaRow, {
       pointerType: 'mouse',
     });
 
@@ -144,23 +151,42 @@ describe('FunctionSidebar function details and sorting', () => {
     );
   });
 
-  it('defaults to node count and switches deterministically to alphabetical', () => {
-    render(<FunctionDetailsHarness />);
+  it('defaults to node count and switches to natural alphanumeric order', () => {
+    render(<NaturalSortHarness />);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Functions (3)' }));
-    expect(functionRows()).toEqual(['Zulu', 'Middle', 'Alpha']);
+    fireEvent.click(screen.getByRole('button', { name: 'Functions (4)' }));
+    expect(
+      functionRows(['Function1', 'function2', 'Function2', 'Function10']),
+    ).toEqual(['Function10', 'Function2', 'Function1', 'function2']);
 
     fireEvent.click(
       screen.getByRole('button', {
         name: 'Sort order: Call graph node count',
       }),
     );
-    fireEvent.click(screen.getByRole('radio', { name: 'Alphabetical' }));
+    fireEvent.click(screen.getByRole('radio', { name: 'Alphanumeric' }));
 
     expect(
-      screen.getByRole('button', { name: 'Sort order: Alphabetical' }),
+      screen.getByRole('button', { name: 'Sort order: Alphanumeric' }),
     ).toBeInTheDocument();
-    expect(functionRows()).toEqual(['Alpha', 'Middle', 'Zulu']);
+    expect(
+      functionRows(['Function1', 'function2', 'Function2', 'Function10']),
+    ).toEqual(['Function1', 'function2', 'Function2', 'Function10']);
+  });
+
+  it('does not render a one-node badge but keeps its tooltip and sort value', async () => {
+    render(<FunctionDetailsHarness />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Functions (3)' }));
+    expect(functionRows()).toEqual(['Zulu', 'Middle', 'Alpha']);
+
+    const alphaRow = screen.getByRole('button', { name: 'Alpha' });
+    expect(within(alphaRow).queryByText('1')).not.toBeInTheDocument();
+    fireEvent.focus(alphaRow);
+
+    expect(
+      (await screen.findAllByText('Call graph nodes: 1')).length,
+    ).toBeGreaterThan(0);
   });
 
   it('keeps the selected sort order across mounted project updates', () => {
@@ -172,12 +198,12 @@ describe('FunctionSidebar function details and sorting', () => {
         name: 'Sort order: Call graph node count',
       }),
     );
-    fireEvent.click(screen.getByRole('radio', { name: 'Alphabetical' }));
+    fireEvent.click(screen.getByRole('radio', { name: 'Alphanumeric' }));
 
     rerender(<FunctionDetailsHarness projectVersion={2} />);
 
     expect(
-      screen.getByRole('button', { name: 'Sort order: Alphabetical' }),
+      screen.getByRole('button', { name: 'Sort order: Alphanumeric' }),
     ).toBeInTheDocument();
     expect(functionRows(['Alpha', 'Beta', 'Middle', 'Zulu'])).toEqual([
       'Alpha',
@@ -204,6 +230,44 @@ function SidebarHarness() {
       showInternalFunctions={false}
     />
   );
+}
+
+function NaturalSortHarness() {
+  const functions = [
+    functionDetails('Function10'),
+    functionDetails('function2'),
+    functionDetails('Function2'),
+    functionDetails('Function1'),
+  ];
+
+  return (
+    <FunctionSidebar
+      functions={functions}
+      internalFunctionCount={0}
+      onRefreshTests={vi.fn()}
+      onSelectFn={vi.fn()}
+      selectedFn={null}
+      showInternalFunctions={false}
+      workflowNodeCounts={
+        new Map([
+          ['Function10', 20],
+          ['function2', 1],
+          ['Function2', 10],
+          ['Function1', 5],
+        ])
+      }
+    />
+  );
+}
+
+function functionDetails(name: string) {
+  return {
+    kind: 'expr' as const,
+    name,
+    origin: 'userDefined' as const,
+    signature: `function ${name}() -> null throws never`,
+    sourcePosition: { column: 10, file: 'baml_src/main.baml', line: 1 },
+  };
 }
 
 function FunctionDetailsHarness({
