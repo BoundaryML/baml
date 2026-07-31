@@ -4,18 +4,8 @@ All notable changes to this project will be documented in this file. See [conven
 
 ## [0.225.0](https://github.com/boundaryml/baml/compare/0.224.0..0.225.0) - 2026-07-31
 
-### Bug Fixes
+### Docs
 
-- correct generated runtime install guidance (#4299) - ([e26ee02](https://github.com/boundaryml/baml/commit/e26ee02447c5cfe9e8b711265c07f71afd511bd7)) - Sam Lijin
-
-### Features
-
-- Intersection bounds (#4291) - ([d42ba80](https://github.com/boundaryml/baml/commit/d42ba804b39c04c5ed6f8466eedf3454e5b3eef3)) - 2kai2kai2
-- Nightly channel should release nightly (#4296) - ([b0c4bab](https://github.com/boundaryml/baml/commit/b0c4bab8ac13ad3426675de30dac44b98c1cf1f7)) - 2kai2kai2
-
-### Miscellaneous Chores
-
-- migrate BEPs analysis to BAML v1 (#4288) - ([b98f9b1](https://github.com/boundaryml/baml/commit/b98f9b1709a00f22c6378be99930b3a7ddd73cb5)) - Sam Lijin
 - brand legacy releases as BAML v0 (#4297) - ([5dbd250](https://github.com/boundaryml/baml/commit/5dbd25084b39523854a8967da5f5363b7368f3a6)) - Sam Lijin
 
 ## [0.224.0](https://github.com/boundaryml/baml/compare/0.223.0..0.224.0) - 2026-07-30
