@@ -309,6 +309,10 @@ pub struct PlaygroundSourceFile {
 }
 
 pub trait PlaygroundSender: Send + Sync {
+    /// Serialize and enqueue the notification synchronously without waiting
+    /// for a consumer or performing blocking I/O. Project snapshots keep
+    /// revision-fencing guards through this call, so implementations must
+    /// return after a bounded in-process handoff.
     fn send_playground_notification(&self, notification: PlaygroundNotification);
 }
 
