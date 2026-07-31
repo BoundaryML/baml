@@ -184,12 +184,15 @@ impl TypeContext for BexVm {
 }
 
 /// A [`TypeContext`] for order-insensitive *structural* equivalence over realized
-/// runtime types: **aliases are expanded** — so recursive aliases fold correctly
-/// (`type A = int | A[]` and `type B = int | B[]` denote the same type, via the
-/// canonicalizer's μ-folding) — while every *re-entrant* nominal fact stays an
-/// opaque leaf. It runs the canonical set-theoretic algebra (union
-/// flatten/sort/dedup, `never` removal, literal-into-base collapse), and interface
-/// bindings compare order-insensitively because the canonicalizer sorts them.
+/// runtime types: **aliases are expanded** — so recursive aliases are
+/// equirecursively correct (`type A = int | A[]` and `type B = int | B[]` denote
+/// the same type at any unfolding depth, via the canonicalizer's
+/// μ-canonicalization: α-invariant de Bruijn binders plus automaton
+/// minimization; `TYPE_SYSTEM.md` §Type Aliases and Recursive Types) — while every
+/// *re-entrant* nominal fact stays an opaque leaf. It runs the canonical
+/// set-theoretic algebra (union flatten/sort/dedup, `never` removal,
+/// literal-into-base collapse), and interface bindings compare
+/// order-insensitively because the canonicalizer sorts them.
 ///
 /// This is the runtime twin of the compiler matcher's `AliasEquivCtx` and shares
 /// its exact fact profile — alias-real, nominal-opaque — which keeps runtime
@@ -205,7 +208,9 @@ impl TypeContext for BexVm {
 /// Two conservative *misses* remain, documented and shared with the compiler
 /// matcher (so the two sides agree): interface-membership absorption
 /// (`Shape | Sq` ≡ `Shape` when `Sq <: Shape`) and enum completeness
-/// (`E.A | E.B | …` ≡ `E`). Membership is *forced* opaque by re-entry; enum is
+/// (`E.A | E.B | …` ≡ `E`). Bool completeness (`true | false ≡ bool`) is *not*
+/// among them: its variant family is closed, so the collapse is context-free
+/// and applies here too. Membership is *forced* opaque by re-entry; enum is
 /// non-re-entrant and could be made real, but only in lockstep with
 /// `AliasEquivCtx`. Their soundness rests on the compiler emitting dispatch
 /// requests already in absorbed form. The general fix is a unified goal solver

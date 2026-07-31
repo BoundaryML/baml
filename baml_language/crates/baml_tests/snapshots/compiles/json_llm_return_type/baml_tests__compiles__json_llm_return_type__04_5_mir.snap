@@ -138,9 +138,9 @@ fn user.ExtractAny$parse(json: string, client: baml.llm.Client) -> int | float |
     }
 }
 
-fn user.ExtractAny$parse_stream(sse: baml.http.SseStream, client: baml.llm.Client) -> baml.llm.Stream<int | float | string | bool | null | baml.json.json$stream[] | map<string, baml.json.json$stream>, int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>> {
+fn user.ExtractAny$parse_stream(sse: baml.http.SseStream, client: baml.llm.Client) -> baml.llm.Stream<baml.json.json, baml.json.json> {
     // Locals:
-    let _0: baml.llm.Stream<int | float | string | bool | null | baml.json.json$stream[] | map<string, baml.json.json$stream>, int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>> // _0 // return
+    let _0: baml.llm.Stream<baml.json.json, baml.json.json> // _0 // return
     let _1: baml.http.SseStream // sse // param
     let _2: baml.llm.Client // client // param
     let _3: bool
@@ -195,9 +195,9 @@ fn user.ExtractAny$render_prompt(client: baml.llm.Client) -> baml.llm.PromptAst 
     }
 }
 
-fn user.ExtractAny$stream(client: baml.llm.Client) -> baml.llm.Stream<int | float | string | bool | null | baml.json.json$stream[] | map<string, baml.json.json$stream>, int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>> {
+fn user.ExtractAny$stream(client: baml.llm.Client) -> baml.llm.Stream<baml.json.json, baml.json.json> {
     // Locals:
-    let _0: baml.llm.Stream<int | float | string | bool | null | baml.json.json$stream[] | map<string, baml.json.json$stream>, int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>> // _0 // return
+    let _0: baml.llm.Stream<baml.json.json, baml.json.json> // _0 // return
     let _1: baml.llm.Client // client // param
     let _2: bool
     let _3: map<string, unknown>

@@ -82,6 +82,15 @@ fn ty_has_cycle(
         Ty::Class(_, type_args, _) => type_args
             .iter()
             .any(|t| ty_has_cycle(t, aliases, visited, stack)),
+        // A `Future`'s value/error positions carry recursion like a nominal
+        // generic's args do — invisible here before this arm existed, which let
+        // a `type F = Future<F, never>[]` alias slip past both the E0068 guard
+        // and the recursive-alias set, sending runtime lowering into unbounded
+        // inline expansion.
+        Ty::Future(value, error, _) => {
+            ty_has_cycle(value, aliases, visited, stack)
+                || ty_has_cycle(error, aliases, visited, stack)
+        }
         Ty::Interface(_, type_args, associated_bindings, _) => {
             type_args
                 .iter()
@@ -244,6 +253,13 @@ fn extract_type_alias_deps(
                 for t in type_args {
                     visit(t, aliases, non_structural, structural, in_structural);
                 }
+            }
+            Ty::Future(value, error, _) => {
+                // Pass-through, like a nominal generic: a future has no empty
+                // base case (constructing one requires the recursive value), so
+                // it is not a structural guard.
+                visit(value, aliases, non_structural, structural, in_structural);
+                visit(error, aliases, non_structural, structural, in_structural);
             }
             Ty::Interface(_, type_args, associated_bindings, _) => {
                 for t in type_args {
@@ -640,6 +656,47 @@ mod tests {
         );
 
         assert!(find_recursive_aliases(&aliases).contains(&qn("List")));
+    }
+
+    #[test]
+    fn recursion_through_future_is_detected() {
+        // `type F = Future<F, never>[]` — recursion flows through the Future's
+        // value position. Before the Future arms existed, this alias evaded
+        // both the recursive set (so runtime lowering inlined it forever) and
+        // the E0068 guard.
+        let mut aliases = HashMap::new();
+        aliases.insert(
+            qn("F"),
+            Ty::List(
+                Box::new(Ty::Future(
+                    Box::new(type_alias("F")),
+                    Box::new(Ty::Never {
+                        attr: TyAttr::default(),
+                    }),
+                    TyAttr::default(),
+                )),
+                TyAttr::default(),
+            ),
+        );
+        assert!(find_recursive_aliases(&aliases).contains(&qn("F")));
+        // List-guarded: the cycle is valid.
+        assert!(!find_invalid_alias_cycles(&aliases).contains(&qn("F")));
+
+        // A pure-Future cycle has no empty base case — invalid (E0068), like a
+        // required class-field cycle.
+        let mut pure = HashMap::new();
+        pure.insert(
+            qn("G"),
+            Ty::Future(
+                Box::new(type_alias("G")),
+                Box::new(Ty::Never {
+                    attr: TyAttr::default(),
+                }),
+                TyAttr::default(),
+            ),
+        );
+        assert!(find_recursive_aliases(&pure).contains(&qn("G")));
+        assert!(find_invalid_alias_cycles(&pure).contains(&qn("G")));
     }
 
     #[test]

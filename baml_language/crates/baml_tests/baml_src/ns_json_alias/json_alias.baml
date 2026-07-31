@@ -90,3 +90,34 @@ function match_json(j: json) -> string {
 test "match_json_arms_exhaustive" {
     assert.is_true(baml.deep_equals(match_json(null), "null"))
 }
+
+// ─── 1.8 Impl dispatch with `json` as a generic argument (B-1078) ────────────
+
+// The impl head below carries the recursive alias as a generic argument. The
+// value's recorded type args cross the normalizer on their way into bytecode,
+// so runtime dispatch compares the impl head's spelling of `JsonWrap<json>`
+// against the normalized one — before equirecursive canonicalization these
+// could disagree (alias vs unfolding) and the resolver declined an impl the
+// compiler had selected.
+
+interface JsonTagged {
+    function tag(self) -> string throws never
+}
+
+class JsonWrap<T> {
+    data T
+}
+
+implements JsonTagged for JsonWrap<json> {
+    function tag(self) -> string { return "json-wrap" }
+}
+
+function json_wrap_tag() -> string {
+    let w = JsonWrap<json> { data: null }
+    let t: JsonTagged = w
+    return t.tag()
+}
+
+test "impl_on_recursive_alias_generic_arg_dispatches" {
+    assert.equal(json_wrap_tag(), "json-wrap")
+}
