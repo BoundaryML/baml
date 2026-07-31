@@ -13,5 +13,5 @@ expression: outcome.dump
 162..171 '{ x + 1 }': hir_ty=[!error] tir=[int]
 164..165 'x': hir_ty=[!error] tir=[int]
 164..169 'x + 1': hir_ty=[!error] tir=[int]
-168..169 '1': hir_ty=[!error] tir=[1]
-173..175 '41': hir_ty=[!error] tir=[41]
+168..169 '1': 1
+173..175 '41': 41

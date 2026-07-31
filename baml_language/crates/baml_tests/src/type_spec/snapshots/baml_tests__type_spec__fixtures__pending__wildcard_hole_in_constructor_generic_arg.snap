@@ -5,5 +5,5 @@ expression: outcome.dump
 473..537 '{\n   ...b.v\n}': !error
 479..484 'let b': hir_ty=[!error] tir=[user.Box<!error>]
 487..502 'Box<_> { v: 5 }': hir_ty=[!error] tir=[user.Box<!error>]
-499..500 '5': hir_ty=[!error] tir=[5]
+499..500 '5': 5
 532..535 'b.v': !error

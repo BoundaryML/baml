@@ -1,4 +1,3 @@
-// pending: S6 literal inference for primitives
 function f() -> string {
     let msg = "hi";
      // ^^^ string

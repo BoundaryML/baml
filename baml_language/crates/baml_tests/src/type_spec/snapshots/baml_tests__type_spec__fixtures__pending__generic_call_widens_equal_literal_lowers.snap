@@ -10,6 +10,6 @@ expression: outcome.dump
 439..444 'let p': hir_ty=[!error] tir=[int[]]
 447..451 'pair': hir_ty=[!error] tir=[(a: T, b: T) -> T[] throws never]
 447..457 'pair(1, 2)': hir_ty=[!error] tir=[(1 | 2)[]]
-452..453 '1': hir_ty=[!error] tir=[1]
-455..456 '2': hir_ty=[!error] tir=[2]
+452..453 '1': 1
+455..456 '2': 2
 479..480 'p': hir_ty=[!error] tir=[int[]]

@@ -10,6 +10,6 @@ expression: outcome.dump
 107..112 'let r': hir_ty=[!error] tir=[int]
 115..118 'add': hir_ty=[!error] tir=[(a: int, b: int) -> int throws never]
 115..124 'add(1, 2)': hir_ty=[!error] tir=[int]
-119..120 '1': hir_ty=[!error] tir=[1]
-122..123 '2': hir_ty=[!error] tir=[2]
+119..120 '1': 1
+122..123 '2': 2
 170..171 'r': hir_ty=[!error] tir=[int]

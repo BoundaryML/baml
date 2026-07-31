@@ -6,8 +6,8 @@ expression: outcome.dump
 456..461 'let v': hir_ty=[!error] tir=[bool]
 464..492 'if c {...alse }': hir_ty=[!error] tir=[true | false]
 467..468 'c': hir_ty=[!error] tir=[bool]
-469..477 '{ true }': hir_ty=[!error] tir=[true]
-471..475 'true': hir_ty=[!error] tir=[true]
-483..492 '{ false }': hir_ty=[!error] tir=[false]
-485..490 'false': hir_ty=[!error] tir=[false]
+469..477 '{ true }': true
+471..475 'true': true
+483..492 '{ false }': false
+485..490 'false': false
 544..545 'v': hir_ty=[!error] tir=[bool]
