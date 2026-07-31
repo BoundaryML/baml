@@ -71,7 +71,7 @@ cutover. "Tested by" is the merge gate for the slice.
 | S6  | Core exprs: literals+freshness, let/locals, blocks, `_` holes        | simple-tier fixtures; wildcard-hole spec tests         |
 | S7  | Expectation + canonicalizing union-join + Diverges/never             | coercion/never-tier fixtures                           |
 | S8  | Calls: fresh vars per site, variance-aware solve, 2-pass args        | call fixtures; invariant-position rejection tests      |
-| S9  | Lambdas: expectation-driven params, child scope                      | lambda fixtures; TIR differential                      |
+| S9  | Lambdas: expectation-driven params, child scope; function VALUES outside call position; consolidate callee/path resolution into one `resolve_value_path` entry (r-a's `infer/path.rs` shape) | lambda fixtures; TIR differential                      |
 | S10 | Patterns + narrowing; exhaustiveness reused via `PatCtx`             | patterns-tier fixtures                                 |
 | S11 | Member resolution: probe/confirm; fields, methods, `?.`              | method-resolution-tier fixtures (obligations stubbed)  |
 | I1  | Impl registry + nominal lookup; orphan check (E0139)                 | `C <: I` fixtures; orphan diagnostic parity vs TIR     |

@@ -739,6 +739,12 @@ impl<'db> InferenceContext<'db> {
     /// The callee's (instantiated) function type. Direct function
     /// references are instantiated here; everything else is whatever the
     /// expression infers to.
+    ///
+    /// TODO(S9/S10): consolidate into a single `resolve_value_path`-style
+    /// entry (rust-analyzer's `infer/path.rs` shape) once function VALUES
+    /// outside call position (`let c: (int) -> int = foo;`) and method
+    /// callees exist - path resolution should have one home, not
+    /// per-construct special cases accreting here.
     fn infer_callee(&mut self, body: &ExprBody, call: ExprId, callee: ExprId) -> Ty {
         // A path that names a function (and is not shadowed by a local)
         // is a direct call.
