@@ -830,6 +830,11 @@ fn local_key(auto: &Automaton<'_>, s: StateId) -> LocalKey {
 fn algebra_pass<C: TypeContext>(auto: &mut Automaton<'_>, root: StateId, ctx: &C) -> bool {
     let cyclic = cyclic_states(auto, root);
     let mut changed = false;
+    // Member read-backs are pure in the automaton and members recur across
+    // union states (a shared leaf sits in many unions), so memoize them while
+    // the automaton is unmutated: any node rewrite or redirect below clears
+    // the memo (a stale read-back would change absorption decisions).
+    let mut read_backs: BTreeMap<StateId, Option<NormalTy>> = BTreeMap::new();
     for s in auto.reachable(root) {
         let Node::Union(raw) = auto.node(s) else {
             continue;
@@ -846,7 +851,13 @@ fn algebra_pass<C: TypeContext>(auto: &mut Automaton<'_>, root: StateId, ctx: &C
         let materialized: Option<Vec<(NormalTy, StateId)>> = if absorb {
             members
                 .iter()
-                .map(|&m| read_back(auto, m).map(|t| (t, m)))
+                .map(|&m| {
+                    read_backs
+                        .entry(m)
+                        .or_insert_with(|| read_back(auto, m))
+                        .clone()
+                        .map(|t| (t, m))
+                })
                 .collect()
         } else {
             None
@@ -890,9 +901,13 @@ fn algebra_pass<C: TypeContext>(auto: &mut Automaton<'_>, root: StateId, ctx: &C
             members
         };
 
-        changed |= members != before;
+        let state_changed = members != before;
+        changed |= state_changed;
         match members.len() {
-            0 => auto.states[s].node = Node::Leaf(auto.never),
+            0 => {
+                auto.states[s].node = Node::Leaf(auto.never);
+                read_backs.clear();
+            }
             1 => {
                 let m = *members
                     .first()
@@ -902,9 +917,19 @@ fn algebra_pass<C: TypeContext>(auto: &mut Automaton<'_>, root: StateId, ctx: &C
                     // The redirect may point other unions' members at a union —
                     // force another closure/refinement round.
                     changed = true;
+                    read_backs.clear();
                 }
             }
-            _ => auto.states[s].node = Node::Union(members.into_iter().collect()),
+            _ => {
+                // The write normalizes the stored member Vec (resolved, sorted,
+                // deduped); with the member set unchanged that is
+                // read-back-invariant (read-back resolves and sorts members
+                // itself), so cached read-backs stay valid.
+                auto.states[s].node = Node::Union(members.into_iter().collect());
+                if state_changed {
+                    read_backs.clear();
+                }
+            }
         }
     }
     changed

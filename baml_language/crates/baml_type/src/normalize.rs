@@ -777,6 +777,17 @@ impl NormalTy {
             // compared by equality) except union decomposition into
             // constructor-headed, non-union members — so the recursion is
             // bounded by two unfolds plus one member decomposition per side.
+            //
+            // The read-back bail (`canonicalize_mu` falling back to the
+            // pre-automaton term) is the one path that hands this method a μ
+            // with an unguarded spine; unfolding such a μ re-injects it into
+            // its own union spine without ever crossing a constructor. Nothing
+            // is provable about it here — answer "not provably disjoint".
+            (NormalTy::Mu { .. }, _) | (_, NormalTy::Mu { .. })
+                if self.has_unguarded_mu() || other.has_unguarded_mu() =>
+            {
+                false
+            }
             (NormalTy::Mu { .. }, _) => self.unfold().is_disjoint_from(other),
             (_, NormalTy::Mu { .. }) => self.is_disjoint_from(&other.unfold()),
 

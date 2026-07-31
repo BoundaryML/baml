@@ -1576,6 +1576,27 @@ fn overlapping_recursive_types_are_not_disjoint() {
 }
 
 #[test]
+fn unguarded_mu_disjointness_terminates_conservatively() {
+    // The read-back bail keeps the pre-automaton spelling, whose μ spine can be
+    // unguarded (`type A = A | A[]`); unfolding it re-injects the μ into its
+    // own union spine forever, so the guard must answer first.
+    let unguarded = NormalTy::Mu {
+        binder: MuDisplay {
+            name: None,
+            rendered: Box::new(Ty::Never {
+                attr: TyAttr::default(),
+            }),
+        },
+        body: Box::new(NormalTy::Union(vec![
+            NormalTy::RecVar(0),
+            NormalTy::List(Box::new(NormalTy::RecVar(0))),
+        ])),
+    };
+    assert!(!unguarded.is_disjoint_from(&NormalTy::String));
+    assert!(!NormalTy::String.is_disjoint_from(&unguarded));
+}
+
+#[test]
 fn union_nested_recursion_renders_via_subset_cover() {
     // `type A = int | (A | null)[]` — the recursion variable sits inside a
     // nested union under the list, so ε-closure splices the named union through
