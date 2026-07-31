@@ -378,20 +378,26 @@ impl DescribeArgs {
                 Ok(crate::ExitCode::Success)
             }
             Some(ResolvedTarget::Item(def)) => {
+                if self.json {
+                    // Typed drill-in document; ids match `--export` exactly.
+                    let symbol = baml_surface::Symbol::from(def);
+                    let Some(export) = baml_surface::export_symbol(&db, symbol) else {
+                        eprintln!("no symbol found: {name}");
+                        print_did_you_mean(&db, name);
+                        return Ok(crate::ExitCode::Other);
+                    };
+                    println!(
+                        "{}",
+                        serde_json::to_string_pretty(&export)
+                            .context("failed to serialize output as JSON")?
+                    );
+                    return Ok(crate::ExitCode::Success);
+                }
                 let describe_files = baml_compiler2_hir::compiler2_all_files(&db);
                 if let Some(desc) =
                     baml_lsp2_actions::describe_by_definition(&db, &describe_files, def)
                 {
-                    if self.json {
-                        let json = description_to_json(&db, &desc, self.budget, &from);
-                        println!(
-                            "{}",
-                            serde_json::to_string_pretty(&[json])
-                                .context("failed to serialize output as JSON")?
-                        );
-                    } else {
-                        render_description(&db, &desc, self.budget, &from);
-                    }
+                    render_description(&db, &desc, self.budget, &from);
                     Ok(crate::ExitCode::Success)
                 } else {
                     eprintln!("no symbol found: {name}");
@@ -403,6 +409,21 @@ impl DescribeArgs {
                 parent,
                 member_name,
             }) => {
+                if self.json {
+                    let owner = baml_surface::Symbol::from(parent);
+                    let Some(member) = owner.member_named(&db, member_name.as_str()) else {
+                        eprintln!("no symbol found: {name}");
+                        print_did_you_mean(&db, name);
+                        return Ok(crate::ExitCode::Other);
+                    };
+                    let export = baml_surface::export_member(&db, owner, member);
+                    println!(
+                        "{}",
+                        serde_json::to_string_pretty(&export)
+                            .context("failed to serialize output as JSON")?
+                    );
+                    return Ok(crate::ExitCode::Success);
+                }
                 let describe_files = baml_compiler2_hir::compiler2_all_files(&db);
                 if let Some(desc) = baml_lsp2_actions::describe_item_member(
                     &db,
@@ -410,16 +431,7 @@ impl DescribeArgs {
                     parent,
                     member_name.as_str(),
                 ) {
-                    if self.json {
-                        let json = description_to_json(&db, &desc, self.budget, &from);
-                        println!(
-                            "{}",
-                            serde_json::to_string_pretty(&[json])
-                                .context("failed to serialize output as JSON")?
-                        );
-                    } else {
-                        render_description(&db, &desc, self.budget, &from);
-                    }
+                    render_description(&db, &desc, self.budget, &from);
                     Ok(crate::ExitCode::Success)
                 } else {
                     eprintln!("no symbol found: {name}");

@@ -58,7 +58,9 @@ impl Db for baml_project::ProjectDatabase {}
 // ── Public API re-exports ─────────────────────────────────────────────────────
 
 pub use display::TyDisplayFormat;
-pub use export::{PackageExport, export_package};
+pub use export::{
+    MemberExport, PackageExport, SymbolExport, export_member, export_package, export_symbol,
+};
 pub use handles::{
     AssocType, Class, Client, Enum, Field, FieldOwner, Function, FunctionOwner, Global, Impl,
     ImplMethod, Interface, Member, Namespace, Package, RequiredMethod, RetryPolicy, Symbol,

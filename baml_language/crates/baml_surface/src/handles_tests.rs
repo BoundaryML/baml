@@ -60,6 +60,8 @@ test greet_works {
 /// One line per namespace item: kind, source kind when it differs, name, the
 /// name-span slice (proving spans line up), and the docstring's first line.
 fn render_user_surface(db: &dyn Db, src: &str) -> String {
+    use std::fmt::Write as _;
+
     let mut out = String::new();
     for ns in Package::user(db).namespaces(db) {
         let path: Vec<String> = ns.path(db).iter().map(ToString::to_string).collect();

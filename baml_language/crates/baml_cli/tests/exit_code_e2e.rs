@@ -2012,3 +2012,44 @@ fn generate_without_baml_toml_reports_no_generators() {
         "Expected a missing-generator hint, got: {stderr}",
     );
 }
+
+/// `describe X --json` emits the typed drill-in document whose ids match
+/// `--export` — the contract the stdlib-matrix tooling keys on.
+#[test]
+fn describe_json_drill_carries_surface_ids() {
+    let built = &common::baml_cli();
+    let tmp = tempfile::tempdir().unwrap();
+    common::write_project(
+        tmp.path(),
+        "function greet(name: string) -> string { name }\n",
+    );
+
+    let output = run_baml_cli(
+        built,
+        tmp.path(),
+        &["describe", "baml.time.Duration", "--json"],
+    );
+    assert!(output.status.success(), "{output:?}");
+    let doc: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(doc["id"], "T:baml.time.Duration");
+    assert_eq!(doc["kind"], "class");
+    assert!(
+        doc["methods"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|m| m["id"] == "M:baml.time.Duration.abs"),
+        "method ids present"
+    );
+
+    let output = run_baml_cli(
+        built,
+        tmp.path(),
+        &["describe", "baml.time.Duration.abs", "--json"],
+    );
+    assert!(output.status.success(), "{output:?}");
+    let doc: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(doc["member_kind"], "method");
+    assert_eq!(doc["id"], "M:baml.time.Duration.abs");
+    assert_eq!(doc["signature"]["returns"]["display"], "baml.time.Duration");
+}

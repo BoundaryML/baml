@@ -317,7 +317,7 @@ pub struct PackageExport {
 
 /// Export one package's full surface.
 pub fn export_package<'db>(db: &'db dyn Db, package: Package<'db>) -> PackageExport {
-    let impl_index = ImplIndex::build(db, package);
+    let impl_index = ImplIndex::build(db);
 
     let mut items = Vec::new();
     for namespace in package.namespaces(db) {
@@ -355,7 +355,7 @@ struct ImplIndex<'db> {
 }
 
 impl<'db> ImplIndex<'db> {
-    fn build(db: &'db dyn Db, package: Package<'db>) -> Self {
+    fn build(db: &'db dyn Db) -> Self {
         // Deterministic id assignment: file order (builtins first, then
         // project files), `#n` suffixes for same-headed duplicates.
         let mut seen_bases: std::collections::HashMap<String, u32> =
@@ -367,7 +367,6 @@ impl<'db> ImplIndex<'db> {
             };
             exports.push((imp, export));
         }
-        let _ = package;
         Self { exports }
     }
 
@@ -689,4 +688,84 @@ fn export_item<'db>(
         source: source_export(db, symbol.file(db), symbol.span(db)),
         detail,
     })
+}
+
+// ── Single-symbol projections (describe drill-in) ───────────────────────────
+
+/// One item plus the full records of every impl attached to it — the
+/// self-contained drill-in document. Ids match `export_package`'s exactly.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct SymbolExport {
+    #[serde(flatten)]
+    pub item: ItemExport,
+    /// Full records for the ids in the item's attachment lists.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub impl_details: Vec<ImplExport>,
+}
+
+/// Export one symbol with its attached impls inlined. `None` for symbols
+/// with no id (impls themselves — export their attachment target instead).
+pub fn export_symbol<'db>(db: &'db dyn Db, symbol: Symbol<'db>) -> Option<SymbolExport> {
+    let impl_index = ImplIndex::build(db);
+    let item = export_item(db, symbol, &impl_index)?;
+    let referenced: Vec<&str> = match &item.detail {
+        ItemDetail::Class { impls, .. } | ItemDetail::Enum { impls, .. } => {
+            impls.iter().map(String::as_str).collect()
+        }
+        ItemDetail::Interface { implementors, .. } => {
+            implementors.iter().map(String::as_str).collect()
+        }
+        ItemDetail::TypeAlias { .. } | ItemDetail::Function { .. } | ItemDetail::Plain {} => {
+            Vec::new()
+        }
+    };
+    let impl_details = impl_index
+        .exports
+        .into_iter()
+        .map(|(_, export)| export)
+        .filter(|export| referenced.contains(&export.id.as_str()))
+        .collect();
+    Some(SymbolExport { item, impl_details })
+}
+
+/// A member's drill-in record.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(tag = "member_kind", rename_all = "snake_case")]
+pub enum MemberExport {
+    Method(FunctionExport),
+    RequiredMethod(RequiredMethodExport),
+    Field(FieldExport),
+    Variant(VariantExport),
+    AssocType(AssocTypeExport),
+}
+
+/// Export one member of `owner`.
+pub fn export_member<'db>(
+    db: &'db dyn Db,
+    owner: Symbol<'db>,
+    member: crate::Member<'db>,
+) -> MemberExport {
+    match member {
+        crate::Member::Method(function) => {
+            MemberExport::Method(function_export(db, function, false))
+        }
+        crate::Member::RequiredMethod(required) => {
+            MemberExport::RequiredMethod(required_method_export(db, owner, required))
+        }
+        crate::Member::Field(field) => MemberExport::Field(field_export(db, owner, field)),
+        crate::Member::Variant(variant) => MemberExport::Variant(VariantExport {
+            id: SymbolId::of_member(db, owner, crate::Member::Variant(variant))
+                .map(|id| id.to_string())
+                .unwrap_or_default(),
+            name: variant.name(db).to_string(),
+            docstring: variant.docstring(db).map(str::to_string),
+        }),
+        crate::Member::AssocType(assoc) => MemberExport::AssocType(AssocTypeExport {
+            id: SymbolId::of_member(db, owner, crate::Member::AssocType(assoc))
+                .map(|id| id.to_string())
+                .unwrap_or_default(),
+            name: assoc.name(db).to_string(),
+            default: assoc.default_ty(db).as_ref().map(TyRef::of),
+        }),
+    }
 }
