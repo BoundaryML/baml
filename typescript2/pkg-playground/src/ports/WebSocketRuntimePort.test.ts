@@ -1,4 +1,3 @@
-// biome-ignore-all assist/source/useSortedKeys: Preserve the protocol-field order used by the transport assertions.
 // biome-ignore-all lint/style/useFilenamingConvention: Preserve the existing test filename beside its implementation.
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -49,30 +48,30 @@ class FakeWebSocket {
 
 function compatibleHello(socket: FakeWebSocket): void {
   socket.receive({
-    type: 'hello',
-    toolchainVersion: 'test',
-    playgroundProtocol: 2,
-    minClientPlaygroundProtocol: 2,
     capabilities: [],
+    minClientPlaygroundProtocol: 2,
+    playgroundProtocol: 2,
+    toolchainVersion: 'test',
+    type: 'hello',
   });
 }
 
 function startRunMessage(requestId: number) {
   return {
-    type: 'startRun' as const,
-    requestId,
-    project: '/project',
-    functionName: 'Extract',
     argsBytes: new Uint8Array([1]),
+    functionName: 'Extract',
+    project: '/project',
+    requestId,
+    type: 'startRun' as const,
   };
 }
 
 const SENT_START_RUN = (requestId: number) => ({
-  type: 'startRun',
-  requestId,
-  project: '/project',
-  functionName: 'Extract',
   argsBytes: 'AQ==',
+  functionName: 'Extract',
+  project: '/project',
+  requestId,
+  type: 'startRun',
 });
 
 describe('WebSocketRuntimePort handshake and command gating', () => {
@@ -127,15 +126,15 @@ describe('WebSocketRuntimePort handshake and command gating', () => {
 
     socket.open();
     socket.receive({
-      type: 'hello',
-      toolchainVersion: 'future',
-      playgroundProtocol: 99,
-      minClientPlaygroundProtocol: 99,
       capabilities: [],
+      minClientPlaygroundProtocol: 99,
+      playgroundProtocol: 99,
+      toolchainVersion: 'future',
+      type: 'hello',
     });
     socket.receive({
+      notification: { projects: ['/stale'], type: 'listProjects' },
       type: 'playgroundNotification',
-      notification: { type: 'listProjects', projects: ['/stale'] },
     });
     socket.receive({ type: 'ready' });
 
@@ -147,9 +146,9 @@ describe('WebSocketRuntimePort handshake and command gating', () => {
     expect(socket.parsedSent()).toEqual([{ type: 'requestState' }]);
     expect(received.filter((msg) => msg.type === 'commandError')).toEqual([
       expect.objectContaining({
-        type: 'commandError',
-        requestId: 40,
         code: 'disconnected',
+        requestId: 40,
+        type: 'commandError',
       }),
     ]);
     port.dispose();
@@ -188,9 +187,9 @@ describe('WebSocketRuntimePort handshake and command gating', () => {
     port.postMessage(startRunMessage(50));
     expect(received.filter((msg) => msg.type === 'commandError')).toEqual([
       expect.objectContaining({
-        type: 'commandError',
-        requestId: 50,
         code: 'disconnected',
+        requestId: 50,
+        type: 'commandError',
       }),
     ]);
 
@@ -219,9 +218,9 @@ describe('WebSocketRuntimePort handshake and command gating', () => {
     // The oldest command fell off the bounded queue with a local failure.
     expect(received).toContainEqual(
       expect.objectContaining({
-        type: 'commandError',
-        requestId: 0,
         code: 'disconnected',
+        requestId: 0,
+        type: 'commandError',
       }),
     );
 
@@ -254,32 +253,32 @@ describe('WebSocketRuntimePort control-flow graph correlation', () => {
     socket.sent.length = 0;
 
     port.postMessage({
-      type: 'requestControlFlowGraph',
-      project: '/project',
       functionName: 'Extract',
+      project: '/project',
       requestId: 17,
+      type: 'requestControlFlowGraph',
     });
     expect(socket.parsedSent()).toEqual([
       {
-        type: 'requestControlFlowGraph',
-        project: '/project',
         functionName: 'Extract',
+        project: '/project',
         requestId: 17,
+        type: 'requestControlFlowGraph',
       },
     ]);
 
     socket.receive({
-      type: 'controlFlowGraphResult',
       functionName: 'Extract',
       graph: null,
       requestId: 17,
+      type: 'controlFlowGraphResult',
     });
     expect(received).toEqual([
       {
-        type: 'controlFlowGraphResult',
         functionName: 'Extract',
         graph: null,
         requestId: 17,
+        type: 'controlFlowGraphResult',
       },
     ]);
     port.dispose();
@@ -299,10 +298,10 @@ describe('WebSocketRuntimePort project-runtime lease', () => {
     const socket = FakeWebSocket.instances[0]!;
 
     port.postMessage({
-      type: 'ensureProjectRuntime',
-      requestId: 10,
-      project: '/selected',
       incarnation: 3,
+      project: '/selected',
+      requestId: 10,
+      type: 'ensureProjectRuntime',
     });
     socket.open();
     expect(socket.parsedSent()).toEqual([{ type: 'requestState' }]);
@@ -311,10 +310,10 @@ describe('WebSocketRuntimePort project-runtime lease', () => {
     expect(socket.parsedSent()).toEqual([
       { type: 'requestState' },
       {
-        type: 'ensureProjectRuntime',
-        requestId: 10,
-        project: '/selected',
         incarnation: 3,
+        project: '/selected',
+        requestId: 10,
+        type: 'ensureProjectRuntime',
       },
     ]);
     port.dispose();
@@ -330,22 +329,22 @@ describe('WebSocketRuntimePort project-runtime lease', () => {
     compatibleHello(first);
 
     port.postMessage({
-      type: 'ensureProjectRuntime',
+      incarnation: 1,
+      project: '/old',
       requestId: 20,
-      project: '/old',
-      incarnation: 1,
-    });
-    port.postMessage({
-      type: 'releaseProjectRuntime',
-      requestId: 21,
-      project: '/old',
-      incarnation: 1,
-    });
-    port.postMessage({
       type: 'ensureProjectRuntime',
-      requestId: 22,
-      project: '/selected',
+    });
+    port.postMessage({
+      incarnation: 1,
+      project: '/old',
+      requestId: 21,
+      type: 'releaseProjectRuntime',
+    });
+    port.postMessage({
       incarnation: 3,
+      project: '/selected',
+      requestId: 22,
+      type: 'ensureProjectRuntime',
     });
 
     first.serverClose();
@@ -358,10 +357,10 @@ describe('WebSocketRuntimePort project-runtime lease', () => {
     expect(second.parsedSent()).toEqual([
       { type: 'requestState' },
       {
-        type: 'ensureProjectRuntime',
-        requestId: 22,
-        project: '/selected',
         incarnation: 3,
+        project: '/selected',
+        requestId: 22,
+        type: 'ensureProjectRuntime',
       },
     ]);
 
@@ -374,10 +373,10 @@ describe('WebSocketRuntimePort project-runtime lease', () => {
     expect(third.parsedSent()).toEqual([
       { type: 'requestState' },
       {
-        type: 'ensureProjectRuntime',
-        requestId: 22,
-        project: '/selected',
         incarnation: 3,
+        project: '/selected',
+        requestId: 22,
+        type: 'ensureProjectRuntime',
       },
     ]);
     port.dispose();
@@ -392,19 +391,19 @@ describe('WebSocketRuntimePort project-runtime lease', () => {
     first.open();
     compatibleHello(first);
     port.postMessage({
-      type: 'ensureProjectRuntime',
-      requestId: 30,
-      project: '/selected',
       incarnation: 5,
+      project: '/selected',
+      requestId: 30,
+      type: 'ensureProjectRuntime',
     });
 
     first.serverClose();
     // The release arrives while disconnected: it must still retire the lease.
     port.postMessage({
-      type: 'releaseProjectRuntime',
-      requestId: 31,
-      project: '/selected',
       incarnation: 5,
+      project: '/selected',
+      requestId: 31,
+      type: 'releaseProjectRuntime',
     });
 
     vi.advanceTimersByTime(500);
@@ -425,30 +424,30 @@ describe('WebSocketRuntimePort project-runtime lease', () => {
     socket.sent.length = 0;
 
     port.postMessage({
-      type: 'ensureProjectRuntime',
-      requestId: 40,
-      project: '/selected',
       incarnation: 7,
+      project: '/selected',
+      requestId: 40,
+      type: 'ensureProjectRuntime',
     });
     port.postMessage({
-      type: 'releaseProjectRuntime',
-      requestId: 41,
-      project: '/selected',
       incarnation: 6,
+      project: '/selected',
+      requestId: 41,
+      type: 'releaseProjectRuntime',
     });
 
     expect(socket.parsedSent()).toEqual([
       {
-        type: 'ensureProjectRuntime',
-        requestId: 40,
-        project: '/selected',
         incarnation: 7,
+        project: '/selected',
+        requestId: 40,
+        type: 'ensureProjectRuntime',
       },
       {
-        type: 'releaseProjectRuntime',
-        requestId: 41,
-        project: '/selected',
         incarnation: 6,
+        project: '/selected',
+        requestId: 41,
+        type: 'releaseProjectRuntime',
       },
     ]);
     port.dispose();

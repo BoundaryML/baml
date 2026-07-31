@@ -96,18 +96,6 @@
       }
     }
   },
-  "overrides": [
-    {
-      "formatter": {
-        "enabled": false
-      },
-      "includes": [
-        "app-promptfiddle/src/playground/baml-lsp-worker.ts",
-        "app-website/playground/baml-worker.ts",
-        "pkg-playground/src/ports/WebSocketRuntimePort.ts"
-      ]
-    }
-  ],
   "vcs": {
     "clientKind": "git",
     "defaultBranch": "canary",
