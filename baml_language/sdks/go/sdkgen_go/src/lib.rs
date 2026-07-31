@@ -1675,7 +1675,7 @@ fn render_functions(
         }
         let _ = writeln!(
             out,
-            "\tif {error_local} := {bootstrap_package}.Ensure(); {error_local} != nil {{"
+            "\tif {error_local} := {bootstrap_package}.Ensure({context_parameter}); {error_local} != nil {{"
         );
         if function_returns_only_error(&function.return_type) {
             let _ = writeln!(out, "\t\treturn {error_local}\n\t}}");
@@ -4544,9 +4544,9 @@ fn render_go_literal_value(literal: &GoLiteral, runtime: &str) -> String {
 fn render_bootstrap(bytecode: &[u8]) -> String {
     let mut out = String::from(BANNER);
     out.push_str("package bootstrap\n\n");
-    out.push_str("import (\n\t\"sync\"\n\n");
+    out.push_str("import (\n\t\"context\"\n\t\"errors\"\n\n");
     let _ = writeln!(out, "\t\"{BAML_GO_MODULE}\"\n)\n");
-    out.push_str("var (\n\tonce          sync.Once\n\tinitializeErr error\n)\n\n");
+    out.push_str("var (\n\tinitialization = make(chan struct{}, 1)\n\tinitialized    bool\n)\n\n");
     out.push_str("var bytecode = []byte{\n");
     for chunk in bytecode.chunks(20) {
         let line = chunk
@@ -4557,9 +4557,21 @@ fn render_bootstrap(bytecode: &[u8]) -> String {
         let _ = writeln!(out, "\t{line},");
     }
     out.push_str("}\n\n");
-    out.push_str("func Ensure() error {\n");
-    out.push_str("\tonce.Do(func() { initializeErr = baml_go.Initialize(bytecode) })\n");
-    out.push_str("\treturn initializeErr\n}\n");
+    out.push_str("func init() {\n\tinitialization <- struct{}{}\n}\n\n");
+    out.push_str("func Ensure(ctx context.Context) error {\n");
+    out.push_str(
+        "\tif ctx == nil {\n\t\treturn errors.New(\"BAML bootstrap: nil context\")\n\t}\n",
+    );
+    out.push_str("\tif err := ctx.Err(); err != nil {\n\t\treturn err\n\t}\n");
+    out.push_str(
+        "\tselect {\n\tcase <-ctx.Done():\n\t\treturn ctx.Err()\n\tcase <-initialization:\n\t}\n",
+    );
+    out.push_str("\tdefer func() { initialization <- struct{}{} }()\n");
+    out.push_str("\tif initialized {\n\t\treturn nil\n\t}\n");
+    out.push_str(
+        "\tif err := baml_go.InitializeContext(ctx, bytecode); err != nil {\n\t\treturn err\n\t}\n",
+    );
+    out.push_str("\tinitialized = true\n\treturn nil\n}\n");
     out
 }
 
@@ -4847,10 +4859,12 @@ mod tests {
         );
         assert!(functions.contains("\"user.echo_text\""));
         assert!(functions.contains("baml_go.String(value)"));
-        assert!(
-            files[&PathBuf::from("internal/bootstrap/bootstrap.go")]
-                .contains("var bytecode = []byte{\n\t1, 2, 3,")
-        );
+        assert!(functions.contains("bootstrap.Ensure(ctx_)"));
+        let bootstrap = &files[&PathBuf::from("internal/bootstrap/bootstrap.go")];
+        assert!(bootstrap.contains("var bytecode = []byte{\n\t1, 2, 3,"));
+        assert!(bootstrap.contains("func Ensure(ctx context.Context) error"));
+        assert!(bootstrap.contains("baml_go.InitializeContext(ctx, bytecode)"));
+        assert!(!bootstrap.contains("sync.Once"));
     }
 
     #[test]
@@ -6204,7 +6218,7 @@ mod tests {
             name: BaseName::new("reserved_args"),
             generic_params: vec![],
             docstring: None,
-            arguments: ["ctx", "result", "err"]
+            arguments: ["context", "ctx", "result", "err"]
                 .into_iter()
                 .map(|name| FunctionArgument {
                     name: BaseName::new(name),
@@ -6226,7 +6240,7 @@ mod tests {
             "example.com/project/baml_sdk",
         );
         assert!(files[&PathBuf::from("functions.go")].contains(
-            "func ReservedArgs(ctx_ context.Context, ctx string, result string, err string)"
+            "func ReservedArgs(ctx_ context.Context, context_ string, ctx string, result string, err string)"
         ));
     }
 

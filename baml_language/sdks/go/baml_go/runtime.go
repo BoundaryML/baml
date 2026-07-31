@@ -61,7 +61,25 @@ type pendingCall struct {
 // serialized program. Generated projects normally call this through their
 // internal bootstrap package exactly once.
 func Initialize(bytecode []byte) error {
-	if err := ensureNativeRuntime(context.Background()); err != nil {
+	return InitializeContext(context.Background(), bytecode)
+}
+
+// InitializeContext replaces the process-wide BAML runtime with the supplied
+// serialized program while honoring cancellation during native-runtime
+// resolution. Generated projects pass the context from the BAML function call
+// so first-use downloads and concurrent initialization waits remain
+// cancellable.
+func InitializeContext(ctx context.Context, bytecode []byte) error {
+	if ctx == nil {
+		return errors.New("baml_go.InitializeContext: nil context")
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if err := ensureNativeRuntime(ctx); err != nil {
+		return err
+	}
+	if err := ctx.Err(); err != nil {
 		return err
 	}
 	return nativeInitialize(bytecode)
@@ -433,6 +451,17 @@ func reservePendingCall(call *pendingCall) uint32 {
 			return id
 		}
 	}
+}
+
+// completePendingCall atomically claims one terminal result. Native error,
+// panic, and success outcomes share one result envelope, so a duplicate or
+// late callback must be ignored rather than racing a send/close pair.
+func completePendingCall(callbackID uint32, payload []byte) {
+	value, ok := pendingCalls.LoadAndDelete(callbackID)
+	if !ok {
+		return
+	}
+	value.(*pendingCall).result <- payload
 }
 
 func encodeCall(callID uint64, args map[string]Input) ([]byte, error) {
