@@ -1,3 +1,6 @@
+// biome-ignore-all assist/source/organizeImports: Preserve the existing import layout in this legacy transport.
+// biome-ignore-all assist/source/useSortedKeys: Preserve the established protocol property layout in this legacy transport.
+// biome-ignore-all lint/style/useFilenamingConvention: Preserve the existing public class filename.
 /**
  * RuntimePort backed by a WebSocket connection to the Rust playground server.
  *

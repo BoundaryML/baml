@@ -1,3 +1,5 @@
+// biome-ignore-all assist/source/useSortedKeys: Preserve the protocol-field order used by the transport assertions.
+// biome-ignore-all lint/style/useFilenamingConvention: Preserve the existing test filename beside its implementation.
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { WorkerOutMessage } from '../worker-protocol';

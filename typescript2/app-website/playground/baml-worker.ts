@@ -1,3 +1,7 @@
+// biome-ignore-all assist/source/organizeImports: Preserve the existing import layout in this legacy worker.
+// biome-ignore-all assist/source/useSortedKeys: Preserve the existing wire-message property layout in this legacy worker.
+// biome-ignore-all lint/style/noParameterAssign: Preserve the existing JSON-RPC normalization flow in this legacy worker.
+// biome-ignore-all lint/suspicious/noExplicitAny: Preserve the existing recursive wire-value conversion in this legacy worker.
 /**
  * BAML Worker for the marketing-site playground.
  *
