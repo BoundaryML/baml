@@ -848,6 +848,8 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
   const workflowCfgResponsesRef = useRef<Map<string, ControlFlowGraph | null>>(
     new Map(),
   );
+  const cfgRequestSequenceRef = useRef(0);
+  const cfgRequestIdsRef = useRef<Map<string, number>>(new Map());
   const [workflowCacheVersion, setWorkflowCacheVersion] = useState(0);
   const [activeTab, setActiveTab] = useState<
     'run' | 'graph' | 'trace' | 'flame' | 'prompt' | 'curl'
@@ -1254,7 +1256,14 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
   function handleControlFlowGraphResult(
     targetName: string,
     graph: ControlFlowGraph | null,
+    requestId?: number,
   ) {
+    if (
+      requestId != null &&
+      cfgRequestIdsRef.current.get(targetName) !== requestId
+    ) {
+      return;
+    }
     const isTestGraph = testGraphRequestsRef.current.has(targetName);
     if (!isTestGraph) {
       workflowCfgResponsesRef.current.set(targetName, graph);
@@ -1371,7 +1380,11 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
               }
               break;
             case 'controlFlowGraphResult':
-              handleControlFlowGraphResult(n.functionName, n.graph);
+              handleControlFlowGraphResult(
+                n.functionName,
+                n.graph,
+                n.requestId,
+              );
               break;
           }
           break;
@@ -1506,7 +1519,11 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
           break;
 
         case 'controlFlowGraphResult':
-          handleControlFlowGraphResult(data.functionName, data.graph);
+          handleControlFlowGraphResult(
+            data.functionName,
+            data.graph,
+            data.requestId,
+          );
           break;
 
         case 'cursorContext':
@@ -1543,6 +1560,20 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
   const projectUpdateVersion = selectedProject
     ? projectUpdates[selectedProject]
     : undefined;
+  const requestControlFlowGraph = useCallback(
+    (project: string, functionName: string) => {
+      const requestId = cfgRequestSequenceRef.current + 1;
+      cfgRequestSequenceRef.current = requestId;
+      cfgRequestIdsRef.current.set(functionName, requestId);
+      port.postMessage({
+        functionName,
+        project,
+        requestId,
+        type: 'requestControlFlowGraph',
+      });
+    },
+    [port],
+  );
 
   useEffect(() => {
     const targetChanged = prevGraphTargetRef.current !== graphTargetName;
@@ -1558,14 +1589,10 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
     if (selectedTestName) {
       testGraphRequestsRef.current.add(selectedTestName);
     }
-    port.postMessage({
-      functionName: graphTargetName,
-      project: selectedProject,
-      type: 'requestControlFlowGraph',
-    });
+    requestControlFlowGraph(selectedProject, graphTargetName);
   }, [
-    port,
     graphTargetName,
+    requestControlFlowGraph,
     selectedProject,
     selectedTestName,
     projectUpdateVersion,
@@ -2393,17 +2420,37 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
       slot.names = new Set();
       workflowCfgCacheRef.current = new Map();
       workflowCfgResponsesRef.current = new Map();
+      cfgRequestIdsRef.current = new Map();
     }
     for (const name of functionNames) {
       if (slot.names.has(name)) continue;
       slot.names.add(name);
-      port.postMessage({
-        functionName: name,
-        project: selectedProject,
-        type: 'requestControlFlowGraph',
-      });
+      requestControlFlowGraph(selectedProject, name);
     }
-  }, [functionNames, selectedProject, projectUpdateVersion, port]);
+  }, [
+    functionNames,
+    selectedProject,
+    projectUpdateVersion,
+    requestControlFlowGraph,
+  ]);
+
+  const workflowNodeCounts = useMemo(() => {
+    void workflowCacheVersion;
+    if (
+      prefetchedCfgRef.current.version !== projectUpdateVersion ||
+      !functionNames.every((name) => workflowCfgResponsesRef.current.has(name))
+    ) {
+      return undefined;
+    }
+
+    return new Map(
+      functionNames.map((name) => [
+        name,
+        Object.keys(workflowCfgResponsesRef.current.get(name)?.nodes ?? {})
+          .length,
+      ]),
+    );
+  }, [functionNames, projectUpdateVersion, workflowCacheVersion]);
 
   // Reverse call map over the cached CFGs: callee -> the functions that
   // call it. calleeName may be bare while function names are qualified
@@ -3023,6 +3070,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
                   testRunResults={testRunResults}
                   testTree={testTree}
                   viewingCollection={viewingCollection}
+                  workflowNodeCounts={workflowNodeCounts}
                 />
               </div>
               <div
