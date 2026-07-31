@@ -283,6 +283,45 @@ describe('WebSocketRuntimePort control-flow graph correlation', () => {
     ]);
     port.dispose();
   });
+
+  it('remains compatible when the optional request ID is omitted', () => {
+    vi.stubGlobal('WebSocket', FakeWebSocket);
+    const port = new WebSocketRuntimePort('ws://playground.test/api/ws');
+    const socket = FakeWebSocket.instances[0]!;
+    const received: WorkerOutMessage[] = [];
+    port.onMessage((message) => received.push(message));
+
+    socket.open();
+    compatibleHello(socket);
+    socket.sent.length = 0;
+
+    port.postMessage({
+      functionName: 'Extract',
+      project: '/project',
+      type: 'requestControlFlowGraph',
+    });
+    expect(socket.parsedSent()).toEqual([
+      {
+        functionName: 'Extract',
+        project: '/project',
+        type: 'requestControlFlowGraph',
+      },
+    ]);
+
+    socket.receive({
+      functionName: 'Extract',
+      graph: null,
+      type: 'controlFlowGraphResult',
+    });
+    expect(received).toEqual([
+      {
+        functionName: 'Extract',
+        graph: null,
+        type: 'controlFlowGraphResult',
+      },
+    ]);
+    port.dispose();
+  });
 });
 
 describe('WebSocketRuntimePort project-runtime lease', () => {
