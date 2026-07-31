@@ -1,0 +1,12 @@
+---
+source: crates/baml_tests/src/type_spec/fixtures.rs
+expression: outcome.dump
+---
+256..335 '{\n   ...dj;\n}': void
+262..278 'let ad...nt[][]': int[][]
+271..278 'int[][]': hir_ty=[!error] tir=[int[][]]
+281..283 '[]': int[][]
+289..297 'adj.push': (self: int[][], item: int[]) -> int throws never
+289..301 'adj.push([])': int
+298..300 '[]': hir_ty=[int[]] tir=[_[]]
+329..332 'adj': int[][]

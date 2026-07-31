@@ -7,8 +7,9 @@
 //! additionally emits a `Sub` constraint, discharged eagerly per the settled
 //! design - invariant heads decay to `Eq`, ground pairs ask the canonical
 //! oracle, var-headed pairs deposit bounds, the irreducible residue defers
-//! to finish. Control-flow merge points join through
-//! `canonical_union_interned` (never fabricated at variables - ruling 1);
+//! to finish. Control-flow merge points join through `union_of` - the
+//! canonical union when members are var-free, syntactic until resolution
+//! otherwise (never fabricated at variables - ruling 1);
 //! `Diverges` tracks never-propagation. Value paths resolve through one
 //! entry (`resolve_value_path`); lambdas deduce unwritten signature slots
 //! from the expected function type and their bodies type in the owner's
@@ -381,7 +382,7 @@ impl<'db> InferenceContext<'db> {
                                 self.widen_fresh(&ty)
                             })
                             .collect();
-                        Ty::list(canonical_union_interned(&joined, &self.facts))
+                        Ty::list(self.union_of(&joined))
                     }
                 }
             }
@@ -402,8 +403,8 @@ impl<'db> InferenceContext<'db> {
                         })
                         .unzip();
                     Ty::intern(TyKind::Map {
-                        key: canonical_union_interned(&keys, &self.facts),
-                        value: canonical_union_interned(&values, &self.facts),
+                        key: self.union_of(&keys),
+                        value: self.union_of(&values),
                         attr: TyAttr::default(),
                     })
                 }
@@ -652,6 +653,18 @@ impl<'db> InferenceContext<'db> {
         }
     }
 
+    /// A union of members that may still contain inference variables. The
+    /// canonical algebra consults the semantic oracle and REQUIRES
+    /// var-free input (the normalizer's invariant), so a var-containing
+    /// join stays syntactic until resolution - the S13 finalize pass
+    /// re-canonicalizes once every variable is solved or ruled an error.
+    fn union_of(&mut self, members: &[Ty]) -> Ty {
+        if members.iter().any(Ty::has_infer) {
+            return Ty::union(members.iter().cloned());
+        }
+        canonical_union_interned(members, &self.facts)
+    }
+
     /// The control-flow join: a canonical union that PRESERVES literal
     /// freshness across the round-trip (the canonical algebra erases
     /// freshness as identity-irrelevant, but widening at the eventual
@@ -666,7 +679,7 @@ impl<'db> InferenceContext<'db> {
                 _ => None,
             })
             .collect();
-        let joined = canonical_union_interned(members, &self.facts);
+        let joined = self.union_of(members);
         if fresh.is_empty() {
             return joined;
         }
@@ -699,7 +712,7 @@ impl<'db> InferenceContext<'db> {
                 }) =>
             {
                 let widened: Vec<Ty> = members.iter().map(widen_fresh_literal).collect();
-                canonical_union_interned(&widened, &self.facts)
+                self.union_of(&widened)
             }
             _ => ty.clone(),
         }
@@ -836,7 +849,7 @@ impl<'db> InferenceContext<'db> {
                 },
             }
         }
-        canonical_union_interned(&outputs, &self.facts)
+        self.union_of(&outputs)
     }
 
     /// The non-null part of a type: `Null` drops from unions (an all-null
@@ -854,7 +867,7 @@ impl<'db> InferenceContext<'db> {
                 if non_null.is_empty() {
                     Ty::never()
                 } else {
-                    canonical_union_interned(&non_null, &self.facts)
+                    self.union_of(&non_null)
                 }
             }
             _ => resolved,
@@ -885,7 +898,7 @@ impl<'db> InferenceContext<'db> {
     /// through (`ns_ops` holds only `math.baml` and `comparison.baml`), so
     /// this table mirrors TIR's `infer_bitwise` exactly: int&int is int,
     /// any int/bigint mix is bigint, everything else is the Error sentinel
-    /// (TIR's InvalidBinaryOp, S17's diagnostic). DELETE this table - and
+    /// (TIR's `InvalidBinaryOp`, S17's diagnostic). DELETE this table - and
     /// route these five operators through `dispatch_operator` - when the
     /// bitwise interfaces land in the stdlib and TIR switches off its own
     /// table.
@@ -942,7 +955,7 @@ impl<'db> InferenceContext<'db> {
         callee: ExprId,
         args: &[baml_compiler2_ast::CallArg],
     ) -> Ty {
-        let callee_fn_ty = self.infer_callee(body, call, callee);
+        let (callee_fn_ty, bound_receiver) = self.infer_callee(body, call, callee);
         let TyKind::Function { params, ret, .. } = callee_fn_ty.kind() else {
             // Not callable (or not yet typed): visit the args, sentinel out.
             for arg in args {
@@ -950,7 +963,13 @@ impl<'db> InferenceContext<'db> {
             }
             return Ty::error();
         };
-        let params: Vec<Ty> = params.iter().map(|param| param.ty.clone()).collect();
+        // A bound method call: the receiver already fills the `self` slot,
+        // so written arguments match against the remaining parameters.
+        let params: Vec<Ty> = params
+            .iter()
+            .skip(usize::from(bound_receiver))
+            .map(|param| param.ty.clone())
+            .collect();
         let ret = ret.clone();
         let is_lambda_arg =
             |arg: &baml_compiler2_ast::CallArg| matches!(body.exprs[arg.expr], Expr::Lambda(_));
@@ -974,27 +993,112 @@ impl<'db> InferenceContext<'db> {
         ret
     }
 
-    /// The callee's (instantiated) function type. A direct function
-    /// reference is the one case that does not go through
-    /// `resolve_value_path`: its instantiation reads the CALL site's
-    /// turbofish, which a bare path value does not have. Everything else is
-    /// whatever the expression infers to (method callees arrive with
-    /// S10/S11).
-    fn infer_callee(&mut self, body: &ExprBody, call: ExprId, callee: ExprId) -> Ty {
-        // A path that names a function (and is not shadowed by a local)
-        // is a direct call.
+    /// The callee's (instantiated) function type, plus whether its first
+    /// parameter is already bound to a receiver (`xs.push(1)` checks `1`
+    /// against `item`, not `self`). Direct function references and
+    /// type-qualified method paths instantiate here because their
+    /// instantiation reads the CALL site's turbofish, which a bare value
+    /// does not have; bound method callees resolve through
+    /// `method_resolution`; everything else is whatever the expression
+    /// infers to.
+    fn infer_callee(&mut self, body: &ExprBody, call: ExprId, callee: ExprId) -> (Ty, bool) {
         if let Expr::Path(segments) = &body.exprs[callee]
             && !self.path_resolves_locally(callee)
-            && let Some(baml_compiler2_hir::contributions::Definition::Function(function)) =
-                self.lower.resolve_value(segments)
         {
-            let signature = function_signature(self.db, function);
-            let instantiation = self.instantiation_args(call, &signature.generic_params);
-            let fn_ty = function_value_ty(&signature, &instantiation);
-            self.result.type_of_expr.insert(callee, fn_ty.clone());
-            return fn_ty;
+            // A path that names a function is a direct call.
+            if let Some(baml_compiler2_hir::contributions::Definition::Function(function)) =
+                self.lower.resolve_value(segments)
+            {
+                let signature = function_signature(self.db, function);
+                let instantiation = self.instantiation_args(call, &signature.generic_params);
+                let fn_ty = function_value_ty(&signature, &instantiation);
+                self.result.type_of_expr.insert(callee, fn_ty.clone());
+                return (fn_ty, false);
+            }
+            // A type-qualified method path (`Array.filled(3, 0)`,
+            // `baml.Array.generate(...)`): statics call directly, and the
+            // UFCS spelling of an instance method takes the receiver as
+            // its written first argument - either way the declared
+            // parameter list matches the written arguments (no bound
+            // receiver). Class generics have no receiver to pin them, so
+            // they instantiate fresh alongside the method's own.
+            if segments.len() >= 2
+                && let Some(baml_compiler2_hir::contributions::Definition::Class(class)) = self
+                    .lower
+                    .resolve_type_definition(&segments[..segments.len() - 1])
+            {
+                let member = segments.last().expect("checked len");
+                let method = baml_compiler2_ppir::item_data::class_data(self.db, class)
+                    .methods
+                    .iter()
+                    .copied()
+                    .find(|&method| {
+                        baml_compiler2_ppir::item_data::function_data(self.db, method).name
+                            == *member
+                    });
+                if let Some(method) = method {
+                    let signature = function_signature(self.db, method);
+                    let class_count = crate::lower::class_generic_frame(self.db, class).len();
+                    let mut instantiation: Vec<Ty> = (0..class_count)
+                        .map(|_| self.table.new_var_ty())
+                        .collect();
+                    let own_params = signature.generic_params[class_count..].to_vec();
+                    instantiation.extend(self.instantiation_args(call, &own_params));
+                    let fn_ty = function_value_ty(&signature, &instantiation);
+                    self.result.type_of_expr.insert(callee, fn_ty.clone());
+                    return (fn_ty, false);
+                }
+            }
         }
-        self.infer_expr(body, callee, &Expectation::None)
+        // A bound method callee, in either AST spelling: `expr.name(..)`
+        // parses as MemberAccess, `local.name(..)` as a multi-segment Path
+        // (the AST cannot split paths before name resolution).
+        match &body.exprs[callee] {
+            Expr::MemberAccess { base, member } => {
+                let member = member.clone();
+                let receiver = self.infer_expr(body, *base, &Expectation::None);
+                let (ty, bound) = self.member_callee(call, &receiver, &member);
+                self.result.type_of_expr.insert(callee, ty.clone());
+                return (ty, bound);
+            }
+            Expr::Path(segments) if segments.len() >= 2 && self.path_resolves_locally(callee) => {
+                let segments = segments.clone();
+                let root = self.infer_path(callee);
+                let receiver = segments[1..segments.len() - 1]
+                    .iter()
+                    .fold(root, |ty, segment| self.field_access(&ty, segment));
+                let member = segments.last().expect("checked len");
+                let (ty, bound) = self.member_callee(call, &receiver, member);
+                self.result.type_of_expr.insert(callee, ty.clone());
+                return (ty, bound);
+            }
+            _ => {}
+        }
+        (self.infer_expr(body, callee, &Expectation::None), false)
+    }
+
+    /// `receiver.member` in callee position: a method (instantiated - the
+    /// receiver pins the class generics, the call site's turbofish or
+    /// fresh variables fill the method's own; bound iff it takes `self`),
+    /// or a field holding a function value.
+    fn member_callee(&mut self, call: ExprId, receiver: &Ty, member: &baml_type::Name) -> (Ty, bool) {
+        let resolved = self.table.resolve_completely(receiver);
+        let candidate =
+            crate::method_resolution::lookup_method(self.db, &self.facts, &resolved, member);
+        let Some(candidate) = candidate else {
+            return (self.field_access(&resolved, member), false);
+        };
+        let signature = function_signature(self.db, candidate.method);
+        let class_count = candidate.class_args.len();
+        let own_params = signature.generic_params[class_count..].to_vec();
+        let mut instantiation = candidate.class_args;
+        instantiation.extend(self.instantiation_args(call, &own_params));
+        let fn_ty = function_value_ty(&signature, &instantiation);
+        let bound = signature
+            .params
+            .first()
+            .is_some_and(|param| param.name.as_str() == "self");
+        (fn_ty, bound)
     }
 
     /// The one home for value-position path typing (rust-analyzer's
@@ -1234,24 +1338,36 @@ impl<'db> InferenceContext<'db> {
         ))
     }
 
-    /// Class field access. Inspection site: the receiver must resolve
-    /// enough to look inside (rustc's `structurally_resolve` discipline).
-    /// Methods, builtins, and non-class receivers arrive with S10/S11.
+    /// Member access in value position. Inspection site: the receiver must
+    /// resolve enough to look inside (rustc's `structurally_resolve`
+    /// discipline). Class fields first; then methods on any receiver kind,
+    /// as full signatures (self included) with the receiver pinning the
+    /// class generics and fresh variables for the method's own - value
+    /// position has no turbofish.
     fn field_access(&mut self, base_ty: &Ty, member: &baml_type::Name) -> Ty {
         let resolved = self.table.resolve_completely(base_ty);
-        let TyKind::Class(qtn, args, _) = resolved.kind() else {
-            return Ty::error();
-        };
-        let Some(baml_compiler2_hir::contributions::Definition::Class(class)) =
-            self.facts.definition_of(qtn)
-        else {
-            return Ty::error();
-        };
-        crate::lower::class_field_types(self.db, class)
-            .iter()
-            .find(|(field, _)| field == member)
-            .map(|(_, field_ty)| substitute_params(field_ty, args))
-            .unwrap_or_else(Ty::error)
+        if let TyKind::Class(qtn, args, _) = resolved.kind()
+            && let Some(baml_compiler2_hir::contributions::Definition::Class(class)) =
+                self.facts.definition_of(qtn)
+            && let Some((_, field_ty)) = crate::lower::class_field_types(self.db, class)
+                .iter()
+                .find(|(field, _)| field == member)
+        {
+            return substitute_params(field_ty, args);
+        }
+        if let Some(candidate) =
+            crate::method_resolution::lookup_method(self.db, &self.facts, &resolved, member)
+        {
+            let signature = function_signature(self.db, candidate.method);
+            let mut instantiation = candidate.class_args;
+            instantiation.extend(
+                signature.generic_params[instantiation.len()..]
+                    .iter()
+                    .map(|_| self.table.new_var_ty()),
+            );
+            return function_value_ty(&signature, &instantiation);
+        }
+        Ty::error()
     }
 
     /// Whether a path expression names a local binding or parameter (which

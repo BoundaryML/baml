@@ -27,4 +27,5 @@
 pub mod facts;
 pub mod infer;
 pub mod lower;
+pub mod method_resolution;
 pub mod ops;

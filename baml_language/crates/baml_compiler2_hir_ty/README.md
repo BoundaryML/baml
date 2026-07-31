@@ -1,16 +1,23 @@
 # baml_compiler2_hir_ty: rust-analyzer-style type inference
 
-Status: shipped through S9 (S0 harness, S1 body-owner ID, S4a interned
+Status: shipped through S11 (S0 harness, S1 body-owner ID, S4a interned
 repr, S4 declaration lowering, S4b oracle entry, S5 table, S6 core exprs,
 S7 bidirectional checking, S8 calls/constructors/fields, S9 lambdas +
-`resolve_value_path` consolidation + function values), plus operator
-dispatch through the `baml.ops` interfaces (decision 4; bitwise on the
-hack table until the stdlib grows its interfaces). 25 of 26 spec
-fixtures green, including six spec-ahead-of-TIR wins (canonicalized
-bool-join, expression-position `_` holes, equality-regime generic
-resolution + coherent disagreement verdicts [B-932], `??` informing its
-right operand [B-1135], builtin `baml.Array`/`baml.Map` bridged to the
-structural types [B-1080]). Pending: push-driven bounds (S11).
+`resolve_value_path` consolidation + function values, S11 method calls:
+`method_resolution` receiver->class table, receiver-pinned class
+generics, `class_self_ty` through the builtin bridge, type-qualified
+method paths), plus operator dispatch through the `baml.ops` interfaces
+(decision 4; bitwise on the hack table until the stdlib grows its
+interfaces). 32 of 34 spec fixtures green, including the
+spec-ahead-of-TIR wins: canonicalized bool-join, expression-position `_`
+holes, equality-regime generic resolution + coherent disagreement
+verdicts [B-932], `??` informing its right operand [B-1135, both
+positions], builtin `baml.Array`/`baml.Map` bridged structural [B-1080],
+reduce-seed widening through method generics [B-1134/B-742/B-267.1],
+push-arg empty-literal adoption [B-940], order-independent empty
+literals in generic args [B-1085]. Pending pins: pairwise bitwise
+dispatch (B-1075, with the stdlib interfaces), unconstrained-hole
+errors (B-236 unchecked half, S13).
 
 `baml_language/TYPE_SYSTEM.md` is the correctness authority. It is
 prescriptive: where the current TIR implementation disagrees with it, the spec
@@ -81,7 +88,7 @@ cutover. "Tested by" is the merge gate for the slice.
 | S8  | Calls: fresh vars per site, variance-aware solve, 2-pass args        | call fixtures; invariant-position rejection tests      |
 | S9  | Lambdas: expectation-driven params, child scope; function VALUES outside call position; consolidate callee/path resolution into one `resolve_value_path` entry (r-a's `infer/path.rs` shape) | lambda fixtures; TIR differential                      |
 | S10 | Patterns + narrowing; exhaustiveness reused via `PatCtx`             | patterns-tier fixtures                                 |
-| S11 | Member resolution: probe/confirm; fields, methods, `?.`              | method-resolution-tier fixtures (obligations stubbed)  |
+| S11 | Member resolution (CORE SHIPPED, before S10/S2/S3): receiver->owning-class table incl. builtin classes (alias-transparent), receiver-pinned class generics + turbofish/fresh method generics, self via `class_self_ty`, bound vs UFCS/static calls, methods as values. Remaining: probe/confirm discipline, `?.` | method fixtures; B-1136 sub-issue fixtures (obligations stubbed) |
 | I1  | Impl registry + nominal lookup; orphan check (E0139)                 | `C <: I` fixtures; orphan diagnostic parity vs TIR     |
 | I2  | ParamEnv: `T extends I` bounds; concreteness rules                   | generic-fn fixtures calling bound methods on `T`       |
 | I3  | Interface members: virtual vs concrete pick, one-`Self` rule, fields | existential + bounded-param method fixtures            |

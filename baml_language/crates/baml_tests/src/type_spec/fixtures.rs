@@ -95,8 +95,9 @@ fn conforming_fixtures() {
 
 #[test]
 fn pending_fixtures() {
+    // Empty is a success state: every written pin's slice has landed.
     let mut failures = Vec::new();
-    for path in fixture_paths(&fixtures_root().join("pending"), false) {
+    for path in fixture_paths(&fixtures_root().join("pending"), true) {
         let name = fixture_name(&path);
         let fixture = std::fs::read_to_string(&path).expect("readable fixture");
         match fixture

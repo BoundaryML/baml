@@ -1,0 +1,13 @@
+---
+source: crates/baml_tests/src/type_spec/fixtures.rs
+expression: outcome.dump
+---
+350..416 '{\n   ...ull\n}': hir_ty=[int | null] tir=[unknown]
+356..374 '(m.at(...[]).at': hir_ty=[(self: int[], index: int) -> int | null throws never] tir=[unknown]
+356..377 '(m.at(....at(v)': hir_ty=[int | null] tir=[unknown]
+357..361 'm.at': (self: int[][], index: int) -> int[] | null throws never
+357..364 'm.at(u)': int[] | null
+357..370 'm.at(u) ?? []': hir_ty=[int[]] tir=[int[] | _[]]
+362..363 'u': int
+368..370 '[]': hir_ty=[int[]] tir=[_[]]
+375..376 'v': int

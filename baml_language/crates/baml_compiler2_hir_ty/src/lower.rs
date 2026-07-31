@@ -231,43 +231,7 @@ impl<'db> LowerCtx<'db> {
                 let data = baml_compiler2_ppir::item_data::class_data(self.db, class_loc);
                 enforce_arity(&mut args, data.generic_params.len());
                 let qtn = self.qualify(def, short);
-                // `baml.future.Future<V, E>` is the dedicated Future kind.
-                if !qtn.is_local()
-                    && qtn.package().as_str() == "baml"
-                    && qtn.namespace().len() == 1
-                    && qtn.namespace()[0].as_str() == "future"
-                    && qtn.name().as_str() == "Future"
-                    && args.len() == 2
-                {
-                    let error_ty = args.pop().expect("checked len");
-                    let value_ty = args.pop().expect("checked len");
-                    return Ty::intern(TyKind::Future(value_ty, error_ty, attr()));
-                }
-                // B-1080: the builtin `baml.Array<T>` / `baml.Map<K, V>`
-                // class spellings ARE the structural types - lowering them
-                // to `List`/`Map` makes every algebra arm relate them for
-                // free, instead of TIR's one-directional argument-path
-                // patch. Keyed on the builtin package specifically: a
-                // user-defined `class Array<T>` stays nominal.
-                if !qtn.is_local()
-                    && qtn.package().as_str() == "baml"
-                    && qtn.namespace().is_empty()
-                {
-                    if qtn.name().as_str() == "Array" && args.len() == 1 {
-                        let element = args.pop().expect("checked len");
-                        return Ty::intern(TyKind::List(element, attr()));
-                    }
-                    if qtn.name().as_str() == "Map" && args.len() == 2 {
-                        let value = args.pop().expect("checked len");
-                        let key = args.pop().expect("checked len");
-                        return Ty::intern(TyKind::Map {
-                            key,
-                            value,
-                            attr: attr(),
-                        });
-                    }
-                }
-                Ty::intern(TyKind::Class(qtn, args.into(), attr()))
+                class_ty(qtn, args)
             }
             Definition::Interface(interface_loc) => {
                 let data = baml_compiler2_ppir::item_data::interface_data(self.db, interface_loc);
@@ -458,6 +422,71 @@ pub fn function_generic_frame<'db>(
     frame
 }
 
+/// The type a class reference denotes, with the builtin bridgings applied
+/// uniformly: `baml.future.Future<V, E>` is the dedicated Future kind, and
+/// (B-1080) the builtin `baml.Array<T>` / `baml.Map<K, V>` class spellings
+/// ARE the structural types - lowering them to `List`/`Map` makes every
+/// algebra arm relate them for free, instead of TIR's one-directional
+/// argument-path patch. Keyed on the builtin package specifically: a
+/// user-defined `class Array<T>` stays nominal. The single constructor for
+/// class types, shared by annotation lowering and `class_self_ty`.
+pub fn class_ty(qtn: TypeName, mut args: Vec<Ty>) -> Ty {
+    let attr = TyAttr::default;
+    if !qtn.is_local() && qtn.package().as_str() == "baml" {
+        if qtn.namespace().len() == 1
+            && qtn.namespace()[0].as_str() == "future"
+            && qtn.name().as_str() == "Future"
+            && args.len() == 2
+        {
+            let error_ty = args.pop().expect("checked len");
+            let value_ty = args.pop().expect("checked len");
+            return Ty::intern(TyKind::Future(value_ty, error_ty, attr()));
+        }
+        if qtn.namespace().is_empty() {
+            if qtn.name().as_str() == "Array" && args.len() == 1 {
+                let element = args.pop().expect("checked len");
+                return Ty::intern(TyKind::List(element, attr()));
+            }
+            if qtn.name().as_str() == "Map" && args.len() == 2 {
+                let value = args.pop().expect("checked len");
+                let key = args.pop().expect("checked len");
+                return Ty::intern(TyKind::Map {
+                    key,
+                    value,
+                    attr: attr(),
+                });
+            }
+        }
+    }
+    Ty::intern(TyKind::Class(qtn, args.into(), attr()))
+}
+
+/// The qualified name a class definition contributes, from its file's
+/// package - the definition-side counterpart of `LowerCtx::qualify`.
+pub fn class_qualified_name<'db>(
+    db: &'db dyn baml_compiler2_ppir::Db,
+    class: ClassLoc<'db>,
+) -> TypeName {
+    let package = baml_compiler2_hir::file_package::file_package(db, class.file(db));
+    TypeName::new(
+        package.package.clone(),
+        package.namespace_path,
+        baml_compiler2_ppir::item_data::class_data(db, class).name.clone(),
+    )
+}
+
+/// The type of `self` inside `class`: the class applied to its own generic
+/// params as `TypeVar`s, through the same builtin bridging as written
+/// annotations - so `self` in `baml.Array<T>` is `T[]`, and substituting
+/// the receiver's args yields e.g. `int[]` with no per-class special case.
+pub fn class_self_ty<'db>(db: &'db dyn baml_compiler2_ppir::Db, class: ClassLoc<'db>) -> Ty {
+    let args: Vec<Ty> = class_generic_frame(db, class)
+        .into_iter()
+        .map(|param| Ty::intern(TyKind::TypeVar(param, TyAttr::default())))
+        .collect();
+    class_ty(class_qualified_name(db, class), args)
+}
+
 /// The root generic frame for a class.
 pub fn class_generic_frame<'db>(
     db: &'db dyn baml_compiler2_ppir::Db,
@@ -520,12 +549,35 @@ pub fn function_signature<'db>(
     let data = baml_compiler2_ppir::item_data::elaborated_function_data(db, function);
     let frame = function_generic_frame(db, function);
     let ctx = lower_ctx_for_file(db, function.file(db)).with_frame(frame.clone());
+    // An unannotated `self` (elaboration leaves its slot `Unknown`) is
+    // typed by the owner: the class's self type (through the builtin
+    // bridging, so Array's `self` is `T[]`), or the interface's `Self`
+    // type variable (frame position 0 by construction). Free-impl `self`
+    // is the for-target - it arrives with the impl frames (I3).
+    let owner = baml_compiler2_ppir::item_data::method_owner(db, function);
+    let self_ty = |param: &baml_compiler2_ppir::item_data::ElaboratedParamData| {
+        if param.name.as_str() != "self"
+            || !matches!(data.type_refs[param.type_ref].kind, TypeRefKind::Unknown)
+        {
+            return None;
+        }
+        match owner {
+            Some(MethodOwner::Class(class)) => Some(class_self_ty(db, class)),
+            Some(MethodOwner::Interface(_)) => Some(Ty::intern(TyKind::TypeVar(
+                frame.first().cloned().expect("interface frame starts with Self"),
+                TyAttr::default(),
+            ))),
+            Some(MethodOwner::FreeImpl(_)) => Some(Ty::error()),
+            None => None,
+        }
+    };
     let params = data
         .params
         .iter()
         .map(|param| SignatureParam {
             name: param.name.clone(),
-            ty: reject_holes(&ctx.lower_type_ref(&data.type_refs, param.type_ref)),
+            ty: self_ty(param)
+                .unwrap_or_else(|| reject_holes(&ctx.lower_type_ref(&data.type_refs, param.type_ref))),
             has_default: param.has_default,
         })
         .collect();

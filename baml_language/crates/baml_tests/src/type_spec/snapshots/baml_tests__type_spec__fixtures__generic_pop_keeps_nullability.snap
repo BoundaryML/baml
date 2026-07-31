@@ -1,0 +1,7 @@
+---
+source: crates/baml_tests/src/type_spec/fixtures.rs
+expression: outcome.dump
+---
+363..401 '{\n   ...ull\n}': T | null
+369..375 'xs.pop': (self: T[]) -> T | null throws never
+369..377 'xs.pop()': T | null

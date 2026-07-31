@@ -131,10 +131,10 @@ function pair<T>(x: T, y: T[]) -> T throws never {
         assert_eq!(render(&pair.ret), "T");
 
         // Method frames prepend the class generics: T = 0, U = 1. The
-        // `self` receiver types as the sentinel until receiver typing lands
-        // with the method-resolution slices.
+        // `self` receiver is the owner class applied to its own params
+        // (S11 `class_self_ty`).
         let method = signature_of(&db, file, "m");
-        assert_eq!(param_renders(&method), ["!error", "T", "U"]);
+        assert_eq!(param_renders(&method), ["user.Holder<T>", "T", "U"]);
         assert_eq!(render(&method.ret), "T");
         assert_eq!(
             method
