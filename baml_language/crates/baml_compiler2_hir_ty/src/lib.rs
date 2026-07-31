@@ -24,5 +24,6 @@
 //! each slice promotes the fixtures it turns green. TIR is not a harness
 //! backend; it only appears in the S15 differential sweep.
 
+pub mod facts;
 pub mod infer;
 pub mod lower;

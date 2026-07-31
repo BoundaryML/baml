@@ -1,0 +1,13 @@
+---
+source: crates/baml_tests/src/type_spec/fixtures.rs
+expression: outcome.dump
+---
+401..498 '{\n   ...  v\n}': bool
+407..412 'let v': bool
+415..443 'if c {...alse }': hir_ty=[bool] tir=[true | false]
+418..419 'c': bool
+420..428 '{ true }': true
+422..426 'true': true
+434..443 '{ false }': false
+436..441 'false': false
+495..496 'v': bool

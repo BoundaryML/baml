@@ -2,8 +2,8 @@
 source: crates/baml_tests/src/type_spec/fixtures.rs
 expression: outcome.dump
 ---
-395..409 '{\n   ... b]\n}': hir_ty=[!error] tir=[T[]]
-401..407 '[a, b]': hir_ty=[!error] tir=[T[]]
+395..409 '{\n   ... b]\n}': T[]
+401..407 '[a, b]': T[]
 402..403 'a': T
 405..406 'b': T
 433..482 '{\n   ...  p\n}': hir_ty=[!error] tir=[int[]]

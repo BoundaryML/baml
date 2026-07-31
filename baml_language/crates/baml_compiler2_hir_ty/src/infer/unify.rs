@@ -20,6 +20,7 @@
 
 use baml_type::interned::{InferVar, Ty, TyKind, for_each_child};
 use ena::unify as ut;
+use rustc_hash::FxHashMap;
 
 /// Local ena key for [`InferVar`] (orphan rules keep `UnifyKey` out of
 /// `baml_type`).
@@ -70,13 +71,31 @@ pub struct UnifyError {
     pub right: Ty,
 }
 
+/// Sub-constraint evidence accumulated on an unsolved variable's class:
+/// lower bounds are values flowing INTO the variable, upper bounds are
+/// contexts it flows into. Resolution derives the solution from these
+/// (widen fresh lowers, lowers must agree, checked against the uppers).
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct VarBounds {
+    pub lowers: Vec<Ty>,
+    pub uppers: Vec<Ty>,
+}
+
 /// A revertible point in the table's history; see
-/// [`InferenceTable::snapshot`].
-pub struct Snapshot(ut::Snapshot<ut::InPlace<VarKey>>);
+/// [`InferenceTable::snapshot`]. The bounds map is snapshotted by clone
+/// (rust-analyzer snapshots its fulfillment context the same way); the ena
+/// undo log covers only the union-find.
+pub struct Snapshot {
+    vars: ut::Snapshot<ut::InPlace<VarKey>>,
+    bounds: FxHashMap<u32, VarBounds>,
+}
 
 #[derive(Default)]
 pub struct InferenceTable {
     vars: ut::InPlaceUnificationTable<VarKey>,
+    /// Bounds per CLASS, keyed by the root's index; var-var unions merge the
+    /// two roots' entries.
+    bounds: FxHashMap<u32, VarBounds>,
 }
 
 impl InferenceTable {
@@ -143,7 +162,19 @@ impl InferenceTable {
         }
         match (left.kind(), right.kind()) {
             (TyKind::Infer { var: Some(a), .. }, TyKind::Infer { var: Some(b), .. }) => {
+                let root_a = self.vars.find(VarKey(*a)).0.index();
+                let root_b = self.vars.find(VarKey(*b)).0.index();
                 self.vars.union(VarKey(*a), VarKey(*b));
+                if root_a != root_b {
+                    let merged_root = self.vars.find(VarKey(*a)).0.index();
+                    let mut merged = self.bounds.remove(&root_a).unwrap_or_default();
+                    let other = self.bounds.remove(&root_b).unwrap_or_default();
+                    merged.lowers.extend(other.lowers);
+                    merged.uppers.extend(other.uppers);
+                    if !(merged.lowers.is_empty() && merged.uppers.is_empty()) {
+                        self.bounds.insert(merged_root, merged);
+                    }
+                }
                 Ok(())
             }
             (TyKind::Infer { var: Some(var), .. }, _) => self.bind(*var, &right, &left),
@@ -172,15 +203,54 @@ impl InferenceTable {
     }
 
     pub fn snapshot(&mut self) -> Snapshot {
-        Snapshot(self.vars.snapshot())
+        Snapshot {
+            vars: self.vars.snapshot(),
+            bounds: self.bounds.clone(),
+        }
     }
 
     pub fn rollback_to(&mut self, snapshot: Snapshot) {
-        self.vars.rollback_to(snapshot.0);
+        self.vars.rollback_to(snapshot.vars);
+        self.bounds = snapshot.bounds;
     }
 
     pub fn commit(&mut self, snapshot: Snapshot) {
-        self.vars.commit(snapshot.0);
+        self.vars.commit(snapshot.vars);
+    }
+
+    /// Records a lower bound (a value flowing into the variable).
+    pub fn add_lower_bound(&mut self, var: InferVar, ty: Ty) {
+        let root = self.vars.find(VarKey(var)).0.index();
+        self.bounds.entry(root).or_default().lowers.push(ty);
+    }
+
+    /// Records an upper bound (a context the variable flows into).
+    pub fn add_upper_bound(&mut self, var: InferVar, ty: Ty) {
+        let root = self.vars.find(VarKey(var)).0.index();
+        self.bounds.entry(root).or_default().uppers.push(ty);
+    }
+
+    /// Every still-unsolved class that has accumulated bounds, as
+    /// `(representative var, bounds)`. Resolution input.
+    pub fn unsolved_bounded_vars(&mut self) -> Vec<(InferVar, VarBounds)> {
+        let roots: Vec<u32> = self.bounds.keys().copied().collect();
+        let mut out = Vec::new();
+        for root in roots {
+            let key = VarKey(InferVar::new(root));
+            if self.vars.probe_value(key) == VarValue::Unknown {
+                let bounds = self.bounds.get(&root).cloned().unwrap_or_default();
+                out.push((InferVar::new(root), bounds));
+            }
+        }
+        out.sort_by_key(|(var, _)| var.index());
+        out
+    }
+
+    /// Solves `var := ty` directly (resolution-time binding; unlike
+    /// [`InferenceTable::unify`] this performs no occurs check because the
+    /// solution was derived from resolved bounds).
+    pub fn solve(&mut self, var: InferVar, ty: Ty) {
+        self.vars.union_value(VarKey(var), VarValue::Known(ty));
     }
 
     /// Solves `var := ty` after the occurs check. `var_ty` is the variable as

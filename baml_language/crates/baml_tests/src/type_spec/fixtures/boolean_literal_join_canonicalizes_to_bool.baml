@@ -1,4 +1,3 @@
-// pending: S7 canonicalizing control-flow joins
 // tir: fails
 //
 // TYPE_SYSTEM.md (BAML Subtyping Cases): `(true | false) == bool`, and type

@@ -1,4 +1,3 @@
-// pending: S7 joins at syntactic join sites
 //
 // doc-inference.md ruling 1: joins happen at constraint-GENERATION sites -
 // a container literal is one - so `[1, "x"]` types as `(int | string)[]`
