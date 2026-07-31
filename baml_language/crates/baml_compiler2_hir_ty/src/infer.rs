@@ -218,6 +218,9 @@ struct InferenceContext<'db> {
     /// The owner's declared return type, the body root's expectation.
     return_ty: Option<Ty>,
     table: InferenceTable,
+    /// Operator impls, built lazily on the first dispatching operator
+    /// (becomes a salsa query with S3's incremental firewall).
+    operators: Option<crate::ops::OperatorRegistry>,
     /// The irreducible `Sub` residue: pairs that were neither ground nor
     /// var-headed nor decomposable when emitted; re-examined at finish once
     /// resolution has run. Generalizes into the obligation worklist at I4.
@@ -251,6 +254,7 @@ impl<'db> InferenceContext<'db> {
             type_refs,
             return_ty,
             table: InferenceTable::new(),
+            operators: None,
             deferred_subs: Vec::new(),
             diverges: Diverges::Maybe,
             result: InferenceResult::default(),
@@ -424,6 +428,8 @@ impl<'db> InferenceContext<'db> {
                 self.diverges = Diverges::Always;
                 Ty::never()
             }
+            Expr::Binary { op, lhs, rhs } => self.infer_binary(body, *op, *lhs, *rhs),
+            Expr::Unary { op, expr: operand } => self.infer_unary(body, *op, *operand),
             Expr::Call { callee, args, .. } => self.infer_call(body, expr, *callee, args),
             Expr::Object {
                 type_name,
@@ -696,6 +702,220 @@ impl<'db> InferenceContext<'db> {
                 canonical_union_interned(&widened, &self.facts)
             }
             _ => ty.clone(),
+        }
+    }
+
+    /// Binary operator typing. Dispatching operators (arithmetic, ordered
+    /// comparison) go through the interfaces - decision 3B, matching TIR's
+    /// arithmetic arm; the structural ones (`&&`/`||` short-circuit
+    /// control flow, `==`/`!=` structural equality over `Concrete`, `??`
+    /// null-algebra) are type algebra, not dispatch. Operand-validity
+    /// diagnostics are S17's; the Compare obligation on ordered
+    /// comparisons lands with I4.
+    fn infer_binary(
+        &mut self,
+        body: &ExprBody,
+        op: baml_compiler2_ast::BinaryOp,
+        lhs: ExprId,
+        rhs: ExprId,
+    ) -> Ty {
+        use baml_compiler2_ast::BinaryOp;
+        match op {
+            BinaryOp::And | BinaryOp::Or => {
+                self.check_expr(body, lhs, &Ty::bool());
+                self.check_expr(body, rhs, &Ty::bool());
+                Ty::bool()
+            }
+            BinaryOp::Eq
+            | BinaryOp::Ne
+            | BinaryOp::Lt
+            | BinaryOp::Le
+            | BinaryOp::Gt
+            | BinaryOp::Ge => {
+                self.infer_expr(body, lhs, &Expectation::None);
+                self.infer_expr(body, rhs, &Expectation::None);
+                Ty::bool()
+            }
+            BinaryOp::NullCoalesce => {
+                let lhs_ty = self.infer_expr(body, lhs, &Expectation::None);
+                let rhs_ty = self.infer_expr(body, rhs, &Expectation::None);
+                self.null_coalesce(&lhs_ty, &rhs_ty)
+            }
+            BinaryOp::Add | BinaryOp::Sub | BinaryOp::Mul | BinaryOp::Div | BinaryOp::Mod => {
+                let lhs_ty = self.infer_expr(body, lhs, &Expectation::None);
+                let rhs_ty = self.infer_expr(body, rhs, &Expectation::None);
+                let interface = match op {
+                    BinaryOp::Add => "Add",
+                    BinaryOp::Sub => "Subtract",
+                    BinaryOp::Mul => "Multiply",
+                    BinaryOp::Div => "Divide",
+                    BinaryOp::Mod => "Remainder",
+                    _ => unreachable!("outer match arm"),
+                };
+                self.dispatch_operator(interface, &lhs_ty, Some(&rhs_ty))
+            }
+            BinaryOp::BitAnd
+            | BinaryOp::BitOr
+            | BinaryOp::BitXor
+            | BinaryOp::Shl
+            | BinaryOp::Shr => {
+                let lhs_ty = self.infer_expr(body, lhs, &Expectation::None);
+                let rhs_ty = self.infer_expr(body, rhs, &Expectation::None);
+                self.bitwise_hack_table(&lhs_ty, &rhs_ty)
+            }
+        }
+    }
+
+    fn infer_unary(
+        &mut self,
+        body: &ExprBody,
+        op: baml_compiler2_ast::UnaryOp,
+        operand: ExprId,
+    ) -> Ty {
+        match op {
+            baml_compiler2_ast::UnaryOp::Not => {
+                self.check_expr(body, operand, &Ty::bool());
+                Ty::bool()
+            }
+            baml_compiler2_ast::UnaryOp::Neg => {
+                let ty = self.infer_expr(body, operand, &Expectation::None);
+                self.dispatch_operator("Negate", &ty, None)
+            }
+        }
+    }
+
+    /// The dispatch: every (lhs alternative, rhs alternative) pair of the
+    /// operands' union members must have an impl of
+    /// `baml.ops.<interface>`; the result is the join of the Outputs.
+    /// Literals widen to their bases for lookup (folding literal
+    /// arithmetic is a later refinement). `never` propagates
+    /// (unreachable-operand rule); Error/unknown operands suppress to the
+    /// sentinel; inference variables in operand position defer to the
+    /// obligation machinery (I4) and sentinel until then.
+    fn dispatch_operator(&mut self, interface: &str, lhs: &Ty, rhs: Option<&Ty>) -> Ty {
+        let lhs = self.table.resolve_completely(lhs);
+        let rhs = rhs.map(|ty| self.table.resolve_completely(ty));
+        if matches!(lhs.kind(), TyKind::Never { .. })
+            || rhs
+                .as_ref()
+                .is_some_and(|ty| matches!(ty.kind(), TyKind::Never { .. }))
+        {
+            return Ty::never();
+        }
+        let undispatchable = |ty: &Ty| {
+            ty.has_error() || ty.has_infer() || matches!(ty.kind(), TyKind::Unknown { .. })
+        };
+        if undispatchable(&lhs) || rhs.as_ref().is_some_and(undispatchable) {
+            return Ty::error();
+        }
+        if self.operators.is_none() {
+            self.operators = Some(crate::ops::OperatorRegistry::build(self.db));
+        }
+        let registry = self.operators.as_ref().expect("just built");
+        let mut outputs = Vec::new();
+        for lhs_member in operand_members(&lhs) {
+            match &rhs {
+                Some(rhs) => {
+                    for rhs_member in operand_members(rhs) {
+                        match registry.output(interface, &lhs_member, Some(&rhs_member)) {
+                            Some(output) => outputs.push(output),
+                            None => return Ty::error(),
+                        }
+                    }
+                }
+                None => match registry.output(interface, &lhs_member, None) {
+                    Some(output) => outputs.push(output),
+                    None => return Ty::error(),
+                },
+            }
+        }
+        canonical_union_interned(&outputs, &self.facts)
+    }
+
+    /// `a ?? b`: `remove_null(a)`, then the canonical-unwrap fast paths
+    /// (TIR's rule) - `rhs <: inner` keeps the unwrapped lhs, `inner <:
+    /// rhs` keeps rhs - else the freshness-preserving join.
+    fn null_coalesce(&mut self, lhs: &Ty, rhs: &Ty) -> Ty {
+        let inner = {
+            let resolved = self.table.resolve_completely(lhs);
+            match resolved.kind() {
+                TyKind::Null { .. } => Ty::never(),
+                TyKind::Union(members, _) => {
+                    let non_null: Vec<Ty> = members
+                        .iter()
+                        .filter(|member| !matches!(member.kind(), TyKind::Null { .. }))
+                        .cloned()
+                        .collect();
+                    if non_null.is_empty() {
+                        Ty::never()
+                    } else {
+                        canonical_union_interned(&non_null, &self.facts)
+                    }
+                }
+                _ => resolved,
+            }
+        };
+        let rhs = self.table.resolve_completely(rhs);
+        let ground =
+            |ty: &Ty| !ty.has_infer() && !ty.has_error() && !matches!(ty.kind(), TyKind::Never { .. });
+        if ground(&inner) && ground(&rhs) {
+            if is_subtype_interned(&rhs, &inner, &self.facts) {
+                return inner;
+            }
+            if is_subtype_interned(&inner, &rhs, &self.facts) {
+                return rhs;
+            }
+        }
+        self.join(&[inner, rhs])
+    }
+
+    /// HACK: bitwise operators do NOT go through interfaces yet. The
+    /// ruling (README decision 3B) says every dispatching operator must,
+    /// but the stdlib has no `baml.ops` bitwise interfaces to dispatch
+    /// through (`ns_ops` holds only `math.baml` and `comparison.baml`), so
+    /// this table mirrors TIR's `infer_bitwise` exactly: int&int is int,
+    /// any int/bigint mix is bigint, everything else is the Error sentinel
+    /// (TIR's InvalidBinaryOp, S17's diagnostic). DELETE this table - and
+    /// route these five operators through `dispatch_operator` - when the
+    /// bitwise interfaces land in the stdlib and TIR switches off its own
+    /// table.
+    fn bitwise_hack_table(&mut self, lhs: &Ty, rhs: &Ty) -> Ty {
+        #[derive(Clone, Copy, PartialEq)]
+        enum Base {
+            Int,
+            Bigint,
+        }
+        fn base_of(ty: &Ty) -> Option<Base> {
+            match ty.kind() {
+                TyKind::Int { .. } | TyKind::Literal(Literal::Int(_), _, _) => Some(Base::Int),
+                TyKind::Bigint { .. } | TyKind::Literal(Literal::Bigint(_), _, _) => {
+                    Some(Base::Bigint)
+                }
+                TyKind::Union(members, _) => {
+                    let mut result: Option<Base> = None;
+                    for member in members {
+                        let base = base_of(member)?;
+                        result = Some(match result {
+                            None => base,
+                            Some(seen) if seen == base => seen,
+                            // An int|bigint union widens to bigint,
+                            // matching the mixed-operand rule below.
+                            Some(_) => Base::Bigint,
+                        });
+                    }
+                    result
+                }
+                _ => None,
+            }
+        }
+        let lhs = self.table.resolve_completely(lhs);
+        let rhs = self.table.resolve_completely(rhs);
+        match (base_of(&lhs), base_of(&rhs)) {
+            (Some(Base::Int), Some(Base::Int)) => Ty::int(),
+            (Some(_), Some(_)) => Ty::intern(TyKind::Bigint {
+                attr: TyAttr::default(),
+            }),
+            _ => Ty::error(),
         }
     }
 
@@ -1222,15 +1442,37 @@ fn function_value_ty(signature: &crate::lower::FunctionSignature, instantiation:
 /// TypeScript-style widening); everything else passes through. Top-level
 /// only - container-element widening arrives with the join machinery.
 fn widen_fresh_literal(ty: &Ty) -> Ty {
-    let TyKind::Literal(literal, Freshness::Fresh, attr) = ty.kind() else {
-        return ty.clone();
-    };
-    let attr = attr.clone();
-    Ty::intern(match literal {
+    match ty.kind() {
+        TyKind::Literal(literal, Freshness::Fresh, attr) => {
+            Ty::intern(literal_base(literal, attr.clone()))
+        }
+        _ => ty.clone(),
+    }
+}
+
+/// The base primitive a literal type belongs to.
+fn literal_base(literal: &Literal, attr: TyAttr) -> TyKind {
+    match literal {
         Literal::Int(_) => TyKind::Int { attr },
         Literal::Bigint(_) => TyKind::Bigint { attr },
         Literal::Float(_) => TyKind::Float { attr },
         Literal::String(_) => TyKind::String { attr },
         Literal::Bool(_) => TyKind::Bool { attr },
-    })
+    }
+}
+
+/// An operand's union alternatives for operator dispatch, literals widened
+/// to their bases regardless of freshness (dispatch is by base type; every
+/// alternative must support the operator).
+fn operand_members(ty: &Ty) -> Vec<Ty> {
+    fn widen(ty: &Ty) -> Ty {
+        match ty.kind() {
+            TyKind::Literal(literal, _, attr) => Ty::intern(literal_base(literal, attr.clone())),
+            _ => ty.clone(),
+        }
+    }
+    match ty.kind() {
+        TyKind::Union(members, _) => members.iter().map(widen).collect(),
+        _ => vec![widen(ty)],
+    }
 }

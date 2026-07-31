@@ -3,11 +3,12 @@
 Status: shipped through S9 (S0 harness, S1 body-owner ID, S4a interned
 repr, S4 declaration lowering, S4b oracle entry, S5 table, S6 core exprs,
 S7 bidirectional checking, S8 calls/constructors/fields, S9 lambdas +
-`resolve_value_path` consolidation + function values). 16 of 18 spec
+`resolve_value_path` consolidation + function values), plus operator
+dispatch through the `baml.ops` interfaces (decision 4; bitwise on the
+hack table until the stdlib grows its interfaces). 21 of 22 spec
 fixtures green, including three spec-ahead-of-TIR wins (canonicalized
 bool-join, expression-position `_` holes, equality-regime generic
-resolution). Pending: operator dispatch through interfaces (with I1),
-push-driven bounds (S11).
+resolution). Pending: push-driven bounds (S11).
 
 `baml_language/TYPE_SYSTEM.md` is the correctness authority. It is
 prescriptive: where the current TIR implementation disagrees with it, the spec
@@ -189,6 +190,25 @@ pointed at the error channel:
    (their own arena; TIR's `DefaultParameterInference`) - same result
    shape, different entry point; the body-owner enum is not widened for
    it.
+
+4. SETTLED (ruling, 2026-07-31) - Operators go through interfaces. A
+   dispatching operator IS its interface dispatch: `a + b` types as
+   `Implements(lhs, baml.ops.Add<rhs>)` with the impl's `Output` as the
+   result (`ops.rs` registry, the operator-shaped seed of I1's full impl
+   registry); there is NO builtin-operator table in the type system, and
+   rewriting primitive cases to single instructions is MIR's job at
+   lowering, invisible to inference. The non-dispatching operators are
+   type algebra, deliberately: `&&`/`||` are short-circuit control flow
+   (not overloadable, as in Rust), `==`/`!=` are structural equality over
+   `Concrete` (comparison.baml's design), `??` is null-algebra
+   (remove-null + canonical-unwrap/join), and `!` is bool. Ordered
+   comparisons are Compare-gated (the obligation lands with I4). ONE
+   exception, marked HACK in `infer.rs::bitwise_hack_table`: the five
+   bitwise operators use a hardcoded table mirroring TIR's
+   `infer_bitwise`, because the stdlib has no `baml.ops` bitwise
+   interfaces yet - when `ns_ops` grows them (and TIR switches off its
+   own table), the hack table is deleted and they route through
+   `dispatch_operator` like everything else.
 
 ## Testing
 

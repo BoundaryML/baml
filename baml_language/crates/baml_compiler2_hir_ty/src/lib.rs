@@ -27,3 +27,4 @@
 pub mod facts;
 pub mod infer;
 pub mod lower;
+pub mod ops;
