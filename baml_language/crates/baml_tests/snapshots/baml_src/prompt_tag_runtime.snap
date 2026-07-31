@@ -39,36 +39,64 @@ function prompt_tag_runtime.$init_test_ns_prompt_tag_runtime_prompt_tag_runtime(
     pop 1
     load_var registry
     load_const "root.prompt_tag_runtime"
-    load_const "prompt_interpolates_ctx_output_format"
+    load_const "ordinary_string_interpolation_keeps_media_tostring_behavior"
     make_closure .<lambda($init_test_ns_prompt_tag_runtime_prompt_tag_runtime, 5)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.prompt_tag_runtime"
-    load_const "render_prompt_companion_interpolates_ctx_output_format"
+    load_const "prompt_preserves_media_nested_in_classes_arrays_and_maps"
     make_closure .<lambda($init_test_ns_prompt_tag_runtime_prompt_tag_runtime, 6)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.prompt_tag_runtime"
-    load_const "prompt_interpolates_ctx_output_format_with"
+    load_const "prompt_preserves_nested_tostring_overrides_beside_media"
     make_closure .<lambda($init_test_ns_prompt_tag_runtime_prompt_tag_runtime, 7)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.prompt_tag_runtime"
-    load_const "prompt_output_format_with_omits_leading_optional_arg"
+    load_const "prompt_parent_tostring_override_owns_media_subtree"
     make_closure .<lambda($init_test_ns_prompt_tag_runtime_prompt_tag_runtime, 8)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.prompt_tag_runtime"
-    load_const "prompt_output_format_with_can_render_null_as_omit"
+    load_const "prompt_interpolates_ctx_output_format"
     make_closure .<lambda($init_test_ns_prompt_tag_runtime_prompt_tag_runtime, 9)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.prompt_tag_runtime"
+    load_const "render_prompt_companion_interpolates_ctx_output_format"
+    make_closure .<lambda($init_test_ns_prompt_tag_runtime_prompt_tag_runtime, 10)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.prompt_tag_runtime"
+    load_const "prompt_interpolates_ctx_output_format_with"
+    make_closure .<lambda($init_test_ns_prompt_tag_runtime_prompt_tag_runtime, 11)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.prompt_tag_runtime"
+    load_const "prompt_output_format_with_omits_leading_optional_arg"
+    make_closure .<lambda($init_test_ns_prompt_tag_runtime_prompt_tag_runtime, 12)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.prompt_tag_runtime"
+    load_const "prompt_output_format_with_can_render_null_as_omit"
+    make_closure .<lambda($init_test_ns_prompt_tag_runtime_prompt_tag_runtime, 13)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
@@ -280,6 +308,11 @@ function prompt_tag_runtime.PtRenderPerson$stream(client: baml.llm.Client) -> ba
     return
 }
 
+function prompt_tag_runtime.RedactedMedia.baml.ToString.to_string(self: prompt_tag_runtime.RedactedMedia) -> string {
+    load_const "REDACTED"
+    return
+}
+
 function prompt_tag_runtime.pt_class_array_interp_fn() -> string {
     load_var ?1
     make_cell
@@ -366,6 +399,113 @@ function prompt_tag_runtime.pt_ctx_output_format_fn() -> string {
     call baml.llm.prompt
     store_var render
     load_deref ?2
+    load_var render
+    call_indirect
+    sys_op baml.llm.PromptAst.text
+    return
+}
+
+function prompt_tag_runtime.pt_media_bundle_fn() -> prompt_tag_runtime.MediaBundle {
+    load_const "https://example.com/picture.png"
+    load_const "image/png"
+    call baml.media.Image.from_url
+    load_const "https://example.com/sound.wav"
+    load_const "audio/wav"
+    call baml.media.Audio.from_url
+    load_const "https://example.com/clip.mp4"
+    load_const "video/mp4"
+    call baml.media.Video.from_url
+    load_const "https://example.com/document.pdf"
+    load_const "application/pdf"
+    call baml.media.Pdf.from_url
+    init_instance user.prompt_tag_runtime.MediaBundle .picture, .sound, .clip, .document
+    return
+}
+
+function prompt_tag_runtime.pt_media_string_interp_fn() -> string {
+    load_const "https://example.com/picture.png"
+    load_const "image/png"
+    call baml.media.Image.from_url
+    store_var picture
+    load_type image
+    load_var picture
+    call baml.String.from
+    store_var _2
+    load_const "Image "
+    load_var _2
+    bin_op +
+    return
+}
+
+function prompt_tag_runtime.pt_nested_media_fn() -> string {
+    load_var ?2
+    make_cell
+    store_var ?2
+    call user.prompt_tag_runtime.pt_media_bundle_fn
+    store_var bundle
+    load_var2 1 1
+    load_type prompt_tag_runtime.MediaBundle
+    alloc_array 1
+    load_var bundle
+    load_const "copy"
+    load_type string
+    load_type prompt_tag_runtime.MediaBundle
+    alloc_map 1
+    init_instance user.prompt_tag_runtime.MediaEnvelope .primary, .gallery, .lookup
+    store_deref ?2
+    load_var envelope
+    make_closure .<tagged(pt_nested_media_fn, 0)>, 1
+    call baml.llm.prompt
+    store_var render
+    load_const "c"
+    load_const "openai"
+    load_const "user"
+    load_const "user"
+    load_type string
+    alloc_array 1
+    init_instance baml.llm.ContextClient .name, .provider, .default_role, .allowed_roles
+    load_type string
+    load_type unknown
+    alloc_map 0
+    load_const null
+    load_const null
+    init_instance baml.llm.Context .client, .tags, .output_format, ._output_format
+    load_var render
+    call_indirect
+    sys_op baml.llm.PromptAst.text
+    return
+}
+
+function prompt_tag_runtime.pt_nested_tostring_and_media_fn() -> string {
+    load_var ?1
+    make_cell
+    store_var ?1
+    load_const "https://example.com/picture.png"
+    load_const "image/png"
+    call baml.media.Image.from_url
+    store_var _3
+    load_const "hi"
+    init_instance user.prompt_tag_runtime.Labeled .tag
+    load_var _3
+    init_instance user.prompt_tag_runtime.LabeledMedia .label, .picture
+    store_deref ?1
+    load_var value
+    make_closure .<tagged(pt_nested_tostring_and_media_fn, 0)>, 1
+    call baml.llm.prompt
+    store_var render
+    load_const "c"
+    load_const "openai"
+    load_const "user"
+    load_const "user"
+    load_type string
+    alloc_array 1
+    init_instance baml.llm.ContextClient .name, .provider, .default_role, .allowed_roles
+    load_type string
+    load_type unknown
+    alloc_map 0
+    load_const null
+    load_const null
+    init_instance baml.llm.Context .client, .tags, .output_format, ._output_format
     load_var render
     call_indirect
     sys_op baml.llm.PromptAst.text
@@ -474,6 +614,38 @@ function prompt_tag_runtime.pt_output_format_with_prefix_fn() -> string {
     call baml.llm.prompt
     store_var render
     load_deref ?2
+    load_var render
+    call_indirect
+    sys_op baml.llm.PromptAst.text
+    return
+}
+
+function prompt_tag_runtime.pt_parent_tostring_owns_media_fn() -> string {
+    load_var ?1
+    make_cell
+    store_var ?1
+    load_const "https://example.com/secret.png"
+    load_const "image/png"
+    call baml.media.Image.from_url
+    init_instance user.prompt_tag_runtime.RedactedMedia .picture
+    store_deref ?1
+    load_var value
+    make_closure .<tagged(pt_parent_tostring_owns_media_fn, 0)>, 1
+    call baml.llm.prompt
+    store_var render
+    load_const "c"
+    load_const "openai"
+    load_const "user"
+    load_const "user"
+    load_type string
+    alloc_array 1
+    init_instance baml.llm.ContextClient .name, .provider, .default_role, .allowed_roles
+    load_type string
+    load_type unknown
+    alloc_map 0
+    load_const null
+    load_const null
+    init_instance baml.llm.Context .client, .tags, .output_format, ._output_format
     load_var render
     call_indirect
     sys_op baml.llm.PromptAst.text
