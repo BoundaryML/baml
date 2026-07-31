@@ -1189,6 +1189,12 @@ impl BexMulitProject {
             .into_iter()
             .map(|f| crate::bex_lsp::FunctionInfo {
                 name: f.name,
+                signature: f.signature,
+                source_position: crate::bex_lsp::FunctionSourcePosition {
+                    file: f.source_position.file,
+                    line: f.source_position.line,
+                    column: f.source_position.column,
+                },
                 kind: if f.is_llm {
                     crate::bex_lsp::FunctionKind::Llm
                 } else {

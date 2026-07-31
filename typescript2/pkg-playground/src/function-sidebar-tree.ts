@@ -28,6 +28,8 @@ export type FunctionSidebarTree = {
   forcedOpenFolderKeys: Set<string>;
 };
 
+export type FunctionSortOrder = 'alphabetical' | 'workflowNodeCount';
+
 type MutableFolderNode = Omit<FunctionSidebarFolderNode, 'children'> & {
   children: Array<FunctionSidebarTreeNode | MutableFolderNode>;
   foldersByName: Map<string, MutableFolderNode>;
@@ -36,6 +38,7 @@ type MutableFolderNode = Omit<FunctionSidebarFolderNode, 'children'> & {
 type BuildFunctionSidebarTreeOptions = {
   search?: string;
   selectedFunctionName?: string | null;
+  sortOrder?: FunctionSortOrder;
   workflowNodeCounts?: ReadonlyMap<string, number>;
 };
 
@@ -50,17 +53,23 @@ export function buildFunctionSidebarTree(
   let functionCount = 0;
 
   const workflowNodeCounts = options.workflowNodeCounts;
-  const sortedFunctions = workflowNodeCounts
-    ? functions
-        .map((functionInfo, index) => ({ functionInfo, index }))
-        .sort(
-          (a, b) =>
-            (workflowNodeCounts.get(b.functionInfo.name) ?? 0) -
-              (workflowNodeCounts.get(a.functionInfo.name) ?? 0) ||
-            a.index - b.index,
-        )
-        .map(({ functionInfo }) => functionInfo)
-    : functions;
+  const sortOrder = options.sortOrder ?? 'workflowNodeCount';
+  const sortedFunctions = functions
+    .map((functionInfo, index) => ({ functionInfo, index }))
+    .sort((a, b) => {
+      if (sortOrder === 'alphabetical') {
+        if (a.functionInfo.name < b.functionInfo.name) return -1;
+        if (a.functionInfo.name > b.functionInfo.name) return 1;
+        return a.index - b.index;
+      }
+      if (!workflowNodeCounts) return a.index - b.index;
+      return (
+        (workflowNodeCounts.get(b.functionInfo.name) ?? 0) -
+          (workflowNodeCounts.get(a.functionInfo.name) ?? 0) ||
+        a.index - b.index
+      );
+    })
+    .map(({ functionInfo }) => functionInfo);
 
   for (const functionInfo of sortedFunctions) {
     if (query && !functionInfo.name.toLowerCase().includes(query)) continue;

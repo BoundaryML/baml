@@ -1,11 +1,28 @@
-import { useState } from 'react';
+// biome-ignore-all lint/style/useFilenamingConvention: Preserve the existing test filename.
+
 import { fireEvent, render, screen } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { useState } from 'react';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import { FunctionSidebar } from '../../pkg-playground/src/FunctionSidebar';
 
 const collapsePendingMessage =
   'Will collapse when this folder is no longer kept open automatically';
+
+beforeAll(() => {
+  vi.stubGlobal(
+    'ResizeObserver',
+    class ResizeObserver {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    },
+  );
+});
+
+afterAll(() => {
+  vi.unstubAllGlobals();
+});
 
 describe('FunctionSidebar folder disclosure', () => {
   it('shows a pending indicator before collapsing after navigation leaves the folder', () => {
@@ -14,6 +31,8 @@ describe('FunctionSidebar folder disclosure', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Functions (2)' }));
     const folder = screen.getByRole('button', { name: 'demo (1)' });
     expect(folder).toHaveAttribute('aria-expanded', 'true');
+    expect(folder.querySelector('.lucide-folder')).not.toBeInTheDocument();
+    expect(folder.querySelector('.lucide-chevron-right')).toBeInTheDocument();
 
     fireEvent.click(folder);
 
@@ -49,20 +68,192 @@ describe('FunctionSidebar folder disclosure', () => {
   });
 });
 
+describe('FunctionSidebar function details and sorting', () => {
+  it('keeps older function metadata payloads usable', async () => {
+    render(<SidebarHarness />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Functions (2)' }));
+    fireEvent.focus(screen.getByRole('button', { name: 'Main' }));
+
+    expect(
+      (await screen.findAllByText('Source position unavailable')).length,
+    ).toBeGreaterThan(0);
+    expect(
+      screen.getAllByText('Call graph nodes: calculating…').length,
+    ).toBeGreaterThan(0);
+  });
+
+  it('shows signature, source position, and node count when a row receives focus', async () => {
+    render(<FunctionDetailsHarness />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Functions (3)' }));
+    fireEvent.focus(screen.getByRole('button', { name: 'Middle' }));
+
+    expect(
+      (
+        await screen.findAllByText(
+          'function Middle(input: string) -> string throws never',
+        )
+      ).length,
+    ).toBeGreaterThan(0);
+    expect(
+      screen.getAllByText('baml_src/main.baml at 7:10').length,
+    ).toBeGreaterThan(0);
+    expect(screen.getAllByText('Call graph nodes: 10').length).toBeGreaterThan(
+      0,
+    );
+  });
+
+  it('shows the same details when a row is hovered with a mouse', async () => {
+    render(<FunctionDetailsHarness />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Functions (3)' }));
+    fireEvent.pointerMove(screen.getByRole('button', { name: 'Alpha' }), {
+      pointerType: 'mouse',
+    });
+
+    expect(
+      (await screen.findAllByText('function Alpha() -> null throws never'))
+        .length,
+    ).toBeGreaterThan(0);
+    expect(
+      screen.getAllByText('baml_src/main.baml at 2:10').length,
+    ).toBeGreaterThan(0);
+    expect(screen.getAllByText('Call graph nodes: 1').length).toBeGreaterThan(
+      0,
+    );
+  });
+
+  it('defaults to node count and switches deterministically to alphabetical', () => {
+    render(<FunctionDetailsHarness />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Functions (3)' }));
+    expect(functionRows()).toEqual(['Zulu', 'Middle', 'Alpha']);
+
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: 'Sort order: Call graph node count',
+      }),
+    );
+    fireEvent.click(screen.getByRole('radio', { name: 'Alphabetical' }));
+
+    expect(
+      screen.getByRole('button', { name: 'Sort order: Alphabetical' }),
+    ).toBeInTheDocument();
+    expect(functionRows()).toEqual(['Alpha', 'Middle', 'Zulu']);
+  });
+
+  it('keeps the selected sort order across mounted project updates', () => {
+    const { rerender } = render(<FunctionDetailsHarness />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Functions (3)' }));
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: 'Sort order: Call graph node count',
+      }),
+    );
+    fireEvent.click(screen.getByRole('radio', { name: 'Alphabetical' }));
+
+    rerender(<FunctionDetailsHarness projectVersion={2} />);
+
+    expect(
+      screen.getByRole('button', { name: 'Sort order: Alphabetical' }),
+    ).toBeInTheDocument();
+    expect(functionRows(['Alpha', 'Beta', 'Middle', 'Zulu'])).toEqual([
+      'Alpha',
+      'Beta',
+      'Middle',
+      'Zulu',
+    ]);
+  });
+});
+
 function SidebarHarness() {
   const [selectedFn, setSelectedFn] = useState<string | null>('demo.Foo');
 
   return (
     <FunctionSidebar
       functions={[
-        { name: 'Main', kind: 'expr', origin: 'userDefined' },
-        { name: 'demo.Foo', kind: 'expr', origin: 'userDefined' },
+        { kind: 'expr', name: 'Main', origin: 'userDefined' },
+        { kind: 'expr', name: 'demo.Foo', origin: 'userDefined' },
       ]}
-      showInternalFunctions={false}
       internalFunctionCount={0}
-      selectedFn={selectedFn}
-      onSelectFn={setSelectedFn}
       onRefreshTests={vi.fn()}
+      onSelectFn={setSelectedFn}
+      selectedFn={selectedFn}
+      showInternalFunctions={false}
     />
   );
+}
+
+function FunctionDetailsHarness({
+  projectVersion = 1,
+}: {
+  projectVersion?: number;
+}) {
+  const functions = [
+    {
+      kind: 'expr' as const,
+      name: 'Zulu',
+      origin: 'userDefined' as const,
+      signature: 'function Zulu() -> null throws never',
+      sourcePosition: { column: 10, file: 'baml_src/main.baml', line: 12 },
+    },
+    {
+      kind: 'expr' as const,
+      name: 'Alpha',
+      origin: 'userDefined' as const,
+      signature: 'function Alpha() -> null throws never',
+      sourcePosition: { column: 10, file: 'baml_src/main.baml', line: 2 },
+    },
+    {
+      kind: 'expr' as const,
+      name: 'Middle',
+      origin: 'userDefined' as const,
+      signature: 'function Middle(input: string) -> string throws never',
+      sourcePosition: { column: 10, file: 'baml_src/main.baml', line: 7 },
+    },
+  ];
+  const workflowNodeCounts = new Map([
+    ['Zulu', 20],
+    ['Alpha', 1],
+    ['Middle', 10],
+  ]);
+  if (projectVersion === 2) {
+    functions.push({
+      kind: 'expr',
+      name: 'Beta',
+      origin: 'userDefined',
+      signature: 'function Beta() -> null throws never',
+      sourcePosition: { column: 10, file: 'baml_src/updated.baml', line: 3 },
+    });
+    workflowNodeCounts.set('Beta', 30);
+  }
+
+  return (
+    <FunctionSidebar
+      functions={functions}
+      internalFunctionCount={0}
+      onRefreshTests={vi.fn()}
+      onSelectFn={vi.fn()}
+      selectedFn={null}
+      showInternalFunctions={false}
+      workflowNodeCounts={workflowNodeCounts}
+    />
+  );
+}
+
+function functionRows(names = ['Alpha', 'Middle', 'Zulu']) {
+  return names
+    .map((name) => ({
+      element: screen.getByRole('button', { name }),
+      name,
+    }))
+    .sort((left, right) =>
+      left.element.compareDocumentPosition(right.element) &
+      Node.DOCUMENT_POSITION_FOLLOWING
+        ? -1
+        : 1,
+    )
+    .map(({ name }) => name);
 }

@@ -48,6 +48,23 @@ describe('function sidebar workflow size', () => {
     expect(functionNode(tree.nodes, 'OneNode').workflowNodeCount).toBe(1);
     expect(functionNode(tree.nodes, 'ManyNodes').workflowNodeCount).toBe(12);
   });
+
+  it('sorts alphabetically when requested without hiding node counts', () => {
+    const tree = buildFunctionSidebarTree(
+      [functionInfo('Zulu'), functionInfo('Alpha'), functionInfo('Middle')],
+      {
+        sortOrder: 'alphabetical',
+        workflowNodeCounts: new Map([
+          ['Zulu', 20],
+          ['Alpha', 1],
+          ['Middle', 10],
+        ]),
+      },
+    );
+
+    expect(tree.nodes.map(nodeLabel)).toEqual(['Alpha', 'Middle', 'Zulu']);
+    expect(functionNode(tree.nodes, 'Zulu').workflowNodeCount).toBe(20);
+  });
 });
 
 function functionInfo(name: string): FunctionInfo {

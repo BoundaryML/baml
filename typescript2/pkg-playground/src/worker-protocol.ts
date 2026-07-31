@@ -123,6 +123,14 @@ export interface FunctionInfo {
   name: string;
   kind: FunctionKind;
   origin: FunctionOrigin;
+  /** Source-like declaration including parameters, return type, and throws. */
+  signature?: string;
+  /** One-based source position of the function name. */
+  sourcePosition?: {
+    file: string;
+    line: number;
+    column: number;
+  };
   capabilities?: LlmCapabilities;
   /** Parameter schemas for the args form. `undefined` = no schema available
    *  (old WASM binary or extraction skipped) → raw-JSON-only mode; `[]` = the

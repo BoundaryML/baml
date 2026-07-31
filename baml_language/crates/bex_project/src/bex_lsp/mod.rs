@@ -173,6 +173,8 @@ pub struct FunctionInfo {
     pub name: String,
     pub kind: FunctionKind,
     pub origin: FunctionOrigin,
+    pub signature: String,
+    pub source_position: FunctionSourcePosition,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub capabilities: Option<LlmCapabilities>,
     /// Parameter schemas for the playground args form; named types inside are
@@ -182,6 +184,14 @@ pub struct FunctionInfo {
     /// the UI relies on the distinction.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub params: Option<Vec<baml_project::ParamSchema>>,
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FunctionSourcePosition {
+    pub file: String,
+    pub line: u32,
+    pub column: u32,
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
