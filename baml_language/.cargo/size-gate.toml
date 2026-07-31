@@ -49,7 +49,7 @@ max_file_bytes = "20.9 MiB"
 max_file_bytes = "26.9 MiB"
 
 [artifacts.baml-cli.platform.x86_64-pc-windows-msvc]
-max_file_bytes = "22.6 MiB"
+max_file_bytes = "22.5 MiB"
 
 [artifacts.packed-program]
 kind = "pack"
