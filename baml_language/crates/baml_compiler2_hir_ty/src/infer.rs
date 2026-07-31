@@ -225,7 +225,7 @@ impl<'db> InferenceContext<'db> {
                 });
                 match annotation {
                     Some(type_expr) => {
-                        let lowered = self.lower.lower_type_expr(type_expr);
+                        let lowered = self.lower.lower_ast_type_expr(type_expr);
                         let annotation_ty = self.instantiate_holes(&lowered);
                         if let Some(init_ty) = init_ty {
                             // Eq against the widened initializer is the S6

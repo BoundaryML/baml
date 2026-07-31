@@ -1,9 +1,11 @@
 //! Declaration lowering: type syntax -> interned [`Ty`], with name
 //! resolution - the rust-analyzer `TyLoweringContext` analog (S4).
 //!
-//! One lowering core over both type-syntax surfaces: ppir's span-free
-//! `TypeRef` stores (signatures, fields, aliases) and `ast::TypeExpr` (body
-//! positions, until the body `TypeRef` migration retires that surface). Name
+//! ONE syntax surface: everything lowers through span-free `TypeRef`s.
+//! Signatures, fields, and aliases come pre-built from ppir's item stores;
+//! body-position `ast::TypeExpr` annotations convert through hir's
+//! `TypeRefBuilder` first (`lower_ast_type_expr`), so there is a single
+//! lowering match. Name
 //! resolution mirrors TIR's `resolve_type_in` algorithm exactly - namespace-
 //! relative first, then `root.`-absolute, then package-prefixed, then the
 //! `$stream` companion fallback - against ppir's canonical `package_items`
@@ -162,89 +164,19 @@ impl<'db> LowerCtx<'db> {
         }
     }
 
-    // -- Spanned surface (body positions, until the TypeRef migration) --------
+    // -- Spanned surface (body positions) --------------------------------------
 
-    pub fn lower_type_expr(&self, type_expr: &ast::TypeExpr) -> Ty {
-        let attr = TyAttr::default;
-        match &type_expr.kind {
-            ast::TypeExprKind::Int { .. } => Ty::int(),
-            ast::TypeExprKind::Bigint { .. } => Ty::intern(TyKind::Bigint { attr: attr() }),
-            ast::TypeExprKind::Float { .. } => Ty::float(),
-            ast::TypeExprKind::String { .. } => Ty::string(),
-            ast::TypeExprKind::Bool { .. } => Ty::bool(),
-            ast::TypeExprKind::Null { .. } => Ty::null(),
-            ast::TypeExprKind::Never { .. } => Ty::never(),
-            ast::TypeExprKind::Void { .. } => Ty::void(),
-            ast::TypeExprKind::Uint8Array { .. } => Ty::intern(TyKind::Uint8Array { attr: attr() }),
-            ast::TypeExprKind::Media { kind, .. } => Ty::intern(TyKind::Media(*kind, attr())),
-            ast::TypeExprKind::BuiltinUnknown { .. } => {
-                Ty::intern(TyKind::Unknown { attr: attr() })
-            }
-            ast::TypeExprKind::Type { .. } => Ty::intern(TyKind::Type { attr: attr() }),
-            ast::TypeExprKind::Rust { .. } => Ty::intern(TyKind::RustType { attr: attr() }),
-            ast::TypeExprKind::Optional { inner, .. } => {
-                Ty::union([self.lower_type_expr(inner), Ty::null()])
-            }
-            ast::TypeExprKind::List { inner, .. } => Ty::list(self.lower_type_expr(inner)),
-            ast::TypeExprKind::Map { key, value, .. } => Ty::intern(TyKind::Map {
-                key: self.lower_type_expr(key),
-                value: self.lower_type_expr(value),
-                attr: attr(),
-            }),
-            ast::TypeExprKind::Union { variants, .. } => {
-                Ty::union(variants.iter().map(|variant| self.lower_type_expr(variant)))
-            }
-            ast::TypeExprKind::Literal { value, .. } => {
-                Ty::intern(TyKind::Literal(value.clone(), Freshness::Regular, attr()))
-            }
-            ast::TypeExprKind::Function {
-                params,
-                ret,
-                throws,
-                ..
-            } => Ty::intern(TyKind::Function {
-                params: params
-                    .iter()
-                    .map(|param| FunctionParam {
-                        name: param.name.clone(),
-                        ty: self.lower_type_expr(&param.ty),
-                        mode: if param.optional {
-                            baml_type::FunctionParamMode::Optional
-                        } else {
-                            baml_type::FunctionParamMode::Required
-                        },
-                    })
-                    .collect(),
-                ret: self.lower_type_expr(ret),
-                throws: throws
-                    .as_ref()
-                    .map(|throws| self.lower_type_expr(throws))
-                    .unwrap_or_else(Ty::never),
-                attr: attr(),
-            }),
-            ast::TypeExprKind::Path {
-                segments,
-                generic_args,
-                associated_type_bindings,
-                ..
-            } => {
-                let args: Vec<Ty> = generic_args
-                    .iter()
-                    .map(|arg| self.lower_type_expr(arg))
-                    .collect();
-                let bindings: Vec<(Name, Ty)> = associated_type_bindings
-                    .iter()
-                    .map(|binding| (binding.name.clone(), self.lower_type_expr(&binding.ty)))
-                    .collect();
-                self.lower_path(segments, args, bindings)
-            }
-            ast::TypeExprKind::AssociatedTypeProjection { .. } => Ty::error(),
-            ast::TypeExprKind::Infer { .. } => Ty::intern(TyKind::Infer {
-                var: None,
-                attr: attr(),
-            }),
-            ast::TypeExprKind::Error { .. } | ast::TypeExprKind::Unknown { .. } => Ty::error(),
-        }
+    /// Lowers a body-position `ast::TypeExpr` by converting it through hir's
+    /// `TypeRefBuilder` - the exact lowering ppir's item data uses - and then
+    /// the single `TypeRef` path above, so `hir_ty` speaks `TypeRef` only. The
+    /// shared per-body store becomes a salsa query with S3; until then each
+    /// annotation builds a throwaway store (annotations are tiny), and the
+    /// surface itself retires with the body `TypeRef` migration at cutover.
+    pub fn lower_ast_type_expr(&self, type_expr: &ast::TypeExpr) -> Ty {
+        let mut builder = baml_compiler2_hir::type_ref::TypeRefBuilder::new();
+        let id = builder.lower(type_expr);
+        let (store, _source_map) = builder.finish();
+        self.lower_type_ref(&store, id)
     }
 
     // -- Path resolution -------------------------------------------------------
