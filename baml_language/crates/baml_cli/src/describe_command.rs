@@ -261,6 +261,34 @@ fn resolve_unqualified_builtin_member<'db>(
     baml_lsp2_actions::resolve_target(db, baml_pkg, name)
 }
 
+/// Every symbol named exactly `name`, in any namespace of any package —
+/// user first, then builtins, deterministic order. Compiler-synthesized
+/// items are excluded (they are reachable by their `$`-qualified names).
+fn search_symbols_by_name<'db>(
+    db: &'db ProjectDatabase,
+    name: &str,
+) -> Vec<baml_surface::Symbol<'db>> {
+    let mut out = Vec::new();
+    let mut packages = vec!["user".to_string()];
+    packages.extend(
+        baml_lsp2_actions::non_user_package_names(db)
+            .into_iter()
+            .map(|s| s.to_string()),
+    );
+    packages[1..].sort();
+    for package_name in &packages {
+        let package = baml_surface::Package::named(db, package_name);
+        for namespace in package.namespaces(db) {
+            for (item_name, symbol) in namespace.items(db) {
+                if item_name.as_str() == name && !symbol.is_synthetic(db) {
+                    out.push(symbol);
+                }
+            }
+        }
+    }
+    out
+}
+
 impl DescribeArgs {
     /// Run the describe command and return the CLI exit code.
     pub fn run(&self) -> Result<crate::ExitCode> {
@@ -378,9 +406,9 @@ impl DescribeArgs {
                 Ok(crate::ExitCode::Success)
             }
             Some(ResolvedTarget::Item(def)) => {
+                let symbol = baml_surface::Symbol::from(def);
                 if self.json {
                     // Typed drill-in document; ids match `--export` exactly.
-                    let symbol = baml_surface::Symbol::from(def);
                     let Some(export) = baml_surface::export_symbol(&db, symbol) else {
                         eprintln!("no symbol found: {name}");
                         print_did_you_mean(&db, name);
@@ -391,85 +419,66 @@ impl DescribeArgs {
                         serde_json::to_string_pretty(&export)
                             .context("failed to serialize output as JSON")?
                     );
-                    return Ok(crate::ExitCode::Success);
-                }
-                let describe_files = baml_compiler2_hir::compiler2_all_files(&db);
-                if let Some(desc) =
-                    baml_lsp2_actions::describe_by_definition(&db, &describe_files, def)
-                {
-                    render_description(&db, &desc, self.budget, &from);
-                    Ok(crate::ExitCode::Success)
                 } else {
-                    eprintln!("no symbol found: {name}");
-                    print_did_you_mean(&db, name);
-                    Ok(crate::ExitCode::Other)
+                    print!("{}", crate::describe_render::render_symbol(&db, symbol));
                 }
+                Ok(crate::ExitCode::Success)
             }
             Some(ResolvedTarget::Member {
                 parent,
                 member_name,
             }) => {
+                let owner = baml_surface::Symbol::from(parent);
+                let Some(member) = owner.member_named(&db, member_name.as_str()) else {
+                    eprintln!("no symbol found: {name}");
+                    print_did_you_mean(&db, name);
+                    return Ok(crate::ExitCode::Other);
+                };
                 if self.json {
-                    let owner = baml_surface::Symbol::from(parent);
-                    let Some(member) = owner.member_named(&db, member_name.as_str()) else {
-                        eprintln!("no symbol found: {name}");
-                        print_did_you_mean(&db, name);
-                        return Ok(crate::ExitCode::Other);
-                    };
                     let export = baml_surface::export_member(&db, owner, member);
                     println!(
                         "{}",
                         serde_json::to_string_pretty(&export)
                             .context("failed to serialize output as JSON")?
                     );
-                    return Ok(crate::ExitCode::Success);
-                }
-                let describe_files = baml_compiler2_hir::compiler2_all_files(&db);
-                if let Some(desc) = baml_lsp2_actions::describe_item_member(
-                    &db,
-                    &describe_files,
-                    parent,
-                    member_name.as_str(),
-                ) {
-                    render_description(&db, &desc, self.budget, &from);
-                    Ok(crate::ExitCode::Success)
                 } else {
-                    eprintln!("no symbol found: {name}");
-                    print_did_you_mean(&db, name);
-                    Ok(crate::ExitCode::Other)
+                    print!(
+                        "{}",
+                        crate::describe_render::render_member(&db, owner, member)
+                    );
                 }
+                Ok(crate::ExitCode::Success)
             }
             None => {
-                // Substring fallback (existing behavior for unresolved names).
-                let describe_files = baml_compiler2_hir::compiler2_all_files(&db);
-                let descriptions = describe(&db, &describe_files, name);
+                // Exact-name fallback: an unqualified name may live in any
+                // namespace of any package (`Point` declared under
+                // `shapes/`). Scan the whole surface and show every match.
+                let matches = search_symbols_by_name(&db, name);
 
-                if descriptions.is_empty() {
+                if matches.is_empty() {
                     eprintln!("no symbol found: {name}");
                     print_did_you_mean(&db, name);
                     return Ok(crate::ExitCode::Other);
                 }
 
                 if self.json {
-                    let budget = self.budget;
-                    let json_output: Vec<serde_json::Value> = descriptions
+                    let exports: Vec<baml_surface::SymbolExport> = matches
                         .iter()
-                        .map(|d| description_to_json(&db, d, budget, &from))
+                        .filter_map(|symbol| baml_surface::export_symbol(&db, *symbol))
                         .collect();
                     println!(
                         "{}",
-                        serde_json::to_string_pretty(&json_output)
+                        serde_json::to_string_pretty(&exports)
                             .context("failed to serialize output as JSON")?
                     );
                     return Ok(crate::ExitCode::Success);
                 }
 
-                for (i, desc) in descriptions.iter().enumerate() {
+                for (i, symbol) in matches.iter().enumerate() {
                     if i > 0 {
                         println!();
-                        println!();
                     }
-                    render_description(&db, desc, self.budget, &from);
+                    print!("{}", crate::describe_render::render_symbol(&db, *symbol));
                 }
 
                 Ok(crate::ExitCode::Success)

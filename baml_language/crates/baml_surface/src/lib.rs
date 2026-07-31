@@ -57,6 +57,9 @@ impl Db for baml_project::ProjectDatabase {}
 
 // ── Public API re-exports ─────────────────────────────────────────────────────
 
+// Re-exported so `Function::origin`/`Global::origin` callers need no direct
+// ast-crate dependency.
+pub use baml_compiler2_ast::{FunctionOrigin, LetOrigin};
 pub use display::TyDisplayFormat;
 pub use export::{
     MemberExport, PackageExport, SymbolExport, export_member, export_package, export_symbol,
