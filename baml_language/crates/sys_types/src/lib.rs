@@ -639,6 +639,14 @@ pub struct SysOpContext<E: Send + Sync + 'static = Box<dyn Send + Sync + 'static
     /// Typed async IO interface for calling back into the runtime IO layer.
     /// Built once by the engine from the `SysOps` table and shared across calls.
     pub runtime_io: Arc<dyn runtime_io::RuntimeIo>,
+
+    /// Optional cold-path observer for normalized LLM attempt metadata.
+    ///
+    /// The engine installs this per sys-op dispatch with the exact logical
+    /// thread/call identity captured structurally from the VM. Keeping the
+    /// observer here lets `sys_llm` report provider-normalized model/token
+    /// data without depending on the profiler or parsing function names.
+    pub llm_observer: Option<LlmCallObserver>,
 }
 
 impl<E: Send + Sync + 'static> Clone for SysOpContext<E> {
@@ -653,9 +661,27 @@ impl<E: Send + Sync + 'static> Clone for SysOpContext<E> {
             type_alias_definitions: self.type_alias_definitions.clone(),
             spawner: self.spawner.clone(),
             runtime_io: self.runtime_io.clone(),
+            llm_observer: self.llm_observer.clone(),
         }
     }
 }
+
+/// Normalized LLM attempt signal emitted by `sys_llm`.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum LlmCallObservation {
+    /// Request construction succeeded and an attempt is about to use `model`.
+    AttemptStarted { model: String },
+    /// A provider response was parsed. `parse_error` means response-to-BAML
+    /// coercion failed; token fields remain useful even on that failure.
+    Completed {
+        model: String,
+        tokens_in: u32,
+        tokens_out: u32,
+        parse_error: bool,
+    },
+}
+
+pub type LlmCallObserver = Arc<dyn Fn(LlmCallObservation) + Send + Sync + 'static>;
 
 /// The shared part of [`SysOpContext`]. Used in `sys_ops` that need engine-level information.
 /// When passing to a sys op, convert to [`SysOpContext`] with `to_op_context`.
@@ -784,6 +810,7 @@ impl SysOpContext {
             >::new()),
             spawner: Arc::new(NeverSpawner),
             runtime_io: Arc::new(runtime_io::NoopRuntimeIo),
+            llm_observer: None,
         }
     }
 }
@@ -805,6 +832,7 @@ impl EngineSysOpContext {
             type_alias_definitions: self.type_alias_definitions.clone(),
             spawner,
             runtime_io: self.runtime_io.clone(),
+            llm_observer: None,
         }
     }
 }

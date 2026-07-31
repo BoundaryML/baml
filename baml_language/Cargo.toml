@@ -104,6 +104,7 @@ baml_compiler_syntax = { path = "crates/baml_compiler_syntax" }
 bex_cache = { path = "crates/bex_cache", default-features = false }
 bex_project = { path = "crates/bex_project", default-features = false }
 bex_engine = { path = "crates/bex_engine", default-features = false }
+bex_query = { path = "crates/bex_query", default-features = false }
 sys_glob = { path = "crates/sys_glob" }
 sys_jinja = { path = "crates/sys_jinja" }
 sys_jinja_types = { path = "crates/sys_jinja_types" }
@@ -231,6 +232,7 @@ regex = { version = "1.10.2" }
 # gitignore-aware directory walking (workspace project discovery in the LSP)
 ignore = { version = "0.4" }
 base64 = "0.22"
+blake3 = "1.8"
 mime_guess = "2"
 bytecount = "0.6"
 reqwest = { version = "0.13.1", default-features = false, features = [

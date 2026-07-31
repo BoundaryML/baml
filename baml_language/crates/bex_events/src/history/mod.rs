@@ -770,6 +770,9 @@ fn open_boundary_from_segments_with_fallback(
             ValueFileRecord::CapturedValue(record) => captured_values.push(record),
             ValueFileRecord::LogEvent(record) => log_values.push(record),
             ValueFileRecord::CaptureLoss(record) => capture_losses.push(record),
+            // Audits are consumed by the observability audit source; they do
+            // not participate in legacy RunStore reconstruction.
+            ValueFileRecord::Audit(_) => {}
         }
     }
     let started = started.ok_or_else(|| {
@@ -1021,6 +1024,7 @@ pub fn read_value_from_segments_with_blobs_result(
                     (record.value_ref, record.body, record.blob_ref)
                 }
                 ValueFileRecord::CaptureLoss(_)
+                | ValueFileRecord::Audit(_)
                 | ValueFileRecord::RunStarted(_)
                 | ValueFileRecord::RunCompleted(_) => continue,
             };
@@ -1501,6 +1505,7 @@ mod tests {
                 ValueCapture {
                     kind: ValueCaptureKind::RootOutput,
                     call: trace,
+                    promotion_trigger: None,
                 },
                 ValueCodec::BamlOutboundValue,
                 vec![1, 2, 3],
@@ -1669,6 +1674,7 @@ mod tests {
                 ValueCapture {
                     kind: ValueCaptureKind::RootOutput,
                     call: root,
+                    promotion_trigger: None,
                 },
                 ValueCodec::BamlOutboundValue,
                 vec![1, 2, 3],
@@ -1684,6 +1690,7 @@ mod tests {
                 ValueCapture {
                     kind: ValueCaptureKind::CallOutput,
                     call: child_trace,
+                    promotion_trigger: None,
                 },
                 ValueCodec::BamlOutboundValue,
                 vec![4, 5, 6],
@@ -1758,6 +1765,7 @@ mod tests {
                 ValueCapture {
                     kind: ValueCaptureKind::CallOutput,
                     call: thread_one,
+                    promotion_trigger: None,
                 },
                 ValueCodec::BamlOutboundValue,
                 vec![1],
@@ -1769,6 +1777,7 @@ mod tests {
                 ValueCapture {
                     kind: ValueCaptureKind::CallOutput,
                     call: thread_two,
+                    promotion_trigger: None,
                 },
                 ValueCodec::BamlOutboundValue,
                 vec![2],
@@ -2016,6 +2025,7 @@ mod tests {
                 ValueCapture {
                     kind: ValueCaptureKind::RootOutput,
                     call: trace,
+                    promotion_trigger: None,
                 },
                 ValueCodec::BamlOutboundValue,
                 large_body.clone(),
@@ -2095,9 +2105,11 @@ mod tests {
                     digest: "../bad".to_string(),
                     size_bytes: 3,
                 }),
+                dag_ref: None,
                 capture: Some(ValueCapture {
                     kind: ValueCaptureKind::RootOutput,
                     call: trace,
+                    promotion_trigger: None,
                 }),
             },
         )
@@ -2138,6 +2150,7 @@ mod tests {
                 ValueCapture {
                     kind: ValueCaptureKind::RootOutput,
                     call: trace,
+                    promotion_trigger: None,
                 },
                 ValueCodec::BamlOutboundValue,
                 large_body.clone(),
@@ -2217,6 +2230,7 @@ mod tests {
                 ValueCapture {
                     kind: ValueCaptureKind::CallInput,
                     call: input_call,
+                    promotion_trigger: None,
                 },
                 ValueCodec::BamlOutboundValue,
                 vec![0, 1],
@@ -2228,6 +2242,7 @@ mod tests {
                 ValueCapture {
                     kind: ValueCaptureKind::CallOutput,
                     call: output_call,
+                    promotion_trigger: None,
                 },
                 ValueCodec::BamlOutboundValue,
                 vec![1, 2, 3],
@@ -2239,6 +2254,7 @@ mod tests {
                 ValueCapture {
                     kind: ValueCaptureKind::CallError,
                     call: error_call,
+                    promotion_trigger: None,
                 },
                 ValueCodec::BamlOutboundValue,
                 vec![4, 5],

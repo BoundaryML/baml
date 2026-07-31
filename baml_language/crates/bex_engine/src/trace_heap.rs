@@ -7,6 +7,7 @@
 
 use std::{
     collections::{HashMap, HashSet},
+    mem::size_of,
     sync::{
         Arc, Mutex,
         atomic::{AtomicU64, Ordering},
@@ -116,6 +117,69 @@ impl TraceSnapshot {
     #[must_use]
     pub fn value(&self, value_ref: TraceValueRef) -> Option<&TraceValue> {
         self.values.get(value_ref.0)
+    }
+
+    /// Conservative owned-byte estimate used to reserve a bounded staging
+    /// slot before adapting this already-detached snapshot to the CAS model.
+    #[must_use]
+    pub fn estimated_retained_bytes(&self) -> usize {
+        self.values.iter().fold(0_usize, |total, value| {
+            total.saturating_add(match value {
+                TraceValue::Null
+                | TraceValue::Bool(_)
+                | TraceValue::Int(_)
+                | TraceValue::Float(_) => 16,
+                TraceValue::Bigint(value) | TraceValue::String(value) => {
+                    value.len().saturating_add(24)
+                }
+                TraceValue::Bytes(value) => value.len().saturating_add(24),
+                TraceValue::Array(values) => values
+                    .len()
+                    .saturating_mul(size_of::<TraceValueRef>())
+                    .saturating_add(24),
+                TraceValue::Map(values) => values.iter().fold(24_usize, |bytes, (key, _)| {
+                    bytes
+                        .saturating_add(key.len())
+                        .saturating_add(size_of::<TraceValueRef>())
+                }),
+                TraceValue::Media(value) => {
+                    let content = match &value.content {
+                        TraceMediaContent::Url(value)
+                        | TraceMediaContent::Base64(value)
+                        | TraceMediaContent::File(value) => value.len(),
+                    };
+                    value
+                        .mime_type
+                        .as_ref()
+                        .map_or(0, String::len)
+                        .saturating_add(content)
+                        .saturating_add(32)
+                }
+                TraceValue::Instance {
+                    type_name,
+                    type_args,
+                    fields,
+                } => type_name
+                    .len()
+                    .saturating_add(
+                        type_args
+                            .len()
+                            .saturating_mul(size_of::<baml_type::RuntimeTy>()),
+                    )
+                    .saturating_add(
+                        fields
+                            .iter()
+                            .map(|(name, _)| name.len().saturating_add(size_of::<TraceValueRef>()))
+                            .sum::<usize>(),
+                    )
+                    .saturating_add(32),
+                TraceValue::Enum { type_name, variant } => type_name
+                    .len()
+                    .saturating_add(variant.len())
+                    .saturating_add(24),
+                TraceValue::Omitted(value) => value.message.len().saturating_add(24),
+            })
+        })
     }
 
     #[cfg(test)]

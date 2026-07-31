@@ -78,6 +78,7 @@ async fn serialize_via_baml_json(
                     "T".to_string(),
                     return_type.clone(),
                 )]))
+                .with_profile_enabled(false)
                 .build(),
             true,
         )

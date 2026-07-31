@@ -1,0 +1,239 @@
+name: Observability Bench (Reusable)
+
+on:
+  workflow_call:
+
+permissions:
+  actions: read
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+env:
+  CARGO_INCREMENTAL: 0
+  CARGO_NET_RETRY: 10
+  CARGO_TERM_COLOR: always
+  RUSTUP_MAX_RETRIES: 10
+
+jobs:
+  obs-bench:
+    name: "obs-bench smoke (${{ matrix.label }})"
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - label: linux-x86_64
+            runner: blacksmith-4vcpu-ubuntu-2404
+            cache_key: linux
+          - label: macos-arm64
+            runner: blacksmith-6vcpu-macos-latest
+            cache_key: macos
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Install pinned Rust toolchain
+        run: rustup show
+        working-directory: baml_language
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "baml_language -> target"
+          cache-all-crates: true
+          cache-targets: false
+          shared-key: "${{ matrix.cache_key }}-obs-bench"
+
+      - name: Fetch dependencies
+        run: cargo fetch
+        working-directory: baml_language
+
+      - name: Verify P0 oracles and tooling
+        run: cargo test -p bex_events -p tools_obs_bench
+        working-directory: baml_language
+
+      - name: Verify native and wasm query cache budgets
+        run: |
+          cargo test -p bex_query --test cache_budgets
+          cargo test -p bex_query --no-default-features --features wasm --test cache_budgets
+        working-directory: baml_language
+
+      - name: Exercise bounded crash recovery
+        run: |
+          cargo run -p tools_obs_bench -- corpus synth \
+            --output "target/obs-bench-crashfuzz-${{ matrix.label }}" \
+            --target-bytes 8192 \
+            --nodes 8
+          cargo run -p tools_obs_bench -- crashfuzz \
+            "target/obs-bench-crashfuzz-${{ matrix.label }}/cct-only.bamlcct" \
+            "target/obs-bench-crashfuzz-${{ matrix.label }}/full-trace.bamlbcct" \
+            --iterations 16 \
+            --format ndjson \
+            > "obs-crashfuzz-${{ matrix.label }}.ndjson"
+        working-directory: baml_language
+
+      - name: Record synthetic CCT kernel trend
+        run: cargo bench -p bex_events --bench cct_update > "obs-cct-${{ matrix.label }}.ndjson"
+        working-directory: baml_language
+
+      - name: Record compact storage trend
+        run: cargo bench -p bex_events --bench bcct_storage > "obs-storage-${{ matrix.label }}.ndjson"
+        working-directory: baml_language
+
+      - name: Record value CAS trend
+        run: cargo bench -p bex_events --bench value_cas > "obs-values-${{ matrix.label }}.ndjson"
+        working-directory: baml_language
+
+      - name: Record bounded query and live-wire trends
+        run: cargo bench -p bex_query --bench query_bounds > "obs-query-${{ matrix.label }}.ndjson"
+        working-directory: baml_language
+
+      - name: Enforce observability acceptance gates
+        env:
+          CCT_ROWS: "obs-cct-${{ matrix.label }}.ndjson"
+          STORAGE_ROWS: "obs-storage-${{ matrix.label }}.ndjson"
+          VALUE_ROWS: "obs-values-${{ matrix.label }}.ndjson"
+          QUERY_ROWS: "obs-query-${{ matrix.label }}.ndjson"
+        run: |
+          jq -s -e '
+            ([.[].median_ns_per_call_pair] | sort) as $medians
+            | ($medians | length) as $count
+            | ($count >= 6)
+              and any(.[]; .depth == 14 and .producer_rings == 1)
+              and any(.[]; .depth == 14 and .producer_rings == 8)
+              and (
+                if ($count % 2) == 0 then
+                  (($medians[($count / 2) - 1] + $medians[$count / 2]) / 2) <= 50
+                else
+                  $medians[($count / 2 | floor)] <= 50
+                end
+              )
+              and all(.[]; .max_ns_per_call_pair < 60)
+          ' "$CCT_ROWS"
+          jq -s -e '
+            (map(select(.bench_id == "bcct_encode_3_rows"))[0]) as $bytes
+            | (map(select(.bench_id == "c11_exact_index_100k"))[0]) as $index
+            | (map(select(.bench_id == "c11_partition_lifecycle_10k"))[0]) as $lifecycle
+            | (map(select(.bench_id == "c12_async_fsync_stall"))[0]) as $durability
+            | ($bytes.bytes_per_second_at_4hz <= 6000)
+              and ($index.index_ratio <= 0.25)
+              and ($lifecycle.rss_delta_bytes <= 67108864)
+              and ($durability.fsyncs_completed == $durability.samples)
+              and ($durability.producer_stall_p99_ns <= 20000000)
+          ' "$STORAGE_ROWS"
+          jq -s -e '
+            (map(select(.bench_id == "value_cas_transcript_64"))[0]) as $transcript
+            | (map(select(.bench_id | startswith("value_cas_size_")))) as $sizes
+            | ($sizes | length) >= 6
+              and all($sizes[];
+                (.encode_mb_s >= 300)
+                and (.median_encode_ns <= ([2000000, (.input_bytes * 4)] | max))
+              )
+              and ($transcript.reduction_x >= 20)
+              and ($transcript.growth_exponent_16_to_64 <= 1.2)
+              and ($transcript.incremental_bytes <= ($transcript.prompt_bytes + 8192))
+              and ($transcript.throughput_mb_s >= 300)
+          ' "$VALUE_ROWS"
+          jq -s -e '
+            (map(select(.bench_id == "c6_open_fold_live_4096"))[0]) as $small
+            | (map(select(.bench_id == "c6_open_fold_live_100000"))[0]) as $large
+            | (map(select(.bench_id == "query_timeline_1000000"))[0]) as $one_m
+            | (map(select(.bench_id == "query_timeline_36000000"))[0]) as $thirty_six_m
+            | (map(select(.bench_id == "c13_live_wire_hotloop"))[0]) as $live
+            | ($small.elapsed_ns <= 250000000)
+              and ($small.source == "native_file")
+              and ($small.source_bytes <= 10485760)
+              and ($large.elapsed_ns <= 2000000000)
+              and ($large.rss_delta_bytes <= 268435456)
+              and ($small.cache_bytes <= $small.cache_max_bytes)
+              and ($large.cache_bytes <= $large.cache_max_bytes)
+              and ($one_m.frame_bytes <= 204800)
+              and ($thirty_six_m.frame_bytes <= 204800)
+              and (($one_m.elapsed_ns / $one_m.iterations) <= 100000000)
+              and (($thirty_six_m.elapsed_ns / $thirty_six_m.iterations) <= 100000000)
+              and (
+                (($one_m.frame_bytes - $thirty_six_m.frame_bytes) | fabs)
+                <= (($one_m.frame_bytes + $thirty_six_m.frame_bytes) / 20)
+              )
+              and ($live.bytes <= ($live.max_bytes * $live.rate_hz * $live.seconds))
+          ' "$QUERY_ROWS"
+        working-directory: baml_language
+
+      - name: Record machine manifest
+        run: cargo run -p tools_obs_bench -- calibrate --format ndjson > "obs-machine-${{ matrix.label }}.ndjson"
+        working-directory: baml_language
+
+      - name: Upload raw rows
+        uses: actions/upload-artifact@v7
+        with:
+          name: "obs-bench-${{ matrix.label }}"
+          path: |
+            baml_language/obs-cct-${{ matrix.label }}.ndjson
+            baml_language/obs-storage-${{ matrix.label }}.ndjson
+            baml_language/obs-values-${{ matrix.label }}.ndjson
+            baml_language/obs-query-${{ matrix.label }}.ndjson
+            baml_language/obs-machine-${{ matrix.label }}.ndjson
+            baml_language/obs-crashfuzz-${{ matrix.label }}.ndjson
+
+  enforce:
+    name: "obs-bench enforce aggregate"
+    needs: obs-bench
+    runs-on: blacksmith-4vcpu-ubuntu-2404
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Install pinned Rust toolchain
+        run: rustup show
+        working-directory: baml_language
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "baml_language -> target"
+          cache-all-crates: true
+          cache-targets: false
+          shared-key: "linux-obs-bench"
+
+      - name: Download platform rows
+        uses: actions/download-artifact@v8
+        with:
+          pattern: obs-bench-*
+          path: reports
+
+      - name: Validate, enforce baselines, and render claim ledgers
+        run: |
+          set -euo pipefail
+          for platform in linux-x86_64 macos-arm64; do
+            report_dir="$GITHUB_WORKSPACE/reports/obs-bench-$platform"
+            mapfile -t rows < <(
+              find "$report_dir" -name '*.ndjson' ! -name 'obs-crashfuzz-*' -type f | sort
+            )
+            cargo run -p tools_obs_bench -- validate "${rows[@]}" --format ndjson \
+              > "$GITHUB_WORKSPACE/reports/validation-$platform.ndjson"
+            cargo run -p tools_obs_bench -- check \
+              "$report_dir/obs-cct-$platform.ndjson" \
+              "$report_dir/obs-storage-$platform.ndjson" \
+              "$report_dir/obs-values-$platform.ndjson" \
+              "$report_dir/obs-query-$platform.ndjson" \
+              --platform "$platform" \
+              > "$GITHUB_WORKSPACE/reports/check-$platform.json"
+            cargo run -p tools_obs_bench -- report "${rows[@]}" --format markdown \
+              > "$GITHUB_WORKSPACE/reports/claims-$platform.md"
+            cat "$GITHUB_WORKSPACE/reports/claims-$platform.md" >> "$GITHUB_STEP_SUMMARY"
+          done
+        working-directory: baml_language
+
+      - name: Upload validation and claim reports
+        uses: actions/upload-artifact@v7
+        with:
+          name: obs-bench-aggregate
+          path: |
+            reports/check-*.json
+            reports/claims-*.md
+            reports/validation-*.ndjson

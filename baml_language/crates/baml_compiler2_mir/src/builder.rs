@@ -655,6 +655,7 @@ impl MirBuilder {
             }),
             lambdas: vec![],
             signature: None,
+            lambda_identity: None,
         }
     }
 
@@ -698,6 +699,7 @@ impl MirBuilder {
             }),
             lambdas: vec![],
             signature: None,
+            lambda_identity: None,
         }
     }
 

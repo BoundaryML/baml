@@ -36,6 +36,13 @@ enum CaptureLossKind {
 enum CaptureLossReason {
   CAPTURE_LOSS_REASON_UNSPECIFIED = 0;
   CAPTURE_LOSS_REASON_QUEUE_FULL = 1;
+  CAPTURE_LOSS_REASON_STAGING_EVICTED = 2;
+  CAPTURE_LOSS_REASON_STAGING_VALUE_TOO_LARGE = 3;
+  CAPTURE_LOSS_REASON_EVICTION_HISTORY_OVERFLOW = 4;
+  CAPTURE_LOSS_REASON_DRAIN_QUEUE_FULL = 5;
+  CAPTURE_LOSS_REASON_SNAPSHOT_MISSING = 6;
+  CAPTURE_LOSS_REASON_ENCODE_FAILED = 7;
+  CAPTURE_LOSS_REASON_COMMIT_FAILED = 8;
 }
 
 enum RunStatus {
@@ -91,6 +98,14 @@ message SourceLocationV1 {
 message ValueCaptureV1 {
   ValueCaptureKind kind = 1;
   TraceCallKeyV1 call = 2;
+  // Set only when a speculative draft was made durable by a trigger.
+  optional string promotion_trigger = 3;
+}
+
+message DagRefV1 {
+  bytes root_cid = 1;
+  uint32 node_codec_version = 2;
+  uint64 logical_len = 3;
 }
 
 message LogEventV1 {
@@ -108,6 +123,28 @@ message CaptureLossV1 {
   optional TraceCallKeyV1 call = 4;
   optional string message = 5;
   uint64 timestamp_ms = 6;
+}
+
+message CapturePolicyChangedV1 {
+  uint64 timestamp_ms = 1;
+  string scope = 2;
+  string previous_policy = 3;
+  string current_policy = 4;
+}
+
+message PromotionOccurredV1 {
+  string trigger = 1;
+  string scope = 2;
+  uint64 records = 3;
+  uint64 staged_evicted = 4;
+  uint64 timestamp_ms = 5;
+}
+
+message ValueAuditV1 {
+  oneof audit {
+    CapturePolicyChangedV1 capture_policy_changed = 1;
+    PromotionOccurredV1 promotion_occurred = 2;
+  }
 }
 
 message TimeAnchorV1 {
@@ -189,4 +226,6 @@ message ValueRecordV1 {
   LogEventV1 log_event = 12;
   CaptureLossV1 capture_loss = 13;
   BlobRefV1 blob = 14;
+  DagRefV1 dag_ref = 15;
+  ValueAuditV1 audit = 16;
 }

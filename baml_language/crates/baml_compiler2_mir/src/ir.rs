@@ -150,6 +150,25 @@ pub struct RuntimeSignature {
     pub display_return_type: String,
 }
 
+/// Compiler-owned classification for a nested callable.
+///
+/// Kept independent of the VM wire type so MIR does not depend on
+/// `bex_vm_types`; emit performs the small exhaustive conversion.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MirLambdaKind {
+    Lambda,
+    SpawnedClosure,
+    Adapter,
+}
+
+/// Structural lambda identity retained through MIR until bytecode emit.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct MirLambdaIdentity {
+    /// Lowering order within the enclosing source definition.
+    pub ordinal: u32,
+    pub kind: MirLambdaKind,
+}
+
 /// A function represented as a control flow graph.
 #[derive(Debug, Clone)]
 pub struct MirFunction {
@@ -171,6 +190,8 @@ pub struct MirFunction {
     /// during emit; `None` there (and on synthetic adapters, which fall back
     /// to no metadata).
     pub signature: Option<RuntimeSignature>,
+    /// Present only for nested compiler-emitted callables.
+    pub lambda_identity: Option<MirLambdaIdentity>,
 }
 
 // ============================================================================

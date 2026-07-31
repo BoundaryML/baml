@@ -10,6 +10,7 @@ use std::{sync::OnceLock, time::Duration};
 
 #[cfg(target_arch = "wasm32")]
 static WASM_COOPERATIVE_PROFILE_ENABLED: AtomicBool = AtomicBool::new(false);
+static GLOBAL_CONFIG: OnceLock<ProfConfig> = OnceLock::new();
 
 /// Master switch for the profiling event stream. DEFAULT-ON (reconciliation
 /// follow-up 16): set `0`/`false` to opt out. Any value other than
@@ -27,6 +28,29 @@ pub const ENV_FREELIST_CAP: &str = "BAML_RING_FREELIST_CAP";
 pub const ENV_WAKE_INTERVAL_MS: &str = "BAML_PROF_WAKE_INTERVAL_MS";
 /// Directory for `.bamlprof` artifacts.
 pub const ENV_PROFILE_DIR: &str = "BAML_PROFILE_DIR";
+/// Consumer pipeline selected at the raw-record fan-out.
+///
+/// P0 deliberately routes every variant through the legacy sinks. Later
+/// phases replace the `cct` arm and make `dual` feed both pipelines without
+/// changing the producer hot path.
+pub const ENV_PROFILE_PIPELINE: &str = "BAML_PROFILE_PIPELINE";
+/// On-disk observability rollout. `dual` writes both the legacy event
+/// artifact and the v2 session stream; `v1` and `v2` are explicit kill
+/// switches for either side.
+pub const ENV_OBS_LAYOUT: &str = "BAML_OBS_LAYOUT";
+/// Optional path for a machine-readable consumer statistics snapshot.
+pub const ENV_OBS_STATS: &str = "BAML_OBS_STATS";
+/// Ring-cap behavior. `abort` is the loud development default; server/SDK
+/// hosts set `shed` before starting their first engine.
+pub const ENV_RING_OVERFLOW_POLICY: &str = "BAML_RING_OVERFLOW_POLICY";
+/// Raw-byte flight-recorder capacity.
+pub const ENV_FLIGHT_RECORDER_BYTES: &str = "BAML_FLIGHT_RECORDER_BYTES";
+/// Opt-in exact full trace.
+pub const ENV_FULL_TRACE: &str = "BAML_FULL_TRACE";
+pub const ENV_FULL_TRACE_MAX_BYTES: &str = "BAML_FULL_TRACE_MAX_BYTES";
+pub const ENV_FULL_TRACE_MAX_DURATION_MS: &str = "BAML_FULL_TRACE_MAX_DURATION_MS";
+/// Optional root-boundary latency trigger. Unset/zero means disarmed.
+pub const ENV_LATENCY_TRIGGER_MS: &str = "BAML_OBS_LATENCY_TRIGGER_MS";
 
 /// Default `.bamlprof` home, relative to the working directory (`baml clean`
 /// integration is an open coordination point).
@@ -50,6 +74,87 @@ pub const DEFAULT_FREELIST_CAP: usize = 4;
 /// Default consumer park timeout. This timer is what bounds the documented
 /// benign lost-wakeup race (design D4) to one interval of extra ring growth.
 pub const DEFAULT_WAKE_INTERVAL: Duration = Duration::from_millis(50);
+pub const DEFAULT_FLIGHT_RECORDER_BYTES: usize = 16 * 1024 * 1024;
+pub const DEFAULT_FULL_TRACE_MAX_BYTES: usize = 64 * 1024 * 1024;
+pub const DEFAULT_FULL_TRACE_MAX_DURATION: Duration = Duration::from_secs(60);
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum RingOverflowPolicy {
+    #[default]
+    Abort,
+    Shed,
+}
+
+impl RingOverflowPolicy {
+    fn parse(value: Option<String>) -> Self {
+        match value.as_deref().map(str::trim) {
+            Some(value) if value.eq_ignore_ascii_case("shed") => Self::Shed,
+            _ => Self::Abort,
+        }
+    }
+}
+
+/// Profiling consumer pipeline. The distinction is made only after a raw
+/// range has left the producer rings.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum ProfilePipeline {
+    Legacy,
+    #[default]
+    Dual,
+    Cct,
+}
+
+/// Durable artifact layout selected independently of the consumer algorithm.
+/// Release-A defaults to `dual` so the existing `.bamlprof` oracle remains
+/// available while readers prefer the v2 session stream.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum ObsLayout {
+    V1,
+    #[default]
+    Dual,
+    V2,
+}
+
+impl ObsLayout {
+    #[must_use]
+    pub fn writes_v1(self) -> bool {
+        matches!(self, Self::V1 | Self::Dual)
+    }
+
+    #[must_use]
+    pub fn writes_v2(self) -> bool {
+        matches!(self, Self::Dual | Self::V2)
+    }
+
+    fn parse(value: Option<String>) -> Self {
+        match value.as_deref().map(str::trim) {
+            Some(value) if value.eq_ignore_ascii_case("v1") => Self::V1,
+            Some(value) if value.eq_ignore_ascii_case("v2") => Self::V2,
+            Some(value) if value.eq_ignore_ascii_case("dual") => Self::Dual,
+            _ => Self::Dual,
+        }
+    }
+}
+
+impl ProfilePipeline {
+    #[must_use]
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Legacy => "legacy",
+            Self::Dual => "dual",
+            Self::Cct => "cct",
+        }
+    }
+
+    fn parse(value: Option<String>) -> Self {
+        match value.as_deref().map(str::trim) {
+            Some(value) if value.eq_ignore_ascii_case("legacy") => Self::Legacy,
+            Some(value) if value.eq_ignore_ascii_case("dual") => Self::Dual,
+            Some(value) if value.eq_ignore_ascii_case("cct") => Self::Cct,
+            _ => Self::Dual,
+        }
+    }
+}
 
 /// Parsed profiling knobs.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -68,6 +173,18 @@ pub struct ProfConfig {
     pub wake_interval: Duration,
     /// Where `.bamlprof` files land ([`ENV_PROFILE_DIR`]).
     pub profile_dir: std::path::PathBuf,
+    /// Raw-record consumer fan-out ([`ENV_PROFILE_PIPELINE`]).
+    pub pipeline: ProfilePipeline,
+    /// Durable layout rollout ([`ENV_OBS_LAYOUT`]).
+    pub obs_layout: ObsLayout,
+    /// Machine-readable consumer statistics path ([`ENV_OBS_STATS`]).
+    pub obs_stats_path: Option<std::path::PathBuf>,
+    pub overflow_policy: RingOverflowPolicy,
+    pub flight_recorder_bytes: usize,
+    pub full_trace: bool,
+    pub full_trace_max_bytes: usize,
+    pub full_trace_max_duration: Duration,
+    pub latency_trigger_ms: Option<u64>,
 }
 
 impl Default for ProfConfig {
@@ -79,6 +196,15 @@ impl Default for ProfConfig {
             freelist_cap: DEFAULT_FREELIST_CAP,
             wake_interval: DEFAULT_WAKE_INTERVAL,
             profile_dir: std::path::PathBuf::from(DEFAULT_PROFILE_DIR),
+            pipeline: ProfilePipeline::Dual,
+            obs_layout: ObsLayout::Dual,
+            obs_stats_path: None,
+            overflow_policy: RingOverflowPolicy::Abort,
+            flight_recorder_bytes: DEFAULT_FLIGHT_RECORDER_BYTES,
+            full_trace: false,
+            full_trace_max_bytes: DEFAULT_FULL_TRACE_MAX_BYTES,
+            full_trace_max_duration: DEFAULT_FULL_TRACE_MAX_DURATION,
+            latency_trigger_ms: None,
         }
     }
 }
@@ -94,8 +220,21 @@ impl ProfConfig {
     /// Producers never read this on the hot path: the engine snapshots
     /// `enabled` (and the ring pointer) into the VM once per exec resume.
     pub fn global() -> &'static ProfConfig {
-        static GLOBAL: OnceLock<ProfConfig> = OnceLock::new();
-        GLOBAL.get_or_init(ProfConfig::from_env)
+        GLOBAL_CONFIG.get_or_init(ProfConfig::from_env)
+    }
+
+    /// Initialize the process profiler with a host-specific overflow policy.
+    ///
+    /// This is a race-free, first-initializer-wins seam for SDK/server hosts
+    /// that need shedding rather than process abort. It must be called before
+    /// constructing the first engine. Returns whether the effective global
+    /// policy equals the requested policy (including when another initializer
+    /// won the race).
+    pub fn try_init_with_overflow_policy(policy: RingOverflowPolicy) -> bool {
+        let mut config = Self::from_env();
+        config.overflow_policy = policy;
+        let _ = GLOBAL_CONFIG.set(config);
+        Self::global().overflow_policy == policy
     }
 
     /// Effective profiling switch for producers.
@@ -145,6 +284,36 @@ impl ProfConfig {
 
         let profile_dir =
             get(ENV_PROFILE_DIR).map_or(defaults.profile_dir, std::path::PathBuf::from);
+        let pipeline = ProfilePipeline::parse(get(ENV_PROFILE_PIPELINE));
+        let obs_layout = ObsLayout::parse(get(ENV_OBS_LAYOUT));
+        let obs_stats_path = get(ENV_OBS_STATS)
+            .map(|value| value.trim().to_owned())
+            .filter(|value| !value.is_empty())
+            .map(std::path::PathBuf::from);
+        let overflow_policy = RingOverflowPolicy::parse(get(ENV_RING_OVERFLOW_POLICY));
+        let flight_recorder_bytes = parse_usize(get(ENV_FLIGHT_RECORDER_BYTES))
+            .unwrap_or(defaults.flight_recorder_bytes)
+            .min(1024 * 1024 * 1024);
+        let full_trace = get(ENV_FULL_TRACE).is_some_and(|value| {
+            matches!(
+                value.trim().to_ascii_lowercase().as_str(),
+                "1" | "true" | "on" | "yes"
+            )
+        });
+        let full_trace_max_bytes = parse_usize(get(ENV_FULL_TRACE_MAX_BYTES))
+            .unwrap_or(defaults.full_trace_max_bytes)
+            .max(64 * 1024);
+        let full_trace_max_duration = parse_usize(get(ENV_FULL_TRACE_MAX_DURATION_MS)).map_or(
+            defaults.full_trace_max_duration,
+            |millis| {
+                Duration::from_millis(
+                    u64::try_from(millis.clamp(1, 24 * 60 * 60 * 1_000)).unwrap_or(u64::MAX),
+                )
+            },
+        );
+        let latency_trigger_ms = parse_usize(get(ENV_LATENCY_TRIGGER_MS))
+            .filter(|millis| *millis != 0)
+            .map(|millis| u64::try_from(millis).unwrap_or(u64::MAX));
 
         ProfConfig {
             enabled,
@@ -153,6 +322,15 @@ impl ProfConfig {
             freelist_cap,
             wake_interval,
             profile_dir,
+            pipeline,
+            obs_layout,
+            obs_stats_path,
+            overflow_policy,
+            flight_recorder_bytes,
+            full_trace,
+            full_trace_max_bytes,
+            full_trace_max_duration,
+            latency_trigger_ms,
         }
     }
 }
@@ -224,6 +402,15 @@ mod tests {
             (ENV_FREELIST_CAP, "2"),
             (ENV_WAKE_INTERVAL_MS, "10"),
             (ENV_PROFILE_DIR, "/tmp/profs"),
+            (ENV_PROFILE_PIPELINE, "dual"),
+            (ENV_OBS_LAYOUT, "v2"),
+            (ENV_OBS_STATS, "/tmp/obs-stats.json"),
+            (ENV_RING_OVERFLOW_POLICY, "shed"),
+            (ENV_FLIGHT_RECORDER_BYTES, "1048576"),
+            (ENV_FULL_TRACE, "true"),
+            (ENV_FULL_TRACE_MAX_BYTES, "2097152"),
+            (ENV_FULL_TRACE_MAX_DURATION_MS, "2500"),
+            (ENV_LATENCY_TRIGGER_MS, "9000"),
         ]));
         assert!(cfg.enabled);
         assert_eq!(cfg.seg_bytes, 128 * 1024);
@@ -231,6 +418,18 @@ mod tests {
         assert_eq!(cfg.freelist_cap, 2);
         assert_eq!(cfg.wake_interval, Duration::from_millis(10));
         assert_eq!(cfg.profile_dir, std::path::PathBuf::from("/tmp/profs"));
+        assert_eq!(cfg.pipeline, ProfilePipeline::Dual);
+        assert_eq!(cfg.obs_layout, ObsLayout::V2);
+        assert_eq!(cfg.overflow_policy, RingOverflowPolicy::Shed);
+        assert_eq!(cfg.flight_recorder_bytes, 1024 * 1024);
+        assert!(cfg.full_trace);
+        assert_eq!(cfg.full_trace_max_bytes, 2 * 1024 * 1024);
+        assert_eq!(cfg.full_trace_max_duration, Duration::from_millis(2500));
+        assert_eq!(cfg.latency_trigger_ms, Some(9000));
+        assert_eq!(
+            cfg.obs_stats_path,
+            Some(std::path::PathBuf::from("/tmp/obs-stats.json"))
+        );
     }
 
     #[test]
@@ -245,6 +444,40 @@ mod tests {
             assert!(
                 !ProfConfig::from_lookup(lookup(&[(ENV_PROFILE, off)])).enabled,
                 "{off:?} should not enable"
+            );
+        }
+    }
+
+    #[test]
+    fn parses_profile_pipeline_without_affecting_producer_enablement() {
+        for (value, expected) in [
+            ("legacy", ProfilePipeline::Legacy),
+            ("LEGACY", ProfilePipeline::Legacy),
+            ("dual", ProfilePipeline::Dual),
+            ("cct", ProfilePipeline::Cct),
+            ("unknown", ProfilePipeline::Dual),
+        ] {
+            let cfg = ProfConfig::from_lookup(lookup(&[(ENV_PROFILE_PIPELINE, value)]));
+            assert_eq!(cfg.pipeline, expected);
+            assert_eq!(cfg.enabled, ProfConfig::default().enabled);
+        }
+    }
+
+    #[test]
+    fn parses_obs_layout_and_defaults_dual() {
+        assert_eq!(
+            ProfConfig::from_lookup(lookup(&[])).obs_layout,
+            ObsLayout::Dual
+        );
+        for (value, expected) in [
+            ("v1", ObsLayout::V1),
+            ("DUAL", ObsLayout::Dual),
+            ("v2", ObsLayout::V2),
+            ("unknown", ObsLayout::Dual),
+        ] {
+            assert_eq!(
+                ProfConfig::from_lookup(lookup(&[(ENV_OBS_LAYOUT, value)])).obs_layout,
+                expected
             );
         }
     }

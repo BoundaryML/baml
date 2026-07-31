@@ -1,11 +1,31 @@
 //! Producer-side trace value capture queue.
 
+#[cfg(not(target_arch = "wasm32"))]
+use std::{collections::HashMap, path::Path, sync::OnceLock};
 use std::{
     collections::VecDeque,
     io,
-    sync::{Arc, Mutex},
+    sync::{
+        Arc, Mutex,
+        atomic::{AtomicU64, Ordering},
+    },
+};
+#[cfg(not(target_arch = "wasm32"))]
+use std::{
+    sync::{Condvar, atomic::AtomicBool},
+    time::Duration,
 };
 
+#[cfg(not(target_arch = "wasm32"))]
+use bex_events::ids::ProcessEuid;
+#[cfg(not(target_arch = "wasm32"))]
+use bex_events::value::{CaptureLossKind, CaptureLossReason, CaptureLossRecord};
+#[cfg(not(target_arch = "wasm32"))]
+use bex_events::value_cas::{
+    CallPath, CanonicalField, CanonicalValue, DurableValueCapture, FieldPresence, MediaContent,
+    MediaValue, OmissionValue, ValueDrainConfig, ValueDrainHandle, ValueDrainService,
+    ValueEnqueueOutcome,
+};
 use bex_events::{
     ids::BoundaryId,
     run::{SourceLocation, TraceCallKey},
@@ -15,8 +35,56 @@ use bex_events::{
     },
 };
 
+#[cfg(not(target_arch = "wasm32"))]
+struct ProjectValueDrain {
+    _service: ValueDrainService,
+    handle: ValueDrainHandle,
+    process_euid: ProcessEuid,
+}
+
+/// One long-lived value worker per project in this process. Boundary-level
+/// completion still performs an explicit flush/finish; keeping the worker
+/// alive only amortizes pack/index ownership and avoids a thread per call.
+#[cfg(not(target_arch = "wasm32"))]
+pub(crate) fn project_value_drain(
+    project_root: &Path,
+    process_euid: ProcessEuid,
+) -> io::Result<ValueDrainHandle> {
+    static SERVICES: OnceLock<Mutex<HashMap<std::path::PathBuf, ProjectValueDrain>>> =
+        OnceLock::new();
+    let project_baml_dir = project_root.join(".baml");
+    let mut services = SERVICES
+        .get_or_init(|| Mutex::new(HashMap::new()))
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    if let Some(existing) = services.get(&project_baml_dir) {
+        if existing.process_euid != process_euid {
+            return Err(io::Error::other(
+                "project value drain was initialized for another process identity",
+            ));
+        }
+        return Ok(existing.handle.clone());
+    }
+    let service = ValueDrainService::start(ValueDrainConfig::new(
+        project_baml_dir.clone(),
+        process_euid,
+    ))?;
+    let handle = service.handle();
+    services.insert(
+        project_baml_dir,
+        ProjectValueDrain {
+            _service: service,
+            handle: handle.clone(),
+            process_euid,
+        },
+    );
+    Ok(handle)
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+use crate::trace_heap::{TraceMediaContent, TraceOmissionReason, TraceValue, TraceValueRef};
 use crate::{
-    trace_heap::{TraceHeap, TraceSnapshotHandle},
+    trace_heap::{TraceHeap, TraceSnapshot, TraceSnapshotHandle},
     trace_value_encode::{encode_trace_snapshot_body, render_encoded_trace_value},
 };
 
@@ -46,6 +114,46 @@ pub struct TraceValueDraft {
     pub kind: CaptureKind,
     pub log: Option<TraceLogMetadata>,
     pub snapshot: TraceSnapshotHandle,
+    #[cfg(not(target_arch = "wasm32"))]
+    pub stage_path: Option<CallPath>,
+}
+
+/// Heap-independent handoff object. Once this exists, neither the adapter nor
+/// the value drain needs to consult `TraceHeap`.
+#[derive(Debug, PartialEq)]
+pub struct OwnedTraceValueDraft {
+    pub boundary_id: BoundaryId,
+    pub call: TraceCallKey,
+    pub kind: CaptureKind,
+    pub log: Option<TraceLogMetadata>,
+    pub snapshot: TraceSnapshot,
+    #[cfg(not(target_arch = "wasm32"))]
+    pub stage_path: Option<CallPath>,
+}
+
+#[derive(Debug, Default, PartialEq)]
+pub struct OwnedTraceDrainReport {
+    pub drafts: Vec<OwnedTraceValueDraft>,
+    pub failures: Vec<TraceDrainFailure>,
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct CasTraceDrainReport {
+    pub enqueued: usize,
+    pub staged: usize,
+    pub dropped: usize,
+    pub staging_evictions: usize,
+    pub adapter_failures: usize,
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+#[derive(Debug)]
+pub struct ContinuousValueDrain {
+    stop: Arc<AtomicBool>,
+    wake: Arc<CaptureWake>,
+    worker: Option<std::thread::JoinHandle<io::Result<()>>>,
+    drain: ValueDrainHandle,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -153,6 +261,16 @@ impl TraceCaptureConfig {
 pub struct TraceCaptureProducer {
     trace_heap: TraceHeap,
     inner: Arc<Mutex<TraceCaptureInner>>,
+    wake: Arc<CaptureWake>,
+}
+
+#[derive(Debug, Default)]
+struct CaptureWake {
+    generation: AtomicU64,
+    #[cfg(not(target_arch = "wasm32"))]
+    mutex: Mutex<()>,
+    #[cfg(not(target_arch = "wasm32"))]
+    condvar: Condvar,
 }
 
 #[derive(Debug)]
@@ -195,6 +313,7 @@ impl TraceCaptureProducer {
                 pending: VecDeque::new(),
                 stats: TraceCaptureStats::default(),
             })),
+            wake: Arc::new(CaptureWake::default()),
         }
     }
 
@@ -213,6 +332,7 @@ impl TraceCaptureProducer {
         boundary_id: BoundaryId,
         call: TraceCallKey,
         kind: CaptureKind,
+        #[cfg(not(target_arch = "wasm32"))] stage_path: Option<CallPath>,
     ) -> Result<CaptureReservation, CaptureSkipReason> {
         let mut inner = self
             .inner
@@ -272,6 +392,8 @@ impl TraceCaptureProducer {
             boundary_id,
             call,
             kind,
+            #[cfg(not(target_arch = "wasm32"))]
+            stage_path,
             committed: false,
         })
     }
@@ -288,7 +410,36 @@ impl TraceCaptureProducer {
             CaptureKind::LogBody,
             "log captures must use capture_log_with"
         );
-        let reservation = self.try_reserve(boundary_id, call, kind)?;
+        let reservation = self.try_reserve(
+            boundary_id,
+            call,
+            kind,
+            #[cfg(not(target_arch = "wasm32"))]
+            None,
+        )?;
+        let snapshot = copy_snapshot(self.trace_heap());
+        reservation.commit(snapshot);
+        Ok(())
+    }
+
+    /// Capture an input speculatively. The snapshot is deep-copied now, but
+    /// the continuous handoff stages it under a byte cap instead of making it
+    /// durable until an error trigger promotes its call subtree.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn capture_staged_with(
+        &self,
+        boundary_id: BoundaryId,
+        call: TraceCallKey,
+        call_path: CallPath,
+        kind: CaptureKind,
+        copy_snapshot: impl FnOnce(&TraceHeap) -> TraceSnapshotHandle,
+    ) -> Result<(), CaptureSkipReason> {
+        assert_eq!(
+            kind,
+            CaptureKind::CallInput,
+            "only call inputs are staged speculatively"
+        );
+        let reservation = self.try_reserve(boundary_id, call, kind, Some(call_path))?;
         let snapshot = copy_snapshot(self.trace_heap());
         reservation.commit(snapshot);
         Ok(())
@@ -300,7 +451,13 @@ impl TraceCaptureProducer {
         call: TraceCallKey,
         copy_snapshot: impl FnOnce(&TraceHeap) -> (TraceLogMetadata, TraceSnapshotHandle),
     ) -> Result<(), CaptureSkipReason> {
-        let reservation = self.try_reserve(boundary_id, call, CaptureKind::LogBody)?;
+        let reservation = self.try_reserve(
+            boundary_id,
+            call,
+            CaptureKind::LogBody,
+            #[cfg(not(target_arch = "wasm32"))]
+            None,
+        )?;
         let (log, snapshot) = copy_snapshot(self.trace_heap());
         reservation.commit_log(snapshot, log);
         Ok(())
@@ -313,6 +470,146 @@ impl TraceCaptureProducer {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         inner.pending.drain(..).collect()
+    }
+
+    /// Move pending snapshots out of `TraceHeap` into owned handoff objects.
+    /// This is the only heap-facing step in the CAS path.
+    #[must_use]
+    pub fn drain_owned_snapshots(&self) -> OwnedTraceDrainReport {
+        let mut report = OwnedTraceDrainReport::default();
+        while let Some(draft) = self.pop_pending() {
+            match self.trace_heap.release(draft.snapshot) {
+                Some(snapshot) => report.drafts.push(OwnedTraceValueDraft {
+                    boundary_id: draft.boundary_id,
+                    call: draft.call,
+                    kind: draft.kind,
+                    log: draft.log,
+                    snapshot,
+                    #[cfg(not(target_arch = "wasm32"))]
+                    stage_path: draft.stage_path,
+                }),
+                None => report.failures.push(Self::drain_failure(
+                    &draft,
+                    TraceDrainFailureReason::SnapshotMissing,
+                    format!(
+                        "trace snapshot {} was already released",
+                        draft.snapshot.raw()
+                    ),
+                )),
+            }
+        }
+        report
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn drain_owned_to_value_service(
+        &self,
+        drain: &ValueDrainHandle,
+    ) -> io::Result<CasTraceDrainReport> {
+        let owned = self.drain_owned_snapshots();
+        let mut report = CasTraceDrainReport {
+            adapter_failures: owned.failures.len(),
+            ..CasTraceDrainReport::default()
+        };
+        for failure in owned.failures {
+            drain.record_capture_loss(
+                failure.boundary_id,
+                CaptureLossRecord {
+                    kind: if failure.kind == CaptureKind::LogBody {
+                        CaptureLossKind::Log
+                    } else {
+                        CaptureLossKind::Value
+                    },
+                    reason: CaptureLossReason::SnapshotMissing,
+                    skipped_count: 1,
+                    call: Some(failure.call),
+                    message: Some(failure.diagnostic),
+                    timestamp_ms: wall_clock_ms(),
+                },
+            )?;
+        }
+        for draft in owned.drafts {
+            let boundary_id = draft.boundary_id;
+            let call = draft.call;
+            let kind = draft.kind;
+            let retained_bytes = draft.snapshot.estimated_retained_bytes();
+            let stage_path = draft.stage_path.clone();
+            match durable_capture_from_owned(draft) {
+                Ok(capture) => {
+                    if let Some(stage_path) = stage_path {
+                        let outcome = drain.stage_with(stage_path, retained_bytes, || capture);
+                        report.staging_evictions = report
+                            .staging_evictions
+                            .saturating_add(outcome.evicted_records);
+                        if outcome.retained {
+                            report.staged += 1;
+                        } else {
+                            report.dropped += 1;
+                        }
+                    } else {
+                        match drain.try_enqueue(capture) {
+                            ValueEnqueueOutcome::Enqueued => report.enqueued += 1,
+                            ValueEnqueueOutcome::DroppedPendingBudget
+                            | ValueEnqueueOutcome::DroppedQueueFull
+                            | ValueEnqueueOutcome::ServiceClosed => report.dropped += 1,
+                        }
+                    }
+                }
+                Err(diagnostic) => {
+                    report.adapter_failures += 1;
+                    drain.record_capture_loss(
+                        boundary_id,
+                        CaptureLossRecord {
+                            kind: if kind == CaptureKind::LogBody {
+                                CaptureLossKind::Log
+                            } else {
+                                CaptureLossKind::Value
+                            },
+                            reason: CaptureLossReason::EncodeFailed,
+                            skipped_count: 1,
+                            call: Some(call),
+                            message: Some(diagnostic),
+                            timestamp_ms: wall_clock_ms(),
+                        },
+                    )?;
+                }
+            }
+        }
+        Ok(report)
+    }
+
+    /// Start a coarse-interval plus producer-wake pump. The worker only moves
+    /// already-owned trace snapshots and feeds the dedicated CAS drain; CAS
+    /// encoding, hashing, pack I/O, and fsync remain on the bex_events worker.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn start_continuous_value_drain(
+        &self,
+        drain: ValueDrainHandle,
+        interval: Duration,
+    ) -> io::Result<ContinuousValueDrain> {
+        let producer = self.clone();
+        let wake = Arc::clone(&self.wake);
+        let worker_wake = Arc::clone(&wake);
+        let stop = Arc::new(AtomicBool::new(false));
+        let worker_stop = Arc::clone(&stop);
+        let worker_drain = drain.clone();
+        let worker = std::thread::Builder::new()
+            .name("baml-trace-value-handoff".to_string())
+            .spawn(move || {
+                let mut generation = worker_wake.generation.load(Ordering::Acquire);
+                while !worker_stop.load(Ordering::Acquire) {
+                    generation = worker_wake.wait(generation, interval);
+                    producer.drain_owned_to_value_service(&worker_drain)?;
+                }
+                producer.drain_owned_to_value_service(&worker_drain)?;
+                Ok(())
+            })?;
+        Ok(ContinuousValueDrain {
+            stop,
+            wake,
+            worker: Some(worker),
+            drain,
+        })
     }
 
     fn pop_pending(&self) -> Option<TraceValueDraft> {
@@ -355,6 +652,7 @@ impl TraceCaptureProducer {
                     Some(ValueCapture {
                         kind: value_capture_kind(draft.kind),
                         call: draft.call,
+                        promotion_trigger: None,
                     }),
                 )
             }
@@ -499,6 +797,198 @@ impl TraceDrainFailureReason {
     }
 }
 
+impl CaptureWake {
+    fn notify(&self) {
+        self.generation.fetch_add(1, Ordering::Release);
+        #[cfg(not(target_arch = "wasm32"))]
+        self.condvar.notify_one();
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    fn wait(&self, observed_generation: u64, timeout: Duration) -> u64 {
+        if self.generation.load(Ordering::Acquire) != observed_generation {
+            return self.generation.load(Ordering::Acquire);
+        }
+        let guard = self
+            .mutex
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let _ = self
+            .condvar
+            .wait_timeout_while(guard, timeout, |_| {
+                self.generation.load(Ordering::Acquire) == observed_generation
+            })
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        self.generation.load(Ordering::Acquire)
+    }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+impl ContinuousValueDrain {
+    /// Stop the handoff pump, perform its final owned-snapshot drain, and wait
+    /// for the CAS worker's ordered completion barrier.
+    pub fn flush_and_join(mut self) -> io::Result<()> {
+        self.stop_and_join()
+    }
+
+    fn stop_and_join(&mut self) -> io::Result<()> {
+        let Some(worker) = self.worker.take() else {
+            return Ok(());
+        };
+        self.stop.store(true, Ordering::Release);
+        self.wake.notify();
+        worker
+            .join()
+            .map_err(|_| io::Error::other("trace value handoff worker panicked"))??;
+        self.drain.flush()
+    }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+impl Drop for ContinuousValueDrain {
+    fn drop(&mut self) {
+        let _ = self.stop_and_join();
+    }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+pub fn stage_owned_trace_value(
+    drain: &ValueDrainHandle,
+    call_path: CallPath,
+    draft: OwnedTraceValueDraft,
+) -> Result<bex_events::value_cas::ValueStageOutcome, String> {
+    let retained_bytes = draft.snapshot.estimated_retained_bytes();
+    let capture = durable_capture_from_owned(draft)?;
+    Ok(drain.stage_with(call_path, retained_bytes, || capture))
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn durable_capture_from_owned(draft: OwnedTraceValueDraft) -> Result<DurableValueCapture, String> {
+    let value = canonical_value_from_snapshot(&draft.snapshot)?;
+    let log_event = draft.log.map(|log| LogEventRecord {
+        call: draft.call,
+        level: log.level,
+        source: log.source,
+        timestamp_ms: log.timestamp_ms,
+        message_preview: log.message_preview,
+    });
+    Ok(DurableValueCapture {
+        boundary_id: draft.boundary_id,
+        call: draft.call,
+        kind: value_capture_kind(draft.kind),
+        log_event,
+        value,
+        promoted_by: None,
+    })
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn canonical_value_from_snapshot(snapshot: &TraceSnapshot) -> Result<CanonicalValue, String> {
+    let mut stack = Vec::new();
+    canonical_trace_value(snapshot, snapshot.root(), &mut stack)
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn canonical_trace_value(
+    snapshot: &TraceSnapshot,
+    value_ref: TraceValueRef,
+    stack: &mut Vec<usize>,
+) -> Result<CanonicalValue, String> {
+    if stack.contains(&value_ref.raw()) {
+        return Ok(CanonicalValue::Omitted(OmissionValue {
+            reason: "cyclicReference".to_string(),
+            message: "cycle detected while adapting owned trace snapshot".to_string(),
+        }));
+    }
+    let value = snapshot.value(value_ref).ok_or_else(|| {
+        format!(
+            "owned trace snapshot references missing value {}",
+            value_ref.raw()
+        )
+    })?;
+    stack.push(value_ref.raw());
+    let converted = match value {
+        TraceValue::Null => CanonicalValue::Null,
+        TraceValue::Bool(value) => CanonicalValue::Bool(*value),
+        TraceValue::Int(value) => CanonicalValue::Int(*value),
+        TraceValue::Float(value) => CanonicalValue::Float(*value),
+        TraceValue::Bigint(value) => CanonicalValue::BigInt(value.clone()),
+        TraceValue::String(value) => CanonicalValue::String(value.clone()),
+        TraceValue::Bytes(value) => CanonicalValue::Bytes(value.clone()),
+        TraceValue::Array(values) => CanonicalValue::List(
+            values
+                .iter()
+                .map(|value| canonical_trace_value(snapshot, *value, stack))
+                .collect::<Result<_, _>>()?,
+        ),
+        TraceValue::Map(values) => CanonicalValue::Map(
+            values
+                .iter()
+                .map(|(key, value)| {
+                    Ok((key.clone(), canonical_trace_value(snapshot, *value, stack)?))
+                })
+                .collect::<Result<_, String>>()?,
+        ),
+        TraceValue::Media(value) => CanonicalValue::Media(MediaValue {
+            kind: value.kind.tag_str().to_string(),
+            mime_type: value.mime_type.clone(),
+            content: match &value.content {
+                TraceMediaContent::Url(value) => MediaContent::Url(value.clone()),
+                TraceMediaContent::Base64(value) => MediaContent::Base64(value.clone()),
+                TraceMediaContent::File(value) => MediaContent::File(value.clone()),
+            },
+        }),
+        TraceValue::Instance {
+            type_name, fields, ..
+        } => CanonicalValue::Class {
+            definition_key: type_name.clone(),
+            fields: fields
+                .iter()
+                .map(|(name, value)| {
+                    Ok(CanonicalField {
+                        name: name.clone(),
+                        presence: FieldPresence::Present(canonical_trace_value(
+                            snapshot, *value, stack,
+                        )?),
+                    })
+                })
+                .collect::<Result<_, String>>()?,
+        },
+        TraceValue::Enum { type_name, variant } => CanonicalValue::Enum {
+            definition_key: type_name.clone(),
+            variant: variant.clone(),
+        },
+        TraceValue::Omitted(value) => CanonicalValue::Omitted(OmissionValue {
+            reason: omission_reason_name(value.reason).to_string(),
+            message: value.message.clone(),
+        }),
+    };
+    let popped = stack.pop();
+    debug_assert_eq!(popped, Some(value_ref.raw()));
+    Ok(converted)
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn omission_reason_name(reason: TraceOmissionReason) -> &'static str {
+    match reason {
+        TraceOmissionReason::OmittedArgument => "omittedArgument",
+        TraceOmissionReason::UnsupportedValue => "unsupportedValue",
+        TraceOmissionReason::HostOwnedValue => "hostOwnedValue",
+        TraceOmissionReason::InvalidRuntimeValue => "invalidRuntimeValue",
+        TraceOmissionReason::CyclicReference => "cyclicReference",
+    }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn wall_clock_ms() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or(Duration::ZERO)
+        .as_millis()
+        .try_into()
+        .unwrap_or(u64::MAX)
+}
+
 fn value_capture_kind(kind: CaptureKind) -> ValueCaptureKind {
     match kind {
         CaptureKind::RootInput => ValueCaptureKind::RootInput,
@@ -537,6 +1027,8 @@ struct CaptureReservation {
     boundary_id: BoundaryId,
     call: TraceCallKey,
     kind: CaptureKind,
+    #[cfg(not(target_arch = "wasm32"))]
+    stage_path: Option<CallPath>,
     committed: bool,
 }
 
@@ -578,9 +1070,13 @@ impl CaptureReservation {
             kind: self.kind,
             log,
             snapshot,
+            #[cfg(not(target_arch = "wasm32"))]
+            stage_path: self.stage_path.take(),
         });
         inner.stats.published = inner.stats.published.saturating_add(1);
         self.committed = true;
+        drop(inner);
+        self.producer.wake.notify();
     }
 }
 
@@ -618,6 +1114,7 @@ mod tests {
             Arc,
             atomic::{AtomicUsize, Ordering},
         },
+        time::Duration,
     };
 
     use bex_events::{
@@ -631,6 +1128,13 @@ mod tests {
         value_capture::{
             CaptureKind, CaptureSkipReason, TraceCaptureConfig, TraceCaptureProducer,
             TraceDrainFailureReason, TraceLogMetadata,
+        },
+    };
+    #[cfg(not(target_arch = "wasm32"))]
+    use bex_events::{
+        value::{ValueCaptureKind, ValueFileRecord, read_bamlvalue_from_bytes},
+        value_cas::{
+            CallPath, TriggerId, ValueBoundaryRegistration, ValueDrainConfig, ValueDrainService,
         },
     };
 
@@ -880,7 +1384,13 @@ mod tests {
         let producer = TraceCaptureProducer::new(TraceCaptureConfig::enabled(1));
         drop(
             producer
-                .try_reserve(boundary_id(), trace_key(), CaptureKind::RootError)
+                .try_reserve(
+                    boundary_id(),
+                    trace_key(),
+                    CaptureKind::RootError,
+                    #[cfg(not(target_arch = "wasm32"))]
+                    None,
+                )
                 .unwrap(),
         );
 
@@ -962,5 +1472,129 @@ mod tests {
         let _ = producer.capture_with(boundary_id(), trace_key(), CaptureKind::LogBody, |_| {
             TraceSnapshotHandle::for_test(1)
         });
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    #[test]
+    fn continuous_owned_handoff_commits_without_retaining_trace_heap_snapshots() {
+        let root = std::env::temp_dir().join(format!(
+            "baml-owned-value-handoff-{}-{:?}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let boundary_dir = root.join("history/run");
+        let process = ProcessEuid([1; 16]);
+        let producer = TraceCaptureProducer::new(TraceCaptureConfig::enabled(4));
+        let service = ValueDrainService::start(ValueDrainConfig::new(&root, process)).unwrap();
+        let drain = service.handle();
+        drain
+            .register_boundary(ValueBoundaryRegistration {
+                boundary_id: boundary_id(),
+                boundary_dir: boundary_dir.clone(),
+                created_ms: 10,
+                run_started: None,
+            })
+            .unwrap();
+        let pump = producer
+            .start_continuous_value_drain(drain.clone(), Duration::from_secs(60))
+            .unwrap();
+        producer
+            .capture_with(
+                boundary_id(),
+                trace_key(),
+                CaptureKind::CallInput,
+                |trace_heap| structured_test_snapshot(trace_heap),
+            )
+            .unwrap();
+        pump.flush_and_join().unwrap();
+        assert_eq!(producer.trace_heap().retained_snapshot_count(), 0);
+        drain.finish_boundary(boundary_id()).unwrap();
+        service.shutdown().unwrap();
+
+        let contents = read_bamlvalue_from_bytes(
+            &std::fs::read(boundary_dir.join("values.bamlvalue")).unwrap(),
+        )
+        .unwrap();
+        let [ValueFileRecord::CapturedValue(record)] = contents.records.as_slice() else {
+            panic!("expected one CAS-backed value root");
+        };
+        assert!(record.body.is_empty());
+        assert!(record.dag_ref.is_some());
+        assert_eq!(
+            record.capture.as_ref().map(|capture| capture.kind),
+            Some(ValueCaptureKind::CallInput)
+        );
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    #[test]
+    fn speculative_owned_handoff_is_durable_only_after_trigger_promotion() {
+        let root = std::env::temp_dir().join(format!(
+            "baml-staged-value-handoff-{}-{:?}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let boundary_dir = root.join("history/run");
+        let process = ProcessEuid([1; 16]);
+        let producer = TraceCaptureProducer::new(TraceCaptureConfig::enabled(4));
+        let service = ValueDrainService::start(ValueDrainConfig::new(&root, process)).unwrap();
+        let drain = service.handle();
+        drain
+            .register_boundary(ValueBoundaryRegistration {
+                boundary_id: boundary_id(),
+                boundary_dir: boundary_dir.clone(),
+                created_ms: 10,
+                run_started: None,
+            })
+            .unwrap();
+        let path = CallPath {
+            boundary_id: boundary_id(),
+            process_euid: process,
+            engine_id: trace_key().engine_id,
+            logical_thread_id: trace_key().thread_id.0,
+            call_ids: vec![1, trace_key().call_id.0],
+        };
+        let pump = producer
+            .start_continuous_value_drain(drain.clone(), Duration::from_secs(60))
+            .unwrap();
+        producer
+            .capture_staged_with(
+                boundary_id(),
+                trace_key(),
+                path,
+                CaptureKind::CallInput,
+                structured_test_snapshot,
+            )
+            .unwrap();
+        pump.flush_and_join().unwrap();
+        assert!(drain.stats().staging_bytes > 0);
+        drain
+            .promote_staged(
+                &CallPath::boundary(boundary_id(), process, trace_key().engine_id),
+                TriggerId("error".to_owned()),
+                99,
+            )
+            .unwrap();
+        drain.finish_boundary(boundary_id()).unwrap();
+        service.shutdown().unwrap();
+
+        let contents = read_bamlvalue_from_bytes(
+            &std::fs::read(boundary_dir.join("values.bamlvalue")).unwrap(),
+        )
+        .unwrap();
+        assert!(contents.records.iter().any(|record| matches!(
+            record,
+            ValueFileRecord::CapturedValue(record)
+                if record.capture.as_ref().and_then(|capture| capture.promotion_trigger.as_deref())
+                    == Some("error")
+        )));
+        std::fs::remove_dir_all(root).unwrap();
     }
 }

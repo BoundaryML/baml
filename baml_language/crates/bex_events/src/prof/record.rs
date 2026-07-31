@@ -27,6 +27,12 @@ pub const START_THREAD_FIXED_LEN: usize = 36;
 pub const END_THREAD_LEN: usize = 18;
 /// See [`CALL_FUNCTION_LEN`].
 pub const SET_FUNCTION_ID_LEN: usize = 41;
+/// `reason + thread + sequence + timestamp`.
+pub const SUSPEND_THREAD_LEN: usize = 22;
+/// Includes one reserved flags byte so the fixed layout can extend additively.
+pub const RESUME_THREAD_LEN: usize = 30;
+/// One cold-path LLM completion/enrichment record.
+pub const LLM_CALL_META_LEN: usize = 38;
 
 /// Upper bound on any encoded record; sizes producer-side stack buffers.
 pub const MAX_RECORD_LEN: usize = START_THREAD_FIXED_LEN + MAX_THREAD_NAME_LEN;
@@ -52,6 +58,9 @@ const TAG_END_FUNCTION: u8 = 0x02;
 const TAG_START_THREAD: u8 = 0x03;
 const TAG_END_THREAD: u8 = 0x04;
 const TAG_SET_FUNCTION_ID: u8 = 0x05;
+const TAG_SUSPEND_THREAD: u8 = 0x06;
+const TAG_RESUME_THREAD: u8 = 0x07;
+const TAG_LLM_CALL_META: u8 = 0x08;
 const CALL_SITE_FILE_ID_NONE: u32 = u32::MAX;
 
 /// Caller-side source span captured at a profiled call site.
@@ -95,6 +104,16 @@ pub enum ThreadEndStatus {
     Cancelled = 1,
     /// Terminated by an error.
     Errored = 2,
+}
+
+/// Why the engine parked a logical thread.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(u8)]
+pub enum SuspendReason {
+    SysOp = 0,
+    Await = 1,
+    AwaitAny = 2,
+    EarlyYield = 3,
 }
 
 /// A decoded ring record. Borrowed (`name`) from the drained byte range.
@@ -168,6 +187,31 @@ pub enum RawRecord<'a> {
         /// Raw clock ticks; converted to ns by the consumer at transcode.
         ts_ticks: u64,
     },
+    /// Tag `0x06`: the engine parked this logical thread.
+    SuspendThread {
+        reason: SuspendReason,
+        thread_id: BexThreadId,
+        suspend_seq: u32,
+        ts_ticks: u64,
+    },
+    /// Tag `0x07`: a self-contained resume. `suspend_ts_ticks` permits exact
+    /// await accounting even if this record drains before its suspend.
+    ResumeThread {
+        thread_id: BexThreadId,
+        suspend_seq: u32,
+        suspend_ts_ticks: u64,
+        ts_ticks: u64,
+    },
+    /// Tag `0x08`: cold-path LLM usage/error metadata.
+    LlmCallMeta {
+        thread_id: BexThreadId,
+        call_id: BexCallId,
+        model_id: u32,
+        tokens_in: u32,
+        tokens_out: u32,
+        flags: u8,
+        ts_ticks: u64,
+    },
 }
 
 /// Why a byte range failed to decode. In a drained, committed range any of
@@ -197,6 +241,9 @@ impl RawRecord<'_> {
             }
             RawRecord::EndThread { .. } => END_THREAD_LEN,
             RawRecord::SetFunctionId { .. } => SET_FUNCTION_ID_LEN,
+            RawRecord::SuspendThread { .. } => SUSPEND_THREAD_LEN,
+            RawRecord::ResumeThread { .. } => RESUME_THREAD_LEN,
+            RawRecord::LlmCallMeta { .. } => LLM_CALL_META_LEN,
         }
     }
 
@@ -310,6 +357,49 @@ impl RawRecord<'_> {
                 w.bytes(&id);
                 w.u64(ts_ticks);
             }
+            RawRecord::SuspendThread {
+                reason,
+                thread_id,
+                suspend_seq,
+                ts_ticks,
+            } => {
+                w.u8(TAG_SUSPEND_THREAD);
+                w.u8(reason as u8);
+                w.u64(thread_id.0);
+                w.u32(suspend_seq);
+                w.u64(ts_ticks);
+            }
+            RawRecord::ResumeThread {
+                thread_id,
+                suspend_seq,
+                suspend_ts_ticks,
+                ts_ticks,
+            } => {
+                w.u8(TAG_RESUME_THREAD);
+                w.u8(0); // reserved flags
+                w.u64(thread_id.0);
+                w.u32(suspend_seq);
+                w.u64(suspend_ts_ticks);
+                w.u64(ts_ticks);
+            }
+            RawRecord::LlmCallMeta {
+                thread_id,
+                call_id,
+                model_id,
+                tokens_in,
+                tokens_out,
+                flags,
+                ts_ticks,
+            } => {
+                w.u8(TAG_LLM_CALL_META);
+                w.u8(flags);
+                w.u64(thread_id.0);
+                w.u64(call_id.0);
+                w.u32(model_id);
+                w.u32(tokens_in);
+                w.u32(tokens_out);
+                w.u64(ts_ticks);
+            }
         }
         debug_assert_eq!(w.pos, self.encoded_len());
         w.pos
@@ -318,6 +408,7 @@ impl RawRecord<'_> {
 
 /// Decodes the record at the front of `buf`, returning it and its encoded
 /// length. Never panics on malformed input.
+#[inline]
 pub fn decode(buf: &[u8]) -> Result<(RawRecord<'_>, usize), DecodeError> {
     let mut r = Reader { buf, pos: 0 };
     let tag = r.u8()?;
@@ -402,12 +493,43 @@ pub fn decode(buf: &[u8]) -> Result<(RawRecord<'_>, usize), DecodeError> {
             },
             ts_ticks: r.u64()?,
         },
+        TAG_SUSPEND_THREAD => RawRecord::SuspendThread {
+            reason: match r.u8()? {
+                0 => SuspendReason::SysOp,
+                1 => SuspendReason::Await,
+                2 => SuspendReason::AwaitAny,
+                3 => SuspendReason::EarlyYield,
+                bad => return Err(DecodeError::InvalidStatus(bad)),
+            },
+            thread_id: BexThreadId(r.u64()?),
+            suspend_seq: r.u32()?,
+            ts_ticks: r.u64()?,
+        },
+        TAG_RESUME_THREAD => {
+            let _reserved_flags = r.u8()?;
+            RawRecord::ResumeThread {
+                thread_id: BexThreadId(r.u64()?),
+                suspend_seq: r.u32()?,
+                suspend_ts_ticks: r.u64()?,
+                ts_ticks: r.u64()?,
+            }
+        }
+        TAG_LLM_CALL_META => RawRecord::LlmCallMeta {
+            flags: r.u8()?,
+            thread_id: BexThreadId(r.u64()?),
+            call_id: BexCallId(r.u64()?),
+            model_id: r.u32()?,
+            tokens_in: r.u32()?,
+            tokens_out: r.u32()?,
+            ts_ticks: r.u64()?,
+        },
         bad => return Err(DecodeError::UnknownTag(bad)),
     };
     Ok((rec, r.pos))
 }
 
 /// Iterates the records in a drained byte range.
+#[inline]
 pub fn iter(buf: &[u8]) -> RecordIter<'_> {
     RecordIter { buf }
 }
@@ -420,6 +542,7 @@ pub struct RecordIter<'a> {
 impl<'a> Iterator for RecordIter<'a> {
     type Item = Result<RawRecord<'a>, DecodeError>;
 
+    #[inline]
     fn next(&mut self) -> Option<Self::Item> {
         if self.buf.is_empty() {
             return None;
@@ -601,6 +724,27 @@ mod tests {
                 id: [v as u8; 16],
                 ts_ticks: v,
             });
+            roundtrip(RawRecord::SuspendThread {
+                reason: SuspendReason::Await,
+                thread_id: BexThreadId(v),
+                suspend_seq: v as u32,
+                ts_ticks: v,
+            });
+            roundtrip(RawRecord::ResumeThread {
+                thread_id: BexThreadId(v),
+                suspend_seq: v as u32,
+                suspend_ts_ticks: v.saturating_sub(1),
+                ts_ticks: v,
+            });
+            roundtrip(RawRecord::LlmCallMeta {
+                thread_id: BexThreadId(v),
+                call_id: BexCallId(v),
+                model_id: v as u32,
+                tokens_in: v as u32,
+                tokens_out: v as u32,
+                flags: v as u8,
+                ts_ticks: v,
+            });
         }
         for status in [
             FunctionEndStatus::Errored,
@@ -718,12 +862,36 @@ mod tests {
             ts_ticks: 0,
         };
         assert_eq!(set_id.encode(&mut buf), 41);
+        let suspend = RawRecord::SuspendThread {
+            reason: SuspendReason::AwaitAny,
+            thread_id: BexThreadId(1),
+            suspend_seq: 2,
+            ts_ticks: 3,
+        };
+        assert_eq!(suspend.encode(&mut buf), SUSPEND_THREAD_LEN);
+        let resume = RawRecord::ResumeThread {
+            thread_id: BexThreadId(1),
+            suspend_seq: 2,
+            suspend_ts_ticks: 3,
+            ts_ticks: 4,
+        };
+        assert_eq!(resume.encode(&mut buf), RESUME_THREAD_LEN);
+        let llm = RawRecord::LlmCallMeta {
+            thread_id: BexThreadId(1),
+            call_id: BexCallId(2),
+            model_id: 3,
+            tokens_in: 4,
+            tokens_out: 5,
+            flags: 6,
+            ts_ticks: 7,
+        };
+        assert_eq!(llm.encode(&mut buf), LLM_CALL_META_LEN);
     }
 
     #[test]
     fn decode_rejects_unknown_tag_and_bad_status() {
         assert_eq!(decode(&[0x00]), Err(DecodeError::UnknownTag(0x00)));
-        assert_eq!(decode(&[0x06]), Err(DecodeError::UnknownTag(0x06)));
+        assert_eq!(decode(&[0x09]), Err(DecodeError::UnknownTag(0x09)));
         assert_eq!(decode(&[]), Err(DecodeError::Truncated));
 
         let mut buf = [0u8; MAX_RECORD_LEN];

@@ -81,9 +81,9 @@ use bex_events::{
 };
 use bex_heap::{BexHeap, Tlab};
 use bex_vm_types::{
-    BinOp, CaptureCategory, CaptureOption, CmpOp, FunctionCaptureProps, FunctionKind, FutureRead,
-    GlobalIndex, HeapPtr, Object, ObjectIndex, ObjectPool, ObjectType, PanicClass, PermitProof,
-    StackIndex, UnaryOp, Value, Variant, VmGlobals,
+    BinOp, CaptureCategory, CaptureOption, CmpOp, FunctionCaptureProps, FunctionKind, FunctionMeta,
+    FutureRead, GlobalIndex, HeapPtr, Object, ObjectIndex, ObjectPool, ObjectType, PanicClass,
+    PermitProof, StackIndex, UnaryOp, Value, Variant, VmGlobals,
     bytecode::{self, Instruction},
     types::{
         BoundMethod, Closure, ConstValue, Function, FunctionOrigin, FunctionType, Instance, Type,
@@ -113,10 +113,15 @@ pub struct VmCaptureMask {
     pub inputs: bool,
     pub output: bool,
     pub error: bool,
+    pub promote_on_error: bool,
 }
 
 pub struct VmCallInputCapture<'a> {
     pub call: TraceCallKey,
+    /// Root-to-call profiling ids. Used only by the bounded speculative
+    /// staging path so an error trigger can promote a whole failing subtree.
+    pub call_path: Vec<u64>,
+    pub speculative: bool,
     pub entries: &'a [(String, Value)],
     pub heap: &'a BexHeap,
     pub permit: PermitProof<'a>,
@@ -133,6 +138,7 @@ impl VmCaptureMask {
             inputs: false,
             output: false,
             error: false,
+            promote_on_error: false,
         }
     }
 
@@ -142,6 +148,10 @@ impl VmCaptureMask {
             inputs: resolve_capture_option(props.option(CaptureCategory::Input), auto_enabled),
             output: resolve_capture_option(props.option(CaptureCategory::Output), auto_enabled),
             error: resolve_capture_option(props.option(CaptureCategory::Error), auto_enabled),
+            promote_on_error: resolve_capture_option(
+                props.option(CaptureCategory::PromoteOnError),
+                auto_enabled,
+            ),
         }
     }
 
@@ -366,6 +376,7 @@ pub(crate) mod tests {
             },
             origin: FunctionOrigin::Internal,
             body_meta: None,
+            def_meta: bex_vm_types::DefinitionMeta::default(),
             capture: FunctionCaptureProps::disabled(),
             function_id: 0,
         }))
@@ -1505,7 +1516,7 @@ impl BexVm {
         entries: &[(String, Value)],
         mask: VmCaptureMask,
     ) {
-        if !mask.inputs {
+        if !mask.inputs && !mask.promote_on_error {
             return;
         }
         let Some(hook) = self.call_input_capture_hook.as_ref() else {
@@ -1516,6 +1527,8 @@ impl BexVm {
         };
         hook.capture_call_input(VmCallInputCapture {
             call,
+            call_path: self.call_path_for_call_id(call_id),
+            speculative: !mask.inputs && mask.promote_on_error,
             entries,
             heap: self.heap.as_ref(),
             permit: self.proof(),
@@ -1530,7 +1543,7 @@ impl BexVm {
         arg_count: usize,
         mask: VmCaptureMask,
     ) {
-        if !mask.inputs {
+        if !mask.inputs && !mask.promote_on_error {
             return;
         }
         let base = locals_offset.into_raw();
@@ -1544,6 +1557,21 @@ impl BexVm {
             entries.push((name, value));
         }
         self.maybe_capture_named_inputs(call_id, &entries, mask);
+    }
+
+    fn call_path_for_call_id(&self, call_id: u64) -> Vec<u64> {
+        let mut path = self
+            .frames
+            .iter()
+            .filter_map(|frame| match frame {
+                Frame::Bytecode(frame) if frame.call_id != 0 => Some(frame.call_id),
+                Frame::Bytecode(_) | Frame::Native(_) => None,
+            })
+            .collect::<Vec<_>>();
+        if call_id != 0 && path.last().copied() != Some(call_id) {
+            path.push(call_id);
+        }
+        path
     }
 
     /// The declared element type of `value` when it is an `Object::Array`, else
@@ -2577,6 +2605,7 @@ impl BexVm {
             throws_type,
             origin: FunctionOrigin::Internal,
             body_meta: None,
+            def_meta: bex_vm_types::DefinitionMeta::default(),
             capture: bex_vm_types::FunctionCaptureProps::disabled(),
             function_id: 0, // synthetic; not in the profiling function table
         };
@@ -2654,6 +2683,7 @@ impl BexVm {
             throws_type,
             origin: FunctionOrigin::Internal,
             body_meta: None,
+            def_meta: bex_vm_types::DefinitionMeta::default(),
             capture: bex_vm_types::FunctionCaptureProps::disabled(),
             function_id: 0,
         };
@@ -3990,6 +4020,25 @@ impl BexVm {
     #[must_use]
     pub fn current_call_id(&self) -> u64 {
         self.current_call_id
+    }
+
+    /// Profiling id of the innermost structurally-declared LLM function.
+    ///
+    /// LLM orchestration runs through ordinary bytecode helpers and sys-ops,
+    /// so the current frame at response parsing is not itself the user LLM
+    /// function. Walking live frames by `FunctionMeta` preserves exact
+    /// ownership without parsing or pattern-matching function names.
+    #[must_use]
+    pub fn current_llm_call_id(&self) -> Option<u64> {
+        self.frames.iter().rev().find_map(|frame| {
+            let Frame::Bytecode(frame) = frame else {
+                return None;
+            };
+            let Object::Function(function) = self.get_object(frame.function) else {
+                return None;
+            };
+            matches!(function.body_meta, Some(FunctionMeta::Llm { .. })).then_some(frame.call_id)
+        })
     }
 
     pub fn install_boundary_id_for_current_call(

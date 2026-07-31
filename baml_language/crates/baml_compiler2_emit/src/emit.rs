@@ -1072,8 +1072,9 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             },
             origin: FunctionOrigin::Internal,
             body_meta: None,
+            def_meta: bex_vm_types::DefinitionMeta::default(),
             capture: FunctionCaptureProps::disabled(),
-            function_id: 0, // assigned at engine init (interim provider)
+            function_id: 0, // assigned after the final object-pool layout is known
         }
     }
 

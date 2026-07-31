@@ -1,0 +1,32 @@
+[package]
+name = "bex_query"
+version = { workspace = true }
+publish = false
+authors = { workspace = true }
+edition = { workspace = true }
+rust-version = { workspace = true }
+homepage = { workspace = true }
+documentation = { workspace = true }
+repository = { workspace = true }
+license = { workspace = true }
+description = "Sans-I/O bounded query engine for BAML observability segments"
+
+[lib]
+doctest = false
+
+[features]
+default = [ "native" ]
+native = [  ]
+wasm = [  ]
+
+[lints]
+workspace = true
+
+[dependencies]
+bex_events = { workspace = true }
+serde = { workspace = true, features = [ "derive" ] }
+serde_json = { workspace = true }
+
+[[bench]]
+name = "query_bounds"
+harness = false

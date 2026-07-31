@@ -19,13 +19,27 @@ use baml_compiler2_emit::{
     generate_project_bytecode_with_stdlib, generate_stdlib_program, take_lowered_files,
 };
 use baml_project::ProjectDatabase;
-use bex_vm_types::{CompilationUnit, Object, Program};
+use bex_vm_types::{CompilationUnit, FIRST_POOL_FUNCTION_ID, Object, Program};
 use common::{A_BAML, B_BAML, C_BAML, assert_programs_byte_identical, build_db};
 
 const ROOT: &str = "/relink-oracle";
 
+fn assert_compile_time_function_ids(program: &Program) {
+    let ids = program.objects.iter().filter_map(|object| match object {
+        Object::Function(function) => Some(function.function_id),
+        _ => None,
+    });
+    for (offset, actual) in ids.enumerate() {
+        assert_eq!(
+            actual,
+            FIRST_POOL_FUNCTION_ID + u32::try_from(offset).expect("test program function count"),
+            "linked reuse output must carry dense compile-time function ids"
+        );
+    }
+}
+
 fn compile_full(files: &[(&str, &str)], base: &Program) -> Program {
-    generate_project_bytecode_with_stdlib(
+    let program = generate_project_bytecode_with_stdlib(
         &build_db(ROOT, files),
         &CompileOptions {
             emit_test_cases: false,
@@ -33,7 +47,9 @@ fn compile_full(files: &[(&str, &str)], base: &Program) -> Program {
         OptLevel::Two,
         base,
     )
-    .expect("full compile failed")
+    .expect("full compile failed");
+    assert_compile_time_function_ids(&program);
+    program
 }
 
 /// The previous compile's symbolic image: the units the reuse path draws clean
@@ -91,7 +107,7 @@ fn relink_with_db(
     clean: &[&str],
 ) -> Program {
     let clean_files: HashSet<String> = clean.iter().map(ToString::to_string).collect();
-    generate_project_bytecode_with_reuse_units(
+    let program = generate_project_bytecode_with_reuse_units(
         &db,
         &CompileOptions {
             emit_test_cases: false,
@@ -101,7 +117,9 @@ fn relink_with_db(
         prev_units,
         &clean_files,
     )
-    .expect("relink failed")
+    .expect("relink failed");
+    assert_compile_time_function_ids(&program);
+    program
 }
 
 fn assert_relink_matches(

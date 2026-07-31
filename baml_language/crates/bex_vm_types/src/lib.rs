@@ -13,6 +13,7 @@
 pub mod bytecode;
 pub mod errors;
 pub mod heap_ptr;
+pub mod identity;
 pub mod indexable;
 pub mod lazy_biased_mutex;
 pub mod link;
@@ -25,6 +26,13 @@ pub mod unit;
 pub use bex_str::BexStr;
 pub use bytecode::{BinOp, Bytecode, CmpOp, Instruction, JumpTableData, UnaryOp};
 pub use heap_ptr::HeapPtr;
+pub use identity::{
+    ContentIdParseError, FIRST_POOL_FUNCTION_ID, FUNCTION_ID_SPAWN_CLOSURE, FUNCTION_ID_UNKNOWN,
+    ProgramIdentity, ProgramIdentityError, ProgramSourceFile, RevisionId, RevisionOptions,
+    SourceIdentityInput, SourceSnapshotId, assign_function_ids, compute_revision_id,
+    compute_source_snapshot_id, finalize_legacy_program_identity, finalize_program_identity,
+    verify_program_identity,
+};
 pub use indexable::{
     GlobalIndex, GlobalPool, ObjectIndex, ObjectPool, SharedGlobals, StackIndex, VmGlobals,
 };
@@ -34,13 +42,13 @@ pub use task_group::{TaskGroupInner, TaskGroupPermit, TaskGroupTicket};
 pub use types::{
     ArrayContainer, ArrayReadGuard, ArrayWriteGuard, AtomicValueSlot, BoundMethod, CaptureCategory,
     CaptureOption, Class, ClassField, CleanupLatch, ClientBuildMeta, ClientBuildType, CollectorRef,
-    ConstValue, Enum, EnumVariant, Function, FunctionCaptureProps, FunctionKind, FunctionMeta,
-    FunctionOrigin, Future, FutureRead, GenericFunction, HostClosure, Instance, LockedContainer,
-    LockedReadGuard, LockedWriteGuard, MapContainer, MapReadGuard, MapWriteGuard, MediaValue,
-    Object, ObjectType, PanicClass, Program, PromptAst, RetryPolicyMeta, SysOp, SysOpErrorCategory,
-    SysOpPanicCategory, TestArgValue, TestCase, Uint8ArrayContainer, Uint8ArrayReadGuard,
-    Uint8ArrayWriteGuard, UnscheduledFuture, Value, ValueKind, Variant, format_float,
-    sys_op_for_path, type_tags,
+    ConstValue, DefinitionMeta, Enum, EnumVariant, Function, FunctionCaptureProps, FunctionKind,
+    FunctionMeta, FunctionOrigin, Future, FutureRead, GenericFunction, HostClosure, Instance,
+    LambdaIdentity, LambdaKind, LockedContainer, LockedReadGuard, LockedWriteGuard, MapContainer,
+    MapReadGuard, MapWriteGuard, MediaValue, Object, ObjectType, PanicClass, Program, PromptAst,
+    RetryPolicyMeta, SysOp, SysOpErrorCategory, SysOpPanicCategory, TestArgValue, TestCase,
+    Uint8ArrayContainer, Uint8ArrayReadGuard, Uint8ArrayWriteGuard, UnscheduledFuture, Value,
+    ValueKind, Variant, format_float, sys_op_for_path, type_tags,
 };
 pub use unit::{
     CompilationUnit, ExportTable, GenericFnKey, InitTail, LocalRef, ProgramImplRuleFrag,

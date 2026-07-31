@@ -1,0 +1,126 @@
+// The per-revision compile-time identity dictionary.
+//
+// A .bamldict file is a sequence of length-delimited RevisionDictionaryV1
+// messages. V1 writers emit exactly four messages, in this order:
+//
+//   header, files, functions, call_sites
+//
+// Keeping the tables in separate outer messages lets readers stop after the
+// header or skip an unneeded table without decoding every row. Unknown outer
+// sections and unknown fields are skipped for additive forward compatibility.
+syntax = "proto3";
+
+package baml.dictionary.v1;
+
+message RevisionDictionaryV1 {
+  oneof section {
+    RevisionDictionaryHeaderV1 header = 1;
+    FileTableV1 files = 2;
+    FunctionTableV1 functions = 3;
+    CallSiteTableV1 call_sites = 4;
+  }
+}
+
+message RevisionDictionaryHeaderV1 {
+  uint32 format_version = 1;
+  bytes revision_id = 2;
+  bytes source_snapshot_id = 3;
+  string compiler_id = 4;
+  // Number of compiler-emitted functions. Reserved synthetic dictionary rows
+  // are not included in this count.
+  uint32 function_count = 5;
+  uint32 capture_policy_version = 6;
+  uint32 file_count = 7;
+  uint32 dictionary_function_count = 8;
+  uint32 call_site_count = 9;
+}
+
+message FileTableV1 {
+  repeated FileRowV1 rows = 1;
+}
+
+message FileRowV1 {
+  uint32 file_id = 1;
+  string path = 2;
+  bytes content_hash = 3;
+}
+
+message FunctionTableV1 {
+  repeated FunctionDictRowV1 rows = 1;
+}
+
+message FunctionDictRowV1 {
+  uint32 function_id = 1;
+  string fqn = 2;
+  string display_name = 3;
+  optional string declared_name = 4;
+  SourceSpanV1 source_span = 5;
+  FunctionKindV1 kind = 6;
+  optional string sys_op_name = 7;
+  FunctionOriginV1 origin = 8;
+  string definition_key = 9;
+  optional string owner_type_key = 10;
+  LambdaIdentityV1 lambda = 11;
+  optional string package_name = 12;
+  repeated string namespace = 13;
+  uint32 capture_flags = 14;
+  bytes def_content_hash = 15;
+  SemanticLanesV1 semantic_lanes = 16;
+}
+
+message SourceSpanV1 {
+  uint32 file_id = 1;
+  uint32 span_start = 2;
+  uint32 span_end = 3;
+  uint32 line = 4;
+}
+
+enum FunctionKindV1 {
+  FUNCTION_KIND_UNSPECIFIED = 0;
+  FUNCTION_KIND_BYTECODE = 1;
+  FUNCTION_KIND_SYS_OP = 2;
+  FUNCTION_KIND_NATIVE = 3;
+}
+
+enum FunctionOriginV1 {
+  FUNCTION_ORIGIN_UNSPECIFIED = 0;
+  FUNCTION_ORIGIN_USER_DEFINED = 1;
+  FUNCTION_ORIGIN_COMPANION = 2;
+  FUNCTION_ORIGIN_INTERNAL = 3;
+  FUNCTION_ORIGIN_BUILTIN = 4;
+  FUNCTION_ORIGIN_AUTO_DERIVE = 5;
+}
+
+message LambdaIdentityV1 {
+  string parent_definition_key = 1;
+  uint32 ordinal = 2;
+  LambdaKindV1 kind = 3;
+}
+
+enum LambdaKindV1 {
+  LAMBDA_KIND_UNSPECIFIED = 0;
+  LAMBDA_KIND_LAMBDA = 1;
+  LAMBDA_KIND_SPAWNED_CLOSURE = 2;
+  LAMBDA_KIND_ADAPTER = 3;
+}
+
+message SemanticLanesV1 {
+  bytes direct_interface = 1;
+  bytes effective_interface = 2;
+  optional bytes direct_implementation = 3;
+  optional bytes effective_implementation = 4;
+}
+
+message CallSiteTableV1 {
+  repeated CallSiteRowV1 rows = 1;
+}
+
+message CallSiteRowV1 {
+  uint32 call_site_id = 1;
+  uint32 caller_function_id = 2;
+  optional uint32 callee_function_id = 3;
+  uint32 file_id = 4;
+  uint32 span_start = 5;
+  uint32 span_end = 6;
+  uint32 line = 7;
+}

@@ -3668,7 +3668,11 @@ fn normalize_disk_event(event: &crate::prof::pb::disk_event_v1::Event) -> Option
                 },
             },
         }),
-        pb::disk_event_v1::Event::SetFunctionId(_) | pb::disk_event_v1::Event::Heartbeat(_) => None,
+        pb::disk_event_v1::Event::SetFunctionId(_)
+        | pb::disk_event_v1::Event::Heartbeat(_)
+        | pb::disk_event_v1::Event::SuspendThread(_)
+        | pb::disk_event_v1::Event::ResumeThread(_)
+        | pb::disk_event_v1::Event::LlmCallMeta(_) => None,
     }
 }
 
@@ -4236,9 +4240,12 @@ mod tests {
         crate::prof::register_engine_metadata(
             ENGINE,
             crate::prof::EngineProfileMetadata {
-                program_id: "program".to_string(),
-                source_snapshot_id: Some("snapshot".to_string()),
-                revision_id: Some("revision".to_string()),
+                source_snapshot_id: "snapshot".to_string(),
+                revision_id: "revision".to_string(),
+                revision_id_bytes: [4; 32],
+                function_count: 2,
+                revision_dictionary: None,
+                models: std::sync::Arc::default(),
                 functions: vec![
                     crate::prof::FunctionMetaEntry {
                         function_id: 1,

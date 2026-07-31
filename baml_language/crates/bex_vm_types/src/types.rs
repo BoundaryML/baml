@@ -58,6 +58,20 @@ pub mod type_tags {
 /// At load time (`BexEngine::new`), these are converted to `Value` (with `HeapPtr`).
 #[derive(Clone, Debug, Default, BorshSerialize, BorshDeserialize)]
 pub struct Program {
+    /// Source/toolchain identity for observability artifacts.
+    ///
+    /// Attached after the final object-pool layout is known. Cache/program
+    /// borsh bytes deliberately omit it; enclosing containers carry and
+    /// restore it at deserialization seams.
+    #[borsh(skip)]
+    pub identity: Option<crate::identity::ProgramIdentity>,
+
+    /// File rows needed to build the revision dictionary without retaining a
+    /// compiler database. Like `identity`, enclosing artifacts carry these
+    /// across Program serialization when available.
+    #[borsh(skip)]
+    pub source_files: Vec<crate::identity::ProgramSourceFile>,
+
     /// Object pool containing functions, classes, strings, etc.
     pub objects: ObjectPool,
 

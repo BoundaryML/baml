@@ -53,7 +53,10 @@ use bex_cache::{
     compute_key, content_hash, env_flag, manifest_key, rel_path, stdlib_diagnostics_key,
     stdlib_interface_key, test_discovery_key,
 };
-use bex_vm_types::{CompilationUnit, Object, Program, relink};
+use bex_vm_types::{
+    CompilationUnit, Object, Program, ProgramIdentity, ProgramSourceFile, RevisionOptions,
+    SourceIdentityInput, relink,
+};
 
 use crate::{
     file_signature::{file_layout_hash, file_signature_hash},
@@ -118,6 +121,10 @@ pub(crate) struct CacheContext {
     /// Whether test cases are emitted — needed to decompose a full compile back
     /// into independently persisted units.
     emit_test_cases: bool,
+    /// Source/toolchain identity omitted from cached Program borsh bytes and
+    /// reattached at this cache-load seam.
+    identity: ProgramIdentity,
+    source_files: Vec<ProgramSourceFile>,
 }
 
 impl CacheContext {
@@ -150,6 +157,30 @@ impl CacheContext {
             manifest: resolved.manifest.as_deref(),
             files: &files,
         });
+        let identity_inputs: Vec<SourceIdentityInput<'_>> = files
+            .iter()
+            .map(|(path, content)| SourceIdentityInput {
+                // Cache-key construction has no Salsa FileId. Cached Program
+                // source rows are restored from compiler output when present;
+                // zero here does not participate in the source hash.
+                file_id: 0,
+                project_relative_path: path,
+                content: content.as_bytes(),
+            })
+            .collect();
+        let source_snapshot_id = bex_vm_types::compute_source_snapshot_id(
+            &identity_inputs,
+            resolved.manifest.as_deref().map(str::as_bytes),
+        );
+        let compiler_id = baml_version::compiler_id();
+        let revision_id = bex_vm_types::compute_revision_id(
+            source_snapshot_id,
+            RevisionOptions {
+                compiler_id: &compiler_id,
+                opt_level: CLI_OPT_LEVEL as u8,
+                emit_test_cases,
+            },
+        );
 
         Some(CacheContext {
             cache: BytecodeCache::open(dir).with_remote_from_env(),
@@ -166,6 +197,20 @@ impl CacheContext {
             ),
             test_discovery_key: test_discovery_key(key.as_bytes()),
             emit_test_cases,
+            identity: ProgramIdentity {
+                revision_id,
+                source_snapshot_id,
+                compiler_id,
+                function_count: 0,
+            },
+            source_files: identity_inputs
+                .iter()
+                .map(|file| ProgramSourceFile {
+                    file_id: 0,
+                    project_relative_path: file.project_relative_path.to_owned(),
+                    content_hash: *blake3::hash(file.content).as_bytes(),
+                })
+                .collect(),
         })
     }
 
@@ -204,7 +249,30 @@ impl CacheContext {
     }
 
     pub(crate) fn load(&self) -> Option<Program> {
-        self.cache.load_shared(&self.key)
+        // `BytecodeCache` restores derived ids at decode; source/toolchain
+        // identity is cache-context state and is reattached here.
+        self.cache.load_shared(&self.key).map(|mut program| {
+            self.attach_identity(&mut program);
+            program
+        })
+    }
+
+    fn attach_identity(&self, program: &mut Program) {
+        let mut identity = self.identity.clone();
+        identity.function_count = bex_vm_types::assign_function_ids(program);
+        program.identity = Some(identity);
+        program.source_files = self.source_files.clone();
+        for file in &mut program.source_files {
+            if let Some(file_id) = program.objects.iter().find_map(|object| {
+                let Object::Function(function) = object else {
+                    return None;
+                };
+                (function.source_file == file.project_relative_path)
+                    .then(|| function.span.file_id.as_u32())
+            }) {
+                file.file_id = file_id;
+            }
+        }
     }
 
     /// The `BAML_CACHE_VERIFY` tripwire: byte-compare a fresh compile against
@@ -614,6 +682,8 @@ pub(crate) fn compile_program_artifacts(
             &plan.clean_files,
         ) {
             Ok((program, units)) => {
+                let mut program = program;
+                ctx.attach_identity(&mut program);
                 return Ok(CompiledArtifacts {
                     program,
                     units: Some(units),
@@ -629,7 +699,8 @@ pub(crate) fn compile_program_artifacts(
             }
         }
     }
-    generate_project_bytecode_with_stdlib(db, options, CLI_OPT_LEVEL, &base).map(|program| {
+    generate_project_bytecode_with_stdlib(db, options, CLI_OPT_LEVEL, &base).map(|mut program| {
+        ctx.attach_identity(&mut program);
         CompiledArtifacts {
             program,
             units: None,

@@ -160,6 +160,7 @@ pub fn initialize_runtime_from_bytecode_with_sys_ops(
     bytecode: &[u8],
     sys_ops: sys_ops::SysOps,
 ) -> Result<Arc<dyn Bex>, BridgeError> {
+    initialize_sdk_profiler_defaults();
     let runtime: Arc<dyn Bex> = bex_project::new_from_bytecode(bytecode, sys_ops)?;
     install_unhandled_spawn_error_handler(&runtime);
     platform::replace_runtime(runtime.clone())?;
@@ -177,6 +178,7 @@ pub fn initialize_runtime_from_files_with_sys_ops(
     src_files: HashMap<String, String>,
     sys_ops: sys_ops::SysOps,
 ) -> Result<Arc<dyn Bex>, BridgeError> {
+    initialize_sdk_profiler_defaults();
     // `vfs::MemoryFS` timestamps its root with `SystemTime::now()`, which is
     // unavailable on wasm32-unknown-unknown. WASM therefore uses an equivalent
     // timestamp-free root marker; source contents are supplied separately.
@@ -263,8 +265,26 @@ pub fn new_function_call_id() -> u64 {
 pub fn function_call_context_builder(
     call_id: bex_project::CallId,
 ) -> bex_project::FunctionCallContextBuilder {
+    let project_root = std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
     bex_project::FunctionCallContextBuilder::new(call_id)
+        .with_boundary_storage(bex_project::BoundaryStorageContext::new(
+            "sdk",
+            project_root,
+        ))
+        .with_default_history_capture(false)
 }
+
+#[cfg(not(target_arch = "wasm32"))]
+fn initialize_sdk_profiler_defaults() {
+    // Safe, first-initializer-wins configuration. If an embedding process
+    // already initialized profiling, its immutable policy remains authoritative.
+    let _ = bex_events::prof::ProfConfig::try_init_with_overflow_policy(
+        bex_events::prof::RingOverflowPolicy::Shed,
+    );
+}
+
+#[cfg(target_arch = "wasm32")]
+fn initialize_sdk_profiler_defaults() {}
 
 /// Cancel an in-flight function call by ID.
 ///

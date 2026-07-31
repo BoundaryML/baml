@@ -56,6 +56,7 @@ fn file_record_from_proto(record: pb::ValueRecordV1) -> io::Result<ValueFileReco
     let has_lifecycle = has_run_started || has_run_completed;
     let has_log_event = record.log_event.is_some();
     let has_capture_loss = record.capture_loss.is_some();
+    let has_audit = record.audit.is_some();
     if has_run_started && has_run_completed {
         return Err(io::Error::new(
             io::ErrorKind::InvalidData,
@@ -68,7 +69,9 @@ fn file_record_from_proto(record: pb::ValueRecordV1) -> io::Result<ValueFileReco
             || record.capture.is_some()
             || has_log_event
             || has_capture_loss
-            || record.blob.is_some())
+            || has_audit
+            || record.blob.is_some()
+            || record.dag_ref.is_some())
     {
         return Err(io::Error::new(
             io::ErrorKind::InvalidData,
@@ -82,13 +85,35 @@ fn file_record_from_proto(record: pb::ValueRecordV1) -> io::Result<ValueFileReco
         return Ok(ValueFileRecord::RunCompleted(completed.try_into()?));
     }
     if let Some(loss) = record.capture_loss {
-        if record.metadata.is_some() || has_log_event || record.capture.is_some() {
+        if record.metadata.is_some()
+            || has_log_event
+            || has_audit
+            || record.capture.is_some()
+            || record.dag_ref.is_some()
+            || record.blob.is_some()
+            || !record.body.is_empty()
+        {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidData,
                 "value record mixed capture loss metadata with body metadata",
             ));
         }
         return Ok(ValueFileRecord::CaptureLoss(loss.try_into()?));
+    }
+    if let Some(audit) = record.audit {
+        if record.metadata.is_some()
+            || has_log_event
+            || record.capture.is_some()
+            || record.dag_ref.is_some()
+            || record.blob.is_some()
+            || !record.body.is_empty()
+        {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "value record mixed audit metadata with body metadata",
+            ));
+        }
+        return Ok(ValueFileRecord::Audit(audit.try_into()?));
     }
     let metadata = record.metadata.ok_or_else(|| {
         io::Error::new(io::ErrorKind::InvalidData, "value record omitted metadata")
@@ -99,11 +124,18 @@ fn file_record_from_proto(record: pb::ValueRecordV1) -> io::Result<ValueFileReco
             "value record mixed log metadata with value capture metadata",
         ));
     }
+    if record.dag_ref.is_some() && (record.blob.is_some() || !record.body.is_empty()) {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "DAG-backed value record also carried an inline or blob body",
+        ));
+    }
     if let Some(log_event) = record.log_event {
         return Ok(ValueFileRecord::LogEvent(LogRecord {
             value_ref: metadata.try_into()?,
             body: record.body,
             blob_ref: record.blob.map(TryInto::try_into).transpose()?,
+            dag_ref: record.dag_ref.map(TryInto::try_into).transpose()?,
             event: log_event.try_into()?,
         }));
     }
@@ -111,6 +143,7 @@ fn file_record_from_proto(record: pb::ValueRecordV1) -> io::Result<ValueFileReco
         value_ref: metadata.try_into()?,
         body: record.body,
         blob_ref: record.blob.map(TryInto::try_into).transpose()?,
+        dag_ref: record.dag_ref.map(TryInto::try_into).transpose()?,
         capture: record.capture.map(TryInto::try_into).transpose()?,
     }))
 }
@@ -194,6 +227,7 @@ mod tests {
             value_ref: ValueRef::available("value_1", ValueCodec::BamlOutboundValue, 3, 3),
             body: vec![1, 2, 3],
             blob_ref: None,
+            dag_ref: None,
             capture: None,
         };
         let start = bytes.len();
@@ -229,6 +263,8 @@ mod tests {
                 log_event: None,
                 capture_loss: None,
                 blob: None,
+                dag_ref: None,
+                audit: None,
             },
             "mixed run_started with run_completed",
         );
@@ -246,6 +282,8 @@ mod tests {
                 log_event: None,
                 capture_loss: None,
                 blob: None,
+                dag_ref: None,
+                audit: None,
             },
             pb::ValueRecordV1 {
                 metadata: None,
@@ -258,12 +296,15 @@ mod tests {
                         thread_id: 1,
                         call_id: 1,
                     }),
+                    promotion_trigger: None,
                 }),
                 run_started: None,
                 run_completed: Some(run_completed_proto()),
                 log_event: None,
                 capture_loss: None,
                 blob: None,
+                dag_ref: None,
+                audit: None,
             },
             pb::ValueRecordV1 {
                 metadata: None,
@@ -278,6 +319,8 @@ mod tests {
                     digest: "0".repeat(64),
                     size_bytes: 3,
                 }),
+                dag_ref: None,
+                audit: None,
             },
             pb::ValueRecordV1 {
                 metadata: Some(value_metadata_proto()),
@@ -288,6 +331,8 @@ mod tests {
                 log_event: None,
                 capture_loss: None,
                 blob: None,
+                dag_ref: None,
+                audit: None,
             },
         ] {
             assert_record_is_invalid(&record, "mixed body metadata with lifecycle metadata");

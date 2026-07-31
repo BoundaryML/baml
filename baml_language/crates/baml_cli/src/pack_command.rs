@@ -31,7 +31,9 @@ use std::{
 
 use anyhow::{Context, Result, anyhow};
 use baml_db::{baml_compiler_diagnostics::Severity, baml_compiler2_emit};
-use baml_exec::{OutputFormat, PACK_SECTION_NAME, PackEnvelope, validate_help_param};
+use baml_exec::{
+    OutputFormat, PACK_SECTION_NAME, PackEnvelope, encode_pack_envelope, validate_help_param,
+};
 use baml_project::ProjectDatabase;
 use bex_engine::BexEngine;
 use bex_vm_types::types::Program;
@@ -145,7 +147,15 @@ impl PackArgs {
         self.validate_flags()?;
 
         let (db, program, needs_format_hint) = self.load_and_compile(reporter)?;
-        let _ = db;
+        let observability = if self.file.is_some() {
+            baml_exec::PackObservability::default()
+        } else {
+            let project_root = db
+                .get_project()
+                .map(|project| project.root(&db).clone())
+                .ok_or_else(|| anyhow!("no project context"))?;
+            crate::manifest::observability_for_root(&project_root)?
+        };
         // Mirror `baml run`'s format advisory: if any source file
         // round-trips through `baml fmt` differently, surface a
         // non-fatal warning so users learn to keep packaged
@@ -171,6 +181,8 @@ impl PackArgs {
         reporter.spin("Packaging", &label);
 
         let envelope = PackEnvelope {
+            program_identity: program.identity.clone(),
+            source_files: program.source_files.clone(),
             program,
             mode: mode.clone(),
             targets: targets
@@ -182,8 +194,9 @@ impl PackArgs {
                 })
                 .collect(),
             output_format: self.output_format,
+            observability,
         };
-        let serialized = borsh::to_vec(&envelope)
+        let serialized = encode_pack_envelope(&envelope)
             .map_err(|e| anyhow!("failed to serialize pack envelope: {e}"))?;
 
         let target_triple = self.resolved_target_triple()?;
@@ -1192,6 +1205,8 @@ mod tests {
     fn test_pack_envelope_roundtrip() {
         let snapshot = baml_tests::engine::compile_source("function main() -> int { 1 }");
         let envelope = PackEnvelope {
+            program_identity: snapshot.identity.clone(),
+            source_files: snapshot.source_files.clone(),
             program: snapshot,
             mode: baml_exec::PackMode::Single,
             targets: vec![baml_exec::TargetEntry {
@@ -1200,14 +1215,35 @@ mod tests {
                 subcommand_name: "main".to_string(),
             }],
             output_format: OutputFormat::Json,
+            observability: baml_exec::PackObservability::default(),
         };
-        let bytes = borsh::to_vec(&envelope).unwrap();
-        let decoded: PackEnvelope = borsh::from_slice(&bytes).unwrap();
+        let bytes = encode_pack_envelope(&envelope).unwrap();
+        assert_eq!(
+            &bytes[..baml_exec::PACK_ENVELOPE_MAGIC.len()],
+            &baml_exec::PACK_ENVELOPE_MAGIC
+        );
+        assert_eq!(
+            &bytes[baml_exec::PACK_ENVELOPE_MAGIC.len()..baml_exec::PACK_ENVELOPE_HEADER_LEN],
+            &baml_exec::PACK_ENVELOPE_VERSION.to_le_bytes()
+        );
+
+        let decoded = baml_exec::decode_pack_envelope(&bytes).unwrap();
         assert!(matches!(decoded.mode, baml_exec::PackMode::Single));
         assert_eq!(decoded.targets.len(), 1);
         assert_eq!(decoded.targets[0].qualified_name, "user.main");
         assert_eq!(decoded.targets[0].subcommand_name, "main");
         assert!(matches!(decoded.output_format, OutputFormat::Json));
+        assert_eq!(
+            decoded.observability,
+            baml_exec::PackObservability::default()
+        );
+
+        // There is deliberately no fallback for the old bare-borsh payload.
+        let legacy_bytes = borsh::to_vec(&envelope).unwrap();
+        assert!(matches!(
+            baml_exec::decode_pack_envelope(&legacy_bytes),
+            Err(baml_exec::PackEnvelopeDecodeError::InvalidMagic { .. })
+        ));
     }
 
     // ── canonicalize_function_name ────────────────────────────────────

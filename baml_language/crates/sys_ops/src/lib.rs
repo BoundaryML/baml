@@ -240,6 +240,8 @@ impl<T> io::IoClassLlmPrimitiveClient for T {
         };
         let prompt_ast = unwrap_prompt_ast(&prompt);
         let io = ctx.runtime_io.clone();
+        let llm_observer = ctx.llm_observer.clone();
+        let model = old_client.model.clone();
         SysOpOutput::async_op(async move {
             sys_llm::execute_build_request_from_owned(
                 &old_client,
@@ -249,6 +251,11 @@ impl<T> io::IoClassLlmPrimitiveClient for T {
             )
             .await
             .map(|req| {
+                if let Some(observer) = &llm_observer {
+                    observer(sys_types::LlmCallObservation::AttemptStarted {
+                        model: model.clone(),
+                    });
+                }
                 io::owned::http::Request {
                     method: req.method,
                     url: req.url,
@@ -304,6 +311,8 @@ impl<T> io::IoClassLlmPrimitiveClient for T {
         };
         let prompt_ast = unwrap_prompt_ast(&prompt);
         let io = ctx.runtime_io.clone();
+        let llm_observer = ctx.llm_observer.clone();
+        let model = old_client.model.clone();
         SysOpOutput::async_op(async move {
             sys_llm::execute_build_request_stream_from_owned(
                 &old_client,
@@ -313,6 +322,11 @@ impl<T> io::IoClassLlmPrimitiveClient for T {
             )
             .await
             .map(|req| {
+                if let Some(observer) = &llm_observer {
+                    observer(sys_types::LlmCallObservation::AttemptStarted {
+                        model: model.clone(),
+                    });
+                }
                 io::owned::http::Request {
                     method: req.method,
                     url: req.url,
@@ -330,9 +344,12 @@ impl<T> io::IoClassLlmPrimitiveClient for T {
         _heap: &std::sync::Arc<BexHeap>,
         _call_id: CallId,
         client: io::owned::llm::PrimitiveClient,
-        _ctx: &SysOpContext,
+        ctx: &SysOpContext,
     ) -> SysOpOutput<io::owned::llm::StreamAccumulator> {
-        match sys_llm::stream_accumulator::new_accumulator(&client.provider) {
+        match sys_llm::stream_accumulator::new_accumulator_with_observer(
+            &client.provider,
+            ctx.llm_observer.clone(),
+        ) {
             Ok(handle) => {
                 let handle: std::sync::Arc<dyn std::any::Any + Send + Sync> =
                     std::sync::Arc::new(handle);
@@ -558,6 +575,27 @@ impl<T> io::IoClassLlmStreamAccumulator for T {
         };
         match sys_llm::stream_accumulator::get_output_tokens(&handle) {
             Ok(tokens) => SysOpOutput::ok(tokens.map(u64::cast_signed)),
+            Err(e) => SysOpOutput::err(VmRustFnError::from(e)),
+        }
+    }
+
+    fn complete_observation(
+        &self,
+        _heap: &std::sync::Arc<BexHeap>,
+        _call_id: CallId,
+        accumulator: io::owned::llm::StreamAccumulator,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<()> {
+        let Ok(handle) = accumulator
+            ._handle
+            .downcast::<bex_resource_types::ResourceHandle>()
+        else {
+            return SysOpOutput::err(VmBamlError::DevOther {
+                message: "Invalid stream accumulator handle".into(),
+            });
+        };
+        match sys_llm::stream_accumulator::complete_observation(&handle) {
+            Ok(()) => SysOpOutput::ok(()),
             Err(e) => SysOpOutput::err(VmRustFnError::from(e)),
         }
     }

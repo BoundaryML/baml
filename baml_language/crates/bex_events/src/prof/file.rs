@@ -31,6 +31,7 @@ pub(crate) struct ProfileWriter {
     /// its hot path, so this is the difference between zero and one malloc
     /// per traced event.
     scratch: Vec<u8>,
+    bytes_written: u64,
 }
 
 impl ProfileWriter {
@@ -55,6 +56,7 @@ impl ProfileWriter {
             file,
             path,
             scratch: Vec::new(),
+            bytes_written: 0,
         };
         writer.write_message(header)?;
         Ok(writer)
@@ -70,7 +72,9 @@ impl ProfileWriter {
     /// it. No-op when nothing is buffered.
     pub(crate) fn flush_buffered(&mut self) -> io::Result<()> {
         if !self.scratch.is_empty() {
+            let len = self.scratch.len();
             self.file.write_all(&self.scratch)?;
+            self.bytes_written = self.bytes_written.saturating_add(len as u64);
             self.scratch.clear();
         }
         Ok(())
@@ -80,7 +84,9 @@ impl ProfileWriter {
         // One-shot header write at file creation: encode + a single write.
         self.scratch.clear();
         encode_length_delimited_message(&mut self.scratch, msg).map_err(io::Error::other)?;
+        let len = self.scratch.len();
         self.file.write_all(&self.scratch)?;
+        self.bytes_written = self.bytes_written.saturating_add(len as u64);
         self.scratch.clear();
         Ok(())
     }
@@ -99,6 +105,10 @@ impl ProfileWriter {
 
     pub(crate) fn path(&self) -> &Path {
         &self.path
+    }
+
+    pub(crate) fn bytes_written(&self) -> u64 {
+        self.bytes_written
     }
 }
 
@@ -158,15 +168,20 @@ mod tests {
         pb::EventFileHeaderV1 {
             process_id: vec![1; 16],
             engine_id: 7,
-            program_id: "program".to_string(),
             started_at_epoch_ns: 123u128.to_le_bytes().to_vec(),
             function_table: None,
             clock_kind: pb::ClockKind::Instant as i32,
             tick_ns_numer: 1,
             tick_ns_denom: 1,
             clock_quality: pb::ClockQuality::Exact as i32,
-            source_snapshot_id: None,
-            revision_id: None,
+            source_snapshot_id: "snapshot".to_string(),
+            revision_id: "revision".to_string(),
+            revision_ref: None,
+            boundary_id: None,
+            trigger_reason: None,
+            trigger_node_id: None,
+            cct_segment_seq: None,
+            cct_block_seq: None,
         }
     }
 

@@ -104,6 +104,16 @@ impl ValueCaptureKind {
 pub struct ValueCapture {
     pub kind: ValueCaptureKind,
     pub call: TraceCallKey,
+    /// Trigger id when this was a speculative capture promoted to durable
+    /// storage. `None` denotes an ordinary policy-selected capture.
+    pub promotion_trigger: Option<String>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct DagRef {
+    pub root_cid: [u8; 32],
+    pub node_codec_version: u16,
+    pub logical_len: u64,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -128,6 +138,7 @@ pub struct ValueRecord {
     pub value_ref: ValueRef,
     pub body: Vec<u8>,
     pub blob_ref: Option<BlobRef>,
+    pub dag_ref: Option<DagRef>,
     pub capture: Option<ValueCapture>,
 }
 
@@ -145,6 +156,7 @@ pub struct LogRecord {
     pub value_ref: ValueRef,
     pub body: Vec<u8>,
     pub blob_ref: Option<BlobRef>,
+    pub dag_ref: Option<DagRef>,
     pub event: LogEventRecord,
 }
 
@@ -167,6 +179,13 @@ impl CaptureLossKind {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum CaptureLossReason {
     QueueFull,
+    StagingEvicted,
+    StagingValueTooLarge,
+    EvictionHistoryOverflow,
+    DrainQueueFull,
+    SnapshotMissing,
+    EncodeFailed,
+    CommitFailed,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -180,10 +199,34 @@ pub struct CaptureLossRecord {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
+pub struct CapturePolicyChangedRecord {
+    pub timestamp_ms: u64,
+    pub scope: String,
+    pub previous_policy: String,
+    pub current_policy: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct PromotionOccurredRecord {
+    pub trigger: String,
+    pub scope: String,
+    pub records: u64,
+    pub staged_evicted: u64,
+    pub timestamp_ms: u64,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum ValueAuditRecord {
+    CapturePolicyChanged(CapturePolicyChangedRecord),
+    PromotionOccurred(PromotionOccurredRecord),
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ValueFileRecord {
     CapturedValue(ValueRecord),
     LogEvent(LogRecord),
     CaptureLoss(CaptureLossRecord),
+    Audit(ValueAuditRecord),
     RunStarted(RunStartedRecord),
     RunCompleted(RunCompletedRecord),
 }
@@ -355,6 +398,7 @@ impl TryFrom<crate::value::pb::ValueCaptureV1> for ValueCapture {
         Ok(Self {
             kind,
             call: call.try_into()?,
+            promotion_trigger: value.promotion_trigger,
         })
     }
 }
@@ -376,6 +420,7 @@ impl From<&ValueCapture> for crate::value::pb::ValueCaptureV1 {
                 ValueCaptureKind::CallInput => crate::value::pb::ValueCaptureKind::CallInput as i32,
             },
             call: Some(value.call.into()),
+            promotion_trigger: value.promotion_trigger.clone(),
         }
     }
 }
@@ -457,6 +502,23 @@ impl TryFrom<crate::value::pb::CaptureLossV1> for CaptureLossRecord {
         };
         let reason = match value.reason() {
             crate::value::pb::CaptureLossReason::QueueFull => CaptureLossReason::QueueFull,
+            crate::value::pb::CaptureLossReason::StagingEvicted => {
+                CaptureLossReason::StagingEvicted
+            }
+            crate::value::pb::CaptureLossReason::StagingValueTooLarge => {
+                CaptureLossReason::StagingValueTooLarge
+            }
+            crate::value::pb::CaptureLossReason::EvictionHistoryOverflow => {
+                CaptureLossReason::EvictionHistoryOverflow
+            }
+            crate::value::pb::CaptureLossReason::DrainQueueFull => {
+                CaptureLossReason::DrainQueueFull
+            }
+            crate::value::pb::CaptureLossReason::SnapshotMissing => {
+                CaptureLossReason::SnapshotMissing
+            }
+            crate::value::pb::CaptureLossReason::EncodeFailed => CaptureLossReason::EncodeFailed,
+            crate::value::pb::CaptureLossReason::CommitFailed => CaptureLossReason::CommitFailed,
             crate::value::pb::CaptureLossReason::Unspecified => {
                 return Err(io::Error::new(
                     io::ErrorKind::InvalidData,
@@ -486,12 +548,125 @@ impl From<&CaptureLossRecord> for crate::value::pb::CaptureLossV1 {
                 CaptureLossReason::QueueFull => {
                     crate::value::pb::CaptureLossReason::QueueFull as i32
                 }
+                CaptureLossReason::StagingEvicted => {
+                    crate::value::pb::CaptureLossReason::StagingEvicted as i32
+                }
+                CaptureLossReason::StagingValueTooLarge => {
+                    crate::value::pb::CaptureLossReason::StagingValueTooLarge as i32
+                }
+                CaptureLossReason::EvictionHistoryOverflow => {
+                    crate::value::pb::CaptureLossReason::EvictionHistoryOverflow as i32
+                }
+                CaptureLossReason::DrainQueueFull => {
+                    crate::value::pb::CaptureLossReason::DrainQueueFull as i32
+                }
+                CaptureLossReason::SnapshotMissing => {
+                    crate::value::pb::CaptureLossReason::SnapshotMissing as i32
+                }
+                CaptureLossReason::EncodeFailed => {
+                    crate::value::pb::CaptureLossReason::EncodeFailed as i32
+                }
+                CaptureLossReason::CommitFailed => {
+                    crate::value::pb::CaptureLossReason::CommitFailed as i32
+                }
             },
             skipped_count: value.skipped_count,
             call: value.call.map(Into::into),
             message: value.message.clone(),
             timestamp_ms: value.timestamp_ms,
         }
+    }
+}
+
+impl TryFrom<crate::value::pb::DagRefV1> for DagRef {
+    type Error = io::Error;
+
+    fn try_from(value: crate::value::pb::DagRefV1) -> Result<Self, Self::Error> {
+        let root_cid = value.root_cid.as_slice().try_into().map_err(|_| {
+            io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!(
+                    "DAG root CID must be 32 bytes, got {}",
+                    value.root_cid.len()
+                ),
+            )
+        })?;
+        let node_codec_version = u16::try_from(value.node_codec_version).map_err(|_| {
+            io::Error::new(
+                io::ErrorKind::InvalidData,
+                "DAG node codec version exceeds u16",
+            )
+        })?;
+        Ok(Self {
+            root_cid,
+            node_codec_version,
+            logical_len: value.logical_len,
+        })
+    }
+}
+
+impl From<&DagRef> for crate::value::pb::DagRefV1 {
+    fn from(value: &DagRef) -> Self {
+        Self {
+            root_cid: value.root_cid.to_vec(),
+            node_codec_version: u32::from(value.node_codec_version),
+            logical_len: value.logical_len,
+        }
+    }
+}
+
+impl TryFrom<crate::value::pb::ValueAuditV1> for ValueAuditRecord {
+    type Error = io::Error;
+
+    fn try_from(value: crate::value::pb::ValueAuditV1) -> Result<Self, Self::Error> {
+        use crate::value::pb::value_audit_v1::Audit;
+        match value.audit.ok_or_else(|| {
+            io::Error::new(io::ErrorKind::InvalidData, "value audit omitted variant")
+        })? {
+            Audit::CapturePolicyChanged(value) => {
+                Ok(Self::CapturePolicyChanged(CapturePolicyChangedRecord {
+                    timestamp_ms: value.timestamp_ms,
+                    scope: value.scope,
+                    previous_policy: value.previous_policy,
+                    current_policy: value.current_policy,
+                }))
+            }
+            Audit::PromotionOccurred(value) => {
+                Ok(Self::PromotionOccurred(PromotionOccurredRecord {
+                    trigger: value.trigger,
+                    scope: value.scope,
+                    records: value.records,
+                    staged_evicted: value.staged_evicted,
+                    timestamp_ms: value.timestamp_ms,
+                }))
+            }
+        }
+    }
+}
+
+impl From<&ValueAuditRecord> for crate::value::pb::ValueAuditV1 {
+    fn from(value: &ValueAuditRecord) -> Self {
+        use crate::value::pb::value_audit_v1::Audit;
+        let audit = match value {
+            ValueAuditRecord::CapturePolicyChanged(value) => {
+                Audit::CapturePolicyChanged(crate::value::pb::CapturePolicyChangedV1 {
+                    timestamp_ms: value.timestamp_ms,
+                    scope: value.scope.clone(),
+                    previous_policy: value.previous_policy.clone(),
+                    current_policy: value.current_policy.clone(),
+                })
+            }
+            ValueAuditRecord::PromotionOccurred(value) => {
+                Audit::PromotionOccurred(crate::value::pb::PromotionOccurredV1 {
+                    trigger: value.trigger.clone(),
+                    scope: value.scope.clone(),
+                    records: value.records,
+                    staged_evicted: value.staged_evicted,
+                    timestamp_ms: value.timestamp_ms,
+                })
+            }
+        };
+        Self { audit: Some(audit) }
     }
 }
 

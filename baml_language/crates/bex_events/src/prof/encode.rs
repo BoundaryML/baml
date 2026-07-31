@@ -149,7 +149,6 @@ pub fn build_header(
     pb::EventFileHeaderV1 {
         process_id: process_id.to_vec(),
         engine_id,
-        program_id: meta.map(|m| m.program_id.clone()).unwrap_or_default(),
         started_at_epoch_ns: started_at_epoch_ns.to_le_bytes().to_vec(),
         clock_kind: match clock.kind() {
             ClockKind::Tsc => pb::ClockKind::Tsc,
@@ -164,8 +163,20 @@ pub fn build_header(
             ClockQuality::Calibrated => pb::ClockQuality::Calibrated,
             ClockQuality::Coarse => pb::ClockQuality::Coarse,
         } as i32,
-        source_snapshot_id: meta.and_then(|m| m.source_snapshot_id.clone()),
-        revision_id: meta.and_then(|m| m.revision_id.clone()),
+        source_snapshot_id: meta
+            .map(|m| m.source_snapshot_id.clone())
+            .unwrap_or_default(),
+        revision_id: meta.map(|m| m.revision_id.clone()).unwrap_or_default(),
+        revision_ref: meta.map(|m| pb::RevisionRefV1 {
+            revision_id: m.revision_id_bytes.to_vec(),
+            dict_format_version: crate::revision_dictionary::DICTIONARY_FORMAT_VERSION,
+            function_count: m.function_count,
+        }),
+        boundary_id: None,
+        trigger_reason: None,
+        trigger_node_id: None,
+        cct_segment_seq: None,
+        cct_block_seq: None,
         function_table: Some(pb::FunctionMetadataTable {
             functions: meta
                 .map(|m| {

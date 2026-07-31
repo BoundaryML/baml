@@ -1,0 +1,139 @@
+name: Observability Bench — Baseline Refresh
+
+# Adopts measured rows from the latest successful canary observability run.
+# This intentionally does not rerun benchmarks: the PR records the exact rows
+# that passed the reusable workflow's fixed acceptance gates.
+
+on:
+  schedule:
+    - cron: "43 10 * * *"
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: "Branch whose latest successful observability rows to adopt"
+        required: false
+        default: "canary"
+      max_delta_pct:
+        description: "Relative regression allowance for refreshed trend metrics"
+        required: false
+        default: "15.0"
+
+permissions:
+  actions: read
+  contents: read
+
+concurrency:
+  group: obs-bench-baseline-refresh
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  refresh:
+    name: "Refresh observability baselines from canary CI"
+    runs-on: blacksmith-4vcpu-ubuntu-2404
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: canary
+          persist-credentials: false
+
+      - name: Install pinned Rust toolchain
+        run: rustup show
+        working-directory: baml_language
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "baml_language -> target"
+          shared-key: "linux-obs-bench"
+          save-if: false
+
+      - name: Download latest successful platform rows
+        id: download
+        env:
+          BRANCH: ${{ inputs.branch || 'canary' }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          mapfile -t run_ids < <(gh run list \
+            --repo "$REPO" \
+            --workflow ci.yaml \
+            --branch "$BRANCH" \
+            --status success \
+            --limit 20 \
+            --json databaseId \
+            --jq '.[].databaseId')
+          run_id=""
+          for candidate in "${run_ids[@]}"; do
+            artifact_names=$(gh api \
+              "repos/$REPO/actions/runs/$candidate/artifacts?per_page=100" \
+              --jq '.artifacts[].name')
+            if [[ "$artifact_names" == *"obs-bench-linux-x86_64"* ]] \
+              && [[ "$artifact_names" == *"obs-bench-macos-arm64"* ]]; then
+              run_id="$candidate"
+              break
+            fi
+          done
+          test -n "$run_id"
+          gh run download "$run_id" \
+            --repo "$REPO" \
+            --pattern 'obs-bench-linux-x86_64' \
+            --pattern 'obs-bench-macos-arm64' \
+            --dir "$GITHUB_WORKSPACE/reports"
+          echo "run_id=$run_id" >> "$GITHUB_OUTPUT"
+
+      - name: Adopt measured rows and build PR body
+        env:
+          MAX_DELTA_PCT: ${{ inputs.max_delta_pct || '15.0' }}
+          REPO: ${{ github.repository }}
+          RUN_ID: ${{ steps.download.outputs.run_id }}
+          SERVER_URL: ${{ github.server_url }}
+        run: |
+          set -euo pipefail
+          for platform in linux-x86_64 macos-arm64; do
+            report_dir="$GITHUB_WORKSPACE/reports/obs-bench-$platform"
+            cargo run -p tools_obs_bench -- refresh-baseline \
+              "$report_dir/obs-cct-$platform.ndjson" \
+              "$report_dir/obs-storage-$platform.ndjson" \
+              "$report_dir/obs-values-$platform.ndjson" \
+              "$report_dir/obs-query-$platform.ndjson" \
+              --platform "$platform" \
+              --max-delta-pct "$MAX_DELTA_PCT" \
+              > "$GITHUB_WORKSPACE/reports/refresh-$platform.json"
+            cargo run -p tools_obs_bench -- check \
+              "$report_dir/obs-cct-$platform.ndjson" \
+              "$report_dir/obs-storage-$platform.ndjson" \
+              "$report_dir/obs-values-$platform.ndjson" \
+              "$report_dir/obs-query-$platform.ndjson" \
+              --platform "$platform" \
+              > "$GITHUB_WORKSPACE/reports/check-$platform.json"
+          done
+          {
+            echo "Adopted measured observability rows from [CI run \`$RUN_ID\`]($SERVER_URL/$REPO/actions/runs/$RUN_ID)."
+            echo ""
+            echo "Both platform baselines were rechecked against the downloaded rows after refresh."
+            echo ""
+            echo '```json'
+            jq -s '.' "$GITHUB_WORKSPACE"/reports/check-*.json
+            echo '```'
+          } > "$GITHUB_WORKSPACE/pr-body.md"
+          cat "$GITHUB_WORKSPACE/pr-body.md" >> "$GITHUB_STEP_SUMMARY"
+        working-directory: baml_language
+
+      - name: Open/update baseline-refresh PR
+        uses: peter-evans/create-pull-request@v6
+        with:
+          # A PAT is required so the refresh PR triggers its own CI gates.
+          token: ${{ secrets.SAM_GITHUB_BOUNDARYML_READWRITE }}
+          base: canary
+          branch: chore/obs-bench-baseline-refresh
+          delete-branch: true
+          title: "chore: refresh observability benchmark baselines"
+          commit-message: "chore: refresh observability benchmark baselines"
+          body-path: pr-body.md
+          add-paths: |
+            baml_language/crates/tools_obs_bench/baselines/*.toml

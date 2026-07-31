@@ -84,15 +84,20 @@ mod tests {
         pb::EventFileHeaderV1 {
             process_id: vec![1; 16],
             engine_id: 7,
-            program_id: "program".to_string(),
             started_at_epoch_ns: 123u128.to_le_bytes().to_vec(),
             function_table: None,
             clock_kind: pb::ClockKind::Instant as i32,
             tick_ns_numer: 1,
             tick_ns_denom: 1,
             clock_quality: pb::ClockQuality::Exact as i32,
-            source_snapshot_id: None,
-            revision_id: None,
+            source_snapshot_id: "snapshot".to_string(),
+            revision_id: "revision".to_string(),
+            revision_ref: None,
+            boundary_id: None,
+            trigger_reason: None,
+            trigger_node_id: None,
+            cct_segment_seq: None,
+            cct_block_seq: None,
         }
     }
 
@@ -205,5 +210,23 @@ mod tests {
             panic!("malformed event frame should fail");
         };
         assert_eq!(error.kind(), std::io::ErrorKind::InvalidData);
+    }
+
+    #[test]
+    fn unknown_future_disk_event_variant_is_skip_compatible() {
+        let header = fixed_header();
+        let mut bytes = Vec::new();
+        encode_length_delimited_message(&mut bytes, &header).unwrap();
+        // Length-delimited DiskEventV1 containing unknown field 10, empty
+        // message. Prost preserves message framing and leaves `event=None`.
+        bytes.extend_from_slice(&[2, 0x52, 0]);
+
+        let parsed = super::read_bamlprof_from_bytes(&bytes).unwrap();
+        assert!(!parsed.truncated);
+        assert_eq!(parsed.events.len(), 1);
+        assert!(parsed.events[0].event.is_none());
+        let reconstructed = crate::run::bamlprof::reconstruct_bamlprof(&parsed).unwrap();
+        assert!(reconstructed.calls.is_empty());
+        assert!(reconstructed.diagnostics.is_empty());
     }
 }

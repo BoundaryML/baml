@@ -225,8 +225,8 @@ export function runToTraceRows(
       offsetNs !== null ? clampPercent((Number(offsetNs) / Number(spanNs)) * 100) : 0;
     const widthPct =
       durationNs !== null
-        ? Math.max(1.5, clampPercent((Number(durationNs) / Number(spanNs)) * 100))
-        : 1.5;
+        ? clampPercent((Number(durationNs) / Number(spanNs)) * 100)
+        : 0;
     return {
       id: call.id,
       depth: callDepth(call, callsById, threadParentCallIds),
@@ -524,8 +524,8 @@ function callToExecutionProfileBlock(
     offsetNs !== null ? clampPercent((Number(offsetNs) / Number(spanNs)) * 100) : 0;
   const widthPct =
     durationNs !== null
-      ? Math.max(1.5, clampPercent((Number(durationNs) / Number(spanNs)) * 100))
-      : 1.5;
+      ? clampPercent((Number(durationNs) / Number(spanNs)) * 100)
+      : 0;
   const functionName = call.functionName ?? `function#${call.functionId}`;
   const origin = executionProfileOrigin(call, functionName);
   const isSystemFrame = isExecutionProfileSystemFrame(functionName, origin);

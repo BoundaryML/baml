@@ -1,7 +1,7 @@
 //! Program/function metadata: the per-artifact join table that turns the
 //! compact `function_id` on every event back into a real definition.
 //!
-//! The join path is `program_id + function_id -> FunctionMetadata ->
+//! The join path is `revision_id + function_id -> FunctionMetadata ->
 //! definition_key / source / revision / semantic lanes`. Events stay
 //! compact (ids only); everything semantic lives here, shipped once per
 //! artifact in the `.bamlprof` header. Enrichment fields
@@ -9,7 +9,7 @@
 //! identity) are modeled but `None` until authoritative compiler/cloud
 //! sources populate them — consumers must tolerate that.
 
-use crate::ids::{FunctionId, ProgramId, SourceSnapshotId};
+use crate::ids::{FunctionId, SourceSnapshotId};
 
 /// Identity of a definition revision (BEP-053). Not yet populated by the
 /// runtime.
@@ -125,14 +125,11 @@ impl FunctionMetadataTable {
     }
 }
 
-/// Program-level metadata an engine derives at construction. `program_id`
-/// is currently random per engine instance (artifact-local joins only, not
-/// durable cross-run identity).
+/// Program-level metadata an engine derives at construction.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ProgramMetadata {
-    pub program_id: ProgramId,
-    pub source_snapshot_id: Option<SourceSnapshotId>,
-    pub revision_id: Option<RevisionId>,
+    pub identity: bex_vm_types::ProgramIdentity,
+    pub revision_dictionary: Option<std::sync::Arc<crate::revision_dictionary::RevisionDictionary>>,
     pub function_table: FunctionMetadataTable,
 }
 

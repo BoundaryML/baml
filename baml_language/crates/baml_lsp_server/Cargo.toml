@@ -33,6 +33,7 @@ baml_version = { workspace = true }
 bex_events = { workspace = true }
 bex_heap = { workspace = true }
 bex_project = { workspace = true }
+bex_query = { workspace = true, features = [ "native" ] }
 bridge_ctypes = { workspace = true }
 sys_native = { workspace = true, features = [ "bundle-http" ] }
 sys_ops = { workspace = true }

@@ -11,13 +11,19 @@ use std::{collections::HashMap, sync::Arc};
 
 pub use baml_builtins2::{MediaContent, MediaValue, PromptAst, PromptAstSimple};
 pub use bex::{Bex, BexCallTraceResult};
+#[cfg(not(target_arch = "wasm32"))]
+pub use bex_engine::value_capture::{
+    CasTraceDrainReport, ContinuousValueDrain, stage_owned_trace_value,
+};
 pub use bex_engine::{
-    CANCELLED_PANIC_CLASS, CaptureDefaults, EngineError, FunctionCallContext,
-    FunctionCallContextBuilder, InboundUnionAmbiguityPolicy, UnhandledSpawnError,
-    UnhandledSpawnErrorHandler, is_cancelled_engine_error, register_inbound_union_ambiguity_policy,
+    BoundaryStorageContext, CANCELLED_PANIC_CLASS, CaptureDefaults, EngineError,
+    FunctionCallContext, FunctionCallContextBuilder, InboundUnionAmbiguityPolicy,
+    UnhandledSpawnError, UnhandledSpawnErrorHandler, is_cancelled_engine_error,
+    register_inbound_union_ambiguity_policy,
     value_capture::{
-        CaptureKind, EncodedTraceValue, TraceCaptureConfig, TraceCaptureProducer,
-        TraceDrainFailure, TraceDrainFailureReason, TraceDrainReport, TraceLogMetadata,
+        CaptureKind, EncodedTraceValue, OwnedTraceDrainReport, OwnedTraceValueDraft,
+        TraceCaptureConfig, TraceCaptureProducer, TraceDrainFailure, TraceDrainFailureReason,
+        TraceDrainReport, TraceLogMetadata,
     },
 };
 pub use bex_external_types::{
@@ -25,6 +31,8 @@ pub use bex_external_types::{
     HostValueKind, MediaKind, RuntimeTy, TyAttr, host_release_dispatch,
     runtime_ty_structurally_equal, selected_arm_equal, try_convert_rust_data, validate_host_return,
 };
+#[cfg(feature = "query-wasm")]
+pub use bex_query as query;
 use indexmap::IndexMap;
 pub use sys_ops::SysOps;
 pub use sys_types::{CallId, CancellationToken};
@@ -120,10 +128,16 @@ pub fn new(
 /// it instead of reaching into `bex_engine` / `bex_vm_types` themselves.
 #[allow(clippy::needless_pass_by_value)]
 pub fn new_from_bytecode(bytecode: &[u8], sys_ops: SysOps) -> Result<Arc<dyn Bex>, RuntimeError> {
-    let program: bex_vm_types::Program =
+    let mut program: bex_vm_types::Program =
         borsh::from_slice(bytecode).map_err(|e| RuntimeError::Compilation {
             message: format!("Failed to deserialize BAML bytecode: {e}"),
         })?;
+    // `ProgramIdentity` and `Function.function_id` are deliberately absent
+    // from raw Program borsh payloads. This legacy load seam owns their
+    // deterministic restoration before the verification-only engine sees the
+    // program. Versioned pack envelopes reattach compile identity separately.
+    let compiler_id = baml_version::compiler_id();
+    bex_vm_types::finalize_legacy_program_identity(&mut program, &compiler_id);
     let engine = bex_engine::BexEngine::new(program, Arc::new(sys_ops), Vec::new())?;
     Ok(Arc::new(engine))
 }
@@ -137,3 +151,32 @@ pub use bex_lsp::{
     PreparedRun, ProjectDiagnostic, ProjectUpdate, TestExpandError, new_lsp,
 };
 pub use fs::{BamlVFS, BulkReadFileSystem, DefaultBulkReadFileSystem, FsPath};
+
+#[cfg(all(test, not(target_arch = "wasm32")))]
+mod tests {
+    use sys_native::SysOpsExt;
+
+    #[test]
+    fn raw_program_load_finalizes_legacy_identity_before_engine_construction() {
+        let program = baml_project::testing::compile_source(r#"function main() -> int { 1 }"#);
+        let bytecode = borsh::to_vec(&program).expect("serialize raw Program");
+        let decoded: bex_vm_types::Program =
+            borsh::from_slice(&bytecode).expect("decode raw Program");
+        assert!(decoded.identity.is_none(), "raw Program omits identity");
+        assert!(
+            decoded
+                .objects
+                .iter()
+                .filter_map(|object| {
+                    let bex_vm_types::Object::Function(function) = object else {
+                        return None;
+                    };
+                    Some(function.function_id)
+                })
+                .all(|function_id| function_id == bex_vm_types::FUNCTION_ID_UNKNOWN)
+        );
+
+        super::new_from_bytecode(&bytecode, sys_native::SysOps::native())
+            .expect("the raw-bytecode load seam finalizes identity");
+    }
+}

@@ -151,6 +151,7 @@ impl<S: ValueArtifactSink> ValueWriter<S> {
             value_ref: value_ref.clone(),
             body,
             blob_ref,
+            dag_ref: None,
             capture,
         };
         let mut encoded = Vec::new();
@@ -175,6 +176,7 @@ impl<S: ValueArtifactSink> ValueWriter<S> {
             value_ref: value_ref.clone(),
             body,
             blob_ref,
+            dag_ref: None,
             event,
         };
         let mut encoded = Vec::new();

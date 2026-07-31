@@ -64,6 +64,7 @@ fn inject_function(
         },
         origin: FunctionOrigin::UserDefined,
         body_meta: None,
+        def_meta: bex_vm_types::DefinitionMeta::default(),
         capture: FunctionCaptureProps::disabled(),
         function_id: 0,
     };

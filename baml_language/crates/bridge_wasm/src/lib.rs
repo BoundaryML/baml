@@ -45,6 +45,7 @@ use std::{
 
 mod error;
 mod handle;
+mod observe_engine;
 mod registry;
 mod host_value {
     pub(crate) use sys_wasm::WasmHost;
@@ -98,6 +99,7 @@ pub use bridge_ctypes::{
 };
 pub use error::BridgeError;
 use js_sys::Function;
+pub use observe_engine::WasmObserveEngine;
 use serde::Deserialize;
 pub use sys_wasm::{
     complete_host_call, mint_host_value_key, register_host_callable,
@@ -1981,6 +1983,7 @@ fn drain_wasm_captured_values(
             let capture = ValueCapture {
                 kind: value_capture_kind_from_bex(draft.kind),
                 call: draft.call,
+                promotion_trigger: None,
             };
             match history_store.borrow_mut().append_value_body(
                 draft.boundary_id,
@@ -2441,6 +2444,7 @@ mod history_tests {
                 ValueCapture {
                     kind: ValueCaptureKind::RootOutput,
                     call: trace,
+                    promotion_trigger: None,
                 },
                 ValueCodec::BamlOutboundValue,
                 vec![1, 2, 3],

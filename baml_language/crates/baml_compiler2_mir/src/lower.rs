@@ -12,7 +12,7 @@ use crate::{
     ir::{
         AggregateKind, BasicBlock, BinOp, BlockId, CatchRegion, Constant, IndexKind, IntrinsicOp,
         ItemRef, Local, LocalDecl, LogLevel, MirFunction, MirFunctionBody, MirFunctionKind,
-        Operand, Place, Rvalue, StatementKind, Terminator,
+        MirLambdaIdentity, MirLambdaKind, Operand, Place, Rvalue, StatementKind, Terminator,
     },
     optimize,
 };
@@ -1434,6 +1434,11 @@ struct LoweringContext<'db> {
     // Counter for generating unique synthetic variable names (e.g. __for_idx, __for_idx_1)
     synthetic_name_counts: HashMap<String, usize>,
 
+    // Monotonic ordinal for every lambda-like callable in this source
+    // definition. Unlike the display-name counters, this is shared across
+    // ordinary lambdas, spawn closures, adapters, and nested bodies.
+    next_lambda_ordinal: u32,
+
     // Lambda functions lowered during body traversal.
     // Collected here and moved into MirFunction.lambdas at the end of lowering.
     // Each entry is a fully-lowered MirFunction for one lambda expression.
@@ -1486,6 +1491,14 @@ struct LoweringContext<'db> {
 
 #[allow(clippy::elidable_lifetime_names)]
 impl<'db> LoweringContext<'db> {
+    fn allocate_lambda_identity(&mut self, kind: MirLambdaKind) -> MirLambdaIdentity {
+        let ordinal = self.next_lambda_ordinal;
+        self.next_lambda_ordinal = ordinal
+            .checked_add(1)
+            .expect("a source definition cannot contain more than u32::MAX lambdas");
+        MirLambdaIdentity { ordinal, kind }
+    }
+
     fn baml_iter_qtn(name: &str) -> QualifiedTypeName {
         QualifiedTypeName::new(Name::new("baml"), vec![Name::new("iter")], Name::new(name))
     }
@@ -2168,6 +2181,7 @@ impl<'db> LoweringContext<'db> {
             interface_method_names: &pkg_data.interface_method_names,
             defer_stack: Vec::new(),
             synthetic_name_counts: HashMap::new(),
+            next_lambda_ordinal: 0,
             chain_null_exits: Vec::new(),
             opt,
         }
@@ -2255,6 +2269,7 @@ impl<'db> LoweringContext<'db> {
             interface_method_names: &pkg_data.interface_method_names,
             defer_stack: Vec::new(),
             synthetic_name_counts: HashMap::new(),
+            next_lambda_ordinal: 0,
             pending_lambdas: Vec::new(),
             lambda_generic_params: Vec::new(),
             capture_indices: None,
@@ -3899,6 +3914,7 @@ impl<'db> LoweringContext<'db> {
         let adapter_idx = *adapter_count;
         *adapter_count += 1;
         let adapter_name = format!("<optional-adapter({parent_name}, {adapter_idx})>");
+        let lambda_identity = self.allocate_lambda_identity(MirLambdaKind::Adapter);
 
         let mut adapter_builder =
             MirBuilder::new(Name::new(&adapter_name), coercion.target_params.len());
@@ -3963,6 +3979,7 @@ impl<'db> LoweringContext<'db> {
             namespace: vec![],
             name: Name::new(&adapter_name),
         };
+        adapter_mir.lambda_identity = Some(lambda_identity);
 
         let lambda_idx = self.pending_lambdas.len();
         self.pending_lambdas.push(adapter_mir);
@@ -4001,6 +4018,11 @@ impl<'db> LoweringContext<'db> {
         let lambda_idx_name = *lambda_count;
         *lambda_count += 1;
         let lambda_name = format!("<lambda({parent_name}, {lambda_idx_name})>");
+        let lambda_kind = match func_def.kind {
+            baml_compiler2_ast::LambdaKind::Anonymous => MirLambdaKind::Lambda,
+            baml_compiler2_ast::LambdaKind::Spawn => MirLambdaKind::SpawnedClosure,
+        };
+        let lambda_identity = self.allocate_lambda_identity(lambda_kind);
 
         // Find the lambda's FileScopeId from the HIR index.
         // The HIR builder registered a ScopeKind::Lambda at the lambda expression's span.
@@ -4321,6 +4343,7 @@ impl<'db> LoweringContext<'db> {
             return_type: sig_return_type,
             throws_type: sig_throws_type,
         });
+        lambda_mir.lambda_identity = Some(lambda_identity);
 
         // Collect transitive captures that inner lambda bodies discovered were
         // needed (names that weren't in hir_captures but that inner lambdas
@@ -4628,6 +4651,7 @@ impl LoweringContext<'_> {
             i
         };
         let lambda_name = format!("<tagged({parent_name}, {idx})>");
+        let lambda_identity = self.allocate_lambda_identity(MirLambdaKind::Adapter);
 
         // Find the HIR Lambda scope registered for this tagged template (its
         // span == the tagged-template expr span; see HIR walk_tagged_template_body).
@@ -4839,6 +4863,7 @@ impl LoweringContext<'_> {
             name: Name::new(&lambda_name),
         };
         lambda_mir.lambdas = nested_lambdas;
+        lambda_mir.lambda_identity = Some(lambda_identity);
 
         let newly_needed_transitive = std::mem::take(&mut self.transitive_captures_needed);
 
@@ -14111,6 +14136,7 @@ pub fn lower_function<'db>(
                 kind: MirFunctionKind::Builtin(*kind),
                 lambdas: vec![],
                 signature: None,
+                lambda_identity: None,
             }
         }
         FunctionBody::Missing => MirFunction {
@@ -14142,6 +14168,7 @@ pub fn lower_function<'db>(
             }),
             lambdas: vec![],
             signature: None,
+            lambda_identity: None,
         },
     }
 }

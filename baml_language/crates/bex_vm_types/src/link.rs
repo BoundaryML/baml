@@ -807,7 +807,9 @@ mod tests {
     use crate::{
         Instruction, Object,
         bytecode::Bytecode,
-        types::{Class, Function, FunctionCaptureProps, FunctionKind, FunctionOrigin},
+        types::{
+            Class, DefinitionMeta, Function, FunctionCaptureProps, FunctionKind, FunctionOrigin,
+        },
         unit::{ExportTable, InitTail, ProgramPackageFrag},
     };
 
@@ -842,6 +844,7 @@ mod tests {
             },
             origin: FunctionOrigin::UserDefined,
             body_meta: None,
+            def_meta: DefinitionMeta::default(),
             capture: FunctionCaptureProps::disabled(),
             function_id: 0,
         }))

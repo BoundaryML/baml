@@ -131,9 +131,28 @@ impl Registry {
                 // visible, and the producer is gone — one drain reaches
                 // empty.
                 progress |= unsafe { ring.drain(&mut |bytes| sink(ring, bytes)) };
-                unsafe { ring.mark_pooled() };
+                // A shed marker publishes the old claimant's engine id. Keep
+                // the ring unclaimable until `take_shed_events` consumes it,
+                // otherwise a racing new claimant could overwrite that id.
+                if !ring.has_shed_events() {
+                    unsafe { ring.mark_pooled() };
+                }
             }
             RingState::Pooled => {}
+        });
+        progress
+    }
+
+    /// Drains explicit producer-side shed markers independently of byte
+    /// progress. This is what makes a fully shed range visible rather than
+    /// waiting for a later successfully committed record.
+    pub(crate) fn take_shed_events(&self, mut sink: impl FnMut(u64, usize)) -> bool {
+        let mut progress = false;
+        self.for_each(|ring| {
+            if let Some((engine_id, count)) = ring.take_shed_events() {
+                progress = true;
+                sink(engine_id, count);
+            }
         });
         progress
     }
@@ -182,7 +201,10 @@ mod global {
     /// use.
     pub(crate) fn global_ctx() -> &'static RingCtx {
         static CTX: OnceLock<RingCtx> = OnceLock::new();
-        CTX.get_or_init(|| RingCtx::new(ProfConfig::global().max_overflow_bytes))
+        CTX.get_or_init(|| {
+            let config = ProfConfig::global();
+            RingCtx::new_with_policy(config.max_overflow_bytes, config.overflow_policy)
+        })
     }
 
     /// One entry per engine this thread has produced for. The `Drop` is the
