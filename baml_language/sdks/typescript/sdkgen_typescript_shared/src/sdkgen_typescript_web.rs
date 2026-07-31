@@ -77,7 +77,12 @@ mod tests {
         let root = &output[&PathBuf::from("index.ts")];
         let typemap = &output[&PathBuf::from("_typemap.ts")];
 
-        assert!(root.contains("pnpm add @boundaryml/baml-bridge-web"));
+        assert!(root.contains(
+            "//  $ pnpm add @boundaryml/baml-bridge-web\n\
+             //  $ npm install @boundaryml/baml-bridge-web\n\
+             //  $ yarn add @boundaryml/baml-bridge-web"
+        ));
+        assert!(!root.contains("baml package"));
         assert!(root.contains("from \"@boundaryml/baml-bridge-web\";"));
         assert!(typemap.contains("from \"@boundaryml/baml-bridge-web\";"));
         assert!(!root.contains("from \"@boundaryml/baml-bridge\";"));
