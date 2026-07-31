@@ -400,9 +400,9 @@ fn runtime_error_class(err: &bex_project::RuntimeError) -> RunErrorClass {
     match err {
         bex_project::RuntimeError::InvalidArgument { .. } => RunErrorClass::Validation,
         bex_project::RuntimeError::Access(_) => RunErrorClass::Host,
-        bex_project::RuntimeError::Other(_) | bex_project::RuntimeError::Compilation { .. } => {
-            RunErrorClass::Host
-        }
+        bex_project::RuntimeError::Other(_)
+        | bex_project::RuntimeError::Compilation { .. }
+        | bex_project::RuntimeError::BytecodeCompatibility { .. } => RunErrorClass::Host,
         bex_project::RuntimeError::Engine(_) => RunErrorClass::Runtime,
     }
 }

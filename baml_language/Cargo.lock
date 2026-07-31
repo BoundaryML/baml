@@ -744,6 +744,7 @@ dependencies = [
  "base64",
  "bex_cache",
  "bex_engine",
+ "bex_project",
  "bex_vm_types",
  "borsh",
  "clap",
@@ -1401,6 +1402,7 @@ dependencies = [
  "text-size",
  "thiserror 2.0.18",
  "tokio",
+ "toml 0.8.23",
  "tracing",
  "vfs",
  "walkdir",
@@ -6632,7 +6634,7 @@ dependencies = [
  "baml_type",
  "baml_version",
  "baml_workspace",
- "borsh",
+ "bex_project",
  "proc-macro2",
  "quote",
  "sdkgen_cpp",
@@ -6643,6 +6645,7 @@ dependencies = [
  "sdkgen_rust",
  "sdkgen_swift",
  "sdkgen_typescript_shared",
+ "toml_edit 0.22.27",
 ]
 
 [[package]]
@@ -6722,7 +6725,6 @@ dependencies = [
  "baml_base",
  "baml_codegen_types",
  "bex_vm_types",
- "borsh",
  "serde",
  "serde_json",
  "sha2",

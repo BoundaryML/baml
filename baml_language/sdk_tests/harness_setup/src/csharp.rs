@@ -113,15 +113,17 @@ fn generate_fixture(
     );
 
     let symbols = baml_project::build_symbol_pool(&db);
-    let bytecode = borsh::to_vec(
-        &db.get_bytecode()
-            .unwrap_or_else(|error| panic!("C# bytecode compilation failed: {error:?}")),
-    )
-    .expect("C# fixture bytecode serialization failed");
+    let program = db
+        .get_bytecode()
+        .unwrap_or_else(|error| panic!("C# bytecode compilation failed: {error:?}"));
+    let embedded_baml_toml = crate::embedded_fixture_baml_toml(&fixture, fixture_name);
+    let bytecode = bex_project::serialize_bytecode(&program, &embedded_baml_toml)
+        .expect("C# fixture bytecode serialization failed");
     let output_directory = fixture.join("baml_client");
     let generate = || {
         sdkgen_csharp::generate_into(sdkgen_csharp::CSharpGenerateRequest {
             symbols: &symbols,
+            program: &program,
             program_bytes: &bytecode,
             cli_version: baml_version::CANONICAL_VERSION,
             required_bridge_version: baml_version::CANONICAL_VERSION,

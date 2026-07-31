@@ -21,6 +21,9 @@ pub use semantic::CSharpGenerationError;
 /// Complete input for one C# generation transaction.
 pub struct CSharpGenerateRequest<'a> {
     pub symbols: &'a SymbolPool,
+    /// Raw compiler program used only for generator-side callable discovery.
+    pub program: &'a bex_vm_types::Program,
+    /// Versioned bytecode envelope embedded into the generated SDK.
     pub program_bytes: &'a [u8],
     pub cli_version: &'a str,
     pub required_bridge_version: &'a str,
@@ -98,9 +101,7 @@ pub fn generate_into(
         ));
     }
     let model = model::CodegenModel::from_symbol_pool(request.symbols);
-    let runtime_identities =
-        model::RuntimeCallableIdentities::from_program_bytes(request.program_bytes)
-            .map_err(CSharpGenerationError::Unsupported)?;
+    let runtime_identities = model::RuntimeCallableIdentities::from_program(request.program);
     let tree = semantic::generate_program_with_runtime_identities(
         &model,
         &runtime_identities,

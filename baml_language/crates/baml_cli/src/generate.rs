@@ -336,7 +336,8 @@ impl GenerateArgs {
         let program = db
             .get_bytecode()
             .map_err(|e| anyhow!("compilation failed: {e:?}"))?;
-        let baml_bytecode = borsh::to_vec(&program)
+        let embedded_baml_toml = embedded_baml_toml(&from)?;
+        let baml_bytecode = bex_project::serialize_bytecode(&program, &embedded_baml_toml)
             .map_err(|e| anyhow!("failed to serialize BAML bytecode: {e}"))?;
 
         let mut total_files = 0;
@@ -358,6 +359,7 @@ impl GenerateArgs {
             if generator.output_type == OutputType::CSharp {
                 let report = sdkgen_csharp::generate_into(sdkgen_csharp::CSharpGenerateRequest {
                     symbols: &pool,
+                    program: &program,
                     program_bytes: &baml_bytecode,
                     cli_version: release_version(),
                     required_bridge_version: baml_version::CANONICAL_VERSION,
@@ -528,6 +530,31 @@ impl GenerateArgs {
 /// sequentially-assigned source-file id, so a collision is impossible.
 fn manifest_file_id() -> FileId {
     FileId::new(0x0FFF_FFFF)
+}
+
+/// Build the independently parseable manifest copy carried by generated
+/// bytecode. The project manifest remains unchanged; only this embedded copy
+/// receives the reserved table describing the actual producing CLI and
+/// bytecode format.
+fn embedded_baml_toml(root: &Path) -> Result<String> {
+    let path = root.join("baml.toml");
+    let content = std::fs::read_to_string(&path)
+        .with_context(|| format!("failed to read {}", path.display()))?;
+    let mut document = content
+        .parse::<DocumentMut>()
+        .with_context(|| format!("failed to parse {}", path.display()))?;
+    let metadata_table = bex_project::BYTECODE_METADATA_TABLE;
+    if document.contains_key(metadata_table) {
+        anyhow::bail!(
+            "{} uses reserved table `[{metadata_table}]`; remove it because `baml generate` owns bytecode compatibility metadata",
+            path.display()
+        );
+    }
+    let mut metadata = Table::new();
+    metadata["baml_cli_version"] = value(release_version());
+    metadata["bytecode_format_version"] = value(i64::from(bex_project::BYTECODE_FORMAT_VERSION));
+    document[metadata_table] = Item::Table(metadata);
+    Ok(document.to_string())
 }
 
 /// Read `baml.toml`'s `[generator.<name>]` sections and run per-target
@@ -819,8 +846,8 @@ mod tests {
 
     use super::{
         AddGeneratorArgs, Diagnostic, Generator, GeneratorDef, OutputType,
-        add_generator_to_manifest, discover_generators, is_valid_go_import_path,
-        parse_add_output_type,
+        add_generator_to_manifest, discover_generators, embedded_baml_toml,
+        is_valid_go_import_path, parse_add_output_type,
     };
 
     fn go_manifest(threshold: Option<i64>) -> String {
@@ -920,6 +947,60 @@ mod tests {
                 .get_ref(),
             "typescript/node"
         );
+    }
+
+    #[test]
+    fn embedded_manifest_preserves_project_toml_and_adds_actual_codegen_metadata() {
+        let directory = tempfile::tempdir().unwrap();
+        let source = "# preserved project manifest\n[package]\nname = \"test\"\n\n[toolchain]\nchannel = \"canary\"\n";
+        fs::write(directory.path().join("baml.toml"), source).unwrap();
+
+        let embedded = embedded_baml_toml(directory.path()).unwrap();
+
+        assert!(
+            embedded.contains("# preserved project manifest"),
+            "{embedded}"
+        );
+        assert_eq!(
+            fs::read_to_string(directory.path().join("baml.toml")).unwrap(),
+            source,
+            "generation metadata must not modify the project manifest"
+        );
+        let parsed: toml::Value = toml::from_str(&embedded).unwrap();
+        assert_eq!(
+            parsed["toolchain"]["channel"].as_str(),
+            Some("canary"),
+            "{embedded}"
+        );
+        assert_eq!(
+            parsed[bex_project::BYTECODE_METADATA_TABLE]["baml_cli_version"].as_str(),
+            Some(crate::commands::release_version()),
+            "{embedded}"
+        );
+        assert_eq!(
+            parsed[bex_project::BYTECODE_METADATA_TABLE]["bytecode_format_version"].as_integer(),
+            Some(i64::from(bex_project::BYTECODE_FORMAT_VERSION)),
+            "{embedded}"
+        );
+    }
+
+    #[test]
+    fn embedded_manifest_rejects_the_reserved_codegen_table() {
+        let directory = tempfile::tempdir().unwrap();
+        fs::write(
+            directory.path().join("baml.toml"),
+            "[package]\nname = \"test\"\n\n[__baml_codegen]\nbaml_cli_version = \"user-owned\"\n",
+        )
+        .unwrap();
+
+        let message = embedded_baml_toml(directory.path())
+            .expect_err("reserved table")
+            .to_string();
+        assert!(
+            message.contains("reserved table `[__baml_codegen]`"),
+            "{message}"
+        );
+        assert!(message.contains("baml generate"), "{message}");
     }
 
     #[test]

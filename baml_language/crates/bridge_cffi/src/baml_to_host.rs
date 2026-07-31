@@ -214,6 +214,9 @@ pub fn result_to_outbound(
         Err(RuntimeError::Compilation { message }) => {
             infra_error_arm(message_instance(COMPILATION_ERROR_CLASS, message), options)
         }
+        Err(RuntimeError::BytecodeCompatibility { message }) => {
+            infra_error_arm(message_instance(COMPILATION_ERROR_CLASS, message), options)
+        }
         Err(RuntimeError::Access(inner)) => infra_error_arm(
             message_instance(ACCESS_ERROR_CLASS, inner.to_string()),
             options,

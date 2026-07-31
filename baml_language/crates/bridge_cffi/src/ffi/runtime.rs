@@ -538,4 +538,23 @@ mod tests {
         );
         crate::free_buffer(buffer);
     }
+
+    #[test]
+    fn bytecode_initializer_surfaces_actionable_unversioned_payload_error() {
+        let bytecode = [1_u8, 2, 3];
+        let buffer = initialize_runtime_from_bytecode(bytecode.as_ptr(), bytecode.len());
+        let message = unsafe { std::slice::from_raw_parts(buffer.ptr.cast::<u8>(), buffer.len) };
+        let message = std::str::from_utf8(message).unwrap();
+        assert!(
+            message.contains("BAML bytecode compatibility error"),
+            "{message}"
+        );
+        assert!(message.contains("unversioned or malformed"), "{message}");
+        assert!(message.contains("baml generate"), "{message}");
+        assert!(
+            message.contains(baml_version::CANONICAL_VERSION),
+            "{message}"
+        );
+        crate::free_buffer(buffer);
+    }
 }

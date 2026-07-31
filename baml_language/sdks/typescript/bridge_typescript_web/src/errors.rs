@@ -33,7 +33,9 @@ pub(crate) fn bridge_error(error: &bridge_cffi::BridgeError) -> JsValue {
         | BridgeError::MissingArgument { .. }
         | BridgeError::InvalidCallId => INVALID_ARGUMENT,
         BridgeError::Runtime(RuntimeError::InvalidArgument { .. }) => INVALID_ARGUMENT,
-        BridgeError::Runtime(RuntimeError::Compilation { .. }) => COMPILATION,
+        BridgeError::Runtime(
+            RuntimeError::Compilation { .. } | RuntimeError::BytecodeCompatibility { .. },
+        ) => COMPILATION,
         BridgeError::Runtime(
             RuntimeError::Other(_) | RuntimeError::Engine(_) | RuntimeError::Access(_),
         )

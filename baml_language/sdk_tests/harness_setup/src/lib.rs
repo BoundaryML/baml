@@ -35,6 +35,7 @@ use std::{
 use baml_codegen_types::{GeneratedOutputFile, SymbolPool, write_generated_output};
 use baml_db::baml_compiler_diagnostics::Severity;
 use baml_project::ProjectDatabase;
+use toml_edit::{DocumentMut, Item, Table, value};
 
 pub mod cpp;
 pub mod csharp;
@@ -146,6 +147,37 @@ pub struct LoadedFixture {
     pub baml_bytecode: Vec<u8>,
 }
 
+fn embedded_fixture_baml_toml(fixture_root: &Path, fixture: &str) -> String {
+    let path = fixture_root.join("baml.toml");
+    let content = match fs::read_to_string(&path) {
+        Ok(content) => content,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            format!("[package]\nname = {fixture:?}\n")
+        }
+        Err(error) => panic!(
+            "fixture `{fixture}`: failed to read {}: {error}",
+            path.display()
+        ),
+    };
+    let mut document = content.parse::<DocumentMut>().unwrap_or_else(|error| {
+        panic!(
+            "fixture `{fixture}`: failed to parse {}: {error}",
+            path.display()
+        )
+    });
+    let metadata_table = bex_project::BYTECODE_METADATA_TABLE;
+    assert!(
+        !document.contains_key(metadata_table),
+        "fixture `{fixture}`: {} uses reserved table `[{metadata_table}]`",
+        path.display()
+    );
+    let mut metadata = Table::new();
+    metadata["baml_cli_version"] = value(baml_version::CANONICAL_VERSION);
+    metadata["bytecode_format_version"] = value(i64::from(bex_project::BYTECODE_FORMAT_VERSION));
+    document[metadata_table] = Item::Table(metadata);
+    document.to_string()
+}
+
 /// Resolve the workspace-root-relative path to `sdk_tests/fixtures/`
 /// from a generator crate's `CARGO_MANIFEST_DIR`. Generator crates
 /// live at `<workspace>/sdk_tests/crates/<generator>/`, so the
@@ -190,7 +222,8 @@ pub fn discover_fixtures(fixtures_root: &Path) -> Vec<String> {
 /// the fixture name in the message on any compile error so a broken
 /// `.baml` source doesn't masquerade as a codegen bug.
 pub fn load_fixture(fixtures_root: &Path, fixture: &str) -> LoadedFixture {
-    let baml_src = fixtures_root.join(fixture).join("baml_src");
+    let fixture_root = fixtures_root.join(fixture);
+    let baml_src = fixture_root.join("baml_src");
     let canonical = fs::canonicalize(&baml_src)
         .unwrap_or_else(|_| panic!("baml_src not found at {}", baml_src.display()));
 
@@ -226,7 +259,8 @@ pub fn load_fixture(fixtures_root: &Path, fixture: &str) -> LoadedFixture {
     let program = db
         .get_bytecode()
         .unwrap_or_else(|e| panic!("fixture `{fixture}`: bytecode compilation failed: {e:?}"));
-    let baml_bytecode = borsh::to_vec(&program)
+    let embedded_baml_toml = embedded_fixture_baml_toml(&fixture_root, fixture);
+    let baml_bytecode = bex_project::serialize_bytecode(&program, &embedded_baml_toml)
         .unwrap_or_else(|e| panic!("fixture `{fixture}`: bytecode serialization failed: {e}"));
     let user_baml_files: Vec<UserBamlFile> = source_files
         .iter()
