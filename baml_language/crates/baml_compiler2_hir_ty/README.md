@@ -1,8 +1,11 @@
 # baml_compiler2_hir_ty: rust-analyzer-style type inference
 
-Status: S0 (harness + engine stub) shipped; the interned type representation
-(S4a, `baml_type::interned`) shipped. No inference engine exists yet; the
-next engine slices are gated on the subtyping-in-the-table decision below.
+Status: shipped through S8 (S0 harness, S1 body-owner ID, S4a interned
+repr, S4 declaration lowering, S4b oracle entry, S5 table, S6 core exprs,
+S7 bidirectional checking, S8 calls/constructors/fields). 13 of 14 spec
+fixtures green, including three spec-ahead-of-TIR wins (canonicalized
+bool-join, expression-position `_` holes, equality-regime generic
+resolution). Pending: lambdas (S9), push-driven bounds (S11).
 
 `baml_language/TYPE_SYSTEM.md` is the correctness authority. It is
 prescriptive: where the current TIR implementation disagrees with it, the spec
