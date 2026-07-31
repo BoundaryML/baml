@@ -740,6 +740,55 @@ pub fn file_body_owners(
     functions.chain(lets).collect()
 }
 
+/// Canonical per-body type references for a function (rust-analyzer's
+/// bodies-own-their-type-refs shape): every type expression written inside
+/// the body, lowered once into a span-free store. Salsa-tracked over PPIR's
+/// canonical body, so downstream type queries depend on structure only.
+#[salsa::tracked]
+pub fn function_body_type_refs<'db>(
+    db: &'db dyn Db,
+    function: baml_compiler2_hir::loc::FunctionLoc<'db>,
+) -> Arc<baml_compiler2_hir::body_type_refs::BodyTypeRefs> {
+    let body = function_body(db, function);
+    let refs = match body.as_ref() {
+        baml_compiler2_hir::body::FunctionBody::Expr(expr_body) => {
+            baml_compiler2_hir::body_type_refs::collect_body_type_refs(expr_body).0
+        }
+        _ => baml_compiler2_hir::body_type_refs::BodyTypeRefs::default(),
+    };
+    Arc::new(refs)
+}
+
+/// Per-body type references for a top-level let's initializer.
+#[salsa::tracked]
+pub fn let_body_type_refs<'db>(
+    db: &'db dyn Db,
+    let_binding: baml_compiler2_hir::loc::LetLoc<'db>,
+) -> Arc<baml_compiler2_hir::body_type_refs::BodyTypeRefs> {
+    let body = baml_compiler2_hir::body::let_body(db, let_binding);
+    let refs = match body.as_ref() {
+        baml_compiler2_hir::body::LetBody::Expr(expr_body) => {
+            baml_compiler2_hir::body_type_refs::collect_body_type_refs(expr_body).0
+        }
+        baml_compiler2_hir::body::LetBody::Missing => {
+            baml_compiler2_hir::body_type_refs::BodyTypeRefs::default()
+        }
+    };
+    Arc::new(refs)
+}
+
+/// Per-body type references for any body owner.
+pub fn body_type_refs<'db>(
+    db: &'db dyn Db,
+    owner: baml_compiler2_hir::body::BodyOwnerId<'db>,
+) -> Arc<baml_compiler2_hir::body_type_refs::BodyTypeRefs> {
+    use baml_compiler2_hir::body::BodyOwnerId;
+    match owner {
+        BodyOwnerId::Function(function) => function_body_type_refs(db, function),
+        BodyOwnerId::Let(let_binding) => let_body_type_refs(db, let_binding),
+    }
+}
+
 /// Canonical function signature — uses PPIR's item tree.
 pub fn function_signature<'db>(
     db: &'db dyn Db,

@@ -1,11 +1,10 @@
 //! Declaration lowering: type syntax -> interned [`Ty`], with name
 //! resolution - the rust-analyzer `TyLoweringContext` analog (S4).
 //!
-//! ONE syntax surface: everything lowers through span-free `TypeRef`s.
-//! Signatures, fields, and aliases come pre-built from ppir's item stores;
-//! body-position `ast::TypeExpr` annotations convert through hir's
-//! `TypeRefBuilder` first (`lower_ast_type_expr`), so there is a single
-//! lowering match. Name
+//! ONE syntax surface: everything lowers through span-free `TypeRef`s -
+//! signatures, fields, and aliases from ppir's per-item stores, body
+//! annotations from ppir's per-body stores (`body_type_refs`). This crate
+//! never sees `ast::TypeExpr`. Name
 //! resolution mirrors TIR's `resolve_type_in` algorithm exactly - namespace-
 //! relative first, then `root.`-absolute, then package-prefixed, then the
 //! `$stream` companion fallback - against ppir's canonical `package_items`
@@ -24,7 +23,6 @@
 //! projections and interface associated-type defaults (I5), generic bounds
 //! into a param env (I2), map-key validation and other diagnostics (S17).
 
-use baml_compiler2_ast as ast;
 use baml_compiler2_hir::{
     contributions::Definition,
     loc::{ClassLoc, FunctionLoc, TypeAliasLoc},
@@ -162,21 +160,6 @@ impl<'db> LowerCtx<'db> {
             // already diagnosed at parse time.
             TypeRefKind::Error | TypeRefKind::Unknown => Ty::error(),
         }
-    }
-
-    // -- Spanned surface (body positions) --------------------------------------
-
-    /// Lowers a body-position `ast::TypeExpr` by converting it through hir's
-    /// `TypeRefBuilder` - the exact lowering ppir's item data uses - and then
-    /// the single `TypeRef` path above, so `hir_ty` speaks `TypeRef` only. The
-    /// shared per-body store becomes a salsa query with S3; until then each
-    /// annotation builds a throwaway store (annotations are tiny), and the
-    /// surface itself retires with the body `TypeRef` migration at cutover.
-    pub fn lower_ast_type_expr(&self, type_expr: &ast::TypeExpr) -> Ty {
-        let mut builder = baml_compiler2_hir::type_ref::TypeRefBuilder::new();
-        let id = builder.lower(type_expr);
-        let (store, _source_map) = builder.finish();
-        self.lower_type_ref(&store, id)
     }
 
     // -- Path resolution -------------------------------------------------------

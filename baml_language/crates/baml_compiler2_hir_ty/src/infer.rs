@@ -10,11 +10,14 @@
 
 pub mod unify;
 
+use std::sync::Arc;
+
 use baml_compiler2_ast::{
     Expr, ExprBody, ExprId, PatId, Pattern, Stmt, StmtId, traverse::BodyNode,
 };
 use baml_compiler2_hir::{
     body::BodyOwnerId,
+    body_type_refs::BodyTypeRefs,
     scope::FileScopeId,
     semantic_index::{
         BindingKind, ExprMetadataKey, ExprMetadataScope, FileSemanticIndex, PathResolution,
@@ -69,7 +72,8 @@ pub fn infer_body<'db>(
         BodyOwnerId::Let(_) => (Vec::new(), Vec::new()),
     };
     let lower = lower_ctx_for_file(db, owner.file(db)).with_frame(frame);
-    let mut ctx = InferenceContext::new(index, owner_scope, lower, param_tys);
+    let type_refs = baml_compiler2_ppir::body_type_refs(db, owner);
+    let mut ctx = InferenceContext::new(index, owner_scope, lower, param_tys, type_refs);
     if let Some(expr_body) = body.expr_body() {
         ctx.infer_expr_body(expr_body);
     }
@@ -91,6 +95,9 @@ struct InferenceContext<'db> {
     /// The owner's parameter types, from its lowered signature, indexed by
     /// declaration position.
     param_tys: Vec<Ty>,
+    /// Every type annotation written in this body, pre-lowered to span-free
+    /// `TypeRef`s (the rust-analyzer bodies-own-their-type-refs shape).
+    type_refs: Arc<BodyTypeRefs>,
     table: InferenceTable,
     result: InferenceResult,
 }
@@ -101,12 +108,14 @@ impl<'db> InferenceContext<'db> {
         owner_scope: Option<FileScopeId>,
         lower: LowerCtx<'db>,
         param_tys: Vec<Ty>,
+        type_refs: Arc<BodyTypeRefs>,
     ) -> InferenceContext<'db> {
         InferenceContext {
             index,
             owner_scope,
             lower,
             param_tys,
+            type_refs,
             table: InferenceTable::new(),
             result: InferenceResult::default(),
         }
@@ -219,13 +228,14 @@ impl<'db> InferenceContext<'db> {
     fn infer_let_pattern(&mut self, body: &ExprBody, pattern: PatId, init_ty: Option<&Ty>) {
         let binding_ty = match &body.patterns[pattern] {
             Pattern::Bind { subpat, .. } => {
-                let annotation = subpat.and_then(|sub| match &body.patterns[sub] {
-                    Pattern::Type(type_expr) => Some(type_expr),
-                    _ => None,
+                let annotation = subpat.and_then(|sub| {
+                    matches!(body.patterns[sub], Pattern::Type(_))
+                        .then(|| self.type_refs.pattern_types.get(&sub).copied())
+                        .flatten()
                 });
                 match annotation {
-                    Some(type_expr) => {
-                        let lowered = self.lower.lower_ast_type_expr(type_expr);
+                    Some(type_ref) => {
+                        let lowered = self.lower.lower_type_ref(&self.type_refs.store, type_ref);
                         let annotation_ty = self.instantiate_holes(&lowered);
                         if let Some(init_ty) = init_ty {
                             // Eq against the widened initializer is the S6

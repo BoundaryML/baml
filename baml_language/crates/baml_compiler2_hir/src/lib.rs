@@ -13,6 +13,7 @@
 //! - Cross-file aggregation: `namespace_items`, `package_items`
 
 pub mod body;
+pub mod body_type_refs;
 mod builder;
 pub mod contributions;
 pub mod diagnostic;
