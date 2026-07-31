@@ -2,7 +2,7 @@
 test "guide 03.06: retry rejects a provider-step failure with committed effects" {
   let inner = ai.testing.FakeProvider { ...fake_resolution(), failures_remaining: 1 };
   let effectful = EffectfulProvider { inner: inner };
-  let label = ai.internal._require_done(ResolveTicket@task(sample_ticket()).with_provider(ai.retry(effectful, 2)).run(runner = ai.run.Agent<Resolution>.new())).value catch (e) {
+  let label = ResolveTicket@task(sample_ticket()).with_provider(ai.retry(effectful, 2)).complete(runner = ai.run.Agent<Resolution>.new()) catch (e) {
     let refused: ai.Failure => "cannot-retry",
     _ => "unexpected",
   };
@@ -10,14 +10,21 @@ test "guide 03.06: retry rejects a provider-step failure with committed effects"
   assert.equal(inner.calls, 1)
 }
 
-test "guide 03.06: a terminal failure is not retried" {
+test "guide 03.06: the caller's retry_if judgment stops replay" {
   let failed = ai.testing.FakeProvider {
     ...fake_resolution(),
     failures_remaining: 1,
     failure_mode: ai.testing.FakeFailureMode.Terminal,
   };
-  let label = ai.internal._require_done(ResolveTicket@task(sample_ticket()).with_provider(ai.retry(failed, 3)).run(runner = ai.run.Agent<Resolution>.new())).value catch (e) {
-    let terminal: ai.Failure => if (!terminal.is_transient()) { "terminal" } else { "unexpected" },
+  //# Retryability is the caller's judgment: refuse to replay refusals
+  let judgment = (failure: ai.Failure) -> bool {
+    match (failure) {
+      let refused: ai.Refused => false,
+      _ => true,
+    }
+  };
+  let label = ResolveTicket@task(sample_ticket()).with_provider(ai.retry(failed, 3, retry_if = judgment)).complete(runner = ai.run.Agent<Resolution>.new()) catch (e) {
+    let refused: ai.Refused => "terminal",
     _ => "unexpected",
   };
   assert.equal(label, "terminal")
@@ -30,7 +37,7 @@ test "guide 03.06: an unknown failure is never assumed replay-safe" {
     failures_remaining: 1,
     failure_mode: ai.testing.FakeFailureMode.Unknown,
   };
-  let label = ai.internal._require_done(ResolveTicket@task(sample_ticket()).with_provider(ai.retry(failed, 3)).run(runner = ai.run.Agent<Resolution>.new())).value catch (e) {
+  let label = ResolveTicket@task(sample_ticket()).with_provider(ai.retry(failed, 3)).complete(runner = ai.run.Agent<Resolution>.new()) catch (e) {
     let unknown: baml.errors.UnknownError => "unknown",
     _ => "unexpected",
   };
@@ -44,7 +51,6 @@ class LiveEffectCommittedFailure {
 
 implements ai.Failure for LiveEffectCommittedFailure {
   // Transient in principle — but the committed effect is what blocks replay.
-  function is_transient(self) -> bool throws never { true }
   function effects(self) -> ai.Effects throws never { ai.Effects.Committed }
 }
 
@@ -92,7 +98,7 @@ testset "integ-test-guide-03-side-effects" {
       calls: 0,
       observed_request_ids: [],
     };
-    let label = ai.internal._require_done(ResolveTicket@task(sample_ticket()).with_provider(ai.retry(effectful, 2)).run(runner = ai.run.Agent<Resolution>.new())).value catch (e) {
+    let label = ResolveTicket@task(sample_ticket()).with_provider(ai.retry(effectful, 2)).complete(runner = ai.run.Agent<Resolution>.new()) catch (e) {
       let refused: ai.Failure => "cannot-retry",
       _ => "unexpected",
     };

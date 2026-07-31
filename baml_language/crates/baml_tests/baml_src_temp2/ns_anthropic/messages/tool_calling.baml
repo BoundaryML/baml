@@ -175,22 +175,35 @@ implements ai.AgentProvider for AnthropicProvider {
         };
       }
       let content = root.anthropic.internal._response_content(raw);
+      let assistant_text = root.anthropic.internal._response_text(raw);
       state.last_assistant_content = content;
       state.messages.push({
         "role": "assistant",
         "content": content,
       });
+      //# Keep the portable transcript complete: visible assistant text
+      //# travels as a TextPart beside the exact provider blocks.
+      let history_parts: ai.MessagePart[] = [];
+      match (assistant_text) {
+        let value: string => {
+          history_parts.push(ai.messages.TextPart { value: value, metadata: {} });
+        },
+        null => {},
+      }
+      history_parts.push(ai.messages.ProviderDataPart {
+        provider: "anthropic",
+        data: { "content": content },
+      });
       state.history.entries.push(ai.ChatMessage {
         message_role: ai.MessageRole.Assistant,
-        content: [ai.messages.ProviderDataPart {
-          provider: "anthropic",
-          data: { "content": content },
-        }],
+        content: history_parts,
         metadata: null,
       });
       return ai.ModelStep<T> {
         outcome: root.anthropic.internal._application_calls(raw_calls, text),
         metadata: metadata,
+        assistant_text: assistant_text,
+        reasoning_text: root.anthropic.internal._response_thinking_text(raw),
       };
     }
     //# Parse a final strict JSON value or SAP text value
@@ -213,6 +226,8 @@ implements ai.AgentProvider for AnthropicProvider {
     ai.ModelStep<T> {
       outcome: value,
       metadata: metadata,
+      assistant_text: root.anthropic.internal._response_text(raw),
+      reasoning_text: root.anthropic.internal._response_thinking_text(raw),
     }
   }
 
@@ -272,7 +287,7 @@ implements ai.AgentProvider for AnthropicProvider {
       }
       let matching: ai.tools.ToolResult[] = [];
       for (let candidate in results) {
-        if (candidate.id == call_id) {
+        if (ai.tools.result_id(candidate) == call_id) {
           matching.push(candidate);
         }
       }
@@ -297,9 +312,9 @@ implements ai.AgentProvider for AnthropicProvider {
     for (let result in ordered_results) {
       let result_block: json = {
         "type": "tool_result",
-        "tool_use_id": result.id,
-        "content": baml.json.stringify(result.output),
-        "is_error": result.is_error,
+        "tool_use_id": ai.tools.result_id(result),
+        "content": baml.json.stringify(ai.tools.result_payload(result)),
+        "is_error": ai.tools.result_is_error(result),
       };
       tool_results.push(result_block);
       history_entries.push(ai.ChatMessage {
@@ -307,9 +322,9 @@ implements ai.AgentProvider for AnthropicProvider {
         content: [ai.messages.ProviderDataPart {
           provider: "anthropic",
           data: {
-            "tool_use_id": result.id,
-            "output": result.output,
-            "is_error": result.is_error,
+            "tool_use_id": ai.tools.result_id(result),
+            "output": ai.tools.result_payload(result),
+            "is_error": ai.tools.result_is_error(result),
           },
         }],
         metadata: null,

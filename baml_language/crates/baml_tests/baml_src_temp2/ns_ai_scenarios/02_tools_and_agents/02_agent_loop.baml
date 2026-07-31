@@ -10,7 +10,7 @@ function agent_loop() -> null {
                 .Agent<Resolution>
                 .new(
                     tools = [search_knowledge],
-                    budget = ai.Budget { max_steps: 3, max_cost_usd: null },
+                    max_steps = 3,
                 ),
         );
     log.info(outcome);

@@ -2,6 +2,10 @@ interface AgentEvent {
   function kind(self) -> string throws never
   function run_id(self) -> string? throws never { null }
   function provider_metadata(self) -> json throws never { null }
+  /// When the runtime emitted this event. Null for events that predate the
+  /// telemetry floor; every event the Agent loop emits going forward
+  /// carries a timestamp so observers can build spans.
+  function emitted_at(self) -> baml.time.Instant? throws never { null }
 }
 
 class ModelStartedEvent {
@@ -64,11 +68,70 @@ class TextDeltaEvent {
     }
 }
 
-class ReasoningBlock {
-    summary: string?,
-    redacted: bool,
-    provider: string,
-    metadata: json,
+/// Visible assistant text produced alongside a step's outcome, when the
+/// provider exposes it. The portable answer to "show the user what the
+/// model said while it worked" — no more smuggling narration through
+/// synthetic tool arguments.
+class AssistantTextEvent {
+    id: string?,
+    step: int,
+    text: string,
+    at: baml.time.Instant,
+    implements AgentEvent {
+        function kind(self) -> string throws never {
+            "assistant_text"
+        }
+        function run_id(self) -> string? throws never {
+            self.id
+        }
+        function emitted_at(self) -> baml.time.Instant? throws never {
+            self.at
+        }
+    }
+}
+
+/// Reasoning text the vendor exposes for display: Anthropic thinking text,
+/// OpenAI reasoning summaries, Gemini thought summaries. Signed/encrypted
+/// continuation blobs never appear here — they stay in the Conversation.
+class ReasoningEvent {
+    id: string?,
+    step: int,
+    text: string,
+    at: baml.time.Instant,
+    implements AgentEvent {
+        function kind(self) -> string throws never {
+            "reasoning"
+        }
+        function run_id(self) -> string? throws never {
+            self.id
+        }
+        function emitted_at(self) -> baml.time.Instant? throws never {
+            self.at
+        }
+    }
+}
+
+/// One event per completed provider step, carrying the step's OWN response
+/// metadata (request id, model, finish reason — for multi-step runs these
+/// were previously unrecoverable) and the step's usage delta. `UsageEvent`
+/// stays cumulative; the delta lives here.
+class StepFinishedEvent {
+    id: string?,
+    step: int,
+    metadata: ai.ResponseMetadata,
+    usage_delta: ai.Usage?,
+    at: baml.time.Instant,
+    implements AgentEvent {
+        function kind(self) -> string throws never {
+            "step_finished"
+        }
+        function run_id(self) -> string? throws never {
+            self.id
+        }
+        function emitted_at(self) -> baml.time.Instant? throws never {
+            self.at
+        }
+    }
 }
 
 class ToolCallEvent {

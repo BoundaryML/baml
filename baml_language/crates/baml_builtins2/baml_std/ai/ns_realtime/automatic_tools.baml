@@ -31,7 +31,7 @@ class AutomaticToolLiveSession {
                 ) {
                     let tool: ai.tools.Tool => ai.tools.invoke_tool(tool, call),
                     null => {
-                        ai.tools.ToolResult.error(call, "tool is not registered on this task")
+                        ai.tools.ToolError.of(call, "tool is not registered on this task")
                     },
                 }
             });

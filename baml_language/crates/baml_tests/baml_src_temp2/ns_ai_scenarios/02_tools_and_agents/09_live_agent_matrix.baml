@@ -8,7 +8,6 @@ function live_agent_matrix() -> null {
         .run
         .Agent<Resolution>
         .new(
-            tools = [],
             tool_registry = registry,
             prepare_step = (context) -> {
                 if (context.step == 0) {

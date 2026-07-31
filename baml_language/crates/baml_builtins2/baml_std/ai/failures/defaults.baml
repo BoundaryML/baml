@@ -11,7 +11,6 @@ class RateLimited {
 }
 
 implements Failure for RateLimited {
-  function is_transient(self) -> bool throws never { true }
   function effects(self) -> Effects throws never { Effects.None }
 }
 
@@ -23,8 +22,13 @@ class NetworkFailure {
 }
 
 implements Failure for NetworkFailure {
-  function is_transient(self) -> bool throws never { true }
-  function effects(self) -> Effects throws never { Effects.Unknown }
+  // Effects.None, deliberately: for a model STEP this is what makes a
+  // transport failure replayable, and it is safe because the step protocol
+  // already guarantees a failing step leaves its conversation unchanged —
+  // the transactional contract, not the failure class, is what makes replay
+  // safe. Operations that commit external effects mid-flight (jobs,
+  // payments) must throw EffectCommitted instead of NetworkFailure.
+  function effects(self) -> Effects throws never { Effects.None }
 }
 
 /// The provider rejected the request as malformed or unfulfillable
@@ -36,7 +40,6 @@ class InvalidRequest {
 }
 
 implements Failure for InvalidRequest {
-  function is_transient(self) -> bool throws never { false }
   function effects(self) -> Effects throws never { Effects.None }
 }
 
@@ -48,7 +51,6 @@ class Refused {
 }
 
 implements Failure for Refused {
-  function is_transient(self) -> bool throws never { false }
   function effects(self) -> Effects throws never { Effects.None }
 }
 
@@ -61,19 +63,20 @@ class ParseFailed {
 }
 
 implements Failure for ParseFailed {
-  function is_transient(self) -> bool throws never { false }
   function effects(self) -> Effects throws never { Effects.None }
 }
 
-/// The attempt failed after committing a side effect (a job was enqueued, a
-/// payment was taken). Blind replay would double the effect.
+/// A NON-CONVERSATION operation failed after committing a side effect (a
+/// job was enqueued, a payment was taken). Blind replay would double the
+/// effect. Scoped to jobs, batches, and similar operations: inside an Agent
+/// run, a failure after committed progress is the `ai.Failed` outcome, which
+/// carries the resumable conversation instead (D11).
 class EffectCommitted {
     provider: string,
     operation: string,
 }
 
 implements Failure for EffectCommitted {
-  function is_transient(self) -> bool throws never { false }
   function effects(self) -> Effects throws never { Effects.Committed }
 }
 
@@ -96,6 +99,5 @@ class ToolCallLimitExceeded {
 }
 
 implements Failure for ToolCallLimitExceeded {
-  function is_transient(self) -> bool throws never { false }
   function effects(self) -> Effects throws never { Effects.None }
 }

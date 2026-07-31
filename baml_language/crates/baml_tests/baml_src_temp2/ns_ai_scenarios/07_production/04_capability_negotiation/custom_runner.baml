@@ -53,9 +53,7 @@ class CapabilityNegotiationRunner {
                     }
                 },
                 let agent: ai.AgentProvider => {
-                    let resolution = ai
-                        .internal
-                        ._require_done(
+                    let resolution = done_or_fail(
                             task.with_provider(agent)
                                 .run(runner = ai.run.Agent<Resolution>.new()),
                         )

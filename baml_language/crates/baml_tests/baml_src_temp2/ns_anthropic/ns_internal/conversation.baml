@@ -84,6 +84,116 @@ function _message_text(message: ai.Message) -> string throws never {
         .join("")
 }
 
+function _append_media_mime(mime: string?) -> string throws ai.InvalidRequest {
+    match (mime) {
+        let value: string => value,
+        null => {
+            throw ai.InvalidRequest {
+                provider: "anthropic",
+                status_code: null,
+                detail: "media appended to an Anthropic conversation needs a mime type",
+            }
+        },
+    }
+}
+
+function _append_image_block(value: image) -> json throws ai.InvalidRequest {
+    match (value.url()) {
+        let url: string => {
+            { "type": "image", "source": { "type": "url", "url": url } }
+        },
+        null => {
+            {
+                "type": "image",
+                "source": {
+                    "type": "base64",
+                    "media_type": _append_media_mime(value.mime_type()),
+                    "data": value.base64(),
+                },
+            }
+        },
+    }
+}
+
+function _append_document_block(value: pdf) -> json throws never {
+    match (value.url()) {
+        let url: string => {
+            { "type": "document", "source": { "type": "url", "url": url } }
+        },
+        null => {
+            {
+                "type": "document",
+                "source": {
+                    "type": "base64",
+                    "media_type": value.mime_type() ?? "application/pdf",
+                    "data": value.base64(),
+                },
+            }
+        },
+    }
+}
+
+// A media part appended mid-conversation must produce the same wire shapes
+// the first-render request builder emits: image blocks with a URL or base64
+// source, and document blocks for PDFs. Dispatch is on the stdlib part
+// classes because the portable media union does not narrow in a match.
+function _append_content_block(part: ai.MessagePart) -> json throws ai.InvalidRequest {
+    match (part) {
+        let image_part: ai.messages.ImagePart => _append_image_block(image_part.value),
+        let pdf_part: ai.messages.PdfPart => _append_document_block(pdf_part.value),
+        let audio_part: ai.messages.AudioPart => {
+            throw ai.InvalidRequest {
+                provider: "anthropic",
+                status_code: null,
+                detail: "Anthropic Messages does not support audio input",
+            }
+        },
+        let video_part: ai.messages.VideoPart => {
+            throw ai.InvalidRequest {
+                provider: "anthropic",
+                status_code: null,
+                detail: "Anthropic Messages does not support video input",
+            }
+        },
+        _ => {
+            if (part.kind() != ai.MessagePartKind.Text) {
+                throw ai.InvalidRequest {
+                    provider: "anthropic",
+                    status_code: null,
+                    detail: "Anthropic append supports text, image, and PDF parts only",
+                };
+            }
+            { "type": "text", "text": part.text() ?? "" }
+        },
+    }
+}
+
+// Render one validated append message into an Anthropic wire message.
+// Anthropic has no mid-conversation system role, so a steering note renders
+// as a user turn wrapped in a documented <steering> tag — the honest mapping.
+// Consecutive user-role wire messages are fine: the Messages API combines
+// same-role neighbors into one turn, so appends keep the existing convention
+// of one wire message per portable message.
+function _append_wire_message(message: ai.Message) -> json throws ai.InvalidRequest {
+    if (message.role() == ai.MessageRole.System) {
+        return {
+            "role": "user",
+            "content": [
+                {
+                    "type": "text",
+                    "text": "<steering>\n" + _message_text(message) + "\n</steering>",
+                },
+            ],
+        };
+    }
+    {
+        "role": "user",
+        "content": message.parts().map((part: ai.MessagePart) -> json {
+            _append_content_block(part)
+        }),
+    }
+}
+
 function _conversation_role_name(role: ai.MessageRole) -> string throws never {
     match (role) {
         ai.MessageRole.System => "system",

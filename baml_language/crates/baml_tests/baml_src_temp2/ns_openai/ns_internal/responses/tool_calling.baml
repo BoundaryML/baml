@@ -154,7 +154,7 @@ function _correlate_tool_results(
     let ordered: ai.tools.ToolResult[] = [];
     for (let call_id in pending_ids) {
         let matching = results.filter((result: ai.tools.ToolResult) -> bool {
-            result.id == call_id
+            ai.tools.result_id(result) == call_id
         });
         if (matching.length() != 1) {
             throw ai.InvalidRequest {

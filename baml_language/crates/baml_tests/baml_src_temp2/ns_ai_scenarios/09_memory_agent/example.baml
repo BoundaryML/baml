@@ -4,9 +4,14 @@
 // completed turn. Fresh turns retain the exact OpenAI conversation; ESC asks
 // Agent for a resumable checkpoint after the current model/tool transaction.
 //
+// The implementation lives in the `memory` namespace next to this file:
+// store.baml (durable memory), tools.baml (plain-function coding tools),
+// curator.baml (the write side), agent.baml (the Task and one turn), and
+// repl.baml (the interactive session).
+//
 // baml run ai_scenarios.memory_agent --from crates/baml_tests/baml_src_temp2
 function memory_agent() -> string {
-    _memory_agent_repl(MemoryAgentBackend.OpenAI)
+    root.ai_scenarios.memory.repl(root.ai_scenarios.memory.Backend.OpenAI)
 }
 
 // Runs the same interactive Task/Agent/tool/memory application, but re-renders
@@ -16,7 +21,7 @@ function memory_agent() -> string {
 //
 // baml run ai_scenarios.memory_agent_google --from crates/baml_tests/baml_src_temp2
 function memory_agent_google() -> string {
-    _memory_agent_repl(MemoryAgentBackend.Google)
+    root.ai_scenarios.memory.repl(root.ai_scenarios.memory.Backend.Google)
 }
 
 // Runs one OpenAI coding turn without opening the REPL. Set
@@ -26,9 +31,7 @@ function memory_agent_google() -> string {
 // BAML_MEMORY_AGENT_TASK="summarize this repo" \
 //   baml run ai_scenarios.memory_agent_once --from crates/baml_tests/baml_src_temp2
 function memory_agent_once() -> string {
-    let task = baml.env.get("BAML_MEMORY_AGENT_TASK")
-        ?? "Summarize this repository and report the most important entry points.";
-    _memory_agent_ask(task, MemoryAgentBackend.OpenAI)
+    root.ai_scenarios.memory.ask(root.ai_scenarios.memory.env_task(), root.ai_scenarios.memory.Backend.OpenAI)
 }
 
 // Runs the same zero-argument one-shot example after overriding both model
@@ -37,7 +40,5 @@ function memory_agent_once() -> string {
 // BAML_MEMORY_AGENT_TASK="summarize this repo" \
 //   baml run ai_scenarios.memory_agent_google_once --from crates/baml_tests/baml_src_temp2
 function memory_agent_google_once() -> string {
-    let task = baml.env.get("BAML_MEMORY_AGENT_TASK")
-        ?? "Summarize this repository and report the most important entry points.";
-    _memory_agent_ask(task, MemoryAgentBackend.Google)
+    root.ai_scenarios.memory.ask(root.ai_scenarios.memory.env_task(), root.ai_scenarios.memory.Backend.Google)
 }

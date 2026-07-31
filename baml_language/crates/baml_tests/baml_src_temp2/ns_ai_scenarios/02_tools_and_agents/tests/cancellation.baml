@@ -172,7 +172,7 @@ test "guide 02: cancellation during a tool effect commits results before interru
                 .new(tools = [tool], cancel = cancel, observers = [observer]),
         );
 
-    let checkpoint = match (outcome) {
+    let _ = match (outcome) {
         let interrupted: ai.Interrupted => {
             assert.equal(interrupted.steps_taken, 1);
             match (interrupted.conversation) {
@@ -180,11 +180,11 @@ test "guide 02: cancellation during a tool effect commits results before interru
                     assert.equal(state.turn, 1);
                     assert.equal(state.submitted_results.length(), 1);
                     assert.equal(state.submitted_results[0].length(), 1);
-                    assert.equal(state.submitted_results[0][0].id, "cancel-one")
+                    assert.equal(ai.tools.result_id(state.submitted_results[0][0]), "cancel-one")
                 },
                 _ => assert.is_true(false),
             };
-            interrupted.conversation
+            null
         },
         _ => baml.sys.panic("expected an Interrupted outcome"),
     };
@@ -192,15 +192,12 @@ test "guide 02: cancellation during a tool effect commits results before interru
     assert.contains(observer.kinds.join(","), "tool_call_finished");
     assert.equal(observer.finished_outcomes, ["interrupted"]);
 
-    // A fresh Agent resumes the committed provider conversation. The tool is
+    // The session resumes the committed provider conversation. The tool is
     // not replayed because submit completed before Interrupted was returned.
-    let resumed = task
-        .run(
-            runner = ai
-                .run
-                .Agent<Resolution>
-                .new(tools = [tool], conversation = checkpoint),
-        );
+    let session = ai.run.AgentSession<Resolution>.of(task, outcome);
+    let resumed = session.resume(
+        runner = ai.run.Agent<Resolution>.new(tools = [tool]),
+    );
     match (resumed) {
         let done: ai.Done<Resolution> => {
             assert.equal(done.value.summary, "Resumed without replay")

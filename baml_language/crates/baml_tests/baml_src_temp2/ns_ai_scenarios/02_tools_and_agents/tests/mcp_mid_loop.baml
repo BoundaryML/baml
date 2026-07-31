@@ -25,7 +25,6 @@ test "guide 02.07: a bootstrap tool adds an MCP server between model steps" {
     usage_per_step: null,
   };
   let runner = ai.run.Agent<Resolution>.new(
-    tools = [],
     tool_registry = registry,
     prepare_step = (context) -> {
       //# Apply bootstrap requests before the next model step
@@ -72,7 +71,6 @@ testset "integ-test-guide-02-mcp-bootstrap" {
     let task = McpBootstrap@task("O-42").with_provider(provider).with_tools([bootstrap_tool]);
     let outcome = task.run(
       runner = ai.run.Agent<Resolution>.new(
-        tools = [],
         tool_registry = registry,
         prepare_step = (context) -> {
           //# Apply bootstrap requests before the next model step

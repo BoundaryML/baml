@@ -44,7 +44,7 @@ implements ai.ConversationAppendProvider for OpenAIProvider {
     self,
     conversation: ai.Conversation,
     messages: ai.Messages,
-  ) -> ai.Conversation throws ai.Failure {
+  ) -> null throws ai.Failure {
     // Validate the entire portable batch before mutating either projection.
     let _ = ai.internal._conversation_append_user_texts(
       messages,
@@ -67,13 +67,10 @@ implements ai.ConversationAppendProvider for OpenAIProvider {
           };
         }
         for (let message in messages.items()) {
-          state.input.push({
-            "role": "user",
-            "content": root.openai.internal._message_text(message),
-          });
+          state.input.push(root.openai.internal._append_input_item(message));
           state.history.entries.push(message);
         }
-        state
+        null
       },
       let state: root.openai.internal.PromptConversation => {
         if (!ai.internal._same_provider_instance(state.owner, self)) {
@@ -91,13 +88,10 @@ implements ai.ConversationAppendProvider for OpenAIProvider {
           };
         }
         for (let message in messages.items()) {
-          state.input.push({
-            "role": "user",
-            "content": root.openai.internal._message_text(message),
-          });
+          state.input.push(root.openai.internal._append_input_item(message));
           state.history.entries.push(message);
         }
-        state
+        null
       },
       _ => throw ai.InvalidRequest {
         provider: "openai-responses",

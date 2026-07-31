@@ -183,6 +183,9 @@ implements ai.AgentProvider for OpenAIProvider {
       baml.json.path_or(call, ".name", "") == root.openai.internal._output_tool_name()
     });
     let metadata = root.openai.internal._response_metadata(raw, self.model);
+    //# Surface visible text and reasoning summaries beside the typed outcome
+    let assistant_text = root.openai.internal._response_output_text(raw);
+    let reasoning_text = root.openai.internal._response_reasoning_text(raw);
     let response_id = baml.json.path_or(raw, ".id", "");
     if (response_id.length() == 0) {
       throw ai.ParseFailed {
@@ -229,6 +232,8 @@ implements ai.AgentProvider for OpenAIProvider {
       return ai.ModelStep<T> {
         outcome: value,
         metadata: metadata,
+        assistant_text: assistant_text,
+        reasoning_text: reasoning_text,
       };
     }
     //# Yield application calls so the runner can execute them
@@ -238,17 +243,29 @@ implements ai.AgentProvider for OpenAIProvider {
       state.last_output = calls;
       state.previous_response_id = response_id;
       state.input = [];
+      // Keep any visible assistant commentary beside the provider-owned call
+      // record so the exported transcript stays complete.
+      let turn_parts: ai.MessagePart[] = [];
+      match (assistant_text) {
+        let value: string => {
+          turn_parts.push(ai.messages.TextPart { value: value, metadata: {} });
+        },
+        null => {},
+      }
+      turn_parts.push(ai.messages.ProviderDataPart {
+        provider: "openai-responses",
+        data: { "output": calls },
+      });
       state.history.entries.push(ai.ChatMessage {
         message_role: ai.MessageRole.Assistant,
-        content: [ai.messages.ProviderDataPart {
-          provider: "openai-responses",
-          data: { "output": calls },
-        }],
+        content: turn_parts,
         metadata: null,
       });
       return ai.ModelStep<T> {
         outcome: root.openai.internal._application_calls(calls, text),
         metadata: metadata,
+        assistant_text: assistant_text,
+        reasoning_text: reasoning_text,
       };
     }
     //# Hybrid SAP mode accepts final T as output_text
@@ -280,6 +297,8 @@ implements ai.AgentProvider for OpenAIProvider {
     ai.ModelStep<T> {
       outcome: value,
       metadata: metadata,
+      assistant_text: content,
+      reasoning_text: reasoning_text,
     }
   }
 
@@ -317,8 +336,8 @@ implements ai.AgentProvider for OpenAIProvider {
     state.input = ordered.map((result: ai.tools.ToolResult) -> json {
       {
         "type": "function_call_output",
-        "call_id": result.id,
-        "output": baml.json.stringify(result.output),
+        "call_id": ai.tools.result_id(result),
+        "output": baml.json.stringify(ai.tools.result_payload(result)),
       }
     });
     for (let result in ordered) {
@@ -327,9 +346,9 @@ implements ai.AgentProvider for OpenAIProvider {
         content: [ai.messages.ProviderDataPart {
           provider: "openai-responses",
           data: {
-            "call_id": result.id,
-            "output": result.output,
-            "is_error": result.is_error,
+            "call_id": ai.tools.result_id(result),
+            "output": ai.tools.result_payload(result),
+            "is_error": ai.tools.result_is_error(result),
           },
         }],
         metadata: null,

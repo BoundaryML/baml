@@ -70,9 +70,7 @@ testset "integ-test-google-vertex-configurations" {
                     location = location,
                     output_mode = root.google.vertex.OutputMode.Native,
                 );
-            let value = ai
-                .internal
-                ._require_done(
+            let value = done_or_fail(
                     ResolveTicket@task(sample_ticket()).with_provider(provider)
                         .run(runner = ai.run.Agent<Resolution>.new()),
                 )
@@ -97,9 +95,7 @@ testset "integ-test-google-vertex-configurations" {
                     location = location,
                     output_mode = root.google.vertex.OutputMode.Sap,
                 );
-            let value = ai
-                .internal
-                ._require_done(
+            let value = done_or_fail(
                     ResolveTicket@task(sample_ticket()).with_provider(provider)
                         .run(runner = ai.run.Agent<Resolution>.new()),
                 )
@@ -118,9 +114,7 @@ testset "integ-test-google-ai-configurations" {
                 api_key = baml.env.get_or_panic("GOOGLE_API_KEY"),
                 output_mode = root.google.ai.OutputMode.Native,
             );
-        let value = ai
-            .internal
-            ._require_done(
+        let value = done_or_fail(
                 ResolveTicket@task(sample_ticket()).with_provider(provider)
                     .run(runner = ai.run.Agent<Resolution>.new()),
             )
@@ -136,9 +130,7 @@ testset "integ-test-google-ai-configurations" {
                 api_key = baml.env.get_or_panic("GOOGLE_API_KEY"),
                 output_mode = root.google.ai.OutputMode.Native,
             );
-        let value = ai
-            .internal
-            ._require_done(
+        let value = done_or_fail(
                 GoogleResolutionArray@task().with_provider(provider)
                     .run(runner = ai.run.Agent<Resolution[]>.new()),
             )
@@ -156,9 +148,7 @@ testset "integ-test-google-ai-configurations" {
                 api_key = baml.env.get_or_panic("GOOGLE_API_KEY"),
                 output_mode = root.google.ai.OutputMode.Sap,
             );
-        let value = ai
-            .internal
-            ._require_done(
+        let value = done_or_fail(
                 ResolveTicket@task(sample_ticket()).with_provider(provider)
                     .run(runner = ai.run.Agent<Resolution>.new()),
             )
@@ -179,7 +169,7 @@ testset "integ-test-google-ai-configurations" {
                     "https://storage.googleapis.com/cloud-samples-data/generative-ai/image/scones.jpg",
                     "image/jpeg",
                 )).with_provider(provider);
-        let value = ai.internal._require_done(task.run(runner = ai.run.Agent<string>.new())).value;
+        let value = task.complete(runner = ai.run.Agent<string>.new());
         assert.is_true(value.length() > 0)
     }
 }

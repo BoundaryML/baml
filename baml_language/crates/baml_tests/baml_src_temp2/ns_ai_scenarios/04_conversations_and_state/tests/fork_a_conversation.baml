@@ -15,14 +15,8 @@ testset "integ-test-guide-04-fork-conversation" {
         let provider = live_openai();
         let billing_task = ProbeConversation@task(billing).with_provider(provider);
         let fraud_task = ProbeConversation@task(fraud).with_provider(provider);
-        let billing_result = ai
-            .internal
-            ._require_done(billing_task.run(runner = ai.run.Agent<ConversationProbe>.new()))
-            .value;
-        let fraud_result = ai
-            .internal
-            ._require_done(fraud_task.run(runner = ai.run.Agent<ConversationProbe>.new()))
-            .value;
+        let billing_result = billing_task.complete(runner = ai.run.Agent<ConversationProbe>.new());
+        let fraud_result = fraud_task.complete(runner = ai.run.Agent<ConversationProbe>.new());
         log.info(
             "live conversation forks "
                 + {

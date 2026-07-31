@@ -8,7 +8,7 @@ test "guide 02.02: Agent runner owns the application tool loop" {
                 .Agent<Resolution>
                 .new(
                     tools = [search_knowledge],
-                    budget = ai.Budget { max_steps: 3, max_cost_usd: null },
+                    max_steps = 3,
                 ),
         );
     match (outcome) {
@@ -25,7 +25,7 @@ testset "integ-test-guide-02-agent-runner" {
         let task = ResolveTicketWithTools@task(sample_ticket()).with_provider(live_openai()).with_tools([search_knowledge]);
         let outcome = task
             .run(
-                runner = ai.run.Agent<Resolution>.new(tools = [search_knowledge], budget = ai.Budget { max_steps: 4, max_cost_usd: null }, after_tool_call = (
+                runner = ai.run.Agent<Resolution>.new(tools = [search_knowledge], max_steps = 4, after_tool_call = (
                     event,
                 ) -> {
                     trace.after_calls.push(event.call.name);

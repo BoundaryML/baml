@@ -13,13 +13,9 @@ testset "integ-test-guide-04-application-history" {
         assert.equal(history.entries.length(), 2);
         assert.equal(updated.entries.length(), 3);
         let task = ProbeConversation@task(updated).with_provider(live_openai());
-        let response = ai
-            .internal
-            ._response_from_done(
-                ai
-                    .internal
-                    ._require_done(task.run(runner = ai.run.Agent<ConversationProbe>.new())),
-            );
+        let response = (
+                done_or_fail(task.run(runner = ai.run.Agent<ConversationProbe>.new()))
+            ).response();
         log.info(
             "live application history "
                 + {

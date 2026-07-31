@@ -1,13 +1,17 @@
 // Explore two independent follow-up paths from the same conversation without
 // either branch changing the other.
+//
+// This is the PORTABLE pole: an application-owned MessageHistory forked by
+// value, surviving provider switches but giving up exact continuation state.
+// The exact-state counterpart is `session.fork()` — see
+// 06_agent_session.baml — which keeps thinking signatures and server-side
+// state but stays with the conversation's provider.
 function fork_a_conversation() -> ConversationProbe[] {
     let base = sample_history();
     let billing = base.append(ai.ChatMessage.user("Please refund it.")).to_history();
     let fraud = base.append(ai.ChatMessage.user("Could this be fraud?")).to_history();
 
-    let billing_result = ai
-        .internal
-        ._require_done(
+    let billing_result = done_or_fail(
             ProbeConversation@task(billing).with_provider(ai
                     .testing
                     .fake_output_provider(
@@ -21,9 +25,7 @@ function fork_a_conversation() -> ConversationProbe[] {
             .run(runner = ai.run.Agent<ConversationProbe>.new()),
         )
         .value;
-    let fraud_result = ai
-        .internal
-        ._require_done(
+    let fraud_result = done_or_fail(
             ProbeConversation@task(fraud).with_provider(ai
                     .testing
                     .fake_output_provider(

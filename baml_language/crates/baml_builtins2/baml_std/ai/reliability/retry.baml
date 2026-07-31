@@ -1,6 +1,45 @@
+/// Delay policy between replayed model steps. Exponential:
+/// `initial_ms * multiplier^(attempt-1)`, capped at `max_ms`. When the
+/// failure is `RateLimited` and the provider sent `retry_after_ms`, that
+/// hint overrides the computed delay — the provider knows its own window.
+class Backoff {
+    initial_ms: int,
+    multiplier: int,
+    max_ms: int,
+
+    function default() -> Backoff throws never {
+        Backoff { initial_ms: 250, multiplier: 2, max_ms: 10000 }
+    }
+
+    /// The delay to sleep after the failure of `attempt` (1-based).
+    function delay_ms(self, attempt: int, failure: ai.Failure) -> int throws never {
+        match (failure) {
+            let limited: ai.RateLimited => match (limited.retry_after_ms) {
+                let hint: int => return hint.max(0),
+                null => {},
+            },
+            _ => {},
+        }
+        let delay = self.initial_ms;
+        let i = 1;
+        while (i < attempt && delay < self.max_ms) {
+            delay = delay * self.multiplier;
+            i = i + 1;
+        }
+        delay.clamp(0, self.max_ms)
+    }
+}
+
 class Retry {
     inner: Provider,
     max_attempts: int,
+    // The caller's judgment of which failures are worth replaying. Null
+    // uses the default judgment (decline Refused/InvalidRequest/ParseFailed,
+    // replay the rest); effect safety (`Effects.None`) is always enforced
+    // regardless.
+    retry_if: ((ai.Failure) -> bool throws never)?,
+    // Null disables sleeping between attempts.
+    backoff: Backoff?,
 }
 
 class RetryConversation {
@@ -24,6 +63,8 @@ class RetryConversation {
 implements Provider for Retry {
   function name(self) -> string throws never { "retry(" + self.inner.name() + ")" }
   function render_shorthand(self) -> string throws never { self.inner.render_shorthand() }
+  // Retry is a thin wrapper: ownership checks may walk through it.
+  function delegate(self) -> Provider? throws never { self.inner }
 }
 
 // Retry wraps individual provider turns. It never replays the Agent lifecycle
@@ -74,9 +115,18 @@ implements AgentProvider for Retry {
         let failure: ai.Failure => {
           if (
             attempt >= self.max_attempts
-              || !ai.internal._may_retry_model_step(failure)
+              || !ai.internal._may_retry_model_step(failure, self.retry_if)
           ) {
             throw e;
+          }
+          //# Back off before the replay; a provider retry_after hint wins.
+          match (self.backoff) {
+            let policy: Backoff => {
+              let _ = baml.sys.sleep(baml.time.Duration.from_milliseconds(policy.delay_ms(attempt, failure))) catch (io) {
+                _ => null,
+              };
+            },
+            null => {},
           }
           attempt = attempt + 1;
           continue;
@@ -125,7 +175,7 @@ implements ConversationAppendProvider for Retry {
     self,
     conversation: Conversation,
     messages: Messages,
-  ) -> Conversation throws ai.Failure | baml.errors.UnknownError {
+  ) -> null throws ai.Failure | baml.errors.UnknownError {
     let state = match (conversation) {
       let value: RetryConversation => value,
       _ => throw baml.errors.UnknownError.with_message<never>(
@@ -145,12 +195,16 @@ implements ConversationAppendProvider for Retry {
         message: "retry inner cannot append exact conversation messages: " + self.inner.name(),
       },
     };
-    state.inner = provider.append_messages(state.inner, messages);
-    state
+    provider.append_messages(state.inner, messages)
   }
 }
 
-function retry(provider: Provider, max_attempts: int) -> Retry throws never {
+function retry(
+    provider: Provider,
+    max_attempts: int,
+    retry_if: ((ai.Failure) -> bool throws never)? = null,
+    backoff: Backoff? = Backoff.default(),
+) -> Retry throws never {
     Retry {
         inner: provider,
         max_attempts: if (max_attempts < 1) {
@@ -158,5 +212,7 @@ function retry(provider: Provider, max_attempts: int) -> Retry throws never {
         } else {
             max_attempts
         },
+        retry_if: retry_if,
+        backoff: backoff,
     }
 }

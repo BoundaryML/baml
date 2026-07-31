@@ -30,9 +30,7 @@ testset "integ-test-guide-05-image-input" {
         model: "gpt-5.6-luna",
         api_key: baml.env.get_or_panic("OPENAI_API_KEY"),
       });
-    let value = ai.internal
-      ._require_done(task.run(runner = ai.run.Agent<string>.new()))
-      .value;
+    let value = task.complete(runner = ai.run.Agent<string>.new());
     assert.is_true(value.length() > 0)
   }
 
@@ -41,9 +39,7 @@ testset "integ-test-guide-05-image-input" {
         "https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf",
         "application/pdf",
       )).with_provider(live_anthropic());
-    let value = ai.internal
-      ._require_done(task.run(runner = ai.run.Agent<string>.new()))
-      .value;
+    let value = task.complete(runner = ai.run.Agent<string>.new());
     log.info(baml.json.stringify({
       "guide": "05.01",
       "media": "pdf",

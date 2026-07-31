@@ -35,7 +35,7 @@ function mcp_mid_loop() -> null {
         `,
         usage_per_step: null,
     };
-    let runner = ai.run.Agent<Resolution>.new(tools = [], tool_registry = registry, prepare_step = (context) -> {
+    let runner = ai.run.Agent<Resolution>.new(tool_registry = registry, prepare_step = (context) -> {
         let next_tools = broker.activate_pending(context.tools);
         ai.tools.StepPlan { provider: null, tools: next_tools, stop: null }
     });

@@ -5,11 +5,9 @@ test "guide 01.02: task construction is inspectable and side-effect free" {
     assert.equal(task.identity?.name, "ResolveTicket");
     assert.equal(task.identity?.package, "user");
     assert.equal(task.provider_name(), "fake");
-    let response = ai
-        .internal
-        ._response_from_done(
-            ai.internal._require_done(task.run(runner = ai.run.Agent<Resolution>.new())),
-        );
+    let response = (
+            done_or_fail(task.run(runner = ai.run.Agent<Resolution>.new()))
+        ).response();
     assert.equal(response.value.category, "billing");
     assert.equal(fake.calls, 1)
 }
@@ -29,13 +27,9 @@ testset "integ-test-guide-01-task-and-runners" {
                 }
                 .to_string(),
         );
-        let response = ai
-            .internal
-            ._response_from_done(
-                ai
-                    .internal
-                    ._require_done(task.run(runner = ai.run.Agent<Resolution>.new())),
-            );
+        let response = (
+                done_or_fail(task.run(runner = ai.run.Agent<Resolution>.new()))
+            ).response();
         log.info(
             "live task executed "
                 + {

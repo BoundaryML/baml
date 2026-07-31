@@ -158,7 +158,7 @@ function _prompt_turn<T>(
     state: PromptConversation,
     tools: ai.tools.Tool[],
     output_suffix: string,
-) -> ai.Task<T> throws never {
+) -> ai.Task<T> throws ai.InvalidRequest {
     //# Render the task with the text choice for this turn
     let rendered = state.recipe.render_with_output_format(state.owner, reflect.type_of<T>(), output_suffix);
     //# Reattach prior tool-loop messages after the original rendered prompt
@@ -172,7 +172,7 @@ function _prompt_turn<T>(
                 [ai.messages._prompt_text_content(rendered), prior],
             )
     };
-    let recipe = ai._prompt_recipe(
+    let recipe = ai.PromptRenderRecipe.of(
         (ctx: baml.llm.Context) -> baml.llm.PromptAst {
             prompt
         },
@@ -216,7 +216,12 @@ function _prompt_step<T>(
             .history
             .entries
             .push(ai.ChatMessage.assistant(_response_text(response.metadata.raw) ?? ""));
-        return ai.ModelStep<T> { outcome: response.value, metadata: response.metadata };
+        return ai.ModelStep<T> {
+            outcome: response.value,
+            metadata: response.metadata,
+            assistant_text: _response_text(response.metadata.raw),
+            reasoning_text: _reasoning_text(response.metadata.raw),
+        };
     }
     //# Ask for the text choice T | ToolCalls without native function declarations
     let response = _generate<T | ai.tools.ToolCalls>(
@@ -250,7 +255,12 @@ function _prompt_step<T>(
                                 ),
                         ),
                 );
-            ai.ModelStep<T> { outcome: calls, metadata: response.metadata }
+            ai.ModelStep<T> {
+                outcome: calls,
+                metadata: response.metadata,
+                assistant_text: _response_text(response.metadata.raw),
+                reasoning_text: _reasoning_text(response.metadata.raw),
+            }
         },
         let value: T => {
             state.last_calls = [];
@@ -258,7 +268,12 @@ function _prompt_step<T>(
                 .history
                 .entries
                 .push(ai.ChatMessage.assistant(_response_text(response.metadata.raw) ?? ""));
-            ai.ModelStep<T> { outcome: value, metadata: response.metadata }
+            ai.ModelStep<T> {
+                outcome: value,
+                metadata: response.metadata,
+                assistant_text: _response_text(response.metadata.raw),
+                reasoning_text: _reasoning_text(response.metadata.raw),
+            }
         },
     }
 }
@@ -268,7 +283,7 @@ function _prompt_results_for_call(
     call_id: string,
 ) -> ai.tools.ToolResult[] throws never {
     results.filter((result: ai.tools.ToolResult) -> bool {
-        result.id == call_id
+        ai.tools.result_id(result) == call_id
     })
 }
 
@@ -317,9 +332,9 @@ function _prompt_submit(
                                 .json
                                 .stringify(
                                     {
-                                        "id": result.id,
-                                        "output": result.output,
-                                        "is_error": result.is_error,
+                                        "id": ai.tools.result_id(result),
+                                        "output": ai.tools.result_payload(result),
+                                        "is_error": ai.tools.result_is_error(result),
                                     },
                                 ),
                             metadata: {},
@@ -393,12 +408,141 @@ function _owned_conversation(
     state
 }
 
+// Mirror the primitive client's first-render media mapping: prefer inline
+// base64 data (inlineData), fall back to fileData for plain URLs. Unresolved
+// local file paths fail exactly like first-render request building does.
+function _media_part_json(
+    mime_or_null: string?,
+    inline: string,
+    uri_or_null: string?,
+    provider_name: string,
+) -> json throws ai.InvalidRequest {
+    let mime = match (mime_or_null) {
+        let value: string => value,
+        null => {
+            throw ai.InvalidRequest {
+            provider: provider_name,
+            status_code: null,
+            detail: "media appended to a Gemini conversation must carry a MIME type",
+        }
+        },
+    };
+    if (inline.length() > 0) {
+        let part: json = { "inlineData": { "mimeType": mime, "data": inline } };
+        return part;
+    }
+    match (uri_or_null) {
+        let uri: string => {
+            let part: json = { "fileData": { "mimeType": mime, "fileUri": uri } };
+            part
+        },
+        null => {
+            throw ai.InvalidRequest {
+            provider: provider_name,
+            status_code: null,
+            detail: "media appended to a Gemini conversation must be inline base64 or a URL; unresolved file paths are not supported",
+        }
+        },
+    }
+}
+
+// The Gemini parts-array form of one fresh user message: text parts stay
+// text, media parts follow the first-render inlineData/fileData mapping.
+// Matches the concrete portable part classes rather than the media() union
+// so the media value keeps its type through extraction.
+function _user_parts_json(
+    message: ai.Message,
+    provider_name: string,
+) -> json[] throws ai.InvalidRequest {
+    let parts: json[] = [];
+    for (let part in message.parts()) {
+        match (part) {
+            let media: ai.messages.ImagePart => {
+                parts
+                    .push(
+                        _media_part_json(
+                            media.value.mime_type(),
+                            media.value.base64(),
+                            media.value.url(),
+                            provider_name,
+                        ),
+                    );
+            },
+            let media: ai.messages.AudioPart => {
+                parts
+                    .push(
+                        _media_part_json(
+                            media.value.mime_type(),
+                            media.value.base64(),
+                            media.value.url(),
+                            provider_name,
+                        ),
+                    );
+            },
+            let media: ai.messages.VideoPart => {
+                parts
+                    .push(
+                        _media_part_json(
+                            media.value.mime_type(),
+                            media.value.base64(),
+                            media.value.url(),
+                            provider_name,
+                        ),
+                    );
+            },
+            let media: ai.messages.PdfPart => {
+                parts
+                    .push(
+                        _media_part_json(
+                            media.value.mime_type(),
+                            media.value.base64(),
+                            media.value.url(),
+                            provider_name,
+                        ),
+                    );
+            },
+            let other: ai.MessagePart => {
+                if (other.media() != null) {
+                    // Application-defined media parts cannot be unpacked here.
+                    throw ai.InvalidRequest {
+                        provider: provider_name,
+                        status_code: null,
+                        detail: "media append on this provider supports the portable ai.messages media part classes",
+                    };
+                }
+                match (other.text()) {
+                    let text: string => {
+                        let text_part: json = { "text": text };
+                        parts.push(text_part);
+                    },
+                    null => {},
+                }
+            },
+        }
+    }
+    if (parts.length() == 0) {
+        let empty_part: json = { "text": "" };
+        parts.push(empty_part);
+    }
+    parts
+}
+
+function _message_has_media(message: ai.Message) -> bool throws never {
+    message
+        .parts()
+        .filter((part: ai.MessagePart) -> bool {
+            part.media() != null
+        })
+        .length()
+        > 0
+}
+
 function _append_messages(
     provider: ai.Provider,
     conversation: ai.Conversation,
     messages: ai.Messages,
     provider_name: string,
-) -> ai.Conversation throws ai.Failure {
+) -> null throws ai.Failure {
     // Validate the complete portable batch before mutating either projection.
     let _ = ai.internal._conversation_append_user_texts(messages, provider_name);
     match (conversation) {
@@ -420,13 +564,38 @@ function _append_messages(
                     detail: "finish the pending Gemini tool exchange before appending a user message",
                 };
             }
+            // Render the whole batch before mutating so a bad message leaves
+            // the conversation unchanged.
+            let new_contents: json[] = [];
             for (let message in messages.items()) {
-                state
-                    .contents
-                    .push({ "role": "user", "parts": [{ "text": _prompt_message_text(message) }] });
+                if (message.role() == ai.MessageRole.System) {
+                    // Gemini has no mid-conversation system role: the honest
+                    // mapping is a user turn carrying the steering note in
+                    // explicit <steering> tags.
+                    let steering: json = {
+                        "role": "user",
+                        "parts": [
+                            {
+                                "text": "<steering>\n" + _prompt_message_text(message) + "\n</steering>",
+                            },
+                        ],
+                    };
+                    new_contents.push(steering);
+                } else {
+                    let content: json = {
+                        "role": "user",
+                        "parts": _user_parts_json(message, provider_name),
+                    };
+                    new_contents.push(content);
+                }
+            }
+            for (let content in new_contents) {
+                state.contents.push(content);
+            }
+            for (let message in messages.items()) {
                 state.history.entries.push(message);
             }
-            state
+            null
         },
         let state: PromptConversation => {
             if (
@@ -446,10 +615,23 @@ function _append_messages(
                     detail: "finish the pending Google prompt-tool exchange before appending a user message",
                 };
             }
+            // Prompt tool mode renders the transcript as text only; media
+            // would be silently dropped, so refuse it before mutating.
+            // Steering (System role) rides along: _prompt_history renders it
+            // as a "system:" transcript line, the mode's honest equivalent.
+            for (let message in messages.items()) {
+                if (_message_has_media(message)) {
+                    throw ai.InvalidRequest {
+                        provider: provider_name,
+                        status_code: null,
+                        detail: "media append is not supported in Google prompt tool mode; use ToolMode.Native",
+                    };
+                }
+            }
             for (let message in messages.items()) {
                 state.history.entries.push(message);
             }
-            state
+            null
         },
         _ => {
             throw ai.InvalidRequest {
@@ -658,15 +840,28 @@ function _step<T>(
     let result = _send_json(request, provider_name);
     _validate_response(result.raw, result.text, provider_name);
     let content = _candidate_content(result.raw, result.text, provider_name);
+    // Provider-neutral display channels: visible text accompanying the outcome
+    // and thought-summary text. thoughtSignature blobs stay in `contents`.
+    let assistant_display = _response_text(result.raw);
+    let reasoning_display = _reasoning_text(result.raw);
     // Preserve all parts, not just calls/text: thoughtSignature is opaque state.
     state.contents.push(content);
+    // The committed assistant turn stays portable: a TextPart carries the
+    // visible text for messages()/export() while the ProviderDataPart keeps
+    // the exact Gemini content for continuation fidelity.
+    let assistant_parts: ai.MessagePart[] = [];
+    match (assistant_display) {
+        let text: string => assistant_parts.push(ai.messages.TextPart { value: text, metadata: {} }),
+        null => {},
+    }
+    assistant_parts.push(ai.messages.ProviderDataPart { provider: provider_name, data: content });
     state
         .history
         .entries
         .push(
             ai.ChatMessage {
                 message_role: ai.MessageRole.Assistant,
-                content: [ai.messages.ProviderDataPart { provider: provider_name, data: content }],
+                content: assistant_parts,
                 metadata: null,
             },
         );
@@ -683,6 +878,8 @@ function _step<T>(
         return ai.ModelStep<T> {
             outcome: _parse_generation_value<T>(result.raw, result.text, provider_name, use_sap),
             metadata: metadata,
+            assistant_text: assistant_display,
+            reasoning_text: reasoning_display,
         };
     }
     //# Finish only from one reserved result call in native output mode
@@ -715,7 +912,12 @@ function _step<T>(
                     ],
                 },
             );
-        return ai.ModelStep<T> { outcome: value, metadata: metadata };
+        return ai.ModelStep<T> {
+            outcome: value,
+            metadata: metadata,
+            assistant_text: assistant_display,
+            reasoning_text: reasoning_display,
+        };
     }
     //# Yield application calls to the runner
     if (calls.length() > 0) {
@@ -729,6 +931,8 @@ function _step<T>(
         return ai.ModelStep<T> {
             outcome: _application_calls(calls, result.text, provider_name),
             metadata: metadata,
+            assistant_text: assistant_display,
+            reasoning_text: reasoning_display,
         };
     }
     //# Hybrid SAP mode accepts final T from ordinary text
@@ -756,7 +960,12 @@ function _step<T>(
         }
         },
     };
-    ai.ModelStep<T> { outcome: value, metadata: metadata }
+    ai.ModelStep<T> {
+        outcome: value,
+        metadata: metadata,
+        assistant_text: assistant_display,
+        reasoning_text: reasoning_display,
+    }
 }
 
 function _calls_for_result(state: Conversation, result_id: string) -> json[] throws never {
@@ -770,7 +979,7 @@ function _results_for_call(
     call_id: string,
 ) -> ai.tools.ToolResult[] throws never {
     results.filter((result: ai.tools.ToolResult) -> bool {
-        result.id == call_id
+        ai.tools.result_id(result) == call_id
     })
 }
 
@@ -812,7 +1021,7 @@ function _submit(
             "functionResponse": {
                 "id": call_id,
                 "name": _normalized_call_name(call),
-                "response": { "result": result.output, "is_error": result.is_error },
+                "response": { "result": ai.tools.result_payload(result), "is_error": ai.tools.result_is_error(result) },
             },
         };
         parts.push(response_part);
@@ -828,8 +1037,8 @@ function _submit(
                             data: {
                                 "id": call_id,
                                 "name": _normalized_call_name(call),
-                                "output": result.output,
-                                "is_error": result.is_error,
+                                "output": ai.tools.result_payload(result),
+                                "is_error": ai.tools.result_is_error(result),
                             },
                         },
                     ],

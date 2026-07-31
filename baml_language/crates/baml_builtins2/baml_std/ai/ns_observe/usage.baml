@@ -18,17 +18,15 @@ function aggregate_usage(responses: ai.ResponseMetadata[]) -> ai.Usage throws ne
     let output = 0;
     let cached = 0;
     let reasoning = 0;
-    let cost = 0.0;
     //# Aggregate usage from every provider response
     for (let meta in responses) {
-        //## Add available token and cost counters
+        //## Add available token counters
         match (meta.usage) {
             let usage: ai.Usage => {
                 input = input + usage.input_tokens;
                 output = output + usage.output_tokens;
                 cached = cached + (usage.cached_input_tokens ?? 0);
                 reasoning = reasoning + (usage.reasoning_tokens ?? 0);
-                cost = cost + (usage.cost_usd ?? 0.0);
             },
             null => {},
         }
@@ -38,6 +36,5 @@ function aggregate_usage(responses: ai.ResponseMetadata[]) -> ai.Usage throws ne
         output_tokens: output,
         cached_input_tokens: cached,
         reasoning_tokens: reasoning,
-        cost_usd: cost,
     }
 }

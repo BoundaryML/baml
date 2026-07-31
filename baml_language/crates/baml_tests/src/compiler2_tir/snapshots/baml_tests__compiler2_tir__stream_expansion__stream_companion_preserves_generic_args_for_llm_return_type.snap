@@ -9,7 +9,8 @@ function user.Dummy$new(lenient: bool) -> ? throws never {
   baml.llm.PrimitiveClient { name: "Dummy", provider: "openai", options: baml.llm.PrimitiveClientOptions { model: "gpt-4", base_url: null, allowed_role_metadata: null, finish_reason_allow_list: null, finish_reason_deny_list: null, supports_streaming: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: null, provider_options: null, media_url_handler: null, headers: map {  }, query_params: map {  }, request_body: map {  } } } : baml.llm.PrimitiveClient
 }
 function user.GetBoxedInt(client: baml.llm.Client = Dummy) -> user.Box<int> throws never {
-  baml.llm.call_llm_function<T>(client, "GetBoxedInt", map {  }) : user.Box<int>
+  ai.internal._run_agent_to_response<Box<int>>(GetBoxedInt$task(client = client)).value : user.Box<int>
+  !! 151..198: unresolved name: GetBoxedInt$task
 }
 function user.GetBoxedInt$render_prompt(client: baml.llm.Client = Dummy) -> baml.llm.PromptAst throws never {
   baml.llm.render_prompt(client, "GetBoxedInt", map {  }) : baml.llm.PromptAst

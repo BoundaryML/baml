@@ -16,28 +16,21 @@ test "guide 02.08: a handoff ai.tools.tool returns control to the application" {
             assert.equal(handoff.call.id, "handoff-1");
             assert.equal(handoff.call.name, "lookup_account");
             assert.equal(baml.json.path_or(handoff.call.args, ".customer_id", ""), "C-1");
-            // The application completes the delegated work, preserves the
-            // provider's call ID, and resumes the exact conversation.
-            let continued = provider
-                .submit(
-                    handoff.conversation,
-                    [
-                        ai
-                            .tools
-                            .ToolResult
-                            .ok(
-                                handoff.call,
-                                { "customer_id": "C-1", "status": "handled externally" },
-                            ),
-                    ],
-                );
-            let resumed = task
-                .run(
-                    runner = ai
-                        .run
-                        .Agent<Resolution>
-                        .new(tools = [handoff_tool], conversation = continued),
-                );
+            // The application completes the delegated work; the session
+            // submits the correlated result and continues the same turn.
+            let session = ai.run.AgentSession<Resolution>.of(task, outcome);
+            let resumed = session.submit_tool_results(
+                [
+                    ai
+                        .tools
+                        .ToolOk
+                        .of(
+                            handoff.call,
+                            { "customer_id": "C-1", "status": "handled externally" },
+                        ),
+                ],
+                runner = ai.run.Agent<Resolution>.new(tools = [handoff_tool]),
+            );
             match (resumed) {
                 let done: ai.Done<Resolution> => {
                     assert.equal(done.value.category, "billing")
@@ -61,15 +54,22 @@ test "guide 02.08: handoffs count toward max_tool_calls_per_step" {
         ],
     );
     let task = ResolveTicketWithTools@task(sample_ticket()).with_provider(provider).with_tools([handoff_tool]);
-    let rejected = false;
-    let _ = task
+    //# A committed step with a rejected batch is an involuntary stop, not a
+    //# throw: the Failed outcome carries the cause and the resumable state.
+    let outcome = task
         .run(
             runner = ai.run.Agent<Resolution>.new(tools = [handoff_tool], max_tool_calls_per_step = 0),
-        ) catch (e) {
-        let limit: ai.ToolCallLimitExceeded => {
-            rejected = limit.actual_tool_calls == 1 && limit.max_tool_calls_per_step == 0;
-            null
+        );
+    let rejected = match (outcome) {
+        let failed: ai.Failed => {
+            match (failed.cause) {
+                let limit: ai.ToolCallLimitExceeded => {
+                    limit.actual_tool_calls == 1 && limit.max_tool_calls_per_step == 0
+                },
+                _ => false,
+            }
         },
+        _ => false,
     };
     assert.is_true(rejected)
 }
@@ -79,15 +79,17 @@ function _ambiguous_handoff_is_rejected(
     tools: ai.tools.ToolInput[],
 ) -> bool {
     let provider = fake_tool_provider(calls);
-    let rejected = false;
-    let _ = ResolveTicketWithTools@task(sample_ticket()).with_provider(provider).with_tools(tools)
-        .run(runner = ai.run.Agent<Resolution>.new(tools = tools)) catch (e) {
-        let failure: ai.Failure => {
-            rejected = failure is ai.InvalidRequest;
-            null
+    let outcome = ResolveTicketWithTools@task(sample_ticket()).with_provider(provider).with_tools(tools)
+        .run(runner = ai.run.Agent<Resolution>.new(tools = tools));
+    match (outcome) {
+        let failed: ai.Failed => {
+            match (failed.cause) {
+                let invalid: ai.InvalidRequest => true,
+                _ => false,
+            }
         },
-    };
-    rejected
+        _ => false,
+    }
 }
 
 test "guide 02.08: handoff steps reject mixed or multiple pending calls" {
@@ -137,12 +139,12 @@ test "guide 02.08: a step budget returns resumable state" {
         .Agent<Resolution>
         .new(
             tools = [search_knowledge],
-            budget = ai.Budget { max_steps: 1, max_cost_usd: null },
+            max_steps = 1,
         );
     let task = ResolveTicketWithTools@task(sample_ticket()).with_provider(fake_tool_provider([one_knowledge_call()])).with_tools([search_knowledge]);
     let outcome = task.run(runner = runner);
     match (outcome) {
-        let stopped: ai.BudgetReached => {
+        let stopped: ai.Stopped => {
             assert.equal(stopped.steps_taken, 1);
             assert.equal(stopped.reason, "max_steps");
         },
@@ -150,7 +152,7 @@ test "guide 02.08: a step budget returns resumable state" {
     }
 }
 
-test "guide 02.08: a cost budget stops between provider steps" {
+test "guide 02.08: a stop_when policy stops between provider steps" {
     let provider = ai.testing.ScriptedToolProvider {
         turns: [ai.tools.ToolCalls { calls: [one_knowledge_call()] }],
         final_output: `
@@ -166,22 +168,27 @@ test "guide 02.08: a cost budget stops between provider steps" {
             output_tokens: 5,
             cached_input_tokens: 0,
             reasoning_tokens: 0,
-            cost_usd: 0.02,
         },
     };
+    //# The application owns spend policy: price the tokens and stop the run
+    //# when the estimate crosses its cap.
+    let price = ai.observe.TokenPrice { input_per_million: 1000.0, output_per_million: 1000.0 };
     let runner = ai
         .run
         .Agent<Resolution>
         .new(
             tools = [search_knowledge],
-            budget = ai.Budget { max_steps: null, max_cost_usd: 0.01 },
+            max_steps = null,
+            stop_when = (context: ai.tools.StepContext) -> bool {
+                ai.observe.estimated_cost(context.usage, price) > 0.01
+            },
         );
     let task = ResolveTicketWithTools@task(sample_ticket()).with_provider(provider).with_tools([search_knowledge]);
     let outcome = task.run(runner = runner);
     match (outcome) {
-        let stopped: ai.BudgetReached => {
+        let stopped: ai.Stopped => {
             assert.equal(stopped.steps_taken, 1);
-            assert.equal(stopped.reason, "max_cost_usd");
+            assert.equal(stopped.reason, "stop_when");
         },
         _ => assert.is_true(false),
     }
@@ -195,12 +202,12 @@ testset "integ-test-guide-02-budgets" {
             .Agent<Resolution>
             .new(
                 tools = [search_knowledge],
-                budget = ai.Budget { max_steps: 1, max_cost_usd: null },
+                max_steps = 1,
             );
         let task = ToolInstructions@task(`Call search_knowledge with query "duplicate charge" before returning a final resolution.`).with_provider(provider).with_tools([search_knowledge]);
         let outcome = task.run(runner = runner);
         match (outcome) {
-            let stopped: ai.BudgetReached => {
+            let stopped: ai.Stopped => {
                 log.info(
                     "live step budget "
                         + { "steps": stopped.steps_taken, "reason": stopped.reason }.to_string(),
@@ -212,25 +219,31 @@ testset "integ-test-guide-02-budgets" {
         }
     }
 
-    test "guide 02.08 live OpenAI: cost budget stops after metered real provider usage" {
-        let provider = LiveCostedToolProvider { inner: live_openai(), cost_per_step_usd: 0.02 };
+    test "guide 02.08 live OpenAI: stop_when policy stops after metered real provider usage" {
+        let provider = live_openai();
+        //# Any real step reports nonzero tokens, so this policy trips after
+        //# exactly one live provider turn.
+        let price = ai.observe.TokenPrice { input_per_million: 1.0, output_per_million: 2.0 };
         let runner = ai
             .run
             .Agent<Resolution>
             .new(
                 tools = [search_knowledge],
-                budget = ai.Budget { max_steps: null, max_cost_usd: 0.01 },
+                max_steps = null,
+                stop_when = (context: ai.tools.StepContext) -> bool {
+                    ai.observe.estimated_cost(context.usage, price) > 0.0
+                },
             );
         let task = ToolInstructions@task(`Call search_knowledge with query "duplicate charge" before returning a final resolution.`).with_provider(provider).with_tools([search_knowledge]);
         let outcome = task.run(runner = runner);
         match (outcome) {
-            let stopped: ai.BudgetReached => {
+            let stopped: ai.Stopped => {
                 log.info(
-                    "live cost budget "
+                    "live stop_when "
                         + { "steps": stopped.steps_taken, "reason": stopped.reason }.to_string(),
                 );
                 assert.equal(stopped.steps_taken, 1);
-                assert.equal(stopped.reason, "max_cost_usd");
+                assert.equal(stopped.reason, "stop_when");
             },
             _ => assert.is_true(false),
         }

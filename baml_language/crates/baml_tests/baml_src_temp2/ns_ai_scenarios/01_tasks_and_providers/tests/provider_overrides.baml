@@ -23,11 +23,11 @@ testset "integ-test-guide-01-provider-overrides" {
     assert.equal(original.provider_name(), "openai")
     assert.equal(overridden.provider_name(), "anthropic")
     assert.contains(overridden.prompt.text(), "Charged twice")
-    let response = ai.internal._response_from_done(
-      ai.internal._require_done(
+    let response = (
+      done_or_fail(
         overridden.run(runner = ai.run.Agent<Resolution>.new()),
-      ),
-    );
+      )
+    ).response();
     log.info("live provider override " + {
       "before": original.provider_name(),
       "after": overridden.provider_name(),

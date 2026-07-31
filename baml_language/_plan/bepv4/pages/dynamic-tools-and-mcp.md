@@ -33,7 +33,7 @@ class Resolution {
 }
 
 function McpBootstrap(order_id: string) -> Resolution {
-  provider: "openai-responses/gpt-5.6-luna"
+  provider: fast_model()
   prompt: `
     Find the status of order ${order_id}. You must first call add_mcp_server
     with server "orders". After that succeeds, call the newly available
@@ -125,7 +125,6 @@ let registry = ai.tools.ToolRegistry.new([add_mcp_server_tool(broker)]);
 
 let outcome = McpBootstrap@task("O-42").run(
   runner = ai.run.Agent<Resolution>.new(
-    tools = [],
     tool_registry = registry,
     prepare_step = (context) -> {
       ai.tools.StepPlan {
@@ -142,8 +141,8 @@ let outcome = McpBootstrap@task("O-42").run(
 
 ```mermaid
 flowchart TD
-  agent["Agent starts with add_mcp_server"] --> budget{"Budget remains?"}
-  budget -->|yes| prepare["prepare_step: broker.activate_pending"]
+  agent["Agent starts with add_mcp_server"] --> limit{"Steps remain?"}
+  limit -->|yes| prepare["prepare_step: broker.activate_pending"]
   prepare --> roster{"Pending server?"}
   roster -->|yes| discover["Discover tool schemas"]
   discover --> registry["Replace the ToolRegistry roster"]
@@ -154,9 +153,9 @@ flowchart TD
   connect --> submit["Submit bootstrap result"]
   result -->|mcp__orders__lookup_order| mcp["Call the MCP-backed handler"]
   mcp --> submit
-  submit --> budget
+  submit --> limit
   result -->|final value| done["Done<Resolution>"]
-  budget -->|no| stopped["BudgetReached"]
+  limit -->|no| stopped["Stopped"]
 ```
 
 ### Illustrative output
@@ -169,9 +168,15 @@ flowchart TD
 [INFO] Done: Resolution { summary: "Order checked through MCP", ... }
 ```
 
-The registry is authoritative for this run. A tool added during one step is
-offered on the next step. Tool names are unique, and replacement is explicit:
-a non-null `StepPlan.tools` is the complete next roster.
+`tool_registry` is deliberately LIVE SHARED STATE — that is its reason to
+exist. The loop re-reads the registry before every step, so a tool added
+during one step is offered on the next; `StepPlan` roster changes apply to
+the registry and remain visible to the caller after the run. This is the
+documented contrast with the `tools` list, which is a run-scoped value
+(nothing the loop does to it is visible outside the run). The two are
+mutually exclusive supply points: passing both `tools` and `tool_registry`
+is an `ai.InvalidRequest`. Tool names are unique, and replacement is
+explicit: a non-null `StepPlan.tools` is the complete next roster.
 
 The generated handlers retain the connection they call:
 `mcp__orders__lookup_order` is `connection.lookup_order` bound to the broker's
@@ -206,14 +211,14 @@ let outcome = ResolveTicketWithTools@task(sample_ticket()).run(
 flowchart TD
   connect["Connect before run"] --> discover["connection.tools() discovers schemas"]
   discover --> registry["Seed the ToolRegistry with add"]
-  registry --> budget{"Agent budget remains?"}
-  budget -->|yes| model["Provider step with complete roster"]
+  registry --> limit{"Steps remain?"}
+  limit -->|yes| model["Provider step with complete roster"]
   model --> result{"Final value or tool calls?"}
   result -->|MCP tool calls| mcp["Call the MCP-backed handler"]
   mcp --> submit["Submit correlated results"]
-  submit --> budget
+  submit --> limit
   result -->|final value| done["Done<Resolution>"]
-  budget -->|no| stopped["BudgetReached"]
+  limit -->|no| stopped["Stopped"]
 ```
 
 ### Illustrative output
@@ -226,5 +231,8 @@ flowchart TD
 
 Use this version when the model does not need to decide whether or when to
 add the server. `ResolveTicketWithTools` is the tool-using function from
-[Agents and tools](agents-and-tools.md); when a `tool_registry` is passed, it
-is authoritative and the function's declared tools are not offered.
+[Agents and tools](agents-and-tools.md); when a `tool_registry` is passed,
+the Agent seeds it with the function's declared tools it does not already
+name, so the declared roster and the MCP tools are both offered — a
+same-named registry tool wins. Pass `replace_tools = true` to make the
+registry the whole roster and leave the declared tools out.

@@ -23,9 +23,9 @@ function _prompt_turn_task<T>(
     provider: root.openai.OpenAIProvider,
     state: PromptConversation,
     output_suffix: string,
-) -> ai.Task<T> throws never {
+) -> ai.Task<T> throws ai.InvalidRequest {
     let prompt = state.recipe.render_with_output_format(provider, reflect.type_of<T>(), output_suffix);
-    let recipe = ai._prompt_recipe(
+    let recipe = ai.PromptRenderRecipe.of(
         (ctx: baml.llm.Context) -> baml.llm.PromptAst {
             prompt
         },
@@ -155,7 +155,12 @@ function _prompt_step<T>(
     }
     if (tools.length() == 0) {
         let response = _prompt_turn<T>(provider, state, "");
-        return ai.ModelStep<T> { outcome: response.value, metadata: response.metadata };
+        return ai.ModelStep<T> {
+            outcome: response.value,
+            metadata: response.metadata,
+            assistant_text: _response_output_text(response.metadata.raw),
+            reasoning_text: _response_reasoning_text(response.metadata.raw),
+        };
     }
     let response = _prompt_turn<T | ai.tools.ToolCalls>(provider, state, _prompt_tool_output_suffix(tools));
     match (response.value) {
@@ -175,10 +180,20 @@ function _prompt_step<T>(
                 }
                 unique.push(id);
             }
-            ai.ModelStep<T> { outcome: calls, metadata: response.metadata }
+            ai.ModelStep<T> {
+                outcome: calls,
+                metadata: response.metadata,
+                assistant_text: _response_output_text(response.metadata.raw),
+                reasoning_text: _response_reasoning_text(response.metadata.raw),
+            }
         },
         let value: T => {
-            ai.ModelStep<T> { outcome: value, metadata: response.metadata }
+            ai.ModelStep<T> {
+                outcome: value,
+                metadata: response.metadata,
+                assistant_text: _response_output_text(response.metadata.raw),
+                reasoning_text: _response_reasoning_text(response.metadata.raw),
+            }
         },
     }
 }
@@ -207,7 +222,7 @@ function _prompt_submit(
     }
     let ordered = _correlate_tool_results(state.pending_call_ids, results);
     let wire_results = ordered.map((result: ai.tools.ToolResult) -> json {
-        { "id": result.id, "output": result.output, "is_error": result.is_error }
+        { "id": ai.tools.result_id(result), "output": ai.tools.result_payload(result), "is_error": ai.tools.result_is_error(result) }
     });
     let content = "Tool results:\n" + baml.json.stringify(wire_results);
     state.input.push({ "role": "user", "content": content });

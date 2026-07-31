@@ -3,7 +3,7 @@
 An LLM function can run directly or produce an unexecuted task. Both forms use
 the Agent lifecycle for ordinary model work.
 
-## The two entry points
+## The three entry points
 
 ```baml
 function ResolveTicket(ticket: SupportTicket) -> Resolution {
@@ -16,11 +16,23 @@ function ResolveTicket(ticket: SupportTicket) -> Resolution {
   `
 }
 
-let direct: Resolution = ResolveTicket(sample_ticket())
+let direct: Resolution = ResolveTicket(sample_ticket());
 
 let task: ai.Task<Resolution> =
-  ResolveTicket@task(sample_ticket())
+  ResolveTicket@task(sample_ticket());
+
+let completed: Resolution = task.complete();
+
+let outcome = task.run(runner = ai.run.Agent<Resolution>.new())
 ```
+
+- The direct generated call returns `T` and treats anything else as an error.
+- `task.complete(runner?)` returns `T` with configuration — use it after
+  `with_provider`/`with_tools`, or with a configured Agent runner. It throws
+  `ai.IncompleteRun` when the run stops at a policy stop, handoff, or
+  interruption.
+- `task.run(runner)` returns the full five-outcome union:
+  `ai.Done<T> | ai.Stopped | ai.Handoff | ai.Interrupted | ai.Failed`.
 
 Creating a task does not make a provider request. It binds:
 
@@ -31,16 +43,21 @@ Creating a task does not make a provider request. It binds:
 - the declared tools.
 
 `Task.with_provider(...)` and `Task.with_tools(...)` return a modified task.
-`Task.run(runner = ...)` consumes the task using the selected lifecycle.
+`Task.run(runner = ...)` consumes the task using the selected lifecycle and
+is always a fresh start: tasks are stateless recipes, so a task can be run or
+completed any number of times. Every continuation of an existing run — a new
+user turn, a resume, or a tool-result submission — goes through
+`ai.run.AgentSession<T>` instead.
 
 ## Ordinary execution is Agent
 
 ```baml
 let outcome:
     ai.Done<Resolution>
-    | ai.BudgetReached
+    | ai.Stopped
     | ai.Handoff
-    | ai.Interrupted =
+    | ai.Interrupted
+    | ai.Failed =
   task.run(
     runner = ai.run.Agent<Resolution>.new(),
   )
@@ -50,6 +67,13 @@ The Agent selects the task's `ai.AgentProvider`, calls `begin`, and repeatedly
 calls `step`. If a step returns `ai.tools.ToolCalls`, the Agent executes the
 application functions and passes their correlated results to `submit`. If a
 step returns `Resolution`, the run returns `Done<Resolution>`.
+
+A classified failure after the run has committed progress — at least one
+completed provider step, or a continuation's entry append or submit — returns
+`ai.Failed { cause, conversation, steps_taken, usage }` at the last committed
+boundary. A failure before any progress still throws, having changed
+nothing, so ordinary catch patterns and step-level `ai.retry` semantics are
+unchanged.
 
 A task with no application tools uses this same state machine. It will usually
 finish after its first `step`; that is an optimization of the same protocol,
@@ -134,81 +158,85 @@ the next committed boundary returns:
 class Interrupted {
   conversation: ai.Conversation,
   steps_taken: int,
+  usage: ai.Usage,
   reason: string, // currently "cancelled"
 }
 ```
 
-Use a fresh, uncancelled token when resuming `Interrupted.conversation`;
-`CancelToken` is one-shot.
+Resume through a session with a fresh, uncancelled token — `CancelToken` is
+one-shot:
 
-### A limit violation is a resumable failure
+```baml
+let resumed = ai.run.AgentSession<Resolution>
+  .of(task, outcome)
+  .resume(
+    runner = ai.run.Agent<Resolution>.new(cancel = baml.spawn.CancelToken.new()),
+  )
+```
 
-An oversized batch throws `ai.ToolCallLimitExceeded`, a non-transient
-`ai.Failure` with `Effects.None`. It includes the configured and actual
-counts, the exact pending `ToolCalls`, the provider-owned `Conversation`, and
-`steps_taken`.
+### A limit violation is a Failed outcome
 
-This differs from `BudgetReached`:
+An oversized batch is returned as
+`ai.Failed { cause: ai.ToolCallLimitExceeded, ... }` rather than thrown: the
+provider step committed, so the run stops at the committed boundary and
+carries the fault. The cause includes the configured and actual counts and
+the exact pending `ToolCalls`; the outcome carries the provider-owned
+`Conversation`, `steps_taken`, and cumulative `usage`.
+
+This differs from `Stopped`:
 
 | Condition | Representation | Continuation state |
 | --- | --- | --- |
-| Step or cost budget reached between steps | `BudgetReached` outcome | Conversation has no newly rejected tool batch |
-| Too many calls returned by one step | `ToolCallLimitExceeded` failure | Conversation and exact pending calls are retained |
+| `max_steps` limit, `stop_when` policy, or `StepPlan` stop between steps | `Stopped` outcome (with the matching `reason`) | Conversation has no newly rejected tool batch |
+| Too many calls returned by one step | `ai.Failed` outcome with `ToolCallLimitExceeded` cause | Conversation and exact pending calls are retained |
 
-To resume a limit failure, the caller submits one correlated
-`ToolResult`—success or error—for every retained call, then constructs an
-Agent with the returned conversation. It must not simply call `step` again
-while the retained calls are unresolved. See
+To continue after a limit violation, pair the task and outcome in a session,
+build one correlated result — `ai.tools.ToolOk.of(call, output)` or
+`ai.tools.ToolError.of(call, message)` — for every retained call, and call
+`session.submit_tool_results(results, runner?)`. The session validates that
+each pending call receives exactly one result before the next model step. See
 [Approvals, limits, and handoffs](approvals-limits-and-handoffs.md) for the
 complete example.
 
 ## Direct-call lowering
 
-Conceptually, the internal lowering is:
+Conceptually, the direct generated call and `task.complete` share one
+unwrap:
 
 ```baml
-function _run_agent_to_response<T>(
+function _complete<T>(
   task: ai.Task<T>,
-) -> ai.ResponseWithMetadata<T>
-    throws ai.Failure | baml.errors.UnknownError {
+) -> T throws ai.IncompleteRun | ai.Failure | baml.errors.UnknownError | baml.errors.Unsupported {
   let outcome = task.run(runner = ai.run.Agent<T>.new());
   match (outcome) {
-    let done: ai.Done<T> => ai.ResponseWithMetadata<T> {
-      value: done.value,
-      metadata: done.metadata,
-      conversation: done.conversation,
-    },
-    let stopped: ai.BudgetReached => throw baml.errors.UnknownError {
-      data: {
-        "steps_taken": stopped.steps_taken,
-        "reason": stopped.reason,
-      },
-      message: ["default Agent stopped before producing the task value"],
-    },
-    let handoff: ai.Handoff => throw baml.errors.UnknownError {
-      data: {
-        "tool": handoff.call.name,
-        "args": handoff.call.args,
-        "call_id": handoff.call.id,
-        "steps_taken": handoff.steps_taken,
-      },
-      message: ["default Agent reached a handoff; run the task with an explicit Agent"],
-    },
-    let interrupted: ai.Interrupted => throw baml.errors.UnknownError {
-      data: {
-        "steps_taken": interrupted.steps_taken,
-        "reason": interrupted.reason,
-      },
-      message: ["default Agent was interrupted before producing the task value"],
+    let done: ai.Done<T> => done.value,
+    let stopped: ai.Stopped => throw ai.IncompleteRun { outcome: stopped },
+    let handoff: ai.Handoff => throw ai.IncompleteRun { outcome: handoff },
+    let interrupted: ai.Interrupted => throw ai.IncompleteRun { outcome: interrupted },
+    let failed: ai.Failed => match (failed.cause) {
+      let failure: ai.Failure => throw failure,
+      let unknown: baml.errors.UnknownError => throw unknown,
     },
   }
 }
 ```
 
-The generated `ResolveTicket(...)` call then projects `.value`. This is
-compiler/runtime lowering, not a public helper applications should call. It
-explains why a direct generated call returns `Resolution`, while an explicit
-Agent returns the full outcome union and retains its conversation.
+The three stop states become `ai.IncompleteRun { outcome }` — a lossless
+channel conversion, not a fifth outcome. The carried outcome still holds the
+committed conversation (`incomplete.conversation()` and
+`incomplete.steps_taken()` read it uniformly across the three variants), so a
+catch site can continue via
+`ai.run.AgentSession.of(task, incomplete.outcome)`. A `Failed` outcome
+rethrows its cause: the caller demanded completion, so a fault is a fault.
+This explains why a direct generated call returns `Resolution`, while an
+explicit Agent returns the full outcome union and retains its conversation.
+
+`ai.IncompleteRun` deliberately does NOT implement `ai.Failure`. A demanded
+completion that stopped at a resumable boundary is control flow, not a
+fault, so it is its own term in the `throws` union — `throws
+ai.IncompleteRun | ai.Failure | baml.errors.UnknownError` — and a generic
+`ai.Failure` catch arm never silently absorbs it. Catch sites are forced to
+decide what a stop means for them.
 
 ## Keep metadata
 
@@ -225,15 +253,18 @@ match (outcome) {
     log.info(done.metadata.usage);
     log.info(done.value);
   },
-  let stopped: ai.BudgetReached => log.info(stopped.reason),
+  let stopped: ai.Stopped => log.info(stopped.reason),
   let handoff: ai.Handoff => log.info(handoff.call.name),
   let interrupted: ai.Interrupted => log.info(interrupted.reason),
+  let failed: ai.Failed => log.info(failed.cause),
 }
 ```
 
-The implementation uses internal unwrapping helpers in scenario code where a
-scenario intentionally expects `Done`. Public application code should still
-handle all outcomes that are normal for its domain.
+When only the final value matters, call `task.complete(runner?)` — or
+`session.complete(message, runner?)` on a continuation — and catch
+`ai.IncompleteRun` where a stop is exceptional. Public application code that
+treats stops, handoffs, or resumable failures as normal control flow should
+match the full outcome union instead.
 
 ## Override a provider
 
@@ -270,7 +301,7 @@ examples.
 | Model name, credentials, base URL, or supported wire options | Configure a provider value |
 | Authentication, request wire format, response parsing, or exact conversation state | Implement a provider adapter |
 | Normal model turns and application tools | `ai.AgentProvider` plus `ai.run.Agent` |
-| Tool-call count, approval, budgets, and handoff execution policy | Configure `ai.run.Agent` |
+| Tool-call count, approval, step limits (`max_steps`, `stop_when`), and handoff execution policy | Configure `ai.run.Agent` |
 | Partial output | `ai.StreamingProvider` plus `ai.run.Stream` |
 | Background or batch submission | `ai.jobs` capability plus the matching runner |
 | Realtime audio and events | `ai.realtime` |
@@ -284,15 +315,20 @@ promise normal model execution. A normal provider also implements
 ## Result map
 
 ```text
-direct generated call → T
-Agent                → Done<T> | BudgetReached | Handoff | Interrupted
-Stream               → baml.llm.Stream<TPartial, T>
-Background           → ai.jobs.Job<T>
-Batch                → ai.jobs.Batch<T>
-Transcribe           → string or ResponseWithMetadata<string>
-VoiceAgent           → null
-Harness              → ai.harness.HarnessRun<T>
+direct generated call  → T
+task.complete(runner?) → T (throws ai.IncompleteRun on a stop)
+Agent                  → Done<T> | Stopped | Handoff | Interrupted | Failed
+Stream                 → baml.llm.Stream<TPartial, T>
+Background             → ai.jobs.Job<T>
+Batch                  → ai.jobs.Batch<T>
+Transcribe             → string or ResponseWithMetadata<string>
+VoiceAgent             → null
+Harness                → ai.harness.HarnessRun<T>
 ```
+
+Continuations never re-enter this map through `task.run` — they go through
+`ai.run.AgentSession<T>`, whose `send`, `resume`, and `submit_tool_results`
+return the same five-outcome union and whose `complete` returns `T`.
 
 The runnable scenario is:
 

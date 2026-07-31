@@ -4,17 +4,30 @@
 interface Conversation {
   function provider(self) -> Provider throws never
   function messages(self) -> Messages throws never
-  // Concrete providers record a versioned nominal + structural fingerprint
-  // for the Task<T> they were created for. Application-defined conversations
-  // may return null.
+  // Concrete providers record a versioned nominal + structural tag for the
+  // Task<T> they were created for (`ai.output_fingerprint<T>()`), which lets
+  // the runtime refuse resuming a conversation under a task with a
+  // different output type. Application-defined conversations may return
+  // null — the default — which SKIPS that guard, exactly like
+  // pending_calls' null convention. Opt in for the protection; null never
+  // fails at runtime.
   function output_type_fingerprint(self) -> string? throws never { null }
 
+  // The tool calls awaiting correlated results, when the provider reports
+  // them. Null means "not reported": session state guards and strict
+  // correlation checks are skipped for such providers.
+  function pending_calls(self) -> ai.tools.ToolCall[]? throws never { null }
+
   // Continue this exact provider-owned state with fresh application messages.
-  // The append is local; the next Agent.run performs the model request.
+  // MUTATES this conversation in place — use `session.fork()` to branch
+  // before appending. The append is local; the next Agent.run performs the
+  // model request. Statement-shaped (returns null) because every
+  // implementation mutates the receiver; portable value types like
+  // MessageHistory stay copy-on-write instead.
   function append_messages(
     self,
     messages: Messages,
-  ) -> Conversation
+  ) -> null
       throws ai.Failure | baml.errors.UnknownError | baml.errors.Unsupported {
     match (self.provider()) {
       let capability: ConversationAppendProvider => {
@@ -29,7 +42,7 @@ interface Conversation {
   function append_message(
     self,
     message: Message,
-  ) -> Conversation
+  ) -> null
       throws ai.Failure | baml.errors.UnknownError | baml.errors.Unsupported {
     self.append_messages(MessageHistory { entries: [message] })
   }

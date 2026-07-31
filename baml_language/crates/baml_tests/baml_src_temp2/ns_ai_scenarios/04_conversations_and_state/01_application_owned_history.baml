@@ -13,10 +13,7 @@ function application_owned_history() -> ConversationProbe {
                         }
                 `,
             ));
-    let result = ai
-        .internal
-        ._require_done(task.run(runner = ai.run.Agent<ConversationProbe>.new()))
-        .value;
+    let result = task.complete(runner = ai.run.Agent<ConversationProbe>.new());
     log.info(
         {
             "original_messages": original.entries.length(),

@@ -2,7 +2,6 @@ class EffectfulStepFailure {
 }
 
 implements ai.Failure for EffectfulStepFailure {
-  function is_transient(self) -> bool throws never { true }
   function effects(self) -> ai.Effects throws never { ai.Effects.Committed }
 }
 
@@ -17,7 +16,7 @@ class EffectfulProvider {
         }
     }
     implements ai.AgentProvider {
-        function begin<T>(self, task: ai.Task<T>) -> ai.Conversation throws never {
+        function begin<T>(self, task: ai.Task<T>) -> ai.Conversation throws ai.Failure {
             self.inner.begin<T>(task.with_provider(self.inner))
         }
 

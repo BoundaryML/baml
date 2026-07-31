@@ -40,7 +40,7 @@ test "guide 02.03: Agent rejects an oversized tool batch before every applicatio
     let provider = fake_tool_provider(calls);
     let task = ResolveTicketWithTools@task(sample_ticket()).with_provider(provider).with_tools([tool]);
     let caught = false;
-    let _ = task
+    let outcome = task
         .run(
             runner = ai
                 .run
@@ -58,8 +58,13 @@ test "guide 02.03: Agent rejects an oversized tool batch before every applicatio
                     },
                     observers = [observer],
                 ),
-        ) catch (e) {
-        let limit: ai.ToolCallLimitExceeded => {
+        );
+    match (outcome) {
+        let failed: ai.Failed => {
+            let limit = match (failed.cause) {
+                let value: ai.ToolCallLimitExceeded => value,
+                _ => baml.sys.panic("expected ToolCallLimitExceeded as the Failed cause"),
+            };
             caught = true;
             assert.equal(limit.provider, "fake-tools");
             assert.equal(limit.max_tool_calls_per_step, 1);
@@ -74,23 +79,19 @@ test "guide 02.03: Agent rejects an oversized tool batch before every applicatio
                 );
             assert.equal(limit.effects(), ai.Effects.None);
 
-            // The failed policy check retains the provider's pending calls and
-            // conversation. Reject each call by its original correlation ID,
-            // submit the results, then resume without replaying the model step.
-            let continued = provider
-                .submit(
-                    limit.conversation,
-                    limit.calls.calls.map((call) -> {
-                        ai.tools.ToolResult.error(call, "parallel calls are disabled")
-                    }),
-                );
-            let resumed = task
-                .run(
-                    runner = ai
-                        .run
-                        .Agent<Resolution>
-                        .new(tools = [tool], max_tool_calls_per_step = 1, conversation = continued),
-                );
+            // The Failed outcome retains the provider's pending calls and
+            // conversation. Reject each call by its original correlation ID
+            // through the session, then continue without replaying the step.
+            let session = ai.run.AgentSession<Resolution>.of(task, outcome);
+            let resumed = session.submit_tool_results(
+                limit.calls.calls.map((call) -> {
+                    ai.tools.ToolError.of(call, "parallel calls are disabled")
+                }),
+                runner = ai
+                    .run
+                    .Agent<Resolution>
+                    .new(tools = [tool], max_tool_calls_per_step = 1),
+            );
             match (resumed) {
                 let done: ai.Done<Resolution> => {
                     assert.equal(done.value.summary, "Resolved with tools")
@@ -99,6 +100,7 @@ test "guide 02.03: Agent rejects an oversized tool batch before every applicatio
             }
             null
         },
+        _ => assert.is_true(false),
     };
 
     assert.is_true(caught);
@@ -170,15 +172,19 @@ function _invalid_tool_calls_are_rejected(calls: ai.tools.ToolCall[]) -> bool {
         `,
         usage_per_step: null,
     };
-    let rejected = false;
-    let _ = ResolveTicketWithTools@task(sample_ticket()).with_provider(provider).with_tools([search_knowledge, lookup_account])
-        .run(runner = ai.run.Agent<Resolution>.new(tools = [search_knowledge, lookup_account])) catch (e) {
-        let failure: ai.Failure => {
-            rejected = failure is ai.InvalidRequest;
-            null
+    //# A committed step delivering a malformed batch is an involuntary
+    //# stop: Failed carries the classified cause
+    let outcome = ResolveTicketWithTools@task(sample_ticket()).with_provider(provider).with_tools([search_knowledge, lookup_account])
+        .run(runner = ai.run.Agent<Resolution>.new(tools = [search_knowledge, lookup_account]));
+    match (outcome) {
+        let failed: ai.Failed => {
+            match (failed.cause) {
+                let invalid: ai.InvalidRequest => true,
+                _ => false,
+            }
         },
-    };
-    rejected
+        _ => false,
+    }
 }
 
 test "guide 02.03: malformed provider tool-call envelopes fail before dispatch" {

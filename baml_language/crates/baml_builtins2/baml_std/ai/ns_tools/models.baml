@@ -2,7 +2,7 @@ class Tool {
     name: string,
     description: string,
     input_schema: json,
-    handler: baml.AnyFunction<Returns = unknown, Throws = ai.Failure>,
+    handler: baml.AnyFunction<Returns = unknown>,
     handoff: bool,
 
     function as_handoff(self) -> Tool throws never {
@@ -19,7 +19,7 @@ class Tool {
 // Public tool inputs accept ordinary BAML functions. Tool is the normalized
 // representation used after configuration crosses into the runner/provider
 // machinery.
-type ToolInput = Tool | baml.AnyFunction<Returns = unknown, Throws = ai.Failure>;
+type ToolInput = Tool | baml.AnyFunction<Returns = unknown>;
 
 function _coarse_schema(type_name: string) -> json throws never {
     let schema: json = { "type": type_name };
@@ -67,7 +67,7 @@ function _schema_for_function(handler: baml.AnyFunction) -> json throws never {
 // differs from the underlying function declaration. reflect.call_any performs
 // checked named argument dispatch, including ordinary BAML default arguments.
 function tool(
-    handler: baml.AnyFunction<Returns = unknown, Throws = ai.Failure>,
+    handler: baml.AnyFunction<Returns = unknown>,
     name: string? = null,
     description: string? = null,
 ) -> Tool throws never {
@@ -84,7 +84,7 @@ function tool(
 function normalize_tool(input: ToolInput) -> Tool throws never {
     match (input) {
         let existing: Tool => existing,
-        let handler: baml.AnyFunction<Returns = unknown, Throws = ai.Failure> => {
+        let handler: baml.AnyFunction<Returns = unknown> => {
             tool(handler)
         },
     }
@@ -96,9 +96,11 @@ function normalize_tools(inputs: ToolInput[]) -> Tool[] throws never {
     })
 }
 
-// Arrays are invariant, so normalized internals widen element-by-element when
-// they need to re-enter a public ToolInput boundary.
-function _tool_inputs_from_tools(tools: Tool[]) -> ToolInput[] throws never {
+/// Widens a normalized `Tool[]` back to the public `ToolInput[]` boundary.
+/// Arrays are invariant, so the widening is element-by-element. Useful when
+/// handing a task's tools to another lifecycle, e.g.
+/// `ai.realtime.with_automatic_tools(session, ai.tools.as_inputs(task.tools))`.
+function as_inputs(tools: Tool[]) -> ToolInput[] throws never {
     tools.map((tool: Tool) -> ToolInput {
         tool
     })
@@ -110,7 +112,7 @@ function tool_from_json_schema(
     name: string,
     description: string,
     input_schema: json,
-    handler: baml.AnyFunction<Returns = unknown, Throws = ai.Failure>,
+    handler: baml.AnyFunction<Returns = unknown>,
 ) -> Tool throws never {
     Tool {
         name: name,
@@ -135,17 +137,92 @@ class ToolCall {
     args: json,
 }
 
-class ToolResult {
+/// The correlated outcome of one application tool call.
+///
+/// A ToolResult is conversation DATA, not program control flow. Providers
+/// require every ToolCall id they emit to receive exactly one correlated
+/// result — success or failure — because the model is the party that recovers
+/// from a failed tool: it reads what happened and retries, picks another
+/// tool, or reports the problem. That is why a failed tool is a value that
+/// flows back into the conversation, not an error in the application's
+/// `throws` channel. (Tool functions themselves fail by throwing
+/// `ai.Failure`; `invoke_tool` is the total boundary that reifies the throw.)
+///
+/// The two cases are a union rather than one class with an `is_error` flag,
+/// following the stdlib idiom for multi-case outcomes — compare the Agent's
+/// `Done | Stopped | Handoff | Interrupted` — so consumers match on the
+/// variant instead of branching on a boolean and decoding a magic
+/// `{"error": ...}` payload. Provider adapters map the variants onto each
+/// wire format at the serialization edge (e.g. Anthropic's `is_error`
+/// boolean, OpenAI's stringified function output); `result_payload` is the
+/// shared canonical JSON they submit.
+type ToolResult = ToolOk | ToolError
+
+/// A tool ran to completion; `output` is its JSON-encoded return value,
+/// correlated to the requesting call by `id`.
+class ToolOk {
     id: string,
     output: json,
-    is_error: bool,
 
-    function ok(call: ToolCall, output: json) -> ToolResult throws never {
-        ToolResult { id: call.id, output: output, is_error: false }
+    /// Correlate a successful output with the provider call that requested it.
+    function of(call: ToolCall, output: json) -> ToolOk throws never {
+        ToolOk { id: call.id, output: output }
     }
+}
 
-    function error(call: ToolCall, message: string) -> ToolResult throws never {
-        ToolResult { id: call.id, output: { "error": message }, is_error: true }
+/// A tool could not produce an output. `message` is model-facing text: it is
+/// submitted into the conversation so the model can self-correct (fix its
+/// arguments, choose another tool, or report failure). `cause` carries the
+/// TYPED original error for the application channel — `after_tool_call`
+/// callbacks and observers match on it instead of parsing the rendered
+/// message. It replaces the former `is_error: true` + `output: {"error":
+/// ...}` convention with typed fields.
+class ToolError {
+    id: string,
+    message: string,
+    cause: (ai.Failure | baml.errors.UnknownError)?,
+
+    /// Correlate a failure message with the provider call that requested it.
+    function of(
+        call: ToolCall,
+        message: string,
+        cause: (ai.Failure | baml.errors.UnknownError)? = null,
+    ) -> ToolError throws never {
+        ToolError { id: call.id, message: message, cause: cause }
+    }
+}
+
+/// The provider correlation id of either variant. Field access through a
+/// union requires a shared interface, so plumbing that only needs the id
+/// uses this helper instead of matching at every site.
+function result_id(result: ToolResult) -> string throws never {
+    match (result) {
+        let ok: ToolOk => ok.id,
+        let failed: ToolError => failed.id,
+    }
+}
+
+/// True for the `ToolError` variant. Prefer matching when you need the
+/// variant's fields; this exists for wire formats and assertions that only
+/// need the flag.
+function result_is_error(result: ToolResult) -> bool throws never {
+    match (result) {
+        let failed: ToolError => true,
+        _ => false,
+    }
+}
+
+/// The JSON payload a provider adapter submits for either variant: the
+/// output for `ToolOk`, the canonical `{"error": message}` object for
+/// `ToolError`. Every adapter shares this shape so the model sees the same
+/// error convention regardless of provider.
+function result_payload(result: ToolResult) -> json throws never {
+    match (result) {
+        let ok: ToolOk => ok.output,
+        let failed: ToolError => {
+            let payload: json = { "error": failed.message };
+            payload
+        },
     }
 }
 
@@ -153,33 +230,67 @@ function invoke_tool(tool: Tool, call: ToolCall) -> ToolResult throws never {
     //# Require a JSON object so named arguments can be checked by call_any
     let args = baml.json.from_json<map<string, unknown>>(call.args) catch (e) {
         _ => {
-            return ToolResult.error(call, "tool arguments must be an object");
+            return ToolError.of(call, "tool arguments must be an object");
         },
     };
-    //# Invoke the original BAML function with signature-aware named arguments
-    let output = reflect.call_any(tool.handler, args) catch (e) {
+    //# Invoke the original BAML function with signature-aware named
+    //# arguments. Handlers may be ordinary fallible functions — including
+    //# LLM functions (agent-as-tool) — so the boundary catches EVERYTHING:
+    //# the model sees a rendered message, and the typed original rides in
+    //# `cause` for the application channel.
+    let output = reflect.call_any(tool.handler, args) catch_all (e) {
         let invalid: reflect.InvalidArgumentError => {
-            return ToolResult
-                .error(
+            return ToolError
+                .of(
                     call,
                     `invalid arguments: expected ${invalid.expected}, received ${invalid.got}`,
                 );
         },
         let failure: ai.Failure => {
-            return ToolResult.error(call, `tool failed: ${failure}`);
+            return ToolError.of(call, `tool failed: ${failure}`, cause = failure);
+        },
+        let unknown: baml.errors.UnknownError => {
+            return ToolError.of(call, `tool failed: ${unknown.message}`, cause = unknown);
+        },
+        _ => {
+            let wrapped = baml.errors.UnknownError.with_message<never>(e, "tool handler threw");
+            return ToolError.of(call, `tool failed: ${wrapped.message}`, cause = wrapped);
         },
     };
     //# Normalize arbitrary typed function results at the provider boundary
     let encoded = baml.json.to_json(output) catch (e) {
         _ => {
-            return ToolResult.error(call, "tool result could not be serialized");
+            return ToolError.of(call, "tool result could not be serialized");
         },
     };
-    ToolResult.ok(call, encoded)
+    ToolOk.of(call, encoded)
 }
 
 class ToolCalls {
     calls: ToolCall[],
+}
+
+/// The batch validation the stock Agent applies before any application
+/// effect: non-empty batch, non-empty unique correlation IDs, non-empty
+/// names. Public so custom runners enforce the same envelope instead of
+/// copying it.
+function check_calls(
+    calls: ToolCalls,
+    provider_name: string,
+) -> null throws ai.InvalidRequest {
+    ai.internal._validate_tool_calls(calls, provider_name)
+}
+
+/// "Every pending call answered exactly once, and nothing else" — the
+/// correlation rule providers enforce in submit and sessions enforce for
+/// handoffs. Public so custom runners and adapters share one check with
+/// one message.
+function check_results(
+    pending: ToolCall[],
+    results: ToolResult[],
+    provider_name: string,
+) -> null throws ai.InvalidRequest {
+    ai.internal._require_exact_correlation(pending, results, provider_name)
 }
 
 class ToolRegistryError {
@@ -188,7 +299,6 @@ class ToolRegistryError {
 }
 
 implements ai.Failure for ToolRegistryError {
-  function is_transient(self) -> bool throws never { false }
   function effects(self) -> ai.Effects throws never { ai.Effects.None }
 }
 

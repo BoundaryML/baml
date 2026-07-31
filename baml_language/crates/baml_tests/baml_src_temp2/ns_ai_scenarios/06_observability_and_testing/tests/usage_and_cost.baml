@@ -1,24 +1,16 @@
 test "guide 06.03: usage is aggregatable without becoming continuation state" {
-    let first = ai
-        .internal
-        ._response_from_done(
-            ai
-                .internal
-                ._require_done(
+    let first = (
+            done_or_fail(
                     ResolveTicket@task(sample_ticket()).with_provider(fake_resolution())
                         .run(runner = ai.run.Agent<Resolution>.new()),
-                ),
-        );
-    let second = ai
-        .internal
-        ._response_from_done(
-            ai
-                .internal
-                ._require_done(
+                )
+        ).response();
+    let second = (
+            done_or_fail(
                     ResolveTicket@task(sample_ticket()).with_provider(fake_resolution())
                         .run(runner = ai.run.Agent<Resolution>.new()),
-                ),
-        );
+                )
+        ).response();
     let usage = ai.observe.aggregate_usage([first.metadata, second.metadata]);
     assert.equal(usage.input_tokens, 2);
     assert
@@ -35,33 +27,24 @@ test "guide 06.03: usage is aggregatable without becoming continuation state" {
 
 testset "integ-test-guide-06-usage-and-cost" {
     test "guide 06.03 live providers: aggregate exact counters and estimate explicit price" {
-        let first = ai
-            .internal
-            ._response_from_done(
-                ai
-                    .internal
-                    ._require_done(
+        let first = (
+                done_or_fail(
                         ResolveTicket@task(sample_ticket()).with_provider(live_openai())
                             .run(runner = ai.run.Agent<Resolution>.new()),
-                    ),
-            );
-        let second = ai
-            .internal
-            ._response_from_done(
-                ai
-                    .internal
-                    ._require_done(
+                    )
+            ).response();
+        let second = (
+                done_or_fail(
                         ResolveTicket@task(sample_ticket()).with_provider(live_anthropic())
                             .run(runner = ai.run.Agent<Resolution>.new()),
-                    ),
-            );
+                    )
+            ).response();
         let first_usage = first.metadata.usage
             ?? ai.Usage {
                 input_tokens: 0,
                 output_tokens: 0,
                 cached_input_tokens: 0,
                 reasoning_tokens: 0,
-                cost_usd: null,
             };
         let second_usage = second.metadata.usage
             ?? ai.Usage {
@@ -69,7 +52,6 @@ testset "integ-test-guide-06-usage-and-cost" {
                 output_tokens: 0,
                 cached_input_tokens: 0,
                 reasoning_tokens: 0,
-                cost_usd: null,
             };
         let aggregate = ai.observe.aggregate_usage([first.metadata, second.metadata]);
         let estimate = ai

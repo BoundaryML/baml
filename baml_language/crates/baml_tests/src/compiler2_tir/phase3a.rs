@@ -197,7 +197,7 @@ function Greet(name: string) -> string {
     );
     assert!(
         tir.contains(
-            "ai._task_named(ai._provider_from_client(client), \"Greet\", map { \"name\": name }, [lookup], baml.llm.prompt`...`)"
+            "ai.internal._task_named(ai.internal._provider_from_client(client), \"Greet\", map { \"name\": name }, [lookup], baml.llm.prompt`...`)"
         ),
         "client sugar and tools must adapt into the same generated task constructor:\n{tir}"
     );
@@ -685,7 +685,7 @@ function call_overrides() -> string {
     );
     assert!(
         tir.contains(
-            "ai._task_named_from_registered_prompt(ai._provider_from_client(client), \"Ask\", map { \"input\": input }, [])"
+            "ai.internal._task_named_from_registered_prompt(ai.internal._provider_from_client(client), \"Ask\", map { \"input\": input }, [])"
         ),
         "raw Jinja and backtick prompts must construct the same Task shape:\n{tir}"
     );
@@ -771,7 +771,7 @@ function make(provider: ai.Provider) -> ai.Task<string> {
     );
     assert!(
         tir.contains(
-            "ai._task_named_from_registered_prompt(provider, \"Registered\", map { \"provider\": provider, \"input\": input }, [lookup])"
+            "ai.internal._task_named_from_registered_prompt(provider, \"Registered\", map { \"provider\": provider, \"input\": input }, [lookup])"
         ),
         "provider source, raw prompt, and tools must share one task constructor:\n{tir}"
     );

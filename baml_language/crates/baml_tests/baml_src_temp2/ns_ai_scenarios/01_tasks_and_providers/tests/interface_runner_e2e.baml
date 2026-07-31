@@ -10,11 +10,9 @@ test "interface runner e2e: typed Agent result with metadata" {
     let fake = fake_resolution();
     let task = ResolveTicket@task(sample_ticket()).with_provider(fake);
 
-    let response = ai
-        .internal
-        ._response_from_done(
-            ai.internal._require_done(task.run(runner = ai.run.Agent<Resolution>.new())),
-        );
+    let response = (
+            done_or_fail(task.run(runner = ai.run.Agent<Resolution>.new()))
+        ).response();
 
     assert.equal(response.value.category, "billing");
     assert.equal(response.metadata.provider, "fake");
@@ -23,14 +21,14 @@ test "interface runner e2e: typed Agent result with metadata" {
 
 test "interface runner e2e: typed value projection" {
     let task = ResolveTicket@task(sample_ticket()).with_provider(fake_resolution());
-    let resolution: Resolution = ai.internal._require_done(task.run(runner = ai.run.Agent<Resolution>.new())).value;
+    let resolution: Resolution = task.complete(runner = ai.run.Agent<Resolution>.new());
 
     assert.equal(resolution.priority, TicketPriority.Urgent)
 }
 
 test "interface runner e2e: provider-backed Agent result" {
     let task = ResolveTicket@task(sample_ticket()).with_provider(fake_resolution());
-    let resolution: Resolution = ai.internal._require_done(task.run(runner = ai.run.Agent<Resolution>.new())).value;
+    let resolution: Resolution = task.complete(runner = ai.run.Agent<Resolution>.new());
 
     assert.equal(resolution.summary, "Duplicate charge")
 }
@@ -38,13 +36,9 @@ test "interface runner e2e: provider-backed Agent result" {
 testset "integ-test-interface-runner-e2e" {
     test "interface runner live OpenAI Agent" {
         let task = ResolveTicket@task(sample_ticket()).with_provider(live_openai());
-        let response = ai
-            .internal
-            ._response_from_done(
-                ai
-                    .internal
-                    ._require_done(task.run(runner = ai.run.Agent<Resolution>.new())),
-            );
+        let response = (
+                done_or_fail(task.run(runner = ai.run.Agent<Resolution>.new()))
+            ).response();
 
         log.info(
             "interface runner live Agent "

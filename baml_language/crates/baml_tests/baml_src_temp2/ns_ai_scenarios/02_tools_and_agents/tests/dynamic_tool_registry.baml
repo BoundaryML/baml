@@ -1,7 +1,7 @@
 test "guide 02.06: a callback can add a tool before the next model step" {
     let registry = ai.tools.ToolRegistry.new([search_knowledge]);
     let account_tool = ai.tools.normalize_tool(lookup_account);
-    let runner = ai.run.Agent<Resolution>.new(tools = [], tool_registry = registry, prepare_step = (context) -> {
+    let runner = ai.run.Agent<Resolution>.new(tool_registry = registry, prepare_step = (context) -> {
         let next_tools = context.tools.slice(0, context.tools.length());
         if (context.step == 0) {
             next_tools.push(account_tool);
@@ -52,7 +52,6 @@ testset "integ-test-guide-02-dynamic-tool-registry" {
                     .run
                     .Agent<Resolution>
                     .new(
-                        tools = [],
                         tool_registry = registry,
                         prepare_step = (context) -> {
                             let has_account = context

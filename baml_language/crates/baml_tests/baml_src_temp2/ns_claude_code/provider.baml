@@ -319,7 +319,6 @@ function _parse_claude_code_cli_lines<T, E>(
         output_tokens: baml.json.path_or<int>(result, ".usage.output_tokens", 0),
         cached_input_tokens: baml.json.path_or<int?>(result, ".usage.cache_read_input_tokens", null),
         reasoning_tokens: null,
-        cost_usd: baml.json.path_or<float?>(result, ".total_cost_usd", null),
     };
     ai.harness._emit_harness_event(
         ai.observe.UsageEvent {
@@ -509,7 +508,7 @@ function _claude_code_agent_turn<T>(
     provider: ClaudeCodeCli,
     state: ClaudeCodeAgentConversation,
     output_suffix: string,
-) -> ai.Task<T> throws never {
+) -> ai.Task<T> throws ai.InvalidRequest {
     let rendered = state
         .recipe
         .render_with_output_format(
@@ -545,7 +544,7 @@ function _claude_code_agent_turn<T>(
         arguments: state.arguments,
         tools: [],
         tags: state.tags,
-        _render: ai._prompt_recipe(
+        _render: ai.PromptRenderRecipe.of(
             (ctx: baml.llm.Context) -> baml.llm.PromptAst {
                 prompt
             },
@@ -725,7 +724,7 @@ implements ai.AgentProvider for ClaudeCodeCli {
         });
       let matches = results.filter(
         (result: ai.tools.ToolResult) -> bool {
-          result.id == call.id
+          ai.tools.result_id(result) == call.id
         },
       );
       if (
@@ -750,9 +749,9 @@ implements ai.AgentProvider for ClaudeCodeCli {
           content: [
             ai.messages.TextPart {
               value: baml.json.stringify({
-                "id": result.id,
-                "output": result.output,
-                "is_error": result.is_error,
+                "id": ai.tools.result_id(result),
+                "output": ai.tools.result_payload(result),
+                "is_error": ai.tools.result_is_error(result),
               }),
               metadata: {},
             },
@@ -797,7 +796,7 @@ function _claude_code_harness_task<T>(
     provider: ClaudeCodeCli,
     session: ClaudeCodeHarnessSession,
     task: ai.Task<T>,
-) -> ai.Task<T> throws never {
+) -> ai.Task<T> throws ai.InvalidRequest {
     let rebound = task.with_provider(provider);
     if (session.steering.length() == 0) {
         return rebound;
@@ -837,7 +836,7 @@ implements ai.harness.Harness for ClaudeCodeCli {
         session: ai.harness.HarnessSession,
         task: ai.Task<T>,
         on_event: ((ai.observe.AgentEvent) -> null throws never)?,
-    ) -> ai.harness.HarnessRun<T> throws baml.errors.UnknownError {
+    ) -> ai.harness.HarnessRun<T> throws ai.InvalidRequest | baml.errors.UnknownError {
         let local = match (session) {
             let value: ClaudeCodeHarnessSession => value,
             _ => {

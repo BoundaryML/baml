@@ -1,4 +1,4 @@
-# Structured output and tool calling
+# Structured outputs and tool calling
 
 An `ai.AgentProvider` must turn each provider response into exactly one of:
 
@@ -6,12 +6,18 @@ An `ai.AgentProvider` must turn each provider response into exactly one of:
 class ModelStep<T> {
   outcome: T | ai.tools.ToolCalls,
   metadata: ai.ResponseMetadata,
+  assistant_text: string?,
+  reasoning_text: string?,
 }
 ```
 
 The provider decides how `T` and the application-tool schemas are represented
 on its wire. The Agent does not know whether the provider used a result
-function, a JSON response schema, or SAP text parsing.
+function, a JSON response schema, or SAP text parsing. The two optional
+display channels carry provider-neutral visible text when the vendor exposes
+it — assistant preamble alongside the outcome, and displayable reasoning
+text; the Agent republishes them as `AssistantTextEvent` and
+`ReasoningEvent`.
 
 ## The decision matrix
 
@@ -182,7 +188,10 @@ function search_knowledge(query: string) -> json throws never {
 ```
 
 `ai.tools.tool(search_knowledge)` retains the function as
-`baml.AnyFunction`. Reflection supplies the tool name, docstring, argument
+`baml.AnyFunction`. A handler may be ANY function — ordinary fallible
+functions and LLM functions included (agent-as-tool); `invoke_tool` is the
+total boundary that reifies a throw into a `ToolError` with the typed
+original in `cause`. Reflection supplies the tool name, docstring, argument
 names, argument types, and defaults:
 
 ```baml
@@ -246,6 +255,16 @@ function, it calls `submit` with the correlated result. OpenAI records:
   "store": true
 }
 ```
+
+Every adapter serializes the submitted payload through
+`ai.tools.result_payload`: a `ToolOk` contributes its JSON output, and a
+`ToolError` contributes the canonical `{"error": message}` object. Each wire
+format differs — Anthropic sets an `is_error` boolean, OpenAI stringifies the
+function output — but the model sees the same error shape on every provider.
+`ToolError.cause` — the typed original `ai.Failure` or
+`baml.errors.UnknownError` — stays on the application channel for
+`after_tool_call` callbacks and observers; it is never serialized to the
+model.
 
 The next Agent iteration calls `step` again. It may return more application
 calls or the reserved result call.

@@ -390,8 +390,8 @@ class RealtimeSession {
                                 "type": "conversation.item.create",
                                 "item": {
                                     "type": "function_call_output",
-                                    "call_id": result.id,
-                                    "output": baml.json.stringify(result.output),
+                                    "call_id": ai.tools.result_id(result),
+                                    "output": baml.json.stringify(ai.tools.result_payload(result)),
                                 },
                             },
                         ),

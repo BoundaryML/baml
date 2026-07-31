@@ -91,3 +91,16 @@ function drain_resolution_stream(
   // final() drains the provider's SSE response and validates the typed result.
   stream.final()
 }
+
+// Test utility: unwrap a completed outcome — value, metadata, and
+// conversation — or fail the test. Application code wanting only the value
+// uses task.complete()/session.complete(); code for which stopping is normal
+// matches the outcome union.
+function done_or_fail<T>(
+  outcome: ai.Done<T> | ai.Stopped | ai.Handoff | ai.Interrupted | ai.Failed,
+) -> ai.Done<T> throws never {
+  match (outcome) {
+    let done: ai.Done<T> => done,
+    _ => baml.sys.panic("expected the run to complete"),
+  }
+}

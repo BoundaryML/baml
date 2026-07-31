@@ -14,77 +14,120 @@ function _MemoryAgentTest(
     `
 }
 
+// Test-only store rooted in a throwaway directory, wiped between runs.
+function _memory_fresh_store(case_name: string) -> root.ai_scenarios.memory.Store {
+    let store = root.ai_scenarios.memory.Store { dir: `/tmp/baml_memory_agent_test/${case_name}` };
+    if (baml.fs.exists(store.dir)) {
+        baml.fs.remove_dir_all(store.dir);
+    };
+    store.ensure();
+    store
+}
+
+function _memory_save_edit(
+    name: string,
+    keywords: string[],
+    body: string,
+) -> root.ai_scenarios.memory.Edit {
+    root.ai_scenarios.memory.Edit { op: "save", name: name, keywords: keywords, body: body }
+}
+
+function _memory_delete_edit(name: string) -> root.ai_scenarios.memory.Edit {
+    root.ai_scenarios.memory.Edit { op: "delete", name: name, keywords: [], body: "" }
+}
+
 testset "memory-agent-tools" {
     test "write then read round trips with line numbers" {
         let path = "/tmp/baml_memory_agent_test/tools/read.txt";
-        let wrote = _memory_agent_write_file(path, "alpha\nbeta\n");
+        let wrote = root.ai_scenarios.memory.write_file(path, "alpha\nbeta\n");
         assert.contains(wrote, "Wrote");
 
-        let read = _memory_agent_read_file(path);
+        let read = root.ai_scenarios.memory.read_file(path);
         assert.contains(read, "1\talpha");
         assert.contains(read, "2\tbeta")
     }
 
     test "edit replaces only the first exact occurrence" {
         let path = "/tmp/baml_memory_agent_test/tools/edit.txt";
-        _memory_agent_write_file(path, "old and old");
-        let edited = _memory_agent_edit_file(path, "old", "new");
+        root.ai_scenarios.memory.write_file(path, "old and old");
+        let edited = root.ai_scenarios.memory.edit_file(path, "old", "new");
         assert.contains(edited, "Edited");
-        assert.contains(_memory_agent_read_file(path), "new and old")
+        assert.contains(root.ai_scenarios.memory.read_file(path), "new and old")
     }
 
-    test "edit miss is a recoverable error" {
+    test "edit miss throws a model-facing ToolFault" {
         let path = "/tmp/baml_memory_agent_test/tools/edit-miss.txt";
-        _memory_agent_write_file(path, "hello");
-        assert.contains(_memory_agent_edit_file(path, "missing", "replacement"), "ERROR")
+        root.ai_scenarios.memory.write_file(path, "hello");
+        let message = root.ai_scenarios.memory.edit_file(path, "missing", "replacement") catch (e) {
+            let fault: root.ai_scenarios.memory.ToolFault => fault.message,
+        };
+        assert.contains(message, "old_str was not found")
     }
 
-    test "reading a missing file is a recoverable error" {
-        assert
-            .contains(
-                _memory_agent_read_file("/tmp/baml_memory_agent_test/tools/definitely-does-not-exist.txt"),
-                "ERROR",
-            )
+    test "reading a missing file throws a model-facing ToolFault" {
+        let message = root.ai_scenarios.memory.read_file("/tmp/baml_memory_agent_test/tools/definitely-does-not-exist.txt") catch (e) {
+            let fault: root.ai_scenarios.memory.ToolFault => fault.message,
+        };
+        assert.contains(message, "no such file")
+    }
+
+    test "a thrown ToolFault reaches the model as a readable ToolError" {
+        let tool = ai.tools.tool(root.ai_scenarios.memory.read_file);
+        let result = ai.tools.invoke_tool(
+            tool,
+            ai.tools.ToolCall {
+                id: "fault-1",
+                name: "read_file",
+                args: { "path": "/tmp/baml_memory_agent_test/tools/definitely-does-not-exist.txt" },
+            },
+        );
+        match (result) {
+            let failed: ai.tools.ToolError => {
+                assert.contains(failed.message, "no such file")
+            },
+            _ => assert.is_true(false),
+        }
     }
 
     test "list dir identifies files and directories" {
         let dir = "/tmp/baml_memory_agent_test/tools/list";
-        _memory_agent_write_file(`${dir}/file.txt`, "file");
-        _memory_agent_write_file(`${dir}/nested/child.txt`, "child");
-        let listing = _memory_agent_list_dir(dir);
+        root.ai_scenarios.memory.write_file(`${dir}/file.txt`, "file");
+        root.ai_scenarios.memory.write_file(`${dir}/nested/child.txt`, "child");
+        let listing = root.ai_scenarios.memory.list_dir(dir);
         assert.contains(listing, "file.txt");
         assert.contains(listing, "nested/")
     }
 
     test "bash reports stdout and successful exit code" {
-        let result = _memory_agent_run_bash("echo hello-memory-agent");
+        let result = root.ai_scenarios.memory.run_bash("echo hello-memory-agent");
         assert.contains(result, "exit code: 0");
         assert.contains(result, "hello-memory-agent")
     }
 
     test "bash reports nonzero exit code without throwing" {
-        assert.contains(_memory_agent_run_bash("exit 3"), "exit code: 3")
+        assert.contains(root.ai_scenarios.memory.run_bash("exit 3"), "exit code: 3")
     }
 
-    test "main tool roster contains filesystem tools but no memory mutations" {
-        let tools = ai.tools.normalize_tools(_memory_agent_main_tools());
+    test "task tools are plain functions with docstring descriptions" {
+        let tools = root.ai_scenarios.memory.Turn@task("hello").tools;
         let names = tools.map((tool: ai.tools.Tool) -> string {
             tool.name
         });
         assert.equal(names, ["read_file", "write_file", "edit_file", "list_dir", "run_bash"]);
         assert.is_true(!names.includes("remember"));
-        assert.is_true(!names.includes("forget"))
+        assert.is_true(!names.includes("forget"));
+        assert.contains(tools.at(0)?.description ?? "", "line numbers")
     }
 }
 
 testset "memory-agent-queue" {
     test "queue command strips either accepted prefix" {
-        assert.equal(_memory_agent_command_arg("/queue fix the bug"), "fix the bug");
-        assert.equal(_memory_agent_command_arg("/q add tests"), "add tests")
+        assert.equal(root.ai_scenarios.memory._command_arg("/queue fix the bug"), "fix the bug");
+        assert.equal(root.ai_scenarios.memory._command_arg("/q add tests"), "add tests")
     }
 
     test "queue display preserves order and numbering" {
-        let display = _memory_agent_show_queue(["first", "second"]);
+        let display = root.ai_scenarios.memory._show_queue(["first", "second"]);
         assert.contains(display, "1.");
         assert.contains(display, "first");
         assert.contains(display, "2.");
@@ -93,44 +136,44 @@ testset "memory-agent-queue" {
 
     test "empty queue has an explicit empty state" {
         let queue: string[] = [];
-        assert.contains(_memory_agent_show_queue(queue), "empty")
+        assert.contains(root.ai_scenarios.memory._show_queue(queue), "empty")
     }
 
     test "prompt label reports staged message count" {
-        assert.contains(_memory_agent_prompt_label(["a", "b", "c"]), "3 queued");
+        assert.contains(root.ai_scenarios.memory._prompt_label(["a", "b", "c"]), "3 queued");
         let queue: string[] = [];
-        assert.contains(_memory_agent_prompt_label(queue), "you")
+        assert.contains(root.ai_scenarios.memory._prompt_label(queue), "you")
     }
 }
 
 testset "memory-agent-interrupt" {
     test "escape followed by enter cancels the active turn" {
-        let interrupt = _memory_agent_classify_interrupt(string.from_code_points([27]));
+        let interrupt = root.ai_scenarios.memory._classify_interrupt(string.from_code_points([27]));
         assert.is_true(interrupt.cancel);
         assert.equal(interrupt.queued, "")
     }
 
     test "empty input is ignored while a turn runs" {
-        let interrupt = _memory_agent_classify_interrupt("   ");
+        let interrupt = root.ai_scenarios.memory._classify_interrupt("   ");
         assert.is_true(!interrupt.cancel);
         assert.equal(interrupt.queued, "")
     }
 
     test "other input becomes typeahead instead of cancellation" {
-        let interrupt = _memory_agent_classify_interrupt("also write docs");
+        let interrupt = root.ai_scenarios.memory._classify_interrupt("also write docs");
         assert.is_true(!interrupt.cancel);
         assert.equal(interrupt.queued, "also write docs");
-        assert.equal(_memory_agent_classify_interrupt("cancel").queued, "cancel")
+        assert.equal(root.ai_scenarios.memory._classify_interrupt("cancel").queued, "cancel")
     }
 }
 
 testset "memory-agent-transcript" {
     test "recalled memory appears before the new user message" {
-        let store = _memory_agent_fresh_store("agent-wiring");
+        let store = _memory_fresh_store("agent-wiring");
         store.remember("prefers-uv", ["python", "deps"], "Install deps with `uv add`.");
 
         let recall = store.inject("add a python dep", "");
-        let transcript = _memory_agent_opening_transcript("EARLIER\n", recall.block, "add a python dep");
+        let transcript = root.ai_scenarios.memory._opening_transcript("EARLIER\n", recall.block, "add a python dep");
 
         assert.contains(transcript, "uv add");
         assert
@@ -144,7 +187,7 @@ testset "memory-agent-transcript" {
     test "no recall leaves ordinary transcript shape unchanged" {
         assert
             .equal(
-                _memory_agent_opening_transcript("EARLIER\n", "", "hello"),
+                root.ai_scenarios.memory._opening_transcript("EARLIER\n", "", "hello"),
                 "EARLIER\n\nUSER: hello\n",
             )
     }
@@ -152,20 +195,20 @@ testset "memory-agent-transcript" {
     test "curator receives only the newly completed turn" {
         assert
             .equal(
-                _memory_agent_turn_delta("OLD\n", "OLD\nUSER: hi\nASSISTANT: yo\n"),
+                root.ai_scenarios.memory._turn_delta("OLD\n", "OLD\nUSER: hi\nASSISTANT: yo\n"),
                 "USER: hi\nASSISTANT: yo\n",
             );
-        assert.equal(_memory_agent_turn_delta("OLD\n", "DIFFERENT\n"), "DIFFERENT\n")
+        assert.equal(root.ai_scenarios.memory._turn_delta("OLD\n", "DIFFERENT\n"), "DIFFERENT\n")
     }
 
     test "continuation message places recalled memory before fresh user text" {
-        let text = _memory_agent_continuation_text(
+        let text = root.ai_scenarios.memory._continuation_text(
             "\n[RECALLED MEMORY]\n[memory:build] Run cargo nextest.\n",
             "fix the failing test",
         );
         assert.is_true(text.starts_with("[RECALLED MEMORY]"));
         assert.is_true(text.ends_with("fix the failing test"));
-        assert.equal(_memory_agent_continuation_text("", "plain follow-up"), "plain follow-up")
+        assert.equal(root.ai_scenarios.memory._continuation_text("", "plain follow-up"), "plain follow-up")
     }
 }
 
@@ -178,46 +221,34 @@ testset "memory-agent-exact-conversation" {
             provider_tools: [],
         };
         let task = _MemoryAgentTest@task(provider);
-        let first = ai
-            .internal
-            ._require_done(
-                task
-                    .run(
-                        runner = ai
-                            .run
-                            .Agent<string>
-                            .new(max_tool_calls_per_step = 1),
-                    ),
+        let first_outcome = task
+            .run(
+                runner = ai
+                    .run
+                    .Agent<string>
+                    .new(max_tool_calls_per_step = 1),
             );
+        let first = done_or_fail(first_outcome);
         let fingerprint = first.conversation.output_type_fingerprint();
-        let continued = _memory_agent_append_user_message(
-            first.conversation,
-            "inspect one more file",
-        );
 
-        assert.equal(continued.output_type_fingerprint(), fingerprint);
-        assert.equal(continued.provider().name(), "memory-agent-exact");
-        assert.equal(continued.messages().items().length(), 2);
-        assert.equal(
-            ai.message_text(continued.messages().items()[1]),
-            "inspect one more file",
-        );
-
-        let resumed = ai
-            .internal
-            ._require_done(
-                task
-                    .run(
-                        runner = ai
-                            .run
-                            .Agent<string>
-                            .new(
-                                max_tool_calls_per_step = 1,
-                                conversation = continued,
-                            ),
-                    ),
+        //# The session appends the fresh user message inside the boundary
+        let session = ai.run.AgentSession<string>.of(task, first_outcome);
+        let resumed = done_or_fail(
+                session.send(
+                    ai.ChatMessage.user("inspect one more file"),
+                    runner = ai
+                        .run
+                        .Agent<string>
+                        .new(max_tool_calls_per_step = 1),
+                ),
             );
         assert.equal(resumed.value, "done");
+        assert.equal(session.conversation().output_type_fingerprint(), fingerprint);
+        assert.equal(session.conversation().provider().name(), "memory-agent-exact");
+        assert.equal(
+            ai.message_text(resumed.conversation.messages().items()[1]),
+            "inspect one more file",
+        );
         // The Task's rendered prompt was not appended again. The exact
         // continuation still contains only the original prompt and new user turn.
         assert.equal(resumed.conversation.messages().items().length(), 2)
@@ -226,34 +257,34 @@ testset "memory-agent-exact-conversation" {
 
 testset "memory-agent-memory-text" {
     test "slugify creates stable file-safe identifiers" {
-        assert.equal(_memory_agent_slugify("Prefers UV"), "prefers-uv");
-        assert.equal(_memory_agent_slugify("  deploy/  staging!! "), "deploy-staging");
-        assert.equal(_memory_agent_slugify("!!!"), "memory")
+        assert.equal(root.ai_scenarios.memory._slugify("Prefers UV"), "prefers-uv");
+        assert.equal(root.ai_scenarios.memory._slugify("  deploy/  staging!! "), "deploy-staging");
+        assert.equal(root.ai_scenarios.memory._slugify("!!!"), "memory")
     }
 
     test "tokenize keeps meaningful terms and drops noise" {
-        assert.equal(_memory_agent_tokenize("How do I run the tests?"), ["run", "tests"]);
-        assert.equal(_memory_agent_tokenize("uv add pydantic"), ["uv", "add", "pydantic"]);
-        assert.equal(_memory_agent_tokenize("   "), [])
+        assert.equal(root.ai_scenarios.memory._tokenize("How do I run the tests?"), ["run", "tests"]);
+        assert.equal(root.ai_scenarios.memory._tokenize("uv add pydantic"), ["uv", "add", "pydantic"]);
+        assert.equal(root.ai_scenarios.memory._tokenize("   "), [])
     }
 
     test "token matching tolerates plurals but not accidental prefixes" {
-        assert.is_true(_memory_agent_token_matches("test", "tests"));
-        assert.is_true(_memory_agent_token_matches("deploy", "deploy"));
-        assert.is_true(!_memory_agent_token_matches("dep", "deploy"));
-        assert.is_true(!_memory_agent_token_matches("python", "pytest"))
+        assert.is_true(root.ai_scenarios.memory._token_matches("test", "tests"));
+        assert.is_true(root.ai_scenarios.memory._token_matches("deploy", "deploy"));
+        assert.is_true(!root.ai_scenarios.memory._token_matches("dep", "deploy"));
+        assert.is_true(!root.ai_scenarios.memory._token_matches("python", "pytest"))
     }
 
     test "keywords are normalized and blanks are removed" {
         assert
             .equal(
-                _memory_agent_split_keywords(" Python , DEPS,, install "),
+                root.ai_scenarios.memory._split_keywords(" Python , DEPS,, install "),
                 ["python", "deps", "install"],
             )
     }
 
     test "memory file format is human readable and round trips through the store" {
-        let store = _memory_agent_fresh_store("file-format");
+        let store = _memory_fresh_store("file-format");
         store.remember("Prefers UV", ["Python", "deps"], "Use `uv add`.");
         let raw = baml.fs.read(store.path_for("Prefers UV"));
         assert.contains(raw, "name: prefers-uv");
@@ -267,7 +298,7 @@ testset "memory-agent-memory-text" {
     }
 
     test "headerless hand-written memory uses its filename as the id" {
-        let store = _memory_agent_fresh_store("headerless");
+        let store = _memory_fresh_store("headerless");
         baml.fs.write(`${store.dir}/scratch.md`, "just a note\nsecond line\n");
         let memory = store.get("scratch");
         assert.equal(memory?.name, "scratch");
@@ -276,7 +307,7 @@ testset "memory-agent-memory-text" {
     }
 
     test "multiline memory bodies survive persistence" {
-        let store = _memory_agent_fresh_store("multiline");
+        let store = _memory_fresh_store("multiline");
         store.remember("build", ["ci"], "line one\n\nline three");
         assert.equal(store.get("build")?.body, "line one\n\nline three")
     }
@@ -284,7 +315,7 @@ testset "memory-agent-memory-text" {
 
 testset "memory-agent-memory-store" {
     test "remember and get round trip through a markdown file" {
-        let store = _memory_agent_fresh_store("round-trip");
+        let store = _memory_fresh_store("round-trip");
         store
             .remember("Prefers UV", ["Python", "deps"], "  The user installs deps with `uv add`.  ");
 
@@ -296,14 +327,14 @@ testset "memory-agent-memory-store" {
     }
 
     test "lookup is insensitive to slug spelling and case" {
-        let store = _memory_agent_fresh_store("slug-lookup");
+        let store = _memory_fresh_store("slug-lookup");
         store.remember("Deploy Steps", [], "run ./deploy.sh");
         assert.not_null(store.get("deploy steps"));
         assert.not_null(store.get("DEPLOY-STEPS"))
     }
 
     test "remember overwrites the same logical name" {
-        let store = _memory_agent_fresh_store("overwrite");
+        let store = _memory_fresh_store("overwrite");
         store.remember("port", ["server"], "the dev server runs on 3000");
         store.remember("port", ["server"], "the dev server runs on 8080");
         assert.equal(store.all().length(), 1);
@@ -311,7 +342,7 @@ testset "memory-agent-memory-store" {
     }
 
     test "forget removes a memory and is idempotent" {
-        let store = _memory_agent_fresh_store("forget");
+        let store = _memory_fresh_store("forget");
         store.remember("temp", [], "throwaway");
         assert.is_true(store.forget("temp"));
         assert.equal(store.get("temp"), null);
@@ -319,7 +350,7 @@ testset "memory-agent-memory-store" {
     }
 
     test "hand-written markdown is discovered but other files are ignored" {
-        let store = _memory_agent_fresh_store("discovery");
+        let store = _memory_fresh_store("discovery");
         baml.fs.write(`${store.dir}/dropped.md`, "a hand-written fact");
         baml.fs.write(`${store.dir}/notes.txt`, "not a memory");
         assert.equal(store.all().length(), 1);
@@ -327,7 +358,7 @@ testset "memory-agent-memory-store" {
     }
 
     test "empty store is usable" {
-        let store = _memory_agent_fresh_store("empty");
+        let store = _memory_fresh_store("empty");
         assert.equal(store.all(), []);
         assert.equal(store.search("anything at all"), []);
         assert.contains(store.listing(), "no memories yet")
@@ -336,7 +367,7 @@ testset "memory-agent-memory-store" {
 
 testset "memory-agent-memory-recall" {
     test "search ranks relevant memories and excludes unrelated ones" {
-        let store = _memory_agent_fresh_store("recall-ranks");
+        let store = _memory_fresh_store("recall-ranks");
         store
             .remember(
                 "prefers-uv",
@@ -359,7 +390,7 @@ testset "memory-agent-memory-recall" {
     }
 
     test "keyword hits outrank body-only hits" {
-        let store = _memory_agent_fresh_store("recall-ranking");
+        let store = _memory_fresh_store("recall-ranking");
         store.remember("keyworded", ["deploy"], "unrelated body text");
         store.remember("body-only", ["misc"], "this body mentions deploy once");
         let hits = store.search("deploy");
@@ -368,7 +399,7 @@ testset "memory-agent-memory-recall" {
     }
 
     test "search limit and stopword filtering prevent prompt flooding" {
-        let store = _memory_agent_fresh_store("recall-limit");
+        let store = _memory_fresh_store("recall-limit");
         store.remember("a", ["deploy"], "one");
         store.remember("b", ["deploy"], "two");
         store.remember("c", ["deploy"], "three");
@@ -378,7 +409,7 @@ testset "memory-agent-memory-recall" {
     }
 
     test "inject includes only relevant unused memories" {
-        let store = _memory_agent_fresh_store("inject-relevant");
+        let store = _memory_fresh_store("inject-relevant");
         store
             .remember(
                 "prefers-uv",
@@ -396,7 +427,7 @@ testset "memory-agent-memory-recall" {
     }
 
     test "inject is idempotent but permits a different later memory" {
-        let store = _memory_agent_fresh_store("inject-idempotent");
+        let store = _memory_fresh_store("inject-idempotent");
         store.remember("prefers-uv", ["python", "deps"], "Use `uv add`.");
         store.remember("deploy-steps", ["deploy", "prod"], "Deploy via `make ship`.");
 
@@ -411,7 +442,7 @@ testset "memory-agent-memory-recall" {
     }
 
     test "listing summarizes the durable store" {
-        let store = _memory_agent_fresh_store("listing");
+        let store = _memory_fresh_store("listing");
         store.remember("prefers-uv", ["python"], "Use uv.");
         store.remember("deploy-steps", ["deploy"], "Use make ship.");
         let listing = store.listing();
@@ -423,59 +454,61 @@ testset "memory-agent-memory-recall" {
 
 testset "memory-agent-curator" {
     test "save and delete edits mutate the store" {
-        let store = _memory_agent_fresh_store("curator-apply");
+        let store = _memory_fresh_store("curator-apply");
         store.remember("stale", ["old"], "the port is 3000");
-        let applied = _memory_agent_apply_edits(
+        let report = root.ai_scenarios.memory.apply_edits(
             [
-                _memory_agent_save_edit("test-command", ["tests"], "run `uv run pytest -q`"),
-                _memory_agent_delete_edit("stale"),
+                _memory_save_edit("test-command", ["tests"], "run `uv run pytest -q`"),
+                _memory_delete_edit("stale"),
             ],
             store,
         );
-        assert.equal(applied, ["+test-command", "-stale"]);
+        assert.equal(report.applied, ["+test-command", "-stale"]);
+        assert.equal(report.rejected, []);
         assert.equal(store.get("test-command")?.body, "run `uv run pytest -q`");
         assert.equal(store.get("stale"), null)
     }
 
     test "invalid edits are discarded" {
-        let store = _memory_agent_fresh_store("curator-invalid");
-        let applied = _memory_agent_apply_edits(
+        let store = _memory_fresh_store("curator-invalid");
+        let report = root.ai_scenarios.memory.apply_edits(
             [
-                _memory_agent_save_edit("", ["x"], "no name"),
-                _memory_agent_save_edit("no-body", ["x"], "   "),
-                _memory_agent_delete_edit("never-existed"),
+                _memory_save_edit("", ["x"], "no name"),
+                _memory_save_edit("no-body", ["x"], "   "),
+                _memory_delete_edit("never-existed"),
             ],
             store,
         );
-        assert.equal(applied, []);
+        assert.equal(report.applied, []);
+        assert.equal(report.rejected.length(), 2);
         assert.equal(store.all(), [])
     }
 
     test "save corrects an existing fact in place" {
-        let store = _memory_agent_fresh_store("curator-correct");
+        let store = _memory_fresh_store("curator-correct");
         store.remember("port", ["server"], "the dev server runs on 3000");
-        _memory_agent_apply_edits([_memory_agent_save_edit("port", ["server"], "the dev server runs on 8080")], store);
+        root.ai_scenarios.memory.apply_edits([_memory_save_edit("port", ["server"], "the dev server runs on 8080")], store);
         assert.equal(store.all().length(), 1);
         assert.equal(store.get("port")?.body, "the dev server runs on 8080")
     }
 
     test "edit application is capped at five mutations per turn" {
-        let store = _memory_agent_fresh_store("curator-cap");
+        let store = _memory_fresh_store("curator-cap");
         let edits = [
-            _memory_agent_save_edit("m1", [], "one"),
-            _memory_agent_save_edit("m2", [], "two"),
-            _memory_agent_save_edit("m3", [], "three"),
-            _memory_agent_save_edit("m4", [], "four"),
-            _memory_agent_save_edit("m5", [], "five"),
-            _memory_agent_save_edit("m6", [], "six"),
-            _memory_agent_save_edit("m7", [], "seven"),
+            _memory_save_edit("m1", [], "one"),
+            _memory_save_edit("m2", [], "two"),
+            _memory_save_edit("m3", [], "three"),
+            _memory_save_edit("m4", [], "four"),
+            _memory_save_edit("m5", [], "five"),
+            _memory_save_edit("m6", [], "six"),
+            _memory_save_edit("m7", [], "seven"),
         ];
-        assert.equal(_memory_agent_apply_edits(edits, store).length(), 5);
+        assert.equal(root.ai_scenarios.memory.apply_edits(edits, store).applied.length(), 5);
         assert.equal(store.all().length(), 5)
     }
 
     test "memory index is compact and includes existing facts" {
-        let store = _memory_agent_fresh_store("curator-index");
+        let store = _memory_fresh_store("curator-index");
         assert.equal(store.index(), "(memory is empty)");
         store.remember("prefers-uv", ["python"], "uses uv");
         assert.equal(store.index(), "- prefers-uv (python): uses uv")
@@ -484,7 +517,9 @@ testset "memory-agent-curator" {
 
 testset "memory-agent-providers" {
     test "task defaults to OpenAI and carries the main tool roster" {
-        let task = _MemoryAgentTurn@task(_memory_agent_opening_transcript("", "", "hello"));
+        let task = root.ai_scenarios.memory.Turn@task(
+            root.ai_scenarios.memory._opening_transcript("", "", "hello"),
+        );
         assert.equal(task.provider_name(), "openai");
         assert.contains(task.prompt.text(), "USER: hello");
         assert
@@ -497,10 +532,10 @@ testset "memory-agent-providers" {
     }
 
     test "Google entrypoint overrides the same task contract" {
-        let transcript = _memory_agent_opening_transcript("EARLIER\n", "", "hello");
-        let openai = _MemoryAgentTurn@task(transcript);
-        let google = _MemoryAgentTurn@task(transcript)
-            .with_provider(_memory_agent_google_provider());
+        let transcript = root.ai_scenarios.memory._opening_transcript("EARLIER\n", "", "hello");
+        let openai = root.ai_scenarios.memory.Turn@task(transcript);
+        let google = root.ai_scenarios.memory.Turn@task(transcript)
+            .with_provider(root.ai_scenarios.memory.google_provider());
         assert.equal(openai.provider_name(), "openai");
         assert.equal(google.provider_name(), "google-ai");
         assert.equal(openai.identity?.name, google.identity?.name);
@@ -516,8 +551,8 @@ testset "memory-agent-providers" {
     }
 
     test "provider settings request serial tools and preserve output budgets" {
-        let openai = _memory_agent_openai_provider();
-        let google = _memory_agent_google_provider();
+        let openai = root.ai_scenarios.memory.openai_provider();
+        let google = root.ai_scenarios.memory.google_provider();
         assert.is_true(!openai.parallel_tool_calls);
         assert.is_true(!google.parallel_tool_calls);
         assert
@@ -534,11 +569,13 @@ testset "memory-agent-providers" {
                     ),
                 4096,
             );
+        //# The curator runs the same providers with a smaller output budget
         assert
             .equal(
                 baml.json
                     .path<int>(
-                        baml.json.to_json(_memory_agent_curator_provider().extra_body),
+                        baml.json
+                            .to_json(root.ai_scenarios.memory.openai_provider(max_output_tokens = 1024).extra_body),
                         ".max_output_tokens",
                     ),
                 1024,
@@ -547,19 +584,18 @@ testset "memory-agent-providers" {
             .equal(
                 baml.json
                     .path<int>(
-                        baml.json.to_json(_memory_agent_google_curator_provider().extra_body),
+                        baml.json
+                            .to_json(root.ai_scenarios.memory.google_provider(max_output_tokens = 1024).extra_body),
                         ".generationConfig.maxOutputTokens",
                     ),
                 1024,
-            );
-        assert.equal(_memory_agent_main_budget().max_steps, 30);
-        assert.equal(_memory_agent_curator_budget().max_steps, 1)
+            )
     }
 
     test "Google override also applies to the isolated curator task" {
-        let openai = _MemoryAgentCurator@task("USER: hi", "(memory is empty)");
-        let google = _MemoryAgentCurator@task("USER: hi", "(memory is empty)")
-            .with_provider(_memory_agent_google_curator_provider());
+        let openai = root.ai_scenarios.memory.Curator@task("USER: hi", "(memory is empty)");
+        let google = root.ai_scenarios.memory.Curator@task("USER: hi", "(memory is empty)")
+            .with_provider(root.ai_scenarios.memory.google_provider(max_output_tokens = 1024));
         assert.equal(openai.provider_name(), "openai");
         assert.equal(google.provider_name(), "google-ai");
         assert.equal(openai.identity?.name, google.identity?.name);
@@ -585,10 +621,10 @@ testset "memory-agent-framework" {
             final_output: "inspection complete",
             usage_per_step: null,
         };
-        let trace = MemoryAgentTrace { transcript: "USER: inspect /tmp\n", steps: 0 };
-        let observer = MemoryAgentObserver { trace: trace, live: false };
-        let outcome = _MemoryAgentTurn@task(
-            _memory_agent_opening_transcript("", "", "inspect /tmp"),
+        let trace = root.ai_scenarios.memory.Trace { transcript: "USER: inspect /tmp\n" };
+        let observer = root.ai_scenarios.memory.Observer { trace: trace, live: false };
+        let outcome = root.ai_scenarios.memory.Turn@task(
+            root.ai_scenarios.memory._opening_transcript("", "", "inspect /tmp"),
         )
             .with_provider(provider)
             .run(
@@ -596,25 +632,28 @@ testset "memory-agent-framework" {
                     .run
                     .Agent<string>
                     .new(
-                        budget = ai.Budget { max_steps: 3, max_cost_usd: null },
+                        max_steps = 3,
                         observers = [observer],
                     ),
             );
         match (outcome) {
             let done: ai.Done<string> => {
                 assert.equal(done.value, "inspection complete");
+                //# Whole-run accounting now rides on the outcome itself
+                assert.equal(done.steps_taken, 2);
                 match (done.conversation) {
                     let state: ai.testing.ScriptedToolConversation => {
                         assert.equal(state.submitted_results.length(), 1);
-                        assert.equal(state.submitted_results.at(0)?.at(0)?.id, "memory-call-1");
-                        assert.is_true(!(state.submitted_results.at(0)?.at(0)?.is_error ?? true))
+                        match (state.submitted_results.at(0)?.at(0)) {
+                            let ok: ai.tools.ToolOk => assert.equal(ok.id, "memory-call-1"),
+                            _ => assert.is_true(false),
+                        }
                     },
                     _ => assert.is_true(false),
                 }
             },
             _ => assert.is_true(false),
         }
-        assert.equal(trace.steps, 2);
         assert.contains(trace.transcript, "[THOUGHT] Inspect the temporary directory.");
         assert.contains(trace.transcript, "[ACTION] ls /tmp");
         assert.contains(trace.transcript, "[RESULT]")
@@ -645,18 +684,18 @@ testset "memory-agent-framework" {
             final_output: "never reached",
             usage_per_step: null,
         };
-        let outcome = _MemoryAgentTurn@task(
-            _memory_agent_opening_transcript("", "", "inspect"),
+        let outcome = root.ai_scenarios.memory.Turn@task(
+            root.ai_scenarios.memory._opening_transcript("", "", "inspect"),
         )
             .with_provider(provider)
             .run(
                 runner = ai
                     .run
                     .Agent<string>
-                    .new(budget = ai.Budget { max_steps: 1, max_cost_usd: null }),
+                    .new(max_steps = 1),
             );
         match (outcome) {
-            let budget: ai.BudgetReached => {
+            let budget: ai.Stopped => {
                 assert.equal(budget.steps_taken, 1);
                 assert.equal(budget.reason, "max_steps")
             },
@@ -665,11 +704,13 @@ testset "memory-agent-framework" {
     }
 
     test "empty curator turn is skipped without a model call" {
-        assert
-            .equal(
-                _memory_agent_curate_turn("   ", _memory_agent_fresh_store("empty-curator"), MemoryAgentBackend.OpenAI),
-                [],
-            )
+        let report = root.ai_scenarios.memory.curate_turn(
+            "   ",
+            _memory_fresh_store("empty-curator"),
+            root.ai_scenarios.memory.Backend.OpenAI,
+        );
+        assert.equal(report.applied, []);
+        assert.equal(report.rejected, [])
     }
 
     test "memory-agent runner rejects a parallel tool batch before dispatch" {
@@ -682,15 +723,20 @@ testset "memory-agent-framework" {
             final_output: `"unreachable"`,
             provider_tools: [],
         };
-        let limited = false;
-        let _ = _MemoryAgentTest@task(provider)
-            .run(runner = _memory_agent_runner()) catch (e) {
-            let failure: ai.ToolCallLimitExceeded => {
-                limited = true;
-                assert.equal(failure.max_tool_calls_per_step, 1);
-                assert.equal(failure.actual_tool_calls, 2);
-                null
+        let outcome = _MemoryAgentTest@task(provider)
+            .run(runner = root.ai_scenarios.memory.runner());
+        let limited = match (outcome) {
+            let failed: ai.Failed => {
+                match (failed.cause) {
+                    let limit: ai.ToolCallLimitExceeded => {
+                        assert.equal(limit.max_tool_calls_per_step, 1);
+                        assert.equal(limit.actual_tool_calls, 2);
+                        true
+                    },
+                    _ => false,
+                }
             },
+            _ => false,
         };
         assert.is_true(limited)
     }

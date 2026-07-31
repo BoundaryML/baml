@@ -48,6 +48,20 @@ class ChatMessage {
             metadata: null,
         }
     }
+
+    /// A mid-conversation instruction that is NOT from the end user —
+    /// compaction summaries, context injection, policy changes. Portable
+    /// role is System; each adapter maps it to its wire's honest
+    /// equivalent: a native developer/system item where the API has one
+    /// (OpenAI), a tagged user-role turn where it does not
+    /// (Anthropic/Gemini).
+    function steer(text: string) -> ChatMessage throws never {
+        ChatMessage {
+            message_role: MessageRole.System,
+            content: [ai.messages.TextPart { value: text, metadata: {} }],
+            metadata: { "steering": true },
+        }
+    }
 }
 
 // Editable, serializable application state. Exact provider continuation data

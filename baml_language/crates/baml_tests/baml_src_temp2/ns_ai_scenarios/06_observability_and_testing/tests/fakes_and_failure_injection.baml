@@ -1,7 +1,7 @@
 
 test "guide 06.06: fakes can inject failures before a valid typed output" {
   let fake = ai.testing.FakeProvider { ...fake_resolution(), failures_remaining: 1 };
-  let failed = ai.internal._require_done(
+  let failed = done_or_fail(
     ResolveTicket@task(sample_ticket()).with_provider(fake).run(
       runner = ai.run.Agent<Resolution>.new(),
     ),
@@ -10,7 +10,7 @@ test "guide 06.06: fakes can inject failures before a valid typed output" {
   };
   assert.equal(failed, "failed")
   assert.equal(
-    ai.internal._require_done(
+    done_or_fail(
       ResolveTicket@task(sample_ticket()).with_provider(fake).run(
         runner = ai.run.Agent<Resolution>.new(),
       ),
@@ -28,13 +28,13 @@ testset "integ-test-guide-06-failure-injection" {
       failure_mode: ai.testing.FakeFailureMode.Retryable,
     };
     let chain = ai.fallback([injected, live_openai()]);
-    let response = ai.internal._response_from_done(
-      ai.internal._require_done(
+    let response = (
+      done_or_fail(
         ResolveTicket@task(sample_ticket()).with_provider(chain).run(
           runner = ai.run.Agent<Resolution>.new(),
         ),
-      ),
-    );
+      )
+    ).response();
     log.info(baml.json.stringify({
       "guide": "06.06",
       "injected_attempts": injected.calls,

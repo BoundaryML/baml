@@ -6,7 +6,7 @@
   "version": 1,
   "shepherds": [],
   "created": "2026-07-26",
-  "updated": "2026-07-28",
+  "updated": "2026-07-30",
   "isGoodReference": false,
   "openIssueCount": 0,
   "pages": [
@@ -30,11 +30,11 @@
       "title": "Dynamic tools and MCP",
       "order": 3
     },
-  {
-    "slug": "structured-outputs-and-tool-calling",
-    "title": "Structured outputs and tool calling",
-    "order": 4
-  },
+    {
+      "slug": "structured-outputs-and-tool-calling",
+      "title": "Structured outputs and tool calling",
+      "order": 4
+    },
     {
       "slug": "approvals-limits-and-handoffs",
       "title": "Approvals, limits, and handoffs",
@@ -46,39 +46,44 @@
       "order": 6
     },
     {
+      "slug": "agent-sessions",
+      "title": "Agent sessions",
+      "order": 7
+    },
+    {
       "slug": "streaming-media-and-transcription",
       "title": "Streaming, media, and transcription",
-      "order": 7
+      "order": 8
     },
     {
       "slug": "routing-retry-and-fallback",
       "title": "Routing, retry, and fallback",
-      "order": 8
+      "order": 9
     },
     {
       "slug": "errors-and-error-handling",
       "title": "Errors and error handling",
-      "order": 9
+      "order": 10
     },
     {
       "slug": "jobs-batches-and-caches",
       "title": "Jobs, batches, and caches",
-      "order": 10
+      "order": 11
     },
     {
       "slug": "voice-and-live-sessions",
       "title": "Voice and live sessions",
-      "order": 11
+      "order": 12
     },
     {
       "slug": "testing-and-observability",
       "title": "Testing and observability",
-      "order": 12
+      "order": 13
     },
     {
       "slug": "harnesses-and-custom-extensions",
       "title": "Harnesses and custom extensions",
-      "order": 13
+      "order": 14
     }
   ]
 }

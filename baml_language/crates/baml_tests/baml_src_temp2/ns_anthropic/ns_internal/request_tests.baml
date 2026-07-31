@@ -7,7 +7,7 @@ class AnthropicRequestFixture {
 
 function _anthropic_request_fixture_task(
     provider: ai.Provider,
-) -> ai.Task<AnthropicRequestFixture> throws never {
+) -> ai.Task<AnthropicRequestFixture> throws ai.InvalidRequest {
     ai.task<AnthropicRequestFixture>(provider, (ctx: baml.llm.Context) -> baml.llm.PromptAst {
         baml.llm.assemble_prompt_ast(["Return the fixture.\n", ""], [ctx.output_format])
     })
@@ -15,7 +15,7 @@ function _anthropic_request_fixture_task(
 
 function _anthropic_image_fixture_task(
     provider: ai.Provider,
-) -> ai.Task<string> throws never {
+) -> ai.Task<string> throws ai.InvalidRequest {
     let value = image.from_base64("iVBORw0KGgo=", "image/png");
     ai.task<string>(provider, (ctx: baml.llm.Context) -> baml.llm.PromptAst {
         baml.llm
@@ -131,15 +131,13 @@ test "Anthropic submit rejects duplicate results for parallel tool calls" {
             _anthropic_submit_result(
                 provider,
                 [
-                    ai.tools.ToolResult {
+                    ai.tools.ToolOk {
                         id: "first",
                         output: { "value": 1 },
-                        is_error: false,
                     },
-                    ai.tools.ToolResult {
+                    ai.tools.ToolOk {
                         id: "first",
                         output: { "value": 2 },
-                        is_error: false,
                     },
                 ],
             ),
@@ -160,8 +158,8 @@ test "Anthropic submit leaves conversation unchanged when a later result is inva
         .submit(
             state,
             [
-                ai.tools.ToolResult { id: "first", output: { "value": 1 }, is_error: false },
-                ai.tools.ToolResult { id: "unknown", output: { "value": 2 }, is_error: false },
+                ai.tools.ToolOk { id: "first", output: { "value": 1 } },
+                ai.tools.ToolOk { id: "unknown", output: { "value": 2 } },
             ],
         ) catch (e) {
         let invalid: ai.InvalidRequest => {
@@ -183,8 +181,8 @@ test "Anthropic submit restores provider tool order" {
         .submit(
             conversation,
             [
-                ai.tools.ToolResult { id: "second", output: { "value": 2 }, is_error: false },
-                ai.tools.ToolResult { id: "first", output: { "value": 1 }, is_error: false },
+                ai.tools.ToolOk { id: "second", output: { "value": 2 } },
+                ai.tools.ToolOk { id: "first", output: { "value": 1 } },
             ],
         );
     match (submitted) {
@@ -227,8 +225,8 @@ test "Anthropic prompt submit correlates every pending call exactly once" {
         provider,
         state,
         [
-            ai.tools.ToolResult { id: "first", output: "one", is_error: false },
-            ai.tools.ToolResult { id: "first", output: "duplicate", is_error: false },
+            ai.tools.ToolOk { id: "first", output: "one" },
+            ai.tools.ToolOk { id: "first", output: "duplicate" },
         ],
     ) catch (e) {
         let invalid: ai.InvalidRequest => {
@@ -253,29 +251,138 @@ test "Anthropic appends a fresh user message without losing exact assistant bloc
     state.last_assistant_content = [opaque];
     state.messages.push({ "role": "assistant", "content": [opaque] });
     let original_wire_length = state.messages.length();
-    let appended = provider.append_message(state, ai.ChatMessage.user("second turn"));
-    match (appended) {
-        let exact: Conversation => {
-            assert.equal(exact.declared_output_type, output_type);
-            assert.equal(exact.messages.length(), original_wire_length + 1);
-            assert
-                .equal(
-                    baml.json
-                        .path<string>(
-                            exact.messages[original_wire_length - 1],
-                            ".content[0].signature",
-                        ),
-                    "opaque-signature",
-                );
-            assert
-                .equal(
-                    baml.json.path<string>(exact.messages[original_wire_length], ".content[0].text"),
-                    "second turn",
-                );
-            assert.equal(ai.message_text(exact.history.entries[1]), "second turn")
+    let _ = provider.append_message(state, ai.ChatMessage.user("second turn"));
+    assert.equal(state.declared_output_type, output_type);
+    assert.equal(state.messages.length(), original_wire_length + 1);
+    assert
+        .equal(
+            baml.json
+                .path<string>(
+                    state.messages[original_wire_length - 1],
+                    ".content[0].signature",
+                ),
+            "opaque-signature",
+        );
+    assert
+        .equal(
+            baml.json.path<string>(state.messages[original_wire_length], ".content[0].text"),
+            "second turn",
+        );
+    assert.equal(ai.message_text(state.history.entries[1]), "second turn")
+}
+
+test "Anthropic renders a steering append as a tagged user turn" {
+    let provider = root
+        .anthropic
+        .messages(model = "claude-test", api_key = "unused", base_url = "https://example.test");
+    let state = match (provider.begin<AnthropicRequestFixture>(_anthropic_request_fixture_task(provider))) {
+        let value: Conversation => value,
+        _ => baml.sys.panic("expected Anthropic conversation"),
+    };
+    let original_wire_length = state.messages.length();
+    let _ = provider.append_message(state, ai.ChatMessage.steer("stay on budget"));
+    assert
+        .equal(
+            baml.json.path<string>(state.messages[original_wire_length], ".role"),
+            "user",
+        );
+    assert
+        .equal(
+            baml.json.path<string>(state.messages[original_wire_length], ".content[0].text"),
+            "<steering>\nstay on budget\n</steering>",
+        );
+    //# The portable projection keeps the System role and steering metadata.
+    let appended = state.history.entries[state.history.entries.length() - 1];
+    assert.is_true(appended.role() == ai.MessageRole.System);
+    assert
+        .equal(
+            baml.json.path_or(appended.provider_metadata(), ".steering", false),
+            true,
+        )
+}
+
+test "Anthropic appends media using the first-render image block shape" {
+    let provider = root
+        .anthropic
+        .messages(model = "claude-test", api_key = "unused", base_url = "https://example.test");
+    let state = match (provider.begin<AnthropicRequestFixture>(_anthropic_request_fixture_task(provider))) {
+        let value: Conversation => value,
+        _ => baml.sys.panic("expected Anthropic conversation"),
+    };
+    let message = ai.ChatMessage {
+        message_role: ai.MessageRole.User,
+        content: [
+            ai.messages.TextPart { value: "compare with this", metadata: {} },
+            ai.messages.ImagePart {
+                value: image.from_base64("iVBORw0KGgo=", "image/png"),
+                metadata: {},
+            },
+        ],
+        metadata: null,
+    };
+    let _ = provider.append_message(state, message);
+    let appended = state.messages[state.messages.length() - 1];
+    assert.equal(baml.json.path<string>(appended, ".role"), "user");
+    assert.equal(baml.json.path<string>(appended, ".content[0].type"), "text");
+    assert.equal(baml.json.path<string>(appended, ".content[0].text"), "compare with this");
+    assert.equal(baml.json.path<string>(appended, ".content[1].type"), "image");
+    assert.equal(baml.json.path<string>(appended, ".content[1].source.type"), "base64");
+    assert
+        .equal(
+            baml.json.path<string>(appended, ".content[1].source.media_type"),
+            "image/png",
+        );
+    assert.equal(baml.json.path<string>(appended, ".content[1].source.data"), "iVBORw0KGgo=")
+}
+
+test "Anthropic append rejects audio and leaves the conversation unchanged" {
+    let provider = root
+        .anthropic
+        .messages(model = "claude-test", api_key = "unused", base_url = "https://example.test");
+    let state = match (provider.begin<AnthropicRequestFixture>(_anthropic_request_fixture_task(provider))) {
+        let value: Conversation => value,
+        _ => baml.sys.panic("expected Anthropic conversation"),
+    };
+    let original_wire_length = state.messages.length();
+    let original_history_length = state.history.entries.length();
+    let rejected = false;
+    let _ = provider
+        .append_messages(
+            state,
+            ai.MessageHistory {
+                entries: [
+                    ai.ChatMessage.user("first message commits only with the batch"),
+                    ai.ChatMessage {
+                        message_role: ai.MessageRole.User,
+                        content: [
+                            ai.messages.AudioPart {
+                                value: audio.from_base64("AAAA", "audio/mp3"),
+                                metadata: {},
+                            },
+                        ],
+                        metadata: null,
+                    },
+                ],
+            },
+        ) catch (e) {
+        let invalid: ai.InvalidRequest => {
+            rejected = true;
+            null
         },
-        _ => assert.is_true(false),
-    }
+        _ => baml.sys.panic("unexpected Anthropic append error"),
+    };
+    assert.is_true(rejected);
+    assert.equal(state.messages.length(), original_wire_length);
+    assert.equal(state.history.entries.length(), original_history_length)
+}
+
+test "Anthropic response helpers split visible text and thinking text" {
+    let raw = baml.json
+        .parse(
+            `{"content":[{"type":"thinking","thinking":"weighing options","signature":"sig"},{"type":"text","text":"partial answer"}]}`,
+        );
+    assert.equal(_response_thinking_text(raw) ?? "", "weighing options");
+    assert.equal(_response_text(raw) ?? "", "partial answer")
 }
 
 test "Anthropic rejects append while native or prompt tool calls are pending" {
@@ -285,7 +392,7 @@ test "Anthropic rejects append while native or prompt tool calls are pending" {
     let _native = provider.append_message(native, ai.ChatMessage.user("too soon")) catch (e) {
         let invalid: ai.InvalidRequest => {
             native_rejected = true;
-            native
+            null
         },
         _ => baml.sys.panic("unexpected Anthropic append error"),
     };
@@ -310,7 +417,7 @@ test "Anthropic rejects append while native or prompt tool calls are pending" {
     let _prompt = prompt_provider.append_message(prompt, ai.ChatMessage.user("too soon")) catch (e) {
         let invalid: ai.InvalidRequest => {
             prompt_rejected = true;
-            prompt
+            null
         },
         _ => baml.sys.panic("unexpected Anthropic prompt append error"),
     };

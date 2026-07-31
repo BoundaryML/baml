@@ -4,7 +4,7 @@ class ClaudeCodeProviderFixture {
 
 function _claude_code_provider_fixture_task(
     provider: ClaudeCodeCli,
-) -> ai.Task<ClaudeCodeProviderFixture> throws never {
+) -> ai.Task<ClaudeCodeProviderFixture> throws ai.InvalidRequest {
     ai.task<ClaudeCodeProviderFixture>(provider, (ctx: baml.llm.Context) -> baml.llm.PromptAst {
         baml.llm.assemble_prompt_ast(["ORIGINAL_CLAUDE_CODE_PROMPT\n", ""], [ctx.output_format])
     })
@@ -12,7 +12,7 @@ function _claude_code_provider_fixture_task(
 
 function _claude_code_provider_fixture_state(
     provider: ClaudeCodeCli,
-) -> ClaudeCodeAgentConversation throws never {
+) -> ClaudeCodeAgentConversation throws ai.InvalidRequest {
     match (provider.begin<ClaudeCodeProviderFixture>(_claude_code_provider_fixture_task(provider))) {
         let state: ClaudeCodeAgentConversation => state,
         _ => baml.sys.panic("expected Claude Code Agent conversation"),
@@ -127,8 +127,8 @@ test "Claude Code submit is atomic when a later result ID is invalid" {
         .submit(
             state,
             [
-                ai.tools.ToolResult { id: "first", output: { "value": 1 }, is_error: false },
-                ai.tools.ToolResult { id: "unknown", output: { "value": 2 }, is_error: false },
+                ai.tools.ToolOk { id: "first", output: { "value": 1 } },
+                ai.tools.ToolOk { id: "unknown", output: { "value": 2 } },
             ],
         ) catch (e) {
         let invalid: ai.InvalidRequest => {
@@ -154,8 +154,8 @@ test "Claude Code submit records valid parallel results in provider call order" 
         .submit(
             state,
             [
-                ai.tools.ToolResult { id: "second", output: { "value": 2 }, is_error: false },
-                ai.tools.ToolResult { id: "first", output: { "value": 1 }, is_error: false },
+                ai.tools.ToolOk { id: "second", output: { "value": 2 } },
+                ai.tools.ToolOk { id: "first", output: { "value": 1 } },
             ],
         );
     assert.equal(state.pending_calls.length(), 0);

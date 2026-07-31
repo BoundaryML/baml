@@ -23,8 +23,12 @@ test "AnyFunction tool invocation applies ordinary function defaults" {
             },
         );
 
-    assert.is_true(!result.is_error);
-    assert.equal(baml.json.path<bool>(result.output, ".include_history"), false)
+    match (result) {
+        let ok: ai.tools.ToolOk => {
+            assert.equal(baml.json.path<bool>(ok.output, ".include_history"), false)
+        },
+        let failed: ai.tools.ToolError => assert.is_true(false),
+    }
 }
 
 test "AnyFunction tool invocation returns a correlated error for invalid arguments" {
@@ -36,9 +40,13 @@ test "AnyFunction tool invocation returns a correlated error for invalid argumen
             ai.tools.ToolCall { id: "invalid-1", name: tool.name, args: { "customer_id": 42 } },
         );
 
-    assert.equal(result.id, "invalid-1");
-    assert.is_true(result.is_error);
-    assert.contains(baml.json.stringify(result.output), "invalid arguments")
+    match (result) {
+        let failed: ai.tools.ToolError => {
+            assert.equal(failed.id, "invalid-1");
+            assert.contains(failed.message, "invalid arguments")
+        },
+        let ok: ai.tools.ToolOk => assert.is_true(false),
+    }
 }
 
 test "AnyFunction tool closure captures application state outside its schema" {
@@ -65,7 +73,7 @@ test "AnyFunction tool closure captures application state outside its schema" {
         );
 
     assert.equal(properties.keys(), ["customer_id"]);
-    assert.equal(baml.json.path<string>(result.output, ".tenant_id"), "tenant-42")
+    assert.equal(baml.json.path<string>(ai.tools.result_payload(result), ".tenant_id"), "tenant-42")
 }
 
 test "AnyFunction bound method excludes self from its tool schema" {
@@ -86,7 +94,7 @@ test "AnyFunction bound method excludes self from its tool schema" {
     assert.equal(tool.name, "lookup");
     assert.equal(tool.description, "Look up an account with a bound application service.");
     assert.equal(properties.keys(), ["customer_id"]);
-    assert.equal(baml.json.path<string>(result.output, ".tenant_id"), "tenant-42")
+    assert.equal(baml.json.path<string>(ai.tools.result_payload(result), ".tenant_id"), "tenant-42")
 }
 
 test "Agent.new accepts bare functions and explicit tool overrides" {

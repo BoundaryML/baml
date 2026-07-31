@@ -13,7 +13,7 @@ implements ai.harness.Harness for NamedHarness {
     session: ai.harness.HarnessSession,
     task: ai.Task<T>,
     on_event: ((ai.observe.AgentEvent) -> null throws never)?,
-  ) -> ai.harness.HarnessRun<T> throws baml.errors.UnknownError {
+  ) -> ai.harness.HarnessRun<T> throws ai.Failure | baml.errors.UnknownError {
     self.inner.run<T>(session, task, on_event = on_event)
   }
   function save_session(self, session: ai.harness.HarnessSession) -> ai.harness.HarnessSessionToken

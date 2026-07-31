@@ -13,6 +13,7 @@ provider. Use observers and response metadata to understand live runs.
 | `ai.observe.AgentObserver` | Watches an Agent without changing it |
 | `ai.Done<T>.metadata` | Keeps request, usage, and provider details |
 | `ai.testing.FakeProvider` | Deterministic provider double with failure injection |
+| `ai.testing.FakeToolProvider` and `ai.testing.ScriptedToolProvider` | Deterministic tool-calling doubles |
 
 ## Example: test workflow code without a model
 
@@ -38,7 +39,7 @@ class Resolution {
 }
 
 function ResolveTicket(ticket: SupportTicket) -> Resolution {
-  provider: "openai-responses/gpt-5.6-luna"
+  provider: fast_model()
   prompt: `
     Resolve this support ticket.
     Subject: ${ticket.subject}
@@ -96,7 +97,7 @@ testset "live-provider" {
         });
         assert.is_true(ready_to_close(done.value))
       },
-      let stopped: ai.BudgetReached => {
+      let stopped: ai.Stopped => {
         throw baml.errors.Unsupported {
           message: "live test stopped: " + stopped.reason,
         }
@@ -109,6 +110,12 @@ testset "live-provider" {
       let interrupted: ai.Interrupted => {
         throw baml.errors.Unsupported {
           message: "live test interrupted: " + interrupted.reason,
+        }
+      },
+      let failed: ai.Failed => {
+        match (failed.cause) {
+          let failure: ai.Failure => throw failure,
+          let unknown: baml.errors.UnknownError => throw unknown,
         }
       },
     }
@@ -146,7 +153,7 @@ class GuideObserver {
 
 function resolve_with_logs(
   ticket: SupportTicket,
-) -> ai.Done<Resolution> | ai.BudgetReached | ai.Handoff | ai.Interrupted {
+) -> ai.Done<Resolution> | ai.Stopped | ai.Handoff | ai.Interrupted | ai.Failed {
   let observer = GuideObserver { kinds: [] };
   let outcome = ResolveTicketWithTools@task(ticket).run(
     runner = ai.run.Agent<Resolution>.new(
@@ -167,29 +174,50 @@ Agent outcome union.
 
 ```mermaid
 flowchart TD
-  agent["Live Agent"] --> budget{"Budget remains?"}
-  budget -->|yes| step["Provider step"]
-  step --> events["Publish model and usage events"]
+  agent["Live Agent"] --> limit{"Steps remain?"}
+  limit -->|yes| step["Provider step"]
+  step --> events["Publish step, text, and usage events"]
   events --> observer["GuideObserver.on_event"]
   observer --> logs["Recorded event kinds"]
   step --> result{"Final value or tool calls?"}
   result -->|tool calls| tools["Run tools and publish events"]
   tools --> observer
   tools --> submit["Submit results"]
-  submit --> budget
+  submit --> limit
   result -->|final value| done["Done and terminal event"]
-  budget -->|no| stopped["BudgetReached"]
+  limit -->|no| stopped["Stopped"]
   done --> observer
 ```
 
 ### Illustrative output
 
 ```console
-[INFO] ["model_started", "usage_updated", "tool_call_proposed", "tool_call_started", "tool_call_finished", "model_started", "usage_updated", "run_finished"]
+[INFO] ["model_started", "step_finished", "usage_updated", "tool_call_proposed", "tool_call_started", "tool_call_finished", "model_started", "step_finished", "usage_updated", "run_finished"]
 ```
 
-Observers receive model, tool, provider, usage, and terminal events. They
-cannot block a tool or change the run; use an Agent callback for that.
+Observers receive model, step, tool, provider, usage, and terminal events.
+They cannot block a tool or change the run; use an Agent callback for that.
+
+### The per-step telemetry floor
+
+Every completed provider step emits one
+`StepFinishedEvent { id, step, metadata, usage_delta, at }` carrying the
+step's OWN response metadata — request ID, model, finish reason, which used
+to be unrecoverable for the intermediate steps of a multi-step run — and
+the step's usage delta. `UsageEvent` stays cumulative; the delta lives on
+the step event. When the provider exposes display channels, the loop also
+emits `AssistantTextEvent { id, step, text, at }` for visible assistant
+text produced alongside a step's outcome — no more smuggling narration
+through synthetic tool arguments — and `ReasoningEvent { id, step, text,
+at }` for the reasoning text the vendor exposes for display (Anthropic
+thinking text, OpenAI reasoning summaries, Gemini thought summaries).
+Signed or encrypted continuation blobs never appear in events; they stay in
+the `Conversation`. The same channels surface on the provider protocol as
+`ModelStep.assistant_text` and `ModelStep.reasoning_text`.
+
+`AgentEvent` itself gained `emitted_at() -> baml.time.Instant?` — every
+event the loop emits going forward carries a timestamp so observers can
+build spans; legacy events that predate the telemetry floor return null.
 
 For a cooperative interruption, observers receive two terminal signals in a
 fixed order:
@@ -209,7 +237,11 @@ with a cancellation request. Those paths emit their normal terminal event.
 
 For a normal model run, inspect `Done.metadata.usage`. The Agent accumulates
 usage reported by each step. Provider fields that are absent remain absent;
-BAML does not invent token or cost data.
+BAML does not invent token or cost data. `ai.Usage` counts tokens only —
+there is no built-in dollar field. When an observer or dashboard needs a
+spend estimate, apply the application's own price table:
+`ai.observe.estimated_cost(usage, ai.observe.TokenPrice { input_per_million:
+..., output_per_million: ... })`.
 
 ## Choose the right kind of test
 
@@ -225,6 +257,52 @@ demand: with `failures_remaining: 1` it throws a classified failure once, then
 succeeds, which exercises the same recovery paths a live provider would. An
 application can still implement a provider capability in its own test sources
 when it needs behavior the standard fakes do not model.
+
+### Fake tool providers
+
+Tool-loop orchestration has its own doubles. `ai.testing.FakeToolProvider`
+proposes one fixed batch of `tool_calls` on its first step and then parses
+`final_output` as the typed result. `ai.testing.ScriptedToolProvider` scripts
+several tool turns — `turns: ai.tools.ToolCalls[]` — before its final output,
+and its conversation records every batch the Agent submitted in
+`submitted_results: ai.tools.ToolResult[][]`:
+
+```baml
+let provider = ai.testing.ScriptedToolProvider {
+  turns: [
+    ai.tools.ToolCalls {
+      calls: [
+        ai.tools.ToolCall {
+          id: "call-1",
+          name: "search_knowledge",
+          args: { "query": "duplicate charge" },
+        },
+      ],
+    },
+  ],
+  final_output: `{"category": "billing", "priority": "Urgent", "summary": "Duplicate charge", "reply": "The duplicate charge will be reversed."}`,
+  usage_per_step: null,
+}
+```
+
+`ai.tools.ToolResult` is the union `ToolOk | ToolError`, so assertions match
+on the variant:
+
+```baml
+match (result) {
+  let ok: ai.tools.ToolOk => assert.equal(ok.id, "call-1"),
+  let failed: ai.tools.ToolError => baml.sys.panic(failed.message),
+}
+```
+
+For coarser checks, `ai.tools.result_id(result)` and
+`ai.tools.result_is_error(result)` answer correlation and success questions
+without destructuring.
+
+Both fakes implement `ResumableAgentProvider` and
+`ConversationAppendProvider`, so session `save`/`fork` and multi-turn `send`
+work against them, and their conversations report `pending_calls()` — the
+same session-phase guardrails a live provider would enforce.
 
 Task values also make provider matrices straightforward: rebind one task with
 `.with_provider(...)` — for example `fast_model()` or `careful_model()` — run

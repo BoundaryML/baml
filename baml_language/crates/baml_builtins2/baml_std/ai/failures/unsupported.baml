@@ -2,6 +2,5 @@
 // mismatches (a retry wrapper around a provider that cannot generate, a
 // fallback chain with no capable member) are classified, terminal failures.
 implements Failure for baml.errors.Unsupported {
-  function is_transient(self) -> bool throws never { false }
   function effects(self) -> Effects throws never { Effects.None }
 }

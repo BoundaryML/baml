@@ -86,7 +86,7 @@ testset "integ-test-guide-08-claude-code-cli" {
 
     test "guide 08.07 live Claude Code: direct call composes native WebFetch with one BAML tool" {
         //# Run the LLM function through its direct-call stand-in
-        let story = ai.internal._require_done(ClaudeCodeWebFetchWithBamlTool@task().with_provider(live_claude_code_with_web_fetch()).run(runner = ai.run.Agent<HackerNewsTopStoryWithBamlTool>.new())).value;
+        let story = ClaudeCodeWebFetchWithBamlTool@task().with_provider(live_claude_code_with_web_fetch()).complete(runner = ai.run.Agent<HackerNewsTopStoryWithBamlTool>.new());
 
         log.info("Claude Code plus BAML tool completed: " + story.to_string());
         assert.is_true(story.title.length() > 0);

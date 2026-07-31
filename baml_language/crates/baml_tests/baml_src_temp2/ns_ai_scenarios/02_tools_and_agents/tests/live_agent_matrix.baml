@@ -12,7 +12,6 @@ testset "integ-test-guide-02-agent-capabilities" {
     let trace = guide_agent_trace();
     let observer = GuideObserver { kinds: [] };
     let runner = ai.run.Agent<Resolution>.new(
-      tools = [],
       tool_registry = registry,
       prepare_step = (context) -> {
         if (context.step == 0) {

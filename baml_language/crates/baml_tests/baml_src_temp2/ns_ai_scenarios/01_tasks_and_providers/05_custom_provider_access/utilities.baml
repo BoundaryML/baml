@@ -6,13 +6,22 @@ class GuideAgentCapability<T> {
 
     implements ai.Runner<ai.Task<T>> {
         type Output = ai.ResponseWithMetadata<T>
-        type Error = ai.Failure | baml.errors.UnknownError
+        type Error = ai.IncompleteRun | ai.Failure | baml.errors.UnknownError
 
         function run(
             self,
             task: ai.Task<T>,
-        ) -> ai.ResponseWithMetadata<T> throws ai.Failure | baml.errors.UnknownError {
-            ai.internal._run_agent_to_response<T>(task.with_provider(self.provider))
+        ) -> ai.ResponseWithMetadata<T> throws ai.IncompleteRun | ai.Failure | baml.errors.UnknownError {
+            let outcome = task
+                .with_provider(self.provider)
+                .run(runner = ai.run.Agent<T>.new());
+            match (outcome) {
+                let done: ai.Done<T> => done.response(),
+                let failed: ai.Failed => throw failed.cause,
+                let stopped: ai.Stopped => throw ai.IncompleteRun { outcome: stopped },
+                let stopped: ai.Handoff => throw ai.IncompleteRun { outcome: stopped },
+                let stopped: ai.Interrupted => throw ai.IncompleteRun { outcome: stopped },
+            }
         }
     }
 }

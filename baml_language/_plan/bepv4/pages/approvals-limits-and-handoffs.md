@@ -11,9 +11,12 @@ approval, authorization, argument rewriting, and blocking logic directly to
 | `before_tool_call` callback | Makes a decision before an Agent runs a tool |
 | `prepare_step` callback | Changes the next provider, tool roster, or stop decision |
 | `ai.tools.ToolDecision` | Allows, replaces, or blocks one tool call |
-| `ai.Budget { max_steps, max_cost_usd }` | Stops work between provider steps |
+| `max_steps` | Caps the number of provider steps (default 32; `null` is unlimited) |
+| `stop_when` | Caller stop policy, checked at every committed boundary with the same `ai.tools.StepContext` that `prepare_step` receives |
 | `max_tool_calls_per_step` | Rejects an oversized provider tool batch before any tool effect |
 | `ai.tools.tool(...).as_handoff()` | Returns one exact call to the application before dispatch |
+| `ai.tools.ToolOk.of(call, output)` / `ai.tools.ToolError.of(call, message)` | Builds one correlated result for a pending call |
+| `session.submit_tool_results(results, runner?)` | Answers pending calls and continues the turn |
 
 ## Example
 
@@ -45,7 +48,7 @@ function lookup_account(customer_id: string) -> json throws never {
 }
 
 function ResolveTicketWithTools(ticket: SupportTicket) -> Resolution {
-  provider: "openai-responses/gpt-5.6-luna"
+  provider: fast_model()
   prompt: `
     Resolve ticket ${ticket.id}. Use the available tools before answering.
     Hand the account over to a person when the request needs authority you
@@ -60,6 +63,10 @@ function ResolveTicketWithTools(ticket: SupportTicket) -> Resolution {
 }
 
 let history_approved = false;
+let price = ai.observe.TokenPrice {
+  input_per_million: 3.0,
+  output_per_million: 15.0,
+};
 
 let outcome = ResolveTicketWithTools@task(sample_ticket()).run(
   runner = ai.run.Agent<Resolution>.new(
@@ -70,22 +77,31 @@ let outcome = ResolveTicketWithTools@task(sample_ticket()).run(
         ai.tools.ToolDecision.allow(event.call)
       }
     },
-    budget = ai.Budget { max_steps: 8, max_cost_usd: 0.25 },
+    max_steps = 8,
+    stop_when = (context) -> {
+      ai.observe.estimated_cost(context.usage, price) > 0.25
+    },
     max_tool_calls_per_step = 1,
   ),
 )
 ```
 
+There is no built-in spend cap: `ai.Usage` counts tokens, and dollar
+accounting is the application's judgment. `ai.observe.TokenPrice` plus
+`ai.observe.estimated_cost(usage, price)` express that judgment inside
+`stop_when` (or an observer), where the application controls the price table
+and the threshold.
+
 ### What happens
 
 ```mermaid
 flowchart TD
-  task["ResolveTicketWithTools task"] --> budget{"Step and cost budget remain?"}
-  budget -->|yes| model["Provider step"]
+  task["ResolveTicketWithTools task"] --> policy{"max_steps and stop_when allow another step?"}
+  policy -->|yes| model["Provider step"]
   model --> result{"Provider returned?"}
   result -->|final value| done["Done<Resolution>"]
   result -->|tool calls| callLimit{"Within per-step call limit?"}
-  callLimit -->|no| limitFailure["ToolCallLimitExceeded with pending calls + conversation"]
+  callLimit -->|no| limitFailure["Failed with ToolCallLimitExceeded cause + pending calls + conversation"]
   callLimit -->|yes| transfer{"Handoff tool?"}
   transfer -->|yes| handoff["Handoff with exact ToolCall"]
   transfer -->|no| callback["before_tool_call"]
@@ -93,8 +109,8 @@ flowchart TD
   callback -->|not approved| blocked["Return blocked tool result"]
   history --> submit["Submit correlated result"]
   blocked --> submit
-  submit --> budget
-  budget -->|no| stopped["BudgetReached"]
+  submit --> policy
+  policy -->|no| stopped["Stopped"]
 ```
 
 ### Illustrative output
@@ -116,8 +132,8 @@ before dispatch. The call retains its provider correlation ID, name, and
 arguments.
 
 A handoff must be unambiguous. If one model step mixes a handoff with an
-application call, or returns several handoff calls, the Agent throws
-`ai.InvalidRequest` before executing anything.
+application call, or returns several handoff calls, the Agent returns
+`ai.Failed` with an `ai.InvalidRequest` cause before executing anything.
 
 ## Enforce the number of tool calls in one step
 
@@ -160,66 +176,76 @@ The typed `ai.ToolCallLimitExceeded` failure carries:
 | `conversation` | Provider-owned continuation at the pending-call boundary |
 | `steps_taken` | Number of completed provider steps |
 
-It is non-transient with `Effects.None`: retrying the same provider step does
-not fix a deterministic policy mismatch, and no application tool effect has
-occurred. It is a failure rather than `BudgetReached` because the provider
-conversation contains unresolved calls. The application must explicitly
-accept or reject every call before taking the next model step.
+Its `effects()` reports `Effects.None`: no application tool effect has
+occurred. But the provider step itself committed, so the run does not throw —
+it returns `ai.Failed { cause: ai.ToolCallLimitExceeded, ... }` at the
+committed boundary. It is a fault rather than `Stopped` because the
+provider conversation contains unresolved calls. The application must
+explicitly accept or reject every call before taking the next model step.
 
 For example, an application can reject the batch and resume without replaying
 the model step:
 
 ```baml
-let outcome = ResolveTicketWithTools@task(sample_ticket()).run(
-  runner = ai.run.Agent<Resolution>.new(max_tool_calls_per_step = 1),
-) catch (e) {
-  let limited: ai.ToolCallLimitExceeded => {
-    let provider = match (limited.conversation.provider()) {
-      let agent: ai.AgentProvider => agent,
-      _ => throw baml.errors.Unsupported {
-        message: "conversation provider cannot resume an Agent",
-      },
-    };
-    let rejected = limited.calls.calls.map((call) -> {
-      ai.tools.ToolResult.error(call, "only one tool call is allowed per step")
-    });
-    let continued = provider.submit(limited.conversation, rejected);
+let task = ResolveTicketWithTools@task(sample_ticket());
 
-    ResolveTicketWithTools@task(sample_ticket()).run(
-      runner = ai.run.Agent<Resolution>.new(
-        max_tool_calls_per_step = 1,
-        conversation = continued,
-      ),
-    )
+let outcome = task.run(
+  runner = ai.run.Agent<Resolution>.new(max_tool_calls_per_step = 1),
+);
+
+match (outcome) {
+  let failed: ai.Failed => match (failed.cause) {
+    let limited: ai.ToolCallLimitExceeded => {
+      let session = ai.run.AgentSession<Resolution>.of(task, failed);
+      let rejected = limited.calls.calls.map((call) -> {
+        ai.tools.ToolError.of(call, "only one tool call is allowed per step")
+      });
+      let continued = session.submit_tool_results(
+        rejected,
+        runner = ai.run.Agent<Resolution>.new(max_tool_calls_per_step = 1),
+      );
+      log.info(continued)
+    },
+    _ => log.info(failed.cause),
   },
+  _ => log.info(outcome),
 }
 ```
 
 Submitting correlated errors is one policy choice. An application may instead
-inspect and fulfill the pending calls externally, but it must preserve every
-call ID and acknowledge the complete batch before resuming.
+inspect and fulfill the pending calls externally with `ai.tools.ToolOk.of`.
+Either way, `submit_tool_results` validates the complete batch: every pending
+call ID must receive exactly one correlated result before the run resumes.
 
 ## Handle every terminal outcome
 
-Each outcome carries what the caller needs to continue:
+Each outcome carries what the caller needs to continue, and every variant
+carries `steps_taken` and cumulative whole-run `usage`:
 
-- `ai.Done<T> { value, metadata, conversation }` — the final typed value, the
-  response metadata, and the conversation that produced it.
-- `ai.BudgetReached { conversation, steps_taken, reason }` — a safe stop with
-  everything needed to resume. `Budget` is multi-dimensional — `max_steps`
-  and/or `max_cost_usd` — and `reason` names the limit that tripped.
-- `ai.Handoff { call, conversation, steps_taken }` — a tool marked
+- `ai.Done<T> { value, metadata, conversation, steps_taken, usage }` — the
+  final typed value, the response metadata, and the conversation that
+  produced it.
+- `ai.Stopped { conversation, steps_taken, usage, reason }` — a voluntary
+  policy stop with everything needed to resume. `reason` names which policy
+  fired: `"max_steps"`, `"stop_when"`, or a `StepPlan` stop's reason.
+- `ai.Handoff { call, conversation, steps_taken, usage }` — a tool marked
   `.as_handoff()` fired; `call` is the exact `ai.tools.ToolCall` the
   application must resolve.
-- `ai.Interrupted { conversation, steps_taken, reason }` — cooperative
+- `ai.Interrupted { conversation, steps_taken, usage, reason }` — cooperative
   cancellation reached a committed boundary with no unsubmitted application
   tool results.
+- `ai.Failed { cause, conversation, steps_taken, usage }` — a classified
+  failure occurred after this run had committed progress: a continuation's
+  entry append or submit, or at least one completed provider step. The
+  conversation is the last committed state. A failure before any progress
+  still throws, so ordinary catch patterns and step-level `ai.retry`
+  semantics are unchanged.
 
 ```baml
 match (outcome) {
   let done: ai.Done<Resolution> => log.info(done.value.reply),
 
-  let stopped: ai.BudgetReached => {
+  let stopped: ai.Stopped => {
     // Save stopped.conversation and resume after the limit or approval changes.
     log.info(`stopped after ${stopped.steps_taken} steps: ${stopped.reason}`)
   },
@@ -233,45 +259,48 @@ match (outcome) {
     // This conversation can resume directly with a fresh cancellation token.
     log.info(`interrupted after ${interrupted.steps_taken} steps`)
   },
+
+  let failed: ai.Failed => {
+    // Resume the carried conversation; never blind-replay a stopped run.
+    log.info(`failed after ${failed.steps_taken} steps`)
+  },
 }
 ```
 
-All incomplete outcomes retain the conversation. `BudgetReached` and
-`Interrupted` can resume that state directly. A `Handoff` still has a pending
-provider call, so the application must submit its result first.
+All incomplete outcomes retain the conversation. `Stopped`,
+`Interrupted`, and `Failed` can resume that state through
+`session.resume()`. A `Handoff` still has a pending provider call, so the
+application must submit its result through `session.submit_tool_results`
+first.
 
 ## Complete a handoff and resume
 
 The application performs the external work, creates one result correlated to
-`handoff.call.id`, and submits it through the conversation's provider:
+`handoff.call.id`, and submits it through the session:
 
 ```baml
 function resume_after_handoff(
   handoff: ai.Handoff,
   external_output: json,
-) -> ai.Done<Resolution> | ai.BudgetReached | ai.Handoff | ai.Interrupted
+) -> ai.Done<Resolution> | ai.Stopped | ai.Handoff | ai.Interrupted | ai.Failed
     throws ai.Failure | baml.errors.UnknownError | baml.errors.Unsupported {
-  let provider = match (handoff.conversation.provider()) {
-    let agent: ai.AgentProvider => agent,
-    _ => throw baml.errors.Unsupported {
-      message: "handoff conversation provider cannot resume an Agent",
-    },
-  };
+  let session = ai.run.AgentSession<Resolution>.of(
+    ResolveTicketWithTools@task(sample_ticket()),
+    handoff,
+  );
 
-  let result = ai.tools.ToolResult.ok(handoff.call, external_output);
-  let conversation = provider.submit(handoff.conversation, [result]);
-
-  ResolveTicketWithTools@task(sample_ticket()).run(
-    runner = ai.run.Agent<Resolution>.new(
-      conversation = conversation,
-    ),
-  )
+  let result = ai.tools.ToolOk.of(handoff.call, external_output);
+  session.submit_tool_results([result])
 }
 ```
 
-`ToolResult.ok(handoff.call, ...)` copies the exact call ID. Use
-`ToolResult.error(handoff.call, message)` when the external work fails. In
-either case, `submit` must happen before the next Agent `step`.
+`ai.tools.ToolOk.of(handoff.call, ...)` copies the exact call ID. Use
+`ai.tools.ToolError.of(handoff.call, message)` when the external work fails.
+In either case, `submit_tool_results` is the only continuation for a
+conversation stopped at a handoff: it validates that each pending call
+receives exactly one correlated result and rejects a submission when nothing
+is pending, while `send` on the same state throws `ai.InvalidRequest`
+pointing back at `submit_tool_results`.
 
 ## What callbacks can change
 

@@ -14,7 +14,7 @@ class ClientConversation {
     identity: ai.TaskIdentity?,
     arguments: map<string, unknown>,
     tags: map<string, string>,
-    pending_calls: ai.tools.ToolCall[],
+    pending: ai.tools.ToolCall[],
 
     implements ai.Conversation {
         function provider(self) -> ai.Provider throws never {
@@ -27,6 +27,10 @@ class ClientConversation {
 
         function output_type_fingerprint(self) -> string? throws never {
             self.declared_output_type
+        }
+
+        function pending_calls(self) -> ai.tools.ToolCall[]? throws never {
+            self.pending
         }
     }
 }
@@ -112,7 +116,7 @@ function _client_prior_turns(state: ClientConversation) -> string throws never {
 function _client_turn_prompt<T>(
     state: ClientConversation,
     output_suffix: string,
-) -> baml.llm.PromptAst throws never {
+) -> baml.llm.PromptAst throws ai.InvalidRequest {
     let rendered = state
         .recipe
         .render_with_output_format(state.owner, reflect.type_of<T>(), output_suffix);
@@ -141,7 +145,19 @@ function _client_execute<T>(
             prompt
         },
     };
-    provider.client.execute_oneshot<T>(context, 0) catch_all (e) {
+    //# One reliability owner (D5): the ai path skips the legacy client
+    //# retry loop — it has no effects gate and would stack with ai.retry.
+    //# Reliability for tasks is expressed with ai.retry / ai.fallback on
+    //# the provider.
+    match (provider.client.retry) {
+        let legacy: baml.llm.RetryPolicy => {
+            log.warn(
+                "client declares a legacy retry_policy; the ai execution path ignores it — wrap the task's provider in ai.retry instead",
+            );
+        },
+        null => {},
+    }
+    provider.client.execute_once_oneshot<T>(context, 0) catch_all (e) {
         _ => throw baml.errors.UnknownError.with_message<never>(
             e,
             "baml.llm.Client provider step failed",
@@ -222,7 +238,7 @@ implements ai.AgentProvider for ClientProvider {
             identity: task.identity,
             arguments: task.arguments,
             tags: task.tags,
-            pending_calls: [],
+            pending: [],
         }
     }
 
@@ -232,7 +248,7 @@ implements ai.AgentProvider for ClientProvider {
         tools: ai.tools.Tool[],
     ) -> ai.ModelStep<T> throws ai.Failure | baml.errors.UnknownError {
         let state = _client_require_state<T>(self, conversation);
-        if (state.pending_calls.length() != 0) {
+        if (state.pending.length() != 0) {
             throw ai.InvalidRequest {
                 provider: self.name(),
                 status_code: null,
@@ -244,6 +260,8 @@ implements ai.AgentProvider for ClientProvider {
             let value = _client_execute<T>(self, state, _client_turn_prompt<T>(state, ""));
             state.history.entries.push(ai.ChatMessage.assistant(_client_value_text(value)));
             return ai.ModelStep<T> {
+                assistant_text: null,
+                reasoning_text: null,
                 outcome: value,
                 metadata: _client_metadata(self),
             }
@@ -260,7 +278,7 @@ implements ai.AgentProvider for ClientProvider {
         match (choice) {
             let calls: ai.tools.ToolCalls => {
                 _client_validate_calls(self, calls);
-                state.pending_calls = calls.calls;
+                state.pending = calls.calls;
                 state.history.entries.push(
                     ai
                         .ChatMessage
@@ -279,6 +297,8 @@ implements ai.AgentProvider for ClientProvider {
                         ),
                 );
                 ai.ModelStep<T> {
+                    assistant_text: null,
+                    reasoning_text: null,
                     outcome: calls,
                     metadata: _client_metadata(self),
                 }
@@ -286,6 +306,8 @@ implements ai.AgentProvider for ClientProvider {
             let value: T => {
                 state.history.entries.push(ai.ChatMessage.assistant(_client_value_text(value)));
                 ai.ModelStep<T> {
+                    assistant_text: null,
+                    reasoning_text: null,
                     outcome: value,
                     metadata: _client_metadata(self),
                 }
@@ -313,7 +335,7 @@ implements ai.AgentProvider for ClientProvider {
                 detail: "client adapter received a conversation owned by another client",
             }
         }
-        if (results.length() != state.pending_calls.length()) {
+        if (results.length() != state.pending.length()) {
             throw ai.InvalidRequest {
                 provider: self.name(),
                 status_code: null,
@@ -322,9 +344,9 @@ implements ai.AgentProvider for ClientProvider {
         }
         let ordered: ai.tools.ToolResult[] = [];
         let seen: string[] = [];
-        for (let call in state.pending_calls) {
+        for (let call in state.pending) {
             let matches = results.filter((result: ai.tools.ToolResult) -> bool {
-                result.id == call.id
+                ai.tools.result_id(result) == call.id
             });
             if (matches.length() != 1 || seen.includes(call.id)) {
                 throw ai.InvalidRequest {
@@ -340,9 +362,9 @@ implements ai.AgentProvider for ClientProvider {
             + baml.json.stringify(
                 ordered.map((result: ai.tools.ToolResult) -> json {
                     {
-                        "id": result.id,
-                        "output": result.output,
-                        "is_error": result.is_error,
+                        "id": ai.tools.result_id(result),
+                        "output": ai.tools.result_payload(result),
+                        "is_error": ai.tools.result_is_error(result),
                     }
                 }),
             );
@@ -353,7 +375,7 @@ implements ai.AgentProvider for ClientProvider {
                 metadata: null,
             },
         );
-        state.pending_calls = [];
+        state.pending = [];
         state
     }
 }

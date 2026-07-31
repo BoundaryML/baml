@@ -10,11 +10,11 @@ function fallback_between_providers() -> ai.ResponseWithMetadata<Resolution> {
     ...fake_resolution(),
     provider_name: "fallback",
   };
-  let response = ai.internal._response_from_done(
-    ai.internal._require_done(
+  let response = (
+    done_or_fail(
       ResolveTicket@task(sample_ticket()).with_provider(ai.fallback([failed, fallback])).run(runner = ai.run.Agent<Resolution>.new()),
-    ),
-  );
+    )
+  ).response();
   log.info({
     "scenario": "fallback_between_providers",
     "completed_by": response.metadata.provider,

@@ -82,7 +82,7 @@ function _prompt_turn<T>(
     state: PromptConversation,
     tools: ai.tools.Tool[],
     output_suffix: string,
-) -> ai.Task<T> throws never {
+) -> ai.Task<T> throws ai.InvalidRequest {
     //# Render this turn with T or T | ToolCalls as the text output contract
     let rendered = state.recipe.render_with_output_format(state.owner, reflect.type_of<T>(), output_suffix);
     //# Reattach prior text tool calls and correlated results
@@ -96,7 +96,7 @@ function _prompt_turn<T>(
                 [ai.messages._prompt_text_content(rendered), prior],
             )
     };
-    let recipe = ai._prompt_recipe(
+    let recipe = ai.PromptRenderRecipe.of(
         (ctx: baml.llm.Context) -> baml.llm.PromptAst {
             prompt
         },
@@ -164,7 +164,12 @@ function _prompt_step<T>(
             .history
             .entries
             .push(ai.ChatMessage.assistant(_response_text(response.metadata.raw) ?? ""));
-        return ai.ModelStep<T> { outcome: response.value, metadata: response.metadata };
+        return ai.ModelStep<T> {
+            outcome: response.value,
+            metadata: response.metadata,
+            assistant_text: _response_text(response.metadata.raw),
+            reasoning_text: _response_thinking_text(response.metadata.raw),
+        };
     }
     //# Prompt mode asks for the text choice T | ToolCalls without native tools
     let response = _messages_generate<T | ai.tools.ToolCalls>(
@@ -207,14 +212,24 @@ function _prompt_step<T>(
                                 ),
                         ),
                 );
-            ai.ModelStep<T> { outcome: calls, metadata: response.metadata }
+            ai.ModelStep<T> {
+                outcome: calls,
+                metadata: response.metadata,
+                assistant_text: _response_text(response.metadata.raw),
+                reasoning_text: _response_thinking_text(response.metadata.raw),
+            }
         },
         let value: T => {
             state
                 .history
                 .entries
                 .push(ai.ChatMessage.assistant(_response_text(response.metadata.raw) ?? ""));
-            ai.ModelStep<T> { outcome: value, metadata: response.metadata }
+            ai.ModelStep<T> {
+                outcome: value,
+                metadata: response.metadata,
+                assistant_text: _response_text(response.metadata.raw),
+                reasoning_text: _response_thinking_text(response.metadata.raw),
+            }
         },
     }
 }
@@ -254,7 +269,7 @@ function _prompt_submit(
             candidate.id == call.id
         });
         let matching = results.filter((candidate: ai.tools.ToolResult) -> bool {
-            candidate.id == call.id
+            ai.tools.result_id(candidate) == call.id
         });
         if (call.id.length() == 0 || pending.length() != 1 || matching.length() != 1) {
             throw ai.InvalidRequest {
@@ -267,7 +282,7 @@ function _prompt_submit(
     for (let call in state.pending_calls) {
         let result = results
             .filter((candidate: ai.tools.ToolResult) -> bool {
-                candidate.id == call.id
+                ai.tools.result_id(candidate) == call.id
             })[0];
         state
             .history
@@ -281,9 +296,9 @@ function _prompt_submit(
                                 .json
                                 .stringify(
                                     {
-                                        "id": result.id,
-                                        "output": result.output,
-                                        "is_error": result.is_error,
+                                        "id": ai.tools.result_id(result),
+                                        "output": ai.tools.result_payload(result),
+                                        "is_error": ai.tools.result_is_error(result),
                                     },
                                 ),
                             metadata: {},

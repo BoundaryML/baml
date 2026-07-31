@@ -75,6 +75,105 @@ function _message_text(message: ai.Message) -> string throws never {
         .join("")
 }
 
+function _append_audio_format(mime: string) -> string throws never {
+    if (mime == "audio/wav" || mime == "audio/x-wav") {
+        return "wav";
+    }
+    if (mime == "audio/mp3" || mime == "audio/mpeg") {
+        return "mp3";
+    }
+    if (mime == "audio/flac" || mime == "audio/x-flac") {
+        return "flac";
+    }
+    if (mime == "audio/ogg") {
+        return "ogg";
+    }
+    if (mime == "audio/webm") {
+        return "webm";
+    }
+    mime
+}
+
+// A media part appended mid-conversation must produce the same wire shape the
+// first-render request builder emits: a URL when the value has one, otherwise
+// a data URL built from the base64 payload and its mime type.
+function _append_media_mime(mime: string?) -> string throws ai.InvalidRequest {
+    match (mime) {
+        let value: string => value,
+        null => {
+            throw ai.InvalidRequest {
+            provider: "openai-responses",
+            status_code: null,
+            detail: "media appended to an OpenAI conversation needs a mime type",
+        }
+        },
+    }
+}
+
+function _append_content_part(part: ai.MessagePart) -> json throws ai.InvalidRequest {
+    match (part) {
+        let value: ai.messages.ImagePart => {
+            {
+                "type": "input_image",
+                "image_url": value.value.url()
+                    ?? `data:${_append_media_mime(value.value.mime_type())};base64,${value.value.base64()}`,
+            }
+        },
+        let value: ai.messages.AudioPart => {
+            {
+                "type": "input_audio",
+                "data": value.value.base64(),
+                "format": _append_audio_format(_append_media_mime(value.value.mime_type())),
+            }
+        },
+        let value: ai.messages.PdfPart => {
+            {
+                "type": "input_file",
+                "file_data": value.value.url()
+                    ?? `data:${_append_media_mime(value.value.mime_type())};base64,${value.value.base64()}`,
+            }
+        },
+        let value: ai.messages.VideoPart => {
+            throw ai.InvalidRequest {
+            provider: "openai-responses",
+            status_code: null,
+            detail: "OpenAI Responses does not support video input",
+        }
+        },
+        _ => {
+            if (part.kind() != ai.MessagePartKind.Text) {
+                throw ai.InvalidRequest {
+                    provider: "openai-responses",
+                    status_code: null,
+                    detail: "OpenAI append supports the portable ai.messages media part classes only",
+                };
+            }
+            { "type": "input_text", "text": part.text() ?? "" }
+        },
+    }
+}
+
+// Render one validated append message into a Responses input item. Steering
+// notes use OpenAI's native developer role; text-only user messages keep the
+// string-content form; user messages with media use the content-array form.
+function _append_input_item(message: ai.Message) -> json throws ai.InvalidRequest {
+    if (message.role() == ai.MessageRole.System) {
+        return { "role": "developer", "content": _message_text(message) };
+    }
+    let has_media = message.parts().some((part: ai.MessagePart) -> bool {
+        part.kind() != ai.MessagePartKind.Text
+    });
+    if (!has_media) {
+        return { "role": "user", "content": _message_text(message) };
+    }
+    {
+        "role": "user",
+        "content": message.parts().map((part: ai.MessagePart) -> json {
+            _append_content_part(part)
+        }),
+    }
+}
+
 function _conversation_role_name(role: ai.MessageRole) -> string throws never {
     match (role) {
         ai.MessageRole.System => "system",

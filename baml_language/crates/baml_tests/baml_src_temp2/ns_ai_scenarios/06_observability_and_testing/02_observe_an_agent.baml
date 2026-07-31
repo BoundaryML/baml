@@ -9,9 +9,10 @@ function observe_an_agent(
         );
     let result = match (outcome) {
         let done: ai.Done<Resolution> => done.value.reply,
-        let budget: ai.BudgetReached => `budget reached: ${budget.reason}`,
+        let budget: ai.Stopped => `budget reached: ${budget.reason}`,
         let handoff: ai.Handoff => `handoff: ${handoff.call.name}`,
         let interrupted: ai.Interrupted => `interrupted: ${interrupted.reason}`,
+        let failed: ai.Failed => `failed at a committed checkpoint: ${failed.cause}`,
     };
     log.info({ "events": observer.kinds, "result": result });
     result

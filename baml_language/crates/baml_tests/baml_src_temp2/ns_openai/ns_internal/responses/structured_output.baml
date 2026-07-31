@@ -298,6 +298,26 @@ function _response_output_text(raw: json) -> string? throws never {
     null
 }
 
+// Reasoning models emit `reasoning` output items whose `summary` entries carry
+// the requested summary text. Join every entry; null when the response has none.
+function _response_reasoning_text(raw: json) -> string? throws never {
+    let summaries: string[] = [];
+    for (let item in baml.json.path_or<json[]>(raw, ".output", [])) {
+        if (baml.json.path_or<string>(item, ".type", "") == "reasoning") {
+            for (let entry in baml.json.path_or<json[]>(item, ".summary", [])) {
+                let text = baml.json.path_or<string>(entry, ".text", "");
+                if (text.length() != 0) {
+                    summaries.push(text);
+                }
+            }
+        }
+    }
+    if (summaries.length() == 0) {
+        return null;
+    }
+    summaries.join("\n")
+}
+
 function _response_refusal(raw: json) -> string? throws never {
     for (let item in baml.json.path_or<json[]>(raw, ".output", [])) {
         for (let content in baml.json.path_or<json[]>(item, ".content", [])) {
@@ -326,7 +346,6 @@ function _response_metadata(
                     output_tokens: baml.json.path_or(usage, ".output_tokens", 0),
                     cached_input_tokens: baml.json.path_or<int?>(usage, ".input_tokens_details.cached_tokens", null),
                     reasoning_tokens: baml.json.path_or<int?>(usage, ".output_tokens_details.reasoning_tokens", null),
-                    cost_usd: null,
                 }
             },
             _ => null,

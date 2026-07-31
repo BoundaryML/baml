@@ -25,8 +25,53 @@ class Task<T> {
         runner.run(self)
     }
 
+    /// Runs this task to completion and returns the final typed value —
+    /// direct-call semantics with configuration. Use it after
+    /// `with_provider`/`with_tools`, or pass a configured Agent runner.
+    /// Tasks are stateless recipes: each call is an independent fresh run,
+    /// and a task can be completed any number of times.
+    ///
+    /// Throws `ai.IncompleteRun` if the run stops at a policy stop, handoff, or
+    /// interruption instead of finishing. The throw is lossless — it
+    /// carries the resumable outcome, so a catch site can continue via
+    /// `ai.run.AgentSession.of(task, incomplete.outcome)`.
+    function complete(
+        self,
+        runner: ai.run.Agent<T> = ai.run.Agent<T>.new(),
+    ) -> T throws ai.IncompleteRun | ai.Failure | baml.errors.UnknownError | baml.errors.Unsupported {
+        ai.internal._done<T>(self.run(runner = runner)).value
+    }
+
     function output_type(self) -> type throws never {
         reflect.type_of<T>()
+    }
+
+    /// The prompt-render recipe this task was declared with — what a
+    /// provider adapter renders (with its own output-format conventions)
+    /// to produce the opening request. Public so adapter authors never
+    /// reach for the private field.
+    function recipe(self) -> PromptRenderRecipe throws never {
+        self._render
+    }
+
+    /// A canonical description of this task's executable contract:
+    /// identity, output type, provider protocol, and the tool schemas the
+    /// model can see. Two tasks with equal fingerprints are STRUCTURALLY
+    /// COMPATIBLE — a session saved under one may be restored under the
+    /// other. Handler implementations are not (and cannot be) part of the
+    /// contract; that is the same reason tasks do not serialize.
+    function contract_fingerprint(self) -> string throws never {
+        let tools = self.tools.map((tool: ai.tools.Tool) -> string {
+            `${tool.name}|handoff=${tool.handoff}|${baml.json.stringify(tool.input_schema)}`
+        });
+        tools.sort_by_key((entry: string) -> string {
+            entry
+        });
+        let identity = match (self.identity) {
+            let id: TaskIdentity => id.package + "." + id.name,
+            null => "anonymous",
+        };
+        `baml-contract/v1;${identity};${ai.internal._output_type_fingerprint<T>()};${self.provider.name()};${tools.join(";")}`
     }
 
     function provider_name(self) -> string throws never {
@@ -37,7 +82,7 @@ class Task<T> {
         ai.messages._prompt_to_messages(self.prompt)
     }
 
-    function with_provider(self, provider: Provider) -> Task<T> throws never {
+    function with_provider(self, provider: Provider) -> Task<T> throws ai.InvalidRequest {
         //# Re-render the same task contract for a different provider
         Task<T> {
             provider: provider,
@@ -67,56 +112,16 @@ class Task<T> {
 function task<T>(
     provider: Provider,
     template: (baml.llm.Context) -> baml.llm.PromptAst throws never,
-) -> Task<T> throws never {
-    _task_named<T>(provider, "anonymous", {}, [], template)
+) -> Task<T> throws ai.InvalidRequest {
+    ai.internal._task_named<T>(provider, "anonymous", {}, [], template)
 }
 
-/// Compiler bridge for the `client:` spelling. The returned value is an
-/// ordinary Provider and follows the same Task + Agent path as `provider:`.
-function _provider_from_client(client: baml.llm.Client) -> Provider throws never {
-    ai.internal.ClientProvider { client: client }
+/// The versioned nominal + structural fingerprint of an output type. For
+/// PROVIDER AUTHORS: a conversation created by `begin<T>` should report
+/// this value from `output_type_fingerprint()` so the Agent's invariant
+/// checks can refuse a wrong-task continuation.
+function output_fingerprint<T>() -> string throws never {
+    ai.internal._output_type_fingerprint<T>()
 }
 
-/// Compiler entry point for constructing a named generated task.
-function _task_named<T>(
-    provider: Provider,
-    name: string,
-    arguments: map<string, unknown>,
-    tools: ai.tools.ToolInput[],
-    template: (baml.llm.Context) -> baml.llm.PromptAst throws never,
-) -> Task<T> throws never {
-    //# Capture the reusable prompt recipe
-    let recipe = _prompt_recipe(template);
-    //# Render the task for its initial provider
-    Task<T> {
-        provider: provider,
-        prompt: recipe.render(provider, reflect.type_of<T>()),
-        identity: TaskIdentity { name: name, package: "user" },
-        arguments: arguments,
-        tools: ai.tools.normalize_tools(tools),
-        tags: {},
-        _render: recipe,
-    }
-}
 
-/// Compiler entry point for a raw Jinja prompt registered under the generated
-/// function name. It constructs the same Task<T> as a backtick prompt.
-function _task_named_from_registered_prompt<T>(
-    provider: Provider,
-    name: string,
-    arguments: map<string, unknown>,
-    tools: ai.tools.ToolInput[],
-) -> Task<T> throws never {
-    //# Capture the registered prompt as a reusable recipe
-    let recipe = _registered_prompt_recipe(name, arguments);
-    //# Render the task for its initial provider
-    Task<T> {
-        provider: provider,
-        prompt: recipe.render(provider, reflect.type_of<T>()),
-        identity: TaskIdentity { name: name, package: "user" },
-        arguments: arguments,
-        tools: ai.tools.normalize_tools(tools),
-        tags: {},
-        _render: recipe,
-    }
-}

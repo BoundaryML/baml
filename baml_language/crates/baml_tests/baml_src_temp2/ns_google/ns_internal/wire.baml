@@ -98,7 +98,27 @@ function _validate_response(
 function _response_text(raw: json) -> string? throws never {
     let pieces: string[] = [];
     for (let part in baml.json.path_or<json[]>(raw, ".candidates[0].content.parts", [])) {
-        if (!baml.json.path_or(part, ".thought", false)) {
+        if (!baml.json.path_or<bool>(part, ".thought", false)) {
+            match (baml.json.path_or<string?>(part, ".text", null)) {
+                let text: string => pieces.push(text),
+                null => {},
+            }
+        }
+    }
+    if (pieces.length() == 0) {
+        null
+    } else {
+        pieces.join("")
+    }
+}
+
+// Thought-summary display text. Parts flagged `thought: true` carry human
+// readable summaries when includeThoughts was requested; opaque
+// thoughtSignature blobs stay in conversation state and never surface here.
+function _reasoning_text(raw: json) -> string? throws never {
+    let pieces: string[] = [];
+    for (let part in baml.json.path_or<json[]>(raw, ".candidates[0].content.parts", [])) {
+        if (baml.json.path_or<bool>(part, ".thought", false)) {
             match (baml.json.path_or<string?>(part, ".text", null)) {
                 let text: string => pieces.push(text),
                 null => {},
@@ -230,7 +250,6 @@ function _response_metadata(
                     output_tokens: baml.json.path_or(usage, ".candidatesTokenCount", 0),
                     cached_input_tokens: baml.json.path_or<int?>(usage, ".cachedContentTokenCount", null),
                     reasoning_tokens: baml.json.path_or<int?>(usage, ".thoughtsTokenCount", null),
-                    cost_usd: null,
                 }
             },
             _ => null,

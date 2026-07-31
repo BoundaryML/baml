@@ -16,9 +16,7 @@ function _MemoryAgentLiveContinuation(
 function _memory_agent_live_exact_follow_up(
     task: ai.Task<string>,
 ) -> string {
-    let first = ai
-        .internal
-        ._require_done(
+    let first = done_or_fail(
             task
                 .run(
                     runner = ai
@@ -27,35 +25,20 @@ function _memory_agent_live_exact_follow_up(
                         .new(max_tool_calls_per_step = 0),
                 ),
         );
-    let continued = first
-        .conversation
-        .append_message(
-            ai.ChatMessage.user(
-                "What exact nonce did I ask you to remember? Reply with only that nonce.",
-            ),
-        );
-    let second = ai
-        .internal
-        ._require_done(
-            task
-                .run(
-                    runner = ai
-                        .run
-                        .Agent<string>
-                        .new(
-                            max_tool_calls_per_step = 0,
-                            conversation = continued,
-                        ),
-                ),
-        );
-    second.value
+    //# The session pairs the task with its exact provider continuation;
+    //# complete demands the finished value or throws IncompleteRun
+    let session = ai.run.AgentSession<string>.of(task, first);
+    session.complete(ai.ChatMessage.user(
+            "What exact nonce did I ask you to remember? Reply with only that nonce.",
+        ),
+        runner = ai.run.Agent<string>.new(max_tool_calls_per_step = 0),)
 }
 
 testset "integ-test-memory-agent-exact-continuation" {
     test "memory agent live OpenAI: fresh user message keeps Responses state" {
         let nonce = "cobalt-417";
         let answer = _memory_agent_live_exact_follow_up(
-            _MemoryAgentLiveContinuation@task(_memory_agent_openai_provider(), nonce),
+            _MemoryAgentLiveContinuation@task(root.ai_scenarios.memory.openai_provider(), nonce),
         );
         assert.contains(answer.to_lower_case(), nonce)
     }
@@ -64,7 +47,7 @@ testset "integ-test-memory-agent-exact-continuation" {
         let nonce = "saffron-928";
         let answer = _memory_agent_live_exact_follow_up(
             _MemoryAgentLiveContinuation@task(
-                _memory_agent_live_google_provider(),
+                root.ai_scenarios.memory.live_google_provider(),
                 nonce,
             ),
         );

@@ -14,16 +14,16 @@ function handoffs_and_budgets() -> null {
     let handoff = handoff_task.run(runner = ai.run.Agent<Resolution>.new(tools = [handoff_tool]));
 
     let budget_task = ResolveTicketWithTools@task(sample_ticket()).with_provider(fake_tool_provider([one_knowledge_call()])).with_tools([search_knowledge]);
-    let budget = budget_task
+    let stopped = budget_task
         .run(
             runner = ai
                 .run
                 .Agent<Resolution>
                 .new(
                     tools = [search_knowledge],
-                    budget = ai.Budget { max_steps: 1, max_cost_usd: null },
+                    max_steps = 1,
                 ),
         );
-    log.info({ "handoff": handoff, "budget": budget });
+    log.info({ "handoff": handoff, "stopped": stopped });
     null
 }

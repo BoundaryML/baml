@@ -40,9 +40,15 @@ behavior tests live in `ns_ai_scenarios`.
 | Normal provider | `ai.AgentProvider` |
 | One provider model turn | `ai.ModelStep<T>` from `AgentProvider.step` |
 | Normal explicit execution | `task.run(runner = ai.run.Agent<T>.new())` |
-| Normal result | `ai.Done<T> \| ai.BudgetReached \| ai.Handoff` |
-| Retry/fallback | `ai.retry(...)` / `ai.fallback(...)` provider wrappers |
+| Normal result | `ai.Done<T> \| ai.Stopped \| ai.Handoff \| ai.Interrupted \| ai.Failed` |
+| Value unwrap | `task.complete(runner?)` / `session.complete(message, runner?)` returning `T` |
+| Stopped-instead-of-done error | `ai.IncompleteRun` thrown by the completion verbs — its own `throws` term, not an `ai.Failure` |
+| Tool result | `ai.tools.ToolResult = ToolOk \| ToolError`, built with `ToolOk.of(call, output)` / `ToolError.of(call, message)` — there is no `is_error` field and no `ToolResult.ok` |
+| Retry/fallback | `ai.retry(provider, max_attempts, retry_if = null, backoff = ai.Backoff.default())` / `ai.fallback(...)` provider wrappers |
 | Exact continuation | `ai.Conversation` |
+| Multi-turn continuation | `ai.run.AgentSession<T>` |
+| Durable session reference | `ai.run.AgentSessionToken` |
+| Wrong task/conversation pairing | `ai.run.SessionMismatch` |
 | Durable continuation | `ai.ResumableAgentProvider` |
 | Provider switch | `ai.ConversationImportProvider` |
 

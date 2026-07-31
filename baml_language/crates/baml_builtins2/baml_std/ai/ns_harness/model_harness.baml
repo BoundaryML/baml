@@ -10,7 +10,7 @@ function _model_harness_task<T>(
   inner: ai.Provider,
   session: LocalHarnessSession,
   task: ai.Task<T>,
-) -> ai.Task<T> throws never {
+) -> ai.Task<T> throws ai.InvalidRequest {
   let rebound = task.with_provider(inner);
   if (session.steering.length() == 0) {
     return rebound;
@@ -53,7 +53,7 @@ implements Harness for ModelHarness {
     session: HarnessSession,
     task: ai.Task<T>,
     on_event: ((ai.observe.AgentEvent) -> null throws never)?,
-  ) -> HarnessRun<T> throws baml.errors.UnknownError {
+  ) -> HarnessRun<T> throws ai.InvalidRequest | baml.errors.UnknownError {
     //# Validate the harness session
     let local = match (session) {
       let value: LocalHarnessSession => value,

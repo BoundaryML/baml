@@ -211,7 +211,7 @@ namespace baml.llm:
   class OrchestrationStep { methods: [] }
   class OutputFormat { methods: [] }
   class PlannerState { methods: [rr_local_offset, rr_pick_index] }
-  class PrimitiveClient { methods: [render_prompt, specialize_prompt, render_specialized_prompt, build_request, build_request_stream, new_stream_accumulator, validate_finish_reason, parse] }
+  class PrimitiveClient { methods: [render_prompt, specialize_prompt, render_specialized_prompt, build_request, authenticate_request, build_request_stream, new_stream_accumulator, validate_finish_reason, parse] }
   class PrimitiveClientOptions { methods: [] }
   class PromptAst { methods: [text, messages, to_string] }
   class PromptMessage { methods: [] }

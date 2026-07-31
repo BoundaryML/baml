@@ -13,11 +13,11 @@ function provider_overrides() -> ai.ResponseWithMetadata<Resolution> {
     };
     let original = ResolveTicket@task(sample_ticket()).with_provider(fast);
     let overridden = original.with_provider(careful);
-    let response = ai.internal._response_from_done(
-      ai.internal._require_done(
+    let response = (
+      done_or_fail(
         overridden.run(runner = ai.run.Agent<Resolution>.new()),
-      ),
-    );
+      )
+    ).response();
     log.info(
         {
             "before": original.provider_name(),

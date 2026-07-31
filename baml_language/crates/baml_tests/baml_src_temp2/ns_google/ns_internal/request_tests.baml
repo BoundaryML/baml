@@ -4,7 +4,7 @@ class RequestFixture {
 
 function _request_fixture_task(
     provider: ai.Provider,
-) -> ai.Task<RequestFixture> throws never {
+) -> ai.Task<RequestFixture> throws ai.InvalidRequest {
     ai.task<RequestFixture>(provider, (ctx: baml.llm.Context) -> baml.llm.PromptAst {
         baml.llm.assemble_prompt_ast(["Return the fixture.\n", ""], [ctx.output_format])
     })
@@ -195,11 +195,10 @@ test "Google submit rejects duplicate or missing result ids" {
     let _duplicate = _submit(
         state,
         [
-            ai.tools.ToolResult { id: "id1", output: { "value": "one" }, is_error: false },
-            ai.tools.ToolResult {
+            ai.tools.ToolOk { id: "id1", output: { "value": "one" } },
+            ai.tools.ToolOk {
                 id: "id1",
                 output: { "value": "duplicate" },
-                is_error: false,
             },
         ],
         provider.name(),
@@ -215,7 +214,7 @@ test "Google submit rejects duplicate or missing result ids" {
     let missing_rejected = false;
     let _missing = _submit(
         state,
-        [ai.tools.ToolResult { id: "id1", output: { "value": "one" }, is_error: false }],
+        [ai.tools.ToolOk { id: "id1", output: { "value": "one" } }],
         provider.name(),
     ) catch (e) {
         let invalid: ai.InvalidRequest => {
@@ -248,8 +247,8 @@ test "Google submit emits function responses in provider call order" {
     _submit(
         state,
         [
-            ai.tools.ToolResult { id: "id2", output: { "value": "two" }, is_error: false },
-            ai.tools.ToolResult { id: "id1", output: { "value": "one" }, is_error: false },
+            ai.tools.ToolOk { id: "id2", output: { "value": "two" } },
+            ai.tools.ToolOk { id: "id1", output: { "value": "one" } },
         ],
         provider.name(),
     );
@@ -327,29 +326,24 @@ test "Google AI appends a fresh user message without losing thought signatures" 
             },
         );
     let original_wire_length = state.contents.length();
-    let appended = provider.append_message(state, ai.ChatMessage.user("second turn"));
-    match (appended) {
-        let exact: Conversation => {
-            assert.equal(exact.declared_output_type, output_type);
-            assert.equal(exact.contents.length(), original_wire_length + 1);
-            assert
-                .equal(
-                    baml.json
-                        .path<string>(
-                            exact.contents[original_wire_length - 1],
-                            ".parts[0].thoughtSignature",
-                        ),
-                    "opaque-signature",
-                );
-            assert
-                .equal(
-                    baml.json.path<string>(exact.contents[original_wire_length], ".parts[0].text"),
-                    "second turn",
-                );
-            assert.equal(ai.message_text(exact.history.entries[1]), "second turn")
-        },
-        _ => assert.is_true(false),
-    }
+    let _ = provider.append_message(state, ai.ChatMessage.user("second turn"));
+    assert.equal(state.declared_output_type, output_type);
+    assert.equal(state.contents.length(), original_wire_length + 1);
+    assert
+        .equal(
+            baml.json
+                .path<string>(
+                    state.contents[original_wire_length - 1],
+                    ".parts[0].thoughtSignature",
+                ),
+            "opaque-signature",
+        );
+    assert
+        .equal(
+            baml.json.path<string>(state.contents[original_wire_length], ".parts[0].text"),
+            "second turn",
+        );
+    assert.equal(ai.message_text(state.history.entries[1]), "second turn")
 }
 
 test "Google Vertex append retains backend ownership and output type" {
@@ -359,15 +353,10 @@ test "Google Vertex append retains backend ownership and output type" {
         _ => baml.sys.panic("expected Vertex conversation"),
     };
     let output_type = state.declared_output_type;
-    let appended = provider.append_message(state, ai.ChatMessage.user("vertex follow up"));
-    match (appended) {
-        let exact: Conversation => {
-            assert.equal(exact.provider_name, "google-vertex");
-            assert.equal(exact.declared_output_type, output_type);
-            assert.equal(ai.message_text(exact.history.entries[1]), "vertex follow up")
-        },
-        _ => assert.is_true(false),
-    }
+    let _ = provider.append_message(state, ai.ChatMessage.user("vertex follow up"));
+    assert.equal(state.provider_name, "google-vertex");
+    assert.equal(state.declared_output_type, output_type);
+    assert.equal(ai.message_text(state.history.entries[1]), "vertex follow up")
 }
 
 test "Google rejects append from another instance and while calls are pending" {
@@ -387,7 +376,7 @@ test "Google rejects append from another instance and while calls are pending" {
     let _wrong = other.append_message(state, ai.ChatMessage.user("wrong owner")) catch (e) {
         let invalid: ai.InvalidRequest => {
             wrong_owner_rejected = true;
-            state
+            null
         },
         _ => baml.sys.panic("unexpected Google append error"),
     };
@@ -398,12 +387,135 @@ test "Google rejects append from another instance and while calls are pending" {
     let _pending = owner.append_message(state, ai.ChatMessage.user("too soon")) catch (e) {
         let invalid: ai.InvalidRequest => {
             pending_rejected = true;
-            state
+            null
         },
         _ => baml.sys.panic("unexpected Google pending append error"),
     };
     assert.is_true(pending_rejected);
     assert.equal(state.history.entries.length(), 1)
+}
+
+test "Google append maps steering notes to a tagged user turn" {
+    let provider = root
+        .google
+        .ai
+        .gemini(model = "gemini-test", api_key = "unused", base_url = "https://example.test/v1beta");
+    let state = match (provider.begin<RequestFixture>(_request_fixture_task(provider))) {
+        let value: Conversation => value,
+        _ => baml.sys.panic("expected Google AI conversation"),
+    };
+    let base_length = state.contents.length();
+    let _ = provider.append_message(state, ai.ChatMessage.steer("Prior order IDs are stale."));
+    let content = state.contents[base_length];
+    // Gemini has no mid-conversation system role, so the steering note rides
+    // in a tagged user turn on the wire.
+    assert.equal(baml.json.path<string>(content, ".role"), "user");
+    assert
+        .equal(
+            baml.json.path<string>(content, ".parts[0].text"),
+            "<steering>\nPrior order IDs are stale.\n</steering>",
+        );
+    // The portable history keeps the System-role steering note untouched.
+    let entry = state.history.entries[state.history.entries.length() - 1];
+    assert.equal(entry.role(), ai.MessageRole.System);
+    assert.equal(baml.json.path<bool>(entry.provider_metadata(), ".steering"), true)
+}
+
+test "Google append renders media parts as inlineData and fileData" {
+    let provider = root
+        .google
+        .ai
+        .gemini(model = "gemini-test", api_key = "unused", base_url = "https://example.test/v1beta");
+    let state = match (provider.begin<RequestFixture>(_request_fixture_task(provider))) {
+        let value: Conversation => value,
+        _ => baml.sys.panic("expected Google AI conversation"),
+    };
+    let base_length = state.contents.length();
+    let message = ai.ChatMessage {
+        message_role: ai.MessageRole.User,
+        content: [
+            ai.messages.TextPart { value: "What is in these?", metadata: {} },
+            ai.messages.ImagePart {
+                value: image.from_base64("aGVsbG8=", "image/png"),
+                metadata: {},
+            },
+            ai.messages.PdfPart {
+                value: pdf.from_url("https://example.com/invoice.pdf", "application/pdf"),
+                metadata: {},
+            },
+        ],
+        metadata: null,
+    };
+    let _ = provider.append_message(state, message);
+    let content = state.contents[base_length];
+    assert.equal(baml.json.path<string>(content, ".role"), "user");
+    assert.equal(baml.json.path<string>(content, ".parts[0].text"), "What is in these?");
+    assert.equal(baml.json.path<string>(content, ".parts[1].inlineData.mimeType"), "image/png");
+    assert.equal(baml.json.path<string>(content, ".parts[1].inlineData.data"), "aGVsbG8=");
+    assert
+        .equal(
+            baml.json.path<string>(content, ".parts[2].fileData.fileUri"),
+            "https://example.com/invoice.pdf",
+        );
+    assert
+        .equal(
+            baml.json.path<string>(content, ".parts[2].fileData.mimeType"),
+            "application/pdf",
+        );
+    assert.equal(ai.message_text(state.history.entries[1]), "What is in these?")
+}
+
+test "Google prompt mode rejects media appends before mutating" {
+    let provider = root
+        .google
+        .ai
+        .gemini(
+            model = "gemini-test",
+            api_key = "unused",
+            base_url = "https://example.test/v1beta",
+            output_mode = root.google.ai.OutputMode.Sap,
+            tool_mode = root.google.ai.ToolMode.Prompt,
+        );
+    let state = match (provider.begin<RequestFixture>(_request_fixture_task(provider))) {
+        let value: PromptConversation => value,
+        _ => baml.sys.panic("expected Google prompt conversation"),
+    };
+    let base_history = state.history.entries.length();
+    let message = ai.ChatMessage {
+        message_role: ai.MessageRole.User,
+        content: [
+            ai.messages.ImagePart {
+                value: image.from_base64("aGVsbG8=", "image/png"),
+                metadata: {},
+            },
+        ],
+        metadata: null,
+    };
+    let rejected = false;
+    let _ = provider.append_message(state, message) catch (e) {
+        let invalid: ai.InvalidRequest => {
+            rejected = true;
+            null
+        },
+        _ => baml.sys.panic("unexpected Google prompt media append error"),
+    };
+    assert.is_true(rejected);
+    assert.equal(state.history.entries.length(), base_history)
+}
+
+test "Google display channels split visible text from thought summaries" {
+    let raw = baml
+        .json
+        .parse(
+            `{"candidates":[{"content":{"parts":[{"text":"Weighing the options.","thought":true},{"thoughtSignature":"opaque-blob"},{"text":"The answer is 4."}]}}]}`,
+        );
+    assert.equal(_response_text(raw), "The answer is 4.");
+    assert.equal(_reasoning_text(raw), "Weighing the options.");
+    // No thought parts means a null reasoning channel, not an empty string.
+    let plain = baml
+        .json
+        .parse(`{"candidates":[{"content":{"parts":[{"text":"Only text."}]}}]}`);
+    assert.equal(_reasoning_text(plain), null)
 }
 
 test "Google prompt-tool conversations append locally after a completed turn" {
@@ -421,12 +533,7 @@ test "Google prompt-tool conversations append locally after a completed turn" {
         let value: PromptConversation => value,
         _ => baml.sys.panic("expected Google prompt conversation"),
     };
-    let appended = provider.append_message(state, ai.ChatMessage.user("follow up"));
-    match (appended) {
-        let exact: PromptConversation => {
-            assert.equal(ai.message_text(exact.history.entries[1]), "follow up");
-            assert.equal(exact.last_calls.length(), 0)
-        },
-        _ => assert.is_true(false),
-    }
+    let _ = provider.append_message(state, ai.ChatMessage.user("follow up"));
+    assert.equal(ai.message_text(state.history.entries[1]), "follow up");
+    assert.equal(state.last_calls.length(), 0)
 }

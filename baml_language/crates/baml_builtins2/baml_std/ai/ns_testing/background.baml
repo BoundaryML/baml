@@ -69,7 +69,7 @@ implements ai.jobs.BackgroundProvider for FakeBackgroundProvider {
   function resume_job<T>(
     self,
     token: ai.jobs.JobToken,
-  ) -> ai.jobs.Job<T> throws baml.errors.UnknownError {
+  ) -> ai.jobs.Job<T> throws ai.InvalidRequest | baml.errors.UnknownError {
     //# Reconstruct a task from the saved job token
     let task = ai.task<T>(
       self.inner,

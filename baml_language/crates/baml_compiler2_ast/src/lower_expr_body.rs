@@ -401,7 +401,7 @@ pub(crate) fn synthesize_llm_call_with_prompt(
 
 /// Synthesize the zero-model-I/O body of a declarative model function's `$task` companion:
 ///
-/// `ai._task_named<T>(provider, "F", { "arg": arg }, tools, (ctx) -> prompt)`
+/// `ai.internal._task_named<T>(provider, "F", { "arg": arg }, tools, (ctx) -> prompt)`
 ///
 /// Provider and tool declarations are ordinary source expressions and are
 /// lowered in the same arena as the prompt closure, so they may reference the
@@ -501,7 +501,7 @@ fn synthesize_ai_task(
     } else if let Some(client) = client_arg_name {
         let client = ctx.alloc_expr(Expr::Path(vec![Name::new(client)]), span);
         let adapter = ctx.alloc_expr(
-            Expr::Path(vec![Name::new("ai"), Name::new("_provider_from_client")]),
+            Expr::Path(vec![Name::new("ai"), Name::new("internal"), Name::new("_provider_from_client")]),
             span,
         );
         ctx.alloc_expr(
@@ -544,7 +544,7 @@ fn synthesize_ai_task(
         None => ("_task_named_from_registered_prompt", None),
     };
     let callee = ctx.alloc_expr(
-        Expr::Path(vec![Name::new("ai"), Name::new(callee_name)]),
+        Expr::Path(vec![Name::new("ai"), Name::new("internal"), Name::new(callee_name)]),
         span,
     );
     let mut args = vec![

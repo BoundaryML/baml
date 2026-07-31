@@ -18,12 +18,12 @@ output before the final typed value.
 
 ```baml
 function InspectImage(value: image) -> string {
-  provider: "openai-responses/gpt-5.6-luna"
+  provider: fast_model()
   prompt: `Describe this image in one short sentence: ${value}`
 }
 
 function InspectPdf(value: pdf) -> string {
-  provider: "openai-responses/gpt-5.6-luna"
+  provider: fast_model()
   prompt: `Summarize this PDF: ${value}`
 }
 
@@ -61,7 +61,7 @@ class Resolution {
 }
 
 function ResolveTicket(ticket: SupportTicket) -> Resolution {
-  provider: "anthropic/claude-sonnet-4-6"
+  provider: careful_model()
   prompt: `
     Resolve this support ticket.
     Subject: ${ticket.subject}

@@ -3,7 +3,7 @@ test "guide 03.01: retry repeats only a replay-safe direct call" {
   //# Configure one transient failure
   let flaky = ai.testing.FakeProvider { ...fake_resolution(), failures_remaining: 1 };
   //# Execute through a bounded retry wrapper
-  let value = ai.internal._require_done(ResolveTicket@task(sample_ticket()).with_provider(ai.retry(flaky, 2)).run(runner = ai.run.Agent<Resolution>.new())).value;
+  let value = ResolveTicket@task(sample_ticket()).with_provider(ai.retry(flaky, 2)).complete(runner = ai.run.Agent<Resolution>.new());
   //# Verify the value and attempt count
   assert.equal(value.category, "billing")
   assert.equal(flaky.calls, 2)
@@ -74,11 +74,11 @@ testset "integ-test-guide-03-retry" {
   test "guide 03.01 live OpenAI: a retryable failure causes exactly one retry" {
     let flaky = FlakyOnceLiveAgent { inner: live_openai(), attempts: 0 };
     let task = ResolveTicket@task(sample_ticket()).with_provider(ai.retry(flaky, 2));
-    let response = ai.internal._response_from_done(
-      ai.internal._require_done(
+    let response = (
+      done_or_fail(
         task.run(runner = ai.run.Agent<Resolution>.new()),
-      ),
-    );
+      )
+    ).response();
     log.info("live retry " + {
       "attempts": flaky.attempts,
       "provider": response.metadata.provider,

@@ -51,7 +51,7 @@ implements ai.ConversationAppendProvider for AnthropicProvider {
     self,
     conversation: ai.Conversation,
     messages: ai.Messages,
-  ) -> ai.Conversation throws ai.Failure {
+  ) -> null throws ai.Failure {
     // Validate the entire portable batch before mutating either projection.
     let _ = ai.internal._conversation_append_user_texts(
       messages,
@@ -77,19 +77,21 @@ implements ai.ConversationAppendProvider for AnthropicProvider {
             detail: "finish the pending Anthropic tool exchange before appending a user message",
           };
         }
+        // Build every wire message before committing so a failing media
+        // conversion leaves both projections unchanged.
+        let wire_messages: json[] = [];
         for (let message in messages.items()) {
-          state.messages.push({
-            "role": "user",
-            "content": [
-              {
-                "type": "text",
-                "text": root.anthropic.internal._message_text(message),
-              },
-            ],
-          });
+          wire_messages.push(
+            root.anthropic.internal._append_wire_message(message),
+          );
+        }
+        for (let wire_message in wire_messages) {
+          state.messages.push(wire_message);
+        }
+        for (let message in messages.items()) {
           state.history.entries.push(message);
         }
-        state
+        null
       },
       let state: root.anthropic.internal.PromptConversation => {
         if (!ai.internal._same_provider_instance(state.owner, self)) {
@@ -109,7 +111,7 @@ implements ai.ConversationAppendProvider for AnthropicProvider {
         for (let message in messages.items()) {
           state.history.entries.push(message);
         }
-        state
+        null
       },
       _ => throw ai.InvalidRequest {
         provider: "anthropic",

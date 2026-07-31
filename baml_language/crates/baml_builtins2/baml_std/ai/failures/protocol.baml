@@ -19,15 +19,26 @@ enum Effects {
     Committed,
 }
 
-/// The one classification axis generic policy code consumes. Errors carry
-/// facts; retry and fallback decide what to do with them. Precision beyond
-/// these two methods comes from catching concrete error types, not from
-/// interface getters.
+/// Errors carry FACTS; callers make judgments. The one method here reports
+/// a fact only the failing layer can know: what this attempt may have
+/// committed before it failed. Whether a failure is worth retrying is the
+/// caller's judgment — expressed by catching concrete error types, or by
+/// passing `retry_if` to `ai.retry` — never a self-report by the error.
 interface Failure {
-  /// Could an identical attempt plausibly succeed? Rate limits and transport
-  /// blips: yes. Refusals, invalid requests, parse failures: no.
-  function is_transient(self) -> bool throws never
-
   /// What this attempt may have committed before it failed.
   function effects(self) -> Effects throws never
+}
+
+/// The shared HTTP status→failure table (429 → RateLimited, 5xx/408 →
+/// NetworkFailure, other 4xx → InvalidRequest). Public so third-party
+/// provider adapters classify identically to the built-ins instead of
+/// copying the table and drifting — retry and fallback behavior depends on
+/// this classification. Effectful endpoints (background jobs, batch
+/// submission) construct their failures directly instead.
+function classify_http(
+    provider: string,
+    status_code: int,
+    body: string,
+) -> Failure throws never {
+    ai.internal._classify_http(provider, status_code, body)
 }

@@ -88,7 +88,6 @@ class BackgroundJob<T> {
                                 ".usage.output_tokens_details.reasoning_tokens",
                                 null,
                             ),
-                        cost_usd: null,
                     },
                     attributes: { "polls": self.polls, "background": true },
                     raw: raw,

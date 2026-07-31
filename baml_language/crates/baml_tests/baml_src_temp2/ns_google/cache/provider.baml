@@ -163,7 +163,6 @@ class ManagedCache {
                         output_tokens: baml.json.path_or(raw, ".usageMetadata.candidatesTokenCount", 0),
                         cached_input_tokens: baml.json.path_or<int?>(raw, ".usageMetadata.cachedContentTokenCount", null),
                         reasoning_tokens: baml.json.path_or<int?>(raw, ".usageMetadata.thoughtsTokenCount", null),
-                        cost_usd: null,
                     },
                     attributes: {
                         "cache_key": self.cache_key,

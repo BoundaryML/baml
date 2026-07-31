@@ -315,7 +315,7 @@ testset "integ-test-guide-05-realtime-call-center" {
             .realtime
             .with_automatic_tools(
                 ai.realtime.open_live(task, ai.testing.RecordingChannel { frames: [] }),
-                ai.tools._tool_inputs_from_tools(task.tools),
+                ai.tools.as_inputs(task.tools),
             );
 
         let opening = ai.realtime.collect_live_turn(live_session);
@@ -345,7 +345,7 @@ testset "integ-test-guide-05-realtime-call-center" {
                 "America/Los_Angeles",
             );
         assert.equal(complete.tool_results.length(), 1);
-        assert.is_true(!complete.tool_results[0].is_error);
+        assert.is_true(!ai.tools.result_is_error(complete.tool_results[0]));
         log.info(
             {
                 "guide": "05.06",
@@ -368,7 +368,7 @@ testset "integ-test-guide-05-realtime-call-center" {
         assert
             .is_true(
                 ending.tool_results.some((result: ai.tools.ToolResult) -> bool {
-                    !result.is_error
+                    !ai.tools.result_is_error(result)
                 }),
             );
         live_session.close()

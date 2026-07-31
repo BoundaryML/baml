@@ -3,11 +3,24 @@ class PromptRenderRecipe {
     registered_function: string?,
     arguments: map<string, unknown>,
 
+    /// Builds a recipe from a bare template function. For PROVIDER AUTHORS:
+    /// use this when re-rendering a task prompt through a transformed
+    /// template (for example, after folding prior turns into the prompt).
+    function of(
+        template: (baml.llm.Context) -> baml.llm.PromptAst throws never,
+    ) -> PromptRenderRecipe throws never {
+        PromptRenderRecipe {
+            template: template,
+            registered_function: null,
+            arguments: {},
+        }
+    }
+
     function render(
         self,
         provider: Provider,
         output_type: type,
-    ) -> baml.llm.PromptAst throws never {
+    ) -> baml.llm.PromptAst throws ai.InvalidRequest {
         self.render_with_output_format(provider, output_type, "")
     }
 
@@ -20,7 +33,7 @@ class PromptRenderRecipe {
         provider: Provider,
         output_type: type,
         suffix: string,
-    ) -> baml.llm.PromptAst throws never {
+    ) -> baml.llm.PromptAst throws ai.InvalidRequest {
         let primitive = provider._render_client();
         match (self.template) {
             let template: ((baml.llm.Context) -> baml.llm.PromptAst throws never) => {
@@ -50,23 +63,4 @@ class PromptRenderRecipe {
     }
 }
 
-function _prompt_recipe(
-    template: (baml.llm.Context) -> baml.llm.PromptAst throws never,
-) -> PromptRenderRecipe throws never {
-    PromptRenderRecipe {
-        template: template,
-        registered_function: null,
-        arguments: {},
-    }
-}
 
-function _registered_prompt_recipe(
-    function_name: string,
-    arguments: map<string, unknown>,
-) -> PromptRenderRecipe throws never {
-    PromptRenderRecipe {
-        template: null,
-        registered_function: function_name,
-        arguments: arguments,
-    }
-}

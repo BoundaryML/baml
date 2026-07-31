@@ -8,7 +8,7 @@ class MisownedBeginProvider {
   }
 
   implements ai.AgentProvider {
-    function begin<T>(self, task: ai.Task<T>) -> ai.Conversation throws never {
+    function begin<T>(self, task: ai.Task<T>) -> ai.Conversation throws ai.Failure {
       self.inner.begin<T>(task.with_provider(self.inner))
     }
     function step<T>(
@@ -44,7 +44,7 @@ class StructurallyEqualMisownedBeginProvider {
         owner: StructurallyEqualMisownedBeginProvider {},
         history: task.messages().to_history(),
         sealed_state: {},
-        declared_output_type: ai.internal._output_type_fingerprint<T>(),
+        declared_output_type: ai.output_fingerprint<T>(),
       }
     }
     function step<T>(
@@ -73,7 +73,7 @@ class MisownedImportProvider {
   }
 
   implements ai.AgentProvider {
-    function begin<T>(self, task: ai.Task<T>) -> ai.Conversation throws never {
+    function begin<T>(self, task: ai.Task<T>) -> ai.Conversation throws ai.Failure {
       self.inner.begin<T>(task.with_provider(self.inner))
     }
     function step<T>(
@@ -119,7 +119,7 @@ class MisownedSubmitProvider {
         owner: self,
         history: task.messages().to_history(),
         sealed_state: {},
-        declared_output_type: ai.internal._output_type_fingerprint<T>(),
+        declared_output_type: ai.output_fingerprint<T>(),
       }
     }
     function step<T>(
@@ -215,22 +215,25 @@ test "guide 04.05: Agent rejects submitted state owned by another provider insta
     wrong_owner: fake_tool_provider([]),
     submit_calls: 0,
   };
-  let rejected = false;
-  let _ = ResolveTicketWithTools@task(sample_ticket()).with_provider(provider).with_tools([search_knowledge])
-    .run(runner = ai.run.Agent<Resolution>.new(tools = [search_knowledge]))
-    catch (e) {
-      let failure: ai.Failure => {
-        rejected = failure is ai.InvalidRequest;
-        null
-      },
-    };
+  //# The bad submit happens after a committed step: an involuntary stop
+  let outcome = ResolveTicketWithTools@task(sample_ticket()).with_provider(provider).with_tools([search_knowledge])
+    .run(runner = ai.run.Agent<Resolution>.new(tools = [search_knowledge]));
+  let rejected = match (outcome) {
+    let failed: ai.Failed => {
+      match (failed.cause) {
+        let invalid: ai.InvalidRequest => true,
+        _ => false,
+      }
+    },
+    _ => false,
+  };
   assert.is_true(rejected);
   assert.equal(provider.submit_calls, 1)
 }
 
 test "guide 04.05: output fingerprints include nominal and structural identity" {
-  let resolution = ai.internal._output_type_fingerprint<Resolution>();
-  let text = ai.internal._output_type_fingerprint<string>();
+  let resolution = ai.output_fingerprint<Resolution>();
+  let text = ai.output_fingerprint<string>();
   assert.contains(resolution, "baml-output/v1;");
   assert.contains(resolution, "Resolution");
   assert.is_true(resolution != text)
@@ -270,15 +273,15 @@ test "guide 04.05: an agent resumes the supplied conversation instead of startin
   });
   let resumed = provider.submit(conversation, results);
   let dispatched: string[] = [];
-  //# Resume the agent from existing continuation state
-  let outcome = task.run(
+  //# Adopt the hand-driven continuation state into a session and resume
+  let session = ai.run.AgentSession<Resolution>.from(task, resumed);
+  let outcome = session.resume(
     runner = ai.run.Agent<Resolution>.new(
       tools = [search_knowledge],
       after_tool_call = (event) -> {
         dispatched.push(event.call.name);
         null
       },
-      conversation = resumed,
     ),
   );
   match (outcome) {
@@ -397,29 +400,12 @@ test "guide 04.05: an Agent rejects a conversation created for another output ty
     },
   );
   let rejected = false;
-  let _ = wrong_task
-    .run(
-      runner = ai.run.Agent<string>.new(conversation = conversation),
-    )
-    catch (e) {
-      let invalid: ai.InvalidRequest => {
-        rejected = true;
-        ai.Done<string> {
-          value: "unreachable",
-          metadata: ai.ResponseMetadata {
-            provider: "test",
-            model: null,
-            request_id: null,
-            finish_reason: null,
-            usage: null,
-            attributes: {},
-            raw: null,
-          },
-          conversation: conversation,
-        }
-      },
-      _ => baml.sys.panic("unexpected conversation type error"),
-    };
+  let _ = ai.run.AgentSession<string>.from(wrong_task, conversation) catch (e) {
+    let invalid: ai.InvalidRequest => {
+      rejected = true;
+      ai.run.AgentSession<string> { _task: wrong_task, _conversation: conversation, _busy: false }
+    },
+  };
   assert.is_true(rejected);
   assert.equal(provider.calls, 0)
 }
@@ -444,14 +430,14 @@ testset "integ-test-guide-04-save-and-resume" {
       .as<ai.AgentProvider>
       .submit(restored, results);
     let dispatched: string[] = [];
-    let outcome = task.run(
+    let session = ai.run.AgentSession<Resolution>.from(task, resumed);
+    let outcome = session.resume(
       runner = ai.run.Agent<Resolution>.new(
         tools = [search_knowledge],
         after_tool_call = (event) -> {
           dispatched.push(event.call.name);
           null
         },
-        conversation = resumed,
       ),
     );
     log.info("live conversation resume " + {

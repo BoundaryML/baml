@@ -125,6 +125,12 @@ let claude = claude_code.ClaudeCodeCli {
 }
 ```
 
+Provider adapters do not hand-add identity fields: instance identity is
+built into the runtime, and `ai.same_provider_instance(a, b)` is the public
+check — true for the same provider instance, or one reachable through the
+other's `delegate()` chain. Conversation-ownership guards use exactly this
+rule.
+
 These roles do not recurse into one another:
 
 - `ai.run.Harness` uses the CLI's harness session protocol;
@@ -197,7 +203,7 @@ class CapabilityNegotiationRunner {
               mode: "agent",
               output: done.value.reply,
             },
-            let stopped: ai.BudgetReached => throw baml.errors.Unsupported {
+            let stopped: ai.Stopped => throw baml.errors.Unsupported {
               message: "negotiated run stopped: " + stopped.reason,
             },
             let handoff: ai.Handoff => throw baml.errors.Unsupported {
@@ -205,6 +211,10 @@ class CapabilityNegotiationRunner {
             },
             let interrupted: ai.Interrupted => throw baml.errors.Unsupported {
               message: "negotiated run interrupted: " + interrupted.reason,
+            },
+            let failed: ai.Failed => match (failed.cause) {
+              let failure: ai.Failure => throw failure,
+              let unknown: baml.errors.UnknownError => throw unknown,
             },
           }
         },
@@ -224,6 +234,31 @@ normal execution back to `ai.run.Agent`.
 
 Keep the runner in `custom_runner.baml` beside the example that owns it. Keep
 its helper classes and functions in `utilities.baml`.
+
+## Writing a provider adapter
+
+The full walkthrough is [Implement a provider](implement-a-provider.md).
+The load-bearing facts for adapter authors:
+
+- `render_shorthand()` returns `"vendor/model"` — any two non-empty
+  segments joined by `/`; a malformed value raises `ai.InvalidRequest` at
+  first render, and agent runs validate it up front.
+- Thin wrappers (retry-like middleware, instrumentation) implement
+  `delegate()` to return their inner provider; conversation-ownership
+  checks walk that chain, so delegating wrappers are legal at any nesting
+  depth. `ai.same_provider_instance(a, b)` is the public form of the check.
+- `Conversation.output_type_fingerprint()` may return null — the guard is
+  skipped, like `pending_calls`' null convention. Opt in to the wrong-task
+  protection by reporting `ai.output_fingerprint<T>()` from conversations
+  your `begin<T>` creates.
+- The public helper kit covers what adapters used to hand-write:
+  `ai.Usage.zero()` and `usage.add(next)` for accumulation,
+  `ai.tools.check_calls(calls, provider_name)` and
+  `ai.tools.check_results(pending, results, provider_name)` for the batch
+  and correlation rules the stock Agent enforces,
+  `ai.classify_http(provider, status_code, body)` for the shared HTTP
+  status → failure table, and `task.recipe()` for the prompt-render recipe
+  an adapter renders with its own output-format conventions.
 
 ## When to add what
 

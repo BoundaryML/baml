@@ -32,7 +32,7 @@ class Harness<T> {
         function run(
             self,
             task: ai.Task<T>,
-        ) -> ai.harness.HarnessRun<T> throws baml.errors.UnknownError {
+        ) -> ai.harness.HarnessRun<T> throws ai.Failure | baml.errors.UnknownError {
             //# Open an isolated harness session with workspace policy
             let session = self.harness.open(self.options);
             //# Run the harness while forwarding normalized events to this invocation

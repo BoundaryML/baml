@@ -37,7 +37,7 @@ class VoiceAgent {
                     .realtime
                     .with_automatic_tools(
                         raw_live_session,
-                        ai.tools._tool_inputs_from_tools(task.tools),
+                        ai.tools.as_inputs(task.tools),
                     )
             } else {
                 raw_live_session
@@ -172,7 +172,10 @@ class VoiceAgent {
                             //### Close after a successful completion-tool result
                             if (
                                 results.results.some((result: ai.tools.ToolResult) -> bool {
-                                    completion_call_ids.includes(result.id) && !result.is_error
+                                    match (result) {
+                                        let ok: ai.tools.ToolOk => completion_call_ids.includes(ok.id),
+                                        _ => false,
+                                    }
                                 })
                             ) {
                                 // A completion tool call is the response boundary, so flush

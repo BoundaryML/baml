@@ -2,6 +2,10 @@ enum FakeFailureMode {
     Retryable,
     Terminal,
     Unknown,
+    // Transport failure (ai.NetworkFailure) — replay-safe for model steps.
+    Network,
+    // ai.ParseFailed — the default retry judgment declines to replay it.
+    Parse,
 }
 
 // A recognized strategy shorthand gives deterministic providers a prompt
@@ -91,6 +95,14 @@ implements ai.AgentProvider for FakeProvider {
           provider: self.provider_name,
           reason: "injected terminal fake failure",
         },
+        FakeFailureMode.Network => throw ai.NetworkFailure {
+          provider: self.provider_name,
+          detail: "injected transport fake failure",
+        },
+        FakeFailureMode.Parse => throw ai.ParseFailed {
+          provider: self.provider_name,
+          raw_output: "injected unparsable fake output",
+        },
         FakeFailureMode.Unknown => throw baml.errors.UnknownError.with_message<never>(
           "injected unclassified fake failure",
           "fake provider",
@@ -103,6 +115,8 @@ implements ai.AgentProvider for FakeProvider {
     };
     //# Return the typed value from exactly one fake model turn
     ai.ModelStep<T> {
+      assistant_text: null,
+      reasoning_text: null,
       outcome: value,
       metadata: ai.ResponseMetadata {
         provider: self.provider_name,
@@ -114,7 +128,6 @@ implements ai.AgentProvider for FakeProvider {
           output_tokens: 1,
           cached_input_tokens: 0,
           reasoning_tokens: 0,
-          cost_usd: 0.0,
         },
         attributes: {},
         raw: null,

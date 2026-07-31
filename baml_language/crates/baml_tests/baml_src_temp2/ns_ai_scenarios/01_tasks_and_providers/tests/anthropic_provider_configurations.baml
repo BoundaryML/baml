@@ -18,9 +18,7 @@ testset "integ-test-anthropic-messages-configurations" {
                 api_key = baml.env.get_or_panic("ANTHROPIC_API_KEY"),
                 output_mode = root.anthropic.OutputMode.Strict,
             );
-        let value = ai
-            .internal
-            ._require_done(
+        let value = done_or_fail(
                 ResolveTicket@task(sample_ticket()).with_provider(provider)
                     .run(runner = ai.run.Agent<Resolution>.new()),
             )
@@ -35,9 +33,7 @@ testset "integ-test-anthropic-messages-configurations" {
                 api_key = baml.env.get_or_panic("ANTHROPIC_API_KEY"),
                 output_mode = root.anthropic.OutputMode.Strict,
             );
-        let value = ai
-            .internal
-            ._require_done(
+        let value = done_or_fail(
                 AnthropicResolutionArray@task().with_provider(provider)
                     .run(runner = ai.run.Agent<Resolution[]>.new()),
             )
@@ -54,9 +50,7 @@ testset "integ-test-anthropic-messages-configurations" {
                 api_key = baml.env.get_or_panic("ANTHROPIC_API_KEY"),
                 output_mode = root.anthropic.OutputMode.Sap,
             );
-        let value = ai
-            .internal
-            ._require_done(
+        let value = done_or_fail(
                 ResolveTicket@task(sample_ticket()).with_provider(provider)
                     .run(runner = ai.run.Agent<Resolution>.new()),
             )

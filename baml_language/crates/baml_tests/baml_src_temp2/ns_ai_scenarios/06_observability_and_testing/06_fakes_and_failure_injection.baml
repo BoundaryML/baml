@@ -6,8 +6,7 @@ function fakes_and_failure_injection(
         ...fake_resolution(),
         failures_remaining: 1,
     };
-    let first_attempt = ai.internal
-        ._require_done(
+    let first_attempt = done_or_fail(
             ResolveTicket@task(sample_ticket()).with_provider(fake)
                 .run(runner = ai.run.Agent<Resolution>.new()),
         )
@@ -15,8 +14,7 @@ function fakes_and_failure_injection(
         _ => null
     };
     log.info({ "first_attempt": first_attempt, "remaining_failures": fake.failures_remaining });
-    ai.internal
-        ._require_done(
+    done_or_fail(
             ResolveTicket@task(sample_ticket()).with_provider(fake)
                 .run(runner = ai.run.Agent<Resolution>.new()),
         )

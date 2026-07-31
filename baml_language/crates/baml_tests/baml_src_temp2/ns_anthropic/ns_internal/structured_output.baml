@@ -153,6 +153,29 @@ function _response_text(raw: json) -> string? throws never {
     parts.join("")
 }
 
+// Visible extended-thinking text for the ModelStep display channel. The
+// signed thinking blocks themselves stay in the conversation's exact
+// assistant content; this is only the human-readable projection.
+function _response_thinking_text(raw: json) -> string? throws never {
+    let parts: string[] = [];
+    let response_content = _response_content(raw);
+    for (let content in response_content) {
+        let content_type = baml.json.path_or(content, ".type", "");
+        if (content_type == "thinking") {
+            match (baml.json.path_or<string?>(content, ".thinking", null)) {
+                let text: string => {
+                    parts.push(text);
+                },
+                null => {},
+            }
+        }
+    }
+    if (parts.length() == 0) {
+        return null;
+    }
+    parts.join("\n")
+}
+
 function _response_tool_uses(raw: json) -> json[] throws never {
     let content = _response_content(raw);
     let calls: json[] = [];
@@ -181,7 +204,6 @@ function _response_metadata(
                     output_tokens: baml.json.path_or(usage, ".output_tokens", 0),
                     cached_input_tokens: baml.json.path_or<int?>(usage, ".cache_read_input_tokens", null),
                     reasoning_tokens: null,
-                    cost_usd: null,
                 }
             },
             _ => null,

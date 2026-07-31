@@ -6,6 +6,11 @@ the application needs the raw bidirectional session — a `LiveSession` you send
 audio/text frames into and receive provider events from directly, with no
 runner managing turns, tools, or shutdown for you.
 
+A realtime `LiveSession` is a live audio/event connection, not an
+`ai.run.AgentSession<T>` (the typed multi-turn continuation handle) and not
+an `ai.harness.HarnessSession` (an external harness's workspace). The three
+share a word and nothing else.
+
 ## Utilities used
 
 | Utility | What it does |
@@ -27,7 +32,7 @@ function lookup_account(customer_id: string) -> json throws never {
 }
 
 function VoiceSupport(instructions: string) -> null {
-  provider: "openai/gpt-realtime"
+  provider: openai.Realtime { model: "gpt-realtime-2.1", voice: "marin", ... }
   prompt: `${instructions}`
 }
 

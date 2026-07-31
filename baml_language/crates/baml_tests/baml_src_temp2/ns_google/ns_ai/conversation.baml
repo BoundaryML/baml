@@ -46,7 +46,7 @@ implements ai.ConversationAppendProvider for Gemini {
     self,
     conversation: ai.Conversation,
     messages: ai.Messages,
-  ) -> ai.Conversation throws ai.Failure {
+  ) -> null throws ai.Failure {
     root.google.internal._append_messages(
       self,
       conversation,

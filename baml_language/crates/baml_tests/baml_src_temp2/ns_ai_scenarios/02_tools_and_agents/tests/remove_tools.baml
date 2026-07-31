@@ -1,6 +1,6 @@
 test "guide 02.09: remove one application tool between provider steps" {
     let registry = ai.tools.ToolRegistry.new([search_knowledge, lookup_account]);
-    let runner = ai.run.Agent<Resolution>.new(tools = [], tool_registry = registry, prepare_step = (context) -> {
+    let runner = ai.run.Agent<Resolution>.new(tool_registry = registry, prepare_step = (context) -> {
         tool_roster_plan(context, remove_name = "lookup_account")
     });
     let task = ResolveTicketWithTools@task(sample_ticket()).with_provider(fake_tool_provider([one_knowledge_call()])).with_tools([]);
@@ -36,7 +36,7 @@ test "guide 02.09: an explicit empty list removes all application tools" {
 
 test "guide 02.09: an empty replacement updates the registry and persists" {
     let registry = ai.tools.ToolRegistry.new([search_knowledge, lookup_account]);
-    let runner = ai.run.Agent<Resolution>.new(tools = [], tool_registry = registry, prepare_step = (context) -> {
+    let runner = ai.run.Agent<Resolution>.new(tool_registry = registry, prepare_step = (context) -> {
         tool_roster_plan(context, remove_name = null, clear_roster = true)
     });
     let task = ResolveTicketWithTools@task(sample_ticket()).with_provider(fake_tool_provider([one_knowledge_call()])).with_tools([]);
@@ -93,7 +93,6 @@ testset "integ-test-guide-02-remove-tools" {
                     .run
                     .Agent<Resolution>
                     .new(
-                        tools = [],
                         tool_registry = registry,
                         prepare_step = (context) -> {
                             tool_roster_plan(context, remove_name = "lookup_account")

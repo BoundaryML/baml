@@ -5,11 +5,11 @@ test "guide 03.02: fallback re-renders and tries the next provider" {
   let good = ai.testing.FakeProvider { ...fake_resolution(), provider_name: "second" };
   //# Execute the ordered fallback chain
   let task = ResolveTicket@task(sample_ticket()).with_provider(ai.fallback([failed, good]));
-  let response = ai.internal._response_from_done(
-    ai.internal._require_done(
+  let response = (
+    done_or_fail(
       task.run(runner = ai.run.Agent<Resolution>.new()),
-    ),
-  );
+    )
+  ).response();
   //# Verify the fallback provider completed
   assert.equal(response.metadata.provider, "second")
 }
@@ -61,11 +61,11 @@ testset "integ-test-guide-03-fallback" {
     ];
     //# Execute the live fallback chain
     let task = ResolveTicket@task(sample_ticket()).with_provider(ai.fallback(providers));
-    let response = ai.internal._response_from_done(
-      ai.internal._require_done(
+    let response = (
+      done_or_fail(
         task.run(runner = ai.run.Agent<Resolution>.new()),
-      ),
-    );
+      )
+    ).response();
     //# Verify Anthropic completed the task
     assert.equal(response.metadata.provider, "anthropic")
   }

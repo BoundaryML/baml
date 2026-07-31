@@ -242,3 +242,11 @@ runner executes it.
 5. **The orchestration is portable.** The same BAML source can generate typed
 TypeScript and Python entry points without rewriting the agent in both host
 languages.
+6. **Continuations are typed sessions, not message arrays.**
+`ai.run.AgentSession<T>` pairs the task with its provider conversation and
+checks that pairing at construction. Continuation intent is a named method —
+`send` starts a new turn, `complete` demands the finished value, `resume`
+continues an unfinished turn, `submit_tool_results` answers a handoff — and
+`save`/`restore` verify the structural task contract (output type, provider
+protocol, tool schemas) before the next request. Message-array SDKs re-pair
+history and code by application discipline.

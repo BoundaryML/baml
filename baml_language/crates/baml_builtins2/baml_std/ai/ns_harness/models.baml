@@ -81,7 +81,7 @@ interface Harness {
     session: HarnessSession,
     task: ai.Task<T>,
     on_event: ((ai.observe.AgentEvent) -> null throws never)?,
-  ) -> HarnessRun<T> throws baml.errors.UnknownError
+  ) -> HarnessRun<T> throws ai.Failure | baml.errors.UnknownError
   function save_session(self, session: HarnessSession) -> HarnessSessionToken
     throws baml.errors.UnknownError
   function restore_session(self, token: HarnessSessionToken) -> HarnessSession

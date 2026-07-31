@@ -1,5 +1,5 @@
 // Regression coverage for appending messages to provider-owned conversations.
-function _append_test_task(provider: ai.Provider) -> ai.Task<string> throws never {
+function _append_test_task(provider: ai.Provider) -> ai.Task<string> throws ai.InvalidRequest {
     ai.task<string>(provider, (ctx: baml.llm.Context) -> baml.llm.PromptAst {
         baml.llm.assemble_prompt_ast(["Return done.\n", ""], [ctx.output_format])
     })
@@ -17,18 +17,23 @@ function _append_test_provider(
     }
 }
 
-test "conversation append preserves output type and resumes through Agent" {
+test "conversation append preserves output type at the protocol level" {
     let provider = _append_test_provider();
     let task = _append_test_task(provider);
-    let first = ai.internal._require_done(task.run(runner = ai.run.Agent<string>.new()));
+    let first = done_or_fail(task.run(runner = ai.run.Agent<string>.new()));
     let fingerprint = first.conversation.output_type_fingerprint();
-    let continued = first.conversation.append_message(ai.ChatMessage.user("one more question"));
-    assert.equal(continued.output_type_fingerprint(), fingerprint);
-    assert.equal(continued.provider().name(), "append-test");
-    assert.equal(continued.messages().items().length(), 2);
-    let second = ai
-        .internal
-        ._require_done(task.run(runner = ai.run.Agent<string>.new(conversation = continued)));
+    let _ = first.conversation.append_message(ai.ChatMessage.user("one more question"));
+    assert.equal(first.conversation.output_type_fingerprint(), fingerprint);
+    assert.equal(first.conversation.provider().name(), "append-test");
+    assert.equal(first.conversation.messages().items().length(), 2)
+}
+
+test "a session send appends inside the boundary and resumes through the Agent" {
+    let provider = _append_test_provider();
+    let task = _append_test_task(provider);
+    let opening = task.run(runner = ai.run.Agent<string>.new());
+    let session = ai.run.AgentSession<string>.of(task, opening);
+    let second = done_or_fail(session.send(ai.ChatMessage.user("one more question")));
     assert.equal(second.value, "done");
     assert.equal(second.conversation.messages().items().length(), 2)
 }
@@ -46,7 +51,7 @@ test "conversation append validates the whole batch before mutation" {
     let _ = provider.append_messages(state, batch) catch (e) {
         let invalid: ai.InvalidRequest => {
             rejected = true;
-            state
+            null
         },
         _ => baml.sys.panic("unexpected append validation error"),
     };
@@ -64,7 +69,7 @@ test "conversation append reports Unsupported when the owner lacks the capabilit
         ) catch (e) {
         let unsupported: baml.errors.Unsupported => {
             rejected = true;
-            conversation
+            null
         },
         _ => baml.sys.panic("unexpected unsupported append error"),
     };
@@ -83,7 +88,7 @@ test "conversation append rejects unresolved fake tool calls" {
     let _ = provider.append_message(state, ai.ChatMessage.user("too soon")) catch (e) {
         let invalid: ai.InvalidRequest => {
             rejected = true;
-            state
+            null
         },
         _ => baml.sys.panic("unexpected pending append error"),
     };
@@ -99,15 +104,10 @@ test "retry preserves exact append through its conversation wrapper" {
         _ => baml.sys.panic("expected retry conversation"),
     };
     let fingerprint = state.output_type_fingerprint();
-    let appended = provider.append_message(state, ai.ChatMessage.user("retry follow up"));
-    match (appended) {
-        let exact: ai.RetryConversation => {
-            assert.equal(exact.output_type_fingerprint(), fingerprint);
-            assert.equal(exact.provider().name(), "retry(retry-member)");
-            assert.equal(ai.message_text(exact.messages().items()[1]), "retry follow up")
-        },
-        _ => assert.is_true(false),
-    }
+    let _ = provider.append_message(state, ai.ChatMessage.user("retry follow up"));
+    assert.equal(state.output_type_fingerprint(), fingerprint);
+    assert.equal(state.provider().name(), "retry(retry-member)");
+    assert.equal(ai.message_text(state.messages().items()[1]), "retry follow up")
 }
 
 test "fallback pins the exact member after append" {
@@ -118,14 +118,9 @@ test "fallback pins the exact member after append" {
         _ => baml.sys.panic("expected fallback conversation"),
     };
     assert.equal(state.progressed, false);
-    let appended = provider.append_message(state, ai.ChatMessage.user("fallback follow up"));
-    match (appended) {
-        let exact: ai.FallbackConversation => {
-            assert.equal(exact.progressed, true);
-            assert.equal(exact.member_index, 0);
-            assert.equal(exact.provider().name(), "fallback");
-            assert.equal(ai.message_text(exact.messages().items()[1]), "fallback follow up")
-        },
-        _ => assert.is_true(false),
-    }
+    let _ = provider.append_message(state, ai.ChatMessage.user("fallback follow up"));
+    assert.equal(state.progressed, true);
+    assert.equal(state.member_index, 0);
+    assert.equal(state.provider().name(), "fallback");
+    assert.equal(ai.message_text(state.messages().items()[1]), "fallback follow up")
 }

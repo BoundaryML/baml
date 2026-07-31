@@ -2,7 +2,7 @@
 // code in a typesafe way. The `ai` namespace never learns about
 // VendorQuotaExceeded: it rides the `ai.Failure | baml.errors.UnknownError`
 // channel because it implements the interface, retry/fallback classify it via
-// is_transient()/effects() without knowing the concrete type, and the app
+// effects() without knowing the concrete type, and the app
 // recovers the concrete type at the catch site.
 
 class VendorQuotaExceeded {
@@ -11,7 +11,6 @@ class VendorQuotaExceeded {
 }
 
 implements ai.Failure for VendorQuotaExceeded {
-  function is_transient(self) -> bool throws never { self.transient }
   function effects(self) -> ai.Effects throws never { ai.Effects.None }
 }
 
@@ -29,7 +28,7 @@ class QuotaLimitedProvider {
   }
 
   implements ai.AgentProvider {
-    function begin<T>(self, task: ai.Task<T>) -> ai.Conversation throws never {
+    function begin<T>(self, task: ai.Task<T>) -> ai.Conversation throws ai.Failure {
       self.inner.begin<T>(task.with_provider(self.inner))
     }
 
@@ -56,18 +55,25 @@ class QuotaLimitedProvider {
   }
 }
 
-test "guide 03.07: a terminal custom error surfaces through retry with its type intact" {
+test "guide 03.07: the caller's retry_if judgment surfaces a custom error un-replayed" {
   let limited = QuotaLimitedProvider {
     inner: fake_resolution(), failures_remaining: 99, transient: false, calls: 0,
   };
+  //# Retryability is the app's judgment — here it reads its own error data
+  let judgment = (failure: ai.Failure) -> bool {
+    match (failure) {
+      let quota: VendorQuotaExceeded => quota.transient,
+      _ => true,
+    }
+  };
   //# The app catches the CONCRETE user type, not a stringly wrapper
-  let label = ai.internal._require_done(ResolveTicket@task(sample_ticket()).with_provider(ai.retry(limited, 3)).run(runner = ai.run.Agent<Resolution>.new())).value catch (e) {
+  let label = ResolveTicket@task(sample_ticket()).with_provider(ai.retry(limited, 3, retry_if = judgment)).complete(runner = ai.run.Agent<Resolution>.new()) catch (e) {
     let quota: VendorQuotaExceeded => "quota:" + quota.quota_name,
     let failure: ai.Failure => "other-failure",
     let unknown: baml.errors.UnknownError => "unknown",
   };
   assert.equal(label, "quota:daily")
-  //# Terminal per its own classification: retry must not replay it
+  //# The judgment said no: retry must not replay it
   assert.equal(limited.calls, 1)
 }
 
@@ -75,7 +81,7 @@ test "guide 03.07: a transient custom error is replayed like any classified fail
   let limited = QuotaLimitedProvider {
     inner: fake_resolution(), failures_remaining: 1, transient: true, calls: 0,
   };
-  let value = ai.internal._require_done(ResolveTicket@task(sample_ticket()).with_provider(ai.retry(limited, 2)).run(runner = ai.run.Agent<Resolution>.new())).value;
+  let value = ResolveTicket@task(sample_ticket()).with_provider(ai.retry(limited, 2)).complete(runner = ai.run.Agent<Resolution>.new());
   assert.equal(value.category, "billing")
   assert.equal(limited.calls, 2)
 }
@@ -88,7 +94,7 @@ test "guide 03.07: fallback exhaustion rethrows the last REAL failure, typed" {
   let second = QuotaLimitedProvider {
     inner: fake_resolution(), failures_remaining: 99, transient: true, calls: 0,
   };
-  let label = ai.internal._require_done(ResolveTicket@task(sample_ticket()).with_provider(ai.fallback([first, second])).run(runner = ai.run.Agent<Resolution>.new())).value catch (e) {
+  let label = ResolveTicket@task(sample_ticket()).with_provider(ai.fallback([first, second])).complete(runner = ai.run.Agent<Resolution>.new()) catch (e) {
     let quota: VendorQuotaExceeded => "quota:" + quota.quota_name,
     _ => "erased",
   };
@@ -103,7 +109,7 @@ test "guide 03.07: unknown failures accumulate breadcrumbs through wrapping laye
     failures_remaining: 1,
     failure_mode: ai.testing.FakeFailureMode.Unknown,
   };
-  let label = ai.internal._require_done(ResolveTicket@task(sample_ticket()).with_provider(ai.retry(failed, 3)).run(runner = ai.run.Agent<Resolution>.new())).value catch (e) {
+  let label = ResolveTicket@task(sample_ticket()).with_provider(ai.retry(failed, 3)).complete(runner = ai.run.Agent<Resolution>.new()) catch (e) {
     // One breadcrumb from the fake, one from the retry step that wrapped it.
     let unknown: baml.errors.UnknownError =>
       unknown.message.length().to_string() + ":" + (unknown.message.at(1) ?? ""),

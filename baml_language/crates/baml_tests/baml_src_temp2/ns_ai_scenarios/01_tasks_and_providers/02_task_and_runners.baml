@@ -9,11 +9,9 @@ function task_and_runners() -> ai.ResponseWithMetadata<Resolution> {
             "tools": task.tools.length(),
         },
     );
-    let response = ai
-        .internal
-        ._response_from_done(
-            ai.internal._require_done(task.run(runner = ai.run.Agent<Resolution>.new())),
-        );
+    let response = (
+            done_or_fail(task.run(runner = ai.run.Agent<Resolution>.new()))
+        ).response();
     log.info(response);
     response
 }

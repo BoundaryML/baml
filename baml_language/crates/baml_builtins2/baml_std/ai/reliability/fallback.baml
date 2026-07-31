@@ -37,16 +37,6 @@ implements Provider for Fallback {
   function render_shorthand(self) -> string throws never { self.first.render_shorthand() }
 }
 
-function _fallback_member(provider: Provider) -> AgentProvider throws baml.errors.Unsupported {
-    match (provider) {
-        let capability: AgentProvider => capability,
-        _ => {
-            throw baml.errors.Unsupported {
-      message: "fallback member cannot run an Agent: " + provider.name(),
-    }
-        },
-    }
-}
 
 // Fallback may switch members only until the first provider turn succeeds.
 // Once a model turn has produced tool calls or a value, changing providers is
@@ -54,7 +44,7 @@ function _fallback_member(provider: Provider) -> AgentProvider throws baml.error
 implements AgentProvider for Fallback {
   function begin<T>(self, task: Task<T>) -> Conversation
       throws ai.Failure | baml.errors.UnknownError {
-    let provider = _fallback_member(self.first);
+    let provider = ai.internal._fallback_member(self.first);
     FallbackConversation {
       owner: self,
       recipe: task._render,
@@ -91,12 +81,12 @@ implements AgentProvider for Fallback {
     //# Try another provider only before any model turn has succeeded
     while (state.member_index < members.length()) {
       let member = members[state.member_index];
-      let provider = _fallback_member(member);
+      let provider = ai.internal._fallback_member(member);
       let result = provider.step<T>(state.inner, tools) catch (e) {
         let failure: ai.Failure => {
           if (
             state.progressed
-              || !ai.internal._may_retry_model_step(failure)
+              || !ai.internal._may_retry_model_step(failure, null)
               || state.member_index + 1 >= members.length()
           ) {
             throw e;
@@ -104,7 +94,7 @@ implements AgentProvider for Fallback {
           failures.push(failure);
           state.member_index = state.member_index + 1;
           let next = members[state.member_index];
-          let next_provider = _fallback_member(next);
+          let next_provider = ai.internal._fallback_member(next);
           state.inner = next_provider.begin<T>(Task<T> {
             provider: next,
             prompt: state.recipe.render(next, reflect.type_of<T>()),
@@ -151,7 +141,7 @@ implements AgentProvider for Fallback {
       )
     }
     let member = self.providers()[state.member_index];
-    let provider = _fallback_member(member);
+    let provider = ai.internal._fallback_member(member);
     state.inner = provider.submit(state.inner, results);
     state
   }
@@ -162,7 +152,7 @@ implements ConversationAppendProvider for Fallback {
     self,
     conversation: Conversation,
     messages: Messages,
-  ) -> Conversation throws ai.Failure | baml.errors.UnknownError {
+  ) -> null throws ai.Failure | baml.errors.UnknownError {
     let state = match (conversation) {
       let value: FallbackConversation => value,
       _ => throw baml.errors.UnknownError.with_message<never>(
@@ -183,11 +173,11 @@ implements ConversationAppendProvider for Fallback {
         message: "fallback member cannot append exact conversation messages: " + member.name(),
       },
     };
-    state.inner = provider.append_messages(state.inner, messages);
+    let _ = provider.append_messages(state.inner, messages);
     // A fallback cannot reconstruct appended exact state on another member.
     // Pin the wrapper to this member after the first successful append.
     state.progressed = true;
-    state
+    null
   }
 }
 

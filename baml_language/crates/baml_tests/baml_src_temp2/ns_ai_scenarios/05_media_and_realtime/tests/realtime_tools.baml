@@ -63,8 +63,8 @@ test "guide 05.05: the explicit automatic-tool wrapper executes task tools" {
     }
 
     assert.equal(results.length(), 1);
-    assert.is_true(!results[0].is_error);
-    assert.equal(baml.json.path_or(results[0].output, ".status", ""), "active");
+    assert.is_true(!ai.tools.result_is_error(results[0]));
+    assert.equal(baml.json.path_or(ai.tools.result_payload(results[0]), ".status", ""), "active");
     assert.equal(raw.control_frames.length(), 1)
 }
 
@@ -107,7 +107,7 @@ testset "integ-test-guide-05-realtime-tools" {
         assert.equal(calls[0].name, "lookup_account");
         assert.equal(baml.json.path_or(calls[0].args, ".customer_id", ""), "C-1");
         assert.equal(results.length(), 1);
-        assert.is_true(!results[0].is_error);
+        assert.is_true(!ai.tools.result_is_error(results[0]));
         let transcript = ai.realtime.collect_live_text(live_session);
         log.info(
             baml.json
@@ -123,6 +123,6 @@ testset "integ-test-guide-05-realtime-tools" {
         );
         assert.contains(transcript.to_lower_case(), "active");
         assert.contains(transcript.to_lower_case(), "pro");
-        assert.equal(results[0].id, calls[0].id)
+        assert.equal(ai.tools.result_id(results[0]), calls[0].id)
     }
 }
