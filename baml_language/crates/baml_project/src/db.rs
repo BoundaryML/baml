@@ -256,6 +256,9 @@ impl baml_compiler2_emit::Db for ProjectDatabase {
 }
 
 #[salsa::db]
+impl baml_surface::Db for ProjectDatabase {}
+
+#[salsa::db]
 impl baml_lsp2_actions::Db for ProjectDatabase {}
 
 impl ProjectDatabase {

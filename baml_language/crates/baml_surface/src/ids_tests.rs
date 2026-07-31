@@ -61,13 +61,13 @@ fn member_ids_round_trip() {
     db.add_file("fixture.baml", FIXTURE);
 
     let cases = [
-        ("baml.String.split", "M:baml.String::split"),
-        ("baml.String::split", "M:baml.String::split"),
-        ("Point.x", "F:user.Point::x"),
-        ("Color.Red", "E:user.Color::Red"),
-        ("Encoder::Error", "A:user.Encoder::Error"),
-        ("Encoder.encode", "M:user.Encoder::encode"),
-        ("baml.Comparable.compare", "M:baml.Comparable::compare"),
+        ("baml.time.Duration.abs", "M:baml.time.Duration.abs"),
+        ("baml.String.split", "M:baml.String.split"),
+        ("Point.x", "F:user.Point.x"),
+        ("Color.Red", "E:user.Color.Red"),
+        ("Encoder.Error", "A:user.Encoder.Error"),
+        ("Encoder.encode", "M:user.Encoder.encode"),
+        ("baml.Comparable.compare", "M:baml.Comparable.compare"),
     ];
     for (path, expected_id) in cases {
         let Some(Resolved::Member(owner, member)) = resolve(&db, path) else {
@@ -92,7 +92,7 @@ fn method_symbol_ids_nest_under_their_type() {
         panic!("String.split is a method")
     };
     let id = SymbolId::of_symbol(&db, Symbol::Function(split)).unwrap();
-    assert_eq!(id.to_string(), "M:baml.String::split");
+    assert_eq!(id.to_string(), "M:baml.String.split");
 }
 
 #[test]
@@ -129,18 +129,17 @@ fn human_path_routing() {
 #[test]
 fn id_strings_reject_malformed_input() {
     for bad in [
-        "baml.String",      // no kind prefix
-        "Q:baml.String",    // unknown prefix
-        "T:String",         // no package segment
-        "T:baml.String::x", // member on a non-member kind
-        "M:baml.String",    // member kind without member
-        "M:baml.String::a::b",
+        "baml.String",   // no kind prefix
+        "Q:baml.String", // unknown prefix
+        "T:String",      // no package segment
+        "M:baml.split",  // member kind without pkg.Type.member shape
         "T:baml..String",
+        "M:baml.String.",
     ] {
         assert!(SymbolId::from_str(bad).is_err(), "{bad} must not parse");
     }
     // serde round-trip.
-    let id = ids::SymbolId::from_str("M:baml.String::split").unwrap();
+    let id = ids::SymbolId::from_str("M:baml.String.split").unwrap();
     let json = serde_json::to_string(&id).unwrap();
     let back: ids::SymbolId = serde_json::from_str(&json).unwrap();
     assert_eq!(back, id);

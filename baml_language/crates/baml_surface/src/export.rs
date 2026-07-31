@@ -10,7 +10,7 @@
 //! API-review hybrid (rendered text you can read and diff, references you
 //! can link), and it sidesteps tree serialization of recursive types
 //! entirely. `unresolved` is computed structurally: a type that fails the
-//! `CodegenTy` narrowing carries a compiler sentinel (today: free-impl
+//! `RuntimeTy` narrowing carries a compiler sentinel (today: free-impl
 //! signatures whose `Self` has no binding) and is flagged rather than
 //! silently exported as if real.
 //!
@@ -19,10 +19,20 @@
 //! item and must not be duplicated into each. The export set is explicit:
 //! synthetic items (`$stream` companions, `$new` constructors) are listed
 //! and flagged, never silently dropped.
+//!
+//! One document covers one package. References may cross packages — a field
+//! type's head, an attached impl declared downstream — and stay
+//! *interpretable* without any lookup because ids are self-describing
+//! (`X:user.impl[user.Renderer for int]` carries kind, package, and path).
+//! The referent's full record lives in its own package's export; there is
+//! deliberately no rustdoc-style stub table, which exists there only because
+//! opaque integer ids need one. Note the asymmetry: an item's `impls` list
+//! is an *attachment view* (project-wide), while the top-level `impls` array
+//! is a *declaration set* (this package only).
 
 use std::fmt::Write as _;
 
-use baml_type::{CodegenTy, Interface as InterfaceBound, ParamTy, Ty};
+use baml_type::{Interface as InterfaceBound, ParamTy, RuntimeTy, Ty};
 use serde::Serialize;
 
 use crate::{
@@ -48,9 +58,12 @@ pub struct TyRef {
     /// the link target for cross-referencing.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub head: Option<String>,
-    /// `true` when the type carries a compiler sentinel (fails `CodegenTy`
-    /// narrowing) — e.g. an unbound `Self` in today's free-impl signatures.
-    /// Consumers must not treat the display string as a real type.
+    /// `true` when the type carries a compiler sentinel — an `!error` or
+    /// `unknown` leaf, e.g. the unbound `Self` in today's free-impl
+    /// signatures. Consumers must not treat the display string as a real
+    /// type. Deliberately-symbolic forms (`(Self as I).Member`, free type
+    /// variables) are *not* flagged: they are the correct declaration-site
+    /// types.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub unresolved: bool,
 }
@@ -73,7 +86,11 @@ impl TyRef {
         Self {
             display: TyDisplayFormat::Canonical.render(ty),
             head,
-            unresolved: CodegenTy::try_from(ty).is_err(),
+            // `RuntimeTy` excludes exactly the compiler-sentinel axis
+            // (`Error`/`Unknown`/`Evolving*`/`Infer`) while keeping symbolic
+            // projections and type variables — the precise "is this a real
+            // type" oracle.
+            unresolved: RuntimeTy::try_from(ty).is_err(),
         }
     }
 }

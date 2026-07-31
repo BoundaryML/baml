@@ -46,6 +46,11 @@ mod ids_tests;
 #[salsa::db]
 pub trait Db: baml_compiler2_tir::Db {}
 
+// In this crate's own test build, the crate is compiled a second time (the
+// dev-dependency on `baml_project` closes a cycle back to the published
+// rlib), so `baml_project`'s production impl targets the *other* instance of
+// this trait. This test-local impl covers the test-local instance; the two
+// never coexist in one crate graph's eyes.
 #[cfg(test)]
 #[salsa::db]
 impl Db for baml_project::ProjectDatabase {}

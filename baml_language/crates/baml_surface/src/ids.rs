@@ -13,20 +13,23 @@
 //! dotted path is not injective:
 //!
 //! ```text
-//! T:baml.String                 type-space item (class/enum/interface/alias)
+//! T:baml.time.Duration          type-space item (class/enum/interface/alias)
 //! V:baml.json.parse             value-space item (function/global/test/…)
-//! M:baml.String::split          method (class, default, or required)
-//! F:user.Point::x               field
-//! E:user.Color::Red             enum variant
-//! A:baml.Comparable::CompareError   associated type
+//! M:baml.time.Duration.abs     method (class, default, or required)
+//! F:user.Point.x               field
+//! E:user.Color.Red             enum variant
+//! A:baml.Comparable.CompareError   associated type
 //! ```
+//!
+//! The path is BAML's own dot syntax throughout. No member separator is
+//! needed: the kind prefix decides the shape — for member kinds the last
+//! segment is the member and the one before it the containing type.
 //!
 //! Impl blocks are unnamed and get their identity from the export layer
 //! (interface head + for-type rendering), not from `SymbolId`.
 //!
-//! [`resolve`] is the human-path front door (`"baml.String.split"`, no
-//! prefixes, forgiving about `.` vs `::` for members); [`SymbolId::resolve`]
-//! is the precise, kind-directed one.
+//! [`resolve`] is the human-path front door (`"baml.time.Duration.abs"`,
+//! no prefixes); [`SymbolId::resolve`] is the precise, kind-directed one.
 
 use std::{fmt, str::FromStr};
 
@@ -110,7 +113,7 @@ impl fmt::Display for SymbolId {
         }
         write!(f, ".{}", self.name)?;
         if let Some(member) = &self.member {
-            write!(f, "::{member}")?;
+            write!(f, ".{member}")?;
         }
         Ok(())
     }
@@ -141,21 +144,15 @@ impl FromStr for SymbolId {
             .and_then(IdKind::from_prefix)
             .ok_or_else(invalid)?;
 
-        let (path, member) = match rest.split_once("::") {
-            Some((path, member)) if !member.is_empty() && !member.contains("::") => {
-                (path, Some(member.to_string()))
-            }
-            Some(_) => return Err(invalid()),
-            None => (rest, None),
-        };
-        if member.is_some() != kind.is_member() {
+        let mut segments: Vec<&str> = rest.split('.').collect();
+        // Member ids need `pkg.Type.member`; item ids need `pkg.Name`.
+        let min = if kind.is_member() { 3 } else { 2 };
+        if segments.len() < min || segments.iter().any(|seg| seg.is_empty()) {
             return Err(invalid());
         }
-
-        let mut segments: Vec<&str> = path.split('.').collect();
-        if segments.len() < 2 || segments.iter().any(|seg| seg.is_empty()) {
-            return Err(invalid());
-        }
+        let member = kind
+            .is_member()
+            .then(|| segments.pop().unwrap_or_else(|| unreachable!()).to_string());
         let name = segments.pop().unwrap_or_else(|| unreachable!()).to_string();
         let package = segments.remove(0).to_string();
         Ok(Self {
@@ -285,24 +282,16 @@ pub enum Resolved<'db> {
     Member(Symbol<'db>, Member<'db>),
 }
 
-/// Resolve a human-written dotted path — `"baml.String"`, `"String.split"`,
-/// `"root.helpers.greet"`, `"baml.Comparable::CompareError"`.
+/// Resolve a human-written dotted path — `"baml.time.Duration"`,
+/// `"String.split"`, `"root.helpers.greet"`.
 ///
 /// Package routing: a leading `root.` forces the user package; a leading
 /// builtin package name (`baml.`, `assert.`, …) selects it; otherwise the
 /// user package is tried first, then `baml` (so unqualified builtin names
 /// like `"String"` or `"json.parse"` resolve). Within a package, the longest
 /// namespace prefix wins, the next segment is the item (types before
-/// values), and one trailing segment — or an explicit `::member` — drills
-/// into a member.
+/// values), and one trailing segment drills into a member.
 pub fn resolve<'db>(db: &'db dyn Db, path: &str) -> Option<Resolved<'db>> {
-    let (path, explicit_member) = match path.split_once("::") {
-        Some((path, member)) if !member.is_empty() && !member.contains("::") => {
-            (path, Some(member))
-        }
-        Some(_) => return None,
-        None => (path, None),
-    };
     let segments: Vec<&str> = path.split('.').collect();
     if segments.iter().any(|seg| seg.is_empty()) {
         return None;
@@ -317,7 +306,7 @@ pub fn resolve<'db>(db: &'db dyn Db, path: &str) -> Option<Resolved<'db>> {
 
     let attempt = |package_name: &str, rest: &[&str]| -> Option<Resolved<'db>> {
         let package = Package::named_checked(db, package_name)?;
-        resolve_in_package(db, package, rest, explicit_member)
+        resolve_in_package(db, package, rest)
     };
     attempt(package_name, rest).or_else(|| {
         // Unqualified builtin fallback: `String.split`, `Comparable`.
@@ -333,13 +322,9 @@ fn resolve_in_package<'db>(
     db: &'db dyn Db,
     package: Package<'db>,
     segments: &[&str],
-    explicit_member: Option<&str>,
 ) -> Option<Resolved<'db>> {
     if segments.is_empty() {
-        return match explicit_member {
-            None => Some(Resolved::Package(package)),
-            Some(_) => None,
-        };
+        return Some(Resolved::Package(package));
     }
 
     // Longest namespace prefix wins; the packages' namespace set is closed,
@@ -353,21 +338,15 @@ fn resolve_in_package<'db>(
         ) else {
             continue;
         };
-        match (item_path, explicit_member) {
-            ([], None) => return Some(Resolved::Namespace(namespace)),
-            ([], Some(_)) => continue,
-            ([item], member) => {
+        match item_path {
+            [] => return Some(Resolved::Namespace(namespace)),
+            [item] => {
                 let symbol = namespace
                     .type_named(db, item)
                     .or_else(|| namespace.value_named(db, item))?;
-                return match member {
-                    None => Some(Resolved::Symbol(symbol)),
-                    Some(name) => symbol
-                        .member_named(db, name)
-                        .map(|m| Resolved::Member(symbol, m)),
-                };
+                return Some(Resolved::Symbol(symbol));
             }
-            ([item, member], None) => {
+            [item, member] => {
                 // `String.split` — implicit member drill-in.
                 if let Some(symbol) = namespace
                     .type_named(db, item)
