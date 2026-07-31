@@ -18,7 +18,7 @@ use std::collections::HashMap;
 
 use proc_macro2::{Group, Ident, Literal, TokenStream, TokenTree};
 use quote::{ToTokens, format_ident, quote};
-use syn::{Attribute, Fields, GenericParam, Generics, parse_quote};
+use syn::{Attribute, Fields, GenericParam, Generics, Index, parse_quote};
 
 use crate::parse::{Family, MVariant, Member, Satellite};
 
@@ -27,6 +27,7 @@ pub(crate) fn emit(family: &Family) -> TokenStream {
     for member in &family.members {
         out.extend(gen_member_enum(family, member));
         out.extend(gen_accessors(family, member));
+        out.extend(gen_head_visitors(family, member));
     }
     // Satellites are generated only for deep members; shallow members reuse
     // their child's satellite (e.g. `ConcreteTy::Function` holds
@@ -175,6 +176,306 @@ fn with_attr_arm(name: &Ident, v: &MVariant) -> TokenStream {
     }
 }
 
+// ── Head visitors ────────────────────────────────────────────────────────────
+//
+// A *head* is an occurrence of the family's type parameter — the nominal
+// reference in `Class`, `Interface`, `Enum`, `EnumVariant`, `TypeAlias`, and
+// `Interface::name`. These walkers exist so a consumer that must reach every
+// head (a garbage collector tracing and forwarding heap-anchored heads) can do
+// so exhaustively *by construction*: the arms are generated from the same
+// variant list as the enum, so a new head-bearing variant cannot be added
+// without its traversal appearing with it. Hand-maintained tracing is precisely
+// where a missed edge becomes a dangling pointer.
+
+/// The family's sole type parameter. Head traversal is defined only for a
+/// single-parameter family — with two, "the head" would be ambiguous — so a
+/// wider family is rejected at expansion rather than given a walker that
+/// silently covers one parameter.
+fn head_param(family: &Family) -> Result<Option<&Ident>, TokenStream> {
+    let mut params = family.generics.params.iter().filter_map(|p| match p {
+        GenericParam::Type(t) => Some(&t.ident),
+        GenericParam::Lifetime(_) | GenericParam::Const(_) => None,
+    });
+    let Some(first) = params.next() else {
+        return Ok(None);
+    };
+    if params.next().is_some() {
+        return Err(quote! {
+            ::core::compile_error!(
+                "ty_family: head visitors support a single type parameter; \
+                 with more than one, which parameter is the nominal head is ambiguous"
+            );
+        });
+    }
+    Ok(Some(first))
+}
+
+fn gen_head_visitors(family: &Family, member: &Member) -> TokenStream {
+    let param = match head_param(family) {
+        Ok(Some(p)) => p,
+        Ok(None) => return TokenStream::new(),
+        Err(e) => return e,
+    };
+    let name = &member.name;
+    let (impl_g, ty_g, where_c) = family.generics.split_for_impl();
+    let shared = member_variants(family, member)
+        .map(|v| head_arm(family, param, name, v, Mutability::Shared));
+    let unique = member_variants(family, member)
+        .map(|v| head_arm(family, param, name, v, Mutability::Unique));
+    let (shared_doc, unique_doc) = visitor_docs(param);
+    quote! {
+        impl #impl_g #name #ty_g #where_c {
+            #[doc = #shared_doc]
+            pub fn visit_heads<F: ::core::ops::FnMut(&#param)>(&self, f: &mut F) {
+                match self {
+                    #(#shared)*
+                }
+            }
+
+            #[doc = #unique_doc]
+            pub fn visit_heads_mut<F: ::core::ops::FnMut(&mut #param)>(&mut self, f: &mut F) {
+                match self {
+                    #(#unique)*
+                }
+            }
+        }
+    }
+}
+
+/// The satellite analogue: a plain struct, so a field walk rather than a match.
+fn gen_sat_head_visitors(family: &Family, sat_name: &Ident, sat: &Satellite) -> TokenStream {
+    let param = match head_param(family) {
+        Ok(Some(p)) => p,
+        Ok(None) => return TokenStream::new(),
+        Err(e) => return e,
+    };
+    let (impl_g, ty_g, where_c) = sat.generics.split_for_impl();
+    let walk = |m: Mutability| -> Vec<TokenStream> {
+        sat.fields
+            .iter()
+            .filter_map(|field| {
+                let fid = field.ident.as_ref()?;
+                let place = m.field_place(quote!(self), fid);
+                visit_expr(family, param, &field.ty, place, m)
+            })
+            .collect()
+    };
+    let shared = walk(Mutability::Shared);
+    let unique = walk(Mutability::Unique);
+    let (shared_doc, unique_doc) = visitor_docs(param);
+    quote! {
+        impl #impl_g #sat_name #ty_g #where_c {
+            #[doc = #shared_doc]
+            pub fn visit_heads<F: ::core::ops::FnMut(&#param)>(&self, f: &mut F) {
+                #(#shared)*
+            }
+
+            #[doc = #unique_doc]
+            pub fn visit_heads_mut<F: ::core::ops::FnMut(&mut #param)>(&mut self, f: &mut F) {
+                #(#unique)*
+            }
+        }
+    }
+}
+
+fn visitor_docs(param: &Ident) -> (String, String) {
+    (
+        format!(
+            " Call `f` on every `{param}` head reachable from this type, in\n\
+              declaration order, descending through nested positions."
+        ),
+        format!(
+            " Call `f` on every `{param}` head reachable from this type, by unique\n\
+              reference, so each can be rewritten in place.\n\n\
+              A relocating collector uses this to forward heads after a move."
+        ),
+    )
+}
+
+/// Whether a traversal borrows shared or uniquely. The two visitors are the
+/// same walk over the same positions, differing only in how each place is
+/// reached, so both are generated from one description.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Mutability {
+    Shared,
+    Unique,
+}
+
+impl Mutability {
+    fn method(self) -> Ident {
+        match self {
+            Mutability::Shared => format_ident!("visit_heads"),
+            Mutability::Unique => format_ident!("visit_heads_mut"),
+        }
+    }
+
+    /// `iter` / `iter_mut`, and `as_ref` / `as_mut`.
+    fn iter(self) -> Ident {
+        match self {
+            Mutability::Shared => format_ident!("iter"),
+            Mutability::Unique => format_ident!("iter_mut"),
+        }
+    }
+
+    fn opt(self) -> Ident {
+        match self {
+            Mutability::Shared => format_ident!("as_ref"),
+            Mutability::Unique => format_ident!("as_mut"),
+        }
+    }
+
+    // Every place is parenthesized: it flows into method chains
+    // (`place.iter()`, `place.as_ref()`), and a bare `&self.generics.iter()`
+    // would bind the `&` to the whole chain rather than the field.
+    fn deref_box(self, place: &TokenStream) -> TokenStream {
+        match self {
+            Mutability::Shared => quote!((&**#place)),
+            Mutability::Unique => quote!((&mut **#place)),
+        }
+    }
+
+    fn field_place(self, base: TokenStream, field: &Ident) -> TokenStream {
+        match self {
+            Mutability::Shared => quote!((&#base.#field)),
+            Mutability::Unique => quote!((&mut #base.#field)),
+        }
+    }
+
+    fn tuple_elem(self, place: &TokenStream, idx: &Index) -> TokenStream {
+        match self {
+            Mutability::Shared => quote!((&#place.#idx)),
+            Mutability::Unique => quote!((&mut #place.#idx)),
+        }
+    }
+}
+
+/// One match arm. Only head-bearing fields are bound; a variant with none gets
+/// an explicit empty arm rather than falling into a catch-all, so the expansion
+/// names every variant it considered.
+fn head_arm(
+    family: &Family,
+    param: &Ident,
+    name: &Ident,
+    v: &MVariant,
+    m: Mutability,
+) -> TokenStream {
+    let id = &v.ident;
+    let skip = match &v.fields {
+        Fields::Unit => quote!(),
+        Fields::Unnamed(_) => quote!((..)),
+        Fields::Named(_) => quote!({ .. }),
+    };
+    let empty = quote! { #name::#id #skip => {} };
+    match &v.fields {
+        Fields::Unit => empty,
+        Fields::Named(named) => {
+            let mut binds = Vec::new();
+            let mut visits = Vec::new();
+            for field in &named.named {
+                let Some(fid) = field.ident.as_ref() else {
+                    continue;
+                };
+                if let Some(visit) = visit_expr(family, param, &field.ty, quote!(#fid), m) {
+                    binds.push(quote!(#fid));
+                    visits.push(visit);
+                }
+            }
+            if visits.is_empty() {
+                return empty;
+            }
+            quote! { #name::#id { #(#binds,)* .. } => { #(#visits)* } }
+        }
+        Fields::Unnamed(unnamed) => {
+            let mut pats = Vec::new();
+            let mut visits = Vec::new();
+            for (i, field) in unnamed.unnamed.iter().enumerate() {
+                let b = format_ident!("f{}", i);
+                match visit_expr(family, param, &field.ty, quote!(#b), m) {
+                    Some(visit) => {
+                        pats.push(quote!(#b));
+                        visits.push(visit);
+                    }
+                    None => pats.push(quote!(_)),
+                }
+            }
+            if visits.is_empty() {
+                return empty;
+            }
+            quote! { #name::#id ( #(#pats),* ) => { #(#visits)* } }
+        }
+    }
+}
+
+/// A statement visiting every head behind `place` (already a reference of the
+/// requested mutability), or `None` when the type holds no head at all.
+fn visit_expr(
+    family: &Family,
+    param: &Ident,
+    ty: &syn::Type,
+    place: TokenStream,
+    m: Mutability,
+) -> Option<TokenStream> {
+    if !mentions(ty, param) {
+        return None;
+    }
+    // A bare head — the leaf this whole walk exists to reach.
+    if crate::convert::path_head(ty).is_some_and(|id| id == param) {
+        return Some(quote! { f(#place); });
+    }
+    // A family type (member enum or satellite) carries its own walker; its
+    // generic arguments need no inspection, since the method is defined at
+    // whatever arguments the field holds.
+    if let Some(id) = crate::convert::path_head(ty)
+        && (*id == family.master_ident || family.satellites.iter().any(|s| s.name == *id))
+    {
+        // `place` is already a reference of the right mutability, and method
+        // resolution auto-reborrows, so no adjustment is needed here.
+        let method = m.method();
+        return Some(quote! { #place.#method(f); });
+    }
+    if let Some(inner) = crate::convert::wrapper_arg(ty, "Box") {
+        let inner_place = m.deref_box(&place);
+        return visit_expr(family, param, inner, inner_place, m);
+    }
+    if let Some(inner) = crate::convert::wrapper_arg(ty, "Vec") {
+        let iter = m.iter();
+        let body = visit_expr(family, param, inner, quote!(__head_item), m)?;
+        return Some(quote! { for __head_item in #place.#iter() { #body } });
+    }
+    if let Some(inner) = crate::convert::wrapper_arg(ty, "Option") {
+        let opt = m.opt();
+        let body = visit_expr(family, param, inner, quote!(__head_item), m)?;
+        return Some(quote! {
+            if let ::core::option::Option::Some(__head_item) = #place.#opt() { #body }
+        });
+    }
+    if let syn::Type::Tuple(t) = ty {
+        let parts: Vec<TokenStream> = t
+            .elems
+            .iter()
+            .enumerate()
+            .filter_map(|(i, et)| {
+                let idx = Index::from(i);
+                visit_expr(family, param, et, m.tuple_elem(&place, &idx), m)
+            })
+            .collect();
+        return (!parts.is_empty()).then(|| quote! { #(#parts)* });
+    }
+    Some(crate::convert::unsupported(ty))
+}
+
+/// Whether `ty` mentions `param` anywhere, including inside generic arguments.
+fn mentions(ty: &syn::Type, param: &Ident) -> bool {
+    fn walk(ts: TokenStream, param: &Ident) -> bool {
+        ts.into_iter().any(|tt| match tt {
+            TokenTree::Ident(id) => id == *param,
+            TokenTree::Group(g) => walk(g.stream(), param),
+            _ => false,
+        })
+    }
+    walk(quote!(#ty), param)
+}
+
 fn gen_satellite(family: &Family, member: &Member, sat: &Satellite) -> TokenStream {
     let sat_name = satellite_name_for(&member.name, &sat.name);
     let map = replacements(family, &member.name);
@@ -188,6 +489,7 @@ fn gen_satellite(family: &Family, member: &Member, sat: &Satellite) -> TokenStre
         quote! { impl #impl_g #sat_name #ty_g #where_c { #body } }
     });
 
+    let visitors = gen_sat_head_visitors(family, &sat_name, sat);
     let doc = format!(
         " Companion of [`{}`] for the `{}` member of the family.",
         sat.name, member.name
@@ -204,6 +506,7 @@ fn gen_satellite(family: &Family, member: &Member, sat: &Satellite) -> TokenStre
             #fields
         }
         #methods
+        #visitors
     }
 }
 

@@ -452,6 +452,60 @@ mod tests {
         );
     }
 
+    /// Every head is reachable through `visit_heads`, at every nesting depth and
+    /// through every shape that can carry one.
+    ///
+    /// This is the property a relocating collector rests on: a head the walk
+    /// misses is a pointer that never gets forwarded, i.e. a dangling reference
+    /// after the next move. The walk is generated from the same variant list as
+    /// the enum, so it cannot drift — this test pins that the *shapes* are all
+    /// descended into (behind `Box`, through `Vec`, through the recursive field
+    /// of a satellite, and through the `Vec<(Name, _)>` associated-type binding,
+    /// whose head sits in a tuple element).
+    #[test]
+    fn visit_heads_reaches_every_head() {
+        let t: Interned = Ty::Map {
+            // Behind a `Box`, with a head nested inside its generic arguments.
+            key: Box::new(Ty::Class(1, vec![Ty::Enum(2, a())], a())),
+            value: Box::new(Ty::Function {
+                // Through a satellite's recursive field.
+                params: vec![FunctionParamTy::required(
+                    Some(Name::new("x")),
+                    Ty::EnumVariant(3, Name::new("V"), a()),
+                )],
+                ret: Box::new(Ty::Interface(
+                    4,
+                    // Through a `Vec` of nested types...
+                    vec![Ty::TypeAlias(5, a())],
+                    // ...and through the tuple element of a binding list.
+                    vec![(Name::new("Item"), Ty::Class(6, vec![], a()))],
+                    a(),
+                )),
+                throws: Box::new(Ty::Void { attr: a() }),
+                attr: a(),
+            }),
+            attr: a(),
+        };
+
+        let mut seen = Vec::new();
+        t.visit_heads(&mut |head| seen.push(*head));
+        assert_eq!(seen, vec![1, 2, 3, 4, 5, 6]);
+
+        // The unique-borrow walk reaches exactly the same positions, and writes
+        // through them — the forwarding step a moving collector performs.
+        let mut forwarded = t.clone();
+        forwarded.visit_heads_mut(&mut |head| *head += 100);
+        let mut seen_after = Vec::new();
+        forwarded.visit_heads(&mut |head| seen_after.push(*head));
+        assert_eq!(seen_after, vec![101, 102, 103, 104, 105, 106]);
+
+        // A head-free type yields nothing rather than being skipped entirely.
+        let leaf: Interned = Ty::List(Box::new(Ty::Int { attr: a() }), a());
+        let mut none = Vec::new();
+        leaf.visit_heads(&mut |head| none.push(*head));
+        assert!(none.is_empty());
+    }
+
     /// A type variable nested inside a concrete container: representable in
     /// `RuntimeTy` but not `RealizedTy`.
     fn with_typevar() -> Ty {

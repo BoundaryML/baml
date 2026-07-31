@@ -1086,7 +1086,7 @@ fn gen_error_bridge(family: &Family, child: usize, member: usize) -> TokenStream
 /// `Target::from(..)` simply infers `Target<Other>` — still the type the
 /// rewritten field holds — so the position stays well-typed rather than
 /// silently converting to the wrong one.
-fn path_head(ty: &Type) -> Option<&Ident> {
+pub(crate) fn path_head(ty: &Type) -> Option<&Ident> {
     let Type::Path(p) = ty else { return None };
     if p.qself.is_some() || p.path.segments.len() != 1 {
         return None;
@@ -1095,7 +1095,7 @@ fn path_head(ty: &Type) -> Option<&Ident> {
 }
 
 /// If `ty` is `Wrapper<Inner>` (one type arg), the `Inner` type.
-fn wrapper_arg<'a>(ty: &'a Type, wrapper: &str) -> Option<&'a Type> {
+pub(crate) fn wrapper_arg<'a>(ty: &'a Type, wrapper: &str) -> Option<&'a Type> {
     let Type::Path(p) = ty else { return None };
     let seg = p.path.segments.last()?;
     if seg.ident != wrapper {
@@ -1127,7 +1127,7 @@ fn contains_recursion(family: &Family, ty: &Type) -> bool {
     walk(quote!(#ty), &names)
 }
 
-fn unsupported(ty: &Type) -> TokenStream {
+pub(crate) fn unsupported(ty: &Type) -> TokenStream {
     let shown = quote!(#ty).to_string();
     let msg = format!("ty_family: unsupported recursive field shape `{shown}`");
     quote! { ::core::compile_error!(#msg) }
