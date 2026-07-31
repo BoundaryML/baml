@@ -5,7 +5,7 @@ expression: outcome.dump
 61..119 '{\n   ...  v\n}': hir_ty=[!error] tir=[int]
 67..72 'let v': hir_ty=[!error] tir=[int]
 75..96 'if c {... { 2 }': hir_ty=[!error] tir=[1 | 2]
-78..79 'c': hir_ty=[!error] tir=[bool]
+78..79 'c': bool
 80..85 '{ 1 }': 1
 82..83 '1': 1
 91..96 '{ 2 }': 2

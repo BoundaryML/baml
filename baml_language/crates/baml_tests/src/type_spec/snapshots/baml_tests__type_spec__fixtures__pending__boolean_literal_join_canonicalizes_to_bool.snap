@@ -5,7 +5,7 @@ expression: outcome.dump
 450..547 '{\n   ...  v\n}': hir_ty=[!error] tir=[bool]
 456..461 'let v': hir_ty=[!error] tir=[bool]
 464..492 'if c {...alse }': hir_ty=[!error] tir=[true | false]
-467..468 'c': hir_ty=[!error] tir=[bool]
+467..468 'c': bool
 469..477 '{ true }': true
 471..475 'true': true
 483..492 '{ false }': false

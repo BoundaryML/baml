@@ -4,8 +4,8 @@ expression: outcome.dump
 ---
 395..409 '{\n   ... b]\n}': hir_ty=[!error] tir=[T[]]
 401..407 '[a, b]': hir_ty=[!error] tir=[T[]]
-402..403 'a': hir_ty=[!error] tir=[T]
-405..406 'b': hir_ty=[!error] tir=[T]
+402..403 'a': T
+405..406 'b': T
 433..482 '{\n   ...  p\n}': hir_ty=[!error] tir=[int[]]
 439..444 'let p': hir_ty=[!error] tir=[int[]]
 447..451 'pair': hir_ty=[!error] tir=[(a: T, b: T) -> T[] throws never]

@@ -8,7 +8,6 @@
 //! slice-local rule: constructs the engine does not handle yet infer to
 //! `Error` silently), and constructs are upgraded slice by slice.
 
-pub mod annotations;
 pub mod unify;
 
 use baml_compiler2_ast::{
@@ -16,7 +15,10 @@ use baml_compiler2_ast::{
 };
 use baml_compiler2_hir::{
     body::BodyOwnerId,
-    semantic_index::{ExprMetadataKey, ExprMetadataScope, FileSemanticIndex, PathResolution},
+    scope::FileScopeId,
+    semantic_index::{
+        BindingKind, ExprMetadataKey, ExprMetadataScope, FileSemanticIndex, PathResolution,
+    },
 };
 use baml_type::{
     Freshness, Literal, TyAttr,
@@ -24,7 +26,10 @@ use baml_type::{
 };
 use rustc_hash::FxHashMap;
 
-use crate::infer::{annotations::lower_annotation, unify::InferenceTable};
+use crate::{
+    infer::unify::InferenceTable,
+    lower::{LowerCtx, function_generic_frame, function_signature, lower_ctx_for_file},
+};
 
 /// Inference side tables for one body owner, keyed by arena ids, mirroring
 /// rust-analyzer's `InferenceResult`. Types are the hash-consed
@@ -50,9 +55,21 @@ pub fn infer_body<'db>(
 ) -> InferenceResult {
     let body = baml_compiler2_ppir::body(db, owner);
     let index = baml_compiler2_ppir::file_semantic_index(db, owner.file(db));
-    let body_scope = baml_compiler2_ppir::body_scope(db, owner)
-        .map(|scope| ExprMetadataScope::Body(scope.file_scope_id(db)));
-    let mut ctx = InferenceContext::new(index, body_scope);
+    let owner_scope = baml_compiler2_ppir::body_scope(db, owner).map(|s| s.file_scope_id(db));
+    // The owner's generic frame makes `T` in body annotations resolve; the
+    // signature gives parameter references their types.
+    let (frame, param_tys) = match owner {
+        BodyOwnerId::Function(function) => {
+            let signature = function_signature(db, function);
+            (
+                function_generic_frame(db, function),
+                signature.params.into_iter().map(|param| param.ty).collect(),
+            )
+        }
+        BodyOwnerId::Let(_) => (Vec::new(), Vec::new()),
+    };
+    let lower = lower_ctx_for_file(db, owner.file(db)).with_frame(frame);
+    let mut ctx = InferenceContext::new(index, owner_scope, lower, param_tys);
     if let Some(expr_body) = body.expr_body() {
         ctx.infer_expr_body(expr_body);
     }
@@ -64,9 +81,16 @@ pub fn infer_body<'db>(
 /// with `Sub` constraints in S7).
 struct InferenceContext<'db> {
     index: &'db FileSemanticIndex<'db>,
-    /// The key half that maps this body's `ExprId`s into the semantic
-    /// index's per-file tables (path resolutions live there).
-    body_scope: Option<ExprMetadataScope>,
+    /// The owner body's scope: the key half mapping this body's `ExprId`s
+    /// into the semantic index's per-file tables, and the guard that keeps
+    /// parameter lookups from crossing into lambda scopes.
+    owner_scope: Option<FileScopeId>,
+    /// Lowering for body-position type annotations, carrying the owner's
+    /// generic frame.
+    lower: LowerCtx<'db>,
+    /// The owner's parameter types, from its lowered signature, indexed by
+    /// declaration position.
+    param_tys: Vec<Ty>,
     table: InferenceTable,
     result: InferenceResult,
 }
@@ -74,11 +98,15 @@ struct InferenceContext<'db> {
 impl<'db> InferenceContext<'db> {
     fn new(
         index: &'db FileSemanticIndex<'db>,
-        body_scope: Option<ExprMetadataScope>,
+        owner_scope: Option<FileScopeId>,
+        lower: LowerCtx<'db>,
+        param_tys: Vec<Ty>,
     ) -> InferenceContext<'db> {
         InferenceContext {
             index,
-            body_scope,
+            owner_scope,
+            lower,
+            param_tys,
             table: InferenceTable::new(),
             result: InferenceResult::default(),
         }
@@ -197,7 +225,10 @@ impl<'db> InferenceContext<'db> {
                 });
                 match annotation {
                     Some(type_expr) => {
-                        let annotation_ty = lower_annotation(&mut self.table, type_expr);
+                        let lower = &self.lower;
+                        let table = &mut self.table;
+                        let annotation_ty =
+                            lower.lower_type_expr(type_expr, &mut || table.new_var_ty());
                         if let Some(init_ty) = init_ty {
                             // Eq against the widened initializer is the S6
                             // interim check; Sub constraints (S7) replace it
@@ -217,20 +248,32 @@ impl<'db> InferenceContext<'db> {
         self.result.type_of_binding.insert(pattern, binding_ty);
     }
 
-    /// Resolves a path expression to a local binding through the semantic
-    /// index. Parameters and non-local names resolve in later slices.
+    /// Resolves a path expression to a local binding or an owner parameter
+    /// through the semantic index. Non-local names (functions, constants)
+    /// resolve in later slices.
     fn infer_path(&mut self, expr: ExprId) -> Ty {
-        let Some(scope) = self.body_scope else {
+        let Some(owner_scope) = self.owner_scope else {
             return Ty::error();
         };
-        let key = ExprMetadataKey::new(scope, expr);
+        let key = ExprMetadataKey::new(ExprMetadataScope::Body(owner_scope), expr);
         match self.index.path_resolution(key) {
-            Some(PathResolution::Local(binding_id)) => self
-                .index
-                .local_binding(binding_id)
-                .and_then(|binding| self.result.type_of_binding.get(&binding.pattern))
-                .cloned()
-                .unwrap_or_else(Ty::error),
+            Some(PathResolution::Local(binding_id)) => match binding_id.kind {
+                BindingKind::Local(_) => self
+                    .index
+                    .local_binding(binding_id)
+                    .and_then(|binding| self.result.type_of_binding.get(&binding.pattern))
+                    .cloned()
+                    .unwrap_or_else(Ty::error),
+                // Owner parameters only: a lambda scope's parameters are
+                // typed by the S9 expectation machinery, not the owner's
+                // signature.
+                BindingKind::Parameter(param_index) if binding_id.scope == owner_scope => self
+                    .param_tys
+                    .get(param_index)
+                    .cloned()
+                    .unwrap_or_else(Ty::error),
+                BindingKind::Parameter(_) => Ty::error(),
+            },
             Some(PathResolution::Unknown) | None => Ty::error(),
         }
     }

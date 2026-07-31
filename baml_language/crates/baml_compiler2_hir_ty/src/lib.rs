@@ -25,3 +25,4 @@
 //! backend; it only appears in the S15 differential sweep.
 
 pub mod infer;
+pub mod lower;
