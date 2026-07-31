@@ -76,6 +76,39 @@ function f(
     }
 
     #[test]
+    fn interface_existentials_and_signature_holes() {
+        let mut db = crate::compiler2_tir::support::make_db();
+        let file = db.add_file(
+            "test.baml",
+            r#"
+interface Show<T> {
+    type Out
+    function show(self, x: T) -> string throws never
+}
+
+function f(
+    a: Show<int>,
+    b: Show<int, Out = string>,
+    c: _,
+) -> int throws never {
+    1
+}
+"#,
+        );
+        let signature = signature_of(&db, file, "f");
+        assert_eq!(
+            param_renders(&signature),
+            [
+                "user.Show<int>",
+                "user.Show<int, Out = string>",
+                // Ruling 4: `_` never infers in declaration signatures - the
+                // hole node is rejected by the signature-side policy fold.
+                "!error",
+            ]
+        );
+    }
+
+    #[test]
     fn generic_frames_cover_functions_and_methods() {
         let mut db = crate::compiler2_tir::support::make_db();
         let file = db.add_file(

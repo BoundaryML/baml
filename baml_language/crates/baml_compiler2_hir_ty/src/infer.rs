@@ -225,10 +225,8 @@ impl<'db> InferenceContext<'db> {
                 });
                 match annotation {
                     Some(type_expr) => {
-                        let lower = &self.lower;
-                        let table = &mut self.table;
-                        let annotation_ty =
-                            lower.lower_type_expr(type_expr, &mut || table.new_var_ty());
+                        let lowered = self.lower.lower_type_expr(type_expr);
+                        let annotation_ty = self.instantiate_holes(&lowered);
                         if let Some(init_ty) = init_ty {
                             // Eq against the widened initializer is the S6
                             // interim check; Sub constraints (S7) replace it
@@ -276,6 +274,23 @@ impl<'db> InferenceContext<'db> {
             },
             Some(PathResolution::Unknown) | None => Ty::error(),
         }
+    }
+
+    /// The `process_user_written_ty` funnel (rust-analyzer's discipline):
+    /// lowering is pure and emits var-less hole nodes for `_`; the inference
+    /// side instantiates each hole as a fresh table variable, filled from
+    /// context.
+    fn instantiate_holes(&mut self, ty: &Ty) -> Ty {
+        if !ty.has_infer() {
+            return ty.clone();
+        }
+        if matches!(ty.kind(), TyKind::Infer { var: None, .. }) {
+            return self.table.new_var_ty();
+        }
+        Ty::intern(
+            ty.kind()
+                .map_children(|child| self.instantiate_holes(child)),
+        )
     }
 
     /// Substitutes solved variables out of every recorded type. The S13

@@ -35,11 +35,6 @@ use baml_type::{
     interned::{FunctionParam, Ty, TyKind},
 };
 
-/// A hole (`_`) filler: fresh inference variables in body positions, the
-/// `Error` sentinel in declaration signatures (ruling 4: signatures never
-/// infer).
-pub type HoleFiller<'h> = dyn FnMut() -> Ty + 'h;
-
 /// Everything needed to lower type syntax appearing in one file, for one
 /// generic frame.
 pub struct LowerCtx<'db> {
@@ -77,12 +72,7 @@ impl<'db> LowerCtx<'db> {
 
     // -- Span-free surface (signatures, fields, aliases) ----------------------
 
-    pub fn lower_type_ref(
-        &self,
-        store: &TypeRefStore,
-        id: TypeRefId,
-        holes: &mut HoleFiller<'_>,
-    ) -> Ty {
+    pub fn lower_type_ref(&self, store: &TypeRefStore, id: TypeRefId) -> Ty {
         let attr = TyAttr::default;
         match &store[id].kind {
             TypeRefKind::Int => Ty::int(),
@@ -99,18 +89,18 @@ impl<'db> LowerCtx<'db> {
             TypeRefKind::Type => Ty::intern(TyKind::Type { attr: attr() }),
             TypeRefKind::Rust => Ty::intern(TyKind::RustType { attr: attr() }),
             TypeRefKind::Optional { inner } => {
-                Ty::union([self.lower_type_ref(store, *inner, holes), Ty::null()])
+                Ty::union([self.lower_type_ref(store, *inner), Ty::null()])
             }
-            TypeRefKind::List { inner } => Ty::list(self.lower_type_ref(store, *inner, holes)),
+            TypeRefKind::List { inner } => Ty::list(self.lower_type_ref(store, *inner)),
             TypeRefKind::Map { key, value } => Ty::intern(TyKind::Map {
-                key: self.lower_type_ref(store, *key, holes),
-                value: self.lower_type_ref(store, *value, holes),
+                key: self.lower_type_ref(store, *key),
+                value: self.lower_type_ref(store, *value),
                 attr: attr(),
             }),
             TypeRefKind::Union { variants } => Ty::union(
                 variants
                     .iter()
-                    .map(|variant| self.lower_type_ref(store, *variant, holes)),
+                    .map(|variant| self.lower_type_ref(store, *variant)),
             ),
             TypeRefKind::Literal { value } => {
                 Ty::intern(TyKind::Literal(value.clone(), Freshness::Regular, attr()))
@@ -124,7 +114,7 @@ impl<'db> LowerCtx<'db> {
                     .iter()
                     .map(|param| FunctionParam {
                         name: param.name.clone(),
-                        ty: self.lower_type_ref(store, param.ty, holes),
+                        ty: self.lower_type_ref(store, param.ty),
                         mode: if param.optional {
                             baml_type::FunctionParamMode::Optional
                         } else {
@@ -132,12 +122,12 @@ impl<'db> LowerCtx<'db> {
                         },
                     })
                     .collect(),
-                ret: self.lower_type_ref(store, *ret, holes),
+                ret: self.lower_type_ref(store, *ret),
                 // Elaboration rewrites every legal omitted throws into a
                 // synthetic effect param; a survivor here recovers as
                 // `never`, mirroring TIR.
                 throws: throws
-                    .map(|throws| self.lower_type_ref(store, throws, holes))
+                    .map(|throws| self.lower_type_ref(store, throws))
                     .unwrap_or_else(Ty::never),
                 attr: attr(),
             }),
@@ -148,22 +138,23 @@ impl<'db> LowerCtx<'db> {
             } => {
                 let args: Vec<Ty> = generic_args
                     .iter()
-                    .map(|arg| self.lower_type_ref(store, *arg, holes))
+                    .map(|arg| self.lower_type_ref(store, *arg))
                     .collect();
                 let bindings: Vec<(Name, Ty)> = associated_type_bindings
                     .iter()
-                    .map(|binding| {
-                        (
-                            binding.name.clone(),
-                            self.lower_type_ref(store, binding.ty, holes),
-                        )
-                    })
+                    .map(|binding| (binding.name.clone(), self.lower_type_ref(store, binding.ty)))
                     .collect();
                 self.lower_path(segments, args, bindings)
             }
             // Associated projections arrive with I5.
             TypeRefKind::AssociatedTypeProjection { .. } => Ty::error(),
-            TypeRefKind::Infer => holes(),
+            // `_` lowers to the var-less hole node; consumers apply policy
+            // (signatures reject holes, inference instantiates them) - the
+            // rust-analyzer pure-lowering + funnel discipline.
+            TypeRefKind::Infer => Ty::intern(TyKind::Infer {
+                var: None,
+                attr: attr(),
+            }),
             // `Unknown` is an omitted annotation (a signature must be
             // explicit; the diagnostic arrives with S17), `Error` was
             // already diagnosed at parse time.
@@ -173,7 +164,7 @@ impl<'db> LowerCtx<'db> {
 
     // -- Spanned surface (body positions, until the TypeRef migration) --------
 
-    pub fn lower_type_expr(&self, type_expr: &ast::TypeExpr, holes: &mut HoleFiller<'_>) -> Ty {
+    pub fn lower_type_expr(&self, type_expr: &ast::TypeExpr) -> Ty {
         let attr = TyAttr::default;
         match &type_expr.kind {
             ast::TypeExprKind::Int { .. } => Ty::int(),
@@ -192,19 +183,17 @@ impl<'db> LowerCtx<'db> {
             ast::TypeExprKind::Type { .. } => Ty::intern(TyKind::Type { attr: attr() }),
             ast::TypeExprKind::Rust { .. } => Ty::intern(TyKind::RustType { attr: attr() }),
             ast::TypeExprKind::Optional { inner, .. } => {
-                Ty::union([self.lower_type_expr(inner, holes), Ty::null()])
+                Ty::union([self.lower_type_expr(inner), Ty::null()])
             }
-            ast::TypeExprKind::List { inner, .. } => Ty::list(self.lower_type_expr(inner, holes)),
+            ast::TypeExprKind::List { inner, .. } => Ty::list(self.lower_type_expr(inner)),
             ast::TypeExprKind::Map { key, value, .. } => Ty::intern(TyKind::Map {
-                key: self.lower_type_expr(key, holes),
-                value: self.lower_type_expr(value, holes),
+                key: self.lower_type_expr(key),
+                value: self.lower_type_expr(value),
                 attr: attr(),
             }),
-            ast::TypeExprKind::Union { variants, .. } => Ty::union(
-                variants
-                    .iter()
-                    .map(|variant| self.lower_type_expr(variant, holes)),
-            ),
+            ast::TypeExprKind::Union { variants, .. } => {
+                Ty::union(variants.iter().map(|variant| self.lower_type_expr(variant)))
+            }
             ast::TypeExprKind::Literal { value, .. } => {
                 Ty::intern(TyKind::Literal(value.clone(), Freshness::Regular, attr()))
             }
@@ -218,7 +207,7 @@ impl<'db> LowerCtx<'db> {
                     .iter()
                     .map(|param| FunctionParam {
                         name: param.name.clone(),
-                        ty: self.lower_type_expr(&param.ty, holes),
+                        ty: self.lower_type_expr(&param.ty),
                         mode: if param.optional {
                             baml_type::FunctionParamMode::Optional
                         } else {
@@ -226,10 +215,10 @@ impl<'db> LowerCtx<'db> {
                         },
                     })
                     .collect(),
-                ret: self.lower_type_expr(ret, holes),
+                ret: self.lower_type_expr(ret),
                 throws: throws
                     .as_ref()
-                    .map(|throws| self.lower_type_expr(throws, holes))
+                    .map(|throws| self.lower_type_expr(throws))
                     .unwrap_or_else(Ty::never),
                 attr: attr(),
             }),
@@ -241,21 +230,19 @@ impl<'db> LowerCtx<'db> {
             } => {
                 let args: Vec<Ty> = generic_args
                     .iter()
-                    .map(|arg| self.lower_type_expr(arg, holes))
+                    .map(|arg| self.lower_type_expr(arg))
                     .collect();
                 let bindings: Vec<(Name, Ty)> = associated_type_bindings
                     .iter()
-                    .map(|binding| {
-                        (
-                            binding.name.clone(),
-                            self.lower_type_expr(&binding.ty, holes),
-                        )
-                    })
+                    .map(|binding| (binding.name.clone(), self.lower_type_expr(&binding.ty)))
                     .collect();
                 self.lower_path(segments, args, bindings)
             }
             ast::TypeExprKind::AssociatedTypeProjection { .. } => Ty::error(),
-            ast::TypeExprKind::Infer { .. } => holes(),
+            ast::TypeExprKind::Infer { .. } => Ty::intern(TyKind::Infer {
+                var: None,
+                attr: attr(),
+            }),
             ast::TypeExprKind::Error { .. } | ast::TypeExprKind::Unknown { .. } => Ty::error(),
         }
     }
@@ -513,6 +500,19 @@ pub struct SignatureParam {
     pub has_default: bool,
 }
 
+/// Ruling 4: `_` never infers in declaration signatures. Lowering emits the
+/// hole node uniformly; this is the signature-side policy fold that rejects
+/// survivors (the inference side instead instantiates holes as fresh vars).
+pub fn reject_holes(ty: &Ty) -> Ty {
+    if !ty.has_infer() {
+        return ty.clone();
+    }
+    if matches!(ty.kind(), TyKind::Infer { var: None, .. }) {
+        return Ty::error();
+    }
+    Ty::intern(ty.kind().map_children(reject_holes))
+}
+
 pub fn function_signature<'db>(
     db: &'db dyn baml_compiler2_ppir::Db,
     function: FunctionLoc<'db>,
@@ -520,24 +520,22 @@ pub fn function_signature<'db>(
     let data = baml_compiler2_ppir::item_data::elaborated_function_data(db, function);
     let frame = function_generic_frame(db, function);
     let ctx = lower_ctx_for_file(db, function.file(db)).with_frame(frame.clone());
-    // Ruling 4: `_` never infers in declaration signatures.
-    let mut holes: Box<HoleFiller<'_>> = Box::new(Ty::error);
     let params = data
         .params
         .iter()
         .map(|param| SignatureParam {
             name: param.name.clone(),
-            ty: ctx.lower_type_ref(&data.type_refs, param.type_ref, &mut holes),
+            ty: reject_holes(&ctx.lower_type_ref(&data.type_refs, param.type_ref)),
             has_default: param.has_default,
         })
         .collect();
     let ret = data
         .return_type
-        .map(|ret| ctx.lower_type_ref(&data.type_refs, ret, &mut holes))
+        .map(|ret| reject_holes(&ctx.lower_type_ref(&data.type_refs, ret)))
         .unwrap_or_else(Ty::error);
     let throws = data
         .throws
-        .map(|throws| ctx.lower_type_ref(&data.type_refs, throws, &mut holes))
+        .map(|throws| reject_holes(&ctx.lower_type_ref(&data.type_refs, throws)))
         .unwrap_or_else(Ty::error);
     FunctionSignature {
         generic_params: frame,
@@ -554,13 +552,12 @@ pub fn class_field_types<'db>(
 ) -> Vec<(Name, Ty)> {
     let data = baml_compiler2_ppir::item_data::class_data(db, class);
     let ctx = lower_ctx_for_file(db, class.file(db)).with_frame(class_generic_frame(db, class));
-    let mut holes: Box<HoleFiller<'_>> = Box::new(Ty::error);
     data.fields
         .iter()
         .map(|field| {
             (
                 field.name.clone(),
-                ctx.lower_type_ref(&data.type_refs, field.type_ref, &mut holes),
+                reject_holes(&ctx.lower_type_ref(&data.type_refs, field.type_ref)),
             )
         })
         .collect()
@@ -570,8 +567,7 @@ pub fn class_field_types<'db>(
 pub fn type_alias_value<'db>(db: &'db dyn baml_compiler2_ppir::Db, alias: TypeAliasLoc<'db>) -> Ty {
     let data = baml_compiler2_ppir::item_data::type_alias_data(db, alias);
     let ctx = lower_ctx_for_file(db, alias.file(db));
-    let mut holes: Box<HoleFiller<'_>> = Box::new(Ty::error);
     data.value
-        .map(|value| ctx.lower_type_ref(&data.type_refs, value, &mut holes))
+        .map(|value| reject_holes(&ctx.lower_type_ref(&data.type_refs, value)))
         .unwrap_or_else(Ty::error)
 }
