@@ -1,7 +1,7 @@
 {
   "name": "baml-language",
   "displayName": "BAML",
-  "description": "BAML language support — syntax highlighting, hover, completions, diagnostics, go-to-definition",
+  "description": "BAML, the Programming Language for AI.",
   "icon": "baml-logo.png",
   "version": "0.15.0",
   "publisher": "Boundary",

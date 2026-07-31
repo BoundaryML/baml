@@ -29,4 +29,4 @@ again.
 
 ## Documentation
 
-See the [BAML documentation](https://docs.boundaryml.com).
+See the [BAML quickstart](https://boundaryml.com/quickstart).
