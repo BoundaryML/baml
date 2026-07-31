@@ -25,11 +25,33 @@ pub const ENV_MAX_OVERFLOW_BYTES: &str = "BAML_RING_MAX_OVERFLOW_BYTES";
 pub const ENV_FREELIST_CAP: &str = "BAML_RING_FREELIST_CAP";
 /// Consumer park timeout in milliseconds (design D4).
 pub const ENV_WAKE_INTERVAL_MS: &str = "BAML_PROF_WAKE_INTERVAL_MS";
-/// Directory for `.bamlprof` artifacts.
+/// Profile artifact anchor directory. Post-P9 no per-engine `.bamlprof`
+/// files are written here; the directory's PARENT is the `.baml` root under
+/// which the v2 planes land (`sessions/`, `dict/`, flight dumps).
 pub const ENV_PROFILE_DIR: &str = "BAML_PROFILE_DIR";
+/// Consumer pipeline selector (observability design §10.3). Post-P9 there is
+/// exactly one pipeline — `cct` — so this knob only survives for
+/// compatibility: the historical `legacy` and `dual` values are accepted and
+/// silently coerced to `cct` (the sinks they named were deleted in P9 step 4).
+pub const ENV_PROFILE_PIPELINE: &str = "BAML_PROFILE_PIPELINE";
+/// When set to a writable file path, the prof consumer (and later the value
+/// drain service) appends one NDJSON self-report line per flush/engine-close
+/// with thread CPU, event/byte/flush counters, and pipeline mode
+/// (observability design §10.3 — converts consumer-cost claims from
+/// inference to measurement).
+pub const ENV_OBS_STATS: &str = "BAML_OBS_STATS";
+/// On-disk layout rollout flag (design §6.10). Post-P9 only the v2
+/// sessions/CCT layout exists; the historical `v1` and `dual` stages are
+/// accepted and silently coerced to `v2` (their writers were deleted in P9).
+pub const ENV_OBS_LAYOUT: &str = "BAML_OBS_LAYOUT";
+/// Opt-in raw record firehose (design §6.1 `raw/`, absorbing N5): rotated
+/// `.bamlprof` of every drained range under the session dir. The first
+/// casualty of retention/shedding; off by default.
+pub const ENV_PROFILE_RAW: &str = "BAML_PROFILE_RAW";
 
-/// Default `.bamlprof` home, relative to the working directory (`baml clean`
-/// integration is an open coordination point).
+/// Default profile anchor, relative to the working directory (`baml clean`
+/// integration is an open coordination point). Its parent (`.baml`) roots
+/// the v2 session/dict layout.
 pub const DEFAULT_PROFILE_DIR: &str = ".baml/profiles";
 
 /// Default ring segment size. At ~28–40 B per record this holds roughly
@@ -51,6 +73,73 @@ pub const DEFAULT_FREELIST_CAP: usize = 4;
 /// benign lost-wakeup race (design D4) to one interval of extra ring growth.
 pub const DEFAULT_WAKE_INTERVAL: Duration = Duration::from_millis(50);
 
+/// The consumer pipeline ([`ENV_PROFILE_PIPELINE`]).
+///
+/// Post-P9 (deletion step 4) exactly one pipeline exists: the CCT
+/// aggregation plane (design §5) plus its raw-firehose/flight sidecars. The
+/// deleted `Legacy` and `Dual` variants' env spellings are still *parsed* —
+/// coerced to [`PipelineMode::Cct`] — so stale environments never fail (or
+/// silently un-profile) a host that pinned `BAML_PROFILE_PIPELINE=dual`
+/// during the rollout.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum PipelineMode {
+    /// CCT aggregation — the only pipeline since P9.
+    #[default]
+    Cct,
+}
+
+impl PipelineMode {
+    /// Recognizes the current spelling plus the retired `legacy`/`dual`
+    /// stages, all of which mean [`PipelineMode::Cct`] now (silent coercion:
+    /// config parsing is pure/target-neutral, so there is no reporting
+    /// channel here; the knob's doc records the compatibility rule).
+    fn parse(value: &str) -> Option<PipelineMode> {
+        match value.trim().to_ascii_lowercase().as_str() {
+            "legacy" | "dual" | "cct" => Some(PipelineMode::Cct),
+            _ => None,
+        }
+    }
+
+    /// Does this mode run the CCT pipeline? Always `true` post-P9; kept so
+    /// call sites written against the rollout-era API stay valid.
+    #[must_use]
+    pub fn runs_cct(self) -> bool {
+        true
+    }
+
+    /// Stable lowercase name (stats lines, bench rows).
+    #[must_use]
+    pub fn as_str(self) -> &'static str {
+        "cct"
+    }
+}
+
+/// §6.10 layout stage ([`ENV_OBS_LAYOUT`]). Post-P9 only the v2
+/// sessions/CCT layout exists; the retired `v1` and `dual` spellings parse
+/// to [`ObsLayout::V2`] (same compatibility rule as [`PipelineMode`]).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum ObsLayout {
+    /// v2 sessions/CCT streams — the only layout since P9.
+    #[default]
+    V2,
+}
+
+impl ObsLayout {
+    fn parse(value: &str) -> Option<ObsLayout> {
+        match value.trim().to_ascii_lowercase().as_str() {
+            "v1" | "dual" | "v2" => Some(ObsLayout::V2),
+            _ => None,
+        }
+    }
+
+    /// Does this layout write the v2 session streams? Always `true` post-P9;
+    /// kept for rollout-era call sites.
+    #[must_use]
+    pub fn writes_v2(self) -> bool {
+        true
+    }
+}
+
 /// Parsed profiling knobs.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ProfConfig {
@@ -68,6 +157,14 @@ pub struct ProfConfig {
     pub wake_interval: Duration,
     /// Where `.bamlprof` files land ([`ENV_PROFILE_DIR`]).
     pub profile_dir: std::path::PathBuf,
+    /// Consumer pipeline selection ([`ENV_PROFILE_PIPELINE`]).
+    pub pipeline: PipelineMode,
+    /// Self-report NDJSON path ([`ENV_OBS_STATS`]); `None` = reporting off.
+    pub obs_stats_path: Option<std::path::PathBuf>,
+    /// On-disk layout stage ([`ENV_OBS_LAYOUT`]).
+    pub layout: ObsLayout,
+    /// Raw firehose opt-in ([`ENV_PROFILE_RAW`]).
+    pub profile_raw: bool,
 }
 
 impl Default for ProfConfig {
@@ -79,6 +176,10 @@ impl Default for ProfConfig {
             freelist_cap: DEFAULT_FREELIST_CAP,
             wake_interval: DEFAULT_WAKE_INTERVAL,
             profile_dir: std::path::PathBuf::from(DEFAULT_PROFILE_DIR),
+            pipeline: PipelineMode::default(),
+            obs_stats_path: None,
+            layout: ObsLayout::default(),
+            profile_raw: false,
         }
     }
 }
@@ -146,6 +247,27 @@ impl ProfConfig {
         let profile_dir =
             get(ENV_PROFILE_DIR).map_or(defaults.profile_dir, std::path::PathBuf::from);
 
+        // Unknown pipeline values fall back to the default (same contract as
+        // every other knob: garbage never fails the host process).
+        let pipeline = get(ENV_PROFILE_PIPELINE)
+            .and_then(|v| PipelineMode::parse(&v))
+            .unwrap_or(defaults.pipeline);
+
+        let obs_stats_path = get(ENV_OBS_STATS)
+            .map(|v| v.trim().to_string())
+            .filter(|v| !v.is_empty())
+            .map(std::path::PathBuf::from);
+
+        let layout = get(ENV_OBS_LAYOUT)
+            .and_then(|v| ObsLayout::parse(&v))
+            .unwrap_or(defaults.layout);
+        let profile_raw = get(ENV_PROFILE_RAW)
+            .map(|v| {
+                let v = v.trim();
+                v == "1" || v.eq_ignore_ascii_case("true")
+            })
+            .unwrap_or(defaults.profile_raw);
+
         ProfConfig {
             enabled,
             seg_bytes,
@@ -153,6 +275,10 @@ impl ProfConfig {
             freelist_cap,
             wake_interval,
             profile_dir,
+            pipeline,
+            obs_stats_path,
+            layout,
+            profile_raw,
         }
     }
 }
@@ -289,6 +415,64 @@ mod tests {
         assert_eq!(cfg.max_overflow_bytes, defaults.max_overflow_bytes);
         assert_eq!(cfg.freelist_cap, defaults.freelist_cap);
         assert_eq!(cfg.wake_interval, defaults.wake_interval);
+    }
+
+    #[test]
+    fn pipeline_mode_parses_and_defaults() {
+        assert_eq!(
+            ProfConfig::from_lookup(lookup(&[])).pipeline,
+            PipelineMode::Cct,
+            "P9: the CCT pipeline is the default"
+        );
+        // Post-P9 compatibility: the retired rollout stages coerce to Cct
+        // instead of failing or silently disabling profiling.
+        for v in ["legacy", "dual", "cct", " CCT ", "DUAL"] {
+            assert_eq!(
+                ProfConfig::from_lookup(lookup(&[(ENV_PROFILE_PIPELINE, v)])).pipeline,
+                PipelineMode::Cct,
+                "BAML_PROFILE_PIPELINE={v}"
+            );
+        }
+        // Garbage falls back to the default instead of failing the host.
+        assert_eq!(
+            ProfConfig::from_lookup(lookup(&[(ENV_PROFILE_PIPELINE, "both")])).pipeline,
+            PipelineMode::Cct
+        );
+    }
+
+    #[test]
+    fn pipeline_mode_sink_selection() {
+        assert!(PipelineMode::Cct.runs_cct());
+        assert_eq!(PipelineMode::Cct.as_str(), "cct");
+    }
+
+    #[test]
+    fn obs_stats_path_parses() {
+        assert_eq!(ProfConfig::from_lookup(lookup(&[])).obs_stats_path, None);
+        assert_eq!(
+            ProfConfig::from_lookup(lookup(&[(ENV_OBS_STATS, "/tmp/stats.ndjson")])).obs_stats_path,
+            Some(std::path::PathBuf::from("/tmp/stats.ndjson"))
+        );
+        // Empty/whitespace value means off, not a file named "".
+        assert_eq!(
+            ProfConfig::from_lookup(lookup(&[(ENV_OBS_STATS, "  ")])).obs_stats_path,
+            None
+        );
+    }
+
+    #[test]
+    fn layout_and_raw_parse() {
+        assert_eq!(ProfConfig::from_lookup(lookup(&[])).layout, ObsLayout::V2);
+        // Retired stages coerce; garbage falls back to the default.
+        for v in ["v1", "dual", "v2", "junk"] {
+            assert_eq!(
+                ProfConfig::from_lookup(lookup(&[(ENV_OBS_LAYOUT, v)])).layout,
+                ObsLayout::V2
+            );
+        }
+        assert!(!ProfConfig::from_lookup(lookup(&[])).profile_raw);
+        assert!(ProfConfig::from_lookup(lookup(&[(ENV_PROFILE_RAW, "1")])).profile_raw);
+        assert!(ObsLayout::V2.writes_v2());
     }
 
     #[test]

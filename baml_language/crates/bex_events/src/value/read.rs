@@ -68,7 +68,9 @@ fn file_record_from_proto(record: pb::ValueRecordV1) -> io::Result<ValueFileReco
             || record.capture.is_some()
             || has_log_event
             || has_capture_loss
-            || record.blob.is_some())
+            || record.blob.is_some()
+            || record.dag_ref.is_some()
+            || record.promoted_by.is_some())
     {
         return Err(io::Error::new(
             io::ErrorKind::InvalidData,
@@ -112,6 +114,8 @@ fn file_record_from_proto(record: pb::ValueRecordV1) -> io::Result<ValueFileReco
         body: record.body,
         blob_ref: record.blob.map(TryInto::try_into).transpose()?,
         capture: record.capture.map(TryInto::try_into).transpose()?,
+        dag_ref: record.dag_ref.map(TryInto::try_into).transpose()?,
+        promoted_by: record.promoted_by,
     }))
 }
 
@@ -195,6 +199,8 @@ mod tests {
             body: vec![1, 2, 3],
             blob_ref: None,
             capture: None,
+            dag_ref: None,
+            promoted_by: None,
         };
         let start = bytes.len();
         encode_record(&mut bytes, &record).unwrap();
@@ -229,6 +235,8 @@ mod tests {
                 log_event: None,
                 capture_loss: None,
                 blob: None,
+                dag_ref: None,
+                promoted_by: None,
             },
             "mixed run_started with run_completed",
         );
@@ -246,6 +254,8 @@ mod tests {
                 log_event: None,
                 capture_loss: None,
                 blob: None,
+                dag_ref: None,
+                promoted_by: None,
             },
             pb::ValueRecordV1 {
                 metadata: None,
@@ -264,6 +274,8 @@ mod tests {
                 log_event: None,
                 capture_loss: None,
                 blob: None,
+                dag_ref: None,
+                promoted_by: None,
             },
             pb::ValueRecordV1 {
                 metadata: None,
@@ -278,6 +290,24 @@ mod tests {
                     digest: "0".repeat(64),
                     size_bytes: 3,
                 }),
+                dag_ref: None,
+                promoted_by: None,
+            },
+            pb::ValueRecordV1 {
+                metadata: None,
+                body: Vec::new(),
+                capture: None,
+                run_started: Some(run_started_proto()),
+                run_completed: None,
+                log_event: None,
+                capture_loss: None,
+                blob: None,
+                dag_ref: Some(pb::DagRefV1 {
+                    root_cid: vec![7; 32],
+                    node_codec_version: 1,
+                    logical_len: 3,
+                }),
+                promoted_by: None,
             },
             pb::ValueRecordV1 {
                 metadata: Some(value_metadata_proto()),
@@ -288,6 +318,8 @@ mod tests {
                 log_event: None,
                 capture_loss: None,
                 blob: None,
+                dag_ref: None,
+                promoted_by: None,
             },
         ] {
             assert_record_is_invalid(&record, "mixed body metadata with lifecycle metadata");

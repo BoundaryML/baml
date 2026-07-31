@@ -30,6 +30,8 @@
 //! `sys_types::CallId`.
 
 pub mod artifact;
+#[cfg(not(baml_loom))]
+pub mod cct;
 pub mod clock;
 pub mod config;
 #[cfg(all(not(target_arch = "wasm32"), not(baml_loom)))]
@@ -44,6 +46,8 @@ pub mod read;
 pub mod record;
 pub(crate) mod registry;
 pub(crate) mod ring;
+#[cfg(all(not(target_arch = "wasm32"), not(baml_loom)))]
+pub(crate) mod stats;
 pub(crate) mod sync;
 pub mod transcode;
 pub(crate) mod wake;
@@ -64,9 +68,12 @@ mod concurrency_tests;
 
 pub use config::{ProfConfig, enable_wasm_cooperative_profile};
 #[cfg(all(not(target_arch = "wasm32"), not(baml_loom)))]
-pub use consumer::{engine_closed, flush_and_join};
+pub use consumer::{
+    RecentCallOut, bind_boundary, cct_live_segment, cct_totals_snapshot, complete_boundary,
+    engine_closed, flight_dump, flush_and_join, process_euid_hex, recent_calls,
+};
 #[cfg(not(baml_loom))]
-pub use drain::{CooperativeProfileDrain, CooperativeProfileDrainOptions};
+pub use drain::CooperativeProfileDrain;
 pub use metadata::register_engine_metadata;
 #[cfg(not(baml_loom))]
 pub use registry::ring_for_engine;
@@ -78,13 +85,23 @@ pub use ring::{Ring, RingHandle};
 /// consumer, so dual-target engine code can build it on wasm32 too.)
 #[derive(Debug, Clone, Default)]
 pub struct EngineProfileMetadata {
-    /// What identifies a Program is still open (M0 coordination); empty for
-    /// now.
+    /// Legacy random-per-engine id. Dies with the v1 header field 3 (the
+    /// observability design's TASK/2 id ruling); kept populated until the
+    /// legacy writers are deleted in P9.
     pub program_id: String,
+    /// `baml_src_1_...` string form (header field 10). Always populated once
+    /// programs are finalized (§4.3 — fallback identity covers legacy paths).
     pub source_snapshot_id: Option<String>,
+    /// `baml_rev_1_...` string form (header field 11).
     pub revision_id: Option<String>,
-    /// Per-run function table; the FQN is the cross-run key.
+    /// Per-run function table; the FQN is the cross-run key. Kept for the
+    /// legacy embedded-table path (and wasm, which has no dict filesystem).
     pub functions: Vec<FunctionMetaEntry>,
+    /// The revision dictionary (§4.2), built once per engine from the
+    /// finalized program. The consumer writes it idempotently to
+    /// `.baml/dict/` before opening any artifact that references the
+    /// revision; wasm keeps the embedded table instead.
+    pub dictionary: Option<std::sync::Arc<crate::dict::pb::RevisionDictionaryV1>>,
 }
 
 /// One function-table row (mirrors `pb::FunctionMetadata`).

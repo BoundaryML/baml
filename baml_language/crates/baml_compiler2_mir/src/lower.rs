@@ -11,8 +11,9 @@ use crate::{
     builder::MirBuilder,
     ir::{
         AggregateKind, BasicBlock, BinOp, BlockId, CatchRegion, Constant, IndexKind, IntrinsicOp,
-        ItemRef, Local, LocalDecl, LogLevel, MirFunction, MirFunctionBody, MirFunctionKind,
-        Operand, Place, Rvalue, StatementKind, Terminator,
+        ItemRef, Local, LocalDecl, LogLevel, MirDefinitionIdentity, MirFunction, MirFunctionBody,
+        MirFunctionKind, MirLambdaIdentity, MirLambdaKind, Operand, Place, Rvalue, StatementKind,
+        Terminator,
     },
     optimize,
 };
@@ -1439,6 +1440,23 @@ struct LoweringContext<'db> {
     // Each entry is a fully-lowered MirFunction for one lambda expression.
     pending_lambdas: Vec<MirFunction>,
 
+    /// §4.5: the definition key of the body currently being lowered — the
+    /// structural parent for any closure produced while lowering it. Starts as
+    /// the top-level definition's key (`function:...` / `let:...`);
+    /// `lower_lambda` and `build_tagged_body_closure` swap in the closure's
+    /// own derived `lambda:...#N` key around its body so nested closures chain
+    /// structurally (never by parsing the debug-name string, which stays
+    /// display-only).
+    current_definition_key: String,
+
+    /// §4.5: lowering-order ordinal of the next closure produced in the
+    /// current body ("lowering order within the parent body"). One counter is
+    /// shared by all three producers (lambda / tagged-spawn body / adapter) so
+    /// the derived `lambda:{parent}#{ordinal}` keys can never collide across
+    /// kinds; saved/restored at closure-body boundaries (unlike the
+    /// display-only `synthetic_name_counts`, which stay function-wide).
+    next_closure_ordinal: u32,
+
     // Generic params of the enclosing lambda(s), accumulated outermost-first.
     // Empty at top-level; `lower_lambda` extends it with the lambda's own
     // `generic_params` while lowering its body and restores it afterward.
@@ -2132,6 +2150,16 @@ impl<'db> LoweringContext<'db> {
             func_data.name.clone()
         };
 
+        // §4.4–§4.5: the key closures lowered inside this body chain from.
+        // Derived from the same `ItemRef` that `lower_function` stamps on the
+        // finished MirFunction, so a closure's `parent_definition_key` and its
+        // parent's own `definition_key` agree by construction.
+        let definition_key = MirDefinitionIdentity::for_item_ref(&def_to_item_ref(
+            db,
+            Definition::Function(func_loc),
+        ))
+        .definition_key;
+
         LoweringContext {
             db,
             builder: MirBuilder::new(func_name, arity),
@@ -2160,6 +2188,8 @@ impl<'db> LoweringContext<'db> {
             enum_variants: &pkg_data.enum_variants,
             class_type_tags,
             pending_lambdas: Vec::new(),
+            current_definition_key: definition_key,
+            next_closure_ordinal: 0,
             lambda_generic_params: Vec::new(),
             capture_indices: None,
             transitive_captures_needed: Vec::new(),
@@ -2224,6 +2254,13 @@ impl<'db> LoweringContext<'db> {
         // Memoized project-wide (was rebuilt here per lowered function).
         let class_type_tags = &class_type_tags_for_project(db, db.project()).tags;
 
+        // §4.5: closures in a let initializer are owned by the let binding —
+        // its `ItemRef` under a distinct `let:` domain, so a let named like a
+        // function can never collide with `function:...` keys. (The `$init`
+        // machinery that *calls* the initializer stays identity-less: it is
+        // synthesized plumbing, not the closure's source parent.)
+        let definition_key = format!("let:{}", def_to_item_ref(db, Definition::Let(let_loc)));
+
         LoweringContext {
             db,
             builder: MirBuilder::new(let_name.clone(), 0),
@@ -2256,6 +2293,8 @@ impl<'db> LoweringContext<'db> {
             defer_stack: Vec::new(),
             synthetic_name_counts: HashMap::new(),
             pending_lambdas: Vec::new(),
+            current_definition_key: definition_key,
+            next_closure_ordinal: 0,
             lambda_generic_params: Vec::new(),
             capture_indices: None,
             transitive_captures_needed: Vec::new(),
@@ -3900,6 +3939,18 @@ impl<'db> LoweringContext<'db> {
         *adapter_count += 1;
         let adapter_name = format!("<optional-adapter({parent_name}, {adapter_idx})>");
 
+        // §4.5: structural identity — claimed AFTER the adapted expression is
+        // lowered above, so a closure produced by that expression (typically
+        // the very lambda being adapted) takes the earlier ordinal, keeping
+        // ordinals in true lowering order. The adapter body is hand-rolled and
+        // can contain no nested closures, so no key swap is needed.
+        let adapter_identity = MirLambdaIdentity {
+            parent_definition_key: self.current_definition_key.clone(),
+            ordinal: self.next_closure_ordinal,
+            kind: MirLambdaKind::Adapter,
+        };
+        self.next_closure_ordinal += 1;
+
         let mut adapter_builder =
             MirBuilder::new(Name::new(&adapter_name), coercion.target_params.len());
 
@@ -3963,6 +4014,7 @@ impl<'db> LoweringContext<'db> {
             namespace: vec![],
             name: Name::new(&adapter_name),
         };
+        adapter_mir.definition_identity = Some(MirDefinitionIdentity::for_lambda(adapter_identity));
 
         let lambda_idx = self.pending_lambdas.len();
         self.pending_lambdas.push(adapter_mir);
@@ -4001,6 +4053,17 @@ impl<'db> LoweringContext<'db> {
         let lambda_idx_name = *lambda_count;
         *lambda_count += 1;
         let lambda_name = format!("<lambda({parent_name}, {lambda_idx_name})>");
+
+        // §4.5: structural identity — the enclosing definition's key is
+        // carried on the context (a nested lambda's parent is the enclosing
+        // lambda's own derived `lambda:...#N` key), never parsed back out of
+        // the display-only debug name above.
+        let lambda_identity = MirLambdaIdentity {
+            parent_definition_key: self.current_definition_key.clone(),
+            ordinal: self.next_closure_ordinal,
+            kind: MirLambdaKind::Lambda,
+        };
+        self.next_closure_ordinal += 1;
 
         // Find the lambda's FileScopeId from the HIR index.
         // The HIR builder registered a ScopeKind::Lambda at the lambda expression's span.
@@ -4075,6 +4138,13 @@ impl<'db> LoweringContext<'db> {
         // children. The lambda body's nested lambdas are collected separately
         // and attached to the lambda as its `.lambdas` field.
         let saved_pending_lambdas = std::mem::take(&mut self.pending_lambdas);
+        // §4.5: closures lowered inside this body chain from THIS lambda's
+        // derived key, with per-parent-body ordinals restarting at 0.
+        let saved_definition_key = std::mem::replace(
+            &mut self.current_definition_key,
+            lambda_identity.definition_key(),
+        );
+        let saved_next_closure_ordinal = std::mem::replace(&mut self.next_closure_ordinal, 0);
         let saved_capture_indices = self.capture_indices.take();
         // Save transitive_captures_needed: after lowering this lambda's body,
         // newly discovered transitive captures will be in this field.  We save
@@ -4294,12 +4364,14 @@ impl<'db> LoweringContext<'db> {
         let lambda_builder = std::mem::replace(&mut self.builder, dummy);
         let mut lambda_mir = lambda_builder.build();
         optimize::optimize_function(&mut lambda_mir);
-        // Override item_ref with the synthetic name.
+        // Override item_ref with the synthetic name (display-only; identity
+        // travels structurally in `definition_identity`).
         lambda_mir.item_ref = ItemRef::Free {
             package: Name::new(""),
             namespace: vec![],
             name: Name::new(&lambda_name),
         };
+        lambda_mir.definition_identity = Some(MirDefinitionIdentity::for_lambda(lambda_identity));
         // Attach nested lambdas as direct children.
         lambda_mir.lambdas = nested_lambdas;
         lambda_mir.signature = Some(crate::ir::RuntimeSignature {
@@ -4342,6 +4414,9 @@ impl<'db> LoweringContext<'db> {
         self.capture_indices = saved_capture_indices;
         // Restore parent's pending_lambdas (siblings of this lambda).
         self.pending_lambdas = saved_pending_lambdas;
+        // Restore the parent's identity chain and ordinal counter (§4.5).
+        self.current_definition_key = saved_definition_key;
+        self.next_closure_ordinal = saved_next_closure_ordinal;
         // Restore the parent's transitive captures (not ours).
         self.transitive_captures_needed = saved_transitive_captures;
 
@@ -4629,6 +4704,16 @@ impl LoweringContext<'_> {
         };
         let lambda_name = format!("<tagged({parent_name}, {idx})>");
 
+        // §4.5: structural identity — spawn/tagged body closures share the
+        // ordinal counter with the other producers so derived keys are unique
+        // within the parent body; the debug name above stays display-only.
+        let closure_identity = MirLambdaIdentity {
+            parent_definition_key: self.current_definition_key.clone(),
+            ordinal: self.next_closure_ordinal,
+            kind: MirLambdaKind::SpawnedClosure,
+        };
+        self.next_closure_ordinal += 1;
+
         // Find the HIR Lambda scope registered for this tagged template (its
         // span == the tagged-template expr span; see HIR walk_tagged_template_body).
         let lambda_scope_id: FileScopeId = if let Some(ref sm) = self.source_map {
@@ -4683,6 +4768,13 @@ impl LoweringContext<'_> {
         let saved_current_scope = self.current_scope;
         let saved_metadata_scope = self.current_metadata_scope;
         let saved_pending_lambdas = std::mem::take(&mut self.pending_lambdas);
+        // §4.5: nested closures in the interpolations chain from this body
+        // closure's derived key, with per-parent-body ordinals from 0.
+        let saved_definition_key = std::mem::replace(
+            &mut self.current_definition_key,
+            closure_identity.definition_key(),
+        );
+        let saved_next_closure_ordinal = std::mem::replace(&mut self.next_closure_ordinal, 0);
         let saved_capture_indices = self.capture_indices.take();
         let saved_transitive_captures = std::mem::take(&mut self.transitive_captures_needed);
         let saved_tagged_body_params = std::mem::take(&mut self.tagged_body_param_bindings);
@@ -4838,6 +4930,7 @@ impl LoweringContext<'_> {
             namespace: vec![],
             name: Name::new(&lambda_name),
         };
+        lambda_mir.definition_identity = Some(MirDefinitionIdentity::for_lambda(closure_identity));
         lambda_mir.lambdas = nested_lambdas;
 
         let newly_needed_transitive = std::mem::take(&mut self.transitive_captures_needed);
@@ -4853,6 +4946,8 @@ impl LoweringContext<'_> {
         self.current_metadata_scope = saved_metadata_scope;
         self.capture_indices = saved_capture_indices;
         self.pending_lambdas = saved_pending_lambdas;
+        self.current_definition_key = saved_definition_key;
+        self.next_closure_ordinal = saved_next_closure_ordinal;
         self.transitive_captures_needed = saved_transitive_captures;
         self.tagged_body_param_bindings = saved_tagged_body_params;
 
@@ -14074,12 +14169,18 @@ pub fn lower_function<'db>(
     );
     let sig = baml_compiler2_ppir::function_signature(db, func_loc);
     let arity = sig.params.len();
+    // §4.4: cross-revision identity, derived from the same `ItemRef` as the
+    // dotted FQN — `function:` key plus a `class:` owner for methods. Stamped
+    // on every branch that carries this `item_ref`; closures lowered inside
+    // the body chain from the matching key seeded in `LoweringContext::new`.
+    let definition_identity = MirDefinitionIdentity::for_item_ref(&item_ref);
 
     match body.as_ref() {
         FunctionBody::Expr(expr_body) => {
             let mut ctx = LoweringContext::new(db, func_loc, expr_body.clone(), source_map, opt);
             let mut mir = ctx.lower_function_body();
             mir.item_ref = item_ref;
+            mir.definition_identity = Some(definition_identity);
             mir
         }
         FunctionBody::Builtin(kind) => {
@@ -14111,6 +14212,10 @@ pub fn lower_function<'db>(
                 kind: MirFunctionKind::Builtin(*kind),
                 lambdas: vec![],
                 signature: None,
+                // Structurally known even though emit keeps builtin
+                // `Function::def_meta` empty (§7.1: builtins are fully
+                // capture-disabled and never dictionary-joined).
+                definition_identity: Some(definition_identity),
             }
         }
         FunctionBody::Missing => MirFunction {
@@ -14142,6 +14247,7 @@ pub fn lower_function<'db>(
             }),
             lambdas: vec![],
             signature: None,
+            definition_identity: Some(definition_identity),
         },
     }
 }

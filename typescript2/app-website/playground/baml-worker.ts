@@ -344,9 +344,6 @@ function onPlaygroundNotification(notification: PlaygroundNotification): void {
         message: notification.message,
       });
       break;
-    case 'profileArtifactChunk':
-      postOut(notification as WorkerOutMessage);
-      break;
     default:
       postOut({
         type: 'playgroundNotification',

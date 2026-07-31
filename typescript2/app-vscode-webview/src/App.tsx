@@ -14,6 +14,8 @@ declare global {
     __PLAYGROUND_CURSOR_POSITION?: CursorPositionMessage['position'];
     /** Open target forwarded by the VS Code extension host. */
     __PLAYGROUND_OPEN_TARGET?: OpenPlaygroundMessage['target'];
+    /** Injected by the server's `/studio` shell so the app lands on the Runs tab. */
+    __STUDIO_INITIAL_TAB?: 'runs';
     acquireVsCodeApi?: () => { postMessage: (message: unknown) => void };
   }
 }
@@ -288,6 +290,7 @@ const App: React.FC = () => {
       {!editorActive && (
         <ExecutionPanel
           port={port}
+          initialTab={window.__STUDIO_INITIAL_TAB}
           onNavigateToSource={(source: SourceNavigationTarget) => {
             getVsCodeApi()?.postMessage({ type: 'navigateToSource', source });
           }}

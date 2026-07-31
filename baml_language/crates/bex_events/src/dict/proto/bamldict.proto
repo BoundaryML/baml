@@ -1,0 +1,106 @@
+// The revision dictionary (`.bamldict`) — observability design §4.2.
+//
+// One file per compiled revision, written once, referenced by every segment
+// header that names the revision. Replaces the per-file 129 KB embedded
+// FunctionMetadataTable: integer-keyed records resolve names/spans/policy
+// through this dictionary instead of carrying strings per artifact.
+//
+// Encoding: a length-delimited stream of ONE RevisionDictionaryV1 message.
+// Sections are separate submessages so readers can skip what they don't
+// need. Additive evolution only: new fields are skipped by old readers; a
+// breaking change bumps `dict_format_version` in referencing headers.
+
+syntax = "proto3";
+
+package baml.dict.v1;
+
+message RevisionDictionaryV1 {
+  IdentitySection identity = 1;
+  // Names the compiled-in capture-default table (§7.1) that produced the
+  // per-function capture_flags.
+  uint32 capture_policy_version = 2;
+  FileSection files = 3;
+  FunctionSection functions = 4;
+  CallSiteSection call_sites = 5;
+}
+
+message IdentitySection {
+  // 32-byte BLAKE3-256 payloads (string forms are baml_rev_1_/baml_src_1_).
+  bytes revision_id = 1;
+  bytes source_snapshot_id = 2;
+  string compiler_id = 3;
+  uint32 function_count = 4;
+  // True when the revision id is the §4.3 fallback (borsh(Program) hash) —
+  // identity-less legacy packs; file rows then carry no content hashes.
+  bool fallback_identity = 5;
+}
+
+message FileSection {
+  repeated FileRow files = 1;
+}
+
+message FileRow {
+  // Dense per-dictionary file id, referenced by FunctionDictRow.file_id and
+  // future call-site records.
+  uint32 file_id = 1;
+  // Project-relative path.
+  string path = 2;
+  // BLAKE3-256 of the file contents; empty for fallback-identity programs.
+  bytes content_hash = 3;
+}
+
+message FunctionSection {
+  repeated FunctionDictRow functions = 1;
+}
+
+message FunctionDictRow {
+  // Dense id as emitted in CallFunction records. Rows for the reserved ids
+  // (0 = unknown, 1 = spawn-closure) are ALWAYS emitted first.
+  uint32 function_id = 1;
+  string fqn = 2;
+  string display_name = 3;
+  optional string declared_name = 4;
+  // Index into FileSection; u32::MAX = no source file (synthetic).
+  uint32 file_id = 5;
+  uint32 span_start = 6;
+  uint32 span_end = 7;
+  uint32 line = 8;
+  // "bytecode" | "sysop:<name>" | "native".
+  string kind = 9;
+  // "user" | "companion" | "internal" | "builtin" | "auto_derive".
+  string origin = 10;
+  // THE cross-revision join key (§4.4); empty for synthetic rows.
+  string definition_key = 11;
+  optional string owner_type_key = 12;
+  LambdaIdentityRow lambda = 13;
+  optional string package_name = 14;
+  repeated string namespace = 15;
+  // §7.1 bitfield: bits 0-1 inputs, 2-3 output, 4-5 error, 6-7
+  // promote_on_error (0 = Disabled, 1 = Auto, 2 = Enabled), bit 8 is_llm,
+  // bit 9 captures_any.
+  uint32 capture_flags = 16;
+  // §4.4 BLAKE3-256 behavior hash; empty for synthetic rows.
+  bytes def_content_hash = 17;
+  // BEP-053 semantic lanes land separately (field reserved).
+}
+
+message LambdaIdentityRow {
+  string parent_definition_key = 1;
+  uint32 ordinal = 2;
+  // 0 = lambda, 1 = spawned closure, 2 = adapter.
+  uint32 kind = 3;
+}
+
+message CallSiteSection {
+  repeated CallSiteRow call_sites = 1;
+}
+
+// Emitted now; consumed by the record-slimming milestone that swaps the
+// ~16 span bytes in CallFunction for a u32 call_site_id.
+message CallSiteRow {
+  uint32 call_site_id = 1;
+  uint32 file_id = 2;
+  uint32 start_offset = 3;
+  uint32 end_offset = 4;
+  uint32 line = 5;
+}

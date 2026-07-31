@@ -655,6 +655,9 @@ impl MirBuilder {
             }),
             lambdas: vec![],
             signature: None,
+            // Placeholder like `item_ref` — the caller stamps the real
+            // identity (design §4.4–§4.5) after `build()`.
+            definition_identity: None,
         }
     }
 
@@ -698,6 +701,9 @@ impl MirBuilder {
             }),
             lambdas: vec![],
             signature: None,
+            // Placeholder like `item_ref` — the caller stamps the real
+            // identity (design §4.4–§4.5) after `build_unchecked()`.
+            definition_identity: None,
         }
     }
 

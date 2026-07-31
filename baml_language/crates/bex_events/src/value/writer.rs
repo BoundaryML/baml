@@ -8,9 +8,9 @@ use std::{
 use crate::{
     ids::BoundaryId,
     value::{
-        BlobRef, BlobStore, CaptureLossRecord, LogEventRecord, LogRecord, RunCompletedRecord,
-        RunStartedRecord, ValueArtifactRef, ValueArtifactSink, ValueCapture, ValueCodec,
-        ValueRecord, ValueRef,
+        BlobRef, BlobStore, CaptureLossRecord, DagRef, LogEventRecord, LogRecord,
+        RunCompletedRecord, RunStartedRecord, ValueArtifactRef, ValueArtifactSink, ValueCapture,
+        ValueCodec, ValueRecord, ValueRef,
         encode::{
             encode_capture_loss, encode_header, encode_log_event, encode_record,
             encode_run_completed, encode_run_started,
@@ -142,6 +142,34 @@ impl<S: ValueArtifactSink> ValueWriter<S> {
         body: Vec<u8>,
         capture: Option<ValueCapture>,
     ) -> io::Result<ValueWriteOutcome> {
+        self.append_body_with_capture_and_dag(codec, body, capture, None)
+    }
+
+    /// Append a captured value body that has additionally been re-encoded
+    /// canonically and persisted to the project store (§7.4 dual-write):
+    /// `dag_ref` addresses the canonical DAG root in that store.
+    pub fn append_body_with_capture_and_dag(
+        &mut self,
+        codec: ValueCodec,
+        body: Vec<u8>,
+        capture: Option<ValueCapture>,
+        dag_ref: Option<DagRef>,
+    ) -> io::Result<ValueWriteOutcome> {
+        self.append_body_with_capture_dag_and_promotion(codec, body, capture, dag_ref, None)
+    }
+
+    /// Like [`Self::append_body_with_capture_and_dag`], additionally
+    /// marking the capture as trigger-promoted (§7.2 `role: promoted`):
+    /// `promoted_by` names the trigger that made this speculatively staged
+    /// capture durable.
+    pub fn append_body_with_capture_dag_and_promotion(
+        &mut self,
+        codec: ValueCodec,
+        body: Vec<u8>,
+        capture: Option<ValueCapture>,
+        dag_ref: Option<DagRef>,
+        promoted_by: Option<String>,
+    ) -> io::Result<ValueWriteOutcome> {
         let id = self.value_id_allocator.allocate();
         let original_size = body.len();
         let (body, blob_ref) = self.store_body(body)?;
@@ -152,6 +180,8 @@ impl<S: ValueArtifactSink> ValueWriter<S> {
             body,
             blob_ref,
             capture,
+            dag_ref,
+            promoted_by,
         };
         let mut encoded = Vec::new();
         encode_record(&mut encoded, &record)
@@ -232,9 +262,10 @@ impl<S: ValueArtifactSink> ValueWriter<S> {
 mod tests {
     use crate::{
         ids::BoundaryId,
+        store::{Store, canon},
         value::{
-            BlobStore, ByteValueArtifactSink, ValueArtifactRef, ValueCodec, ValueFileRecord,
-            ValueIdAllocator, ValueWriter, read_bamlvalue_from_bytes,
+            BlobStore, ByteValueArtifactSink, DagRef, ValueArtifactRef, ValueCodec,
+            ValueFileRecord, ValueIdAllocator, ValueWriter, read_bamlvalue_from_bytes,
         },
     };
 
@@ -291,6 +322,56 @@ mod tests {
 
         assert_eq!(first_outcome.value_ref.id, "value_1");
         assert_eq!(second_outcome.value_ref.id, "value_2");
+    }
+
+    #[test]
+    fn dag_ref_round_trips_and_store_serves_the_root() {
+        let dir = std::env::temp_dir().join(format!(
+            "bamlvalue-writer-dag-{}-{:?}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let _ = std::fs::remove_dir_all(&dir);
+
+        let value = canon::CanonValue::Map(vec![
+            ("name".to_string(), canon::CanonValue::String("ada".into())),
+            ("count".to_string(), canon::CanonValue::Int(42)),
+        ]);
+        let encoded = canon::encode(&value);
+        let mut store = Store::open(&dir, [5; 16]).unwrap();
+        store.put_encoded(&encoded, 1).unwrap();
+
+        let dag_ref = DagRef {
+            root_cid: encoded.root_cid,
+            node_codec_version: canon::NODE_CODEC_VERSION,
+            logical_len: encoded.logical_len,
+        };
+        let sink = ByteValueArtifactSink::new();
+        let mut writer = ValueWriter::new(sink, BoundaryId::from_bytes([2; 16])).unwrap();
+        writer
+            .append_body_with_capture_and_dag(
+                ValueCodec::BamlOutboundValue,
+                vec![1, 2, 3],
+                None,
+                Some(dag_ref),
+            )
+            .unwrap();
+
+        let parsed = read_bamlvalue_from_bytes(writer.sink().bytes()).unwrap();
+        let ValueFileRecord::CapturedValue(record) = &parsed.records[0] else {
+            panic!("expected value record");
+        };
+        assert_eq!(record.body, vec![1, 2, 3], "legacy body stays (dual-write)");
+        assert_eq!(record.dag_ref, Some(dag_ref));
+        let root = store
+            .get(&dag_ref.root_cid)
+            .unwrap()
+            .expect("store serves the DAG root");
+        assert!(!root.is_empty());
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]

@@ -473,6 +473,28 @@ impl TickConverter {
         }
     }
 
+    /// Rebuild a converter from a persisted ns-per-tick rational — the clock
+    /// identity a raw-firehose header carries (§6.2: `ns = ticks * numer /
+    /// denom`, no segment anchoring; raw tick stamps are absolute in the
+    /// producing process's tick domain). Serves readers and test oracles
+    /// replaying raw ranges through
+    /// [`crate::prof::transcode::to_disk_event`]. Only the rate participates
+    /// in conversion; the reconstructed converter reports
+    /// [`ClockKind::Instant`].
+    pub fn from_rate(numer: u64, denom: u64) -> Self {
+        let rate = (numer.max(1), denom.max(1));
+        TickConverter {
+            kind: ClockKind::Instant,
+            seg_base_ticks: 0,
+            seg_base_ns: 0,
+            rate,
+            scale: scale_of(rate),
+            prev: None,
+            refined: true,
+            sample0: None,
+        }
+    }
+
     /// Build from the process clock. Call on the consumer thread only: for
     /// the x86 TSC this blocks ~2 ms taking a coarse two-point rate
     /// estimate (producers only buffer meanwhile); exact-rate sources

@@ -35,6 +35,10 @@ message DiskEventV1 {
     SetFunctionId set_function_id = 4;
     EndFunction end_function = 5;
     Heartbeat heartbeat = 6;
+    SuspendThread suspend_thread = 7;
+    ResumeThread resume_thread = 8;
+    LlmCallMeta llm_call_meta = 9;
+    ModelBirth model_birth = 10;
   }
 }
 
@@ -95,6 +99,56 @@ message EndFunction {
 // simplification of "uploader emits it").
 message Heartbeat {
   uint64 timestamp_ns = 1;
+}
+
+// The logical thread parked (observability design §5.3). Emitted at the
+// engine's actual park points, per park — a ready-inline sysop emits
+// neither suspend nor resume, so its window correctly counts as running.
+message SuspendThread {
+  uint64 thread_id = 1;
+  SuspendReason reason = 2;
+  // Per-thread park counter pairing this suspend with its resume.
+  uint32 suspend_seq = 3;
+  uint64 timestamp_ns = 4;
+}
+
+// The logical thread resumed. Self-contained (§5.3): carries the paired
+// suspend's timestamp, so awaiting duration is computable from this record
+// alone — immune to cross-ring reordering.
+message ResumeThread {
+  uint64 thread_id = 1;
+  uint32 suspend_seq = 2;
+  uint64 suspend_timestamp_ns = 3;
+  uint64 timestamp_ns = 4;
+}
+
+enum SuspendReason {
+  SUSPEND_REASON_SYS_OP = 0;
+  SUSPEND_REASON_AWAIT = 1;
+  SUSPEND_REASON_AWAIT_ANY = 2;
+  SUSPEND_REASON_EARLY_YIELD = 3;
+}
+
+// A newly interned LLM model name (§5.4): once per model per engine.
+// LlmCallMeta.model_id resolves against the most recent birth with that id.
+message ModelBirth {
+  uint32 model_id = 1;
+  string name = 2;
+}
+
+// One LLM call's durable enrichment (§5.4): model + token usage + error
+// class, joined to the sysop's CallFunction by (thread_id, call_id).
+// model_id resolves through the engine's interned model table.
+message LlmCallMeta {
+  uint64 thread_id = 1;
+  uint64 call_id = 2;
+  uint32 model_id = 3;
+  uint32 tokens_in = 4;
+  uint32 tokens_out = 5;
+  bool provider_error = 6;
+  bool parse_error = 7;
+  bool retry = 8;
+  uint64 timestamp_ns = 9;
 }
 
 // How a single call frame ended — a closed taxonomy of the ways a frame can

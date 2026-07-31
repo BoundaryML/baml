@@ -15,6 +15,7 @@ pub(crate) mod bytecode_cache;
 #[cfg(test)]
 mod cache_test_support;
 pub(crate) mod check_command;
+pub(crate) mod clean_command;
 pub(crate) mod commands;
 pub(crate) mod describe_command;
 #[cfg(test)]
@@ -37,9 +38,12 @@ pub(crate) mod paint;
 pub(crate) mod playground_command;
 pub(crate) mod project_load;
 pub(crate) mod project_session;
+pub mod q_command;
 pub mod reporter;
 pub(crate) mod run_command;
+pub(crate) mod run_observability;
 pub(crate) mod skill_check;
+pub(crate) mod studio_command;
 pub(crate) mod telemetry;
 pub(crate) mod telemetry_command;
 pub(crate) mod test_command;

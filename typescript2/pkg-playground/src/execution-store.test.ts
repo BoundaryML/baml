@@ -87,7 +87,7 @@ describe('execution-store', () => {
       'call_node_1',
     ]);
     expect(next.calls).toHaveLength(1);
-    expect(next.threads[0]?.callNodeIds).toEqual(['call_node_1']);
+    expect(next.threads?.[0]?.callNodeIds).toEqual(['call_node_1']);
     expect(next.result?.value).toBe('ok');
   });
 

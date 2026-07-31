@@ -31,7 +31,7 @@ pub use live_cache::{
 };
 pub use read::{BamlvalueContents, read_bamlvalue_from_bytes};
 pub use record::{
-    CaptureLossKind, CaptureLossReason, CaptureLossRecord, LogEventRecord, LogRecord,
+    CaptureLossKind, CaptureLossReason, CaptureLossRecord, DagRef, LogEventRecord, LogRecord,
     RunCompletedRecord, RunStartedRecord, ValueAvailability, ValueCapture, ValueCaptureKind,
     ValueCodec, ValueFileRecord, ValueRecord, ValueRef,
 };

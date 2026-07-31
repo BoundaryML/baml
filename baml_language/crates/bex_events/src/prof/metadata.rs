@@ -64,6 +64,7 @@ mod tests {
                 package_name: None,
                 namespace: vec!["ns".to_string()],
             }],
+            dictionary: None,
         }
     }
 

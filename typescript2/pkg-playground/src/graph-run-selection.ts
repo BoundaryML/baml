@@ -55,7 +55,9 @@ function isGraphRunCandidate(
     return true;
   }
 
-  return run.calls.some((call) => call.functionName === selectedFn);
+  // `calls` is absent on current wires (§9.3 — profile call nodes are no
+  // longer serialized); the target-based matches above are the primary path.
+  return (run.calls ?? []).some((call) => call.functionName === selectedFn);
 }
 
 function compareRunRecency(left: Run, right: Run): number {

@@ -72,6 +72,41 @@ pub enum TraceValue {
     Omitted(TraceOmissionDescriptor),
 }
 
+impl TraceValue {
+    /// Owned heap payload bytes beyond the inline `TraceValue` slot.
+    fn approx_payload_bytes(&self) -> usize {
+        match self {
+            TraceValue::Null | TraceValue::Bool(_) | TraceValue::Int(_) | TraceValue::Float(_) => 0,
+            TraceValue::Bigint(text) | TraceValue::String(text) => text.len(),
+            TraceValue::Bytes(bytes) => bytes.len(),
+            TraceValue::Array(items) => items.len() * size_of::<TraceValueRef>(),
+            TraceValue::Map(entries) => entries
+                .iter()
+                .map(|(key, _)| key.len() + size_of::<TraceValueRef>())
+                .sum(),
+            TraceValue::Media(media) => {
+                let content = match &media.content {
+                    TraceMediaContent::Url(text)
+                    | TraceMediaContent::Base64(text)
+                    | TraceMediaContent::File(text) => text.len(),
+                };
+                content + media.mime_type.as_ref().map_or(0, String::len)
+            }
+            TraceValue::Instance {
+                type_name, fields, ..
+            } => {
+                type_name.len()
+                    + fields
+                        .iter()
+                        .map(|(name, _)| name.len() + size_of::<TraceValueRef>())
+                        .sum::<usize>()
+            }
+            TraceValue::Enum { type_name, variant } => type_name.len() + variant.len(),
+            TraceValue::Omitted(descriptor) => descriptor.message.len(),
+        }
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct TraceMediaValue {
     pub kind: MediaKind,
@@ -101,6 +136,24 @@ pub enum TraceOmissionReason {
     CyclicReference,
 }
 
+impl TraceOmissionReason {
+    /// Stable reason byte carried by the §7.4 canonical value encoding
+    /// (`CanonValue::Omitted.reason`). These wire values are FROZEN —
+    /// append-only, never re-purpose or renumber:
+    /// `OmittedArgument=0`, `UnsupportedValue=1`, `HostOwnedValue=2`,
+    /// `InvalidRuntimeValue=3`, `CyclicReference=4`.
+    #[must_use]
+    pub(crate) fn canonical_code(self) -> u8 {
+        match self {
+            Self::OmittedArgument => 0,
+            Self::UnsupportedValue => 1,
+            Self::HostOwnedValue => 2,
+            Self::InvalidRuntimeValue => 3,
+            Self::CyclicReference => 4,
+        }
+    }
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub struct TraceSnapshot {
     root: TraceValueRef,
@@ -116,6 +169,17 @@ impl TraceSnapshot {
     #[must_use]
     pub fn value(&self, value_ref: TraceValueRef) -> Option<&TraceValue> {
         self.values.get(value_ref.0)
+    }
+
+    /// Approximate retained bytes of this snapshot (inline value slots plus
+    /// owned heap payloads). Used for §7.2 staging-ring byte accounting —
+    /// an accounting estimate, not an allocator measurement.
+    #[must_use]
+    pub fn approx_bytes(&self) -> usize {
+        self.values
+            .iter()
+            .map(|value| size_of::<TraceValue>() + value.approx_payload_bytes())
+            .sum()
     }
 
     #[cfg(test)]
@@ -199,6 +263,18 @@ impl TraceHeap {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .remove(&handle)
+    }
+
+    /// Approximate retained bytes of one snapshot without cloning it
+    /// (§7.2 staging-ring accounting). `None` when already released.
+    #[must_use]
+    pub fn snapshot_bytes(&self, handle: TraceSnapshotHandle) -> Option<usize> {
+        self.inner
+            .snapshots
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .get(&handle)
+            .map(TraceSnapshot::approx_bytes)
     }
 
     #[must_use]

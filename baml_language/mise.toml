@@ -48,6 +48,14 @@ description = "Run cargo stow"
 run = "cargo run -p cargo-stow -- stow --fix"
 sources = ["**/*.rs", "**/Cargo.toml"]
 
+[tasks.obs-bench]
+description = "Check observability bench rows against the platform baseline"
+run = "cargo run -p tools_obs_bench --release -- check"
+
+[tasks.obs-bench-record]
+description = "Record a new observability bench baseline (refresh-baseline)"
+run = "cargo run -p tools_obs_bench --release -- refresh-baseline"
+
 [tasks.size-gate]
 description = "Check artifact sizes against baseline"
 run = "cargo run -p cargo-size-gate -- size-gate check"

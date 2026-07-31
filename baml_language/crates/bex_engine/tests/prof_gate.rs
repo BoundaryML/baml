@@ -6,10 +6,20 @@
 //!   exactly one `EndFunction`, every `StartThread` an `EndThread` — with
 //!   exact per-function call counts.
 //! - **Reconstruction smoke**: rebuild the per-thread call trees from the
-//!   `.bamlprof` (v2 §7.2 shape) and assert nesting + spawn-edge sanity.
+//!   event stream (v2 §7.2 shape) and assert nesting + spawn-edge sanity.
 //! - Sys-op pairs (`PR4b`) and the unwind (`EndFunction{Errored}`) path,
 //!   plus the §7 status taxonomy: `Cancelled` (cancel drain + in-flight
 //!   sysop) and `Exited` (`baml.sys.exit` unwinds).
+//!
+//! Data source (P9 step 4, design §10.3): the legacy per-engine `.bamlprof`
+//! writers are gone — every gate reads the §6.2 raw firehose instead. The
+//! engine's session `raw/` files are demuxed by engine id (exact — tests
+//! sharing this process never read each other's files), replayed through
+//! `to_disk_event` (the flight-dump/test-oracle transcode), and joined with
+//! a metadata snapshot into the same `(header, events)` shape the
+//! assertions have always consumed. Only the source changed; every contract
+//! (balance, statuses, thread lifecycles, sentinels, boundary lifecycle,
+//! flight recorder, live segment, recent calls) is asserted unchanged.
 //!
 //! This file is its own test binary: the profiling knobs are environment
 //! variables latched once per process (`ProfConfig::global`), so they must
@@ -32,7 +42,10 @@ use bex_engine::{
 };
 use bex_events::{
     ids::BoundaryId,
-    prof::{file::read_bamlprof, pb},
+    prof::{
+        cct::raw::read_raw_file, clock::TickConverter, encode::build_header, pb,
+        transcode::to_disk_event,
+    },
     run::{
         self, CallNodeId, CallStatus, ReconstructedProfile, TraceCallKey, TraceThreadKey, bamlprof,
     },
@@ -144,8 +157,18 @@ fn llm_function_capture_defaults_auto_inputs_outputs_errors() {
         CaptureOption::Auto
     );
     assert_eq!(
+        llm_capture.promote_on_error,
+        CaptureOption::Auto,
+        "LLM functions promote staged captures on error (design §7.1)"
+    );
+    // §7.1 compiled-in defaults: user functions capture nothing by default
+    // EXCEPT the error value (already materialized at throw) and staged
+    // promotion — the retroactive-evidence contract.
+    assert_eq!(
         plain_capture.expect("plain function emitted"),
         FunctionCaptureProps::disabled()
+            .with_option(CaptureCategory::Error, CaptureOption::Auto)
+            .with_promote_on_error(CaptureOption::Auto)
     );
 }
 
@@ -185,96 +208,162 @@ fn init_prof_env() {
             // The smallest legal segment: forces constant growth + recycling
             // under real producer load (G3's requirement).
             std::env::set_var("BAML_RING_SEG_BYTES", "65536");
+            // §10.3 post-P9: the CCT pipeline is the only pipeline; setting
+            // it explicitly keeps the suite's latched config self-evident.
+            std::env::set_var("BAML_PROFILE_PIPELINE", "cct");
+            // §6.2/§10.3: the raw firehose is the suite's exact-event data
+            // source — every gate reads its verbatim ring truth.
+            std::env::set_var("BAML_PROFILE_RAW", "1");
         }
         let cfg = bex_events::prof::ProfConfig::global();
         assert!(cfg.enabled, "profiling must be on for the gate tests");
         assert_eq!(cfg.profile_dir, dir);
+        assert!(cfg.pipeline.runs_cct());
+        assert!(
+            cfg.profile_raw,
+            "raw firehose must be on for the gate tests"
+        );
     });
 }
 
-async fn run_main(source: &str) -> Result<BexExternalValue, EngineError> {
+/// Identity snapshot of one engine, taken while it is alive (its metadata
+/// is freed at engine close). The engine id demuxes the shared sessions
+/// root exactly — tests sharing this process never read each other's files
+/// — and the function-table snapshot backs the synthesized header the
+/// assertions join fqns through (the shape the legacy embedded table had).
+#[derive(Clone)]
+struct EngineTag {
+    engine_id: u64,
+    meta: bex_events::prof::EngineProfileMetadata,
+}
+
+/// Snapshot an engine's id + metadata. `activate_profiling` is the
+/// idempotent registration point every profiled call goes through; calling
+/// it here makes the snapshot valid even before the first call.
+fn tag_engine(engine: &BexEngine) -> EngineTag {
+    engine.activate_profiling();
+    let engine_id = engine.engine_id().0;
+    let meta = bex_events::prof::metadata::get_engine_metadata(engine_id)
+        .expect("engine metadata is registered while the engine is alive");
+    EngineTag { engine_id, meta }
+}
+
+async fn run_main(source: &str) -> (Result<BexExternalValue, EngineError>, EngineTag) {
     let program = compile_for_engine(source);
     let engine = Arc::new(
         BexEngine::new(program, Arc::new(sys_native::SysOps::native()), Vec::new())
             .expect("engine construction"),
     );
-    engine
+    let tag = tag_engine(&engine);
+    let result = engine
         .call_function(
             "main",
             vec![],
             FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
             true,
         )
-        .await
+        .await;
+    (result, tag)
 }
 
-/// Flushes the consumer and loads the (unique) profile whose function table
-/// contains `marker_fqn` — each test uses distinct function names, and each
-/// engine writes its own file, so the marker demuxes this binary's shared
-/// profile directory.
-fn load_profile(marker_fqn: &str) -> (pb::EventFileHeaderV1, Vec<Event>) {
+/// The engine's §6.1 session dir under the shared sessions root, demuxed by
+/// process euid + `-e<engine_id>` suffix (dir names are
+/// `<started_secs>-<euid_hex32>-e<engine>`; engine ids are dense per
+/// process, so the euid guards against another process's sessions).
+fn session_dir_for(engine_id: u64) -> Option<PathBuf> {
+    let euid_hex = bex_events::prof::process_euid_hex();
+    let suffix = format!("-e{engine_id}");
+    let sessions_root = prof_dir().parent().unwrap().join("sessions");
+    std::fs::read_dir(sessions_root)
+        .ok()?
+        .filter_map(Result::ok)
+        .map(|e| e.path())
+        .find(|p| {
+            p.file_name()
+                .and_then(|n| n.to_str())
+                .is_some_and(|n| n.contains(&euid_hex) && n.ends_with(&suffix))
+        })
+}
+
+/// Replays the engine's §6.2 raw firehose into the `(header, events)` shape
+/// the legacy `.bamlprof` loader returned: verbatim ring records through
+/// `to_disk_event` (ns via the raw container's clock quad), plus a header
+/// synthesized from the raw identity and the tag's function table. `None`
+/// while the session (or its first raw flush) does not exist yet — a valid
+/// result for the suppressed-call probe, a retry for [`load_profile`].
+fn read_raw_events(tag: &EngineTag) -> Option<(pb::EventFileHeaderV1, Vec<Event>)> {
+    let session_dir = session_dir_for(tag.engine_id)?;
+    let mut raw_files: Vec<PathBuf> = std::fs::read_dir(session_dir.join("raw"))
+        .ok()?
+        .filter_map(Result::ok)
+        .map(|e| e.path())
+        .collect();
+    raw_files.sort();
+    let mut events: Vec<Event> = Vec::new();
+    let mut process_euid: Option<[u8; 16]> = None;
+    let mut clock: (u8, u8, u64, u64) = (0, 0, 1, 1);
+    for path in &raw_files {
+        let parsed = read_raw_file(&std::fs::read(path).ok()?).ok()?;
+        assert_eq!(parsed.engine_id, tag.engine_id, "session demux mismatch");
+        // Per-file clock: the consumer's converter can refine mid-run.
+        let conv = TickConverter::from_rate(parsed.clock.2, parsed.clock.3);
+        process_euid = Some(parsed.process_euid);
+        clock = parsed.clock;
+        for range in &parsed.ranges {
+            for rec in bex_events::prof::record::iter(range) {
+                let raw = rec.expect("committed raw range decodes");
+                events.extend(to_disk_event(&raw, &conv).event);
+            }
+        }
+    }
+    let process_euid = process_euid?;
+    if events.is_empty() {
+        return None;
+    }
+    let started_at_epoch_ns = session_dir
+        .file_name()
+        .and_then(|n| n.to_str())
+        .and_then(|n| n.split('-').next())
+        .and_then(|secs| secs.parse::<u128>().ok())
+        .map_or(0, |secs| secs * 1_000_000_000);
+    let header = build_header(
+        process_euid,
+        tag.engine_id,
+        started_at_epoch_ns,
+        Some(&tag.meta),
+        &TickConverter::from_rate(clock.2, clock.3),
+    );
+    Some((header, events))
+}
+
+/// Flushes the consumer and replays this engine's raw firehose. Bounded
+/// retry: a live engine's session dir is minted by the (forced) window
+/// flush behind the ack, but a spawned child's tail records can land after
+/// this test's first flush (the child's task holds the engine open).
+fn load_profile(tag: &EngineTag) -> (pb::EventFileHeaderV1, Vec<Event>) {
+    for _ in 0..40 {
+        assert!(
+            bex_events::prof::flush_and_join(Duration::from_mins(1)),
+            "consumer never acked the flush"
+        );
+        if let Some(found) = read_raw_events(tag) {
+            return found;
+        }
+        std::thread::sleep(Duration::from_millis(50));
+    }
+    panic!("no raw session data for engine {}", tag.engine_id)
+}
+
+/// Returns whether the engine's raw firehose recorded any event. Unlike
+/// [`load_profile`], absence is a valid result: tests use this to assert a
+/// suppressed entry call did not create a profile component (no records →
+/// no session dir, no raw files).
+fn engine_has_profile_events(tag: &EngineTag) -> bool {
     assert!(
         bex_events::prof::flush_and_join(Duration::from_mins(1)),
         "consumer never acked the flush"
     );
-    let mut found = None;
-    for entry in std::fs::read_dir(prof_dir()).expect("profile dir exists") {
-        let path = entry.unwrap().path();
-        // The tolerant reader hands back the whole-message prefix even when
-        // a live heartbeat append tears the tail; our events were synced
-        // whole before the flush ack. A file whose HEADER is unreadable is
-        // mid-creation and cannot be ours — skip it.
-        let Ok(contents) = read_bamlprof(&path) else {
-            continue;
-        };
-        let (header, events) = (contents.header, contents.events);
-        let has_marker = header
-            .function_table
-            .as_ref()
-            .is_some_and(|t| t.functions.iter().any(|f| f.fqn == marker_fqn));
-        if has_marker {
-            assert!(
-                found.is_none(),
-                "two profiles claim marker {marker_fqn} — engine demux broken"
-            );
-            let events: Vec<Event> = events
-                .into_iter()
-                .filter_map(|e| e.event)
-                .filter(|e| !matches!(e, Event::Heartbeat(_)))
-                .collect();
-            found = Some((header, events));
-        }
-    }
-    found.unwrap_or_else(|| panic!("no profile contains {marker_fqn}"))
-}
-
-/// Returns whether any readable profile file contains `marker_fqn` in its
-/// function table. Unlike [`load_profile`], absence is a valid result: tests
-/// use this to assert a suppressed entry call did not create a profile
-/// component.
-fn profile_contains_marker(marker_fqn: &str) -> bool {
-    assert!(
-        bex_events::prof::flush_and_join(Duration::from_mins(1)),
-        "consumer never acked the flush"
-    );
-    let Ok(entries) = std::fs::read_dir(prof_dir()) else {
-        return false;
-    };
-    for entry in entries.flatten() {
-        let path = entry.path();
-        let Ok(contents) = read_bamlprof(&path) else {
-            continue;
-        };
-        let has_marker = contents
-            .header
-            .function_table
-            .as_ref()
-            .is_some_and(|t| t.functions.iter().any(|f| f.fqn == marker_fqn));
-        if has_marker {
-            return true;
-        }
-    }
-    false
+    read_raw_events(tag).is_some()
 }
 
 /// [`load_profile`] for tests whose program SPAWNS children: a spawned
@@ -283,9 +372,9 @@ fn profile_contains_marker(marker_fqn: &str) -> bool {
 /// Re-flush (bounded) until every started thread has ended — under heavy
 /// parallel test load the child task can otherwise lose the race with the
 /// first flush and the balance asserts see a truncated stream.
-fn load_profile_quiesced(marker_fqn: &str) -> (pb::EventFileHeaderV1, Vec<Event>) {
+fn load_profile_quiesced(tag: &EngineTag) -> (pb::EventFileHeaderV1, Vec<Event>) {
     for _ in 0..40 {
-        let (header, events) = load_profile(marker_fqn);
+        let (header, events) = load_profile(tag);
         let started: HashSet<u64> = events
             .iter()
             .filter_map(|e| match e {
@@ -307,7 +396,7 @@ fn load_profile_quiesced(marker_fqn: &str) -> (pb::EventFileHeaderV1, Vec<Event>
     }
     // Quiescence never arrived: return the last read; the caller's balance
     // asserts will fail with the truncated stream visible.
-    load_profile(marker_fqn)
+    load_profile(tag)
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
@@ -322,6 +411,7 @@ async fn profile_suppressed_context_does_not_emit_records() {
         BexEngine::new(program, Arc::new(sys_native::SysOps::native()), Vec::new())
             .expect("engine construction"),
     );
+    let tag = tag_engine(&engine);
 
     let value = engine
         .call_function(
@@ -336,7 +426,7 @@ async fn profile_suppressed_context_does_not_emit_records() {
         .expect("profile-disabled call succeeds");
     assert_eq!(value, BexExternalValue::Int(41));
     assert!(
-        !profile_contains_marker("user.psc_marker"),
+        !engine_has_profile_events(&tag),
         "profile-disabled call must not emit records or create an orphan profile component"
     );
 
@@ -352,7 +442,7 @@ async fn profile_suppressed_context_does_not_emit_records() {
     assert_eq!(value, BexExternalValue::Int(41));
     drop(engine);
 
-    let (header, events) = load_profile("user.psc_marker");
+    let (header, events) = load_profile(&tag);
     let (counts, threads) = assert_balance(&header, &events);
     assert_eq!(threads.len(), 1, "enabled call creates one root thread");
     assert_eq!(
@@ -366,11 +456,10 @@ async fn profile_suppressed_context_does_not_emit_records() {
 async fn native_profile_reconstructs_canonical_parity_shape() {
     let _guard = test_lock().await;
     init_prof_env();
-    run_main(PROFILE_PARITY_SOURCE)
-        .await
-        .expect("profile parity program runs");
+    let (result, tag) = run_main(PROFILE_PARITY_SOURCE).await;
+    result.expect("profile parity program runs");
 
-    let (header, events) = load_profile("user.parity_mid");
+    let (header, events) = load_profile(&tag);
     assert_balance(&header, &events);
     let contents = bex_events::prof::file::BamlprofContents {
         header,
@@ -409,6 +498,7 @@ async fn log_capture_attributes_repeated_nested_calls() {
         BexEngine::new(program, Arc::new(sys_native::SysOps::native()), Vec::new())
             .expect("engine construction"),
     );
+    let tag = tag_engine(&engine);
     let boundary_id = BoundaryId::from_bytes([4; 16]);
     let value_capture = TraceCaptureProducer::new(TraceCaptureConfig::enabled(16));
     let call_ctx = FunctionCallContextBuilder::new(sys_types::CallId::next())
@@ -445,7 +535,7 @@ async fn log_capture_attributes_repeated_nested_calls() {
         parsed.records
     );
 
-    let (header, events) = load_profile("user.log_phase4_leaf");
+    let (header, events) = load_profile(&tag);
     assert_balance(&header, &events);
     let contents = bex_events::prof::file::BamlprofContents {
         header,
@@ -543,6 +633,7 @@ async fn call_output_capture_attributes_repeated_enabled_calls() {
         BexEngine::new(program, Arc::new(sys_native::SysOps::native()), Vec::new())
             .expect("engine construction"),
     );
+    let tag = tag_engine(&engine);
     let boundary_id = BoundaryId::from_bytes([5; 16]);
     let value_capture = TraceCaptureProducer::new(TraceCaptureConfig::enabled(16));
     let call_ctx = FunctionCallContextBuilder::new(sys_types::CallId::next())
@@ -590,7 +681,7 @@ async fn call_output_capture_attributes_repeated_enabled_calls() {
     }
     assert_eq!(call_output_records, 4);
 
-    let (header, events) = load_profile("user.capture_phase5_leaf");
+    let (header, events) = load_profile(&tag);
     assert_balance(&header, &events);
     let contents = bex_events::prof::file::BamlprofContents {
         header,
@@ -686,6 +777,7 @@ async fn explicit_local_id_source_to_value_artifact_snapshots_before_mutation() 
         BexEngine::new(program, Arc::new(sys_native::SysOps::native()), Vec::new())
             .expect("engine construction"),
     );
+    let tag = tag_engine(&engine);
     let boundary_id = BoundaryId::from_bytes([8; 16]);
     let value_capture = TraceCaptureProducer::new(TraceCaptureConfig::enabled(16));
     let call_ctx = FunctionCallContextBuilder::new(sys_types::CallId::next())
@@ -742,7 +834,7 @@ async fn explicit_local_id_source_to_value_artifact_snapshots_before_mutation() 
         .count();
     assert_eq!(call_input_records, 1);
 
-    let (header, events) = load_profile("user.capture_phase6_summarize_array");
+    let (header, events) = load_profile(&tag);
     assert_balance(&header, &events);
     let contents = bex_events::prof::file::BamlprofContents {
         header,
@@ -978,10 +1070,11 @@ async fn explicit_local_id_is_evaluated_last_and_exactly_once() {
             }
         }
     "#;
-    let value = run_main(source)
-        .await
-        .expect("evaluation-order program runs");
-    assert_eq!(value, BexExternalValue::Int(1));
+    let (value, _tag) = run_main(source).await;
+    assert_eq!(
+        value.expect("evaluation-order program runs"),
+        BexExternalValue::Int(1)
+    );
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
@@ -1005,6 +1098,7 @@ async fn call_input_capture_attributes_enabled_sysop_calls() {
         BexEngine::new(program, Arc::new(sys_native::SysOps::native()), Vec::new())
             .expect("engine construction"),
     );
+    let tag = tag_engine(&engine);
     let boundary_id = BoundaryId::from_bytes([9; 16]);
     let value_capture = TraceCaptureProducer::new(TraceCaptureConfig::enabled(16));
     let call_ctx = FunctionCallContextBuilder::new(sys_types::CallId::next())
@@ -1053,7 +1147,7 @@ async fn call_input_capture_attributes_enabled_sysop_calls() {
         .count();
     assert_eq!(call_input_records, 1);
 
-    let (header, events) = load_profile("user.capture_phase6_sysop_marker");
+    let (header, events) = load_profile(&tag);
     assert_balance(&header, &events);
     let contents = bex_events::prof::file::BamlprofContents {
         header,
@@ -1117,6 +1211,7 @@ async fn call_output_capture_attributes_enabled_native_calls() {
         BexEngine::new(program, Arc::new(sys_native::SysOps::native()), Vec::new())
             .expect("engine construction"),
     );
+    let tag = tag_engine(&engine);
     let boundary_id = BoundaryId::from_bytes([7; 16]);
     let value_capture = TraceCaptureProducer::new(TraceCaptureConfig::enabled(16));
     let call_ctx = FunctionCallContextBuilder::new(sys_types::CallId::next())
@@ -1151,7 +1246,7 @@ async fn call_output_capture_attributes_enabled_native_calls() {
         "expected only the capture-enabled native output: {captured:#?}"
     );
 
-    let (header, events) = load_profile("user.capture_phase5_native_wrapper");
+    let (header, events) = load_profile(&tag);
     assert_balance(&header, &events);
     let contents = bex_events::prof::file::BamlprofContents {
         header,
@@ -1224,6 +1319,7 @@ async fn call_error_capture_records_throw_origin_without_rethrow_duplicate() {
         BexEngine::new(program, Arc::new(sys_native::SysOps::native()), Vec::new())
             .expect("engine construction"),
     );
+    let tag = tag_engine(&engine);
     let boundary_id = BoundaryId::from_bytes([6; 16]);
     let value_capture = TraceCaptureProducer::new(TraceCaptureConfig::enabled(16));
     let call_ctx = FunctionCallContextBuilder::new(sys_types::CallId::next())
@@ -1275,7 +1371,7 @@ async fn call_error_capture_records_throw_origin_without_rethrow_duplicate() {
         .count();
     assert_eq!(call_error_records, 1);
 
-    let (header, events) = load_profile("user.capture_phase5_boom");
+    let (header, events) = load_profile(&tag);
     assert_balance(&header, &events);
     let contents = bex_events::prof::file::BamlprofContents {
         header,
@@ -1315,7 +1411,6 @@ async fn call_error_capture_records_throw_origin_without_rethrow_duplicate() {
 async fn captured_call_errors_for_source(
     source: &str,
     capture_functions: &[&str],
-    marker_fqn: &str,
     boundary_id: BoundaryId,
 ) -> (Vec<EncodedTraceValue>, HashMap<TraceCallKey, String>) {
     let mut program = compile_for_engine(source);
@@ -1332,6 +1427,7 @@ async fn captured_call_errors_for_source(
         BexEngine::new(program, Arc::new(sys_native::SysOps::native()), Vec::new())
             .expect("engine construction"),
     );
+    let tag = tag_engine(&engine);
     let value_capture = TraceCaptureProducer::new(TraceCaptureConfig::enabled(16));
     let call_ctx = FunctionCallContextBuilder::new(sys_types::CallId::next())
         .with_boundary_id(boundary_id)
@@ -1373,7 +1469,7 @@ async fn captured_call_errors_for_source(
         .count();
     assert_eq!(call_error_records, call_errors.len());
 
-    let (header, events) = load_profile(marker_fqn);
+    let (header, events) = load_profile(&tag);
     assert_balance(&header, &events);
     let contents = bex_events::prof::file::BamlprofContents {
         header,
@@ -1428,7 +1524,6 @@ async fn call_error_capture_keeps_independent_equal_primitive_origins() {
             "user.capture_phase5_equal_fail_a",
             "user.capture_phase5_equal_fail_b",
         ],
-        "user.capture_phase5_equal_fail_a",
         BoundaryId::from_bytes([18; 16]),
     )
     .await;
@@ -1478,7 +1573,6 @@ async fn call_error_capture_treats_equal_wrapper_throw_as_new_origin() {
             "user.capture_phase5_equal_leaf",
             "user.capture_phase5_equal_wrapper_new_throw",
         ],
-        "user.capture_phase5_equal_leaf",
         BoundaryId::from_bytes([19; 16]),
     )
     .await;
@@ -1629,7 +1723,14 @@ fn assert_balance(
                     et.thread_id
                 );
             }
-            Event::SetFunctionId(_) | Event::Heartbeat(_) => {}
+            // Suspend/Resume pair per park; LlmCallMeta enriches a call —
+            // none of them participates in call/thread balance.
+            Event::SetFunctionId(_)
+            | Event::Heartbeat(_)
+            | Event::SuspendThread(_)
+            | Event::ResumeThread(_)
+            | Event::LlmCallMeta(_)
+            | Event::ModelBirth(_) => {}
         }
     }
     assert_eq!(
@@ -1670,9 +1771,10 @@ async fn g3_lossless_spawn_and_call_heavy() {
                 + (await f4) + (await f5) + (await f6) + (await f7) + local
         }
     "#;
-    run_main(source).await.expect("g3 program runs");
+    let (result, tag) = run_main(source).await;
+    result.expect("g3 program runs");
 
-    let (header, events) = load_profile_quiesced("user.g3_work");
+    let (header, events) = load_profile_quiesced(&tag);
     let (counts, threads) = assert_balance(&header, &events);
 
     // 1 root + 8 spawned children.
@@ -1699,9 +1801,10 @@ async fn reconstruction_smoke() {
             (await f) + a
         }
     "#;
-    run_main(source).await.expect("rc program runs");
+    let (result, tag) = run_main(source).await;
+    result.expect("rc program runs");
 
-    let (header, events) = load_profile_quiesced("user.rc_mid");
+    let (header, events) = load_profile_quiesced(&tag);
     assert_balance(&header, &events);
 
     let contents = bex_events::prof::file::BamlprofContents {
@@ -1903,9 +2006,10 @@ async fn sysop_pair_emitted() {
         }
         function main() -> int { sy_wait() }
     "#;
-    run_main(source).await.expect("sysop program runs");
+    let (result, tag) = run_main(source).await;
+    result.expect("sysop program runs");
 
-    let (header, events) = load_profile("user.sy_wait");
+    let (header, events) = load_profile(&tag);
     assert_balance(&header, &events);
 
     let sleep_ids: HashSet<u32> = header
@@ -1927,53 +2031,57 @@ async fn sysop_pair_emitted() {
     assert_eq!(sleep_calls, 1, "expected exactly one sleep sysop call");
 }
 
-/// Engine teardown: dropping a `BexEngine` must close its `.bamlprof`
-/// (stopping its heartbeats and freeing the fd) while later engines keep
+/// Engine teardown: dropping a `BexEngine` must seal its session (stopping
+/// its heartbeats/raw flushes and freeing the fd) while later engines keep
 /// working. Catches the engine-churn leak class (LSP-shaped hosts).
+/// (Rewritten against the session/raw layout in P9 step 4: the legacy
+/// contract asserted the closed engine's `.bamlprof` stopped growing; the
+/// v2 equivalent is that the whole sealed session dir stops growing.)
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn engine_teardown_closes_profile() {
+    fn dir_bytes(dir: &std::path::Path) -> u64 {
+        let mut total = 0;
+        let Ok(entries) = std::fs::read_dir(dir) else {
+            return 0;
+        };
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.is_dir() {
+                total += dir_bytes(&path);
+            } else if let Ok(meta) = entry.metadata() {
+                total += meta.len();
+            }
+        }
+        total
+    }
+
     let _guard = test_lock().await;
     init_prof_env();
     let source = r#"
         function td_work(n: int) -> int { n + 1 }
         function main() -> int { td_work(41) }
     "#;
-    run_main(source).await.expect("td program runs");
+    let (result, tag) = run_main(source).await;
+    result.expect("td program runs");
     // run_main dropped its Arc<BexEngine> on return -> EngineClosed was sent
     // before this flush on the same channel (FIFO), so the ack implies the
-    // close (sync + writer removed) already happened.
-    let (_, events) = load_profile_quiesced("user.td_work");
+    // close (final raw flush + session seal) already happened.
+    let (_, events) = load_profile_quiesced(&tag);
     assert!(!events.is_empty());
 
-    let path = {
-        let mut found = None;
-        for entry in std::fs::read_dir(prof_dir()).unwrap() {
-            let path = entry.unwrap().path();
-            let Ok(contents) = read_bamlprof(&path) else {
-                continue;
-            };
-            let has_marker = contents
-                .header
-                .function_table
-                .as_ref()
-                .is_some_and(|t| t.functions.iter().any(|f| f.fqn == "user.td_work"));
-            if has_marker {
-                found = Some(path);
-            }
-        }
-        found.expect("td profile exists")
-    };
-    let size_before = std::fs::metadata(&path).unwrap().len();
-    // Two heartbeat intervals: a still-open writer would have grown.
+    let session_dir = session_dir_for(tag.engine_id).expect("td session dir exists");
+    let size_before = dir_bytes(&session_dir);
+    // Multiple heartbeat/window intervals: a still-open session would have
+    // grown (heartbeat/watermark rows land at window cadence).
     std::thread::sleep(Duration::from_millis(2_500));
     assert!(
         bex_events::prof::flush_and_join(Duration::from_mins(1)),
         "post-close flush must still ack"
     );
-    let size_after = std::fs::metadata(&path).unwrap().len();
+    let size_after = dir_bytes(&session_dir);
     assert_eq!(
         size_before, size_after,
-        "closed engine's profile kept growing (heartbeats after close)"
+        "closed engine's session kept growing (writes after seal)"
     );
 
     // Later engines are unaffected.
@@ -1981,8 +2089,9 @@ async fn engine_teardown_closes_profile() {
         function td_after(n: int) -> int { n }
         function main() -> int { td_after(1) }
     "#;
-    run_main(source2).await.expect("post-teardown engine runs");
-    let (_, events2) = load_profile_quiesced("user.td_after");
+    let (result2, tag2) = run_main(source2).await;
+    result2.expect("post-teardown engine runs");
+    let (_, events2) = load_profile_quiesced(&tag2);
     assert!(!events2.is_empty());
 }
 
@@ -2001,12 +2110,12 @@ async fn set_function_id_recorded() {
         }
         function main() -> string { sid_work() }
     "#;
-    let value = run_main(source).await.expect("sid program runs");
-    let bex_engine::BexExternalValue::String(returned_id) = value else {
+    let (value, tag) = run_main(source).await;
+    let bex_engine::BexExternalValue::String(returned_id) = value.expect("sid program runs") else {
         panic!("expected the overridden $id string");
     };
 
-    let (header, events) = load_profile("user.sid_work");
+    let (header, events) = load_profile(&tag);
     assert_balance(&header, &events);
 
     let sid_work_function_id = header
@@ -2087,10 +2196,10 @@ async fn unwind_emits_error_ends() {
         function uw_mid(n: int) -> int throws string { uw_inner(n) }
         function main() -> int throws string { uw_mid(0) }
     "#;
-    let result = run_main(source).await;
+    let (result, tag) = run_main(source).await;
     assert!(result.is_err(), "program must surface the throw");
 
-    let (header, events) = load_profile("user.uw_inner");
+    let (header, events) = load_profile(&tag);
     let (counts, _) = assert_balance(&header, &events);
     assert_eq!(counts.get("user.uw_inner"), Some(&1));
 
@@ -2198,12 +2307,13 @@ async fn caught_exception_keeps_ring_balance() {
         }
         function main() -> int { ce_safe() }
     "#;
-    let value = run_main(source)
-        .await
-        .expect("the catch swallows the throw");
-    assert_eq!(value, BexExternalValue::Int(42));
+    let (value, tag) = run_main(source).await;
+    assert_eq!(
+        value.expect("the catch swallows the throw"),
+        BexExternalValue::Int(42)
+    );
 
-    let (header, events) = load_profile("user.ce_safe");
+    let (header, events) = load_profile(&tag);
     let (_, threads) = assert_balance(&header, &events);
     assert_eq!(threads.len(), 1, "single-threaded program");
 
@@ -2247,6 +2357,7 @@ async fn call_callable_has_real_identity_and_balance() {
         BexEngine::new(program, Arc::new(sys_native::SysOps::native()), Vec::new())
             .expect("engine construction"),
     );
+    let tag = tag_engine(&engine);
     let handle = match engine
         .call_function(
             "cc_get",
@@ -2272,7 +2383,7 @@ async fn call_callable_has_real_identity_and_balance() {
     assert_eq!(value, BexExternalValue::Int(42));
     drop(engine);
 
-    let (header, events) = load_profile("user.cc_callee");
+    let (header, events) = load_profile(&tag);
     let (counts, threads) = assert_balance(&header, &events);
     // One root thread per entry call: cc_get's and call_callable's.
     assert_eq!(threads.len(), 2, "two entry calls -> two root threads");
@@ -2331,6 +2442,7 @@ async fn root_cancellation_ends_thread_cancelled() {
         BexEngine::new(program, Arc::new(sys_native::SysOps::native()), Vec::new())
             .expect("engine construction"),
     );
+    let tag = tag_engine(&engine);
     let cancel = CancellationToken::new();
     let call_ctx = FunctionCallContextBuilder::new(sys_types::CallId::next())
         .with_cancel_token(cancel.clone())
@@ -2347,7 +2459,7 @@ async fn root_cancellation_ends_thread_cancelled() {
     assert!(result.is_err(), "a cancelled call must not return Ok");
     drop(engine);
 
-    let (header, events) = load_profile("user.rcx_pin");
+    let (header, events) = load_profile(&tag);
     assert_balance(&header, &events);
     let statuses = end_statuses_by_fqn(&header, &events);
     assert_eq!(
@@ -2392,10 +2504,10 @@ async fn spawned_child_cancellation_ends_child_cancelled() {
             }
         }
     "#;
-    let value = run_main(source).await.expect("scc program runs");
-    assert_eq!(value, BexExternalValue::Int(7));
+    let (value, tag) = run_main(source).await;
+    assert_eq!(value.expect("scc program runs"), BexExternalValue::Int(7));
 
-    let (header, events) = load_profile_quiesced("user.scc_pin");
+    let (header, events) = load_profile_quiesced(&tag);
     assert_balance(&header, &events);
     let statuses = end_statuses_by_fqn(&header, &events);
     // Two lambdas exist here: the `baml.spawn.options` argument closure
@@ -2451,10 +2563,13 @@ async fn unobserved_child_error_keeps_parent_completed() {
             await g
         }
     "#;
-    let value = run_main(source).await.expect("parent call succeeds");
-    assert_eq!(value, BexExternalValue::Int(1));
+    let (value, tag) = run_main(source).await;
+    assert_eq!(
+        value.expect("parent call succeeds"),
+        BexExternalValue::Int(1)
+    );
 
-    let (header, events) = load_profile_quiesced("user.uce_pin");
+    let (header, events) = load_profile_quiesced(&tag);
     assert_balance(&header, &events);
     let statuses = end_statuses_by_fqn(&header, &events);
     assert_eq!(
@@ -2498,10 +2613,10 @@ async fn spawned_child_error_ends_child_errored() {
             }
         }
     "#;
-    let value = run_main(source).await.expect("sce program runs");
-    assert_eq!(value, BexExternalValue::Int(9));
+    let (value, tag) = run_main(source).await;
+    assert_eq!(value.expect("sce program runs"), BexExternalValue::Int(9));
 
-    let (header, events) = load_profile_quiesced("user.sce_boom");
+    let (header, events) = load_profile_quiesced(&tag);
     // The error path DOES unwind the VM, so (unlike cancellation) the
     // child's stream is fully balanced.
     assert_balance(&header, &events);
@@ -2550,12 +2665,12 @@ async fn sys_exit_status_mapping() {
             1
         }
     "#;
-    let result = run_main(source_zero).await;
+    let (result, tag) = run_main(source_zero).await;
     assert!(
         matches!(result, Err(EngineError::Exit { code: 0 })),
         "exit(0) must surface as EngineError::Exit: {result:?}"
     );
-    let (header, events) = load_profile("user.sxz_pin");
+    let (header, events) = load_profile(&tag);
     assert_balance(&header, &events);
     let statuses = end_statuses_by_fqn(&header, &events);
     for fqn in ["user.main", "baml.sys.exit"] {
@@ -2579,12 +2694,12 @@ async fn sys_exit_status_mapping() {
             1
         }
     "#;
-    let result = run_main(source_three).await;
+    let (result, tag) = run_main(source_three).await;
     assert!(
         matches!(result, Err(EngineError::Exit { code: 3 })),
         "exit(3) must surface as EngineError::Exit: {result:?}"
     );
-    let (header, events) = load_profile("user.sxn_pin");
+    let (header, events) = load_profile(&tag);
     assert_balance(&header, &events);
     let statuses = end_statuses_by_fqn(&header, &events);
     for fqn in ["user.main", "baml.sys.exit"] {
@@ -2613,9 +2728,10 @@ async fn sentinel_rows_present_in_header() {
         function sn_pin() -> int { 5 }
         function main() -> int { sn_pin() }
     "#;
-    run_main(source).await.expect("sn program runs");
+    let (result, tag) = run_main(source).await;
+    result.expect("sn program runs");
 
-    let (header, _events) = load_profile("user.sn_pin");
+    let (header, _events) = load_profile(&tag);
     let table = header.function_table.as_ref().expect("header has a table");
 
     let spawn_row = table
@@ -2628,22 +2744,26 @@ async fn sentinel_rows_present_in_header() {
         .iter()
         .find(|f| f.fqn == UNKNOWN_FUNCTION_FQN)
         .expect("unknown-function sentinel row missing");
-    let max_real_id = table
+    // Reserved-low scheme (design §4.1): sentinels live at fixed ids 0/1,
+    // and every real function id starts at the reserved-range ceiling.
+    assert_eq!(
+        unknown_row.function_id, 0,
+        "unknown-function row is the fixed id 0"
+    );
+    assert_eq!(
+        spawn_row.function_id, 1,
+        "spawn-closure row is the fixed id 1"
+    );
+    let min_real_id = table
         .functions
         .iter()
         .filter(|f| f.fqn != SPAWN_CLOSURE_FQN && f.fqn != UNKNOWN_FUNCTION_FQN)
         .map(|f| f.function_id)
-        .max()
+        .min()
         .expect("table has real functions");
-    assert_eq!(
-        spawn_row.function_id,
-        max_real_id + 1,
-        "spawn-closure row must sit one past the real ids"
-    );
-    assert_eq!(
-        unknown_row.function_id,
-        max_real_id + 2,
-        "unknown-function row must sit two past the real ids"
+    assert!(
+        min_real_id >= 16,
+        "real function ids start at FIRST_POOL_FUNCTION_ID (16), got {min_real_id}"
     );
 
     let mut seen = HashSet::new();
@@ -2685,10 +2805,10 @@ async fn same_display_name_functions_are_not_misattributed() {
             a.run() + b.run()
         }
     "#;
-    let value = run_main(source).await.expect("dn program runs");
-    assert_eq!(value, BexExternalValue::Int(3));
+    let (value, tag) = run_main(source).await;
+    assert_eq!(value.expect("dn program runs"), BexExternalValue::Int(3));
 
-    let (header, events) = load_profile("user.DnClsA.run");
+    let (header, events) = load_profile(&tag);
     let (counts, _) = assert_balance(&header, &events);
     assert_eq!(
         counts.get("user.DnClsA.run"),
@@ -2737,6 +2857,10 @@ fn normalized_per_thread_streams(
         Event::EndThread(et) => et.timestamp_ns,
         Event::SetFunctionId(sf) => sf.timestamp_ns,
         Event::Heartbeat(hb) => hb.timestamp_ns,
+        Event::SuspendThread(st) => st.timestamp_ns,
+        Event::ResumeThread(rt) => rt.timestamp_ns,
+        Event::LlmCallMeta(lm) => lm.timestamp_ns,
+        Event::ModelBirth(_) => 0,
     };
     let tid_of = |e: &Event| match e {
         Event::CallFunction(cf) => cf.thread_id,
@@ -2745,6 +2869,10 @@ fn normalized_per_thread_streams(
         Event::EndThread(et) => et.thread_id,
         Event::SetFunctionId(sf) => sf.thread_id,
         Event::Heartbeat(_) => 0,
+        Event::SuspendThread(st) => st.thread_id,
+        Event::ResumeThread(rt) => rt.thread_id,
+        Event::LlmCallMeta(lm) => lm.thread_id,
+        Event::ModelBirth(_) => 0,
     };
     let mut per_thread: HashMap<u64, Vec<&Event>> = HashMap::new();
     for e in events {
@@ -2774,7 +2902,17 @@ fn normalized_per_thread_streams(
                     Event::EndThread(et) => format!("end-thread status={}", et.status),
                     Event::SetFunctionId(sf) => format!("set-id id={}", sf.call_id),
                     Event::Heartbeat(_) => "heartbeat".to_string(),
+                    // Timing-only records (§5.3/§5.4): park cadence differs
+                    // by construction between an interrupted and an
+                    // uninterrupted run, so T20's stream identity is over
+                    // the structural records only — these are filtered
+                    // below, exactly like differing timestamps are ignored.
+                    Event::SuspendThread(_) => "suspend".to_string(),
+                    Event::ResumeThread(_) => "resume".to_string(),
+                    Event::LlmCallMeta(lm) => format!("llm-meta id={}", lm.call_id),
+                    Event::ModelBirth(mb) => format!("model-birth {}", mb.model_id),
                 })
+                .filter(|line| line != "suspend" && line != "resume")
                 .collect()
         })
         .collect()
@@ -2820,6 +2958,7 @@ async fn early_yield_resume_produces_identical_stream() {
             BexEngine::new(program, Arc::new(sys_native::SysOps::native()), Vec::new())
                 .expect("engine construction"),
         );
+        let tag = tag_engine(&engine);
         let value = engine
             .call_function(
                 "spin",
@@ -2830,7 +2969,7 @@ async fn early_yield_resume_produces_identical_stream() {
             .await
             .expect("plain run completes");
         assert_eq!(value, BexExternalValue::Int(N));
-        let (header, events) = load_profile("user.ey_plain_pin");
+        let (header, events) = load_profile(&tag);
         assert_balance(&header, &events);
         normalized_per_thread_streams(&header, &events, "user.ey_plain_pin")
     };
@@ -2843,6 +2982,7 @@ async fn early_yield_resume_produces_identical_stream() {
             BexEngine::new(program, Arc::new(sys_native::SysOps::native()), Vec::new())
                 .expect("engine construction"),
         );
+        let tag = tag_engine(&engine);
         let call_handle = {
             let engine = Arc::clone(&engine);
             tokio::spawn(async move {
@@ -2867,7 +3007,7 @@ async fn early_yield_resume_produces_identical_stream() {
             .expect("task joins")
             .expect("parked run completes");
         assert_eq!(value, BexExternalValue::Int(N));
-        let (header, events) = load_profile("user.ey_parked_pin");
+        let (header, events) = load_profile(&tag);
         assert_balance(&header, &events);
         normalized_per_thread_streams(&header, &events, "user.ey_parked_pin")
     };
@@ -2918,6 +3058,7 @@ async fn dropped_call_future_truncates_stream_by_policy() {
         BexEngine::new(program, Arc::new(sys_native::SysOps::native()), Vec::new())
             .expect("engine construction"),
     );
+    let tag = tag_engine(&engine);
     {
         let engine = Arc::clone(&engine);
         let call_ctx = FunctionCallContextBuilder::new(sys_types::CallId::next()).build();
@@ -2931,7 +3072,7 @@ async fn dropped_call_future_truncates_stream_by_policy() {
     // would land inside this window.
     tokio::time::sleep(Duration::from_millis(800)).await;
 
-    let (_header, events) = load_profile("user.dft_pin");
+    let (_header, events) = load_profile(&tag);
     assert!(
         events.iter().any(|e| matches!(e, Event::CallFunction(_))),
         "the call started: {events:#?}"
@@ -2942,4 +3083,491 @@ async fn dropped_call_future_truncates_stream_by_policy() {
          EndThread). If End records now appear, a root drop-guard was added — \
          flip this test to assert Cancelled statuses instead: {events:#?}"
     );
+}
+
+/// §10.3 CCT-equivalence oracle: the CCT pipeline's aggregate counters
+/// must equal counts derived from the raw firehose's exact event stream
+/// (per function id: enters and ends), for a spawn- and call-heavy
+/// program. (Post-P9 the raw side comes from the `raw/` files themselves —
+/// `load_profile_quiesced` replays them — not the deleted legacy writer.)
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn cct_equivalence_matches_raw_derived_counters() {
+    let _guard = test_lock().await;
+    init_prof_env();
+    let source = r#"
+        function ceq_leaf(n: int) -> int { n }
+        function ceq_mid(n: int) -> int { ceq_leaf(n) + ceq_leaf(n + 1) }
+        function ceq_work(n: int) -> int {
+            let s = 0;
+            let i = 0;
+            while (i < 50) {
+                s = s + ceq_mid(i);
+                i = i + 1;
+            }
+            s
+        }
+        function main() -> int {
+            let a = spawn { ceq_work(1) };
+            let b = spawn { ceq_work(2) };
+            ceq_work(0) + (await a) + (await b)
+        }
+    "#;
+    let (result, tag) = run_main(source).await;
+    result.expect("ceq program runs");
+
+    let (header, events) = load_profile_quiesced(&tag);
+    let engine_id = header.engine_id;
+
+    // Raw-derived truth: enters per function id from CallFunction; ends by
+    // joining EndFunction back through the (thread, call) -> function map.
+    // Two passes: FILE ORDER IS NOT EVENT ORDER (multi-ring) — an
+    // EndFunction can precede its CallFunction in the file.
+    let mut enters: HashMap<u32, u64> = HashMap::new();
+    let mut ends: HashMap<u32, u64> = HashMap::new();
+    let mut call_fn: HashMap<(u64, u64), u32> = HashMap::new();
+    for event in &events {
+        if let Event::CallFunction(cf) = event {
+            *enters.entry(cf.function_id).or_default() += 1;
+            call_fn.insert((cf.thread_id, cf.call_id), cf.function_id);
+        }
+    }
+    for event in &events {
+        if let Event::EndFunction(ef) = event {
+            let function_id = call_fn
+                .get(&(ef.thread_id, ef.call_id))
+                .copied()
+                .expect("every EndFunction joins a CallFunction");
+            *ends.entry(function_id).or_default() += 1;
+        }
+    }
+
+    let snapshot = bex_events::prof::cct_totals_snapshot(std::time::Duration::from_secs(10))
+        .expect("live consumer answers the oracle tap");
+    let mut cct_enters: HashMap<u32, u64> = HashMap::new();
+    let mut cct_ends: HashMap<u32, u64> = HashMap::new();
+    for (eid, function_id, e, d) in snapshot {
+        if eid == engine_id && function_id != 0 {
+            *cct_enters.entry(function_id).or_default() += e;
+            *cct_ends.entry(function_id).or_default() += d;
+        }
+    }
+
+    // Compare over every function the raw stream saw (id 0 frames are
+    // trampoline/unattributable — both sides count them, but the CCT also
+    // synthesizes id-0 rows, so the contract is per REAL function id).
+    for (&function_id, &raw_enters) in &enters {
+        if function_id == 0 {
+            continue;
+        }
+        assert_eq!(
+            cct_enters.get(&function_id).copied().unwrap_or(0),
+            raw_enters,
+            "enters mismatch for function {function_id}"
+        );
+        assert_eq!(
+            cct_ends.get(&function_id).copied().unwrap_or(0),
+            ends.get(&function_id).copied().unwrap_or(0),
+            "ends mismatch for function {function_id}"
+        );
+    }
+    let diag_functions = [enters.len(), cct_enters.len()];
+    assert!(
+        diag_functions[0] > 0,
+        "oracle needs a nonempty stream: {diag_functions:?}"
+    );
+}
+
+/// §6.4/§6.5 boundary lifecycle against the live consumer: bind the run's
+/// root thread to a boundary dir, complete it, and get a sealed
+/// `cct.bamlcct` snapshot plus `bound`/`complete` meta records.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn boundary_bind_and_complete_produces_sealed_snapshot() {
+    let _guard = test_lock().await;
+    init_prof_env();
+    let source = r#"
+        function bnd_leaf(n: int) -> int { n * 2 }
+        function main() -> int { bnd_leaf(21) }
+    "#;
+    let (result, tag) = run_main(source).await;
+    result.expect("bnd program runs");
+
+    let (header, events) = load_profile_quiesced(&tag);
+    let engine_id = header.engine_id;
+    let root_thread = events
+        .iter()
+        .filter_map(|e| match e {
+            Event::StartThread(st) => Some(st.thread_id),
+            _ => None,
+        })
+        .min()
+        .expect("a root thread started");
+
+    let dir = std::env::temp_dir().join(format!(
+        "baml-boundary-gate-{}-{}",
+        std::process::id(),
+        engine_id
+    ));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+
+    let bound = bex_events::prof::bind_boundary(
+        engine_id,
+        *b"BOUNDARYGATE0001",
+        root_thread,
+        &dir,
+        std::time::Duration::from_secs(10),
+    );
+    assert!(bound, "bind must ack");
+    let completed = bex_events::prof::complete_boundary(
+        *b"BOUNDARYGATE0001",
+        "succeeded",
+        std::time::Duration::from_secs(10),
+    );
+    assert!(completed, "complete must ack");
+
+    // The snapshot is a sealed BCCT file whose totals include the leaf.
+    let snapshot_bytes = std::fs::read(dir.join("cct.bamlcct")).expect("cct.bamlcct written");
+    let contents =
+        bex_events::prof::cct::segment::scan_segment(&snapshot_bytes).expect("snapshot scans");
+    assert_eq!(
+        contents.end,
+        bex_events::prof::cct::segment::ScanEnd::Sealed
+    );
+    let totals_block = contents
+        .blocks
+        .iter()
+        .find(|b| b.kind == bex_events::prof::cct::segment::BlockKind::NodeTotal as u8)
+        .expect("node_total block");
+    let rows = bex_events::prof::cct::blocks::decode_cct_delta(
+        totals_block.payload,
+        totals_block.row_count as usize,
+    )
+    .expect("totals decode");
+    assert!(rows.iter().any(|r| r.enters >= 1), "folded totals present");
+
+    // Meta stream carries bound + complete.
+    let meta_bytes = std::fs::read(dir.join("boundary.bamlmeta")).unwrap();
+    let meta = bex_events::prof::cct::meta::read_meta(&meta_bytes).unwrap();
+    let kinds: Vec<u8> = meta
+        .records
+        .iter()
+        .map(bex_events::prof::cct::meta::MetaRecord::kind)
+        .collect();
+    assert!(kinds.contains(&17), "bound record present: {kinds:?}");
+    assert!(kinds.contains(&18), "complete record present: {kinds:?}");
+
+    std::fs::remove_dir_all(&dir).ok();
+}
+
+/// §6.2/§10.3 raw firehose oracle: with `BAML_PROFILE_RAW=1` (on for the
+/// whole suite), the session's `raw/` files — verbatim ring truth, framed
+/// per drained range, decoded HERE from the raw record wire format without
+/// any `to_disk_event` help — must replay to exactly the per-function
+/// enters/ends the CCT aggregation pipeline counted for the same engine.
+/// (Formerly `raw_firehose_replays_to_legacy_counts`, comparing against
+/// the legacy `.bamlprof` stream; that side died in P9 step 4 and the
+/// §10.3 truth to match is now `cct_totals_snapshot`.)
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn raw_firehose_replays_to_cct_counts() {
+    use bex_events::prof::record::RawRecord;
+
+    let _guard = test_lock().await;
+    init_prof_env();
+    let source = r#"
+        function rawfh_leaf(n: int) -> int { n + 1 }
+        function rawfh_work(n: int) -> int {
+            let s = 0;
+            let i = 0;
+            while (i < 40) {
+                s = s + rawfh_leaf(i);
+                i = i + 1;
+            }
+            s
+        }
+        function main() -> int {
+            let a = spawn { rawfh_work(1) };
+            rawfh_work(0) + (await a)
+        }
+    "#;
+    let (result, tag) = run_main(source).await;
+    result.expect("rawfh program runs");
+
+    // Quiesce (spawned child) so both sides see the final stream.
+    let (header, _events) = load_profile_quiesced(&tag);
+    let engine_id = header.engine_id;
+
+    // The raw firehose lives under this engine's session dir:
+    // <profile_dir_parent>/sessions/<started>-<euid>-e<engine_id>/raw/.
+    let session_dir = session_dir_for(engine_id).expect("session dir for this engine");
+    let raw_dir = session_dir.join("raw");
+    let mut raw_files: Vec<_> = std::fs::read_dir(&raw_dir)
+        .expect("raw/ exists under the session")
+        .filter_map(Result::ok)
+        .map(|e| e.path())
+        .collect();
+    raw_files.sort();
+    assert!(!raw_files.is_empty(), "at least one raw-NNNNNN.bamlprof");
+
+    // Replay: decode every range of every file, derive the counters.
+    let mut raw_enters: HashMap<u32, u64> = HashMap::new();
+    let mut raw_ends: HashMap<u32, u64> = HashMap::new();
+    let mut raw_call_fn: HashMap<(u64, u64), u32> = HashMap::new();
+    let mut all_ranges: Vec<Vec<u8>> = Vec::new();
+    for path in &raw_files {
+        let parsed = read_raw_file(&std::fs::read(path).unwrap()).expect("raw file parses");
+        assert_eq!(parsed.engine_id, engine_id);
+        assert_eq!(parsed.torn_bytes, 0, "sealed run leaves no torn tail");
+        all_ranges.extend(parsed.ranges);
+    }
+    // Two passes: FILE ORDER IS NOT EVENT ORDER (multi-ring) — an
+    // EndFunction can precede its CallFunction in the drain order.
+    for range in &all_ranges {
+        for rec in bex_events::prof::record::iter(range) {
+            if let RawRecord::CallFunction {
+                thread_id,
+                call_id,
+                function_id,
+                ..
+            } = rec.expect("raw range decodes")
+            {
+                *raw_enters.entry(function_id.0).or_default() += 1;
+                raw_call_fn.insert((thread_id.0, call_id.0), function_id.0);
+            }
+        }
+    }
+    for range in &all_ranges {
+        for rec in bex_events::prof::record::iter(range) {
+            if let RawRecord::EndFunction {
+                thread_id, call_id, ..
+            } = rec.unwrap()
+            {
+                let function_id = raw_call_fn
+                    .get(&(thread_id.0, call_id.0))
+                    .copied()
+                    .expect("every raw EndFunction joins a CallFunction");
+                *raw_ends.entry(function_id).or_default() += 1;
+            }
+        }
+    }
+
+    // CCT truth for the same engine (§10.3 oracle tap).
+    let snapshot = bex_events::prof::cct_totals_snapshot(std::time::Duration::from_secs(10))
+        .expect("live consumer answers the oracle tap");
+    let mut cct_enters: HashMap<u32, u64> = HashMap::new();
+    let mut cct_ends: HashMap<u32, u64> = HashMap::new();
+    for (eid, function_id, e, d) in snapshot {
+        if eid == engine_id && function_id != 0 {
+            *cct_enters.entry(function_id).or_default() += e;
+            *cct_ends.entry(function_id).or_default() += d;
+        }
+    }
+
+    // Compare over every REAL function the raw stream saw (the CCT also
+    // synthesizes id-0 rows for trampoline/unattributable frames, so id 0
+    // is out of the per-function contract — same rule as the equivalence
+    // oracle above).
+    assert!(!raw_enters.is_empty(), "raw stream saw functions");
+    for (&function_id, &enters) in &raw_enters {
+        if function_id == 0 {
+            continue;
+        }
+        assert_eq!(
+            cct_enters.get(&function_id).copied().unwrap_or(0),
+            enters,
+            "cct enters mismatch for function {function_id}"
+        );
+        assert_eq!(
+            cct_ends.get(&function_id).copied().unwrap_or(0),
+            raw_ends.get(&function_id).copied().unwrap_or(0),
+            "cct ends mismatch for function {function_id}"
+        );
+    }
+}
+
+/// §9.2 LiveMirrorSource tap: `cct_live_segment` returns an always-sealed
+/// BCCT segment of the whole live engine whose node_total rows sum to the
+/// same per-function truth as the §10.3 oracle tap.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn live_segment_matches_oracle_totals() {
+    let _guard = test_lock().await;
+    init_prof_env();
+    let source = r#"
+        function lseg_leaf(n: int) -> int { n * 3 }
+        function lseg_work(n: int) -> int {
+            let s = 0;
+            let i = 0;
+            while (i < 25) {
+                s = s + lseg_leaf(i);
+                i = i + 1;
+            }
+            s
+        }
+        function main() -> int { lseg_work(1) + lseg_work(2) }
+    "#;
+    let (result, tag) = run_main(source).await;
+    result.expect("lseg program runs");
+
+    let (header, _) = load_profile_quiesced(&tag);
+    let engine_id = header.engine_id;
+
+    let bytes = bex_events::prof::cct_live_segment(engine_id, std::time::Duration::from_secs(10))
+        .expect("live segment for a recently closed engine");
+    let contents =
+        bex_events::prof::cct::segment::scan_segment(&bytes).expect("live segment scans");
+    assert_eq!(
+        contents.end,
+        bex_events::prof::cct::segment::ScanEnd::Sealed
+    );
+
+    // Join node_total rows through the birth rows' function ids.
+    let mut node_fn: HashMap<u32, u32> = HashMap::new();
+    let mut live_enters: HashMap<u32, u64> = HashMap::new();
+    for block in &contents.blocks {
+        if block.kind == bex_events::prof::cct::segment::BlockKind::NodeBirth as u8 {
+            let rows = bex_events::prof::cct::blocks::decode_node_birth(
+                block.payload,
+                block.row_count as usize,
+            )
+            .expect("births decode");
+            for row in rows {
+                node_fn.insert(row.node_id, row.function_id);
+            }
+        }
+    }
+    for block in &contents.blocks {
+        if block.kind == bex_events::prof::cct::segment::BlockKind::NodeTotal as u8 {
+            let rows = bex_events::prof::cct::blocks::decode_cct_delta(
+                block.payload,
+                block.row_count as usize,
+            )
+            .expect("totals decode");
+            for row in rows {
+                let function = node_fn.get(&row.node_id).copied().unwrap_or(0);
+                *live_enters.entry(function).or_default() += u64::from(row.enters);
+            }
+        }
+    }
+
+    let snapshot = bex_events::prof::cct_totals_snapshot(std::time::Duration::from_secs(10))
+        .expect("oracle tap answers");
+    let mut oracle_enters: HashMap<u32, u64> = HashMap::new();
+    for (eid, function, enters, _) in snapshot {
+        if eid == engine_id && function != 0 {
+            *oracle_enters.entry(function).or_default() += enters;
+        }
+    }
+    for (&function, &enters) in &oracle_enters {
+        assert_eq!(
+            live_enters.get(&function).copied().unwrap_or(0),
+            enters,
+            "live-segment enters mismatch for function {function}"
+        );
+    }
+    assert!(!oracle_enters.is_empty(), "oracle saw functions");
+}
+
+/// §9.4 exact-recency tap: `recent_calls` returns the ring's completed
+/// calls with function ids joined — the raw stream's per-function call
+/// counts bound it from above, and small runs fit entirely in the ring.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn recent_calls_tap_matches_ring_contract() {
+    let _guard = test_lock().await;
+    init_prof_env();
+    let source = r#"
+        function rct_leaf(n: int) -> int { n + 7 }
+        function main() -> int {
+            let s = 0;
+            let i = 0;
+            while (i < 30) {
+                s = s + rct_leaf(i);
+                i = i + 1;
+            }
+            s
+        }
+    "#;
+    let (result, tag) = run_main(source).await;
+    result.expect("rct program runs");
+
+    let (header, events) = load_profile_quiesced(&tag);
+    let engine_id = header.engine_id;
+
+    let rows = bex_events::prof::recent_calls(engine_id, std::time::Duration::from_secs(10))
+        .expect("recent calls for a recently closed engine");
+    assert!(!rows.is_empty(), "ring holds the run's completed calls");
+    // Every leaf call completed and fits in the 4096-slot ring: the tap
+    // must return exactly 30 rows for the leaf's function id.
+    let mut by_fn: HashMap<u32, u64> = HashMap::new();
+    for row in &rows {
+        assert!(row.end_ns >= row.start_ns, "completed calls only");
+        *by_fn.entry(row.function).or_default() += 1;
+    }
+    let mut raw_counts: HashMap<u32, u64> = HashMap::new();
+    for event in &events {
+        if let Event::CallFunction(cf) = event {
+            *raw_counts.entry(cf.function_id).or_default() += 1;
+        }
+    }
+    for (&function, &count) in &raw_counts {
+        if function == 0 {
+            continue;
+        }
+        assert_eq!(
+            by_fn.get(&function).copied().unwrap_or(0),
+            count,
+            "ring rows for function {function}"
+        );
+    }
+}
+
+/// §5.9/§3.1 flight recorder: a root-level error auto-dumps the retained
+/// raw window into `sessions/<sess>/flight/`, in exact `.bamlprof` framing
+/// every reader already parses; manual dumps rate-limit (≥5 s spacing).
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn flight_recorder_dumps_on_error_and_rate_limits() {
+    let _guard = test_lock().await;
+    init_prof_env();
+    let source = r#"
+        function flt_leaf(n: int) -> int { n + 1 }
+        function main() -> int throws string {
+            let s = flt_leaf(1) + flt_leaf(2);
+            if (s > 0) { throw "flight test failure" }
+            s
+        }
+    "#;
+    let (result, tag) = run_main(source).await;
+    assert!(result.is_err(), "program must error");
+
+    let (header, _) = load_profile_quiesced(&tag);
+    let engine_id = header.engine_id;
+
+    // The OnError trigger fired during transcode: find the dump.
+    let session_dir = session_dir_for(engine_id).expect("session dir for this engine");
+    let flight_dir = session_dir.join("flight");
+    let dumps: Vec<_> = std::fs::read_dir(&flight_dir)
+        .expect("flight/ exists after an errored root")
+        .filter_map(Result::ok)
+        .map(|e| e.path())
+        .filter(|p| {
+            p.file_name()
+                .and_then(|n| n.to_str())
+                .is_some_and(|n| n.contains("-error") && n.ends_with(".bamlprof"))
+        })
+        .collect();
+    assert!(!dumps.is_empty(), "OnError dump written");
+
+    // Exact framing: the standard reader parses it and sees the leaf.
+    let bytes = std::fs::read(&dumps[0]).unwrap();
+    let contents = bex_events::prof::read::read_bamlprof_from_bytes(&bytes).expect("dump parses");
+    assert_eq!(contents.header.engine_id, engine_id);
+    let calls = contents
+        .events
+        .iter()
+        .filter(|e| matches!(e.event, Some(pb::disk_event_v1::Event::CallFunction(_))))
+        .count();
+    assert!(calls >= 3, "leaf calls + main retained: {calls}");
+
+    // Manual dump immediately after: rate limit binds (≥5 s spacing).
+    let second =
+        bex_events::prof::flight_dump(engine_id, "manual", std::time::Duration::from_secs(10));
+    assert!(second.is_none(), "second dump within 5 s must be dropped");
 }

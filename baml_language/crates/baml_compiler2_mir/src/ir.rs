@@ -150,6 +150,99 @@ pub struct RuntimeSignature {
     pub display_return_type: String,
 }
 
+/// Cross-revision structural identity of one lowered definition (design
+/// §4.4–§4.5) — MIR-local mirror of `bex_vm_types::identity::DefinitionMeta`
+/// (this crate does not depend on `bex_vm_types`; emit converts 1:1 onto
+/// `Function::def_meta`). Built from `ItemRef`s and structural lambda
+/// parentage during lowering, never by parsing display names.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MirDefinitionIdentity {
+    /// THE cross-revision join key: `"function:user.Extract"`,
+    /// `"lambda:function:user.hello.retry#0"`, ...
+    pub definition_key: String,
+    /// Owner type for methods: `"class:user.Foo"`, derived from the
+    /// `ItemRef::Method` fields (never capital-letter FQN sniffing).
+    pub owner_type_key: Option<String>,
+    /// Structural lambda identity; `None` for named definitions.
+    pub lambda: Option<MirLambdaIdentity>,
+}
+
+/// Structural identity of a lambda/closure (design §4.5): the enclosing
+/// definition's key + lowering ordinal + kind, carried instead of the
+/// display-only `"<lambda(parent, N)>"` debug string.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MirLambdaIdentity {
+    /// The enclosing definition's key — a lambda nested inside another lambda
+    /// chains through its parent's derived `lambda:...#N` key.
+    pub parent_definition_key: String,
+    /// Lowering order within the parent body. One shared counter covers all
+    /// closure kinds so derived keys can never collide across kinds.
+    pub ordinal: u32,
+    pub kind: MirLambdaKind,
+}
+
+/// Mirror of `bex_vm_types::identity::LambdaKind`, converted in emit.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MirLambdaKind {
+    /// An ordinary source lambda (`lower_lambda`).
+    Lambda,
+    /// A spawn / tagged-template body closure (`build_tagged_body_closure`).
+    SpawnedClosure,
+    /// A compiler-synthesized adapter closure
+    /// (`lower_optional_function_adapter`).
+    Adapter,
+}
+
+impl MirLambdaIdentity {
+    /// The derived definition key: `lambda:{parent_key}#{ordinal}` — the same
+    /// form `bex_vm_types::identity::LambdaIdentity::definition_key` produces.
+    #[must_use]
+    pub fn definition_key(&self) -> String {
+        format!("lambda:{}#{}", self.parent_definition_key, self.ordinal)
+    }
+}
+
+impl MirDefinitionIdentity {
+    /// Identity of a named definition: `function:` + the dotted FQN, plus the
+    /// `class:`-prefixed owner path for methods (read structurally off the
+    /// `ItemRef::Method` fields).
+    #[must_use]
+    pub fn for_item_ref(item_ref: &ItemRef) -> Self {
+        let owner_type_key = match item_ref {
+            ItemRef::Method {
+                package,
+                namespace,
+                class,
+                ..
+            } => {
+                let mut parts: Vec<&str> = vec![package.as_str()];
+                for ns in namespace {
+                    parts.push(ns.as_str());
+                }
+                parts.push(class.as_str());
+                Some(format!("class:{}", parts.join(".")))
+            }
+            ItemRef::Free { .. } | ItemRef::EnumType { .. } => None,
+        };
+        Self {
+            definition_key: format!("function:{item_ref}"),
+            owner_type_key,
+            lambda: None,
+        }
+    }
+
+    /// Identity of a closure: the key is derived from the structural lambda
+    /// identity; closures have no owner type.
+    #[must_use]
+    pub fn for_lambda(lambda: MirLambdaIdentity) -> Self {
+        Self {
+            definition_key: lambda.definition_key(),
+            owner_type_key: None,
+            lambda: Some(lambda),
+        }
+    }
+}
+
 /// A function represented as a control flow graph.
 #[derive(Debug, Clone)]
 pub struct MirFunction {
@@ -171,6 +264,11 @@ pub struct MirFunction {
     /// during emit; `None` there (and on synthetic adapters, which fall back
     /// to no metadata).
     pub signature: Option<RuntimeSignature>,
+    /// Cross-revision identity (design §4.4–§4.5), emitted onto
+    /// `Function::def_meta`. Populated by `lower_function` for named
+    /// definitions and by the three closure producers for lambdas; `None`
+    /// only where a body has no source identity (builder placeholders).
+    pub definition_identity: Option<MirDefinitionIdentity>,
 }
 
 // ============================================================================

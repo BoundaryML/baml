@@ -130,6 +130,7 @@ bridge_cffi = { path = "crates/bridge_cffi", default-features = false }
 sys_wasm = { path = "crates/sys_wasm" }
 baml_exec = { path = "crates/baml_exec" }
 bex_events = { path = "crates/bex_events" }
+bex_query = { path = "crates/bex_query" }
 bex_resource_types = { path = "crates/bex_resource_types" }
 darwin-kperf = "0.1.0"
 darwin-kperf-events = "0.1.0"
@@ -148,6 +149,9 @@ baml_workspace = { path = "crates/baml_workspace" }
 
 #  External dependencies
 anyhow = { version = "1" }
+# BLAKE3-256 is the content-address hash of the observability design
+# (revision ids, def_content_hash, value CIDs — TASK/design.md §4.3/§7.4).
+blake3 = { version = "1" }
 async-trait = "0.1"
 askama = { version = "0.14.0" }
 # Slim, reqwest/serde-based replacements for the AWS SDK + Google Cloud auth
@@ -240,6 +244,7 @@ mimalloc = { version = "0.1.52" }
 rowan = { version = "0.16" }
 rustls = { version = "0.23.37", default-features = false }
 rustls-pemfile = "2"
+memmap2 = { version = "0.9" }
 rustc-hash = { version = "2.1" }
 salsa = { version = "0.26", default-features = false, features = [
   "compact_str",

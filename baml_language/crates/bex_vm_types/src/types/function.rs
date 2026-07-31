@@ -143,6 +143,11 @@ pub struct FunctionCaptureProps {
     pub inputs: CaptureOption,
     pub output: CaptureOption,
     pub error: CaptureOption,
+    /// The fourth capture option (observability design §7.1): when a trigger
+    /// fires on an error in this function's subtree, staged speculative
+    /// captures for it are promoted to durable storage. Rides the same
+    /// deliberate `Function` wire bump as `def_meta`.
+    pub promote_on_error: CaptureOption,
 }
 
 impl FunctionCaptureProps {
@@ -152,7 +157,16 @@ impl FunctionCaptureProps {
             inputs: CaptureOption::Disabled,
             output: CaptureOption::Disabled,
             error: CaptureOption::Disabled,
+            promote_on_error: CaptureOption::Disabled,
         }
+    }
+
+    /// Set `promote_on_error` (not a [`CaptureCategory`]: promotion is a
+    /// policy bit about *when* captures become durable, not a value slot).
+    #[must_use]
+    pub const fn with_promote_on_error(mut self, option: CaptureOption) -> Self {
+        self.promote_on_error = option;
+        self
     }
 
     #[must_use]
@@ -291,13 +305,21 @@ pub struct Function {
     /// boundary defaults; ordinary functions default to disabled.
     pub capture: FunctionCaptureProps,
 
-    /// Per-run profiling id (`0` = unassigned), written into the BEX event
-    /// stream's `CallFunction` records and resolved through the per-run
-    /// function table in the `.bamlprof` header. Assigned by the engine's
-    /// interim provider at construction (plan §2.6); the M0 id table moves
-    /// assignment to compile time. `#[borsh(skip)]` keeps it out of the pack
-    /// envelope — it is runtime-only state, and skipping it leaves the wire
-    /// format unchanged.
+    /// Cross-revision structural identity (observability design §4.5):
+    /// compiler-emitted definition key, owner type, and structural lambda
+    /// identity. A deliberate wire bump (with `capture.promote_on_error`):
+    /// `bex_cache::FORMAT_VERSION` and the pack-envelope version cover it.
+    /// `None` only for compiler-synthesized bodies with no source identity
+    /// (`$init`, trampolines, test fixtures).
+    pub def_meta: Option<crate::identity::DefinitionMeta>,
+
+    /// Dense profiling id (`0` = unattributable), written into the BEX event
+    /// stream's `CallFunction` records and resolved through the revision
+    /// dictionary. Stamped by `assign_function_ids` in final pool order at
+    /// every `Program` materialization site (observability design §4.1);
+    /// the engine walk only verifies. `#[borsh(skip)]` because a unit cannot
+    /// know its pool position until link — ids are derived state, one walk
+    /// re-derives them.
     #[borsh(skip)]
     pub function_id: u32,
 }

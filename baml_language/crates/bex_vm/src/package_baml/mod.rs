@@ -460,7 +460,13 @@ pub fn attach_builtins(object: Object) -> Result<Object, VmInternalError> {
                 origin: function.origin,
                 body_meta: function.body_meta,
                 capture: function.capture,
-                function_id: 0, // synthetic; not in the profiling function table
+                def_meta: function.def_meta,
+                // Preserved: ids are stamped at compile time (design §4.1);
+                // this rebuild only resolves NativeUnresolved → Native and
+                // must not erase identity. (Zeroing here was harmless when
+                // the engine re-stamped after conversion; it would be a live
+                // bug now.)
+                function_id: function.function_id,
             }))
         }
         other => other,

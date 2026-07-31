@@ -1,16 +1,16 @@
 //! Canonical Rust reconstruction for BEX profile events.
 //!
-//! The playground run store consumes this module instead of reconstructing
-//! execution structure in TypeScript. Raw profile events do not carry
-//! playground run identity; they carry BEX trace identity, and this module
-//! reconstructs thread/call projections from those identities plus explicit
+//! Live profiling flows through the CCT aggregation plane (§9.3 "one live
+//! plane"); the run store no longer buffers or projects raw profile events.
+//! This module keeps the profile-event model and reconstruction machinery for
+//! replay surfaces: `.bamlprof` artifacts ([`bamlprof`]) and the disk history
+//! reader rebuild thread/call projections from recorded events plus explicit
 //! parent edges.
 
 #[cfg(not(target_arch = "wasm32"))]
 use std::time::{SystemTime, UNIX_EPOCH};
 use std::{
-    collections::{HashMap, HashSet, VecDeque},
-    panic::AssertUnwindSafe,
+    collections::{HashMap, HashSet},
     sync::{
         Arc, Mutex,
         atomic::{AtomicBool, Ordering},
@@ -29,89 +29,13 @@ use crate::{
     value::ValueRef,
 };
 
-pub trait ProfileEventObserver: Send + Sync + 'static {
-    fn ingest_profile_event(&self, envelope: ProfileEventEnvelope);
-
-    /// Called after an engine has been dropped and all of its remaining
-    /// profile events have been delivered. Observers that buffer events may
-    /// release everything associated with the engine — no further events or
-    /// runs can arrive for it.
-    fn engine_closed(&self, engine_id: EngineId) {
-        let _ = engine_id;
-    }
-}
-
-#[must_use]
-pub fn register_profile_observer<T>(observer: Arc<T>) -> ProfileObserverRegistration
-where
-    T: ProfileEventObserver,
-{
-    let mut state = profile_observers()
-        .lock()
-        .unwrap_or_else(std::sync::PoisonError::into_inner);
-    let id = state.next_id;
-    state.next_id = state.next_id.saturating_add(1);
-    state.observers.push((id, observer));
-    ProfileObserverRegistration { id }
-}
-
-#[cfg_attr(target_arch = "wasm32", allow(dead_code))]
-pub(crate) fn publish_profile_event(envelope: &ProfileEventEnvelope) {
-    let observers = profile_observers()
-        .lock()
-        .unwrap_or_else(std::sync::PoisonError::into_inner)
-        .observers
-        .iter()
-        .map(|(_, observer)| observer.clone())
-        .collect::<Vec<_>>();
-    for observer in observers {
-        let envelope = envelope.clone();
-        let _ =
-            std::panic::catch_unwind(AssertUnwindSafe(|| observer.ingest_profile_event(envelope)));
-    }
-}
-
+/// Engine-close notification from the native consumer. The run-store
+/// profile-event observer plane is gone (§9.3 "one live plane"), so this is
+/// a no-op retained for the consumer's call site; engine-close bookkeeping
+/// lives in the CCT plane and the history store.
 #[cfg_attr(target_arch = "wasm32", allow(dead_code))]
 pub(crate) fn publish_engine_closed(engine_id: EngineId) {
-    let observers = profile_observers()
-        .lock()
-        .unwrap_or_else(std::sync::PoisonError::into_inner)
-        .observers
-        .iter()
-        .map(|(_, observer)| observer.clone())
-        .collect::<Vec<_>>();
-    for observer in observers {
-        let _ = std::panic::catch_unwind(AssertUnwindSafe(|| observer.engine_closed(engine_id)));
-    }
-}
-
-pub struct ProfileObserverRegistration {
-    id: u64,
-}
-
-impl Drop for ProfileObserverRegistration {
-    fn drop(&mut self) {
-        profile_observers()
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .observers
-            .retain(|(id, _)| *id != self.id);
-    }
-}
-
-struct ProfileObserverState {
-    next_id: u64,
-    observers: Vec<(u64, Arc<dyn ProfileEventObserver>)>,
-}
-
-fn profile_observers() -> &'static Mutex<ProfileObserverState> {
-    static OBSERVERS: std::sync::OnceLock<Mutex<ProfileObserverState>> = std::sync::OnceLock::new();
-    OBSERVERS.get_or_init(|| {
-        Mutex::new(ProfileObserverState {
-            next_id: 1,
-            observers: Vec::new(),
-        })
-    })
+    let _ = engine_id;
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -701,24 +625,6 @@ pub struct GraphRuntimeOverlayEntry {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct CfgNodeId(pub u64);
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct CfgNodeSourceSpan {
-    pub cfg_node_id: CfgNodeId,
-    pub file_id: u64,
-    pub start_offset: u32,
-    pub end_offset: u32,
-}
-
-pub trait GraphRuntimeOverlaySpanProvider: Send + Sync + 'static {
-    fn cfg_node_spans_for_run(&self, run: &Run) -> GraphRuntimeOverlaySpanResolution;
-}
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum GraphRuntimeOverlaySpanResolution {
-    Available(Vec<CfgNodeSourceSpan>),
-    Unavailable(RunDiagnostic),
-}
-
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct RunSummary {
     pub boundary_id: BoundaryId,
@@ -847,7 +753,6 @@ impl RequestCommandResult {
 #[derive(Clone)]
 pub struct InMemoryRunStore {
     inner: Arc<Mutex<RunStoreInner>>,
-    graph_overlay_span_provider: Arc<Mutex<Option<Arc<dyn GraphRuntimeOverlaySpanProvider>>>>,
 }
 
 impl std::fmt::Debug for InMemoryRunStore {
@@ -860,7 +765,6 @@ impl std::fmt::Debug for InMemoryRunStore {
 struct RunStoreInner {
     runs: HashMap<BoundaryId, RunRecord>,
     host_call_index: HashMap<HostCallId, BoundaryId>,
-    profile_events: Vec<ProfileEventEnvelope>,
     retention: RunRetentionPolicy,
     next_payload_id: u64,
 }
@@ -870,10 +774,8 @@ struct RunRecord {
     run: Run,
     host_call_id: Option<HostCallId>,
     root_trace: Option<TraceCallKey>,
-    profile_function_table: Vec<ProfileFunctionMetadata>,
     start_guard: StartGuard,
     patches: Vec<RunPatch>,
-    domain_diagnostics: Vec<RunDiagnostic>,
     pending_input_requests: HashSet<u64>,
     pending_env_requests: HashSet<u64>,
     output_bytes: usize,
@@ -898,22 +800,10 @@ impl InMemoryRunStore {
             inner: Arc::new(Mutex::new(RunStoreInner {
                 runs: HashMap::new(),
                 host_call_index: HashMap::new(),
-                profile_events: Vec::new(),
                 retention,
                 next_payload_id: 1,
             })),
-            graph_overlay_span_provider: Arc::new(Mutex::new(None)),
         }
-    }
-
-    pub fn set_graph_runtime_overlay_span_provider(
-        &self,
-        provider: Arc<dyn GraphRuntimeOverlaySpanProvider>,
-    ) {
-        *self
-            .graph_overlay_span_provider
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(provider);
     }
 
     pub fn create_run(
@@ -969,10 +859,8 @@ impl InMemoryRunStore {
             run,
             host_call_id: None,
             root_trace: None,
-            profile_function_table: Vec::new(),
             start_guard: start_guard.clone(),
             patches: Vec::new(),
-            domain_diagnostics: Vec::new(),
             pending_input_requests: HashSet::new(),
             pending_env_requests: HashSet::new(),
             output_bytes: 0,
@@ -1031,17 +919,14 @@ impl InMemoryRunStore {
             .root_call_node_id
             .and_then(|root_id| run.calls.iter().find(|call| call.id == root_id))
             .map(|call| call.trace_key);
-        let domain_diagnostics = run.diagnostics.clone();
         inner.runs.insert(
             run.boundary_id,
             RunRecord {
                 run,
                 host_call_id: None,
                 root_trace,
-                profile_function_table: Vec::new(),
                 start_guard: StartGuard::new(),
                 patches: Vec::new(),
-                domain_diagnostics,
                 pending_input_requests: HashSet::new(),
                 pending_env_requests: HashSet::new(),
                 output_bytes: 0,
@@ -1153,16 +1038,15 @@ impl InMemoryRunStore {
             .copied()
     }
 
+    /// Record the run's root BEX trace identity. Live profile events no
+    /// longer project into the run store (§9.3 "one live plane"), so this
+    /// only pins the root identity for conflict detection and value payload
+    /// attribution; `Attached` carries no patches.
     pub fn attach_root_trace(
         &self,
         boundary_id: BoundaryId,
         root_call_ref: CallRef,
     ) -> AttachRootTraceResult {
-        let graph_overlay_span_provider = self
-            .graph_overlay_span_provider
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .clone();
         let root_trace = TraceCallKey {
             process_euid: root_call_ref.process_euid,
             engine_id: root_call_ref.engine_id,
@@ -1173,109 +1057,21 @@ impl InMemoryRunStore {
             .inner
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        let inner = &mut *inner;
         let Some(record) = inner.runs.get_mut(&boundary_id) else {
             return AttachRootTraceResult::RunMissing;
         };
         match record.root_trace {
-            Some(existing) if existing == root_trace => {
-                return AttachRootTraceResult::AlreadyAttached;
+            Some(existing) if existing == root_trace => AttachRootTraceResult::AlreadyAttached,
+            Some(existing) => AttachRootTraceResult::Conflict {
+                existing: existing.call_ref(),
+            },
+            None => {
+                record.root_trace = Some(root_trace);
+                AttachRootTraceResult::Attached {
+                    patches: Vec::new(),
+                }
             }
-            Some(existing) => {
-                return AttachRootTraceResult::Conflict {
-                    existing: existing.call_ref(),
-                };
-            }
-            None => record.root_trace = Some(root_trace),
         }
-        let patches = recompute_record_profile(
-            record,
-            &inner.profile_events,
-            &inner.retention,
-            graph_overlay_span_provider.as_deref(),
-        );
-        AttachRootTraceResult::Attached { patches }
-    }
-
-    pub fn ingest_profile_event(&self, envelope: ProfileEventEnvelope) -> Vec<RunPatch> {
-        let graph_overlay_span_provider = self
-            .graph_overlay_span_provider
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .clone();
-        let mut inner = self
-            .inner
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        let inner = &mut *inner;
-        // An event can only belong to runs rooted in the same
-        // process/engine: component membership is resolved over the
-        // thread/call parent graph, which never crosses engines.
-        let event_scope = (envelope.process_euid, envelope.engine_id);
-        inner.profile_events.push(envelope);
-        trim_profile_events(&mut inner.profile_events);
-        let mut patches = Vec::new();
-        for record in inner.runs.values_mut() {
-            let Some(root_trace) = record.root_trace else {
-                continue;
-            };
-            if (root_trace.process_euid, root_trace.engine_id) != event_scope {
-                continue;
-            }
-            patches.extend(recompute_record_profile(
-                record,
-                &inner.profile_events,
-                &inner.retention,
-                graph_overlay_span_provider.as_deref(),
-            ));
-        }
-        patches
-    }
-
-    /// Number of buffered profile events (diagnostics/tests).
-    #[must_use]
-    pub fn profile_events_len(&self) -> usize {
-        self.inner
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .profile_events
-            .len()
-    }
-
-    /// Release everything buffered for a closed engine. Runs rooted in the
-    /// engine get one final profile recompute (the engine is drained before
-    /// this is called), then the engine's profile events are dropped — no
-    /// further events or runs can arrive for a closed engine.
-    pub fn engine_closed(&self, engine_id: EngineId) -> Vec<RunPatch> {
-        let graph_overlay_span_provider = self
-            .graph_overlay_span_provider
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .clone();
-        let mut inner = self
-            .inner
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        let inner = &mut *inner;
-        let mut patches = Vec::new();
-        for record in inner.runs.values_mut() {
-            let Some(root_trace) = record.root_trace else {
-                continue;
-            };
-            if root_trace.engine_id != engine_id {
-                continue;
-            }
-            patches.extend(recompute_record_profile(
-                record,
-                &inner.profile_events,
-                &inner.retention,
-                graph_overlay_span_provider.as_deref(),
-            ));
-        }
-        inner
-            .profile_events
-            .retain(|envelope| envelope.engine_id != engine_id);
-        patches
     }
 
     pub fn complete_run(
@@ -1336,7 +1132,6 @@ impl InMemoryRunStore {
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         let retention = inner.retention.clone();
         let record = inner.runs.get_mut(&boundary_id)?;
-        record.domain_diagnostics.push(diagnostic.clone());
         record.run.diagnostics.push(diagnostic.clone());
         Some(push_patch(
             record,
@@ -1939,12 +1734,6 @@ impl InMemoryRunStore {
     }
 }
 
-impl ProfileEventObserver for InMemoryRunStore {
-    fn ingest_profile_event(&self, envelope: ProfileEventEnvelope) {
-        let _ = InMemoryRunStore::ingest_profile_event(self, envelope);
-    }
-}
-
 impl RunStoreInner {
     fn allocate_payload_id(&mut self) -> PayloadId {
         let id = PayloadId(self.next_payload_id);
@@ -2505,19 +2294,6 @@ fn next_active_request_status(record: &RunRecord) -> Option<RunStatus> {
     Some(RunStatus::Running)
 }
 
-/// Hard backstop on the retained profile-event window. Engine closure is the
-/// primary release point (`InMemoryRunStore::engine_closed`); this cap only
-/// bounds a single long-lived engine that emits events faster than runs
-/// complete. Matches `BoundaryTraceRouter`'s bound in `history::router`.
-const PROFILE_EVENTS_CAP: usize = 100_000;
-
-fn trim_profile_events(profile_events: &mut Vec<ProfileEventEnvelope>) {
-    if profile_events.len() > PROFILE_EVENTS_CAP {
-        let excess = profile_events.len() - PROFILE_EVENTS_CAP;
-        profile_events.drain(..excess);
-    }
-}
-
 /// Evict the oldest terminal runs beyond the retention policy's
 /// `max_terminal_runs` / `terminal_ttl_ms`. Evicted runs disappear from
 /// `list_runs`/`snapshot`; on native the playground rehydrates them from the
@@ -2572,551 +2348,6 @@ fn enforce_terminal_retention(inner: &mut RunStoreInner, now_ms: u64) {
     inner
         .host_call_index
         .retain(|_, boundary_id| !evict.contains(boundary_id));
-}
-
-fn recompute_record_profile(
-    record: &mut RunRecord,
-    profile_events: &[ProfileEventEnvelope],
-    retention: &RunRetentionPolicy,
-    graph_overlay_span_provider: Option<&dyn GraphRuntimeOverlaySpanProvider>,
-) -> Vec<RunPatch> {
-    let Some(root_trace) = record.root_trace else {
-        return Vec::new();
-    };
-    let component_events = component_events_for_root(profile_events, root_trace);
-    if component_events.is_empty() {
-        return Vec::new();
-    }
-
-    if record.profile_function_table.is_empty() {
-        record.profile_function_table = live_function_table(root_trace.engine_id);
-    }
-    let reconstructed =
-        reconstruct_with_function_table(component_events, record.profile_function_table.clone());
-    let root_call_node_id = Some(call_node_id(&root_trace));
-    let diagnostics = reconstructed
-        .diagnostics
-        .iter()
-        .map(run_diagnostic_from_reconstruction)
-        .collect::<Vec<_>>();
-    record.run.root_call_node_id = root_call_node_id;
-    record.run.calls.clone_from(&reconstructed.calls);
-    record.run.threads.clone_from(&reconstructed.threads);
-    let mut payload_updates = Vec::new();
-    if let Some(root_call_node_id) = root_call_node_id {
-        for payload in &mut record.run.payloads {
-            if payload.call_node_id.is_none()
-                && matches!(
-                    &payload.kind,
-                    PayloadKind::CapturedValue(CapturedValuePayload {
-                        role: CapturedValueRole::RootInput,
-                        ..
-                    })
-                )
-            {
-                payload.call_node_id = Some(root_call_node_id);
-                payload_updates.push(payload.clone());
-            }
-        }
-    }
-    for payload in &mut record.run.payloads {
-        if payload.call_node_id.is_none()
-            && let PayloadKind::CapturedValue(CapturedValuePayload {
-                role:
-                    CapturedValueRole::CallInput
-                    | CapturedValueRole::CallOutput
-                    | CapturedValueRole::CallError,
-                trace_call: Some(call),
-                ..
-            }) = &payload.kind
-            && record.run.calls.iter().any(|node| node.trace_key == *call)
-        {
-            payload.call_node_id = Some(call_node_id(call));
-            payload_updates.push(payload.clone());
-        }
-    }
-    for payload in &mut record.run.payloads {
-        if payload.call_node_id.is_none()
-            && let PayloadKind::Log(LogPayload {
-                trace_call: Some(call),
-                ..
-            }) = &payload.kind
-            && record.run.calls.iter().any(|node| node.trace_key == *call)
-        {
-            payload.call_node_id = Some(call_node_id(call));
-            payload_updates.push(payload.clone());
-        }
-    }
-    attach_payload_ids_to_calls(&mut record.run.calls, &record.run.payloads);
-    let graph_runtime_overlay =
-        build_graph_runtime_overlay(&record.run, graph_overlay_span_provider);
-    record.run.graph_runtime_overlay = Some(graph_runtime_overlay.clone());
-    record.run.diagnostics = record
-        .domain_diagnostics
-        .iter()
-        .cloned()
-        .chain(diagnostics.clone())
-        .collect();
-
-    let mut changes = Vec::new();
-    changes.push(RunPatchChange::SetRootCallNode(root_call_node_id));
-    changes.push(RunPatchChange::SetGraphRuntimeOverlay(
-        graph_runtime_overlay,
-    ));
-    changes.extend(
-        reconstructed
-            .threads
-            .into_iter()
-            .map(RunPatchChange::UpsertThreadNode),
-    );
-    changes.extend(
-        record
-            .run
-            .calls
-            .iter()
-            .cloned()
-            .map(RunPatchChange::UpsertCallNode),
-    );
-    changes.extend(
-        payload_updates
-            .into_iter()
-            .map(RunPatchChange::UpsertPayload),
-    );
-    changes.extend(
-        diagnostics
-            .into_iter()
-            .map(RunPatchChange::UpsertDiagnostic),
-    );
-    vec![push_patch(record, retention, changes)]
-}
-
-fn live_function_table(engine_id: EngineId) -> Vec<ProfileFunctionMetadata> {
-    crate::prof::metadata::get_engine_metadata(engine_id.0)
-        .map(|metadata| {
-            metadata
-                .functions
-                .into_iter()
-                .map(|function| ProfileFunctionMetadata {
-                    function_id: FunctionId(function.function_id),
-                    fqn: function.fqn,
-                    source_file: (!function.source_file.is_empty()).then_some(function.source_file),
-                    span_start: Some(function.span_start),
-                    span_end: Some(function.span_end),
-                    kind: (!function.kind.is_empty()).then_some(function.kind),
-                })
-                .collect()
-        })
-        .unwrap_or_default()
-}
-
-fn build_graph_runtime_overlay(
-    run: &Run,
-    graph_overlay_span_provider: Option<&dyn GraphRuntimeOverlaySpanProvider>,
-) -> GraphRuntimeOverlay {
-    if let Some(provider) = graph_overlay_span_provider {
-        match provider.cfg_node_spans_for_run(run) {
-            GraphRuntimeOverlaySpanResolution::Available(cfg_node_spans) => {
-                return build_graph_runtime_overlay_from_cfg_spans(run, &cfg_node_spans);
-            }
-            GraphRuntimeOverlaySpanResolution::Unavailable(diagnostic) => {
-                return build_unattached_graph_runtime_overlay(run, Some(diagnostic));
-            }
-        }
-    }
-    build_unattached_graph_runtime_overlay(run, None)
-}
-
-fn build_unattached_graph_runtime_overlay(
-    run: &Run,
-    project_store_diagnostic: Option<RunDiagnostic>,
-) -> GraphRuntimeOverlay {
-    let entries: Vec<GraphRuntimeOverlayEntry> = Vec::new();
-    let attached_call_node_ids = entries
-        .iter()
-        .flat_map(|entry| entry.call_node_ids.iter().copied())
-        .collect::<HashSet<_>>();
-    let unattached_call_node_ids = run
-        .calls
-        .iter()
-        .filter(|call| !attached_call_node_ids.contains(&call.id))
-        .map(|call| call.id)
-        .collect::<Vec<_>>();
-
-    let mut diagnostics = Vec::new();
-    if run.calls.iter().any(|call| call.call_site_source.is_none()) {
-        diagnostics.push(RunDiagnostic {
-            severity: DiagnosticSeverity::Info,
-            code: Some("GraphOverlayCallSiteUnavailable".to_string()),
-            message: "Runtime graph overlay left calls unattached because call-site provenance is unavailable; no function-name fallback was used.".to_string(),
-            call_node_id: None,
-            payload_id: None,
-        });
-    }
-    if run.calls.iter().any(|call| call.call_site_source.is_some()) {
-        diagnostics.push(project_store_diagnostic.unwrap_or_else(|| RunDiagnostic {
-            severity: DiagnosticSeverity::Info,
-            code: Some("GraphOverlayProjectStoreUnavailable".to_string()),
-            message: "Runtime graph overlay left call-site-provenance calls unattached because ProjectStore CFG resolution is not wired into this projection yet; no browser fallback was used.".to_string(),
-            call_node_id: None,
-            payload_id: None,
-        }));
-    }
-
-    GraphRuntimeOverlay {
-        boundary_id: run.boundary_id,
-        project_generation: run.request.project_generation,
-        entries,
-        unattached_call_node_ids,
-        diagnostics,
-    }
-}
-
-#[must_use]
-pub fn build_graph_runtime_overlay_from_cfg_spans(
-    run: &Run,
-    cfg_node_spans: &[CfgNodeSourceSpan],
-) -> GraphRuntimeOverlay {
-    let mut entries = Vec::<GraphRuntimeOverlayEntry>::new();
-    let mut entry_by_cfg_node_id = HashMap::<CfgNodeId, usize>::new();
-    let mut unattached_call_node_ids = Vec::new();
-
-    let mut saw_missing_call_site = false;
-    let mut saw_incomplete_call_site = false;
-    let mut saw_unmatched_call_site = false;
-    let mut saw_ambiguous_call_site = false;
-
-    for call in &run.calls {
-        let Some(call_site) = call.call_site_source.as_ref() else {
-            saw_missing_call_site = true;
-            unattached_call_node_ids.push(call.id);
-            continue;
-        };
-        let (Some(file_id), Some(start_offset), Some(end_offset)) = (
-            call_site.file_id,
-            call_site.start_offset,
-            call_site.end_offset,
-        ) else {
-            saw_incomplete_call_site = true;
-            unattached_call_node_ids.push(call.id);
-            continue;
-        };
-        if end_offset < start_offset {
-            saw_incomplete_call_site = true;
-            unattached_call_node_ids.push(call.id);
-            continue;
-        }
-
-        match resolve_cfg_node_for_call_site(cfg_node_spans, file_id, start_offset, end_offset) {
-            CfgNodeResolution::Matched(cfg_node_id) => {
-                let entry_index = *entry_by_cfg_node_id.entry(cfg_node_id).or_insert_with(|| {
-                    let index = entries.len();
-                    entries.push(GraphRuntimeOverlayEntry {
-                        cfg_node_id,
-                        call_node_ids: Vec::new(),
-                    });
-                    index
-                });
-                entries[entry_index].call_node_ids.push(call.id);
-            }
-            CfgNodeResolution::Unmatched => {
-                saw_unmatched_call_site = true;
-                unattached_call_node_ids.push(call.id);
-            }
-            CfgNodeResolution::Ambiguous => {
-                saw_ambiguous_call_site = true;
-                unattached_call_node_ids.push(call.id);
-            }
-        }
-    }
-
-    let mut diagnostics = Vec::new();
-    if saw_missing_call_site {
-        diagnostics.push(RunDiagnostic {
-            severity: DiagnosticSeverity::Info,
-            code: Some("GraphOverlayCallSiteUnavailable".to_string()),
-            message: "Runtime graph overlay left calls unattached because call-site provenance is unavailable; no function-name fallback was used.".to_string(),
-            call_node_id: None,
-            payload_id: None,
-        });
-    }
-    if saw_incomplete_call_site {
-        diagnostics.push(RunDiagnostic {
-            severity: DiagnosticSeverity::Info,
-            code: Some("GraphOverlayCallSiteIncomplete".to_string()),
-            message: "Runtime graph overlay left calls unattached because call-site provenance lacked a complete file/offset span; no function-name fallback was used.".to_string(),
-            call_node_id: None,
-            payload_id: None,
-        });
-    }
-    if saw_unmatched_call_site {
-        diagnostics.push(RunDiagnostic {
-            severity: DiagnosticSeverity::Info,
-            code: Some("GraphOverlayCfgNodeUnavailable".to_string()),
-            message: "Runtime graph overlay left calls unattached because no captured CFG node source span matched the call-site provenance; no function-name fallback was used.".to_string(),
-            call_node_id: None,
-            payload_id: None,
-        });
-    }
-    if saw_ambiguous_call_site {
-        diagnostics.push(RunDiagnostic {
-            severity: DiagnosticSeverity::Warning,
-            code: Some("GraphOverlayCfgNodeAmbiguous".to_string()),
-            message: "Runtime graph overlay left calls unattached because multiple captured CFG node source spans matched the call-site provenance equally; no arbitrary graph node was selected.".to_string(),
-            call_node_id: None,
-            payload_id: None,
-        });
-    }
-
-    GraphRuntimeOverlay {
-        boundary_id: run.boundary_id,
-        project_generation: run.request.project_generation,
-        entries,
-        unattached_call_node_ids,
-        diagnostics,
-    }
-}
-
-enum CfgNodeResolution {
-    Matched(CfgNodeId),
-    Unmatched,
-    Ambiguous,
-}
-
-fn resolve_cfg_node_for_call_site(
-    cfg_node_spans: &[CfgNodeSourceSpan],
-    file_id: u64,
-    start_offset: u32,
-    end_offset: u32,
-) -> CfgNodeResolution {
-    let mut exact_matches = cfg_node_spans
-        .iter()
-        .filter(|span| {
-            span.file_id == file_id
-                && span.start_offset == start_offset
-                && span.end_offset == end_offset
-        })
-        .map(|span| span.cfg_node_id);
-    let Some(first_exact) = exact_matches.next() else {
-        return resolve_containing_cfg_node(cfg_node_spans, file_id, start_offset, end_offset);
-    };
-    if exact_matches.next().is_some() {
-        CfgNodeResolution::Ambiguous
-    } else {
-        CfgNodeResolution::Matched(first_exact)
-    }
-}
-
-fn resolve_containing_cfg_node(
-    cfg_node_spans: &[CfgNodeSourceSpan],
-    file_id: u64,
-    start_offset: u32,
-    end_offset: u32,
-) -> CfgNodeResolution {
-    let mut best: Option<(u32, CfgNodeId)> = None;
-    let mut ambiguous = false;
-
-    for span in cfg_node_spans {
-        if span.file_id != file_id
-            || span.start_offset > start_offset
-            || span.end_offset < end_offset
-        {
-            continue;
-        }
-
-        let width = span.end_offset.saturating_sub(span.start_offset);
-        match best {
-            None => {
-                best = Some((width, span.cfg_node_id));
-                ambiguous = false;
-            }
-            Some((best_width, _)) if width < best_width => {
-                best = Some((width, span.cfg_node_id));
-                ambiguous = false;
-            }
-            Some((best_width, _)) if width == best_width => {
-                ambiguous = true;
-            }
-            Some(_) => {}
-        }
-    }
-
-    if ambiguous {
-        CfgNodeResolution::Ambiguous
-    } else if let Some((_, cfg_node_id)) = best {
-        CfgNodeResolution::Matched(cfg_node_id)
-    } else {
-        CfgNodeResolution::Unmatched
-    }
-}
-
-fn run_diagnostic_from_reconstruction(diagnostic: &ReconstructionDiagnostic) -> RunDiagnostic {
-    RunDiagnostic {
-        severity: diagnostic.severity,
-        code: Some(format!("{:?}", diagnostic.code)),
-        message: diagnostic.message.clone(),
-        call_node_id: None,
-        payload_id: None,
-    }
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-enum TraceGraphNode {
-    Thread(TraceThreadKey),
-    Call(TraceCallKey),
-}
-
-fn component_events_for_root(
-    events: &[ProfileEventEnvelope],
-    root_trace: TraceCallKey,
-) -> Vec<ProfileEventEnvelope> {
-    component_event_indices_for_root(events, root_trace)
-        .into_iter()
-        .map(|index| events[index].clone())
-        .collect()
-}
-
-pub(crate) fn component_event_indices_for_root<'a>(
-    events: impl IntoIterator<Item = &'a ProfileEventEnvelope>,
-    root_trace: TraceCallKey,
-) -> Vec<usize> {
-    let mut adjacency: HashMap<TraceGraphNode, HashSet<TraceGraphNode>> = HashMap::new();
-    let mut event_nodes = Vec::<Vec<TraceGraphNode>>::new();
-
-    for envelope in events {
-        if envelope.process_euid != root_trace.process_euid
-            || envelope.engine_id != root_trace.engine_id
-        {
-            event_nodes.push(Vec::new());
-            continue;
-        }
-        let nodes = match &envelope.event.kind {
-            ProfileEventKind::StartThread {
-                thread_id,
-                parent_thread_id,
-                parent_call_id,
-                ..
-            } => {
-                let thread = TraceGraphNode::Thread(TraceThreadKey {
-                    process_euid: envelope.process_euid,
-                    engine_id: envelope.engine_id,
-                    thread_id: *thread_id,
-                });
-                ensure_graph_node(&mut adjacency, thread);
-                if let Some(parent_thread_id) = parent_thread_id {
-                    let parent_thread = TraceGraphNode::Thread(TraceThreadKey {
-                        process_euid: envelope.process_euid,
-                        engine_id: envelope.engine_id,
-                        thread_id: *parent_thread_id,
-                    });
-                    link_graph_nodes(&mut adjacency, thread, parent_thread);
-                    if let Some(parent_call_id) = parent_call_id {
-                        let parent_call = TraceGraphNode::Call(TraceCallKey {
-                            process_euid: envelope.process_euid,
-                            engine_id: envelope.engine_id,
-                            thread_id: *parent_thread_id,
-                            call_id: *parent_call_id,
-                        });
-                        link_graph_nodes(&mut adjacency, thread, parent_call);
-                    }
-                }
-                vec![thread]
-            }
-            ProfileEventKind::EndThread { thread_id, .. } => {
-                let thread = TraceGraphNode::Thread(TraceThreadKey {
-                    process_euid: envelope.process_euid,
-                    engine_id: envelope.engine_id,
-                    thread_id: *thread_id,
-                });
-                ensure_graph_node(&mut adjacency, thread);
-                vec![thread]
-            }
-            ProfileEventKind::CallFunction {
-                thread_id,
-                call_id,
-                parent_call_id,
-                ..
-            } => {
-                let thread_key = TraceThreadKey {
-                    process_euid: envelope.process_euid,
-                    engine_id: envelope.engine_id,
-                    thread_id: *thread_id,
-                };
-                let thread = TraceGraphNode::Thread(thread_key);
-                let call = TraceGraphNode::Call(TraceCallKey {
-                    process_euid: envelope.process_euid,
-                    engine_id: envelope.engine_id,
-                    thread_id: *thread_id,
-                    call_id: *call_id,
-                });
-                link_graph_nodes(&mut adjacency, thread, call);
-                if let Some(parent_call_id) = parent_call_id {
-                    let parent_call = TraceGraphNode::Call(TraceCallKey {
-                        process_euid: envelope.process_euid,
-                        engine_id: envelope.engine_id,
-                        thread_id: *thread_id,
-                        call_id: *parent_call_id,
-                    });
-                    link_graph_nodes(&mut adjacency, call, parent_call);
-                }
-                vec![call, thread]
-            }
-            ProfileEventKind::EndFunction {
-                thread_id, call_id, ..
-            } => {
-                let call = TraceGraphNode::Call(TraceCallKey {
-                    process_euid: envelope.process_euid,
-                    engine_id: envelope.engine_id,
-                    thread_id: *thread_id,
-                    call_id: *call_id,
-                });
-                ensure_graph_node(&mut adjacency, call);
-                vec![call]
-            }
-        };
-        event_nodes.push(nodes);
-    }
-
-    let root = TraceGraphNode::Call(root_trace);
-    if !adjacency.contains_key(&root) {
-        return Vec::new();
-    }
-    let mut visited = HashSet::new();
-    let mut queue = VecDeque::from([root]);
-    while let Some(node) = queue.pop_front() {
-        if !visited.insert(node) {
-            continue;
-        }
-        if let Some(neighbors) = adjacency.get(&node) {
-            queue.extend(neighbors.iter().copied());
-        }
-    }
-
-    event_nodes
-        .into_iter()
-        .enumerate()
-        .filter_map(|(index, nodes)| {
-            nodes
-                .iter()
-                .any(|node| visited.contains(node))
-                .then_some(index)
-        })
-        .collect()
-}
-
-fn ensure_graph_node(
-    adjacency: &mut HashMap<TraceGraphNode, HashSet<TraceGraphNode>>,
-    node: TraceGraphNode,
-) {
-    adjacency.entry(node).or_default();
-}
-
-fn link_graph_nodes(
-    adjacency: &mut HashMap<TraceGraphNode, HashSet<TraceGraphNode>>,
-    a: TraceGraphNode,
-    b: TraceGraphNode,
-) {
-    adjacency.entry(a).or_default().insert(b);
-    adjacency.entry(b).or_default().insert(a);
 }
 
 #[derive(Clone, Debug)]
@@ -3668,7 +2899,15 @@ fn normalize_disk_event(event: &crate::prof::pb::disk_event_v1::Event) -> Option
                 },
             },
         }),
-        pb::disk_event_v1::Event::SetFunctionId(_) | pb::disk_event_v1::Event::Heartbeat(_) => None,
+        // Suspend/Resume/LlmCallMeta feed the CCT aggregation pipeline
+        // (observability design §5.3/§5.4), not the run-store call tree —
+        // skipped here exactly like SetFunctionId/Heartbeat.
+        pb::disk_event_v1::Event::SetFunctionId(_)
+        | pb::disk_event_v1::Event::Heartbeat(_)
+        | pb::disk_event_v1::Event::SuspendThread(_)
+        | pb::disk_event_v1::Event::ResumeThread(_)
+        | pb::disk_event_v1::Event::LlmCallMeta(_)
+        | pb::disk_event_v1::Event::ModelBirth(_) => None,
     }
 }
 
@@ -3918,221 +3157,6 @@ mod tests {
         }
     }
 
-    fn source_location(file_id: u64, start_offset: u32, end_offset: u32) -> SourceLocation {
-        SourceLocation {
-            file_path: None,
-            file_id: Some(file_id),
-            line: 0,
-            column: 0,
-            end_line: None,
-            end_column: None,
-            start_offset: Some(start_offset),
-            end_offset: Some(end_offset),
-        }
-    }
-
-    fn incomplete_source_location(file_id: u64) -> SourceLocation {
-        SourceLocation {
-            file_path: None,
-            file_id: Some(file_id),
-            line: 0,
-            column: 0,
-            end_line: None,
-            end_column: None,
-            start_offset: None,
-            end_offset: Some(10),
-        }
-    }
-
-    fn run_call(
-        raw_id: u64,
-        function_id: u32,
-        call_site_source: Option<SourceLocation>,
-    ) -> CallNode {
-        let trace_key = TraceCallKey {
-            process_euid: ProcessEuid([1; 16]),
-            engine_id: EngineId(2),
-            thread_id: BexThreadId(1),
-            call_id: BexCallId(raw_id),
-        };
-        CallNode {
-            id: CallNodeId(raw_id),
-            trace_key,
-            trace_ref: trace_key.call_ref(),
-            thread_id: ThreadNodeId(1),
-            parent_id: None,
-            function_id: FunctionId(function_id),
-            function_name: Some("user.child".to_string()),
-            function_origin: Some(FunctionOrigin::User),
-            callee_source: None,
-            call_site_source,
-            started_at_ns: Some(raw_id),
-            ended_at_ns: None,
-            status: CallStatus::Running,
-            payload_ids: Vec::new(),
-        }
-    }
-
-    fn run_with_calls(calls: Vec<CallNode>) -> Run {
-        let store = InMemoryRunStore::default();
-        let start = create_test_run(&store, request("main"), RequestId(1));
-        let mut run = store.snapshot(start.boundary_id).unwrap();
-        run.calls = calls;
-        run
-    }
-
-    #[test]
-    fn graph_overlay_maps_same_callee_calls_by_distinct_call_site_spans() {
-        let run = run_with_calls(vec![
-            run_call(1, 2, Some(source_location(7, 20, 31))),
-            run_call(2, 2, Some(source_location(7, 80, 91))),
-        ]);
-
-        let overlay = build_graph_runtime_overlay_from_cfg_spans(
-            &run,
-            &[
-                CfgNodeSourceSpan {
-                    cfg_node_id: CfgNodeId(101),
-                    file_id: 7,
-                    start_offset: 20,
-                    end_offset: 31,
-                },
-                CfgNodeSourceSpan {
-                    cfg_node_id: CfgNodeId(102),
-                    file_id: 7,
-                    start_offset: 80,
-                    end_offset: 91,
-                },
-            ],
-        );
-
-        assert_eq!(overlay.project_generation, ProjectGeneration(1));
-        assert_eq!(
-            overlay.entries,
-            vec![
-                GraphRuntimeOverlayEntry {
-                    cfg_node_id: CfgNodeId(101),
-                    call_node_ids: vec![CallNodeId(1)],
-                },
-                GraphRuntimeOverlayEntry {
-                    cfg_node_id: CfgNodeId(102),
-                    call_node_ids: vec![CallNodeId(2)],
-                },
-            ]
-        );
-        assert!(overlay.unattached_call_node_ids.is_empty());
-        assert!(overlay.diagnostics.is_empty());
-    }
-
-    #[test]
-    fn graph_overlay_groups_repeated_call_site_executions_on_one_cfg_node() {
-        let run = run_with_calls(vec![
-            run_call(1, 2, Some(source_location(7, 20, 31))),
-            run_call(2, 2, Some(source_location(7, 20, 31))),
-        ]);
-
-        let overlay = build_graph_runtime_overlay_from_cfg_spans(
-            &run,
-            &[CfgNodeSourceSpan {
-                cfg_node_id: CfgNodeId(101),
-                file_id: 7,
-                start_offset: 20,
-                end_offset: 31,
-            }],
-        );
-
-        assert_eq!(
-            overlay.entries,
-            vec![GraphRuntimeOverlayEntry {
-                cfg_node_id: CfgNodeId(101),
-                call_node_ids: vec![CallNodeId(1), CallNodeId(2)],
-            }]
-        );
-        assert!(overlay.unattached_call_node_ids.is_empty());
-        assert!(overlay.diagnostics.is_empty());
-    }
-
-    #[test]
-    fn graph_overlay_uses_single_smallest_containing_cfg_span() {
-        let run = run_with_calls(vec![run_call(1, 2, Some(source_location(7, 32, 38)))]);
-
-        let overlay = build_graph_runtime_overlay_from_cfg_spans(
-            &run,
-            &[
-                CfgNodeSourceSpan {
-                    cfg_node_id: CfgNodeId(100),
-                    file_id: 7,
-                    start_offset: 20,
-                    end_offset: 60,
-                },
-                CfgNodeSourceSpan {
-                    cfg_node_id: CfgNodeId(101),
-                    file_id: 7,
-                    start_offset: 30,
-                    end_offset: 40,
-                },
-            ],
-        );
-
-        assert_eq!(
-            overlay.entries,
-            vec![GraphRuntimeOverlayEntry {
-                cfg_node_id: CfgNodeId(101),
-                call_node_ids: vec![CallNodeId(1)],
-            }]
-        );
-        assert!(overlay.unattached_call_node_ids.is_empty());
-        assert!(overlay.diagnostics.is_empty());
-    }
-
-    #[test]
-    fn graph_overlay_leaves_missing_unmatched_and_ambiguous_calls_unattached() {
-        let run = run_with_calls(vec![
-            run_call(1, 2, None),
-            run_call(2, 2, Some(incomplete_source_location(7))),
-            run_call(3, 2, Some(source_location(8, 10, 20))),
-            run_call(4, 2, Some(source_location(7, 30, 40))),
-        ]);
-
-        let overlay = build_graph_runtime_overlay_from_cfg_spans(
-            &run,
-            &[
-                CfgNodeSourceSpan {
-                    cfg_node_id: CfgNodeId(101),
-                    file_id: 7,
-                    start_offset: 30,
-                    end_offset: 40,
-                },
-                CfgNodeSourceSpan {
-                    cfg_node_id: CfgNodeId(102),
-                    file_id: 7,
-                    start_offset: 30,
-                    end_offset: 40,
-                },
-            ],
-        );
-
-        assert!(overlay.entries.is_empty());
-        assert_eq!(
-            overlay.unattached_call_node_ids,
-            vec![CallNodeId(1), CallNodeId(2), CallNodeId(3), CallNodeId(4)]
-        );
-        let codes = overlay
-            .diagnostics
-            .iter()
-            .filter_map(|diagnostic| diagnostic.code.as_deref())
-            .collect::<Vec<_>>();
-        assert_eq!(
-            codes,
-            vec![
-                "GraphOverlayCallSiteUnavailable",
-                "GraphOverlayCallSiteIncomplete",
-                "GraphOverlayCfgNodeUnavailable",
-                "GraphOverlayCfgNodeAmbiguous",
-            ]
-        );
-    }
-
     #[test]
     fn run_store_indexes_host_call_and_replays_retained_patches() {
         let store = InMemoryRunStore::new(RunRetentionPolicy {
@@ -4227,157 +3251,6 @@ mod tests {
             ..RunFilter::default()
         });
         assert!(wrong_generation.is_empty());
-    }
-
-    #[test]
-    fn live_reconstruction_uses_registered_engine_function_metadata() {
-        const ENGINE: u64 = 90_001;
-        let _ = crate::prof::metadata::remove_engine_metadata(ENGINE);
-        crate::prof::register_engine_metadata(
-            ENGINE,
-            crate::prof::EngineProfileMetadata {
-                program_id: "program".to_string(),
-                source_snapshot_id: Some("snapshot".to_string()),
-                revision_id: Some("revision".to_string()),
-                functions: vec![
-                    crate::prof::FunctionMetaEntry {
-                        function_id: 1,
-                        fqn: "user.main".to_string(),
-                        source_file: "main.baml".to_string(),
-                        span_start: 1,
-                        span_end: 10,
-                        kind: "bytecode".to_string(),
-                        definition_key: None,
-                        owner_type: None,
-                        parent_function: None,
-                        lambda_path: None,
-                        package_name: None,
-                        namespace: Vec::new(),
-                    },
-                    crate::prof::FunctionMetaEntry {
-                        function_id: 2,
-                        fqn: "user.child".to_string(),
-                        source_file: "main.baml".to_string(),
-                        span_start: 11,
-                        span_end: 20,
-                        kind: "bytecode".to_string(),
-                        definition_key: None,
-                        owner_type: None,
-                        parent_function: None,
-                        lambda_path: None,
-                        package_name: None,
-                        namespace: Vec::new(),
-                    },
-                ],
-            },
-        );
-
-        let store = InMemoryRunStore::default();
-        let start = create_test_run(&store, request("main"), RequestId(1));
-        let root = CallRef {
-            process_euid: ProcessEuid([9; 16]),
-            engine_id: EngineId(ENGINE),
-            thread_id: BexThreadId(1),
-            call_id: BexCallId(1),
-        };
-        assert!(matches!(
-            store.attach_root_trace(start.boundary_id, root),
-            AttachRootTraceResult::Attached { .. }
-        ));
-
-        let live = |kind, timestamp_ns| ProfileEventEnvelope {
-            source: ProfileEventSource::Live {
-                target: RuntimeTarget::Native,
-                source_id: "test".to_string(),
-            },
-            process_euid: root.process_euid,
-            engine_id: root.engine_id,
-            event: ProfileEvent { timestamp_ns, kind },
-        };
-
-        for event in [
-            live(
-                ProfileEventKind::StartThread {
-                    thread_id: BexThreadId(1),
-                    parent_thread_id: None,
-                    parent_call_id: None,
-                    name: None,
-                },
-                10,
-            ),
-            live(
-                ProfileEventKind::CallFunction {
-                    thread_id: BexThreadId(1),
-                    call_id: BexCallId(1),
-                    parent_call_id: None,
-                    function_id: FunctionId(1),
-                    call_site_source: None,
-                },
-                20,
-            ),
-            live(
-                ProfileEventKind::CallFunction {
-                    thread_id: BexThreadId(1),
-                    call_id: BexCallId(2),
-                    parent_call_id: Some(BexCallId(1)),
-                    function_id: FunctionId(2),
-                    call_site_source: None,
-                },
-                30,
-            ),
-        ] {
-            store.ingest_profile_event(event);
-        }
-
-        let snapshot = store.snapshot(start.boundary_id).unwrap();
-        let child = snapshot
-            .calls
-            .iter()
-            .find(|call| call.function_name.as_deref() == Some("user.child"))
-            .expect("child call reconstructed with metadata name");
-        assert_eq!(child.function_origin, Some(FunctionOrigin::User));
-        assert_eq!(
-            child.callee_source,
-            Some(SourceLocation {
-                file_path: Some("main.baml".to_string()),
-                file_id: None,
-                line: 0,
-                column: 0,
-                end_line: None,
-                end_column: None,
-                start_offset: Some(11),
-                end_offset: Some(20),
-            })
-        );
-
-        let summaries = store.list_runs(&RunFilter {
-            call_tree_contains_function: Some("user.child".to_string()),
-            visibility: RunVisibilityFilter::HistoryOnly,
-            ..RunFilter::default()
-        });
-        assert_eq!(summaries.len(), 1);
-        assert!(
-            summaries[0]
-                .touched_functions
-                .contains(&"user.child".to_string())
-        );
-
-        let _ = crate::prof::metadata::remove_engine_metadata(ENGINE);
-        store.ingest_profile_event(live(
-            ProfileEventKind::EndFunction {
-                thread_id: BexThreadId(1),
-                call_id: BexCallId(2),
-                status: CallStatus::Ok,
-            },
-            40,
-        ));
-        let after_metadata_removal = store.snapshot(start.boundary_id).unwrap();
-        let child = after_metadata_removal
-            .calls
-            .iter()
-            .find(|call| call.function_name.as_deref() == Some("user.child"))
-            .expect("run keeps function metadata after global registry cleanup");
-        assert_eq!(child.function_origin, Some(FunctionOrigin::User));
     }
 
     #[test]
@@ -4605,465 +3478,6 @@ mod tests {
     }
 
     #[test]
-    fn run_store_projects_root_value_refs_to_wire() {
-        use crate::value::{ValueCodec, ValueRef};
-
-        let store = InMemoryRunStore::default();
-        let success = create_test_run(&store, request("success"), RequestId(1));
-        let output_ref = ValueRef::available("value_output", ValueCodec::BamlOutboundValue, 4, 4);
-        store.complete_run(
-            success.boundary_id,
-            RunOutcome::Succeeded(RunResult {
-                value_ref: Some(output_ref),
-                renderer_hint: None,
-                supporting_payload_ids: Vec::new(),
-            }),
-            200,
-        );
-        let success_wire = run_to_wire(&store.snapshot(success.boundary_id).unwrap());
-        let result = success_wire["result"].as_object().unwrap();
-        assert!(!result.contains_key("value"));
-        assert_eq!(result["valueRef"]["id"], "value_output");
-        assert_eq!(result["valueRef"]["codec"], "bamlOutboundValue");
-        assert_eq!(result["valueRef"]["availability"], "available");
-
-        let failure = create_test_run(&store, request("failure"), RequestId(2));
-        let error_ref = ValueRef::available("value_error", ValueCodec::BamlOutboundValue, 2, 2);
-        store.complete_run(
-            failure.boundary_id,
-            RunOutcome::Failed(RunError {
-                class: RunErrorClass::Runtime,
-                message: "boom".to_string(),
-                details: None,
-                value_ref: Some(error_ref),
-            }),
-            300,
-        );
-        let failure_wire = run_to_wire(&store.snapshot(failure.boundary_id).unwrap());
-        assert_eq!(failure_wire["error"]["valueRef"]["id"], "value_error");
-
-        let inputs = create_test_run(&store, request("inputs"), RequestId(3));
-        let input_ref = ValueRef::available("value_inputs", ValueCodec::BamlOutboundValue, 8, 8);
-        store
-            .ingest_root_input_value_ref(inputs.boundary_id, Some(input_ref))
-            .unwrap();
-        assert_eq!(
-            store.snapshot(inputs.boundary_id).unwrap().payloads[0].call_node_id,
-            None
-        );
-        for event in [
-            envelope(
-                ProfileEventKind::StartThread {
-                    thread_id: BexThreadId(1),
-                    parent_thread_id: None,
-                    parent_call_id: None,
-                    name: None,
-                },
-                10,
-            ),
-            envelope(
-                ProfileEventKind::CallFunction {
-                    thread_id: BexThreadId(1),
-                    call_id: BexCallId(1),
-                    parent_call_id: None,
-                    function_id: FunctionId(1),
-                    call_site_source: None,
-                },
-                20,
-            ),
-        ] {
-            store.ingest_profile_event(event);
-        }
-        let AttachRootTraceResult::Attached { patches } =
-            store.attach_root_trace(inputs.boundary_id, root_call_ref(1, 1))
-        else {
-            panic!("root trace should attach");
-        };
-        assert!(patches.iter().any(|patch| {
-            patch.changes.iter().any(|change| {
-                matches!(
-                    change,
-                    RunPatchChange::UpsertPayload(PayloadEvent {
-                        call_node_id: Some(_),
-                        kind: PayloadKind::CapturedValue(CapturedValuePayload {
-                            role: CapturedValueRole::RootInput,
-                            ..
-                        }),
-                        ..
-                    })
-                )
-            })
-        }));
-        let inputs_wire = run_to_wire(&store.snapshot(inputs.boundary_id).unwrap());
-        let payload = &inputs_wire["payloads"][0];
-        assert!(payload["callNodeId"].is_string());
-        assert_eq!(payload["kind"]["type"], "capturedValue");
-        assert_eq!(payload["kind"]["role"], "rootInput");
-        assert_eq!(payload["kind"]["label"], "inputs");
-        assert_eq!(payload["kind"]["valueRef"]["id"], "value_inputs");
-    }
-
-    #[test]
-    fn run_store_backfills_identified_log_payloads_to_reconstructed_calls() {
-        use crate::value::{ValueCodec, ValueRef};
-
-        let store = InMemoryRunStore::default();
-        let start = create_test_run(&store, request("logs"), RequestId(1));
-        let logged_call = TraceCallKey {
-            process_euid: ProcessEuid([1; 16]),
-            engine_id: EngineId(2),
-            thread_id: BexThreadId(1),
-            call_id: BexCallId(2),
-        };
-        let source = SourceLocation {
-            file_path: None,
-            file_id: Some(9),
-            line: 12,
-            column: 3,
-            end_line: None,
-            end_column: None,
-            start_offset: Some(30),
-            end_offset: Some(44),
-        };
-        let value_ref = ValueRef::available("value_log", ValueCodec::BamlOutboundValue, 6, 6);
-        let initial_patch = store
-            .ingest_log_value_ref(
-                start.boundary_id,
-                logged_call,
-                Some("warn".to_string()),
-                "watch this".to_string(),
-                Some(source.clone()),
-                Some(value_ref),
-            )
-            .expect("run should exist");
-
-        assert!(initial_patch.changes.iter().any(|change| {
-            matches!(
-                change,
-                RunPatchChange::UpsertPayload(PayloadEvent {
-                    call_node_id: None,
-                    kind: PayloadKind::Log(LogPayload {
-                        trace_call: Some(_),
-                        ..
-                    }),
-                    ..
-                })
-            )
-        }));
-
-        for event in [
-            envelope(
-                ProfileEventKind::StartThread {
-                    thread_id: BexThreadId(1),
-                    parent_thread_id: None,
-                    parent_call_id: None,
-                    name: None,
-                },
-                10,
-            ),
-            envelope(
-                ProfileEventKind::CallFunction {
-                    thread_id: BexThreadId(1),
-                    call_id: BexCallId(1),
-                    parent_call_id: None,
-                    function_id: FunctionId(1),
-                    call_site_source: None,
-                },
-                20,
-            ),
-            envelope(
-                ProfileEventKind::CallFunction {
-                    thread_id: BexThreadId(1),
-                    call_id: BexCallId(2),
-                    parent_call_id: Some(BexCallId(1)),
-                    function_id: FunctionId(2),
-                    call_site_source: Some(source),
-                },
-                30,
-            ),
-        ] {
-            store.ingest_profile_event(event);
-        }
-        let AttachRootTraceResult::Attached { patches } =
-            store.attach_root_trace(start.boundary_id, root_call_ref(1, 1))
-        else {
-            panic!("root trace should attach");
-        };
-
-        let expected_call_id = call_node_id(&logged_call);
-        assert!(patches.iter().any(|patch| {
-            patch.changes.iter().any(|change| {
-                matches!(
-                    change,
-                    RunPatchChange::UpsertPayload(PayloadEvent {
-                        call_node_id: Some(call_id),
-                        kind: PayloadKind::Log(LogPayload { .. }),
-                        ..
-                    }) if *call_id == expected_call_id
-                )
-            })
-        }));
-        let snapshot = store.snapshot(start.boundary_id).unwrap();
-        let payload = snapshot
-            .payloads
-            .iter()
-            .find(|payload| matches!(payload.kind, PayloadKind::Log(_)))
-            .expect("log payload");
-        assert_eq!(payload.call_node_id, Some(expected_call_id));
-        let child = snapshot
-            .calls
-            .iter()
-            .find(|call| call.id == expected_call_id)
-            .expect("logged call");
-        assert_eq!(child.payload_ids, vec![payload.id]);
-
-        let wire = run_to_wire(&snapshot);
-        let payload = &wire["payloads"][0];
-        assert_eq!(
-            payload["callNodeId"],
-            format!("call_node_{}", expected_call_id.get())
-        );
-        assert_eq!(payload["kind"]["type"], "log");
-        assert_eq!(payload["kind"]["level"], "warn");
-        assert_eq!(payload["kind"]["message"], "watch this");
-        assert_eq!(payload["kind"]["source"]["line"], 12);
-        assert_eq!(payload["kind"]["valueRef"]["id"], "value_log");
-    }
-
-    #[test]
-    fn run_store_backfills_call_value_payloads_to_reconstructed_calls() {
-        use crate::value::{ValueCodec, ValueRef};
-
-        let store = InMemoryRunStore::default();
-        let start = create_test_run(&store, request("call-values"), RequestId(1));
-        let input_call = TraceCallKey {
-            process_euid: ProcessEuid([1; 16]),
-            engine_id: EngineId(2),
-            thread_id: BexThreadId(1),
-            call_id: BexCallId(2),
-        };
-        let output_call = TraceCallKey {
-            process_euid: ProcessEuid([1; 16]),
-            engine_id: EngineId(2),
-            thread_id: BexThreadId(1),
-            call_id: BexCallId(3),
-        };
-        let error_call = TraceCallKey {
-            process_euid: ProcessEuid([1; 16]),
-            engine_id: EngineId(2),
-            thread_id: BexThreadId(1),
-            call_id: BexCallId(4),
-        };
-        let input_ref = ValueRef::available("value_input", ValueCodec::BamlOutboundValue, 8, 8);
-        let output_ref = ValueRef::available("value_output", ValueCodec::BamlOutboundValue, 6, 6);
-        let error_ref = ValueRef::available("value_error", ValueCodec::BamlOutboundValue, 4, 4);
-
-        let input_patch = store
-            .ingest_call_value_ref(
-                start.boundary_id,
-                input_call,
-                CapturedValueRole::CallInput,
-                Some("inputs".to_string()),
-                Some(input_ref),
-            )
-            .expect("run should exist");
-        let output_patch = store
-            .ingest_call_value_ref(
-                start.boundary_id,
-                output_call,
-                CapturedValueRole::CallOutput,
-                Some("output".to_string()),
-                Some(output_ref),
-            )
-            .expect("run should exist");
-        let error_patch = store
-            .ingest_call_value_ref(
-                start.boundary_id,
-                error_call,
-                CapturedValueRole::CallError,
-                Some("error".to_string()),
-                Some(error_ref),
-            )
-            .expect("run should exist");
-
-        for patch in [input_patch, output_patch, error_patch] {
-            assert!(patch.changes.iter().any(|change| {
-                matches!(
-                    change,
-                    RunPatchChange::UpsertPayload(PayloadEvent {
-                        call_node_id: None,
-                        kind: PayloadKind::CapturedValue(CapturedValuePayload {
-                            trace_call: Some(_),
-                            ..
-                        }),
-                        ..
-                    })
-                )
-            }));
-        }
-
-        for event in [
-            envelope(
-                ProfileEventKind::StartThread {
-                    thread_id: BexThreadId(1),
-                    parent_thread_id: None,
-                    parent_call_id: None,
-                    name: None,
-                },
-                10,
-            ),
-            envelope(
-                ProfileEventKind::CallFunction {
-                    thread_id: BexThreadId(1),
-                    call_id: BexCallId(1),
-                    parent_call_id: None,
-                    function_id: FunctionId(1),
-                    call_site_source: None,
-                },
-                20,
-            ),
-            envelope(
-                ProfileEventKind::CallFunction {
-                    thread_id: BexThreadId(1),
-                    call_id: BexCallId(2),
-                    parent_call_id: Some(BexCallId(1)),
-                    function_id: FunctionId(2),
-                    call_site_source: None,
-                },
-                30,
-            ),
-            envelope(
-                ProfileEventKind::CallFunction {
-                    thread_id: BexThreadId(1),
-                    call_id: BexCallId(3),
-                    parent_call_id: Some(BexCallId(1)),
-                    function_id: FunctionId(3),
-                    call_site_source: None,
-                },
-                40,
-            ),
-            envelope(
-                ProfileEventKind::CallFunction {
-                    thread_id: BexThreadId(1),
-                    call_id: BexCallId(4),
-                    parent_call_id: Some(BexCallId(1)),
-                    function_id: FunctionId(4),
-                    call_site_source: None,
-                },
-                50,
-            ),
-        ] {
-            store.ingest_profile_event(event);
-        }
-        let AttachRootTraceResult::Attached { patches } =
-            store.attach_root_trace(start.boundary_id, root_call_ref(1, 1))
-        else {
-            panic!("root trace should attach");
-        };
-
-        let input_call_id = call_node_id(&input_call);
-        let output_call_id = call_node_id(&output_call);
-        let error_call_id = call_node_id(&error_call);
-        for expected_call_id in [input_call_id, output_call_id, error_call_id] {
-            assert!(patches.iter().any(|patch| {
-                patch.changes.iter().any(|change| {
-                    matches!(
-                        change,
-                        RunPatchChange::UpsertPayload(PayloadEvent {
-                            call_node_id: Some(call_id),
-                            kind: PayloadKind::CapturedValue(CapturedValuePayload { .. }),
-                            ..
-                        }) if *call_id == expected_call_id
-                    )
-                })
-            }));
-        }
-
-        let snapshot = store.snapshot(start.boundary_id).unwrap();
-        let input_payload = snapshot
-            .payloads
-            .iter()
-            .find(|payload| {
-                matches!(
-                    &payload.kind,
-                    PayloadKind::CapturedValue(CapturedValuePayload {
-                        role: CapturedValueRole::CallInput,
-                        ..
-                    })
-                )
-            })
-            .expect("input payload");
-        assert_eq!(input_payload.call_node_id, Some(input_call_id));
-        let output_payload = snapshot
-            .payloads
-            .iter()
-            .find(|payload| {
-                matches!(
-                    &payload.kind,
-                    PayloadKind::CapturedValue(CapturedValuePayload {
-                        role: CapturedValueRole::CallOutput,
-                        ..
-                    })
-                )
-            })
-            .expect("output payload");
-        assert_eq!(output_payload.call_node_id, Some(output_call_id));
-        let error_payload = snapshot
-            .payloads
-            .iter()
-            .find(|payload| {
-                matches!(
-                    &payload.kind,
-                    PayloadKind::CapturedValue(CapturedValuePayload {
-                        role: CapturedValueRole::CallError,
-                        ..
-                    })
-                )
-            })
-            .expect("error payload");
-        assert_eq!(error_payload.call_node_id, Some(error_call_id));
-
-        for (expected_call_id, expected_payload) in [
-            (input_call_id, input_payload),
-            (output_call_id, output_payload),
-            (error_call_id, error_payload),
-        ] {
-            let call = snapshot
-                .calls
-                .iter()
-                .find(|call| call.id == expected_call_id)
-                .expect("call node");
-            assert_eq!(call.payload_ids, vec![expected_payload.id]);
-        }
-
-        let wire = run_to_wire(&snapshot);
-        let input_wire = wire["payloads"]
-            .as_array()
-            .unwrap()
-            .iter()
-            .find(|payload| payload["kind"]["role"] == "callInput")
-            .expect("call input wire payload");
-        assert_eq!(input_wire["kind"]["label"], "inputs");
-        assert_eq!(input_wire["kind"]["valueRef"]["id"], "value_input");
-        let output_wire = wire["payloads"]
-            .as_array()
-            .unwrap()
-            .iter()
-            .find(|payload| payload["kind"]["role"] == "callOutput")
-            .expect("call output wire payload");
-        assert_eq!(output_wire["kind"]["label"], "output");
-        assert_eq!(output_wire["kind"]["valueRef"]["id"], "value_output");
-        let error_wire = wire["payloads"]
-            .as_array()
-            .unwrap()
-            .iter()
-            .find(|payload| payload["kind"]["role"] == "callError")
-            .expect("call error wire payload");
-        assert_eq!(error_wire["kind"]["label"], "error");
-        assert_eq!(error_wire["kind"]["valueRef"]["id"], "value_error");
-    }
-
-    #[test]
     fn run_store_request_commands_report_terminal_and_cancelled_state() {
         let store = InMemoryRunStore::default();
         let start_terminal = create_test_run(&store, request("main"), RequestId(1));
@@ -5149,404 +3563,6 @@ mod tests {
             panic!("old cursor should be outside the retained patch window");
         };
         assert_eq!(reason, RunCursorExpiredReason::Compacted);
-    }
-
-    #[test]
-    fn run_store_root_trace_claims_only_connected_profile_component() {
-        let store = InMemoryRunStore::default();
-        let start = create_test_run(&store, request("main"), RequestId(1));
-        let AttachRootTraceResult::Attached { patches } =
-            store.attach_root_trace(start.boundary_id, root_call_ref(1, 1))
-        else {
-            panic!("root trace should attach");
-        };
-        assert!(patches.is_empty(), "no events have arrived yet");
-
-        for event in [
-            envelope(
-                ProfileEventKind::StartThread {
-                    thread_id: BexThreadId(1),
-                    parent_thread_id: None,
-                    parent_call_id: None,
-                    name: None,
-                },
-                10,
-            ),
-            envelope(
-                ProfileEventKind::CallFunction {
-                    thread_id: BexThreadId(1),
-                    call_id: BexCallId(1),
-                    parent_call_id: None,
-                    function_id: FunctionId(1),
-                    call_site_source: None,
-                },
-                20,
-            ),
-            envelope(
-                ProfileEventKind::CallFunction {
-                    thread_id: BexThreadId(1),
-                    call_id: BexCallId(2),
-                    parent_call_id: Some(BexCallId(1)),
-                    function_id: FunctionId(2),
-                    call_site_source: None,
-                },
-                30,
-            ),
-            envelope(
-                ProfileEventKind::EndFunction {
-                    thread_id: BexThreadId(1),
-                    call_id: BexCallId(2),
-                    status: CallStatus::Ok,
-                },
-                40,
-            ),
-            envelope(
-                ProfileEventKind::EndFunction {
-                    thread_id: BexThreadId(1),
-                    call_id: BexCallId(1),
-                    status: CallStatus::Ok,
-                },
-                50,
-            ),
-            envelope(
-                ProfileEventKind::EndThread {
-                    thread_id: BexThreadId(1),
-                    status: ThreadStatus::Completed,
-                },
-                60,
-            ),
-            envelope(
-                ProfileEventKind::StartThread {
-                    thread_id: BexThreadId(99),
-                    parent_thread_id: None,
-                    parent_call_id: None,
-                    name: None,
-                },
-                10,
-            ),
-            envelope(
-                ProfileEventKind::CallFunction {
-                    thread_id: BexThreadId(99),
-                    call_id: BexCallId(1),
-                    parent_call_id: None,
-                    function_id: FunctionId(99),
-                    call_site_source: None,
-                },
-                20,
-            ),
-            envelope(
-                ProfileEventKind::EndFunction {
-                    thread_id: BexThreadId(99),
-                    call_id: BexCallId(1),
-                    status: CallStatus::Ok,
-                },
-                30,
-            ),
-            envelope(
-                ProfileEventKind::EndThread {
-                    thread_id: BexThreadId(99),
-                    status: ThreadStatus::Completed,
-                },
-                40,
-            ),
-        ] {
-            store.ingest_profile_event(event);
-        }
-
-        let snapshot = store.snapshot(start.boundary_id).unwrap();
-        assert_eq!(
-            snapshot.root_call_node_id,
-            Some(call_node_id(&TraceCallKey {
-                process_euid: ProcessEuid([1; 16]),
-                engine_id: EngineId(2),
-                thread_id: BexThreadId(1),
-                call_id: BexCallId(1),
-            }))
-        );
-        assert_eq!(snapshot.threads.len(), 1, "{:#?}", snapshot.threads);
-        assert_eq!(snapshot.calls.len(), 2, "{:#?}", snapshot.calls);
-        assert!(
-            snapshot
-                .calls
-                .iter()
-                .all(|call| call.trace_key.thread_id != BexThreadId(99))
-        );
-        assert!(
-            snapshot.diagnostics.is_empty(),
-            "{:#?}",
-            snapshot.diagnostics
-        );
-    }
-
-    #[test]
-    fn graph_overlay_leaves_calls_unattached_without_call_site_provenance() {
-        let store = InMemoryRunStore::default();
-        let start = create_test_run(&store, request("main"), RequestId(1));
-        let AttachRootTraceResult::Attached { patches } =
-            store.attach_root_trace(start.boundary_id, root_call_ref(1, 1))
-        else {
-            panic!("root trace should attach");
-        };
-        assert!(patches.is_empty());
-
-        for event in [
-            envelope(
-                ProfileEventKind::StartThread {
-                    thread_id: BexThreadId(1),
-                    parent_thread_id: None,
-                    parent_call_id: None,
-                    name: None,
-                },
-                10,
-            ),
-            envelope(
-                ProfileEventKind::CallFunction {
-                    thread_id: BexThreadId(1),
-                    call_id: BexCallId(1),
-                    parent_call_id: None,
-                    function_id: FunctionId(1),
-                    call_site_source: None,
-                },
-                20,
-            ),
-        ] {
-            store.ingest_profile_event(event);
-        }
-
-        let snapshot = store.snapshot(start.boundary_id).unwrap();
-        let overlay = snapshot
-            .graph_runtime_overlay
-            .expect("profile reconstruction should set graph overlay");
-        assert!(overlay.entries.is_empty());
-        assert_eq!(
-            overlay.unattached_call_node_ids,
-            snapshot
-                .calls
-                .iter()
-                .map(|call| call.id)
-                .collect::<Vec<_>>()
-        );
-        assert!(overlay.diagnostics.iter().any(|diagnostic| {
-            diagnostic.code.as_deref() == Some("GraphOverlayCallSiteUnavailable")
-        }));
-        assert!(
-            snapshot
-                .calls
-                .iter()
-                .all(|call| call.call_site_source.is_none())
-        );
-    }
-
-    #[test]
-    fn graph_overlay_keeps_call_site_calls_unattached_until_project_store_join() {
-        let store = InMemoryRunStore::default();
-        let start = create_test_run(&store, request("main"), RequestId(1));
-        let AttachRootTraceResult::Attached { patches } =
-            store.attach_root_trace(start.boundary_id, root_call_ref(1, 1))
-        else {
-            panic!("root trace should attach");
-        };
-        assert!(patches.is_empty());
-        let call_site_source = SourceLocation {
-            file_path: None,
-            file_id: Some(1),
-            line: 7,
-            column: 0,
-            end_line: None,
-            end_column: None,
-            start_offset: Some(40),
-            end_offset: Some(51),
-        };
-
-        for event in [
-            envelope(
-                ProfileEventKind::StartThread {
-                    thread_id: BexThreadId(1),
-                    parent_thread_id: None,
-                    parent_call_id: None,
-                    name: None,
-                },
-                10,
-            ),
-            envelope(
-                ProfileEventKind::CallFunction {
-                    thread_id: BexThreadId(1),
-                    call_id: BexCallId(1),
-                    parent_call_id: None,
-                    function_id: FunctionId(1),
-                    call_site_source: Some(call_site_source.clone()),
-                },
-                20,
-            ),
-        ] {
-            store.ingest_profile_event(event);
-        }
-
-        let snapshot = store.snapshot(start.boundary_id).unwrap();
-        assert_eq!(snapshot.calls[0].call_site_source, Some(call_site_source));
-        let overlay = snapshot
-            .graph_runtime_overlay
-            .expect("profile reconstruction should set graph overlay");
-        assert!(overlay.entries.is_empty());
-        assert_eq!(
-            overlay.unattached_call_node_ids,
-            snapshot
-                .calls
-                .iter()
-                .map(|call| call.id)
-                .collect::<Vec<_>>()
-        );
-        assert!(overlay.diagnostics.iter().any(|diagnostic| {
-            diagnostic.code.as_deref() == Some("GraphOverlayProjectStoreUnavailable")
-        }));
-    }
-
-    struct StaticSpanProvider {
-        spans: Vec<CfgNodeSourceSpan>,
-    }
-
-    impl GraphRuntimeOverlaySpanProvider for StaticSpanProvider {
-        fn cfg_node_spans_for_run(&self, run: &Run) -> GraphRuntimeOverlaySpanResolution {
-            assert_eq!(run.request.project_generation, ProjectGeneration(1));
-            GraphRuntimeOverlaySpanResolution::Available(self.spans.clone())
-        }
-    }
-
-    #[test]
-    fn graph_overlay_span_provider_populates_live_overlay_entries() {
-        let store = InMemoryRunStore::default();
-        store.set_graph_runtime_overlay_span_provider(Arc::new(StaticSpanProvider {
-            spans: vec![CfgNodeSourceSpan {
-                cfg_node_id: CfgNodeId(701),
-                file_id: 1,
-                start_offset: 40,
-                end_offset: 51,
-            }],
-        }));
-        let start = create_test_run(&store, request("main"), RequestId(1));
-        let AttachRootTraceResult::Attached { patches } =
-            store.attach_root_trace(start.boundary_id, root_call_ref(1, 1))
-        else {
-            panic!("root trace should attach");
-        };
-        assert!(patches.is_empty());
-        let call_site_source = SourceLocation {
-            file_path: None,
-            file_id: Some(1),
-            line: 7,
-            column: 0,
-            end_line: None,
-            end_column: None,
-            start_offset: Some(40),
-            end_offset: Some(51),
-        };
-
-        for event in [
-            envelope(
-                ProfileEventKind::StartThread {
-                    thread_id: BexThreadId(1),
-                    parent_thread_id: None,
-                    parent_call_id: None,
-                    name: None,
-                },
-                10,
-            ),
-            envelope(
-                ProfileEventKind::CallFunction {
-                    thread_id: BexThreadId(1),
-                    call_id: BexCallId(1),
-                    parent_call_id: None,
-                    function_id: FunctionId(1),
-                    call_site_source: Some(call_site_source),
-                },
-                20,
-            ),
-        ] {
-            store.ingest_profile_event(event);
-        }
-
-        let snapshot = store.snapshot(start.boundary_id).unwrap();
-        let overlay = snapshot
-            .graph_runtime_overlay
-            .expect("profile reconstruction should set graph overlay");
-        assert_eq!(
-            overlay.entries,
-            vec![GraphRuntimeOverlayEntry {
-                cfg_node_id: CfgNodeId(701),
-                call_node_ids: vec![snapshot.calls[0].id],
-            }]
-        );
-        assert!(overlay.unattached_call_node_ids.is_empty());
-        assert!(overlay.diagnostics.is_empty());
-    }
-
-    #[test]
-    fn registered_profile_observer_feeds_run_store_before_root_attach() {
-        let store = Arc::new(InMemoryRunStore::default());
-        let _registration = register_profile_observer(store.clone());
-        let start = create_test_run(&store, request("main"), RequestId(1));
-
-        for event in [
-            envelope(
-                ProfileEventKind::StartThread {
-                    thread_id: BexThreadId(1),
-                    parent_thread_id: None,
-                    parent_call_id: None,
-                    name: None,
-                },
-                10,
-            ),
-            envelope(
-                ProfileEventKind::CallFunction {
-                    thread_id: BexThreadId(1),
-                    call_id: BexCallId(1),
-                    parent_call_id: None,
-                    function_id: FunctionId(1),
-                    call_site_source: None,
-                },
-                20,
-            ),
-            envelope(
-                ProfileEventKind::EndFunction {
-                    thread_id: BexThreadId(1),
-                    call_id: BexCallId(1),
-                    status: CallStatus::Ok,
-                },
-                30,
-            ),
-            envelope(
-                ProfileEventKind::EndThread {
-                    thread_id: BexThreadId(1),
-                    status: ThreadStatus::Completed,
-                },
-                40,
-            ),
-        ] {
-            publish_profile_event(&event);
-        }
-
-        let AttachRootTraceResult::Attached { patches } =
-            store.attach_root_trace(start.boundary_id, root_call_ref(1, 1))
-        else {
-            panic!("root trace should attach");
-        };
-
-        assert!(
-            !patches.is_empty(),
-            "retained live events should reconstruct"
-        );
-        let snapshot = store.snapshot(start.boundary_id).unwrap();
-        assert_eq!(snapshot.threads.len(), 1);
-        assert_eq!(snapshot.calls.len(), 1);
-        assert_eq!(
-            snapshot.root_call_node_id,
-            Some(call_node_id(&TraceCallKey {
-                process_euid: ProcessEuid([1; 16]),
-                engine_id: EngineId(2),
-                thread_id: BexThreadId(1),
-                call_id: BexCallId(1),
-            }))
-        );
     }
 
     #[test]
@@ -5877,112 +3893,195 @@ mod tests {
         assert!(store.snapshot(new.boundary_id).is_some());
     }
 
-    fn thread_and_root_call_events(engine_id: EngineId) -> Vec<ProfileEventEnvelope> {
-        let live = |kind, timestamp_ns| ProfileEventEnvelope {
-            source: ProfileEventSource::Live {
-                target: RuntimeTarget::Native,
-                source_id: "test".to_string(),
-            },
-            process_euid: ProcessEuid([1; 16]),
-            engine_id,
-            event: ProfileEvent { timestamp_ns, kind },
-        };
-        vec![
-            live(
-                ProfileEventKind::StartThread {
-                    thread_id: BexThreadId(1),
-                    parent_thread_id: None,
-                    parent_call_id: None,
-                    name: None,
-                },
-                10,
-            ),
-            live(
-                ProfileEventKind::CallFunction {
-                    thread_id: BexThreadId(1),
-                    call_id: BexCallId(1),
-                    parent_call_id: None,
-                    function_id: FunctionId(1),
-                    call_site_source: None,
-                },
-                20,
-            ),
-        ]
+    #[test]
+    fn run_store_projects_root_value_refs_to_wire() {
+        use crate::value::{ValueCodec, ValueRef};
+
+        let store = InMemoryRunStore::default();
+        let success = create_test_run(&store, request("success"), RequestId(1));
+        let output_ref = ValueRef::available("value_output", ValueCodec::BamlOutboundValue, 4, 4);
+        store.complete_run(
+            success.boundary_id,
+            RunOutcome::Succeeded(RunResult {
+                value_ref: Some(output_ref),
+                renderer_hint: None,
+                supporting_payload_ids: Vec::new(),
+            }),
+            200,
+        );
+        let success_wire = run_to_wire(&store.snapshot(success.boundary_id).unwrap());
+        let result = success_wire["result"].as_object().unwrap();
+        assert!(!result.contains_key("value"));
+        assert_eq!(result["valueRef"]["id"], "value_output");
+        assert_eq!(result["valueRef"]["codec"], "bamlOutboundValue");
+        assert_eq!(result["valueRef"]["availability"], "available");
+
+        let failure = create_test_run(&store, request("failure"), RequestId(2));
+        let error_ref = ValueRef::available("value_error", ValueCodec::BamlOutboundValue, 2, 2);
+        store.complete_run(
+            failure.boundary_id,
+            RunOutcome::Failed(RunError {
+                class: RunErrorClass::Runtime,
+                message: "boom".to_string(),
+                details: None,
+                value_ref: Some(error_ref),
+            }),
+            300,
+        );
+        let failure_wire = run_to_wire(&store.snapshot(failure.boundary_id).unwrap());
+        assert_eq!(failure_wire["error"]["valueRef"]["id"], "value_error");
+
+        let inputs = create_test_run(&store, request("inputs"), RequestId(3));
+        let input_ref = ValueRef::available("value_inputs", ValueCodec::BamlOutboundValue, 8, 8);
+        store
+            .ingest_root_input_value_ref(inputs.boundary_id, Some(input_ref))
+            .unwrap();
+        let inputs_wire = run_to_wire(&store.snapshot(inputs.boundary_id).unwrap());
+        let payload = &inputs_wire["payloads"][0];
+        // Live profile events no longer project call nodes (§9.3 "one live
+        // plane"), so the root input payload stays unattached on the live
+        // path.
+        assert_eq!(payload["callNodeId"], serde_json::Value::Null);
+        assert_eq!(payload["kind"]["type"], "capturedValue");
+        assert_eq!(payload["kind"]["role"], "rootInput");
+        assert_eq!(payload["kind"]["label"], "inputs");
+        assert_eq!(payload["kind"]["valueRef"]["id"], "value_inputs");
     }
 
-    fn engine_root_call_ref(engine_id: EngineId) -> CallRef {
-        CallRef {
+    #[test]
+    fn run_store_records_log_value_payloads_with_trace_call() {
+        use crate::value::{ValueCodec, ValueRef};
+
+        let store = InMemoryRunStore::default();
+        let start = create_test_run(&store, request("logs"), RequestId(1));
+        let logged_call = TraceCallKey {
             process_euid: ProcessEuid([1; 16]),
-            engine_id,
+            engine_id: EngineId(2),
             thread_id: BexThreadId(1),
-            call_id: BexCallId(1),
-        }
+            call_id: BexCallId(2),
+        };
+        let source = SourceLocation {
+            file_path: None,
+            file_id: Some(9),
+            line: 12,
+            column: 3,
+            end_line: None,
+            end_column: None,
+            start_offset: Some(30),
+            end_offset: Some(44),
+        };
+        let value_ref = ValueRef::available("value_log", ValueCodec::BamlOutboundValue, 6, 6);
+        let patch = store
+            .ingest_log_value_ref(
+                start.boundary_id,
+                logged_call,
+                Some("warn".to_string()),
+                "watch this".to_string(),
+                Some(source),
+                Some(value_ref),
+            )
+            .expect("run should exist");
+        assert!(patch.changes.iter().any(|change| {
+            matches!(
+                change,
+                RunPatchChange::UpsertPayload(PayloadEvent {
+                    call_node_id: None,
+                    kind: PayloadKind::Log(LogPayload {
+                        trace_call: Some(call),
+                        ..
+                    }),
+                    ..
+                }) if *call == logged_call
+            )
+        }));
+
+        let wire = run_to_wire(&store.snapshot(start.boundary_id).unwrap());
+        let payload = &wire["payloads"][0];
+        assert_eq!(payload["kind"]["type"], "log");
+        assert_eq!(payload["kind"]["level"], "warn");
+        assert_eq!(payload["kind"]["message"], "watch this");
+        assert_eq!(payload["kind"]["source"]["line"], 12);
+        assert_eq!(payload["kind"]["valueRef"]["id"], "value_log");
     }
 
     #[test]
-    fn profile_event_recompute_is_scoped_to_the_event_engine() {
+    fn run_store_records_call_value_payloads_with_trace_call() {
+        use crate::value::{ValueCodec, ValueRef};
+
         let store = InMemoryRunStore::default();
-        let run_a = create_test_run(&store, request("a"), RequestId(1));
-        let run_b = create_test_run(&store, request("b"), RequestId(2));
-        assert!(matches!(
-            store.attach_root_trace(run_a.boundary_id, engine_root_call_ref(EngineId(2))),
-            AttachRootTraceResult::Attached { .. }
-        ));
-        assert!(matches!(
-            store.attach_root_trace(run_b.boundary_id, engine_root_call_ref(EngineId(3))),
-            AttachRootTraceResult::Attached { .. }
-        ));
-
-        // Events for engine 2 must only patch the run rooted in engine 2.
-        for event in thread_and_root_call_events(EngineId(2)) {
-            for patch in store.ingest_profile_event(event) {
-                assert_eq!(patch.boundary_id, run_a.boundary_id);
-            }
+        let start = create_test_run(&store, request("call-values"), RequestId(1));
+        let call = TraceCallKey {
+            process_euid: ProcessEuid([1; 16]),
+            engine_id: EngineId(2),
+            thread_id: BexThreadId(1),
+            call_id: BexCallId(2),
+        };
+        for (role, label, id) in [
+            (CapturedValueRole::CallInput, "inputs", "value_input"),
+            (CapturedValueRole::CallOutput, "output", "value_output"),
+            (CapturedValueRole::CallError, "error", "value_error"),
+        ] {
+            let value_ref = ValueRef::available(id, ValueCodec::BamlOutboundValue, 4, 4);
+            let patch = store
+                .ingest_call_value_ref(
+                    start.boundary_id,
+                    call,
+                    role,
+                    Some(label.to_string()),
+                    Some(value_ref),
+                )
+                .expect("run should exist");
+            assert!(patch.changes.iter().any(|change| {
+                matches!(
+                    change,
+                    RunPatchChange::UpsertPayload(PayloadEvent {
+                        call_node_id: None,
+                        kind: PayloadKind::CapturedValue(CapturedValuePayload {
+                            trace_call: Some(trace),
+                            ..
+                        }),
+                        ..
+                    }) if *trace == call
+                )
+            }));
         }
-        assert!(!store.snapshot(run_a.boundary_id).unwrap().calls.is_empty());
-        assert!(store.snapshot(run_b.boundary_id).unwrap().calls.is_empty());
-    }
 
-    #[test]
-    fn engine_closed_releases_events_and_keeps_reconstructed_runs() {
-        let store = InMemoryRunStore::default();
-        let start = create_test_run(&store, request("main"), RequestId(1));
-        assert!(matches!(
-            store.attach_root_trace(start.boundary_id, engine_root_call_ref(EngineId(2))),
-            AttachRootTraceResult::Attached { .. }
-        ));
-        for event in thread_and_root_call_events(EngineId(2)) {
-            store.ingest_profile_event(event);
-        }
-        let calls_before = store.snapshot(start.boundary_id).unwrap().calls;
-        assert!(!calls_before.is_empty());
-
-        store.engine_closed(EngineId(2));
-        assert_eq!(store.profile_events_len(), 0);
-        // The run keeps the call tree reconstructed before the release.
+        let wire = run_to_wire(&store.snapshot(start.boundary_id).unwrap());
+        let roles = wire["payloads"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|payload| payload["kind"]["role"].as_str().unwrap().to_string())
+            .collect::<Vec<_>>();
+        assert_eq!(roles, vec!["callInput", "callOutput", "callError"]);
         assert_eq!(
-            store.snapshot(start.boundary_id).unwrap().calls,
-            calls_before
+            wire["payloads"][1]["kind"]["valueRef"]["id"],
+            "value_output"
         );
     }
 
     #[test]
-    fn trim_profile_events_drops_oldest_beyond_cap() {
-        let mut events: Vec<ProfileEventEnvelope> = (0..PROFILE_EVENTS_CAP + 5)
-            .map(|i| {
-                thread_and_root_call_events(EngineId(2))
-                    .into_iter()
-                    .next()
-                    .map(|mut envelope| {
-                        envelope.event.timestamp_ns = i as u64;
-                        envelope
-                    })
-                    .unwrap()
-            })
-            .collect();
-        trim_profile_events(&mut events);
-        assert_eq!(events.len(), PROFILE_EVENTS_CAP);
-        assert_eq!(events[0].event.timestamp_ns, 5);
+    fn attach_root_trace_pins_identity_and_reports_conflicts() {
+        let store = InMemoryRunStore::default();
+        let start = create_test_run(&store, request("main"), RequestId(1));
+        assert!(matches!(
+            store.attach_root_trace(start.boundary_id, root_call_ref(1, 1)),
+            AttachRootTraceResult::Attached { patches } if patches.is_empty()
+        ));
+        assert_eq!(
+            store.attach_root_trace(start.boundary_id, root_call_ref(1, 1)),
+            AttachRootTraceResult::AlreadyAttached
+        );
+        assert_eq!(
+            store.attach_root_trace(start.boundary_id, root_call_ref(1, 2)),
+            AttachRootTraceResult::Conflict {
+                existing: root_call_ref(1, 1)
+            }
+        );
+        assert_eq!(
+            store.attach_root_trace(test_boundary_id(9), root_call_ref(1, 1)),
+            AttachRootTraceResult::RunMissing
+        );
     }
 
     fn output_texts(store: &InMemoryRunStore, boundary_id: BoundaryId) -> Vec<String> {

@@ -25,8 +25,12 @@ baml_builtins2_codegen = { workspace = true }
 baml_base = { workspace = true }
 baml_builtins2 = { workspace = true }
 baml_type = { workspace = true }
+# identity.rs: revision/def hashing (BLAKE3-256) and the public
+# "baml_rev_1_..." id string forms (observability design §4).
+base64 = { workspace = true }
 bex_resource_types = { workspace = true }
 bex_str = { workspace = true }
+blake3 = { workspace = true }
 borsh = { workspace = true }
 indexmap = { workspace = true }
 num-bigint = { workspace = true }

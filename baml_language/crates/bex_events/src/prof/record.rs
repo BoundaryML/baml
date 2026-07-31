@@ -27,6 +27,22 @@ pub const START_THREAD_FIXED_LEN: usize = 36;
 pub const END_THREAD_LEN: usize = 18;
 /// See [`CALL_FUNCTION_LEN`].
 pub const SET_FUNCTION_ID_LEN: usize = 41;
+/// Tag `0x06` (observability design §5.3): 1 tag + 1 reason + 8 thread +
+/// 4 seq + 8 ts.
+pub const SUSPEND_THREAD_LEN: usize = 22;
+/// Tag `0x07` (§5.3): 1 tag + 1 flags + 8 thread + 4 seq + 8 suspend_ts +
+/// 8 ts. Carries the suspend timestamp so the record is self-contained —
+/// awaiting duration is computable from the resume alone, immune to
+/// cross-ring reordering.
+pub const RESUME_THREAD_LEN: usize = 30;
+/// Tag `0x08` (§5.4): 1 tag + 1 flags + 8 thread + 8 call + 4 model +
+/// 4 tokens_in + 4 tokens_out + 8 ts.
+pub const LLM_CALL_META_LEN: usize = 38;
+/// Tag `0x09` (§5.4 model interning): fixed prefix (1 tag + 1 flags +
+/// 4 model_id + 2 name_len); the name bytes follow. Emitted once per
+/// newly interned model on the cold path, so the session stream's
+/// `model_birth` blocks need no side channel to the engine.
+pub const MODEL_BIRTH_FIXED_LEN: usize = 8;
 
 /// Upper bound on any encoded record; sizes producer-side stack buffers.
 pub const MAX_RECORD_LEN: usize = START_THREAD_FIXED_LEN + MAX_THREAD_NAME_LEN;
@@ -52,6 +68,47 @@ const TAG_END_FUNCTION: u8 = 0x02;
 const TAG_START_THREAD: u8 = 0x03;
 const TAG_END_THREAD: u8 = 0x04;
 const TAG_SET_FUNCTION_ID: u8 = 0x05;
+const TAG_SUSPEND_THREAD: u8 = 0x06;
+const TAG_RESUME_THREAD: u8 = 0x07;
+const TAG_LLM_CALL_META: u8 = 0x08;
+const TAG_MODEL_BIRTH: u8 = 0x09;
+
+/// [`RawRecord::LlmCallMeta`] flag bits.
+pub const LLM_META_FLAG_PROVIDER_ERROR: u8 = 1 << 0;
+/// See [`LLM_META_FLAG_PROVIDER_ERROR`].
+pub const LLM_META_FLAG_PARSE_ERROR: u8 = 1 << 1;
+/// See [`LLM_META_FLAG_PROVIDER_ERROR`].
+pub const LLM_META_FLAG_RETRY: u8 = 1 << 2;
+
+/// Why a logical thread parked (observability design §5.3). Emitted at the
+/// engine's actual park points — per park, not per call; ready-inline
+/// sysops emit neither suspend nor resume, so their window counts as
+/// running, correctly.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(u8)]
+pub enum SuspendReason {
+    /// Parked on an async sys-op (LLM call, sleep, fetch, ...).
+    SysOp = 0,
+    /// Parked on a future `await`.
+    Await = 1,
+    /// Parked on `await_any` / select.
+    AwaitAny = 2,
+    /// Cooperative early yield (scheduler fairness / GC safepoint).
+    EarlyYield = 3,
+}
+
+impl TryFrom<u8> for SuspendReason {
+    type Error = u8;
+    fn try_from(value: u8) -> Result<Self, u8> {
+        match value {
+            0 => Ok(SuspendReason::SysOp),
+            1 => Ok(SuspendReason::Await),
+            2 => Ok(SuspendReason::AwaitAny),
+            3 => Ok(SuspendReason::EarlyYield),
+            other => Err(other),
+        }
+    }
+}
 const CALL_SITE_FILE_ID_NONE: u32 = u32::MAX;
 
 /// Caller-side source span captured at a profiled call site.
@@ -168,6 +225,70 @@ pub enum RawRecord<'a> {
         /// Raw clock ticks; converted to ns by the consumer at transcode.
         ts_ticks: u64,
     },
+    /// Tag `0x06` (§5.3): the logical thread parked (engine released the
+    /// heap permit for an await). Instruments the actual engine park
+    /// points; the CCT engine charges the parked window to the innermost
+    /// open call's awaiting time.
+    SuspendThread {
+        /// Why the thread parked.
+        reason: SuspendReason,
+        /// Logical BEX thread id.
+        thread_id: BexThreadId,
+        /// Per-thread park counter (pairs this suspend with its resume).
+        suspend_seq: u32,
+        /// Raw clock ticks; converted to ns by the consumer at transcode.
+        ts_ticks: u64,
+    },
+    /// Tag `0x07` (§5.3): the logical thread resumed. Self-contained:
+    /// carries the suspend timestamp (held in an engine local across the
+    /// engine's own `.await`), so awaiting duration never depends on
+    /// cross-ring record ordering.
+    ResumeThread {
+        /// Reserved flag bits (zero today).
+        flags: u8,
+        /// Logical BEX thread id.
+        thread_id: BexThreadId,
+        /// Pairs with the matching [`RawRecord::SuspendThread`].
+        suspend_seq: u32,
+        /// The paired suspend's raw ticks, carried verbatim.
+        suspend_ts_ticks: u64,
+        /// Raw clock ticks; converted to ns by the consumer at transcode.
+        ts_ticks: u64,
+    },
+    /// Tag `0x09` (§5.4): a newly interned LLM model name. Once per model
+    /// per engine, cold path; `LlmCallMeta.model_id` resolves against the
+    /// most recent birth with that id.
+    ModelBirth {
+        /// Reserved flag bits (zero today).
+        flags: u8,
+        /// The id `LlmCallMeta` records reference (1-based; 0 = unknown).
+        model_id: u32,
+        /// Model name bytes, ≤ [`MAX_THREAD_NAME_LEN`] (validated at
+        /// transcode).
+        name: &'a [u8],
+    },
+    /// Tag `0x08` (§5.4): one LLM call's durable enrichment — model +
+    /// token usage + error class — emitted once per completed LLM call on
+    /// the cold path. `(thread_id, call_id)` joins it to the sysop's
+    /// `CallFunction`; `model_id` resolves through the engine's interned
+    /// model table (`model_birth` rows in the session stream).
+    LlmCallMeta {
+        /// [`LLM_META_FLAG_PROVIDER_ERROR`] | [`LLM_META_FLAG_PARSE_ERROR`]
+        /// | [`LLM_META_FLAG_RETRY`].
+        flags: u8,
+        /// Logical BEX thread id.
+        thread_id: BexThreadId,
+        /// The LLM sysop call this enriches.
+        call_id: BexCallId,
+        /// Interned model id (0 = unknown model).
+        model_id: u32,
+        /// Prompt tokens reported by the provider (0 = unreported).
+        tokens_in: u32,
+        /// Completion tokens reported by the provider (0 = unreported).
+        tokens_out: u32,
+        /// Raw clock ticks; converted to ns by the consumer at transcode.
+        ts_ticks: u64,
+    },
 }
 
 /// Why a byte range failed to decode. In a drained, committed range any of
@@ -197,6 +318,12 @@ impl RawRecord<'_> {
             }
             RawRecord::EndThread { .. } => END_THREAD_LEN,
             RawRecord::SetFunctionId { .. } => SET_FUNCTION_ID_LEN,
+            RawRecord::ModelBirth { name, .. } => {
+                MODEL_BIRTH_FIXED_LEN + name.len().min(MAX_THREAD_NAME_LEN)
+            }
+            RawRecord::SuspendThread { .. } => SUSPEND_THREAD_LEN,
+            RawRecord::ResumeThread { .. } => RESUME_THREAD_LEN,
+            RawRecord::LlmCallMeta { .. } => LLM_CALL_META_LEN,
         }
     }
 
@@ -310,6 +437,66 @@ impl RawRecord<'_> {
                 w.bytes(&id);
                 w.u64(ts_ticks);
             }
+            RawRecord::SuspendThread {
+                reason,
+                thread_id,
+                suspend_seq,
+                ts_ticks,
+            } => {
+                w.u8(TAG_SUSPEND_THREAD);
+                w.u8(reason as u8);
+                w.u64(thread_id.0);
+                w.u32(suspend_seq);
+                w.u64(ts_ticks);
+            }
+            RawRecord::ResumeThread {
+                flags,
+                thread_id,
+                suspend_seq,
+                suspend_ts_ticks,
+                ts_ticks,
+            } => {
+                w.u8(TAG_RESUME_THREAD);
+                w.u8(flags);
+                w.u64(thread_id.0);
+                w.u32(suspend_seq);
+                w.u64(suspend_ts_ticks);
+                w.u64(ts_ticks);
+            }
+            RawRecord::ModelBirth {
+                flags,
+                model_id,
+                name,
+            } => {
+                let name = &name[..name.len().min(MAX_THREAD_NAME_LEN)];
+                w.u8(TAG_MODEL_BIRTH);
+                w.u8(flags);
+                w.u32(model_id);
+                #[expect(
+                    clippy::cast_possible_truncation,
+                    reason = "name.len() <= MAX_THREAD_NAME_LEN = 256"
+                )]
+                w.u16(name.len() as u16);
+                w.bytes(name);
+            }
+            RawRecord::LlmCallMeta {
+                flags,
+                thread_id,
+                call_id,
+                model_id,
+                tokens_in,
+                tokens_out,
+                ts_ticks,
+            } => {
+                w.u8(TAG_LLM_CALL_META);
+                w.u8(flags);
+                w.u64(thread_id.0);
+                w.u64(call_id.0);
+                w.u32(model_id);
+                w.u32(tokens_in);
+                w.u32(tokens_out);
+                w.u64(ts_ticks);
+            }
         }
         debug_assert_eq!(w.pos, self.encoded_len());
         w.pos
@@ -319,6 +506,58 @@ impl RawRecord<'_> {
 /// Decodes the record at the front of `buf`, returning it and its encoded
 /// length. Never panics on malformed input.
 pub fn decode(buf: &[u8]) -> Result<(RawRecord<'_>, usize), DecodeError> {
+    // Hot-path fast decode for the two dominant tags: ONE bounds check,
+    // then fixed-offset loads the compiler folds into unaligned reads —
+    // mirroring the encoder's single-check unchecked stores (§5.11 decode
+    // budget ~6 ns/pair).
+    match buf.first() {
+        Some(&TAG_CALL_FUNCTION) if buf.len() >= CALL_FUNCTION_LEN => {
+            let flags = buf[1];
+            let thread_id = u64::from_le_bytes(buf[2..10].try_into().unwrap());
+            let call_id = u64::from_le_bytes(buf[10..18].try_into().unwrap());
+            let parent_call_id = u64::from_le_bytes(buf[18..26].try_into().unwrap());
+            let function_id = u32::from_le_bytes(buf[26..30].try_into().unwrap());
+            let ts_ticks = u64::from_le_bytes(buf[30..38].try_into().unwrap());
+            let file_id = u32::from_le_bytes(buf[38..42].try_into().unwrap());
+            let call_site = (file_id != CALL_SITE_FILE_ID_NONE).then(|| CallSiteSourceSpan {
+                file_id,
+                start_offset: u32::from_le_bytes(buf[42..46].try_into().unwrap()),
+                end_offset: u32::from_le_bytes(buf[46..50].try_into().unwrap()),
+                line: u32::from_le_bytes(buf[50..54].try_into().unwrap()),
+            });
+            return Ok((
+                RawRecord::CallFunction {
+                    flags,
+                    thread_id: BexThreadId(thread_id),
+                    call_id: BexCallId(call_id),
+                    parent_call_id: BexCallId(parent_call_id),
+                    function_id: FunctionId(function_id),
+                    call_site,
+                    ts_ticks,
+                },
+                CALL_FUNCTION_LEN,
+            ));
+        }
+        Some(&TAG_END_FUNCTION) if buf.len() >= END_FUNCTION_LEN => {
+            let status = match buf[1] {
+                0 => FunctionEndStatus::Ok,
+                1 => FunctionEndStatus::Errored,
+                2 => FunctionEndStatus::Cancelled,
+                3 => FunctionEndStatus::Exited,
+                bad => return Err(DecodeError::InvalidStatus(bad)),
+            };
+            return Ok((
+                RawRecord::EndFunction {
+                    status,
+                    thread_id: BexThreadId(u64::from_le_bytes(buf[2..10].try_into().unwrap())),
+                    call_id: BexCallId(u64::from_le_bytes(buf[10..18].try_into().unwrap())),
+                    ts_ticks: u64::from_le_bytes(buf[18..26].try_into().unwrap()),
+                },
+                END_FUNCTION_LEN,
+            ));
+        }
+        _ => {}
+    }
     let mut r = Reader { buf, pos: 0 };
     let tag = r.u8()?;
     let rec = match tag {
@@ -400,6 +639,46 @@ pub fn decode(buf: &[u8]) -> Result<(RawRecord<'_>, usize), DecodeError> {
                 id.copy_from_slice(bytes);
                 id
             },
+            ts_ticks: r.u64()?,
+        },
+        TAG_SUSPEND_THREAD => {
+            let reason_byte = r.u8()?;
+            let reason =
+                SuspendReason::try_from(reason_byte).map_err(DecodeError::InvalidStatus)?;
+            RawRecord::SuspendThread {
+                reason,
+                thread_id: BexThreadId(r.u64()?),
+                suspend_seq: r.u32()?,
+                ts_ticks: r.u64()?,
+            }
+        }
+        TAG_RESUME_THREAD => RawRecord::ResumeThread {
+            flags: r.u8()?,
+            thread_id: BexThreadId(r.u64()?),
+            suspend_seq: r.u32()?,
+            suspend_ts_ticks: r.u64()?,
+            ts_ticks: r.u64()?,
+        },
+        TAG_MODEL_BIRTH => {
+            let flags = r.u8()?;
+            let model_id = r.u32()?;
+            let name_len = r.u16()?;
+            if usize::from(name_len) > MAX_THREAD_NAME_LEN {
+                return Err(DecodeError::NameTooLong(name_len));
+            }
+            RawRecord::ModelBirth {
+                flags,
+                model_id,
+                name: r.bytes(usize::from(name_len))?,
+            }
+        }
+        TAG_LLM_CALL_META => RawRecord::LlmCallMeta {
+            flags: r.u8()?,
+            thread_id: BexThreadId(r.u64()?),
+            call_id: BexCallId(r.u64()?),
+            model_id: r.u32()?,
+            tokens_in: r.u32()?,
+            tokens_out: r.u32()?,
             ts_ticks: r.u64()?,
         },
         bad => return Err(DecodeError::UnknownTag(bad)),
@@ -601,6 +880,40 @@ mod tests {
                 id: [v as u8; 16],
                 ts_ticks: v,
             });
+            roundtrip(RawRecord::ResumeThread {
+                flags: v as u8,
+                thread_id: BexThreadId(v),
+                suspend_seq: v as u32,
+                suspend_ts_ticks: v / 2,
+                ts_ticks: v,
+            });
+            roundtrip(RawRecord::LlmCallMeta {
+                flags: (v as u8) & 0b111,
+                thread_id: BexThreadId(v),
+                call_id: BexCallId(v),
+                model_id: v as u32,
+                tokens_in: v as u32,
+                tokens_out: (v / 2) as u32,
+                ts_ticks: v,
+            });
+        }
+        roundtrip(RawRecord::ModelBirth {
+            flags: 0,
+            model_id: 3,
+            name: b"claude-fable-5",
+        });
+        for reason in [
+            SuspendReason::SysOp,
+            SuspendReason::Await,
+            SuspendReason::AwaitAny,
+            SuspendReason::EarlyYield,
+        ] {
+            roundtrip(RawRecord::SuspendThread {
+                reason,
+                thread_id: BexThreadId(7),
+                suspend_seq: 3,
+                ts_ticks: 11,
+            });
         }
         for status in [
             FunctionEndStatus::Errored,
@@ -718,13 +1031,52 @@ mod tests {
             ts_ticks: 0,
         };
         assert_eq!(set_id.encode(&mut buf), 41);
+        let suspend = RawRecord::SuspendThread {
+            reason: SuspendReason::Await,
+            thread_id: BexThreadId(1),
+            suspend_seq: 1,
+            ts_ticks: 0,
+        };
+        assert_eq!(suspend.encode(&mut buf), 22);
+        let resume = RawRecord::ResumeThread {
+            flags: 0,
+            thread_id: BexThreadId(1),
+            suspend_seq: 1,
+            suspend_ts_ticks: 0,
+            ts_ticks: 0,
+        };
+        assert_eq!(resume.encode(&mut buf), 30);
+        let llm = RawRecord::LlmCallMeta {
+            flags: 0,
+            thread_id: BexThreadId(1),
+            call_id: BexCallId(1),
+            model_id: 0,
+            tokens_in: 0,
+            tokens_out: 0,
+            ts_ticks: 0,
+        };
+        assert_eq!(llm.encode(&mut buf), 38);
     }
 
     #[test]
     fn decode_rejects_unknown_tag_and_bad_status() {
         assert_eq!(decode(&[0x00]), Err(DecodeError::UnknownTag(0x00)));
-        assert_eq!(decode(&[0x06]), Err(DecodeError::UnknownTag(0x06)));
+        // 0x06-0x09 are claimed (Suspend/Resume/LlmCallMeta/ModelBirth);
+        // the next free tag is 0x0A.
+        assert_eq!(decode(&[0x0A]), Err(DecodeError::UnknownTag(0x0A)));
         assert_eq!(decode(&[]), Err(DecodeError::Truncated));
+
+        // A SuspendThread with an out-of-range reason byte is InvalidStatus.
+        let mut buf = [0u8; MAX_RECORD_LEN];
+        let len = RawRecord::SuspendThread {
+            reason: SuspendReason::SysOp,
+            thread_id: BexThreadId(1),
+            suspend_seq: 1,
+            ts_ticks: 0,
+        }
+        .encode(&mut buf);
+        buf[1] = 9; // past the reason range {SysOp,Await,AwaitAny,EarlyYield}
+        assert_eq!(decode(&buf[..len]), Err(DecodeError::InvalidStatus(9)));
 
         let mut buf = [0u8; MAX_RECORD_LEN];
         let len = RawRecord::EndFunction {

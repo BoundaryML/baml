@@ -5,6 +5,7 @@ package baml.value.v1;
 enum ValueCodec {
   VALUE_CODEC_UNSPECIFIED = 0;
   VALUE_CODEC_BAML_OUTBOUND_VALUE = 1;
+  VALUE_CODEC_CANONICAL_DAG = 2;
 }
 
 enum ValueAvailability {
@@ -36,6 +37,9 @@ enum CaptureLossKind {
 enum CaptureLossReason {
   CAPTURE_LOSS_REASON_UNSPECIFIED = 0;
   CAPTURE_LOSS_REASON_QUEUE_FULL = 1;
+  // §7.2 staging-ring byte-pressure eviction: a speculative capture was
+  // dropped before any trigger could promote it.
+  CAPTURE_LOSS_REASON_STAGING_EVICTED = 2;
 }
 
 enum RunStatus {
@@ -68,6 +72,15 @@ message BlobRefV1 {
   string algorithm = 1;
   string digest = 2;
   uint64 size_bytes = 3;
+}
+
+// §7.4 canonical-DAG reference: the captured value re-encoded canonically
+// and persisted in the project content-addressed store. `root_cid` is the
+// 32-byte BLAKE3 CID of the DAG root node under `node_codec_version`.
+message DagRefV1 {
+  bytes root_cid = 1;
+  uint32 node_codec_version = 2;
+  uint64 logical_len = 3;
 }
 
 message TraceCallKeyV1 {
@@ -189,4 +202,9 @@ message ValueRecordV1 {
   LogEventV1 log_event = 12;
   CaptureLossV1 capture_loss = 13;
   BlobRefV1 blob = 14;
+  DagRefV1 dag_ref = 15;
+  // §7.2 trigger promotion (`role: promoted`): set when this capture was
+  // staged speculatively and made durable by the named trigger. Additive —
+  // old readers skip it; absent means a normal (non-promoted) capture.
+  optional string promoted_by = 16;
 }

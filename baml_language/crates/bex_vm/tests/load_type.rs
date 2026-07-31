@@ -73,6 +73,7 @@ fn inject_function(
         origin: FunctionOrigin::UserDefined,
         body_meta: None,
         capture: FunctionCaptureProps::disabled(),
+        def_meta: None,
         function_id: 0,
     };
 

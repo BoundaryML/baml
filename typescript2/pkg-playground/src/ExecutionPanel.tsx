@@ -28,7 +28,6 @@ import {
   reconcileArgs,
   typeLookupFrom,
 } from './args-form-model';
-import { CapturedValueCard } from './CapturedValueCard';
 import { ApiKeysDialog } from './components/ApiKeysDialog';
 import { CopyButton } from './components/CopyButton';
 import { ErrorDisplay } from './components/ErrorDisplay';
@@ -49,8 +48,8 @@ import {
   selectDefaultFunctionName,
   selectMainFunctionName,
 } from './default-function-selection';
-import { ExecutionProfileView } from './ExecutionProfileView';
 import { useEnvVars } from './envAtoms';
+import { ObsRunsTab } from './obs/RunsView';
 import type { ExecutionStoreSnapshot } from './execution-store';
 import { createExecutionStore, type ExecutionStore } from './execution-store';
 import { FunctionSidebar } from './FunctionSidebar';
@@ -77,9 +76,7 @@ import {
 import {
   decodeRunResultValue,
   type RunStoreDisplayRun,
-  type RunTraceLog,
   runToDisplayRun,
-  runToTraceRows,
 } from './run-store-projections';
 import type { RuntimePort } from './runtime-port';
 import {
@@ -89,7 +86,6 @@ import {
 } from './serialized-test-tree';
 import { companionFunctionName } from './shared/companion-functions';
 import { collectLatestTestRunResults } from './test-run-results';
-import { ValueRenderer } from './ValueRenderer';
 import type { ValueBodyCache } from './value-body-cache';
 import { createValueBodyCache } from './value-body-cache';
 import {
@@ -288,7 +284,10 @@ export interface ExecutionPanelProps {
   /** Called whenever the selected project changes. */
   onSelectedProjectChange?: (project: string | null) => void;
   /** Tab shown on mount (default 'run'). Embedded views often want 'graph'. */
-  initialTab?: 'run' | 'graph' | 'trace' | 'flame' | 'prompt' | 'curl';
+  initialTab?: 'run' | 'graph' | 'prompt' | 'curl' | 'runs';
+  /** Override the `/api/obs` observability WebSocket URL used by the Runs
+      tab (default: derived the same way as the `/api/ws` URL). */
+  obsUrl?: string;
   /** Auto-select this function once the project reports it (applied once). */
   initialFunctionName?: string;
   /** Auto-run this test once the test tree reports it (applied once). */
@@ -490,199 +489,6 @@ const CollectionDebugView: FC<CollectionDebugViewProps> = ({
   );
 };
 
-const traceStatusClass = (status: Run['calls'][number]['status']): string => {
-  switch (status) {
-    case 'ok':
-      return 'bg-vsc-green';
-    case 'errored':
-      return 'bg-vsc-red';
-    case 'cancelled':
-    case 'exited':
-      return 'bg-vsc-yellow';
-    case 'running':
-      return 'bg-vsc-text-muted';
-    default:
-      status satisfies never;
-      return 'bg-vsc-text-muted';
-  }
-};
-
-function formatTraceMs(value: number | null): string {
-  if (value == null) return '';
-  if (value < 1) return `${value.toFixed(2)}ms`;
-  if (value < 100) return `${value.toFixed(1)}ms`;
-  return `${Math.round(value)}ms`;
-}
-
-function traceLogLevelClass(level: string | null): string {
-  switch (level) {
-    case 'error':
-      return 'text-vsc-red';
-    case 'warn':
-      return 'text-vsc-yellow';
-    case 'debug':
-      return 'text-vsc-text-muted';
-    case 'info':
-    case null:
-      return 'text-vsc-accent';
-    default:
-      return 'text-vsc-text-muted';
-  }
-}
-
-function traceValueStateLabel(value: {
-  state: RunTraceLog['state'];
-}): string | null {
-  switch (value.state) {
-    case 'available':
-      return null;
-    case 'loading':
-      return 'loading';
-    case 'pending':
-      return 'pending';
-    case 'omitted':
-      return 'omitted';
-    case 'truncated':
-      return 'truncated';
-    case 'missing':
-      return 'missing';
-    case 'lost':
-      return 'lost';
-    case 'error':
-      return 'error';
-    case 'unavailable':
-      return 'unavailable';
-    default:
-      value.state satisfies never;
-      return null;
-  }
-}
-
-const TraceLogView: FC<{ log: RunTraceLog }> = ({ log }) => {
-  const stateLabel = traceValueStateLabel(log);
-  return (
-    <div className="rounded border border-vsc-border-subtle bg-vsc-surface/60 px-2 py-1">
-      <div className="flex min-w-0 items-center gap-1.5">
-        <span
-          className={cn(
-            'font-vsc-mono text-[10px] uppercase',
-            traceLogLevelClass(log.level),
-          )}
-        >
-          {log.level ?? 'log'}
-        </span>
-        {log.sourceLine != null && (
-          <span className="text-vsc-text-faint text-[10px]">
-            :{log.sourceLine}
-          </span>
-        )}
-        <span className="min-w-0 truncate text-vsc-text-muted text-[11px]">
-          {log.message}
-        </span>
-        {stateLabel && (
-          <span className="ml-auto shrink-0 rounded border border-vsc-border-subtle px-1 py-0.5 text-[10px] text-vsc-text-faint">
-            {stateLabel}
-          </span>
-        )}
-      </div>
-      {log.value !== null && (
-        <div className="mt-1 overflow-x-auto">
-          <ValueRenderer displayMode="inline" value={log.value} />
-        </div>
-      )}
-      {log.diagnostic && (
-        <div className="mt-1 text-[10px] text-vsc-text-faint">
-          {log.diagnostic}
-        </div>
-      )}
-    </div>
-  );
-};
-
-const TraceTimelineView: FC<{
-  run: Run | undefined;
-  valueBodyCache: ValueBodyCache;
-}> = ({ run, valueBodyCache }) => {
-  const rows = runToTraceRows(run, valueBodyCache);
-  if (rows.length === 0) {
-    return (
-      <div className="flex-1 flex items-center justify-center text-vsc-text-faint text-xs bg-vsc-bg">
-        No trace yet
-      </div>
-    );
-  }
-
-  return (
-    <div className="flex-1 overflow-auto bg-vsc-bg font-vsc-mono text-xs">
-      <div className="min-w-[560px] p-2">
-        {rows.map((row) => (
-          <div
-            className="grid grid-cols-[72px_minmax(200px,1fr)_80px] gap-2 items-center border-b border-vsc-border-subtle py-1"
-            key={row.id}
-          >
-            <div className="text-[10px] text-vsc-text-faint text-right">
-              {formatTraceMs(row.offsetMs)}
-            </div>
-            <div className="min-w-0">
-              <div
-                className="flex items-center gap-1.5 min-w-0"
-                style={{ paddingLeft: Math.min(row.depth, 12) * 12 }}
-              >
-                <span
-                  className={cn(
-                    'w-1.5 h-1.5 rounded-full shrink-0',
-                    traceStatusClass(row.status),
-                  )}
-                />
-                <span className="text-vsc-text truncate">
-                  {row.functionName}
-                </span>
-                {row.sourceLine != null && (
-                  <span className="text-vsc-text-faint text-[10px] shrink-0">
-                    :{row.sourceLine}
-                  </span>
-                )}
-              </div>
-              <div className="relative mt-1 h-1.5 rounded bg-vsc-surface overflow-hidden">
-                <div
-                  className="absolute top-0 bottom-0 rounded bg-vsc-accent"
-                  style={{
-                    left: `${row.spanLeftPct}%`,
-                    width: `${row.spanWidthPct}%`,
-                  }}
-                />
-              </div>
-              {row.logs.length > 0 && (
-                <div
-                  className="mt-1.5 space-y-1"
-                  style={{ paddingLeft: Math.min(row.depth, 12) * 12 + 10 }}
-                >
-                  {row.logs.map((log) => (
-                    <TraceLogView key={log.id} log={log} />
-                  ))}
-                </div>
-              )}
-              {row.callValues.length > 0 && (
-                <div
-                  className="mt-1.5 space-y-1"
-                  style={{ paddingLeft: Math.min(row.depth, 12) * 12 + 10 }}
-                >
-                  {row.callValues.map((value) => (
-                    <CapturedValueCard compact key={value.id} value={value} />
-                  ))}
-                </div>
-              )}
-            </div>
-            <div className="text-[10px] text-vsc-text-faint">
-              {formatTraceMs(row.durationMs)}
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-};
-
 // ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
@@ -701,6 +507,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
   initialArgsJson,
   argsByFunction,
   initialSidebarOpen = true,
+  obsUrl,
 }) => {
   const runStoreClient = useMemo(() => createRunStoreClient(port), [port]);
   const executionStore = useMemo(
@@ -850,8 +657,21 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
   );
   const [workflowCacheVersion, setWorkflowCacheVersion] = useState(0);
   const [activeTab, setActiveTab] = useState<
-    'run' | 'graph' | 'trace' | 'flame' | 'prompt' | 'curl'
-  >(initialTab ?? 'run');
+    'run' | 'graph' | 'prompt' | 'curl' | 'runs'
+  >(() => {
+    // Normalize unknown tab names (e.g. the removed legacy 'trace'/'flame'
+    // profile tabs from an older host) to the default run tab.
+    switch (initialTab) {
+      case 'run':
+      case 'graph':
+      case 'prompt':
+      case 'curl':
+      case 'runs':
+        return initialTab;
+      default:
+        return 'run';
+    }
+  });
   const [highlightedNodeId, setHighlightedNodeId] = useState<number | null>(
     null,
   );
@@ -1386,7 +1206,6 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
         case 'runSnapshot':
         case 'valueBody':
         case 'runCursorExpired':
-        case 'profileArtifactChunk':
           // RunStoreClient consumes these during the staged migration. The
           // legacy reducer keeps ignoring them until the UI cutover.
           break;
@@ -2712,12 +2531,6 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
                 <TabsTrigger className="py-1 h-7" value="graph">
                   Graph
                 </TabsTrigger>
-                <TabsTrigger className="py-1 h-7" value="trace">
-                  Trace
-                </TabsTrigger>
-                <TabsTrigger className="py-1 h-7" value="flame">
-                  Flame
-                </TabsTrigger>
                 {canPreviewPrompt && (
                   <TabsTrigger className="py-1 h-7" value="prompt">
                     Prompt
@@ -2736,6 +2549,13 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
               </TabsList>
             </>
           )}
+
+          {/* Observability runs list (§9.6) — available in every view state. */}
+          <TabsList className="bg-transparent border-b-0 ml-1 h-7">
+            <TabsTrigger className="py-1 h-7" value="runs">
+              Runs
+            </TabsTrigger>
+          </TabsList>
 
           <div className="flex-1" />
 
@@ -2761,7 +2581,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
 
           {/* The primary Run button lives next to the args editor inside the
               Run tab; other tabs keep a compact icon so re-running while
-              watching the graph/trace stays one click away. */}
+              watching the graph stays one click away. */}
           {selectedFn &&
             !viewingCollection &&
             !viewingTestRun &&
@@ -3034,7 +2854,9 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
 
           {/* Content area */}
           <div className="flex-1 flex flex-col min-h-0 min-w-0">
-            {viewingCollection && collectionDebug ? (
+            {activeTab === 'runs' ? (
+              <ObsRunsTab obsUrl={obsUrl} />
+            ) : viewingCollection && collectionDebug ? (
               <CollectionDebugView
                 expandedLogId={expandedLogId}
                 setExpandedLogId={setExpandedLogId}
@@ -3302,29 +3124,6 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
                     <div className="flex-1 flex items-center justify-center text-vsc-text-faint text-xs bg-vsc-bg h-full">
                       Loading graph...
                     </div>
-                  )}
-                </TabsContent>
-
-                {/* Trace timeline */}
-                <TabsContent
-                  className="flex-1 min-h-0 mt-0 flex flex-col"
-                  style={{ minHeight: 300 }}
-                  value="trace"
-                >
-                  <TraceTimelineView
-                    run={latestGraphRunSnapshot}
-                    valueBodyCache={valueBodyCache}
-                  />
-                </TabsContent>
-
-                {/* Profile flamegraph */}
-                <TabsContent
-                  className="flex-1 min-h-0 mt-0 flex flex-col"
-                  style={{ minHeight: 300 }}
-                  value="flame"
-                >
-                  {activeTab === 'flame' && (
-                    <ExecutionProfileView run={latestGraphRunSnapshot} />
                   )}
                 </TabsContent>
 

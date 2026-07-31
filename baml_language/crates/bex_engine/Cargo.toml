@@ -7,6 +7,7 @@ authors.workspace = true
 license.workspace = true
 
 [dependencies]
+borsh = { workspace = true }
 baml_builtins2 = { workspace = true }
 baml_type = { workspace = true }
 baml_type_runtime = { workspace = true }

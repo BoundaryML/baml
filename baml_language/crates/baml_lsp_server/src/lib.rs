@@ -37,6 +37,7 @@ pub mod lsp_ingress;
 mod lsp_runtime;
 mod native_lsp_sender;
 mod native_vfs;
+mod obs_ws;
 pub mod playground_env;
 pub mod playground_http;
 pub mod playground_io;
@@ -497,9 +498,6 @@ fn run_server_inner(
             ..Default::default()
         },
     ));
-    let _profile_observer = bex_events::run::register_profile_observer(Arc::new(
-        playground_runs::RunStoreProfileObserver::new(run_store.clone(), broadcast_tx.clone()),
-    ));
     let session_store = Arc::new(PlaygroundSessionStore::default());
     let env_state = Arc::new(PlaygroundEnvState::new(
         broadcast_tx.clone(),
@@ -610,9 +608,6 @@ fn run_server_inner(
         spawner,
     );
     let bex: Arc<dyn bex_project::BexLsp> = Arc::new(bex);
-    run_store.set_graph_runtime_overlay_span_provider(Arc::new(
-        playground_runs::ProjectGraphRuntimeOverlaySpanProvider::new(bex.clone()),
-    ));
 
     let has_explicit_workspace_roots = !workspace_roots.is_empty();
     let explicit_projects = if has_explicit_workspace_roots {

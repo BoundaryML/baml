@@ -99,6 +99,20 @@ pub fn compiler2_all_files(db: &dyn Db) -> Vec<baml_base::SourceFile> {
     files
 }
 
+// ── file_blake3 ───────────────────────────────────────────────────────────────
+
+/// BLAKE3 hash of one file's source text bytes.
+///
+/// Salsa-tracked so revision-identity computations (`source_snapshot_id`,
+/// `TASK/design.md` §4.2–4.3) can combine *memoized* per-file hashes: an LSP
+/// keystroke re-hashes only the edited file, and the `[u8; 32]` result gives
+/// downstream queries early cutoff via `PartialEq` (an edit that round-trips
+/// back to identical bytes backdates cleanly).
+#[salsa::tracked]
+pub fn file_blake3(db: &dyn Db, file: SourceFile) -> [u8; 32] {
+    *blake3::hash(file.text(db).as_bytes()).as_bytes()
+}
+
 // ── file_ast ──────────────────────────────────────────────────────────────────
 
 /// The CST → AST lowering output for one file: top-level items plus the
@@ -238,4 +252,81 @@ pub fn scope_bindings_query<'db>(
 /// Returns the env var references found in a file's expression bodies.
 pub fn file_env_var_refs(db: &dyn Db, file: SourceFile) -> &[baml_compiler2_ast::EnvVarRef] {
     &file_semantic_index(db, file).env_var_refs
+}
+
+#[cfg(test)]
+mod tests {
+    use std::path::PathBuf;
+
+    use baml_base::{FileId, SourceFile};
+    use baml_workspace::Project;
+    use salsa::Setter as _;
+
+    use super::{Db, file_blake3};
+
+    #[salsa::db]
+    #[derive(Default)]
+    struct TestDb {
+        storage: salsa::Storage<TestDb>,
+        project: Option<Project>,
+    }
+
+    #[salsa::db]
+    impl salsa::Database for TestDb {}
+
+    #[salsa::db]
+    impl baml_workspace::Db for TestDb {
+        fn project(&self) -> Project {
+            self.project.expect("test db initialized")
+        }
+    }
+
+    #[salsa::db]
+    impl Db for TestDb {}
+
+    fn test_db() -> TestDb {
+        let mut db = TestDb::default();
+        let project = Project::new(&db, PathBuf::from("/test"), Vec::new());
+        db.project = Some(project);
+        db
+    }
+
+    #[test]
+    fn file_blake3_is_content_hash_and_tracks_only_the_edited_file() {
+        let mut db = test_db();
+        let a = SourceFile::new(
+            &db,
+            "class A {}".to_string(),
+            PathBuf::from("a.baml"),
+            FileId::new(0),
+        );
+        let b = SourceFile::new(
+            &db,
+            "class A {}".to_string(),
+            PathBuf::from("b.baml"),
+            FileId::new(1),
+        );
+
+        // Same content → same hash, independent of path / file identity, and
+        // it is exactly blake3 of the text bytes.
+        assert_eq!(file_blake3(&db, a), file_blake3(&db, b));
+        assert_eq!(file_blake3(&db, a), *blake3::hash(b"class A {}").as_bytes());
+
+        let a_before = file_blake3(&db, a);
+        let b_before = file_blake3(&db, b);
+
+        // Edit one file: its hash changes, the untouched file's hash does not.
+        a.set_text(&mut db)
+            .to("class A { field string }".to_string());
+        assert_ne!(file_blake3(&db, a), a_before, "edited file's hash changes");
+        assert_eq!(
+            file_blake3(&db, b),
+            b_before,
+            "untouched file's hash is unchanged"
+        );
+
+        // Reverting to the original bytes restores the original hash.
+        a.set_text(&mut db).to("class A {}".to_string());
+        assert_eq!(file_blake3(&db, a), a_before);
+    }
 }

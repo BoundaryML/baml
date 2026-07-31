@@ -595,16 +595,52 @@ pub fn execute_parse_response_from_owned(
     return_type: &baml_type::RuntimeTy,
     ctx: &::sys_types::SysOpContext,
 ) -> Result<bex_external_types::BexExternalValue, LlmOpError> {
-    let mut provider = LlmProvider::from_str(&client.provider)
-        .map_err(|e| LlmOpError::ParseResponseError(e.to_string()))?;
+    // §5.4 enrichment: deposit what we learn about this LLM call into the
+    // engine's per-call slot so the profiling stream records model + token
+    // usage + error class durably. Every exit path below deposits — a
+    // sample with error flags is exactly as important as a success sample.
+    let deposit = |sample: ::sys_types::LlmCallMetaSample| {
+        if let Some(slot) = &ctx.llm_meta
+            && let Ok(mut guard) = slot.lock()
+        {
+            *guard = Some(sample);
+        }
+    };
+    let request_model = (!client.model.is_empty()).then(|| client.model.clone());
+
+    let mut provider = LlmProvider::from_str(&client.provider).map_err(|e| {
+        deposit(::sys_types::LlmCallMetaSample {
+            model: request_model.clone(),
+            parse_error: true,
+            ..Default::default()
+        });
+        LlmOpError::ParseResponseError(e.to_string())
+    })?;
 
     // Vertex AI + Anthropic model uses rawPredict, which returns Anthropic-format responses.
     if provider == LlmProvider::VertexAi && build_request::is_anthropic_model(&client.model) {
         provider = LlmProvider::Anthropic;
     }
 
-    let response = parse_response::parse_response(provider, response)
-        .map_err(|e| LlmOpError::ParseResponseError(e.to_string()))?;
+    let response = parse_response::parse_response(provider, response).map_err(|e| {
+        deposit(::sys_types::LlmCallMetaSample {
+            model: request_model.clone(),
+            parse_error: true,
+            ..Default::default()
+        });
+        LlmOpError::ParseResponseError(e.to_string())
+    })?;
+
+    // The provider response parsed: from here on the sample carries real
+    // usage; only the error-class flags vary by exit path.
+    let sample = ::sys_types::LlmCallMetaSample {
+        model: response.model.clone().or_else(|| request_model.clone()),
+        tokens_in: response.usage.input_tokens.unwrap_or(0),
+        tokens_out: response.usage.output_tokens.unwrap_or(0),
+        provider_error: false,
+        parse_error: false,
+        retry: false,
+    };
 
     // Normalize empty finish_reason to None so oneshot and streaming paths agree
     // (matches `execute_validate_finish_reason`'s behavior above).
@@ -613,14 +649,29 @@ pub fn execute_parse_response_from_owned(
         .as_deref()
         .filter(|s| !s.is_empty());
     if !client.is_finish_reason_allowed(finish_reason) {
+        deposit(::sys_types::LlmCallMetaSample {
+            provider_error: true,
+            ..sample
+        });
         return Err(LlmOpError::ParseResponseError(format!(
             "Finish reason not allowed: {}",
             finish_reason.unwrap_or("unknown")
         )));
     }
 
-    if let Some(parsed) = parse_llm_output_for_target(return_type, &response.output)? {
-        return Ok(parsed);
+    match parse_llm_output_for_target(return_type, &response.output) {
+        Ok(Some(parsed)) => {
+            deposit(sample);
+            return Ok(parsed);
+        }
+        Ok(None) => {}
+        Err(err) => {
+            deposit(::sys_types::LlmCallMetaSample {
+                parse_error: true,
+                ..sample
+            });
+            return Err(err);
+        }
     }
 
     let compiled = bex_sap::CompiledSapModel::from_sys_op_context(
@@ -630,7 +681,19 @@ pub fn execute_parse_response_from_owned(
     )
     .map_err(|e| LlmOpError::ParseResponseError(e.to_string()))?;
     let sap = SapStreamCache::new(compiled);
-    execute_sap_parse_final(&response.content, &sap, ctx)
+    match execute_sap_parse_final(&response.content, &sap, ctx) {
+        Ok(parsed) => {
+            deposit(sample);
+            Ok(parsed)
+        }
+        Err(err) => {
+            deposit(::sys_types::LlmCallMetaSample {
+                parse_error: true,
+                ..sample
+            });
+            Err(err)
+        }
+    }
 }
 
 fn parse_llm_output_for_target(

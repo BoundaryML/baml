@@ -39,8 +39,9 @@ pub fn run_to_wire(run: &Run) -> Value {
         })),
         "rootCallNodeId": run.root_call_node_id.map(call_node_id_to_wire),
         "graphRuntimeOverlay": run.graph_runtime_overlay.as_ref().map(graph_runtime_overlay_to_wire),
-        "calls": run.calls.iter().map(call_to_wire).collect::<Vec<_>>(),
-        "threads": run.threads.iter().map(thread_to_wire).collect::<Vec<_>>(),
+        // `calls`/`threads` left the wire with the run store's profile-event
+        // projection (§9.3 "one live plane"); the TS side treats them as
+        // absent-optional.
         "payloads": run.payloads.iter().map(payload_to_wire).collect::<Vec<_>>(),
         "diagnostics": run.diagnostics.iter().map(diagnostic_to_wire).collect::<Vec<_>>(),
         "cursor": run.cursor.0,

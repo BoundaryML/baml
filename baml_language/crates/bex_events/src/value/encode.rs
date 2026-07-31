@@ -60,6 +60,8 @@ pub fn encode_file_record(
             log_event: None,
             capture_loss: None,
             blob: record.blob_ref.as_ref().map(Into::into),
+            dag_ref: record.dag_ref.as_ref().map(Into::into),
+            promoted_by: record.promoted_by.clone(),
         },
         ValueFileRecord::LogEvent(record) => pb::ValueRecordV1 {
             metadata: Some((&record.value_ref).into()),
@@ -70,6 +72,8 @@ pub fn encode_file_record(
             log_event: Some((&record.event).into()),
             capture_loss: None,
             blob: record.blob_ref.as_ref().map(Into::into),
+            dag_ref: None,
+            promoted_by: None,
         },
         ValueFileRecord::CaptureLoss(record) => pb::ValueRecordV1 {
             metadata: None,
@@ -80,6 +84,8 @@ pub fn encode_file_record(
             log_event: None,
             capture_loss: Some(record.into()),
             blob: None,
+            dag_ref: None,
+            promoted_by: None,
         },
         ValueFileRecord::RunStarted(record) => pb::ValueRecordV1 {
             metadata: None,
@@ -90,6 +96,8 @@ pub fn encode_file_record(
             log_event: None,
             capture_loss: None,
             blob: None,
+            dag_ref: None,
+            promoted_by: None,
         },
         ValueFileRecord::RunCompleted(record) => pb::ValueRecordV1 {
             metadata: None,
@@ -100,6 +108,8 @@ pub fn encode_file_record(
             log_event: None,
             capture_loss: None,
             blob: None,
+            dag_ref: None,
+            promoted_by: None,
         },
     }
     .encode_length_delimited(out)
@@ -127,6 +137,8 @@ mod tests {
             body: vec![1, 2, 3],
             blob_ref: None,
             capture: None,
+            dag_ref: None,
+            promoted_by: None,
         };
         let mut bytes = Vec::new();
         super::encode_header(&mut bytes, BoundaryId::from_bytes([7; 16])).unwrap();
@@ -253,6 +265,8 @@ mod tests {
             log_event: None,
             capture_loss: None,
             blob: None,
+            dag_ref: None,
+            promoted_by: None,
         };
         let mut bytes = Vec::new();
         super::encode_header(&mut bytes, BoundaryId::from_bytes([9; 16])).unwrap();
@@ -309,6 +323,8 @@ mod tests {
             log_event: None,
             capture_loss: None,
             blob: None,
+            dag_ref: None,
+            promoted_by: None,
         };
         let mut bytes = Vec::new();
         record.encode_length_delimited(&mut bytes).unwrap();

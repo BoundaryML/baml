@@ -601,6 +601,25 @@ pub trait VmSpawner<E: Send + Sync + 'static = Box<dyn Send + Sync + 'static>>:
 /// [`SysOpContext`] is the per-call version of [`EngineSysOpContext`].
 // Manual Clone impl: the derive would add an unnecessary `E: Clone` bound,
 // but no field actually stores `E` directly (only `Arc<dyn VmSpawner<E>>`).
+/// One LLM call's enrichment sample (observability design §5.4), deposited
+/// by `sys_llm` into the per-call [`SysOpContext::llm_meta`] slot and
+/// drained by the engine after the sysop completes — becoming the durable
+/// `LlmCallMeta` ring record (model, token usage, error class).
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct LlmCallMetaSample {
+    /// Provider-reported model name (`None` when the provider omits it;
+    /// the engine falls back to the request-side configured model).
+    pub model: Option<String>,
+    pub tokens_in: u64,
+    pub tokens_out: u64,
+    /// Provider-side failure (HTTP error, finish-reason policy rejection).
+    pub provider_error: bool,
+    /// The response arrived but did not parse into the return type.
+    pub parse_error: bool,
+    /// This call was a retry of a prior attempt (BAML-level orchestration).
+    pub retry: bool,
+}
+
 pub struct SysOpContext<E: Send + Sync + 'static = Box<dyn Send + Sync + 'static>> {
     /// Pre-extracted LLM function metadata, keyed by function name.
     /// Used by LLM ops that need to look up function prompt templates, client names, etc.
@@ -636,6 +655,12 @@ pub struct SysOpContext<E: Send + Sync + 'static = Box<dyn Send + Sync + 'static
     /// Can be used to spawn new VMs.
     pub spawner: Arc<dyn VmSpawner<E>>,
 
+    /// Per-call LLM enrichment slot (§5.4). The engine installs a fresh
+    /// slot per sysop call; `sys_llm` deposits a [`LlmCallMetaSample`] at
+    /// completion; the engine drains it into the profiling stream. `None`
+    /// on the shared template context.
+    pub llm_meta: Option<Arc<std::sync::Mutex<Option<LlmCallMetaSample>>>>,
+
     /// Typed async IO interface for calling back into the runtime IO layer.
     /// Built once by the engine from the `SysOps` table and shared across calls.
     pub runtime_io: Arc<dyn runtime_io::RuntimeIo>,
@@ -653,6 +678,7 @@ impl<E: Send + Sync + 'static> Clone for SysOpContext<E> {
             type_alias_definitions: self.type_alias_definitions.clone(),
             spawner: self.spawner.clone(),
             runtime_io: self.runtime_io.clone(),
+            llm_meta: self.llm_meta.clone(),
         }
     }
 }
@@ -784,6 +810,7 @@ impl SysOpContext {
             >::new()),
             spawner: Arc::new(NeverSpawner),
             runtime_io: Arc::new(runtime_io::NoopRuntimeIo),
+            llm_meta: None,
         }
     }
 }
@@ -805,6 +832,8 @@ impl EngineSysOpContext {
             type_alias_definitions: self.type_alias_definitions.clone(),
             spawner,
             runtime_io: self.runtime_io.clone(),
+            // Installed per call by the engine's execute_sys_op.
+            llm_meta: None,
         }
     }
 }

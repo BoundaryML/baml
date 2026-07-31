@@ -9,7 +9,7 @@ use std::{
 use anyhow::{Context, Result, anyhow};
 use baml_db::{baml_compiler_diagnostics::Severity, baml_compiler2_emit};
 use baml_project::ProjectDatabase;
-use bex_engine::{BexEngine, FunctionCallContextBuilder, UserFunctionInfo};
+use bex_engine::{BexEngine, CallRef, FunctionCallContextBuilder, UserFunctionInfo};
 // `surface_clap_error` is defined later in this file.
 // For --log-file event sink.
 use clap::Args;
@@ -517,6 +517,7 @@ impl RunArgs {
             &function_name,
             parsed.cli_values,
             json_args,
+            Some(&project_root),
             reporter,
         )
     }
@@ -525,7 +526,10 @@ impl RunArgs {
     fn run_subcommand_targets(&self, reporter: &Reporter) -> Result<crate::ExitCode> {
         let argv = self.build_argv_for_subcommand();
         let (db, mut engine, needs_format_hint) = self.load_and_compile(argv.clone(), reporter)?;
-        let _ = db;
+        // Phase H observability roots the boundary dir under the
+        // project's `.baml`; standalone (`--file`) mode resolves to the
+        // file's parent, matching the database's project root.
+        let project_root = Self::project_root(&db).ok();
         Self::emit_format_hint_if_needed(reporter, needs_format_hint);
 
         let (entries, lookups) = self.resolve_subcommand_targets(&engine)?;
@@ -566,7 +570,14 @@ impl RunArgs {
             None => None,
         };
 
-        self.dispatch_and_finish(engine, &chosen, parsed.cli_values, json_args, reporter)
+        self.dispatch_and_finish(
+            engine,
+            &chosen,
+            parsed.cli_values,
+            json_args,
+            project_root.as_deref(),
+            reporter,
+        )
     }
 
     /// Walk `self.functions`, resolve each to an engine-canonical
@@ -617,12 +628,19 @@ impl RunArgs {
 
     /// Shared tail: spawn the runtime and run dispatch. The program runs
     /// silently — its own stdout is the output that matters.
+    ///
+    /// Phase H (observability design §3.2/§6.4): when history capture is
+    /// on, a boundary is minted + begun under `<project>/.baml/history/`
+    /// before the call, value capture rides the call context, and after
+    /// the engine settles the boundary is drained, bound, and completed.
+    /// Every observability step is best-effort — it never fails the run.
     fn dispatch_and_finish(
         &self,
         engine: BexEngine,
         function_name: &str,
         cli_values: HashMap<String, bex_engine::BexExternalValue>,
         json_args: Option<serde_json::Value>,
+        project_root: Option<&Path>,
         reporter: &Reporter,
     ) -> Result<crate::ExitCode> {
         self.vlog(format_args!("Calling {function_name}"));
@@ -631,17 +649,43 @@ impl RunArgs {
 
         let rt = tokio::runtime::Runtime::new().context("failed to create tokio runtime")?;
         let engine = Arc::new(engine);
+
+        // Host-side `begin` (§6.4) happens BEFORE the run so a crash
+        // leaves a begin-without-complete boundary (crash evidence).
+        let display_target = function_name.strip_prefix("user.").unwrap_or(function_name);
+        let revision_id = engine
+            .program_metadata()
+            .revision_id
+            .as_ref()
+            .map(|id| id.0.clone())
+            .unwrap_or_default();
+        let boundary = project_root.and_then(|root| {
+            crate::run_observability::RunBoundary::begin(root, display_target, &revision_id)
+        });
+        let call_ctx = match &boundary {
+            Some(boundary) => boundary.context_builder(CallId::next()).build(),
+            None => FunctionCallContextBuilder::new(CallId::next()).build(),
+        };
+
         let output_format = self.output_format;
         let start = std::time::Instant::now();
-        let dispatch_result = rt.block_on(baml_exec::dispatch_target(
-            Arc::clone(&engine),
+        let (dispatch_result, entry_call_ref, status) = rt.block_on(dispatch_target_traced(
+            &engine,
             function_name,
             cli_values,
             json_args,
             output_format,
+            call_ctx,
         ));
         rt.block_on(engine.shutdown());
         let unhandled_spawn_failed = report_unhandled_spawn_errors(&engine, reporter);
+
+        // Completion barrier (§11 Phase H): drain → bind → complete →
+        // flush, after shutdown so spawned tasks' events are included and
+        // before `Exit` terminates the process below.
+        if let Some(boundary) = boundary {
+            boundary.finish(&engine, entry_call_ref, status);
+        }
 
         self.vlog(format_args!("Completed in {:.2?}", start.elapsed()));
 
@@ -1593,6 +1637,116 @@ fn surface_clap_error(reporter: &Reporter, err: clap::Error) -> Result<crate::Ex
         ErrorKind::DisplayHelp | ErrorKind::DisplayVersion => crate::ExitCode::Success,
         _ => crate::ExitCode::Other,
     })
+}
+
+/// `baml_exec::dispatch_target`, traced: byte-identical dispatch
+/// semantics (arg building, output writing, error rendering), but the
+/// call context is caller-supplied — so the Phase H boundary id + value
+/// capture ride along — and the entry `CallRef` plus the boundary status
+/// (`succeeded` / `failed` / `cancelled`) are surfaced for the
+/// observability completion barrier.
+///
+/// Kept in `baml_cli` rather than widening `dispatch_target` itself:
+/// `dispatch_target` is the shared pack-host entrypoint and its callers
+/// have no boundary to thread through (pack-host wiring is a separate
+/// Phase H site).
+async fn dispatch_target_traced(
+    engine: &Arc<BexEngine>,
+    target_name: &str,
+    cli_values: HashMap<String, bex_engine::BexExternalValue>,
+    json_args: Option<serde_json::Value>,
+    output_format: OutputFormat,
+    call_ctx: bex_engine::FunctionCallContext,
+) -> (
+    Result<baml_exec::DispatchResult>,
+    Option<CallRef>,
+    &'static str,
+) {
+    let Some(func_info) = engine.find_user_function(target_name) else {
+        return (
+            Err(anyhow!("function `{target_name}` not found")),
+            None,
+            "failed",
+        );
+    };
+    if let Err(err) = baml_exec::validate_help_param(engine, &func_info.qualified_name) {
+        return (Err(err), None, "failed");
+    }
+    let args = match baml_exec::build_args_from_signature(
+        engine,
+        cli_values,
+        json_args.as_ref(),
+        &func_info.param_names,
+        &func_info.param_types,
+        &func_info.param_has_default,
+    )
+    .await
+    {
+        Ok(args) => args,
+        Err(err) => return (Err(err), None, "failed"),
+    };
+
+    match engine
+        .call_function_bound_args_with_trace(target_name, args, call_ctx, true)
+        .await
+    {
+        Ok(traced) => {
+            let call_ref = Some(traced.entry_call_ref);
+            match traced.value {
+                Ok(value) => {
+                    if !matches!(func_info.return_type, bex_engine::RuntimeTy::Void { .. }) {
+                        if let Err(err) = baml_exec::write_output(
+                            engine,
+                            value,
+                            &func_info.return_type,
+                            output_format,
+                        )
+                        .await
+                        {
+                            // Serialization failed but the call itself
+                            // succeeded — the boundary records the call's
+                            // truth; the run still exits non-zero.
+                            return (Err(err), call_ref, "succeeded");
+                        }
+                    }
+                    (Ok(baml_exec::DispatchResult::Ok), call_ref, "succeeded")
+                }
+                Err(error) => engine_error_outcome(error, call_ref),
+            }
+        }
+        // Early failures (lookup/validation/pre-cancel) never entered the
+        // VM, so there is no entry call ref.
+        Err(error) => engine_error_outcome(error, None),
+    }
+}
+
+/// Shared error tail of [`dispatch_target_traced`]: `baml.sys.exit` is a
+/// clean termination request; cancellation is its own boundary status;
+/// anything else prints exactly like `dispatch_target` and fails.
+fn engine_error_outcome(
+    error: bex_engine::EngineError,
+    call_ref: Option<CallRef>,
+) -> (
+    Result<baml_exec::DispatchResult>,
+    Option<CallRef>,
+    &'static str,
+) {
+    match error {
+        bex_engine::EngineError::Exit { code } => (
+            Ok(baml_exec::DispatchResult::Exit(code)),
+            call_ref,
+            "succeeded",
+        ),
+        error => {
+            let status = if bex_engine::is_cancelled_engine_error(&error) {
+                "cancelled"
+            } else {
+                "failed"
+            };
+            baml_exec::print_error(format_args!("{error:#}"));
+            (Ok(baml_exec::DispatchResult::TargetError), call_ref, status)
+        }
+    }
 }
 
 /// Load expression source from -e argument: inline string, @file, or - for stdin.

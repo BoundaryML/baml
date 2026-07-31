@@ -107,6 +107,21 @@ pub struct Program {
     /// references are order-independent). The single source of truth for interface
     /// dispatch, named-item lookup, and recursive-alias rendering.
     pub packages: IndexMap<baml_type::Name, ProgramPackage>,
+
+    /// Compile-time identity (observability design §4.2), attached by
+    /// `finalize_program_identity` at every site that materializes a runnable
+    /// program. `#[borsh(skip)]` because units cannot carry it (a unit does
+    /// not know its pool position until link) and packs recompute a fallback
+    /// at load — keeping the wire format, the bytecode cache, and the B-693
+    /// byte-identity oracles unchanged.
+    #[borsh(skip)]
+    pub identity: Option<crate::identity::ProgramIdentity>,
+
+    /// User source files (path + BLAKE3) recorded by the emit finalizer —
+    /// the revision dictionary's file table (§4.2). Same `#[borsh(skip)]`
+    /// rationale as `identity`; empty for identity-less/legacy programs.
+    #[borsh(skip)]
+    pub source_files: Vec<crate::identity::SourceFileIdentity>,
 }
 
 /// Metadata for building a client tree at runtime.

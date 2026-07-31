@@ -113,3 +113,32 @@ export {
   WasmPanicRegistry,
   type WasmPanic,
 } from './wasm-panic';
+
+// Observability (§9.3 BQF1 wire + /api/obs client + Runs tab)
+export {
+  decodeFrame,
+  crc32c,
+  asRunsList,
+  asRunMeta,
+  asTimeline,
+  asLeftHeavy,
+  asTopFunctions,
+  asStatus,
+  FrameKind,
+  FOLD_ROW_FUNCTION,
+  BqfDecodeError,
+} from './obs/bqf1';
+export type {
+  BqfFrame,
+  BqfColumn,
+  RunsListColumns,
+  RunMetaColumns,
+  TimelineColumns,
+  LeftHeavyColumns,
+  TopFunctionsColumns,
+  StatusColumns,
+} from './obs/bqf1';
+export { WsObserveClient, defaultObsUrl } from './obs/observe-client';
+export type { ObsQueryMethod, ObsQueryParams } from './obs/observe-client';
+export { ObsRunsTab } from './obs/RunsView';
+export type { ObsRunsTabProps } from './obs/RunsView';

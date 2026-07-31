@@ -137,6 +137,11 @@ pub(crate) enum Commands {
     #[command(about = "Check BAML source files for compiler errors")]
     Check(crate::check_command::CheckArgs),
 
+    #[command(about = "Clean up .baml observability data (history, sessions, store)")]
+    Clean(crate::clean_command::CleanArgs),
+    #[command(about = "Query observability data with BQL (e.g. 'ctx() | top(10, by=total_ns)')")]
+    Q(crate::q_command::QArgs),
+
     // #[command(about = "Starts a server that translates LLM responses to BAML responses")]
     // Serve(baml_runtime::cli::serve::ServeArgs),
 
@@ -184,6 +189,9 @@ pub(crate) enum Commands {
 
     #[command(about = "Open the BAML playground in your browser")]
     Playground(crate::playground_command::PlaygroundArgs),
+
+    #[command(about = "Open BAML Studio, the runs/trace viewer, in your browser")]
+    Studio(crate::studio_command::StudioArgs),
 
     #[command(about = "Package a BAML target as a standalone executable")]
     Pack(crate::pack_command::PackArgs),
@@ -370,8 +378,11 @@ impl RuntimeCli {
             Commands::Init(args) => args.run(),
             Commands::New(args) => args.run(),
             Commands::Check(args) => args.run(),
+            Commands::Clean(args) => args.run(),
+            Commands::Q(args) => args.run(),
             Commands::Run(args) => args.run(),
             Commands::Playground(args) => args.run(),
+            Commands::Studio(args) => args.run(),
             Commands::Pack(args) => args.run(),
             Commands::Ide(args) => args.run(),
             Commands::Agent(args) => args.run(),
@@ -401,12 +412,15 @@ impl Commands {
     fn has_legacy_project(&self) -> bool {
         match self {
             Self::Check(args) => args.from.is_some(),
+            Self::Clean(args) => args.from.is_some(),
+            Self::Q(args) => args.from.is_some(),
             Self::Format(args) => args.from.is_some(),
             Self::Describe(args) => args.from.is_some(),
             Self::Generate(args) => args.has_legacy_project(),
             Self::Test(args) => args.from.is_some(),
             Self::Run(args) => args.from.is_some(),
             Self::Playground(args) => args.from.is_some(),
+            Self::Studio(args) => args.from.is_some(),
             Self::Pack(args) => args.from.is_some(),
             Self::Agent(crate::agent_command::AgentArgs {
                 command: crate::agent_command::AgentCommand::Install(args),
@@ -422,12 +436,15 @@ impl Commands {
         let project = project.to_path_buf();
         match self {
             Self::Check(args) => args.from = Some(project.clone()),
+            Self::Clean(args) => args.from = Some(project.clone()),
+            Self::Q(args) => args.from = Some(project.clone()),
             Self::Format(args) => args.from = Some(project.clone()),
             Self::Describe(args) => args.from = Some(project.clone()),
             Self::Generate(args) => args.apply_project(&project),
             Self::Test(args) => args.from = Some(project.clone()),
             Self::Run(args) => args.from = Some(project.clone()),
             Self::Playground(args) => args.from = Some(project.clone()),
+            Self::Studio(args) => args.from = Some(project.clone()),
             Self::Pack(args) => args.from = Some(project.clone()),
             Self::Agent(crate::agent_command::AgentArgs {
                 command: crate::agent_command::AgentCommand::Install(args),
@@ -475,6 +492,7 @@ mod tests {
     const PUBLIC_COMMAND_PATHS: &[&[&str]] = &[
         &[],
         &["check"],
+        &["clean"],
         &["auth"],
         &["auth", "login"],
         &["auth", "whoami"],
@@ -488,6 +506,7 @@ mod tests {
         &["new"],
         &["run"],
         &["playground"],
+        &["studio"],
         &["pack"],
         &["ide"],
         &["ide", "install"],
@@ -583,6 +602,30 @@ mod tests {
     }
 
     #[test]
+    fn clean_help_presents_public_baml_command() {
+        let help = help_for(&["baml-cli", "clean", "--help"]);
+        assert!(help.contains("Usage: baml clean [OPTIONS]"), "{help}");
+        assert!(!help.contains("Usage: baml-cli clean"), "{help}");
+        assert!(help.contains("--dry-run"), "{help}");
+        assert!(help.contains("--gc-only"), "{help}");
+        assert!(help.contains("--retention-only"), "{help}");
+        assert!(help.contains("--grace-hours <N>"), "{help}");
+    }
+
+    /// `--gc-only` and `--retention-only` select mutually exclusive passes.
+    #[test]
+    fn clean_rejects_gc_only_plus_retention_only() {
+        let err = RuntimeCli::command()
+            .try_get_matches_from(["baml", "clean", "--gc-only", "--retention-only"])
+            .unwrap_err();
+        assert_eq!(
+            err.kind(),
+            clap::error::ErrorKind::ArgumentConflict,
+            "{err}"
+        );
+    }
+
+    #[test]
     fn check_help_includes_global_project_option() {
         let help = help_for(&["baml-cli", "check", "--help"]);
         assert!(help.contains("Usage: baml check [OPTIONS]"), "{help}");
@@ -639,6 +682,19 @@ mod tests {
         let help = help_for(&["baml-cli", "--help"]);
         assert!(help.contains("playground"), "{help}");
         assert!(help.contains("Open the BAML playground"), "{help}");
+    }
+
+    #[test]
+    fn studio_help_presents_public_baml_command() {
+        let help = help_for(&["baml-cli", "studio", "--help"]);
+        assert!(
+            help.contains("Usage: baml studio [OPTIONS] [PATH]"),
+            "{help}"
+        );
+        assert!(!help.contains("Usage: baml-cli studio"), "{help}");
+        assert!(help.contains("--project <PATH>"), "{help}");
+        assert!(help.contains("--port <PORT>"), "{help}");
+        assert!(help.contains("--no-open"), "{help}");
     }
 
     #[test]
@@ -799,6 +855,10 @@ mod tests {
         let examples: &[&[&str]] = &[
             &["baml", "check"],
             &["baml", "check", "--project", "./my-project"],
+            &["baml", "clean"],
+            &["baml", "clean", "--dry-run"],
+            &["baml", "clean", "--gc-only"],
+            &["baml", "clean", "--grace-hours", "0"],
             &["baml", "auth", "whoami"],
             &["baml", "auth", "logout"],
             &["baml", "auth", "login"],
@@ -892,6 +952,9 @@ mod tests {
                 "--port",
                 "4265",
             ],
+            &["baml", "studio"],
+            &["baml", "studio", "./captured-run"],
+            &["baml", "studio", "--no-open", "--port", "4265"],
             &["baml", "ide", "install"],
             &["baml", "ide", "install", "--cursor"],
             &["baml", "ide", "install", "--output-dir", "./extensions"],

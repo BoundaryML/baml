@@ -9,7 +9,7 @@
 //! identity) are modeled but `None` until authoritative compiler/cloud
 //! sources populate them — consumers must tolerate that.
 
-use crate::ids::{FunctionId, ProgramId, SourceSnapshotId};
+use crate::ids::{FunctionId, SourceSnapshotId};
 
 /// Identity of a definition revision (BEP-053). Not yet populated by the
 /// runtime.
@@ -125,15 +125,22 @@ impl FunctionMetadataTable {
     }
 }
 
-/// Program-level metadata an engine derives at construction. `program_id`
-/// is currently random per engine instance (artifact-local joins only, not
-/// durable cross-run identity).
-#[derive(Clone, Debug, PartialEq, Eq)]
+/// Program-level metadata an engine derives at construction.
+///
+/// The former random-per-engine `program_id` is deleted (observability
+/// design §4.2 header ruling: engine-instance identity is already
+/// `(process_id, engine_id)`; durable program identity is `revision_id`).
+#[derive(Clone, Debug, PartialEq)]
 pub struct ProgramMetadata {
-    pub program_id: ProgramId,
+    /// The §4.3 snapshot identity; always present once programs are
+    /// finalized (fallback identity covers legacy paths).
     pub source_snapshot_id: Option<SourceSnapshotId>,
+    /// The §4.3 revision identity, in `baml_rev_1_...` string form.
     pub revision_id: Option<RevisionId>,
     pub function_table: FunctionMetadataTable,
+    /// The revision dictionary (§4.2), built once per engine; the consumer
+    /// writes it to `.baml/dict/` before any referencing artifact.
+    pub dictionary: Option<std::sync::Arc<crate::dict::pb::RevisionDictionaryV1>>,
 }
 
 #[cfg(test)]

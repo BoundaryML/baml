@@ -92,9 +92,7 @@ use ::core::sync::atomic::AtomicBool;
 use async_trait::async_trait;
 pub use bex_events::{
     FunctionMetadataTable, ProgramMetadata,
-    ids::{
-        BexCallId, BexThreadId, CallRef, EngineId, FunctionId, ProcessEuid, ProgramId, ThreadRef,
-    },
+    ids::{BexCallId, BexThreadId, CallRef, EngineId, FunctionId, ProcessEuid, ThreadRef},
 };
 pub use bex_external_types::{BexExternalValue, RuntimeTy, TypeName, UnionMetadata};
 use bex_heap::BexHeap;
@@ -854,6 +852,19 @@ pub struct BexEngine {
     /// a superseded candidate therefore drops without registering metadata
     /// or emitting an `engine_closed` tombstone.
     prof_activated: AtomicBool,
+
+    /// Interned LLM model names (observability design §5.4): `model_id`s in
+    /// `LlmCallMeta` records resolve here. Id 0 = unknown; real ids start
+    /// at 1 in intern order. Flushed as `model_birth` rows by the session
+    /// stream (P3). Cold path only (one lock per completed LLM call).
+    llm_models: std::sync::Mutex<LlmModelIntern>,
+}
+
+/// See `BexEngine::llm_models`.
+#[derive(Default)]
+struct LlmModelIntern {
+    by_name: std::collections::HashMap<String, u32>,
+    names: Vec<String>,
 }
 
 impl Drop for BexEngine {
@@ -899,9 +910,17 @@ impl Drop for BexEngine {
 /// into the `.bamlprof` header rows.
 fn prof_engine_metadata(meta: &ProgramMetadata) -> bex_events::prof::EngineProfileMetadata {
     bex_events::prof::EngineProfileMetadata {
-        program_id: hex_bytes(&meta.program_id.0),
-        source_snapshot_id: meta.source_snapshot_id.as_ref().map(|id| hex_bytes(&id.0)),
+        // Header field 3 (program_id) is deleted (§4.2): engine-instance
+        // identity is (process_id, engine_id); empty string = absent on the
+        // proto3 wire.
+        program_id: String::new(),
+        // Fields 10/11: the public string forms (baml_src_1_/baml_rev_1_).
+        source_snapshot_id: meta
+            .source_snapshot_id
+            .as_ref()
+            .map(|id| bex_vm_types::SourceSnapshotId(id.0).encode()),
         revision_id: meta.revision_id.as_ref().map(|id| id.0.clone()),
+        dictionary: meta.dictionary.clone(),
         functions: meta
             .function_table
             .functions
@@ -1254,44 +1273,6 @@ fn extract_host_diagnostics_from_value(
     )
 }
 
-// TODO(bep-053): replace with compiler-owned metadata — capital-letter
-// sniffing on FQN segments is an acknowledged-interim heuristic and must not
-// become load-bearing.
-fn derive_owner_type_definition_key(fqn: &str) -> Option<bex_events::DefinitionKey> {
-    let parts = fqn.split('.').collect::<Vec<_>>();
-    if parts.len() < 3 {
-        return None;
-    }
-
-    let owner = parts[parts.len() - 2];
-    if !owner
-        .chars()
-        .next()
-        .is_some_and(|ch| ch.is_ascii_uppercase())
-    {
-        return None;
-    }
-
-    Some(bex_events::DefinitionKey(format!(
-        "class:{}",
-        parts[..parts.len() - 1].join(".")
-    )))
-}
-
-// TODO(bep-053): replace with compiler-owned lambda identity — the
-// `find("<lambda")` name sniff is an acknowledged-interim heuristic.
-fn derive_lambda_metadata(fqn: &str) -> (Option<bex_events::DefinitionKey>, Option<String>) {
-    let Some(lambda_start) = fqn.find("<lambda") else {
-        return (None, None);
-    };
-
-    let parent = fqn[..lambda_start].trim_end_matches(['.', ':']).to_string();
-    let parent_function =
-        (!parent.is_empty()).then(|| bex_events::DefinitionKey(format!("function:{parent}")));
-    let lambda_path = Some(fqn[lambda_start..].to_string());
-    (parent_function, lambda_path)
-}
-
 // ── Friendly generic-inference errors ───────────────────────────────────────
 //
 // Inbound generic-call failures are surfaced to host callers, so their messages
@@ -1390,114 +1371,141 @@ impl BexEngine {
     }
 
     fn build_program_metadata(program: &bex_vm_types::Program) -> ProgramMetadata {
-        // Ids are 1-based sequential in pool order (`0` = unassigned) — the
-        // exact sequence the pre-heap walk in `new()` stamps onto each
-        // `Function.function_id`, so the table and the `.bamlprof` records
-        // agree byte-for-byte. M0 moves this to compile time.
-        let mut next_function_id: u32 = 0;
-        let mut functions: Vec<bex_events::FunctionMetadata> = program
-            .objects
-            .iter()
-            .filter_map(|obj| {
-                let Object::Function(function) = obj else {
-                    return None;
+        // Ids come off the functions themselves now (stamped by the compile-
+        // time finalizer, or by the engine's fallback finalization for
+        // identity-less programs — both run before this walk). The reserved
+        // rows (0 = unknown, 1 = spawn-closure) are emitted FIRST, matching
+        // the revision dictionary's row order (observability design §4.1).
+        let mut functions: Vec<bex_events::FunctionMetadata> = vec![
+            bex_events::FunctionMetadata {
+                function_id: FunctionId(bex_vm_types::FUNCTION_ID_UNKNOWN),
+                fqn: UNKNOWN_FUNCTION_FQN.to_string(),
+                display_name: UNKNOWN_FUNCTION_DISPLAY_NAME.to_string(),
+                source_file: None,
+                source_span: None,
+                kind: bex_events::RuntimeFunctionKind::Bytecode,
+                origin: bex_events::RuntimeFunctionOrigin::Internal,
+                owner_type: None,
+                parent_function: None,
+                lambda_path: None,
+                definition_key: Some(bex_events::DefinitionKey(format!(
+                    "function:{UNKNOWN_FUNCTION_FQN}"
+                ))),
+                package_name: Some("baml".to_string()),
+                namespace: Vec::new(),
+                source_snapshot_id: None,
+                revision_id: None,
+                semantic_lanes: None,
+            },
+            bex_events::FunctionMetadata {
+                function_id: FunctionId(bex_vm_types::FUNCTION_ID_SPAWN_CLOSURE),
+                fqn: SPAWN_CLOSURE_FQN.to_string(),
+                display_name: SPAWN_CLOSURE_DISPLAY_NAME.to_string(),
+                source_file: None,
+                source_span: None,
+                kind: bex_events::RuntimeFunctionKind::Bytecode,
+                origin: bex_events::RuntimeFunctionOrigin::Internal,
+                owner_type: None,
+                parent_function: None,
+                lambda_path: Some(SPAWN_CLOSURE_DISPLAY_NAME.to_string()),
+                definition_key: Some(bex_events::DefinitionKey(format!(
+                    "function:{SPAWN_CLOSURE_FQN}"
+                ))),
+                package_name: Some("baml".to_string()),
+                namespace: Vec::new(),
+                source_snapshot_id: None,
+                revision_id: None,
+                semantic_lanes: None,
+            },
+        ];
+        functions.extend(program.objects.iter().filter_map(|obj| {
+            let Object::Function(function) = obj else {
+                return None;
+            };
+            let function_id = FunctionId(function.function_id);
+            let fqn = function.name.clone();
+            // Identity comes structurally from the compiler (def_meta) —
+            // the capital-letter/`<lambda` FQN sniffing heuristics are gone
+            // (design §4.4/§4.5). Synthetic bodies without def_meta carry
+            // no keys, which is the truth.
+            let (definition_key, owner_type, parent_function, lambda_path) =
+                match &function.def_meta {
+                    Some(meta) => (
+                        Some(bex_events::DefinitionKey(meta.definition_key.clone())),
+                        meta.owner_type_key
+                            .as_ref()
+                            .map(|key| bex_events::DefinitionKey(key.clone())),
+                        meta.lambda.as_ref().map(|lambda| {
+                            bex_events::DefinitionKey(lambda.parent_definition_key.clone())
+                        }),
+                        meta.lambda.as_ref().map(|lambda| lambda.definition_key()),
+                    ),
+                    None => (None, None, None, None),
                 };
+            let mut parts = fqn.split('.').map(str::to_string).collect::<Vec<_>>();
+            let display_name = function
+                .declared_name
+                .clone()
+                .or_else(|| parts.last().cloned())
+                .unwrap_or_else(|| fqn.clone());
+            let package_name = if parts.len() > 1 {
+                Some(parts.remove(0))
+            } else {
+                None
+            };
+            let namespace = if parts.len() > 1 {
+                parts[..parts.len() - 1].to_vec()
+            } else {
+                Vec::new()
+            };
+            let source_file =
+                (!function.source_file.is_empty()).then(|| function.source_file.clone());
+            let source_span = Some(bex_events::SourceSpan {
+                file_id: function.span.file_id.as_u32(),
+                start: function.span.range.start().into(),
+                end: function.span.range.end().into(),
+            });
 
-                next_function_id += 1;
-                let function_id = FunctionId(next_function_id);
-                let fqn = function.name.clone();
-                let owner_type = derive_owner_type_definition_key(&fqn);
-                let (parent_function, lambda_path) = derive_lambda_metadata(&fqn);
-                let mut parts = fqn.split('.').map(str::to_string).collect::<Vec<_>>();
-                let display_name = parts.last().cloned().unwrap_or_else(|| fqn.clone());
-                let package_name = if parts.len() > 1 {
-                    Some(parts.remove(0))
-                } else {
-                    None
-                };
-                let namespace = if parts.len() > 1 {
-                    parts[..parts.len() - 1].to_vec()
-                } else {
-                    Vec::new()
-                };
-                let source_file =
-                    (!function.source_file.is_empty()).then(|| function.source_file.clone());
-                let source_span = Some(bex_events::SourceSpan {
-                    file_id: function.span.file_id.as_u32(),
-                    start: function.span.range.start().into(),
-                    end: function.span.range.end().into(),
-                });
-
-                Some(bex_events::FunctionMetadata {
-                    function_id,
-                    fqn: fqn.clone(),
-                    display_name,
-                    source_file,
-                    source_span,
-                    kind: function.kind.into(),
-                    origin: function.origin.into(),
-                    owner_type,
-                    parent_function,
-                    lambda_path,
-                    definition_key: Some(bex_events::DefinitionKey(format!("function:{fqn}"))),
-                    package_name,
-                    namespace,
-                    source_snapshot_id: None,
-                    revision_id: None,
-                    semantic_lanes: None,
-                })
+            Some(bex_events::FunctionMetadata {
+                function_id,
+                fqn,
+                display_name,
+                source_file,
+                source_span,
+                kind: function.kind.into(),
+                origin: function.origin.into(),
+                owner_type,
+                parent_function,
+                lambda_path,
+                definition_key,
+                package_name,
+                namespace,
+                source_snapshot_id: None,
+                revision_id: None,
+                semantic_lanes: None,
             })
-            .collect();
+        }));
 
-        // Synthetic rows live just past the pool indices, so they can never
-        // collide with a real function's id.
-        functions.push(bex_events::FunctionMetadata {
-            function_id: FunctionId(next_function_id + 1),
-            fqn: SPAWN_CLOSURE_FQN.to_string(),
-            display_name: SPAWN_CLOSURE_DISPLAY_NAME.to_string(),
-            source_file: None,
-            source_span: None,
-            kind: bex_events::RuntimeFunctionKind::Bytecode,
-            origin: bex_events::RuntimeFunctionOrigin::Internal,
-            owner_type: None,
-            parent_function: None,
-            lambda_path: Some(SPAWN_CLOSURE_DISPLAY_NAME.to_string()),
-            definition_key: Some(bex_events::DefinitionKey(format!(
-                "function:{SPAWN_CLOSURE_FQN}"
-            ))),
-            package_name: Some("baml".to_string()),
-            namespace: Vec::new(),
-            source_snapshot_id: None,
-            revision_id: None,
-            semantic_lanes: None,
-        });
-
-        functions.push(bex_events::FunctionMetadata {
-            function_id: FunctionId(next_function_id + 2),
-            fqn: UNKNOWN_FUNCTION_FQN.to_string(),
-            display_name: UNKNOWN_FUNCTION_DISPLAY_NAME.to_string(),
-            source_file: None,
-            source_span: None,
-            kind: bex_events::RuntimeFunctionKind::Bytecode,
-            origin: bex_events::RuntimeFunctionOrigin::Internal,
-            owner_type: None,
-            parent_function: None,
-            lambda_path: None,
-            definition_key: Some(bex_events::DefinitionKey(format!(
-                "function:{UNKNOWN_FUNCTION_FQN}"
-            ))),
-            package_name: Some("baml".to_string()),
-            namespace: Vec::new(),
-            source_snapshot_id: None,
-            revision_id: None,
-            semantic_lanes: None,
-        });
+        // Header fields 10/11 (string forms) come from the finalized
+        // identity — always present after fallback finalization.
+        let (source_snapshot_id, revision_id) = match &program.identity {
+            Some(identity) => (
+                Some(bex_events::ids::SourceSnapshotId(
+                    identity.source_snapshot_id.0,
+                )),
+                Some(bex_events::RevisionId(identity.revision_id.encode())),
+            ),
+            None => (None, None),
+        };
+        // The dictionary is a pure walk over the same finalized program;
+        // the consumer writes it idempotently before referencing artifacts.
+        let dictionary = bex_events::dict::build_revision_dictionary(program).map(Arc::new);
 
         ProgramMetadata {
-            program_id: ProgramId::new_random(),
-            source_snapshot_id: None,
-            revision_id: None,
+            source_snapshot_id,
+            revision_id,
             function_table: FunctionMetadataTable { functions },
+            dictionary,
         }
     }
 
@@ -1540,6 +1548,31 @@ impl BexEngine {
         let argv: Arc<[String]> = Arc::from(argv);
         let process_euid = ProcessEuid::current();
         let engine_id = Self::next_engine_id();
+        // Fallback finalization (design §4.3): programs from the compiler
+        // arrive finalized (ids stamped, identity attached). Identity-less
+        // programs — hand-built tests, legacy packs — get dense ids and the
+        // domain-separated borsh(Program) fallback identity here, once.
+        // `function_id` is `#[borsh(skip)]`, so hashing before stamping is
+        // equivalent to after.
+        let mut bytecode_program = bytecode_program;
+        if bytecode_program.identity.is_none() {
+            let program_bytes = borsh::to_vec(&bytecode_program).map_err(|err| {
+                EngineError::VmInternalError(
+                    bex_vm::errors::VmInternalError::IdentityNotFinalized {
+                        message: format!("serialize program for fallback id: {err}"),
+                    },
+                )
+            })?;
+            let (revision_id, source_snapshot_id) =
+                bex_vm_types::identity::fallback_revision_id(&program_bytes);
+            let function_count = bex_vm_types::assign_function_ids(&mut bytecode_program);
+            bytecode_program.identity = Some(bex_vm_types::ProgramIdentity {
+                revision_id,
+                source_snapshot_id,
+                compiler_id: "fallback".to_string(),
+                function_count,
+            });
+        }
         let program_metadata = Self::build_program_metadata(&bytecode_program);
 
         // BEX profiling event stream: snapshot the master switch once
@@ -1573,26 +1606,40 @@ impl BexEngine {
         // This must happen before BexHeap::new() because objects become immutable
         // behind an Arc after that point.
         //
-        // The same pre-freeze walk is the profiling interim function-id
-        // provider (plan §2.6): per-run sequential ids (1-based; 0 =
-        // unassigned), assigned unconditionally so ids are deterministic,
-        // with the header metadata table built only when profiling is on.
-        // M0 moves assignment to compile time and replaces this seam.
-        let mut next_function_id: u32 = 0;
-        let mut function_pool_indices: Vec<usize> = Vec::new();
+        // Function-id assignment moved to compile time (observability design
+        // §4.1: `finalize_program_identity`, with the engine's fallback
+        // finalization above covering identity-less programs). This walk is
+        // VERIFY-ONLY for ids: a full check in debug builds, a last-id tail
+        // probe in release. `convert_program`'s builtin re-attachment
+        // preserves ids, so the sequence must survive conversion intact.
+        let mut expected_function_id: u32 = bex_vm_types::FIRST_POOL_FUNCTION_ID;
+        let mut last_id_ok = true;
         let compile_time_objects: Vec<Object> = compile_time_objects
             .into_iter()
-            .enumerate()
-            .map(|(idx, mut obj)| {
+            .map(|mut obj| {
                 if let Object::Function(ref mut func) = obj {
                     func.bytecode.compact = Some(func.bytecode.lower_to_compact());
-                    next_function_id += 1;
-                    func.function_id = next_function_id;
-                    function_pool_indices.push(idx);
+                    debug_assert_eq!(
+                        func.function_id, expected_function_id,
+                        "function id not finalized for {:?} — every Program \
+                         materialization site must run finalize_program_identity",
+                        func.name
+                    );
+                    last_id_ok = func.function_id == expected_function_id;
+                    expected_function_id += 1;
                 }
                 obj
             })
             .collect();
+        if !last_id_ok {
+            return Err(EngineError::VmInternalError(
+                bex_vm::errors::VmInternalError::IdentityNotFinalized {
+                    message: "function ids missing or non-dense (finalize_program_identity \
+                              did not run at the Program materialization site)"
+                        .to_string(),
+                },
+            ));
+        }
         // Profiling metadata registration is deferred to
         // `activate_profiling()` so discarded candidate engines never leave
         // consumer-side state (`BexEngine::new` activates immediately).
@@ -1811,6 +1858,7 @@ impl BexEngine {
             engine_id,
             program_metadata,
             next_thread_id: AtomicU64::new(1),
+            llm_models: std::sync::Mutex::new(LlmModelIntern::default()),
             heap,
             globals,
             _globals_permit: globals_permit,
@@ -1912,6 +1960,127 @@ impl BexEngine {
         // SAFETY: the handle was claimed via this live thread's TLS lookup
         // on the line above; engine arms never run from TLS destructors.
         unsafe { handle.push(&buf[..len]) };
+    }
+
+    /// §5.3 park bookkeeping: emits `SuspendThread` and returns the
+    /// `(suspend_seq, suspend_ticks)` token the paired [`Self::prof_resume`]
+    /// needs. `None` when this thread isn't emitting — the resume side is a
+    /// no-op then, so call sites never branch.
+    ///
+    /// Per park, not per call: a ready-inline sysop emits neither record,
+    /// so its window correctly counts as running.
+    fn prof_suspend(
+        &self,
+        vm: &mut bex_vm::BexVm,
+        reason: bex_events::prof::record::SuspendReason,
+    ) -> Option<(u32, u64)> {
+        if !self.prof_enabled || vm.prof_suppressed {
+            return None;
+        }
+        vm.prof_suspend_seq = vm.prof_suspend_seq.wrapping_add(1);
+        let suspend_seq = vm.prof_suspend_seq;
+        let ts_ticks = bex_events::prof::clock::now_ticks();
+        self.prof_emit(&bex_events::prof::record::RawRecord::SuspendThread {
+            reason,
+            thread_id: BexThreadId(vm.prof_thread_id),
+            suspend_seq,
+            ts_ticks,
+        });
+        Some((suspend_seq, ts_ticks))
+    }
+
+    /// §5.3: emits the self-contained `ResumeThread` for a park token. The
+    /// suspend timestamp travels in the record (held in this engine local
+    /// across the engine's own `.await`), so awaiting duration never
+    /// depends on cross-ring record ordering.
+    fn prof_resume(&self, vm: &bex_vm::BexVm, park: Option<(u32, u64)>) {
+        let Some((suspend_seq, suspend_ts_ticks)) = park else {
+            return;
+        };
+        self.prof_emit(&bex_events::prof::record::RawRecord::ResumeThread {
+            flags: 0,
+            thread_id: BexThreadId(vm.prof_thread_id),
+            suspend_seq,
+            suspend_ts_ticks,
+            ts_ticks: bex_events::prof::clock::now_ticks(),
+        });
+    }
+
+    /// §5.4: drain the per-call LLM enrichment slot into an `LlmCallMeta`
+    /// ring record, joined to the sysop's `CallFunction` by the still-armed
+    /// `pending_sysop_call_id`. Must run BEFORE the outcome handling calls
+    /// `prof_end_sysop` (which takes the id). No sample deposited = no
+    /// record — non-LLM sysops cost one Arc and one lock check.
+    fn prof_emit_llm_meta(
+        &self,
+        vm: &bex_vm::BexVm,
+        slot: &std::sync::Arc<std::sync::Mutex<Option<sys_types::LlmCallMetaSample>>>,
+    ) {
+        if !self.prof_enabled || vm.prof_suppressed {
+            return;
+        }
+        let Some(sample) = slot.lock().ok().and_then(|mut guard| guard.take()) else {
+            return;
+        };
+        let Some(call_id) = vm.pending_sysop_call_id else {
+            return;
+        };
+        let model_id = sample
+            .model
+            .as_deref()
+            .map_or(0, |name| self.intern_llm_model(name));
+        let mut flags = 0u8;
+        if sample.provider_error {
+            flags |= bex_events::prof::record::LLM_META_FLAG_PROVIDER_ERROR;
+        }
+        if sample.parse_error {
+            flags |= bex_events::prof::record::LLM_META_FLAG_PARSE_ERROR;
+        }
+        if sample.retry {
+            flags |= bex_events::prof::record::LLM_META_FLAG_RETRY;
+        }
+        #[expect(
+            clippy::cast_possible_truncation,
+            reason = "token counts saturate at u32::MAX by construction"
+        )]
+        self.prof_emit(&bex_events::prof::record::RawRecord::LlmCallMeta {
+            flags,
+            thread_id: BexThreadId(vm.prof_thread_id),
+            call_id: BexCallId(call_id),
+            model_id,
+            tokens_in: sample.tokens_in.min(u64::from(u32::MAX)) as u32,
+            tokens_out: sample.tokens_out.min(u64::from(u32::MAX)) as u32,
+            ts_ticks: bex_events::prof::clock::now_ticks(),
+        });
+    }
+
+    /// Intern a model name (id 1..; 0 = unknown). Idempotent. First intern
+    /// emits the 0x09 `ModelBirth` record so the stream is self-contained
+    /// (§5.4 — `model_birth` session rows need no engine side channel).
+    fn intern_llm_model(&self, name: &str) -> u32 {
+        let mut intern = self.llm_models.lock().unwrap_or_else(|e| e.into_inner());
+        if let Some(&id) = intern.by_name.get(name) {
+            return id;
+        }
+        intern.names.push(name.to_string());
+        let id = u32::try_from(intern.names.len()).unwrap_or(u32::MAX);
+        intern.by_name.insert(name.to_string(), id);
+        self.prof_emit(&bex_events::prof::record::RawRecord::ModelBirth {
+            flags: 0,
+            model_id: id,
+            name: bex_events::prof::record::capped_name_bytes(name),
+        });
+        id
+    }
+
+    /// The interned model table in id order (`names()[id - 1]`); the P3
+    /// session stream flushes these as `model_birth` rows.
+    pub fn llm_model_names(&self) -> Vec<String> {
+        self.llm_models
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .names
+            .clone()
     }
 
     /// Re-snapshots the VM's ring from the *current* OS thread's TLS (D5a).
@@ -4276,6 +4445,17 @@ impl BexEngine {
         }
         if let Some(capture) = root_capture {
             self.capture_root_value(thread, capture, CaptureKind::RootError, value);
+            // §3.1 OnError promotion (§7.2): a root-level unhandled throw
+            // makes this engine's staged speculative drafts durable — the
+            // next drain writes them with `promoted_by: "error"`. Engine
+            // scope, not thread scope: spawned helpers' staged inputs are
+            // exactly the retroactive evidence the trigger exists for.
+            let prefix = crate::value_capture::TraceCallKeyPrefix::engine(
+                capture.call.process_euid,
+                capture.call.engine_id,
+            );
+            let report = capture.producer.promote_staged(prefix, "error");
+            let _ = report;
         }
         Err(EngineError::UnhandledThrow {
             value: Box::new(external),
@@ -5085,7 +5265,7 @@ impl BexEngine {
                             None
                         };
 
-                    let sys_op_result =
+                    let (sys_op_result, llm_meta_slot) =
                         self.execute_sys_op(operation, &bex_args, call_id, cancel, thread.proof());
 
                     let outcome = match sys_op_result {
@@ -5094,6 +5274,10 @@ impl BexEngine {
                             // Release the heap permit so concurrent GC
                             // can run during the wait. Re-acquire
                             // before touching VM state.
+                            let park = self.prof_suspend(
+                                &mut thread.vm,
+                                bex_events::prof::record::SuspendReason::SysOp,
+                            );
                             let inactive = thread.release();
                             self.maybe_collect_garbage().await;
                             let outcome = tokio::select! {
@@ -5102,6 +5286,7 @@ impl BexEngine {
                                 r = fut                  => SysOpOutcome::Result(r),
                             };
                             thread = inactive.acquire().await;
+                            self.prof_resume(&thread.vm, park);
                             // Re-snapshot post-await (D5a): the task may be on a different
                             // OS thread now, and engine-driven VM re-entries before the
                             // next loop-head refresh (inject_sysop_throw's unwind) push
@@ -5129,6 +5314,11 @@ impl BexEngine {
                             }
                         }
                     };
+
+                    // §5.4: drain the LLM enrichment slot while the sysop's
+                    // profiling call id is still armed (prof_end_sysop
+                    // below takes it). Non-LLM ops deposited nothing.
+                    self.prof_emit_llm_meta(&thread.vm, &llm_meta_slot);
 
                     // PR4b: close the sys-op call pair opened at the VM's
                     // yield site. Post-await this task may sit on a
@@ -5410,6 +5600,10 @@ impl BexEngine {
                     // wait would deadlock concurrent GC park (which needs
                     // every permit) against the spawned task that fulfils
                     // this future (which needs a permit to write the heap).
+                    let park = self.prof_suspend(
+                        &mut thread.vm,
+                        bex_events::prof::record::SuspendReason::Await,
+                    );
                     let inactive = thread.release();
                     // While parked, run a heuristic-driven GC check (no
                     // permit dance needed since we're already released).
@@ -5425,6 +5619,7 @@ impl BexEngine {
                         r = future              => AwaitOutcome::Done(r),
                     };
                     thread = inactive.acquire().await;
+                    self.prof_resume(&thread.vm, park);
                     // Re-snapshot post-await (D5a): the task may be on a different
                     // OS thread now, and engine-driven VM re-entries before the
                     // next loop-head refresh (inject_sysop_throw's unwind) push
@@ -5486,6 +5681,10 @@ impl BexEngine {
                         }
                         ws
                     };
+                    let park = self.prof_suspend(
+                        &mut thread.vm,
+                        bex_events::prof::record::SuspendReason::AwaitAny,
+                    );
                     let inactive = thread.release();
                     self.maybe_collect_garbage().await;
                     let outcome = if waiters.is_empty() {
@@ -5509,6 +5708,7 @@ impl BexEngine {
                         }
                     };
                     thread = inactive.acquire().await;
+                    self.prof_resume(&thread.vm, park);
                     // Re-snapshot post-await (D5a): the task may be on a different
                     // OS thread now, and engine-driven VM re-entries before the
                     // next loop-head refresh (inject_sysop_throw's unwind) push
@@ -5555,7 +5755,15 @@ impl BexEngine {
                 }
 
                 VmExecState::EarlyYield => {
+                    // §5.3: a cooperative yield is a (usually tiny) park —
+                    // the safepoint may or may not actually wait on GC, and
+                    // the honest cost of the check lands in awaiting time.
+                    let park = self.prof_suspend(
+                        &mut thread.vm,
+                        bex_events::prof::record::SuspendReason::EarlyYield,
+                    );
                     thread = self.gc_safepoint(thread).await;
+                    self.prof_resume(&thread.vm, park);
                 }
             }
         }
@@ -5569,6 +5777,7 @@ impl BexEngine {
     ///
     /// A per-call context is created by cloning the shared `sys_op_ctx` with the
     /// call's cancellation token. This is O(1) since all fields are `Arc`-wrapped.
+    #[expect(clippy::type_complexity, reason = "per-call slot type spelled once")]
     fn execute_sys_op(
         self: &Arc<Self>,
         op: SysOp,
@@ -5576,7 +5785,10 @@ impl BexEngine {
         call_id: CallId,
         cancel: &CancellationToken,
         permit: bex_heap::PermitProof<'_>,
-    ) -> SysOpResult {
+    ) -> (
+        SysOpResult,
+        std::sync::Arc<std::sync::Mutex<Option<sys_types::LlmCallMetaSample>>>,
+    ) {
         fn check(op: SysOp, err: &OpError) {
             if let sys_types::OpErrorPayload::Vm(kind) = &err.payload {
                 if let Err(violation) = sys_types::validate_sys_op_error(op, kind) {
@@ -5592,16 +5804,24 @@ impl BexEngine {
             // collect, drain `cleanup()` finalizers, and only afterward resume
             // the caller.
             let engine = self.clone();
-            return SysOpResult::Async(Box::pin(async move {
-                engine
-                    .collect_garbage(bex_heap::CollectionLevel::Major)
-                    .await;
-                Ok(BexExternalValue::Null)
-            }));
+            return (
+                SysOpResult::Async(Box::pin(async move {
+                    engine
+                        .collect_garbage(bex_heap::CollectionLevel::Major)
+                        .await;
+                    Ok(BexExternalValue::Null)
+                })),
+                std::sync::Arc::new(std::sync::Mutex::new(None)),
+            );
         }
         let args = args.iter().map(std::convert::Into::into).collect();
         let fn_ptr = self.sys_ops.get(op);
         let mut ctx = self.sys_op_ctx.to_op_context(cancel.clone(), self.clone());
+        // §5.4: a fresh per-call LLM enrichment slot. sys_llm deposits at
+        // completion; the event-loop caller drains it into the profiling
+        // stream. One Arc per sysop call, cold path.
+        let llm_meta = std::sync::Arc::new(std::sync::Mutex::new(None));
+        ctx.llm_meta = Some(llm_meta.clone());
         // Rebuild RuntimeIo with the live per-call context so IO calls
         // (media resolution, auth) use the correct cancellation token.
         ctx.runtime_io =
@@ -5612,7 +5832,7 @@ impl BexEngine {
         // a `HostThrown` payload is checked engine-side against the
         // surrounding callable's declared `E`, not against the sysop's
         // category contract, so it short-circuits here.
-        match result {
+        let result = match result {
             SysOpResult::Ready(Ok(v)) => SysOpResult::Ready(Ok(v)),
             SysOpResult::Ready(Err(err)) => {
                 check(op, &err);
@@ -5628,7 +5848,8 @@ impl BexEngine {
                 });
                 SysOpResult::Async(boxed)
             }
-        }
+        };
+        (result, llm_meta)
     }
 }
 

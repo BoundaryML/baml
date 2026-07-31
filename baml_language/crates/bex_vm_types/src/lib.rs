@@ -13,6 +13,7 @@
 pub mod bytecode;
 pub mod errors;
 pub mod heap_ptr;
+pub mod identity;
 pub mod indexable;
 pub mod lazy_biased_mutex;
 pub mod link;
@@ -25,6 +26,11 @@ pub mod unit;
 pub use bex_str::BexStr;
 pub use bytecode::{BinOp, Bytecode, CmpOp, Instruction, JumpTableData, UnaryOp};
 pub use heap_ptr::HeapPtr;
+pub use identity::{
+    DefinitionMeta, FIRST_POOL_FUNCTION_ID, FUNCTION_ID_SPAWN_CLOSURE, FUNCTION_ID_UNKNOWN,
+    LambdaIdentity, LambdaKind, ProgramIdentity, RevisionId, SourceFileIdentity, SourceSnapshotId,
+    assign_function_ids, verify_function_ids,
+};
 pub use indexable::{
     GlobalIndex, GlobalPool, ObjectIndex, ObjectPool, SharedGlobals, StackIndex, VmGlobals,
 };

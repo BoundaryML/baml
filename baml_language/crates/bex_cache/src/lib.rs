@@ -20,6 +20,7 @@ use std::{
     fs,
     io::{self, Read, Write},
     path::{Path, PathBuf},
+    sync::OnceLock,
     time::SystemTime,
 };
 
@@ -49,7 +50,12 @@ use sha2::{Digest, Sha256};
 /// (BEP-062 `reflect.signature`).
 ///
 /// Version 3: diagnostic cache blobs gained `message_highlights` fields.
-pub const FORMAT_VERSION: u32 = 3;
+///
+/// Version 4: `Function` gained the borsh-serialized `def_meta`
+/// (`DefinitionMeta`: definition_key / owner_type_key / lambda identity) and
+/// `FunctionCaptureProps` gained `promote_on_error` — the deliberate wire
+/// bump of the observability design (§4.5, §7.1).
+pub const FORMAT_VERSION: u32 = 4;
 
 const MAGIC: [u8; 4] = *b"BEXC";
 
@@ -438,6 +444,57 @@ fn fingerprint_impl(cache_dir: &Path) -> io::Result<[u8; 32]> {
     Ok(digest)
 }
 
+/// Canonical human-readable identity of the running compiler build
+/// (`compiler_id` in `TASK/design.md` §4.2):
+/// `"{CANONICAL_VERSION}+{CHANNEL}+{hex16}"`, where `hex16` is the first
+/// 16 hex characters of the BLAKE3 hash of the running executable's bytes.
+///
+/// This string feeds `revision_id` (design §4.3); the contract is that two
+/// different compiler builds must never produce equal revision ids for the
+/// same source. The version+channel pair alone cannot deliver that — two
+/// `canary` checkouts both claim the same version yet emit incompatible
+/// bytecode — so the exe hash stands in for a commit id and distinguishes
+/// dev rebuilds (mirroring [`compiler_fingerprint`]'s rationale). If the
+/// executable cannot be located or read, this falls back to
+/// `"{CANONICAL_VERSION}+{CHANNEL}"` — acceptable for display paths, and
+/// revision ids degrade no further than the stamped release identity.
+///
+/// Memoized for the life of the process (the binary cannot change under a
+/// running process's identity), so the executable is hashed at most once.
+pub fn compiler_id() -> &'static str {
+    static ID: OnceLock<String> = OnceLock::new();
+    ID.get_or_init(|| {
+        let base = format!(
+            "{}+{}",
+            baml_version::CANONICAL_VERSION,
+            baml_version::CHANNEL
+        );
+        match exe_blake3() {
+            Ok(digest) => format!("{base}+{}", hex(&digest[..8])),
+            Err(_) => base,
+        }
+    })
+}
+
+/// BLAKE3 of the current executable's bytes. Same exe-read pattern as
+/// [`fingerprint_impl`], but BLAKE3 (the observability design's hash family)
+/// instead of SHA-256, and no on-disk memo — [`compiler_id`] caches the
+/// resulting string per process, so this runs at most once.
+fn exe_blake3() -> io::Result<[u8; 32]> {
+    let exe = std::env::current_exe()?;
+    let mut f = fs::File::open(&exe)?;
+    let mut h = blake3::Hasher::new();
+    let mut buf = vec![0u8; 1 << 20];
+    loop {
+        let n = f.read(&mut buf)?;
+        if n == 0 {
+            break;
+        }
+        h.update(&buf[..n]);
+    }
+    Ok(*h.finalize().as_bytes())
+}
+
 /// On-disk store: `<dir>/bytecode/<first-two-hex>/<key-hex>.bexc`.
 ///
 /// Content addressing makes a shared directory safe across projects: equal
@@ -790,6 +847,24 @@ mod tests {
         let mut inputs = dummy_inputs(&files);
         inputs.compiler_fingerprint = [8u8; 32];
         assert_ne!(base, compute_key(&inputs), "fingerprint");
+    }
+
+    #[test]
+    fn compiler_id_is_nonempty_version_prefixed_and_stable() {
+        let id = compiler_id();
+        assert!(!id.is_empty());
+        assert!(
+            id.starts_with(baml_version::CANONICAL_VERSION),
+            "compiler_id {id:?} must start with CANONICAL_VERSION"
+        );
+        assert!(
+            id[baml_version::CANONICAL_VERSION.len()..]
+                .starts_with(&format!("+{}", baml_version::CHANNEL)),
+            "compiler_id {id:?} must carry the channel after the version"
+        );
+        // Memoized: byte-identical (indeed pointer-identical) across calls.
+        assert_eq!(id, compiler_id());
+        assert!(std::ptr::eq(id, compiler_id()));
     }
 
     #[test]

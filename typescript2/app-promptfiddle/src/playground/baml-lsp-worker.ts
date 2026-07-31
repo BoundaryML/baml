@@ -421,9 +421,6 @@ function onPlaygroundNotification(notification: PlaygroundNotification): void {
         patch: notification.patch,
       } as WorkerOutMessage);
       break;
-    case "profileArtifactChunk":
-      postOut(notification as WorkerOutMessage);
-      break;
     case "runSnapshot":
       postOut({
         type: "runSnapshot",

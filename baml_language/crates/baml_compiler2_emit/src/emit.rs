@@ -1073,7 +1073,10 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             origin: FunctionOrigin::Internal,
             body_meta: None,
             capture: FunctionCaptureProps::disabled(),
-            function_id: 0, // assigned at engine init (interim provider)
+            // Set by callers from `MirFunction::definition_identity` (§4.4) —
+            // this builder only sees the body, never the identity.
+            def_meta: None,
+            function_id: 0, // stamped by finalize_program_identity (design §4.1)
         }
     }
 

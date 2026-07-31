@@ -86,6 +86,61 @@ pub fn to_disk_event(raw: &RawRecord<'_>, conv: &TickConverter) -> pb::DiskEvent
             id: id.to_vec(),
             timestamp_ns: conv.to_ns(ts_ticks),
         }),
+        RawRecord::SuspendThread {
+            reason,
+            thread_id,
+            suspend_seq,
+            ts_ticks,
+        } => Event::SuspendThread(pb::SuspendThread {
+            thread_id: thread_id.0,
+            reason: match reason {
+                crate::prof::record::SuspendReason::SysOp => pb::SuspendReason::SysOp,
+                crate::prof::record::SuspendReason::Await => pb::SuspendReason::Await,
+                crate::prof::record::SuspendReason::AwaitAny => pb::SuspendReason::AwaitAny,
+                crate::prof::record::SuspendReason::EarlyYield => pb::SuspendReason::EarlyYield,
+            } as i32,
+            suspend_seq,
+            timestamp_ns: conv.to_ns(ts_ticks),
+        }),
+        RawRecord::ResumeThread {
+            flags: _,
+            thread_id,
+            suspend_seq,
+            suspend_ts_ticks,
+            ts_ticks,
+        } => Event::ResumeThread(pb::ResumeThread {
+            thread_id: thread_id.0,
+            suspend_seq,
+            suspend_timestamp_ns: conv.to_ns(suspend_ts_ticks),
+            timestamp_ns: conv.to_ns(ts_ticks),
+        }),
+        RawRecord::ModelBirth {
+            flags: _,
+            model_id,
+            name,
+        } => Event::ModelBirth(pb::ModelBirth {
+            model_id,
+            name: String::from_utf8_lossy(name).into_owned(),
+        }),
+        RawRecord::LlmCallMeta {
+            flags,
+            thread_id,
+            call_id,
+            model_id,
+            tokens_in,
+            tokens_out,
+            ts_ticks,
+        } => Event::LlmCallMeta(pb::LlmCallMeta {
+            thread_id: thread_id.0,
+            call_id: call_id.0,
+            model_id,
+            tokens_in,
+            tokens_out,
+            provider_error: flags & crate::prof::record::LLM_META_FLAG_PROVIDER_ERROR != 0,
+            parse_error: flags & crate::prof::record::LLM_META_FLAG_PARSE_ERROR != 0,
+            retry: flags & crate::prof::record::LLM_META_FLAG_RETRY != 0,
+            timestamp_ns: conv.to_ns(ts_ticks),
+        }),
     };
     pb::DiskEventV1 { event: Some(event) }
 }

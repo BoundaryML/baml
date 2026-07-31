@@ -12,6 +12,9 @@ use crate::{
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ValueCodec {
     BamlOutboundValue,
+    /// §7.4 canonical value DAG: the record body is addressed by a
+    /// [`DagRef`] into the project content-addressed store.
+    CanonicalDag,
 }
 
 impl ValueCodec {
@@ -19,8 +22,19 @@ impl ValueCodec {
     pub fn as_wire_str(self) -> &'static str {
         match self {
             Self::BamlOutboundValue => "bamlOutboundValue",
+            Self::CanonicalDag => "canonicalDag",
         }
     }
+}
+
+/// §7.4 canonical-DAG reference: the captured value canonically re-encoded
+/// and persisted in the project content-addressed store. `root_cid` is the
+/// BLAKE3 CID of the DAG root node under `node_codec_version`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct DagRef {
+    pub root_cid: [u8; 32],
+    pub node_codec_version: u32,
+    pub logical_len: u64,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -129,6 +143,13 @@ pub struct ValueRecord {
     pub body: Vec<u8>,
     pub blob_ref: Option<BlobRef>,
     pub capture: Option<ValueCapture>,
+    /// Canonical-DAG address of this capture in the project store, when the
+    /// capture path had a store available (§7.4 dual-write).
+    pub dag_ref: Option<DagRef>,
+    /// §7.2 trigger promotion (`role: promoted`): the trigger id that made
+    /// this speculatively staged capture durable. `None` for normal
+    /// captures.
+    pub promoted_by: Option<String>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -167,6 +188,9 @@ impl CaptureLossKind {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum CaptureLossReason {
     QueueFull,
+    /// §7.2 staging-ring byte-pressure eviction: a speculative capture was
+    /// dropped before any trigger could promote it.
+    StagingEvicted,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -194,6 +218,7 @@ impl TryFrom<crate::value::pb::ValueMetadataV1> for ValueRef {
     fn try_from(metadata: crate::value::pb::ValueMetadataV1) -> Result<Self, Self::Error> {
         let codec = match metadata.codec() {
             crate::value::pb::ValueCodec::BamlOutboundValue => ValueCodec::BamlOutboundValue,
+            crate::value::pb::ValueCodec::CanonicalDag => ValueCodec::CanonicalDag,
             crate::value::pb::ValueCodec::Unspecified => {
                 return Err(io::Error::new(
                     io::ErrorKind::InvalidData,
@@ -251,6 +276,7 @@ impl From<&ValueRef> for crate::value::pb::ValueMetadataV1 {
                 ValueCodec::BamlOutboundValue => {
                     crate::value::pb::ValueCodec::BamlOutboundValue as i32
                 }
+                ValueCodec::CanonicalDag => crate::value::pb::ValueCodec::CanonicalDag as i32,
             },
             availability: match value_ref.availability {
                 ValueAvailability::Pending => crate::value::pb::ValueAvailability::Pending as i32,
@@ -293,6 +319,37 @@ impl From<&BlobRef> for crate::value::pb::BlobRefV1 {
             algorithm: value.algorithm.clone(),
             digest: value.digest.clone(),
             size_bytes: u64::try_from(value.size_bytes).unwrap_or(u64::MAX),
+        }
+    }
+}
+
+impl TryFrom<crate::value::pb::DagRefV1> for DagRef {
+    type Error = io::Error;
+
+    fn try_from(value: crate::value::pb::DagRefV1) -> Result<Self, Self::Error> {
+        let root_cid: [u8; 32] = value.root_cid.as_slice().try_into().map_err(|_| {
+            io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!(
+                    "dag ref root cid must be 32 bytes, got {}",
+                    value.root_cid.len()
+                ),
+            )
+        })?;
+        Ok(Self {
+            root_cid,
+            node_codec_version: value.node_codec_version,
+            logical_len: value.logical_len,
+        })
+    }
+}
+
+impl From<&DagRef> for crate::value::pb::DagRefV1 {
+    fn from(value: &DagRef) -> Self {
+        Self {
+            root_cid: value.root_cid.to_vec(),
+            node_codec_version: value.node_codec_version,
+            logical_len: value.logical_len,
         }
     }
 }
@@ -457,6 +514,9 @@ impl TryFrom<crate::value::pb::CaptureLossV1> for CaptureLossRecord {
         };
         let reason = match value.reason() {
             crate::value::pb::CaptureLossReason::QueueFull => CaptureLossReason::QueueFull,
+            crate::value::pb::CaptureLossReason::StagingEvicted => {
+                CaptureLossReason::StagingEvicted
+            }
             crate::value::pb::CaptureLossReason::Unspecified => {
                 return Err(io::Error::new(
                     io::ErrorKind::InvalidData,
@@ -485,6 +545,9 @@ impl From<&CaptureLossRecord> for crate::value::pb::CaptureLossV1 {
             reason: match value.reason {
                 CaptureLossReason::QueueFull => {
                     crate::value::pb::CaptureLossReason::QueueFull as i32
+                }
+                CaptureLossReason::StagingEvicted => {
+                    crate::value::pb::CaptureLossReason::StagingEvicted as i32
                 }
             },
             skipped_count: value.skipped_count,

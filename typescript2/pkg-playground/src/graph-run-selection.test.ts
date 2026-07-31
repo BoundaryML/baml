@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { findLatestGraphRunSnapshot } from './graph-run-selection';
-import type { Run } from './worker-protocol';
+import type { CallNode, Run } from './worker-protocol';
 
 describe('findLatestGraphRunSnapshot', () => {
   it('selects the newest direct run when snapshots are newest-first', () => {
@@ -145,7 +145,7 @@ function runFixture(
   };
 }
 
-function callFixture(id: string, functionName: string): Run['calls'][number] {
+function callFixture(id: string, functionName: string): CallNode {
   return {
     calleeSource: null,
     callSiteSource: null,

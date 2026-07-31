@@ -323,6 +323,7 @@ mod tests {
             origin: FunctionOrigin::Internal,
             body_meta: None,
             capture: FunctionCaptureProps::disabled(),
+            def_meta: None,
             function_id: 0,
         }
     }

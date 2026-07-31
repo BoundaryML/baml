@@ -1,6 +1,5 @@
 ---
 source: crates/baml_cli/src/help_command.rs
-assertion_line: 203
 expression: concise
 ---
 Build and run BAML projects.
@@ -9,6 +8,8 @@ Usage: baml [OPTIONS] <COMMAND>
 
 Commands:
   check       Check BAML source files for compiler errors
+  clean       Clean up .baml observability data (history, sessions, store)
+  q           Query observability data with BQL (e.g. 'ctx() | top(10, by=total_ns)')
   auth        Manage authentication
   feedback    Report an issue or improvement to Boundary
   fmt         Format BAML source files
@@ -19,6 +20,7 @@ Commands:
   new         Create a new BAML project directory
   run         Run a BAML function or script
   playground  Open the BAML playground in your browser
+  studio      Open BAML Studio, the runs/trace viewer, in your browser
   pack        Package a BAML target as a standalone executable
   ide         Install or manage IDE integration assets
   agent       Install BAML agent skills for this project

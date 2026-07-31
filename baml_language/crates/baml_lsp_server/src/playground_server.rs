@@ -544,7 +544,8 @@ fn drain_captured_values_and_broadcast(
         }
     };
     let mut history_errors = Vec::new();
-    let report = producer.drain_to_value_recorder_report(|draft, body| {
+    // Playground live path: no project store, so the canonical encoding is unused.
+    let report = producer.drain_to_value_recorder_report(|draft, body, _canonical| {
         if let Some(log) = &draft.log {
             let event = LogEventRecord {
                 call: draft.call,
@@ -1014,6 +1015,7 @@ fn build_router(
 
     let api = Router::new()
         .route("/api/ws", get(playground_ws_handler))
+        .route("/api/obs", get(obs_ws_handler))
         .route("/api/lsp", get(lsp_ws_handler))
         .route(
             "/api/source-files",
@@ -1056,6 +1058,27 @@ fn history_project_root_for_project(project: &str) -> PathBuf {
 async fn playground_ws_handler(State(state): State<WsState>, ws: WebSocketUpgrade) -> Response {
     tracing::info!("Playground: /api/ws upgrade request received");
     ws.on_upgrade(move |socket| playground_ws_session(socket, state))
+}
+
+/// §9.3 observability WS: BQF1 binary frames over `/api/obs`. The session
+/// (see `crate::obs_ws`) only needs the project's `.baml` root; the server
+/// stays stateless for observability — disk is the database.
+async fn obs_ws_handler(State(state): State<WsState>, ws: WebSocketUpgrade) -> Response {
+    tracing::info!("Playground: /api/obs upgrade request received");
+    let baml_root = obs_baml_root(&state.workspace_roots);
+    ws.on_upgrade(move |socket| crate::obs_ws::obs_ws_session(socket, baml_root))
+}
+
+/// The `.baml` root the observability engine reads: the resolved project
+/// root of the first workspace root — the same resolution the history
+/// store applies when a run begins (`history_project_root_for_project`) —
+/// joined with `.baml`.
+fn obs_baml_root(workspace_roots: &[PathBuf]) -> PathBuf {
+    let base = workspace_roots
+        .first()
+        .cloned()
+        .unwrap_or_else(|| PathBuf::from("."));
+    bex_events::history::path::resolve_project_root(&base).join(".baml")
 }
 
 // ---------------------------------------------------------------------------
@@ -2568,10 +2591,29 @@ fn apply_api_response_headers(
 // ---------------------------------------------------------------------------
 
 fn dev_proxy_router(upstream: String) -> Router {
-    Router::new().fallback(move |req: Request<Body>| {
-        let upstream = upstream.clone();
-        async move { proxy_request(upstream, req).await }
-    })
+    let studio_upstream = upstream.clone();
+    Router::new()
+        .route(
+            "/studio",
+            get(move || async move {
+                // §9.1 `/studio`: the same SPA shell, with the studio boot
+                // hint injected so the app lands on the Runs tab.
+                let index_request = Request::builder()
+                    .method(Method::GET)
+                    .uri("/")
+                    .body(Body::empty())
+                    .expect("static request parts are valid");
+                transform_ok_html_response(
+                    proxy_request(studio_upstream, index_request).await,
+                    inject_studio_boot_script,
+                )
+                .await
+            }),
+        )
+        .fallback(move |req: Request<Body>| {
+            let upstream = upstream.clone();
+            async move { proxy_request(upstream, req).await }
+        })
 }
 
 async fn proxy_request(upstream: String, req: Request<Body>) -> Response {
@@ -2746,6 +2788,7 @@ fn static_router(dir: String) -> Router {
     Router::new()
         .route("/", get(static_index_handler))
         .route("/index.html", get(static_index_handler))
+        .route("/studio", get(studio_static_index_handler))
         .route("/{*path}", get(static_path_handler))
         .fallback_service(get_service(ServeDir::new(dir.clone())))
         .with_state(dir)
@@ -2753,6 +2796,63 @@ fn static_router(dir: String) -> Router {
 
 async fn static_index_handler(State(dir): State<PathBuf>) -> Response {
     serve_static_index(&dir).await
+}
+
+// ---------------------------------------------------------------------------
+// `/studio` — the observability-first entry (§9.1). Serves the same SPA
+// shell as the playground, with a boot hint injected so the app lands on
+// the Runs tab.
+// ---------------------------------------------------------------------------
+
+/// Injected into the SPA shell served at `/studio`. The webview boot
+/// (`app-vscode-webview/src/App.tsx`) reads this global and passes it to
+/// `ExecutionPanel` as `initialTab`, making the runs list the landing view.
+const STUDIO_BOOT_SCRIPT: &str = "<script>window.__STUDIO_INITIAL_TAB=\"runs\";</script>";
+
+fn inject_studio_boot_script(html: &str) -> String {
+    match html.find("</head>") {
+        Some(head_end) => format!(
+            "{}{STUDIO_BOOT_SCRIPT}{}",
+            &html[..head_end],
+            &html[head_end..]
+        ),
+        None => format!("{STUDIO_BOOT_SCRIPT}{html}"),
+    }
+}
+
+async fn studio_static_index_handler(State(dir): State<PathBuf>) -> Response {
+    transform_ok_html_response(serve_static_index(&dir).await, inject_studio_boot_script).await
+}
+
+/// Apply `transform` to a successful HTML response's body; pass anything
+/// else (errors, non-HTML) through untouched.
+async fn transform_ok_html_response(response: Response, transform: fn(&str) -> String) -> Response {
+    if response.status() != StatusCode::OK {
+        return response;
+    }
+    let (mut parts, body) = response.into_parts();
+    let is_html = parts
+        .headers
+        .get(header::CONTENT_TYPE)
+        .and_then(|value| value.to_str().ok())
+        .is_some_and(|content_type| content_type.starts_with("text/html"));
+    if !is_html {
+        return Response::from_parts(parts, body);
+    }
+    let bytes = match axum::body::to_bytes(body, 10 * 1024 * 1024).await {
+        Ok(bytes) => bytes,
+        Err(error) => {
+            return text_response(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Failed to read index body: {error}"),
+            );
+        }
+    };
+    let html = transform(&String::from_utf8_lossy(&bytes));
+    // The body changed length; a stale upstream Content-Length would
+    // truncate or over-read the transformed page.
+    parts.headers.remove(header::CONTENT_LENGTH);
+    Response::from_parts(parts, Body::from(html))
 }
 
 async fn static_path_handler(
@@ -2920,6 +3020,25 @@ mod tests {
             thread_id: BexThreadId(1),
             call_id: BexCallId(3),
         }
+    }
+
+    /// The `/studio` shell is the playground shell plus a boot hint that
+    /// lands the app on the Runs tab; the hint goes inside `<head>` so it
+    /// runs before the bundle boots.
+    #[test]
+    fn studio_boot_script_is_injected_inside_head() {
+        let html = "<html><head><title>BAML</title></head><body></body></html>";
+        let injected = inject_studio_boot_script(html);
+        assert!(injected.contains("window.__STUDIO_INITIAL_TAB=\"runs\""));
+        assert!(
+            injected.find(STUDIO_BOOT_SCRIPT).unwrap() < injected.find("</head>").unwrap(),
+            "{injected}"
+        );
+
+        // A shell with no <head> still gets the hint, prepended.
+        let headless = inject_studio_boot_script("<div></div>");
+        assert!(headless.starts_with(STUDIO_BOOT_SCRIPT), "{headless}");
+        assert!(headless.ends_with("<div></div>"), "{headless}");
     }
 
     #[test]

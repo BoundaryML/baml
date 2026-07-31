@@ -4,6 +4,7 @@
 
 mod analysis;
 mod emit;
+pub mod identity;
 mod pull_semantics;
 mod stack_carry;
 mod verifier;
@@ -37,9 +38,9 @@ use baml_compiler2_ppir::{
 };
 use baml_type::{ParamTy, RuntimeTy, TyAttr};
 use bex_vm_types::{
-    Bytecode, CaptureCategory, Class, ClassField, ConstValue, Enum, EnumVariant, Function,
-    FunctionCaptureProps, FunctionKind, FunctionMeta, FunctionOrigin, GlobalIndex, Instruction,
-    Object, ObjectIndex, ObjectPool, Program,
+    Bytecode, CaptureCategory, CaptureOption, Class, ClassField, ConstValue, Enum, EnumVariant,
+    Function, FunctionCaptureProps, FunctionKind, FunctionMeta, FunctionOrigin, GlobalIndex,
+    Instruction, Object, ObjectIndex, ObjectPool, Program,
     unit::{
         CompilationUnit, LocalRef, ProgramImplRuleFrag, ProgramMethodImplFrag, ProgramPackageFrag,
         Symbol, SymbolKind,
@@ -1274,7 +1275,9 @@ pub fn generate_project_bytecode_with_opt(
     options: &CompileOptions,
     opt: OptLevel,
 ) -> Result<Program, LoweringError> {
-    generate_impl(db, options, opt, None, false, None)
+    let mut program = generate_impl(db, options, opt, None, false, None)?;
+    identity::finalize_program_identity(db, opt, options.emit_test_cases, &mut program);
+    Ok(program)
 }
 
 /// Compile ONLY the builtin stdlib into a standalone `Program` slice.
@@ -1289,7 +1292,7 @@ pub fn generate_stdlib_program(
     db: &dyn crate::Db,
     opt: OptLevel,
 ) -> Result<Program, LoweringError> {
-    generate_impl(
+    let mut program = generate_impl(
         db,
         &CompileOptions {
             emit_test_cases: false,
@@ -1298,7 +1301,12 @@ pub fn generate_stdlib_program(
         None,
         true,
         None,
-    )
+    )?;
+    // The stdlib slice is user-independent by contract; splice consumers
+    // re-finalize with real project identity, so its own ids just need to
+    // be dense for direct runs.
+    identity::finalize_program_identity(db, opt, false, &mut program);
+    Ok(program)
 }
 
 /// Generate project bytecode on top of a precompiled stdlib `Program` slice
@@ -1315,7 +1323,9 @@ pub fn generate_project_bytecode_with_stdlib(
     opt: OptLevel,
     base: &Program,
 ) -> Result<Program, LoweringError> {
-    generate_impl(db, options, opt, Some(base), false, None)
+    let mut program = generate_impl(db, options, opt, Some(base), false, None)?;
+    identity::finalize_program_identity(db, opt, options.emit_test_cases, &mut program);
+    Ok(program)
 }
 
 /// Incremental compile that lowers function bodies only for dirty files, reuses
@@ -1453,8 +1463,11 @@ pub fn generate_project_bytecode_with_reuse_artifacts(
         carrier.init_tail = Some(tail);
     }
 
-    let program = bex_vm_types::link::link(&assembled)
+    let mut program = bex_vm_types::link::link(&assembled)
         .map_err(|e| LoweringError::Internal(format!("link reused units: {e}")))?;
+    // Finalize the LINKED program (partial dirty-only programs are never
+    // finalized — they are not runnable).
+    identity::finalize_program_identity(db, opt, options.emit_test_cases, &mut program);
     Ok((program, assembled))
 }
 
@@ -3487,7 +3500,8 @@ fn emit_file_group(
                 origin: FunctionOrigin::Internal,
                 body_meta: None,
                 capture: FunctionCaptureProps::disabled(),
-                function_id: 0, // assigned at engine init (interim provider)
+                def_meta: None, // synthesized chainer — no source identity (§4.4)
+                function_id: 0, // stamped by finalize_program_identity (design §4.1)
             };
 
             let chainer_name = if pkg_name.as_str() == "user" {
@@ -4565,6 +4579,10 @@ fn emit_functions_serial(
                         compile_mir_function(body, mir.arity, mir.span, &line_starts, ctx, opt);
                     f.name.clone_from(&fq_name);
                     f.source_file.clone_from(&source_file);
+                    // §4.4: identity was built during lowering, so it rides
+                    // inside this file's compilation unit and the linked and
+                    // full emits agree byte for byte.
+                    f.def_meta = mir.definition_identity.as_ref().map(def_meta_from_mir);
                     f
                 }
                 MirFunctionKind::Builtin(kind) => {
@@ -4862,6 +4880,9 @@ fn emit_functions_parallel(
             );
             f.name.clone_from(&item.fq_name);
             f.source_file.clone_from(&item.source_file);
+            // §4.4: mirrors the serial pass exactly — identity comes off the
+            // Stage-A MirFunction, so parallel emit stays byte-identical.
+            f.def_meta = item.mir.definition_identity.as_ref().map(def_meta_from_mir);
             Some((f, fragment))
         })
         .collect();
@@ -5058,8 +5079,39 @@ fn builtin_emit_function(kind: BuiltinKind, fq_name: &str, arity: usize) -> Opti
         origin: FunctionOrigin::Builtin,
         body_meta: None,
         capture: FunctionCaptureProps::disabled(),
-        function_id: 0, // assigned at engine init (interim provider)
+        // Builtins carry no wire identity: §7.1 keeps them fully
+        // capture-disabled, so nothing dictionary-joins them.
+        def_meta: None,
+        function_id: 0, // stamped by finalize_program_identity (design §4.1)
     })
+}
+
+/// Convert MIR's structural definition identity (built during lowering — the
+/// §4.4/§4.5 requirement that identity rides inside each `CompilationUnit`'s
+/// functions, never a post-link pass) into the wire `Function::def_meta`.
+/// A pure 1:1 field map: MIR mirrors the `bex_vm_types` shape because it does
+/// not depend on that crate.
+fn def_meta_from_mir(
+    identity: &baml_compiler2_mir::MirDefinitionIdentity,
+) -> bex_vm_types::DefinitionMeta {
+    bex_vm_types::DefinitionMeta {
+        definition_key: identity.definition_key.clone(),
+        owner_type_key: identity.owner_type_key.clone(),
+        lambda: identity
+            .lambda
+            .as_ref()
+            .map(|lambda| bex_vm_types::LambdaIdentity {
+                parent_definition_key: lambda.parent_definition_key.clone(),
+                ordinal: lambda.ordinal,
+                kind: match lambda.kind {
+                    baml_compiler2_mir::MirLambdaKind::Lambda => bex_vm_types::LambdaKind::Lambda,
+                    baml_compiler2_mir::MirLambdaKind::SpawnedClosure => {
+                        bex_vm_types::LambdaKind::SpawnedClosure
+                    }
+                    baml_compiler2_mir::MirLambdaKind::Adapter => bex_vm_types::LambdaKind::Adapter,
+                },
+            }),
+    }
 }
 
 /// Fill a compiled function's signature, throws, origin, and LLM metadata
@@ -5081,6 +5133,21 @@ fn attach_function_metadata<'db>(
     let signature_metadata = compute_function_metadata(db, func_loc, &parameter_defaults, cache);
     apply_signature_metadata(compiled_fn, &signature_metadata);
     compiled_fn.origin = emitted_function_origin(fq_name, is_builtin_file, func.metadata.origin);
+
+    // §7.1 compiled-in capture defaults, keyed on the function class the
+    // origin just resolved to. Value capture (inputs/output) is opt-in for
+    // ordinary code — only errors are Auto-captured, with Auto promotion of
+    // staged speculative captures when a trigger fires — while compiler/VM
+    // plumbing captures nothing at all. LLM functions are the exception and
+    // are upgraded to all-Auto in the client branch below.
+    compiled_fn.capture = match compiled_fn.origin {
+        FunctionOrigin::UserDefined | FunctionOrigin::Companion | FunctionOrigin::AutoDerive => {
+            FunctionCaptureProps::disabled()
+                .with_auto(CaptureCategory::Error)
+                .with_promote_on_error(CaptureOption::Auto)
+        }
+        FunctionOrigin::Builtin | FunctionOrigin::Internal => FunctionCaptureProps::disabled(),
+    };
 
     // Set LLM-specific body_meta if this is an LLM function with a client.
     //
@@ -5108,10 +5175,14 @@ fn attach_function_metadata<'db>(
             prompt_template,
             client: client.to_string(),
         });
+        // §7.1: LLM row of the defaults table — the one class whose values
+        // are Auto-captured by default (inputs and output are the prompt and
+        // parse result, the exact payloads observability exists for).
         compiled_fn.capture = FunctionCaptureProps::disabled()
             .with_auto(CaptureCategory::Input)
             .with_auto(CaptureCategory::Output)
-            .with_auto(CaptureCategory::Error);
+            .with_auto(CaptureCategory::Error)
+            .with_promote_on_error(CaptureOption::Auto);
     }
 }
 
@@ -5229,6 +5300,10 @@ fn compile_lambdas_flat(
                     compile_mir_function(body, lambda.arity, lambda.span, line_starts, ctx, opt);
                 f.name.clone_from(&lambda_name);
                 f.source_file = source_file.to_string();
+                // §4.5: structural lambda identity (parent key + ordinal +
+                // kind) recorded at lowering; the `<lambda(parent, N)>` name
+                // above is display-only and no longer parsed by anything.
+                f.def_meta = lambda.definition_identity.as_ref().map(def_meta_from_mir);
                 // Stamp the runtime signature `lower_lambda` recorded — the
                 // same struct and writer as a top-level declaration (lambdas
                 // have no TIR `func_data` to read from). Closure values
@@ -5369,7 +5444,8 @@ fn compile_init_function<'db>(
                     origin: FunctionOrigin::Internal,
                     body_meta: None,
                     capture: FunctionCaptureProps::disabled(),
-                    function_id: 0, // assigned at engine init (interim provider)
+                    def_meta: None, // synthesized helper — no source identity (§4.4)
+                    function_id: 0, // stamped by finalize_program_identity (design §4.1)
                 }
             }
         };
@@ -5446,7 +5522,8 @@ fn compile_init_function<'db>(
         origin: FunctionOrigin::Internal,
         body_meta: None,
         capture: FunctionCaptureProps::disabled(),
-        function_id: 0, // assigned at engine init (interim provider)
+        def_meta: None, // synthesized $init — no source identity (§4.4)
+        function_id: 0, // stamped by finalize_program_identity (design §4.1)
     })
 }
 

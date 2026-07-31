@@ -35,6 +35,8 @@ pub use dispatch::{
     DispatchResult, build_args_from_signature, clamp_exit_code, dispatch_target,
     validate_help_param,
 };
-pub use envelope::{PACK_SECTION_NAME, PackEnvelope, PackMode, TargetEntry};
+pub use envelope::{
+    PACK_SECTION_NAME, PackEnvelope, PackEnvelopeDecodeError, PackMode, TargetEntry,
+};
 pub use json_coerce::load_json_source;
 pub use output::{OutputFormat, format_value, write_output};

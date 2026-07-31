@@ -1,6 +1,7 @@
 //! Artifact-safe encoding for trace-owned value snapshots.
 
 use baml_type::{FunctionParamMode, Literal, MediaKind, RuntimeTy};
+use bex_events::store::canon::{CanonValue, Presence};
 use num_bigint::BigInt;
 use prost::{Enumeration, Message};
 
@@ -431,6 +432,91 @@ pub(crate) fn encode_trace_snapshot_body(snapshot: &TraceSnapshot) -> Result<Vec
     Ok(value.encode_to_vec())
 }
 
+/// Convert a trace snapshot into the §7.4 canonical value model
+/// ([`bex_events::store::canon::CanonValue`]) for content-addressed storage.
+///
+/// Schema-erasing by design: class/enum identity travels as the
+/// `class:<dotted>` / `enum:<dotted>` definition key and `type_args` are
+/// dropped (§4.4). Map insertion order passes through — the canonical
+/// encoder sorts internally, so both orders yield the same root CID.
+/// Dangling refs never panic; they degrade to `Omitted`.
+pub(crate) fn canonical_from_snapshot(snapshot: &TraceSnapshot) -> CanonValue {
+    canonical_value(snapshot, snapshot.root())
+}
+
+fn canonical_value(snapshot: &TraceSnapshot, value_ref: TraceValueRef) -> CanonValue {
+    let Some(value) = snapshot.value(value_ref) else {
+        return CanonValue::Omitted {
+            reason: TraceOmissionReason::InvalidRuntimeValue.canonical_code(),
+            message: "dangling ref".to_string(),
+        };
+    };
+    match value {
+        TraceValue::Null => CanonValue::Null,
+        TraceValue::Bool(value) => CanonValue::Bool(*value),
+        TraceValue::Int(value) => CanonValue::Int(*value),
+        TraceValue::Float(value) => CanonValue::Float(*value),
+        // Trace bigints are already decimal (`BigInt::to_string`); the
+        // canonical encoder normalizes sign/leading zeros itself.
+        TraceValue::Bigint(value) => CanonValue::Bigint(value.clone()),
+        TraceValue::String(value) => CanonValue::String(value.clone()),
+        TraceValue::Bytes(value) => CanonValue::Bytes(value.clone()),
+        TraceValue::Array(items) => CanonValue::List(
+            items
+                .iter()
+                .map(|item| canonical_value(snapshot, *item))
+                .collect(),
+        ),
+        TraceValue::Map(entries) => CanonValue::Map(
+            entries
+                .iter()
+                .map(|(key, value)| (key.clone(), canonical_value(snapshot, *value)))
+                .collect(),
+        ),
+        TraceValue::Media(media) => CanonValue::Media {
+            kind: media.kind.tag_str().to_string(),
+            mime: media.mime_type.clone(),
+            content_kind: match media.content {
+                TraceMediaContent::Url(_) => 0,
+                TraceMediaContent::Base64(_) => 1,
+                TraceMediaContent::File(_) => 2,
+            },
+            content: match &media.content {
+                TraceMediaContent::Url(content)
+                | TraceMediaContent::Base64(content)
+                | TraceMediaContent::File(content) => content.clone(),
+            },
+        },
+        TraceValue::Instance {
+            type_name, fields, ..
+        } => CanonValue::Class {
+            definition_key: format!("class:{type_name}"),
+            fields: fields
+                .iter()
+                .map(|(name, field_ref)| {
+                    if matches!(snapshot.value(*field_ref), Some(TraceValue::Null)) {
+                        (name.clone(), Presence::Null, None)
+                    } else {
+                        (
+                            name.clone(),
+                            Presence::Value,
+                            Some(canonical_value(snapshot, *field_ref)),
+                        )
+                    }
+                })
+                .collect(),
+        },
+        TraceValue::Enum { type_name, variant } => CanonValue::Enum {
+            definition_key: format!("enum:{type_name}"),
+            variant: variant.clone(),
+        },
+        TraceValue::Omitted(descriptor) => CanonValue::Omitted {
+            reason: descriptor.reason.canonical_code(),
+            message: descriptor.message.clone(),
+        },
+    }
+}
+
 fn encode_value(
     snapshot: &TraceSnapshot,
     value_ref: TraceValueRef,
@@ -743,14 +829,17 @@ pub(crate) fn render_encoded_trace_value(body: &[u8]) -> Result<String, String> 
 
 #[cfg(test)]
 mod tests {
+    use bex_events::store::canon::{self, CanonValue, Presence};
     use bridge_ctypes::baml_bridge::cffi::{
         BamlOutboundValue, BamlTyPrimitiveKind, baml_outbound_value::Value as BamlValueVariant,
         baml_ty,
     };
     use prost::Message;
 
+    use super::canonical_from_snapshot;
     use crate::trace_heap::{
-        TraceOmissionDescriptor, TraceOmissionReason, TraceSnapshot, TraceValue, TraceValueRef,
+        TraceMediaContent, TraceMediaValue, TraceOmissionDescriptor, TraceOmissionReason,
+        TraceSnapshot, TraceValue, TraceValueRef,
     };
 
     #[test]
@@ -817,6 +906,168 @@ mod tests {
             media.value,
             Some(bridge_ctypes::baml_bridge::cffi::baml_value_media::Value::Base64(_))
         ));
+    }
+
+    #[test]
+    fn canonical_from_snapshot_maps_the_full_value_model() {
+        let snapshot = TraceSnapshot::for_test(
+            TraceValueRef::for_test(8),
+            vec![
+                // 0
+                TraceValue::String("ada".to_string()),
+                // 1
+                TraceValue::Null,
+                // 2
+                TraceValue::Enum {
+                    type_name: "user.Color".to_string(),
+                    variant: "Red".to_string(),
+                },
+                // 3: BigInt::to_string form — passes through verbatim.
+                TraceValue::Bigint("42".to_string()),
+                // 4
+                TraceValue::Media(TraceMediaValue {
+                    kind: bex_external_types::MediaKind::Image,
+                    mime_type: Some("image/png".to_string()),
+                    content: TraceMediaContent::Base64("aW1n".to_string()),
+                }),
+                // 5
+                TraceValue::Omitted(TraceOmissionDescriptor {
+                    reason: TraceOmissionReason::HostOwnedValue,
+                    message: "host-owned callable".to_string(),
+                }),
+                // 6
+                TraceValue::Int(7),
+                // 7
+                TraceValue::Map(vec![
+                    ("b".to_string(), TraceValueRef::for_test(6)),
+                    ("a".to_string(), TraceValueRef::for_test(0)),
+                ]),
+                // 8: type_args are schema-erased by design.
+                TraceValue::Instance {
+                    type_name: "user.Box".to_string(),
+                    type_args: vec![baml_type::RuntimeTy::string()],
+                    fields: vec![
+                        ("name".to_string(), TraceValueRef::for_test(0)),
+                        ("age".to_string(), TraceValueRef::for_test(1)),
+                        ("color".to_string(), TraceValueRef::for_test(2)),
+                        ("big".to_string(), TraceValueRef::for_test(3)),
+                        ("pic".to_string(), TraceValueRef::for_test(4)),
+                        ("gone".to_string(), TraceValueRef::for_test(5)),
+                        ("meta".to_string(), TraceValueRef::for_test(7)),
+                    ],
+                },
+            ],
+        );
+
+        let canonical = canonical_from_snapshot(&snapshot);
+        assert_eq!(
+            canonical,
+            CanonValue::Class {
+                definition_key: "class:user.Box".to_string(),
+                fields: vec![
+                    (
+                        "name".to_string(),
+                        Presence::Value,
+                        Some(CanonValue::String("ada".to_string())),
+                    ),
+                    ("age".to_string(), Presence::Null, None),
+                    (
+                        "color".to_string(),
+                        Presence::Value,
+                        Some(CanonValue::Enum {
+                            definition_key: "enum:user.Color".to_string(),
+                            variant: "Red".to_string(),
+                        }),
+                    ),
+                    (
+                        "big".to_string(),
+                        Presence::Value,
+                        Some(CanonValue::Bigint("42".to_string())),
+                    ),
+                    (
+                        "pic".to_string(),
+                        Presence::Value,
+                        Some(CanonValue::Media {
+                            kind: "image".to_string(),
+                            mime: Some("image/png".to_string()),
+                            content_kind: 1,
+                            content: "aW1n".to_string(),
+                        }),
+                    ),
+                    (
+                        "gone".to_string(),
+                        Presence::Value,
+                        Some(CanonValue::Omitted {
+                            reason: 2,
+                            message: "host-owned callable".to_string(),
+                        }),
+                    ),
+                    (
+                        "meta".to_string(),
+                        Presence::Value,
+                        Some(CanonValue::Map(vec![
+                            ("b".to_string(), CanonValue::Int(7)),
+                            ("a".to_string(), CanonValue::String("ada".to_string())),
+                        ])),
+                    ),
+                ],
+            }
+        );
+    }
+
+    #[test]
+    fn canonical_map_insertion_orders_share_a_root_cid() {
+        let ab = TraceSnapshot::for_test(
+            TraceValueRef::for_test(2),
+            vec![
+                TraceValue::Int(1),
+                TraceValue::Int(2),
+                TraceValue::Map(vec![
+                    ("a".to_string(), TraceValueRef::for_test(0)),
+                    ("b".to_string(), TraceValueRef::for_test(1)),
+                ]),
+            ],
+        );
+        let ba = TraceSnapshot::for_test(
+            TraceValueRef::for_test(2),
+            vec![
+                TraceValue::Int(2),
+                TraceValue::Int(1),
+                TraceValue::Map(vec![
+                    ("b".to_string(), TraceValueRef::for_test(0)),
+                    ("a".to_string(), TraceValueRef::for_test(1)),
+                ]),
+            ],
+        );
+
+        let canonical_ab = canonical_from_snapshot(&ab);
+        let canonical_ba = canonical_from_snapshot(&ba);
+        // Insertion order passes through to the model...
+        assert_ne!(canonical_ab, canonical_ba);
+        // ...and the canonical encoder makes it irrelevant.
+        assert_eq!(
+            canon::encode(&canonical_ab).root_cid,
+            canon::encode(&canonical_ba).root_cid,
+        );
+    }
+
+    #[test]
+    fn canonical_dangling_refs_degrade_to_omitted() {
+        let dangling_item = TraceSnapshot::for_test(
+            TraceValueRef::for_test(0),
+            vec![TraceValue::Array(vec![TraceValueRef::for_test(9)])],
+        );
+        let expected = CanonValue::Omitted {
+            reason: TraceOmissionReason::InvalidRuntimeValue.canonical_code(),
+            message: "dangling ref".to_string(),
+        };
+        assert_eq!(
+            canonical_from_snapshot(&dangling_item),
+            CanonValue::List(vec![expected.clone()]),
+        );
+
+        let dangling_root = TraceSnapshot::for_test(TraceValueRef::for_test(5), Vec::new());
+        assert_eq!(canonical_from_snapshot(&dangling_root), expected);
     }
 
     #[test]

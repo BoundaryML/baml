@@ -1,129 +1,20 @@
-//! `.bamlprof` file writing and reading (v2 §4 framing).
+//! `.bamlprof` file reading (v2 §4 framing).
 //!
 //! Framing: one length-delimited [`pb::EventFileHeaderV1`], then a stream of
-//! length-delimited [`pb::DiskEventV1`] messages. One file per engine per
-//! process: `<process_id>-<started_at>-<engine>.bamlprof`.
+//! length-delimited [`pb::DiskEventV1`] messages. The per-engine
+//! `ProfileWriter` that used to append these files from the consumer was
+//! deleted in P9 step 4 — flight dumps (`prof::consumer`) and the wasm
+//! cooperative drain's byte sinks (`prof::artifact`) are the remaining
+//! producers of this framing, both via the shared encoders in
+//! [`crate::prof::encode`]. Reading stays forever: goldens, flight dumps,
+//! and historical archives all parse through here.
 
-use std::{
-    fs::{self, File},
-    io::{self, Write},
-    path::{Path, PathBuf},
-};
+use std::{fs, io, path::Path};
 
 pub use crate::prof::read::{
     BamlprofContents, header_started_at_epoch_ns, read_bamlprof_from_bytes,
     read_bamlprof_from_reader,
 };
-use crate::prof::{
-    artifact::{ProfileArtifactRef, ProfileArtifactSink},
-    encode::{encode_disk_event, encode_length_delimited_message},
-    pb,
-};
-
-/// A single engine's open profile file.
-pub(crate) struct ProfileWriter {
-    file: File,
-    path: PathBuf,
-    /// Reused length-delimited encode buffer. One allocation that grows to
-    /// the largest message, then stays — avoids a `Vec` allocation (and the
-    /// extra `encoded_len` walk a pre-sized `with_capacity` would cost) on
-    /// every event written. The consumer transcodes one event per record on
-    /// its hot path, so this is the difference between zero and one malloc
-    /// per traced event.
-    scratch: Vec<u8>,
-}
-
-impl ProfileWriter {
-    /// Creates the profiles directory if needed, the file, and writes the
-    /// header.
-    pub(crate) fn create(
-        dir: &Path,
-        process_id: [u8; 16],
-        started_at_epoch_ns: u128,
-        engine_id: u64,
-        header: &pb::EventFileHeaderV1,
-    ) -> io::Result<ProfileWriter> {
-        fs::create_dir_all(dir)?;
-        let started_at_secs = started_at_epoch_ns / 1_000_000_000;
-        let name = format!(
-            "{}-{started_at_secs}-{engine_id}.bamlprof",
-            hex_uuid(process_id)
-        );
-        let path = dir.join(name);
-        let file = File::create(&path)?;
-        let mut writer = ProfileWriter {
-            file,
-            path,
-            scratch: Vec::new(),
-        };
-        writer.write_message(header)?;
-        Ok(writer)
-    }
-
-    /// Appends one length-delimited event to the in-flight range buffer.
-    /// Native files and WASM byte/chunk sinks share the target-neutral encoder.
-    pub(crate) fn encode_event(&mut self, event: &pb::DiskEventV1) {
-        encode_disk_event(&mut self.scratch, event);
-    }
-
-    /// Write the accumulated range buffer to the file in one syscall and reset
-    /// it. No-op when nothing is buffered.
-    pub(crate) fn flush_buffered(&mut self) -> io::Result<()> {
-        if !self.scratch.is_empty() {
-            self.file.write_all(&self.scratch)?;
-            self.scratch.clear();
-        }
-        Ok(())
-    }
-
-    fn write_message(&mut self, msg: &impl prost::Message) -> io::Result<()> {
-        // One-shot header write at file creation: encode + a single write.
-        self.scratch.clear();
-        encode_length_delimited_message(&mut self.scratch, msg).map_err(io::Error::other)?;
-        self.file.write_all(&self.scratch)?;
-        self.scratch.clear();
-        Ok(())
-    }
-
-    /// Flush buffered range bytes to the OS (no `fsync`). The cadence flush.
-    pub(crate) fn flush(&mut self) -> io::Result<()> {
-        self.flush_buffered()
-    }
-
-    /// Flush + `fsync`: survives power loss, not just process exit. Used for
-    /// explicit flush requests and engine closes.
-    pub(crate) fn sync(&mut self) -> io::Result<()> {
-        self.flush_buffered()?;
-        self.file.sync_all()
-    }
-
-    pub(crate) fn path(&self) -> &Path {
-        &self.path
-    }
-}
-
-impl ProfileArtifactSink for ProfileWriter {
-    fn write_chunk(&mut self, bytes: &[u8]) -> io::Result<()> {
-        self.flush_buffered()?;
-        self.file.write_all(bytes)
-    }
-
-    fn flush(&mut self) -> io::Result<ProfileArtifactRef> {
-        self.flush_buffered()?;
-        Ok(ProfileArtifactRef::NativeFile {
-            path: self.path.clone(),
-        })
-    }
-}
-
-fn hex_uuid(bytes: [u8; 16]) -> String {
-    let mut s = String::with_capacity(32);
-    for b in bytes {
-        use std::fmt::Write as _;
-        let _ = write!(s, "{b:02x}");
-    }
-    s
-}
 
 /// Reads a `.bamlprof` back: the header and every whole event, tolerating a
 /// torn trailing message. Errors only when the file or its header is
@@ -136,23 +27,11 @@ pub fn read_bamlprof(path: &Path) -> io::Result<BamlprofContents> {
 
 #[cfg(test)]
 mod tests {
-    use std::sync::atomic::{AtomicU32, Ordering};
-
-    use super::ProfileWriter;
     use crate::prof::{
         artifact::{ByteProfileArtifactSink, ProfileArtifactRef, ProfileArtifactSink},
         encode::{encode_disk_event, encode_length_delimited_message},
         pb,
     };
-
-    fn temp_dir(tag: &str) -> std::path::PathBuf {
-        static N: AtomicU32 = AtomicU32::new(0);
-        std::env::temp_dir().join(format!(
-            "bamlprof-file-{}-{}-{tag}",
-            std::process::id(),
-            N.fetch_add(1, Ordering::Relaxed)
-        ))
-    }
 
     fn fixed_header() -> pb::EventFileHeaderV1 {
         pb::EventFileHeaderV1 {
@@ -196,25 +75,13 @@ mod tests {
         ]
     }
 
+    /// The shared encoders + byte sink produce exactly the framing this
+    /// module reads back (the byte contract the deleted native file writer
+    /// used to co-assert; the encoding side is the surviving producer).
     #[test]
-    fn native_file_writer_and_byte_sink_share_byte_contract() {
-        let dir = temp_dir("byte-contract");
-        let process_id = [0xAB; 16];
-        let started_at_epoch_ns = 123_456_789_000u128;
-        let engine_id = 7;
+    fn byte_sink_output_reads_back() {
         let header = fixed_header();
         let events = fixed_events();
-
-        let mut writer =
-            ProfileWriter::create(&dir, process_id, started_at_epoch_ns, engine_id, &header)
-                .unwrap();
-        for event in &events {
-            writer.encode_event(event);
-        }
-        writer.sync().unwrap();
-        let native_path = writer.path().to_path_buf();
-        drop(writer);
-        let native_bytes = std::fs::read(&native_path).unwrap();
 
         let mut sink = ByteProfileArtifactSink::new();
         let mut shared_bytes = Vec::new();
@@ -226,17 +93,16 @@ mod tests {
         assert_eq!(
             sink.flush().unwrap(),
             ProfileArtifactRef::Bytes {
-                len: native_bytes.len(),
+                len: shared_bytes.len(),
                 truncated: false,
                 dropped_bytes: 0,
                 dropped_chunks: 0
             }
         );
 
-        assert_eq!(native_bytes, sink.bytes());
-        let parsed = super::read_bamlprof(&native_path).unwrap();
+        let parsed = super::read_bamlprof_from_bytes(sink.bytes()).unwrap();
+        assert_eq!(parsed.header, header);
         assert_eq!(parsed.events, events);
-        let _ = std::fs::remove_file(native_path);
-        let _ = std::fs::remove_dir(dir);
+        assert!(!parsed.truncated);
     }
 }

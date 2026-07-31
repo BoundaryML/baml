@@ -234,9 +234,9 @@ export function createExecutionStore(client: RunStoreClient): ExecutionStore {
 function applyRunPatchChange(run: Run, change: RunPatchChange): Run {
   switch (change.type) {
     case 'upsertCallNode':
-      return { ...run, calls: upsertById(run.calls, change.call) };
+      return { ...run, calls: upsertById(run.calls ?? [], change.call) };
     case 'upsertThreadNode':
-      return { ...run, threads: upsertById(run.threads, change.thread) };
+      return { ...run, threads: upsertById(run.threads ?? [], change.thread) };
     case 'upsertPayload':
       return { ...run, payloads: upsertById(run.payloads, change.payload) };
     case 'upsertDiagnostic':
@@ -346,8 +346,8 @@ function cloneRun(run: Run): Run {
       : null,
     error: run.error ? { ...run.error } : null,
     cancellation: run.cancellation ? { ...run.cancellation } : null,
-    calls: run.calls.map((call) => ({ ...call })),
-    threads: run.threads.map((thread) => ({
+    calls: (run.calls ?? []).map((call) => ({ ...call })),
+    threads: (run.threads ?? []).map((thread) => ({
       ...thread,
       callNodeIds: [...thread.callNodeIds],
     })),

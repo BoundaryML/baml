@@ -182,23 +182,7 @@ export type PlaygroundNotification =
       data: number[];
       expandError?: { testsetName: string; message: string };
     }
-  | {
-      type: 'profileArtifactChunk';
-      boundaryId?: BoundaryId;
-      engineId: number;
-      processId: string;
-      bytesBase64: string;
-      retainedBytes: number;
-      maxBytes?: number;
-      droppedBytes: number;
-      droppedChunks: number;
-    }
   | ({ type: 'valueBody' } & ValueBodyResponse);
-
-export type ProfileArtifactChunkMessage = Extract<
-  PlaygroundNotification,
-  { type: 'profileArtifactChunk' }
->;
 
 // ---------------------------------------------------------------------------
 // Control flow graph types (matches Rust serde output from baml_compiler2_visualization)
@@ -548,8 +532,11 @@ export interface Run {
   cancellation: RunCancellation | null;
   rootCallNodeId: string | null;
   graphRuntimeOverlay: GraphRuntimeOverlay | null;
-  calls: CallNode[];
-  threads: ThreadNode[];
+  /** Profile call/thread nodes. The runtime stopped serializing these
+   *  (§9.3 "one live plane" — the CctEngine feeds `/api/obs` instead), so
+   *  they are absent on current wires; consumers must tolerate `undefined`. */
+  calls?: CallNode[];
+  threads?: ThreadNode[];
   payloads: PayloadEvent[];
   diagnostics: RunDiagnostic[];
   cursor: RunCursor;
@@ -795,7 +782,6 @@ export type WebSocketInMessage =
 export type WorkerOutMessage =
   | { type: 'ready' }
   | { type: 'playgroundNotification'; notification: PlaygroundNotification }
-  | ProfileArtifactChunkMessage
   | { type: 'diagnostics'; entries: DiagnosticEntry[] }
   | { type: 'runStarted'; requestId?: number; run: Run }
   | { type: 'runPatch'; patch: RunPatch }

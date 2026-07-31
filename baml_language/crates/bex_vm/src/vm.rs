@@ -317,6 +317,7 @@ pub(crate) mod tests {
             prof_ring: None,
             prof_suppressed: false,
             prof_thread_id: 0,
+            prof_suspend_seq: 0,
             call_id_counter: 0,
             current_call_id: 0,
             pending_sysop_call_id: None,
@@ -367,6 +368,7 @@ pub(crate) mod tests {
             origin: FunctionOrigin::Internal,
             body_meta: None,
             capture: FunctionCaptureProps::disabled(),
+            def_meta: None,
             function_id: 0,
         }))
     }
@@ -673,6 +675,11 @@ pub struct BexVm {
     /// Logical BEX thread id for the profiling event stream, minted by the
     /// engine per logical thread (root call or spawn) — not the OS thread.
     pub prof_thread_id: u64,
+
+    /// Per-logical-thread park counter (observability design §5.3): pairs
+    /// each SuspendThread record with its ResumeThread. Bumped by the
+    /// engine at park points; never on the VM hot path.
+    pub prof_suspend_seq: u32,
 
     /// Per-call id counter; ids start at 1 (`0` = none). Minted
     /// unconditionally — it is `$id` language semantics (M1 reads it) — and
@@ -1247,6 +1254,7 @@ impl BexVm {
             prof_ring: None,
             prof_suppressed: false,
             prof_thread_id: 0,
+            prof_suspend_seq: 0,
             call_id_counter: 0,
             current_call_id: 0,
             pending_sysop_call_id: None,
@@ -2578,6 +2586,7 @@ impl BexVm {
             origin: FunctionOrigin::Internal,
             body_meta: None,
             capture: bex_vm_types::FunctionCaptureProps::disabled(),
+            def_meta: None,
             function_id: 0, // synthetic; not in the profiling function table
         };
         let entry_ptr = self.tlab.alloc(Object::Function(Box::new(entry_function)));
@@ -2655,6 +2664,7 @@ impl BexVm {
             origin: FunctionOrigin::Internal,
             body_meta: None,
             capture: bex_vm_types::FunctionCaptureProps::disabled(),
+            def_meta: None,
             function_id: 0,
         };
         let entry_ptr = self.tlab.alloc(Object::Function(Box::new(entry_function)));

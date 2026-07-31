@@ -256,6 +256,12 @@ pub enum VmInternalError {
     #[error("bridge failure: {message}")]
     BridgeFailure { message: String },
 
+    /// A `Program` reached the engine without compile-time identity being
+    /// finalizable (observability design §4.1) — ids unstamped or identity
+    /// serialization failed.
+    #[error("program identity not finalized: {message}")]
+    IdentityNotFinalized { message: String },
+
     /// A `VirtualCall` could not resolve an implementation of `method` for the
     /// receiver's runtime concrete type. The type checker only emits a virtual
     /// call once it has proved the receiver implements the interface, so the
