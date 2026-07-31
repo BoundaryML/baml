@@ -26,9 +26,12 @@
 pub mod facts;
 pub mod handles;
 pub mod head;
+pub mod ids;
 
 #[cfg(test)]
 mod handles_tests;
+#[cfg(test)]
+mod ids_tests;
 
 // ── Db trait ──────────────────────────────────────────────────────────────────
 
@@ -47,6 +50,8 @@ impl Db for baml_project::ProjectDatabase {}
 
 pub use handles::{
     AssocType, Class, Client, Enum, Field, FieldOwner, Function, FunctionOwner, Global, Impl,
-    Interface, Namespace, Package, RequiredMethod, RetryPolicy, Symbol, SymbolKind, TemplateString,
-    Test, Throws, TypeAlias, Variant,
+    ImplMethod, Interface, Member, Namespace, Package, RequiredMethod, RetryPolicy, Symbol,
+    SymbolKind, TemplateString, Test, Throws, TypeAlias, Variant,
 };
+pub use head::{TyHead, impl_attaches, ty_head};
+pub use ids::{IdKind, InvalidSymbolId, Resolved, SymbolId, resolve};

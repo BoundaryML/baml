@@ -831,6 +831,23 @@ impl<'db> Package<'db> {
         self.0.name(db)
     }
 
+    /// The package with this name, when such a package can exist: `user`,
+    /// or one of the builtin stdlib packages. `None` otherwise — a routing
+    /// guard for string resolution.
+    pub fn named_checked(db: &'db dyn Db, name: &str) -> Option<Self> {
+        (name == "user" || baml_builtins2::stdlib_package_names().contains(&name))
+            .then(|| Self::named(db, name))
+    }
+
+    /// The namespace at exactly this path, if the package has it.
+    pub fn namespace(self, db: &'db dyn Db, path: &[String]) -> Option<Namespace<'db>> {
+        let path: Vec<Name> = path.iter().map(Name::new).collect();
+        baml_compiler2_ppir::package_items(db, self.0)
+            .namespaces
+            .contains_key(&path)
+            .then(|| Namespace(NamespaceId::new(db, self.0.name(db), path)))
+    }
+
     /// The package's namespaces, root first, then sorted by path.
     pub fn namespaces(self, db: &'db dyn Db) -> Vec<Namespace<'db>> {
         let items = baml_compiler2_ppir::package_items(db, self.0);
@@ -862,6 +879,22 @@ impl<'db> Namespace<'db> {
     /// The dotted namespace path; empty for the package root.
     pub fn path(self, db: &'db dyn Db) -> Vec<Name> {
         self.0.path(db)
+    }
+
+    /// The type-space item with this name, if any.
+    pub fn type_named(self, db: &'db dyn Db, name: &str) -> Option<Symbol<'db>> {
+        baml_compiler2_ppir::namespace_items(db, self.0)
+            .types
+            .get(&Name::new(name))
+            .map(|def| Symbol::from(*def))
+    }
+
+    /// The value-space item with this name, if any.
+    pub fn value_named(self, db: &'db dyn Db, name: &str) -> Option<Symbol<'db>> {
+        baml_compiler2_ppir::namespace_items(db, self.0)
+            .values
+            .get(&Name::new(name))
+            .map(|def| Symbol::from(*def))
     }
 
     /// Every named item this namespace contributes, types then values, each
@@ -1134,5 +1167,119 @@ impl<'db> Interface<'db> {
             .into_iter()
             .filter(|imp| facts::impl_data(db, imp.0).is_some_and(|data| data.interface == self.0))
             .collect()
+    }
+}
+
+// ── Members: named lookup + the member sum ──────────────────────────────────
+
+/// Any named member of a type: a method (class method, interface default, or
+/// impl override — all [`Function`]s), an interface required method, a field,
+/// an enum variant, or an associated type.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum Member<'db> {
+    Method(Function<'db>),
+    RequiredMethod(RequiredMethod<'db>),
+    Field(Field<'db>),
+    Variant(Variant<'db>),
+    AssocType(AssocType<'db>),
+}
+
+impl<'db> Member<'db> {
+    pub fn name(self, db: &'db dyn Db) -> Name {
+        match self {
+            Self::Method(m) => m.name(db),
+            Self::RequiredMethod(m) => m.name(db),
+            Self::Field(f) => f.name(db),
+            Self::Variant(v) => v.name(db),
+            Self::AssocType(a) => a.name(db),
+        }
+    }
+
+    pub fn name_span(self, db: &'db dyn Db) -> TextRange {
+        match self {
+            Self::Method(m) => m.name_span(db),
+            Self::RequiredMethod(m) => m.name_span(db),
+            Self::Field(f) => f.name_span(db),
+            Self::Variant(v) => v.name_span(db),
+            Self::AssocType(a) => a.name_span(db),
+        }
+    }
+}
+
+impl<'db> Class<'db> {
+    /// Look up a member by name: methods first, then fields.
+    pub fn member_named(self, db: &'db dyn Db, name: &str) -> Option<Member<'db>> {
+        if let Some(method) = self
+            .methods(db)
+            .into_iter()
+            .find(|m| m.name(db).as_str() == name)
+        {
+            return Some(Member::Method(method));
+        }
+        self.fields(db)
+            .into_iter()
+            .find(|f| f.name(db).as_str() == name)
+            .map(Member::Field)
+    }
+}
+
+impl<'db> Enum<'db> {
+    /// Look up a variant by name.
+    pub fn member_named(self, db: &'db dyn Db, name: &str) -> Option<Member<'db>> {
+        self.variants(db)
+            .into_iter()
+            .find(|v| v.name(db).as_str() == name)
+            .map(Member::Variant)
+    }
+}
+
+impl<'db> Interface<'db> {
+    /// Look up a member by name: default methods, then required methods,
+    /// then fields, then associated types.
+    pub fn member_named(self, db: &'db dyn Db, name: &str) -> Option<Member<'db>> {
+        if let Some(method) = self
+            .default_methods(db)
+            .into_iter()
+            .find(|m| m.name(db).as_str() == name)
+        {
+            return Some(Member::Method(method));
+        }
+        if let Some(required) = self
+            .required_methods(db)
+            .into_iter()
+            .find(|m| m.name(db).as_str() == name)
+        {
+            return Some(Member::RequiredMethod(required));
+        }
+        if let Some(field) = self
+            .fields(db)
+            .into_iter()
+            .find(|f| f.name(db).as_str() == name)
+        {
+            return Some(Member::Field(field));
+        }
+        self.assoc_types(db)
+            .into_iter()
+            .find(|a| a.name(db).as_str() == name)
+            .map(Member::AssocType)
+    }
+}
+
+impl<'db> Symbol<'db> {
+    /// Look up a member of this symbol by name, where the kind has members.
+    pub fn member_named(self, db: &'db dyn Db, name: &str) -> Option<Member<'db>> {
+        match self {
+            Self::Class(c) => c.member_named(db, name),
+            Self::Enum(e) => e.member_named(db, name),
+            Self::Interface(i) => i.member_named(db, name),
+            Self::TypeAlias(_)
+            | Self::Function(_)
+            | Self::TemplateString(_)
+            | Self::Client(_)
+            | Self::Test(_)
+            | Self::RetryPolicy(_)
+            | Self::Global(_)
+            | Self::Impl(_) => None,
+        }
     }
 }
