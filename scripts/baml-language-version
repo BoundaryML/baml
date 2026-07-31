@@ -612,6 +612,20 @@ def replace_regex(path: Path, pattern: str, replacement: str) -> None:
     path.write_text(new_text, encoding="utf-8")
 
 
+def replace_json_version(path: Path, version: str) -> None:
+    text = path.read_text(encoding="utf-8")
+    new_text, count = re.subn(
+        r'^(\s*"version"\s*:\s*)"[^"]*"(?P<comma>,?)$',
+        lambda match: f'{match.group(1)}"{version}"{match.group("comma")}',
+        text,
+        count=1,
+        flags=re.MULTILINE,
+    )
+    if count != 1:
+        fail(f"could not update expected version surface in {path.relative_to(ROOT)}")
+    path.write_text(new_text, encoding="utf-8")
+
+
 def stamp(plan: ReleasePlan) -> None:
     BAML_VERSION_RS.parent.mkdir(parents=True, exist_ok=True)
     BAML_VERSION_RS.write_text(
@@ -647,10 +661,10 @@ def stamp(plan: ReleasePlan) -> None:
         r'^version = ".*"$',
         f'version = "{plan.crates_io_version}"',
     )
-    replace_regex(VSIX_PACKAGE, r'^  "version": ".*",$', f'  "version": "{plan.canonical_version}",')
+    replace_json_version(VSIX_PACKAGE, plan.canonical_version)
     for package in NPM_PACKAGES:
         if package.exists():
-            replace_regex(package, r'^  "version": ".*",$', f'  "version": "{plan.canonical_version}",')
+            replace_json_version(package, plan.canonical_version)
     replace_regex(
         GO_RUNTIME_VERSION,
         r'^const DefaultRuntimeVersion = ".*"$',

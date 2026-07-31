@@ -96,7 +96,7 @@ class VersionToolTests(unittest.TestCase):
         ):
             self.write(
                 package,
-                json.dumps({"version": version, "name": "fixture"}, indent=2)
+                json.dumps({"name": "fixture", "version": version}, indent=2)
                 + "\n",
             )
         self.write(
