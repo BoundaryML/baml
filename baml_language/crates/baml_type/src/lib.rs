@@ -903,7 +903,7 @@ impl TyRenderStrategy for CanonicalTyRender {
     }
 }
 
-impl Interface {
+impl<N: Clone> Interface<N> {
     /// The interface *existential* type ([`Ty::Interface`]) denoted by this
     /// constraint, with default attributes. The inverse of
     /// [`Ty::as_interface`].
@@ -911,7 +911,7 @@ impl Interface {
     /// A constraint may pin only some associated types whereas a fully-specified
     /// existential pins all of them; this lifts the constraint verbatim, so the
     /// result carries exactly the bindings the constraint holds.
-    pub fn to_ty(&self) -> Ty {
+    pub fn to_ty(&self) -> Ty<N> {
         Ty::Interface(
             self.name.clone(),
             self.generics.clone(),
@@ -924,7 +924,7 @@ impl Interface {
     /// followed by the type of each associated-type binding (the names are not
     /// yielded). Lets generic `Ty`-walkers descend into a constraint without
     /// re-deriving its shape.
-    pub fn tys(&self) -> impl Iterator<Item = &Ty> {
+    pub fn tys(&self) -> impl Iterator<Item = &Ty<N>> {
         self.generics
             .iter()
             .chain(self.associated_types.iter().map(|(_, ty)| ty))
@@ -934,7 +934,7 @@ impl Interface {
     /// associated-type bindings) mapped through `f`. The name and the binding
     /// names are preserved. The structure-preserving companion to [`tys`](Self::tys),
     /// for substitution/erasure/normalization passes.
-    pub fn map_tys(&self, mut f: impl FnMut(&Ty) -> Ty) -> Interface {
+    pub fn map_tys(&self, mut f: impl FnMut(&Ty<N>) -> Ty<N>) -> Interface<N> {
         // Route through `new` so the sort invariant is self-enforcing. `f` maps
         // only the binding *types*, never the names, so on an already-sorted
         // constraint the re-sort is a no-op — but it removes the dependence on
