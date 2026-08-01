@@ -48,10 +48,9 @@ pub use ffi::{
     },
     objects::flush_events,
     runtime::{
-        BamlBridgeInfoV1, BridgeInfo, BridgeLanguage, create_baml_runtime, destroy_baml_runtime,
-        ensure_version_compatible,
+        BamlBridgeInfoV1, create_baml_runtime, destroy_baml_runtime,
         initialize_runtime_from_bytecode as initialize_runtime_from_bytecode_ffi,
-        invoke_runtime_cli, register_bridge, register_bridge_ffi, registered_bridge,
+        initialize_runtime_from_bytecode_with_metadata, invoke_runtime_cli, register_bridge_ffi,
         shutdown_runtime as shutdown_runtime_ffi, version,
     },
     unhandled_spawn::register_unhandled_spawn_error_callback,

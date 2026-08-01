@@ -90,9 +90,33 @@ pub fn try_to_source_code_with_bytecode_and_options(
     baml_bytecode: &[u8],
     options: &GoGenOptions<'_>,
 ) -> Result<HashMap<PathBuf, String>, GoGenerationError> {
+    try_to_source_code_with_bytecode_metadata_and_options(pool, baml_bytecode, None, options)
+}
+
+pub fn try_to_source_code_with_bytecode_and_metadata_and_options(
+    pool: &SymbolPool,
+    baml_bytecode: &[u8],
+    embedded_baml_toml: &str,
+    options: &GoGenOptions<'_>,
+) -> Result<HashMap<PathBuf, String>, GoGenerationError> {
+    try_to_source_code_with_bytecode_metadata_and_options(
+        pool,
+        baml_bytecode,
+        Some(embedded_baml_toml),
+        options,
+    )
+}
+
+fn try_to_source_code_with_bytecode_metadata_and_options(
+    pool: &SymbolPool,
+    baml_bytecode: &[u8],
+    embedded_baml_toml: Option<&str>,
+    options: &GoGenOptions<'_>,
+) -> Result<HashMap<PathBuf, String>, GoGenerationError> {
     formatting::gofmt_generated_files(render_source_code_with_bytecode_and_options(
         pool,
         baml_bytecode,
+        embedded_baml_toml,
         options,
     ))
 }
@@ -100,6 +124,7 @@ pub fn try_to_source_code_with_bytecode_and_options(
 fn render_source_code_with_bytecode_and_options(
     pool: &SymbolPool,
     baml_bytecode: &[u8],
+    embedded_baml_toml: Option<&str>,
     options: &GoGenOptions<'_>,
 ) -> HashMap<PathBuf, String> {
     assert!(
@@ -119,7 +144,7 @@ fn render_source_code_with_bytecode_and_options(
     let cyclic_edges = cyclic_class_edges(pool, &renderable_classes);
     let mut files = HashMap::from([(
         PathBuf::from("internal/bootstrap/bootstrap.go"),
-        render_bootstrap(baml_bytecode),
+        render_bootstrap(baml_bytecode, embedded_baml_toml),
     )]);
 
     for package in packages.iter() {
@@ -4541,7 +4566,7 @@ fn render_go_literal_value(literal: &GoLiteral, runtime: &str) -> String {
     }
 }
 
-fn render_bootstrap(bytecode: &[u8]) -> String {
+fn render_bootstrap(bytecode: &[u8], embedded_baml_toml: Option<&str>) -> String {
     let mut out = String::from(BANNER);
     out.push_str("package bootstrap\n\n");
     out.push_str("import (\n\t\"sync\"\n\n");
@@ -4557,8 +4582,15 @@ fn render_bootstrap(bytecode: &[u8]) -> String {
         let _ = writeln!(out, "\t{line},");
     }
     out.push_str("}\n\n");
+    if let Some(embedded_baml_toml) = embedded_baml_toml {
+        let _ = writeln!(out, "const embeddedBamlToml = {embedded_baml_toml:?}\n");
+    }
     out.push_str("func Ensure() error {\n");
-    out.push_str("\tonce.Do(func() { initializeErr = baml_go.Initialize(bytecode) })\n");
+    if embedded_baml_toml.is_some() {
+        out.push_str("\tonce.Do(func() { initializeErr = baml_go.InitializeWithMetadata(bytecode, embeddedBamlToml) })\n");
+    } else {
+        out.push_str("\tonce.Do(func() { initializeErr = baml_go.Initialize(bytecode) })\n");
+    }
     out.push_str("\treturn initializeErr\n}\n");
     out
 }
@@ -4597,6 +4629,7 @@ mod tests {
         render_source_code_with_bytecode_and_options(
             pool,
             baml_bytecode,
+            None,
             &GoGenOptions {
                 naming_convention,
                 sdk_import_path,
@@ -4610,7 +4643,7 @@ mod tests {
         baml_bytecode: &[u8],
         options: &GoGenOptions<'_>,
     ) -> HashMap<PathBuf, String> {
-        render_source_code_with_bytecode_and_options(pool, baml_bytecode, options)
+        render_source_code_with_bytecode_and_options(pool, baml_bytecode, None, options)
     }
 
     fn without_horizontal_whitespace(value: &str) -> String {

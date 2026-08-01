@@ -176,7 +176,7 @@ internal static class PrimitiveProtocol
                 StringKey = "self",
                 Value = new InboundValue
                 {
-                    Handle = new BamlBridge.Cffi.V1.BamlHandle
+                    Handle = new global::BamlBridge.Cffi.V1.BamlHandle
                     {
                         Key = transferred.Key,
                         HandleType = BamlHandleType.AdtTaggedHeapHandle,
@@ -797,7 +797,7 @@ internal static class PrimitiveProtocol
         ownership.AddTransfer(transferred);
         return new InboundValue
         {
-            Handle = new BamlBridge.Cffi.V1.BamlHandle
+            Handle = new global::BamlBridge.Cffi.V1.BamlHandle
             {
                 Key = transferred.Key,
                 HandleType = value.HandleType,

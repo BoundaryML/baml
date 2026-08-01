@@ -74,6 +74,7 @@ const instance = new WebAssembly.Instance(workerdModule, {
   "./bridge_web_core_bg.js": imports,
 });
 imports.__wbg_set_wasm(instance.exports);
+instance.exports.__wbindgen_start();
 
 export default async function initWasm() {}
 export * from "./bridge_web_core_bg.js";

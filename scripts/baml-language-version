@@ -29,6 +29,8 @@ VSIX_PACKAGE = ROOT / "typescript2" / "app-vscode-ext" / "package.json"
 NODE_PACKAGE = ROOT / "baml_language" / "sdks" / "typescript" / "bridge_typescript" / "package.json"
 NODE_NATIVE_JS = ROOT / "baml_language" / "sdks" / "typescript" / "bridge_typescript" / "dist" / "native.js"
 WEB_PACKAGE = ROOT / "baml_language" / "sdks" / "typescript" / "bridge_typescript_web" / "package.json"
+NODE_VERSION_RS = ROOT / "baml_language" / "sdks" / "typescript" / "bridge_typescript" / "src" / "version.rs"
+WEB_VERSION_RS = ROOT / "baml_language" / "sdks" / "typescript" / "bridge_typescript_web" / "src" / "version.rs"
 NPM_PACKAGES = (NODE_PACKAGE, WEB_PACKAGE)
 GO_RUNTIME_VERSION = ROOT / "baml_language" / "sdks" / "go" / "baml_go" / "version.go"
 RUST_BRIDGE_VERSION_RS = ROOT / "baml_language" / "sdks" / "rust" / "bridge_rust" / "src" / "version.rs"
@@ -43,6 +45,10 @@ CSHARP_PROJECT = (
     / "src"
     / "Baml.Bridge.csproj"
 )
+CSHARP_RUNTIME_IDENTITY = ROOT / "baml_language" / "sdks" / "csharp" / "bridge_csharp" / "src" / "RuntimeIdentity.cs"
+JAVA_VERSION = ROOT / "baml_language" / "sdks" / "java" / "baml_bridge" / "src" / "main" / "java" / "baml_bridge" / "BamlVersion.java"
+SWIFT_RUNTIME_IDENTITY = ROOT / "baml_language" / "sdks" / "swift" / "Sources" / "BamlBridge" / "RuntimeIdentity.swift"
+CPP_VERSION = ROOT / "baml_language" / "sdks" / "cpp" / "bridge_cpp" / "include" / "baml" / "version.h"
 JAVA_BRIDGE_BUILD = ROOT / "baml_language" / "sdks" / "java" / "baml_bridge" / "build.gradle.kts"
 JAVA_KOTLIN_BUILD = (
     ROOT
@@ -84,6 +90,7 @@ PLAN_REGISTRIES = (
     "maven",
     "gradle_plugin",
     "swiftpm",
+    "go",
 )
 
 
@@ -158,6 +165,10 @@ class ReleasePlan:
     @property
     def swiftpm_version(self) -> str:
         return self.registry_versions["swiftpm"]
+
+    @property
+    def go_version(self) -> str:
+        return self.registry_versions["go"]
 
 
 def fail(message: str, code: int = 1) -> None:
@@ -474,6 +485,7 @@ def registry_versions_for(canonical: str) -> dict[str, str]:
         "maven": canonical,
         "gradle_plugin": canonical,
         "swiftpm": canonical,
+        "go": f"v{canonical}",
     }
     # Keep the map and the declared registry set in lockstep.
     assert set(translations) == set(PLAN_REGISTRIES)
@@ -634,8 +646,7 @@ def stamp(plan: ReleasePlan) -> None:
                 "//! Stamped BAML language product version.",
                 "",
                 f'pub const CANONICAL_VERSION: &str = "{plan.canonical_version}";',
-                "#[allow(dead_code)]",
-                f'const PYPI_VERSION: &str = "{plan.pypi_version}";',
+                f'pub const PYPI_VERSION: &str = "{plan.pypi_version}";',
                 f'pub const CHANNEL: &str = "{plan.channel}";',
                 "#[allow(dead_code)]",
                 f'const STABLE_VERSION: &str = "{plan.canary_version}";',
@@ -650,8 +661,13 @@ def stamp(plan: ReleasePlan) -> None:
     # version handshake compares the loaded engine against it).
     replace_regex(
         RUST_BRIDGE_VERSION_RS,
-        r'^pub\(crate\) const CANONICAL_VERSION: &str = ".*";$',
-        f'pub(crate) const CANONICAL_VERSION: &str = "{plan.canonical_version}";',
+        r'^pub\(crate\) const TOOLCHAIN_VERSION: &str = ".*";$',
+        f'pub(crate) const TOOLCHAIN_VERSION: &str = "{plan.canonical_version}";',
+    )
+    replace_regex(
+        RUST_BRIDGE_VERSION_RS,
+        r'^pub\(crate\) const BRIDGE_RUNTIME_VERSION: &str = ".*";$',
+        f'pub(crate) const BRIDGE_RUNTIME_VERSION: &str = "{plan.crates_io_version}";',
     )
     # The bridge crate publishes to crates.io, so its Cargo.toml version is a
     # literal (not the workspace `0.0.0-beta`) stamped from the plan's
@@ -667,13 +683,69 @@ def stamp(plan: ReleasePlan) -> None:
             replace_json_version(package, plan.canonical_version)
     replace_regex(
         GO_RUNTIME_VERSION,
-        r'^const DefaultRuntimeVersion = ".*"$',
-        f'const DefaultRuntimeVersion = "{plan.canonical_version}"',
+        r'^const ToolchainVersion = ".*"$',
+        f'const ToolchainVersion = "{plan.canonical_version}"',
+    )
+    replace_regex(
+        GO_RUNTIME_VERSION,
+        r'^const BridgeRuntimeVersion = ".*"$',
+        f'const BridgeRuntimeVersion = "{plan.go_version}"',
     )
     replace_regex(
         CSHARP_PROJECT,
         r"^    <Version>.*</Version>$",
         f"    <Version>{plan.nuget_version}</Version>",
+    )
+    for path in (NODE_VERSION_RS, WEB_VERSION_RS):
+        replace_regex(
+            path,
+            r'^pub\(crate\) const TOOLCHAIN_VERSION: &str = ".*";$',
+            f'pub(crate) const TOOLCHAIN_VERSION: &str = "{plan.canonical_version}";',
+        )
+        replace_regex(
+            path,
+            r'^pub\(crate\) const BRIDGE_RUNTIME_VERSION: &str = ".*";$',
+            f'pub(crate) const BRIDGE_RUNTIME_VERSION: &str = "{plan.npm_version}";',
+        )
+    replace_regex(
+        CSHARP_RUNTIME_IDENTITY,
+        r'^    internal const string ToolchainVersion = ".*";$',
+        f'    internal const string ToolchainVersion = "{plan.canonical_version}";',
+    )
+    replace_regex(
+        CSHARP_RUNTIME_IDENTITY,
+        r'^    internal const string BridgeRuntimeVersion = ".*";$',
+        f'    internal const string BridgeRuntimeVersion = "{plan.nuget_version}";',
+    )
+    replace_regex(
+        JAVA_VERSION,
+        r'^    static final String TOOLCHAIN_VERSION = ".*";$',
+        f'    static final String TOOLCHAIN_VERSION = "{plan.canonical_version}";',
+    )
+    replace_regex(
+        JAVA_VERSION,
+        r'^    static final String BRIDGE_RUNTIME_VERSION = ".*";$',
+        f'    static final String BRIDGE_RUNTIME_VERSION = "{plan.maven_version}";',
+    )
+    replace_regex(
+        SWIFT_RUNTIME_IDENTITY,
+        r'^    public static let toolchainVersion = ".*"$',
+        f'    public static let toolchainVersion = "{plan.canonical_version}"',
+    )
+    replace_regex(
+        SWIFT_RUNTIME_IDENTITY,
+        r'^    public static let bridgeRuntimeVersion = ".*"$',
+        f'    public static let bridgeRuntimeVersion = "{plan.swiftpm_version}"',
+    )
+    replace_regex(
+        CPP_VERSION,
+        r'^inline constexpr const char\* kToolchainVersion = ".*";$',
+        f'inline constexpr const char* kToolchainVersion = "{plan.canonical_version}";',
+    )
+    replace_regex(
+        CPP_VERSION,
+        r'^inline constexpr const char\* kBridgeRuntimeVersion = ".*";$',
+        f'inline constexpr const char* kBridgeRuntimeVersion = "{plan.canonical_version}";',
     )
 
     text = PY_INIT.read_text(encoding="utf-8")
@@ -762,7 +834,7 @@ def check_release() -> None:
         ),
         "baml_version::PYPI_VERSION": exact_regex_field(
             BAML_VERSION_RS,
-            r'^const PYPI_VERSION: &str = "([^"]+)";$',
+            r'^pub const PYPI_VERSION: &str = "([^"]+)";$',
             expected.pypi_version,
         ),
         "baml_version::CHANNEL": exact_regex_field(
@@ -788,10 +860,15 @@ def check_release() -> None:
         # Load-bearing beyond drift hygiene: the Rust bridge's loader
         # handshakes the loaded engine's version() against this constant,
         # in development builds too.
-        "rust bridge CANONICAL_VERSION": exact_regex_field(
+        "rust bridge toolchain version": exact_regex_field(
             RUST_BRIDGE_VERSION_RS,
-            r'^pub\(crate\) const CANONICAL_VERSION: &str = "([^"]+)";$',
+            r'^pub\(crate\) const TOOLCHAIN_VERSION: &str = "([^"]+)";$',
             expected.canonical_version,
+        ),
+        "rust bridge runtime version": exact_regex_field(
+            RUST_BRIDGE_VERSION_RS,
+            r'^pub\(crate\) const BRIDGE_RUNTIME_VERSION: &str = "([^"]+)";$',
+            expected.crates_io_version,
         ),
         "rust bridge Cargo.toml version": exact_regex_field(
             # stamp() writes this from crates_io_version; check the same
@@ -804,15 +881,60 @@ def check_release() -> None:
         "vsix package version": (
             json_version(VSIX_PACKAGE) == expected.canonical_version
         ),
-        "go runtime version": exact_regex_field(
+        "go toolchain version": exact_regex_field(
             GO_RUNTIME_VERSION,
-            r'^const DefaultRuntimeVersion = "([^"]+)"$',
+            r'^const ToolchainVersion = "([^"]+)"$',
             expected.canonical_version,
+        ),
+        "go bridge runtime version": exact_regex_field(
+            GO_RUNTIME_VERSION,
+            r'^const BridgeRuntimeVersion = "([^"]+)"$',
+            expected.go_version,
         ),
         "C# NuGet project version": exact_regex_field(
             CSHARP_PROJECT,
             r"^    <Version>([^<]+)</Version>$",
             expected.nuget_version,
+        ),
+        "C# toolchain version": exact_regex_field(
+            CSHARP_RUNTIME_IDENTITY,
+            r'^    internal const string ToolchainVersion = "([^"]+)";$',
+            expected.canonical_version,
+        ),
+        "C# bridge runtime version": exact_regex_field(
+            CSHARP_RUNTIME_IDENTITY,
+            r'^    internal const string BridgeRuntimeVersion = "([^"]+)";$',
+            expected.nuget_version,
+        ),
+        "Java toolchain version": exact_regex_field(
+            JAVA_VERSION,
+            r'^    static final String TOOLCHAIN_VERSION = "([^"]+)";$',
+            expected.canonical_version,
+        ),
+        "Java bridge runtime version": exact_regex_field(
+            JAVA_VERSION,
+            r'^    static final String BRIDGE_RUNTIME_VERSION = "([^"]+)";$',
+            expected.maven_version,
+        ),
+        "Swift toolchain version": exact_regex_field(
+            SWIFT_RUNTIME_IDENTITY,
+            r'^    public static let toolchainVersion = "([^"]+)"$',
+            expected.canonical_version,
+        ),
+        "Swift bridge runtime version": exact_regex_field(
+            SWIFT_RUNTIME_IDENTITY,
+            r'^    public static let bridgeRuntimeVersion = "([^"]+)"$',
+            expected.swiftpm_version,
+        ),
+        "C++ toolchain version": exact_regex_field(
+            CPP_VERSION,
+            r'^inline constexpr const char\* kToolchainVersion = "([^"]+)";$',
+            expected.canonical_version,
+        ),
+        "C++ bridge runtime version": exact_regex_field(
+            CPP_VERSION,
+            r'^inline constexpr const char\* kBridgeRuntimeVersion = "([^"]+)";$',
+            expected.canonical_version,
         ),
         # Java/Kotlin packages intentionally receive their identity-valued
         # Maven version from the frozen plan through -PbamlVersion.
@@ -841,6 +963,16 @@ def check_release() -> None:
         checks["node package version"] = (
             json_version(NODE_PACKAGE) == expected.npm_version
         )
+        checks["node toolchain version"] = exact_regex_field(
+            NODE_VERSION_RS,
+            r'^pub\(crate\) const TOOLCHAIN_VERSION: &str = "([^"]+)";$',
+            expected.canonical_version,
+        )
+        checks["node bridge runtime version"] = exact_regex_field(
+            NODE_VERSION_RS,
+            r'^pub\(crate\) const BRIDGE_RUNTIME_VERSION: &str = "([^"]+)";$',
+            expected.npm_version,
+        )
         if not NODE_NATIVE_JS.exists():
             mismatches.append(
                 "node native loader version guards: "
@@ -867,6 +999,16 @@ def check_release() -> None:
     if WEB_PACKAGE.exists():
         checks["web package version"] = (
             json_version(WEB_PACKAGE) == expected.npm_version
+        )
+        checks["web toolchain version"] = exact_regex_field(
+            WEB_VERSION_RS,
+            r'^pub\(crate\) const TOOLCHAIN_VERSION: &str = "([^"]+)";$',
+            expected.canonical_version,
+        )
+        checks["web bridge runtime version"] = exact_regex_field(
+            WEB_VERSION_RS,
+            r'^pub\(crate\) const BRIDGE_RUNTIME_VERSION: &str = "([^"]+)";$',
+            expected.npm_version,
         )
 
     for name, ok in checks.items():

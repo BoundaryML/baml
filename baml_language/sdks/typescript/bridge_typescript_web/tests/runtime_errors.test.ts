@@ -63,7 +63,7 @@ describe("Web runtime and setup errors", () => {
     expect((rawError as Error & { code?: string }).code).toBe("invalid_argument");
 
     expect(() => BamlRuntime.initializeRuntime(".", { "": SOURCE_A })).toThrow(BamlInvalidArgumentError);
-    expect(() => BamlRuntime.initializeRuntimeFromBytecode(new Uint8Array([1, 2, 3]))).toThrow(BamlClientError);
+    expect(() => BamlRuntime.initializeRuntimeFromBytecode(new Uint8Array([1, 2, 3]))).toThrow(/Failed to deserialize BAML bytecode/);
   });
 
   it("initializes from sources and replaces the singleton atomically", async () => {

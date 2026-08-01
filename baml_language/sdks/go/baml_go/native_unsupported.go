@@ -10,13 +10,13 @@ func nativeOpen(string) (string, error) {
 
 func nativeCloseAfterLoadFailure() {}
 
-func nativeRegisterBridge(string) error { return unsupportedNativeOperation() }
+func nativeRegisterBridge(string, string, string) error { return unsupportedNativeOperation() }
 
 func nativeRuntimeTarget() (string, error) {
 	return "", unsupportedNativeOperation()
 }
 
-func nativeInitialize([]byte) error               { return unsupportedNativeOperation() }
+func nativeInitialize([]byte, string) error       { return unsupportedNativeOperation() }
 func nativeRegisterCallback()                     {}
 func nativeRegisterUnhandledSpawnErrorCallback()  {}
 func nativeShutdown() error                       { return unsupportedNativeOperation() }
