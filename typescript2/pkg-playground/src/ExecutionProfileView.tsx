@@ -284,6 +284,7 @@ const ProfileFlameChart: FC<{
                   )}
                   style={{
                     left: `${block.spanLeftPct}%`,
+                    minWidth: 1,
                     width: `${block.spanWidthPct}%`,
                     top: block.lane * 24 + 2,
                     backgroundColor: color.background,

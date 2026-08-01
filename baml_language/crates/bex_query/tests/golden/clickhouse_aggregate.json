@@ -1,0 +1,43 @@
+[
+  {
+    "name": "hot_functions_by_revision",
+    "bql": "ctx(last=24h, rev=\"rev-2\") | calls(fn=\"extract_*\") | rollup() | top(5, by=total_ns)",
+    "sql_contains": [
+      "FROM obs_cct_aggregate AS c",
+      "d.revision_id = c.revision_id",
+      "c.window_end_ns >= toUnixTimestamp64Nano(now64(9)) - {p0:UInt64}",
+      "c.revision_id = {p1:String}",
+      "match(d.fqn, {p2:String})",
+      "GROUP BY d.definition_key",
+      "ORDER BY total_ns DESC",
+      "LIMIT 5"
+    ],
+    "param_values": ["86400000000000", "rev-2", "^extract_.*$"],
+    "tables": ["obs_cct_aggregate", "obs_function_dictionary"]
+  },
+  {
+    "name": "error_series",
+    "bql": "ctx(last=1h) | errors() | series(bucket=15m, metrics=[calls, errors]) | sort(by=errors, order=desc) | limit(20)",
+    "sql_contains": [
+      "(c.ends_err + c.ends_cancel + c.ends_exit) > 0",
+      "intDiv(c.window_start_ns, 900000000000) * 900000000000 AS bucket_ns",
+      "ORDER BY errors DESC",
+      "LIMIT 20"
+    ],
+    "param_values": ["3600000000000"],
+    "tables": ["obs_cct_aggregate", "obs_function_dictionary"]
+  },
+  {
+    "name": "bounded_run_index",
+    "bql": "runs(last=7d, rev=\"rev-9\", limit=50) | sort(by=created_ms, order=desc)",
+    "sql_contains": [
+      "FROM obs_runs AS r",
+      "r.created_ms * 1000000 >= toUnixTimestamp64Nano(now64(9)) - {p0:UInt64}",
+      "r.revision_id = {p1:String}",
+      "ORDER BY created_ms DESC",
+      "LIMIT 50"
+    ],
+    "param_values": ["604800000000000", "rev-9"],
+    "tables": ["obs_runs"]
+  }
+]

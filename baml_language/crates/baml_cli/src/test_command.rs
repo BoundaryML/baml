@@ -16,8 +16,8 @@ use baml_db::{baml_compiler_diagnostics::Severity, baml_compiler2_emit};
 use baml_project::ProjectDatabase;
 use baml_type::RuntimeTy;
 use bex_engine::{
-    BexCallArg, BexEngine, BexExternalValue, CancellationToken, CaptureDefaults,
-    FunctionCallContext, FunctionCallContextBuilder, test_arg_to_external,
+    BexCallArg, BexEngine, BexExternalValue, BoundaryStorageContext, CancellationToken,
+    CaptureDefaults, FunctionCallContext, FunctionCallContextBuilder, test_arg_to_external,
     value_capture::{TraceCaptureConfig, TraceCaptureProducer},
 };
 use clap::{Args, FromArgMatches, ValueEnum};
@@ -327,29 +327,47 @@ struct RunCtx<'a> {
     engine: &'a Arc<BexEngine>,
     rt: &'a tokio::runtime::Runtime,
     cancel: &'a CancellationToken,
+    project_root: &'a std::path::Path,
     unhandled_spawn_failures: &'a AtomicUsize,
     logs: TestLogLevel,
+    observability: baml_exec::PackObservability,
 }
 
 impl RunCtx<'_> {
     fn call_context(&self, call_id: CallId) -> (FunctionCallContext, Option<TraceCaptureProducer>) {
-        let builder =
-            FunctionCallContextBuilder::new(call_id).with_cancel_token(self.cancel.clone());
-        if self.logs == TestLogLevel::Off {
-            return (builder.build(), None);
-        }
-
-        // Only log bodies are needed here. Periodic draining keeps this queue
-        // bounded in practice while leaving enough headroom for bursty tests.
-        let producer = TraceCaptureProducer::new(TraceCaptureConfig::logs_only(100_000));
-        let context = builder
-            .with_capture_defaults(CaptureDefaults {
-                values_enabled: false,
-                logs_enabled: true,
-            })
-            .with_value_capture(producer.clone())
-            .build();
-        (context, Some(producer))
+        let builder = FunctionCallContextBuilder::new(call_id)
+            .with_cancel_token(self.cancel.clone())
+            .with_boundary_storage(
+                BoundaryStorageContext::new("test", self.project_root.to_path_buf())
+                    .with_observability(
+                        self.observability.enabled,
+                        self.observability.capture_values,
+                        self.observability.capture_logs,
+                        self.observability.latency_trigger_ms,
+                    ),
+            );
+        let logs_enabled = self.logs != TestLogLevel::Off;
+        let durable_capture = bex_events::prof::history_enabled()
+            && bex_events::prof::ProfConfig::global().is_enabled();
+        let context = if logs_enabled && !durable_capture {
+            // Requested console logs remain available under the history/profile
+            // opt-out, but this producer has no value budget and cannot become
+            // a durable capture without a boundary lifecycle.
+            let producer = TraceCaptureProducer::new(TraceCaptureConfig::logs_only(
+                FunctionCallContextBuilder::DEFAULT_PENDING_LOG_DRAFTS,
+            ));
+            builder
+                .with_capture_defaults(CaptureDefaults {
+                    values_enabled: false,
+                    logs_enabled: true,
+                })
+                .with_value_capture(producer)
+                .build()
+        } else {
+            builder.with_default_history_capture(logs_enabled).build()
+        };
+        let log_producer = (self.logs != TestLogLevel::Off).then(|| context.value_capture.clone());
+        (context, log_producer)
     }
 
     fn print_logs(&self, producer: Option<&TraceCaptureProducer>) {
@@ -566,12 +584,16 @@ impl TestArgs {
         })));
         let rt = tokio::runtime::Runtime::new().context("failed to create tokio runtime")?;
         let cancel = CancellationToken::new();
+        let project_root = session.root().to_path_buf();
+        let observability = crate::manifest::observability_for_root(&project_root)?;
         let run_ctx = RunCtx {
             engine: &engine,
             rt: &rt,
             cancel: &cancel,
+            project_root: &project_root,
             unhandled_spawn_failures: &unhandled_spawn_failures,
             logs: invocation.logs,
+            observability,
         };
 
         // ── 5. Resolve the testset registry handle ─────────────────────────
@@ -1187,6 +1209,7 @@ fn list_selected_testset_names(
 ) -> Result<Vec<String>> {
     let call_ctx = FunctionCallContextBuilder::new(CallId::next())
         .with_cancel_token(ctx.cancel.clone())
+        .with_profile_enabled(false)
         .build();
     let value = ctx
         .rt

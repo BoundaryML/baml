@@ -9,7 +9,7 @@ use std::{
 use anyhow::{Context, Result, anyhow};
 use baml_db::{baml_compiler_diagnostics::Severity, baml_compiler2_emit};
 use baml_project::ProjectDatabase;
-use bex_engine::{BexEngine, FunctionCallContextBuilder, UserFunctionInfo};
+use bex_engine::{BexEngine, BoundaryStorageContext, FunctionCallContextBuilder, UserFunctionInfo};
 // `surface_clap_error` is defined later in this file.
 // For --log-file event sink.
 use clap::Args;
@@ -517,6 +517,7 @@ impl RunArgs {
             &function_name,
             parsed.cli_values,
             json_args,
+            project_root,
             reporter,
         )
     }
@@ -525,7 +526,7 @@ impl RunArgs {
     fn run_subcommand_targets(&self, reporter: &Reporter) -> Result<crate::ExitCode> {
         let argv = self.build_argv_for_subcommand();
         let (db, mut engine, needs_format_hint) = self.load_and_compile(argv.clone(), reporter)?;
-        let _ = db;
+        let project_root = Self::project_root(&db)?;
         Self::emit_format_hint_if_needed(reporter, needs_format_hint);
 
         let (entries, lookups) = self.resolve_subcommand_targets(&engine)?;
@@ -566,7 +567,14 @@ impl RunArgs {
             None => None,
         };
 
-        self.dispatch_and_finish(engine, &chosen, parsed.cli_values, json_args, reporter)
+        self.dispatch_and_finish(
+            engine,
+            &chosen,
+            parsed.cli_values,
+            json_args,
+            project_root,
+            reporter,
+        )
     }
 
     /// Walk `self.functions`, resolve each to an engine-canonical
@@ -623,6 +631,7 @@ impl RunArgs {
         function_name: &str,
         cli_values: HashMap<String, bex_engine::BexExternalValue>,
         json_args: Option<serde_json::Value>,
+        project_root: PathBuf,
         reporter: &Reporter,
     ) -> Result<crate::ExitCode> {
         self.vlog(format_args!("Calling {function_name}"));
@@ -633,12 +642,20 @@ impl RunArgs {
         let engine = Arc::new(engine);
         let output_format = self.output_format;
         let start = std::time::Instant::now();
+        let observability = crate::manifest::observability_for_root(&project_root)?;
+        let boundary_storage = BoundaryStorageContext::new("cli", project_root).with_observability(
+            observability.enabled,
+            observability.capture_values,
+            observability.capture_logs,
+            observability.latency_trigger_ms,
+        );
         let dispatch_result = rt.block_on(baml_exec::dispatch_target(
             Arc::clone(&engine),
             function_name,
             cli_values,
             json_args,
             output_format,
+            boundary_storage,
         ));
         rt.block_on(engine.shutdown());
         let unhandled_spawn_failed = report_unhandled_spawn_errors(&engine, reporter);
@@ -943,13 +960,24 @@ impl RunArgs {
                 attr: baml_type::TyAttr::default(),
             });
         let output_format = self.output_format;
+        let observability = crate::manifest::observability_for_root(&project_root)?;
+        let boundary_storage = BoundaryStorageContext::new("cli", project_root.clone())
+            .with_observability(
+                observability.enabled,
+                observability.capture_values,
+                observability.capture_logs,
+                observability.latency_trigger_ms,
+            );
         let result: std::result::Result<(), bex_engine::EngineError> = rt.block_on(async {
             let engine_for_call = Arc::clone(&engine);
             let value = engine_for_call
                 .call_function(
                     "baml_run_expr_main__",
                     vec![],
-                    FunctionCallContextBuilder::new(CallId::next()).build(),
+                    FunctionCallContextBuilder::new(CallId::next())
+                        .with_boundary_storage(boundary_storage)
+                        .with_default_history_capture(false)
+                        .build(),
                     true,
                 )
                 .await?;

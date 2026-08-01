@@ -136,6 +136,7 @@ pub enum CaptureCategory {
     Input,
     Output,
     Error,
+    PromoteOnError,
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, BorshSerialize, BorshDeserialize)]
@@ -143,6 +144,7 @@ pub struct FunctionCaptureProps {
     pub inputs: CaptureOption,
     pub output: CaptureOption,
     pub error: CaptureOption,
+    pub promote_on_error: CaptureOption,
 }
 
 impl FunctionCaptureProps {
@@ -152,6 +154,7 @@ impl FunctionCaptureProps {
             inputs: CaptureOption::Disabled,
             output: CaptureOption::Disabled,
             error: CaptureOption::Disabled,
+            promote_on_error: CaptureOption::Disabled,
         }
     }
 
@@ -161,6 +164,7 @@ impl FunctionCaptureProps {
             CaptureCategory::Input => self.inputs,
             CaptureCategory::Output => self.output,
             CaptureCategory::Error => self.error,
+            CaptureCategory::PromoteOnError => self.promote_on_error,
         }
     }
 
@@ -170,6 +174,7 @@ impl FunctionCaptureProps {
             CaptureCategory::Input => self.inputs = option,
             CaptureCategory::Output => self.output = option,
             CaptureCategory::Error => self.error = option,
+            CaptureCategory::PromoteOnError => self.promote_on_error = option,
         }
         self
     }
@@ -178,6 +183,32 @@ impl FunctionCaptureProps {
     pub const fn with_auto(self, category: CaptureCategory) -> Self {
         self.with_option(category, CaptureOption::Auto)
     }
+}
+
+/// Stable, compiler-owned identity for a function definition.
+///
+/// This is serialized with [`Function`]. Runtime metadata builders consume it
+/// directly; debug/display names are never parsed to recover semantic identity.
+#[derive(Clone, Debug, Default, PartialEq, Eq, BorshSerialize, BorshDeserialize)]
+pub struct DefinitionMeta {
+    pub definition_key: String,
+    pub owner_type_key: Option<String>,
+    pub lambda: Option<LambdaIdentity>,
+}
+
+/// Stable identity for a compiler-emitted lambda or closure.
+#[derive(Clone, Debug, PartialEq, Eq, BorshSerialize, BorshDeserialize)]
+pub struct LambdaIdentity {
+    pub parent_definition_key: String,
+    pub ordinal: u32,
+    pub kind: LambdaKind,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, BorshSerialize, BorshDeserialize)]
+pub enum LambdaKind {
+    Lambda,
+    SpawnedClosure,
+    Adapter,
 }
 
 /// Represents any Baml function.
@@ -287,17 +318,22 @@ pub struct Function {
     /// LLM-specific metadata (prompt template, client name). `None` for non-LLM functions.
     pub body_meta: Option<FunctionMeta>,
 
+    /// Stable definition identity emitted by the compiler.
+    pub def_meta: DefinitionMeta,
+
     /// Capture policy hints for this function. Hosts resolve `Auto` against
     /// boundary defaults; ordinary functions default to disabled.
     pub capture: FunctionCaptureProps,
 
-    /// Per-run profiling id (`0` = unassigned), written into the BEX event
-    /// stream's `CallFunction` records and resolved through the per-run
-    /// function table in the `.bamlprof` header. Assigned by the engine's
-    /// interim provider at construction (plan §2.6); the M0 id table moves
-    /// assignment to compile time. `#[borsh(skip)]` keeps it out of the pack
-    /// envelope — it is runtime-only state, and skipping it leaves the wire
-    /// format unchanged.
+    /// Dense compile-time profiling id, derived from this function's position
+    /// among `Object::Function` entries in final object-pool order. Real pool
+    /// ids start at [`crate::FIRST_POOL_FUNCTION_ID`]; zero is reserved for
+    /// unattributable/runtime-synthesized functions.
+    ///
+    /// `#[borsh(skip)]` is intentional: compilation units do not know their
+    /// final linked pool position, and re-deriving ids is one linear walk after
+    /// link or deserialization. Keeping the field derived also preserves the
+    /// byte identity of full and incremental compiler outputs.
     #[borsh(skip)]
     pub function_id: u32,
 }
@@ -449,5 +485,51 @@ impl From<&FunctionKind> for FunctionType {
         } else {
             FunctionType::Callable
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use borsh::BorshDeserialize;
+
+    use super::*;
+
+    #[test]
+    fn definition_meta_borsh_round_trip_is_structural() {
+        let meta = DefinitionMeta {
+            definition_key: "lambda:function:user.main#7".to_string(),
+            owner_type_key: Some("class:user.Worker".to_string()),
+            lambda: Some(LambdaIdentity {
+                parent_definition_key: "function:user.main".to_string(),
+                ordinal: 7,
+                kind: LambdaKind::SpawnedClosure,
+            }),
+        };
+
+        let first = borsh::to_vec(&meta).expect("serialize definition metadata");
+        let second = borsh::to_vec(&meta).expect("serialize definition metadata again");
+        assert_eq!(first, second);
+        assert_eq!(
+            DefinitionMeta::try_from_slice(&first).expect("deserialize definition metadata"),
+            meta
+        );
+    }
+
+    #[test]
+    fn capture_props_borsh_includes_promote_on_error() {
+        let props = FunctionCaptureProps::disabled()
+            .with_auto(CaptureCategory::Error)
+            .with_auto(CaptureCategory::PromoteOnError);
+
+        // Borsh encodes each field in declaration order. CaptureOption's
+        // Disabled and Auto discriminants are 0 and 1 respectively.
+        assert_eq!(
+            borsh::to_vec(&props).expect("serialize capture props"),
+            [0, 0, 1, 1]
+        );
+        assert_eq!(
+            FunctionCaptureProps::try_from_slice(&[0, 0, 1, 1]).expect("deserialize capture props"),
+            props
+        );
     }
 }

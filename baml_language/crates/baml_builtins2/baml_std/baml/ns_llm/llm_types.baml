@@ -632,6 +632,12 @@ class StreamAccumulator {
   function output_tokens(self) -> int? throws root.errors.LlmClient {
     $rust_io_function
   }
+
+  /// Emit the profiler's final stream observation after final parsing
+  /// succeeds. The accumulator owns exact-once suppression.
+  function complete_observation(self) -> null throws root.errors.LlmClient {
+    $rust_io_function
+  }
 }
 
 /// DO NOT USE FROM USER CODE
@@ -715,7 +721,9 @@ class Stream<TStream, TFinal> {
     }
 
     let content = self._acc.content();
-    __sap_parse_final<TStream, TFinal>(content, self._cache)
+    let result: TFinal = __sap_parse_final<TStream, TFinal>(content, self._cache);
+    self._acc.complete_observation();
+    result
   }
 }
 

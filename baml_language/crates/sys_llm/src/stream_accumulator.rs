@@ -24,6 +24,8 @@ pub(crate) struct AccumulatorState {
     input_tokens: Option<u64>,
     output_tokens: Option<u64>,
     is_done: bool,
+    completion_emitted: bool,
+    observer: Option<sys_types::LlmCallObserver>,
 }
 
 /// Global registry for stream accumulator state.
@@ -61,6 +63,15 @@ static ACCUM_REGISTRY: std::sync::LazyLock<Arc<AccumulatorRegistry>> =
 /// Returns an error if the provider doesn't support streaming
 /// (e.g. `google-ai`, `aws-bedrock`).
 pub fn new_accumulator(provider_str: &str) -> Result<ResourceHandle, LlmOpError> {
+    new_accumulator_with_observer(provider_str, None)
+}
+
+/// Create a stream accumulator that retains the structurally owned LLM
+/// observer even after the function which created the stream has returned.
+pub fn new_accumulator_with_observer(
+    provider_str: &str,
+    observer: Option<sys_types::LlmCallObserver>,
+) -> Result<ResourceHandle, LlmOpError> {
     let provider = provider_str
         .parse::<LlmProvider>()
         .map_err(|_| LlmOpError::Other(format!("Unknown provider: {provider_str}")))?;
@@ -97,6 +108,8 @@ pub fn new_accumulator(provider_str: &str) -> Result<ResourceHandle, LlmOpError>
         input_tokens: None,
         output_tokens: None,
         is_done: false,
+        completion_emitted: false,
+        observer,
     };
 
     ACCUM_REGISTRY
@@ -321,9 +334,92 @@ pub fn get_output_tokens(handle: &ResourceHandle) -> Result<Option<u64>, LlmOpEr
     Ok(state.output_tokens)
 }
 
+/// Emit the final normalized observation once, after the caller has
+/// successfully parsed the accumulated stream into its final BAML value.
+///
+/// The callback runs after releasing the registry lock: the engine observer
+/// may intern model metadata and emit into the profiling ring.
+pub fn complete_observation(handle: &ResourceHandle) -> Result<(), LlmOpError> {
+    let pending = {
+        let mut entries = ACCUM_REGISTRY
+            .entries
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let state = entries
+            .get_mut(&handle.key())
+            .ok_or_else(|| LlmOpError::Other("Accumulator handle is invalid".into()))?;
+        if state.completion_emitted {
+            return Ok(());
+        }
+        state.completion_emitted = true;
+        state.observer.clone().map(|observer| {
+            let tokens_in =
+                u32::try_from(state.input_tokens.unwrap_or_default()).unwrap_or(u32::MAX);
+            let tokens_out =
+                u32::try_from(state.output_tokens.unwrap_or_default()).unwrap_or(u32::MAX);
+            (
+                observer,
+                sys_types::LlmCallObservation::Completed {
+                    model: state.model.clone().unwrap_or_default(),
+                    tokens_in,
+                    tokens_out,
+                    parse_error: false,
+                },
+            )
+        })
+    };
+    if let Some((observer, observation)) = pending {
+        observer(observation);
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn completed_observation_uses_final_metadata_and_emits_once() {
+        let observations = Arc::new(std::sync::Mutex::new(Vec::new()));
+        let captured = Arc::clone(&observations);
+        let observer: sys_types::LlmCallObserver = Arc::new(move |observation| {
+            captured
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .push(observation);
+        });
+        let handle = new_accumulator_with_observer("openai", Some(observer)).unwrap();
+        let events = serde_json::json!([
+            {
+                "event": "message",
+                "data": "{\"model\":\"gpt-stream-final\",\"choices\":[{\"delta\":{\"content\":\"done\"},\"finish_reason\":\"stop\"}],\"usage\":{\"prompt_tokens\":13,\"completion_tokens\":5}}",
+                "id": null
+            }
+        ]);
+        add_events(&handle, &events.to_string()).unwrap();
+        assert!(
+            observations
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .is_empty(),
+            "transport completion alone must not report a successful final parse"
+        );
+
+        complete_observation(&handle).unwrap();
+        complete_observation(&handle).unwrap();
+
+        assert_eq!(
+            *observations
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner),
+            vec![sys_types::LlmCallObservation::Completed {
+                model: "gpt-stream-final".into(),
+                tokens_in: 13,
+                tokens_out: 5,
+                parse_error: false,
+            }]
+        );
+    }
 
     #[test]
     fn test_openai_accumulation() {

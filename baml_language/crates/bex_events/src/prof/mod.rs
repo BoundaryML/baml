@@ -30,6 +30,8 @@
 //! `sys_types::CallId`.
 
 pub mod artifact;
+pub mod boundary;
+pub mod cct;
 pub mod clock;
 pub mod config;
 #[cfg(all(not(target_arch = "wasm32"), not(baml_loom)))]
@@ -37,13 +39,19 @@ pub(crate) mod consumer;
 #[cfg(not(baml_loom))]
 pub mod drain;
 pub mod encode;
+pub mod exact_index;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod file;
 pub mod metadata;
+pub mod models;
 pub mod read;
 pub mod record;
+pub mod recorder;
 pub(crate) mod registry;
 pub(crate) mod ring;
+#[cfg(all(not(target_arch = "wasm32"), not(baml_loom)))]
+pub(crate) mod stats;
+pub mod storage;
 pub(crate) mod sync;
 pub mod transcode;
 pub(crate) mod wake;
@@ -62,11 +70,18 @@ pub mod pb {
 #[cfg(test)]
 mod concurrency_tests;
 
-pub use config::{ProfConfig, enable_wasm_cooperative_profile};
+pub use boundary::{
+    BoundaryBegin, BoundaryBinding, BoundaryCompletion, BoundaryLifecycle, history_enabled,
+};
+pub use config::{
+    ObsLayout, ProfConfig, ProfilePipeline, RingOverflowPolicy, enable_wasm_cooperative_profile,
+};
 #[cfg(all(not(target_arch = "wasm32"), not(baml_loom)))]
 pub use consumer::{engine_closed, flush_and_join};
 #[cfg(not(baml_loom))]
-pub use drain::{CooperativeProfileDrain, CooperativeProfileDrainOptions};
+pub use drain::{
+    CctDrainSnapshot, CctDrainWindow, CooperativeProfileDrain, CooperativeProfileDrainOptions,
+};
 pub use metadata::register_engine_metadata;
 #[cfg(not(baml_loom))]
 pub use registry::ring_for_engine;
@@ -78,12 +93,18 @@ pub use ring::{Ring, RingHandle};
 /// consumer, so dual-target engine code can build it on wasm32 too.)
 #[derive(Debug, Clone, Default)]
 pub struct EngineProfileMetadata {
-    /// What identifies a Program is still open (M0 coordination); empty for
-    /// now.
-    pub program_id: String,
-    pub source_snapshot_id: Option<String>,
-    pub revision_id: Option<String>,
-    /// Per-run function table; the FQN is the cross-run key.
+    /// Canonical full-width compile identity. Native engine registrations
+    /// always populate both strings.
+    pub source_snapshot_id: String,
+    pub revision_id: String,
+    pub revision_id_bytes: [u8; 32],
+    pub function_count: u32,
+    /// Native consumer writes this once before creating a referencing header.
+    pub revision_dictionary: Option<std::sync::Arc<crate::revision_dictionary::RevisionDictionary>>,
+    /// Shared cold-path model interner. Storage drains snapshot newly born
+    /// names and write them as BCCT `model_birth` rows.
+    pub models: std::sync::Arc<models::ModelMetadataTable>,
+    /// Complete degradation/wasm fallback table.
     pub functions: Vec<FunctionMetaEntry>,
 }
 

@@ -47,9 +47,12 @@ mod tests {
 
     fn meta(fqn: &str) -> EngineProfileMetadata {
         EngineProfileMetadata {
-            program_id: "program".to_string(),
-            source_snapshot_id: Some("snapshot".to_string()),
-            revision_id: Some("revision".to_string()),
+            source_snapshot_id: "snapshot".to_string(),
+            revision_id: "revision".to_string(),
+            revision_id_bytes: [3; 32],
+            function_count: 1,
+            revision_dictionary: None,
+            models: std::sync::Arc::default(),
             functions: vec![FunctionMetaEntry {
                 function_id: 1,
                 fqn: fqn.to_string(),

@@ -15,6 +15,21 @@ use baml_compiler2_emit::{
 };
 use baml_project::ProjectDatabase;
 use baml_workspace::discover_baml_files;
+use bex_vm_types::{FIRST_POOL_FUNCTION_ID, Object, Program};
+
+fn assert_compile_time_function_ids(program: &Program) {
+    let ids = program.objects.iter().filter_map(|object| match object {
+        Object::Function(function) => Some(function.function_id),
+        _ => None,
+    });
+    for (offset, actual) in ids.enumerate() {
+        assert_eq!(
+            actual,
+            FIRST_POOL_FUNCTION_ID + u32::try_from(offset).expect("test program function count"),
+            "compiler must assign dense function ids in final pool order"
+        );
+    }
+}
 
 /// Read every `.baml` file under `root` into memory, in discovery order.
 fn read_project(root: &Path) -> Vec<(PathBuf, String)> {
@@ -38,6 +53,7 @@ fn compile_to_bytes(root: &Path, sources: &[(PathBuf, String)], emit_test_cases:
     }
     let program = generate_project_bytecode(&db, &CompileOptions { emit_test_cases })
         .unwrap_or_else(|e| panic!("compilation of {} failed: {e:?}", root.display()));
+    assert_compile_time_function_ids(&program);
     borsh::to_vec(&program).expect("borsh serialization failed")
 }
 
@@ -155,6 +171,7 @@ fn stdlib_splice_is_byte_identical_to_full_compile() {
     let empty_sources = read_project(&empty_root);
     let base = generate_stdlib_program(&build_db(&empty_root, &empty_sources), OptLevel::Two)
         .expect("stdlib compile failed");
+    assert_compile_time_function_ids(&base);
     let base_bytes = borsh::to_vec(&base).expect("serialize stdlib base");
 
     for (root, emit_test_cases) in [
@@ -171,6 +188,7 @@ fn stdlib_splice_is_byte_identical_to_full_compile() {
             &base,
         )
         .unwrap_or_else(|e| panic!("splice compile of {} failed: {e:?}", root.display()));
+        assert_compile_time_function_ids(&spliced);
         let spliced = borsh::to_vec(&spliced).expect("serialize spliced program");
 
         assert_eq!(
@@ -192,6 +210,7 @@ fn stdlib_splice_is_byte_identical_to_full_compile() {
         // The stdlib slice must also be reproducible from THIS project's db.
         let rebuilt = generate_stdlib_program(&build_db(&root, &sources), OptLevel::Two)
             .expect("stdlib recompile failed");
+        assert_compile_time_function_ids(&rebuilt);
         let rebuilt = borsh::to_vec(&rebuilt).expect("serialize rebuilt base");
         assert!(
             rebuilt == base_bytes,

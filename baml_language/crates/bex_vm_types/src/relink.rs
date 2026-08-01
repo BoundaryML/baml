@@ -256,7 +256,7 @@ mod tests {
     use super::*;
     use crate::{
         bytecode::{Bytecode, ClassInitPlan},
-        types::{FunctionCaptureProps, FunctionKind, FunctionOrigin},
+        types::{DefinitionMeta, FunctionCaptureProps, FunctionKind, FunctionOrigin},
     };
 
     fn test_function() -> Function {
@@ -322,6 +322,7 @@ mod tests {
             },
             origin: FunctionOrigin::Internal,
             body_meta: None,
+            def_meta: DefinitionMeta::default(),
             capture: FunctionCaptureProps::disabled(),
             function_id: 0,
         }

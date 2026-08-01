@@ -16,5 +16,8 @@ doctest = false
 [lints]
 workspace = true
 
+[dependencies]
+blake3 = { workspace = true }
+
 [package.metadata.ci]
 wasm_support = true

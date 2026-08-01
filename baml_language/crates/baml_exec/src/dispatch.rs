@@ -7,8 +7,8 @@ use std::{collections::HashMap, sync::Arc};
 
 use anyhow::{Context, Result, anyhow};
 use bex_engine::{
-    BexCallArg, BexEngine, BexExternalValue, CallId, EngineError, FunctionCallContextBuilder,
-    RuntimeTy,
+    BexCallArg, BexEngine, BexExternalValue, BoundaryStorageContext, CallId, EngineError,
+    FunctionCallContextBuilder, RuntimeTy,
 };
 
 use crate::output::{OutputFormat, write_output};
@@ -60,6 +60,7 @@ pub async fn dispatch_target(
     cli_values: HashMap<String, BexExternalValue>,
     json_args: Option<serde_json::Value>,
     output_format: OutputFormat,
+    boundary_storage: BoundaryStorageContext,
 ) -> Result<DispatchResult> {
     let func_info = engine
         .find_user_function(target_name)
@@ -87,7 +88,10 @@ pub async fn dispatch_target(
         .call_function_bound_args(
             target_name,
             args,
-            FunctionCallContextBuilder::new(CallId::next()).build(),
+            FunctionCallContextBuilder::new(CallId::next())
+                .with_boundary_storage(boundary_storage)
+                .with_default_history_capture(false)
+                .build(),
             true,
         )
         .await;
@@ -230,6 +234,7 @@ async fn deserialize_via_baml_json(
             vec![BexExternalValue::String(json_text.into())],
             FunctionCallContextBuilder::new(CallId::next())
                 .with_type_args(indexmap::IndexMap::from([("T".to_string(), ty.clone())]))
+                .with_profile_enabled(false)
                 .build(),
             true,
         )

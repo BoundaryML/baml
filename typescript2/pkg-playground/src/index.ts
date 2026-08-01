@@ -3,6 +3,13 @@
 // Execution panel + transport abstraction
 export { ExecutionPanel } from './ExecutionPanel';
 export type { ExecutionPanelProps } from './ExecutionPanel';
+export { ObserveRunsView } from './ObserveRunsView';
+export {
+  WsObserveClient,
+  decodeLeftHeavyFrame,
+  decodeRunsFrame,
+} from './observe-client';
+export { decodeBqf1 } from './observe-bqf';
 export type { RuntimePort } from './runtime-port';
 export { WorkerRuntimePort } from './ports/WorkerRuntimePort';
 export { WebSocketRuntimePort } from './ports/WebSocketRuntimePort';

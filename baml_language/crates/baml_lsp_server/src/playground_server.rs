@@ -506,6 +506,7 @@ struct WsState {
     /// Target of the most recent OpenPlayground; replayed to a page when it
     /// requests state so a freshly opened / reconnected window navigates there.
     current_open_target: crate::playground_sender::SharedOpenTarget,
+    observe: crate::observe_server::ObserveState,
 }
 
 type LiveValueStore = Arc<Mutex<LiveValueCache>>;
@@ -569,6 +570,7 @@ fn drain_captured_values_and_broadcast(
             let capture = ValueCapture {
                 kind: value_capture_kind_from_bex(draft.kind),
                 call: draft.call,
+                promotion_trigger: None,
             };
             match history_store.append_value_body(
                 draft.boundary_id,
@@ -996,6 +998,7 @@ fn build_router(
     )));
     let history_store = Arc::new(HistoryStore::new((*workspace_roots).clone()));
     let history_observer_registration = Arc::new(register_history_observer(history_store.clone()));
+    let observe = crate::observe_server::ObserveState::new(workspace_roots.clone());
     let ws_state = WsState {
         bex,
         broadcast_tx,
@@ -1010,10 +1013,13 @@ fn build_router(
         doc_mirror,
         workspace_roots,
         current_open_target,
+        observe,
     };
 
     let api = Router::new()
         .route("/api/ws", get(playground_ws_handler))
+        .route("/api/obs", get(observe_ws_handler))
+        .route("/api/obs/blob/{boundary}/{cid}", get(observe_blob_handler))
         .route("/api/lsp", get(lsp_ws_handler))
         .route(
             "/api/source-files",
@@ -1044,6 +1050,90 @@ fn build_router(
     Ok(api.fallback_service(fallback))
 }
 
+async fn observe_blob_handler(
+    State(state): State<WsState>,
+    AxumPath((boundary, cid)): AxumPath<(String, String)>,
+    headers: axum::http::HeaderMap,
+) -> Response {
+    let bytes = match state.observe.read_value_chunk(&boundary, &cid) {
+        Ok(bytes) => bytes,
+        Err(bex_query::QueryError::NotFound(_)) => {
+            return text_response(StatusCode::NOT_FOUND, "value chunk not found".to_owned());
+        }
+        Err(error) => {
+            return text_response(StatusCode::BAD_REQUEST, error.to_string());
+        }
+    };
+    let total = bytes.len();
+    let range = match headers
+        .get(header::RANGE)
+        .and_then(|value| value.to_str().ok())
+    {
+        Some(value) => match parse_single_byte_range(value, total) {
+            Ok(range) => Some(range),
+            Err(()) => {
+                return Response::builder()
+                    .status(StatusCode::RANGE_NOT_SATISFIABLE)
+                    .header(header::CONTENT_RANGE, format!("bytes */{total}"))
+                    .body(Body::empty())
+                    .unwrap_or_else(|_| Response::new(Body::empty()));
+            }
+        },
+        None => None,
+    };
+    let (status, start, end) = range.map_or((StatusCode::OK, 0, total), |(start, end)| {
+        (StatusCode::PARTIAL_CONTENT, start, end)
+    });
+    let mut response = Response::builder()
+        .status(status)
+        .header(header::ACCEPT_RANGES, "bytes")
+        .header(header::CONTENT_TYPE, "application/octet-stream")
+        .header(
+            header::CONTENT_LENGTH,
+            end.saturating_sub(start).to_string(),
+        );
+    if status == StatusCode::PARTIAL_CONTENT {
+        response = response.header(
+            header::CONTENT_RANGE,
+            format!("bytes {start}-{}/{total}", end.saturating_sub(1)),
+        );
+    }
+    response
+        .body(Body::from(bytes[start..end].to_vec()))
+        .unwrap_or_else(|_| Response::new(Body::empty()))
+}
+
+fn parse_single_byte_range(value: &str, total: usize) -> Result<(usize, usize), ()> {
+    let value = value.strip_prefix("bytes=").ok_or(())?;
+    if value.contains(',') || total == 0 {
+        return Err(());
+    }
+    let (start, end) = value.split_once('-').ok_or(())?;
+    if start.is_empty() {
+        let suffix = end.parse::<usize>().map_err(|_| ())?;
+        if suffix == 0 {
+            return Err(());
+        }
+        return Ok((total.saturating_sub(suffix.min(total)), total));
+    }
+    let start = start.parse::<usize>().map_err(|_| ())?;
+    if start >= total {
+        return Err(());
+    }
+    let end = if end.is_empty() {
+        total
+    } else {
+        end.parse::<usize>()
+            .map_err(|_| ())?
+            .saturating_add(1)
+            .min(total)
+    };
+    if end <= start {
+        return Err(());
+    }
+    Ok((start, end))
+}
+
 fn history_project_root_for_project(project: &str) -> PathBuf {
     let fs_path = bex_project::FsPath::from_str(project.to_string());
     bex_events::history::path::resolve_project_root(fs_path.as_path())
@@ -1056,6 +1146,11 @@ fn history_project_root_for_project(project: &str) -> PathBuf {
 async fn playground_ws_handler(State(state): State<WsState>, ws: WebSocketUpgrade) -> Response {
     tracing::info!("Playground: /api/ws upgrade request received");
     ws.on_upgrade(move |socket| playground_ws_session(socket, state))
+}
+
+async fn observe_ws_handler(State(state): State<WsState>, ws: WebSocketUpgrade) -> Response {
+    let observe = state.observe;
+    ws.on_upgrade(move |socket| crate::observe_server::session(socket, observe))
 }
 
 // ---------------------------------------------------------------------------
@@ -2867,6 +2962,20 @@ mod tests {
     use bex_vm_types::{RootHaver, Value};
 
     use super::*;
+
+    #[test]
+    fn observe_blob_range_parser_supports_prefix_open_and_suffix_ranges() {
+        assert_eq!(parse_single_byte_range("bytes=2-5", 10), Ok((2, 6)));
+        assert_eq!(parse_single_byte_range("bytes=7-", 10), Ok((7, 10)));
+        assert_eq!(parse_single_byte_range("bytes=-3", 10), Ok((7, 10)));
+    }
+
+    #[test]
+    fn observe_blob_range_parser_rejects_multi_and_unsatisfiable_ranges() {
+        assert_eq!(parse_single_byte_range("bytes=1-2,4-5", 10), Err(()));
+        assert_eq!(parse_single_byte_range("bytes=10-", 10), Err(()));
+        assert_eq!(parse_single_byte_range("items=1-2", 10), Err(()));
+    }
 
     fn unique_temp_dir(name: &str) -> PathBuf {
         std::env::temp_dir().join(format!(

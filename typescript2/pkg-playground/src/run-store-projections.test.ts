@@ -1028,6 +1028,53 @@ describe('run-store-projections', () => {
     ]);
   });
 
+  it('keeps short-call geometry truthful instead of inflating it in data space', () => {
+    const run = runFixture({
+      rootCallNodeId: 'root',
+      calls: [
+        callFixture({
+          id: 'root',
+          parentId: null,
+          functionId: 1,
+          functionName: 'user.Main',
+          startedAtNs: '0',
+          endedAtNs: '1000000000',
+          status: 'ok',
+        }),
+        callFixture({
+          id: 'tiny',
+          parentId: 'root',
+          functionId: 2,
+          functionName: 'user.Tiny',
+          startedAtNs: '500000000',
+          endedAtNs: '500000001',
+          status: 'ok',
+        }),
+        callFixture({
+          id: 'zero',
+          parentId: 'root',
+          functionId: 3,
+          functionName: 'user.Zero',
+          startedAtNs: '750000000',
+          endedAtNs: '750000000',
+          status: 'ok',
+        }),
+      ],
+    });
+
+    const traceRows = runToTraceRows(run);
+    const tinyTrace = traceRows.find((row) => row.id === 'tiny');
+    const zeroTrace = traceRows.find((row) => row.id === 'zero');
+    expect(tinyTrace?.spanWidthPct).toBeCloseTo(0.0000001);
+    expect(zeroTrace?.spanWidthPct).toBe(0);
+
+    const blocks = buildExecutionProfileProjection(run).blocks;
+    const tinyBlock = blocks.find((block) => block.id === 'tiny');
+    const zeroBlock = blocks.find((block) => block.id === 'zero');
+    expect(tinyBlock?.spanWidthPct).toBeCloseTo(0.0000001);
+    expect(zeroBlock?.spanWidthPct).toBe(0);
+  });
+
   it('projects spawned thread roots under their parent call stack', () => {
     const run = runFixture({
       rootCallNodeId: 'root',

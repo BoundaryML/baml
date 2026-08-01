@@ -36,6 +36,7 @@ use std::{marker::PhantomData, ptr::null_mut};
 use crossbeam_utils::CachePadded;
 
 use crate::prof::{
+    config::RingOverflowPolicy,
     sync::{AtomicPtr, AtomicU8, AtomicU32, AtomicUsize, Buf, Ordering, UnsafeCell},
     wake::Wake,
 };
@@ -72,17 +73,34 @@ pub(crate) struct RingCtx {
 
 impl RingCtx {
     #[cfg(not(baml_loom))]
+    #[cfg_attr(
+        not(test),
+        allow(dead_code, reason = "private test contexts default to abort")
+    )]
     pub(crate) const fn new(max_overflow_bytes: usize) -> Self {
+        Self::new_with_policy(max_overflow_bytes, RingOverflowPolicy::Abort)
+    }
+
+    #[cfg(not(baml_loom))]
+    pub(crate) const fn new_with_policy(
+        max_overflow_bytes: usize,
+        policy: RingOverflowPolicy,
+    ) -> Self {
         Self {
-            budget: MemBudget::new(max_overflow_bytes),
+            budget: MemBudget::new(max_overflow_bytes, policy),
             wake: Wake::new(),
         }
     }
 
     #[cfg(baml_loom)]
     pub(crate) fn new(max_overflow_bytes: usize) -> Self {
+        Self::new_with_policy(max_overflow_bytes, RingOverflowPolicy::Abort)
+    }
+
+    #[cfg(baml_loom)]
+    pub(crate) fn new_with_policy(max_overflow_bytes: usize, policy: RingOverflowPolicy) -> Self {
         Self {
-            budget: MemBudget::new(max_overflow_bytes),
+            budget: MemBudget::new(max_overflow_bytes, policy),
             wake: Wake::new(),
         }
     }
@@ -98,36 +116,64 @@ impl RingCtx {
     pub(crate) fn live_bytes(&self) -> usize {
         self.budget.live()
     }
+
+    /// Peak allocated ring-segment bytes since this context was created.
+    pub(crate) fn peak_bytes(&self) -> usize {
+        self.budget.peak()
+    }
 }
 
 /// Live-memory accounting against `BAML_RING_MAX_OVERFLOW_BYTES` (D6).
 pub(crate) struct MemBudget {
     live: AtomicUsize,
+    peak: AtomicUsize,
     cap: usize,
+    policy: RingOverflowPolicy,
 }
 
 impl MemBudget {
     #[cfg(not(baml_loom))]
-    const fn new(cap: usize) -> Self {
+    const fn new(cap: usize, policy: RingOverflowPolicy) -> Self {
         Self {
             live: AtomicUsize::new(0),
+            peak: AtomicUsize::new(0),
             cap,
+            policy,
         }
     }
 
     #[cfg(baml_loom)]
-    fn new(cap: usize) -> Self {
+    fn new(cap: usize, policy: RingOverflowPolicy) -> Self {
         Self {
             live: AtomicUsize::new(0),
+            peak: AtomicUsize::new(0),
             cap,
+            policy,
         }
     }
 
-    fn charge(&self, bytes: usize) {
+    fn charge(&self, bytes: usize) -> bool {
         let live = self.live.fetch_add(bytes, Ordering::Relaxed) + bytes;
         if live > self.cap {
-            overflow_abort(live, self.cap);
+            if self.policy == RingOverflowPolicy::Abort {
+                overflow_abort(live, self.cap);
+            }
+            self.live.fetch_sub(bytes, Ordering::Relaxed);
+            return false;
         }
+        let mut observed = self.peak.load(Ordering::Relaxed);
+        while live > observed {
+            match self.peak.compare_exchange_weak(
+                observed,
+                live,
+                Ordering::Relaxed,
+                Ordering::Relaxed,
+            ) {
+                Ok(_) => break,
+                Err(actual) => observed = actual,
+            }
+        }
+        true
     }
 
     fn credit(&self, bytes: usize) {
@@ -137,6 +183,10 @@ impl MemBudget {
     #[cfg_attr(not(test), allow(dead_code, reason = "test/telemetry accessor"))]
     fn live(&self) -> usize {
         self.live.load(Ordering::Relaxed)
+    }
+
+    fn peak(&self) -> usize {
+        self.peak.load(Ordering::Relaxed)
     }
 }
 
@@ -180,15 +230,16 @@ fn segment_footprint(seg_bytes: usize) -> usize {
     seg_bytes + size_of::<Segment>()
 }
 
-fn alloc_segment(seg_bytes: usize, ctx: &RingCtx) -> *mut Segment {
-    ctx.budget.charge(segment_footprint(seg_bytes));
-    Box::into_raw(Box::new(Segment {
-        sync: CachePadded::new(SegSync {
-            commit_len: AtomicU32::new(0),
-            next: AtomicPtr::new(null_mut()),
-        }),
-        buf: Buf::new(seg_bytes),
-    }))
+fn alloc_segment(seg_bytes: usize, ctx: &RingCtx) -> Option<*mut Segment> {
+    ctx.budget.charge(segment_footprint(seg_bytes)).then(|| {
+        Box::into_raw(Box::new(Segment {
+            sync: CachePadded::new(SegSync {
+                commit_len: AtomicU32::new(0),
+                next: AtomicPtr::new(null_mut()),
+            }),
+            buf: Buf::new(seg_bytes),
+        }))
+    })
 }
 
 /// # Safety
@@ -227,6 +278,9 @@ struct RingShared {
     /// *before* its first push, read by the consumer only *after* observing
     /// a new commit — so the first push's Release/Acquire publishes it.
     engine_id: UnsafeCell<u64>,
+    /// Producer-side structural records shed since the consumer last
+    /// observed this ring. Release/Acquire also publishes `engine_id`.
+    shed_events: AtomicUsize,
 }
 
 /// The segmented SPSC ring. See the module docs.
@@ -260,7 +314,8 @@ impl Ring {
         freelist_cap: usize,
         engine_id: u64,
     ) -> *mut Ring {
-        let seg = alloc_segment(seg_bytes, ctx);
+        let seg = alloc_segment(seg_bytes, ctx)
+            .expect("initial profiling ring segment exceeds configured memory cap");
         Box::into_raw(Box::new(Ring {
             p: CachePadded::new(UnsafeCell::new(RingProducer {
                 head: seg,
@@ -275,6 +330,7 @@ impl Ring {
                 free_head: AtomicPtr::new(null_mut()),
                 free_len: AtomicUsize::new(0),
                 engine_id: UnsafeCell::new(engine_id),
+                shed_events: AtomicUsize::new(0),
             }),
             seg_bytes,
             freelist_cap,
@@ -329,7 +385,14 @@ impl Ring {
                 // Slow path: link a recycled or fresh segment.
                 let seg = match unsafe { self.free_pop() } {
                     Some(seg) => seg,
-                    None => alloc_segment(self.seg_bytes, self.ctx),
+                    None => {
+                        let Some(seg) = alloc_segment(self.seg_bytes, self.ctx) else {
+                            self.s.shed_events.fetch_add(1, Ordering::Release);
+                            self.ctx.wake.wake_if_parked();
+                            return;
+                        };
+                        seg
+                    }
                 };
                 unsafe {
                     // D2: the producer owns the reset, for recycled and fresh
@@ -543,6 +606,22 @@ impl Ring {
         self.s.engine_id.with(|p| unsafe { *p })
     }
 
+    /// Returns and clears producer-side structural loss. The Acquire swap
+    /// publishes the claimant's engine id even when every new record was
+    /// shed and therefore no committed byte range exists.
+    pub(crate) fn take_shed_events(&self) -> Option<(u64, usize)> {
+        let count = self.s.shed_events.swap(0, Ordering::Acquire);
+        if count == 0 {
+            return None;
+        }
+        let engine_id = self.s.engine_id.with(|pointer| unsafe { *pointer });
+        Some((engine_id, count))
+    }
+
+    pub(crate) fn has_shed_events(&self) -> bool {
+        self.s.shed_events.load(Ordering::Acquire) != 0
+    }
+
     #[cfg(test)]
     pub(crate) fn free_len(&self) -> usize {
         self.s.free_len.load(Ordering::Relaxed)
@@ -639,4 +718,38 @@ unsafe fn consume_range(
     unsafe { seg.buf.with_slice(*tail_pos, len, |bytes| sink(bytes)) };
     *tail_pos = committed;
     true
+}
+
+#[cfg(test)]
+mod shed_tests {
+    use super::*;
+
+    #[test]
+    fn shed_policy_bounds_memory_and_reports_every_dropped_record() {
+        let segment_bytes = 64;
+        let footprint = segment_footprint(segment_bytes);
+        let context = Box::leak(Box::new(RingCtx::new_with_policy(
+            footprint * 2,
+            RingOverflowPolicy::Shed,
+        )));
+        let pointer = Ring::alloc(context, segment_bytes, 0, 77);
+        let ring = unsafe { &*pointer };
+        for _ in 0..40 {
+            unsafe { ring.push(&[1; 8]) };
+        }
+        let (engine_id, shed) = ring.take_shed_events().expect("must shed");
+        assert_eq!(engine_id, 77);
+        assert!(shed > 0);
+        assert!(context.live_bytes() <= footprint * 2);
+        assert!(context.peak_bytes() <= footprint * 2);
+
+        let mut retained = 0;
+        unsafe {
+            ring.drain(&mut |bytes| retained += bytes.len());
+        }
+        assert_eq!(retained / 8 + shed, 40);
+        unsafe {
+            drop(Box::from_raw(pointer));
+        }
+    }
 }

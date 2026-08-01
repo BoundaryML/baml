@@ -56,19 +56,6 @@ impl ProcessEuid {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct EngineId(pub u64);
 
-/// Identity of a compiled program. Currently random per engine construction
-/// — good enough for event-file-local joins, NOT a durable content identity
-/// (identical programs in two engines get different ids).
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub struct ProgramId(pub [u8; 16]);
-
-impl ProgramId {
-    #[must_use]
-    pub fn new_random() -> Self {
-        Self(*uuid::Uuid::new_v4().as_bytes())
-    }
-}
-
 /// Identity of the source snapshot a program was compiled from. Modeled for
 /// the metadata join path but not yet populated by the runtime — consumers
 /// must tolerate `None`.
@@ -81,8 +68,9 @@ pub struct SourceSnapshotId(pub [u8; 32]);
 pub struct BexThreadId(pub u64);
 
 /// Index into the engine's function metadata table
-/// ([`crate::FunctionMetadataTable`]) — 1-based sequential in object-pool
-/// walk order (0 = unassigned). NOT stable across recompiles: joins are
+/// ([`crate::FunctionMetadataTable`]) — real functions are dense from 16 in
+/// object-pool walk order, with 0..=15 reserved for synthetic/runtime frames.
+/// NOT stable across recompiles: joins are
 /// valid only against the same artifact's header (cross-run joins use the
 /// FQN). Synthetic rows (spawn-closure, unknown-function) sit just past
 /// the real functions.
@@ -215,9 +203,22 @@ impl CallRef {
 }
 
 impl BoundaryId {
+    /// Mint a time-sortable ULID payload: 48-bit Unix milliseconds followed
+    /// by 80 random bits. The public wire encoding remains the existing
+    /// `baml_id_1_...` representation; chronological comparisons use these
+    /// raw bytes rather than the base64url text.
     #[must_use]
     pub fn new_random() -> Self {
-        Self(*uuid::Uuid::new_v4().as_bytes())
+        let mut bytes = *uuid::Uuid::new_v4().as_bytes();
+        let unix_ms = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_or(0, |duration| {
+                u64::try_from(duration.as_millis()).unwrap_or(u64::MAX)
+            })
+            .min(0x0000_ffff_ffff_ffff);
+        let timestamp = unix_ms.to_be_bytes();
+        bytes[..6].copy_from_slice(&timestamp[2..]);
+        Self(bytes)
     }
 
     #[must_use]
@@ -342,6 +343,23 @@ mod tests {
             BoundaryId::from_wire_str(&boundary_id.to_wire_string()),
             Some(boundary_id)
         );
+    }
+
+    #[test]
+    fn minted_boundary_id_carries_unix_milliseconds_in_raw_prefix() {
+        let before = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_millis() as u64;
+        let boundary_id = BoundaryId::new_random();
+        let after = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_millis() as u64;
+        let mut timestamp = [0_u8; 8];
+        timestamp[2..].copy_from_slice(&boundary_id.as_bytes()[..6]);
+        let encoded_ms = u64::from_be_bytes(timestamp);
+        assert!((before..=after).contains(&encoded_ms));
     }
 
     #[test]

@@ -35,6 +35,9 @@ message DiskEventV1 {
     SetFunctionId set_function_id = 4;
     EndFunction end_function = 5;
     Heartbeat heartbeat = 6;
+    SuspendThread suspend_thread = 7;
+    ResumeThread resume_thread = 8;
+    LlmCallMeta llm_call_meta = 9;
   }
 }
 
@@ -97,6 +100,41 @@ message Heartbeat {
   uint64 timestamp_ns = 1;
 }
 
+// Engine park/resume records are cold-path structural enrichment. Readers
+// that only reconstruct calls may skip them.
+message SuspendThread {
+  uint64 thread_id = 1;
+  uint32 suspend_seq = 2;
+  SuspendReason reason = 3;
+  uint64 timestamp_ns = 4;
+}
+
+message ResumeThread {
+  uint64 thread_id = 1;
+  uint32 suspend_seq = 2;
+  // Carried by Resume so awaiting duration survives cross-ring reordering.
+  uint64 suspend_timestamp_ns = 3;
+  uint64 timestamp_ns = 4;
+}
+
+message LlmCallMeta {
+  uint64 thread_id = 1;
+  uint64 call_id = 2;
+  uint32 model_id = 3;
+  uint32 tokens_in = 4;
+  uint32 tokens_out = 5;
+  // bit 0 provider_error, bit 1 parse_error, bit 2 retry.
+  uint32 flags = 6;
+  uint64 timestamp_ns = 7;
+}
+
+enum SuspendReason {
+  SUSPEND_REASON_SYS_OP = 0;
+  SUSPEND_REASON_AWAIT = 1;
+  SUSPEND_REASON_AWAIT_ANY = 2;
+  SUSPEND_REASON_EARLY_YIELD = 3;
+}
+
 // How a single call frame ended — a closed taxonomy of the ways a frame can
 // be popped: normal return, exception unwind, cancellation, exit unwind.
 // Statuses describe the FRAME's fate, not the program's outcome (a frame
@@ -131,8 +169,8 @@ message EventFileHeaderV1 {
   // UUID, minted once per process.
   bytes process_id = 1;
   uint64 engine_id = 2;
-  // What identifies a Program is still open (M0 coordination); empty for now.
-  string program_id = 3;
+  reserved 3;
+  reserved "program_id";
   // Wall anchor as 16 little-endian bytes (u128 nanoseconds since the Unix
   // epoch): wall(event) = started_at_epoch_ns + event.timestamp_ns.
   bytes started_at_epoch_ns = 4;
@@ -152,8 +190,25 @@ message EventFileHeaderV1 {
   ClockQuality clock_quality = 9;
   // Durable source/revision metadata when available. These are artifact
   // metadata, not playground BoundaryId and not hot-path semantic hashes.
-  optional string source_snapshot_id = 10;
-  optional string revision_id = 11;
+  string source_snapshot_id = 10;
+  string revision_id = 11;
+  optional RevisionRefV1 revision_ref = 12;
+  // Populated by boundary-scoped full-trace/flight writers. Continuous
+  // session artifacts use partition_bind instead.
+  optional bytes boundary_id = 13;
+  // Exact-evidence provenance. Continuous/raw oracle files leave these
+  // absent; flight/full-trace artifacts populate them so a UI can jump back
+  // to the aggregate context that armed the capture.
+  optional string trigger_reason = 14;
+  optional uint32 trigger_node_id = 15;
+  optional uint32 cct_segment_seq = 16;
+  optional uint32 cct_block_seq = 17;
+}
+
+message RevisionRefV1 {
+  bytes revision_id = 1;
+  uint32 dict_format_version = 2;
+  uint32 function_count = 3;
 }
 
 // Which hardware source produced event timestamps (header diagnostics).

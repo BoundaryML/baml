@@ -460,8 +460,13 @@ pub fn attach_builtins(object: Object) -> Result<Object, VmInternalError> {
                 throws_type: function.throws_type,
                 origin: function.origin,
                 body_meta: function.body_meta,
+                def_meta: function.def_meta,
                 capture: function.capture,
-                function_id: 0, // synthetic; not in the profiling function table
+                // Assigned from final linked pool order by the compiler (or
+                // restored at the explicit deserialization seam). Attaching
+                // a native implementation changes only dispatch; it must not
+                // erase the function's revision-local identity.
+                function_id: function.function_id,
             }))
         }
         other => other,

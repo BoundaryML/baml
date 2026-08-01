@@ -744,7 +744,10 @@ dependencies = [
  "base64",
  "bex_cache",
  "bex_engine",
+ "bex_events",
+ "bex_query",
  "bex_vm_types",
+ "blake3",
  "borsh",
  "clap",
  "console",
@@ -825,6 +828,7 @@ dependencies = [
  "baml_compiler2_ppir",
  "baml_compiler2_tir",
  "baml_type",
+ "baml_version",
  "baml_workspace",
  "bex_vm_types",
  "borsh",
@@ -1062,6 +1066,7 @@ dependencies = [
  "bex_events",
  "bex_heap",
  "bex_project",
+ "bex_query",
  "bex_vm_types",
  "bridge_ctypes",
  "crossbeam-channel",
@@ -1096,9 +1101,10 @@ name = "baml_pack_host"
 version = "0.0.0-beta"
 dependencies = [
  "baml_exec",
+ "baml_version",
  "bex_engine",
  "bex_events",
- "borsh",
+ "bex_vm_types",
  "libsui",
  "sys_native",
  "tokio",
@@ -1226,6 +1232,9 @@ dependencies = [
 [[package]]
 name = "baml_version"
 version = "0.0.0-beta"
+dependencies = [
+ "blake3",
+]
 
 [[package]]
 name = "baml_workspace"
@@ -1319,14 +1328,21 @@ dependencies = [
 name = "bex_events"
 version = "0.0.0-beta"
 dependencies = [
+ "baml_base",
+ "baml_type",
  "base64",
  "bex_external_types",
  "bex_vm_types",
+ "blake3",
+ "borsh",
  "crossbeam-utils",
+ "fs2",
+ "libc",
  "loom",
  "prost",
  "prost-build",
  "protoc-bin-vendored",
+ "rustc-hash 2.1.2",
  "serde_json",
  "sha2",
  "smallvec",
@@ -1383,6 +1399,7 @@ dependencies = [
  "bex_engine",
  "bex_external_types",
  "bex_heap",
+ "bex_query",
  "bex_vm_types",
  "borsh",
  "ignore",
@@ -1406,6 +1423,15 @@ dependencies = [
  "vfs",
  "walkdir",
  "wasm-bindgen-futures",
+]
+
+[[package]]
+name = "bex_query"
+version = "0.0.0-beta"
+dependencies = [
+ "bex_events",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
@@ -1486,8 +1512,10 @@ dependencies = [
  "baml_builtins2",
  "baml_builtins2_codegen",
  "baml_type",
+ "base64",
  "bex_resource_types",
  "bex_str",
+ "blake3",
  "borsh",
  "indexmap",
  "num-bigint",
@@ -1522,6 +1550,20 @@ name = "bitflags"
 version = "2.11.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c4512299f36f043ab09a583e57bceb5a5aab7a73db1805848e8fef3c9e8c78b3"
+
+[[package]]
+name = "blake3"
+version = "1.8.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0aa83c34e62843d924f905e0f5c866eb1dd6545fc4d719e803d9ba6030371fce"
+dependencies = [
+ "arrayref",
+ "arrayvec",
+ "cc",
+ "cfg-if",
+ "constant_time_eq",
+ "cpufeatures 0.3.0",
+]
 
 [[package]]
 name = "block"
@@ -2244,6 +2286,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c2459377285ad874054d797f3ccebf984978aa39129f6eafde5cdc8315b612f8"
 
 [[package]]
+name = "constant_time_eq"
+version = "0.4.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3d52eff69cd5e647efe296129160853a42795992097e8af39800e1060caeea9b"
+
+[[package]]
 name = "convert_case"
 version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2324,6 +2372,15 @@ name = "cpufeatures"
 version = "0.2.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "59ed5838eebb26a2bb2e58f6d5b5316989ae9d08bab10e0e6d103e656d1b0280"
+dependencies = [
+ "libc",
+]
+
+[[package]]
+name = "cpufeatures"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8b2a41393f66f16b0823bb79094d54ac5fbd34ab292ddafb9a0456ac9f87d201"
 dependencies = [
  "libc",
 ]
@@ -5708,7 +5765,7 @@ version = "0.14.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "343d3bd7056eda839b03204e68deff7d1b13aba7af2b2fd16890697274262ee7"
 dependencies = [
- "heck 0.4.1",
+ "heck 0.5.0",
  "itertools 0.14.0",
  "log",
  "multimap",
@@ -6950,7 +7007,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e3bf829a2d51ab4a5ddf1352d8470c140cadc8301b2ae1789db023f01cedd6ba"
 dependencies = [
  "cfg-if",
- "cpufeatures",
+ "cpufeatures 0.2.17",
  "digest",
 ]
 
@@ -6961,7 +7018,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a7507d819769d01a365ab707794a4084392c824f54a7a6a7862f8c3d0892b283"
 dependencies = [
  "cfg-if",
- "cpufeatures",
+ "cpufeatures 0.2.17",
  "digest",
  "sha2-asm",
 ]
@@ -7486,7 +7543,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "32497e9a4c7b38532efcdebeef879707aa9f794296a4f0244f6f69e9bc8574bd"
 dependencies = [
  "fastrand",
- "getrandom 0.3.4",
+ "getrandom 0.4.2",
  "once_cell",
  "rustix 1.1.4",
  "windows-sys 0.61.2",
@@ -7870,6 +7927,18 @@ dependencies = [
  "salsa",
  "serde",
  "serde_json",
+]
+
+[[package]]
+name = "tools_obs_bench"
+version = "0.0.0-beta"
+dependencies = [
+ "anyhow",
+ "bex_events",
+ "clap",
+ "serde",
+ "serde_json",
+ "toml 0.8.23",
 ]
 
 [[package]]

@@ -58,6 +58,7 @@ import { setGatewayEnabled } from './gateway';
 import { GraphView } from './graph/GraphView';
 import { findLatestGraphRunSnapshot } from './graph-run-selection';
 import { cn } from './lib/utils';
+import { ObserveRunsView } from './ObserveRunsView';
 import { BOUNDARY_PROXY_URL_KEY, getProxyEnvVarConfig } from './proxy-config';
 import { ResultDisplay } from './ResultDisplay';
 import { RunOutputTerminal } from './RunOutputTerminal';
@@ -288,7 +289,7 @@ export interface ExecutionPanelProps {
   /** Called whenever the selected project changes. */
   onSelectedProjectChange?: (project: string | null) => void;
   /** Tab shown on mount (default 'run'). Embedded views often want 'graph'. */
-  initialTab?: 'run' | 'graph' | 'trace' | 'flame' | 'prompt' | 'curl';
+  initialTab?: 'run' | 'graph' | 'trace' | 'flame' | 'prompt' | 'curl' | 'runs';
   /** Auto-select this function once the project reports it (applied once). */
   initialFunctionName?: string;
   /** Auto-run this test once the test tree reports it (applied once). */
@@ -648,6 +649,7 @@ const TraceTimelineView: FC<{
                   className="absolute top-0 bottom-0 rounded bg-vsc-accent"
                   style={{
                     left: `${row.spanLeftPct}%`,
+                    minWidth: 1,
                     width: `${row.spanWidthPct}%`,
                   }}
                 />
@@ -852,7 +854,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
   const cfgRequestIdsRef = useRef<Map<string, number>>(new Map());
   const [workflowCacheVersion, setWorkflowCacheVersion] = useState(0);
   const [activeTab, setActiveTab] = useState<
-    'run' | 'graph' | 'trace' | 'flame' | 'prompt' | 'curl'
+    'run' | 'graph' | 'trace' | 'flame' | 'prompt' | 'curl' | 'runs'
   >(initialTab ?? 'run');
   const [highlightedNodeId, setHighlightedNodeId] = useState<number | null>(
     null,
@@ -2784,6 +2786,12 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
             </>
           )}
 
+          <TabsList className="bg-transparent border-b-0 ml-1 h-7">
+            <TabsTrigger className="py-1 h-7" value="runs">
+              Runs
+            </TabsTrigger>
+          </TabsList>
+
           <div className="flex-1" />
 
           {projectRoots.length > 1 && (
@@ -3082,7 +3090,9 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
 
           {/* Content area */}
           <div className="flex-1 flex flex-col min-h-0 min-w-0">
-            {viewingCollection && collectionDebug ? (
+            {activeTab === 'runs' ? (
+              <ObserveRunsView />
+            ) : viewingCollection && collectionDebug ? (
               <CollectionDebugView
                 expandedLogId={expandedLogId}
                 setExpandedLogId={setExpandedLogId}

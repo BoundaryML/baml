@@ -60,6 +60,11 @@ run = "cargo run -p cargo-size-gate -- size-gate bake --branch canary"
 description = "Record a new size baseline by building locally (bootstrap a brand-new platform)"
 run = "cargo run -p cargo-size-gate -- size-gate record"
 
+[tasks.obs-bench-smoke]
+description = "Run observability oracles plus CCT, storage, value, and query trend benches"
+run = "cargo test -p bex_events -p tools_obs_bench && cargo bench -p bex_events --bench cct_update && cargo bench -p bex_events --bench bcct_storage && cargo bench -p bex_events --bench value_cas && cargo bench -p bex_query --bench query_bounds"
+sources = ["crates/bex_events/**/*.rs", "crates/bex_query/**/*.rs", "crates/tools_obs_bench/**/*.rs", "**/Cargo.toml"]
+
 [tasks.fmt-cpp]
 description = "Run clang-format over the hand-written C++ SDK sources"
 run = "scripts/fmt_cpp.sh"

@@ -21,8 +21,9 @@ use baml_compiler2_hir::{
     package::PackageId,
 };
 use baml_compiler2_mir::{
-    BuiltinKind, Local, MirFunctionBody, MirFunctionKind, Operand, Place, ResolvedAliases, Rvalue,
-    StatementKind, Terminator, def_to_item_ref, lower_function, lower_let_body,
+    BuiltinKind, ItemRef, Local, MirFunctionBody, MirFunctionKind, MirLambdaKind, Operand, Place,
+    ResolvedAliases, Rvalue, StatementKind, Terminator, def_to_item_ref, lower_function,
+    lower_let_body,
 };
 // PPIR item-data firewall (canonical / post-expansion view, including synthetic
 // `*$stream` items) — enumeration + lookup queries in place of the raw item tree.
@@ -37,9 +38,9 @@ use baml_compiler2_ppir::{
 };
 use baml_type::{ParamTy, RuntimeTy, TyAttr};
 use bex_vm_types::{
-    Bytecode, CaptureCategory, Class, ClassField, ConstValue, Enum, EnumVariant, Function,
-    FunctionCaptureProps, FunctionKind, FunctionMeta, FunctionOrigin, GlobalIndex, Instruction,
-    Object, ObjectIndex, ObjectPool, Program,
+    Bytecode, CaptureCategory, Class, ClassField, ConstValue, DefinitionMeta, Enum, EnumVariant,
+    Function, FunctionCaptureProps, FunctionKind, FunctionMeta, FunctionOrigin, GlobalIndex,
+    Instruction, LambdaIdentity, LambdaKind, Object, ObjectIndex, ObjectPool, Program,
     unit::{
         CompilationUnit, LocalRef, ProgramImplRuleFrag, ProgramMethodImplFrag, ProgramPackageFrag,
         Symbol, SymbolKind,
@@ -1082,6 +1083,68 @@ fn emitted_function_origin(
     }
 }
 
+fn definition_meta_for_item_ref(item_ref: &ItemRef) -> DefinitionMeta {
+    let owner_type_key = match item_ref {
+        ItemRef::Method {
+            package,
+            namespace,
+            class,
+            ..
+        } => {
+            let mut path = Vec::with_capacity(namespace.len() + 2);
+            path.push(package.as_str());
+            path.extend(namespace.iter().map(Name::as_str));
+            path.push(class.as_str());
+            Some(format!("class:{}", path.join(".")))
+        }
+        ItemRef::Free { .. } | ItemRef::EnumType { .. } => None,
+    };
+    DefinitionMeta {
+        definition_key: format!("function:{item_ref}"),
+        owner_type_key,
+        lambda: None,
+    }
+}
+
+fn lambda_definition_meta(
+    parent_definition_key: &str,
+    identity: baml_compiler2_mir::MirLambdaIdentity,
+) -> DefinitionMeta {
+    let kind = match identity.kind {
+        MirLambdaKind::Lambda => LambdaKind::Lambda,
+        MirLambdaKind::SpawnedClosure => LambdaKind::SpawnedClosure,
+        MirLambdaKind::Adapter => LambdaKind::Adapter,
+    };
+    DefinitionMeta {
+        definition_key: format!("lambda:{parent_definition_key}#{}", identity.ordinal),
+        owner_type_key: None,
+        lambda: Some(LambdaIdentity {
+            parent_definition_key: parent_definition_key.to_string(),
+            ordinal: identity.ordinal,
+            kind,
+        }),
+    }
+}
+
+fn ordinary_capture_defaults(origin: FunctionOrigin) -> FunctionCaptureProps {
+    match origin {
+        FunctionOrigin::UserDefined | FunctionOrigin::Companion | FunctionOrigin::AutoDerive => {
+            FunctionCaptureProps::disabled()
+                .with_auto(CaptureCategory::Error)
+                .with_auto(CaptureCategory::PromoteOnError)
+        }
+        FunctionOrigin::Internal | FunctionOrigin::Builtin => FunctionCaptureProps::disabled(),
+    }
+}
+
+fn llm_capture_defaults() -> FunctionCaptureProps {
+    FunctionCaptureProps::disabled()
+        .with_auto(CaptureCategory::Input)
+        .with_auto(CaptureCategory::Output)
+        .with_auto(CaptureCategory::Error)
+        .with_auto(CaptureCategory::PromoteOnError)
+}
+
 /// Read-only snapshot of pooled class field metadata: every name registered in
 /// `class_object_indices` → the class's fields (name + type, in field order).
 /// Built once from the `Object::Class` entries before function bodies are
@@ -1137,6 +1200,63 @@ pub trait Db: baml_compiler2_mir::Db {
 /// Compile options.
 pub struct CompileOptions {
     pub emit_test_cases: bool,
+}
+
+/// Attach source/toolchain identity only after the final program layout is
+/// materialized. `project.files` contains user files only; compiler builtins
+/// are identified by `compiler_id` and deliberately excluded from the source
+/// snapshot. The manifest is not currently a Salsa input, so this compiler
+/// seam records it as absent; pack/host fallbacks remain deterministic.
+fn finalize_emitted_program(
+    db: &dyn crate::Db,
+    options: &CompileOptions,
+    opt: OptLevel,
+    program: &mut Program,
+    include_user_sources: bool,
+) {
+    let root = db.project().root(db);
+    let files: Vec<(u32, String, &[u8])> = if include_user_sources {
+        db.project()
+            .files(db)
+            .iter()
+            .map(|file| {
+                let path = file.path(db);
+                let relative = path.strip_prefix(&root).unwrap_or(&path);
+                (
+                    file.file_id(db).as_u32(),
+                    relative.display().to_string(),
+                    file.text(db).as_bytes(),
+                )
+            })
+            .collect()
+    } else {
+        Vec::new()
+    };
+    let inputs: Vec<bex_vm_types::SourceIdentityInput<'_>> = files
+        .iter()
+        .map(
+            |(file_id, path, content)| bex_vm_types::SourceIdentityInput {
+                file_id: *file_id,
+                project_relative_path: path,
+                content,
+            },
+        )
+        .collect();
+    let compiler_id = baml_version::compiler_id();
+    bex_vm_types::finalize_program_identity(
+        program,
+        &inputs,
+        None,
+        bex_vm_types::RevisionOptions {
+            compiler_id: &compiler_id,
+            opt_level: match opt {
+                OptLevel::Zero => 0,
+                OptLevel::One => 1,
+                OptLevel::Two => 2,
+            },
+            emit_test_cases: options.emit_test_cases,
+        },
+    );
 }
 
 /// Errors that can occur during bytecode generation.
@@ -1274,7 +1394,9 @@ pub fn generate_project_bytecode_with_opt(
     options: &CompileOptions,
     opt: OptLevel,
 ) -> Result<Program, LoweringError> {
-    generate_impl(db, options, opt, None, false, None)
+    let mut program = generate_impl(db, options, opt, None, false, None)?;
+    finalize_emitted_program(db, options, opt, &mut program, true);
+    Ok(program)
 }
 
 /// Compile ONLY the builtin stdlib into a standalone `Program` slice.
@@ -1289,7 +1411,7 @@ pub fn generate_stdlib_program(
     db: &dyn crate::Db,
     opt: OptLevel,
 ) -> Result<Program, LoweringError> {
-    generate_impl(
+    let mut program = generate_impl(
         db,
         &CompileOptions {
             emit_test_cases: false,
@@ -1298,7 +1420,17 @@ pub fn generate_stdlib_program(
         None,
         true,
         None,
-    )
+    )?;
+    finalize_emitted_program(
+        db,
+        &CompileOptions {
+            emit_test_cases: false,
+        },
+        opt,
+        &mut program,
+        false,
+    );
+    Ok(program)
 }
 
 /// Generate project bytecode on top of a precompiled stdlib `Program` slice
@@ -1315,7 +1447,9 @@ pub fn generate_project_bytecode_with_stdlib(
     opt: OptLevel,
     base: &Program,
 ) -> Result<Program, LoweringError> {
-    generate_impl(db, options, opt, Some(base), false, None)
+    let mut program = generate_impl(db, options, opt, Some(base), false, None)?;
+    finalize_emitted_program(db, options, opt, &mut program, true);
+    Ok(program)
 }
 
 /// Incremental compile that lowers function bodies only for dirty files, reuses
@@ -1453,8 +1587,9 @@ pub fn generate_project_bytecode_with_reuse_artifacts(
         carrier.init_tail = Some(tail);
     }
 
-    let program = bex_vm_types::link::link(&assembled)
+    let mut program = bex_vm_types::link::link(&assembled)
         .map_err(|e| LoweringError::Internal(format!("link reused units: {e}")))?;
+    finalize_emitted_program(db, options, opt, &mut program, true);
     Ok((program, assembled))
 }
 
@@ -3343,7 +3478,7 @@ fn emit_file_group(
             let sorted_bindings = topological_sort_lets(db, let_bindings)?;
 
             // Compile all let-binding initializers into a single $init function.
-            let init_fn = compile_init_function(
+            let mut init_fn = compile_init_function(
                 db,
                 &sorted_bindings,
                 globals,
@@ -3361,6 +3496,7 @@ fn emit_file_group(
             } else {
                 format!("{pkg_name}.$init")
             };
+            init_fn.def_meta.definition_key = format!("function:{init_fq_name}");
 
             let fn_obj_idx = program.add_object(Object::Function(Box::new(init_fn)));
             program
@@ -3455,7 +3591,7 @@ fn emit_file_group(
 
             // Synthesized function uses Span::fake() — same pattern as
             // $init synthesis at compile_init_function (lib.rs:1085-1103).
-            let chainer_fn = Function {
+            let mut chainer_fn = Function {
                 name: "$init_test".to_string(),
                 source_file: String::new(), // synthesized, no source file
                 docstring: None,
@@ -3486,8 +3622,9 @@ fn emit_file_group(
                 },
                 origin: FunctionOrigin::Internal,
                 body_meta: None,
+                def_meta: DefinitionMeta::default(),
                 capture: FunctionCaptureProps::disabled(),
-                function_id: 0, // assigned at engine init (interim provider)
+                function_id: 0, // assigned after the final object-pool layout is known
             };
 
             let chainer_name = if pkg_name.as_str() == "user" {
@@ -3495,6 +3632,7 @@ fn emit_file_group(
             } else {
                 format!("{pkg_name}.$init_test")
             };
+            chainer_fn.def_meta.definition_key = format!("function:{chainer_name}");
 
             let fn_obj_idx = program.add_object(Object::Function(Box::new(chainer_fn)));
             program
@@ -4519,6 +4657,11 @@ fn emit_functions_serial(
         for &func_loc in file_functions(db, *file) {
             let mir = lower_function(db, func_loc, opt);
             let fq_name = mir.item_ref.to_string();
+            let parent_origin = emitted_function_origin(
+                &fq_name,
+                is_builtin_file,
+                function_data(db, func_loc).metadata.origin,
+            );
 
             let mut compiled_fn = match &mir.kind {
                 MirFunctionKind::Bytecode(body) => {
@@ -4528,6 +4671,8 @@ fn emit_functions_serial(
                     let empty_spawn_capture_indices = HashSet::new();
                     let lambda_info = compile_lambdas_flat(
                         &mir.lambdas,
+                        &definition_meta_for_item_ref(&mir.item_ref).definition_key,
+                        parent_origin,
                         Some(body),
                         &empty_capture_types,
                         &empty_spawn_capture_indices,
@@ -4583,6 +4728,7 @@ fn emit_functions_serial(
                 func_loc,
                 cache_pass4,
                 is_builtin_file,
+                &mir.item_ref,
                 &fq_name,
                 &mut compiled_fn,
             );
@@ -4609,6 +4755,7 @@ struct FnWorkItem {
     /// Line index of the item's file, shared by every function in the file.
     line_starts: std::sync::Arc<[u32]>,
     is_builtin_file: bool,
+    origin: FunctionOrigin,
 }
 
 /// Identity of one Pass-4 function before MIR lowering: the [`FnWorkItem`]
@@ -4796,6 +4943,13 @@ fn emit_functions_parallel(
         .into_iter()
         .zip(mirs)
         .map(|(seed, mir)| FnWorkItem {
+            origin: emitted_function_origin(
+                &mir.item_ref.to_string(),
+                seed.is_builtin_file,
+                function_data(db, FunctionLoc::new(db, seed.file, seed.local_id))
+                    .metadata
+                    .origin,
+            ),
             file: seed.file,
             local_id: seed.local_id,
             fq_name: mir.item_ref.to_string(),
@@ -4820,6 +4974,8 @@ fn emit_functions_parallel(
             let empty_spawn_capture_indices = HashSet::new();
             let lambda_info = compile_lambdas_flat(
                 &item.mir.lambdas,
+                &definition_meta_for_item_ref(&item.mir.item_ref).definition_key,
+                item.origin,
                 Some(body),
                 &empty_capture_types,
                 &empty_spawn_capture_indices,
@@ -4903,6 +5059,7 @@ fn emit_functions_parallel(
             func_loc,
             cache,
             item.is_builtin_file,
+            &item.mir.item_ref,
             &item.fq_name,
             &mut compiled_fn,
         );
@@ -5057,8 +5214,9 @@ fn builtin_emit_function(kind: BuiltinKind, fq_name: &str, arity: usize) -> Opti
         },
         origin: FunctionOrigin::Builtin,
         body_meta: None,
+        def_meta: DefinitionMeta::default(),
         capture: FunctionCaptureProps::disabled(),
-        function_id: 0, // assigned at engine init (interim provider)
+        function_id: 0, // assigned after the final object-pool layout is known
     })
 }
 
@@ -5072,6 +5230,7 @@ fn attach_function_metadata<'db>(
     func_loc: baml_compiler2_hir::loc::FunctionLoc<'db>,
     cache: &ResolvedAliases,
     is_builtin_file: bool,
+    item_ref: &ItemRef,
     fq_name: &str,
     compiled_fn: &mut Function,
 ) {
@@ -5081,6 +5240,8 @@ fn attach_function_metadata<'db>(
     let signature_metadata = compute_function_metadata(db, func_loc, &parameter_defaults, cache);
     apply_signature_metadata(compiled_fn, &signature_metadata);
     compiled_fn.origin = emitted_function_origin(fq_name, is_builtin_file, func.metadata.origin);
+    compiled_fn.def_meta = definition_meta_for_item_ref(item_ref);
+    compiled_fn.capture = ordinary_capture_defaults(compiled_fn.origin);
 
     // Set LLM-specific body_meta if this is an LLM function with a client.
     //
@@ -5108,10 +5269,7 @@ fn attach_function_metadata<'db>(
             prompt_template,
             client: client.to_string(),
         });
-        compiled_fn.capture = FunctionCaptureProps::disabled()
-            .with_auto(CaptureCategory::Input)
-            .with_auto(CaptureCategory::Output)
-            .with_auto(CaptureCategory::Error);
+        compiled_fn.capture = llm_capture_defaults();
     }
 }
 
@@ -5157,6 +5315,8 @@ fn register_compiled_function(
 #[allow(clippy::too_many_arguments)]
 fn compile_lambdas_flat(
     lambdas: &[baml_compiler2_mir::MirFunction],
+    parent_definition_key: &str,
+    origin: FunctionOrigin,
     parent_body: Option<&MirFunctionBody>,
     parent_capture_types: &[RuntimeTy],
     parent_spawn_capture_indices: &HashSet<usize>,
@@ -5192,6 +5352,8 @@ fn compile_lambdas_flat(
                 // Recursively compile any nested lambdas within this lambda.
                 let nested_info = compile_lambdas_flat(
                     &lambda.lambdas,
+                    parent_definition_key,
+                    origin,
                     Some(body),
                     &capture_info.capture_types,
                     &capture_info.spawn_capture_indices,
@@ -5237,6 +5399,12 @@ fn compile_lambdas_flat(
                 if let Some(sig) = &lambda.signature {
                     apply_signature_metadata(&mut f, sig);
                 }
+                let identity = lambda
+                    .lambda_identity
+                    .expect("every nested MIR callable has structural lambda identity");
+                f.def_meta = lambda_definition_meta(parent_definition_key, identity);
+                f.origin = origin;
+                f.capture = ordinary_capture_defaults(f.origin);
                 let idx = objects_base + objects.len();
                 objects.push(Object::Function(Box::new(f)));
                 idx
@@ -5287,7 +5455,7 @@ fn compile_init_function<'db>(
         // Lower the let initializer through MIR → MirFunctionBody (+ any lambda children).
         let maybe_body = lower_let_body(db, *let_loc, opt);
 
-        let helper_fn = match maybe_body {
+        let mut helper_fn = match maybe_body {
             Some((mir_body, lambdas)) => {
                 let line_starts = build_line_starts(file.text(db));
                 // Compile lambda children first and collect their object indices.
@@ -5296,6 +5464,8 @@ fn compile_init_function<'db>(
                 let empty_spawn_capture_indices = HashSet::new();
                 let lambda_info = compile_lambdas_flat(
                     &lambdas,
+                    &format!("let:{fq_name}"),
+                    FunctionOrigin::UserDefined,
                     Some(&mir_body),
                     &empty_capture_types,
                     &empty_spawn_capture_indices,
@@ -5368,11 +5538,13 @@ fn compile_init_function<'db>(
                     },
                     origin: FunctionOrigin::Internal,
                     body_meta: None,
+                    def_meta: DefinitionMeta::default(),
                     capture: FunctionCaptureProps::disabled(),
-                    function_id: 0, // assigned at engine init (interim provider)
+                    function_id: 0, // assigned after the final object-pool layout is known
                 }
             }
         };
+        helper_fn.def_meta.definition_key = format!("function:{fq_name}.$init");
 
         // Register the helper function as an object and a global slot.
         // This lets $init call it via Call(global_idx).
@@ -5445,8 +5617,13 @@ fn compile_init_function<'db>(
         },
         origin: FunctionOrigin::Internal,
         body_meta: None,
+        def_meta: DefinitionMeta {
+            definition_key: "function:$init".to_string(),
+            owner_type_key: None,
+            lambda: None,
+        },
         capture: FunctionCaptureProps::disabled(),
-        function_id: 0, // assigned at engine init (interim provider)
+        function_id: 0, // assigned after the final object-pool layout is known
     })
 }
 

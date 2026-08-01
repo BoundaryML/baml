@@ -1,0 +1,5 @@
+schema_version = 1
+seed = 62173
+total_calls = 1000000
+path_counts = [4, 16, 64, 256, 1024, 3537, 4096]
+generator = "obs-bench gen-paths"

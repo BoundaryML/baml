@@ -31,8 +31,9 @@ pub use live_cache::{
 };
 pub use read::{BamlvalueContents, read_bamlvalue_from_bytes};
 pub use record::{
-    CaptureLossKind, CaptureLossReason, CaptureLossRecord, LogEventRecord, LogRecord,
-    RunCompletedRecord, RunStartedRecord, ValueAvailability, ValueCapture, ValueCaptureKind,
-    ValueCodec, ValueFileRecord, ValueRecord, ValueRef,
+    CaptureLossKind, CaptureLossReason, CaptureLossRecord, CapturePolicyChangedRecord, DagRef,
+    LogEventRecord, LogRecord, PromotionOccurredRecord, RunCompletedRecord, RunStartedRecord,
+    ValueAuditRecord, ValueAvailability, ValueCapture, ValueCaptureKind, ValueCodec,
+    ValueFileRecord, ValueRecord, ValueRef,
 };
 pub use writer::{ValueIdAllocator, ValueWriteOutcome, ValueWriter};

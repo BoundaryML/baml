@@ -49,6 +49,10 @@ use common::compile_for_engine;
 use pb::disk_event_v1::Event;
 use prost::Message;
 use sys_native::SysOpsExt;
+use wiremock::{
+    Mock, MockServer, ResponseTemplate,
+    matchers::{method, path},
+};
 
 /// Synthetic header rows (see `bex_engine`'s `SPAWN_CLOSURE_FQN` /
 /// `UNKNOWN_FUNCTION_FQN`).
@@ -144,8 +148,25 @@ fn llm_function_capture_defaults_auto_inputs_outputs_errors() {
         CaptureOption::Auto
     );
     assert_eq!(
-        plain_capture.expect("plain function emitted"),
-        FunctionCaptureProps::disabled()
+        llm_capture.option(CaptureCategory::PromoteOnError),
+        CaptureOption::Auto
+    );
+    let plain_capture = plain_capture.expect("plain function emitted");
+    assert_eq!(
+        plain_capture.option(CaptureCategory::Input),
+        CaptureOption::Disabled
+    );
+    assert_eq!(
+        plain_capture.option(CaptureCategory::Output),
+        CaptureOption::Disabled
+    );
+    assert_eq!(
+        plain_capture.option(CaptureCategory::Error),
+        CaptureOption::Auto
+    );
+    assert_eq!(
+        plain_capture.option(CaptureCategory::PromoteOnError),
+        CaptureOption::Auto
     );
 }
 
@@ -248,6 +269,54 @@ fn load_profile(marker_fqn: &str) -> (pb::EventFileHeaderV1, Vec<Event>) {
     found.unwrap_or_else(|| panic!("no profile contains {marker_fqn}"))
 }
 
+fn load_profile_for_engine(engine_id: u64) -> (pb::EventFileHeaderV1, Vec<Event>) {
+    assert!(
+        bex_events::prof::flush_and_join(Duration::from_mins(1)),
+        "consumer never acked the flush"
+    );
+    for entry in std::fs::read_dir(prof_dir()).expect("profile dir exists") {
+        let path = entry.unwrap().path();
+        let Ok(contents) = read_bamlprof(&path) else {
+            continue;
+        };
+        if contents.header.engine_id == engine_id {
+            let events = contents
+                .events
+                .into_iter()
+                .filter_map(|event| event.event)
+                .filter(|event| !matches!(event, Event::Heartbeat(_)))
+                .collect();
+            return (contents.header, events);
+        }
+    }
+    panic!("no profile for engine {engine_id}");
+}
+
+fn load_profile_for_engine_quiesced(engine_id: u64) -> (pb::EventFileHeaderV1, Vec<Event>) {
+    for _ in 0..40 {
+        let (header, events) = load_profile_for_engine(engine_id);
+        let started: HashSet<u64> = events
+            .iter()
+            .filter_map(|event| match event {
+                Event::StartThread(event) => Some(event.thread_id),
+                _ => None,
+            })
+            .collect();
+        let ended: HashSet<u64> = events
+            .iter()
+            .filter_map(|event| match event {
+                Event::EndThread(event) => Some(event.thread_id),
+                _ => None,
+            })
+            .collect();
+        if started == ended {
+            return (header, events);
+        }
+        std::thread::sleep(Duration::from_millis(50));
+    }
+    load_profile_for_engine(engine_id)
+}
+
 /// Returns whether any readable profile file contains `marker_fqn` in its
 /// function table. Unlike [`load_profile`], absence is a valid result: tests
 /// use this to assert a suppressed entry call did not create a profile
@@ -308,6 +377,64 @@ fn load_profile_quiesced(marker_fqn: &str) -> (pb::EventFileHeaderV1, Vec<Event>
     // Quiescence never arrived: return the last read; the caller's balance
     // asserts will fail with the truncated stream visible.
     load_profile(marker_fqn)
+}
+
+/// Assert the self-contained suspend/resume contract independent of file
+/// arrival order (a resumed Tokio task may write to a different OS-thread
+/// ring). Returns `(thread_id, sequence, reason)` for each suspension.
+fn assert_suspend_resume_pairs(events: &[Event]) -> Vec<(u64, u32, i32)> {
+    let suspends: HashMap<(u64, u32), &pb::SuspendThread> = events
+        .iter()
+        .filter_map(|event| match event {
+            Event::SuspendThread(event) => Some(((event.thread_id, event.suspend_seq), event)),
+            _ => None,
+        })
+        .collect();
+    let resumes: HashMap<(u64, u32), &pb::ResumeThread> = events
+        .iter()
+        .filter_map(|event| match event {
+            Event::ResumeThread(event) => Some(((event.thread_id, event.suspend_seq), event)),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(
+        suspends.len(),
+        resumes.len(),
+        "every suspension must have exactly one resume"
+    );
+    for (key, suspend) in &suspends {
+        let resume = resumes
+            .get(key)
+            .unwrap_or_else(|| panic!("missing resume for {key:?}"));
+        assert_eq!(
+            resume.suspend_timestamp_ns, suspend.timestamp_ns,
+            "resume must carry the exact converted suspend tick for {key:?}"
+        );
+        assert!(
+            resume.timestamp_ns >= suspend.timestamp_ns,
+            "resume predates suspend for {key:?}"
+        );
+    }
+
+    let mut by_thread: HashMap<u64, Vec<u32>> = HashMap::new();
+    for &(thread_id, sequence) in suspends.keys() {
+        by_thread.entry(thread_id).or_default().push(sequence);
+    }
+    for (thread_id, sequences) in &mut by_thread {
+        sequences.sort_unstable();
+        let expected: Vec<u32> = (1..=u32::try_from(sequences.len()).unwrap()).collect();
+        assert_eq!(
+            *sequences, expected,
+            "suspend sequences are not dense-monotonic for thread {thread_id}"
+        );
+    }
+
+    let mut result = suspends
+        .values()
+        .map(|event| (event.thread_id, event.suspend_seq, event.reason))
+        .collect::<Vec<_>>();
+    result.sort_unstable();
+    result
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
@@ -1629,7 +1756,11 @@ fn assert_balance(
                     et.thread_id
                 );
             }
-            Event::SetFunctionId(_) | Event::Heartbeat(_) => {}
+            Event::SetFunctionId(_)
+            | Event::Heartbeat(_)
+            | Event::SuspendThread(_)
+            | Event::ResumeThread(_)
+            | Event::LlmCallMeta(_) => {}
         }
     }
     assert_eq!(
@@ -1925,6 +2056,227 @@ async fn sysop_pair_emitted() {
         .filter(|e| matches!(e, Event::CallFunction(cf) if sleep_ids.contains(&cf.function_id)))
         .count();
     assert_eq!(sleep_calls, 1, "expected exactly one sleep sysop call");
+    let parks = assert_suspend_resume_pairs(&events);
+    assert_eq!(parks.len(), 1, "the one async sleep parks exactly once");
+    assert_eq!(
+        parks[0].2,
+        pb::SuspendReason::SysOp as i32,
+        "async sysop uses the SysOp reason"
+    );
+}
+
+/// A `SysOpResult::Ready` operation is running work, not scheduler waiting.
+/// It must retain its normal call pair without producing park records.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn ready_inline_sysop_emits_no_suspend() {
+    let _guard = test_lock().await;
+    init_prof_env();
+    let source = r##"
+        client ReadyClient {
+            provider openai
+            options { model "gpt-ready" api_key "test" }
+        }
+        function ready_llm_pin() -> string {
+            client ReadyClient
+            prompt #"ready"#
+        }
+        function main() -> int {
+            let _ = baml.llm.get_return_type("user.ready_llm_pin");
+            1
+        }
+    "##;
+    let engine = Arc::new(
+        BexEngine::new(
+            compile_for_engine(source),
+            Arc::new(sys_native::SysOps::native()),
+            Vec::new(),
+        )
+        .expect("engine construction"),
+    );
+    assert_eq!(
+        engine
+            .call_function(
+                "main",
+                vec![],
+                FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+                true,
+            )
+            .await
+            .expect("ready sysop program runs"),
+        BexExternalValue::Int(1)
+    );
+    let (_, events) = load_profile_for_engine(engine.engine_id().0);
+    assert!(
+        assert_suspend_resume_pairs(&events).is_empty(),
+        "Ready sysops must not be labeled awaiting"
+    );
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn await_and_await_any_emit_exact_suspend_reasons() {
+    let _guard = test_lock().await;
+    init_prof_env();
+    let source = r#"
+        function await_reasons_pin() -> int { 0 }
+        function delayed(n: int) -> int {
+            baml.sys.sleep(baml.time.Duration.from_milliseconds(10n));
+            n
+        }
+        function main() -> int {
+            await_reasons_pin();
+            let a = spawn { delayed(1) };
+            let b = spawn { delayed(2) };
+            let raced = baml.future.race([a, b]);
+            await raced
+        }
+    "#;
+    let engine = Arc::new(
+        BexEngine::new(
+            compile_for_engine(source),
+            Arc::new(sys_native::SysOps::native()),
+            Vec::new(),
+        )
+        .expect("engine construction"),
+    );
+    let value = engine
+        .call_function(
+            "main",
+            vec![],
+            FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+            true,
+        )
+        .await
+        .expect("await-reason program runs");
+    assert!(matches!(
+        value,
+        BexExternalValue::Int(1) | BexExternalValue::Int(2)
+    ));
+    let (_, events) = load_profile_for_engine_quiesced(engine.engine_id().0);
+    let reasons: HashSet<i32> = assert_suspend_resume_pairs(&events)
+        .into_iter()
+        .map(|(_, _, reason)| reason)
+        .collect();
+    assert!(
+        reasons.contains(&(pb::SuspendReason::SysOp as i32)),
+        "worker sleep must emit SysOp suspension"
+    );
+    assert!(
+        reasons.contains(&(pb::SuspendReason::Await as i32)),
+        "awaiting the race future must emit Await suspension"
+    );
+    assert!(
+        reasons.contains(&(pb::SuspendReason::AwaitAny as i32)),
+        "race worker must emit AwaitAny suspension"
+    );
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn llm_completion_emits_structurally_owned_metadata_and_model_birth() {
+    let _guard = test_lock().await;
+    init_prof_env();
+    let server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(path("/chat/completions"))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .insert_header("content-type", "application/json")
+                .set_body_string(
+                    r#"{"id":"chatcmpl-prof","object":"chat.completion","created":0,
+                        "model":"gpt-observed-2026-07",
+                        "choices":[{"index":0,"message":{"role":"assistant","content":"done"},
+                                    "finish_reason":"stop"}],
+                        "usage":{"prompt_tokens":13,"completion_tokens":5,"total_tokens":18}}"#,
+                ),
+        )
+        .mount(&server)
+        .await;
+    let source = format!(
+        r##"
+        client ProfClient {{
+            provider openai
+            options {{
+                model "gpt-configured"
+                api_key "test"
+                base_url "{}"
+            }}
+        }}
+        function llm_meta_pin() -> string {{
+            client ProfClient
+            prompt #"hello"#
+        }}
+        function main() -> string {{ llm_meta_pin() }}
+    "##,
+        server.uri()
+    );
+    let engine = Arc::new(
+        BexEngine::new(
+            compile_for_engine(&source),
+            Arc::new(sys_native::SysOps::native()),
+            Vec::new(),
+        )
+        .expect("engine construction"),
+    );
+    let engine_id = engine.engine_id().0;
+    let value = engine
+        .call_function(
+            "main",
+            vec![],
+            FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+            true,
+        )
+        .await
+        .expect("LLM call succeeds");
+    assert_eq!(value, BexExternalValue::String("done".to_string().into()));
+
+    let (_, events) = load_profile_for_engine(engine_id);
+    assert_suspend_resume_pairs(&events);
+    let llm_function_id = engine
+        .program_metadata()
+        .function_table
+        .functions
+        .iter()
+        .find(|function| function.fqn == "user.llm_meta_pin")
+        .expect("LLM function metadata")
+        .function_id
+        .0;
+    let llm_call = events
+        .iter()
+        .find_map(|event| match event {
+            Event::CallFunction(call) if call.function_id == llm_function_id => {
+                Some((call.thread_id, call.call_id))
+            }
+            _ => None,
+        })
+        .expect("LLM call record");
+    let llm_meta = events
+        .iter()
+        .find_map(|event| match event {
+            Event::LlmCallMeta(meta) => Some(meta),
+            _ => None,
+        })
+        .expect("LLM completion metadata");
+    assert_eq!(
+        (llm_meta.thread_id, llm_meta.call_id),
+        llm_call,
+        "metadata joins to the structural FunctionMeta::Llm frame"
+    );
+    assert_eq!(llm_meta.tokens_in, 13);
+    assert_eq!(llm_meta.tokens_out, 5);
+    assert_eq!(llm_meta.flags, 0);
+
+    let registered = bex_events::prof::metadata::get_engine_metadata(engine_id)
+        .expect("live engine metadata remains registered");
+    let births = registered.models.entries_after(0);
+    assert_eq!(
+        births.len(),
+        2,
+        "configured and provider-returned models intern"
+    );
+    assert!(
+        births.iter().any(
+            |entry| entry.name == "gpt-observed-2026-07" && entry.model_id == llm_meta.model_id
+        )
+    );
 }
 
 /// Engine teardown: dropping a `BexEngine` must close its `.bamlprof`
@@ -2601,10 +2953,9 @@ async fn sys_exit_status_mapping() {
     );
 }
 
-/// Every header's function table carries the two reserved sentinel rows —
-/// the spawn-closure row and the unknown-function row — sitting one and two
-/// past the highest real function id (so they can never collide), with all
-/// ids in the table unique.
+/// Every header's function table begins with the two stable reserved rows:
+/// unknown at id 0 and spawn-closure at id 1. Real pool functions start at 16,
+/// leaving room for future runtime/host frame identities.
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn sentinel_rows_present_in_header() {
     let _guard = test_lock().await;
@@ -2628,22 +2979,25 @@ async fn sentinel_rows_present_in_header() {
         .iter()
         .find(|f| f.fqn == UNKNOWN_FUNCTION_FQN)
         .expect("unknown-function sentinel row missing");
-    let max_real_id = table
-        .functions
-        .iter()
-        .filter(|f| f.fqn != SPAWN_CLOSURE_FQN && f.fqn != UNKNOWN_FUNCTION_FQN)
-        .map(|f| f.function_id)
-        .max()
-        .expect("table has real functions");
     assert_eq!(
-        spawn_row.function_id,
-        max_real_id + 1,
-        "spawn-closure row must sit one past the real ids"
+        table.functions.first().map(|row| row.fqn.as_str()),
+        Some(UNKNOWN_FUNCTION_FQN),
+        "unknown-function row must be emitted first"
     );
     assert_eq!(
-        unknown_row.function_id,
-        max_real_id + 2,
-        "unknown-function row must sit two past the real ids"
+        table.functions.get(1).map(|row| row.fqn.as_str()),
+        Some(SPAWN_CLOSURE_FQN),
+        "spawn-closure row must be emitted second"
+    );
+    assert_eq!(unknown_row.function_id, 0);
+    assert_eq!(spawn_row.function_id, 1);
+    assert!(
+        table
+            .functions
+            .iter()
+            .filter(|f| f.fqn != SPAWN_CLOSURE_FQN && f.fqn != UNKNOWN_FUNCTION_FQN)
+            .all(|f| f.function_id >= 16),
+        "real pool function ids must stay out of the reserved low range"
     );
 
     let mut seen = HashSet::new();
@@ -2737,6 +3091,9 @@ fn normalized_per_thread_streams(
         Event::EndThread(et) => et.timestamp_ns,
         Event::SetFunctionId(sf) => sf.timestamp_ns,
         Event::Heartbeat(hb) => hb.timestamp_ns,
+        Event::SuspendThread(suspend) => suspend.timestamp_ns,
+        Event::ResumeThread(resume) => resume.timestamp_ns,
+        Event::LlmCallMeta(meta) => meta.timestamp_ns,
     };
     let tid_of = |e: &Event| match e {
         Event::CallFunction(cf) => cf.thread_id,
@@ -2745,6 +3102,9 @@ fn normalized_per_thread_streams(
         Event::EndThread(et) => et.thread_id,
         Event::SetFunctionId(sf) => sf.thread_id,
         Event::Heartbeat(_) => 0,
+        Event::SuspendThread(suspend) => suspend.thread_id,
+        Event::ResumeThread(resume) => resume.thread_id,
+        Event::LlmCallMeta(meta) => meta.thread_id,
     };
     let mut per_thread: HashMap<u64, Vec<&Event>> = HashMap::new();
     for e in events {
@@ -2757,6 +3117,11 @@ fn normalized_per_thread_streams(
         .map(|(_, mut es)| {
             es.sort_by_key(|e| ts_of(e));
             es.into_iter()
+                // Park records intentionally differ between the forced-GC and
+                // uninterrupted variants below. The parity comparison remains
+                // about loss/duplication of the underlying execution stream;
+                // suspend semantics are asserted independently.
+                .filter(|e| !matches!(e, Event::SuspendThread(_) | Event::ResumeThread(_)))
                 .map(|e| match e {
                     Event::CallFunction(cf) => format!(
                         "call {} id={} parent={:?}",
@@ -2774,6 +3139,15 @@ fn normalized_per_thread_streams(
                     Event::EndThread(et) => format!("end-thread status={}", et.status),
                     Event::SetFunctionId(sf) => format!("set-id id={}", sf.call_id),
                     Event::Heartbeat(_) => "heartbeat".to_string(),
+                    Event::SuspendThread(suspend) => {
+                        format!("suspend seq={}", suspend.suspend_seq)
+                    }
+                    Event::ResumeThread(resume) => {
+                        format!("resume seq={}", resume.suspend_seq)
+                    }
+                    Event::LlmCallMeta(meta) => {
+                        format!("llm-meta call={} model={}", meta.call_id, meta.model_id)
+                    }
                 })
                 .collect()
         })
@@ -2832,6 +3206,7 @@ async fn early_yield_resume_produces_identical_stream() {
         assert_eq!(value, BexExternalValue::Int(N));
         let (header, events) = load_profile("user.ey_plain_pin");
         assert_balance(&header, &events);
+        assert_suspend_resume_pairs(&events);
         normalized_per_thread_streams(&header, &events, "user.ey_plain_pin")
     };
 
@@ -2869,6 +3244,11 @@ async fn early_yield_resume_produces_identical_stream() {
         assert_eq!(value, BexExternalValue::Int(N));
         let (header, events) = load_profile("user.ey_parked_pin");
         assert_balance(&header, &events);
+        // The VM checks the cross-thread park flag only every ~32M control-flow
+        // instructions, so this compact parity fixture does not guarantee that
+        // it reaches an EarlyYield poll before completing. If it does, the
+        // generic pair validator pins the record contract.
+        assert_suspend_resume_pairs(&events);
         normalized_per_thread_streams(&header, &events, "user.ey_parked_pin")
     };
 

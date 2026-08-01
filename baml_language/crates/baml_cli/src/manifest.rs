@@ -43,6 +43,11 @@ pub(crate) struct BamlToml {
     #[serde(default)]
     pub test: TestManifest,
 
+    /// `[observability]` — durable local history, capture, trigger, and
+    /// retention policy.
+    #[serde(default)]
+    pub observability: ObservabilityManifest,
+
     /// Stray top-level keys. Captured (not denied) so typos surface as
     /// warnings and forward-compatible manifests still load.
     #[serde(flatten)]
@@ -73,6 +78,49 @@ pub(crate) struct TestProfileManifest {
 
     #[serde(flatten)]
     pub unknown: IndexMap<String, toml::Value>,
+}
+
+#[derive(Debug, Default, Deserialize)]
+pub(crate) struct ObservabilityManifest {
+    pub enabled: Option<bool>,
+    pub capture_values: Option<bool>,
+    pub capture_logs: Option<bool>,
+    pub latency_trigger_ms: Option<u64>,
+    pub history_max_age_days: Option<u64>,
+    pub history_max_bytes: Option<u64>,
+    pub newest_boundary_floor: Option<usize>,
+    pub gc_grace_hours: Option<u64>,
+
+    #[serde(flatten)]
+    pub unknown: IndexMap<String, toml::Value>,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(crate) struct ObservabilityRetention {
+    pub history_max_age_days: Option<u64>,
+    pub history_max_bytes: Option<u64>,
+    pub newest_boundary_floor: Option<usize>,
+    pub gc_grace_hours: Option<u64>,
+}
+
+impl ObservabilityManifest {
+    pub(crate) fn execution_policy(&self) -> baml_exec::PackObservability {
+        baml_exec::PackObservability {
+            enabled: self.enabled.unwrap_or(true),
+            capture_values: self.capture_values.unwrap_or(true),
+            capture_logs: self.capture_logs.unwrap_or(false),
+            latency_trigger_ms: self.latency_trigger_ms.filter(|threshold| *threshold != 0),
+        }
+    }
+
+    pub(crate) fn retention(&self) -> ObservabilityRetention {
+        ObservabilityRetention {
+            history_max_age_days: self.history_max_age_days,
+            history_max_bytes: self.history_max_bytes,
+            newest_boundary_floor: self.newest_boundary_floor,
+            gc_grace_hours: self.gc_grace_hours,
+        }
+    }
 }
 
 /// Top-level keys that are valid in `baml.toml` but are *not* consumed by
@@ -215,7 +263,44 @@ pub(crate) fn unknown_field_warnings(manifest: &BamlToml) -> Vec<String> {
             ));
         }
     }
+    for key in manifest.observability.unknown.keys() {
+        warnings.push(format!(
+            "ignoring unrecognized key `{key}` in [observability]"
+        ));
+    }
     warnings
+}
+
+pub(crate) fn observability_for_root(
+    root: &std::path::Path,
+) -> anyhow::Result<baml_exec::PackObservability> {
+    let path = root.join("baml.toml");
+    let content = match std::fs::read_to_string(&path) {
+        Ok(content) => content,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            return Ok(baml_exec::PackObservability::default());
+        }
+        Err(error) => return Err(error.into()),
+    };
+    let manifest =
+        parse(&content).map_err(|error| anyhow::anyhow!("invalid {}: {error}", path.display()))?;
+    Ok(manifest.observability.execution_policy())
+}
+
+pub(crate) fn observability_retention_for_root(
+    root: &std::path::Path,
+) -> anyhow::Result<ObservabilityRetention> {
+    let path = root.join("baml.toml");
+    let content = match std::fs::read_to_string(&path) {
+        Ok(content) => content,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            return Ok(ObservabilityRetention::default());
+        }
+        Err(error) => return Err(error.into()),
+    };
+    let manifest =
+        parse(&content).map_err(|error| anyhow::anyhow!("invalid {}: {error}", path.display()))?;
+    Ok(manifest.observability.retention())
 }
 
 #[cfg(test)]
@@ -247,6 +332,29 @@ mod tests {
             m.test.profiles["regular"].args,
             vec!["-x", "*::integration::*"]
         );
+    }
+
+    #[test]
+    fn parses_observability_execution_and_retention_policy() {
+        let manifest = parse(
+            "[observability]\n\
+             enabled = false\n\
+             capture_values = false\n\
+             capture_logs = true\n\
+             latency_trigger_ms = 9000\n\
+             history_max_age_days = 14\n\
+             history_max_bytes = 1048576\n\
+             newest_boundary_floor = 5\n\
+             gc_grace_hours = 48\n",
+        )
+        .unwrap();
+        let policy = manifest.observability.execution_policy();
+        assert!(!policy.enabled);
+        assert!(!policy.capture_values);
+        assert!(policy.capture_logs);
+        assert_eq!(policy.latency_trigger_ms, Some(9000));
+        assert_eq!(manifest.observability.history_max_age_days, Some(14));
+        assert_eq!(manifest.observability.newest_boundary_floor, Some(5));
     }
 
     #[test]

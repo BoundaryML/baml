@@ -1,7 +1,8 @@
 // Runtime host for binaries produced by `baml pack`.
 //
 // Startup:
-//   1. Extract `PackEnvelope` (borsh) from the OS-native embedded section.
+//   1. Extract and validate the versioned `PackEnvelope` from the OS-native
+//      embedded section.
 //   2. Decide single-target vs multi-subcommand dispatch from
 //      `envelope.mode`.
 //   3. Initialize the BAML engine with the embedded program and the
@@ -25,18 +26,61 @@
 use std::{collections::HashMap, process::ExitCode, sync::Arc};
 
 use baml_exec::{
-    DispatchResult, PACK_SECTION_NAME, PackEnvelope, PackMode, clamp_exit_code, dispatch_target,
-    load_json_source, parse_multi_target_argv, parse_target_argv, print_error,
+    DispatchResult, PACK_SECTION_NAME, PackEnvelope, PackMode, clamp_exit_code,
+    decode_pack_envelope, dispatch_target, load_json_source, parse_multi_target_argv,
+    parse_target_argv, print_error,
 };
-use bex_engine::{BexEngine, UserFunctionInfo};
+use bex_engine::{BexEngine, BoundaryStorageContext, UserFunctionInfo};
+use bex_vm_types::types::Program;
 use sys_native::SysOpsExt;
+
+/// Restore program identity that is deliberately absent from the borsh
+/// payload. Keep this as the single pack-load finalization seam: once the
+/// versioned envelope carries `ProgramIdentity`, its reattachment belongs
+/// here alongside the derived function-id assignment.
+fn finalize_loaded_program(
+    program: &mut Program,
+    identity: Option<bex_vm_types::ProgramIdentity>,
+    source_files: Vec<bex_vm_types::ProgramSourceFile>,
+) -> Result<(), String> {
+    match identity {
+        Some(identity) => {
+            let function_count = bex_vm_types::assign_function_ids(program);
+            if identity.function_count != function_count {
+                return Err(format!(
+                    "pack identity function count mismatch: envelope={}, program={function_count}",
+                    identity.function_count
+                ));
+            }
+            program.identity = Some(identity);
+        }
+        None => {
+            let compiler_id = baml_version::compiler_id();
+            bex_vm_types::finalize_legacy_program_identity(program, &compiler_id);
+        }
+    }
+    program.source_files = source_files;
+    Ok(())
+}
 
 fn extract_envelope() -> Result<PackEnvelope, String> {
     let section = libsui::find_section(PACK_SECTION_NAME)
         .map_err(|e| format!("Failed to read embedded section: {e}"))?
         .ok_or("No embedded BAML package found. This binary must be built with `baml pack`.")?;
 
-    borsh::from_slice(section).map_err(|e| format!("Failed to deserialize pack envelope: {e}"))
+    let mut envelope = decode_pack_envelope(section)
+        .map_err(|e| format!("Failed to decode pack envelope: {e}"))?;
+
+    // Function ids are derived from final object-pool order and intentionally
+    // omitted from borsh. Pack loading bypasses the linker, so restore them at
+    // this deserialization seam before the engine can observe the program.
+    finalize_loaded_program(
+        &mut envelope.program,
+        envelope.program_identity.take(),
+        std::mem::take(&mut envelope.source_files),
+    )?;
+
+    Ok(envelope)
 }
 
 /// Build `baml.argv` per BEP-027 §"baml.argv in packaged binaries".
@@ -64,6 +108,13 @@ fn target_is_typed(info: &UserFunctionInfo) -> bool {
 }
 
 fn main() -> ExitCode {
+    // Packed binaries are SDK-style production hosts: request the bounded
+    // shedding policy before engine construction can latch global profiling
+    // configuration. An embedding that initialized profiling earlier remains
+    // authoritative because the config is intentionally process-immutable.
+    let _ = bex_events::prof::ProfConfig::try_init_with_overflow_policy(
+        bex_events::prof::RingOverflowPolicy::Shed,
+    );
     let envelope = match extract_envelope() {
         Ok(e) => e,
         Err(e) => {
@@ -141,6 +192,7 @@ fn run_single(envelope: PackEnvelope) -> ExitCode {
         &target.qualified_name,
         parsed,
         envelope.output_format,
+        envelope.observability,
     )
 }
 
@@ -226,7 +278,13 @@ fn run_subcommand(envelope: PackEnvelope) -> ExitCode {
     }
 
     let engine = Arc::new(engine);
-    finalize_dispatch(&engine, &chosen, parsed, envelope.output_format)
+    finalize_dispatch(
+        &engine,
+        &chosen,
+        parsed,
+        envelope.output_format,
+        envelope.observability,
+    )
 }
 
 fn finalize_dispatch(
@@ -234,6 +292,7 @@ fn finalize_dispatch(
     target_name: &str,
     parsed: baml_exec::ParsedTargetArgs,
     output_format: baml_exec::OutputFormat,
+    observability: baml_exec::PackObservability,
 ) -> ExitCode {
     let json_args = match parsed.json_source {
         Some(source) => match load_json_source(&source) {
@@ -254,12 +313,23 @@ fn finalize_dispatch(
         }
     };
 
+    let boundary_storage = BoundaryStorageContext::new(
+        "pack",
+        std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from(".")),
+    )
+    .with_observability(
+        observability.enabled,
+        observability.capture_values,
+        observability.capture_logs,
+        observability.latency_trigger_ms,
+    );
     let result = rt.block_on(dispatch_target(
         Arc::clone(engine),
         target_name,
         parsed.cli_values,
         json_args,
         output_format,
+        boundary_storage,
     ));
     rt.block_on(engine.shutdown());
     let mut unhandled_spawn_failed = false;

@@ -287,8 +287,11 @@ jobs:
         run: |
           if git diff --quiet "${MERGE_BASE}...HEAD" -- \
             ':baml_language/crates/bex_events/**' \
+            ':baml_language/crates/tools_obs_bench/**' \
             ':baml_language/Cargo.toml' \
             ':baml_language/rust-toolchain.toml' \
+            ':.github/workflows/obs-bench.reusable.yaml' \
+            ':.github/workflows/obs-bench-baseline-refresh.yml' \
             ':.github/workflows/ci.yaml' \
           ; then
             echo "changed=false" >> "$GITHUB_OUTPUT"
@@ -803,6 +806,12 @@ jobs:
         env:
           MIRIFLAGS: "-Zmiri-ignore-leaks -Zmiri-disable-isolation"
 
+  obs-bench:
+    name: "Observability benchmark smoke"
+    needs: determine_changes
+    if: needs.determine_changes.outputs.prof == 'true'
+    uses: ./.github/workflows/obs-bench.reusable.yaml
+
   proto-sync:
     name: "proto generated files sync"
     runs-on: blacksmith-4vcpu-ubuntu-2404
@@ -1236,6 +1245,7 @@ jobs:
       - linguist-compile-gate
       # - miri-tests  # TEMPORARILY DISABLED: miri tests timing out
       - prof-concurrency
+      - obs-bench
       - proto-sync
       - sdk_parity_check
       # NOTE: size-gate is intentionally NOT a required gate. It is an
@@ -1265,6 +1275,7 @@ jobs:
           echo "| linguist-compile-gate | ${{ needs.linguist-compile-gate.result }} |" >> $GITHUB_STEP_SUMMARY
           # echo "| miri-tests | ${{ needs.miri-tests.result }} |" >> $GITHUB_STEP_SUMMARY  # TEMPORARILY DISABLED
           echo "| prof-concurrency | ${{ needs.prof-concurrency.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| obs-bench | ${{ needs.obs-bench.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| proto-sync | ${{ needs.proto-sync.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| sdk-parity-check | ${{ needs.sdk_parity_check.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY

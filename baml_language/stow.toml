@@ -118,7 +118,7 @@ reason = "Only compiler_emit and baml_project crates should depend on bex_vm_typ
 # tools namespace configuration
 [[namespaces]]
 name = "tools"
-approved_prefixes = ["sap", "semantic", "compile"]
+approved_prefixes = ["sap", "semantic", "compile", "obs"]
 # Allow tools_stow folder to have package name "cargo-stow" for cargo subcommand convention
 name_exceptions = { "tools_stow" = "cargo-stow", "tools_size_gate" = "cargo-size-gate" }
 

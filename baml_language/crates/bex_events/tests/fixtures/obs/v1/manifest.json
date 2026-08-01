@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "format_epoch": "observability-v1",
+  "fixtures": [
+    {
+      "format": "canonical-value-node-v1",
+      "bytes": "bex_events/tests/fixtures/obs/v1/canonical_class_person.hex",
+      "identity": "bex_events/tests/fixtures/obs/v1/canonical_class_person.cid"
+    },
+    {
+      "format": "BQF1",
+      "bytes": "bex_query/tests/fixtures/bqf1_empty_completeness.hex",
+      "test": "bex_query/tests/bqf_golden.rs"
+    },
+    {
+      "format": "BCCT1-header",
+      "bytes": "bex_events/tests/fixtures/obs/v1/bcct_header.hex",
+      "test": "bex_events/tests/obs_golden.rs"
+    },
+    {
+      "format": "bamldict-v1",
+      "bytes": "bex_events/tests/fixtures/obs/v1/revision_dictionary.hex",
+      "test": "bex_events/src/revision_dictionary/file.rs"
+    }
+  ],
+  "status": "frozen",
+  "notes": "Frozen fixtures are append-only: existing bytes and identities are never rewritten."
+}

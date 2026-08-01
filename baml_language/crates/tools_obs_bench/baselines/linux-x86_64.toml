@@ -1,0 +1,255 @@
+schema_version = 1
+platform = "linux-x86_64"
+generated_unix_seconds = 0
+
+[[metric]]
+bench_id = "value_cas_size_1024"
+metric = "median_encode_ns"
+direction = "lower"
+baseline = 2000000.0
+max_delta_pct = 0.0
+max = 2000000.0
+claim = "C10"
+
+[[metric]]
+bench_id = "value_cas_size_1024"
+metric = "encode_mb_s"
+direction = "higher"
+baseline = 300.0
+max_delta_pct = 0.0
+min = 300.0
+claim = "C10"
+
+[[metric]]
+bench_id = "value_cas_size_4096"
+metric = "median_encode_ns"
+direction = "lower"
+baseline = 2000000.0
+max_delta_pct = 0.0
+max = 2000000.0
+claim = "C10"
+
+[[metric]]
+bench_id = "value_cas_size_16384"
+metric = "median_encode_ns"
+direction = "lower"
+baseline = 2000000.0
+max_delta_pct = 0.0
+max = 2000000.0
+claim = "C10"
+
+[[metric]]
+bench_id = "value_cas_size_65536"
+metric = "median_encode_ns"
+direction = "lower"
+baseline = 2000000.0
+max_delta_pct = 0.0
+max = 2000000.0
+claim = "C10"
+
+[[metric]]
+bench_id = "value_cas_size_262144"
+metric = "median_encode_ns"
+direction = "lower"
+baseline = 2000000.0
+max_delta_pct = 0.0
+max = 2000000.0
+claim = "C10"
+
+[[metric]]
+bench_id = "value_cas_size_1048576"
+metric = "median_encode_ns"
+direction = "lower"
+baseline = 4194304.0
+max_delta_pct = 0.0
+max = 4194304.0
+claim = "C10"
+
+[[metric]]
+bench_id = "bcct_encode_3_rows"
+metric = "bytes_per_second_at_4hz"
+direction = "lower"
+baseline = 6000.0
+max_delta_pct = 0.0
+max = 6000.0
+claim = "C3"
+
+[[metric]]
+bench_id = "c11_exact_index_100k"
+metric = "index_ratio"
+direction = "lower"
+baseline = 0.25
+max_delta_pct = 0.0
+max = 0.25
+claim = "C11"
+
+[[metric]]
+bench_id = "c11_partition_lifecycle_10k"
+metric = "rss_delta_bytes"
+direction = "lower"
+baseline = 67108864.0
+max_delta_pct = 0.0
+max = 67108864.0
+claim = "C11"
+
+[[metric]]
+bench_id = "c12_async_fsync_stall"
+metric = "producer_stall_p99_ns"
+direction = "lower"
+baseline = 20000000.0
+max_delta_pct = 0.0
+max = 20000000.0
+claim = "C12"
+
+[[metric]]
+bench_id = "cct_engine_integrated_f1"
+metric = "median_ns_per_call_pair"
+direction = "lower"
+baseline = 50.0
+max_delta_pct = 20.0
+max = 60.0
+claim = "C2"
+
+[[metric]]
+bench_id = "cct_engine_integrated_f16"
+metric = "median_ns_per_call_pair"
+direction = "lower"
+baseline = 50.0
+max_delta_pct = 20.0
+max = 60.0
+claim = "C2"
+
+[[metric]]
+bench_id = "cct_engine_integrated_f1024"
+metric = "median_ns_per_call_pair"
+direction = "lower"
+baseline = 50.0
+max_delta_pct = 20.0
+max = 60.0
+claim = "C2"
+
+[[metric]]
+bench_id = "cct_engine_integrated_f4096"
+metric = "median_ns_per_call_pair"
+direction = "lower"
+baseline = 50.0
+max_delta_pct = 20.0
+max = 60.0
+claim = "C2"
+
+[[metric]]
+bench_id = "value_cas_transcript_64"
+metric = "reduction_x"
+direction = "higher"
+baseline = 20.0
+max_delta_pct = 0.0
+min = 20.0
+claim = "C5"
+
+[[metric]]
+bench_id = "value_cas_transcript_64"
+metric = "growth_exponent_16_to_64"
+direction = "lower"
+baseline = 1.2
+max_delta_pct = 0.0
+max = 1.2
+claim = "C5"
+
+[[metric]]
+bench_id = "value_cas_transcript_64"
+metric = "throughput_mb_s"
+direction = "higher"
+baseline = 300.0
+max_delta_pct = 0.0
+min = 300.0
+claim = "C10"
+
+[[metric]]
+bench_id = "value_cas_transcript_64"
+metric = "incremental_bytes"
+direction = "lower"
+baseline = 73728.0
+max_delta_pct = 0.0
+max = 73728.0
+claim = "C5"
+
+[[metric]]
+bench_id = "c6_open_fold_live_4096"
+metric = "elapsed_ns"
+direction = "lower"
+baseline = 250000000.0
+max_delta_pct = 0.0
+max = 250000000.0
+claim = "C6"
+
+[[metric]]
+bench_id = "c6_open_fold_live_4096"
+metric = "source_bytes"
+direction = "lower"
+baseline = 10485760.0
+max_delta_pct = 0.0
+max = 10485760.0
+claim = "C6"
+
+[[metric]]
+bench_id = "c6_open_fold_live_100000"
+metric = "rss_delta_bytes"
+direction = "lower"
+baseline = 268435456.0
+max_delta_pct = 0.0
+max = 268435456.0
+claim = "C7"
+
+[[metric]]
+bench_id = "c6_open_fold_live_100000"
+metric = "elapsed_ns"
+direction = "lower"
+baseline = 2000000000.0
+max_delta_pct = 0.0
+max = 2000000000.0
+claim = "C6"
+
+[[metric]]
+bench_id = "query_timeline_1000000"
+metric = "ns_per_iteration"
+direction = "lower"
+baseline = 100000000.0
+max_delta_pct = 0.0
+max = 100000000.0
+claim = "C7"
+
+[[metric]]
+bench_id = "query_timeline_1000000"
+metric = "frame_bytes"
+direction = "lower"
+baseline = 204800.0
+max_delta_pct = 0.0
+max = 204800.0
+claim = "C7"
+
+[[metric]]
+bench_id = "query_timeline_36000000"
+metric = "ns_per_iteration"
+direction = "lower"
+baseline = 100000000.0
+max_delta_pct = 0.0
+max = 100000000.0
+claim = "C7"
+
+[[metric]]
+bench_id = "query_timeline_36000000"
+metric = "frame_bytes"
+direction = "lower"
+baseline = 204800.0
+max_delta_pct = 0.0
+max = 204800.0
+claim = "C7"
+
+[[metric]]
+bench_id = "c13_live_wire_hotloop"
+metric = "bytes"
+direction = "lower"
+baseline = 15360000.0
+max_delta_pct = 0.0
+max = 15360000.0
+claim = "C13"

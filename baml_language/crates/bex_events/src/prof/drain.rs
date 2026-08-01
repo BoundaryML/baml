@@ -17,7 +17,9 @@ use crate::{
             ByteProfileArtifactSink, ByteProfileArtifactStats, ProfileArtifactRef,
             ProfileArtifactSink,
         },
+        cct::{CctSnapshot, EngineCct, WindowDelta},
         clock::{self, TickConverter},
+        config::{ProfConfig, ProfilePipeline},
         encode::{build_header, encode_disk_event, encode_length_delimited_message},
         metadata, record,
         registry::Registry,
@@ -47,6 +49,8 @@ pub struct CooperativeProfileDrain {
     closed_engines: HashSet<u64>,
     closed_reported: HashSet<u64>,
     corrupt_reported: bool,
+    pipeline: ProfilePipeline,
+    cct_engines: HashMap<u64, EngineCct>,
 }
 
 #[derive(Debug)]
@@ -64,6 +68,20 @@ pub struct CooperativeProfileDrainOutput {
     pub chunks: Vec<ProfileArtifactChunk>,
     pub artifacts: Vec<ProfileArtifactSnapshot>,
     pub diagnostics: Vec<ProfileDrainDiagnostic>,
+    pub cct_windows: Vec<CctDrainWindow>,
+    pub cct_snapshots: Vec<CctDrainSnapshot>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct CctDrainWindow {
+    pub engine_id: EngineId,
+    pub window: WindowDelta,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct CctDrainSnapshot {
+    pub engine_id: EngineId,
+    pub snapshot: CctSnapshot,
 }
 
 #[derive(Clone, Debug)]
@@ -102,7 +120,16 @@ impl CooperativeProfileDrain {
             closed_engines: HashSet::new(),
             closed_reported: HashSet::new(),
             corrupt_reported: false,
+            pipeline: ProfConfig::global().pipeline,
+            cct_engines: HashMap::new(),
         }
+    }
+
+    /// Selects the raw-record fan-out without changing producer behavior.
+    #[must_use]
+    pub fn with_pipeline(mut self, pipeline: ProfilePipeline) -> Self {
+        self.pipeline = pipeline;
+        self
     }
 
     #[cfg(test)]
@@ -121,6 +148,8 @@ impl CooperativeProfileDrain {
             closed_engines: HashSet::new(),
             closed_reported: HashSet::new(),
             corrupt_reported: false,
+            pipeline: ProfilePipeline::Legacy,
+            cct_engines: HashMap::new(),
         }
     }
 
@@ -141,16 +170,89 @@ impl CooperativeProfileDrain {
                     self.transcode(ring, bytes, &mut output, &mut touched_engines);
                 })
             };
-            output.progress |= progress;
-            if !progress {
+            let mut shed = Vec::new();
+            let shed_progress =
+                registry.take_shed_events(|engine_id, count| shed.push((engine_id, count)));
+            for (engine_id, count) in shed {
+                self.cct_engines
+                    .entry(engine_id)
+                    .or_default()
+                    .mark_shed_range(u64::try_from(count).unwrap_or(u64::MAX));
+                output.diagnostics.push(ProfileDrainDiagnostic {
+                    engine_id: Some(EngineId(engine_id)),
+                    code: "ProfileStructuralRangeShed",
+                    message: format!(
+                        "shed {count} structural profile records after the ring memory cap"
+                    ),
+                });
+            }
+            for (&engine_id, cct) in &mut self.cct_engines {
+                cct.finish_sweep();
+                output
+                    .cct_windows
+                    .extend(cct.take_windows().into_iter().map(|window| CctDrainWindow {
+                        engine_id: EngineId(engine_id),
+                        window,
+                    }));
+            }
+            output.progress |= progress || shed_progress;
+            if !progress && !shed_progress {
                 break;
             }
         }
         output.artifacts = self.artifact_snapshots(&touched_engines);
+        output.cct_snapshots = self
+            .cct_engines
+            .iter()
+            .map(|(&engine_id, cct)| CctDrainSnapshot {
+                engine_id: EngineId(engine_id),
+                snapshot: cct.snapshot(),
+            })
+            .collect();
+        output
+            .cct_snapshots
+            .sort_by_key(|snapshot| snapshot.engine_id.0);
         output
     }
 
     fn transcode(
+        &mut self,
+        ring: &'static Ring,
+        bytes: &[u8],
+        output: &mut CooperativeProfileDrainOutput,
+        touched_engines: &mut HashSet<u64>,
+    ) {
+        match self.pipeline {
+            ProfilePipeline::Legacy => {
+                self.transcode_legacy(ring, bytes, output, touched_engines);
+            }
+            ProfilePipeline::Dual => {
+                self.transcode_cct(ring, bytes);
+                self.transcode_legacy(ring, bytes, output, touched_engines);
+            }
+            ProfilePipeline::Cct => self.transcode_cct(ring, bytes),
+        }
+    }
+
+    fn transcode_cct(&mut self, ring: &'static Ring, bytes: &[u8]) {
+        // SAFETY: `Registry::sweep` produced this drained range.
+        let engine_id = unsafe { ring.engine_id() };
+        if self.closed_engines.contains(&engine_id) {
+            return;
+        }
+        let cct = self.cct_engines.entry(engine_id).or_default();
+        for rec in record::iter(bytes) {
+            match rec {
+                Ok(raw) => cct.ingest_raw(&raw, &self.conv),
+                Err(_) => {
+                    cct.mark_corrupt_range();
+                    break;
+                }
+            }
+        }
+    }
+
+    fn transcode_legacy(
         &mut self,
         ring: &'static Ring,
         bytes: &[u8],
@@ -391,9 +493,12 @@ mod tests {
 
     fn metadata() -> EngineProfileMetadata {
         EngineProfileMetadata {
-            program_id: "program".to_string(),
-            source_snapshot_id: Some("snapshot".to_string()),
-            revision_id: Some("revision".to_string()),
+            source_snapshot_id: "snapshot".to_string(),
+            revision_id: "revision".to_string(),
+            revision_id_bytes: [2; 32],
+            function_count: 1,
+            revision_dictionary: None,
+            models: std::sync::Arc::default(),
             functions: vec![FunctionMetaEntry {
                 function_id: 1,
                 fqn: "pkg.Main".to_string(),
@@ -473,7 +578,7 @@ mod tests {
 
         let parsed = read_bamlprof_from_bytes(&output.artifacts[0].bytes).unwrap();
         assert_eq!(parsed.header.engine_id, ENGINE);
-        assert_eq!(parsed.header.program_id, "program");
+        assert_eq!(parsed.header.revision_id, "revision");
         assert_eq!(parsed.events.len(), 4);
         assert!(!parsed.truncated);
 
@@ -521,5 +626,37 @@ mod tests {
             diagnostic.code == "ProfileArtifactTruncated"
                 && diagnostic.engine_id == Some(EngineId(engine))
         }));
+    }
+
+    #[test]
+    fn cooperative_dual_and_cct_modes_expose_ram_snapshots() {
+        for (offset, pipeline, keeps_legacy) in [
+            (10, ProfilePipeline::Dual, true),
+            (11, ProfilePipeline::Cct, false),
+        ] {
+            let registry = leak(Registry::new());
+            let ctx = leak(RingCtx::new(1 << 20));
+            let engine = ENGINE + offset;
+            push_records(registry, ctx, engine);
+            let mut drain = CooperativeProfileDrain::with_identity(
+                options(None),
+                TickConverter::identity(),
+                [9; 16],
+                123,
+            )
+            .with_pipeline(pipeline);
+            let output = drain.drain_until_idle(registry, 8);
+            assert_eq!(output.artifacts.len(), usize::from(keeps_legacy));
+            assert_eq!(output.events.len(), if keeps_legacy { 4 } else { 0 });
+            assert_eq!(output.cct_snapshots.len(), 1);
+            let function = output.cct_snapshots[0]
+                .snapshot
+                .nodes
+                .iter()
+                .find(|node| node.identity.function_id == FunctionId(1))
+                .unwrap();
+            assert_eq!(function.counters.enters, 1);
+            assert_eq!(function.counters.ends_ok, 1);
+        }
     }
 }

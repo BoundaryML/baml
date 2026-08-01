@@ -287,6 +287,7 @@ const App: React.FC = () => {
       )}
       {!editorActive && (
         <ExecutionPanel
+          initialTab={window.location.pathname === '/studio' ? 'runs' : undefined}
           port={port}
           onNavigateToSource={(source: SourceNavigationTarget) => {
             getVsCodeApi()?.postMessage({ type: 'navigateToSource', source });

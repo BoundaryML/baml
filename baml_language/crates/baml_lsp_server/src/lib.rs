@@ -37,6 +37,7 @@ pub mod lsp_ingress;
 mod lsp_runtime;
 mod native_lsp_sender;
 mod native_vfs;
+mod observe_server;
 pub mod playground_env;
 pub mod playground_http;
 pub mod playground_io;
@@ -401,6 +402,8 @@ pub struct PlaygroundServerOptions {
     pub port: Option<u16>,
     /// Open the local browser once the server is up.
     pub open_browser: bool,
+    /// SPA landing path. Playground uses `/`; Studio uses `/studio`.
+    pub landing_path: String,
 }
 
 impl Default for PlaygroundServerOptions {
@@ -408,6 +411,7 @@ impl Default for PlaygroundServerOptions {
         Self {
             port: None,
             open_browser: true,
+            landing_path: "/".to_owned(),
         }
     }
 }
@@ -417,6 +421,23 @@ pub fn run_playground_server(
     playground_dir_override: Option<PathBuf>,
     options: PlaygroundServerOptions,
 ) -> anyhow::Result<()> {
+    run_server_inner(
+        PlaygroundOpenTarget::Browser,
+        workspace_roots,
+        playground_dir_override,
+        options,
+    )
+}
+
+/// Start the same loopback-only server with the runs-first Studio landing
+/// page. Workspace roots may contain only `.baml/`; source discovery is not a
+/// precondition for observability routes.
+pub fn run_studio_server(
+    workspace_roots: Vec<PathBuf>,
+    playground_dir_override: Option<PathBuf>,
+    mut options: PlaygroundServerOptions,
+) -> anyhow::Result<()> {
+    options.landing_path = "/studio".to_owned();
     run_server_inner(
         PlaygroundOpenTarget::Browser,
         workspace_roots,
@@ -626,7 +647,10 @@ fn run_server_inner(
         spawn_standalone_workspace_poller(bex.clone(), workspace_roots.clone())?;
     }
 
-    if matches!(playground_open_target, PlaygroundOpenTarget::Browser) && playground_port != 0 {
+    if matches!(playground_open_target, PlaygroundOpenTarget::Browser)
+        && playground_port != 0
+        && options.landing_path == "/"
+    {
         if let Some(project) = explicit_projects.first() {
             if options.open_browser {
                 playground_sender.send_playground_notification(
@@ -641,6 +665,11 @@ fn run_server_inner(
         } else if has_explicit_workspace_roots {
             tracing::warn!("No BAML projects discovered for explicit workspace roots");
         }
+    } else if matches!(playground_open_target, PlaygroundOpenTarget::Browser)
+        && playground_port != 0
+        && options.open_browser
+    {
+        open_browser_landing(playground_port, &options.landing_path);
     }
 
     // Start playground HTTP/WS server. In editor/LSP mode it runs in the
@@ -868,6 +897,20 @@ fn format_playground_banner(port: u16, roots: &[PathBuf]) -> String {
          Remote machine? Forward the port, then open the URL locally:\n    \
          ssh -L {port}:localhost:{port} <user@host>\n\n  Press Ctrl-C to stop.\n"
     )
+}
+
+fn open_browser_landing(port: u16, landing_path: &str) {
+    let path = if landing_path.starts_with('/') {
+        landing_path.to_owned()
+    } else {
+        format!("/{landing_path}")
+    };
+    let url = format!("http://localhost:{port}{path}");
+    std::thread::spawn(move || {
+        if let Err(error) = webbrowser::open(&url) {
+            tracing::error!("Failed to open browser at {url}: {error}");
+        }
+    });
 }
 
 fn absolutize_workspace_roots(workspace_roots: Vec<PathBuf>) -> anyhow::Result<Vec<PathBuf>> {

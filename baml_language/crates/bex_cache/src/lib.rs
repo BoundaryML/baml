@@ -49,7 +49,10 @@ use sha2::{Digest, Sha256};
 /// (BEP-062 `reflect.signature`).
 ///
 /// Version 3: diagnostic cache blobs gained `message_highlights` fields.
-pub const FORMAT_VERSION: u32 = 3;
+///
+/// Version 4: `Function` gained serialized definition/lambda identity and
+/// `FunctionCaptureProps::promote_on_error`.
+pub const FORMAT_VERSION: u32 = 4;
 
 const MAGIC: [u8; 4] = *b"BEXC";
 
@@ -471,7 +474,11 @@ impl BytecodeCache {
         let path = self.entry_path(key);
         let data = fs::read(&path).ok()?;
         let payload = check_entry(&data, key)?;
-        let program = borsh::from_slice::<Program>(payload).ok()?;
+        let mut program = borsh::from_slice::<Program>(payload).ok()?;
+        // Function ids are derived from final object-pool order and skipped by
+        // borsh. Cache reads are Program deserialization seams, so restore the
+        // runnable identity before returning the value.
+        bex_vm_types::assign_function_ids(&mut program);
         // Freshen mtime for trim (≥1h granularity keeps inode churn low).
         freshen_entry(&path);
         Some(program)
@@ -1205,7 +1212,8 @@ impl BytecodeCache {
         // supply executable VM programs. The entry framing additionally rejects
         // corruption, truncation, version skew, and responses for another key.
         let payload = check_entry(&entry, key)?;
-        let program = borsh::from_slice::<Program>(payload).ok()?;
+        let mut program = borsh::from_slice::<Program>(payload).ok()?;
+        bex_vm_types::assign_function_ids(&mut program);
         self.persist_from_remote(key, &entry);
         Some(program)
     }

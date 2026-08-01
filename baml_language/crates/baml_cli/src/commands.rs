@@ -137,6 +137,9 @@ pub(crate) enum Commands {
     #[command(about = "Check BAML source files for compiler errors")]
     Check(crate::check_command::CheckArgs),
 
+    #[command(about = "Apply observability retention and collect captured values")]
+    Clean(crate::clean_command::CleanArgs),
+
     // #[command(about = "Starts a server that translates LLM responses to BAML responses")]
     // Serve(baml_runtime::cli::serve::ServeArgs),
 
@@ -185,8 +188,18 @@ pub(crate) enum Commands {
     #[command(about = "Open the BAML playground in your browser")]
     Playground(crate::playground_command::PlaygroundArgs),
 
+    #[command(about = "Open the trace-first BAML Studio")]
+    Studio(crate::studio_command::StudioArgs),
+
     #[command(about = "Package a BAML target as a standalone executable")]
     Pack(crate::pack_command::PackArgs),
+
+    #[command(
+        name = "q",
+        visible_alias = "query",
+        about = "Query bounded observability data with BQL"
+    )]
+    Query(crate::query_command::QueryArgs),
 
     #[command(
         about = "Install or manage IDE integration assets",
@@ -370,9 +383,12 @@ impl RuntimeCli {
             Commands::Init(args) => args.run(),
             Commands::New(args) => args.run(),
             Commands::Check(args) => args.run(),
+            Commands::Clean(args) => args.run(),
             Commands::Run(args) => args.run(),
             Commands::Playground(args) => args.run(),
+            Commands::Studio(args) => args.run(),
             Commands::Pack(args) => args.run(),
+            Commands::Query(args) => args.run(),
             Commands::Ide(args) => args.run(),
             Commands::Agent(args) => args.run(),
             Commands::Describe(args) => args.run(),
@@ -401,12 +417,14 @@ impl Commands {
     fn has_legacy_project(&self) -> bool {
         match self {
             Self::Check(args) => args.from.is_some(),
+            Self::Clean(args) => args.from.is_some(),
             Self::Format(args) => args.from.is_some(),
             Self::Describe(args) => args.from.is_some(),
             Self::Generate(args) => args.has_legacy_project(),
             Self::Test(args) => args.from.is_some(),
             Self::Run(args) => args.from.is_some(),
             Self::Playground(args) => args.from.is_some(),
+            Self::Studio(args) => args.from.is_some(),
             Self::Pack(args) => args.from.is_some(),
             Self::Agent(crate::agent_command::AgentArgs {
                 command: crate::agent_command::AgentCommand::Install(args),
@@ -422,13 +440,16 @@ impl Commands {
         let project = project.to_path_buf();
         match self {
             Self::Check(args) => args.from = Some(project.clone()),
+            Self::Clean(args) => args.from = Some(project.clone()),
             Self::Format(args) => args.from = Some(project.clone()),
             Self::Describe(args) => args.from = Some(project.clone()),
             Self::Generate(args) => args.apply_project(&project),
             Self::Test(args) => args.from = Some(project.clone()),
             Self::Run(args) => args.from = Some(project.clone()),
             Self::Playground(args) => args.from = Some(project.clone()),
+            Self::Studio(args) => args.from = Some(project.clone()),
             Self::Pack(args) => args.from = Some(project.clone()),
+            Self::Query(args) => args.project = Some(project.clone()),
             Self::Agent(crate::agent_command::AgentArgs {
                 command: crate::agent_command::AgentCommand::Install(args),
             }) => args.dir = Some(project),
@@ -475,6 +496,7 @@ mod tests {
     const PUBLIC_COMMAND_PATHS: &[&[&str]] = &[
         &[],
         &["check"],
+        &["clean"],
         &["auth"],
         &["auth", "login"],
         &["auth", "whoami"],
@@ -488,7 +510,9 @@ mod tests {
         &["new"],
         &["run"],
         &["playground"],
+        &["studio"],
         &["pack"],
+        &["q"],
         &["ide"],
         &["ide", "install"],
         &["agent"],

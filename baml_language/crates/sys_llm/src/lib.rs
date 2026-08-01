@@ -603,34 +603,73 @@ pub fn execute_parse_response_from_owned(
         provider = LlmProvider::Anthropic;
     }
 
-    let response = parse_response::parse_response(provider, response)
+    let response = match parse_response::parse_response(provider, response) {
+        Ok(response) => response,
+        Err(error) => {
+            if let Some(observer) = &ctx.llm_observer {
+                observer(sys_types::LlmCallObservation::Completed {
+                    model: client.model.clone(),
+                    tokens_in: 0,
+                    tokens_out: 0,
+                    parse_error: true,
+                });
+            }
+            return Err(LlmOpError::ParseResponseError(error.to_string()));
+        }
+    };
+
+    let observed_model = response
+        .model
+        .clone()
+        .unwrap_or_else(|| client.model.clone());
+    let tokens_in = response
+        .usage
+        .input_tokens
+        .unwrap_or_default()
+        .min(u64::from(u32::MAX)) as u32;
+    let tokens_out = response
+        .usage
+        .output_tokens
+        .unwrap_or_default()
+        .min(u64::from(u32::MAX)) as u32;
+
+    let result = (|| {
+        // Normalize empty finish_reason to None so oneshot and streaming paths agree
+        // (matches `execute_validate_finish_reason`'s behavior above).
+        let finish_reason = response
+            .finish_reason_raw
+            .as_deref()
+            .filter(|s| !s.is_empty());
+        if !client.is_finish_reason_allowed(finish_reason) {
+            return Err(LlmOpError::ParseResponseError(format!(
+                "Finish reason not allowed: {}",
+                finish_reason.unwrap_or("unknown")
+            )));
+        }
+
+        if let Some(parsed) = parse_llm_output_for_target(return_type, &response.output)? {
+            return Ok(parsed);
+        }
+
+        let compiled = bex_sap::CompiledSapModel::from_sys_op_context(
+            ctx,
+            return_type.clone(),
+            baml_type::RuntimeTy::null(), // no streaming
+        )
         .map_err(|e| LlmOpError::ParseResponseError(e.to_string()))?;
+        let sap = SapStreamCache::new(compiled);
+        execute_sap_parse_final(&response.content, &sap, ctx)
+    })();
 
-    // Normalize empty finish_reason to None so oneshot and streaming paths agree
-    // (matches `execute_validate_finish_reason`'s behavior above).
-    let finish_reason = response
-        .finish_reason_raw
-        .as_deref()
-        .filter(|s| !s.is_empty());
-    if !client.is_finish_reason_allowed(finish_reason) {
-        return Err(LlmOpError::ParseResponseError(format!(
-            "Finish reason not allowed: {}",
-            finish_reason.unwrap_or("unknown")
-        )));
+    if let Some(observer) = &ctx.llm_observer {
+        observer(sys_types::LlmCallObservation::Completed {
+            model: observed_model,
+            tokens_in,
+            tokens_out,
+            parse_error: result.is_err(),
+        });
     }
-
-    if let Some(parsed) = parse_llm_output_for_target(return_type, &response.output)? {
-        return Ok(parsed);
-    }
-
-    let compiled = bex_sap::CompiledSapModel::from_sys_op_context(
-        ctx,
-        return_type.clone(),
-        baml_type::RuntimeTy::null(), // no streaming
-    )
-    .map_err(|e| LlmOpError::ParseResponseError(e.to_string()))?;
-    let sap = SapStreamCache::new(compiled);
-    execute_sap_parse_final(&response.content, &sap, ctx)
+    result
 }
 
 fn parse_llm_output_for_target(

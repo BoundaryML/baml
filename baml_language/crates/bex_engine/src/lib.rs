@@ -93,7 +93,7 @@ use async_trait::async_trait;
 pub use bex_events::{
     FunctionMetadataTable, ProgramMetadata,
     ids::{
-        BexCallId, BexThreadId, CallRef, EngineId, FunctionId, ProcessEuid, ProgramId, ThreadRef,
+        BexCallId, BexThreadId, BoundaryId, CallRef, EngineId, FunctionId, ProcessEuid, ThreadRef,
     },
 };
 pub use bex_external_types::{BexExternalValue, RuntimeTy, TypeName, UnionMetadata};
@@ -106,8 +106,9 @@ use bex_vm::{
     VmEventSourceLocation, VmExecState,
 };
 use bex_vm_types::{
-    FunctionMeta, FunctionOrigin, GlobalPool, HeapPtr, Object, SharedGlobals, SysOp,
-    TaskGroupInner, UnscheduledFuture, Value, ValueKind, VmGlobals,
+    FIRST_POOL_FUNCTION_ID, FUNCTION_ID_SPAWN_CLOSURE, FUNCTION_ID_UNKNOWN, FunctionMeta,
+    FunctionOrigin, GlobalPool, HeapPtr, Object, SharedGlobals, SysOp, TaskGroupInner,
+    UnscheduledFuture, Value, ValueKind, VmGlobals,
 };
 pub use conversion::test_arg_to_external;
 // Re-export CancellationToken for callers.
@@ -203,12 +204,8 @@ enum EngineLifecycle {
 
 /// Reserved header-table row for calls whose function identity cannot be
 /// resolved (e.g. runtime-synthesized functions absent from the compile-time
-/// pool). Ring `CallFunction` records do NOT reference this row today:
-/// unresolvable callees are stamped `function_id: 0` ("unassigned" — see
-/// `BexVm::prof_enter_call`) and the consumer transcodes ids verbatim. The
-/// row (id = max real id + 2) is reserved in every header for consumers that
-/// want a display bucket for such records; re-pointing the id-0 paths at it
-/// is an open cross-team item.
+/// pool). Such calls use [`FUNCTION_ID_UNKNOWN`], and every metadata table
+/// carries this row first so consumers can always render them.
 const UNKNOWN_FUNCTION_FQN: &str = "baml.<unknown-function>";
 const UNKNOWN_FUNCTION_DISPLAY_NAME: &str = "<unknown-function>";
 
@@ -235,6 +232,28 @@ pub(crate) enum ChildSettleKind {
     Cancelled,
     Errored,
 }
+
+/// Identity carried locally across one engine park.
+///
+/// The suspend timestamp is deliberately copied into `ResumeThread`, making
+/// the latter self-contained when pre/post-await records drain from different
+/// producer rings after a Tokio task migration.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct ProfSuspension {
+    thread_id: BexThreadId,
+    suspend_seq: u32,
+    suspend_ts_ticks: u64,
+}
+
+#[derive(Debug, Clone)]
+struct ProfLlmAttempt {
+    model: String,
+    attempts: u32,
+}
+
+const LLM_META_PROVIDER_ERROR: u8 = 1 << 0;
+const LLM_META_PARSE_ERROR: u8 = 1 << 1;
+const LLM_META_RETRY: u8 = 1 << 2;
 
 /// §7 follow-up 11: closes a spawned thread's profiling lifecycle if the
 /// task future is dropped before its event loop takes over (abnormal host
@@ -355,6 +374,34 @@ struct EngineCallInputCaptureHook {
 
 impl VmCallInputCaptureHook for EngineCallInputCaptureHook {
     fn capture_call_input(&self, capture: VmCallInputCapture<'_>) {
+        #[cfg(not(target_arch = "wasm32"))]
+        if capture.speculative {
+            let call_path = bex_events::value_cas::CallPath {
+                boundary_id: self.boundary_id,
+                process_euid: capture.call.process_euid,
+                engine_id: capture.call.engine_id,
+                logical_thread_id: capture.call.thread_id.0,
+                call_ids: if capture.call_path.is_empty() {
+                    vec![capture.call.call_id.0]
+                } else {
+                    capture.call_path
+                },
+            };
+            let _ = self.producer.capture_staged_with(
+                self.boundary_id,
+                capture.call,
+                call_path,
+                CaptureKind::CallInput,
+                |trace_heap| {
+                    trace_heap.copy_named_values_from_bex_heap(
+                        capture.heap,
+                        capture.permit,
+                        capture.entries,
+                    )
+                },
+            );
+            return;
+        }
         let _ = self.producer.capture_with(
             self.boundary_id,
             capture.call,
@@ -846,6 +893,15 @@ pub struct BexEngine {
     /// profiling emission and the per-resume ring refresh.
     prof_enabled: bool,
 
+    /// Shared name table referenced by registered engine metadata. The actual
+    /// raw LLM records carry only its compact ids.
+    prof_models: Arc<bex_events::prof::models::ModelMetadataTable>,
+
+    /// Cold attempt state keyed by the exact logical `(thread, LLM-call)`.
+    /// Entries survive a failed attempt so the next completion is marked as a
+    /// retry, and are dropped on success or logical-thread termination.
+    prof_llm_attempts: Mutex<HashMap<(u64, u64), ProfLlmAttempt>>,
+
     /// Whether this engine's profiling lifecycle has been activated
     /// (metadata registered with the profiling consumer). Engines built via
     /// [`BexEngine::new`] activate at construction. Candidate engines built
@@ -897,11 +953,17 @@ impl Drop for BexEngine {
 
 /// Maps the M0 [`ProgramMetadata`] (the canonical per-run function table)
 /// into the `.bamlprof` header rows.
-fn prof_engine_metadata(meta: &ProgramMetadata) -> bex_events::prof::EngineProfileMetadata {
+fn prof_engine_metadata(
+    meta: &ProgramMetadata,
+    models: Arc<bex_events::prof::models::ModelMetadataTable>,
+) -> bex_events::prof::EngineProfileMetadata {
     bex_events::prof::EngineProfileMetadata {
-        program_id: hex_bytes(&meta.program_id.0),
-        source_snapshot_id: meta.source_snapshot_id.as_ref().map(|id| hex_bytes(&id.0)),
-        revision_id: meta.revision_id.as_ref().map(|id| id.0.clone()),
+        source_snapshot_id: meta.identity.source_snapshot_id.to_string(),
+        revision_id: meta.identity.revision_id.to_string(),
+        revision_id_bytes: *meta.identity.revision_id.as_bytes(),
+        function_count: meta.identity.function_count,
+        revision_dictionary: meta.revision_dictionary.clone(),
+        models,
         functions: meta
             .function_table
             .functions
@@ -927,15 +989,6 @@ fn prof_engine_metadata(meta: &ProgramMetadata) -> bex_events::prof::EngineProfi
             })
             .collect(),
     }
-}
-
-fn hex_bytes(bytes: &[u8]) -> String {
-    use std::fmt::Write as _;
-    let mut encoded = String::with_capacity(bytes.len() * 2);
-    for byte in bytes {
-        let _ = write!(encoded, "{byte:02x}");
-    }
-    encoded
 }
 
 #[cfg(target_arch = "wasm32")]
@@ -1254,44 +1307,6 @@ fn extract_host_diagnostics_from_value(
     )
 }
 
-// TODO(bep-053): replace with compiler-owned metadata — capital-letter
-// sniffing on FQN segments is an acknowledged-interim heuristic and must not
-// become load-bearing.
-fn derive_owner_type_definition_key(fqn: &str) -> Option<bex_events::DefinitionKey> {
-    let parts = fqn.split('.').collect::<Vec<_>>();
-    if parts.len() < 3 {
-        return None;
-    }
-
-    let owner = parts[parts.len() - 2];
-    if !owner
-        .chars()
-        .next()
-        .is_some_and(|ch| ch.is_ascii_uppercase())
-    {
-        return None;
-    }
-
-    Some(bex_events::DefinitionKey(format!(
-        "class:{}",
-        parts[..parts.len() - 1].join(".")
-    )))
-}
-
-// TODO(bep-053): replace with compiler-owned lambda identity — the
-// `find("<lambda")` name sniff is an acknowledged-interim heuristic.
-fn derive_lambda_metadata(fqn: &str) -> (Option<bex_events::DefinitionKey>, Option<String>) {
-    let Some(lambda_start) = fqn.find("<lambda") else {
-        return (None, None);
-    };
-
-    let parent = fqn[..lambda_start].trim_end_matches(['.', ':']).to_string();
-    let parent_function =
-        (!parent.is_empty()).then(|| bex_events::DefinitionKey(format!("function:{parent}")));
-    let lambda_path = Some(fqn[lambda_start..].to_string());
-    (parent_function, lambda_path)
-}
-
 // ── Friendly generic-inference errors ───────────────────────────────────────
 //
 // Inbound generic-call failures are surfaced to host callers, so their messages
@@ -1390,69 +1405,33 @@ impl BexEngine {
     }
 
     fn build_program_metadata(program: &bex_vm_types::Program) -> ProgramMetadata {
-        // Ids are 1-based sequential in pool order (`0` = unassigned) — the
-        // exact sequence the pre-heap walk in `new()` stamps onto each
-        // `Function.function_id`, so the table and the `.bamlprof` records
-        // agree byte-for-byte. M0 moves this to compile time.
-        let mut next_function_id: u32 = 0;
-        let mut functions: Vec<bex_events::FunctionMetadata> = program
-            .objects
-            .iter()
-            .filter_map(|obj| {
-                let Object::Function(function) = obj else {
-                    return None;
-                };
-
-                next_function_id += 1;
-                let function_id = FunctionId(next_function_id);
-                let fqn = function.name.clone();
-                let owner_type = derive_owner_type_definition_key(&fqn);
-                let (parent_function, lambda_path) = derive_lambda_metadata(&fqn);
-                let mut parts = fqn.split('.').map(str::to_string).collect::<Vec<_>>();
-                let display_name = parts.last().cloned().unwrap_or_else(|| fqn.clone());
-                let package_name = if parts.len() > 1 {
-                    Some(parts.remove(0))
-                } else {
-                    None
-                };
-                let namespace = if parts.len() > 1 {
-                    parts[..parts.len() - 1].to_vec()
-                } else {
-                    Vec::new()
-                };
-                let source_file =
-                    (!function.source_file.is_empty()).then(|| function.source_file.clone());
-                let source_span = Some(bex_events::SourceSpan {
-                    file_id: function.span.file_id.as_u32(),
-                    start: function.span.range.start().into(),
-                    end: function.span.range.end().into(),
-                });
-
-                Some(bex_events::FunctionMetadata {
-                    function_id,
-                    fqn: fqn.clone(),
-                    display_name,
-                    source_file,
-                    source_span,
-                    kind: function.kind.into(),
-                    origin: function.origin.into(),
-                    owner_type,
-                    parent_function,
-                    lambda_path,
-                    definition_key: Some(bex_events::DefinitionKey(format!("function:{fqn}"))),
-                    package_name,
-                    namespace,
-                    source_snapshot_id: None,
-                    revision_id: None,
-                    semantic_lanes: None,
-                })
-            })
-            .collect();
-
-        // Synthetic rows live just past the pool indices, so they can never
-        // collide with a real function's id.
+        // Reserved identities are stable and precede real pool functions in
+        // every fallback metadata table. Real ids are compiler output; this
+        // walk consumes and verifies them rather than deriving another,
+        // engine-local sequence.
+        let mut functions = Vec::with_capacity(program.objects.len() + 2);
         functions.push(bex_events::FunctionMetadata {
-            function_id: FunctionId(next_function_id + 1),
+            function_id: FunctionId(FUNCTION_ID_UNKNOWN),
+            fqn: UNKNOWN_FUNCTION_FQN.to_string(),
+            display_name: UNKNOWN_FUNCTION_DISPLAY_NAME.to_string(),
+            source_file: None,
+            source_span: None,
+            kind: bex_events::RuntimeFunctionKind::Bytecode,
+            origin: bex_events::RuntimeFunctionOrigin::Internal,
+            owner_type: None,
+            parent_function: None,
+            lambda_path: None,
+            definition_key: Some(bex_events::DefinitionKey(format!(
+                "function:{UNKNOWN_FUNCTION_FQN}"
+            ))),
+            package_name: Some("baml".to_string()),
+            namespace: Vec::new(),
+            source_snapshot_id: None,
+            revision_id: None,
+            semantic_lanes: None,
+        });
+        functions.push(bex_events::FunctionMetadata {
+            function_id: FunctionId(FUNCTION_ID_SPAWN_CLOSURE),
             fqn: SPAWN_CLOSURE_FQN.to_string(),
             display_name: SPAWN_CLOSURE_DISPLAY_NAME.to_string(),
             source_file: None,
@@ -1472,31 +1451,88 @@ impl BexEngine {
             semantic_lanes: None,
         });
 
-        functions.push(bex_events::FunctionMetadata {
-            function_id: FunctionId(next_function_id + 2),
-            fqn: UNKNOWN_FUNCTION_FQN.to_string(),
-            display_name: UNKNOWN_FUNCTION_DISPLAY_NAME.to_string(),
-            source_file: None,
-            source_span: None,
-            kind: bex_events::RuntimeFunctionKind::Bytecode,
-            origin: bex_events::RuntimeFunctionOrigin::Internal,
-            owner_type: None,
-            parent_function: None,
-            lambda_path: None,
-            definition_key: Some(bex_events::DefinitionKey(format!(
-                "function:{UNKNOWN_FUNCTION_FQN}"
-            ))),
-            package_name: Some("baml".to_string()),
-            namespace: Vec::new(),
-            source_snapshot_id: None,
-            revision_id: None,
-            semantic_lanes: None,
-        });
+        let mut expected_function_id = FIRST_POOL_FUNCTION_ID;
+        functions.extend(program.objects.iter().filter_map(|obj| {
+            let Object::Function(function) = obj else {
+                return None;
+            };
+
+            debug_assert_eq!(
+                function.function_id, expected_function_id,
+                "compiler did not assign dense function ids in object-pool order"
+            );
+            expected_function_id = expected_function_id
+                .checked_add(1)
+                .expect("program has more functions than the u32 identity space supports");
+            let function_id = FunctionId(function.function_id);
+            let fqn = function.name.clone();
+            let owner_type = function
+                .def_meta
+                .owner_type_key
+                .clone()
+                .map(bex_events::DefinitionKey);
+            let parent_function = function
+                .def_meta
+                .lambda
+                .as_ref()
+                .map(|lambda| bex_events::DefinitionKey(lambda.parent_definition_key.clone()));
+            let lambda_path = function
+                .def_meta
+                .lambda
+                .as_ref()
+                .map(|lambda| format!("#{}", lambda.ordinal));
+            let mut parts = fqn.split('.').map(str::to_string).collect::<Vec<_>>();
+            let display_name = parts.last().cloned().unwrap_or_else(|| fqn.clone());
+            let package_name = if parts.len() > 1 {
+                Some(parts.remove(0))
+            } else {
+                None
+            };
+            let namespace = if parts.len() > 1 {
+                parts[..parts.len() - 1].to_vec()
+            } else {
+                Vec::new()
+            };
+            let source_file =
+                (!function.source_file.is_empty()).then(|| function.source_file.clone());
+            let source_span = Some(bex_events::SourceSpan {
+                file_id: function.span.file_id.as_u32(),
+                start: function.span.range.start().into(),
+                end: function.span.range.end().into(),
+            });
+
+            Some(bex_events::FunctionMetadata {
+                function_id,
+                fqn: fqn.clone(),
+                display_name,
+                source_file,
+                source_span,
+                kind: function.kind.into(),
+                origin: function.origin.into(),
+                owner_type,
+                parent_function,
+                lambda_path,
+                definition_key: Some(bex_events::DefinitionKey(
+                    function.def_meta.definition_key.clone(),
+                )),
+                package_name,
+                namespace,
+                source_snapshot_id: None,
+                revision_id: None,
+                semantic_lanes: None,
+            })
+        }));
 
         ProgramMetadata {
-            program_id: ProgramId::new_random(),
-            source_snapshot_id: None,
-            revision_id: None,
+            identity: program
+                .identity
+                .clone()
+                .expect("engine programs are finalized before metadata construction"),
+            revision_dictionary: bex_events::revision_dictionary::RevisionDictionary::from_program(
+                program,
+            )
+            .ok()
+            .map(Arc::new),
             function_table: FunctionMetadataTable { functions },
         }
     }
@@ -1537,6 +1573,11 @@ impl BexEngine {
         sys_ops: std::sync::Arc<sys_ops::SysOps>,
         argv: Vec<String>,
     ) -> Result<Self, EngineError> {
+        bex_vm_types::verify_program_identity(&bytecode_program).map_err(|error| {
+            EngineError::VmInternalError(bex_vm::errors::VmInternalError::BridgeFailure {
+                message: format!("program identity verification failed: {error}"),
+            })
+        })?;
         let argv: Arc<[String]> = Arc::from(argv);
         let process_euid = ProcessEuid::current();
         let engine_id = Self::next_engine_id();
@@ -1546,6 +1587,7 @@ impl BexEngine {
         // (plan §2.2). The engine id minted above demuxes both the host
         // event identity and this engine's `.bamlprof`.
         let prof_enabled = bex_events::prof::ProfConfig::global().is_enabled();
+        let prof_models = Arc::new(bex_events::prof::models::ModelMetadataTable::default());
 
         // Extract package_init_order before consuming bytecode_program.
         let package_init_order = bytecode_program.package_init_order.clone();
@@ -1573,26 +1615,37 @@ impl BexEngine {
         // This must happen before BexHeap::new() because objects become immutable
         // behind an Arc after that point.
         //
-        // The same pre-freeze walk is the profiling interim function-id
-        // provider (plan §2.6): per-run sequential ids (1-based; 0 =
-        // unassigned), assigned unconditionally so ids are deterministic,
-        // with the header metadata table built only when profiling is on.
-        // M0 moves assignment to compile time and replaces this seam.
-        let mut next_function_id: u32 = 0;
-        let mut function_pool_indices: Vec<usize> = Vec::new();
+        // Function ids are already compiler output. This walk is verification
+        // only: debug builds check every row while release builds check the
+        // final row, catching an identity-less deserialization without adding
+        // a branch to every function in production.
+        let mut expected_function_id = FIRST_POOL_FUNCTION_ID;
+        let mut last_function_id = None;
         let compile_time_objects: Vec<Object> = compile_time_objects
             .into_iter()
-            .enumerate()
-            .map(|(idx, mut obj)| {
+            .map(|mut obj| {
                 if let Object::Function(ref mut func) = obj {
                     func.bytecode.compact = Some(func.bytecode.lower_to_compact());
-                    next_function_id += 1;
-                    func.function_id = next_function_id;
-                    function_pool_indices.push(idx);
+                    debug_assert_eq!(
+                        func.function_id, expected_function_id,
+                        "compiler did not assign dense function ids in object-pool order"
+                    );
+                    last_function_id = Some(func.function_id);
+                    expected_function_id = expected_function_id
+                        .checked_add(1)
+                        .expect("program has more functions than the u32 identity space supports");
                 }
                 obj
             })
             .collect();
+        if let Some(last_function_id) = last_function_id {
+            assert_eq!(
+                last_function_id,
+                expected_function_id - 1,
+                "runnable Program is missing compile-time function ids; finalize it after link or \
+                 deserialization"
+            );
+        }
         // Profiling metadata registration is deferred to
         // `activate_profiling()` so discarded candidate engines never leave
         // consumer-side state (`BexEngine::new` activates immediately).
@@ -1650,10 +1703,9 @@ impl BexEngine {
                 })
                 .collect();
 
-        // Function identity by heap address. Ids are 1-based sequential in
-        // pool walk order (the same walk that stamped `Function.function_id`
-        // and built the metadata table), and compile-time objects never
-        // move, so this is built once and valid for the engine's lifetime.
+        // Function identity lives directly on each compile-time function.
+        // Objects never move after heap construction, so the VM can read the
+        // compiler-assigned id without a name lookup.
 
         // Build class name lookup table from pre-computed indices.
         let resolved_class_names: indexmap::IndexMap<String, HeapPtr> = class_indices
@@ -1841,6 +1893,8 @@ impl BexEngine {
             error_class_ptrs,
             panic_class_ptrs,
             prof_enabled,
+            prof_models,
+            prof_llm_attempts: Mutex::new(HashMap::new()),
             prof_activated: AtomicBool::new(false),
         })
     }
@@ -1849,9 +1903,8 @@ impl BexEngine {
     /// header metadata with the profiling consumer. Idempotent; a no-op when
     /// the `BAML_PROFILE` master switch is off.
     ///
-    /// The .bamlprof header consumes the M0 metadata table (its ids match
-    /// the ids stamped on each Function during construction — same walk
-    /// order, same 1-based sequence).
+    /// The `.bamlprof` header consumes the compile-time identity table; its
+    /// ids are read directly from each finalized `Function`.
     pub fn activate_profiling(&self) {
         self.shutdown_required.store(true, Ordering::Release);
         if !self.prof_enabled {
@@ -1864,7 +1917,7 @@ impl BexEngine {
         {
             bex_events::prof::register_engine_metadata(
                 self.engine_id.0,
-                prof_engine_metadata(&self.program_metadata),
+                prof_engine_metadata(&self.program_metadata, Arc::clone(&self.prof_models)),
             );
         }
     }
@@ -1925,6 +1978,188 @@ impl BexEngine {
         } else {
             None
         };
+    }
+
+    /// Emits the cold-path record immediately before this logical thread
+    /// releases its heap permit and parks.
+    fn prof_suspend_thread(
+        &self,
+        thread: &mut BexThread,
+        reason: bex_events::prof::record::SuspendReason,
+    ) -> Option<ProfSuspension> {
+        if thread.vm.prof_ring.is_none() {
+            return None;
+        }
+        let suspend_seq = thread.next_prof_suspend_seq()?;
+        let suspension = ProfSuspension {
+            thread_id: BexThreadId(thread.vm.prof_thread_id),
+            suspend_seq,
+            suspend_ts_ticks: bex_events::prof::clock::now_ticks(),
+        };
+        self.prof_emit(&bex_events::prof::record::RawRecord::SuspendThread {
+            reason,
+            thread_id: suspension.thread_id,
+            suspend_seq,
+            ts_ticks: suspension.suspend_ts_ticks,
+        });
+        Some(suspension)
+    }
+
+    /// Emits the matching self-contained resume after the heap permit has
+    /// been reacquired. This goes through the current OS thread's TLS ring,
+    /// so it remains correct if the task migrated while parked.
+    fn prof_resume_thread(&self, suspension: Option<ProfSuspension>) {
+        let Some(suspension) = suspension else {
+            return;
+        };
+        self.prof_emit(&bex_events::prof::record::RawRecord::ResumeThread {
+            thread_id: suspension.thread_id,
+            suspend_seq: suspension.suspend_seq,
+            suspend_ts_ticks: suspension.suspend_ts_ticks,
+            ts_ticks: bex_events::prof::clock::now_ticks(),
+        });
+    }
+
+    fn prof_llm_observer(
+        self: &Arc<Self>,
+        thread_id: u64,
+        llm_call_id: u64,
+    ) -> sys_types::LlmCallObserver {
+        let engine = Arc::downgrade(self);
+        Arc::new(move |observation| {
+            if let Some(engine) = engine.upgrade() {
+                engine.prof_observe_llm(thread_id, llm_call_id, observation);
+            }
+        })
+    }
+
+    fn prof_observe_llm(
+        &self,
+        thread_id: u64,
+        llm_call_id: u64,
+        observation: sys_types::LlmCallObservation,
+    ) {
+        if !self.prof_enabled {
+            return;
+        }
+        let key = (thread_id, llm_call_id);
+        match observation {
+            sys_types::LlmCallObservation::AttemptStarted { model } => {
+                // Intern before any raw record can reference this id. BCCT
+                // drains snapshot births from the shared table independently.
+                let _ = self.prof_models.intern(&model);
+                let mut attempts = self
+                    .prof_llm_attempts
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+                let state = attempts.entry(key).or_insert_with(|| ProfLlmAttempt {
+                    model: model.clone(),
+                    attempts: 0,
+                });
+                state.model = model;
+                state.attempts = state.attempts.saturating_add(1);
+            }
+            sys_types::LlmCallObservation::Completed {
+                model,
+                tokens_in,
+                tokens_out,
+                parse_error,
+            } => {
+                let (attempts_count, fallback_model) = {
+                    let mut attempts = self
+                        .prof_llm_attempts
+                        .lock()
+                        .unwrap_or_else(std::sync::PoisonError::into_inner);
+                    let state = attempts.entry(key).or_insert_with(|| ProfLlmAttempt {
+                        model: model.clone(),
+                        attempts: 1,
+                    });
+                    let value = (state.attempts.max(1), state.model.clone());
+                    if !parse_error {
+                        attempts.remove(&key);
+                    }
+                    value
+                };
+                let model = if model.is_empty() {
+                    fallback_model
+                } else {
+                    model
+                };
+                let model_id = self.prof_models.intern(&model);
+                let mut flags = u8::from(parse_error) * LLM_META_PARSE_ERROR;
+                if attempts_count > 1 {
+                    flags |= LLM_META_RETRY;
+                }
+                self.prof_emit(&bex_events::prof::record::RawRecord::LlmCallMeta {
+                    thread_id: BexThreadId(thread_id),
+                    call_id: BexCallId(llm_call_id),
+                    model_id,
+                    tokens_in,
+                    tokens_out,
+                    flags,
+                    ts_ticks: bex_events::prof::clock::now_ticks(),
+                });
+            }
+        }
+    }
+
+    fn prof_llm_provider_error(&self, thread_id: u64, llm_call_id: u64) {
+        let key = (thread_id, llm_call_id);
+        let (model, attempts_count) = {
+            let attempts = self
+                .prof_llm_attempts
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let Some(state) = attempts.get(&key) else {
+                return;
+            };
+            (state.model.clone(), state.attempts.max(1))
+        };
+        let model_id = self.prof_models.intern(&model);
+        let flags = LLM_META_PROVIDER_ERROR
+            | if attempts_count > 1 {
+                LLM_META_RETRY
+            } else {
+                0
+            };
+        self.prof_emit(&bex_events::prof::record::RawRecord::LlmCallMeta {
+            thread_id: BexThreadId(thread_id),
+            call_id: BexCallId(llm_call_id),
+            model_id,
+            tokens_in: 0,
+            tokens_out: 0,
+            flags,
+            ts_ticks: bex_events::prof::clock::now_ticks(),
+        });
+    }
+
+    fn llm_http_attempt_failed(
+        operation: SysOp,
+        outcome: &Result<BexExternalValue, OpError>,
+    ) -> bool {
+        if !matches!(
+            operation,
+            SysOp::BamlHttpSend | SysOp::BamlHttpFetch | SysOp::BamlHttpFetchSse
+        ) {
+            return false;
+        }
+        match outcome {
+            Err(_) => true,
+            Ok(BexExternalValue::Instance {
+                class_name, fields, ..
+            }) if class_name == "baml.http.Response" => !matches!(
+                fields.get("status_code"),
+                Some(BexExternalValue::Int(200..=299))
+            ),
+            Ok(_) => false,
+        }
+    }
+
+    fn prof_forget_llm_thread(&self, thread_id: u64) {
+        self.prof_llm_attempts
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .retain(|&(candidate_thread, _), _| candidate_thread != thread_id);
     }
 
     /// Closes the sys-op call pair opened at the VM's `VmExecState::SysOp`
@@ -2900,6 +3135,7 @@ impl BexEngine {
             return_type,
             throws_type,
             host_call_id,
+            function_name,
             boundary,
             value_capture,
             Some(root_input_values),
@@ -2966,43 +3202,16 @@ impl BexEngine {
         return_type: RuntimeTy,
         throws_type: Option<RuntimeTy>,
         host_call_id: CallId,
+        entry_target: &str,
         boundary: BoundaryContext,
         value_capture: TraceCaptureProducer,
         root_input_values: Option<Vec<(String, Value)>>,
         cancel: CancellationToken,
         copy_objects: bool,
     ) -> Result<BexCallResult, EngineError> {
-        // D5a: the entry-frame CallFunction below pushes into the snapshot;
-        // take it on THIS thread, after the last await before the push.
-        self.prof_refresh_vm_ring(&mut thread.vm);
-        // §7 decision 7: the root StartThread is emitted before the entry
-        // frame's CallFunction so that every thread's first record is its
-        // StartThread — a uniform invariant for renderers (children get
-        // theirs at the Spawn arm, before their entry push). BALANCE: the
-        // matching EndThread is emitted by run_thread_event_loop on every
-        // exit path; no early return / `?` may be introduced between this
-        // emission and the run_thread_event_loop call below, or an error
-        // path would leak an unclosed StartThread.
-        if thread.vm.prof_ring.is_some() {
-            self.prof_emit(&bex_events::prof::record::RawRecord::StartThread {
-                flags: 0,
-                thread_id: BexThreadId(thread.vm.prof_thread_id),
-                parent_thread_id: BexThreadId(0), // engine-root thread
-                parent_call_id: BexCallId(0),
-                ts_ticks: bex_events::prof::clock::now_ticks(),
-                name: b"",
-            });
-        }
-        thread
-            .vm
-            .set_value_capture_auto_enabled(boundary.capture_defaults.values_enabled);
-        // The call's named type args are lowered to positional De Bruijn slots
-        // against the callee's generic params. An empty map seeds nothing
-        // (non-generic callee) or all-unbound slots (generic callee with no
-        // bindings).
-        // The runtime frame holds realized type args; narrow the host-supplied
-        // bindings at this FFI boundary, rejecting a non-realized binding rather
-        // than erasing it.
+        // Validate and narrow host-supplied type arguments before emitting the
+        // balanced root-thread lifecycle. No fallible return is allowed after
+        // `StartThread` and before the event loop owns its matching end.
         let type_args = type_args
             .into_iter()
             .map(|(name, ty)| match baml_type::RealizedTy::try_from(&ty) {
@@ -3016,6 +3225,113 @@ impl BexEngine {
                 )),
             })
             .collect::<Result<indexmap::IndexMap<_, _>, _>>()?;
+        // D5a: the entry-frame CallFunction below pushes into the snapshot;
+        // take it on THIS thread, after the last await before the push.
+        self.prof_refresh_vm_ring(&mut thread.vm);
+        // §7 decision 7: the root StartThread is emitted before the entry
+        // frame's CallFunction so that every thread's first record is its
+        // StartThread — a uniform invariant for renderers (children get
+        // theirs at the Spawn arm, before their entry push). BALANCE: the
+        // matching EndThread is emitted by run_thread_event_loop on every
+        // exit path; no early return / `?` may be introduced between this
+        // emission and the run_thread_event_loop call below, or an error
+        // path would leak an unclosed StartThread.
+        let boundary_project_root = boundary
+            .storage_context
+            .project_root
+            .clone()
+            .unwrap_or_else(|| {
+                std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."))
+            });
+        let boundary_lifecycle =
+            if thread.vm.prof_ring.is_some() && boundary.storage_context.durable_history_enabled {
+                let mut begin = bex_events::prof::BoundaryBegin::new(
+                    boundary.boundary_id,
+                    entry_target,
+                    *self.program_metadata.identity.revision_id.as_bytes(),
+                    boundary_project_root.clone(),
+                );
+                begin.source = boundary.storage_context.source.clone();
+                begin.project_id = boundary.storage_context.project_id.clone();
+                begin.capture_defaults = u32::from(boundary.capture_defaults.values_enabled)
+                    | (u32::from(boundary.capture_defaults.logs_enabled) << 1);
+                match bex_events::prof::BoundaryLifecycle::begin(begin) {
+                    Ok(lifecycle) => Some(lifecycle),
+                    Err(error) => {
+                        tracing::warn!(%error, "failed to begin durable boundary history");
+                        None
+                    }
+                }
+            } else {
+                None
+            };
+        #[cfg(not(target_arch = "wasm32"))]
+        let value_drain =
+            if boundary.capture_defaults.values_enabled || boundary.capture_defaults.logs_enabled {
+                boundary_lifecycle
+                    .as_ref()
+                    .and_then(bex_events::prof::BoundaryLifecycle::storage_registration)
+                    .and_then(|(boundary_dir, created_ms)| {
+                        let handle = match crate::value_capture::project_value_drain(
+                            &boundary_project_root,
+                            self.process_euid,
+                        ) {
+                            Ok(handle) => handle,
+                            Err(error) => {
+                                tracing::warn!(%error, "failed to start project value drain");
+                                return None;
+                            }
+                        };
+                        if let Err(error) = handle.register_boundary(
+                            bex_events::value_cas::ValueBoundaryRegistration {
+                                boundary_id: boundary.boundary_id,
+                                boundary_dir,
+                                created_ms,
+                                run_started: None,
+                            },
+                        ) {
+                            tracing::warn!(%error, "failed to register value boundary");
+                            return None;
+                        }
+                        match value_capture.start_continuous_value_drain(
+                            handle.clone(),
+                            std::time::Duration::from_millis(25),
+                        ) {
+                            Ok(pump) => Some((pump, handle)),
+                            Err(error) => {
+                                tracing::warn!(%error, "failed to start continuous value handoff");
+                                None
+                            }
+                        }
+                    })
+            } else {
+                None
+            };
+        if thread.vm.prof_ring.is_some() {
+            self.prof_emit(&bex_events::prof::record::RawRecord::StartThread {
+                flags: 0,
+                thread_id: BexThreadId(thread.vm.prof_thread_id),
+                parent_thread_id: BexThreadId(0), // engine-root thread
+                parent_call_id: BexCallId(0),
+                ts_ticks: bex_events::prof::clock::now_ticks(),
+                name: b"",
+            });
+        }
+        if let Some(lifecycle) = boundary_lifecycle.as_ref()
+            && let Err(error) = lifecycle.bind(
+                ThreadRef {
+                    process_euid: self.process_euid,
+                    engine_id: self.engine_id,
+                    thread_id: BexThreadId(thread.vm.prof_thread_id),
+                },
+                std::time::Duration::from_secs(5),
+            )
+        {
+            tracing::warn!(%error, "failed to bind durable boundary history");
+        }
+        thread
+            .vm
+            .set_value_capture_auto_enabled(boundary.capture_defaults.values_enabled);
         thread
             .vm
             .set_entry_point_with_type_args(entry_ptr, &vm_args, type_args);
@@ -3075,6 +3391,7 @@ impl BexEngine {
         }
 
         // Run the event loop.
+        let boundary_started = std::time::Instant::now();
         let result = self
             .run_thread_event_loop(
                 return_type,
@@ -3088,6 +3405,70 @@ impl BexEngine {
                 copy_objects,
             )
             .await;
+
+        let status = match &result {
+            Ok(ThreadOutcome::RootValue(_)) => "ok",
+            Ok(ThreadOutcome::SettledChild(_)) => "engine_error",
+            Err(_) => "error",
+        };
+        let mut boundary_completion = bex_events::prof::BoundaryCompletion::new(status);
+        let failed = status != "ok";
+        let trigger = if failed {
+            Some("error".to_owned())
+        } else if let Some(label) = boundary.manual_trigger.as_deref() {
+            Some(format!("manual:{label}"))
+        } else {
+            boundary.latency_trigger_ms.and_then(|threshold_ms| {
+                let elapsed_ms =
+                    u64::try_from(boundary_started.elapsed().as_millis()).unwrap_or(u64::MAX);
+                (elapsed_ms >= threshold_ms)
+                    .then(|| format!("latency:{elapsed_ms}>={threshold_ms}"))
+            })
+        };
+        boundary_completion.trigger.clone_from(&trigger);
+        #[cfg(not(target_arch = "wasm32"))]
+        if let Some((pump, handle)) = value_drain {
+            if let Err(error) = pump.flush_and_join() {
+                boundary_completion
+                    .diagnostics
+                    .push(format!("continuous value drain failed: {error}"));
+            }
+            let promotion_scope = bex_events::value_cas::CallPath::boundary(
+                boundary.boundary_id,
+                self.process_euid,
+                self.engine_id,
+            );
+            if let Some(trigger) = trigger.as_ref() {
+                let timestamp_ms = std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .map_or(0, |duration| {
+                        u64::try_from(duration.as_millis()).unwrap_or(u64::MAX)
+                    });
+                if let Err(error) = handle.promote_staged(
+                    &promotion_scope,
+                    bex_events::value_cas::TriggerId(trigger.clone()),
+                    timestamp_ms,
+                ) {
+                    boundary_completion
+                        .diagnostics
+                        .push(format!("error-trigger value promotion failed: {error}"));
+                }
+            } else {
+                let _ = handle.release_staged(&promotion_scope);
+            }
+            if let Err(error) = handle.finish_boundary(boundary.boundary_id) {
+                boundary_completion
+                    .diagnostics
+                    .push(format!("value boundary commit failed: {error}"));
+            }
+        }
+        if let Some(lifecycle) = boundary_lifecycle {
+            if let Err(error) =
+                lifecycle.complete(boundary_completion, std::time::Duration::from_secs(30))
+            {
+                tracing::warn!(%error, "failed to complete durable boundary history");
+            }
+        }
 
         // Flush any host-value releases queued during this call. The root
         // thread's `ActiveHeapPermit` was consumed by `run_thread_event_loop`
@@ -3554,6 +3935,7 @@ impl BexEngine {
             return_type,
             throws_type,
             host_call_id,
+            "<callable>",
             boundary,
             value_capture,
             None,
@@ -4769,6 +5151,7 @@ impl BexEngine {
                 copy_objects,
             )
             .await;
+        self.prof_forget_llm_thread(prof_thread_id);
         if profile_thread {
             let status = match &result {
                 Ok(ThreadOutcome::SettledChild(ChildSettleKind::Cancelled)) => {
@@ -5085,8 +5468,22 @@ impl BexEngine {
                             None
                         };
 
-                    let sys_op_result =
-                        self.execute_sys_op(operation, &bex_args, call_id, cancel, thread.proof());
+                    let prof_llm_owner = if thread.vm.prof_ring.is_some() {
+                        thread
+                            .vm
+                            .current_llm_call_id()
+                            .map(|llm_call_id| (thread.vm.prof_thread_id, llm_call_id))
+                    } else {
+                        None
+                    };
+                    let sys_op_result = self.execute_sys_op(
+                        operation,
+                        &bex_args,
+                        call_id,
+                        cancel,
+                        thread.proof(),
+                        prof_llm_owner,
+                    );
 
                     let outcome = match sys_op_result {
                         SysOpResult::Ready(r) => r,
@@ -5094,6 +5491,10 @@ impl BexEngine {
                             // Release the heap permit so concurrent GC
                             // can run during the wait. Re-acquire
                             // before touching VM state.
+                            let suspension = self.prof_suspend_thread(
+                                &mut thread,
+                                bex_events::prof::record::SuspendReason::SysOp,
+                            );
                             let inactive = thread.release();
                             self.maybe_collect_garbage().await;
                             let outcome = tokio::select! {
@@ -5102,6 +5503,7 @@ impl BexEngine {
                                 r = fut                  => SysOpOutcome::Result(r),
                             };
                             thread = inactive.acquire().await;
+                            self.prof_resume_thread(suspension);
                             // Re-snapshot post-await (D5a): the task may be on a different
                             // OS thread now, and engine-driven VM re-entries before the
                             // next loop-head refresh (inject_sysop_throw's unwind) push
@@ -5148,6 +5550,11 @@ impl BexEngine {
                     );
                     let sysop_origin_capture =
                         sysop_capture_call.map(|call_id| (call_id, sysop_capture_mask));
+                    if Self::llm_http_attempt_failed(operation, &outcome)
+                        && let Some((thread_id, llm_call_id)) = prof_llm_owner
+                    {
+                        self.prof_llm_provider_error(thread_id, llm_call_id);
+                    }
 
                     match outcome {
                         Ok(external) => {
@@ -5410,6 +5817,10 @@ impl BexEngine {
                     // wait would deadlock concurrent GC park (which needs
                     // every permit) against the spawned task that fulfils
                     // this future (which needs a permit to write the heap).
+                    let suspension = self.prof_suspend_thread(
+                        &mut thread,
+                        bex_events::prof::record::SuspendReason::Await,
+                    );
                     let inactive = thread.release();
                     // While parked, run a heuristic-driven GC check (no
                     // permit dance needed since we're already released).
@@ -5425,6 +5836,7 @@ impl BexEngine {
                         r = future              => AwaitOutcome::Done(r),
                     };
                     thread = inactive.acquire().await;
+                    self.prof_resume_thread(suspension);
                     // Re-snapshot post-await (D5a): the task may be on a different
                     // OS thread now, and engine-driven VM re-entries before the
                     // next loop-head refresh (inject_sysop_throw's unwind) push
@@ -5486,6 +5898,10 @@ impl BexEngine {
                         }
                         ws
                     };
+                    let suspension = self.prof_suspend_thread(
+                        &mut thread,
+                        bex_events::prof::record::SuspendReason::AwaitAny,
+                    );
                     let inactive = thread.release();
                     self.maybe_collect_garbage().await;
                     let outcome = if waiters.is_empty() {
@@ -5509,6 +5925,7 @@ impl BexEngine {
                         }
                     };
                     thread = inactive.acquire().await;
+                    self.prof_resume_thread(suspension);
                     // Re-snapshot post-await (D5a): the task may be on a different
                     // OS thread now, and engine-driven VM re-entries before the
                     // next loop-head refresh (inject_sysop_throw's unwind) push
@@ -5555,7 +5972,12 @@ impl BexEngine {
                 }
 
                 VmExecState::EarlyYield => {
+                    let suspension = self.prof_suspend_thread(
+                        &mut thread,
+                        bex_events::prof::record::SuspendReason::EarlyYield,
+                    );
                     thread = self.gc_safepoint(thread).await;
+                    self.prof_resume_thread(suspension);
                 }
             }
         }
@@ -5576,6 +5998,7 @@ impl BexEngine {
         call_id: CallId,
         cancel: &CancellationToken,
         permit: bex_heap::PermitProof<'_>,
+        prof_llm_owner: Option<(u64, u64)>,
     ) -> SysOpResult {
         fn check(op: SysOp, err: &OpError) {
             if let sys_types::OpErrorPayload::Vm(kind) = &err.payload {
@@ -5602,6 +6025,9 @@ impl BexEngine {
         let args = args.iter().map(std::convert::Into::into).collect();
         let fn_ptr = self.sys_ops.get(op);
         let mut ctx = self.sys_op_ctx.to_op_context(cancel.clone(), self.clone());
+        if let Some((thread_id, llm_call_id)) = prof_llm_owner {
+            ctx.llm_observer = Some(self.prof_llm_observer(thread_id, llm_call_id));
+        }
         // Rebuild RuntimeIo with the live per-call context so IO calls
         // (media resolution, auth) use the correct cancellation token.
         ctx.runtime_io =
