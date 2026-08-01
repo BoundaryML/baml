@@ -207,6 +207,8 @@ export declare function completeHostCall(callId: number, isError: number, conten
 /** No-op: tracing has been removed. Kept as a live symbol for ABI stability. */
 export declare function flushEvents(): void
 
+export declare function getBridgeRuntimeVersion(): string
+
 /**
  * Return the process-global `BamlRuntime`, or a `BamlError`-shaped
  * `napi::Error` if `initializeRuntime` has not run yet. The handle is
@@ -215,9 +217,9 @@ export declare function flushEvents(): void
  */
 export declare function getRuntime(): BamlRuntime
 
-export declare function getVersion(): string
 export declare function getToolchainVersion(): string
-export declare function getBridgeRuntimeVersion(): string
+
+export declare function getVersion(): string
 
 /**
  * A u64 handle key split into two i32 halves, mirroring the shape of

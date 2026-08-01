@@ -257,7 +257,6 @@ impl GenerateArgs {
         let _ = session.warm_prep_seeds_only();
         session.prime();
         let (db, from) = (session.db, session.resolved.root);
-        let embedded_baml_toml = build_embedded_baml_toml(&from)?;
         // Compile-time diagnostics — same shape as run/pack: render the
         // diagnostic block after abandoning the spinner so the colored
         // source-snippet output doesn't fight with the lamb. No "Checking"
@@ -329,6 +328,8 @@ impl GenerateArgs {
             }
             return Ok(crate::ExitCode::Other);
         }
+
+        let embedded_baml_toml = build_embedded_baml_toml(&from)?;
 
         // Build the codegen SymbolPool from the compiler database.
         let pool = baml_project::build_symbol_pool(&db);

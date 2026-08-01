@@ -448,6 +448,10 @@ const BRIDGE_HEADERS: &[(&str, &str)] = &[
         include_str!("../../bridge_cpp/include/baml/runtime.h"),
     ),
     (
+        "include/baml/version.h",
+        include_str!("../../bridge_cpp/include/baml/version.h"),
+    ),
+    (
         "include/baml/variant.h",
         include_str!("../../bridge_cpp/include/baml/variant.h"),
     ),
@@ -2290,7 +2294,7 @@ fn render_inlinedbaml(
 
 #[cfg(test)]
 mod bytecode_escape_tests {
-    use super::{escape_bytecode, render_inlinedbaml};
+    use super::{BRIDGE_HEADERS, escape_bytecode, render_inlinedbaml};
 
     fn escaped(bytes: &[u8]) -> String {
         let mut out = String::new();
@@ -2309,6 +2313,15 @@ mod bytecode_escape_tests {
         assert!(output.contains("const char kEmbeddedBamlToml[]"));
         assert!(output.contains("initialize_runtime_from_bytecode_with_metadata("));
         assert!(output.contains("kEmbeddedBamlToml);"));
+    }
+
+    #[test]
+    fn generated_sdk_vendors_the_public_version_header() {
+        let version_header = BRIDGE_HEADERS
+            .iter()
+            .find(|(path, _)| *path == "include/baml/version.h");
+
+        assert!(version_header.is_some());
     }
 
     #[test]
