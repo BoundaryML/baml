@@ -1,8 +1,8 @@
 type ProjectId = int
 
 function NormalAlias(pid: ProjectId) -> string {
-  client "openai/gpt-4o"
-  prompt `Pid: ${pid}. Generate a fake name for it.`
+  client: "openai/gpt-4o"
+  prompt: `Pid: ${pid}. Generate a fake name for it.`
 }
 
 type A = float
@@ -10,8 +10,8 @@ type B = A
 type C = B
 
 function LongerAlias(c: C) -> string {
-  client "openai/gpt-4o"
-  prompt `${c}`
+  client: "openai/gpt-4o"
+  prompt: `${c}`
 }
 
 type JsonValue = int | string | bool | float | JsonObject | JsonArray
@@ -19,16 +19,16 @@ type JsonObject = map<string, JsonValue>
 type JsonArray = JsonValue[]
 
 function RecursiveAliases(j: JsonValue) -> string {
-  client "openai/gpt-4o"
-  prompt `${j}`
+  client: "openai/gpt-4o"
+  prompt: `${j}`
 }
 
 type I = J
 type J = I
 
 function InvalidAlias(i: I) -> string {
-  client "openai/gpt-4o"
-  prompt `${i}`
+  client: "openai/gpt-4o"
+  prompt: `${i}`
 }
 
 //----
@@ -46,21 +46,21 @@ function InvalidAlias(i: I) -> string {
 // type_aliases_jinja.baml:3:27 (type) len=9 "ProjectId"
 // type_aliases_jinja.baml:3:41 (type) [defaultLibrary] len=6 "string"
 // type_aliases_jinja.baml:4:3 (property) len=6 "client"
-// type_aliases_jinja.baml:4:10 (string) len=15 "\"openai/gpt-4o\""
+// type_aliases_jinja.baml:4:11 (string) len=15 "\"openai/gpt-4o\""
 // type_aliases_jinja.baml:5:3 (property) [declaration] len=6 "prompt"
-// type_aliases_jinja.baml:5:10 (string) len=1 "`"
-// type_aliases_jinja.baml:5:11 (string) len=3 "Pid"
-// type_aliases_jinja.baml:5:14 (string) len=1 ":"
-// type_aliases_jinja.baml:5:18 (parameter) len=3 "pid"
-// type_aliases_jinja.baml:5:22 (string) len=1 "."
-// type_aliases_jinja.baml:5:24 (string) len=8 "Generate"
-// type_aliases_jinja.baml:5:33 (string) len=1 "a"
-// type_aliases_jinja.baml:5:35 (string) len=4 "fake"
-// type_aliases_jinja.baml:5:40 (string) len=4 "name"
-// type_aliases_jinja.baml:5:45 (string) len=3 "for"
-// type_aliases_jinja.baml:5:49 (string) len=2 "it"
-// type_aliases_jinja.baml:5:51 (string) len=1 "."
-// type_aliases_jinja.baml:5:52 (string) len=1 "`"
+// type_aliases_jinja.baml:5:11 (string) len=1 "`"
+// type_aliases_jinja.baml:5:12 (string) len=3 "Pid"
+// type_aliases_jinja.baml:5:15 (string) len=1 ":"
+// type_aliases_jinja.baml:5:19 (parameter) len=3 "pid"
+// type_aliases_jinja.baml:5:23 (string) len=1 "."
+// type_aliases_jinja.baml:5:25 (string) len=8 "Generate"
+// type_aliases_jinja.baml:5:34 (string) len=1 "a"
+// type_aliases_jinja.baml:5:36 (string) len=4 "fake"
+// type_aliases_jinja.baml:5:41 (string) len=4 "name"
+// type_aliases_jinja.baml:5:46 (string) len=3 "for"
+// type_aliases_jinja.baml:5:50 (string) len=2 "it"
+// type_aliases_jinja.baml:5:52 (string) len=1 "."
+// type_aliases_jinja.baml:5:53 (string) len=1 "`"
 // type_aliases_jinja.baml:8:1 (keyword) len=4 "type"
 // type_aliases_jinja.baml:8:6 (type) [declaration] len=1 "A"
 // type_aliases_jinja.baml:8:8 (operator) len=1 "="
@@ -79,11 +79,11 @@ function InvalidAlias(i: I) -> string {
 // type_aliases_jinja.baml:12:25 (type) len=1 "C"
 // type_aliases_jinja.baml:12:31 (type) [defaultLibrary] len=6 "string"
 // type_aliases_jinja.baml:13:3 (property) len=6 "client"
-// type_aliases_jinja.baml:13:10 (string) len=15 "\"openai/gpt-4o\""
+// type_aliases_jinja.baml:13:11 (string) len=15 "\"openai/gpt-4o\""
 // type_aliases_jinja.baml:14:3 (property) [declaration] len=6 "prompt"
-// type_aliases_jinja.baml:14:10 (string) len=1 "`"
-// type_aliases_jinja.baml:14:13 (parameter) len=1 "c"
-// type_aliases_jinja.baml:14:15 (string) len=1 "`"
+// type_aliases_jinja.baml:14:11 (string) len=1 "`"
+// type_aliases_jinja.baml:14:14 (parameter) len=1 "c"
+// type_aliases_jinja.baml:14:16 (string) len=1 "`"
 // type_aliases_jinja.baml:17:1 (keyword) len=4 "type"
 // type_aliases_jinja.baml:17:6 (type) [declaration] len=9 "JsonValue"
 // type_aliases_jinja.baml:17:16 (operator) len=1 "="
@@ -116,11 +116,11 @@ function InvalidAlias(i: I) -> string {
 // type_aliases_jinja.baml:21:30 (type) len=9 "JsonValue"
 // type_aliases_jinja.baml:21:44 (type) [defaultLibrary] len=6 "string"
 // type_aliases_jinja.baml:22:3 (property) len=6 "client"
-// type_aliases_jinja.baml:22:10 (string) len=15 "\"openai/gpt-4o\""
+// type_aliases_jinja.baml:22:11 (string) len=15 "\"openai/gpt-4o\""
 // type_aliases_jinja.baml:23:3 (property) [declaration] len=6 "prompt"
-// type_aliases_jinja.baml:23:10 (string) len=1 "`"
-// type_aliases_jinja.baml:23:13 (parameter) len=1 "j"
-// type_aliases_jinja.baml:23:15 (string) len=1 "`"
+// type_aliases_jinja.baml:23:11 (string) len=1 "`"
+// type_aliases_jinja.baml:23:14 (parameter) len=1 "j"
+// type_aliases_jinja.baml:23:16 (string) len=1 "`"
 // type_aliases_jinja.baml:26:1 (keyword) len=4 "type"
 // type_aliases_jinja.baml:26:6 (type) [declaration] len=1 "I"
 // type_aliases_jinja.baml:26:8 (operator) len=1 "="
@@ -135,8 +135,8 @@ function InvalidAlias(i: I) -> string {
 // type_aliases_jinja.baml:29:26 (type) len=1 "I"
 // type_aliases_jinja.baml:29:32 (type) [defaultLibrary] len=6 "string"
 // type_aliases_jinja.baml:30:3 (property) len=6 "client"
-// type_aliases_jinja.baml:30:10 (string) len=15 "\"openai/gpt-4o\""
+// type_aliases_jinja.baml:30:11 (string) len=15 "\"openai/gpt-4o\""
 // type_aliases_jinja.baml:31:3 (property) [declaration] len=6 "prompt"
-// type_aliases_jinja.baml:31:10 (string) len=1 "`"
-// type_aliases_jinja.baml:31:13 (parameter) len=1 "i"
-// type_aliases_jinja.baml:31:15 (string) len=1 "`"
+// type_aliases_jinja.baml:31:11 (string) len=1 "`"
+// type_aliases_jinja.baml:31:14 (parameter) len=1 "i"
+// type_aliases_jinja.baml:31:16 (string) len=1 "`"

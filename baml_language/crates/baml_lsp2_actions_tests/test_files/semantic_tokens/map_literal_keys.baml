@@ -11,8 +11,8 @@ class Fields {
 }
 
 function InOutEnumKey(i1: map<MapKey, string>, i2: map<MapKey, string>) -> map<MapKey, string> {
-  client "openai/gpt-4o"
-  prompt `
+  client: "openai/gpt-4o"
+  prompt: `
     Merge these: ${i1} ${i2}
 
     ${ctx.output_format}
@@ -23,8 +23,8 @@ function InOutLiteralStringUnionMapKey(
   i1: map<"one" | "two" | ("three" | "four"), string>,
   i2: map<"one" | "two" | ("three" | "four"), string>
 ) -> map<"one" | "two" | ("three" | "four"), string> {
-  client "openai/gpt-4o"
-  prompt `
+  client: "openai/gpt-4o"
+  prompt: `
     Merge these:
 
     ${i1}
@@ -202,9 +202,9 @@ function InOutLiteralStringUnionMapKey(
 // map_literal_keys.baml:13:88 (type) [defaultLibrary] len=6 "string"
 // map_literal_keys.baml:13:94 (operator) len=1 ">"
 // map_literal_keys.baml:14:3 (property) len=6 "client"
-// map_literal_keys.baml:14:10 (string) len=15 "\"openai/gpt-4o\""
+// map_literal_keys.baml:14:11 (string) len=15 "\"openai/gpt-4o\""
 // map_literal_keys.baml:15:3 (property) [declaration] len=6 "prompt"
-// map_literal_keys.baml:15:10 (string) len=1 "`"
+// map_literal_keys.baml:15:11 (string) len=1 "`"
 // map_literal_keys.baml:16:5 (string) len=5 "Merge"
 // map_literal_keys.baml:16:11 (string) len=5 "these"
 // map_literal_keys.baml:16:16 (string) len=1 ":"
@@ -250,9 +250,9 @@ function InOutLiteralStringUnionMapKey(
 // map_literal_keys.baml:25:46 (type) [defaultLibrary] len=6 "string"
 // map_literal_keys.baml:25:52 (operator) len=1 ">"
 // map_literal_keys.baml:26:3 (property) len=6 "client"
-// map_literal_keys.baml:26:10 (string) len=15 "\"openai/gpt-4o\""
+// map_literal_keys.baml:26:11 (string) len=15 "\"openai/gpt-4o\""
 // map_literal_keys.baml:27:3 (property) [declaration] len=6 "prompt"
-// map_literal_keys.baml:27:10 (string) len=1 "`"
+// map_literal_keys.baml:27:11 (string) len=1 "`"
 // map_literal_keys.baml:28:5 (string) len=5 "Merge"
 // map_literal_keys.baml:28:11 (string) len=5 "these"
 // map_literal_keys.baml:28:16 (string) len=1 ":"

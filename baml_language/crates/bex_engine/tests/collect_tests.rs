@@ -857,8 +857,8 @@ async fn collect_tests_testset_with_function_call_and_field_access() {
         }
 
         function ClassifySentiment(text: string) -> Sentiment {
-            client GPT4o
-            prompt `classify ${text}`
+            client: GPT4o
+            prompt: `classify ${text}`
         }
 
         client GPT4o = openai.OpenAiClient.new(model = "gpt-4o");
@@ -903,8 +903,8 @@ async fn collect_tests_user_exact_file_full_lifecycle() {
         }
 
         function ClassifySentiment(text: string) -> Sentiment {
-            client GPT4o
-            prompt `
+            client: GPT4o
+            prompt: `
                 Classify the sentiment of the following text.
                 ${ctx.output_format}
                 Text: ${text}
@@ -953,13 +953,13 @@ async fn collect_tests_user_exact_file_full_lifecycle() {
         }
 
         function ClassifySentiment2(text: string) -> string {
-            client GPT4o
-            prompt `classify ${text}`
+            client: GPT4o
+            prompt: `classify ${text}`
         }
 
         function GenerateTests(count: int, topic: string) -> string[] {
-            client GPT4o
-            prompt `generate ${count} tests about ${topic}`
+            client: GPT4o
+            prompt: `generate ${count} tests about ${topic}`
         }
     "##;
 

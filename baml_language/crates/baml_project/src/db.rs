@@ -2585,8 +2585,8 @@ function Workflow(input: string) -> string {
             std::path::Path::new("/tmp/llm.baml"),
             r##"
 function Summarize(input: string) -> string {
-    client GPT4
-    prompt `Summarize ${input}`
+    client: GPT4
+    prompt: `Summarize ${input}`
 }
 "##,
         );
@@ -2730,8 +2730,8 @@ function GuessingGame() -> string {
             std::path::Path::new("/tmp/wf.baml"),
             r##"
 function Summarize(input: string) -> string {
-    client GPT4
-    prompt `Summarize ${input}`
+    client: GPT4
+    prompt: `Summarize ${input}`
 }
 
 function Workflow(input: string) -> string {
@@ -2777,8 +2777,8 @@ function Workflow(input: string) -> string {
             std::path::Path::new("/tmp/ns_workflows/ns_prompts/summarize.baml"),
             r##"
 function Summarize(input: string) -> string {
-    client GPT4
-    prompt `Summarize ${input}`
+    client: GPT4
+    prompt: `Summarize ${input}`
 }
 "##,
         );
@@ -2823,8 +2823,8 @@ function Workflow(input: string) -> string {
             std::path::Path::new("/tmp/ns_http/fetch.baml"),
             r##"
 function fetch(input: string) -> string {
-    client UserClient
-    prompt `User fetch ${input}`
+    client: UserClient
+    prompt: `User fetch ${input}`
 }
 "##,
         );
@@ -3157,8 +3157,8 @@ test "renders workflow" {
         let path = std::path::Path::new("/tmp/llm.baml");
         let source = r##"
 function Summarize(input: string) -> string {
-    client GPT4
-    prompt `Summarize ${input}`
+    client: GPT4
+    prompt: `Summarize ${input}`
 }
 "##;
         db.add_or_update_file(path, source);

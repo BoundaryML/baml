@@ -1,8 +1,8 @@
 // This file contains invalid MDX header usage patterns
 
 function HeaderInPrompt() -> string {
-    client GPT4
-    prompt `
+    client: GPT4
+    prompt: `
         //# This is inside a prompt
         It should be treated as literal text, not a header
     `

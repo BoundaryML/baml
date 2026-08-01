@@ -165,8 +165,6 @@ ast_node!(BacktickInterpolation, BACKTICK_INTERPOLATION);
 
 ast_node!(TypeExpr, TYPE_EXPR);
 ast_node!(Attribute, ATTRIBUTE);
-ast_node!(TypeBuilderBlock, TYPE_BUILDER_BLOCK);
-ast_node!(DynamicTypeDef, DYNAMIC_TYPE_DEF);
 ast_node!(ObjectField, OBJECT_FIELD);
 ast_node!(GenericParam, GENERIC_PARAM);
 
@@ -975,14 +973,14 @@ impl TemplateStringDef {
 impl LlmFunctionBody {
     /// Get the client field if present.
     ///
-    /// For `function Foo() -> string { client GPT4 ... }`, returns the `client GPT4` field.
+    /// For `function Foo() -> string { client: GPT4 ... }`, returns the `client: GPT4` field.
     pub fn client_field(&self) -> Option<ClientField> {
         self.syntax.children().find_map(ClientField::cast)
     }
 
     /// Get the prompt field if present.
     ///
-    /// For `function Foo() -> string { ... prompt #"..."# }`, returns the `prompt #"..."#` field.
+    /// For `function Foo() -> string { ... prompt: #"..."# }`, returns the `prompt: #"..."#` field.
     pub fn prompt_field(&self) -> Option<PromptField> {
         self.syntax.children().find_map(PromptField::cast)
     }
@@ -1030,13 +1028,13 @@ impl ClientValueDef {
 
 impl ToolsField {
     /// The tools value expression — the first child node after the `tools`
-    /// keyword and optional colon (usually an `ARRAY_LITERAL`).
+    /// keyword and colon (usually an `ARRAY_LITERAL`).
     pub fn expr(&self) -> Option<SyntaxNode> {
         self.syntax.children().next()
     }
 
     /// The tools value as a node-or-token element. A bare dot-free
-    /// identifier (`tools my_tools`) is emitted by the parser as a WORD
+    /// identifier (`tools: my_tools`) is emitted by the parser as a WORD
     /// token with no wrapping node, so [`Self::expr`] alone would miss it
     /// and the field would silently lower to an empty toolbox.
     pub fn value_element(&self) -> Option<rowan::NodeOrToken<SyntaxNode, SyntaxToken>> {
@@ -1049,7 +1047,7 @@ impl ToolsField {
                         continue;
                     }
                     // The leading `tools` keyword lexes as a WORD; everything
-                    // after it (and the optional colon) is the value.
+                    // after it (and the colon) is the value.
                     if !seen_keyword && t.kind() == SyntaxKind::WORD && t.text() == "tools" {
                         seen_keyword = true;
                         continue;
@@ -1073,8 +1071,8 @@ impl SpecExpr {
 impl ClientField {
     /// Get the client name token if it's a simple identifier.
     ///
-    /// For `client GPT4`, returns the `GPT4` token.
-    /// For `client "openai/gpt-4o"`, returns None (use `name_or_string()` instead).
+    /// For `client: GPT4`, returns the `GPT4` token.
+    /// For `client: "openai/gpt-4o"`, returns None (use `name_or_string()` instead).
     pub fn name(&self) -> Option<SyntaxToken> {
         self.syntax
             .children_with_tokens()
@@ -1085,15 +1083,15 @@ impl ClientField {
     /// Get the client value as a string, whether it's an identifier, an
     /// unquoted shorthand, or a string literal.
     ///
-    /// For `client GPT4`, returns "GPT4".
-    /// For `client "openai/gpt-4o"`, returns "openai/gpt-4o".
-    /// For `client openai/gpt-4o` (unquoted shorthand), returns
+    /// For `client: GPT4`, returns "GPT4".
+    /// For `client: "openai/gpt-4o"`, returns "openai/gpt-4o".
+    /// For `client: openai/gpt-4o` (unquoted shorthand), returns
     /// "openai/gpt-4o" — the parser consumes the whole shorthand as value
     /// tokens, and truncating to the first WORD would silently resolve the
     /// provider prefix alone.
     pub fn value(&self) -> Option<String> {
         // Try token form first: concatenate every non-trivia value token after
-        // the `client` keyword and one optional leading colon. Only the FIRST
+        // the `client` keyword and the leading colon. Only the FIRST
         // colon is field syntax — later ones belong to the value (model ids
         // like `ollama/llama3:8b`). A single WORD yields the plain identifier;
         // a multi-token run reproduces the unquoted shorthand (its source has
@@ -1126,7 +1124,7 @@ impl ClientField {
 
     /// The client value as a node-or-token element: a `STRING_LITERAL` node
     /// for the `"provider/model"` form, any other node for an expression
-    /// (`client my_client()`), or a bare identifier token (`client Fast`).
+    /// (`client: my_client()`), or a bare identifier token (`client: Fast`).
     pub fn value_element(&self) -> Option<rowan::NodeOrToken<SyntaxNode, SyntaxToken>> {
         for el in self.syntax.children_with_tokens() {
             match &el {
@@ -1153,7 +1151,7 @@ impl PromptField {
 
     /// Get the backtick string literal node containing the prompt.
     ///
-    /// For `` prompt `Hello ${name}` ``, returns the `` `Hello ${name}` `` node.
+    /// For `` prompt: `Hello ${name}` ``, returns the `` `Hello ${name}` `` node.
     /// A backtick prompt compiles to a prompt-tag closure.
     pub fn backtick_string(&self) -> Option<BacktickStringLiteral> {
         self.syntax.children().find_map(BacktickStringLiteral::cast)
@@ -2470,32 +2468,22 @@ impl TypeAliasDef {
 }
 
 impl BlockAttribute {
-    /// Get the first segment of the attribute name (e.g., "dynamic" from @@dynamic).
+    /// Get the first segment of the attribute name.
     pub fn name(&self) -> Option<SyntaxToken> {
         self.syntax
             .children_with_tokens()
             .filter_map(rowan::NodeOrToken::into_token)
-            .find(|token| {
-                matches!(
-                    token.kind(),
-                    SyntaxKind::WORD | SyntaxKind::KW_DYNAMIC | SyntaxKind::KW_THROWS
-                )
-            })
+            .find(|token| matches!(token.kind(), SyntaxKind::WORD | SyntaxKind::KW_THROWS))
     }
 
     /// Get the full attribute name including dot-separated modifiers.
-    /// For @@stream.done returns "stream.done", for @@dynamic returns "dynamic".
+    /// For `@@stream.done`, returns `stream.done`.
     pub fn full_name(&self) -> Option<String> {
         let segments: Vec<String> = self
             .syntax
             .children_with_tokens()
             .filter_map(rowan::NodeOrToken::into_token)
-            .filter(|token| {
-                matches!(
-                    token.kind(),
-                    SyntaxKind::WORD | SyntaxKind::KW_DYNAMIC | SyntaxKind::KW_THROWS
-                )
-            })
+            .filter(|token| matches!(token.kind(), SyntaxKind::WORD | SyntaxKind::KW_THROWS))
             .map(|token| token.text().to_string())
             .collect();
 

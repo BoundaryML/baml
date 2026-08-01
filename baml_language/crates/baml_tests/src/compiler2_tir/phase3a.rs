@@ -176,8 +176,8 @@ fn backtick_llm_function_compiles_to_agent_loop() {
 client MyClient = openai.OpenAiClient.new(model = "gpt-4o-mini", api_key = "k");
 
 function Greet(name: string) -> string {
-  client MyClient
-  prompt `Hello ${name}!`
+  client: MyClient
+  prompt: `Hello ${name}!`
 }
 "#,
     );
@@ -207,34 +207,34 @@ fn new_mode_failures_have_good_diagnostics() {
         // (label, client clause, prompt body, a phrase the diagnostic must contain)
         (
             "undef_var",
-            "client C",
-            "prompt `Hi ${nobody}!`",
+            "client: C",
+            "prompt: `Hi ${nobody}!`",
             "unresolved name: nobody",
         ),
         (
             "ctx_bad_field",
-            "client C",
-            "prompt `${ctx.nope}`",
+            "client: C",
+            "prompt: `${ctx.nope}`",
             "has no member `nope`",
         ),
         (
             "arith_type_err",
-            "client C",
-            r#"prompt `${1 + "a"}`"#,
+            "client: C",
+            r#"prompt: `${1 + "a"}`"#,
             "operator `+`",
         ),
         // `ctx.output_format_with` is removed surface: only `output_format`
         // exists on the spec ctx, so this is a member error now.
         (
             "removed_ctx_method",
-            "client C",
-            "prompt `${ctx.output_format_with(5)}`",
+            "client: C",
+            "prompt: `${ctx.output_format_with(5)}`",
             "has no member `output_format_with`",
         ),
         (
             "bad_client",
-            "client Nope",
-            "prompt `Hi ${name}!`",
+            "client: Nope",
+            "prompt: `Hi ${name}!`",
             "unresolved name: Nope",
         ),
         // Block-tag interps (`${for}`) must also report at the user's
@@ -242,20 +242,20 @@ fn new_mode_failures_have_good_diagnostics() {
         // it matches plain `if`/`while`, which BAML does not bool-check.)
         (
             "for_non_iterable",
-            "client C",
-            "prompt `${for (let x in 5)}${x}${endfor}`",
+            "client: C",
+            "prompt: `${for (let x in 5)}${x}${endfor}`",
             "cannot iterate over type `5`",
         ),
         (
             "for_body_type_err",
-            "client C",
-            r#"prompt `${for (let x in [1, 2])}${x + "a"}${endfor}`"#,
+            "client: C",
+            r#"prompt: `${for (let x in [1, 2])}${x + "a"}${endfor}`"#,
             "operator `+`",
         ),
         (
             "role_marker_requires_name",
-            "client C",
-            "prompt `${role()}hi`",
+            "client: C",
+            "prompt: `${role()}hi`",
             "expected 1 argument(s), got 0",
         ),
     ];
@@ -630,8 +630,8 @@ client DefaultClient = openai.OpenAiClient.new(model = "gpt-4o-mini", api_key = 
 client OverrideClient = openai.OpenAiClient.new(model = "gpt-4o-mini", api_key = "override-key");
 
 function Ask(input: string) -> string {
-  client DefaultClient
-  prompt `${input}`
+  client: DefaultClient
+  prompt: `${input}`
 }
 
 function call_overrides() -> string {

@@ -8,9 +8,9 @@ client GeminiFlash = google.GoogleClient.new(
 
 function FetchDatax(user_id: string) -> Hi {
     //# collect source material
-    client GeminiFlash
+    client: GeminiFlash
 
-    prompt `
+    prompt: `
         give short story 10 sentences
         make up data ${user_id}.
 

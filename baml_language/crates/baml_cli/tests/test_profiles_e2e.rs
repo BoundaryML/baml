@@ -39,8 +39,8 @@ testset "integration" {
 client TestClient = openai.OpenAiClient.new(model = "gpt-4o-mini");
 
 function Summarize(input: string) -> string {
-  client TestClient
-  prompt `${input}`
+  client: TestClient
+  prompt: `${input}`
 }
 
 test BasicTest {

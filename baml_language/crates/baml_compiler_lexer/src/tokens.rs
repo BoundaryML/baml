@@ -71,9 +71,6 @@ pub enum TokenKind {
     RetryPolicy,
     #[token("template_string")]
     TemplateString,
-    #[token("type_builder")]
-    TypeBuilder,
-
     // Control flow keywords
     #[token("if")]
     If,
@@ -115,9 +112,6 @@ pub enum TokenKind {
     Instanceof,
     #[token("is")]
     Is,
-    #[token("dynamic")]
-    Dynamic,
-
     // ============ Identifiers and Literals ============
     /// Any identifier-like word (non-keyword)
     /// Also matches $-prefixed identifiers and `$`-separated names.
@@ -365,7 +359,6 @@ impl std::fmt::Display for TokenKind {
             TokenKind::TestSet => "testset",
             TokenKind::RetryPolicy => "retry_policy",
             TokenKind::TemplateString => "template_string",
-            TokenKind::TypeBuilder => "type_builder",
             TokenKind::If => "if",
             TokenKind::Else => "else",
             TokenKind::For => "for",
@@ -385,8 +378,6 @@ impl std::fmt::Display for TokenKind {
             TokenKind::Defer => "defer",
             TokenKind::Instanceof => "instanceof",
             TokenKind::Is => "is",
-            TokenKind::Dynamic => "dynamic",
-
             // Identifiers and literals
             TokenKind::Word => "identifier",
             TokenKind::Quote => "'\"'",
@@ -592,6 +583,11 @@ mod tests {
             .map(|t| t.text.as_str())
             .collect();
         assert_eq!(words, vec!["gpt-4o", "model-name"]);
+    }
+
+    #[test]
+    fn dynamic_is_an_identifier() {
+        assert_eq!(lex_no_whitespace("dynamic"), vec![TokenKind::Word]);
     }
 
     #[test]

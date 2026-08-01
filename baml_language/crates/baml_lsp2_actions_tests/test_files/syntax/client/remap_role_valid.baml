@@ -13,8 +13,8 @@ client<llm> MyClient {
 }
 
 function TestRemap(input: string) -> string {
-  client MyClient
-  prompt `
+  client: MyClient
+  prompt: `
     ${role("user")}
     Test message: ${input}
   `
@@ -45,7 +45,7 @@ function TestRemap(input: string) -> string {
 // E0003
 //
 //   × unresolved name: `MyClient`
-//     ╭─[client_remap_role_valid.baml:16:10]
-//  16 │   client MyClient
-//     ·          ────────
+//     ╭─[client_remap_role_valid.baml:16:11]
+//  16 │   client: MyClient
+//     ·           ────────
 //     ╰────

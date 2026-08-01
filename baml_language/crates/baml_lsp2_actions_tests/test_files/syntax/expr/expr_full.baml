@@ -1,11 +1,11 @@
 function MakePoem(length: int) -> string {
-    client GPT4o
-    prompt `Write a poem ${length} lines long.`
+    client: GPT4o
+    prompt: `Write a poem ${length} lines long.`
 }
 
 function CombinePoems(poem1: string, poem2: string) -> string {
-    client GPT4o
-    prompt `Combine the following two poems into one poem.
+    client: GPT4o
+    prompt: `Combine the following two poems into one poem.
 
     Poem 1:
     ${poem1}

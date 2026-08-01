@@ -443,37 +443,12 @@ TriviaRetryBlock /* 4 name trailing */
 
 // ===== Test declaration =====
 function TestTarget() -> string {
-    client BasicClient
-    prompt `Hello`
+    client: BasicClient
+    prompt: `Hello`
 }
 
 test BasicTest {
     functions [TestTarget]
-    args {
-
-    }
-}
-
-// ===== Test with type builder =====
-test TypeBuilderTest {
-    functions [TestTarget]
-    type_builder {
-        class InnerClass {
-            b int
-        }
-        dynamic class DynamicInner {
-            c string
-        }
-        enum InnerEnum {
-            X
-            Y
-        }
-        dynamic enum DynamicInnerEnum {
-            P
-            Q
-        }
-        type InnerAlias = string | int
-    },
     args {
 
     }
@@ -518,141 +493,6 @@ TriviaTestBlock /* 4 name trailing */
     } /* 16 args close brace trailing */
 /* 17 close brace leading */
 } /* 18 close brace trailing */
-
-// ===== Test with type builder containing long/complex types =====
-test LongTypeBuilderTest {
-    functions [TestTarget]
-    type_builder {
-        class VeryLongClassNameThatExceedsTheLineLimitWhenCombinedWithTheTypeBuilderIndentation {
-            extremely_long_field_name_for_testing_wrapping int
-            another_very_long_field_name string
-        }
-        enum VeryLongEnumNameThatAlsoExceedsTheLineLimitWhenCombinedWithTheTypeBuilderIndentation {
-            VeryLongVariantNameThatExceedsLimit
-            AnotherVeryLongVariantName
-        }
-        type VeryLongTypeAliasNameThatExceedsLimit = int | string | bool | float | null | int[] | string[]
-    }
-    args {
-
-    }
-}
-
-// ===== Trivia on test with type builder (line comments) =====
-// 1 test leading
-test // 2 test trailing
-// 3 name leading
-TriviaTypeBuilderTest // 4 name trailing
-// 5 open brace leading
-{ // 6 open brace trailing
-    // 7 functions leading
-    functions // 8 functions trailing
-    // 9 value leading
-    [TestTarget] // 10 value trailing
-    // 11 type_builder leading
-    type_builder // 12 type_builder trailing
-    // 13 tb open brace leading
-    { // 14 tb open brace trailing
-        // 15 class leading
-        class // 16 class trailing
-        // 17 class name leading
-        TbInnerClass // 18 class name trailing
-        // 19 class brace leading
-        { // 20 class brace trailing
-            // 21 field leading
-            field_name: // 22 field name trailing
-            // 23 type leading
-            int // 24 type trailing
-        // 25 class close leading
-        } // 26 class close trailing
-        // 27 enum leading
-        enum // 28 enum trailing
-        // 29 enum name leading
-        TbInnerEnum // 30 enum name trailing
-        // 31 enum brace leading
-        { // 32 enum brace trailing
-            // 33 variant leading
-            X // 34 variant trailing
-        // 35 enum close leading
-        } // 36 enum close trailing
-        // 37 type alias leading
-        type // 38 type trailing
-        // 39 alias name leading
-        TbAlias // 40 alias name trailing
-        // 41 equals leading
-        = // 42 equals trailing
-        // 43 rhs leading
-        string // 44 rhs trailing
-    // 45 tb close leading
-    } // 46 tb close trailing
-    // 47 args leading
-    args // 48 args trailing
-    // 49 args brace leading
-    { // 50 args brace trailing
-    // 51 args close leading
-    } // 52 args close trailing
-// 53 close leading
-} // 54 close trailing
-
-///////////////////
-
-// ===== Trivia on test with type builder (block comments) =====
-/* 1 test leading */
-test /* 2 test trailing */
-/* 3 name leading */
-TriviaTypeBuilderTestBlock /* 4 name trailing */
-/* 5 open brace leading */
-{ /* 6 open brace trailing */
-    /* 7 functions leading */
-    functions /* 8 functions trailing */
-    /* 9 value leading */
-    [TestTarget] /* 10 value trailing */
-    /* 11 type_builder leading */
-    type_builder /* 12 type_builder trailing */
-    /* 13 tb open brace leading */
-    { /* 14 tb open brace trailing */
-        /* 15 class leading */
-        class /* 16 class trailing */
-        /* 17 class name leading */
-        TbInnerClassBlock /* 18 class name trailing */
-        /* 19 class brace leading */
-        { /* 20 class brace trailing */
-            /* 21 field leading */
-            field_name :/* 22 field name trailing */
-            /* 23 type leading */
-            int /* 24 type trailing */
-        /* 25 class close leading */
-        } /* 26 class close trailing */
-        /* 27 enum leading */
-        enum /* 28 enum trailing */
-        /* 29 enum name leading */
-        TbInnerEnumBlock /* 30 enum name trailing */
-        /* 31 enum brace leading */
-        { /* 32 enum brace trailing */
-            /* 33 variant leading */
-            X /* 34 variant trailing */
-        /* 35 enum close leading */
-        } /* 36 enum close trailing */
-        /* 37 type alias leading */
-        type /* 38 type trailing */
-        /* 39 alias name leading */
-        TbAliasBlock /* 40 alias name trailing */
-        /* 41 equals leading */
-        = /* 42 equals trailing */
-        /* 43 rhs leading */
-        string /* 44 rhs trailing */
-    /* 45 tb close leading */
-    } /* 46 tb close trailing */
-    /* 47 args leading */
-    args /* 48 args trailing */
-    /* 49 args brace leading */
-    { /* 50 args brace trailing */
-    /* 51 args close leading */
-    } /* 52 args close trailing */
-/* 53 close leading */
-} /* 54 close trailing */
-
-///////////////////
 
 // ===== Short names =====
 client<llm> C {

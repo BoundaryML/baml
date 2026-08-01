@@ -19,13 +19,13 @@ function ProcessVideo(transcript: string, title: string?) -> string {
 
 // LLM helper functions
 function GenerateTitle(transcript: string) -> string {
-    client GPT4
-    prompt `Generate a title from: ${transcript}`
+    client: GPT4
+    prompt: `Generate a title from: ${transcript}`
 }
 
 function SummarizeVideo(transcript: string) -> string {
-    client GPT4
-    prompt `Summarize: ${transcript}`
+    client: GPT4
+    prompt: `Summarize: ${transcript}`
 }
 
 client GPT4 = openai.OpenAiClient.new(

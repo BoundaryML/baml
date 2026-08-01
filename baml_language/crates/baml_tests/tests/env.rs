@@ -101,9 +101,9 @@ async fn runtime_constructed_openai_client_defaults_api_key_from_env() {
     let output = baml_test!(
         r#"
             function EnvPrompt() -> string {
-                client "openai/gpt-4o-mini"
-                tools []
-                prompt `Say hi`
+                client: "openai/gpt-4o-mini"
+                tools: []
+                prompt: `Say hi`
             }
 
             function main() -> map<string, string> {
@@ -135,9 +135,9 @@ async fn anthropic_clients_default_api_key_from_env_at_runtime() {
     let output = baml_test!(
         r#"
             function EnvPrompt() -> string {
-                client "anthropic/claude-haiku-4-5"
-                tools []
-                prompt `Say hi`
+                client: "anthropic/claude-haiku-4-5"
+                tools: []
+                prompt: `Say hi`
             }
 
             function main() -> map<string, string> {
