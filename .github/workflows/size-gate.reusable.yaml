@@ -50,7 +50,7 @@ jobs:
     timeout-minutes: 20
     continue-on-error: true
     steps:
-      - uses: useblacksmith/checkout@v1
+      - uses: useblacksmith/checkout@v1.1
         with:
           persist-credentials: false
 
@@ -136,7 +136,7 @@ jobs:
     timeout-minutes: 20
     continue-on-error: true
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           persist-credentials: false
 
@@ -226,7 +226,7 @@ jobs:
     env:
       CARGO_BUILD_JOBS: "16"
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           persist-credentials: false
 
@@ -330,7 +330,7 @@ jobs:
     timeout-minutes: 25
     continue-on-error: true
     steps:
-      - uses: useblacksmith/checkout@v1
+      - uses: useblacksmith/checkout@v1.1
         with:
           persist-credentials: false
 
@@ -421,7 +421,7 @@ jobs:
       contents: read
       pull-requests: write
     steps:
-      - uses: useblacksmith/checkout@v1
+      - uses: useblacksmith/checkout@v1.1
         with:
           persist-credentials: false
 

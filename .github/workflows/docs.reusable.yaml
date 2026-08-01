@@ -24,7 +24,7 @@ jobs:
       name: ${{ inputs.is_canary && 'boundary-tools-prod' || 'boundary-tools-dev' }}
     steps:
       - name: Checkout repository
-        uses: useblacksmith/checkout@v1
+        uses: useblacksmith/checkout@v1.1
         with:
           persist-credentials: false
 
@@ -37,7 +37,7 @@ jobs:
           env: docs-${{ inputs.is_canary && 'prod' || 'dev' }}
 
       - name: Setup Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v7
         with:
           node-version: '20'
 

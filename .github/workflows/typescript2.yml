@@ -30,7 +30,7 @@ jobs:
     timeout-minutes: 10
     steps:
       - name: Checkout
-        uses: useblacksmith/checkout@v1
+        uses: useblacksmith/checkout@v1.1
         with:
           fetch-depth: 0
           persist-credentials: false

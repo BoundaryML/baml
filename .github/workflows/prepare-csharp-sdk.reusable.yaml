@@ -25,12 +25,12 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 90
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           ref: ${{ inputs.source_sha }}
           persist-credentials: false
 
-      - uses: actions/setup-dotnet@v5
+      - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: 10.0.301
 
@@ -107,7 +107,7 @@ jobs:
             baml_language/sdks/csharp/bridge_csharp/tools/Baml.NuGetNormalizer/Baml.NuGetNormalizer.csproj \
             -- --self-test
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: csharp-neutral-preparation
           path: ${{ runner.temp }}/csharp-neutral
