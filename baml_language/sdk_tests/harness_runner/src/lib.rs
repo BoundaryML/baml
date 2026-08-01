@@ -386,8 +386,10 @@ pub fn assert_typescript_web_generated_esm(fixture: &str, runtime_dir: &str) {
     let root = fs::read_to_string(generated.join("baml_sdk/index.ts"))
         .unwrap_or_else(|e| panic!("{fixture}: read generated SDK root: {e}"));
     assert!(
-        root.contains("initializeRuntimeFromBytecode(_inlinedbaml.BYTECODE)"),
-        "{fixture}: generated SDK root must initialize the web runtime from emitted bytecode"
+        root.contains(
+            "initializeRuntimeFromBytecode(_inlinedbaml.BYTECODE, _inlinedbaml.BAML_TOML)"
+        ),
+        "{fixture}: generated SDK root must initialize the web runtime from emitted bytecode and metadata"
     );
 }
 

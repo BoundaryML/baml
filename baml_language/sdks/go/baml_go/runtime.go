@@ -61,10 +61,14 @@ type pendingCall struct {
 // serialized program. Generated projects normally call this through their
 // internal bootstrap package exactly once.
 func Initialize(bytecode []byte) error {
+	return InitializeWithMetadata(bytecode, "")
+}
+
+func InitializeWithMetadata(bytecode []byte, embeddedBamlToml string) error {
 	if err := ensureNativeRuntime(context.Background()); err != nil {
 		return err
 	}
-	return nativeInitialize(bytecode)
+	return nativeInitialize(bytecode, embeddedBamlToml)
 }
 
 func ensureNativeRuntime(ctx context.Context) error {
@@ -87,7 +91,7 @@ func ensureNativeRuntime(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	if err := nativeRegisterBridge(requiredRuntimeVersion()); err != nil {
+	if err := nativeRegisterBridge(BridgeRuntimeName, GetToolchainVersion(), GetBridgeRuntimeVersion()); err != nil {
 		nativeCloseAfterLoadFailure()
 		return err
 	}

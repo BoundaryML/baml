@@ -119,10 +119,15 @@ fn generate_fixture(
     )
     .expect("C# fixture bytecode serialization failed");
     let output_directory = fixture.join("baml_client");
+    let embedded_baml_toml = format!(
+        "[__baml_codegen]\nmetadata_version = 1\n\n[__baml_codegen.toolchain]\nversion = {:?}\n",
+        baml_version::CANONICAL_VERSION
+    );
     let generate = || {
         sdkgen_csharp::generate_into(sdkgen_csharp::CSharpGenerateRequest {
             symbols: &symbols,
             program_bytes: &bytecode,
+            embedded_baml_toml: &embedded_baml_toml,
             cli_version: baml_version::CANONICAL_VERSION,
             required_bridge_version: baml_version::CANONICAL_VERSION,
             program_identity,

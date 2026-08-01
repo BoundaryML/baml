@@ -1232,8 +1232,8 @@ internal static unsafe class Program
     private static void VerifyNativeAbiLayoutAndValidation()
     {
         Require(sizeof(BamlBuffer) == 16, "BamlBuffer layout changed");
-        Require(sizeof(BamlBridgeInfoV1) == 32, "BamlBridgeInfoV1 layout changed");
-        Require(sizeof(BamlApiV1) == 192, "BamlApiV1 layout changed");
+        Require(sizeof(BamlBridgeInfoV1) == 64, "BamlBridgeInfoV1 layout changed");
+        Require(sizeof(BamlApiV1) == 200, "BamlApiV1 layout changed");
         (string Field, int Offset)[] layout =
         [
             (nameof(BamlApiV1.AbiVersion), 0),
@@ -1260,6 +1260,7 @@ internal static unsafe class Program
             (nameof(BamlApiV1.RegisterBridge), 168),
             (nameof(BamlApiV1.RegisterUnhandledSpawnErrorCallback), 176),
             (nameof(BamlApiV1.ShutdownRuntime), 184),
+            (nameof(BamlApiV1.InitializeRuntimeFromBytecodeWithMetadata), 192),
         ];
         foreach ((string field, int offset) in layout)
         {
@@ -1271,7 +1272,7 @@ internal static unsafe class Program
         BamlApiV1 table = CreateValidTable();
         NativeApi.ValidateTable(&table);
         Require(
-            BamlApiV1Layout.RequiredPrefixSize == 192,
+            BamlApiV1Layout.RequiredPrefixSize == 200,
             "BamlApiV1 required prefix changed");
         table = CreateValidTable();
         table.StructSize += 64;
@@ -1282,12 +1283,12 @@ internal static unsafe class Program
         table.AbiVersion = 999;
         ExpectInvalidTable(table);
         table = CreateValidTable();
-        table.StructSize = 184;
+        table.StructSize = 192;
         ExpectInvalidTable(table);
         table = CreateValidTable();
         table.RegisterBridge = null;
         ExpectInvalidTable(table);
-        for (int field = 0; field < 22; field++)
+        for (int field = 0; field < 23; field++)
         {
             table = CreateValidTable();
             ClearRequiredFunction(ref table, field);
@@ -2501,6 +2502,7 @@ internal static unsafe class Program
         RegisterBridge = &RegisterBridge,
         RegisterUnhandledSpawnErrorCallback = &RegisterUnhandledSpawnError,
         ShutdownRuntime = &Shutdown,
+        InitializeRuntimeFromBytecodeWithMetadata = &InitializeWithMetadata,
     };
 
     private static void ExpectInvalidTable(BamlApiV1 table, bool passNull = false)
@@ -2543,6 +2545,7 @@ internal static unsafe class Program
             case 19: table.RegisterBridge = null; break;
             case 20: table.RegisterUnhandledSpawnErrorCallback = null; break;
             case 21: table.ShutdownRuntime = null; break;
+            case 22: table.InitializeRuntimeFromBytecodeWithMetadata = null; break;
             default: throw new ArgumentOutOfRangeException(nameof(field));
         }
     }
@@ -2580,6 +2583,9 @@ internal static unsafe class Program
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
     private static BamlBuffer Initialize(byte* bytes, nuint length) => default;
+
+    [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
+    private static BamlBuffer InitializeWithMetadata(byte* bytes, nuint length, byte* embeddedBamlToml) => default;
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
     private static void FreeBuffer(BamlBuffer buffer)

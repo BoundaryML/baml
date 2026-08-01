@@ -101,7 +101,7 @@ export declare class BamlRuntime {
    */
   static initializeRuntime(rootPath: string, files: Record<string, string>): BamlRuntime
   /** Initialize the process-global runtime from precompiled BAML bytecode. */
-  static initializeRuntimeFromBytecode(bytecode: Buffer): BamlRuntime
+  static initializeRuntimeFromBytecode(bytecode: Buffer, embeddedBamlToml?: string | undefined | null): BamlRuntime
   /** Call a BAML function synchronously (blocking). */
   callFunctionSync(argsProto: Buffer, ctx?: HostSpanManager | undefined | null, collectors?: Array<Collector> | undefined | null): Buffer
   /** Call a BAML function asynchronously. */
@@ -216,6 +216,8 @@ export declare function flushEvents(): void
 export declare function getRuntime(): BamlRuntime
 
 export declare function getVersion(): string
+export declare function getToolchainVersion(): string
+export declare function getBridgeRuntimeVersion(): string
 
 /**
  * A u64 handle key split into two i32 halves, mirroring the shape of

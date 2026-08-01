@@ -1614,12 +1614,14 @@ dependencies = [
  "libc",
  "once_cell",
  "prost",
+ "semver",
  "serde_json",
  "sys_native",
  "sys_ops",
  "sys_types",
  "thiserror 2.0.18",
  "tokio",
+ "toml 0.8.23",
  "vfs",
  "wasm-bindgen-futures",
 ]
@@ -1644,7 +1646,6 @@ dependencies = [
 name = "bridge_java"
 version = "0.0.0-beta"
 dependencies = [
- "baml_version",
  "bex_project",
  "bridge_cffi",
  "bridge_ctypes",

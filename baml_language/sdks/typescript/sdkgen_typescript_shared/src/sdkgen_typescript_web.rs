@@ -31,6 +31,21 @@ pub fn to_source_code_with_bytecode(
     to_source_code(pool, baml_bytecode, naming_convention)
 }
 
+pub fn to_source_code_with_bytecode_and_metadata(
+    pool: &SymbolPool,
+    baml_bytecode: &[u8],
+    embedded_baml_toml: &str,
+    naming_convention: NamingConvention,
+) -> HashMap<PathBuf, String> {
+    crate::to_source_code_with_metadata(
+        pool,
+        baml_bytecode,
+        Some(embedded_baml_toml),
+        naming_convention,
+        crate::GeneratorConfig::new(RUNTIME_PACKAGE),
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use baml_base::Name as BaseName;

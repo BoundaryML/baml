@@ -51,11 +51,28 @@ pub fn to_source_code_with_bytecode(
     baml_bytecode: &[u8],
     _naming_convention: NamingConvention,
 ) -> HashMap<PathBuf, String> {
+    to_source_code_with_optional_metadata(pool, baml_bytecode, None)
+}
+
+pub fn to_source_code_with_bytecode_and_metadata(
+    pool: &SymbolPool,
+    baml_bytecode: &[u8],
+    embedded_baml_toml: &str,
+    _naming_convention: NamingConvention,
+) -> HashMap<PathBuf, String> {
+    to_source_code_with_optional_metadata(pool, baml_bytecode, Some(embedded_baml_toml))
+}
+
+fn to_source_code_with_optional_metadata(
+    pool: &SymbolPool,
+    baml_bytecode: &[u8],
+    embedded_baml_toml: Option<&str>,
+) -> HashMap<PathBuf, String> {
     let mut out: HashMap<PathBuf, String> = HashMap::new();
 
     out.insert(
         PathBuf::from("_InlinedBaml.swift"),
-        render_inlined_baml(baml_bytecode),
+        render_inlined_baml(baml_bytecode, embedded_baml_toml),
     );
 
     let ctx = build_translate_ctx(pool);
@@ -554,7 +571,8 @@ fn render_root(root_decls: &BTreeMap<String, String>) -> String {
          \tstatic let _initialized: Bool = {{\n\
          \t\tBamlRuntime.shared.initialize(\n\
          \t\t\tbytecode: _BamlInlined.bytecode,\n\
-         \t\t\tsdkVersion: sdkVersion\n\
+         \t\t\tsdkVersion: sdkVersion,\n\
+         \t\t\tembeddedBamlToml: _BamlInlined.embeddedBamlToml\n\
          \t\t)\n\
          \t\treturn true\n\
          \t}}()\n",
@@ -621,7 +639,7 @@ fn render_ns_enum(
 /// multi-MB payload). A `"""…"""` literal is a single token — instant —
 /// and the embedded newlines are skipped by the base64 decoder via
 /// `.ignoreUnknownCharacters`.
-fn render_inlined_baml(baml_bytecode: &[u8]) -> String {
+fn render_inlined_baml(baml_bytecode: &[u8], embedded_baml_toml: Option<&str>) -> String {
     // Fixed-width lines inside the literal for editor/diff friendliness.
     const CHUNK: usize = 96;
     let b64 = base64::engine::general_purpose::STANDARD.encode(baml_bytecode);
@@ -636,6 +654,10 @@ fn render_inlined_baml(baml_bytecode: &[u8]) -> String {
         out.push('\n');
     }
     out.push_str("        \"\"\"\n");
+    let manifest = embedded_baml_toml
+        .map(|manifest| format!("Optional.some({manifest:?})"))
+        .unwrap_or_else(|| "Optional.none".to_string());
+    let _ = writeln!(out, "    static let embeddedBamlToml: String? = {manifest}");
     out.push_str(
         "\n    static var bytecode: Data {\n        \
          Data(base64Encoded: bytecodeBase64, options: .ignoreUnknownCharacters)!\n    }\n}\n",

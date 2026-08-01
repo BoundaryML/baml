@@ -5,12 +5,20 @@ use std::collections::HashMap;
 use wasm_bindgen::prelude::*;
 
 #[wasm_bindgen(js_name = stageRuntimeBytecode)]
-pub fn stage_runtime_bytecode(bytecode: &[u8]) -> Result<(), JsValue> {
+#[allow(clippy::needless_pass_by_value)] // wasm-bindgen requires an owned optional string at the JS boundary.
+pub fn stage_runtime_bytecode(
+    bytecode: &[u8],
+    embedded_baml_toml: Option<String>,
+) -> Result<(), JsValue> {
     let sys_ops = sys_wasm::build()
         .map_err(|error| crate::errors::setup_error(crate::errors::CLIENT, error))?;
-    bridge_cffi::initialize_runtime_from_bytecode_with_sys_ops(bytecode, sys_ops)
-        .map(|_| ())
-        .map_err(|error| crate::errors::bridge_error(&error))
+    bridge_cffi::initialize_runtime_from_bytecode_with_sys_ops(
+        bytecode,
+        embedded_baml_toml.as_deref(),
+        sys_ops,
+    )
+    .map(|_| ())
+    .map_err(|error| crate::errors::bridge_error(&error))
 }
 
 #[wasm_bindgen(js_name = stageRuntimeSources)]

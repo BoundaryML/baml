@@ -547,8 +547,11 @@ jobs:
             baml_language/sdks/csharp/bridge_csharp/src/Baml.Bridge.csproj)"
           rust_crate="$(sed -n 's/^version = "\(.*\)"$/\1/p' \
             baml_language/sdks/rust/bridge_rust/Cargo.toml)"
+          go_toolchain="$(sed -n \
+            's/^const ToolchainVersion = "\(.*\)"$/\1/p' \
+            baml_language/sdks/go/baml_go/version.go)"
           go_runtime="$(sed -n \
-            's/^const DefaultRuntimeVersion = "\(.*\)"$/\1/p' \
+            's/^const BridgeRuntimeVersion = "\(.*\)"$/\1/p' \
             baml_language/sdks/go/baml_go/version.go)"
           vsix="$(jq -r .version typescript2/app-vscode-ext/package.json)"
           test "$node_npm" = "$nightly"
@@ -559,13 +562,15 @@ jobs:
           test "$gradle_plugin" = "$nightly"
           test "$swiftpm" = "$nightly"
           test "$rust_crate" = "$nightly"
-          test "$go_runtime" = "$nightly"
+          test "$go_toolchain" = "$nightly"
+          test "$go_runtime" = "v$nightly"
           test "$vsix" = "$nightly"
           for shipping_version in \
             "$node_npm" "$web_npm" "$csharp_nuget" "$maven" \
-            "$gradle_plugin" "$swiftpm" "$rust_crate" "$go_runtime" "$vsix"; do
+            "$gradle_plugin" "$swiftpm" "$rust_crate" "$go_toolchain" "$vsix"; do
             test "$shipping_version" != "$canary"
           done
+          test "$go_runtime" != "v$canary"
 
   # Call reusable workflows
   bridge-cffi-release:
