@@ -454,6 +454,20 @@ impl TypeContext for NoFacts {
     }
 }
 
+/// [`TypeContext`] must stay usable behind a trait object: the fact methods are the
+/// dynamic half of the algebra, and a solver session holds one `&dyn TypeContext` rather
+/// than monomorphizing every walk per context. The `where Self: Sized` bounds on the
+/// defaulted algebra methods are what keeps them out of the vtable — dropping one would
+/// silently break this.
+#[cfg(test)]
+const _: fn() = || {
+    #[expect(
+        deprecated,
+        reason = "type-level assertion only; no facts are consulted"
+    )]
+    let _: &dyn TypeContext = &NoFacts;
+};
+
 /// Free-function form of [`TypeContext::normalize`], for a context held by value.
 /// Pending removal once every caller uses the method form.
 pub fn normalize<C: TypeContext>(ty: &Ty, ctx: &C) -> Ty {
@@ -1767,6 +1781,18 @@ impl NormalTy {
         assumptions: &mut HashSet<(NormalTy, NormalTy)>,
     ) -> bool {
         match (self, sup) {
+            // The coinductive assumption probe is sound only on contractive
+            // operands: unfolding a μ with an unguarded spine re-injects the μ
+            // into its own union, and the recorded pair then closes the
+            // derivation without ever crossing a constructor — proving
+            // `T <: μX.(X | …)` for arbitrary `T`. Canonical operands are
+            // ε-closed (contractive), but the read-back bail hands this method
+            // the pre-automaton spelling; answer by identity, never by unfold.
+            (NormalTy::Mu { .. }, _) | (_, NormalTy::Mu { .. })
+                if self.has_unguarded_mu() || sup.has_unguarded_mu() =>
+            {
+                self == sup
+            }
             // μ-unfolding (equirecursive). The closed-term substitution needs no
             // index shifting, and the outer `is_subtype_of` recorded this pair on
             // the expanding-arm assumption set.

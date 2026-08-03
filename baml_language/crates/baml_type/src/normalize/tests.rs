@@ -76,8 +76,10 @@ impl TypeContext for Ctx {
     }
 
     fn interface_requires(&self, sub: &Interface, sup: &Interface) -> bool {
+        // *Properly* requires, per the trait contract: same-name queries only arise for
+        // distinct instantiations (`I<int>` vs `I<string>`), which are not requirements.
         let (a, b) = (&sub.name, &sup.name);
-        a == b || self.requires.iter().any(|(x, y)| x == a && y == b)
+        self.requires.iter().any(|(x, y)| x == a && y == b)
     }
 
     fn enum_variants(&self, name: &QualifiedTypeName) -> Option<Vec<Name>> {
@@ -1573,6 +1575,35 @@ fn overlapping_recursive_types_are_not_disjoint() {
     let d = union(vec![Ty::bool(), list(alias("A"))]);
     assert!(!ctx.definitely_disjoint(&alias("A"), &d));
     assert_eq!(ctx.constant_equality(&alias("A"), &d), None);
+}
+
+#[test]
+fn unguarded_mu_subtyping_is_not_vacuously_true() {
+    // A read-back bail can hand the subtype checker a pre-automaton μ with an
+    // unguarded spine; unfolding it re-injects the μ into its own union, and
+    // the assumption probe would close `string <: μX.(X | Foo<X>)` without
+    // crossing a constructor. The contractivity guard must answer by identity.
+    let unguarded = NormalTy::Mu {
+        binder: MuDisplay {
+            name: None,
+            rendered: Box::new(Ty::Never {
+                attr: TyAttr::default(),
+            }),
+        },
+        body: Box::new(NormalTy::Union(vec![
+            NormalTy::RecVar(0),
+            NormalTy::List(Box::new(NormalTy::RecVar(0))),
+        ])),
+    };
+    let ctx = Ctx::default();
+    assert!(!NormalTy::String.is_subtype_of(&unguarded, &ctx, &mut HashSet::new()));
+    assert!(!unguarded.is_subtype_of(&NormalTy::String, &ctx, &mut HashSet::new()));
+    // Identity across the guard stays reflexive.
+    assert!(
+        unguarded
+            .clone()
+            .is_subtype_of(&unguarded, &ctx, &mut HashSet::new())
+    );
 }
 
 #[test]
