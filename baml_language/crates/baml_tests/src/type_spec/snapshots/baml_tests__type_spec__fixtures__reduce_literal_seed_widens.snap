@@ -12,9 +12,9 @@ expression: outcome.dump
 476..477 '2': 2
 479..480 '3': 3
 489..508 '(a, b)... + b }': hir_ty=[(a: int, b: int) -> int throws never] tir=[(a: 0, b: int) -> 0 throws E]
-499..508 '{ a + b }': hir_ty=[!error] tir=[int]
+499..508 '{ a + b }': int
 501..502 'a': hir_ty=[int] tir=[0]
-501..506 'a + b': hir_ty=[!error] tir=[int]
+501..506 'a + b': int
 505..506 'b': int
 510..511 '0': 0
 536..541 'total': int

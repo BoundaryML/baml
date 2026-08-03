@@ -17,6 +17,7 @@
 //! yet still record the `Error` sentinel and upgrade slice by slice.
 
 pub(crate) mod flow;
+pub(crate) mod obligations;
 pub(crate) mod pat;
 pub mod unify;
 
@@ -287,8 +288,11 @@ struct InferenceContext<'db> {
     table: InferenceTable,
     /// The irreducible `Sub` residue: pairs that were neither ground nor
     /// var-headed nor decomposable when emitted; re-examined at finish once
-    /// resolution has run. Generalizes into the obligation worklist at I4.
+    /// resolution has run.
     deferred_subs: Vec<(Ty, Ty)>,
+    /// The obligation worklist (I4): registered during the walk,
+    /// discharged at finish interleaved with bound resolution.
+    obligations: Vec<obligations::Obligation>,
     diverges: Diverges,
     result: InferenceResult,
 }
@@ -323,6 +327,7 @@ impl<'db> InferenceContext<'db> {
             throws_channels: vec![Vec::new()],
             table: InferenceTable::new(),
             deferred_subs: Vec::new(),
+            obligations: Vec::new(),
             diverges: Diverges::Maybe,
             result: InferenceResult::default(),
         }
@@ -510,7 +515,7 @@ impl<'db> InferenceContext<'db> {
                 self.diverges = Diverges::Always;
                 Ty::never()
             }
-            Expr::Binary { op, lhs, rhs } => self.infer_binary(body, *op, *lhs, *rhs),
+            Expr::Binary { op, lhs, rhs } => self.infer_binary(body, expr, *op, *lhs, *rhs),
             Expr::Unary { op, expr: operand } => self.infer_unary(body, *op, *operand),
             Expr::Call { callee, args, .. } => self.infer_call(body, expr, *callee, args),
             Expr::Object {
@@ -998,6 +1003,7 @@ impl<'db> InferenceContext<'db> {
     fn infer_binary(
         &mut self,
         body: &ExprBody,
+        expr: ExprId,
         op: baml_compiler2_ast::BinaryOp,
         lhs: ExprId,
         rhs: ExprId,
@@ -1042,7 +1048,7 @@ impl<'db> InferenceContext<'db> {
                     BinaryOp::Mod => "Remainder",
                     _ => unreachable!("outer match arm"),
                 };
-                self.dispatch_operator(interface, &lhs_ty, Some(&rhs_ty))
+                self.operator_or_obligation(expr, interface, &lhs_ty, Some(&rhs_ty))
             }
             BinaryOp::BitAnd
             | BinaryOp::BitOr
@@ -1069,20 +1075,47 @@ impl<'db> InferenceContext<'db> {
             }
             baml_compiler2_ast::UnaryOp::Neg => {
                 let ty = self.infer_expr(body, operand, &Expectation::None);
-                self.dispatch_operator("Negate", &ty, None)
+                self.operator_or_obligation(operand, "Negate", &ty, None)
             }
         }
     }
 
-    /// The dispatch: every (lhs alternative, rhs alternative) pair of the
-    /// operands' union members must have an impl of
+    /// Operator typing at a use site: ground operands dispatch now;
+    /// operands still carrying inference variables REGISTER an operator
+    /// obligation (I4 - rust-analyzer's register-and-fulfill, never
+    /// guess-or-fail early) whose fresh output variable stands for the
+    /// result until discharge.
+    fn operator_or_obligation(
+        &mut self,
+        at: ExprId,
+        interface: &'static str,
+        lhs: &Ty,
+        rhs: Option<&Ty>,
+    ) -> Ty {
+        let lhs_resolved = self.table.resolve_completely(lhs);
+        let rhs_resolved = rhs.map(|ty| self.table.resolve_completely(ty));
+        if lhs_resolved.has_infer() || rhs_resolved.as_ref().is_some_and(Ty::has_infer) {
+            let out = self.table.new_var_ty();
+            self.register_obligation(obligations::Obligation::Operator {
+                interface,
+                lhs: lhs_resolved,
+                rhs: rhs_resolved,
+                out: out.clone(),
+                at,
+            });
+            return out;
+        }
+        self.dispatch_operator(interface, &lhs_resolved, rhs_resolved.as_ref())
+    }
+
+    /// The GROUND dispatch: every (lhs alternative, rhs alternative) pair
+    /// of the operands' union members must have an impl of
     /// `baml.ops.<interface>`; the result is the join of the Outputs.
     /// Literals widen to their bases for lookup (folding literal
     /// arithmetic is a later refinement). `never` propagates
     /// (unreachable-operand rule); Error/unknown operands suppress to the
-    /// sentinel; inference variables in operand position defer to the
-    /// obligation machinery (I4) and sentinel until then.
-    fn dispatch_operator(&mut self, interface: &str, lhs: &Ty, rhs: Option<&Ty>) -> Ty {
+    /// sentinel. Also the discharge rule for operator obligations.
+    pub(super) fn dispatch_operator(&mut self, interface: &str, lhs: &Ty, rhs: Option<&Ty>) -> Ty {
         let lhs = self.table.resolve_completely(lhs);
         let rhs = rhs.map(|ty| self.table.resolve_completely(ty));
         if matches!(lhs.kind(), TyKind::Never { .. })
@@ -1333,6 +1366,7 @@ impl<'db> InferenceContext<'db> {
             {
                 let signature = function_signature(self.db, function);
                 let instantiation = self.instantiation_args(call, &signature.generic_params);
+                self.register_call_bounds(function, &instantiation, call);
                 let fn_ty = function_value_ty(&signature, &instantiation);
                 self.result.type_of_expr.insert(callee, fn_ty.clone());
                 return (fn_ty, false);
@@ -1425,6 +1459,7 @@ impl<'db> InferenceContext<'db> {
         let own_params = signature.generic_params[class_count..].to_vec();
         let mut instantiation = candidate.class_args;
         instantiation.extend(self.instantiation_args(call, &own_params));
+        self.register_call_bounds(candidate.method, &instantiation, call);
         let fn_ty = function_value_ty(&signature, &instantiation);
         let bound = signature
             .params
@@ -1592,6 +1627,45 @@ impl<'db> InferenceContext<'db> {
             throws: throws_ty,
             attr: TyAttr::default(),
         })
+    }
+
+    /// Registers one Implements obligation per declared bound of a
+    /// callee's generic frame, with the call-site instantiation
+    /// substituted through bound args (bounds may reference sibling
+    /// params). Discharge stalls until the argument grounds -
+    /// rust-analyzer's where-clause obligations.
+    fn register_call_bounds(
+        &mut self,
+        function: baml_compiler2_hir::loc::FunctionLoc<'db>,
+        instantiation: &[Ty],
+        at: ExprId,
+    ) {
+        let bounds = crate::lower::function_generic_bounds(self.db, function);
+        for (param, param_bounds) in bounds {
+            let Some(arg) = instantiation.get(param.index() as usize) else {
+                continue;
+            };
+            for bound in param_bounds {
+                let interface = baml_type::interned::InterfaceRef::new(
+                    bound.name.clone(),
+                    bound
+                        .generics
+                        .iter()
+                        .map(|generic| substitute_params(generic, instantiation))
+                        .collect(),
+                    bound
+                        .associated_types
+                        .iter()
+                        .map(|(name, ty)| (name.clone(), substitute_params(ty, instantiation)))
+                        .collect(),
+                );
+                self.register_obligation(obligations::Obligation::Implements {
+                    ty: arg.clone(),
+                    interface,
+                    at,
+                });
+            }
+        }
     }
 
     /// The instantiation vector for a generic item at a use site: explicit
@@ -1923,7 +1997,14 @@ impl<'db> InferenceContext<'db> {
     /// syntactic while variables were live. The invariant afterward: no
     /// `Infer` reaches the result.
     fn finish(mut self) -> InferenceResult {
-        self.resolve_bounded_vars();
+        // The fulfillment fixpoint: resolve what ground bounds determine,
+        // attempt obligations, repeat while either side progresses.
+        loop {
+            self.resolve_bounded_vars();
+            if !self.discharge_obligations_once() {
+                break;
+            }
+        }
         self.drain_deferred_subs();
         // BAML's only defaulting rule: an unconstrained EFFECT is `never`
         // (a value variable erases to Error instead - ruling 2).
@@ -2015,18 +2096,31 @@ impl<'db> InferenceContext<'db> {
                 // Bounds must be ground to decide; classes whose bounds
                 // still mention other unsolved vars wait for a later round
                 // (a cycle that never grounds is erased at finalize).
-                let lowers: Vec<Ty> = bounds
+                // The GROUND SUBSET decides (the obligation-deadlock
+                // rule): bounds still carrying variables move to the
+                // deferred residue for post-hoc verification instead of
+                // blocking the class forever - an operator obligation's
+                // output may bound the very variable its operand waits
+                // on.
+                let (lowers, deferred_lowers): (Vec<Ty>, Vec<Ty>) = bounds
                     .lowers
                     .iter()
                     .map(|ty| self.table.resolve_completely(ty))
-                    .collect();
-                let uppers: Vec<Ty> = bounds
+                    .partition(|ty| !ty.has_infer());
+                let (uppers, deferred_uppers): (Vec<Ty>, Vec<Ty>) = bounds
                     .uppers
                     .iter()
                     .map(|ty| self.table.resolve_completely(ty))
-                    .collect();
-                if lowers.iter().chain(uppers.iter()).any(Ty::has_infer) {
+                    .partition(|ty| !ty.has_infer());
+                if lowers.is_empty() && uppers.is_empty() {
                     continue;
+                }
+                let var_ty = Ty::infer_var(var);
+                for deferred in deferred_lowers {
+                    self.deferred_subs.push((deferred, var_ty.clone()));
+                }
+                for deferred in deferred_uppers {
+                    self.deferred_subs.push((var_ty.clone(), deferred));
                 }
                 let solution = if lowers.is_empty() {
                     // No values flowed in: the MINIMUM upper is the meet

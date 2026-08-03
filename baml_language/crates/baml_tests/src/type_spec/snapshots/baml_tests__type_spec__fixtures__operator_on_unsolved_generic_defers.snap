@@ -1,0 +1,20 @@
+---
+source: crates/baml_tests/src/type_spec/fixtures.rs
+expression: outcome.dump
+---
+377..384 'combine': throws __effect_param_0
+424..445 '{\n   ...ed)\n}': A
+430..431 'f': (x: A, y: A) -> A throws __effect_param_0
+430..443 'f(seed, seed)': A
+432..436 'seed': A
+438..442 'seed': A
+456..457 'g': throws never
+467..540 '{\n   ...int\n}': hir_ty=[int] tir=[int | 0]
+473..480 'combine': hir_ty=[(f: (x: int, y: int) -> int throws never, seed: int) -> int throws never] tir=[(f: (x: A, y: A) -> A throws __effect_param_0, seed: A) -> A throws __effect_param_0]
+473..504 'combin... }, 0)': hir_ty=[int] tir=[int | 0]
+481..500 '(a, b)... + b }': hir_ty=[(a: int, b: int) -> int throws never] tir=[(a: int | 0, b: int | 0) -> int | 0 throws __effect_param_0]
+491..500 '{ a + b }': int
+493..494 'a': hir_ty=[int] tir=[int | 0]
+493..498 'a + b': int
+497..498 'b': hir_ty=[int] tir=[int | 0]
+502..503 '0': 0
