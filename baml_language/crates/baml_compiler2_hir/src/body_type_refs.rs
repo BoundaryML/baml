@@ -29,6 +29,9 @@ pub struct BodyTypeRefs {
     pub pattern_types: FxHashMap<PatId, TypeRefId>,
     /// Array-pattern `[...]: T` ascriptions.
     pub array_ascriptions: FxHashMap<PatId, TypeRefId>,
+    /// Class-destructure generic args (`Box<int> { v }` patterns), in
+    /// written order. Never empty when present.
+    pub pattern_class_args: FxHashMap<PatId, Box<[TypeRefId]>>,
     /// Explicit expression-position type arguments (`Call`, `GenericApply`,
     /// and `Object` constructors), in written order. Never empty when
     /// present.
@@ -66,6 +69,12 @@ pub fn collect_body_type_refs(body: &ExprBody) -> (BodyTypeRefs, TypeRefSourceMa
             } => {
                 refs.array_ascriptions
                     .insert(pat_id, builder.lower(type_expr));
+            }
+            Pattern::Class { generic_args, .. } if !generic_args.is_empty() => {
+                refs.pattern_class_args.insert(
+                    pat_id,
+                    generic_args.iter().map(|arg| builder.lower(arg)).collect(),
+                );
             }
             _ => {}
         }

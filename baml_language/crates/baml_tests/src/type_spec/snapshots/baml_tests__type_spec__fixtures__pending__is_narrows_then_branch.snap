@@ -1,0 +1,13 @@
+---
+source: crates/baml_tests/src/type_spec/fixtures.rs
+expression: outcome.dump
+---
+112..187 '{\n   ...ing\n}': hir_ty=[int | string] tir=[string | "x"]
+118..153 'if (v ... "x" }': hir_ty=[int | string] tir=[string | "x"]
+122..123 'v': int | string
+122..133 'v is string': bool
+127..133 'string': hir_ty=[!error] tir=[string]
+135..140 '{ v }': hir_ty=[int | string] tir=[string]
+137..138 'v': hir_ty=[int | string] tir=[string]
+146..153 '{ "x" }': "x"
+148..151 '"x"': "x"

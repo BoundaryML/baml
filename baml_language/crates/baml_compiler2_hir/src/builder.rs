@@ -42,7 +42,9 @@ struct PathRootReference {
 
 #[derive(Default)]
 struct PatternNames {
-    names: FxHashMap<Name, TextRange>,
+    /// Per introduced name: its source range and the `Pattern::Bind` node
+    /// that introduces it.
+    names: FxHashMap<Name, (TextRange, ast::PatId)>,
     duplicates: FxHashSet<Name>,
 }
 
@@ -830,13 +832,14 @@ impl<'db> SemanticIndexBuilder<'db> {
                 .insert((source_map.pattern_span(pat_id), pat_id), scope_id);
         }
 
-        for (name, name_range) in names.names {
+        for (name, (name_range, bind_pattern)) in names.names {
             self.scope_bindings[scope_id.index() as usize]
                 .bindings
                 .push(LocalBinding {
                     name,
                     site,
                     pattern: pat_id,
+                    bind_pattern,
                     name_range,
                     visible_from,
                 });
@@ -867,7 +870,7 @@ impl<'db> SemanticIndexBuilder<'db> {
                 let mut result = PatternNames::default();
                 result
                     .names
-                    .insert(name.clone(), source_map.pattern_span(pat_id));
+                    .insert(name.clone(), (source_map.pattern_span(pat_id), pat_id));
                 if let Some(sp) = subpat {
                     let inner = Self::collect_pattern_names(patterns, *sp, source_map, diagnostics);
                     Self::merge_with_dup_check(&mut result, inner, diagnostics);
@@ -996,15 +999,15 @@ impl<'db> SemanticIndexBuilder<'db> {
         diagnostics: &mut Vec<Hir2Diagnostic>,
     ) {
         target.duplicates.extend(source.duplicates);
-        for (name, range) in source.names {
-            if let Some(prev) = target.names.get(&name) {
+        for (name, (range, bind_pattern)) in source.names {
+            if let Some((prev, _)) = target.names.get(&name) {
                 diagnostics.push(Hir2Diagnostic::DuplicatePatternBinding {
                     name: name.clone(),
                     sites: vec![*prev, range],
                 });
                 target.duplicates.insert(name);
             } else {
-                target.names.insert(name, range);
+                target.names.insert(name, (range, bind_pattern));
             }
         }
     }

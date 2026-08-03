@@ -120,7 +120,15 @@ impl BindingId {
 pub struct LocalBinding {
     pub name: Name,
     pub site: DefinitionSite,
+    /// The ROOT pattern the binding was registered under (the whole
+    /// destructure for `let Pack { value }`). MIR's binding lookups key on
+    /// this.
     pub pattern: PatId,
+    /// The `Pattern::Bind` node that introduces THIS name - equal to
+    /// `pattern` for a bare `let x`, the inner bind for destructures. The
+    /// per-name identity type inference keys binding types on. For an
+    /// or-pattern, the first alternative's bind is representative.
+    pub bind_pattern: PatId,
     pub name_range: TextRange,
     pub visible_from: TextSize,
 }

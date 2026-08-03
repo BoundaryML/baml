@@ -1,0 +1,13 @@
+---
+source: crates/baml_tests/src/type_spec/fixtures.rs
+expression: outcome.dump
+---
+368..474 '{\n   ...int\n}': hir_ty=[int] tir=[T]
+374..394 'let bo...k<int>': user.Pack<int>
+385..394 'Pack<int>': hir_ty=[!error] tir=[user.Pack<int>]
+397..415 'Pack {...: 42 }': user.Pack<int>
+411..413 '42': 42
+421..439 'let Pa...alue }': hir_ty=[!error] tir=[user.Pack<T>]
+432..437 'value': hir_ty=[int] tir=[T]
+442..447 'boxed': user.Pack<int>
+453..458 'value': hir_ty=[int] tir=[T]

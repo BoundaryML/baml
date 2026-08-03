@@ -416,7 +416,7 @@ fn collect_hir_ty_nodes(
             continue;
         };
         for binding in &bindings.bindings {
-            if let Some(ty) = owner.result.type_of_binding.get(&binding.pattern) {
+            if let Some(ty) = owner.result.type_of_binding.get(&binding.bind_pattern) {
                 nodes.push(TypedNode {
                     range: binding_name_range(fixture, binding),
                     kind: NodeKind::BindingName,

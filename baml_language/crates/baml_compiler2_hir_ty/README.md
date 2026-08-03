@@ -90,7 +90,7 @@ cutover. "Tested by" is the merge gate for the slice.
 | S7  | Expectation + canonicalizing union-join + Diverges/never             | coercion/never-tier fixtures                           |
 | S8  | Calls: fresh vars per site, variance-aware solve, 2-pass args        | call fixtures; invariant-position rejection tests      |
 | S9  | Lambdas: expectation-driven params, child scope; function VALUES outside call position; consolidate callee/path resolution into one `resolve_value_path` entry (r-a's `infer/path.rs` shape) | lambda fixtures; TIR differential                      |
-| S10 | Patterns + narrowing; exhaustiveness reused via `PatCtx`             | patterns-tier fixtures                                 |
+| S10 | S10a SHIPPED: pattern typing + exhaustiveness (lifted `exhaustiveness.rs` + `infer/pat.rs` walk; B-919 adoption, B-633 provable claiming, `covers_type` gate). Remaining S10b: flow narrowing per the settled FlowEnv/CondFacts design | patterns fixtures; pending narrowing pins |
 | S11 | Member resolution (CORE SHIPPED, before S10/S2/S3): receiver->owning-class table incl. builtin classes (alias-transparent), receiver-pinned class generics + turbofish/fresh method generics, self via `class_self_ty`, bound vs UFCS/static calls, methods as values. Remaining: probe/confirm discipline, `?.` | method fixtures; B-1136 sub-issue fixtures (obligations stubbed) |
 | I1  | Impl registry + nominal lookup; orphan check (E0139)                 | `C <: I` fixtures; orphan diagnostic parity vs TIR     |
 | I2  | ParamEnv: `T extends I` bounds; concreteness rules                   | generic-fn fixtures calling bound methods on `T`       |

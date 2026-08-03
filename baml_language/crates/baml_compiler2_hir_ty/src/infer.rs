@@ -16,6 +16,7 @@
 //! table under the lambda's scope. Constructs the engine does not handle
 //! yet still record the `Error` sentinel and upgrade slice by slice.
 
+pub(crate) mod pat;
 pub mod unify;
 
 use std::sync::Arc;
@@ -28,7 +29,8 @@ use baml_compiler2_hir::{
     body_type_refs::BodyTypeRefs,
     scope::FileScopeId,
     semantic_index::{
-        BindingKind, ExprMetadataKey, ExprMetadataScope, FileSemanticIndex, PathResolution,
+        BindingId, BindingKind, ExprMetadataKey, ExprMetadataScope, FileSemanticIndex,
+        PathResolution,
     },
 };
 use baml_type::{
@@ -207,6 +209,11 @@ struct InferenceContext<'db> {
     /// Parameter types for each lambda scope this run has walked, deduced by
     /// `infer_lambda`; the lambda-scope analog of `param_tys`.
     lambda_params: FxHashMap<FileScopeId, Vec<Ty>>,
+    /// The flow-narrowing overlay: refined types for bindings, consulted
+    /// before `type_of_binding`. S10a populates it per match arm only;
+    /// the S10b condition/branch machinery grows it into the full
+    /// environment (design: eager-forward on the structured walk).
+    flow: FxHashMap<BindingId, Ty>,
     /// Lowering for body-position type annotations, carrying the owner's
     /// generic frame.
     lower: LowerCtx<'db>,
@@ -250,6 +257,7 @@ impl<'db> InferenceContext<'db> {
             current_scope: owner_scope,
             source_map,
             lambda_params: FxHashMap::default(),
+            flow: FxHashMap::default(),
             lower,
             param_tys,
             type_refs,
@@ -443,6 +451,13 @@ impl<'db> InferenceContext<'db> {
                 self.field_access(&base_ty, member)
             }
             Expr::Lambda(def) => self.infer_lambda(body, expr, def, expected),
+            Expr::Match {
+                scrutinee, arms, ..
+            } => {
+                let arms = arms.clone();
+                self.infer_match(body, *scrutinee, &arms, expected)
+            }
+            Expr::Is { scrutinee, pattern } => self.infer_is(body, *scrutinee, *pattern),
             // Not yet implemented: visit children generically, record the
             // sentinel.
             _ => {
@@ -526,22 +541,27 @@ impl<'db> InferenceContext<'db> {
                     },
                 }
             }
-            // Destructuring patterns: later slices.
+            // Destructures: the pattern walk records each binding's type
+            // itself; the let-level entry keeps the initializer type for
+            // the pattern node (refutability is S17's diagnostic).
             _ => {
-                if let Some(init) = initializer {
-                    self.infer_expr(body, init, &Expectation::None);
-                }
-                Ty::error()
+                self.infer_let_destructure(body, pattern, initializer);
+                return self.finish_let_else(body, else_branch);
             }
         };
+        self.finish_let_else(body, else_branch);
+        self.result.type_of_binding.insert(pattern, binding_ty);
+    }
+
+    /// The `let ... else` tail, shared by the bind and destructure paths.
+    /// Ruling: the else branch must diverge; the check itself is an S17
+    /// diagnostic. Its divergence does not leak past the let.
+    fn finish_let_else(&mut self, body: &ExprBody, else_branch: Option<ExprId>) {
         if let Some(else_expr) = else_branch {
-            // Ruling: the else branch must diverge; the check itself is an
-            // S17 diagnostic. Its divergence does not leak past the let.
             let saved = self.diverges;
             self.infer_expr(body, else_expr, &Expectation::None);
             self.diverges = saved;
         }
-        self.result.type_of_binding.insert(pattern, binding_ty);
     }
 
     /// `Sub(actual, expected)` - eager discharge per the settled design:
@@ -1395,12 +1415,18 @@ impl<'db> InferenceContext<'db> {
         let key = ExprMetadataKey::new(ExprMetadataScope::Body(scope), expr);
         match self.index.path_resolution(key) {
             Some(PathResolution::Local(binding_id)) => match binding_id.kind {
-                BindingKind::Local(_) => self
-                    .index
-                    .local_binding(binding_id)
-                    .and_then(|binding| self.result.type_of_binding.get(&binding.pattern))
-                    .cloned()
-                    .unwrap_or_else(Ty::error),
+                BindingKind::Local(_) => {
+                    // The flow overlay wins over the declared/widened
+                    // binding type (narrowed within a match arm).
+                    if let Some(narrowed) = self.flow.get(&binding_id) {
+                        return narrowed.clone();
+                    }
+                    self.index
+                        .local_binding(binding_id)
+                        .and_then(|binding| self.result.type_of_binding.get(&binding.bind_pattern))
+                        .cloned()
+                        .unwrap_or_else(Ty::error)
+                }
                 BindingKind::Parameter(param_index) => {
                     let params = if Some(binding_id.scope) == self.owner_scope {
                         Some(&self.param_tys)
@@ -1629,7 +1655,7 @@ fn erase_infer(ty: &Ty) -> Ty {
     if matches!(ty.kind(), TyKind::Infer { .. }) {
         return Ty::error();
     }
-    Ty::intern(ty.kind().map_children(|child| erase_infer(child)))
+    Ty::intern(ty.kind().map_children(erase_infer))
 }
 
 /// A fresh literal widens to its base primitive at binding sites (the spec's

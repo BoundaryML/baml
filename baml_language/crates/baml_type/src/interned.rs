@@ -132,6 +132,11 @@ impl Ty {
     pub fn has_error(&self) -> bool {
         self.0.flags.contains(TypeFlags::HAS_ERROR)
     }
+
+    /// Whether this type contains a rigid type variable.
+    pub fn has_typevar(&self) -> bool {
+        self.0.flags.contains(TypeFlags::HAS_TYPEVAR)
+    }
 }
 
 impl Clone for Ty {
