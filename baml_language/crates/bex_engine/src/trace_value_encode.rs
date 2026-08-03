@@ -346,6 +346,8 @@ struct BamlTyFuture {
 struct BamlTyTypeVar {
     #[prost(string, tag = "1")]
     name: String,
+    #[prost(uint32, tag = "2")]
+    index: u32,
 }
 
 #[derive(Clone, PartialEq, Message)]
@@ -652,8 +654,9 @@ fn runtime_ty_to_variant(ty: &RuntimeTy) -> BamlTyVariant {
         RuntimeTy::Resource { .. } => BamlTyVariant::Resource(BamlTyResource {}),
         RuntimeTy::PromptAst { .. } => BamlTyVariant::PromptAst(BamlTyPromptAst {}),
         RuntimeTy::Void { .. } => BamlTyVariant::Void(BamlTyVoid {}),
-        RuntimeTy::TypeVar(name, _) => BamlTyVariant::TypeVar(BamlTyTypeVar {
-            name: name.as_str().to_string(),
+        RuntimeTy::TypeVar(param, _) => BamlTyVariant::TypeVar(BamlTyTypeVar {
+            name: param.as_str().to_string(),
+            index: param.index(),
         }),
         RuntimeTy::AssociatedTypeProjection {
             base,
@@ -719,6 +722,23 @@ fn bigint_to_hex(value: &str) -> String {
         .parse::<BigInt>()
         .map(|value| format!("{value:x}"))
         .unwrap_or_else(|_| value.to_string())
+}
+
+/// Render the trace wire value in the same user-facing shape used by live log
+/// consumers: scalar values are unwrapped, while structured values retain a
+/// complete debug representation.
+pub(crate) fn render_encoded_trace_value(body: &[u8]) -> Result<String, String> {
+    let value = BamlOutboundValue::decode(body)
+        .map_err(|err| format!("failed to decode captured BAML log body: {err}"))?;
+    Ok(match value.value.as_ref() {
+        None | Some(BamlValueVariant::NullValue(_)) => "null".to_string(),
+        Some(BamlValueVariant::StringValue(value)) => value.clone(),
+        Some(BamlValueVariant::IntValue(value)) => value.to_string(),
+        Some(BamlValueVariant::FloatValue(value)) => value.to_string(),
+        Some(BamlValueVariant::BoolValue(value)) => value.to_string(),
+        Some(BamlValueVariant::BigintValue(value)) => value.clone(),
+        Some(_) => format!("{value:?}"),
+    })
 }
 
 #[cfg(test)]

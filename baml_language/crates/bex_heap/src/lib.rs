@@ -72,7 +72,7 @@ pub use accessor::{AccessError, BexClass, BexValue, BuiltinClass};
 pub use bex_external_types::{BexExternalValue, Handle};
 pub use bex_vm_types::PermitProof;
 pub use gc::{CollectionLevel, GcStats};
-pub use heap::{BexHeap, DEFAULT_TLAB_SIZE, Generation, HeapStats};
+pub use heap::{BexHeap, DEFAULT_TLAB_SIZE, Generation, HeapStats, UnhandledSpawnError};
 pub(crate) use heap_debugger::{HeapDebuggerConfig, HeapDebuggerState};
 pub use heap_guard::{
     ActiveHeapPermit, HeapGuard, HeapPermit, HeapPermitManager, InactiveHeapPermit,

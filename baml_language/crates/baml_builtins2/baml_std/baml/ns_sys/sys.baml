@@ -37,6 +37,13 @@ function sleep(delay: root.time.Duration) -> null throws root.errors.Io {
   $rust_io_function
 }
 
+/// Forces a full garbage collection and runs queued `cleanup()` finalizers before returning.
+/// Intended for deterministic tests and runtime diagnostics; production code should normally
+/// let the runtime schedule collections automatically.
+function collect_garbage() -> null throws never {
+  $rust_io_function
+}
+
 /// Panics with `message`, throwing a `baml.panics.UserPanic`. Never returns.
 //baml:fallible
 function panic(message: string) -> never throws never {

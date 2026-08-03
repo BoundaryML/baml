@@ -10,7 +10,6 @@ pub trait Token {
     fn span(&self) -> TextRange;
 }
 
-pub trait KeywordToken: Token {}
 macro_rules! define_keyword_tokens {
     ($($keyword:literal => SyntaxKind::$syntax_kind:ident => $name:ident;)*) => {
         $(
@@ -42,7 +41,6 @@ macro_rules! define_keyword_tokens {
                     Ok(Self::new_from_span(token.text_range()))
                 }
             }
-            impl KeywordToken for $name {}
             impl std::fmt::Display for $name {
                 fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
                     f.write_str($keyword)
@@ -86,6 +84,7 @@ define_keyword_tokens! {
     "instanceof" => SyntaxKind::KW_INSTANCEOF => Instanceof;
     "is" => SyntaxKind::KW_IS => Is;
     "dynamic" => SyntaxKind::KW_DYNAMIC => Dynamic;
+    "spawn" => SyntaxKind::KW_SPAWN => Spawn;
     "with" => SyntaxKind::KW_WITH => With;
     "throws" => SyntaxKind::KW_THROWS => Throws;
     "type" => SyntaxKind::KW_TYPE => TypeKw;
@@ -130,7 +129,6 @@ impl std::fmt::Display for BindingKeyword {
     }
 }
 
-pub trait PunctuationToken: Token {}
 macro_rules! define_punctuation_tokens {
     ($($punct:literal => SyntaxKind::$syntax_kind:ident => $name:ident;)*) => {
         $(
@@ -162,7 +160,6 @@ macro_rules! define_punctuation_tokens {
                     Ok(Self::new_from_span(token.text_range()))
                 }
             }
-            impl PunctuationToken for $name {}
             impl std::fmt::Display for $name {
                 fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
                     f.write_str($punct)

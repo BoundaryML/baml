@@ -55,9 +55,9 @@
 use baml_base::SourceFile;
 use baml_compiler2_ast::{
     Expr, ExprId, Stmt,
-    ast::{AstSourceMap, ExprBody, FunctionBodyDef, FunctionOrigin},
+    ast::{AstSourceMap, ExprBody, FunctionOrigin},
 };
-use baml_compiler2_hir::{body::FunctionBody, loc::FunctionLoc, scope::FileScopeId};
+use baml_compiler2_hir::{body::FunctionBody, scope::FileScopeId};
 use baml_compiler2_tir::{inference::infer_scope_types, ty::Ty};
 use text_size::TextSize;
 
@@ -108,13 +108,12 @@ pub struct InlineAnnotation {
 /// with this module.
 #[salsa::tracked(returns(ref))]
 pub fn file_annotations(db: &dyn Db, file: SourceFile) -> Vec<InlineAnnotation> {
-    let item_tree = baml_compiler2_hir::file_item_tree(db, file);
     let index = baml_compiler2_hir::file_semantic_index(db, file);
 
     let mut out: Vec<InlineAnnotation> = Vec::new();
 
-    for (func_local_id, func_data) in &item_tree.functions {
-        let func_loc = FunctionLoc::new(db, file, *func_local_id);
+    for &func_loc in baml_compiler2_ppir::item_data::file_functions(db, file) {
+        let func_data = baml_compiler2_ppir::item_data::function_data(db, func_loc);
 
         // Process user-written functions and methods, plus the synthesized
         // `$init_test*` registration functions (so test/testset bodies — which
@@ -122,7 +121,7 @@ pub fn file_annotations(db: &dyn Db, file: SourceFile) -> Vec<InlineAnnotation> 
         // never surface their synthetic `client` / `function_name` / `args`
         // calls, and since we don't recurse into skipped functions, their
         // internals stay hidden.
-        let is_user = func_data.origin == FunctionOrigin::UserDefined;
+        let is_user = func_data.metadata.origin == FunctionOrigin::UserDefined;
         let is_test_init = func_data.name.as_str().starts_with("$init_test");
         if (!is_user && !is_test_init)
             || baml_compiler2_ppir::item_data::function_llm_meta(db, func_loc).is_some()
@@ -240,84 +239,70 @@ fn process_body(
         });
     }
 
-    // ── Parameter-name hints on calls + recurse into lambdas ──────────────────
+    // ── Parameter-name hints on calls ─────────────────────────────────────────
+    // Lambda bodies share this arena, so this one pass covers them too.
     for (expr_id, expr) in body.exprs.iter() {
-        match expr {
-            Expr::Call { callee, args, .. } => {
-                // Skip synthesized test/testset registration calls — their
-                // `name` / `body` / `collector` / `runner` arguments are codegen,
-                // not user-facing. We still recurse into their lambda arguments
-                // (the actual test bodies) via the `Expr::Lambda` arm below.
-                if is_synthetic_registration(body, *callee) {
-                    continue;
-                }
-                // Skip compiler-synthesized wrapping calls — e.g. the
-                // `string.from(${expr})` that `${…}` interpolation lowers to.
-                // Marked at lowering time (see `AstSourceMap::synthetic_exprs`),
-                // so without this every interpolation would get a spurious
-                // `value:` parameter hint.
-                if source_map.is_synthetic_expr(expr_id) {
-                    continue;
-                }
-                let callee_span = source_map.expr_span(*callee);
-                if callee_span.is_empty() {
-                    continue;
-                }
+        if let Expr::Call { callee, args, .. } = expr {
+            // Skip synthesized test/testset registration calls — their
+            // `name` / `body` / `collector` / `runner` arguments are codegen,
+            // not user-facing. We still recurse into their lambda arguments
+            // (the actual test bodies) via the `Expr::Lambda` arm below.
+            if is_synthetic_registration(body, *callee) {
+                continue;
+            }
+            // Skip compiler-synthesized wrapping calls — e.g. the
+            // `string.from(${expr})` that `${…}` interpolation lowers to.
+            // Marked at lowering time (see `AstSourceMap::synthetic_exprs`),
+            // so without this every interpolation would get a spurious
+            // `value:` parameter hint.
+            if source_map.is_synthetic_expr(expr_id) {
+                continue;
+            }
+            let callee_span = source_map.expr_span(*callee);
+            if callee_span.is_empty() {
+                continue;
+            }
 
-                // Find a scope where the callee resolves to a function type.
-                // ExprIds are arena-local (per body), so restrict lookup to the
-                // callee's source scope chain instead of scanning every scope in
-                // the file for the first matching numeric id.
-                let use_scope =
-                    scope_at_offset_within_body(index, callee_span.start(), owner_scope);
-                for file_scope_id in ancestor_scopes_within_body(index, use_scope, owner_scope) {
-                    let scope_id = index.scope_ids[file_scope_id.index() as usize];
-                    let inference = infer_scope_types(db, scope_id);
-                    let Some(Ty::Function { params, .. }) = inference.expression_type(*callee)
-                    else {
+            // Find a scope where the callee resolves to a function type.
+            // ExprIds are arena-local (per body), so restrict lookup to the
+            // callee's source scope chain instead of scanning every scope in
+            // the file for the first matching numeric id.
+            let use_scope = scope_at_offset_within_body(index, callee_span.start(), owner_scope);
+            for file_scope_id in ancestor_scopes_within_body(index, use_scope, owner_scope) {
+                let scope_id = index.scope_ids[file_scope_id.index() as usize];
+                let inference = infer_scope_types(db, scope_id);
+                let Some(Ty::Function { params, .. }) = inference.expression_type(*callee) else {
+                    continue;
+                };
+                if args.len() != params.len() {
+                    continue;
+                }
+                for (arg, param) in args.iter().zip(params.iter()) {
+                    if arg.label.is_some() {
+                        continue;
+                    }
+                    let Some(name) = &param.name else {
                         continue;
                     };
-                    if args.len() != params.len() {
+                    let name_str = name.as_str();
+                    // `self` is implicit.
+                    if name_str == "self" {
                         continue;
                     }
-                    for (arg, param) in args.iter().zip(params.iter()) {
-                        if arg.label.is_some() {
-                            continue;
-                        }
-                        let Some(name) = &param.name else {
-                            continue;
-                        };
-                        let name_str = name.as_str();
-                        // `self` is implicit.
-                        if name_str == "self" {
-                            continue;
-                        }
-                        let arg_span = source_map.expr_span(arg.expr);
-                        if arg_span.is_empty() {
-                            continue;
-                        }
-                        out.push(InlineAnnotation {
-                            offset: arg_span.start(),
-                            label: format!("{name_str}: "),
-                            kind: AnnotationKind::Parameter,
-                            padding_left: false,
-                            padding_right: false,
-                        });
+                    let arg_span = source_map.expr_span(arg.expr);
+                    if arg_span.is_empty() {
+                        continue;
                     }
-                    break;
+                    out.push(InlineAnnotation {
+                        offset: arg_span.start(),
+                        label: format!("{name_str}: "),
+                        kind: AnnotationKind::Parameter,
+                        padding_left: false,
+                        padding_right: false,
+                    });
                 }
+                break;
             }
-            // Lambdas (including desugared `test` / `testset` bodies) carry their
-            // own body + source map — recurse so their lets and calls get hints.
-            Expr::Lambda(func_def) => {
-                if let Some(FunctionBodyDef::Expr(lbody, lsmap)) = &func_def.body {
-                    let lambda_scope = index
-                        .lambda_scope_for(source_map.expr_span(expr_id))
-                        .unwrap_or(owner_scope);
-                    process_body(db, file, index, lambda_scope, lbody, lsmap, out);
-                }
-            }
-            _ => {}
         }
     }
 }

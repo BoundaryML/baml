@@ -5,24 +5,42 @@ use clap::Args;
 
 use crate::project_load::{SourceLocation, resolve_source_location};
 
+/// Open the BAML playground in a browser.
+///
+/// Serves either a discovered BAML project or one standalone source file. By
+/// default, the server selects the first available port starting at 4265 and
+/// opens a browser unless the session is headless.
 #[derive(Args, Clone, Debug)]
+#[command(after_long_help = "\
+Examples:
+  Open the nearest project:
+    baml playground
+
+  Serve a specific project without opening a browser:
+    baml playground --project ./my-project --no-open
+
+  Serve a standalone file on a fixed port:
+    baml playground --file script.baml --port 4265")]
 pub struct PlaygroundArgs {
+    #[command(flatten)]
+    pub compiler: crate::commands::CompilerArgs,
+
     /// Standalone single-file source. Loads only this file (no project discovery).
-    #[arg(long, value_name = "PATH")]
+    #[arg(long, value_name = "PATH", help_heading = "Project options")]
     pub file: Option<PathBuf>,
 
-    /// Project search starting point. Ignored when `--file` is set.
-    #[arg(long, value_name = "PATH")]
+    /// Deprecated alias for `--project`.
+    #[arg(long, value_name = "PATH", hide = true)]
     pub from: Option<PathBuf>,
 
     /// Listen on exactly this port (errors if unavailable).
     /// Default: the first free port from 4265.
-    #[arg(long, value_name = "PORT")]
+    #[arg(long, value_name = "PORT", help_heading = "Server options")]
     pub port: Option<u16>,
 
     /// Do not open a browser. Opening is also skipped automatically in
     /// headless sessions (SSH, or no display on Linux).
-    #[arg(long)]
+    #[arg(long, help_heading = "Server options")]
     pub no_open: bool,
 }
 
@@ -60,7 +78,7 @@ fn workspace_roots(from: Option<&Path>, file: Option<&Path>) -> Result<Vec<PathB
     match location {
         SourceLocation::Project { root, files } => {
             if files.is_empty() {
-                anyhow::bail!("No .baml files found in {}", root.display());
+                anyhow::bail!("no `.baml` files found in {}", root.display());
             }
             Ok(vec![root])
         }
@@ -80,7 +98,7 @@ fn resolve_playground_assets() -> Result<Option<PathBuf>> {
     }
 
     anyhow::bail!(
-        "Could not find packaged playground assets. For local debugging, run \
+        "could not find packaged playground assets. For local debugging, run \
          `pnpm --filter app-vscode-webview dev -- --host 127.0.0.1 --port 4000` \
          and set `BAML_PLAYGROUND_DEV_PORT=4000`, or set `BAML_PLAYGROUND_DIR` \
          to a built app-vscode-webview/dist directory."
@@ -88,7 +106,7 @@ fn resolve_playground_assets() -> Result<Option<PathBuf>> {
 }
 
 fn discover_playground_dir() -> Result<Option<PathBuf>> {
-    let exe = std::env::current_exe().context("Could not resolve current executable")?;
+    let exe = std::env::current_exe().context("could not resolve current executable")?;
     let Some(bin_dir) = exe.parent() else {
         return Ok(None);
     };

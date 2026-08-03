@@ -21,8 +21,7 @@ use baml_compiler2_hir::{
     item_tree::{ItemTree, ItemTreeSourceMap},
     namespace::{NameConflict, NamespaceId, NamespaceItems},
     package::{PackageId, PackageItems, PackageItemsExtra},
-    scope::ScopeId,
-    semantic_index::{FileSemanticIndex, ScopeBindings},
+    semantic_index::FileSemanticIndex,
 };
 pub use expand::{ExpandCtx, SapAttrs, expand_partial, stream_expand};
 use rustc_hash::{FxHashMap, FxHashSet};
@@ -249,14 +248,7 @@ pub fn ppir_expansion_items(db: &dyn Db, file: SourceFile) -> PpirExpansionItems
 
                 // Transform each field in-place
                 stream_class.fields.retain_mut(|field| {
-                    let ppir_ty = field
-                        .type_expr
-                        .as_ref()
-                        .map(PpirTy::from_type_expr)
-                        .unwrap_or(PpirTy::CannotBeStreamed {
-                            origin: ty::CannotBeStreamedOrigin::Unknown,
-                            attrs: PpirTypeAttrs::default(),
-                        });
+                    let ppir_ty = PpirTy::from_type_expr(&field.type_expr);
                     let ctx = ExpandCtx {
                         package_name: &package_name,
                         namespace_path: &pkg_info.namespace_path,
@@ -288,22 +280,17 @@ pub fn ppir_expansion_items(db: &dyn Db, file: SourceFile) -> PpirExpansionItems
                     }
 
                     // Preserve non-stream type attributes from the original outermost TypeExpr
-                    if let Some(orig_spanned) = &field.type_expr {
-                        for attr in orig_spanned.attrs() {
-                            if !attr.name.starts_with("stream.") && !attr.name.starts_with("sap.") {
-                                type_expr.attrs_mut().push(attr.clone());
-                            }
+                    for attr in field.type_expr.attrs() {
+                        if !attr.name.starts_with("stream.") && !attr.name.starts_with("sap.") {
+                            type_expr.attrs_mut().push(attr.clone());
                         }
                     }
 
                     // Replace the field's type expr (preserves field.name, field.attributes, field.span, etc.)
-                    field.type_expr = Some(ast::TypeExpr {
-                        span: field
-                            .type_expr
-                            .as_ref()
-                            .map_or(TextRange::default(), |s| s.span),
+                    field.type_expr = ast::TypeExpr {
+                        span: field.type_expr.span,
                         ..type_expr
-                    });
+                    };
 
                     // Strip stream.* from field-level attributes (preserve @alias, @description, @skip, etc.)
                     field.attributes.retain(|a| !a.name.starts_with("stream."));
@@ -482,14 +469,15 @@ pub fn ppir_expansion_items(db: &dyn Db, file: SourceFile) -> PpirExpansionItems
                     let companion = ast::FunctionDef {
                         name: SmolStr::new(format!("{}$stream", func.name)),
                         generic_params: func.generic_params.clone(),
-                        generic_param_bounds: func.generic_param_bounds.clone(),
                         params: func.params.clone(),
                         defaults: func.defaults.clone(),
                         return_type: Some(companion_stream_return_type.clone()),
                         throws: None,
                         body: Some(ast::FunctionBodyDef::Expr(body, source_map)),
                         declarative_meta: None,
-                        origin: ast::FunctionOrigin::Companion,
+                        metadata: ast::FunctionMetadata::user_facing(
+                            ast::FunctionOrigin::Companion,
+                        ),
                         is_tagged_template_tag: func.is_tagged_template_tag,
                         attributes: vec![],
                         docstring: func.docstring.clone(),
@@ -543,14 +531,15 @@ pub fn ppir_expansion_items(db: &dyn Db, file: SourceFile) -> PpirExpansionItems
                     let companion = ast::FunctionDef {
                         name: SmolStr::new(format!("{}$parse_stream", func.name)),
                         generic_params: func.generic_params.clone(),
-                        generic_param_bounds: func.generic_param_bounds.clone(),
                         params,
                         defaults: func.defaults.clone(),
                         return_type: Some(companion_stream_return_type),
                         throws: None,
                         body: Some(ast::FunctionBodyDef::Expr(body, source_map)),
                         declarative_meta: None,
-                        origin: ast::FunctionOrigin::Companion,
+                        metadata: ast::FunctionMetadata::user_facing(
+                            ast::FunctionOrigin::Companion,
+                        ),
                         is_tagged_template_tag: func.is_tagged_template_tag,
                         attributes: vec![],
                         docstring: func.docstring.clone(),
@@ -623,13 +612,22 @@ pub fn file_symbol_contributions(
 }
 
 /// Canonical item tree (original + *$stream types).
-pub fn file_item_tree(db: &dyn Db, file: SourceFile) -> Arc<ItemTree> {
+///
+/// `pub(crate)`: the raw `ItemTree` is the substrate the `item_data` firewall
+/// queries are built on. Consumers use the enumeration
+/// (`file_classes`/`file_functions`/…) and lookup (`class_data`/
+/// `function_data`/…) queries, never the tree itself — that is what gives
+/// per-item invalidation instead of per-file.
+pub(crate) fn file_item_tree(db: &dyn Db, file: SourceFile) -> Arc<ItemTree> {
     let index = file_semantic_index(db, file);
     Arc::clone(&index.item_tree)
 }
 
 /// Canonical item-tree source map (original + *$stream types).
-pub fn file_item_tree_source_map(db: &dyn Db, file: SourceFile) -> Arc<ItemTreeSourceMap> {
+///
+/// `pub(crate)`: spans are served by the per-item `*_source_map` firewall
+/// queries in `item_data`.
+pub(crate) fn file_item_tree_source_map(db: &dyn Db, file: SourceFile) -> Arc<ItemTreeSourceMap> {
     let index = file_semantic_index(db, file);
     Arc::clone(&index.item_tree_source_map)
 }
@@ -742,14 +740,20 @@ pub fn elaborated_function_signature<'db>(
 
     let return_type = func_data.return_type.clone();
     let throws = func_data.throws.clone();
-    let reserved_effect_param_names = item_tree
+    let reserved_effect_param_names: Vec<Name> = item_tree
         .enclosing_type_generic_params(function.id(db))
-        .to_vec();
+        .iter()
+        .map(|param| param.name.clone())
+        .collect();
 
     Arc::new(
         baml_compiler2_hir::signature::elaborate_function_signature_parts(
             func_data.name.clone(),
-            func_data.generic_params.clone(),
+            func_data
+                .generic_params
+                .iter()
+                .map(|param| param.name.clone())
+                .collect(),
             &reserved_effect_param_names,
             params,
             return_type,
@@ -805,27 +809,6 @@ pub fn elaborated_function_signature_source_map<'db>(
     function: baml_compiler2_hir::loc::FunctionLoc<'db>,
 ) -> baml_compiler2_hir::signature::SignatureSourceMap {
     function_signature_source_map(db, function)
-}
-
-/// Returns the `ScopeBindings` for a given scope (canonical index).
-pub fn scope_bindings_query<'db>(db: &'db dyn Db, scope_id: ScopeId<'db>) -> ScopeBindings {
-    let file = scope_id.file(db);
-    let index = file_semantic_index(db, file);
-    let local_id = scope_id.file_scope_id(db);
-    index.scope_bindings[local_id.index() as usize].clone()
-}
-
-/// Returns the scope-level `PathResolution` for a multi-segment `Path` expression.
-///
-/// Uses the canonical (PPIR) semantic index, which includes *$stream synthetic items.
-/// Returns `None` if `expr_id` was not recorded as a multi-segment path.
-pub fn path_resolution_query(
-    db: &dyn Db,
-    file: baml_base::SourceFile,
-    expr_id: baml_compiler2_ast::ExprId,
-) -> Option<baml_compiler2_hir::PathResolution> {
-    let index = file_semantic_index(db, file);
-    index.path_resolution(expr_id).cloned()
 }
 
 /// Canonical namespace items (original + *$stream types).
@@ -920,13 +903,17 @@ pub fn namespace_items<'db>(
 pub fn package_items<'db>(db: &'db dyn Db, package_id: PackageId<'db>) -> PackageItems<'db> {
     let package_name = package_id.name(db);
 
-    let mut ns_paths: std::collections::HashSet<Vec<Name>> = std::collections::HashSet::new();
+    // Consumers observe the insertion order of `namespaces`, so namespace
+    // discovery must not inherit `HashSet`'s per-process randomized order.
+    let mut ns_paths: Vec<Vec<Name>> = Vec::new();
     for file in baml_compiler2_hir::compiler2_all_files(db) {
         let pkg_info = baml_compiler2_hir::file_package::file_package(db, file);
         if pkg_info.package == *package_name {
-            ns_paths.insert(pkg_info.namespace_path.clone());
+            ns_paths.push(pkg_info.namespace_path.clone());
         }
     }
+    ns_paths.sort();
+    ns_paths.dedup();
 
     let mut namespaces: FxHashMap<Vec<Name>, NamespaceItems<'db>> = FxHashMap::default();
     let mut all_conflicts: Vec<NameConflict<'db>> = Vec::new();

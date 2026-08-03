@@ -13,19 +13,19 @@ import { make_ipsum, round_trip_ipsum } from "./baml_sdk/symbol_collisions/lorem
 import { make_deep, round_trip_deep } from "./baml_sdk/symbol_collisions/a/b/c/d/index.js";
 
 describe("roundtrip symbol_collisions", () => {
-  it("round_trip_foo_bar", () => {
+  it("symbol_collisions_round_trip_foo_bar", () => {
     const bar = make_foo_bar("hi", 2);
     expect(round_trip_foo_bar(bar)).toEqual(bar);
   });
-  it("round_trip_fizz_foo_bar", () => {
+  it("symbol_collisions_round_trip_fizz_foo_bar", () => {
     const bar = make_fizz_foo_bar("t", 1.5);
     expect(round_trip_fizz_foo_bar(bar)).toEqual(bar);
   });
-  it("round_trip_fizz_buzz_foo_bar", () => {
+  it("symbol_collisions_round_trip_fizz_buzz_foo_bar", () => {
     const bar = make_fizz_buzz_foo_bar("f", 2.5, true);
     expect(round_trip_fizz_buzz_foo_bar(bar)).toEqual(bar);
   });
-  it("round_trip_ipsum", () => {
+  it("symbol_collisions_round_trip_ipsum", () => {
     const ipsum = make_ipsum(
       make_foo_bar("a", 1),
       make_fizz_foo_bar("b", 2.0),
@@ -33,7 +33,7 @@ describe("roundtrip symbol_collisions", () => {
     );
     expect(round_trip_ipsum(ipsum)).toEqual(ipsum);
   });
-  it("round_trip_deep", () => {
+  it("symbol_collisions_round_trip_deep", () => {
     const ipsum = make_ipsum(
       make_foo_bar("a", 1),
       make_fizz_foo_bar("b", 2.0),

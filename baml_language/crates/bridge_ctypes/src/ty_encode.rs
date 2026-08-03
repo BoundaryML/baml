@@ -161,8 +161,9 @@ fn runtime_ty_to_variant(ty: &RuntimeTy) -> TyVariant {
             value: Some(Box::new(runtime_ty_to_proto_ty(value))),
             error: Some(Box::new(runtime_ty_to_proto_ty(error))),
         })),
-        RuntimeTy::TypeVar(name, _) => TyVariant::TypeVar(BamlTyTypeVar {
-            name: name.as_str().to_string(),
+        RuntimeTy::TypeVar(param, _) => TyVariant::TypeVar(BamlTyTypeVar {
+            name: param.as_str().to_string(),
+            index: param.index(),
         }),
         RuntimeTy::AssociatedTypeProjection {
             base,
@@ -235,7 +236,9 @@ fn function_param_mode(mode: baml_type::FunctionParamMode) -> BamlTyFunctionPara
 
 #[cfg(test)]
 mod tests {
-    use baml_type::{Name, RuntimeInterface, RuntimeTy, TyAttr, TypeName};
+    use baml_type::{
+        Freshness, Literal, Name, ParamTy, RuntimeInterface, RuntimeTy, TyAttr, TypeName,
+    };
 
     use super::runtime_ty_to_proto_ty;
     use crate::{
@@ -263,6 +266,31 @@ mod tests {
             RuntimeTy::string(),
             RuntimeTy::list(RuntimeTy::int()),
         ));
+    }
+
+    #[test]
+    fn roundtrip_preserves_type_var_index() {
+        assert_roundtrip(&RuntimeTy::TypeVar(
+            ParamTy::new(7, Name::new("T")),
+            TyAttr::default(),
+        ));
+    }
+
+    #[test]
+    fn roundtrip_preserves_every_literal_identity() {
+        for literal in [
+            Literal::String("draft".into()),
+            Literal::Int(42),
+            Literal::Bigint(42.into()),
+            Literal::Float("1.25".into()),
+            Literal::Bool(true),
+        ] {
+            assert_roundtrip(&RuntimeTy::Literal(
+                literal,
+                Freshness::Regular,
+                TyAttr::default(),
+            ));
+        }
     }
 
     #[test]

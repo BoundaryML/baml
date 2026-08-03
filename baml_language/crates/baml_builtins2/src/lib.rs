@@ -51,10 +51,6 @@ impl BuiltinFile {
 pub const PACKAGE_BAML: &str = "baml";
 /// Package name for boundary identity and capture helpers.
 pub const PACKAGE_BOUNDARY: &str = "boundary";
-/// Package name for the testing package.
-pub const PACKAGE_TESTING: &str = "testing";
-/// Package name for the assert package.
-pub const PACKAGE_ASSERT: &str = "assert";
 
 /// Absolute path to the `baml_std/` source tree, captured at compile time via
 /// `CARGO_MANIFEST_DIR`. Used by `baml_builtins2_codegen` to produce clickable
@@ -62,11 +58,17 @@ pub const PACKAGE_ASSERT: &str = "assert";
 /// generated code or committed artifacts).
 pub const BAML_STD_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/baml_std");
 
-/// YAML documentation for BAML keywords, embedded at compile time.
+/// YAML documentation for BAML language-reference topics, embedded at compile time.
 pub const BAML_KEYWORDS_YAML: &str = include_str!("../keyword_docs/baml_keywords.yaml");
 
 /// YAML crosswalk documentation for TypeScript/JS keywords, embedded at compile time.
 pub const TS_KEYWORDS_YAML: &str = include_str!("../keyword_docs/ts_keywords.yaml");
+
+mod language_docs;
+pub use language_docs::{
+    LanguageTopic, TypescriptCrosswalkTopic, has_describe_topic, language_topic, language_topics,
+    typescript_crosswalk_topic, typescript_crosswalk_topics,
+};
 
 /// Builtin registration macro: package, relative virtual path, filesystem include path.
 macro_rules! builtin {
@@ -97,6 +99,7 @@ pub const ALL: &[BuiltinFile] = &[
     builtin!("baml", "type_class.baml"),
     // --- Namespaced (ns_* folders) ---
     builtin!("baml", "ns_errors/errors.baml"),
+    builtin!("baml", "ns_errors/unknown_error.baml"),
     builtin!("baml", "ns_errors/stack_trace.baml"),
     builtin!("baml", "ns_errors/error_context.baml"),
     builtin!("baml", "ns_panics/panics.baml"),
@@ -112,11 +115,14 @@ pub const ALL: &[BuiltinFile] = &[
     builtin!("baml", "ns_net/net.baml"),
     builtin!("baml", "ns_media/media.baml"),
     builtin!("baml", "ns_json/json.baml"),
+    builtin!("baml", "ns_schema/schema.baml"),
     builtin!("baml", "ns_yaml/yaml.baml"),
     builtin!("baml", "ns_toml/toml.baml"),
     builtin!("baml", "ns_csv/csv.baml"),
     builtin!("baml", "ns_llm/llm_types.baml"),
     builtin!("baml", "ns_llm/llm.baml"),
+    builtin!("baml", "ns_sap/sap.baml"),
+    builtin!("baml", "ns_ws/ws.baml"),
     builtin!("baml", "ns_stream/stream.baml"),
     builtin!("baml", "ns_iter/iter.baml"),
     builtin!("baml", "ns_future/future.baml"),

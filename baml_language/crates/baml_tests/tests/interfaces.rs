@@ -66,7 +66,7 @@ fn collect_compile_errors_from_db(db: &ProjectDatabase) -> Vec<String> {
                 .map(|span| user_file_ids.contains(&span.file_id))
                 .unwrap_or(false)
         })
-        .map(|d| format!("[{}] {}", d.code(), d.message))
+        .map(|d| format!("[{}] {}", d.code(), d.message_with_primary_label()))
         .collect()
 }
 
@@ -2174,7 +2174,7 @@ fn self_param_method_rejects_heterogeneous_generic_args() {
             return x.eq(y)
         }
         "#,
-        "got U",
+        "expected `S`, found `U`",
     );
 }
 
@@ -2192,7 +2192,7 @@ fn self_param_method_rejects_mismatched_literal_arg() {
             return x.eq(5)
         }
         "#,
-        "expected T, got 5",
+        "expected `T`, found `5`",
     );
 }
 
@@ -2231,7 +2231,7 @@ fn self_param_method_rejects_nested_self_mismatch() {
             return x.addAll(ys)
         }
         "#,
-        "got U[]",
+        "expected `T[]`, found `U[]`",
     );
 }
 
@@ -2279,7 +2279,7 @@ fn bound_self_method_value_rejects_heterogeneous_arg() {
             return f(y)
         }
         "#,
-        "got U",
+        "expected `T`, found `U`",
     );
 }
 
@@ -3510,7 +3510,7 @@ fn same_interface_different_type_args_is_not_assignable() {
             return x
         }
         "#,
-        "type mismatch",
+        "mismatched types",
     );
 }
 
@@ -3559,7 +3559,7 @@ fn generic_interface_method_explicit_type_args_are_checked() {
             return e.echo<int>("nope")
         }
         "#,
-        "type mismatch",
+        "mismatched types",
     );
 }
 
@@ -4024,7 +4024,7 @@ fn concrete_receiver_self_param_method_rejects_wrong_arg() {
             return Num { v: 1 }.neq(Other { w: 2 })
         }
         "#,
-        "got Other",
+        "expected `Num`, found `Other`",
     );
 }
 
@@ -4047,7 +4047,7 @@ fn unbounded_generic_forwarded_to_bounded_call_is_rejected() {
             return same(x)
         }
         "#,
-        "expected Equatable",
+        "expected `Equatable`, found `U`",
     );
 }
 
@@ -4066,7 +4066,7 @@ fn unbounded_generic_forwarded_through_container_is_rejected() {
             return firstEq(xs)
         }
         "#,
-        "expected Equatable",
+        "expected `Equatable`, found `U`",
     );
 }
 
@@ -5949,7 +5949,7 @@ fn inherited_generic_interface_field_construction_uses_parent_args() {
             let b = Box { value: "wrong" }
         }
         "#,
-        "type mismatch: expected int",
+        "expected `int`, found",
     );
 }
 
@@ -11061,13 +11061,16 @@ async fn wf3_concrete_field_shadows_interface_views_pins() {
     assert_eq!(output.result.unwrap(), BexExternalValue::String("N".into()));
 }
 
-/// wf3 pin: a bare generic interface in reflection (`reflect.type_of<Box>()`,
-/// no type args) currently acts as an undocumented wildcard matching every
-/// instantiation's implementors. Pinned to flag the behavior.
+/// wf3: a bare generic interface in a type-argument position
+/// (`reflect.type_of<Box>()`, no type args) is an arity error like any other
+/// type position — a generic head is written fully explicit or inferred
+/// wholesale, never a partial wildcard. (This replaces the old undocumented
+/// wildcard-matching behavior; a deliberate every-instantiation reflection
+/// query would need its own designed spelling.)
 /// `_plan/wf3/generics-reflection/gen_bare_impl_both.baml`
 #[tokio::test]
-async fn wf3_bare_generic_interface_reflection_is_wildcard_pins() {
-    let output = baml_test!(
+async fn wf3_bare_generic_interface_reflection_is_arity_error() {
+    assert_compile_error_contains(
         r#"
         interface Box<T> {
             function get(self) -> T throws never
@@ -11077,20 +11080,13 @@ async fn wf3_bare_generic_interface_reflection_is_wildcard_pins() {
                 function get(self) -> int { return 1 }
             }
         }
-        class StringBox {
-            implements Box<string> {
-                function get(self) -> string { return "hi" }
-            }
-        }
         function main() -> bool {
             let bare = reflect.type_of<Box>()
             return bare.implemented_by(reflect.type_of<IntBox>())
-                && bare.implemented_by(reflect.type_of<StringBox>())
-                && bare.implementors().length() == 2
         }
-        "#
+        "#,
+        "type `Box` expects 1 type argument(s), got 0",
     );
-    assert_eq!(output.result.unwrap(), BexExternalValue::Bool(true));
 }
 
 /// wf3 pin: a blanket impl's implementor is reported by reflection as the bare
@@ -11414,10 +11410,10 @@ async fn union_fuzz_f01_field_read_on_iface_union_member() {
     );
 }
 
-/// F2 [crash]: generic-interface match narrowing ignores the type argument — a
-/// `StrSlot` (only `Slot<string>`) matches the `let a: Slot<int>` arm, so
-/// `a.value + 1` runs integer add on a string and panics (`tagged_int_add`).
-/// SHOULD NOT match the `Slot<int>` arm; falls through -> 0.
+/// F2 regression: generic-interface match narrowing must respect type arguments.
+/// If a `StrSlot` (`Slot<string>`) incorrectly matched the `let a: Slot<int>` arm,
+/// `a.value + 1` would run integer addition on a string and panic. It should
+/// instead fall through and return 0.
 /// Repro: `cat_generic_iface_union/generic_iface_union_2d_unsound.baml`
 #[tokio::test]
 async fn union_fuzz_f02_generic_match_narrowing_ignores_type_arg_crash() {
@@ -12048,6 +12044,11 @@ fn duplicate_implements_differing_only_in_assoc_bindings_is_compile_error() {
 // Ordering (`<` `<=` `>` `>=`) is valid only when both operands are the *same
 // concrete type* implementing `baml.ops.Compare` (or the same bounded type-var).
 // A union, an interface-existential, or two different types is a compile error.
+//
+// That restriction is load-bearing, not merely conservative: a valid ordering over
+// a non-primitive lowers to a `baml.ops.Compare` virtual call resolved from the
+// *receiver's* concrete type alone (`lower_binary`). Single dispatch is only sound
+// because both operands are guaranteed to be the same concrete type at runtime.
 
 #[test]
 fn ordering_on_union_operands_is_rejected() {
@@ -12119,11 +12120,199 @@ fn ordering_on_same_concrete_primitive_is_ok() {
 // its single concrete base `int` before the union rejection — is exercised at
 // runtime by `baml_src/ns_arrays/sort_comparable.baml`.)
 
+// The tests below are TIR-only: these helpers collect diagnostics and never run
+// MIR lowering, so they pin the *accepted set* rather than the dispatch. They are
+// the guard that the shapes `lower_ordering_via_virtual_call` exists to serve stay
+// accepted, and that the shapes its soundness depends on stay rejected. Runtime
+// behavior of the lowering lives in `bex_vm/tests/comparison_driver.rs` and
+// `baml_src/ns_operators/operators.baml`.
+
+#[test]
+fn ordering_on_user_class_implementing_compare_is_ok() {
+    // Guards against over-rejection: a class implementing `Compare` may be
+    // ordered. Only the required `lt` is defined — `<=`/`>`/`>=` reach the
+    // interface's defaults.
+    assert_no_compile_errors(
+        r#"
+        class Money {
+            cents: int
+            implements baml.ops.Equals {
+                function eq(self, other: Self) -> bool throws never { self.cents == other.cents }
+            }
+            implements baml.ops.Compare {
+                function lt(self, other: Self) -> bool throws never { self.cents < other.cents }
+            }
+        }
+        function f(a: Money, b: Money) -> bool throws never {
+            (a < b) && (a <= b) && (a > b) && (a >= b)
+        }
+        "#,
+    );
+}
+
+#[test]
+fn ordering_on_bounded_type_var_is_ok() {
+    // `T extends Compare` is a single concrete type per instantiation, so ordering
+    // is exact-type. The impl can only come from the runtime instantiation.
+    assert_no_compile_errors(
+        r#"
+        function max<T extends baml.ops.Compare>(a: T, b: T) -> T throws never {
+            if a < b { b } else { a }
+        }
+        "#,
+    );
+}
+
+#[test]
+fn compare_bound_rejects_abstract_type_argument() {
+    // The counterpart to `ordering_on_union_operands_is_rejected`: a union cannot
+    // sneak in through a type argument either. This is what makes the operand of a
+    // `Compare`-bounded ordering a single concrete type at runtime, and hence what
+    // makes single-dispatch (`Compare.lt` resolved on the receiver alone, in
+    // `lower_ordering_via_virtual_call`) sound.
+    assert_compile_error_code(
+        r#"
+        function max<T extends baml.ops.Compare>(a: T, b: T) -> T throws never {
+            if a < b { b } else { a }
+        }
+        function f(a: int | string, b: int | string) -> int | string throws never {
+            max<int | string>(a, b)
+        }
+        "#,
+        "E0001",
+    );
+}
+
+#[test]
+fn ordering_on_interface_existential_type_argument_is_rejected() {
+    // Same premise via the other abstract spelling: an interface-existential type
+    // argument has no single runtime type to dispatch on either.
+    assert_compile_error_code(
+        r#"
+        function max<T extends baml.ops.Compare>(a: T, b: T) -> T throws never {
+            if a < b { b } else { a }
+        }
+        function f(a: baml.ops.Compare, b: baml.ops.Compare) -> baml.ops.Compare throws never {
+            max<baml.ops.Compare>(a, b)
+        }
+        "#,
+        "E0001",
+    );
+}
+
+#[test]
+fn compare_without_equals_is_rejected() {
+    // `Compare requires Equals`, and the inherited `le` default is literally
+    // `self.lt(other) || self.eq(other)`. If a type could implement `Compare`
+    // without `Equals`, `a <= b` would lower to a virtual call whose `eq` has no
+    // impl to resolve — an uncatchable internal error. E0125 is what prevents it.
+    assert_compile_error_code(
+        r#"
+        class NoEq {
+            v: int
+            implements baml.ops.Compare {
+                function lt(self, other: Self) -> bool throws never { self.v < other.v }
+            }
+        }
+        "#,
+        "E0125",
+    );
+}
+
 // ── Group AI: arithmetic operators dispatch through the `baml.ops` interfaces ──
 // `+ - * / %` (and unary `-`) are valid iff the operand types implement the
 // matching `baml.ops` interface for the right operand; the result is the impl's
 // `Output`. Unions are valid iff every operand pair is, with the union of their
 // outputs.
+
+#[test]
+fn scalar_arithmetic_matches_builtin_impl_matrix() {
+    let types = [
+        ("int", "int"),
+        ("float", "float"),
+        ("bigint", "bigint"),
+        ("string", "string"),
+        ("bool", "bool"),
+        ("null", "null"),
+    ];
+    let operators = [
+        ("add", "+"),
+        ("sub", "-"),
+        ("mul", "*"),
+        ("div", "/"),
+        ("rem", "%"),
+    ];
+    let numeric_pair = |lhs: &str, rhs: &str| {
+        matches!(
+            (lhs, rhs),
+            ("int", "int")
+                | ("int", "float")
+                | ("float", "int")
+                | ("float", "float")
+                | ("int", "bigint")
+                | ("bigint", "int")
+                | ("bigint", "bigint")
+        )
+    };
+
+    let mut valid_source = String::new();
+    let mut invalid_source = String::new();
+    let mut invalid_count = 0;
+    for (lhs_name, lhs_ty) in types {
+        for (rhs_name, rhs_ty) in types {
+            for (op_name, symbol) in operators {
+                let is_valid = numeric_pair(lhs_name, rhs_name)
+                    || (lhs_name == "string" && rhs_name == "string" && op_name == "add");
+                let source = format!(
+                    "function {op_name}_{lhs_name}_{rhs_name}(lhs: {lhs_ty}, rhs: {rhs_ty}) -> int {{ lhs {symbol} rhs; 0 }}\n"
+                );
+                if is_valid {
+                    valid_source.push_str(&source);
+                } else {
+                    invalid_source.push_str(&source);
+                    invalid_count += 1;
+                }
+            }
+        }
+    }
+
+    assert_no_compile_errors(&valid_source);
+    let errors = collect_compile_errors(&invalid_source);
+    assert_eq!(
+        errors.len(),
+        invalid_count,
+        "each missing impl must produce one error:\n  {}",
+        errors.join("\n  ")
+    );
+    assert!(
+        errors
+            .iter()
+            .all(|error| error.contains("cannot be applied")),
+        "unexpected diagnostics:\n  {}",
+        errors.join("\n  ")
+    );
+}
+
+#[test]
+fn structural_arithmetic_without_impls_is_rejected() {
+    let errors = collect_compile_errors(
+        r#"
+        function f(xs: int[], values: map<string, int>, n: float) -> int {
+            xs + n;
+            n + xs;
+            values + n;
+            n + values;
+            0
+        }
+        "#,
+    );
+    assert_eq!(errors.len(), 4, "unexpected diagnostics: {errors:#?}");
+    assert!(
+        errors
+            .iter()
+            .all(|error| error.contains("cannot be applied"))
+    );
+}
 
 #[test]
 fn arithmetic_on_user_type_implementing_add_is_ok() {
@@ -12185,6 +12374,7 @@ fn negate_on_user_type_implementing_negate_is_ok() {
         class Vec2 {
             x: int
             implements baml.ops.Negate {
+                type Output = Vec2
                 function neg(self) -> Vec2 throws never { Vec2 { x: -self.x } }
             }
         }
@@ -12379,7 +12569,7 @@ fn compound_assign_result_not_assignable_to_target_is_rejected() {
             c
         }
         "#,
-        "type mismatch",
+        "mismatched types",
     );
 }
 
@@ -12390,6 +12580,7 @@ fn compound_assign_on_user_type_with_self_output_is_ok() {
         class Vec2 {
             x: int
             implements baml.ops.Add<Vec2> {
+                type Output = Vec2
                 function add(self, rhs: Vec2) -> Vec2 throws never {
                     Vec2 { x: self.x + rhs.x }
                 }

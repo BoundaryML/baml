@@ -3,28 +3,32 @@ source: crates/baml_tests/tests/baml_src.rs
 ---
 function cancel_token.$init_test_ns_cancel_token_cancel_token(registry: testing.TestCollector) -> null {
     load_var registry
+    load_const "root.cancel_token"
     load_const "await_token_cancelled_catches"
     make_closure .<lambda($init_test_ns_cancel_token_cancel_token, 0)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.cancel_token"
     load_const "uncancelled_token_completes"
     make_closure .<lambda($init_test_ns_cancel_token_cancel_token, 1)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.cancel_token"
     load_const "token_is_cancelled_reflects_cancel"
     make_closure .<lambda($init_test_ns_cancel_token_cancel_token, 2)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.cancel_token"
     load_const "detached_spawn_completes"
     make_closure .<lambda($init_test_ns_cancel_token_cancel_token, 3)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_const null
     return
@@ -54,6 +58,8 @@ function cancel_token.await_token_cancelled_catches() -> int {
     load_var _3
     load_const null
     load_var _9
+    load_type int
+    load_type baml.errors.Io
     spawn
     store_var _10
     load_var tok
@@ -82,7 +88,7 @@ function cancel_token.detached_spawn_completes() -> int {
     make_closure .<lambda(detached_spawn_completes, 0)>, 0
     store_var _2
     load_type int
-    load_type null
+    load_type never
     load_const <omitted>
     load_const <omitted>
     load_const true
@@ -100,6 +106,8 @@ function cancel_token.detached_spawn_completes() -> int {
     load_var _2
     load_const null
     load_var _7
+    load_type int
+    load_type never
     spawn
     store_var _8
     load_var _8
@@ -131,7 +139,7 @@ function cancel_token.uncancelled_token_completes() -> int {
     make_closure .<lambda(uncancelled_token_completes, 0)>, 0
     store_var _3
     load_type int
-    load_type null
+    load_type never
     load_const <omitted>
     load_var tok
     load_const <omitted>
@@ -149,6 +157,8 @@ function cancel_token.uncancelled_token_completes() -> int {
     load_var _3
     load_const null
     load_var _9
+    load_type int
+    load_type never
     spawn
     store_var _10
     load_var _10

@@ -32,11 +32,11 @@ import * as builtinMedia from "./baml_sdk/baml/media/index.js";
 import * as builtinLlm from "./baml_sdk/baml/llm/index.js";
 
 describe("type_shapes — namespace imports", () => {
-  it("baml_sdk root imports cleanly", () => {
+  it("main_root_imports_cleanly", () => {
     expect(bamlSdk).toBeDefined();
   });
 
-  it("every namespace module imports cleanly", () => {
+  it("main_all_namespaces_reachable", () => {
     for (const mod of [
       primitives,
       media,
@@ -62,7 +62,7 @@ describe("type_shapes — namespace imports", () => {
     }
   });
 
-  it("runtime-owned builtin leaves expose their public names", () => {
+  it("main_runtime_owned_builtin_leaves_expose_their_public_names", () => {
     for (const value of [builtinMedia.Image, builtinMedia.Audio, builtinMedia.Video, builtinMedia.Pdf, builtinLlm.Stream]) {
       expect(value).toBeTypeOf("function");
     }
@@ -70,15 +70,15 @@ describe("type_shapes — namespace imports", () => {
 });
 
 describe("type_shapes — representative symbols", () => {
-  it("root Foo is reachable", () => {
+  it("main_root_foo_reachable", () => {
     expect(Foo).toBeDefined();
   });
 
-  it("baml_sdk/lorem.Resume is reachable", () => {
+  it("main_lorem_resume_reachable", () => {
     expect(Resume).toBeDefined();
   });
 
-  it("baml_sdk/a/b.Thing is reachable at the deep namespace", () => {
+  it("main_deep_namespace_thing_reachable", () => {
     expect(Thing).toBeDefined();
   });
 });

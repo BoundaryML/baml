@@ -19,45 +19,45 @@ from baml_sdk.lorem import (
 from baml_sdk.ipsum import round_trip_lorem_resume_from_ipsum
 
 
-def test_make_foo():
+def test_routing_make_foo():
     assert make_foo(v=3).v == 3
 
 
-def test_round_trip_foo():
+def test_routing_round_trip_foo():
     f = Foo(v=10)
     assert round_trip_foo(f=f) == f
 
 
-def test_round_trip_thing_from_ab():
+def test_routing_round_trip_thing_from_ab():
     t = Thing(v=1)
     assert round_trip_thing_from_ab(t=t) == t
 
 
-def test_round_trip_root_foo_from_ab():
+def test_routing_round_trip_root_foo_from_ab():
     f = Foo(v=2)
     assert round_trip_root_foo_from_ab(f=f) == f
 
 
-def test_round_trip_deep_thing_from_a():
+def test_routing_round_trip_deep_thing_from_a():
     t = Thing(v=4)
     assert round_trip_deep_thing_from_a(t=t) == t
 
 
-def test_round_trip_deep_thing_from_lorem():
+def test_routing_round_trip_deep_thing_from_lorem():
     t = Thing(v=5)
     assert round_trip_deep_thing_from_lorem(t=t) == t
 
 
-def test_round_trip_resume():
+def test_routing_round_trip_resume():
     r = Resume(name="ada", email=None)
     assert round_trip_resume(r=r) == r
 
 
-def test_round_trip_root_foo():
+def test_routing_round_trip_root_foo():
     f = Foo(v=6)
     assert round_trip_root_foo(f=f) == f
 
 
-def test_round_trip_lorem_resume_from_ipsum():
+def test_routing_round_trip_lorem_resume_from_ipsum():
     r = Resume(name="grace", email="g@x.com")
     assert round_trip_lorem_resume_from_ipsum(r=r) == r

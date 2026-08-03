@@ -13,19 +13,41 @@
 // inside `Reporter::status` / `spin` / `finish` / `warning`.
 #![allow(clippy::print_stderr)]
 
-use std::time::Instant;
+use std::{
+    sync::atomic::{AtomicBool, AtomicU8, Ordering},
+    time::Instant,
+};
 
 use console::{Color, Style};
 use indicatif::HumanDuration;
 
-/// Brand purple `#A855F7` for the cargo-style verb. Rendered via 24-bit
-/// truecolor ANSI (`\x1b[38;2;168;85;247m`) on terminals that support it;
-/// `console::Style` strips the escape when stderr isn't a TTY, so piped
-/// output stays plain.
+/// BAML purple for bold status verbs and section headers.
 const VERB_COLOR: Color = Color::TrueColor(0xA8, 0x55, 0xF7);
 
-fn verb_style() -> Style {
+static QUIET: AtomicBool = AtomicBool::new(false);
+static VERBOSE: AtomicU8 = AtomicU8::new(0);
+
+pub(crate) fn init(quiet: u8, verbose: u8) {
+    QUIET.store(quiet > 0, Ordering::Relaxed);
+    VERBOSE.store(verbose, Ordering::Relaxed);
+}
+
+pub(crate) fn verbose() -> bool {
+    VERBOSE.load(Ordering::Relaxed) > 0
+}
+
+pub(crate) fn print_verbose(args: std::fmt::Arguments<'_>) {
+    if verbose() && !QUIET.load(Ordering::Relaxed) {
+        eprintln!("{args}");
+    }
+}
+
+pub(crate) fn accent_style() -> Style {
     Style::new().fg(VERB_COLOR).bold()
+}
+
+pub(crate) fn secondary_style() -> Style {
+    Style::new().dim()
 }
 
 /// Clap help-text styling re-exported from `baml_exec`. Lives there so
@@ -51,17 +73,26 @@ impl Reporter {
     /// Print a one-shot status line that stays in the scrollback —
     /// cargo's `   Compiling foo v0.1.0` shape.
     pub fn status(&self, verb: &str, msg: impl AsRef<str>) {
+        if QUIET.load(Ordering::Relaxed) {
+            return;
+        }
         let line = format_status(verb, msg.as_ref());
         eprintln!("{line}");
     }
 
     /// Mark a new phase with a persistent cargo-style line.
     pub fn spin(&self, verb: &str, msg: impl AsRef<str>) {
+        if QUIET.load(Ordering::Relaxed) || !crate::output::policy().progress {
+            return;
+        }
         eprintln!("{}", format_status(verb, msg.as_ref()));
     }
 
     /// Print a final cargo-style "Finished" line with elapsed wall-clock time.
     pub fn finish(&self, verb: &str, msg: impl AsRef<str>) {
+        if QUIET.load(Ordering::Relaxed) {
+            return;
+        }
         // `{:#}` is `HumanDuration`'s alternate form — the compact
         // `5s` / `2m` / `1h` shape, matching cargo's `Finished` line.
         // The default `{}` form spells out `5 seconds`, which is too
@@ -87,13 +118,13 @@ impl Default for Reporter {
 }
 
 /// Format a single status line as cargo does it: 12-char right-aligned
-/// bold purple verb (BAML brand `#A855F7`), then a space, then the
+/// bold BAML-purple verb, then a space, then the
 /// payload. Padding is computed on the *unstyled* verb so ANSI escape
 /// bytes don't blow up column counts. `console::Style` strips the escape
 /// when stderr isn't a TTY, so piped output stays plain.
 fn format_status(verb: &str, msg: &str) -> String {
     let padded = format!("{verb:>12}");
-    let styled = verb_style().apply_to(padded);
+    let styled = accent_style().apply_to(padded);
     format!("{styled} {msg}")
 }
 
@@ -109,6 +140,15 @@ impl Reporter {
     pub fn error(&self, msg: impl std::fmt::Display) {
         self.abandon();
         print_error(msg);
+    }
+
+    /// Print a fatal error and hand back the terminal exit code, so
+    /// command handlers can `return Ok(reporter.fatal(...))` instead of
+    /// printing through `eprintln!` and constructing the code by hand.
+    #[must_use]
+    pub fn fatal(&self, msg: impl std::fmt::Display) -> crate::ExitCode {
+        self.error(msg);
+        crate::ExitCode::Other
     }
 
     /// Print a warning. Mirrors the formatting of [`print_warning`].
@@ -144,5 +184,22 @@ mod tests {
             stripped.starts_with("     Loading bar"),
             "got: {stripped:?}"
         );
+    }
+
+    #[test]
+    fn shared_styles_use_brand_accent_and_default_secondary_text() {
+        let accent = accent_style()
+            .force_styling(true)
+            .apply_to("accent")
+            .to_string();
+        assert!(accent.contains("\x1b[38;2;168;85;247m"), "{accent:?}");
+        assert!(!accent.contains("\x1b[38;5;"), "{accent:?}");
+
+        let secondary = secondary_style()
+            .force_styling(true)
+            .apply_to("secondary")
+            .to_string();
+        assert!(secondary.contains("\x1b[2m"), "{secondary:?}");
+        assert!(!secondary.contains("\x1b[38;"), "{secondary:?}");
     }
 }

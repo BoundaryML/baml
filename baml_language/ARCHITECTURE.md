@@ -140,7 +140,7 @@ The parser produces a **CST** (Concrete Syntax Tree), which is a lossless, error
 **What lives here:**
 - **Companion function expansion** — LLM functions are expanded into the base function plus generated companions (`render_prompt`, `build_request`, `parse`).
 - **Client desugaring** — `client<llm>` blocks are desugared into a top-level `Let` binding (the `Client` object) plus an optional `$new` companion function (the `PrimitiveClient` constructor).
-- **Lambda expression body extraction** — Lambda bodies are lifted into their own scope-addressable units for downstream analysis.
+- **Lambda expression bodies** — A lambda's body is lowered into the enclosing function's arena and referenced by `ExprId`; the lambda gets its own scope, not its own arena.
 - **LLM function normalization** — There is no concept of "LLM function" downstream. LLM functions become regular functions with declarative metadata attached.
 - **Type expression lowering** — Source-level type syntax is converted to `TypeExpr` nodes.
 - **Config item lowering** — Config block syntax (used in clients, generators, etc.) is lowered to AST expressions.
@@ -202,7 +202,7 @@ The parser produces a **CST** (Concrete Syntax Tree), which is a lossless, error
 - SAP (streaming attribute propagation) attributes
 - **The canonical item layer** — `ppir::file_item_tree` merges original items with the synthetic stream items, and the per-item **firewall queries** (`item_data`: enumeration + `*_data` + `*_source_map`) that front the item tree live here.
 
-**How it works:** The PPIR generates synthetic AST items (the stream variants) and re-runs the HIR builder over the *merged* list — originals first, then synthetics appended. The flow is HIR → PPIR → (re-run the HIR builder on merged items) → TIR. PPIR's tree is **canonical**, but it is an internal substrate: downstream layers read it **only through the firewall queries** in `item_data` (enumeration + `*_data` + `*_source_map`) — never `file_item_tree` directly, and never the HIR pre-expansion tree. A `ClassLoc`/`FunctionLoc` therefore unambiguously means a canonical item. (Originals keep identical `LocalItemId`s in the pre-expansion and canonical trees because they are allocated first, in the same order — which is what makes a HIR-derived `*Loc` safe to pass to a firewall query. Migrating the remaining direct `file_item_tree` readers onto the firewall queries is in progress.)
+**How it works:** The PPIR generates synthetic AST items (the stream variants) and re-runs the HIR builder over the *merged* list — originals first, then synthetics appended. The flow is HIR → PPIR → (re-run the HIR builder on merged items) → TIR. PPIR's tree is **canonical**, but it is an internal substrate: downstream layers read it **only through the firewall queries** in `item_data` (enumeration + `*_data` + `*_source_map`) — never `file_item_tree` directly, and never the HIR pre-expansion tree. A `ClassLoc`/`FunctionLoc` therefore unambiguously means a canonical item. (Originals keep identical `LocalItemId`s in the pre-expansion and canonical trees because they are allocated first, in the same order — which is what makes a HIR-derived `*Loc` safe to pass to a firewall query. This is enforced: `file_item_tree` is `pub(crate)` in both HIR and PPIR, so no downstream crate can reach the raw tree at all.)
 
 **Key Salsa queries:**
 - `ppir_expansion_items(db, file)` — Synthetic stream items per file
@@ -239,7 +239,7 @@ The parser produces a **CST** (Concrete Syntax Tree), which is a lossless, error
 5. This recursively resolves until a leaf type is reached.
 
 **Key Salsa queries:**
-- `infer_scope_types(db, scope_id)` — Per-scope type inference. This is the main query. It returns types for a single scope, NOT a monolithic per-function result. This gives fine-grained incrementality: editing a lambda body only recomputes that lambda's types, not the enclosing function's.
+- `infer_scope_types(db, scope_id)` — Per-scope type inference. This is the main query. It returns types for a single scope, NOT a monolithic per-function result. Note that a lambda body is *not* independently incremental: it lives in the enclosing function's `ExprBody`, so editing it invalidates that function's body query and hence its inference.
 - `resolve_name_at(db, file, offset, name)` — On-demand name resolution with type information.
 
 ---
@@ -433,9 +433,24 @@ A `client<llm>` block desugars into **two AST items**:
 
 ### Lambda Expression Bodies
 
-Lambda bodies are extracted into their own scope-addressable AST units during CST→AST lowering. This is necessary because:
-- Lambdas need their own scope for per-scope incremental inference.
-- Capture analysis (which happens in HIR) needs each lambda to be a distinct scope.
+A lambda's body is lowered into the **enclosing function's** `ExprBody`, and the
+lambda holds an `ExprId` pointing at it — the same shape as rust-analyzer's
+`Expr::Closure { body: ExprId }`. One arena per function (or top-level `let`),
+never one per lambda.
+
+Lambdas still get their own `ScopeKind::Lambda` scope, because both of the
+reasons they need one are about *scopes*, not arenas:
+- per-scope incremental inference,
+- capture analysis in HIR, which needs each lambda to be a distinct scope.
+
+Scopes and arenas are therefore orthogonal. Two consequences worth knowing:
+- An `ExprId` is unambiguous within a function but **not** within a file, so
+  file-level maps key on `ExprMetadataKey` (arena owner + id), which is rustc's
+  `HirId { owner, local_id }`.
+- Analyses that must not attribute a lambda's behaviour to its definer — effect
+  (`throws`) inference, call-graph edges — cannot scan the arena flatly, because
+  a lambda's expressions are siblings of the function's own. They walk
+  structurally via `ExprBody::reachable_excluding_lambdas`.
 
 ---
 
@@ -745,7 +760,7 @@ User adds `// comment` to `file_a.baml`. File B is untouched.
 4. `namespace_items(user_root)` re-runs and early-cuts when the name set is unchanged. (Exception: a file already holding a *duplicate-name* conflict currently carries a `name_span` in the conflict record, so a cosmetic edit there loses cutoff — a known gap being closed.)
 5. `file_semantic_index(file_b)` — NOT re-run (its input `file_b.text` is unchanged), so nothing about file B recomputes.
 
-**Status / caveat.** The firewall queries above exist and cut off, but many downstream consumers are **not yet migrated onto them** — notably `infer_scope_types`, which still reads the coarse `no_eq` `file_semantic_index` directly and therefore re-runs on *any* edit to its file today. Realizing end-to-end cutoff (a comment edit not re-running type inference) requires migrating those consumers to the firewall queries; that work is in progress. Treat this section as the mechanism, not a fully-realized guarantee — the incremental tests in `baml_tests` pin what actually holds today, and one of them (`comment_edit_does_not_reexecute_type_inference`) is deliberately `#[ignore]`d precisely because inference is not yet migrated.
+**Status / caveat.** The **item layer** is fully behind the firewall: every consumer (TIR, MIR, emit, LSP, project, CLI, tests) reads items through the `item_data` queries, and the raw doors (`file_item_tree` in both HIR and PPIR) are `pub(crate)`. The remaining red edge is the **scope tree**: `infer_scope_types` (and the LSP scope walkers) still read the coarse `no_eq` `file_semantic_index` directly for scopes/bindings, and therefore re-run on *any* edit to their file today. Realizing end-to-end cutoff (a comment edit not re-running type inference) requires fronting the scope tree with the same kind of fine-grained queries (`scope_owner`/`function_scope` exist; the per-scope data queries do not yet). The incremental tests in `baml_tests` pin what actually holds today, and one of them (`comment_edit_does_not_reexecute_type_inference`) is deliberately `#[ignore]`d precisely because inference still reads the coarse index.
 
 ---
 

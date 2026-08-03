@@ -10,9 +10,17 @@ function boundary.id() -> boundary.LocalId {
 function boundary.id.current() -> string {
 }
 
-function user.unwrap_or(o: Opt<T> | Non, default: T) -> T {
+function reflect.call_any(f: baml.AnyFunction<Returns = #0, Throws = #1>, args: map<string, unknown>) -> #0 {
+}
+
+function reflect.signature(f: baml.AnyFunction<Returns = unknown, Throws = unknown>) -> reflect.Signature {
+}
+
+function user.unwrap_or(o: Opt<#0> | Non, default: #0) -> #0 {
     load_var o
-    is_type Opt<...>
+    store_var _3
+    load_var _3
+    narrow_bind Opt<...>, slot=3
     pop_jump_if_false L0
     jump L1
 
@@ -21,7 +29,7 @@ function user.unwrap_or(o: Opt<T> | Non, default: T) -> T {
     jump L2
 
   L1:
-    load_var o
+    load_var _3
     load_field .value
 
   L2:

@@ -12,25 +12,25 @@ import {
 } from "./baml_sdk/optional/index.js";
 
 describe("roundtrip optional", () => {
-  it("round_trip_optional_int", () => {
+  it("optional_round_trip_optional_int", () => {
     expect(round_trip_optional_int(5)).toBe(5);
     expect(round_trip_optional_int(null)).toBeNull();
   });
-  it("round_trip_optional_resume", () => {
+  it("optional_round_trip_optional_resume", () => {
     const r = new Resume({ name: "ada" });
     expect(round_trip_optional_resume(r)).toEqual(r);
     expect(round_trip_optional_resume(null)).toBeNull();
   });
-  it("round_trip_optional_union", () => {
+  it("optional_round_trip_optional_union", () => {
     expect(round_trip_optional_union(3)).toBe(3);
     expect(round_trip_optional_union("s")).toBe("s");
     expect(round_trip_optional_union(null)).toBeNull();
   });
-  it("round_trip_resume", () => {
+  it("optional_round_trip_resume", () => {
     const r = new Resume({ name: "grace" });
     expect(round_trip_resume(r)).toEqual(r);
   });
-  it("round_trip_optional_container", () => {
+  it("optional_round_trip_optional_container", () => {
     const c = new OptionalContainer({
       optional_int: null,
       optional_class: new Resume({ name: "x" }),

@@ -25,13 +25,23 @@ static void BAML_CFFI_CALL expected_host_release_callback(uint64_t host_value_ke
   (void)host_value_key;
 }
 
+static void BAML_CFFI_CALL expected_unhandled_spawn_error_callback(
+    const int8_t *content, size_t length, int32_t cancelled) {
+  (void)content;
+  (void)length;
+  (void)cancelled;
+}
+
 int main(void) {
   BamlResultCallback result_callback = expected_result_callback;
   BamlHostDispatchCallback dispatch_callback = expected_host_dispatch_callback;
   BamlHostReleaseCallback release_callback = expected_host_release_callback;
+  BamlUnhandledSpawnErrorCallback unhandled_spawn_error_callback =
+      expected_unhandled_spawn_error_callback;
   (void)result_callback;
   (void)dispatch_callback;
   (void)release_callback;
+  (void)unhandled_spawn_error_callback;
   PRINT_SIZE(BamlCffiStatus);
   PRINT_ALIGN(BamlCffiStatus);
   PRINT_SIZE(BamlBridgeLanguage);
@@ -50,6 +60,10 @@ int main(void) {
   PRINT_OFFSET(BamlBridgeInfoV1, language);
   PRINT_OFFSET(BamlBridgeInfoV1, sdk_version);
   PRINT_OFFSET(BamlBridgeInfoV1, sdk_version_len);
+  PRINT_OFFSET(BamlBridgeInfoV1, bridge_runtime_name);
+  PRINT_OFFSET(BamlBridgeInfoV1, bridge_runtime_name_len);
+  PRINT_OFFSET(BamlBridgeInfoV1, bridge_runtime_version);
+  PRINT_OFFSET(BamlBridgeInfoV1, bridge_runtime_version_len);
   PRINT_SIZE(BamlApiV1);
   PRINT_ALIGN(BamlApiV1);
   PRINT_OFFSET(BamlApiV1, abi_version);
@@ -74,5 +88,8 @@ int main(void) {
   PRINT_OFFSET(BamlApiV1, media_base64);
   PRINT_OFFSET(BamlApiV1, media_mime_type);
   PRINT_OFFSET(BamlApiV1, register_bridge);
+  PRINT_OFFSET(BamlApiV1, register_unhandled_spawn_error_callback);
+  PRINT_OFFSET(BamlApiV1, shutdown_runtime);
+  PRINT_OFFSET(BamlApiV1, initialize_runtime_from_bytecode_with_metadata);
   return 0;
 }

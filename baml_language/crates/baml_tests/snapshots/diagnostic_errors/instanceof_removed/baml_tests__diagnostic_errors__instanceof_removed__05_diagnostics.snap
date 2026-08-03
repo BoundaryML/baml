@@ -2,22 +2,20 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === COMPILER2 DIAGNOSTICS ===
-  [hir] error: `instanceof` is no longer supported. Use a `match` expression for type checking instead.
-    ╭─[ instanceof_removed.baml:13:7 ]
-    │
- 13 │     x instanceof Cat
-    │       ─────┬────  
-    │            ╰────── use `match` instead
-    │ 
-    │ Note: Error code: E0098
-────╯
+  [hir] E0098
 
-  [hir] error: `instanceof` is no longer supported. Use a `match` expression for type checking instead.
-    ╭─[ instanceof_removed.baml:17:11 ]
-    │
+  × `instanceof` is no longer supported. Use a `match` expression for type checking instead.
+    ╭─[instanceof_removed.baml:13:7]
+ 13 │     x instanceof Cat
+    ·       ─────┬────
+    ·            ╰── use `match` instead
+    ╰────
+
+  [hir] E0098
+
+  × `instanceof` is no longer supported. Use a `match` expression for type checking instead.
+    ╭─[instanceof_removed.baml:17:11]
  17 │     if (x instanceof Dog) {
-    │           ─────┬────  
-    │                ╰────── use `match` instead
-    │ 
-    │ Note: Error code: E0098
-────╯
+    ·           ─────┬────
+    ·                ╰── use `match` instead
+    ╰────

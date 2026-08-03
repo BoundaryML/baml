@@ -1,0 +1,1324 @@
+---
+title: Tutorial - An Agentic AI App with Streaming
+description: An end-to-end agentic chatbot tutorial for React devs
+slug: structured-chat-tutorial
+date: May 5, 2025
+tags: ['tutorials']
+author:
+  name: Greg Hale
+  imageUrl: /greg.jpg
+  linkedin: https://www.linkedin.com/in/imalsogreg
+---
+
+We'd like to show you just how easy it is to build an agentic chatbot
+using BAML! In this tutorial, we'll go from zero to working app, with
+explanations that you can follow step by step.
+
+First, a look at the final product we will produce:
+
+<Video src="/blog/todo-llm/todo-llm-small.mp4"/>
+
+This chatbot helps users build and manage Todo lists using natural language.
+We will build an agentic LLM that decides what actions should be taken to
+modify the Todo list, and then write business logic in TypeScript to apply
+those changes to the page.
+
+If you reach the end of the tutorial, you will have a working app, and
+understanding of the following concepts:
+
+ - LLM API Design with BAML types functions
+ - Tool use in BAML
+ - How to use React hooks derived from BAML code
+ - How to manage React state with streaming updates
+
+### System Architecture
+
+Our app will be built around React frontend with a state that can be updated
+through both direct user interactions (e.g. Clicks on checkboxes) and
+tool calls determined by an LLM.
+
+<Image
+  src="/blog/todo-llm/diagram.png"
+  alt="React holds the central state. Clicks and LLM calls update the state."
+  width={1528}
+  height={524}/>
+
+## Streaming UI
+
+The tool calls we will use to update the Todo list are relatively simple,
+but a good UI experience requires a couple subtle issues to be resolved
+around streaming.
+
+When the user enters a query, our BAML LLM function will determine which
+tool calls to issue to satisfy the query, it it will return them in a list.
+Our streaming should look like this:
+
+ - Stream the invidivual tool calls from the list (so we process each tool
+   call as soon as it's ready, rather than waiting for the full list).
+ - Do not stream the _contents_ of each tool call - each tool call should be
+   presented to our application exactly once, because it is a single instruction
+   for updating the UI (e.g., Add an Item, or Update An Item).
+ - Make one exception to the above rule: the tool call that sends messages to
+   the user should have its contents streamed, so that the message itself is
+   streamed in to the UI.
+
+This is exactly the kind of fine-grained behavior that
+[Semantic Streaming](https://docs.boundaryml.com/guide/baml-basics/streaming#semantic-streaming)
+lets you specify. We will see how to use Semantic Streaming in your
+Todo app when we craft your BAML LLM function.
+
+## Dev environment
+
+We reccommend using VSCode or Cursor, and getting the `BAML` extension from
+the `Extensions` tab. We'll be building a NextJS app, so you need to have
+`nodejs` installed, which ships two utilities we will use: `npm` and `npx`.
+
+## Scaffolding
+
+We'll set up the basic structure of the project first, following the
+[QuickStart Guide](https://docs.boundaryml.com/guide/framework-integration/react-next-js/quick-start)
+for a new NextJS app. The only prerequisite is that you have `nodejs` installed.
+
+```bash
+npx create-next-app@latest todo-llm
+cd todo-llm
+npm install @boundaryml/baml @boundaryml/baml-nextjs-plugin
+npx baml-cli init
+npm baml-cli generate
+```
+
+`create-next-app` will ask you several questions about your preferred
+typechecker, linter and build system. We recommend using TypeScript and
+Tailwind. We will say `No` to Turbopack because it doesn't yet work with
+BAML react hooks (which we'll explain later). The other defaults are fine.
+
+Your directory should now look approximately like this. `baml_src` contains
+the BAML source code you write to define your LLM functions. `baml_client`
+contains typescript code automatically generated from your `baml_src` code,
+for connecting your app to your LLM functions. React components live under
+`/src`. 
+
+```bash
+[nix-shell:~/code/todo-llm5]$ tree -L 2
+.
+├── README.md
+├── baml_src
+│   ├── clients.baml
+│   ├── generators.baml
+│   └── resume.baml
+├── baml_client
+│   ├── react
+│   |   └── hooks.ts
+│   ├── types.ts
+│   └── partial_types.svg
+├── next.config.ts
+├── package.json
+├── src
+│   └── app
+│       ├── page.tsx
+│       ├── globals.css
+│       └── layout.svg
+└── tsconfig.json
+```
+
+We need to update the file `next.config.ts` to make NextJS aware of the BAML
+integration.
+
+```typescript
+// next.config.ts
+import { withBaml } from '@boundaryml/baml-nextjs-plugin';
+import type { NextConfig } from 'next';
+const nextConfig: NextConfig = {
+  // ... existing config
+};
+
+export default withBaml()(nextConfig);
+```
+
+Now we will fix our `baml_src/generators.baml` file, telling it to generate
+React hooks for us:
+
+```rust
+generator target {
+    // vv Change this from "typescript" to "typescript/react"
+    output_type "typescript/react"
+    output_dir "../"
+    version "0.86.0"
+    default_client_mode async
+}
+```
+
+<Note>
+You will need to change `version "0.86.0"` to the version of BAML you installed.
+That version will be reported to you if you run `npx baml-cli generate`.
+</Note>
+
+## Let's write some BAML!
+
+Now it's time to design our LLM Function. Our goal is to write a function that
+takes a user query and produces a list of changes to make to the UI. We will
+build the pieces one at at time, then assemble them into a final file at the end
+of this section.
+
+Here are some example queries we expect from the user:
+
+ - "Please add a todo item: Go for a Run"
+ - "Add the 'Personal' tag to all the items about socializing"
+ - "I finished my homework 20 minutes ago"
+ - "Please summarize the remaining items, and make new items if any
+   unfinished items need to be broken down into smaller steps"
+
+### Input Type
+
+To satisfy the queries above, the LLM needs to know three things:
+
+ 1. The query itself.
+ 2. The time the query was created (to make sense of phrases like "yesterday").
+ 3. The current state of the Todo list.
+
+Create a new file called `baml_src/todo.baml`. We'll start writing the inputs to
+our LLM function.
+
+A class called `Query` will hold the user's message and the timestamp at which
+it was sent.
+
+```rust
+class Query {
+  message string
+  date_time int @description("Timestamp of the message - seconds since UNIX Epoch")
+}
+```
+
+A class called `State` will hold the "current" list of Todo items. "Current" is
+a relevant notion for our frontend. The LLM will not remember anything between
+calls, so it's not exactly current from the LLM's perspective. When we send
+the LLM a request, `State` will serve as the LLM's memory.
+
+```rust
+class State {
+  todo_list TodoList
+}
+
+class TodoList {
+  items TodoItem[]
+}
+
+class TodoItem {
+  id string
+  title string
+  created_at int @description("Timestamp in seconds since UNIX Epoch")
+  completed_at int? @description("Timestamp in seconds since UNIX Epoch")
+  tags Tag[]
+}
+
+enum Tag {
+  Work
+  Personal
+  Errand
+}
+```
+
+<Tip title="Aside" icon="leaf">
+It may not be necessary to warp `TodoList` and `State` in their own structs
+like this, but we will do it in this example because these would be natural
+places to add more fields for different features later.
+</Tip>
+
+<Tip title="Checkpoint!" icon="check">
+Check that everything is alright by running `npx baml-cli generate`. If you
+see errors that you don't know how to fix, drop by our
+[Discord](https://discord.gg/yzaTpQ3tdT) where we (and our enthusiastic
+community) are excited to help!
+</Tip>
+
+
+### Output Type
+
+Our function should take the inputs we created above and produce a list of
+actions for updating the State. In other words, a list of Tool calls.
+
+```rust
+// A Tool call for adding a new item.
+// It doesn't include an ID because the frontend will be responsible
+// for generating the ID.
+class AddItem {
+  type "add_item"
+  title string 
+  tags Tag[]
+
+  // The following line tell the BAML runtime that `AddItem` is "atomic".
+  // During streaming it will be delivered all at once, not streamed bit
+  // by bit.
+  @@stream.done
+}
+
+// A Tool call for adjusting an existing item.
+class AdjustItem {
+  type "adjust_item"
+  item_id string
+  title string?
+  completed_at int?
+  tags Tag[]?
+
+  // This tool, too, should not be provided to the client in pieces.
+  @@stream.done
+}
+
+// A tool call to send text to the user.
+// This tool has no @@stream.done attribute, because we do want it
+// to be streamed in.
+class MessageToUser {
+  type "message_to_user"
+
+  // @stream.with_state will cause the `message` field to be wrapped
+  // in an object that reports if streaming is in progress or done,
+  // when using the type in the React client.
+  message string @stream.not_null @stream.with_state
+}
+
+// Collect all the tools together into a union for convenience.
+type Tool = AddItem | AdjustItem | MessageToUser
+```
+
+There are a few things to point out here.
+
+  1. `@@stream.done` comes from
+     [SemanticStreaming](https://docs.boundaryml.com/guide/baml-basics/streaming#semantic-streaming).
+     It indicates that this class will never reach your React code in partial
+     form, you will always recive it as a completed whole.
+  1. The class `MessageToUser` uses `@stream.not_null` and `@stream.with_state`
+     on its `message` field. These mean that your app will always receive
+     `MessageToUser` with some not-null `message` value, and that the `message`
+     field will be wrapped with metadata about whether the field is complete
+     or still streaming. We used this annotation here to help our UI know when a
+     message is finished.
+  1. The `AddItem` tool call does not specify an ID. We made this choice so
+     that our React app, not the LLM, is in charge of assigning IDs to new
+     items.
+  
+
+### The LLM Function
+
+We are finally ready to write our LLM function.
+
+```rust
+function SelectTools(state: State, query: Query) -> Tool[] {
+  client "openai/gpt-4o"
+  prompt #"
+    You are a helpful assistant that can help with the user's todo list.
+    You can adjust an item, add an item, or send the user a message.
+    Here is the state:
+    {{ state }}
+
+    When the user specifies relative times, use the current time and their
+    time delta to determine an absolute time. Never return a value like
+    "1745877191 - 7200".  Instead, return a value like "1745870191".
+
+    When updating an item, you may be tempted to only fill out the fields
+    that need chaning. But it's important instead to fill out all the fields.
+    If you don't want to update a field, set it to the existing value.
+
+    If the user mentions finishing an item that isn't on the list, inform them
+    that it's not on the list.
+
+    {{ ctx.output_format }}
+
+    {{ _.role('user')}}
+    User query: {{ query.message }}
+    That message was sent at {{ query.date_time }}
+  "#
+}
+```
+
+This function wraps our prompt up as a function, parameterized by the current
+state of the app and the user's query. When we call this function, we will
+supply these parameters, the BAML runtime will splice them into the prompt
+and send the request to GPT-4o, then parse the LLM's response into our
+return type: `Tool[]` (a list of `Tool`s).
+
+
+### Tests
+
+We're not vibe coding here, we're writing a system that should act more like
+a web app than an LLM demo project, and we need some tests.
+
+```rust
+test NewFirstItem {
+  functions [SelectTools]
+  args {
+    state {
+        todo_list {
+            items []
+        }
+    }
+    query {
+        message "Add 'Take otu the trash' to Errands"
+        date_time 1719225600
+    }
+  }
+  @@assert( {{ this|length == 1 }})
+  @@assert( {{ this[0].type == "add_item" }} )
+}
+
+test NewAdvice {
+  functions [SelectTools]
+  args {
+    state {
+        todo_list {
+            items []
+        }
+    }
+    query {
+        message "Help"
+        date_time 1719225600
+    }
+  }
+  @@assert( {{ this[0].type == "message_to_user" }} )
+}
+
+test CompleteSecondItem {
+  functions [SelectTools]
+  args {
+    state {
+      todo_list {
+        items [
+          {
+            id 1
+            title "Take out the trash"
+            created_at 1719225600
+            completed_at null
+            deleted false
+            tags [Errand]
+          },
+          {
+            id 2
+            title "Buy groceries"
+            created_at 1719225600
+            completed_at null
+            deleted false
+            tags [Errand]
+          }
+        ]
+      }
+    }
+    query {
+      message "I bought the groceries 5 hours ago"
+      date_time 1719225600
+    }
+  }
+  @@assert( {{ this|length == 1 }} )
+  @@assert( {{ this[0].type == "adjust_item" }} )
+}
+```
+
+
+### The Full BAML File
+
+Here, we have collected the entire contents of `todo.baml` into a BAML file and
+included it in a playground. Try running the tests and verifying that the LLM
+generates the expected tool calls from each test query.
+
+
+<BamlBlock name="1" bamlCode={`
+
+class Query {
+    message string
+    date_time int @description("Timestamp of the message (sec)")
+}
+
+class TodoItem {
+    id string
+    title string
+    created_at int @description("Timestamp in seconds since UNIX Epoch")
+    completed_at int? @description("Timestamp in seconds since UNIX Epoch")
+    tags Tag[]
+}
+
+enum Tag {
+    Work
+    Personal
+    Errand
+}
+
+class AddItem {
+    type "add_item"
+    title string 
+    tags Tag[]
+    @@stream.done
+}
+
+class AdjustItem {
+    type "adjust_item"
+    item_id string
+    title string?
+    completed_at int?
+    tags Tag[]?
+    @@stream.done
+}
+
+class MessageToUser {
+    type "message_to_user"
+    message string @stream.not_null @stream.with_state
+}
+
+class TodoList {
+  items TodoItem[]
+}
+
+class State {
+  todo_list TodoList
+}
+
+type Tool = AddItem | AdjustItem | MessageToUser
+
+function SelectTools(state: State, query: Query) -> Tool[] {
+    client "openai/gpt-4o"
+    prompt #"
+        You are a helpful assistant that can help with the user's todo list.
+        You can adjust an item, add an item, or send the user a message.
+        Here is the state:
+        {{ state }}
+
+        When the user specifies relative times, use the current time and their
+        time delta to determine an absolute time. Never return a value like
+        "1745877191 - 7200".  Instead, return a value like "1745870191".
+
+        When updating an item, you may be tempted to only fill out the fields
+        that need chaning. But it's important instead to fill out all the fields.
+        If you don't want to update a field, set it to the existing value.
+
+        If the user mentions finishing an item that isn't on the list, inform them
+        that it's not on the list.
+
+        {{ ctx.output_format }}
+
+        {{ _.role('user')}}
+        User query: {{ query.message }}
+        That message was sent at {{ query.date_time }}
+    "#
+}
+
+test NewFirstItem {
+  functions [SelectTools]
+  args {
+    state {
+      todo_list {
+        items []
+      }
+    }
+    query {
+      message "Add 'Take otu the trash' to Errands"
+      date_time 1719225600
+    }
+  }
+  @@assert( {{ this|length == 1 }})
+  @@assert( {{ this[0].type == "add_item" }} )
+}
+
+test NewAdvice {
+  functions [SelectTools]
+  args {
+    state {
+      todo_list {
+        items []
+      }
+    }
+    query {
+      message "Help"
+      date_time 1719225600
+    }
+  }
+  @@assert( {{ this[0].type == "message_to_user" }} )
+}
+
+test CompleteSecondItem {
+  functions [SelectTools]
+  args {
+    state {
+      todo_list {
+        items [
+          {
+            id 1
+            title "Take out the trash"
+            created_at 1719225600
+            completed_at null
+            deleted false
+            tags [Errand]
+          },
+          {
+            id 2
+            title "Buy groceries"
+            created_at 1719225600
+            completed_at null
+            deleted false
+            tags [Errand]
+          }
+        ]
+      }
+    }
+    query {
+      message "I bought the groceries 5 hours ago"
+      date_time 1719225600
+    }
+  }
+  @@assert( {{ this|length == 1 }} )
+  @@assert( {{ this[0].type == "adjust_item" }} )
+}
+`}
+
+ />
+
+ <Tip title="Checkpoint">
+ Make sure `npx baml-cli generate` still works, and that, when you save the BAML
+ file, you see the nofication: `"BAML client successfully generated!"`.
+
+ Also, click the Run Test buttons in the playground. Experiment with the prompt
+ and see which parts are critical to the model performing correctly. What
+ happens if you omit `{{ ctx.output_format }}`? What happens if you delete the
+ paragraphh forbidding timestamps like "1745877191 - 7200"? Experimenting with
+ the prompt and observing the effects on your tests is a core part of the BAML
+ development process. If you get good at it, you can get very reliable results
+ from your LLMs.
+ </Tip>
+
+ ## Building the Web App
+
+ As you have been writing your `todo.baml` file, the VSCode extension has been
+ watching and reflecting the changes into another directory called
+ `baml_client`. `baml_client` is accessible from your React code.
+
+Let's start with the simplest possible use of your generated BAML function,
+`SelectTools`.
+
+<Tip title="Aside">
+At this point, you will need your API key available in the environment,
+in order to make LLM calls.
+
+```bash
+export OPENAI_API_KEY=sk-proj-*************
+```
+</Tip>
+
+Start the development server so you can watch your changes reflected
+in the app.
+
+```bash
+npm run dev
+```
+
+In a web browser, navigate to `localhost:3000`. You should see the NextJS
+started template after a moment of compiling.
+
+### Components
+
+We'll start by importing some basic components from shadcn/ui.
+
+```bash
+pnpm dlx shadcn@latest init
+pnpm dlx shadcn@latest add badge
+pnpm dlx shadcn@latest add button
+pnpm dlx shadcn@latest add checkbox
+pnpm dlx shadcn@latest add input
+pnpm dlx shadcn@latest add label
+pnpm dlx shadcn@latest add textarea
+pnpm dlx shadcn@latest add tooltip
+```
+
+### A/V Test
+
+We will add a component that simply checks that LLM calls are working, before
+we build a real UI. Create a file in `src/components/test-llm.tsx`.
+
+Even this isn't the real code we will use, it's small and simple, so we'll
+use code comments to introduce some of the important concepts.
+
+```typescript
+'use client'
+
+import { useState } from "react"
+import { useSelectTools } from "../../baml_client/react/hooks"
+import { State, Query } from "../../baml_client/types"
+import { Input } from "@/components/ui/input"
+
+
+function TestLLM() {
+    // A standard `useState` hook will track the value of our Input element.
+    const [queryText, setQueryText] = useState("")
+    
+    // `useSelectTool` is generated from our BAML code.
+    const hook = useSelectTools({
+        // Specify to the hook that we want streaming.
+        stream: true,
+        // Capture every stream event and log it to console for debugging.
+        onStreamData: (chunk) => {
+            console.log(chunk)
+        }
+    })
+
+    // Make a placeholder value for calling the LLM function.
+    const state: State = {
+        todo_list: {
+            items: []
+        }
+    }
+    // Make a real `Query` object. (The `Query` TypeScript type was generated
+    // from our BAML `Query` class).
+    const query: Query = {
+        message: queryText,
+        date_time: Math.floor(Date.now() / 1000.0)
+    }
+
+    return (
+        <div>
+            <input
+               type="text"
+               className="border-2 border-gray-300 rounded-md p-2"
+               value={queryText}
+               onChange={(e) => setQueryText(e.target.value)} />
+
+            {* When the button is clicked, call the LLM function using
+               the hook's `mutate()` method.
+            *}
+            <button onClick={() => hook.mutate(state, query)}>
+              Create Todo
+            </button>
+
+            <div>
+                <pre>
+                    {* hook.streamData is a reactive value containing the
+                       current LLM result *}
+                    {JSON.stringify(hook.streamData, null, 2)}
+                </pre>
+            </div>
+        </div>
+    )
+}
+
+export { TestLLM }
+```
+
+Let's analyze this code to understand the basics of BAML's integration with React.
+
+ - 1. `useSelectTools` is a react hook generated from our BAML function `SelectTools`.
+      When you change the BAML code for this function, the associated types for this
+      react hook will automatically update.
+ - 2. `onStreamData` is an optional parameter you can pass to the hook constructor. The
+      callback will be invoked each time new stream data is available. For now, we will
+      simply log the streamed data to the console.
+ - 3. The `hook.mutate()` method is used to invoke the LLM Function.
+ - 4. `hook.streamData` is a reactive value containing the most recently streamed data.
+      By using using it in JSX we get a live view of its value.
+
+
+Add this component to the site by deleting the contents of
+`src/app/page.tsx` and replacing it with this:
+
+```typescript
+// src/app/page.tsx
+
+import { TestLLM } from '@/components/test-llm';
+
+export default function Home() {
+  return (
+    <TestLLM />
+  );
+}
+```
+
+If you are still running `npm run dev`, your page should behave
+like this:
+
+<Video src="/blog/todo-llm/todo-llm-debug.mov"/>
+
+At this point, depending on your familiarity with React, it might be clear how
+close we are to a working app! In fact, if your LLM function returns a value
+that corresponds directly to a rendered UI, then the patterns you have already
+seen are enough to render a streaming UI for your functions.
+
+## Agentic UI Updates
+
+Our LLM function does not return a directly renderable UI element, but a list of
+tool calls that determine how we should _update_ the UI.
+
+To support this pattern, we will make a couple simplifying architectural
+decisions:
+
+ - 1. Keep track of App state separately from the state we send to the LLM.
+ - 2. Use [jotai](https://jotai.org/) to manage App state.
+ - 3. Execute UI updates in the `onStreamData` callback, by modifying
+      the state stored in Jotai atoms.
+
+### Application State
+
+Our application state will store the current Todo items, messages the
+user has sent, and messages the LLM has sent back. We will also store
+a field that tracks whether or not we are currently waiting for an LLM to
+respond.
+
+First, add jotai to the project:
+
+```bash
+npm add jotai@latest
+```
+
+Copy the following into `src/lib/atoms.ts`:
+
+```typescript
+import { atom } from 'jotai';
+import { atomWithStorage } from 'jotai/utils';
+import type { State } from '../../baml_client';
+
+// Our App state is a combination of our BAML `State` type and two extra
+// fields: `running` and `messages`.
+const stateAtom = atomWithStorage<
+  State & { running: boolean; messages: string[] }
+>('todoState', {
+  todo_list: { items: [] },
+  running: false,
+  messages: [],
+});
+
+export { stateAtom };
+```
+
+This code initialize a new `atom` to store our UI's state. Any other component
+in the application can import this atom to get a read-only, or read-write
+view, depending on that component's needs. We plan to read from the atom while
+rendering components, and write to it while handling LLM responses.
+
+Let's start with a top-level component that will organize the rest of the site.
+Create the file `src/components/todo-app.tsx`.
+
+```typescript
+'use client';
+
+import { MessagesToUser } from '@/components/message-list';
+import { TodoList } from '@/components/todo-list';
+import { stateAtom } from '@/lib/atoms';
+import { useSetAtom } from 'jotai';
+import { useTodoToolHandler } from './tool-handler';
+
+// Top-level Component for the Todo App.
+export function TodoInterface() {
+
+  // We will define `useTodoToolHandler later. For now, we assume it returns
+  // pair of callbacks that should be called when a user sends a query or
+  // clicks a Todo checkbox.
+  const { onUserQuery, onCheckboxClick } = useTodoToolHandler();
+
+  // Get a handle on the `stateAtom`, which allows modifying the App state.
+  const setState = useSetAtom(stateAtom);
+
+  // Define a callback for resetting the App state.
+  const handleReset = () => {
+    setState({
+      todo_list: { items: [] },
+      running: false,
+      messages: [],
+    });
+  };
+
+  // The HTML elements mostly organize the page with flex boxes.
+  return (
+    <div className="container mx-auto max-w-4xl p-5">
+      <div className="flex flex-col w-full">
+        <div className="w-full flex flex-row justify-center items-center gap-4 mb-6">
+          <h1 className="text-4xl">
+            TODO-LLM
+          </h1>
+        </div>
+
+        <div className="flex  gap-4 max-w-3xl mx-auto w-full">
+            {* Pass the callabcks through to the logical components. *}
+            <TodoList onCheckboxClick={onCheckboxClick} onRun={onUserQuery} onReset={handleReset} />
+        </div>
+      </div>
+    </div>
+  );
+}
+```
+
+An error will tell you `TodoList` and `useTodoToolHandler` are not defined.
+We will implement these now.
+
+Let's first look at the `useTodoToolHandler` callback. This function provides
+the two callbacks that connect the LLM's tool calls to our UI state.
+
+This is the most complex part of our application. Take your time, focus
+on the code comments, and experiment in your editor. We can do it!
+
+Create the file `src/components/tool-handler.tsx` with the following contents:
+
+```typescript
+'use client';
+
+import { stateAtom } from '@/lib/atoms';
+import { useAtom } from 'jotai';
+import { useCallback, useRef } from 'react';
+import type { partial_types } from '../../baml_client/partial_types';
+import { useSelectTools } from '../../baml_client/react/hooks';
+import type * as types from '../../baml_client/types';
+
+// Helper functions for tool handling.
+
+// Helper function for creating a new Todo item.
+const createTodoItem = (title: string, tags: string[] = []): types.TodoItem => {
+  // The creation timestamp is in seconds, and Date.now()
+  const timestamp = Math.floor(Date.now() / 1000);
+  const randomStr = Math.random().toString(36).substring(2, 15);
+  const cuid2 = `c${randomStr}${Math.random().toString(36).substring(2, 12)}`.slice(0, 25);
+  return {
+    id: cuid2,
+    title,
+    tags,
+    created_at: timestamp,
+    completed_at: null,
+    deleted: false,
+  };
+};
+
+// Apply updates to a TodoItem, returning the new one.
+const updateTodoItem = (
+  item: types.TodoItem,
+  updates: Partial<types.TodoItem>,
+): types.TodoItem => ({
+  ...item,
+  ...updates,
+  tags: updates.tags ?? item.tags,
+});
+
+// *************** The main tool handler *********************** //
+// This is the function that sets up the hook and dispatches to
+// helpers that implement each tool.
+export function useTodoToolHandler() {
+  const [state, setState] = useAtom(stateAtom);
+  const finishedInstructionsRef = useRef(new Set<number>());
+
+  // Helper function for update the state with a new Todo item.
+  const handleAddItem = useCallback(
+    (tool: types.AddItem) => {
+      setState((prevState) => ({
+        ...prevState,
+        todo_list: {
+          ...prevState.todo_list,
+          items: [
+            ...prevState.todo_list.items,
+            createTodoItem(tool.title, tool.tags),
+          ],
+        },
+      }));
+    },
+    [setState],
+  );
+
+  // Helper function for update the state for item adjustment.
+  const handleAdjustItem = useCallback(
+    (tool: types.AdjustItem) => {
+      setState((prevState) => ({
+        ...prevState,
+        todo_list: {
+          ...prevState.todo_list,
+          items: prevState.todo_list.items.map((item) =>
+            item.id === tool.item_id
+              ? updateTodoItem(item, {
+                  title: tool.title ?? undefined,
+                  completed_at: tool.completed_at ?? undefined,
+                  deleted: tool.deleted ?? undefined,
+                  tags: tool.tags ?? undefined,
+                })
+              : item,
+          ),
+        },
+      }));
+    },
+    [setState],
+  );
+
+  // Helper function for streaming a message.
+  const handleMessageToUser = useCallback(
+    (tool: partial_types.MessageToUser) => {
+      setState((prevState) => ({
+        ...prevState,
+        messages: prevState.messages.map((msg, idx) =>
+          idx === prevState.messages.length - 1 ? tool.message.value : msg,
+        ),
+      }));
+
+      if (tool.message.state === 'Complete') {
+        setState((prevState) => ({
+          ...prevState,
+          messages: [...prevState.messages, ''],
+        }));
+      }
+    },
+    [setState],
+  );
+
+  // Invoke the generated hook from the `SelectTools` BAML function.
+  const hook = useSelectTools({
+    stream: true,
+
+    // When the stream is finished after an invokation:
+    //   - Reset the hook.
+    //   - Reset the list of already-processed tool-calls.
+    //   - Update `running` state to `false`.
+    onFinalData: () => {
+      hook.reset();
+      finishedInstructionsRef.current = new Set<number>();
+      setState((prevState) => ({
+        ...prevState,
+        running: false,
+      }));
+    },
+
+    // When a stream chunk is received:
+    //   - Focus on the last call in the list. Any item other than
+    //     the last item is already completely handled.
+    onStreamData: (chunk) => {
+      if (!chunk?.length) return;
+
+      const tool_id = chunk.length - 1;
+      const tool = chunk[tool_id];
+
+      if (finishedInstructionsRef.current.has(tool_id)) return;
+
+      // Dispatch to the right handler for the tool.
+      switch (tool?.type) {
+        case 'add_item':
+          handleAddItem(tool as types.AddItem);
+          finishedInstructionsRef.current.add(tool_id);
+          break;
+        case 'adjust_item':
+          handleAdjustItem(tool as types.AdjustItem);
+          finishedInstructionsRef.current.add(tool_id);
+          break;
+        case 'message_to_user':
+          handleMessageToUser(tool as partial_types.MessageToUser);
+          if (
+            (tool as partial_types.MessageToUser).message.state === 'Complete'
+          ) {
+            finishedInstructionsRef.current.add(tool_id);
+          }
+          break;
+      }
+    },
+  });
+
+  // This callback will be called when the user submits a query.
+  // On query, we:
+  //   - Set `running` to `true`
+  //   - Push an empty string to the `messages` list. If we encounter
+  //     a `message_to_user` call, it will populate that empty string.
+  //   - call `hook.mutate()` to call the LLM.
+  //   - We don't need to handle the stream here. Streaming is handled
+  //     by the `onStreamData` callback that we set when building the hook.
+  const onUserQuery = useCallback(
+    async (message: string) => {
+      setState((prevState) => ({
+        ...prevState,
+        running: true,
+        messages: [...prevState.messages, message, ''],
+      }));
+
+      hook.mutate(state, {
+        message,
+        date_time: Math.floor(Date.now() / 1000),
+      });
+    },
+    [hook, state, setState],
+  );
+
+  // This callback is called when the user clicks the checkmark on a todo item.
+  const onCheckboxClick = useCallback(
+    async (item_id: string) => {
+      setState((prevState) => ({
+        ...prevState,
+        todo_list: {
+          ...prevState.todo_list,
+          items: prevState.todo_list.items.map((item) =>
+            item.id === item_id
+              ? updateTodoItem(item, {
+                  completed_at: item.completed_at
+                    ? null
+                    : Math.floor(Date.now() / 1000),
+                })
+              : item,
+          ),
+        },
+      }));
+    },
+    [setState],
+  );
+
+  return {
+    onUserQuery,
+    onCheckboxClick,
+  };
+}
+```
+
+There is a lot going on in this file, let's break it down.
+
+ - The `on_user_query` callback calls `hook.mutate()` with the message from
+   the query `Input` element, and the current time.
+ - `on_user_query` also pushes a new, empty message onto the `messages`
+   state. This empty message will receive any characters received from
+   the `message_to_user` tool call, if that tool is called.
+ - The `useSelectTools` callback is created with a `onStreamData` handler.
+   The callback passed to `onStreamData` selects the last tool in the list.
+   The streamed value received by `onStreamData` is always a list of tool
+   calls. If the list is longer than 1, that means we alrealy saw the
+   previous list item in a previous stream chunk. We therefore only have to
+   exampine the last tool call in our list.
+ - We call `switch (tool?.type)` to determine the precise tool call being
+   processed, and then defer to one of the handler functions. We also
+   add the index of this tool call to `finishedInstructionsRef`, if the
+   tool call was marked `@stream.done`. `@stream.done` tool calls are
+   received in a single chunk, and therefore we know they are done as soon
+   as we process them for the first time.
+ - We do not always add `message_to_user` tool calls to
+   `finishedInstructionsRef`, because a subsequent stream message might
+   extend this tool call with further tokens. (Recall that this tool
+   was not marked `@stream.done` in our BAML code). We use the wrapping
+   `state` tracker that comes from BAML's `@stream.with_state` attribute
+   to deterimine whether `message_to_user` tool call is complete.
+ - Special-purpose handlers for the `add_item` and `adjust_item` tools
+   update our UI state.
+ - An `onCheckboxClick` callback updates the state of any Todo item
+   that has been manually clicked.
+
+### Todo List UI
+
+With our state update callbacks in hand, we can finish building the user 
+interface for the todo-list.
+
+Create the file `src/components/todo-list.tsx`. This component will render a
+dialog box showing us the current app state, which can be useful for debugging.
+
+```typescript
+import { Checkbox } from "@/components/ui/checkbox";
+import { stateAtom } from "@/lib/atoms";
+import { useAtom } from "jotai";
+import type * as types from "../../baml_client/types";
+import { Badge } from "./ui/badge";
+import { Label } from "./ui/label";
+import { useState } from "react";
+import { Button } from "./ui/button";
+import { Input } from "./ui/input";
+import { MessagesToUser } from "./message-list";
+
+// This is the main component for the interactive parts of the Todo list.
+//   - The query input field and run button
+//   - The Todo list
+//   - The messages to the user
+export function TodoList(props: {
+  onCheckboxClick: (item_id: string) => void;
+  onRun: (message: string) => void;
+  onReset: () => void;
+}) {
+
+  // Access the UI state in read-only mode.
+  const [state] = useAtom(stateAtom);
+
+  // A standard `useState` for the Query input.
+  const [message, setMessage] = useState("");
+
+  return (
+    <div className="flex flex-col w-full max-w-2xl mx-auto">
+      <div className="flex flex-col items-center gap-2 mb-4 w-full">
+        <div className="flex w-full gap-2">
+
+          {* The Input uses the tool-handling `onRun` handler on submit. *}
+          <Input
+            value={message}
+            className="text-xl"
+            placeholder="What needs to be done?"
+            onChange={(e) => setMessage(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                props.onRun(message);
+                setMessage("");
+              }
+            }}
+          />
+
+          <Button
+            disabled={state.running}
+            variant="default"
+            onClick={() => {
+              props.onRun(message);
+              setMessage("");
+            }}
+          >
+            {state.running ? "Pending..." : "Send"}
+          </Button>
+
+          {* A button to reset the state *}
+          <Button variant="outline"  onClick={props.onReset}>
+            Reset
+          </Button>
+        </div>
+      </div>
+
+      <div className="flex gap-4">
+        <div className="w-1/2 border border-border rounded-lg shadow-sm p-4">
+
+          {* Render each Todo item, with the onCheckboxClick callback *}
+          {state.todo_list.items.map((item, index) => (
+            <TodoItem key={`message-${index}`} item={item} onCheckboxClick={props.onCheckboxClick} />
+          ))}
+
+          <div className="text-sm text-muted-foreground mt-4">
+            {state.todo_list.items.filter((item) => !item.completed_at).length}{" "}
+            items left!
+          </div>
+
+        </div>
+        <div className="w-1/2">
+          {* Render the messages to the user *}
+          <MessagesToUser />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Component for a single Todo list item.
+export function TodoItem(props: {
+  item: types.TodoItem;
+  onCheckboxClick: (item_id: string) => void;
+}) {
+  const isCompleted = props.item.completed_at != null;
+
+  return (
+    <div
+      className="flex justify-between gap-3 py-2 border-b border-border last:border-b-0"
+    >
+      <div className="flex flex-col gap-2">
+        <div className="flex items-center gap-2">
+          <Checkbox
+            checked={isCompleted}
+            id={`todo-${props.item.id}`}
+            onCheckedChange={() => props.onCheckboxClick(props.item.id)}
+            className="h-5 w-5"
+          />
+          <Label
+            htmlFor={`todo-${props.item.id}`}
+            className={`flex-1 ${
+              isCompleted ? "text-muted-foreground line-through" : ""
+            }`}
+          >
+            {props.item.title}
+          </Label>
+        </div>
+        <span className="text-xs text-muted-foreground">
+          {props.item.completed_at
+            ? `Completed ${new Date(props.item.completed_at * 1000).toLocaleString()}`
+            : "Not completed"}
+        </span>
+      </div>
+      <div className="flex items-center gap-2">
+        {props.item.tags.map((tag) => (
+          <Badge key={tag} variant="outline">
+            {tag}
+          </Badge>
+        ))}
+      </div>
+    </div>
+  );
+}
+```
+
+We'll add a simple component to render messages to the user, in
+`src/components/message-list.tsx`:
+
+```typescript
+import { stateAtom } from '@/lib/atoms';
+import { useAtom } from 'jotai';
+
+function MessagesToUser() {
+  const [state] = useAtom(stateAtom);
+  console.log('Current state:', state);
+
+  return (
+    <div className="w-full flex flex-col gap-2">
+        {state.messages
+          .filter((message) => message !== '')
+          .map((message, index, arr) => (
+            <div
+              className={`p-3 rounded-lg ${
+                index === arr.length - 1
+                  ? 'bg-primary/10 border-l-2 border-primary'
+                  : 'bg-muted/50'
+              }`}
+              key={`message-${index}-${message.slice(0, 10)}`}
+            >
+              <p className="text-sm text-foreground">{message}</p>
+            </div>
+          ))}
+    </div>
+  );
+}
+
+export { MessagesToUser };
+```
+
+Finally, we will add the `TodoInterface` to our main page, in `src/app/page.tsx`:
+
+```typescript
+import { TodoInterface } from '@/components/todo-app';
+
+export default function Home() {
+  return (
+    <TodoInterface />
+  );
+}
+```
+
+<Tip title="checkpoint">
+At this point, we have defined all the components needed to run the
+full app. Does your browser show you a nice UI at `localhost:3000`?
+Try sending some queries to the LLM, and watch items and messages
+populate.
+
+One of my favorite queries is this: "Create several todo items to
+help me get great at chess - explain each item after you creat it."
+
+This will produce a number of Todo items interleaved with streaming
+messages. This is a pattern of combined streaming and atomic tool
+calls that is difficult to replicate in other agentic frameworks!
+</Tip>
+
+## Reflecting on the App
+
+With 140 lines of BAML and 430 lines of TypeScript code, we've created an
+agentic web app that blends a streaming chatbot with a structured
+domain model. We achieved exactly the streaming behavior we wanted, using
+BAML's streaming annotations, and it is clear how we could extend the
+application with different types of frontend elements or updates to the
+prompt.
+
+If you have made it this far in the blog post, :clap:, this one was
+very long and did not try to hide the complexity of the end-to-end
+development process. Please let us know if this format was useful to you,
+or if you prefer shorter and more focused tutorials.
+
+### Next time
+
+In the next installment, we will make our tool calls more interesting in
+two ways.
+
+  1. The tool calls in this demo just update the UI, they don't have explicit
+     return values, other than their effect on the UI state that gets passed
+     back to the LLM. We will add tools that get current real-world data to
+     inform our new Todo items.
+  2. We will augment the Todo list state into a vector database and add tool
+     calls that find Todos from the database by semantic similarity.
+
+### Takeaways
+
+Thank you for taking the time to learn about integrating BAML into a React
+app! If you remember anything from the experience, we hope it's this: BAML
+makes it easy to build and test the LLM parts of your app, then call your
+LLM Function from React just like it was any other hook, with the reactive
+data and type safety you would expect.

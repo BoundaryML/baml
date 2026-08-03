@@ -10,7 +10,6 @@ use std::fmt::Write;
 use baml_base::Name;
 use baml_compiler2_hir::{
     contributions::Definition,
-    file_item_tree,
     package::{PackageId, package_items},
 };
 use baml_project::ProjectDatabase;
@@ -21,6 +20,12 @@ fn make_db() -> ProjectDatabase {
     let mut db = ProjectDatabase::new();
     db.set_project_root(std::path::Path::new("."));
     db
+}
+
+/// Declared generic parameter names, for assertions that care about the names
+/// rather than the bounds.
+fn generic_param_names(params: &[baml_compiler2_ppir::item_data::GenericParamData]) -> Vec<Name> {
+    params.iter().map(|param| param.name.clone()).collect()
 }
 
 /// Build a sorted, human-readable summary of what `package_items(db, "baml")`
@@ -59,8 +64,7 @@ fn render_baml_package_items(db: &ProjectDatabase) -> String {
             let def = &ns_items.types[name];
             match def {
                 Definition::Class(class_loc) => {
-                    let item_tree = file_item_tree(db, class_loc.file(db));
-                    let class_data = &item_tree[class_loc.id(db)];
+                    let class_data = baml_compiler2_ppir::item_data::class_data(db, *class_loc);
                     let gp_str = if class_data.generic_params.is_empty() {
                         String::new()
                     } else {
@@ -69,7 +73,7 @@ fn render_baml_package_items(db: &ProjectDatabase) -> String {
                             class_data
                                 .generic_params
                                 .iter()
-                                .map(|n| n.as_str())
+                                .map(|param| param.name.as_str())
                                 .collect::<Vec<_>>()
                                 .join(", ")
                         )
@@ -77,7 +81,11 @@ fn render_baml_package_items(db: &ProjectDatabase) -> String {
                     let method_names: Vec<String> = class_data
                         .methods
                         .iter()
-                        .map(|mid| item_tree.functions[mid].name.to_string())
+                        .map(|mid| {
+                            baml_compiler2_ppir::item_data::function_data(db, *mid)
+                                .name
+                                .to_string()
+                        })
                         .collect();
                     writeln!(
                         output,
@@ -102,8 +110,7 @@ fn render_baml_package_items(db: &ProjectDatabase) -> String {
             let def = &ns_items.values[name];
             match def {
                 Definition::Function(func_loc) => {
-                    let item_tree = file_item_tree(db, func_loc.file(db));
-                    let func_data = &item_tree[func_loc.id(db)];
+                    let func_data = baml_compiler2_ppir::item_data::function_data(db, *func_loc);
                     let gp_str = if func_data.generic_params.is_empty() {
                         String::new()
                     } else {
@@ -112,7 +119,7 @@ fn render_baml_package_items(db: &ProjectDatabase) -> String {
                             func_data
                                 .generic_params
                                 .iter()
-                                .map(|n| n.as_str())
+                                .map(|param| param.name.as_str())
                                 .collect::<Vec<_>>()
                                 .join(", ")
                         )
@@ -260,11 +267,10 @@ fn array_has_generic_param_t() {
         panic!("Array should be a class");
     };
 
-    let item_tree = file_item_tree(&db, class_loc.file(&db));
-    let class_data = &item_tree[class_loc.id(&db)];
+    let class_data = baml_compiler2_ppir::item_data::class_data(&db, *class_loc);
 
     assert_eq!(
-        class_data.generic_params,
+        generic_param_names(&class_data.generic_params),
         vec![Name::new("T")],
         "Array should have generic_params [T]"
     );
@@ -282,11 +288,10 @@ fn map_has_generic_params_k_v() {
         panic!("Map should be a class");
     };
 
-    let item_tree = file_item_tree(&db, class_loc.file(&db));
-    let class_data = &item_tree[class_loc.id(&db)];
+    let class_data = baml_compiler2_ppir::item_data::class_data(&db, *class_loc);
 
     assert_eq!(
-        class_data.generic_params,
+        generic_param_names(&class_data.generic_params),
         vec![Name::new("K"), Name::new("V")],
         "Map should have generic_params [K, V]"
     );
@@ -304,8 +309,7 @@ fn string_class_has_no_generic_params() {
         panic!("String should be a class");
     };
 
-    let item_tree = file_item_tree(&db, class_loc.file(&db));
-    let class_data = &item_tree[class_loc.id(&db)];
+    let class_data = baml_compiler2_ppir::item_data::class_data(&db, *class_loc);
 
     assert!(
         class_data.generic_params.is_empty(),
@@ -327,13 +331,16 @@ fn array_has_expected_methods() {
         panic!("Array should be a class");
     };
 
-    let item_tree = file_item_tree(&db, class_loc.file(&db));
-    let class_data = &item_tree[class_loc.id(&db)];
+    let class_data = baml_compiler2_ppir::item_data::class_data(&db, *class_loc);
 
     let method_names: Vec<String> = class_data
         .methods
         .iter()
-        .map(|mid| item_tree.functions[mid].name.to_string())
+        .map(|mid| {
+            baml_compiler2_ppir::item_data::function_data(&db, *mid)
+                .name
+                .to_string()
+        })
         .collect();
 
     let expected = [
@@ -359,13 +366,16 @@ fn map_has_expected_methods() {
         panic!("Map should be a class");
     };
 
-    let item_tree = file_item_tree(&db, class_loc.file(&db));
-    let class_data = &item_tree[class_loc.id(&db)];
+    let class_data = baml_compiler2_ppir::item_data::class_data(&db, *class_loc);
 
     let method_names: Vec<String> = class_data
         .methods
         .iter()
-        .map(|mid| item_tree.functions[mid].name.to_string())
+        .map(|mid| {
+            baml_compiler2_ppir::item_data::function_data(&db, *mid)
+                .name
+                .to_string()
+        })
         .collect();
 
     let expected = ["length", "has", "keys", "values", "set", "get"];

@@ -239,11 +239,11 @@ fn pack_e2e_sys_exit_propagates_to_shell() {
     let built = common::ensure_built();
     let (_tmp, bin) = pack_project(
         built,
-        "function main() -> string {\n  baml.sys.exit(7)\n  \"never\"\n}\n",
+        "function main() -> never {\n  baml.sys.exit(42)\n}\n",
         &["main"],
     );
     let out = run(&bin, &[]);
-    assert_eq!(out.status.code(), Some(7));
+    assert_eq!(out.status.code(), Some(42));
 }
 
 /// Pack a **manifest-less** `baml_src/`-only project (no `baml.toml`) and

@@ -5,7 +5,7 @@ use baml_runtime::{cli::RuntimeCliDefaults, BamlRuntime};
 use clap::{CommandFactory, Parser, Subcommand};
 
 #[derive(Parser, Debug)]
-#[command(author, version, about = "A CLI tool for working with BAML. Learn more at https://docs.boundaryml.com.", long_about = None)]
+#[command(author, version, about = "A CLI tool for working with BAML v0. Learn more at https://docs.boundaryml.com.", long_about = None)]
 #[command(styles = clap_cargo::style::CLAP_STYLING)]
 #[command(propagate_version = true)]
 pub(crate) struct RuntimeCli {

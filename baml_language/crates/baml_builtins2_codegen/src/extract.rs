@@ -61,15 +61,22 @@ impl std::error::Error for ExtractNativeBuiltinsError {}
 pub fn extract_native_builtins()
 -> Result<(Vec<NativeBuiltin>, Vec<NativeBuiltin>, Vec<NativeClassDef>), ExtractNativeBuiltinsError>
 {
+    extract_native_builtins_for(baml_builtins2::PACKAGE_BAML)
+}
+
+/// [`extract_native_builtins`] scoped to one stdlib package, so each package
+/// with Rust-implemented builtins gets its own generated dispatch surface.
+#[allow(clippy::type_complexity)]
+pub fn extract_native_builtins_for(
+    package: &str,
+) -> Result<(Vec<NativeBuiltin>, Vec<NativeBuiltin>, Vec<NativeClassDef>), ExtractNativeBuiltinsError>
+{
     let mut vm_builtins = Vec::new();
     let mut io_builtins = Vec::new();
     let mut class_defs = Vec::new();
     let mut diagnostic_lines: Vec<String> = Vec::new();
 
-    for builtin_file in baml_builtins2::ALL
-        .iter()
-        .filter(|f| f.package == baml_builtins2::PACKAGE_BAML)
-    {
+    for builtin_file in baml_builtins2::ALL.iter().filter(|f| f.package == package) {
         let path = builtin_file.virtual_path();
         // Real filesystem path for diagnostic messages (clickable in editors).
         let diag_path = format!(
@@ -206,7 +213,7 @@ fn extract_from_class(
     let class_generics: Vec<String> = class_def
         .generic_params
         .iter()
-        .map(|n| n.as_str().to_string())
+        .map(|param| param.name.as_str().to_string())
         .collect();
 
     // Builtin methods may be declared directly on the class or inside an
@@ -232,7 +239,7 @@ fn extract_from_class(
         let method_generics: Vec<String> = method
             .generic_params
             .iter()
-            .map(|n| n.as_str().to_string())
+            .map(|param| param.name.as_str().to_string())
             .collect();
         let mut all_generics = class_generics.clone();
         for g in &method_generics {
@@ -385,7 +392,7 @@ fn extract_class_fields(
     let generic_params: Vec<String> = class_def
         .generic_params
         .iter()
-        .map(|n| n.as_str().to_string())
+        .map(|param| param.name.as_str().to_string())
         .collect();
 
     let fields: Vec<NativeClassField> = class_def
@@ -393,11 +400,7 @@ fn extract_class_fields(
         .iter()
         .enumerate()
         .map(|(index, field)| {
-            let field_type = field
-                .type_expr
-                .as_ref()
-                .map(|te| type_expr_to_baml_type(te, &generic_params))
-                .unwrap_or(BamlType::Named("unknown".to_string()));
+            let field_type = type_expr_to_baml_type(&field.type_expr, &generic_params);
             NativeClassField {
                 name: field.name.as_str().to_string(),
                 field_type,
@@ -431,7 +434,7 @@ fn extract_from_free_function(
     let generics: Vec<String> = func_def
         .generic_params
         .iter()
-        .map(|n| n.as_str().to_string())
+        .map(|param| param.name.as_str().to_string())
         .collect();
 
     let path = format!("{namespace_prefix}.{}", func_def.name.as_str());
@@ -534,7 +537,7 @@ fn extract_from_implements_for(
     let impl_generics: Vec<String> = impl_def
         .generic_params
         .iter()
-        .map(|(n, _)| n.as_str().to_string())
+        .map(|param| param.name.as_str().to_string())
         .collect();
 
     // `Self` inside method signatures resolves to the `for` target.
@@ -558,7 +561,7 @@ fn extract_from_implements_for(
         let method_generics: Vec<String> = method
             .generic_params
             .iter()
-            .map(|n| n.as_str().to_string())
+            .map(|param| param.name.as_str().to_string())
             .collect();
         let mut all_generics = impl_generics.clone();
         for g in &method_generics {

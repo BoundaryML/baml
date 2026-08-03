@@ -23,13 +23,14 @@ use std::collections::HashSet;
 
 use baml_base::{FileId, Name, SourceFile, Span};
 use baml_compiler_diagnostics::{
-    Diagnostic, DiagnosticId, DiagnosticPhase, ParseError, ToDiagnostic,
+    Diagnostic, DiagnosticId, DiagnosticIdentifierKind, DiagnosticPhase, DiagnosticText,
+    ParseError, ToDiagnostic,
 };
 use baml_compiler2_hir::{file_semantic_index, scope::ScopeKind};
 use baml_compiler2_tir::{
     infer_context::{DiagnosticLocation, TirTypeError},
     inference::render_scope_diagnostics,
-    ty::{QualifiedTypeName, Ty, TyAttr},
+    ty::{ParamTy, Ty, TyAttr},
 };
 use indexmap::IndexMap;
 use text_size::{TextRange, TextSize};
@@ -131,40 +132,35 @@ pub fn check_file(db: &dyn Db, file: SourceFile) -> Vec<Diagnostic> {
             Definition::Class(class_loc) => {
                 let resolved = baml_compiler2_tir::inference::resolve_class_fields(db, class_loc);
                 for (error, span) in &resolved.diagnostics {
-                    diagnostics.push(
-                        Diagnostic::error(
-                            tir_type_error_to_diagnostic_id(error),
-                            source_aware_tir_type_error_message(db, file, error),
-                        )
-                        .with_primary_span(Span {
+                    diagnostics.push(new_tir_diagnostic(
+                        error,
+                        rich_source_aware_tir_type_error_message(db, file, error),
+                        Span {
                             file_id,
                             range: *span,
-                        })
-                        .with_phase(DiagnosticPhase::Type),
-                    );
+                        },
+                        false,
+                    ));
                 }
             }
             Definition::TypeAlias(alias_loc) => {
                 let resolved = baml_compiler2_tir::inference::resolve_type_alias(db, alias_loc);
                 for (error, span) in &resolved.diagnostics {
-                    diagnostics.push(
-                        Diagnostic::error(
-                            tir_type_error_to_diagnostic_id(error),
-                            source_aware_tir_type_error_message(db, file, error),
-                        )
-                        .with_primary_span(Span {
+                    diagnostics.push(new_tir_diagnostic(
+                        error,
+                        rich_source_aware_tir_type_error_message(db, file, error),
+                        Span {
                             file_id,
                             range: *span,
-                        })
-                        .with_phase(DiagnosticPhase::Type),
-                    );
+                        },
+                        false,
+                    ));
                 }
             }
             _ => {}
         }
     }
 
-    let item_tree = baml_compiler2_hir::file_item_tree(db, file);
     let pkg_info = baml_compiler2_hir::file_package::file_package(db, file);
     let pkg_id = baml_compiler2_hir::package::PackageId::new(db, pkg_info.package.clone());
     let res_ctx = baml_compiler2_tir::package_interface::package_resolution_context(db, pkg_id);
@@ -191,19 +187,26 @@ pub fn check_file(db: &dyn Db, file: SourceFile) -> Vec<Diagnostic> {
     diagnostics.extend(check_jinja_templates(
         db,
         file_id,
-        &item_tree,
+        file,
         pkg_items,
+        &pkg_info.package,
         &pkg_info.namespace_path,
         source_text,
     ));
 
     // ── 6. Function signature diagnostics ────────────────────────────────────
     //
+    // FIXME(lsp-validation-antipattern): this re-implements TIR signature
+    // checking off the item-data firewall. Validation logic belongs in TIR/HIR
+    // with check.rs only surfacing diagnostics; it stays here because the
+    // default-signature diagnostics it emits have no TIR home yet.
+    //
     // Build a method → enclosing class list so we can merge class generic params.
     let mut method_to_class = Vec::new();
-    for (class_id, class_data) in &item_tree.classes {
-        for &method_id in &class_data.methods {
-            method_to_class.push((method_id, *class_id));
+    for &class_loc in baml_compiler2_ppir::item_data::file_classes(db, file) {
+        let class_data = baml_compiler2_ppir::item_data::class_data(db, class_loc);
+        for &method_loc in &class_data.methods {
+            method_to_class.push((method_loc, class_loc));
         }
     }
     // Out-of-body `implement Interface for Type` methods: their `Self` resolves
@@ -211,73 +214,62 @@ pub fn check_file(db: &dyn Db, file: SourceFile) -> Vec<Diagnostic> {
     // (`$rust_function`/builtin) impl methods skip the scope-inference path, so
     // without this their signatures would leave `Self` unresolved here.
     let mut method_to_impl = Vec::new();
-    for impl_id in &item_tree.free_impls {
-        let Some(block) = item_tree.impls.get(impl_id) else {
-            continue;
-        };
-        for &method_id in &block.methods {
-            method_to_impl.push((method_id, block));
+    for &impl_loc in baml_compiler2_ppir::item_data::file_free_impls(db, file) {
+        let block = baml_compiler2_ppir::item_data::impl_block_data(db, impl_loc);
+        for &method_loc in &block.methods {
+            method_to_impl.push((method_loc, impl_loc));
         }
     }
 
-    for (local_id, func_data) in &item_tree.functions {
-        let func_loc = baml_compiler2_hir::loc::FunctionLoc::new(db, file, *local_id);
-        // Expression-body functions already have their signatures checked
-        // during scope inference (step 3). Only check non-expr bodies here.
-        // Read the body discriminant straight off the item tree already in
-        // hand — the `function_body` query clones the whole `ExprBody` arena
-        // on execution, far too expensive for a body-kind test.
+    for &func_loc in baml_compiler2_ppir::item_data::file_functions(db, file) {
+        let func_data = baml_compiler2_ppir::item_data::function_data(db, func_loc);
+        // Expression-body functions already have their signatures checked during
+        // scope inference (step 3); only check non-expr bodies here. `function_body`
+        // is tracked (its `Arc` is cached per revision), so this body-kind test is
+        // O(1) on repeat rather than re-cloning the `ExprBody` arena each call.
         if matches!(
-            func_data.body,
-            Some(baml_compiler2_ast::FunctionBodyDef::Expr(..))
+            baml_compiler2_ppir::function_body(db, func_loc).as_ref(),
+            baml_compiler2_hir::body::FunctionBody::Expr(..)
         ) {
             continue;
         }
 
-        let sig = baml_compiler2_hir::signature::function_signature(db, func_loc);
+        let func_source_map = baml_compiler2_ppir::item_data::function_source_map(db, func_loc);
         let mut type_errors = Vec::new();
         let mut param_types = Vec::new();
 
-        // Compute the effective generic params: method params + enclosing class params.
-        let mut generic_params = func_data.generic_params.clone();
-        let enclosing_class_id = method_to_class
+        let generic_params = baml_compiler2_tir::function_generic_params(db, func_loc);
+        let enclosing_class = method_to_class
             .iter()
-            .find(|(mid, _)| mid == local_id)
-            .map(|(_, class_id)| *class_id);
-        if let Some(class_id) = enclosing_class_id {
-            let class_data = &item_tree[class_id];
-            // Prepend class generic params (class params come first, method params after)
-            let mut merged = class_data.generic_params.clone();
-            merged.extend(generic_params);
-            generic_params = merged;
-        }
+            .find(|(mid, _)| *mid == func_loc)
+            .map(|(_, class_loc)| *class_loc);
         // BEP-044: inside an out-of-body `implement Interface for Type` block,
         // `Self` is the `for` target and the block's generic params are in scope.
         let enclosing_impl = method_to_impl
             .iter()
-            .find(|(mid, _)| mid == local_id)
+            .find(|(mid, _)| *mid == func_loc)
             .map(|(_, imp)| *imp);
-        if let Some(imp) = enclosing_impl
-            && let baml_compiler2_hir::item_tree::ImplSubject::Free { generics, .. } = &imp.subject
-        {
-            let mut merged: Vec<Name> = generics.iter().map(|g| g.name.clone()).collect();
-            merged.extend(generic_params);
-            generic_params = merged;
-        }
+        let enclosing_impl_data =
+            enclosing_impl.map(|imp| baml_compiler2_ppir::item_data::impl_block_data(db, imp));
         // Pre-resolve `Self` to the enclosing impl's `for` target before lowering
-        // signature types, mirroring the body path in `tir::inference`.
-        let self_replacement = enclosing_impl.and_then(|imp| match &imp.subject {
-            baml_compiler2_hir::item_tree::ImplSubject::Free { for_target, .. } => {
-                Some(for_target.clone())
+        // signature types, mirroring the body path in `tir::inference`. The
+        // for-target lives in the impl block's own type-ref arena.
+        let self_replacement: Option<(
+            &baml_compiler2_hir::type_ref::TypeRefStore,
+            baml_compiler2_hir::type_ref::TypeRefId,
+        )> = enclosing_impl_data.and_then(|block| match &block.subject {
+            baml_compiler2_ppir::item_data::ImplSubjectData::Free { for_target, .. } => {
+                Some((&block.type_refs, *for_target))
             }
-            baml_compiler2_hir::item_tree::ImplSubject::InClass { .. } => None,
+            baml_compiler2_ppir::item_data::ImplSubjectData::InClass { .. } => None,
         });
         // BEP-044: `Self` in an out-of-body impl method's signature is the impl's
         // `for` target. The lowering context carries it as `self_ty`, so `Self`
         // resolves during lowering (no textual substitution).
-        let self_ty: Option<Ty> = self_replacement.as_ref().map(|for_target| {
-            baml_compiler2_tir::lower_type_expr::lower_type_expr(
-                for_target,
+        let self_ty: Option<Ty> = self_replacement.map(|(store, id)| {
+            baml_compiler2_tir::lower_type_expr::lower_type_ref(
+                store,
+                id,
                 &baml_compiler2_tir::lower_type_expr::ScopeCtx {
                     db,
                     package_items: pkg_items,
@@ -289,12 +281,13 @@ pub fn check_file(db: &dyn Db, file: SourceFile) -> Vec<Diagnostic> {
                 &mut Vec::new(),
             )
         });
-        let lower_sig_te = |te: &baml_compiler2_ast::TypeExpr,
-                            generic_params: &[Name],
-                            diags: &mut Vec<baml_compiler2_tir::infer_context::TirTypeError>|
+        let lower_sig_ref = |id: baml_compiler2_hir::type_ref::TypeRefId,
+                             generic_params: &[ParamTy],
+                             diags: &mut Vec<baml_compiler2_tir::infer_context::TirTypeError>|
          -> Ty {
-            baml_compiler2_tir::lower_type_expr::lower_type_expr(
-                te,
+            baml_compiler2_tir::lower_type_expr::lower_type_ref(
+                &func_data.type_refs,
+                id,
                 &baml_compiler2_tir::lower_type_expr::ScopeCtx {
                     db,
                     package_items: pkg_items,
@@ -307,43 +300,35 @@ pub fn check_file(db: &dyn Db, file: SourceFile) -> Vec<Diagnostic> {
             )
         };
 
-        // Check return type — use the span from the item tree's TypeExpr.
-        if let Some(ret_te) = &sig.return_type {
-            lower_sig_te(ret_te, &generic_params, &mut type_errors);
+        // Check return type — anchor diagnostics at the return type's source span.
+        if let Some(ret_id) = func_data.return_type {
+            lower_sig_ref(ret_id, &generic_params, &mut type_errors);
             if !type_errors.is_empty() {
-                if let Some(ret_spanned) = &func_data.return_type {
-                    for error in type_errors.drain(..) {
-                        diagnostics.push(
-                            Diagnostic::error(
-                                tir_type_error_to_diagnostic_id(&error),
-                                error.to_string(),
-                            )
-                            .with_primary_span(Span {
-                                file_id,
-                                range: ret_spanned.span,
-                            })
-                            .with_phase(DiagnosticPhase::Type),
-                        );
-                    }
+                let range = func_source_map.type_refs.span(ret_id);
+                for error in type_errors.drain(..) {
+                    diagnostics.push(
+                        Diagnostic::error(
+                            tir_type_error_to_diagnostic_id(&error),
+                            error.to_string(),
+                        )
+                        .with_primary_span(Span { file_id, range })
+                        .with_phase(DiagnosticPhase::Type),
+                    );
                 }
             }
         }
 
-        // Check parameter types — use the type_expr span, not the whole param span.
-        for (i, param) in sig.params.iter().enumerate() {
+        // Check parameter types — anchor diagnostics at each annotation's span.
+        for param in &func_data.params {
             type_errors.clear();
-            let param_ty = if param.name.as_str() == "self"
-                && matches!(
-                    param.ty.kind,
-                    baml_compiler2_ast::TypeExprKind::Unknown { .. }
-                ) {
+            let param_ty = if param.name.as_str() == "self" && param.type_ref.is_none() {
                 // `self`'s type is the enclosing receiver: the class for an in-body
                 // method, or the impl's `for` target for an out-of-body
                 // `implement I for C` method (mirroring the body path in
                 // `tir::inference`). Falling back to `Unknown` would otherwise
                 // leave `self` untyped in the latter case.
-                if let Some(class_id) = enclosing_class_id.as_ref() {
-                    let class_data = &item_tree[*class_id];
+                if let Some(class_loc) = enclosing_class {
+                    let class_data = baml_compiler2_ppir::item_data::class_data(db, class_loc);
                     pkg_items
                         .lookup_type(&pkg_info.namespace_path, &class_data.name)
                         .map(|def| {
@@ -353,11 +338,11 @@ pub fn check_file(db: &dyn Db, file: SourceFile) -> Vec<Diagnostic> {
                             // unparameterized receiver into generic-class method
                             // bodies (e.g. the auto-derived `to_json`'s
                             // `to_string<Self>(self)`).
-                            let class_args: Vec<Ty> = class_data
-                                .generic_params
-                                .iter()
-                                .map(|p| Ty::TypeVar(p.clone(), TyAttr::default()))
-                                .collect();
+                            let class_args: Vec<Ty> =
+                                baml_compiler2_tir::class_generic_params(db, class_loc)
+                                    .into_iter()
+                                    .map(|param| Ty::TypeVar(param, TyAttr::default()))
+                                    .collect();
                             Ty::Class(
                                 baml_compiler2_tir::lower_type_expr::qualify_def(
                                     db,
@@ -371,9 +356,10 @@ pub fn check_file(db: &dyn Db, file: SourceFile) -> Vec<Diagnostic> {
                         .unwrap_or(Ty::Unknown {
                             attr: TyAttr::default(),
                         })
-                } else if let Some(for_target) = &self_replacement {
-                    baml_compiler2_tir::lower_type_expr::lower_type_expr(
-                        for_target,
+                } else if let Some((store, id)) = self_replacement {
+                    baml_compiler2_tir::lower_type_expr::lower_type_ref(
+                        store,
+                        id,
                         &baml_compiler2_tir::lower_type_expr::ScopeCtx {
                             db,
                             package_items: pkg_items,
@@ -390,32 +376,33 @@ pub fn check_file(db: &dyn Db, file: SourceFile) -> Vec<Diagnostic> {
                         attr: TyAttr::default(),
                     }
                 }
+            } else if let Some(param_id) = param.type_ref {
+                lower_sig_ref(param_id, &generic_params, &mut type_errors)
             } else {
-                lower_sig_te(&param.ty, &generic_params, &mut type_errors)
+                // A missing annotation lowered to the `Unknown` sentinel, which
+                // yields `Ty::Unknown` with no diagnostic.
+                Ty::Unknown {
+                    attr: TyAttr::default(),
+                }
             };
             if !type_errors.is_empty() {
-                if let Some(param) = func_data.params.get(i) {
-                    if let Some(type_spanned) = &param.type_expr {
-                        for error in type_errors.drain(..) {
-                            diagnostics.push(
-                                Diagnostic::error(
-                                    tir_type_error_to_diagnostic_id(&error),
-                                    error.to_string(),
-                                )
-                                .with_primary_span(Span {
-                                    file_id,
-                                    range: type_spanned.span,
-                                })
-                                .with_phase(DiagnosticPhase::Type),
-                            );
-                        }
+                if let Some(type_id) = param.type_ref {
+                    let range = func_source_map.type_refs.span(type_id);
+                    for error in type_errors.drain(..) {
+                        diagnostics.push(
+                            Diagnostic::error(
+                                tir_type_error_to_diagnostic_id(&error),
+                                error.to_string(),
+                            )
+                            .with_primary_span(Span { file_id, range })
+                            .with_phase(DiagnosticPhase::Type),
+                        );
                     }
                 }
             }
             param_types.push((param.name.clone(), param_ty));
         }
 
-        let func_loc = baml_compiler2_hir::loc::FunctionLoc::new(db, file, *local_id);
         if let Some(scope_id) = baml_compiler2_ppir::item_data::function_scope(db, func_loc) {
             let context = baml_compiler2_tir::infer_context::InferContext::new(db, scope_id);
             let mut builder = baml_compiler2_tir::builder::TypeInferenceBuilder::new(
@@ -657,32 +644,23 @@ fn impl_diagnostic_spans(
 ///
 /// Returns `None` if the path doesn't name an interface (including: name
 /// doesn't exist, or resolves to a class/enum/etc.).
-#[derive(Debug, Clone)]
-struct ResolvedInterfaceData<'db> {
-    loc: baml_compiler2_hir::loc::InterfaceLoc<'db>,
-    iface: baml_compiler2_hir::item_tree::Interface,
-    qtn: QualifiedTypeName,
-}
-
+/// The interface an `extends` bound names, or `None` when it does not resolve to
+/// one (diagnosed elsewhere). Only the `loc` is needed: rendering a declarer's
+/// name goes through the compiler's `interface_loc_qtn`, so this does not carry
+/// a second copy of the identity.
 fn resolve_interface_path<'db>(
     db: &'db dyn Db,
     target: &baml_compiler2_ast::TypeExpr,
     pkg_items: &baml_compiler2_hir::package::PackageItems<'db>,
     namespace_path: &[Name],
-) -> Option<ResolvedInterfaceData<'db>> {
-    let resolved = baml_compiler2_tir::interfaces::resolve_path_to_interface_identity(
+) -> Option<baml_compiler2_hir::loc::InterfaceLoc<'db>> {
+    baml_compiler2_tir::interfaces::resolve_path_to_interface_identity(
         db,
         target,
         pkg_items,
         namespace_path,
-    )?;
-    let item_tree = baml_compiler2_hir::file_item_tree(db, resolved.loc.file(db));
-    let iface = item_tree.interfaces.get(&resolved.loc.id(db))?.clone();
-    Some(ResolvedInterfaceData {
-        loc: resolved.loc,
-        iface,
-        qtn: resolved.qtn,
-    })
+    )
+    .map(|resolved| resolved.loc)
 }
 
 fn validate_associated_type_bindings_in_items(
@@ -709,8 +687,7 @@ fn validate_associated_type_bindings_in_items(
                 );
             }
             baml_compiler2_ast::Item::Class(class) => {
-                let outer_bounds =
-                    generic_bound_expr_map(&class.generic_params, &class.generic_param_bounds);
+                let outer_bounds = generic_bound_expr_map(&class.generic_params);
                 for method in &class.methods {
                     validate_associated_type_bindings_in_function(
                         db,
@@ -738,8 +715,7 @@ fn validate_associated_type_bindings_in_items(
             }
             baml_compiler2_ast::Item::Interface(iface) => {
                 validate_associated_type_declaration_names(file_id, iface, &mut diagnostics);
-                let iface_bounds =
-                    generic_bound_expr_map(&iface.generic_params, &iface.generic_param_bounds);
+                let iface_bounds = generic_bound_expr_map(&iface.generic_params);
                 for method in &iface.required_methods {
                     validate_associated_type_bindings_in_method_sig(
                         db,
@@ -764,19 +740,7 @@ fn validate_associated_type_bindings_in_items(
                 }
             }
             baml_compiler2_ast::Item::ImplementsFor(imp) => {
-                let impl_generics: Vec<Name> = imp
-                    .generic_params
-                    .iter()
-                    .map(|(name, _)| name.clone())
-                    .collect();
-                // Single-bound view (first `&`-bound only) — unchanged behavior;
-                // the full bound set lives on the new HIR `ImplBlock`.
-                let impl_bound_exprs: Vec<Option<baml_compiler2_ast::TypeExpr>> = imp
-                    .generic_params
-                    .iter()
-                    .map(|(_, bounds)| bounds.first().cloned())
-                    .collect();
-                let impl_bounds = generic_bound_expr_map(&impl_generics, &impl_bound_exprs);
+                let impl_bounds = generic_bound_expr_map(&imp.generic_params);
                 for method in &imp.methods {
                     validate_associated_type_bindings_in_function(
                         db,
@@ -805,7 +769,7 @@ fn validate_associated_type_declaration_names(
         if iface
             .generic_params
             .iter()
-            .any(|param| param == &assoc.name)
+            .any(|param| param.name == assoc.name)
         {
             diagnostics.push(
                 Diagnostic::error(
@@ -825,26 +789,25 @@ fn validate_associated_type_declaration_names(
     }
 }
 
-type GenericBoundExprMap = std::collections::HashMap<Name, baml_compiler2_ast::TypeExpr>;
+/// Each in-scope type variable's declared bound *conjunction* — `T extends A & B`
+/// maps `T` to `[A, B]`, so a `T.member` projection is resolved against all of
+/// them (and reports ambiguity when more than one supplies `member`).
+type GenericBoundExprMap = std::collections::HashMap<Name, Vec<baml_compiler2_ast::TypeExpr>>;
 
-fn generic_bound_expr_map(
-    params: &[Name],
-    bounds: &[Option<baml_compiler2_ast::TypeExpr>],
-) -> GenericBoundExprMap {
+fn generic_bound_expr_map(params: &[baml_compiler2_ast::GenericParam]) -> GenericBoundExprMap {
     params
         .iter()
-        .zip(bounds.iter())
-        .filter_map(|(name, bound)| bound.as_ref().map(|bound| (name.clone(), bound.clone())))
+        .filter(|param| !param.bounds.is_empty())
+        .map(|param| (param.name.clone(), param.bounds.clone()))
         .collect()
 }
 
 fn extend_generic_bound_expr_map(
     outer: &GenericBoundExprMap,
-    params: &[Name],
-    bounds: &[Option<baml_compiler2_ast::TypeExpr>],
+    params: &[baml_compiler2_ast::GenericParam],
 ) -> GenericBoundExprMap {
     let mut merged = outer.clone();
-    merged.extend(generic_bound_expr_map(params, bounds));
+    merged.extend(generic_bound_expr_map(params));
     merged
 }
 
@@ -857,11 +820,8 @@ fn validate_associated_type_bindings_in_function(
     namespace_path: &[Name],
     diagnostics: &mut Vec<Diagnostic>,
 ) {
-    let generic_bounds = extend_generic_bound_expr_map(
-        outer_generic_bounds,
-        &function.generic_params,
-        &function.generic_param_bounds,
-    );
+    let generic_bounds =
+        extend_generic_bound_expr_map(outer_generic_bounds, &function.generic_params);
     for param in &function.params {
         if let Some(te) = &param.type_expr {
             validate_ambiguous_typevar_associated_projection_in_type_expr(
@@ -911,11 +871,8 @@ fn validate_associated_type_bindings_in_method_sig(
     namespace_path: &[Name],
     diagnostics: &mut Vec<Diagnostic>,
 ) {
-    let generic_bounds = extend_generic_bound_expr_map(
-        outer_generic_bounds,
-        &method.generic_params,
-        &method.generic_param_bounds,
-    );
+    let generic_bounds =
+        extend_generic_bound_expr_map(outer_generic_bounds, &method.generic_params);
     for param in &method.params {
         if let Some(te) = &param.type_expr {
             validate_ambiguous_typevar_associated_projection_in_type_expr(
@@ -964,7 +921,7 @@ fn validate_ambiguous_typevar_associated_projection_in_type_expr(
     span: TextRange,
     pkg_items: &baml_compiler2_hir::package::PackageItems<'_>,
     namespace_path: &[Name],
-    generic_bounds: &std::collections::HashMap<Name, baml_compiler2_ast::TypeExpr>,
+    generic_bounds: &GenericBoundExprMap,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
     use baml_compiler2_ast::TypeExprKind;
@@ -980,19 +937,38 @@ fn validate_ambiguous_typevar_associated_projection_in_type_expr(
             {
                 let base = &segments[0];
                 let member = &segments[1];
-                if let Some(bound) = generic_bounds.get(base) {
-                    let sources = associated_type_projection_sources_for_interface_bound(
-                        db,
-                        bound,
-                        member,
-                        pkg_items,
-                        namespace_path,
-                    );
+                if let Some(bounds) = generic_bounds.get(base) {
+                    // `T extends A & B` — the member may come from any conjunct,
+                    // so the declarers are collected across the whole conjunction:
+                    // none means unknown, two or more is ambiguous. The compiler
+                    // owns that walk (and its cross-conjunct deduplication, without
+                    // which two bounds reaching the same declarer through `requires`
+                    // would look like an ambiguity); this only renders the result.
+                    let roots = bounds.iter().filter_map(|bound| {
+                        resolve_interface_path(db, bound, pkg_items, namespace_path)
+                    });
+                    let sources: Vec<String> =
+                        baml_compiler2_tir::interfaces::interfaces_declaring_associated_type(
+                            db, roots, member,
+                        )
+                        .into_iter()
+                        .filter_map(|loc| {
+                            baml_compiler2_tir::interfaces::interface_loc_qtn(db, loc)
+                                .map(|qtn| qtn.render_user_facing())
+                        })
+                        .collect();
                     if sources.is_empty() {
+                        let rendered = bounds
+                            .iter()
+                            .map(ToString::to_string)
+                            .collect::<Vec<_>>()
+                            .join(" & ");
                         diagnostics.push(
                             Diagnostic::error(
                                 DiagnosticId::UnknownType,
-                                format!("unknown associated type `{member}` for bound `{bound}`"),
+                                format!(
+                                    "unknown associated type `{member}` for bound `{rendered}`"
+                                ),
                             )
                             .with_primary_span(Span {
                                 file_id,
@@ -1166,73 +1142,56 @@ fn validate_ambiguous_typevar_associated_projection_in_type_expr(
     }
 }
 
-fn associated_type_projection_sources_for_interface_bound(
-    db: &dyn Db,
-    bound: &baml_compiler2_ast::TypeExpr,
-    member: &Name,
-    pkg_items: &baml_compiler2_hir::package::PackageItems<'_>,
-    namespace_path: &[Name],
-) -> Vec<String> {
-    let Some(root) = resolve_interface_path(db, bound, pkg_items, namespace_path) else {
-        return Vec::new();
-    };
-    let mut out = Vec::new();
-    let mut visited = HashSet::new();
-    let mut stack = vec![root];
-
-    while let Some(current) = stack.pop() {
-        if !visited.insert(current.qtn.clone()) {
-            continue;
-        }
-        if current
-            .iface
-            .associated_types
-            .iter()
-            .any(|assoc| assoc.name == *member)
-        {
-            out.push(current.qtn.render_user_facing());
-        }
-        let current_file = current.loc.file(db);
-        let current_pkg = baml_compiler2_hir::file_package::file_package(db, current_file);
-        let current_pkg_id =
-            baml_compiler2_hir::package::PackageId::new(db, current_pkg.package.clone());
-        let current_pkg_items = baml_compiler2_hir::package::package_items(db, current_pkg_id);
-        for parent in &current.iface.requires {
-            if let Some(parent) =
-                resolve_interface_path(db, parent, current_pkg_items, &current_pkg.namespace_path)
-            {
-                stack.push(parent);
-            }
-        }
-    }
-
-    out
-}
-
 fn check_jinja_templates(
     db: &dyn Db,
     file_id: FileId,
-    item_tree: &baml_compiler2_hir::item_tree::ItemTree,
+    file: SourceFile,
     pkg_items: &baml_compiler2_hir::package::PackageItems<'_>,
+    package: &Name,
     namespace_path: &[Name],
     source_text: &str,
 ) -> Vec<Diagnostic> {
-    let base_types = build_jinja_types(db, pkg_items, namespace_path);
+    // Files with no LLM prompts and no template_string bodies have nothing to
+    // validate. Return before touching the package-wide Jinja environment so
+    // such files never pay for (or depend on) it at all.
+    let has_prompts = baml_compiler2_ppir::item_data::file_functions(db, file)
+        .iter()
+        .any(|&func_loc| {
+            baml_compiler2_ppir::item_data::function_llm_prompt(db, func_loc).is_some()
+        });
+    let has_templates = baml_compiler2_ppir::item_data::file_template_strings(db, file)
+        .iter()
+        .any(|&template_loc| {
+            baml_compiler2_ppir::item_data::template_string_data(db, template_loc)
+                .body
+                .is_some()
+        });
+    if !has_prompts && !has_templates {
+        return Vec::new();
+    }
+
+    let ns_id = baml_compiler2_hir::namespace::NamespaceId::new(
+        db,
+        package.clone(),
+        namespace_path.to_vec(),
+    );
+    let base_types = jinja_base_types(db, ns_id);
     let mut diagnostics = Vec::new();
 
-    for func_data in item_tree.functions.values() {
+    for &func_loc in baml_compiler2_ppir::item_data::file_functions(db, file) {
         diagnostics.extend(check_llm_prompt_template(
             db,
             file_id,
-            func_data,
+            func_loc,
             pkg_items,
             namespace_path,
-            &base_types,
+            base_types,
             source_text,
         ));
     }
 
-    for template in item_tree.template_strings.values() {
+    for &template_loc in baml_compiler2_ppir::item_data::file_template_strings(db, file) {
+        let template = baml_compiler2_ppir::item_data::template_string_data(db, template_loc);
         let Some(body) = &template.body else {
             continue;
         };
@@ -1241,16 +1200,16 @@ fn check_jinja_templates(
         types.start_scope();
         for param in &template.params {
             let ty = param
-                .type_expr
-                .as_ref()
-                .map(|type_expr| {
-                    jinja_type_from_type_expr(db, type_expr, pkg_items, namespace_path)
+                .type_ref
+                .map(|id| {
+                    jinja_type_from_type_ref(db, &template.type_refs, id, pkg_items, namespace_path)
                 })
                 .unwrap_or(sys_jinja_types::Type::Unknown);
             types.add_variable(param.name.as_str(), ty);
         }
 
-        let range_hint = template.span;
+        let range_hint =
+            baml_compiler2_ppir::item_data::template_string_source_map(db, template_loc).span;
         diagnostics.extend(render_jinja_validation_result(
             file_id,
             source_text,
@@ -1266,26 +1225,25 @@ fn check_jinja_templates(
 fn check_llm_prompt_template(
     db: &dyn Db,
     file_id: FileId,
-    func_data: &baml_compiler2_hir::item_tree::Function,
+    func_loc: baml_compiler2_hir::loc::FunctionLoc<'_>,
     pkg_items: &baml_compiler2_hir::package::PackageItems<'_>,
     namespace_path: &[Name],
     base_types: &sys_jinja_types::PredefinedTypes,
     source_text: &str,
 ) -> Vec<Diagnostic> {
-    let Some(baml_compiler2_ast::DeclarativeMeta::Llm(llm)) = &func_data.declarative_meta else {
-        return Vec::new();
-    };
-    let Some(prompt) = &llm.prompt else {
+    let Some(prompt) = baml_compiler2_ppir::item_data::function_llm_prompt(db, func_loc) else {
         return Vec::new();
     };
 
+    let func_data = baml_compiler2_ppir::item_data::function_data(db, func_loc);
     let mut types = base_types.clone();
     types.start_scope();
     for param in &func_data.params {
         let ty = param
-            .type_expr
-            .as_ref()
-            .map(|type_expr| jinja_type_from_type_expr(db, type_expr, pkg_items, namespace_path))
+            .type_ref
+            .map(|id| {
+                jinja_type_from_type_ref(db, &func_data.type_refs, id, pkg_items, namespace_path)
+            })
             .unwrap_or(sys_jinja_types::Type::Unknown);
         types.add_variable(param.name.as_str(), ty);
     }
@@ -1297,6 +1255,31 @@ fn check_llm_prompt_template(
         &prompt.text,
         sys_jinja_types::validate_template(func_data.name.as_str(), &prompt.text, &mut types),
     )
+}
+
+/// Package-wide Jinja type environment (classes, enums, aliases, and
+/// `template_strings` visible from a namespace), memoized per
+/// (package, namespace path).
+///
+/// `build_jinja_types` walks every type in the package, so before this was a
+/// Salsa query it re-ran O(package items) work once per checked file — the
+/// dominant quadratic term in whole-project checks (and it ran a second time
+/// per file inside `get_bytecode`'s error gate). As a tracked function the
+/// walk runs once per (package, namespace, revision) and every later
+/// `check_file` in the same revision gets a memo hit; `PredefinedTypes`'s
+/// `PartialEq` gives Salsa backdating, so edits that leave the environment
+/// unchanged don't invalidate downstream prompt checks.
+#[salsa::tracked(returns(ref))]
+fn jinja_base_types<'db>(
+    db: &'db dyn Db,
+    ns_id: baml_compiler2_hir::namespace::NamespaceId<'db>,
+) -> sys_jinja_types::PredefinedTypes {
+    let pkg_id = baml_compiler2_hir::package::PackageId::new(db, ns_id.package(db));
+    // Match the call-site environment exactly: `check_file` resolves items via
+    // `package_resolution_context(...).own_items`, which is ppir's
+    // `package_items` — use the same query here so the env is identical.
+    let pkg_items = baml_compiler2_ppir::package_items(db, pkg_id);
+    build_jinja_types(db, pkg_items, &ns_id.path(db))
 }
 
 fn build_jinja_types(
@@ -1319,21 +1302,20 @@ fn build_jinja_types(
             continue;
         };
         let file = class_loc.file(db);
-        let item_tree = baml_compiler2_ppir::file_item_tree(db, file);
-        let class_data = &item_tree[class_loc.id(db)];
+        let class_data = baml_compiler2_ppir::item_data::class_data(db, class_loc);
         let class_namespace =
             baml_compiler2_hir::file_package::file_package(db, file).namespace_path;
         let fields = class_data
             .fields
             .iter()
             .map(|field| {
-                let ty = field
-                    .type_expr
-                    .as_ref()
-                    .map(|type_expr| {
-                        jinja_type_from_type_expr(db, type_expr, pkg_items, &class_namespace)
-                    })
-                    .unwrap_or(sys_jinja_types::Type::Unknown);
+                let ty = jinja_type_from_type_ref(
+                    db,
+                    &class_data.type_refs,
+                    field.type_ref,
+                    pkg_items,
+                    &class_namespace,
+                );
                 (field.name.to_string(), ty)
             })
             .collect::<IndexMap<_, _>>();
@@ -1344,8 +1326,7 @@ fn build_jinja_types(
         let Definition::Enum(enum_loc) = *def else {
             continue;
         };
-        let item_tree = baml_compiler2_ppir::file_item_tree(db, enum_loc.file(db));
-        let enum_data = &item_tree[enum_loc.id(db)];
+        let enum_data = baml_compiler2_ppir::item_data::enum_data(db, enum_loc);
         types.add_enum(
             enum_data.name.as_str(),
             enum_data
@@ -1361,14 +1342,19 @@ fn build_jinja_types(
             continue;
         };
         let file = alias_loc.file(db);
-        let item_tree = baml_compiler2_ppir::file_item_tree(db, file);
-        let alias_data = &item_tree[alias_loc.id(db)];
-        if let Some(type_expr) = &alias_data.type_expr {
+        let alias_data = baml_compiler2_ppir::item_data::type_alias_data(db, alias_loc);
+        if let Some(id) = alias_data.value {
             let alias_namespace =
                 baml_compiler2_hir::file_package::file_package(db, file).namespace_path;
             types.add_alias(
                 alias_data.name.as_str(),
-                jinja_type_from_type_expr(db, type_expr, pkg_items, &alias_namespace),
+                jinja_type_from_type_ref(
+                    db,
+                    &alias_data.type_refs,
+                    id,
+                    pkg_items,
+                    &alias_namespace,
+                ),
             );
         }
     }
@@ -1378,8 +1364,7 @@ fn build_jinja_types(
             continue;
         };
         let file = template_loc.file(db);
-        let item_tree = baml_compiler2_ppir::file_item_tree(db, file);
-        let template = &item_tree[template_loc.id(db)];
+        let template = baml_compiler2_ppir::item_data::template_string_data(db, template_loc);
         let template_namespace =
             baml_compiler2_hir::file_package::file_package(db, file).namespace_path;
         let args = template
@@ -1387,10 +1372,15 @@ fn build_jinja_types(
             .iter()
             .map(|param| {
                 let ty = param
-                    .type_expr
-                    .as_ref()
-                    .map(|type_expr| {
-                        jinja_type_from_type_expr(db, type_expr, pkg_items, &template_namespace)
+                    .type_ref
+                    .map(|id| {
+                        jinja_type_from_type_ref(
+                            db,
+                            &template.type_refs,
+                            id,
+                            pkg_items,
+                            &template_namespace,
+                        )
                     })
                     .unwrap_or(sys_jinja_types::Type::Unknown);
                 (param.name.to_string(), ty)
@@ -1402,82 +1392,88 @@ fn build_jinja_types(
     types
 }
 
-fn jinja_type_from_type_expr(
+fn jinja_type_from_type_ref(
     db: &dyn Db,
-    type_expr: &baml_compiler2_ast::TypeExpr,
+    store: &baml_compiler2_hir::type_ref::TypeRefStore,
+    id: baml_compiler2_hir::type_ref::TypeRefId,
     pkg_items: &baml_compiler2_hir::package::PackageItems<'_>,
     namespace_path: &[Name],
 ) -> sys_jinja_types::Type {
-    jinja_type_from_type_expr_inner(
+    jinja_type_from_type_ref_inner(
         db,
-        type_expr,
+        store,
+        id,
         pkg_items,
         namespace_path,
         &mut HashSet::new(),
     )
 }
 
-fn jinja_type_from_type_expr_inner(
+fn jinja_type_from_type_ref_inner(
     db: &dyn Db,
-    type_expr: &baml_compiler2_ast::TypeExpr,
+    store: &baml_compiler2_hir::type_ref::TypeRefStore,
+    id: baml_compiler2_hir::type_ref::TypeRefId,
     pkg_items: &baml_compiler2_hir::package::PackageItems<'_>,
     namespace_path: &[Name],
     resolving_aliases: &mut HashSet<String>,
 ) -> sys_jinja_types::Type {
-    use baml_compiler2_ast::TypeExprKind;
-    use baml_compiler2_hir::contributions::Definition;
+    use baml_compiler2_hir::{contributions::Definition, type_ref::TypeRefKind};
     use sys_jinja_types::Type;
 
-    match &type_expr.kind {
-        TypeExprKind::Int { .. } => Type::Int,
-        TypeExprKind::Bigint { .. } => Type::Bigint,
-        TypeExprKind::Float { .. } => Type::Float,
-        TypeExprKind::String { .. } => Type::String,
-        TypeExprKind::Bool { .. } => Type::Bool,
-        TypeExprKind::Null { .. } => Type::None,
-        TypeExprKind::Media { kind, .. } => match kind {
+    match &store[id].kind {
+        TypeRefKind::Int => Type::Int,
+        TypeRefKind::Bigint => Type::Bigint,
+        TypeRefKind::Float => Type::Float,
+        TypeRefKind::String => Type::String,
+        TypeRefKind::Bool => Type::Bool,
+        TypeRefKind::Null => Type::None,
+        TypeRefKind::Media { kind } => match kind {
             baml_base::MediaKind::Image => Type::Image,
             baml_base::MediaKind::Audio => Type::Audio,
             _ => Type::Unknown,
         },
-        TypeExprKind::Literal { value, .. } => Type::Literal(value.clone()),
-        TypeExprKind::Optional { inner, .. } => Type::merge([
+        TypeRefKind::Literal { value } => Type::Literal(value.clone()),
+        TypeRefKind::Optional { inner } => Type::merge([
             Type::None,
-            jinja_type_from_type_expr_inner(
+            jinja_type_from_type_ref_inner(
                 db,
-                inner,
+                store,
+                *inner,
                 pkg_items,
                 namespace_path,
                 resolving_aliases,
             ),
         ]),
-        TypeExprKind::List { inner, .. } => Type::List(Box::new(jinja_type_from_type_expr_inner(
+        TypeRefKind::List { inner } => Type::List(Box::new(jinja_type_from_type_ref_inner(
             db,
-            inner,
+            store,
+            *inner,
             pkg_items,
             namespace_path,
             resolving_aliases,
         ))),
-        TypeExprKind::Map { value, .. } => Type::Map(
+        TypeRefKind::Map { value, .. } => Type::Map(
             Box::new(Type::String),
-            Box::new(jinja_type_from_type_expr_inner(
+            Box::new(jinja_type_from_type_ref_inner(
                 db,
-                value,
+                store,
+                *value,
                 pkg_items,
                 namespace_path,
                 resolving_aliases,
             )),
         ),
-        TypeExprKind::Union { variants, .. } => Type::merge(variants.iter().map(|variant| {
-            jinja_type_from_type_expr_inner(
+        TypeRefKind::Union { variants } => Type::merge(variants.iter().map(|&variant| {
+            jinja_type_from_type_ref_inner(
                 db,
+                store,
                 variant,
                 pkg_items,
                 namespace_path,
                 resolving_aliases,
             )
         })),
-        TypeExprKind::Path { segments, .. } if !segments.is_empty() => {
+        TypeRefKind::Path { segments, .. } if !segments.is_empty() => {
             let (lookup_namespace, name) = jinja_lookup_path(namespace_path, segments);
             let key = format!(
                 "{}::{}",
@@ -1497,17 +1493,16 @@ fn jinja_type_from_type_expr_inner(
                         return Type::RecursiveTypeAlias(name);
                     }
                     let file = alias_loc.file(db);
-                    let item_tree = baml_compiler2_ppir::file_item_tree(db, file);
-                    let alias = &item_tree[alias_loc.id(db)];
+                    let alias = baml_compiler2_ppir::item_data::type_alias_data(db, alias_loc);
                     let alias_namespace =
                         baml_compiler2_hir::file_package::file_package(db, file).namespace_path;
                     let resolved = alias
-                        .type_expr
-                        .as_ref()
-                        .map(|spanned| {
-                            jinja_type_from_type_expr_inner(
+                        .value
+                        .map(|value_id| {
+                            jinja_type_from_type_ref_inner(
                                 db,
-                                spanned,
+                                &alias.type_refs,
+                                value_id,
                                 pkg_items,
                                 &alias_namespace,
                                 resolving_aliases,
@@ -1524,19 +1519,19 @@ fn jinja_type_from_type_expr_inner(
                 _ => Type::Unknown,
             }
         }
-        TypeExprKind::Function { .. } | TypeExprKind::AssociatedTypeProjection { .. } => {
+        TypeRefKind::Function { .. } | TypeRefKind::AssociatedTypeProjection { .. } => {
             Type::Unknown
         }
-        TypeExprKind::Uint8Array { .. }
-        | TypeExprKind::Never { .. }
-        | TypeExprKind::Void { .. }
-        | TypeExprKind::BuiltinUnknown { .. }
-        | TypeExprKind::Type { .. }
-        | TypeExprKind::Rust { .. }
-        | TypeExprKind::Error { .. }
-        | TypeExprKind::Unknown { .. }
-        | TypeExprKind::Infer { .. }
-        | TypeExprKind::Path { .. } => Type::Unknown,
+        TypeRefKind::Uint8Array
+        | TypeRefKind::Never
+        | TypeRefKind::Void
+        | TypeRefKind::BuiltinUnknown
+        | TypeRefKind::Type
+        | TypeRefKind::Rust
+        | TypeRefKind::Error
+        | TypeRefKind::Unknown
+        | TypeRefKind::Infer
+        | TypeRefKind::Path { .. } => Type::Unknown,
     }
 }
 
@@ -1570,7 +1565,7 @@ fn render_jinja_validation_result(
         return vec![
             Diagnostic::error(
                 DiagnosticId::JinjaParseError,
-                format!("Error parsing jinja template: {parse_error}"),
+                format!("error parsing jinja template: {parse_error}"),
             )
             .with_primary_span(Span { file_id, range })
             .with_phase(DiagnosticPhase::Type),
@@ -1657,9 +1652,19 @@ fn is_function_default_signature_diagnostic(
 /// `RenderedTirDiagnostic` has already resolved arena IDs to `TextRange`.
 /// We add the `file_id` to form a full `Span` for the primary annotation.
 ///
+#[cfg(test)]
 fn tir_rendered_to_diagnostic(
     rendered: baml_compiler2_tir::infer_context::RenderedTirDiagnostic,
     file_id: FileId,
+) -> Diagnostic {
+    let message = DiagnosticText::from(rendered.message.clone());
+    tir_rendered_to_diagnostic_with_message(rendered, file_id, message)
+}
+
+fn tir_rendered_to_diagnostic_with_message(
+    rendered: baml_compiler2_tir::infer_context::RenderedTirDiagnostic,
+    file_id: FileId,
+    message: DiagnosticText,
 ) -> Diagnostic {
     let unknown_member_access_member = match &rendered.error {
         TirTypeError::UnresolvedMember {
@@ -1672,50 +1677,113 @@ fn tir_rendered_to_diagnostic(
         file_id,
         range: rendered.range,
     };
-    let diag = match rendered.severity {
-        baml_compiler2_tir::infer_context::DiagnosticSeverity::Warning => Diagnostic::warning(
-            tir_type_error_to_diagnostic_id(&rendered.error),
-            rendered.message,
-        ),
-        baml_compiler2_tir::infer_context::DiagnosticSeverity::Error => Diagnostic::error(
-            tir_type_error_to_diagnostic_id(&rendered.error),
-            rendered.message,
-        ),
-    };
+    let warning = matches!(
+        rendered.severity,
+        baml_compiler2_tir::infer_context::DiagnosticSeverity::Warning
+    );
+    let mut diag = new_tir_diagnostic(&rendered.error, message, span, warning);
     let diag = if let Some(member) = &unknown_member_access_member {
+        diag.annotations.clear();
         diag.with_primary(
             span,
             format!("use `match` to narrow this value before accessing `{member}`"),
         )
     } else {
-        diag.with_primary_span(span)
+        diag
     };
-    rendered
-        .related
-        .into_iter()
-        .fold(diag, |diag, related| {
-            let span = Span {
-                file_id: related.file_id,
-                range: related.range,
-            };
-            let message = related.message;
-            let diag = if unknown_member_access_member.is_some() {
-                diag.with_secondary(span, message.clone())
-            } else {
-                diag
-            };
-            diag.with_related(span, message)
-        })
-        .with_phase(DiagnosticPhase::Type)
+    rendered.related.into_iter().fold(diag, |diag, related| {
+        let span = Span {
+            file_id: related.file_id,
+            range: related.range,
+        };
+        let message = related.message;
+        let diag = if unknown_member_access_member.is_some() {
+            diag.with_secondary(span, message.clone())
+        } else {
+            diag
+        };
+        diag.with_related(span, message)
+    })
 }
 
 fn tir_rendered_to_diagnostic_for_file(
     db: &dyn Db,
     file: SourceFile,
-    mut rendered: baml_compiler2_tir::infer_context::RenderedTirDiagnostic,
+    rendered: baml_compiler2_tir::infer_context::RenderedTirDiagnostic,
 ) -> Diagnostic {
-    rendered.message = source_aware_tir_type_error_message(db, file, &rendered.error);
-    tir_rendered_to_diagnostic(rendered, file.file_id(db))
+    let message = rich_source_aware_tir_type_error_message(db, file, &rendered.error);
+    tir_rendered_to_diagnostic_with_message(rendered, file.file_id(db), message)
+}
+
+fn new_tir_diagnostic(
+    error: &TirTypeError,
+    message: DiagnosticText,
+    span: Span,
+    warning: bool,
+) -> Diagnostic {
+    let id = tir_type_error_to_diagnostic_id(error);
+    let headline = match error {
+        TirTypeError::TypeMismatch { .. } => Some("mismatched types"),
+        TirTypeError::MissingReturn { .. } => Some("missing return expression"),
+        _ => None,
+    };
+    let diagnostic = match headline {
+        Some(headline) => {
+            let diagnostic = if warning {
+                Diagnostic::warning(id, headline)
+            } else {
+                Diagnostic::error(id, headline)
+            };
+            diagnostic.with_primary(span, message)
+        }
+        None => {
+            let diagnostic = if warning {
+                Diagnostic::warning(id, message)
+            } else {
+                Diagnostic::error(id, message)
+            };
+            diagnostic.with_primary_span(span)
+        }
+    };
+    diagnostic.with_phase(DiagnosticPhase::Type)
+}
+
+fn rich_source_aware_tir_type_error_message(
+    db: &dyn Db,
+    file: SourceFile,
+    error: &TirTypeError,
+) -> DiagnosticText {
+    let ty = |ty: &Ty| crate::utils::display_ty_for_file(db, file, ty);
+    match error {
+        TirTypeError::TypeMismatch { expected, got } => DiagnosticText::new()
+            .text("expected ")
+            .type_expr(ty(expected))
+            .text(", found ")
+            .type_expr(ty(got)),
+        TirTypeError::UnresolvedName { name, .. } => DiagnosticText::new()
+            .text("unresolved name: ")
+            .identifier(name, DiagnosticIdentifierKind::Variable),
+        TirTypeError::UnresolvedMember {
+            base_type, member, ..
+        } => DiagnosticText::new()
+            .text("type ")
+            .type_expr(ty(base_type))
+            .text(" has no member ")
+            .identifier(member, DiagnosticIdentifierKind::Field),
+        TirTypeError::NotCallable { ty: callee_ty } => DiagnosticText::new()
+            .type_expr(ty(callee_ty))
+            .text(" is not a function and cannot be called"),
+        TirTypeError::NotIterable { ty: iter_ty } => DiagnosticText::new()
+            .text("cannot iterate over type ")
+            .type_expr(ty(iter_ty)),
+        TirTypeError::NotIndexable { ty: index_ty } => DiagnosticText::new()
+            .text("cannot index into type ")
+            .type_expr(ty(index_ty)),
+        TirTypeError::MissingReturn { expected } => DiagnosticText::new()
+            .text("expected return value of type ")
+            .type_expr(ty(expected)),
+        _ => DiagnosticText::from(source_aware_tir_type_error_message(db, file, error)),
+    }
 }
 
 fn source_aware_tir_type_error_message(
@@ -1858,6 +1926,10 @@ fn source_aware_tir_type_error_message(
         TirTypeError::InvalidInterfaceUpcastTarget { target } => {
             format!("`.as<T>` requires an interface target, got {}", ty(target))
         }
+        TirTypeError::RuntimeIdArgumentTypeMismatch { got } => format!(
+            "`$id` at a call site expects `boundary.LocalId`, got {}",
+            ty(got)
+        ),
         _ => error.to_string(),
     }
 }
@@ -1874,8 +1946,13 @@ fn tir_type_error_to_diagnostic_id(
         TirTypeError::TypeMismatch { .. } => DiagnosticId::TypeMismatch,
         TirTypeError::UnresolvedMember { .. } => DiagnosticId::NoSuchField,
         TirTypeError::UnionMemberNoCommonInterface { .. } => DiagnosticId::NoSuchField,
-        TirTypeError::UnknownClassPatternField { .. } => DiagnosticId::NoSuchField,
-        TirTypeError::UnresolvedName { .. } => DiagnosticId::UnknownVariable,
+        TirTypeError::UnknownClassField { .. } | TirTypeError::UnknownClassPatternField { .. } => {
+            DiagnosticId::NoSuchField
+        }
+        TirTypeError::UnknownClassPropertyShorthand { .. } => DiagnosticId::NoSuchField,
+        TirTypeError::UnresolvedName { .. } | TirTypeError::UnresolvedPropertyShorthand { .. } => {
+            DiagnosticId::UnknownVariable
+        }
         TirTypeError::DeadCode { .. } => DiagnosticId::UnreachableCode,
         TirTypeError::VoidUsedAsValue => DiagnosticId::TypeMismatch,
         TirTypeError::VoidFunctionResultUsed => DiagnosticId::TypeMismatch,
@@ -1960,9 +2037,16 @@ fn tir_type_error_to_diagnostic_id(
         // a name-resolution failure.
         TirTypeError::RuntimeIdCompoundAssignment
         | TirTypeError::RuntimeIdMemberAccess { .. }
-        | TirTypeError::RuntimeIdCallSiteArgument => DiagnosticId::TypeMismatch,
+        | TirTypeError::DuplicateRuntimeIdArgument
+        | TirTypeError::RuntimeIdArgumentMustBeLast
+        | TirTypeError::RuntimeIdArgumentTypeMismatch { .. } => DiagnosticId::TypeMismatch,
         TirTypeError::IntegerLiteralOutOfRange { .. } => DiagnosticId::IntegerLiteralOutOfRange,
         TirTypeError::GenericBoundNotInterface { .. } => DiagnosticId::GenericBoundNotInterface,
+        // Builtin interfaces (BEP-062, E0153/E0154).
+        TirTypeError::BuiltinInterfaceNotImplementable { .. } => {
+            DiagnosticId::BuiltinInterfaceNotImplementable
+        }
+        TirTypeError::BuiltinInterfaceNotABound { .. } => DiagnosticId::BuiltinInterfaceNotABound,
         // A `_` placeholder in a non-inferable position.
         TirTypeError::CannotInferType => DiagnosticId::WildcardTypeNotAllowed,
         // Generic-parameter / associated-type declaration hygiene.
@@ -1976,6 +2060,7 @@ fn tir_type_error_to_diagnostic_id(
         TirTypeError::BoundedTypeArgNotConcrete { .. }
         | TirTypeError::MissingAssociatedTypeBindings { .. }
         | TirTypeError::AmbiguousInterfacePatternBindings { .. } => DiagnosticId::TypeMismatch,
+        TirTypeError::InterfaceProjectionBase { .. } => DiagnosticId::InterfaceProjectionBase,
         // Interface impl conformance (BEP-044, E0113–E0139): tir2 owns these and
         // check.rs surfaces them via `check_interfaces`.
         TirTypeError::MissingInterfaceMethod { .. } => DiagnosticId::MissingInterfaceMethod,
@@ -2005,6 +2090,9 @@ fn tir_type_error_to_diagnostic_id(
             DiagnosticId::DuplicateInterfaceFieldLink
         }
         TirTypeError::SelfInInterfaceField { .. } => DiagnosticId::SelfInInterfaceField,
+        TirTypeError::SelfInAssociatedTypeDefault { .. } => {
+            DiagnosticId::SelfInAssociatedTypeDefault
+        }
         TirTypeError::InterfaceRequiresNonInterface { .. } => {
             DiagnosticId::InterfaceRequiresNonInterface
         }
@@ -2316,25 +2404,29 @@ function TakeGuess(person: Person) -> string {
 <[CURSOR]"#,
         );
 
-        let messages = check_file(&test.db, test.cursor.file)
-            .into_iter()
-            .map(|diag| diag.message)
+        let diagnostics = check_file(&test.db, test.cursor.file);
+        let messages = diagnostics
+            .iter()
+            .map(|diag| diag.message.as_str())
             .collect::<Vec<_>>();
 
         assert!(
-            messages.iter().any(|message| message
-                == "default for parameter `a` cannot reference later parameter `b`"),
+            messages.contains(&"default for parameter `a` cannot reference later parameter `b`"),
             "missing forward-reference diagnostic; got {messages:#?}"
         );
         assert!(
-            messages
-                .iter()
-                .any(|message| message == "type mismatch: expected string, got 2"),
-            "missing default type-mismatch diagnostic; got {messages:#?}"
+            diagnostics.iter().any(|diagnostic| {
+                diagnostic.message == "mismatched types"
+                    && diagnostic.annotations.iter().any(|annotation| {
+                        annotation.message.as_deref() == Some("expected `string`, found `2`")
+                    })
+            }),
+            "missing default type-mismatch diagnostic; got {diagnostics:#?}"
         );
         assert!(
-            messages.iter().any(|message| message
-                == "required parameter `required` cannot appear after a defaulted parameter"),
+            messages.contains(
+                &"required parameter `required` cannot appear after a defaulted parameter"
+            ),
             "missing required-after-default diagnostic; got {messages:#?}"
         );
     }
@@ -2366,15 +2458,48 @@ function TakeGuess(person: Person) -> string {
     }
 
     #[test]
+    fn check_file_renders_runtime_id_mismatch_type_in_file_namespace() {
+        let test = CursorTest::with_filename(
+            "billing/test.baml",
+            r#"class WrongId {
+  value int
+}
+
+function target(value: int) -> int {
+  value
+}
+
+function main(value: WrongId) -> int {
+  target(1, $id = value)
+}
+<[CURSOR]"#,
+        );
+
+        let diagnostics = check_file(&test.db, test.cursor.file);
+        let diag = diagnostics
+            .iter()
+            .find(|diag| {
+                diag.id == DiagnosticId::TypeMismatch
+                    && diag.message.contains("expects `boundary.LocalId`")
+            })
+            .expect("runtime-id type mismatch diagnostic");
+
+        assert_eq!(
+            diag.message,
+            "`$id` at a call site expects `boundary.LocalId`, got WrongId"
+        );
+    }
+
+    #[test]
     fn parse_error_in_body_taints_scope_and_descendants() {
-        // A braceless lambda is a syntax error; parser recovery leaves a
-        // malformed lambda that would otherwise emit cascading type errors. The
-        // function-body scope containing the parse error — and its descendant
-        // lambda scope — must be tainted so those type errors are suppressed.
+        // A missing right-hand operand is a syntax error in the function body.
+        // The function-body scope containing the parse error — and its
+        // descendant lambda scope — must be tainted so cascading type errors
+        // are suppressed.
         let mut builder = ProjectTest::builder();
         builder.source(
             "test.baml",
-            "function Braceless() -> int {\n  let f = (x: int) => x + 1;\n  f(2)\n}\n",
+            "function Broken() -> int {\n  let broken = 1 + ;\n  let f = (x: int) -> { x + 1 };\n  f(2)\n}\n",
         );
         let test = builder.build();
         let file = test.files[0];
@@ -2383,7 +2508,7 @@ function TakeGuess(person: Person) -> string {
         let parse_errors = baml_compiler_parser::parse_errors(&test.db, file);
         assert!(
             !parse_errors.is_empty(),
-            "braceless lambda should produce a parse error"
+            "missing right-hand operand should produce a parse error"
         );
 
         let tainted = parse_error_tainted_scopes(index, &parse_errors);
@@ -2398,7 +2523,7 @@ function TakeGuess(person: Person) -> string {
             .scopes
             .iter()
             .position(|s| s.kind == ScopeKind::Lambda)
-            .expect("a lambda scope should exist for the braceless lambda");
+            .expect("a descendant lambda scope should exist");
         assert!(
             tainted.contains(&lambda_idx),
             "descendant lambda scope (index {lambda_idx}) must be tainted, got {tainted:?}"

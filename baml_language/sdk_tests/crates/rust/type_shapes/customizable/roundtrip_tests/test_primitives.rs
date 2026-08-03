@@ -12,7 +12,7 @@ use baml_sdk::primitives::{
 };
 
 #[test]
-fn test_return_int() {
+fn test_primitives_return_int() {
     assert_eq!(return_int().unwrap(), 42);
 }
 
@@ -21,39 +21,39 @@ fn test_return_int() {
     clippy::approx_constant,
     reason = "3.14 is the fixture's literal, not a stand-in for PI"
 )]
-fn test_return_float() {
+fn test_primitives_return_float() {
     assert_eq!(return_float().unwrap(), 3.14);
 }
 
 #[test]
-fn test_return_string() {
+fn test_primitives_return_string() {
     assert_eq!(return_string().unwrap(), "hello");
 }
 
 #[test]
-fn test_return_bool() {
+fn test_primitives_return_bool() {
     assert!(return_bool().unwrap());
 }
 
 #[test]
-fn test_return_null() {
+fn test_primitives_return_null() {
     // `-> null` lowers to `()`; the successful unwrap is the `is None`
     // assertion.
     return_null().unwrap();
 }
 
 #[test]
-fn test_round_trip_int() {
+fn test_primitives_round_trip_int() {
     assert_eq!(round_trip_int(7).unwrap(), 7);
 }
 
 #[test]
-fn test_round_trip_float() {
+fn test_primitives_round_trip_float() {
     assert_eq!(round_trip_float(2.5).unwrap(), 2.5);
 }
 
 #[test]
-fn test_round_trip_float_accepts_int() {
+fn test_primitives_round_trip_float_accepts_int() {
     // A python int into a float param widens at the FFI boundary (the wire
     // encoder is value-shaped, so `7` arrives engine-side as an int). The
     // declared `-> float` must hand back a genuine float, not the int riding
@@ -64,11 +64,13 @@ fn test_round_trip_float_accepts_int() {
     // API instead so the wire-level intent (int out, float back) is
     // preserved.
     let int_on_the_wire = baml_bridge::wire::InboundValue {
+        value_type: None,
         value: Some(baml_bridge::wire::inbound_value::Value::IntValue(7)),
     };
     let result = baml_bridge::runtime::invoke_sync::<f64, core::convert::Infallible>(
         "user.primitives.round_trip_float",
         baml_bridge::encode::kwargs(vec![("x", Some(int_on_the_wire))]),
+        vec![],
     )
     .unwrap();
     // Python's `isinstance(result, float)` collapses into the static `f64`
@@ -77,24 +79,24 @@ fn test_round_trip_float_accepts_int() {
 }
 
 #[test]
-fn test_round_trip_string() {
+fn test_primitives_round_trip_string() {
     assert_eq!(round_trip_string("hi".to_string()).unwrap(), "hi");
 }
 
 #[test]
-fn test_round_trip_bool() {
+fn test_primitives_round_trip_bool() {
     assert!(!round_trip_bool(false).unwrap());
 }
 
 #[test]
-fn test_round_trip_null() {
+fn test_primitives_round_trip_null() {
     // Explicit `None` for the `null`-typed param is `()`; the successful
     // unwrap is the `is None` assertion.
     round_trip_null(()).unwrap();
 }
 
 #[test]
-fn test_round_trip_uint8_array() {
+fn test_primitives_round_trip_uint8_array() {
     assert_eq!(
         round_trip_uint8_array(b"\x00\x01\x02".to_vec()).unwrap(),
         b"\x00\x01\x02".to_vec()
@@ -102,7 +104,7 @@ fn test_round_trip_uint8_array() {
 }
 
 #[test]
-fn test_round_trip_primitives() {
+fn test_primitives_round_trip_primitives() {
     let p = Primitives {
         int_field: 1,
         float_field: 1.5,
@@ -115,7 +117,7 @@ fn test_round_trip_primitives() {
 }
 
 #[test]
-fn test_round_trip_primitives_float_field_accepts_int() {
+fn test_primitives_round_trip_primitives_float_field_accepts_int() {
     // An int into a float *field* is coerced by pydantic at construction, so
     // it reaches the wire as a float already — pin that contract alongside
     // the param-level widening above.

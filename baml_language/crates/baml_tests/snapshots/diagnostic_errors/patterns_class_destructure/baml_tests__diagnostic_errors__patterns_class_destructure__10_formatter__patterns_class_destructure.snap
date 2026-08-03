@@ -187,7 +187,15 @@ function class_destructure_or_pattern_must_bind_same_names(v: Person | int) -> i
 
 function class_destructure_or_pattern_same_binding_conflicting_types(v: Person | Admin) -> int {
     match (v) {
-        Person { age } | Admin { age } => 1,
+        Person { age } | Admin { age } => age,
+    }
+}
+
+function class_destructure_or_pattern_same_binding_conflicting_types_reversed(
+    v: Person | Admin,
+) -> int {
+    match (v) {
+        Admin { age } | Person { age } => age,
     }
 }
 

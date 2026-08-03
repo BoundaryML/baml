@@ -525,6 +525,10 @@ fn run_filter_from_js(filter: JsValue) -> Result<RunFilter, String> {
 /// Initialize the WASM module with panic hook (auto-called by wasm-bindgen).
 #[wasm_bindgen(start)]
 pub fn start() {
+    bex_project::register_inbound_union_ambiguity_policy(
+        bex_project::InboundUnionAmbiguityPolicy::SelectDefault,
+    )
+    .expect("the browser TypeScript bridge must own the process-wide inbound policy");
     #[cfg(feature = "console_error_panic")]
     console_error_panic_hook::set_once();
     LOGGER_INIT.call_once(|| {
@@ -1473,8 +1477,14 @@ impl BamlWasmRuntime {
     /// Triggers a `playground_send_notification` callback with a
     /// `ControlFlowGraphResult` notification containing the serialized graph.
     #[wasm_bindgen(js_name = requestControlFlowGraph)]
-    pub fn request_control_flow_graph(&self, _project: String, function_name: &str) {
-        self.bex.request_control_flow_graph(function_name);
+    pub fn request_control_flow_graph(
+        &self,
+        _project: String,
+        function_name: &str,
+        request_id: Option<u32>,
+    ) {
+        self.bex
+            .request_control_flow_graph(function_name, request_id);
     }
 
     /// Handle a cursor position change from the editor.

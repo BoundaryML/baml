@@ -25,6 +25,11 @@ func Enum(name string, value string, variants ...string) Input {
 // Generated decoders convert the returned exact wire name to their named Go
 // string type only after this validation succeeds.
 func (value Value) Enum(name string, variants ...string) (string, error) {
+	unwrapped, err := value.unwrapUnionVariants()
+	if err != nil {
+		return "", err
+	}
+	value = unwrapped
 	if value.value == nil {
 		return "", fmt.Errorf("BAML value is uninitialized")
 	}

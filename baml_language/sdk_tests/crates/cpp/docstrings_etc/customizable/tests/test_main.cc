@@ -31,7 +31,7 @@ static size_t CountOccurrences(const std::string& text,
   return count;
 }
 
-BAML_TEST(class_doc_summary_and_attributes_section) {
+BAML_TEST(main_class_doc_summary_and_attributes_section) {
   // Anchored on the namespace open so nothing precedes the summary line
   // (python parity: exact __doc__ equality).
   const std::string expected =
@@ -45,7 +45,7 @@ BAML_TEST(class_doc_summary_and_attributes_section) {
   BAML_ASSERT(header_text().find(expected) != std::string::npos);
 }
 
-BAML_TEST(undocumented_field_listed_as_bare_name_under_attributes) {
+BAML_TEST(main_undocumented_field_listed_as_bare_name_under_attributes) {
   // Note: `id` is documented, `text` is not - the any-doc rule lists every
   // field, the undocumented one as a bare name. One contiguous block
   // (python parity: exact __doc__ equality), pinning the blank separator
@@ -63,7 +63,7 @@ BAML_TEST(undocumented_field_listed_as_bare_name_under_attributes) {
   BAML_ASSERT(header_text().find(expected) != std::string::npos);
 }
 
-BAML_TEST(enum_doc_summary_and_members_section) {
+BAML_TEST(main_enum_doc_summary_and_members_section) {
   const std::string expected =
       "namespace docs {\n"
       "/// Sentiment labels surfaced by the model.\n"
@@ -77,7 +77,7 @@ BAML_TEST(enum_doc_summary_and_members_section) {
   BAML_ASSERT(header_text().find(expected) != std::string::npos);
 }
 
-BAML_TEST(enum_summary_only_omits_members_section) {
+BAML_TEST(main_enum_summary_only_omits_members_section) {
   const std::string text = header_text();
   // The class-level summary is present verbatim with NO Members: rollup
   // between it and the declaration (python parity: exact __doc__
@@ -107,7 +107,7 @@ BAML_TEST(enum_summary_only_omits_members_section) {
   BAML_ASSERT(Priority::HIGH != Priority::LOW);
 }
 
-BAML_TEST(no_inline_field_or_variant_doc_artifacts) {
+BAML_TEST(main_no_inline_field_or_variant_doc_artifacts) {
   // Field/variant /// docs live exclusively in the parent's rollup, never
   // inline per field: each doc line appears exactly once, on the parent.
   const std::string text = header_text();

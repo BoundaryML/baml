@@ -2,10 +2,10 @@
 //! single machine-readable source for the release target set, each target's
 //! per-artifact support, and the `bridge_cffi` cdylib build config.
 //!
-//! The cffi, toolchain, and python build matrices are generated from this file
-//! (each in its own workflow); the Rust target list is kept in sync with
-//! [`crate::SUPPORTED_RELEASE_TARGETS`] by the tests below. The nodejs matrix
-//! keeps its bespoke per-target build recipes in its own workflow.
+//! The cffi, toolchain, python, Java, and C# build matrices are generated from
+//! this file (each in its own workflow); the Rust target list is kept in sync
+//! with [`crate::SUPPORTED_RELEASE_TARGETS`] by the tests below. The nodejs
+//! matrix keeps its bespoke per-target build recipes in its own workflow.
 //!
 //! Support is encoded structurally: an artifact that is `None` in [`Artifacts`]
 //! is not built for the target (unsupported), so "unsupported but configured"
@@ -48,7 +48,11 @@ pub struct Artifacts {
     #[serde(default)]
     pub nodejs: Option<SdkArtifact>,
     #[serde(default)]
+    pub java: Option<JavaArtifact>,
+    #[serde(default)]
     pub cffi: Option<CffiArtifact>,
+    #[serde(default)]
+    pub csharp: Option<CSharpArtifact>,
 }
 
 /// The CLI toolchain artifact (baml-cli + pack host, archived per target).
@@ -87,6 +91,27 @@ pub struct SdkArtifact {
     pub experimental: bool,
 }
 
+/// The per-target `bridge_java` native jar (`baml_bridge`'s `natives-<platform>`
+/// classifier artifact carrying the `bridge_java` cdylib).
+#[derive(Debug, Clone, Deserialize)]
+pub struct JavaArtifact {
+    /// `<os>-<arch>` classifier token for the natives jar
+    /// (`baml-bridge-<version>-natives-<platform>.jar`), also passed to Gradle
+    /// as `-PbamlNativePlatform` and used as the `/native/<platform>/` resource
+    /// dir the loader reads. musl targets carry a `-musl` suffix so their jar
+    /// does not collide with the gnu jar (the runtime loader resolves only the
+    /// bare `<os>-<arch>` token today; the `-musl` jars are for explicit-
+    /// classifier consumers and are experimental).
+    pub platform: String,
+    /// GitHub Actions runner label (native-arch, distinct from the `os` family):
+    /// the cdylib is built natively per target so `cargo build --target` needs
+    /// no cross C toolchain except the musl linker (`setup-musl-cross`).
+    pub runner: String,
+    /// Built best-effort: a build failure must not block the release.
+    #[serde(default)]
+    pub experimental: bool,
+}
+
 /// The standalone `bridge_cffi` engine cdylib built per target.
 #[derive(Debug, Clone, Deserialize)]
 pub struct CffiArtifact {
@@ -105,10 +130,50 @@ pub struct CffiArtifact {
     pub experimental: bool,
 }
 
+/// The C# projection of a shared `bridge_cffi` producer artifact.
+#[derive(Debug, Clone, Deserialize)]
+pub struct CSharpArtifact {
+    /// Portable .NET Runtime Identifier used below `runtimes/{rid}/native/`.
+    pub rid: String,
+    /// Canonical native filename installed in the RID directory.
+    pub native_asset: String,
+    /// Native GitHub Actions runner for executing the assembled package.
+    pub consumer_runner: String,
+    /// Packaging contract used by this target.
+    pub package_policy: String,
+    /// Built best-effort: a build failure must not block the release.
+    #[serde(default)]
+    pub experimental: bool,
+}
+
 /// Parse the embedded platform contract. Panics if the committed file is
 /// malformed — that is a build-blocking repository error the tests guard.
 pub fn platforms() -> Platforms {
-    serde_json::from_str(PLATFORMS_JSON).expect("release/platforms.json is valid")
+    let platforms: Platforms =
+        serde_json::from_str(PLATFORMS_JSON).expect("release/platforms.json is valid JSON");
+    validate_platforms(&platforms).expect("release/platforms.json has valid artifact dependencies");
+    platforms
+}
+
+fn validate_platforms(platforms: &Platforms) -> Result<(), String> {
+    for target in &platforms.targets {
+        let Some(csharp) = &target.artifacts.csharp else {
+            continue;
+        };
+        let Some(cffi) = &target.artifacts.cffi else {
+            return Err(format!(
+                "{}: C# requires a CFFI source artifact",
+                target.triple
+            ));
+        };
+        if !csharp.experimental && cffi.experimental {
+            return Err(format!(
+                "{}: required C# cannot consume experimental CFFI",
+                target.triple
+            ));
+        }
+    }
+    Ok(())
 }
 
 #[cfg(test)]
@@ -209,6 +274,48 @@ mod tests {
         }
     }
 
+    /// Every target ships a Java native jar, on a native-arch runner.
+    #[test]
+    fn every_target_has_a_java_runner() {
+        for t in platforms().targets {
+            let java = t
+                .artifacts
+                .java
+                .as_ref()
+                .unwrap_or_else(|| panic!("{}: java artifact missing", t.triple));
+            assert!(!java.runner.is_empty(), "{}: empty java runner", t.triple);
+        }
+    }
+
+    /// The Java `platform` token is the `<os>-<arch>` classifier the natives jar
+    /// and the `NativeLibraryLoader` resource path are built from (musl gets a
+    /// `-musl` suffix so its jar does not collide with the gnu jar).
+    #[test]
+    fn java_platform_tokens_follow_the_natives_classifier_convention() {
+        for t in platforms().targets {
+            let Some(java) = &t.artifacts.java else {
+                continue;
+            };
+            let os_token = match t.os.as_str() {
+                "macos" => "macos",
+                "linux" => "linux",
+                "windows" => "windows",
+                other => panic!("{}: unknown os {other}", t.triple),
+            };
+            let base = format!("{os_token}-{}", t.arch);
+            let expected = if t.libc.as_deref() == Some("musl") {
+                format!("{base}-musl")
+            } else {
+                base
+            };
+            assert_eq!(
+                java.platform, expected,
+                "{}: unexpected java platform token",
+                t.triple
+            );
+        }
+    }
+
     /// The recorded cffi asset name must match the loader's filename convention
     /// (`libbaml_cffi-<triple>.{so,dylib}` / `baml_cffi-<triple>.dll`).
     #[test]
@@ -226,6 +333,70 @@ mod tests {
         }
     }
 
+    #[test]
+    fn csharp_runtime_assets_follow_the_platform_contract() {
+        let expected_rids = BTreeSet::from([
+            "linux-arm64".to_string(),
+            "linux-musl-arm64".to_string(),
+            "linux-musl-x64".to_string(),
+            "linux-x64".to_string(),
+            "osx-arm64".to_string(),
+            "osx-x64".to_string(),
+            "win-arm64".to_string(),
+            "win-x64".to_string(),
+        ]);
+        let mut actual_rids = BTreeSet::new();
+
+        for t in platforms().targets {
+            let Some(csharp) = &t.artifacts.csharp else {
+                continue;
+            };
+            assert!(t.artifacts.cffi.is_some(), "{}: C# requires CFFI", t.triple);
+            assert!(
+                !csharp.experimental,
+                "{}: the eight-RID C# package is all-required",
+                t.triple
+            );
+            let arch = match t.arch.as_str() {
+                "aarch64" => "arm64",
+                "x86_64" => "x64",
+                other => panic!("{}: unsupported .NET architecture {other}", t.triple),
+            };
+            let rid = match (t.os.as_str(), t.libc.as_deref()) {
+                ("macos", _) => format!("osx-{arch}"),
+                ("linux", Some("musl")) => format!("linux-musl-{arch}"),
+                ("linux", _) => format!("linux-{arch}"),
+                ("windows", _) => format!("win-{arch}"),
+                (other, _) => panic!("{}: unsupported .NET OS {other}", t.triple),
+            };
+            let native_asset = match t.os.as_str() {
+                "macos" => "libbridge_cffi.dylib",
+                "windows" => "bridge_cffi.dll",
+                _ => "libbridge_cffi.so",
+            };
+            assert_eq!(csharp.rid, rid, "{}: unexpected .NET RID", t.triple);
+            assert!(
+                actual_rids.insert(csharp.rid.clone()),
+                "{}: duplicate .NET RID {}",
+                t.triple,
+                csharp.rid
+            );
+            assert_eq!(
+                csharp.native_asset, native_asset,
+                "{}: unexpected .NET native filename",
+                t.triple
+            );
+            assert!(
+                !csharp.consumer_runner.is_empty(),
+                "{}: empty .NET consumer runner",
+                t.triple
+            );
+            assert_eq!(csharp.package_policy, "rid-native");
+        }
+
+        assert_eq!(actual_rids, expected_rids);
+    }
+
     /// The linchpin of the schema: a missing artifact key deserializes to
     /// `None`, i.e. "not built for this target" — the only way to express
     /// unsupported, so it can never carry a contradictory build config.
@@ -241,5 +412,71 @@ mod tests {
         assert!(p.artifacts.cffi.is_none(), "absent cffi is unsupported");
         assert!(p.artifacts.python.is_none());
         assert!(p.artifacts.nodejs.is_none());
+        assert!(p.artifacts.java.is_none());
+        assert!(p.artifacts.csharp.is_none());
+    }
+
+    #[test]
+    fn cffi_support_does_not_imply_csharp_support() {
+        let json = r#"{
+            "schema": 1,
+            "targets": [{
+                "triple": "x86_64-unknown-linux-gnu", "os": "linux", "arch": "x86_64",
+                "libc": "gnu", "archive_suffix": ".tar.gz",
+                "artifacts": { "cffi": {
+                    "asset": "libbaml_cffi-x86_64-unknown-linux-gnu.so",
+                    "runner": "ubuntu-22.04"
+                } }
+            }]
+        }"#;
+        let p: Platforms = serde_json::from_str(json).unwrap();
+        assert!(validate_platforms(&p).is_ok());
+        assert!(p.targets[0].artifacts.cffi.is_some());
+        assert!(p.targets[0].artifacts.csharp.is_none());
+    }
+
+    #[test]
+    fn csharp_without_cffi_is_rejected() {
+        let json = r#"{
+            "schema": 1,
+            "targets": [{
+                "triple": "x86_64-unknown-linux-gnu", "os": "linux", "arch": "x86_64",
+                "libc": "gnu", "archive_suffix": ".tar.gz",
+                "artifacts": { "csharp": {
+                    "rid": "linux-x64",
+                    "native_asset": "libbridge_cffi.so",
+                    "consumer_runner": "ubuntu-24.04",
+                    "package_policy": "rid-native"
+                } }
+            }]
+        }"#;
+        let p: Platforms = serde_json::from_str(json).unwrap();
+        assert!(validate_platforms(&p).is_err());
+    }
+
+    #[test]
+    fn required_csharp_cannot_consume_experimental_cffi() {
+        let json = r#"{
+            "schema": 1,
+            "targets": [{
+                "triple": "x86_64-unknown-linux-gnu", "os": "linux", "arch": "x86_64",
+                "libc": "gnu", "archive_suffix": ".tar.gz",
+                "artifacts": {
+                    "cffi": {
+                        "asset": "libbaml_cffi-x86_64-unknown-linux-gnu.so",
+                        "runner": "ubuntu-22.04",
+                        "experimental": true
+                    },
+                    "csharp": {
+                        "rid": "linux-x64",
+                        "native_asset": "libbridge_cffi.so",
+                        "consumer_runner": "ubuntu-24.04",
+                        "package_policy": "rid-native"
+                    }
+                }
+            }]
+        }"#;
+        let p: Platforms = serde_json::from_str(json).unwrap();
+        assert!(validate_platforms(&p).is_err());
     }
 }

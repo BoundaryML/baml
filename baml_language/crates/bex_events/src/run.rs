@@ -388,6 +388,7 @@ pub enum PayloadKind {
     EnvRequested(EnvRequested),
     EnvResolved(EnvResolved),
     Log(LogPayload),
+    Output(OutputPayload),
     CapturedValue(CapturedValuePayload),
 }
 
@@ -496,6 +497,33 @@ pub struct LogPayload {
     pub source: Option<SourceLocation>,
     pub value_ref: Option<ValueRef>,
     pub trace_call: Option<TraceCallKey>,
+}
+
+/// A chunk written by `baml.io.print` / `println` / `eprint` / `eprintln`.
+///
+/// These are raw stream writes, not structured log records: `print` carries no
+/// trailing newline, so consumers must concatenate consecutive chunks on the
+/// same stream rather than treating each payload as one line.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct OutputPayload {
+    pub stream: OutputStream,
+    pub text: String,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum OutputStream {
+    Stdout,
+    Stderr,
+}
+
+impl OutputStream {
+    #[must_use]
+    pub fn as_wire_str(self) -> &'static str {
+        match self {
+            Self::Stdout => "stdout",
+            Self::Stderr => "stderr",
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -848,7 +876,14 @@ struct RunRecord {
     domain_diagnostics: Vec<RunDiagnostic>,
     pending_input_requests: HashSet<u64>,
     pending_env_requests: HashSet<u64>,
+    output_bytes: usize,
+    output_truncated: bool,
 }
+
+/// Per-run byte budget for `baml.io` stream output. A tight print loop must not
+/// be able to grow the run store without bound; past the budget we emit one
+/// truncation notice and drop the rest.
+const MAX_RUN_OUTPUT_BYTES: usize = 1 << 20;
 
 impl Default for InMemoryRunStore {
     fn default() -> Self {
@@ -940,6 +975,8 @@ impl InMemoryRunStore {
             domain_diagnostics: Vec::new(),
             pending_input_requests: HashSet::new(),
             pending_env_requests: HashSet::new(),
+            output_bytes: 0,
+            output_truncated: false,
         };
         self.inner
             .lock()
@@ -1007,6 +1044,8 @@ impl InMemoryRunStore {
                 domain_diagnostics,
                 pending_input_requests: HashSet::new(),
                 pending_env_requests: HashSet::new(),
+                output_bytes: 0,
+                output_truncated: false,
             },
         );
         true
@@ -1286,14 +1325,6 @@ impl InMemoryRunStore {
         Some(patch)
     }
 
-    pub fn complete_run_now(
-        &self,
-        boundary_id: BoundaryId,
-        outcome: RunOutcome,
-    ) -> Option<RunPatch> {
-        self.complete_run(boundary_id, outcome, epoch_ms())
-    }
-
     pub fn add_diagnostic(
         &self,
         boundary_id: BoundaryId,
@@ -1312,32 +1343,6 @@ impl InMemoryRunStore {
             &retention,
             vec![RunPatchChange::UpsertDiagnostic(diagnostic)],
         ))
-    }
-
-    pub fn ingest_payload(
-        &self,
-        boundary_id: BoundaryId,
-        kind: PayloadKind,
-        call_node_id: Option<CallNodeId>,
-        body: Option<PayloadBody>,
-        redaction: RedactionMetadata,
-    ) -> Option<RunPatch> {
-        let mut inner = self
-            .inner
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        let payload_id = inner.allocate_payload_id();
-        let retention = inner.retention.clone();
-        let record = inner.runs.get_mut(&boundary_id)?;
-        let payload = PayloadEvent {
-            id: payload_id,
-            call_node_id,
-            timestamp_ms: epoch_ms(),
-            kind,
-            redaction,
-            body,
-        };
-        Some(push_payload_patch(record, &retention, payload, None))
     }
 
     pub fn ingest_root_input_value_ref(
@@ -1447,6 +1452,49 @@ impl InMemoryRunStore {
                 value_ref,
                 trace_call: Some(call),
             }),
+            redaction: RedactionMetadata::display_safe(),
+            body: None,
+        };
+        Some(push_payload_patch(record, &retention, payload, None))
+    }
+
+    /// Record a `baml.io` stream write against the run owning `host_call_id`.
+    ///
+    /// Returns `None` when the write cannot be attributed to a live run (no
+    /// attached host call, or the run is already evicted). Callers should treat
+    /// that as "nothing to broadcast" rather than as a failure: panicking a
+    /// program over an unroutable debug print costs more than the lost line.
+    pub fn ingest_output(
+        &self,
+        host_call_id: &HostCallId,
+        stream: OutputStream,
+        text: String,
+    ) -> Option<RunPatch> {
+        let mut inner = self
+            .inner
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let boundary_id = *inner.host_call_index.get(host_call_id)?;
+        let payload_id = inner.allocate_payload_id();
+        let retention = inner.retention.clone();
+        let record = inner.runs.get_mut(&boundary_id)?;
+
+        if record.output_truncated {
+            return None;
+        }
+        let text = if record.output_bytes.saturating_add(text.len()) > MAX_RUN_OUTPUT_BYTES {
+            record.output_truncated = true;
+            format!("\n[output truncated: run exceeded {MAX_RUN_OUTPUT_BYTES} bytes]\n")
+        } else {
+            record.output_bytes = record.output_bytes.saturating_add(text.len());
+            text
+        };
+
+        let payload = PayloadEvent {
+            id: payload_id,
+            call_node_id: None,
+            timestamp_ms: epoch_ms(),
+            kind: PayloadKind::Output(OutputPayload { stream, text }),
             redaction: RedactionMetadata::display_safe(),
             body: None,
         };
@@ -5935,5 +5983,64 @@ mod tests {
         trim_profile_events(&mut events);
         assert_eq!(events.len(), PROFILE_EVENTS_CAP);
         assert_eq!(events[0].event.timestamp_ns, 5);
+    }
+
+    fn output_texts(store: &InMemoryRunStore, boundary_id: BoundaryId) -> Vec<String> {
+        store
+            .snapshot(boundary_id)
+            .expect("run snapshot")
+            .payloads
+            .iter()
+            .filter_map(|payload| match &payload.kind {
+                PayloadKind::Output(output) => Some(output.text.clone()),
+                _ => None,
+            })
+            .collect()
+    }
+
+    #[test]
+    fn ingest_output_caps_a_runaway_print_loop() {
+        let store = InMemoryRunStore::default();
+        let start = create_test_run(&store, request("output"), RequestId(1));
+        let host = HostCallId::Native(sys_types::CallId(1));
+        store.attach_host_call(start.boundary_id, host.clone());
+
+        let chunk = "x".repeat(64 * 1024);
+        // Well past MAX_RUN_OUTPUT_BYTES worth of writes.
+        for _ in 0..64 {
+            store.ingest_output(&host, OutputStream::Stdout, chunk.clone());
+        }
+
+        let texts = output_texts(&store, start.boundary_id);
+        let notices = texts
+            .iter()
+            .filter(|text| text.contains("output truncated"))
+            .count();
+        assert_eq!(notices, 1, "exactly one truncation notice");
+        assert!(
+            texts
+                .last()
+                .is_some_and(|text| text.contains("output truncated")),
+            "the notice is the last thing recorded"
+        );
+        let total: usize = texts.iter().map(String::len).sum();
+        assert!(
+            total < MAX_RUN_OUTPUT_BYTES * 2,
+            "retained output stays bounded, got {total} bytes"
+        );
+    }
+
+    #[test]
+    fn ingest_output_without_an_attached_host_call_records_nothing() {
+        let store = InMemoryRunStore::default();
+        let start = create_test_run(&store, request("output"), RequestId(1));
+        let orphan = HostCallId::Native(sys_types::CallId(99));
+
+        assert!(
+            store
+                .ingest_output(&orphan, OutputStream::Stdout, "hi".to_string())
+                .is_none()
+        );
+        assert!(output_texts(&store, start.boundary_id).is_empty());
     }
 }

@@ -1,0 +1,65 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 42832
+---
+=== PPIR ===
+class user.AliasEqualsOwnName {
+  a: string
+  b: string
+}
+class user.AliasEqualsOwnName$stream {
+  a: string | null
+  b: string | null
+}
+class user.AliasVsAlias {
+  a: string
+  b: string
+}
+class user.AliasVsAlias$stream {
+  a: string | null
+  b: string | null
+}
+class user.AllDistinct {
+  a: string
+  b: string
+  c: string
+}
+class user.AllDistinct$stream {
+  a: string | null
+  b: string | null
+  c: string | null
+}
+class user.NameVsAlias {
+  x: string
+  b: string
+}
+class user.NameVsAlias$stream {
+  x: string | null
+  b: string | null
+}
+class user.NormalizedCollision {
+  a: string
+  b: string
+}
+class user.NormalizedCollision$stream {
+  a: string | null
+  b: string | null
+}
+class user.SkippedDoesNotCollide {
+  a: string
+  b: string
+}
+class user.SkippedDoesNotCollide$stream {
+  a: string | null
+  b: string | null
+}
+class user.TripleCollision {
+  first: string
+  second: string
+  shared: string
+}
+class user.TripleCollision$stream {
+  first: string | null
+  second: string | null
+  shared: string | null
+}

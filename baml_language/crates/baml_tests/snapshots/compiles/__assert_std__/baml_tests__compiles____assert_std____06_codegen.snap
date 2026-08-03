@@ -130,6 +130,7 @@ function assert.equal(actual: unknown, expected: unknown) -> null {
 }
 
 function assert.format_operand(value: unknown) -> string {
+    load_type unknown
     load_var value
     call baml.String.from
     return

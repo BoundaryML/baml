@@ -17,21 +17,6 @@ fn user.B.greet(self: B) -> string {
     }
 }
 
-fn user.test_deep_field(a: A) -> string {
-    // Locals:
-    let _0: string // _0 // return
-    let _1: A // a // param
-
-    bb0: {
-        _0 = copy _1.0.0;
-        goto -> bb1;
-    }
-
-    bb1: {
-        return;
-    }
-}
-
 fn user.test_deep_method(a: A) -> string {
     // Locals:
     let _0: string // _0 // return
@@ -41,6 +26,21 @@ fn user.test_deep_method(a: A) -> string {
     bb0: {
         _2 = copy _1.0;
         _0 = call const fn user.B.greet(copy _2) -> [bb1];
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.test_deep_field(a: A) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: A // a // param
+
+    bb0: {
+        _0 = copy _1.0.0;
+        goto -> bb1;
     }
 
     bb1: {

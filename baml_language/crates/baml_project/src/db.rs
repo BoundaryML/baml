@@ -160,11 +160,18 @@ pub struct ProjectDatabase {
     /// long-lived `ProjectDatabase`).
     seeded_callable_throws: Option<baml_workspace::SeededCallableThrows>,
     /// Maps file paths to their `SourceFile` handles (user files only).
-    file_map: HashMap<std::path::PathBuf, SourceFile>,
+    ///
+    /// `Arc`-wrapped (with `Arc::make_mut` at the mutation sites) so cloning a
+    /// database handle stays O(1): the parallel check and emit drivers mint a
+    /// shared-storage handle per work chunk, and a deep per-clone copy of an
+    /// N-entry `PathBuf` map made every clone O(files) — quadratic CPU and
+    /// peak RSS across a whole compile.
+    file_map: Arc<HashMap<std::path::PathBuf, SourceFile>>,
     /// Maps file paths to compiler2-only `SourceFile` handles.
     compiler2_file_map: HashMap<std::path::PathBuf, SourceFile>,
-    /// Maps `FileId` to file path for reverse lookup (all files including v2 stubs).
-    file_id_to_path: HashMap<FileId, std::path::PathBuf>,
+    /// Maps `FileId` to file path for reverse lookup (all files including v2
+    /// stubs). `Arc`-wrapped for the same reason as `file_map`.
+    file_id_to_path: Arc<HashMap<FileId, std::path::PathBuf>>,
     /// `SourceFile` inputs of removed paths. Salsa never frees inputs, so a
     /// delete/recreate cycle (branch switch, codegen rewriting `.baml`
     /// files) would mint a new immortal input per cycle; instead the input
@@ -292,9 +299,9 @@ impl ProjectDatabase {
             seeded_throw_facts: None,
             seeded_stdlib_interface: None,
             seeded_callable_throws: None,
-            file_map: HashMap::new(),
+            file_map: Arc::new(HashMap::new()),
             compiler2_file_map: HashMap::new(),
-            file_id_to_path: HashMap::new(),
+            file_id_to_path: Arc::new(HashMap::new()),
             removed_file_tombstones: HashMap::new(),
         };
         db.seeded_throw_facts = Some(baml_workspace::SeededThrowFacts::new(
@@ -315,30 +322,6 @@ impl ProjectDatabase {
     /// Get the project, if set.
     pub fn get_project(&self) -> Option<Project> {
         self.project
-    }
-
-    /// Get the project, if set.
-    ///
-    /// Alias for `get_project()` for API compatibility with old `LspDatabase`.
-    pub fn project(&self) -> Option<Project> {
-        self.project
-    }
-
-    /// Get a reference to self as the database.
-    ///
-    /// This method exists for API compatibility with code that previously
-    /// called `lsp_db.db()` to get the underlying `RootDatabase`.
-    /// Since `ProjectDatabase` IS the database now, this just returns `self`.
-    pub fn db(&self) -> &Self {
-        self
-    }
-
-    /// Get a mutable reference to self as the database.
-    ///
-    /// This method exists for API compatibility with code that previously
-    /// called `lsp_db.db_mut()` to get the underlying `RootDatabase`.
-    pub fn db_mut(&mut self) -> &mut Self {
-        self
     }
 
     /// Seed per-file throw facts from a previous compile of identical file
@@ -453,8 +436,8 @@ impl ProjectDatabase {
             };
             let file_id = file.file_id(self);
 
-            self.file_map.insert(canonical_path.clone(), file);
-            self.file_id_to_path.insert(file_id, canonical_path);
+            Arc::make_mut(&mut self.file_map).insert(canonical_path.clone(), file);
+            Arc::make_mut(&mut self.file_id_to_path).insert(file_id, canonical_path);
 
             // Update project files list if project is set
             if let Some(project) = self.project {
@@ -467,6 +450,44 @@ impl ProjectDatabase {
         }
     }
 
+    /// Bulk [`Self::add_or_update_file`]: identical per-file semantics
+    /// (canonicalization, tombstone revival, map registration), but the
+    /// project file list is written once at the end instead of once per new
+    /// file. The per-file path clones and re-sets the whole `files` Vec and
+    /// bumps the salsa revision each time — O(files²) copies plus one
+    /// revision per file during initial project load.
+    pub fn add_or_update_files<'a, I>(&mut self, files: I)
+    where
+        I: IntoIterator<Item = (&'a std::path::Path, &'a str)>,
+    {
+        let mut new_files = Vec::new();
+        for (path, content) in files {
+            let canonical_path = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
+
+            if let Some(&existing_file) = self.file_map.get(&canonical_path) {
+                existing_file.set_text(self).to(content.to_string());
+                continue;
+            }
+            let file = if let Some(file) = self.removed_file_tombstones.remove(&canonical_path) {
+                file.set_text(self).to(content.to_string());
+                file
+            } else {
+                self.add_file_internal(&canonical_path, content)
+            };
+            let file_id = file.file_id(self);
+            Arc::make_mut(&mut self.file_map).insert(canonical_path.clone(), file);
+            Arc::make_mut(&mut self.file_id_to_path).insert(file_id, canonical_path);
+            new_files.push(file);
+        }
+        if !new_files.is_empty()
+            && let Some(project) = self.project
+        {
+            let mut project_files: Vec<SourceFile> = project.files(self).clone();
+            project_files.extend(new_files);
+            project.set_files(self).to(project_files);
+        }
+    }
+
     /// Remove a file from the database.
     ///
     /// Note: Salsa doesn't support true removal. The input is emptied (so its
@@ -476,9 +497,9 @@ impl ProjectDatabase {
     pub fn remove_file(&mut self, path: &std::path::Path) {
         let canonical_path = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
 
-        if let Some(file) = self.file_map.remove(&canonical_path) {
+        if let Some(file) = Arc::make_mut(&mut self.file_map).remove(&canonical_path) {
             let file_id = file.file_id(self);
-            self.file_id_to_path.remove(&file_id);
+            Arc::make_mut(&mut self.file_id_to_path).remove(&file_id);
 
             // Remove from project files list
             if let Some(project) = self.project {
@@ -544,7 +565,7 @@ impl ProjectDatabase {
             let file = self.add_file_internal(&path, builtin.contents);
             let file_id = file.file_id(self);
 
-            self.file_id_to_path.insert(file_id, path.clone());
+            Arc::make_mut(&mut self.file_id_to_path).insert(file_id, path.clone());
             self.compiler2_file_map.insert(path, file);
 
             v2_builtin_files.push(file);
@@ -558,11 +579,6 @@ impl ProjectDatabase {
     /// This is an alias for `add_or_update_file` for API compatibility.
     pub fn add_file(&mut self, path: impl AsRef<std::path::Path>, content: &str) -> SourceFile {
         self.add_or_update_file(path.as_ref(), content)
-    }
-
-    /// Get all files currently in the database.
-    pub fn files(&self) -> impl Iterator<Item = SourceFile> + '_ {
-        self.file_map.values().copied()
     }
 
     /// Get all file paths currently tracked by the database.
@@ -582,23 +598,6 @@ impl ProjectDatabase {
     /// Get a `FileId` by its path.
     pub fn path_to_file_id(&self, path: &std::path::Path) -> Option<FileId> {
         self.get_file(path).map(|file| file.file_id(self))
-    }
-
-    /// Get the file path for a `FileId`.
-    pub fn get_path(&self, file_id: FileId) -> Option<&std::path::Path> {
-        self.file_id_to_path
-            .get(&file_id)
-            .map(std::path::PathBuf::as_path)
-    }
-
-    /// Get a `SourceFile` by its `FileId`.
-    pub fn get_file_by_id(&self, file_id: FileId) -> Option<SourceFile> {
-        self.file_id_to_path.get(&file_id).and_then(|path| {
-            self.file_map
-                .get(path)
-                .or_else(|| self.compiler2_file_map.get(path))
-                .copied()
-        })
     }
 
     /// Get the compiled bytecode for the project using the compiler2 pipeline.
@@ -632,6 +631,20 @@ impl ProjectDatabase {
         if error_count > 0 {
             return Err(baml_compiler2_emit::LoweringError::ProjectHasErrors { error_count });
         }
+        self.get_bytecode_unchecked()
+    }
+
+    /// [`Self::get_bytecode`] without the error gate: goes straight to codegen.
+    ///
+    /// Only for callers that have already run a full-project check (per-file
+    /// `check_file` sweep **plus** package-level diagnostics) at the current
+    /// revision and found no user-file errors — the gate in `get_bytecode`
+    /// would re-derive exactly that result. Calling this on an error-bearing
+    /// project can panic in the runtime-conversion boundary (see the gate
+    /// comment above).
+    pub fn get_bytecode_unchecked(
+        &self,
+    ) -> Result<bex_vm_types::Program, baml_compiler2_emit::LoweringError> {
         let opts = baml_compiler2_emit::CompileOptions {
             emit_test_cases: false,
         };
@@ -653,6 +666,121 @@ impl ProjectDatabase {
     ) -> Option<baml_compiler2_visualization::control_flow::ControlFlowGraph> {
         let mut ctx = CfgExpansionCtx::default();
         self.ast_control_flow_graph_impl(function_name, &mut ctx)
+            .or_else(|| self.ast_test_control_flow_graph_impl(function_name, &mut ctx))
+    }
+
+    /// Build a graph for a statically named top-level `test "..." { ... }`
+    /// declaration. New-style tests are lowered into lambdas passed to the
+    /// per-file `$init_test_*` function, so they do not appear in
+    /// `file_functions`. The test registry exposes their canonical names to
+    /// the playground (`root[.namespace]::name`); recover the matching lambda
+    /// from that synthesized registration and graph its body directly.
+    fn ast_test_control_flow_graph_impl(
+        &self,
+        test_name: &str,
+        ctx: &mut CfgExpansionCtx,
+    ) -> Option<baml_compiler2_visualization::control_flow::ControlFlowGraph> {
+        use baml_compiler2_ast::{Expr, FunctionBodyDef, Item};
+        use baml_compiler2_visualization::control_flow::{
+            NodeType, build_control_flow_graph_from_expr,
+        };
+        use baml_type::Literal;
+
+        if !ctx.expanding.insert(test_name.to_string()) {
+            return None;
+        }
+
+        let mut result = None;
+        'files: for source_file in self.file_map.values().copied() {
+            let ast = baml_compiler2_hir::file_ast(self, source_file);
+            for item in &ast.items {
+                let Item::Function(init_function) = item else {
+                    continue;
+                };
+                if !init_function.name.as_str().starts_with("$init_test") {
+                    continue;
+                }
+                let Some(FunctionBodyDef::Expr(registration_body, registration_source_map)) =
+                    init_function.body.as_ref()
+                else {
+                    continue;
+                };
+
+                let mut duplicate_counts = HashMap::<String, usize>::new();
+                for (_, expr) in registration_body.exprs.iter() {
+                    let Expr::Call { callee, args, .. } = expr else {
+                        continue;
+                    };
+                    let Expr::Path(callee_segments) = &registration_body.exprs[*callee] else {
+                        continue;
+                    };
+                    if callee_segments.last().map(AsRef::<str>::as_ref) != Some("register_test_at")
+                        || args.len() != 4
+                    {
+                        continue;
+                    }
+
+                    let Expr::Literal(Literal::String(owner)) =
+                        &registration_body.exprs[args[0].expr]
+                    else {
+                        continue;
+                    };
+                    let Expr::Literal(Literal::String(name)) =
+                        &registration_body.exprs[args[1].expr]
+                    else {
+                        // Runtime-computed test names cannot be identified
+                        // statically from the canonical registry name.
+                        continue;
+                    };
+                    let canonical_base = format!("{owner}::{name}");
+                    let duplicate_count = duplicate_counts
+                        .entry(canonical_base.clone())
+                        .and_modify(|count| *count += 1)
+                        .or_insert(1);
+                    let canonical_name = if *duplicate_count == 1 {
+                        canonical_base
+                    } else {
+                        format!("{canonical_base}#{duplicate_count}")
+                    };
+                    if canonical_name != test_name {
+                        continue;
+                    }
+
+                    let Expr::Lambda(test_lambda) = &registration_body.exprs[args[2].expr] else {
+                        continue;
+                    };
+                    // The test body is an expression in the registration body's
+                    // own arena, so it shares that body's source map.
+                    let test_body = registration_body;
+                    let mut graph =
+                        build_control_flow_graph_from_expr(test_name, test_body, test_lambda.body);
+                    self.attach_source_spans_to_graph(
+                        &mut graph,
+                        source_file,
+                        registration_source_map,
+                    );
+
+                    let test_name_span =
+                        Self::source_map_expr_range(registration_source_map, args[1].expr)
+                            .and_then(|range| self.source_span_for_range(source_file, range));
+                    if let Some(root) = graph
+                        .nodes
+                        .values_mut()
+                        .find(|node| node.node_type == NodeType::FunctionRoot)
+                    {
+                        root.source_span = test_name_span
+                            .or_else(|| self.source_span_for_range(source_file, test_lambda.span));
+                    }
+
+                    self.expand_user_function_calls_in_graph(&mut graph, test_body, ctx);
+                    result = Some(graph);
+                    break 'files;
+                }
+            }
+        }
+
+        ctx.expanding.remove(test_name);
+        result
     }
 
     fn ast_control_flow_graph_impl(
@@ -670,8 +798,8 @@ impl ProjectDatabase {
 
         let mut result = None;
         for source_file in self.file_map.values().copied() {
-            let index = baml_compiler2_ppir::file_semantic_index(self, source_file);
-            for (local_id, func_data) in &index.item_tree.functions {
+            for &func_loc in baml_compiler2_ppir::item_data::file_functions(self, source_file) {
+                let func_data = baml_compiler2_ppir::item_data::function_data(self, func_loc);
                 if !self.function_name_matches_source_name(
                     source_file,
                     &func_data.name,
@@ -680,8 +808,6 @@ impl ProjectDatabase {
                     continue;
                 }
 
-                let func_loc =
-                    baml_compiler2_hir::loc::FunctionLoc::new(self, source_file, *local_id);
                 let func_span =
                     baml_compiler2_ppir::item_data::function_source_map(self, func_loc).span;
                 let body = baml_compiler2_ppir::function_body(self, func_loc);
@@ -844,8 +970,8 @@ impl ProjectDatabase {
     fn function_header_title(&self, function_name: &str) -> Option<String> {
         let mut unique_title = None;
         for source_file in self.file_map.values().copied() {
-            let index = baml_compiler2_ppir::file_semantic_index(self, source_file);
-            for (local_id, func_data) in &index.item_tree.functions {
+            for &func_loc in baml_compiler2_ppir::item_data::file_functions(self, source_file) {
+                let func_data = baml_compiler2_ppir::item_data::function_data(self, func_loc);
                 if !self.function_name_matches_source_name(
                     source_file,
                     &func_data.name,
@@ -853,8 +979,6 @@ impl ProjectDatabase {
                 ) {
                     continue;
                 }
-                let func_loc =
-                    baml_compiler2_hir::loc::FunctionLoc::new(self, source_file, *local_id);
                 let func_span =
                     baml_compiler2_ppir::item_data::function_source_map(self, func_loc).span;
                 let text = source_file.text(self);
@@ -1023,6 +1147,18 @@ impl ProjectDatabase {
         let span_idx =
             la_arena::Idx::<text_size::TextRange>::from_raw(la_arena::RawIdx::from_u32(raw));
         self.source_span_for_range(source_file, spans[span_idx])
+    }
+
+    fn source_map_expr_range(
+        source_map: &baml_compiler2_ast::AstSourceMap,
+        expr_id: baml_compiler2_ast::ExprId,
+    ) -> Option<text_size::TextRange> {
+        let raw = expr_id.into_raw();
+        if raw.into_u32() as usize >= source_map.expr_spans.len() {
+            return None;
+        }
+        let span_idx = la_arena::Idx::<text_size::TextRange>::from_raw(raw);
+        Some(source_map.expr_spans[span_idx])
     }
 
     fn source_span_for_range(
@@ -1265,7 +1401,7 @@ impl ProjectDatabase {
             return Some(sf);
         }
         // Fallback: match by file name suffix (handles Monaco's relative paths)
-        for (stored_path, sf) in &self.file_map {
+        for (stored_path, sf) in self.file_map.iter() {
             if stored_path.ends_with(file_path)
                 || file_path.ends_with(stored_path.to_string_lossy().as_ref())
             {
@@ -1298,17 +1434,20 @@ impl ProjectDatabase {
         // A declarative LLM function and its `$stream`/`$parse_stream` companions
         // share one declaration span, hence one scope range — so multiple
         // functions match here. Prefer the user-authored one (origin order).
-        let (local_id, _) = index
-            .item_tree
-            .functions
+        let func_loc = baml_compiler2_ppir::item_data::file_functions(self, source_file)
             .iter()
-            .filter(|(id, _)| {
-                let loc = baml_compiler2_hir::loc::FunctionLoc::new(self, source_file, **id);
+            .copied()
+            .filter(|&loc| {
                 baml_compiler2_ppir::item_data::function_source_map(self, loc).span
                     == func_scope_range
             })
-            .min_by_key(|(_, func_data)| func_origin_rank(func_data.origin))?;
-        let func_loc = baml_compiler2_hir::loc::FunctionLoc::new(self, source_file, *local_id);
+            .min_by_key(|&loc| {
+                func_origin_rank(
+                    baml_compiler2_ppir::item_data::function_data(self, loc)
+                        .metadata
+                        .origin,
+                )
+            })?;
         let sig = baml_compiler2_ppir::function_signature(self, func_loc);
         let body = baml_compiler2_ppir::function_body(self, func_loc);
         let is_workflow = matches!(
@@ -1326,8 +1465,8 @@ impl ProjectDatabase {
         let mut memberships = Vec::new();
 
         for source_file in self.file_map.values().copied() {
-            let index = baml_compiler2_ppir::file_semantic_index(self, source_file);
-            for (local_id, func_data) in &index.item_tree.functions {
+            for &func_loc in baml_compiler2_ppir::item_data::file_functions(self, source_file) {
+                let func_data = baml_compiler2_ppir::item_data::function_data(self, func_loc);
                 let func_name =
                     self.playground_function_name_for_source_file(source_file, &func_data.name);
                 if func_data.name.as_str() == target_function_name
@@ -1336,8 +1475,6 @@ impl ProjectDatabase {
                     continue; // Skip self
                 }
 
-                let func_loc =
-                    baml_compiler2_hir::loc::FunctionLoc::new(self, source_file, *local_id);
                 let body = baml_compiler2_ppir::function_body(self, func_loc);
 
                 // Only workflow (Expr) functions can call other functions
@@ -1417,18 +1554,21 @@ impl ProjectDatabase {
         };
 
         let func_scope_range = index.scopes[func_scope_id.index() as usize].range;
-        if let Some((local_id, _)) = index
-            .item_tree
-            .functions
+        if let Some(func_loc) = baml_compiler2_ppir::item_data::file_functions(self, source_file)
             .iter()
-            .filter(|(id, _)| {
-                let loc = baml_compiler2_hir::loc::FunctionLoc::new(self, source_file, **id);
+            .copied()
+            .filter(|&loc| {
                 baml_compiler2_ppir::item_data::function_source_map(self, loc).span
                     == func_scope_range
             })
-            .min_by_key(|(_, func_data)| func_origin_rank(func_data.origin))
+            .min_by_key(|&loc| {
+                func_origin_rank(
+                    baml_compiler2_ppir::item_data::function_data(self, loc)
+                        .metadata
+                        .origin,
+                )
+            })
         {
-            let func_loc = baml_compiler2_hir::loc::FunctionLoc::new(self, source_file, *local_id);
             let Some(source_map) = baml_compiler2_ppir::function_body_source_map(self, func_loc)
             else {
                 return (None, vec![]);
@@ -1869,6 +2009,39 @@ function Workflow(input: string) -> string {
 
         // Edges should be non-empty.
         assert!(!graph.edges_by_src.is_empty(), "graph should have edges");
+    }
+
+    #[test]
+    fn graph_source_spans_use_vscode_utf16_columns() {
+        use baml_compiler2_visualization::control_flow::NodeType;
+
+        let mut db = ProjectDatabase::new();
+        db.set_project_root(std::path::Path::new("/tmp"));
+        let src = r#"function Workflow() -> string { let rocket = "🚀"; Summarize(rocket) }"#;
+        db.add_or_update_file(std::path::Path::new("/tmp/workflow.baml"), src);
+
+        let graph = db.ast_control_flow_graph("Workflow").unwrap();
+        let call_span = graph
+            .nodes
+            .values()
+            .find(|node| {
+                matches!(node.node_type, NodeType::OtherScope) && node.label == "Summarize(rocket)"
+            })
+            .and_then(|node| node.source_span.as_ref())
+            .expect("call graph node should have a source span");
+
+        let byte_start = src.find("Summarize(rocket)").unwrap();
+        let byte_end = byte_start + "Summarize(rocket)".len();
+        assert_eq!(call_span.start_offset, u32::try_from(byte_start).unwrap());
+        assert_eq!(call_span.end_offset, u32::try_from(byte_end).unwrap());
+        assert_eq!(
+            call_span.column,
+            u32::try_from(src[..byte_start].encode_utf16().count()).unwrap()
+        );
+        assert_eq!(
+            call_span.end_column,
+            u32::try_from(src[..byte_end].encode_utf16().count()).unwrap()
+        );
     }
 
     #[test]
@@ -2360,6 +2533,75 @@ function Early(x: int) -> string {
         assert!(
             graph.nodes.values().all(|n| n.label != "helper body"),
             "callee body headers should not be expanded below a terminal return"
+        );
+    }
+
+    #[test]
+    fn ast_control_flow_graph_builds_new_style_test_bodies() {
+        use baml_compiler2_visualization::control_flow::NodeType;
+
+        let mut db = ProjectDatabase::new();
+        db.set_project_root(std::path::Path::new("/tmp"));
+        let src = r#"
+function Workflow(input: int) -> int {
+  //# Choose result
+  input + 1
+}
+
+test "renders workflow" {
+  let result = Workflow(41)
+  assert.equal(result, 42)
+}
+"#;
+        db.add_or_update_file(std::path::Path::new("/tmp/tests.baml"), src);
+
+        let workflow_graph = db
+            .ast_control_flow_graph("Workflow")
+            .expect("workflow should have a graph");
+        assert!(
+            workflow_graph
+                .nodes
+                .values()
+                .any(|node| node.node_type == NodeType::HeaderContextEnter),
+            "fixture workflow must have control flow: {:#?}",
+            workflow_graph.nodes
+        );
+        let graph = db
+            .ast_control_flow_graph("root::renders workflow")
+            .expect("new-style test should have a graph");
+        let root = graph
+            .nodes
+            .values()
+            .find(|node| node.node_type == NodeType::FunctionRoot)
+            .expect("test graph should have a root");
+        let root_span = root
+            .source_span
+            .as_ref()
+            .expect("test graph root should navigate to its declaration");
+        let name_start = src.find("\"renders workflow\"").unwrap();
+        assert_eq!(root_span.start_offset as usize, name_start);
+        assert_eq!(
+            root_span.end_offset as usize,
+            name_start + "\"renders workflow\"".len()
+        );
+        assert!(
+            graph
+                .nodes
+                .values()
+                .any(|node| node.label.contains("Workflow")),
+            "the test body's workflow call should be represented"
+        );
+        let prepared =
+            baml_compiler2_visualization::control_flow::prepare_control_flow_graph_for_visualization(
+                &graph,
+            );
+        assert!(
+            prepared.nodes.values().any(|node| {
+                node.node_type == NodeType::HeaderContextEnter && node.label == "Choose result"
+            }),
+            "the selected test should render the called workflow's control flow; raw={:#?}; prepared={:#?}",
+            graph.nodes,
+            prepared.nodes
         );
     }
 

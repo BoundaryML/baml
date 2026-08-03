@@ -1,0 +1,29 @@
+# Swift-facing FFI artifact. Unlike Python (PyO3) and Node (napi), Swift
+# consumes the C ABI directly: this crate re-exports `bridge_cffi`'s
+# `extern "C"` surface and builds it as a staticlib, which
+# `scripts/build-xcframework.sh` wraps into `BamlBridgeFFI.xcframework`
+# for the SwiftPM package at `sdks/swift/`.
+[package]
+name = "bridge_swift"
+edition.workspace = true
+version.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[lib]
+name = "bridge_swift"
+crate-type = [ "staticlib", "rlib" ]
+
+[features]
+default = [ "bundle-http", "aws-crypto" ]
+bundle-http = [ "bridge_cffi/bundle-http" ]
+aws-crypto = [ "bundle-http", "bridge_cffi/aws-crypto" ]
+# Apple targets can also use ring; the iOS feasibility work validated
+# ring + rustls-platform-verifier on-device.
+ring-crypto = [ "bundle-http", "bridge_cffi/ring-crypto" ]
+
+[dependencies]
+bridge_cffi = { workspace = true }
+
+[package.metadata.ci]
+wasm_support = false

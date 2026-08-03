@@ -1,4 +1,4 @@
-"""Decoder-side tests for `BamlPyHandle` round-tripping.
+"""Decoder-side tests for BAML handle round-tripping.
 
 These tests exercise `_decode_handle` with handle kinds that have no
 Python-facing constructor (FunctionRef, ADT_MEDIA_GENERIC). The
@@ -33,10 +33,10 @@ def _make_handle(key: int, handle_type: int) -> "baml_handle_pb2.BamlHandle":
     return h
 
 
-def test_function_ref_decodes_to_pyhandle():
+def test_function_ref_decodes_to_callable():
     key, ht = _seed_function_ref_handle(123)
     result = _decode_handle(_make_handle(key, ht), BamlTypeMap())
-    assert isinstance(result, BamlPyHandle)
+    assert callable(result)
 
 
 def test_adt_media_generic_decodes_to_pyhandle():
@@ -51,10 +51,10 @@ def test_decoded_pyhandle_releases_on_drop():
     cloning it fails because the entry is gone.
     """
     key, ht = _seed_function_ref_handle(7)
-    pyh = _decode_handle(_make_handle(key, ht), BamlTypeMap())
-    assert isinstance(pyh, BamlPyHandle)
-    del pyh  # CPython refcount drops to 0; Drop runs HANDLE_TABLE.release.
+    closure = _decode_handle(_make_handle(key, ht), BamlTypeMap())
+    assert callable(closure)
+    del closure  # CPython refcount drops to 0; Drop runs HANDLE_TABLE.release.
     stale = _decode_handle(_make_handle(key, ht), BamlTypeMap())
-    assert isinstance(stale, BamlPyHandle)
+    assert callable(stale)
     with pytest.raises(RuntimeError, match="invalid handle"):
-        copy.copy(stale)
+        copy.copy(stale._handle)

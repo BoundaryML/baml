@@ -1,0 +1,1197 @@
+/* =========================================================================
+   /learn2 — minimalist BAML slide deck.
+   Refined, HN/Rust-book register: cream paper, ink type, tan hairlines,
+   mono labels, generous whitespace. Tokens come from globals.css.
+   ========================================================================= */
+
+.l2-deck {
+  --l2-ink: #1a1612;
+  --l2-body: #2b2520;
+  --l2-muted: #6f6a63;
+  --l2-soft: #8a8580;
+  --l2-rule: #e2ddcf;
+  --l2-rule-strong: #d8cfbd;
+  --l2-violet: #6d28d9;
+  --l2-green: #047857;
+  --l2-amber: #b45309;
+  --l2-link: #2563eb;
+  --l2-red: #b42318;
+
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  /* terminal register: monospace throughout the deck */
+  font-family: var(--font-geist-mono), ui-monospace, "SF Mono", monospace;
+  font-weight: 300;
+  color: var(--l2-body);
+  outline: none;
+  background-color: var(--background, #fbf7ed);
+  background-image: radial-gradient(
+    circle at 1px 1px,
+    rgba(42, 37, 32, 0.04) 1px,
+    transparent 0
+  );
+  background-size: 20px 20px;
+}
+
+/* ---- chrome: header ---- */
+.l2-deck-head {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.85rem 1.5rem;
+  font-size: 12px;
+  border-bottom: 1px solid var(--l2-rule);
+}
+.l2-wordmark {
+  font-weight: 600;
+  color: var(--l2-ink);
+  letter-spacing: 0.06em;
+  text-decoration: none;
+}
+.l2-wordmark span {
+  margin-left: 0.35rem;
+  font-weight: 400;
+  color: var(--l2-soft);
+}
+.l2-section-tag {
+  font-size: 11px;
+  color: var(--l2-soft);
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+}
+.l2-counter {
+  color: var(--l2-muted);
+  letter-spacing: 0.08em;
+}
+
+/* ---- stage ---- */
+.l2-stage {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  /* `safe center` keeps tall slides scrollable instead of clipping the top */
+  justify-content: safe center;
+  min-height: 0;
+  padding: clamp(1.25rem, 4vw, 3.5rem);
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+.l2-slide {
+  width: 100%;
+  min-width: 0;
+  max-width: 1040px;
+  animation: l2-slide-in 420ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+@keyframes l2-slide-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ---- chrome: footer ---- */
+.l2-deck-foot {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.6rem 1.5rem;
+  border-top: 1px solid var(--l2-rule);
+}
+.l2-nav-btn {
+  display: grid;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
+  font-size: 14px;
+  color: var(--l2-ink);
+  cursor: pointer;
+  background: #fffdf6;
+  border: 1px solid var(--l2-rule-strong);
+  border-radius: 8px;
+  transition:
+    background 120ms ease,
+    border-color 120ms ease;
+}
+.l2-nav-btn:hover:not(:disabled) {
+  background: #f4eee0;
+}
+.l2-nav-btn:disabled {
+  cursor: default;
+  opacity: 0.35;
+}
+.l2-dots {
+  display: flex;
+  flex: 1;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: center;
+}
+.l2-dot {
+  width: 7px;
+  height: 7px;
+  padding: 0;
+  cursor: pointer;
+  background: var(--l2-rule-strong);
+  border: none;
+  border-radius: 999px;
+  transition:
+    transform 120ms ease,
+    background 120ms ease;
+}
+.l2-dot:hover {
+  background: var(--l2-soft);
+}
+.l2-dot--on {
+  background: var(--l2-ink);
+  transform: scale(1.35);
+}
+
+/* ---- slide content ---- */
+.l2-slide-shell {
+  max-width: 720px;
+  margin: 0 auto;
+}
+.l2-slide-shell--wide {
+  max-width: 1040px;
+}
+.l2-slide-title {
+  margin: 0.6rem 0 1.4rem;
+  font-size: clamp(25px, 3.6vw, 40px);
+  font-weight: 600;
+  line-height: 1.1;
+  color: var(--l2-ink);
+  letter-spacing: -0.01em;
+}
+.l2-slide-body {
+  font-size: 17px;
+  line-height: 1.7;
+}
+.l2-lead {
+  max-width: 46ch;
+  margin: 0 0 1.1rem;
+  font-size: clamp(18px, 2.2vw, 22px);
+  line-height: 1.55;
+  color: var(--l2-ink);
+}
+
+.l2-quote {
+  padding-left: 1.1rem;
+  margin: 0 0 1.4rem;
+  border-left: 2px solid var(--l2-violet);
+}
+.l2-quote p {
+  margin: 0;
+  font-family: inherit;
+  font-size: clamp(20px, 2.6vw, 28px);
+  font-weight: 300;
+  line-height: 1.4;
+  color: var(--l2-ink);
+}
+.l2-quote-cite {
+  display: block;
+  margin-top: 0.7rem;
+  font-size: 12px;
+  font-style: normal;
+  color: var(--l2-soft);
+  letter-spacing: 0.04em;
+}
+
+.l2-bullets {
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+.l2-bullets li {
+  position: relative;
+  padding-left: 1.4rem;
+  font-size: 17px;
+  line-height: 1.5;
+  color: var(--l2-body);
+}
+.l2-bullets li::before {
+  position: absolute;
+  top: 0.62em;
+  left: 0;
+  width: 6px;
+  height: 6px;
+  content: "";
+  background: var(--l2-violet);
+  border-radius: 999px;
+}
+
+/* two-pane */
+.l2-split {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: clamp(1rem, 3vw, 2.2rem);
+  align-items: start;
+}
+.l2-split-left,
+.l2-split-right {
+  /* allow grid children to shrink so code can scroll internally instead of
+     blowing out the page width */
+  min-width: 0;
+}
+.l2-split-left {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+@media (max-width: 840px) {
+  .l2-split {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* stacked examples (not a comparison — just two snippets) */
+.l2-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 1.1rem;
+  min-width: 0;
+}
+.l2-example {
+  min-width: 0;
+}
+.l2-example-label {
+  margin: 0 0 0.45rem;
+  font-size: 11px;
+  color: var(--l2-soft);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+
+/* section divider */
+.l2-section-divider {
+  padding: 2rem 0;
+  text-align: center;
+}
+.l2-section-index {
+  display: inline-block;
+  font-size: 12px;
+  color: var(--l2-soft);
+  text-transform: uppercase;
+  letter-spacing: 0.22em;
+}
+.l2-section-title {
+  margin: 0.8rem 0 0.6rem;
+  font-size: clamp(30px, 5vw, 52px);
+  font-weight: 600;
+  color: var(--l2-ink);
+  letter-spacing: -0.01em;
+}
+.l2-section-blurb {
+  font-family: inherit;
+  font-size: clamp(15px, 1.8vw, 19px);
+  color: var(--l2-muted);
+}
+
+/* callouts */
+.l2-callout {
+  padding: 0.7rem 0.9rem;
+  font-size: 13.5px;
+  line-height: 1.5;
+  background: #fffdf6;
+  border: 1px solid var(--l2-rule-strong);
+  border-radius: 10px;
+}
+.l2-callout--warn {
+  color: #7a5a16;
+  background: #fbf3df;
+  border-color: #ecd9b0;
+}
+.l2-callout--good {
+  color: #0c5e42;
+  background: #eafaf2;
+  border-color: #bfe3d2;
+}
+.l2-callout--note {
+  color: var(--l2-muted);
+}
+
+.l2-key {
+  padding: 1px 6px;
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 11px;
+  background: #fffdf6;
+  border: 1px solid var(--l2-rule-strong);
+  border-bottom-width: 2px;
+  border-radius: 5px;
+}
+
+/* cover / closing */
+.l2-cover {
+  padding: 2rem 0;
+  text-align: center;
+}
+.l2-cover-kicker {
+  margin: 0 0 1.2rem;
+  font-size: 12px;
+  color: var(--l2-soft);
+  text-transform: uppercase;
+  letter-spacing: 0.24em;
+}
+.l2-cover-mark {
+  display: flex;
+  gap: clamp(0.5rem, 2vw, 1.3rem);
+  align-items: center;
+  justify-content: center;
+}
+.l2-cover-sheep {
+  width: clamp(52px, 11vw, 116px);
+  height: auto;
+}
+.l2-cover-title {
+  margin: 0;
+  font-family: var(--font-geist-mono), ui-monospace, monospace;
+  font-size: clamp(52px, 11vw, 120px);
+  font-weight: 500;
+  line-height: 0.95;
+  color: var(--l2-ink);
+  letter-spacing: -0.04em;
+}
+.l2-cover-sub {
+  max-width: 52ch;
+  margin: 1.4rem auto 0;
+  font-size: clamp(16px, 2vw, 20px);
+  line-height: 1.5;
+  color: var(--l2-muted);
+}
+.l2-cover-hint {
+  margin-top: 2.4rem;
+  font-size: 12px;
+  color: var(--l2-soft);
+  letter-spacing: 0.12em;
+}
+
+/* =================== code blocks =================== */
+.l2-code {
+  min-width: 0;
+  max-width: 100%;
+  margin: 0;
+  overflow: hidden;
+  background: #fffdf7;
+  border: 1px solid var(--l2-rule-strong);
+  border-radius: 10px;
+}
+.l2-code-head {
+  display: flex;
+  gap: 0.6rem;
+  align-items: center;
+  padding: 0.5rem 0.8rem;
+  background: #f6f0e2;
+  border-bottom: 1px solid var(--l2-rule);
+}
+.l2-code-dots {
+  display: inline-flex;
+  gap: 5px;
+}
+.l2-code-dots i {
+  width: 9px;
+  height: 9px;
+  background: #d8cfbd;
+  border-radius: 999px;
+}
+.l2-code-name {
+  font-size: 11.5px;
+  color: var(--l2-muted);
+  letter-spacing: 0.03em;
+}
+.l2-code-scroll {
+  overflow-x: auto;
+}
+.l2-pre {
+  padding: 0.7rem 0;
+  margin: 0;
+  font-family: var(--font-geist-mono), ui-monospace, monospace;
+  font-size: 13px;
+  line-height: 1.65;
+  tab-size: 2;
+}
+.l2-pre code {
+  display: block;
+  min-width: max-content;
+}
+.l2-line {
+  display: flex;
+  align-items: baseline;
+  padding: 0 0.9rem;
+  white-space: pre;
+}
+/* Wrap mode: soft-wrap within the column instead of forcing a horizontal
+   scrollbar. Used where a long inline diagnostic would otherwise blow the
+   line past a narrow pair column. */
+.l2-code--wrap .l2-pre code {
+  min-width: 0;
+}
+.l2-code--wrap .l2-line {
+  white-space: pre-wrap;
+}
+.l2-code--wrap .l2-lc {
+  min-width: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.l2-line-hl {
+  background: rgba(109, 40, 217, 0.07);
+}
+.l2-ln {
+  flex: 0 0 auto;
+  width: 2.2em;
+  margin-right: 0.8em;
+  font-size: 11.5px;
+  color: #b9b2a3;
+  text-align: right;
+  user-select: none;
+}
+.l2-lc {
+  white-space: pre;
+}
+.l2-note {
+  max-width: 22ch;
+  padding-left: 1.2rem;
+  margin-left: auto;
+  font-size: 11.5px;
+  font-style: italic;
+  color: var(--l2-violet);
+  white-space: normal;
+}
+.l2-note-arrow {
+  margin-right: 0.3rem;
+  font-style: normal;
+}
+
+/* error-lens inline diagnostics */
+.l2-errorlens {
+  margin-left: 1.6em;
+  font-size: 11.5px;
+  font-style: italic;
+  white-space: pre-wrap;
+  opacity: 0.95;
+}
+.l2-line-diag.l2-sev-error {
+  background: rgba(180, 35, 24, 0.07);
+  box-shadow: inset 2px 0 0 var(--l2-red);
+}
+.l2-line-diag.l2-sev-warning {
+  background: rgba(180, 83, 9, 0.07);
+  box-shadow: inset 2px 0 0 var(--l2-amber);
+}
+.l2-errorlens.l2-sev-error {
+  color: var(--l2-red);
+}
+.l2-errorlens.l2-sev-warning {
+  color: var(--l2-amber);
+}
+.l2-errorlens.l2-sev-info {
+  color: var(--l2-muted);
+}
+
+/* =================== spawn race =================== */
+.l2-race {
+  padding: 1.1rem 1.2rem 1.4rem;
+  background: #fffdf7;
+  border: 1px solid var(--l2-rule-strong);
+  border-radius: 12px;
+}
+.l2-race-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1.1rem;
+}
+.l2-race-lanes {
+  display: flex;
+  flex-direction: column;
+  gap: 1.3rem;
+}
+.l2-lane {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.5rem;
+}
+.l2-lane-meta {
+  display: flex;
+  gap: 0.7rem;
+  align-items: baseline;
+}
+.l2-lane-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--l2-ink);
+}
+.l2-lane-sub {
+  font-size: 11.5px;
+  color: var(--l2-soft);
+}
+.l2-lane-bars {
+  display: flex;
+  gap: 5px;
+  height: 26px;
+}
+.l2-bar {
+  flex: 1;
+  overflow: hidden;
+  background: #efe8d8;
+  border-radius: 3px;
+}
+.l2-bar-fill {
+  display: block;
+  height: 100%;
+  width: 0%;
+  border-radius: 3px;
+  animation-name: l2-fill;
+  animation-timing-function: cubic-bezier(0.3, 0.7, 0.3, 1);
+  animation-fill-mode: forwards;
+}
+@keyframes l2-fill {
+  from {
+    width: 0%;
+  }
+  to {
+    width: 100%;
+  }
+}
+.l2-lane-clock {
+  justify-self: end;
+  font-size: 12px;
+  font-weight: 600;
+  opacity: 0;
+  animation: l2-clock-in 200ms ease forwards;
+}
+@keyframes l2-clock-in {
+  to {
+    opacity: 1;
+  }
+}
+
+.l2-btn {
+  padding: 0.35rem 0.7rem;
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 11px;
+  color: var(--l2-ink);
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  background: #fffdf6;
+  border: 1px solid var(--l2-rule-strong);
+  border-radius: 8px;
+  transition: background 120ms ease;
+}
+.l2-btn:hover {
+  background: #f4eee0;
+}
+
+.l2-loading {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-size: 13px;
+  color: #8a8580;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .l2-slide,
+  .l2-bar-fill,
+  .l2-lane-clock {
+    animation-duration: 1ms !important;
+  }
+}
+
+/* =================== live playground (Monaco + ExecutionPanel) =================== */
+.l2-live {
+  display: flex;
+  min-width: 0;
+  height: min(58vh, 440px);
+  overflow: hidden;
+  background: #fffdf7;
+  border: 1px solid var(--l2-rule-strong);
+  border-radius: 10px;
+}
+/* Panes are sized by the shadcn Resizable (react-resizable-panels) group;
+   these classes only handle inner layout + the handle's paper styling. */
+.l2-live-editor {
+  min-width: 0;
+}
+.l2-live-splitter {
+  width: 5px;
+  background: var(--l2-rule, #e2ddcf);
+  transition: background 120ms ease;
+}
+.l2-live-splitter:hover,
+.l2-live-splitter[data-resize-handle-state="hover"],
+.l2-live-splitter[data-resize-handle-state="drag"] {
+  background: var(--l2-violet, #6d28d9);
+}
+.l2-live-panel {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.l2-live-panel > * {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+.l2-live-loading {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 100%;
+  font-size: 12px;
+  color: var(--l2-soft);
+}
+/* result/graph pane wrapper — hosts the absolutely-positioned loading veil so
+   it covers only this pane (never the editor). */
+.l2-live-pane {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.l2-live-pane > * {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+.l2-live-veil {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  display: flex;
+  gap: 0.55rem;
+  align-items: center;
+  justify-content: center;
+  font-size: 12.5px;
+  color: var(--l2-soft);
+  background: rgba(255, 255, 255, 0.72);
+  -webkit-backdrop-filter: blur(2px);
+  backdrop-filter: blur(2px);
+}
+.l2-live-spinner {
+  width: 15px;
+  height: 15px;
+  border: 2px solid rgba(128, 128, 128, 0.25);
+  border-top-color: rgba(128, 128, 128, 0.75);
+  border-radius: 50%;
+  animation: l2-live-spin 0.7s linear infinite;
+}
+@keyframes l2-live-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .l2-live-spinner {
+    animation: none;
+  }
+}
+/* Hero/full-bleed embeds (homepage): fill the parent box instead of the
+   deck-slide height cap, and let the parent own the frame. */
+.l2-live--fill {
+  height: 100%;
+  border: none;
+  border-radius: 0;
+}
+
+/* Slides containing the live playground get every pixel we can spare:
+   the slide/shell width caps come off and the column stretches so the
+   playground (flex: 1) absorbs all remaining stage height. */
+.l2-stage:has(.l2-live) {
+  padding: clamp(0.75rem, 1.5vw, 1.25rem);
+}
+.l2-slide:has(.l2-live) {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  max-width: none;
+  min-height: 0;
+}
+.l2-slide:has(.l2-live) .l2-slide-shell {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  width: 100%;
+  max-width: none;
+  min-height: 0;
+  margin: 0;
+}
+.l2-slide:has(.l2-live) .l2-slide-body {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+}
+.l2-slide:has(.l2-live) .l2-live {
+  flex: 1 1 auto;
+  height: auto;
+  min-height: 320px;
+}
+
+/* =================== multi-editor (scroll demo) =================== */
+/* The frame owns the border + radius (and optional filename header); the editor
+   box sits flush inside it, so a framed BamlEditor matches the deck's static
+   code blocks (.l2-code). */
+.l2-bamled-frame {
+  overflow: hidden;
+  background: #fffdf7;
+  border: 1px solid var(--l2-rule-strong);
+  border-radius: 10px;
+}
+.l2-bamled {
+  overflow: hidden;
+  background: #fffdf7;
+}
+.l2-bamled-loading {
+  display: grid;
+  place-items: center;
+  min-height: 120px;
+  font-size: 12px;
+  color: var(--l2-soft);
+}
+.l2-bamled-wrap {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+}
+/* "try editing me" nudge — a small popup that springs out of the editor's
+   top-right corner and bounces, dismissed on first focus/edit. Desktop-only:
+   hidden on touch and narrow viewports. */
+.l2-edit-hint {
+  position: absolute;
+  top: -16px;
+  right: 12px;
+  z-index: 6;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 14px;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  color: #fff;
+  white-space: nowrap;
+  pointer-events: none;
+  background: #6d28d9;
+  border-radius: 9px;
+  transform-origin: bottom right;
+  opacity: 0;
+  animation:
+    l2-edit-hint-pop 440ms cubic-bezier(0.34, 1.56, 0.64, 1) 500ms both,
+    l2-edit-hint-bounce 1.5s ease-in-out 1000ms infinite;
+}
+/* tail — a rotated square poking down into the editor */
+.l2-edit-hint::after {
+  content: '';
+  position: absolute;
+  right: 18px;
+  bottom: -4px;
+  width: 11px;
+  height: 11px;
+  background: #6d28d9;
+  border-radius: 0 0 2px 0;
+  transform: rotate(45deg);
+}
+.l2-edit-hint-emoji {
+  font-size: 14px;
+}
+@keyframes l2-edit-hint-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.75) translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+@keyframes l2-edit-hint-bounce {
+  0%,
+  45%,
+  100% {
+    transform: translateY(0);
+  }
+  18% {
+    transform: translateY(-9px);
+  }
+  33% {
+    transform: translateY(-3px);
+  }
+}
+@media (hover: none), (max-width: 860px) {
+  .l2-edit-hint {
+    display: none;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .l2-edit-hint {
+    animation: l2-edit-hint-pop 420ms ease 600ms both;
+  }
+}
+.l2-term {
+  margin-top: 6px;
+  overflow: hidden;
+  font-family: var(--font-geist-mono), ui-monospace, monospace;
+  font-size: 12px;
+  background: #141210;
+  border: 1px solid #2a2620;
+  border-radius: 8px;
+}
+.l2-term-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 5px 10px;
+  background: #201c18;
+  border-bottom: 1px solid #2a2620;
+}
+.l2-term-title {
+  font-size: 11px;
+  color: #8a8580;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+}
+.l2-term-x {
+  padding: 0 4px;
+  font-size: 16px;
+  line-height: 1;
+  color: #8a8580;
+  cursor: pointer;
+  background: none;
+  border: none;
+}
+.l2-term-x:hover {
+  color: #f3ede0;
+}
+.l2-term-body {
+  max-height: 170px;
+  padding: 8px 10px;
+  overflow: auto;
+  color: #f3ede0;
+}
+.l2-term-line {
+  display: flex;
+  gap: 0.6rem;
+  align-items: baseline;
+  padding: 1px 0;
+}
+.l2-term-check {
+  flex: 0 0 auto;
+  width: 1em;
+}
+.l2-term-pass .l2-term-check {
+  color: #7ee787;
+}
+.l2-term-fail .l2-term-check {
+  color: #ff7b72;
+}
+.l2-term-error .l2-term-check {
+  color: #e3b341;
+}
+.l2-term-running .l2-term-check {
+  color: #8a8580;
+}
+.l2-term-name {
+  color: #f3ede0;
+}
+.l2-term-meta {
+  font-size: 11px;
+  color: #8a8580;
+}
+.l2-term-err {
+  color: #ff7b72;
+  word-break: break-word;
+  white-space: pre-wrap;
+}
+.l2-editors-demo {
+  min-height: 100vh;
+  font-family: var(--font-geist-mono), ui-monospace, monospace;
+  font-weight: 300;
+  color: #2b2520;
+  background-color: #fbf7ed;
+  background-image: radial-gradient(
+    circle at 1px 1px,
+    rgba(42, 37, 32, 0.04) 1px,
+    transparent 0
+  );
+  background-size: 20px 20px;
+}
+.l2-editors-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.85rem 1.5rem;
+  font-size: 12px;
+  color: #6f6a63;
+  border-bottom: 1px solid #e2ddcf;
+}
+.l2-editors-head a {
+  color: #6d28d9;
+  text-decoration: none;
+}
+.l2-editors-main {
+  max-width: 820px;
+  padding: 2rem 1.5rem 6rem;
+  margin: 0 auto;
+}
+.l2-editors-intro {
+  margin: 0 0 2rem;
+  font-size: 14px;
+  line-height: 1.6;
+  color: #6f6a63;
+}
+.l2-editors-intro code {
+  padding: 1px 5px;
+  background: rgba(0, 0, 0, 0.06);
+  border-radius: 4px;
+}
+.l2-editors-cell {
+  margin-bottom: 2.2rem;
+}
+.l2-editors-cell-title {
+  margin: 0 0 0.5rem;
+  font-size: 11px;
+  color: #8a8580;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+}
+
+/* ---- editor header Run button + in-frame results panel ---- */
+.l2-run-btn {
+  padding: 3px 12px;
+  margin-left: auto;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: #fffdf6;
+  letter-spacing: 0.05em;
+  cursor: pointer;
+  background: #047857;
+  border: none;
+  border-radius: 6px;
+  transition:
+    background 120ms ease,
+    transform 80ms ease;
+}
+.l2-run-btn:hover:not(:disabled) {
+  background: #065f46;
+}
+.l2-run-btn:active:not(:disabled) {
+  transform: translateY(1px);
+}
+.l2-run-btn:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+/* results live INSIDE the editor frame, under the code — same paper, not a
+   detached terminal */
+.l2-runs {
+  background: #faf6ea;
+  border-top: 1px solid var(--l2-rule, #e2ddcf);
+  animation: l2-runs-in 200ms ease;
+}
+@keyframes l2-runs-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.l2-runs-head {
+  display: flex;
+  gap: 0.8rem;
+  align-items: center;
+  padding: 5px 12px;
+  font-size: 10.5px;
+  color: #8a8580;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  border-bottom: 1px dashed #e2ddcf;
+}
+.l2-runs-summary {
+  margin-left: auto;
+  color: #6f6a63;
+  text-transform: none;
+  letter-spacing: 0.03em;
+}
+.l2-runs-clear {
+  padding: 0;
+  font: inherit;
+  color: #8a8580;
+  cursor: pointer;
+  background: none;
+  border: none;
+}
+.l2-runs-clear:hover {
+  color: #1a1612;
+}
+.l2-runs-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+  align-items: baseline;
+  padding: 5px 12px;
+  font-family: var(--font-geist-mono), ui-monospace, monospace;
+  font-size: 12.5px;
+}
+.l2-runs-row + .l2-runs-row {
+  border-top: 1px solid rgba(26, 22, 18, 0.05);
+}
+.l2-runs-check {
+  flex: 0 0 auto;
+  width: 1em;
+}
+.l2-runs--pass .l2-runs-check {
+  color: #047857;
+}
+.l2-runs--fail .l2-runs-check {
+  color: #b42318;
+}
+.l2-runs--error .l2-runs-check {
+  color: #b45309;
+}
+.l2-runs--running .l2-runs-check {
+  color: #8a8580;
+}
+.l2-runs-name {
+  color: #1a1612;
+}
+.l2-runs-meta {
+  margin-left: auto;
+  font-size: 11px;
+  color: #8a8580;
+}
+.l2-runs-meta + .l2-runs-meta {
+  margin-left: 0.6rem;
+}
+.l2-runs-err {
+  flex-basis: 100%;
+  padding-left: 1.55em;
+  font-size: 11.5px;
+  color: #b42318;
+  word-break: break-word;
+  white-space: pre-wrap;
+}
+
+/* showcase line highlight inside the Monaco editor (BamlEditor highlightLines) */
+.l2-ed-hl {
+  background: rgba(4, 120, 87, 0.09);
+}
+
+/* ErrorLens-style inline diagnostics in the Monaco editor */
+.l2-el-line-error {
+  background: rgba(180, 35, 24, 0.06);
+}
+.l2-el-line-warning {
+  background: rgba(180, 83, 9, 0.06);
+}
+.l2-el-line-info {
+  background: rgba(37, 99, 235, 0.05);
+}
+.l2-el-msg {
+  font-style: italic;
+  font-weight: 700;
+}
+.l2-el-msg-error {
+  color: #dc2014 !important;
+}
+.l2-el-msg-warning {
+  color: #b45309 !important;
+}
+.l2-el-msg-info {
+  color: #2563eb !important;
+}
+
+/* Dark page: the paper-theme reds/blues above are too dark to read on a dark
+ * editor — brighten the inline messages and line tints. Scoped to a dark
+ * code-theme page (data-code-theme="dark" on the page root), which covers both
+ * the LivePlayground and the standalone BamlEditor panes. The light /learn2
+ * deck (no data-code-theme) keeps its values. */
+[data-code-theme="dark"] .l2-el-line-error {
+  background: rgba(248, 113, 113, 0.1);
+}
+[data-code-theme="dark"] .l2-el-line-warning {
+  background: rgba(234, 179, 8, 0.1);
+}
+[data-code-theme="dark"] .l2-el-line-info {
+  background: rgba(96, 165, 250, 0.1);
+}
+[data-code-theme="dark"] .l2-el-msg-error {
+  color: #f87171 !important;
+}
+[data-code-theme="dark"] .l2-el-msg-warning {
+  color: #e0af68 !important;
+}
+[data-code-theme="dark"] .l2-el-msg-info {
+  color: #60a5fa !important;
+}
+
+/* =================== terminal box =================== */
+.l2-terminal {
+  max-width: 520px;
+  margin: 0 auto;
+  overflow: hidden;
+  text-align: left;
+  background: #141210;
+  border: 1px solid #2a2620;
+  border-radius: 10px;
+  box-shadow: 0 8px 30px rgba(20, 18, 16, 0.18);
+}
+.l2-terminal-bar {
+  display: flex;
+  gap: 6px;
+  padding: 9px 12px;
+  background: #201c18;
+  border-bottom: 1px solid #2a2620;
+}
+.l2-terminal-bar i {
+  width: 10px;
+  height: 10px;
+  background: #4a443c;
+  border-radius: 999px;
+}
+.l2-terminal-body {
+  padding: 16px 18px;
+  margin: 0;
+  font-family: var(--font-geist-mono), ui-monospace, monospace;
+  font-size: 15px;
+  line-height: 1.7;
+  color: #f3ede0;
+}
+.l2-terminal-prompt {
+  margin-right: 0.35rem;
+  color: #7ee787;
+  user-select: none;
+}
+
+/* closing slide */
+.l2-close {
+  display: flex;
+  flex-direction: column;
+  gap: 1.6rem;
+  align-items: center;
+}
+.l2-close-link {
+  font-size: 14px;
+  color: var(--l2-violet);
+  letter-spacing: 0.02em;
+  text-decoration: none;
+  border-bottom: 1px solid transparent;
+}
+.l2-close-link:hover {
+  border-bottom-color: var(--l2-violet);
+}

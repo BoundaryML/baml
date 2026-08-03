@@ -129,7 +129,7 @@ pub struct FunctionDecl {
     pub name: t::Word,
     pub generic_params: Option<super::GenericParamList>,
     pub params: FunctionParamList,
-    pub arrow: t::Arrow,
+    pub arrow: super::FunctionArrow,
     pub return_type: Type,
     pub throws: Option<ThrowsClause>,
     pub body: FunctionDeclBody,
@@ -233,8 +233,13 @@ impl Printable for FunctionDecl {
             // It fits in single line!
             printer.append_from_printer(param_printer);
             printer.print_spaces(1);
-            printer.print_raw_token(&self.arrow);
-            printer.print_spaces(1);
+            // Normalize the permissively accepted `=>` spelling to `->`.
+            printer.print_str("->");
+            self.arrow.print_separator_before(
+                Some(self.return_type.leftmost_token()),
+                shape.indent + printer.config.indent_width,
+                printer,
+            );
             printer.append_from_printer(return_type_printer);
             if self.throws.is_some() {
                 printer.print_spaces(1);
@@ -251,14 +256,13 @@ impl Printable for FunctionDecl {
             let _ = self.params.print_multi_line(params_shape, printer);
 
             printer.print_spaces(1);
-            printer.print_raw_token(&self.arrow);
-            printer.print_spaces(1);
-
-            // Trivia between -> and return type
-            let (_, arrow_trailing) = printer.trivia.get_for_range_split(self.arrow.span());
-            printer.print_trivia_squished(arrow_trailing);
-            let return_type_leading = printer.trivia.get_leading_for_element(&self.return_type);
-            printer.print_trivia_squished(return_type_leading);
+            // Normalize the permissively accepted `=>` spelling to `->`.
+            printer.print_str("->");
+            self.arrow.print_separator_before(
+                Some(self.return_type.leftmost_token()),
+                shape.indent + printer.config.indent_width,
+                printer,
+            );
 
             let curr_line_len = printer.current_line_len();
             let return_type_shape = Shape {
@@ -1830,12 +1834,17 @@ impl FromCST for EnumDecl {
                     let variant = StrongAstError::assert_is_node(elem)?;
                     let variant = EnumVariant::from_cst(SyntaxElement::Node(variant))?;
 
-                    let comma = it
-                        .next_if_kind(SyntaxKind::COMMA)
-                        .map(t::Comma::from_cst)
-                        .transpose()?;
+                    let delimiter = match it.peek().map(SyntaxElement::kind) {
+                        Some(SyntaxKind::COMMA) => Some(EnumVariantDelimiter::Comma(
+                            t::Comma::from_cst(it.next().expect("peeked"))?,
+                        )),
+                        Some(SyntaxKind::SEMICOLON) => Some(EnumVariantDelimiter::Semicolon(
+                            t::Semicolon::from_cst(it.next().expect("peeked"))?,
+                        )),
+                        _ => None,
+                    };
 
-                    items.push(EnumItem::Variant(variant, comma));
+                    items.push(EnumItem::Variant(variant, delimiter));
                 }
                 SyntaxKind::BLOCK_ATTRIBUTE => {
                     let attr = BlockAttribute::from_cst(elem)?;
@@ -1919,20 +1928,35 @@ impl Printable for EnumDecl {
 /// Any of the valid items in an [`EnumDecl`].
 #[derive(Debug)]
 pub enum EnumItem {
-    Variant(EnumVariant, Option<t::Comma>),
+    Variant(EnumVariant, Option<EnumVariantDelimiter>),
     BlockAttribute(BlockAttribute),
+}
+
+#[derive(Debug)]
+pub enum EnumVariantDelimiter {
+    Comma(t::Comma),
+    Semicolon(t::Semicolon),
+}
+
+impl EnumVariantDelimiter {
+    fn span(&self) -> TextRange {
+        match self {
+            Self::Comma(comma) => comma.span(),
+            Self::Semicolon(semicolon) => semicolon.span(),
+        }
+    }
 }
 
 impl Printable for EnumItem {
     fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
         match self {
-            EnumItem::Variant(variant, comma) => {
+            EnumItem::Variant(variant, delimiter) => {
                 let info = variant.print(shape, printer);
-                if let Some(comma) = &comma {
-                    printer.print_raw_token(comma);
-                } else {
-                    printer.print_str(",");
+                if let Some(delimiter) = delimiter {
+                    let (leading, _) = printer.trivia.get_for_range_split(delimiter.span());
+                    printer.print_trivia_squished(leading);
                 }
+                printer.print_str(",");
                 info
             }
             EnumItem::BlockAttribute(attr) => attr.print(shape, printer),
@@ -1946,9 +1970,9 @@ impl Printable for EnumItem {
     }
     fn rightmost_token(&self) -> TextRange {
         match self {
-            EnumItem::Variant(variant, comma) => {
-                if let Some(comma) = comma {
-                    comma.span()
+            EnumItem::Variant(variant, delimiter) => {
+                if let Some(delimiter) = delimiter {
+                    delimiter.span()
                 } else {
                     variant.rightmost_token()
                 }

@@ -21,11 +21,11 @@
 /// }
 /// ```
 ///
-/// Note: `CompareError` is intentionally *not* defaulted. A defaulted associated
-/// type would be injected into a bare `T extends Comparable` bound as the
-/// concrete default, which then rejects any implementor that overrides it —
-/// so `MyError[].sort()` (a fallible comparator) would stop compiling. Leaving
-/// it undefaulted keeps the `Comparable` bound permissive over `CompareError`.
+/// Note: `CompareError` is intentionally *not* defaulted, so that every
+/// implementor states its error type outright. Defaulting it would be sound —
+/// a bare `T extends Comparable` bound pins nothing, so an implementor that
+/// overrides the default still satisfies the bound and its error type flows
+/// through — but a comparator's failure mode is worth writing down.
 interface Comparable {
   type CompareError
 

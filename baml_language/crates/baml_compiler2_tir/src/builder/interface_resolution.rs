@@ -55,7 +55,7 @@ struct MemberLoweringEnv {
     /// Type-variable names in scope for the lowering: the interface's params, the caller's
     /// extra names (method generics), `Self`'s bound name (when symbolic), and the
     /// associated-type names.
-    all_generic_params: Vec<Name>,
+    all_generic_params: Vec<crate::ty::ParamTy>,
     /// The lowering scope's bounds — the enclosing scope's (shadowed by this member's own
     /// names), the interface's declared param bounds, and `Self`'s interface bound.
     bounds: crate::lower_type_expr::TypeVarBoundsMap,
@@ -66,7 +66,7 @@ struct MemberLoweringEnv {
     iface_ty: Ty,
     /// Substitution applied to the lowered type: interface generics at their realized args,
     /// extra generics to themselves, each associated type to its pin or symbolic projection.
-    bindings: rustc_hash::FxHashMap<Name, Ty>,
+    bindings: rustc_hash::FxHashMap<crate::ty::ParamTy, Ty>,
     /// Diagnostics produced while resolving pins/projections; the caller reports them.
     diags: Vec<TirTypeError>,
 }
@@ -97,9 +97,8 @@ pub(crate) struct InterfaceMethodSpec<'db> {
     return_type: SigTypeRef,
     throws: SigTypeRef,
     /// Method generic params with their interface-bound *conjunction* (`T extends A & B`),
-    /// unified. Currently at most one element per param — the parser surfaces only the first
-    /// conjunct — but a list so an override's bounds compare correctly once §3.6 lands.
-    generics: Vec<(Name, Vec<baml_compiler2_hir::type_ref::TypeRefId>)>,
+    /// unified — every conjunct is kept, so an override's bounds compare as sets.
+    generics: Vec<baml_compiler2_ppir::item_data::GenericParamData>,
 }
 
 impl<'db> InterfaceMethodSpec<'db> {
@@ -124,17 +123,9 @@ impl<'db> InterfaceMethodSpec<'db> {
                 SigTypeRef::Id(p.type_ref),
             )
         }));
-        let generics = sig
-            .user_generic_params
-            .iter()
-            .cloned()
-            .zip(
-                func_data
-                    .generic_param_bounds
-                    .iter()
-                    .map(|bound| bound.iter().copied().collect()),
-            )
-            .collect();
+        // `user_generic_params` is the elaborated view of the same declaration
+        // list, so the declaration's params carry the bounds in the same order.
+        let generics = func_data.generic_params.clone();
         Self {
             sig_refs: &sig.type_refs,
             bound_refs: &func_data.type_refs,
@@ -155,16 +146,7 @@ impl<'db> InterfaceMethodSpec<'db> {
             let ty = p.type_ref.map_or(SigTypeRef::Missing, SigTypeRef::Id);
             (is_self, p.has_default, p.name.clone(), ty)
         }));
-        let generics = sig
-            .generic_params
-            .iter()
-            .cloned()
-            .zip(
-                sig.generic_param_bounds
-                    .iter()
-                    .map(|bound| bound.iter().copied().collect()),
-            )
-            .collect();
+        let generics = sig.generic_params.clone();
         Self {
             sig_refs: &iface_data.type_refs,
             bound_refs: &iface_data.type_refs,
@@ -179,14 +161,17 @@ impl<'db> InterfaceMethodSpec<'db> {
     /// The method's own generic parameter names — in scope (as free type variables) when
     /// lowering this spec's signature through a context.
     pub(crate) fn generic_param_names(&self) -> Vec<Name> {
-        self.generics.iter().map(|(name, _)| name.clone()).collect()
+        self.generics
+            .iter()
+            .map(|param| param.name.clone())
+            .collect()
     }
 
     /// The method's generic parameters paired with their interface-bound conjunction
     /// (declaration order, ids into [`Self::bound_store`]) — so an override's bounds can be
     /// checked against the interface method's (an implementation may not add a requirement
     /// the interface does not declare).
-    pub(crate) fn generic_bounds(&self) -> &[(Name, Vec<baml_compiler2_hir::type_ref::TypeRefId>)] {
+    pub(crate) fn generic_bounds(&self) -> &[baml_compiler2_ppir::item_data::GenericParamData] {
         &self.generics
     }
 
@@ -355,21 +340,71 @@ impl<'db> TypeInferenceBuilder<'db> {
         recv: SelfReceiver<'_>,
         access: MemberAccess<'_>,
     ) -> Option<Ty> {
-        let pkg_items = self.resolve_class_pkg_items(bound.name.package())?;
-        let def = pkg_items.lookup_type(bound.name.namespace(), bound.name.name())?;
+        let declarers = self.member_declarers_for_bound(bound, access.member);
+        self.arbitrate_member_declarers(&declarers, recv, access)
+    }
+
+    /// Resolve `access.member` on a receiver bounded by a **conjunction** of interfaces
+    /// (`T extends A & B`, `type Assoc extends J & K`).
+    ///
+    /// Unlike a single bound's `requires` closure, the conjuncts are siblings: none
+    /// shadows another, so a member declared by two of them is ambiguous exactly as two
+    /// incomparable interfaces within one closure are. Collecting every conjunct's
+    /// declarers before arbitrating is what makes that visible — resolving conjunct by
+    /// conjunct and taking the first hit silently picks one.
+    ///
+    /// Each conjunct still applies its own root-wins tiering first, and the union is
+    /// deduped by realized identity, so overlaps that denote the *same* interface (`B`
+    /// requiring `A` with the member on `A`) stay unambiguous.
+    pub(super) fn resolve_interface_member_over_conjunction(
+        &mut self,
+        bounds: &[baml_type::Interface],
+        recv: SelfReceiver<'_>,
+        access: MemberAccess<'_>,
+    ) -> Option<Ty> {
+        let mut declarers: Vec<InterfaceView<'db>> = Vec::new();
+        for iface in bounds {
+            for view in self.member_declarers_for_bound(
+                InterfaceBound {
+                    name: &iface.name,
+                    type_args: &iface.generics,
+                    associated_bindings: &iface.associated_types,
+                },
+                access.member,
+            ) {
+                if !declarers.iter().any(|v| v.realized == view.realized) {
+                    declarers.push(view);
+                }
+            }
+        }
+        self.arbitrate_member_declarers(&declarers, recv, access)
+    }
+
+    /// Every interface in `bound`'s `requires` closure that declares `member`.
+    ///
+    /// Existential / type-var receiver: the concrete type is unknown, so a member may
+    /// come from `bound.name` OR any interface it transitively `requires`. Resolution
+    /// is *tiered*, matching the associated-type resolver `resolve_through_roots`: the
+    /// directly-named interface shadows the ones it requires (root-wins), but two
+    /// *incomparable* interfaces declaring the same member are ambiguous and must be
+    /// qualified (`recv.as<I>.member`). So resolve through the root when it declares
+    /// `member`; otherwise collect the closure interfaces that declare it.
+    fn member_declarers_for_bound(
+        &mut self,
+        bound: InterfaceBound<'_>,
+        member: &Name,
+    ) -> Vec<InterfaceView<'db>> {
+        let Some(pkg_items) = self.resolve_class_pkg_items(bound.name.package()) else {
+            return Vec::new();
+        };
+        let Some(def) = pkg_items.lookup_type(bound.name.namespace(), bound.name.name()) else {
+            return Vec::new();
+        };
         let Definition::Interface(root_loc) = def else {
-            return None;
+            return Vec::new();
         };
         let db = self.context.db();
 
-        // Existential / type-var receiver: the concrete type is unknown, so a member may
-        // come from `bound.name` OR any interface it transitively `requires`. Resolution
-        // is *tiered*, matching the associated-type resolver `resolve_through_roots`: the
-        // directly-named interface shadows the ones it requires (root-wins), but two
-        // *incomparable* interfaces declaring the same member are ambiguous and must be
-        // qualified (`recv.as<I>.member`). So resolve through the root when it declares
-        // `member`; otherwise collect the closure interfaces that declare it — one
-        // resolves, ≥2 are ambiguous, none is unresolved.
         // A rigid `Self` receiver resolves associated types symbolically — do NOT fill
         // an unbound associated type with its interface default (the implementor may
         // override it); the default is applied for concrete/existential receivers by
@@ -383,10 +418,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             false,
         );
         let mut declarers: Vec<InterfaceView<'db>> = Vec::new();
-        if self
-            .interface_member_kind(root_loc, access.member)
-            .is_some()
-        {
+        if self.interface_member_kind(root_loc, member).is_some() {
             // Direct tier: the root shadows everything it transitively requires.
             if let Some((loc, args, assoc)) = closure.iter().find(|(loc, _, _)| *loc == root_loc)
                 && let Some(qtn) = crate::interfaces::interface_loc_qtn(db, *loc)
@@ -403,7 +435,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 if *loc == root_loc {
                     continue;
                 }
-                if self.interface_member_kind(*loc, access.member).is_some()
+                if self.interface_member_kind(*loc, member).is_some()
                     && let Some(qtn) = crate::interfaces::interface_loc_qtn(db, *loc)
                 {
                     let realized = baml_type::Interface::new(qtn, args.clone(), assoc.clone());
@@ -416,8 +448,18 @@ impl<'db> TypeInferenceBuilder<'db> {
                 }
             }
         }
+        declarers
+    }
 
-        match declarers.as_slice() {
+    /// One declarer resolves; ≥2 are ambiguous; none is unresolved (`None`, so the
+    /// caller can fall through to its own not-found handling).
+    fn arbitrate_member_declarers(
+        &mut self,
+        declarers: &[InterfaceView<'db>],
+        recv: SelfReceiver<'_>,
+        access: MemberAccess<'_>,
+    ) -> Option<Ty> {
+        match declarers {
             [] => None,
             [one] => self.resolve_member_on_one_interface(one, recv, &access),
             // ≥2 incomparable interfaces declare `member`: resolving it would silently pick
@@ -873,8 +915,9 @@ impl<'db> TypeInferenceBuilder<'db> {
         let db = self.context.db();
         let iface_data = baml_compiler2_ppir::item_data::interface_data(db, view.loc);
 
-        // Field lookup: this interface's own fields (no closure).
-        for field in &iface_data.fields {
+        // Field lookup: this interface's own fields (no closure). The enumeration index
+        // *is* the field's dispatch index — see `MemberResolution::InterfaceVirtualField`.
+        for (field_index, field) in iface_data.fields.iter().enumerate() {
             if &field.name != access.member {
                 continue;
             }
@@ -890,47 +933,45 @@ impl<'db> TypeInferenceBuilder<'db> {
                     attr: TyAttr::default(),
                 });
             }
-            let ty = field
-                .type_ref
-                .map(|type_ref| {
-                    // A field lowers in the same environment as a method signature — so
-                    // `key: Self.Key` resolves through the receiver's pins/impls exactly
-                    // as a `-> Self.Key` return would. Fields require a bound receiver
-                    // (checked above), so no fresh receiver generic is ever needed.
-                    let env = self.interface_member_lowering_env(view, recv, &[], None);
-                    let mut diags = env.diags;
-                    let ns = view.namespace(db);
-                    let ty = crate::generics::substitute_ty(
-                        &crate::lower_type_expr::lower_type_ref(
-                            &iface_data.type_refs,
-                            type_ref,
-                            &crate::lower_type_expr::ScopeCtx {
-                                db,
-                                package_items: view.pkg_items(db),
-                                ns_context: &ns,
-                                generic_params: &env.all_generic_params,
-                                bounds: &env.bounds,
-                                self_ty: Some(env.self_ty.clone()),
-                            },
-                            &mut diags,
-                        ),
-                        &env.bindings,
-                    );
-                    let span = baml_compiler2_ppir::item_data::interface_source_map(db, view.loc)
-                        .type_refs
-                        .span(type_ref);
-                    for diag in diags {
-                        self.context.report_at_span(diag, span);
-                    }
-                    ty
-                })
-                .unwrap_or(Ty::Unknown {
-                    attr: TyAttr::default(),
-                });
+            let ty = {
+                // A field lowers in the same environment as a method signature — so
+                // `key: Self.Key` resolves through the receiver's pins/impls exactly
+                // as a `-> Self.Key` return would. Fields require a bound receiver
+                // (checked above), so no fresh receiver generic is ever needed.
+                let env = self.interface_member_lowering_env(view, recv, &[], false);
+                let mut diags = env.diags;
+                let ns = view.namespace(db);
+                let ty = crate::generics::substitute_ty(
+                    &crate::lower_type_expr::lower_type_ref(
+                        &iface_data.type_refs,
+                        field.type_ref,
+                        &crate::lower_type_expr::ScopeCtx {
+                            db,
+                            package_items: view.pkg_items(db),
+                            ns_context: &ns,
+                            generic_params: &env.all_generic_params,
+                            bounds: &env.bounds,
+                            self_ty: Some(env.self_ty.clone()),
+                        },
+                        &mut diags,
+                    ),
+                    &env.bindings,
+                );
+                let span = baml_compiler2_ppir::item_data::interface_source_map(db, view.loc)
+                    .type_refs
+                    .span(field.type_ref);
+                for diag in diags {
+                    self.context.report_at_span(diag, span);
+                }
+                ty
+            };
             self.resolutions.insert(
                 access.at,
                 crate::inference::MemberResolution::InterfaceVirtualField {
                     iface_loc: view.loc,
+                    interface: view.realized.to_ty(),
+                    field_index: u32::try_from(field_index)
+                        .expect("interface field count fits u32"),
                     field: access.member.clone(),
                 },
             );
@@ -1005,7 +1046,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 &view,
                 SelfReceiver::Existential(iface_ty),
                 &[],
-                None,
+                false,
             );
             let ns = view.namespace(db);
             let mut diags = env.diags;
@@ -1013,29 +1054,22 @@ impl<'db> TypeInferenceBuilder<'db> {
                 if !seen.insert(field.name.clone()) {
                     continue;
                 }
-                let ty = field
-                    .type_ref
-                    .map(|type_ref| {
-                        crate::generics::substitute_ty(
-                            &crate::lower_type_expr::lower_type_ref(
-                                &iface_data.type_refs,
-                                type_ref,
-                                &crate::lower_type_expr::ScopeCtx {
-                                    db,
-                                    package_items: view.pkg_items(db),
-                                    ns_context: &ns,
-                                    generic_params: &env.all_generic_params,
-                                    bounds: &env.bounds,
-                                    self_ty: Some(env.self_ty.clone()),
-                                },
-                                &mut diags,
-                            ),
-                            &env.bindings,
-                        )
-                    })
-                    .unwrap_or(Ty::Unknown {
-                        attr: TyAttr::default(),
-                    });
+                let ty = crate::generics::substitute_ty(
+                    &crate::lower_type_expr::lower_type_ref(
+                        &iface_data.type_refs,
+                        field.type_ref,
+                        &crate::lower_type_expr::ScopeCtx {
+                            db,
+                            package_items: view.pkg_items(db),
+                            ns_context: &ns,
+                            generic_params: &env.all_generic_params,
+                            bounds: &env.bounds,
+                            self_ty: Some(env.self_ty.clone()),
+                        },
+                        &mut diags,
+                    ),
+                    &env.bindings,
+                );
                 out.push((field.name.clone(), ty));
             }
         }
@@ -1053,25 +1087,32 @@ impl<'db> TypeInferenceBuilder<'db> {
         view: &InterfaceView<'db>,
         recv: SelfReceiver<'_>,
         extra_generic_names: &[Name],
-        receiver_generic: Option<&Name>,
+        symbolic_receiver: bool,
     ) -> MemberLoweringEnv {
         let db = self.context.db();
         let data = baml_compiler2_ppir::item_data::interface_data(db, view.loc);
+        let interface_env = crate::generic_env::interface_generic_env(db, view.loc);
+        let (self_param, interface_params) = interface_env.interface_param_parts();
+        let self_param = self_param.clone();
+        let mut all_generic_params = interface_env.params().to_vec();
+        let inherited_count = all_generic_params.len();
+        crate::ty::ParamTy::extend_frame(&mut all_generic_params, extra_generic_names);
+        let method_params = &all_generic_params[inherited_count..];
         let prefer_symbolic = matches!(recv, SelfReceiver::RigidVar(_));
         let mut diags = Vec::new();
 
         // Interface generic args bound to their params; an unbound param stays its own type
         // variable. Extra (method) generics likewise. Associated types are resolved below.
         let iface_args: Vec<Ty> = if view.realized.generics.is_empty() {
-            data.generic_params
+            interface_params
                 .iter()
                 .map(|gp| Ty::TypeVar(gp.clone(), TyAttr::default()))
                 .collect()
         } else {
             view.realized.generics.clone()
         };
-        let mut base_bindings = crate::generics::bind_type_vars(&data.generic_params, &iface_args);
-        for generic_param in data.generic_params.iter().chain(extra_generic_names) {
+        let mut base_bindings = crate::generics::bind_type_vars(interface_params, &iface_args);
+        for generic_param in interface_params.iter().chain(method_params) {
             base_bindings
                 .entry(generic_param.clone())
                 .or_insert_with(|| Ty::TypeVar(generic_param.clone(), TyAttr::default()));
@@ -1083,7 +1124,13 @@ impl<'db> TypeInferenceBuilder<'db> {
         let mut pins: Vec<(Name, Ty)> = Vec::new();
         for assoc in &data.associated_types {
             let mut prior = base_bindings.clone();
-            prior.extend(pins.iter().cloned());
+            for (name, ty) in &pins {
+                let param = interface_env
+                    .resolve_any_param(name)
+                    .expect("associated type parameter is in its interface environment")
+                    .clone();
+                prior.insert(param, ty.clone());
+            }
             if let Some(ty) = self.associated_type_pin(view, assoc, prefer_symbolic, &prior) {
                 pins.push((assoc.name.clone(), ty));
             }
@@ -1111,30 +1158,17 @@ impl<'db> TypeInferenceBuilder<'db> {
         // `Self.Assoc` through its bound; an exact or union `Self` is the receiver type itself;
         // a bound-existential `Self` is the receiver's own (complete) interface existential.
         let (self_ty, self_bound_name) = match recv {
-            SelfReceiver::RigidVar(name) => (
-                Ty::TypeVar(name.clone(), TyAttr::default()),
-                Some(name.clone()),
+            SelfReceiver::RigidVar(param) => (
+                Ty::TypeVar(param.clone(), TyAttr::default()),
+                Some(param.clone()),
             ),
             SelfReceiver::ExactTy(ty) | SelfReceiver::Union(ty) => (ty.clone(), None),
-            SelfReceiver::Existential(existential_ty) => match receiver_generic {
-                Some(fresh) => (
-                    Ty::TypeVar(fresh.clone(), TyAttr::default()),
-                    Some(fresh.clone()),
-                ),
-                None => (existential_ty.clone(), None),
-            },
+            SelfReceiver::Existential(_) if symbolic_receiver => (
+                Ty::TypeVar(self_param.clone(), TyAttr::default()),
+                Some(self_param),
+            ),
+            SelfReceiver::Existential(existential_ty) => (existential_ty.clone(), None),
         };
-
-        let mut all_generic_params = data.generic_params.clone();
-        all_generic_params.extend(extra_generic_names.iter().cloned());
-        if let Some(name) = &self_bound_name
-            && !all_generic_params.contains(name)
-        {
-            all_generic_params.push(name.clone());
-        }
-        // Associated type names are in-scope type variables: a bare `Assoc` reference lowers
-        // to `Ty::TypeVar(Assoc)` and is substituted to its pin / symbolic projection below.
-        all_generic_params.extend(data.associated_types.iter().map(|assoc| assoc.name.clone()));
 
         // The lowering scope's bounds, innermost binding wins:
         //   1. the *enclosing* scope's — the receiver type may carry the caller's rigid type
@@ -1145,17 +1179,16 @@ impl<'db> TypeInferenceBuilder<'db> {
         //      interface's scope — a caller variable sharing a name must not leak a bound in);
         //   3. the interface's own declared param bounds, and `Self`'s interface bound.
         let mut bounds = self.generic_param_bounds.clone();
-        bounds.remove(&Name::new("Self"));
-        for name in &all_generic_params {
-            bounds.remove(name);
+        for param in &all_generic_params {
+            bounds.remove(param);
         }
-        for (name, param_bounds) in
+        for (param, param_bounds) in
             crate::lower_type_expr::interface_generic_param_bounds(db, view.loc)
         {
-            bounds.insert(name.clone(), param_bounds.clone());
+            bounds.insert(param.clone(), param_bounds.clone());
         }
-        if let Some(name) = &self_bound_name {
-            bounds.insert(name.clone(), vec![iface_bound]);
+        if let Some(param) = &self_bound_name {
+            bounds.insert(param.clone(), vec![iface_bound]);
         }
 
         // Final substitution map: interface args, extra generics, and each associated type
@@ -1186,7 +1219,11 @@ impl<'db> TypeInferenceBuilder<'db> {
                     diags.extend(lowered.diagnostics);
                     lowered.ty
                 };
-                bindings.insert(assoc.name.clone(), value);
+                let param = interface_env
+                    .resolve_any_param(&assoc.name)
+                    .expect("associated type parameter is in its interface environment")
+                    .clone();
+                bindings.insert(param, value);
             }
         }
 
@@ -1211,7 +1248,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         view: &InterfaceView<'db>,
         assoc: &baml_compiler2_ppir::item_data::AssociatedTypeData,
         prefer_symbolic: bool,
-        prior: &rustc_hash::FxHashMap<Name, Ty>,
+        prior: &rustc_hash::FxHashMap<crate::ty::ParamTy, Ty>,
     ) -> Option<Ty> {
         if let Some((_, ty)) = view
             .realized
@@ -1233,8 +1270,8 @@ impl<'db> TypeInferenceBuilder<'db> {
         // pins resolved so far), so a Self-referencing default (`type Items = Self.Item[]`)
         // reduces against them. The default was lowered once (symbolic `Self`) by the shared
         // query; realize substitutes this receiver for `Self` and the realized generic args.
-        let iface_generic_params =
-            &baml_compiler2_ppir::item_data::interface_data(db, view.loc).generic_params;
+        let interface_env = crate::generic_env::interface_generic_env(db, view.loc);
+        let (self_param, iface_generic_params) = interface_env.interface_param_parts();
         let self_ty = Ty::Interface(
             view.realized.name.clone(),
             view.realized.generics.clone(),
@@ -1245,6 +1282,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             &default,
             iface_generic_params,
             &view.realized.generics,
+            self_param,
             &self_ty,
         );
         Some(crate::generics::substitute_ty(&realized, prior))
@@ -1268,17 +1306,17 @@ impl<'db> TypeInferenceBuilder<'db> {
         let ns = view.namespace(db);
         let pkg_items = view.pkg_items(db);
 
-        let rigid_pin: Option<Name> = match recv {
+        let rigid_pin: Option<crate::ty::ParamTy> = match recv {
             SelfReceiver::RigidVar(pin) => Some(pin.clone()),
             _ => None,
         };
-        let generic_names: Vec<Name> = spec.generics.iter().map(|(name, _)| name.clone()).collect();
+        let generic_names: Vec<Name> = spec.generic_param_names();
 
-        // An exact receiver pins `Self` to its own type, not to a fresh method generic,
-        // so suppress the unbound-reference generic there.
-        let receiver_generic = (!access.bound
-            && !matches!(recv, SelfReceiver::ExactTy(_) | SelfReceiver::Union(_)))
-        .then(|| self.fresh_interface_method_receiver_generic(data, &generic_names));
+        let symbolic_receiver =
+            !access.bound && !matches!(recv, SelfReceiver::ExactTy(_) | SelfReceiver::Union(_));
+        let interface_env = crate::generic_env::interface_generic_env(db, view.loc);
+        let receiver_generic =
+            symbolic_receiver.then(|| interface_env.interface_param_parts().0.clone());
 
         let MemberLoweringEnv {
             all_generic_params,
@@ -1287,12 +1325,18 @@ impl<'db> TypeInferenceBuilder<'db> {
             iface_ty,
             bindings,
             mut diags,
-        } = self.interface_member_lowering_env(
-            view,
-            recv,
-            &generic_names,
-            receiver_generic.as_ref(),
-        );
+        } = self.interface_member_lowering_env(view, recv, &generic_names, symbolic_receiver);
+        let method_generic_params = generic_names
+            .iter()
+            .map(|name| {
+                all_generic_params
+                    .iter()
+                    .rev()
+                    .find(|param| param.name() == name)
+                    .expect("method generic parameter is in its lowering environment")
+                    .clone()
+            })
+            .collect::<Vec<_>>();
 
         let ctx = crate::lower_type_expr::ScopeCtx {
             db,
@@ -1363,30 +1407,21 @@ impl<'db> TypeInferenceBuilder<'db> {
         // enforcement works without the function type carrying them: the receiver generic
         // is bounded by the interface, the method's own params by their declared bounds.
         let mut function_generic_params = Vec::new();
-        let mut function_generic_param_bounds: Vec<Option<Ty>> = Vec::new();
+        let mut function_generic_param_bounds: Vec<Vec<Ty>> = Vec::new();
         if let Some(receiver_generic) = &receiver_generic {
             function_generic_params.push(receiver_generic.clone());
-            function_generic_param_bounds.push(Some(iface_ty.clone()));
+            function_generic_param_bounds.push(vec![iface_ty.clone()]);
             // The synthetic receiver bound is an interface; store it as the conjunction.
             self.generic_param_bounds.insert(
                 receiver_generic.clone(),
                 iface_ty.as_interface().into_iter().collect(),
             );
         }
-        function_generic_params.extend(generic_names.iter().cloned());
-        // Call-site bound enforcement (`function_generic_param_bounds: Vec<Option<Ty>>`) is still
-        // single-bound; take the first conjunct until that path is retyped to a conjunction
-        // (currently a no-op — the parser surfaces at most one). Conformance (E0120) reads the
-        // full conjunction via `generic_bounds()`.
-        let bound_ids: Vec<Option<baml_compiler2_hir::type_ref::TypeRefId>> = spec
-            .generics
-            .iter()
-            .map(|(_, bound)| bound.first().copied())
-            .collect();
+        function_generic_params.extend(method_generic_params);
         function_generic_param_bounds.extend(lower_generic_param_bound_refs(
             db,
             spec.bound_store(),
-            &bound_ids,
+            spec.generic_bounds(),
             pkg_items,
             &ns,
             &all_generic_params,
@@ -1427,7 +1462,10 @@ impl<'db> TypeInferenceBuilder<'db> {
         let owner_type_arg_bindings = data
             .generic_params
             .iter()
-            .filter_map(|param| bindings.get(param).cloned().map(|ty| (param.clone(), ty)))
+            .filter_map(|declared| {
+                let param = interface_env.resolve_param(&declared.name)?;
+                bindings.get(param).cloned().map(|ty| (param.clone(), ty))
+            })
             .collect::<Vec<_>>();
         if !owner_type_arg_bindings.is_empty() {
             self.owner_type_arg_binding_seed

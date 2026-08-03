@@ -32,13 +32,14 @@ pub mod symbols;
 pub mod testing;
 
 pub use check::{
-    CheckResult, NarrowedDiagnostics, collect_compiler2_diagnostics,
-    collect_compiler2_diagnostics_narrowed, collect_diagnostics,
+    CheckResult, NarrowedDiagnostics, check_files_parallel, collect_compiler2_diagnostics,
+    collect_compiler2_diagnostics_narrowed, collect_diagnostics, collect_package_level_diagnostics,
+    prime_file_indexes_parallel,
 };
 pub use client_codegen::build_symbol_pool;
 pub use db::{CursorContext, EventCallback, ProjectDatabase};
 pub use param_schema::{FieldSchema, FieldSchemaField, ParamSchema, TypeSchema};
 pub use symbols::{
-    FunctionListing, FunctionOrigin, FunctionSymbol, Symbol, SymbolKind, TestSymbol,
-    list_functions, list_functions_with_metadata, list_tests_with_metadata,
+    FunctionListing, FunctionOrigin, FunctionSourcePosition, FunctionSymbol, Symbol, SymbolKind,
+    TestSymbol, list_functions_with_metadata, list_tests_with_metadata,
 };

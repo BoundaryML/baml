@@ -4,9 +4,9 @@ use std::{
 };
 
 use anyhow::{Context, Result};
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
-use crate::measure::ArtifactMeasurement;
+use crate::{human_size, measure::ArtifactMeasurement};
 
 /// A platform baseline file containing measurements for all artifacts on that platform.
 #[derive(Debug, Serialize, Deserialize)]
@@ -17,8 +17,110 @@ pub(crate) struct PlatformBaseline {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub git_sha: Option<String>,
 
-    #[serde(default)]
+    #[serde(
+        default,
+        serialize_with = "serialize_artifacts",
+        deserialize_with = "deserialize_artifacts"
+    )]
     pub artifacts: BTreeMap<String, ArtifactMeasurement>,
+}
+
+#[derive(Serialize, Deserialize)]
+struct HumanReadableArtifactMeasurement {
+    #[serde(with = "human_size::required")]
+    file_bytes: u64,
+
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        with = "human_size::optional"
+    )]
+    stripped_bytes: Option<u64>,
+
+    #[serde(with = "human_size::required")]
+    gzip_bytes: u64,
+
+    #[serde(
+        default,
+        skip_serializing_if = "BTreeMap::is_empty",
+        with = "human_size::map"
+    )]
+    sections: BTreeMap<String, u64>,
+}
+
+impl From<&ArtifactMeasurement> for HumanReadableArtifactMeasurement {
+    fn from(measurement: &ArtifactMeasurement) -> Self {
+        Self {
+            file_bytes: measurement.file_bytes,
+            stripped_bytes: measurement.stripped_bytes,
+            gzip_bytes: measurement.gzip_bytes,
+            sections: measurement.sections.clone(),
+        }
+    }
+}
+
+impl From<HumanReadableArtifactMeasurement> for ArtifactMeasurement {
+    fn from(measurement: HumanReadableArtifactMeasurement) -> Self {
+        Self {
+            file_bytes: measurement.file_bytes,
+            stripped_bytes: measurement.stripped_bytes,
+            gzip_bytes: measurement.gzip_bytes,
+            sections: measurement.sections,
+        }
+    }
+}
+
+#[derive(PartialEq, Eq)]
+struct DisplayedArtifactMeasurement {
+    file_bytes: String,
+    stripped_bytes: Option<String>,
+    gzip_bytes: String,
+    sections: BTreeMap<String, String>,
+}
+
+impl From<&ArtifactMeasurement> for DisplayedArtifactMeasurement {
+    fn from(measurement: &ArtifactMeasurement) -> Self {
+        Self {
+            file_bytes: human_size::format(measurement.file_bytes),
+            stripped_bytes: measurement.stripped_bytes.map(human_size::format),
+            gzip_bytes: human_size::format(measurement.gzip_bytes),
+            sections: measurement
+                .sections
+                .iter()
+                .map(|(name, bytes)| (name.clone(), human_size::format(*bytes)))
+                .collect(),
+        }
+    }
+}
+
+fn serialize_artifacts<S>(
+    artifacts: &BTreeMap<String, ArtifactMeasurement>,
+    serializer: S,
+) -> Result<S::Ok, S::Error>
+where
+    S: Serializer,
+{
+    artifacts
+        .iter()
+        .map(|(name, measurement)| (name, HumanReadableArtifactMeasurement::from(measurement)))
+        .collect::<BTreeMap<_, _>>()
+        .serialize(serializer)
+}
+
+fn deserialize_artifacts<'de, D>(
+    deserializer: D,
+) -> Result<BTreeMap<String, ArtifactMeasurement>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    BTreeMap::<String, HumanReadableArtifactMeasurement>::deserialize(deserializer).map(
+        |artifacts| {
+            artifacts
+                .into_iter()
+                .map(|(name, measurement)| (name, measurement.into()))
+                .collect()
+        },
+    )
 }
 
 impl PlatformBaseline {
@@ -45,6 +147,20 @@ impl PlatformBaseline {
         std::fs::write(path, content)
             .with_context(|| format!("failed to write baseline: {}", path.display()))?;
         Ok(())
+    }
+
+    /// Whether `measurements` would serialize to the sizes already stored in this baseline.
+    pub(crate) fn measurements_match(
+        &self,
+        measurements: &BTreeMap<String, ArtifactMeasurement>,
+    ) -> bool {
+        self.artifacts.len() == measurements.len()
+            && self.artifacts.iter().all(|(name, existing)| {
+                measurements.get(name).is_some_and(|measurement| {
+                    DisplayedArtifactMeasurement::from(existing)
+                        == DisplayedArtifactMeasurement::from(measurement)
+                })
+            })
     }
 }
 
@@ -79,5 +195,55 @@ pub(crate) fn now_iso8601() -> String {
     match output {
         Ok(o) if o.status.success() => String::from_utf8_lossy(&o.stdout).trim().to_owned(),
         _ => "unknown".to_owned(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn baseline_round_trips_human_readable_sizes() {
+        let baseline = PlatformBaseline {
+            version: 1,
+            recorded_at: "2026-07-29T10:12:16Z".to_owned(),
+            git_sha: Some("abc123".to_owned()),
+            artifacts: BTreeMap::from([(
+                "baml-cli".to_owned(),
+                ArtifactMeasurement {
+                    file_bytes: 22_990_336,
+                    stripped_bytes: Some(22_990_336),
+                    gzip_bytes: 10_413_994,
+                    sections: BTreeMap::from([(".text".to_owned(), 1_024)]),
+                },
+            )]),
+        };
+
+        let toml = toml::to_string_pretty(&baseline).unwrap();
+        assert!(toml.contains(r#"file_bytes = "21.9 MiB""#));
+        assert!(toml.contains(r#"stripped_bytes = "21.9 MiB""#));
+        assert!(toml.contains(r#"gzip_bytes = "9.9 MiB""#));
+        assert!(toml.contains(r#"".text" = "1.0 KiB""#));
+
+        let parsed: PlatformBaseline = toml::from_str(&toml).unwrap();
+        let artifact = &parsed.artifacts["baml-cli"];
+        assert_eq!(artifact.file_bytes, 22_963_814);
+        assert_eq!(artifact.stripped_bytes, Some(22_963_814));
+        assert_eq!(artifact.gzip_bytes, 10_380_902);
+        assert_eq!(artifact.sections[".text"], 1_024);
+        assert_ne!(parsed.artifacts, baseline.artifacts);
+        assert!(parsed.measurements_match(&baseline.artifacts));
+    }
+
+    #[test]
+    fn checked_in_baselines_use_human_readable_sizes() {
+        for content in [
+            include_str!("../../../.ci/size-gate/aarch64-apple-darwin.toml"),
+            include_str!("../../../.ci/size-gate/wasm32-unknown-unknown.toml"),
+            include_str!("../../../.ci/size-gate/x86_64-pc-windows-msvc.toml"),
+            include_str!("../../../.ci/size-gate/x86_64-unknown-linux-gnu.toml"),
+        ] {
+            toml::from_str::<PlatformBaseline>(content).unwrap();
+        }
     }
 }

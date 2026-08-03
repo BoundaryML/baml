@@ -1,0 +1,269 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 37509
+---
+=== PPIR ===
+class user.GAliased {
+  status: user.GStatus
+  role: user.GRole
+  point: user.GPoint
+  coord: user.GCoord
+}
+class user.GAliased$stream {
+  status: user.GStatus | null
+  role: user.GRole | null
+  point: user.GPoint$stream | null
+  coord: user.GCoord$stream | null
+}
+class user.GComplex {
+  statuses: user.GStatus[]
+  maybe_status: user.GStatus?
+  role_or_status: user.GRole | user.GStatus
+  points: user.GPoint[]
+  maybe_point: user.GPoint?
+  config_map: map<string, user.GConfig>
+}
+class user.GComplex$stream {
+  statuses: user.GStatus[]
+  maybe_status: user.GStatus | null
+  role_or_status: user.GRole | user.GStatus | null
+  points: user.GPoint$stream[]
+  maybe_point: user.GPoint$stream | null
+  config_map: map<string, user.GConfig$stream>
+}
+class user.GConfig {
+  key: string
+  value: string
+}
+class user.GConfig$stream {
+  key: string | null
+  value: string | null
+}
+class user.GCoord {
+  lat: float
+  lng: float
+}
+class user.GCoord$stream {
+  lat: float | null
+  lng: float | null
+}
+class user.GIncident {
+  severity: user.GSeverity
+  priority: user.GPriority
+  title: string
+  config: user.GConfig
+}
+class user.GIncident$stream {
+  severity: user.GSeverity | null
+  priority: user.GPriority | null
+  title: string | null
+  config: user.GConfig$stream | null
+}
+class user.GPoint {
+  x: float
+  y: float
+}
+class user.GPoint$stream {
+  x: float | null
+  y: float | null
+}
+class user.GProfile {
+  status: user.GStatus
+  role: user.GRole
+  name: string
+  location: user.GPoint
+  fallback: user.GCoord
+}
+class user.GProfile$stream {
+  status: user.GStatus | null
+  role: user.GRole | null
+  name: string | null
+  location: user.GPoint$stream | null
+  fallback: user.GCoord$stream | null
+}
+enum user.GPriority {P0, P1, P2, P3}
+enum user.GRole {Admin, User, Guest}
+enum user.GSeverity {Low, Medium, High}
+enum user.GSize {Small, Medium, Large}
+enum user.GStatus {Active, Inactive, Pending}
+enum user.GroupF {F1, F2, F3, F4, F5, F6}
+class user.MFoo {
+  x: int
+}
+class user.MFoo$stream {
+  x: int | null
+}
+class user.OrderingModifiers {
+  c1: user.MFoo?
+  c2: user.MFoo?
+  c3: user.MFoo[]
+  c4: user.MFoo[]
+  c5: user.MFoo[]?
+  c6: map<string, user.MFoo>
+}
+class user.OrderingModifiers$stream {
+  c1: user.MFoo?
+  c2: user.MFoo?
+  c3: user.MFoo[]
+  c4: user.MFoo[]
+  c5: user.MFoo[]?
+  c6: map<string, user.MFoo>
+}
+class user.AliasInNestedTypes {
+  d1: user.NFoo[]
+  d2: user.NFoo[]
+  d3: user.NFoo[]
+  d4: map<user.NFoo, user.NBar>
+  d5: map<user.NFoo, user.NBar>
+  d6: user.NFoo | user.NBar[]
+  d7: user.NFoo | user.NBar[]
+  d8: user.NFoo[]
+  d9: user.NFoo
+  d10: map<string, map<user.NFoo, user.NBar>>
+}
+class user.AliasInNestedTypes$stream {
+  d1: user.NFoo$stream[]
+  d2: user.NFoo$stream[]
+  d3: user.NFoo$stream[]
+  d4: map<user.NFoo, user.NBar$stream>
+  d5: map<user.NFoo, user.NBar$stream>
+  d6: user.NFoo$stream | user.NBar$stream[]
+  d7: user.NFoo$stream | user.NBar$stream[]
+  d8: user.NFoo[]
+  d9: user.NFoo$stream | null
+  d10: map<string, map<user.NFoo, user.NBar$stream>>
+}
+class user.NBar {
+  x: int
+}
+class user.NBar$stream {
+  x: int | null
+}
+class user.NFoo {
+  x: int
+}
+class user.NFoo$stream {
+  x: int | null
+}
+class user.EA {
+  x: int
+}
+class user.EA$stream {
+  x: int | null
+}
+class user.EB {
+  x: int
+}
+class user.EB$stream {
+  x: int | null
+}
+class user.EC {
+  x: int
+}
+class user.EC$stream {
+  x: int | null
+}
+class user.EFoo {
+  x: int
+}
+class user.EFoo$stream {
+  x: int | null
+}
+type user.E1 = user.EFoo
+type user.E1$stream = user.EFoo$stream
+type user.E2 = user.EFoo
+type user.E2$stream = user.EFoo$stream
+type user.E3 = user.EFoo
+type user.E3$stream = user.EFoo$stream
+type user.E4 = user.EA | user.EB | user.EC
+type user.E4$stream = user.EA$stream | user.EB$stream | user.EC$stream
+function user.E5(x: user.EFoo) -> string  [expr] {
+  {  } "hello"
+}
+function user.E6(x: user.EFoo) -> string  [expr] {
+  {  } "hello"
+}
+function user.E7() -> user.EFoo  [expr] {
+  {  } user.EFoo { x: 1 }
+}
+function user.E8() -> user.EFoo  [expr] {
+  {  } user.EFoo { x: 1 }
+}
+class user.Fizz {
+  x: int
+}
+class user.Fizz$stream {
+  x: int | null
+}
+class user.OrderingSimple {
+  a1: user.Fizz
+  a2: user.Fizz
+  a3: user.Fizz
+  a4: user.Fizz
+  a5: user.Fizz
+  a6: user.Fizz
+  a7: user.Fizz
+  a8: user.Fizz
+  a9: user.Fizz
+}
+class user.OrderingSimple$stream {
+  a1: user.Fizz
+  a2: user.Fizz$stream | null
+  a3: user.Fizz
+  a4: user.Fizz
+  a5: user.Fizz
+  a6: user.Fizz
+  a7: user.Fizz
+  a8: user.Fizz$stream | null
+  a9: user.Fizz
+}
+class user.OrderingUnions {
+  b1: user.UA | user.UB | user.UC
+  b2: user.UA | user.UB | user.UC
+  b3: user.UA | user.UB | user.UC
+  b4: user.UA | user.UB | user.UC
+  b5: user.UA | user.UB | user.UC
+  b6: user.UA | user.UB | user.UC
+  b7: user.UA | user.UB | user.UC
+  b8: user.UA | user.UB | user.UC
+  b9: user.UA | user.UB
+  b10: user.UA | user.UB
+  b11: user.UA | user.UB
+  b12: user.UA | user.UB
+  b13: user.UA | user.UB
+  b14: user.UA | user.UB
+}
+class user.OrderingUnions$stream {
+  b1: user.UA | user.UB | user.UC
+  b2: user.UA$stream | user.UB$stream | user.UC$stream | null
+  b3: user.UA$stream | user.UB$stream | user.UC$stream | null
+  b4: user.UA$stream | user.UB$stream | user.UC$stream | null
+  b5: user.UA$stream | user.UB$stream | user.UC$stream | null
+  b6: user.UA$stream | user.UB$stream | user.UC$stream | null
+  b7: user.UA | user.UB | user.UC
+  b8: user.UA$stream | user.UB$stream | user.UC$stream | null
+  b9: user.UA | user.UB
+  b10: user.UA | user.UB
+  b11: user.UA$stream | user.UB$stream | null
+  b12: user.UA | user.UB
+  b13: user.UA$stream | user.UB$stream | null
+  b14: user.UA$stream | user.UB$stream | null
+}
+class user.UA {
+  x: int
+}
+class user.UA$stream {
+  x: int | null
+}
+class user.UB {
+  x: int
+}
+class user.UB$stream {
+  x: int | null
+}
+class user.UC {
+  x: int
+}
+class user.UC$stream {
+  x: int | null
+}

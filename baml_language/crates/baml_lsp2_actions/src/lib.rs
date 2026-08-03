@@ -12,8 +12,8 @@
 //! ## Phase 2
 //!
 //! - `file_outline(db, file) -> &Vec<OutlineItem>` — Salsa tracked query that
-//!   builds a hierarchical symbol tree from `file_symbol_contributions` and
-//!   `file_item_tree`. Cached per file revision.
+//!   builds a hierarchical symbol tree from `file_symbol_contributions` and the
+//!   item-data firewall queries. Cached per file revision.
 //! - `search_symbols(db, files, query) -> Vec<SymbolInfo>` — regular function
 //!   that iterates files calling `file_outline` and filters by query string.
 //!   Used for `workspace/symbol` and as a helper for `textDocument/documentSymbol`.
@@ -48,7 +48,6 @@ pub mod definition;
 pub mod describe;
 pub mod env_vars;
 pub mod fixes;
-pub mod grep;
 pub mod listing;
 pub mod outline;
 pub mod search;
@@ -63,8 +62,6 @@ mod completions_tests;
 mod definition_at_tests;
 #[cfg(test)]
 mod describe_tests;
-#[cfg(test)]
-mod grep_tests;
 #[cfg(test)]
 mod listing_tests;
 #[cfg(test)]
@@ -93,22 +90,22 @@ pub use annotations::{AnnotationKind, InlineAnnotation, file_annotations};
 // depend on `baml_compiler2_hir` directly just for type conversions.
 pub use baml_compiler2_hir::contributions::DefinitionKind;
 pub use check::check_file;
-pub use completions::{Completion, CompletionKind, completions_at};
+pub use completions::{Completion, CompletionInsertTextFormat, CompletionKind, completions_at};
 pub use definition::{Location, definition_at};
 pub use describe::{
     DepRef, RefSite, SymbolDescription, describe, describe_by_definition, describe_item_member,
 };
 pub use env_vars::all_env_var_names;
 pub use fixes::{Fix, FixKind, fixes_at};
-pub use grep::{GrepMode, GrepOptions, GrepResult, MatchAnnotation, TextMatch, grep, list_symbols};
 pub use listing::{
     ListingEntry, ResolvedTarget, list_namespace_items, list_package_items, non_user_package_names,
-    resolve_target,
+    resolve_builtin_type_target, resolve_target,
 };
 pub use outline::{OutlineItem, file_outline};
 pub use search::{SymbolInfo, search_symbols};
 pub use tokens::{
-    ModifierSet, SemanticToken, SemanticTokenType, TOKEN_MODIFIERS, TOKEN_TYPES, semantic_tokens,
+    ModifierSet, SemanticToken, SemanticTokenType, TOKEN_MODIFIERS, TOKEN_TYPES,
+    semantic_highlight_style, semantic_tokens,
 };
 pub use type_info::{FunctionParamInfo, TypeInfo, type_at};
 pub use usages::usages_at;

@@ -11,7 +11,7 @@ only (the 32d decision), so the method case asserts on the stub source.
 import inspect
 
 
-def test_imports():
+def test_raises_imports_symbols_reachable():
     import baml_sdk  # noqa: F401
     from baml_sdk.raises_test import (  # noqa: F401
         DocLoader,
@@ -22,7 +22,7 @@ def test_imports():
     )
 
 
-def test_union_throws_lists_all_names():
+def test_raises_union_throws_lists_all_names():
     from baml_sdk.raises_test import LoadDoc
 
     doc = inspect.getdoc(LoadDoc)
@@ -30,7 +30,7 @@ def test_union_throws_lists_all_names():
     assert doc.rstrip().endswith("Raises:\n    ParseError, TimeoutError"), repr(doc)
 
 
-def test_async_sibling_also_has_raises():
+def test_raises_async_sibling_also_has_raises():
     from baml_sdk.raises_test import LoadDoc_async
 
     doc = inspect.getdoc(LoadDoc_async)
@@ -38,7 +38,7 @@ def test_async_sibling_also_has_raises():
     assert doc.rstrip().endswith("Raises:\n    ParseError, TimeoutError"), repr(doc)
 
 
-def test_single_throws():
+def test_raises_single_throws():
     from baml_sdk.raises_test import Reparse
 
     doc = inspect.getdoc(Reparse)
@@ -46,7 +46,7 @@ def test_single_throws():
     assert doc.rstrip().endswith("Raises:\n    ParseError"), repr(doc)
 
 
-def test_summary_precedes_raises_block():
+def test_raises_summary_precedes_raises_block():
     from baml_sdk.raises_test import LoadDoc
 
     doc = inspect.getdoc(LoadDoc)
@@ -55,7 +55,7 @@ def test_summary_precedes_raises_block():
     assert "\n\nRaises:\n" in doc, repr(doc)
 
 
-def test_inferred_contract_without_clause_still_raises():
+def test_raises_inferred_contract_without_clause_still_raises():
     # No written `throws` clause, but the body throws ParseError — the
     # inferred contract (callable_throws) still surfaces a Raises block.
     from baml_sdk.raises_test import InferredThrow
@@ -65,14 +65,14 @@ def test_inferred_contract_without_clause_still_raises():
     assert doc.rstrip().endswith("Raises:\n    ParseError"), repr(doc)
 
 
-def test_non_throwing_function_has_no_raises_block():
+def test_raises_non_throwing_function_has_no_raises_block():
     from baml_sdk.raises_test import PureLen
 
     doc = inspect.getdoc(PureLen) or ""
     assert "Raises:" not in doc, repr(doc)
 
 
-def test_method_raises_block_in_pyi():
+def test_raises_method_raises_block_in_pyi():
     # Methods carry `Raises:` in the .pyi (pyright/IDE surface) per the 32d
     # decision; the runtime `.py` __doc__ trailer is free-functions-only.
     import baml_sdk.raises_test as mod

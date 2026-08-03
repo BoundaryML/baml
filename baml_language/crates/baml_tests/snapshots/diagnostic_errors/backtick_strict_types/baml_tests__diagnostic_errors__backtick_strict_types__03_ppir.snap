@@ -1,0 +1,14 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 38760
+---
+=== PPIR ===
+function user.case_a_null_interp() -> string  [expr] {
+  { let x: int? = null } `...`
+}
+function user.case_e_optional_int_interp() -> string  [expr] {
+  { let c = get_count() } `...`
+}
+function user.get_count() -> int?  [expr] {
+  {  } 42
+}

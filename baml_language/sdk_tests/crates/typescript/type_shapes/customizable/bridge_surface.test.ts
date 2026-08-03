@@ -36,7 +36,9 @@ const packageRootExports = [
   "defineInstanceFunction",
   "encodeCallArgs",
   "flushEvents",
+  "getBridgeRuntimeVersion",
   "getRuntime",
+  "getToolchainVersion",
   "getTypeMap",
   "getVersion",
   "initializeRuntime",
@@ -72,11 +74,11 @@ const constructors = [
 ] as const;
 
 describe("bridge package-root parity contract", () => {
-  it("exports the same runtime values in Node, browsers, and Workers", () => {
+  it("bridge_surface_exports_the_same_runtime_values_in_node_browsers_and_workers", () => {
     expect(Object.keys(bridge).sort()).toEqual([...packageRootExports].sort());
   });
 
-  it("preserves the public constructor names", () => {
+  it("bridge_surface_preserves_the_public_constructor_names", () => {
     for (const name of constructors) {
       const value = bridge[name];
       expect(value).toBeTypeOf("function");

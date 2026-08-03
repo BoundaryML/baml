@@ -46,9 +46,11 @@ use std::{
 ///
 /// If `uv` is managed by mise but its shim isn't on PATH, the
 /// helper falls back to `mise which uv` before giving up. On Windows,
-/// `pnpm` is commonly exposed as `pnpm.cmd`; Rust's process launcher
-/// does not consistently apply shell-style `PATHEXT` expansion when
-/// asked to spawn `pnpm`, so the helper retries the explicit shim.
+/// `pnpm` is commonly exposed as `pnpm.cmd` and `gradle` as
+/// `gradle.bat` (there is no bare `gradle.exe`); Rust's process
+/// launcher does not consistently apply shell-style `PATHEXT`
+/// expansion when asked to spawn `pnpm` / `gradle`, so the helper
+/// retries the explicit shim (`pnpm.cmd` / `gradle.bat`).
 pub fn run_test_cmd(fixture: &str, cmd: &str, cache_subdir: &str, cache_env_var: &str) {
     run_test_cmd_with_env(fixture, cmd, cache_subdir, cache_env_var, &[]);
 }
@@ -149,6 +151,35 @@ pub fn run_workspace_cmd(relative_dir: &str, cmd: &str, cache_subdir: &str, cach
         "workspace command `{cmd}` in `{relative_dir}` failed:\nstdout: {}\nstderr: {}",
         String::from_utf8_lossy(&output.stdout),
         String::from_utf8_lossy(&output.stderr)
+    );
+}
+
+/// Java-fixture variant of [`run_test_cmd`]: injects
+/// `BAML_JAVA_BRIDGE_LIB` pointing at the workspace-built
+/// `bridge_java` cdylib (produced by `crates/java/setup.sh`), so the
+/// generated `Baml` anchor can `System.load` the engine during tests.
+pub fn run_java_test_cmd(fixture: &str, cmd: &str, cache_subdir: &str, cache_env_var: &str) {
+    let manifest = std::path::PathBuf::from(
+        env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR not set; run via `cargo test`"),
+    );
+    let lib_name = if cfg!(target_os = "windows") {
+        "bridge_java.dll"
+    } else if cfg!(target_os = "macos") {
+        "libbridge_java.dylib"
+    } else {
+        "libbridge_java.so"
+    };
+    let lib = workspace_root_from_manifest(&manifest)
+        .join("target")
+        .join("debug")
+        .join(lib_name);
+    let lib_str = lib.to_string_lossy().into_owned();
+    run_test_cmd_with_env(
+        fixture,
+        cmd,
+        cache_subdir,
+        cache_env_var,
+        &[("BAML_JAVA_BRIDGE_LIB", lib_str.as_str())],
     );
 }
 
@@ -355,8 +386,10 @@ pub fn assert_typescript_web_generated_esm(fixture: &str, runtime_dir: &str) {
     let root = fs::read_to_string(generated.join("baml_sdk/index.ts"))
         .unwrap_or_else(|e| panic!("{fixture}: read generated SDK root: {e}"));
     assert!(
-        root.contains("initializeRuntimeFromBytecode(_inlinedbaml.BYTECODE)"),
-        "{fixture}: generated SDK root must initialize the web runtime from emitted bytecode"
+        root.contains(
+            "initializeRuntimeFromBytecode(_inlinedbaml.BYTECODE, _inlinedbaml.BAML_TOML)"
+        ),
+        "{fixture}: generated SDK root must initialize the web runtime from emitted bytecode and metadata"
     );
 }
 
@@ -413,6 +446,21 @@ fn run_test_process(
         #[cfg(windows)]
         Err(err) if err.kind() == ErrorKind::NotFound && prog == "pnpm" => {
             let mut fallback = Command::new("pnpm.cmd");
+            fallback
+                .args(args)
+                .current_dir(dir)
+                .env(cache_env_var, cache_dir);
+            for (k, v) in extra_env {
+                fallback.env(k, v);
+            }
+            fallback.output()
+        }
+        // Gradle ships as `gradle.bat` on Windows (no bare `gradle.exe`),
+        // and Rust's launcher doesn't reliably apply PATHEXT (see the
+        // `pnpm.cmd` note above), so retry the explicit batch launcher.
+        #[cfg(windows)]
+        Err(err) if err.kind() == ErrorKind::NotFound && prog == "gradle" => {
+            let mut fallback = Command::new("gradle.bat");
             fallback
                 .args(args)
                 .current_dir(dir)
@@ -603,6 +651,38 @@ pub mod python_pydantic2 {
     }
 
     pub use crate::python_pydantic2_test_suite as test_suite;
+}
+
+/// Java generator's test-side glue. Invoked from
+/// `crates/java/src/lib.rs` as
+/// `sdk_test_harness_runner::java::test_suite!()`.
+pub mod java {
+    /// `include!`s `OUT_DIR/java_tests.rs` — the per-fixture scaffold
+    /// emitted by `sdk_test_harness_setup::java::run_all`.
+    #[macro_export]
+    macro_rules! java_test_suite {
+        () => {
+            include!(concat!(env!("OUT_DIR"), "/java_tests.rs"));
+        };
+    }
+
+    pub use crate::java_test_suite as test_suite;
+}
+
+/// Swift generator's test-side glue. Invoked from
+/// `crates/swift/src/lib.rs` as
+/// `sdk_test_harness_runner::swift::test_suite!()`.
+pub mod swift {
+    /// `include!`s `OUT_DIR/swift_tests.rs` — the per-fixture
+    /// scaffold emitted by `sdk_test_harness_setup::swift::run_all`.
+    #[macro_export]
+    macro_rules! swift_test_suite {
+        () => {
+            include!(concat!(env!("OUT_DIR"), "/swift_tests.rs"));
+        };
+    }
+
+    pub use crate::swift_test_suite as test_suite;
 }
 
 /// C++ generator's test-side glue. Invoked from `crates/cpp/src/lib.rs` as

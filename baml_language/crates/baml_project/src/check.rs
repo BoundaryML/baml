@@ -25,7 +25,7 @@ use crate::ProjectDatabase;
 pub struct CheckResult {
     /// The collected diagnostics.
     pub diagnostics: Vec<Diagnostic>,
-    /// Maps `FileId` to source text (for Ariadne rendering).
+    /// Maps `FileId` to source text for diagnostic rendering.
     pub sources: HashMap<FileId, String>,
     /// Maps `FileId` to file path (for URL generation).
     pub file_paths: HashMap<FileId, std::path::PathBuf>,
@@ -79,59 +79,95 @@ pub fn collect_compiler2_diagnostics(db: &ProjectDatabase) -> Vec<Diagnostic> {
 
 /// Run `check_file` for every file across worker threads.
 ///
-/// Every query `check_file` reaches is read-only, and `ProjectDatabase`'s
-/// `Clone` produces a shared-storage salsa handle (the rust-analyzer
-/// concurrency model): workers share one memo table, so a scope inferred by
-/// one thread is a cache hit for every other. Output order does not matter —
-/// the caller sorts diagnostics by (file, span, message) — so workers just
-/// pull the next file off a shared atomic counter (files vary a lot in size;
-/// work-stealing beats fixed chunks).
-///
-/// The first file is checked serially before fanning out: it warms the
-/// package-level queries (package items / resolution context / alias maps)
-/// that every file reads, so cold workers don't all block on the same shared
-/// memo slots.
+/// Output order does not matter — the caller sorts diagnostics by
+/// (file, span, message).
 fn collect_file_diagnostics_parallel(
     db: &ProjectDatabase,
     source_files: &[SourceFile],
     diagnostics: &mut Vec<Diagnostic>,
 ) {
-    // `ProjectDatabase` is `Send` but deliberately not `Sync` (each salsa
-    // handle carries thread-confined query-stack state), so tasks cannot share
-    // `&db` — every task MOVES its own cloned shared-storage handle instead
-    // (an Arc bump; all clones share one memo table). Small chunks keep
-    // work-stealing effective on rayon's global pool — files vary a lot in
-    // check cost — while amortizing the per-task clone.
+    for file_diagnostics in check_files_parallel(db, source_files) {
+        diagnostics.extend(file_diagnostics);
+    }
+}
+
+/// Prime every compiler2 file's PPIR semantic index across worker threads.
+///
+/// Whole-package aggregate queries (`package_items` / `namespace_items`)
+/// fold over **every** file's semantic index, and every file's check demands
+/// them. On a cold database, the first worker to claim such an aggregate
+/// memo computes parse + lowering + indexing for the entire project inline
+/// on its own thread while every other worker parks on that memo's sync
+/// slot — the whole compile degenerates to ~1 effective core regardless of
+/// thread count. Priming the per-file indexes first keeps all workers busy
+/// on file-local work; the aggregate fold itself is then cheap for whichever
+/// worker claims it.
+///
+/// Public because warm cache paths (the serve-time throws gate, package-level
+/// diagnostics on a no-op check) demand the same aggregates outside any
+/// per-file check fan-out. Priming twice is harmless — the second wave is all
+/// memo hits.
+pub fn prime_file_indexes_parallel(db: &ProjectDatabase) {
+    const CHUNK: usize = 4;
+    let all_files = baml_compiler2_hir::compiler2_all_files(db);
+    let chunks: Vec<&[SourceFile]> = all_files.chunks(CHUNK).collect();
+    let handles: Vec<ProjectDatabase> = chunks.iter().map(|_| db.clone()).collect();
+    rayon::scope(move |s| {
+        for (chunk, db) in chunks.into_iter().zip(handles) {
+            s.spawn(move |_| {
+                for file in chunk {
+                    let _ = baml_compiler2_ppir::file_semantic_index(&db, *file);
+                }
+            });
+        }
+    });
+}
+
+/// Check `files` across worker threads, returning each file's diagnostics in
+/// input order (so callers that group per file — the LSP's diagnostics
+/// candidate — can zip results back to their inputs).
+///
+/// Every query `check_file` reaches is read-only, and `ProjectDatabase`'s
+/// `Clone` produces a shared-storage salsa handle (the rust-analyzer
+/// concurrency model): workers share one memo table, so a scope inferred by
+/// one thread is a cache hit for every other. `ProjectDatabase` is `Send`
+/// but deliberately not `Sync` (each salsa handle carries thread-confined
+/// query-stack state), so tasks cannot share `&db` — every task MOVES its
+/// own cloned handle instead (an Arc bump; all clones share one memo table).
+/// Small chunks keep work-stealing effective on rayon's global pool — files
+/// vary a lot in check cost — while amortizing the per-task clone.
+pub fn check_files_parallel(db: &ProjectDatabase, files: &[SourceFile]) -> Vec<Vec<Diagnostic>> {
     const CHUNK: usize = 4;
 
-    let Some((first, rest)) = source_files.split_first() else {
-        return;
-    };
-    diagnostics.extend(lsp2_check_file(db, *first));
+    prime_file_indexes_parallel(db);
 
-    let chunks: Vec<&[SourceFile]> = rest.chunks(CHUNK).collect();
+    let chunks: Vec<(usize, &[SourceFile])> = files.chunks(CHUNK).enumerate().collect();
     // Handles are cloned OUTSIDE the rayon scope: a `!Sync` database can't be
     // borrowed by the (Send) scope closure, so each chunk's handle is created
     // up front and MOVED into its task.
     let handles: Vec<ProjectDatabase> = chunks.iter().map(|_| db.clone()).collect();
-    let (tx, rx) = std::sync::mpsc::channel::<Vec<Diagnostic>>();
+    let (tx, rx) = std::sync::mpsc::channel::<(usize, Vec<Vec<Diagnostic>>)>();
     rayon::scope(move |s| {
-        for (chunk, db) in chunks.into_iter().zip(handles) {
+        for ((chunk_index, chunk), db) in chunks.into_iter().zip(handles) {
             let tx = tx.clone();
             s.spawn(move |_| {
-                let mut out = Vec::new();
-                for file in chunk {
-                    out.extend(lsp2_check_file(&db, *file));
-                }
+                let out: Vec<Vec<Diagnostic>> = chunk
+                    .iter()
+                    .map(|file| lsp2_check_file(&db, *file))
+                    .collect();
                 // Receiver outlives the scope; a send only fails if it
                 // dropped early, which would mean a panic elsewhere.
-                let _ = tx.send(out);
+                let _ = tx.send((chunk_index, out));
             });
         }
     });
-    for out in rx {
-        diagnostics.extend(out);
+    let mut slots: Vec<Option<Vec<Diagnostic>>> = (0..files.len()).map(|_| None).collect();
+    for (chunk_index, out) in rx {
+        for (offset, file_diagnostics) in out.into_iter().enumerate() {
+            slots[chunk_index * CHUNK + offset] = Some(file_diagnostics);
+        }
     }
+    slots.into_iter().map(Option::unwrap_or_default).collect()
 }
 
 /// The per-checked-file split alongside the merged, honest-ordered set produced
@@ -163,9 +199,32 @@ pub fn collect_compiler2_diagnostics_narrowed(
     precomputed: Vec<Diagnostic>,
 ) -> NarrowedDiagnostics {
     let source_files = baml_compiler2_hir::compiler2_all_files(db);
+    // Even a fully-served (zero-checked-files) collection ends in
+    // `package_level_diagnostics`, which derives the whole-package aggregates
+    // — prime the per-file indexes across workers so that derivation is a
+    // parallel-fed fold, not a serial parse of the project. When the caller
+    // already primed (cache gate, cold fan-out) this is all memo hits.
+    prime_file_indexes_parallel(db);
+    // Filter up front (outside any parallel region): `should_check` is a plain
+    // `&dyn Fn`, so it never has to be thread-safe.
+    let checked: Vec<SourceFile> = source_files
+        .iter()
+        .copied()
+        .filter(|file| should_check(*file))
+        .collect();
     let mut fresh: Vec<Diagnostic> = Vec::new();
-    for file in &source_files {
-        if should_check(*file) {
+    // Same parallel-by-default policy as [`collect_compiler2_diagnostics`]. On
+    // a cold check `should_check` is all-true and `checked` is the whole
+    // project, so a serial loop here would leave every core but one idle; on a
+    // warm incremental check the dirty set is small and stays on the serial
+    // arm. Cross-file collection order is not part of the contract: `merged`
+    // gets the total-order sort below, and `fresh` consumers group by owner
+    // file (per-file order is preserved — each file's diagnostics come from
+    // one `lsp2_check_file` call, appended contiguously).
+    if checked.len() > 8 {
+        collect_file_diagnostics_parallel(db, &checked, &mut fresh);
+    } else {
+        for file in &checked {
             fresh.extend(lsp2_check_file(db, *file));
         }
     }
@@ -174,6 +233,15 @@ pub fn collect_compiler2_diagnostics_narrowed(
     merged.extend(package_level_diagnostics(db, &source_files));
     sort_diagnostics(&mut merged);
     NarrowedDiagnostics { merged, fresh }
+}
+
+/// Public wrapper over the private `package_level_diagnostics` for callers that assemble
+/// per-file diagnostics themselves (the LSP's candidate builder): these
+/// cross-file diagnostics come from `package_items`, not `check_file`, so a
+/// per-file sweep alone silently misses them.
+pub fn collect_package_level_diagnostics(db: &ProjectDatabase) -> Vec<Diagnostic> {
+    let source_files = baml_compiler2_hir::compiler2_all_files(db);
+    package_level_diagnostics(db, &source_files)
 }
 
 /// Package-level diagnostics (cross-file name conflicts and namespace shadows),
@@ -287,13 +355,6 @@ impl ProjectDatabase {
             sources,
             file_paths,
         }
-    }
-
-    /// Legacy check method for backwards compatibility.
-    /// Returns (diagnostics, sources) tuple.
-    pub fn check_legacy(&self) -> (Vec<Diagnostic>, HashMap<FileId, String>) {
-        let result = self.check();
-        (result.diagnostics, result.sources)
     }
 
     /// Check a single file and return diagnostics for that file only.

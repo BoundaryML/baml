@@ -52,6 +52,49 @@ test "associated_type_projection_in_throws_position_runs" {
     assert.equal(atp_throws_main(), "default:boom|generic:boom")
 }
 
+class CaeKaboom {
+    data: int
+}
+
+interface CaeDriver<Input> {
+    type Output
+    type Error
+
+    function drive(self, input: Input) -> Self.Output throws Self.Error
+}
+
+class CaeTask<T> {
+    value: T
+
+    function drive<Output, Error, D extends CaeDriver<CaeTask<T>, Output = Output, Error = Error>>(
+        self,
+        driver: D,
+    ) -> Output throws Error {
+        driver.drive(self)
+    }
+}
+
+class CaeIntDriver {}
+
+implements CaeDriver<CaeTask<int>> for CaeIntDriver {
+    type Output = int
+    type Error = CaeKaboom
+
+    function drive(self, input: CaeTask<int>) -> int throws CaeKaboom {
+        throw CaeKaboom { data: input.value }
+    }
+}
+
+function cae_main() -> int {
+    CaeTask<int> { value: 42 }.drive(CaeIntDriver {}) catch (e) {
+        let error: CaeKaboom => error.data
+    }
+}
+
+test "concrete_associated_error_binds_generic_throws_at_call_site" {
+    assert.equal(cae_main(), 42)
+}
+
 // ─── default_method_self_call_yielding_associated_type_runs ──────────────────
 
 interface Describable {

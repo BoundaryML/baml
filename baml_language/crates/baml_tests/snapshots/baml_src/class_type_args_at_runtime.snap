@@ -3,76 +3,86 @@ source: crates/baml_tests/tests/baml_src.rs
 ---
 function class_type_args_at_runtime.$init_test_ns_class_type_args_at_runtime_class_type_args_at_runtime(registry: testing.TestCollector) -> null {
     load_var registry
+    load_const "root.class_type_args_at_runtime"
     load_const "method_sees_class_type_arg_int"
     make_closure .<lambda($init_test_ns_class_type_args_at_runtime_class_type_args_at_runtime, 0)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.class_type_args_at_runtime"
     load_const "method_sees_class_type_arg_string"
     make_closure .<lambda($init_test_ns_class_type_args_at_runtime_class_type_args_at_runtime, 1)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.class_type_args_at_runtime"
     load_const "method_sees_composite_class_type_arg"
     make_closure .<lambda($init_test_ns_class_type_args_at_runtime_class_type_args_at_runtime, 2)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.class_type_args_at_runtime"
     load_const "union_dispatch_generic_class_int"
     make_closure .<lambda($init_test_ns_class_type_args_at_runtime_class_type_args_at_runtime, 3)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.class_type_args_at_runtime"
     load_const "union_dispatch_generic_class_string"
     make_closure .<lambda($init_test_ns_class_type_args_at_runtime_class_type_args_at_runtime, 4)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.class_type_args_at_runtime"
     load_const "is_type_parametric_class_same_args"
     make_closure .<lambda($init_test_ns_class_type_args_at_runtime_class_type_args_at_runtime, 5)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.class_type_args_at_runtime"
     load_const "is_type_parametric_class_different_args"
     make_closure .<lambda($init_test_ns_class_type_args_at_runtime_class_type_args_at_runtime, 6)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.class_type_args_at_runtime"
     load_const "is_type_bare_class_still_matches"
     make_closure .<lambda($init_test_ns_class_type_args_at_runtime_class_type_args_at_runtime, 7)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.class_type_args_at_runtime"
     load_const "closure_inside_method_captures_class_type_arg"
     make_closure .<lambda($init_test_ns_class_type_args_at_runtime_class_type_args_at_runtime, 8)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.class_type_args_at_runtime"
     load_const "closure_inside_method_survives_gc"
     make_closure .<lambda($init_test_ns_class_type_args_at_runtime_class_type_args_at_runtime, 9)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_const null
     return
 }
 
-function class_type_args_at_runtime.Box.describe(self: class_type_args_at_runtime.Box<T>) -> string {
+function class_type_args_at_runtime.Box.describe(self: class_type_args_at_runtime.Box<#0>) -> string {
     load_type #0
     call baml.TypeValue.baml.ToString.to_string
     return
 }
 
-function class_type_args_at_runtime.Box2.make_describer(self: class_type_args_at_runtime.Box2<T>) -> () -> string throws never {
+function class_type_args_at_runtime.Box2.make_describer(self: class_type_args_at_runtime.Box2<#0>) -> () -> string throws never {
     load_type #0
     make_closure .<lambda(Box2.make_describer, 0)>, captures=0, ntypeargs=1
     return

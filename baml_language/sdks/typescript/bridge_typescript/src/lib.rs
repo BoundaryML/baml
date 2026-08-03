@@ -10,6 +10,8 @@ pub mod host_value;
 pub mod media;
 pub mod runtime;
 mod types;
+pub mod unhandled_spawn;
+mod version;
 
 use napi_derive::napi;
 
@@ -17,7 +19,9 @@ use napi_derive::napi;
 fn init() {
     if let Err(error) = bridge_cffi::register_bridge(bridge_cffi::BridgeInfo {
         language: bridge_cffi::BridgeLanguage::NodeJs,
-        sdk_version: baml_version::CANONICAL_VERSION.to_string(),
+        bridge_runtime_name: version::BRIDGE_RUNTIME_NAME.to_string(),
+        bridge_runtime_version: version::BRIDGE_RUNTIME_VERSION.to_string(),
+        toolchain_version: version::TOOLCHAIN_VERSION.to_string(),
     }) {
         eprintln!("failed to register BAML Node.js bridge: {error}");
     }
@@ -32,12 +36,29 @@ fn init() {
 
 #[napi]
 pub fn get_version() -> &'static str {
-    baml_version::CANONICAL_VERSION
+    get_toolchain_version()
+}
+
+#[napi(js_name = "getToolchainVersion")]
+pub fn get_toolchain_version() -> &'static str {
+    version::TOOLCHAIN_VERSION
+}
+
+#[napi(js_name = "getBridgeRuntimeVersion")]
+pub fn get_bridge_runtime_version() -> &'static str {
+    version::BRIDGE_RUNTIME_VERSION
 }
 
 /// No-op: tracing has been removed. Kept as a live symbol for ABI stability.
 #[napi]
 pub fn flush_events() {}
+
+#[napi(js_name = "shutdownRuntime")]
+pub async fn shutdown_runtime() -> napi::Result<()> {
+    bridge_cffi::shutdown_runtime()
+        .await
+        .map_err(errors::bridge_error_to_napi)
+}
 
 #[napi(js_name = "newFunctionCall")]
 pub fn new_function_call() -> String {

@@ -154,6 +154,7 @@ impl BexLspRequest for BexMulitProject {
         // Negotiate the position encoding first: UTF-8 when offered,
         // UTF-16 baseline otherwise. Everything after this reads the cell.
         let encoding = self.negotiate_encoding(&params.capabilities);
+        let snippet_support = self.negotiate_snippet_support(&params.capabilities);
 
         let mut roots = Vec::new();
 
@@ -175,9 +176,10 @@ impl BexLspRequest for BexMulitProject {
         }
 
         tracing::info!(
-            "Workspace roots: {:?}; position encoding: {:?}",
+            "Workspace roots: {:?}; position encoding: {:?}; snippet support: {}",
             roots.iter().map(vfs::VfsPath::as_str).collect::<Vec<_>>(),
             encoding,
+            snippet_support,
         );
 
         *self.workspace_roots.lock().unwrap() = roots;
@@ -537,8 +539,6 @@ impl BexLspRequest for BexMulitProject {
         &self,
         params: lsp_request_params!("textDocument/completion"),
     ) -> Result<lsp_request_result!("textDocument/completion"), LspError> {
-        use lsp_types::CompletionItemKind;
-
         // Use compiler2 completions_at — context-aware completions from CST + HIR/TIR.
         let completions = self.compute_on_position(
             &params.text_document_position,
@@ -546,42 +546,10 @@ impl BexLspRequest for BexMulitProject {
         )?;
 
         // Convert domain Completion → LSP CompletionItem.
+        let snippet_support = self.snippet_support_for_request()?;
         let items: Vec<_> = completions
             .into_iter()
-            .map(|item| lsp_types::CompletionItem {
-                label: item.label,
-                kind: Some(match item.kind {
-                    baml_lsp2_actions::CompletionKind::Keyword => CompletionItemKind::KEYWORD,
-                    baml_lsp2_actions::CompletionKind::Function => CompletionItemKind::FUNCTION,
-                    baml_lsp2_actions::CompletionKind::Class => CompletionItemKind::CLASS,
-                    baml_lsp2_actions::CompletionKind::Enum => CompletionItemKind::ENUM,
-                    baml_lsp2_actions::CompletionKind::EnumVariant => {
-                        CompletionItemKind::ENUM_MEMBER
-                    }
-                    baml_lsp2_actions::CompletionKind::Field => CompletionItemKind::FIELD,
-                    baml_lsp2_actions::CompletionKind::Variable => CompletionItemKind::VARIABLE,
-                    baml_lsp2_actions::CompletionKind::Primitive => {
-                        CompletionItemKind::TYPE_PARAMETER
-                    }
-                    baml_lsp2_actions::CompletionKind::TypeAlias => {
-                        CompletionItemKind::TYPE_PARAMETER
-                    }
-                    baml_lsp2_actions::CompletionKind::TemplateString => {
-                        CompletionItemKind::FUNCTION
-                    }
-                    baml_lsp2_actions::CompletionKind::Client => CompletionItemKind::MODULE,
-                    baml_lsp2_actions::CompletionKind::Generator => CompletionItemKind::MODULE,
-                    baml_lsp2_actions::CompletionKind::Test => CompletionItemKind::METHOD,
-                    baml_lsp2_actions::CompletionKind::RetryPolicy => CompletionItemKind::MODULE,
-                    baml_lsp2_actions::CompletionKind::Method => CompletionItemKind::METHOD,
-                    baml_lsp2_actions::CompletionKind::Module => CompletionItemKind::MODULE,
-                    baml_lsp2_actions::CompletionKind::Parameter => CompletionItemKind::FIELD,
-                }),
-                detail: item.detail,
-                insert_text: item.insert_text,
-                sort_text: item.sort_text,
-                ..Default::default()
-            })
+            .map(|item| completion_to_lsp(item, snippet_support))
             .collect();
 
         if items.is_empty() {
@@ -852,21 +820,24 @@ impl BexLspRequest for BexMulitProject {
         let path = self.get_path_from_uri(&params.text_document.uri)?;
         let root_path = Self::get_baml_project_root(&path)?;
         let project_handle = self.get_or_create_project(root_path)?;
-        // Get current file text from the project database.
-        let text = {
+        // Format the current source file in the project database. Keep the
+        // text for edit comparison and diagnostics, but reuse the existing
+        // Salsa input instead of constructing a second ProjectDatabase and
+        // reparsing cloned source through `baml_fmt::format`.
+        let (text, formatted) = {
             let guard = read_for_request(&project_handle.project)?;
             let lsp_db = guard.db();
             let Some(source_file) = lsp_db.get_file(std::path::Path::new(path.as_str())) else {
                 return Err(LspError::FileNotFound(path));
             };
-            source_file.text(lsp_db).clone()
+            let text = source_file.text(lsp_db).clone();
+            let formatted =
+                baml_fmt::format_salsa(lsp_db, source_file, baml_fmt::FormatOptions::default());
+            (text, formatted)
         };
 
-        // Map LSP FormattingOptions → baml_fmt FormatOptions.
-        let options = baml_fmt::FormatOptions::default();
-
         // Run the formatter. On parse errors, return no edits (silently skip).
-        let formatted = match baml_fmt::format(&text, &options) {
+        let formatted = match formatted {
             Ok(f) => f,
             Err(baml_fmt::FormatterError::ParseErrors { .. }) => return Ok(None),
             Err(baml_fmt::FormatterError::StrongAstError(e)) => {
@@ -897,6 +868,52 @@ impl BexLspRequest for BexMulitProject {
             },
             new_text: formatted,
         }]))
+    }
+}
+
+fn completion_to_lsp(
+    item: baml_lsp2_actions::Completion,
+    snippet_support: bool,
+) -> lsp_types::CompletionItem {
+    use lsp_types::{CompletionItemKind, InsertTextFormat};
+
+    let (insert_text, insert_text_format) = match item.insert_text_format {
+        baml_lsp2_actions::CompletionInsertTextFormat::Snippet if !snippet_support => (None, None),
+        baml_lsp2_actions::CompletionInsertTextFormat::PlainText => {
+            (item.insert_text, Some(InsertTextFormat::PLAIN_TEXT))
+        }
+        baml_lsp2_actions::CompletionInsertTextFormat::Snippet => {
+            (item.insert_text, Some(InsertTextFormat::SNIPPET))
+        }
+    };
+
+    lsp_types::CompletionItem {
+        label: item.label,
+        kind: Some(match item.kind {
+            baml_lsp2_actions::CompletionKind::Keyword => CompletionItemKind::KEYWORD,
+            baml_lsp2_actions::CompletionKind::Function => CompletionItemKind::FUNCTION,
+            baml_lsp2_actions::CompletionKind::Class => CompletionItemKind::CLASS,
+            baml_lsp2_actions::CompletionKind::Enum => CompletionItemKind::ENUM,
+            baml_lsp2_actions::CompletionKind::EnumVariant => CompletionItemKind::ENUM_MEMBER,
+            baml_lsp2_actions::CompletionKind::Field => CompletionItemKind::FIELD,
+            baml_lsp2_actions::CompletionKind::Variable => CompletionItemKind::VARIABLE,
+            baml_lsp2_actions::CompletionKind::Primitive
+            | baml_lsp2_actions::CompletionKind::TypeAlias => CompletionItemKind::TYPE_PARAMETER,
+            baml_lsp2_actions::CompletionKind::TemplateString => CompletionItemKind::FUNCTION,
+            baml_lsp2_actions::CompletionKind::Client
+            | baml_lsp2_actions::CompletionKind::Generator
+            | baml_lsp2_actions::CompletionKind::RetryPolicy
+            | baml_lsp2_actions::CompletionKind::Module => CompletionItemKind::MODULE,
+            baml_lsp2_actions::CompletionKind::Test | baml_lsp2_actions::CompletionKind::Method => {
+                CompletionItemKind::METHOD
+            }
+            baml_lsp2_actions::CompletionKind::Parameter => CompletionItemKind::FIELD,
+        }),
+        detail: item.detail,
+        insert_text,
+        insert_text_format,
+        sort_text: item.sort_text,
+        ..Default::default()
     }
 }
 
@@ -1208,5 +1225,31 @@ mod tests {
             server_capabilities(PositionEncoding::UTF16).position_encoding,
             Some(lsp_types::PositionEncodingKind::UTF16)
         );
+    }
+
+    #[test]
+    fn completion_conversion_preserves_snippet_format() {
+        let completion = baml_lsp2_actions::Completion {
+            label: "function".to_string(),
+            kind: baml_lsp2_actions::CompletionKind::Keyword,
+            detail: Some("function declaration".to_string()),
+            insert_text: Some("function ${1:Name}() {\n  $0\n}".to_string()),
+            insert_text_format: baml_lsp2_actions::CompletionInsertTextFormat::Snippet,
+            sort_text: Some("02_function".to_string()),
+        };
+        let item = completion_to_lsp(completion.clone(), true);
+
+        assert_eq!(
+            item.insert_text.as_deref(),
+            Some("function ${1:Name}() {\n  $0\n}")
+        );
+        assert_eq!(
+            item.insert_text_format,
+            Some(lsp_types::InsertTextFormat::SNIPPET)
+        );
+
+        let item = completion_to_lsp(completion, false);
+        assert_eq!(item.insert_text, None);
+        assert_eq!(item.insert_text_format, None);
     }
 }

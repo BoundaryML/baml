@@ -12,6 +12,9 @@ use baml_project::ProjectDatabase;
 use printer::{Printer, Shape};
 pub use trivia_classifier::{EmittableTrivia, TriviaInfo};
 
+#[cfg(test)]
+mod formatter_scenario_tests;
+
 /// Runs the formatter on the given source code.
 ///
 /// Also see [`format_salsa`] if you already have a [`salsa::Database`] with the source files in it.
@@ -33,11 +36,22 @@ pub fn format_salsa(
 ) -> Result<String, FormatterError> {
     let tokens = baml_compiler_lexer::lex_file(db, file);
     let (parsed, errors) = baml_compiler_parser::parse_file(&tokens);
+    let cst = SyntaxNode::new_root(parsed);
+
+    // Honor the documented escape hatch at the shared library boundary so
+    // CLI and LSP behavior cannot diverge. Inspect parser-classified comment
+    // tokens rather than the raw source: directive-like text inside a string
+    // must not disable formatting. This check intentionally precedes the parse
+    // error gate so the directive can protect an incomplete or intentionally
+    // non-canonical file.
+    if has_ignore_directive(&cst) {
+        return Ok(file.text(db).clone());
+    }
+
     if !errors.is_empty() {
         return Err(FormatterError::ParseErrors(errors));
     }
 
-    let cst = SyntaxNode::new_root(parsed);
     let trivia = TriviaInfo::classify_trivia(&cst);
     let strong_ast = ast::SourceFile::from_cst(SyntaxElement::Node(cst))?;
 
@@ -53,6 +67,30 @@ pub fn format_salsa(
     Ok(printer.output)
 }
 
+fn has_ignore_directive(cst: &SyntaxNode) -> bool {
+    cst.descendants_with_tokens().any(|element| {
+        let SyntaxElement::Token(token) = element else {
+            return false;
+        };
+        matches!(
+            token.kind(),
+            baml_db::baml_compiler_syntax::SyntaxKind::LINE_COMMENT
+                | baml_db::baml_compiler_syntax::SyntaxKind::BLOCK_COMMENT
+        ) && comment_contains_ignore_directive(token.text())
+    })
+}
+
+fn comment_contains_ignore_directive(comment: &str) -> bool {
+    const PREFIX: &str = "baml-format";
+    let lowercase = comment.to_ascii_lowercase();
+    lowercase.match_indices(PREFIX).any(|(start, _)| {
+        lowercase[start + PREFIX.len()..]
+            .trim_start()
+            .strip_prefix(':')
+            .is_some_and(|rest| rest.trim_start().starts_with("ignore"))
+    })
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct FormatOptions {
     /// Maximum line width before wrapping kicks in. Default: `100`
@@ -64,10 +102,13 @@ impl Default for FormatOptions {
     fn default() -> Self {
         Self {
             line_width: 100,
-            indent_width: 4,
+            indent_width: CANONICAL_INDENT_WIDTH,
         }
     }
 }
+
+/// Canonical indentation used by the CLI, LSP, and default library formatter.
+pub const CANONICAL_INDENT_WIDTH: usize = 4;
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum FormatterError {
@@ -75,6 +116,21 @@ pub enum FormatterError {
     ParseErrors(Vec<ParseError>),
     #[error("{0}")]
     StrongAstError(#[from] ast::StrongAstError),
+}
+
+#[cfg(test)]
+mod format_options_tests {
+    use super::*;
+
+    #[test]
+    fn default_options_use_the_canonical_four_space_indent() {
+        let options = FormatOptions::default();
+        assert_eq!(CANONICAL_INDENT_WIDTH, 4);
+        assert_eq!(options.indent_width, CANONICAL_INDENT_WIDTH);
+        let formatted = format("function value() -> int {\n  result\n}\n", &options)
+            .expect("default formatter options should format a function body");
+        assert_eq!(formatted, "function value() -> int {\n    result\n}\n");
+    }
 }
 
 #[cfg(test)]
@@ -139,6 +195,47 @@ mod lambda_format_tests {
         assert_eq!(formatted, second, "formatter should be idempotent");
     }
 
+    /// A JS/TS-style fat arrow is an unambiguous punctuation slip in a
+    /// function signature. The shared parser accepts it and the formatter
+    /// repairs it to canonical BAML `->` rather than rejecting the file.
+    #[test]
+    fn test_top_level_fat_arrow_is_repaired() {
+        let source = "function add(a: int, b: int) => int {\n    a + b\n}\n";
+        let options = FormatOptions::default();
+        let formatted = format(source, &options).expect("formatter should repair a fat arrow");
+        assert_eq!(
+            formatted,
+            "function add(a: int, b: int) -> int {\n    a + b\n}\n"
+        );
+        let second = format(&formatted, &options).expect("formatter should be idempotent");
+        assert_eq!(formatted, second, "formatter should be idempotent");
+    }
+
+    #[test]
+    fn test_expression_bodied_lambda_is_rejected() {
+        let options = FormatOptions::default();
+        for arrow in ["->", "=>"] {
+            let source = format!(
+                "function apply() -> int {{\n    let add_one = (x: int) {arrow} x + 1\n    add_one(41)\n}}\n"
+            );
+            assert!(
+                format(&source, &options).is_err(),
+                "formatter must reject a lambda body without braces for {arrow}"
+            );
+        }
+    }
+
+    #[test]
+    fn test_arrow_comments_survive_annotated_and_block_bodies() {
+        let source = "function top() => /* result */ int { 1 }\n\nfunction apply() -> int {\n    let identity = (x: int) => /* body */ { x }\n    identity(1)\n}\n";
+        let options = FormatOptions::default();
+        let formatted = format(source, &options).expect("formatter should preserve comments");
+        assert!(formatted.contains("-> /* result */ int"));
+        assert!(formatted.contains("-> /* body */ {"));
+        let second = format(&formatted, &options).expect("formatter should be idempotent");
+        assert_eq!(formatted, second, "formatter should be idempotent");
+    }
+
     #[test]
     fn test_top_level_interface_spacing_is_idempotent() {
         let source = r#"interface Named {
@@ -199,6 +296,28 @@ implements<T extends Named> Printable for Box<T> {
                 "formatter should be idempotent for:\n{source}"
             );
         }
+    }
+}
+
+#[cfg(test)]
+mod ignore_directive_tests {
+    use super::*;
+
+    #[test]
+    fn line_comment_directive_preserves_invalid_source_verbatim() {
+        let source = "// BAML-FORMAT : ignore\nfunction unfinished(\n";
+        let formatted = format(source, &FormatOptions::default())
+            .expect("the ignore directive should bypass parse errors");
+        assert_eq!(formatted, source);
+    }
+
+    #[test]
+    fn directive_text_inside_a_string_does_not_disable_formatting() {
+        let source = "function main() -> string {\n  let marker = \"// baml-format: ignore\";\n  marker\n}\n";
+        let formatted = format(source, &FormatOptions::default())
+            .expect("directive-like string content is ordinary source text");
+        assert_ne!(formatted, source);
+        assert!(formatted.contains("    let marker = \"// baml-format: ignore\";"));
     }
 }
 
@@ -397,6 +516,135 @@ mod linear_formatter_regression_tests {
                 && formatted.contains("baml.spawn.options"),
             "keyword path segments should round-trip, got:\n{formatted}"
         );
+        let second = format(&formatted, &options).expect("formatter should be idempotent");
+        assert_eq!(formatted, second, "formatter should be idempotent");
+    }
+}
+
+#[cfg(test)]
+mod spawn_and_hug_format_tests {
+    use super::*;
+
+    fn assert_formats_to(source: &str, expected: &str) {
+        let options = FormatOptions::default();
+        let formatted = format(source, &options).expect("formatter should succeed");
+        assert_eq!(formatted, expected);
+        let second = format(&formatted, &options).expect("formatter should be idempotent");
+        assert_eq!(formatted, second, "formatter should be idempotent");
+    }
+
+    /// A relocated `spawn { … }` body reindents like any block instead of
+    /// printing verbatim at its original columns, and a call whose sole
+    /// argument is a spawn hugs the parens (`push(spawn {` … `});`).
+    #[test]
+    fn test_spawn_call_arg_hugs_parens() {
+        let source = "function f(calls: int[]) -> int[] {\n    let futures: baml.future.Future<int, null>[] = [];\n    for (let c in calls) {\n        futures\n            .push(\n                spawn {\n            compute_something_with(c, \"a long string to push this past the line width limit!\")\n        },\n            );\n    }\n    await baml.future.all(futures)\n}\n";
+        let expected = "function f(calls: int[]) -> int[] {\n    let futures: baml.future.Future<int, null>[] = [];\n    for (let c in calls) {\n        futures.push(spawn {\n            compute_something_with(c, \"a long string to push this past the line width limit!\")\n        });\n    }\n    await baml.future.all(futures)\n}\n";
+        assert_formats_to(source, expected);
+    }
+
+    /// A lambda argument hugs the call parens the same way, including with
+    /// leading non-block arguments on the call line.
+    #[test]
+    fn test_trailing_lambda_arg_hugs_parens() {
+        let source = "function f(rows: int[]) -> int {\n    rows.reduce(0, (acc: int, x: int) -> {\n        acc + x + 1000000 + 2000000 + 3000000 + 4000000 + 5000000 + 6000000\n    })\n}\n";
+        assert_formats_to(source, source);
+    }
+
+    /// Width used by a hugged trailing argument includes the chain prefix
+    /// exactly once. Double-counting `receiver.method` would wrap parameters
+    /// even though this lambda header fits the configured line width.
+    #[test]
+    fn test_hug_width_accounts_for_chain_prefix_once() {
+        let source = "function f() -> int {\n    receiver.method((a: int, b: int) -> {\n        a + b\n    })\n}\n";
+        let options = FormatOptions {
+            line_width: 45,
+            ..FormatOptions::default()
+        };
+        let formatted = format(source, &options).expect("formatter should succeed");
+        assert_eq!(formatted, source);
+        let second = format(&formatted, &options).expect("formatter should be idempotent");
+        assert_eq!(formatted, second, "formatter should be idempotent");
+    }
+
+    /// The hug layout may remove the trailing comma, but comments attached to
+    /// the final argument and comma must remain in the formatted output.
+    #[test]
+    fn test_hug_preserves_trailing_argument_comments() {
+        let source = "function f() -> int {\n    consume(0, /* before spawn */ spawn {\n        let x = 1;\n        x\n    } /* after spawn */, /* after comma */)\n}\n";
+        let options = FormatOptions::default();
+        let formatted = format(source, &options).expect("formatter should succeed");
+        for marker in [
+            "/* before spawn */",
+            "/* after spawn */",
+            "/* after comma */",
+        ] {
+            assert!(
+                formatted.contains(marker),
+                "hug comment {marker} must survive, got:\n{formatted}"
+            );
+        }
+        let second = format(&formatted, &options).expect("formatter should be idempotent");
+        assert_eq!(formatted, second, "formatter should be idempotent");
+    }
+
+    /// A simple spawn body (`{ tail }`) stays on one line when it fits.
+    #[test]
+    fn test_simple_spawn_stays_single_line() {
+        let source = "function f() -> int {\n    let nm = \"n\";\n    let a = spawn nm { 7 };\n    let b = spawn with baml.spawn.options(name = nm) { 8 };\n    (await a) + (await b)\n}\n";
+        assert_formats_to(source, source);
+    }
+
+    /// A spawn body with statements expands into a normal indented block.
+    #[test]
+    fn test_multi_statement_spawn_body_expands() {
+        let source =
+            "function f() -> int {\n    let a = spawn { let x = 1; x + 1 };\n    await a\n}\n";
+        let expected = "function f() -> int {\n    let a = spawn {\n        let x = 1;\n        x + 1\n    };\n    await a\n}\n";
+        assert_formats_to(source, expected);
+    }
+
+    /// An empty block with no interior comment collapses to `{}` — most
+    /// visibly in match arms (`null => {},`) and empty `if` bodies.
+    #[test]
+    fn test_empty_blocks_collapse() {
+        let source = "function f(p: string?) -> int {\n    match (p) {\n        null => {\n        },\n        let t: string => {\n            log(t);\n        },\n    }\n    if (p == null) {\n    }\n    0\n}\n";
+        let expected = "function f(p: string?) -> int {\n    match (p) {\n        null => {},\n        let t: string => {\n            log(t);\n        },\n    }\n    if (p == null) {}\n    0\n}\n";
+        assert_formats_to(source, expected);
+    }
+
+    /// An empty block that holds a comment must NOT collapse — the comment
+    /// would be lost.
+    #[test]
+    fn test_empty_block_with_comment_stays_multi_line() {
+        let source = "function f(p: string?) -> int {\n    if (p == null) {\n        // nothing to do\n    }\n    0\n}\n";
+        let options = FormatOptions::default();
+        let formatted = format(source, &options).expect("formatter should succeed");
+        assert!(
+            formatted.contains("// nothing to do"),
+            "interior comment must survive, got:\n{formatted}"
+        );
+        let second = format(&formatted, &options).expect("formatter should be idempotent");
+        assert_eq!(formatted, second, "formatter should be idempotent");
+    }
+
+    #[test]
+    fn test_spawn_header_comments_are_preserved() {
+        let source = "function f(name: string) -> int {\n    let future = spawn // after spawn\n        name /* before with */ with /* before first */ first(), /* after comma */ second() /* before body */ { 1 };\n    await future\n}\n";
+        let options = FormatOptions::default();
+        let formatted = format(source, &options).expect("formatter should succeed");
+        for marker in [
+            "// after spawn",
+            "/* before with */",
+            "/* before first */",
+            "/* after comma */",
+            "/* before body */",
+        ] {
+            assert!(
+                formatted.contains(marker),
+                "spawn header comment {marker} must survive, got:\n{formatted}"
+            );
+        }
         let second = format(&formatted, &options).expect("formatter should be idempotent");
         assert_eq!(formatted, second, "formatter should be idempotent");
     }
@@ -951,6 +1199,18 @@ mod map_literal_format_tests {
     fn test_non_empty_map_keeps_interior_padding() {
         // Guard the established behavior: non-empty maps keep `{ ... }` padding.
         let source = "function f() -> int {\n    { \"a\": 1 };\n    0\n}\n";
+        assert_formats_to(source, source);
+    }
+
+    #[test]
+    fn test_property_shorthand_is_preserved() {
+        let source = "function f(options: string) -> map<string, string> {\n    { options, explicit: options }\n}\n";
+        assert_formats_to(source, source);
+    }
+
+    #[test]
+    fn test_object_property_shorthand_is_preserved() {
+        let source = "class Config {\n    options: string,\n}\n\nfunction f(options: string) -> Config {\n    Config { options }\n}\n";
         assert_formats_to(source, source);
     }
 

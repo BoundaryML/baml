@@ -2,62 +2,54 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === COMPILER2 DIAGNOSTICS ===
-  [type] error: expected 1 argument(s), got 2
-    ╭─[ closure_errors.baml:21:3 ]
-    │
- 21 │   transform(fmt, "hello")
-    │   ───────────┬───────────  
-    │              ╰───────────── expected 1 argument(s), got 2
-    │ 
-    │ Note: Error code: E0005
-────╯
+  [type] E0005
 
-  [type] error: type mismatch: expected string, got Formatter
-    ╭─[ closure_errors.baml:21:13 ]
-    │
+  × expected 1 argument(s), got 2
+    ╭─[closure_errors.baml:21:3]
  21 │   transform(fmt, "hello")
-    │             ─┬─  
-    │              ╰─── type mismatch: expected string, got Formatter
-    │ 
-    │ Note: Error code: E0001
-────╯
+    ·   ───────────────────────
+    ╰────
 
-  [type] error: expected 1 argument(s), got 0
-    ╭─[ closure_errors.baml:27:3 ]
-    │
+  [type] E0001
+
+  × mismatched types
+    ╭─[closure_errors.baml:21:13]
+ 21 │   transform(fmt, "hello")
+    ·             ─┬─
+    ·              ╰── expected `string`, found `Formatter`
+    ╰────
+
+  [type] E0005
+
+  × expected 1 argument(s), got 0
+    ╭─[closure_errors.baml:27:3]
  27 │   f()
-    │   ─┬─  
-    │    ╰─── expected 1 argument(s), got 0
-    │ 
-    │ Note: Error code: E0005
-────╯
+    ·   ───
+    ╰────
 
-  [type] error: type mismatch: expected (Counter) -> int throws never, got () -> int throws never
-    ╭─[ closure_errors.baml:33:44 ]
-    │
+  [type] E0001
+
+  × mismatched types
+    ╭─[closure_errors.baml:33:44]
  33 │   let inc: (Counter) -> int throws never = c.increment;
-    │                                            ─────┬─────  
-    │                                                 ╰─────── type mismatch: expected (Counter) -> int throws never, got () -> int throws never
-    │ 
-    │ Note: Error code: E0001
-────╯
+    ·                                            ─────┬─────
+    ·                                                 ╰── expected `(Counter) -> int throws never`, found `() -> int throws never`
+    ╰────
 
-  [type] error: type mismatch: expected () -> string throws never, got (self: Employee) -> string throws never
-    ╭─[ closure_errors.baml:39:38 ]
-    │
+  [type] E0001
+
+  × mismatched types
+    ╭─[closure_errors.baml:39:38]
  39 │   let f: () -> string throws never = Employee.full_name;
-    │                                      ─────────┬────────  
-    │                                               ╰────────── type mismatch: expected () -> string throws never, got (self: Employee) -> string throws never
-    │ 
-    │ Note: Error code: E0001
-────╯
+    ·                                      ─────────┬────────
+    ·                                               ╰── expected `() -> string throws never`, found `(self: Employee) -> string throws never`
+    ╰────
 
-  [type] error: type mismatch: expected (Employee) -> string throws never, got () -> string throws never
-    ╭─[ closure_errors.baml:50:17 ]
-    │
+  [type] E0001
+
+  × mismatched types
+    ╭─[closure_errors.baml:50:17]
  50 │   takes_unbound(e.full_name)
-    │                 ─────┬─────  
-    │                      ╰─────── type mismatch: expected (Employee) -> string throws never, got () -> string throws never
-    │ 
-    │ Note: Error code: E0001
-────╯
+    ·                 ─────┬─────
+    ·                      ╰── expected `(Employee) -> string throws never`, found `() -> string throws never`
+    ╰────

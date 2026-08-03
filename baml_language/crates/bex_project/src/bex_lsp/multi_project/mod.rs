@@ -147,6 +147,11 @@ struct LiveProject {
     project: BexProject,
     in_memory_changes: Mutex<HashMap<crate::fs::FsPath, OverlayDocument>>,
     diagnostics_fence: Mutex<DiagnosticsFence>,
+    /// The latest build failure that was not represented by source
+    /// diagnostics. Keep it revision-scoped so a later edit immediately stops
+    /// surfacing a stale failure, while `requestState` can still replay the
+    /// failure that made the current build unavailable.
+    build_failure: Mutex<BuildFailureState>,
     /// Debounce tickets (pre-work suppression only — never authorization;
     /// installation is guarded by the revision-conditional commit).
     #[cfg(not(target_arch = "wasm32"))]
@@ -165,6 +170,7 @@ impl LiveProject {
             project,
             in_memory_changes: Mutex::new(HashMap::new()),
             diagnostics_fence: Mutex::new(DiagnosticsFence::default()),
+            build_failure: Mutex::new(BuildFailureState::default()),
             #[cfg(not(target_arch = "wasm32"))]
             diagnostics_epoch: std::sync::atomic::AtomicU64::new(0),
             #[cfg(not(target_arch = "wasm32"))]
@@ -172,6 +178,52 @@ impl LiveProject {
             #[cfg(not(target_arch = "wasm32"))]
             rebuild_gate: tokio::sync::Mutex::new(()),
         }
+    }
+}
+
+#[derive(Default)]
+struct BuildFailureState {
+    latest: Option<(SourceRevision, String)>,
+}
+
+impl BuildFailureState {
+    fn record(&mut self, revision: SourceRevision, message: String) {
+        if self
+            .latest
+            .as_ref()
+            .is_some_and(|(latest_revision, _)| *latest_revision > revision)
+        {
+            return;
+        }
+        self.latest = Some((revision, message));
+    }
+
+    fn clear_through(&mut self, revision: SourceRevision) {
+        if self
+            .latest
+            .as_ref()
+            .is_some_and(|(latest_revision, _)| *latest_revision <= revision)
+        {
+            self.latest = None;
+        }
+    }
+
+    fn message_for(&self, revision: SourceRevision) -> Option<&str> {
+        self.latest
+            .as_ref()
+            .filter(|(failed_revision, _)| *failed_revision == revision)
+            .map(|(_, message)| message.as_str())
+    }
+
+    fn project_diagnostic_for(
+        &self,
+        revision: SourceRevision,
+    ) -> Option<crate::bex_lsp::ProjectDiagnostic> {
+        self.message_for(revision)
+            .map(|message| crate::bex_lsp::ProjectDiagnostic {
+                severity: "error",
+                message: format!("Current build failed: {message}"),
+            })
     }
 }
 
@@ -194,6 +246,11 @@ struct BexMulitProject {
     /// the client offers it, otherwise UTF-16. Set exactly once; reading
     /// before negotiation never freezes a default.
     negotiated_encoding: std::sync::Arc<OnceLock<PositionEncoding>>,
+
+    /// Whether the client advertised completion-item snippet support during
+    /// `initialize`. Connection-scoped because capabilities belong to one
+    /// client session.
+    snippet_support: std::sync::Arc<OnceLock<bool>>,
 
     /// Workspace root directories provided by the LSP client during
     /// `initialize`. Used by `on_notification_initialized` to scope
@@ -308,6 +365,7 @@ impl BexMulitProject {
             sender,
             playground_sender,
             negotiated_encoding: std::sync::Arc::new(OnceLock::new()),
+            snippet_support: std::sync::Arc::new(OnceLock::new()),
             workspace_roots: std::sync::Arc::new(std::sync::Mutex::new(Vec::new())),
             fs,
             spawner,
@@ -319,10 +377,10 @@ impl BexMulitProject {
     }
 
     /// Connection-scoped dispatcher: shares the process-owned project
-    /// registry (and everything hanging off it) but owns a fresh
-    /// position-encoding negotiation, fresh initialize workspace
-    /// roots, and a fresh semantic-token delta cache (encoding-dependent),
-    /// and writes only through the connection's revocable `sender`.
+    /// registry (and everything hanging off it) but owns fresh capability
+    /// negotiation, fresh initialize workspace roots, and a fresh
+    /// semantic-token delta cache (encoding-dependent), and writes only
+    /// through the connection's revocable `sender`.
     /// After browser takeover revokes that sender, a retained clone of
     /// this session fails `send_*` with `ClientClosed` instead of leaking
     /// into the replacement session.
@@ -333,6 +391,7 @@ impl BexMulitProject {
         let mut session = self.clone();
         session.sender = sender;
         session.negotiated_encoding = std::sync::Arc::new(OnceLock::new());
+        session.snippet_support = std::sync::Arc::new(OnceLock::new());
         session.workspace_roots = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
         session.semantic_tokens_cache =
             std::sync::Arc::new(std::sync::Mutex::new(std::collections::HashMap::new()));
@@ -377,6 +436,33 @@ impl BexMulitProject {
             .negotiated_encoding
             .get()
             .expect("negotiated encoding was just set")
+    }
+
+    fn negotiate_snippet_support(
+        &self,
+        client_capabilities: &lsp_types::ClientCapabilities,
+    ) -> bool {
+        let supported = client_capabilities
+            .text_document
+            .as_ref()
+            .and_then(|text_document| text_document.completion.as_ref())
+            .and_then(|completion| completion.completion_item.as_ref())
+            .and_then(|completion_item| completion_item.snippet_support)
+            .unwrap_or(false);
+        // First negotiation wins; a duplicate initialize cannot flip it.
+        let _ = self.snippet_support.set(supported);
+        *self
+            .snippet_support
+            .get()
+            .expect("snippet support was just set")
+    }
+
+    fn snippet_support_for_request(&self) -> Result<bool, LspError> {
+        self.snippet_support.get().copied().ok_or_else(|| {
+            LspError::ServerNotInitialized(
+                "completion capabilities have not been negotiated yet".to_string(),
+            )
+        })
     }
 
     fn get_path_from_uri(&self, uri: &lsp_types::Url) -> Result<vfs::VfsPath, LspError> {
@@ -897,7 +983,7 @@ impl BexMulitProject {
             // The playground project snapshot rides the same debounced tail:
             // emit one owned payload per quiet period, not one per
             // keystroke.
-            this.send_update_project(&project_root, &project);
+            this.send_update_project(project_root.as_str(), &project);
         });
     }
 
@@ -1069,24 +1155,39 @@ impl BexMulitProject {
 
         match report.engine {
             EngineBuildOutcome::Committed(receipt) => {
+                project
+                    .build_failure
+                    .lock()
+                    .unwrap()
+                    .clear_through(receipt.source_revision);
                 log::info!(
                     "engine rebuild: generation {} committed at {}",
                     receipt.generation,
                     receipt.source_revision
                 );
-                self.send_update_project(project_root, project);
+                self.send_update_project(project_root.as_str(), project);
                 self.collect_tests_for_project(project_root.as_str(), project);
             }
             EngineBuildOutcome::BlockedByDiagnostics { source_revision } => {
+                project
+                    .build_failure
+                    .lock()
+                    .unwrap()
+                    .clear_through(source_revision);
                 log::info!("engine rebuild: blocked by diagnostics at {source_revision}");
-                self.send_update_project(project_root, project);
+                self.send_update_project(project_root.as_str(), project);
             }
             EngineBuildOutcome::Failed {
                 source_revision,
                 message,
             } => {
+                project
+                    .build_failure
+                    .lock()
+                    .unwrap()
+                    .record(source_revision, message.clone());
                 log::warn!("engine rebuild failed at {source_revision}: {message}");
-                self.send_update_project(project_root, project);
+                self.send_update_project(project_root.as_str(), project);
             }
             EngineBuildOutcome::Superseded { current_revision } => {
                 log::info!(
@@ -1140,17 +1241,18 @@ impl BexMulitProject {
         out
     }
 
-    /// Build one owned, complete `ProjectUpdate` payload with a bounded
-    /// source read. `None` means the project was busy or broken — the caller
-    /// keeps the last announced state rather than sending a wiped payload.
-    fn build_project_update(&self, project: &LiveProject) -> Option<crate::bex_lsp::ProjectUpdate> {
-        let is_bex_current = project.project.is_bex_current();
-
-        let guard = project.project.read_source_for_request().ok()?;
-        let candidate = crate::project::collect_diagnostic_candidate(&guard);
+    /// Build one owned, complete `ProjectUpdate` payload from the caller's
+    /// source lease. The caller keeps that lease through notification
+    /// publication so an edit cannot make this snapshot obsolete mid-send.
+    fn build_project_update(
+        &self,
+        guard: &crate::project::SourceGuard<'_>,
+        is_bex_current: bool,
+        generation: u64,
+    ) -> crate::bex_lsp::ProjectUpdate {
+        let candidate = crate::project::collect_diagnostic_candidate(guard);
         let listing = baml_project::list_functions_with_metadata(guard.db());
         let tests_listing = baml_project::list_tests_with_metadata(guard.db());
-        drop(guard);
 
         let documents = candidate_to_publishable(&candidate, self.encoding_for_publication());
         let diagnostics = Self::flatten_diagnostics(&documents);
@@ -1160,6 +1262,12 @@ impl BexMulitProject {
             .into_iter()
             .map(|f| crate::bex_lsp::FunctionInfo {
                 name: f.name,
+                signature: f.signature,
+                source_position: crate::bex_lsp::FunctionSourcePosition {
+                    file: f.source_position.file,
+                    line: f.source_position.line,
+                    column: f.source_position.column,
+                },
                 kind: if f.is_llm {
                     crate::bex_lsp::FunctionKind::Llm
                 } else {
@@ -1187,13 +1295,14 @@ impl BexMulitProject {
             })
             .collect();
 
-        Some(crate::bex_lsp::ProjectUpdate {
+        crate::bex_lsp::ProjectUpdate {
             is_bex_current,
+            generation,
             functions,
             tests,
             types: Some(listing.types),
             diagnostics,
-        })
+        }
     }
 
     fn send_list_projects(&self) {
@@ -1208,20 +1317,33 @@ impl BexMulitProject {
         );
     }
 
-    fn send_update_project(&self, project_root: &vfs::VfsPath, project: &LiveProject) {
-        let Some(update) = self.build_project_update(project) else {
-            log::debug!(
-                "skipping UpdateProject for busy project {}",
-                project_root.as_str()
-            );
+    fn send_update_project(&self, project_root: &str, project: &LiveProject) {
+        let Ok(guard) = project.project.read_source_for_request() else {
+            log::debug!("skipping UpdateProject for busy project {project_root}");
             return;
         };
+        let source_revision = guard.revision();
+        let (is_bex_current, generation) =
+            project.project.runtime_status_for_source(source_revision);
+        let mut update = self.build_project_update(&guard, is_bex_current, generation);
+
+        // Keep the failure read and notification publication in one critical
+        // section. Otherwise a diagnostics-tail snapshot that read "no
+        // failure" could publish after the engine tail recorded and sent a
+        // failure for the same revision, regressing the UI to its transient
+        // preparing state.
+        let build_failure = project.build_failure.lock().unwrap();
+        if let Some(diagnostic) = build_failure.project_diagnostic_for(source_revision) {
+            update.diagnostics.push(diagnostic);
+        }
         self.playground_sender.send_playground_notification(
             crate::bex_lsp::PlaygroundNotification::UpdateProject {
-                project: project_root.as_str().to_string(),
+                project: project_root.to_string(),
                 update,
             },
         );
+        drop(build_failure);
+        drop(guard);
     }
 
     // ── Test collection / runs ───────────────────────────────────────────
@@ -1912,16 +2034,8 @@ impl super::BexLsp for BexMulitProject {
                 .collect()
         };
         for (fs_path, project) in projects {
-            let root_str = fs_path.as_path().to_string_lossy().into_owned();
-            let Some(update) = self.build_project_update(&project) else {
-                continue;
-            };
-            self.playground_sender.send_playground_notification(
-                crate::bex_lsp::PlaygroundNotification::UpdateProject {
-                    project: root_str,
-                    update,
-                },
-            );
+            let root = fs_path.as_path().to_string_lossy();
+            self.send_update_project(&root, &project);
         }
     }
 
@@ -1964,7 +2078,7 @@ impl super::BexLsp for BexMulitProject {
             .control_flow_graph_for_generation(generation, function_name)
     }
 
-    fn request_control_flow_graph(&self, function_name: &str) {
+    fn request_control_flow_graph(&self, function_name: &str, request_id: Option<u32>) {
         let graph = self.ast_control_flow_graph(function_name);
         let graph = graph.map(|g| {
             baml_compiler2_visualization::control_flow::prepare_control_flow_graph_for_visualization(&g)
@@ -1974,6 +2088,7 @@ impl super::BexLsp for BexMulitProject {
             crate::bex_lsp::PlaygroundNotification::ControlFlowGraphResult {
                 function_name: function_name.to_string(),
                 graph: graph_json,
+                request_id,
             },
         );
     }
@@ -2290,6 +2405,181 @@ mod tests {
     }
 
     #[test]
+    fn build_failures_are_revision_fenced_for_project_update_replay() {
+        let mut failures = BuildFailureState::default();
+
+        failures.record(SourceRevision(4), "failed to emit bytecode".to_string());
+        assert_eq!(
+            failures.message_for(SourceRevision(4)),
+            Some("failed to emit bytecode")
+        );
+        let rendered = failures
+            .project_diagnostic_for(SourceRevision(4))
+            .expect("the current revision's build failure must reach ProjectUpdate");
+        assert_eq!(rendered.severity, "error");
+        assert_eq!(
+            rendered.message,
+            "Current build failed: failed to emit bytecode"
+        );
+        assert_eq!(
+            failures.message_for(SourceRevision(5)),
+            None,
+            "an edit must not replay the previous revision's failure"
+        );
+
+        failures.record(SourceRevision(3), "older failure".to_string());
+        assert_eq!(
+            failures.message_for(SourceRevision(4)),
+            Some("failed to emit bytecode"),
+            "a late stale rebuild must not replace a newer failure"
+        );
+
+        failures.clear_through(SourceRevision(3));
+        assert_eq!(
+            failures.message_for(SourceRevision(4)),
+            Some("failed to emit bytecode")
+        );
+        failures.clear_through(SourceRevision(4));
+        assert_eq!(failures.message_for(SourceRevision(4)), None);
+    }
+
+    struct GatedPlaygroundSender {
+        publication: std::sync::mpsc::SyncSender<Vec<String>>,
+        release: std::sync::Mutex<std::sync::mpsc::Receiver<()>>,
+    }
+
+    impl crate::bex_lsp::PlaygroundSender for GatedPlaygroundSender {
+        fn send_playground_notification(
+            &self,
+            notification: crate::bex_lsp::PlaygroundNotification,
+        ) {
+            let crate::bex_lsp::PlaygroundNotification::UpdateProject { update, .. } = notification
+            else {
+                return;
+            };
+            self.publication
+                .send(
+                    update
+                        .diagnostics
+                        .into_iter()
+                        .map(|diagnostic| diagnostic.message)
+                        .collect(),
+                )
+                .unwrap();
+            self.release.lock().unwrap().recv().unwrap();
+        }
+    }
+
+    #[test]
+    fn source_lease_fences_failure_publication_against_a_racing_edit() {
+        let root = vfs::VfsPath::new(vfs::MemoryFS::new());
+        let bex_project = crate::project::BexProject::new(
+            &root,
+            std::sync::Arc::new(sys_ops::SysOpsBuilder::new().build()),
+        );
+        let source_path = crate::fs::FsPath::from_str("/p/main.baml".to_string());
+        let revision = bex_project
+            .mutate_sources(crate::project::SourceBatch {
+                replace_all: false,
+                sources: [(
+                    source_path.clone(),
+                    "function main() -> int {\n    1\n}\n".to_string(),
+                )]
+                .into_iter()
+                .collect(),
+                versions: Vec::new(),
+            })
+            .unwrap();
+        let project = std::sync::Arc::new(LiveProject::new(bex_project));
+        project
+            .build_failure
+            .lock()
+            .unwrap()
+            .record(revision, "failed to emit bytecode".to_string());
+
+        let (publication_tx, publication_rx) = std::sync::mpsc::sync_channel(1);
+        let (release_tx, release_rx) = std::sync::mpsc::sync_channel(1);
+        let lsp = std::sync::Arc::new(BexMulitProject::new(
+            std::sync::Arc::new(|_: &vfs::VfsPath| {
+                std::sync::Arc::new(sys_ops::SysOpsBuilder::new().build())
+            }),
+            std::sync::Arc::new(RecordingSender {
+                notifications: std::sync::Mutex::new(Vec::new()),
+            }),
+            std::sync::Arc::new(GatedPlaygroundSender {
+                publication: publication_tx,
+                release: std::sync::Mutex::new(release_rx),
+            }),
+            crate::fs::BamlVFS::new(std::sync::Arc::new(Box::new(vfs::PhysicalFS::new("/")))),
+            BackgroundSpawner::new(),
+        ));
+
+        let publishing_lsp = lsp;
+        let publishing_project = project.clone();
+        let publisher = std::thread::spawn(move || {
+            publishing_lsp.send_update_project("/p", &publishing_project);
+        });
+        let diagnostics = publication_rx
+            .recv_timeout(std::time::Duration::from_secs(10))
+            .expect("the failure-bearing update must reach the publication boundary");
+        assert!(
+            diagnostics
+                .iter()
+                .any(|message| message == "Current build failed: failed to emit bytecode")
+        );
+
+        let (edit_started_tx, edit_started_rx) = std::sync::mpsc::sync_channel(1);
+        let (edit_done_tx, edit_done_rx) = std::sync::mpsc::sync_channel(1);
+        let editing_project = project.clone();
+        let editor = std::thread::spawn(move || {
+            edit_started_tx.send(()).unwrap();
+            let next_revision = editing_project
+                .project
+                .mutate_sources(crate::project::SourceBatch {
+                    replace_all: false,
+                    sources: [(
+                        source_path,
+                        "function main() -> int {\n    2\n}\n".to_string(),
+                    )]
+                    .into_iter()
+                    .collect(),
+                    versions: Vec::new(),
+                })
+                .unwrap();
+            edit_done_tx.send(next_revision).unwrap();
+        });
+        edit_started_rx.recv().unwrap();
+        assert!(
+            edit_done_rx
+                .recv_timeout(std::time::Duration::from_millis(100))
+                .is_err(),
+            "the edit must remain blocked while the old revision is publishing"
+        );
+
+        release_tx.send(()).unwrap();
+        publisher.join().unwrap();
+        assert_eq!(
+            edit_done_rx
+                .recv_timeout(std::time::Duration::from_secs(2))
+                .unwrap(),
+            SourceRevision(revision.0 + 1)
+        );
+        editor.join().unwrap();
+
+        let current_revision = project.project.current_revision();
+        assert_eq!(current_revision, SourceRevision(revision.0 + 1));
+        assert!(
+            project
+                .build_failure
+                .lock()
+                .unwrap()
+                .project_diagnostic_for(current_revision)
+                .is_none(),
+            "the previous revision's failure must not appear after the edit"
+        );
+    }
+
+    #[test]
     fn vfs_walk_skips_generated_dirs_and_finds_markers() {
         let root = vfs::VfsPath::new(vfs::MemoryFS::new());
         for dir in [
@@ -2358,7 +2648,7 @@ mod tests {
     }
 
     /// A connection-scoped session shares the project registry but owns its
-    /// own encoding negotiation and workspace roots and routes output
+    /// own capability negotiation and workspace roots and routes output
     /// through its own sender.
     #[test]
     fn connection_scoped_session_is_fresh_but_shares_projects() {
@@ -2377,6 +2667,18 @@ mod tests {
         let _ = root
             .negotiated_encoding
             .set(crate::bex_lsp::position_codec::PositionEncoding::UTF8);
+        let snippet_capabilities = serde_json::from_value(serde_json::json!({
+            "textDocument": {
+                "completion": {
+                    "completionItem": {
+                        "snippetSupport": true
+                    }
+                }
+            }
+        }))
+        .expect("valid client capabilities");
+        assert!(root.negotiate_snippet_support(&snippet_capabilities));
+        assert!(root.snippet_support_for_request().unwrap());
         root.workspace_roots
             .lock()
             .unwrap()
@@ -2396,6 +2698,13 @@ mod tests {
         // entries are encoded per-connection); shared project registry and
         // result-id sequence.
         assert!(session.negotiated_encoding.get().is_none());
+        assert!(session.snippet_support.get().is_none());
+        assert!(matches!(
+            session.snippet_support_for_request(),
+            Err(LspError::ServerNotInitialized(_))
+        ));
+        assert!(!session.negotiate_snippet_support(&lsp_types::ClientCapabilities::default()));
+        assert!(!session.snippet_support_for_request().unwrap());
         assert!(session.workspace_roots.lock().unwrap().is_empty());
         assert!(session.semantic_tokens_cache.lock().unwrap().is_empty());
         assert!(Arc::ptr_eq(&session.projects, &root.projects));

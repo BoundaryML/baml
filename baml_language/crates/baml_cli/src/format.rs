@@ -11,25 +11,38 @@ use clap::Args;
 
 use crate::{project_load::find_project_root_from, reporter::Reporter};
 
+/// Format BAML source files.
+///
+/// With explicit paths, formats those files or directories. With no paths,
+/// discovers the nearest BAML project and formats all of its `.baml` files.
+/// If no project is found, the command succeeds without changing anything.
 #[derive(Args, Debug)]
+#[command(after_long_help = "\
+Examples:
+  Format the nearest project:
+    baml fmt
+
+  Format a specific file:
+    baml fmt baml_src/main.baml
+
+  Preview formatted output:
+    baml fmt --dry-run")]
 pub struct FormatArgs {
     #[arg(
         help = "Specific files to format. If omitted, all `.baml` files in the project are formatted."
     )]
     pub paths: Vec<PathBuf>,
 
-    /// Project search starting point for default file discovery. Mirrors
-    /// `baml run`/`baml pack`'s `--from`. When the
-    /// directory has neither a `baml.toml` nor a `baml_src/` subdirectory,
-    /// there's nothing to format and `baml fmt` is a no-op success.
-    #[arg(long, value_name = "PATH")]
+    /// Deprecated alias for `--project`.
+    #[arg(long, value_name = "PATH", hide = true)]
     pub from: Option<PathBuf>,
 
     #[arg(
         short = 'n',
         long = "dry-run",
         help = "Write formatter changes to stdout instead of files.",
-        default_value = "false"
+        default_value = "false",
+        help_heading = "Output options"
     )]
     pub dry_run: bool,
 }

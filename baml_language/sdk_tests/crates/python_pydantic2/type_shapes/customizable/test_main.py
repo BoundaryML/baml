@@ -7,11 +7,11 @@ listed in 18a are reachable.
 """
 
 
-def test_root_imports_cleanly():
+def test_main_root_imports_cleanly():
     import baml_sdk  # noqa: F401
 
 
-def test_all_namespaces_reachable():
+def test_main_all_namespaces_reachable():
     import baml_sdk.primitives  # noqa: F401
     import baml_sdk.media  # noqa: F401
     import baml_sdk.enums  # noqa: F401
@@ -31,13 +31,13 @@ def test_all_namespaces_reachable():
     import baml_sdk.a  # noqa: F401
 
 
-def test_root_foo_reachable():
+def test_main_root_foo_reachable():
     from baml_sdk import Foo  # noqa: F401
 
 
-def test_lorem_resume_reachable():
+def test_main_lorem_resume_reachable():
     from baml_sdk.lorem import Resume  # noqa: F401
 
 
-def test_deep_namespace_thing_reachable():
+def test_main_deep_namespace_thing_reachable():
     from baml_sdk.a.b import Thing  # noqa: F401

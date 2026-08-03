@@ -102,3 +102,32 @@ fn virtual_call_result_assigned_to_field() {
     assert!(run_bool(SRC, "user.flag_into_field_true"));
     assert!(!run_bool(SRC, "user.flag_into_field_false"));
 }
+
+// The base of a projection is itself allowed to be a call expression. MIR must
+// evaluate that call into a local before appending field projections.
+#[test]
+fn method_call_result_can_be_the_base_of_nested_field_assignment() {
+    const SRC: &str = r#"
+        class Info { title: string? }
+        class Record { info: Info }
+        class Store {
+            record: Record
+            calls: int
+            function require(self) -> Record {
+                self.calls += 1;
+                self.record
+            }
+        }
+
+        function main() -> bool {
+            let store = Store {
+                record: Record { info: Info { title: null } },
+                calls: 0,
+            };
+            store.require().info.title = "triage";
+            store.record.info.title == "triage" && store.calls == 1
+        }
+    "#;
+
+    assert!(run_bool(SRC, "user.main"));
+}

@@ -2,7 +2,6 @@
 
 use std::fmt;
 
-use ariadne;
 use borsh::{BorshDeserialize, BorshSerialize};
 use smol_str::SmolStr;
 use text_size::{TextRange, TextSize};
@@ -75,23 +74,6 @@ impl FileId {
         FileId(u32::MAX)
     }
 
-    /// Create a synthetic `FileId` for the stream expansion of `origin`.
-    ///
-    /// Sets tag `0x1` on the origin's index bits. Deterministic: same origin
-    /// always produces the same synthetic id.
-    pub fn stream_expansion(origin: FileId) -> FileId {
-        debug_assert!(
-            origin.0 & 0xF000_0000 == 0,
-            "cannot expand a non-origin FileId"
-        );
-        FileId(origin.0 | 0x1000_0000)
-    }
-
-    /// Returns `true` if this `FileId` refers to a synthetic stream expansion file.
-    pub fn is_stream_expansion(self) -> bool {
-        self.0 & 0xF000_0000 == 0x1000_0000
-    }
-
     pub fn as_u32(self) -> u32 {
         self.0
     }
@@ -158,13 +140,6 @@ impl Span {
         Span { file_id, range }
     }
 
-    pub fn at_offset(file_id: FileId, offset: TextSize) -> Self {
-        Span {
-            file_id,
-            range: TextRange::empty(offset),
-        }
-    }
-
     /// Create a fake span for testing or when no real span is available.
     ///
     /// Uses a sentinel `FileId` (`u32::MAX`) that's unlikely to conflict with real files.
@@ -173,22 +148,6 @@ impl Span {
             file_id: FileId::sentinel(),
             range: TextRange::empty(TextSize::new(0)),
         }
-    }
-}
-
-impl ariadne::Span for Span {
-    type SourceId = FileId;
-    fn source(&self) -> &Self::SourceId {
-        &self.file_id
-    }
-    fn start(&self) -> usize {
-        let range = self.range.start().into()..self.range.end().into();
-        range.start()
-    }
-
-    fn end(&self) -> usize {
-        let range = self.range.start().into()..self.range.end().into();
-        range.end()
     }
 }
 
@@ -323,16 +282,6 @@ impl fmt::Display for Literal {
 /// Module identifier (for multi-file support)
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct ModuleId(u32);
-
-impl ModuleId {
-    pub fn new(id: u32) -> Self {
-        ModuleId(id)
-    }
-
-    pub fn as_u32(self) -> u32 {
-        self.0
-    }
-}
 
 /// Severity level for diagnostics
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

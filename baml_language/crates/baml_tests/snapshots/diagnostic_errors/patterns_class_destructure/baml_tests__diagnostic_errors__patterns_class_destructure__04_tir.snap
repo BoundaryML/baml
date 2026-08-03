@@ -32,7 +32,6 @@ function user.class_destructure_duplicate_field_key_in_let() -> int throws never
     let Person { age: first, age: second } = Person { age: 1, flexible_age: 2, address: Address { zip: 3 } } : user.Person
     first + second : unknown
   }
-  !! 902..907: unresolved name: first
 }
 function user.class_destructure_duplicate_field_key_with_wildcards() -> int throws never {
   { : 1
@@ -105,7 +104,7 @@ function user.generic_class_type_pattern_requires_type_args(boxed: user.Box<int>
       Box =>
         1 : 1
   }
-  !! 3074..3077: type mismatch: expected Box<int>, got Box
+  !! 3074..3077: type `Box` expects 1 type argument(s), got 0
 }
 function user.generic_class_type_pattern_in_chain_requires_type_args(boxed: user.Box<int>) -> int throws never {
   { : 1
@@ -113,7 +112,7 @@ function user.generic_class_type_pattern_in_chain_requires_type_args(boxed: user
       value: Box =>
         1 : 1
   }
-  !! 3210..3224: type mismatch: expected Box<int>, got Box
+  !! 3221..3224: type `Box` expects 1 type argument(s), got 0
 }
 function user.generic_class_destructure_requires_type_args(boxed: user.Box<int>) -> int throws never {
   { : T
@@ -206,12 +205,20 @@ function user.class_destructure_or_pattern_must_bind_same_names(v: user.Person |
   }
 }
 function user.class_destructure_or_pattern_same_binding_conflicting_types(v: user.Person | user.Admin) -> int throws never {
-  { : 1
-    match (v : user.Person | user.Admin) : 1
+  { : !error
+    match (v : user.Person | user.Admin) : !error
       Person { age: age } | Admin { age: age } =>
-        1 : 1
+        age : !error
   }
   !! 5786..5789: Or-pattern alternatives bind `age` with conflicting types: `int` vs `string`
+}
+function user.class_destructure_or_pattern_same_binding_conflicting_types_reversed(v: user.Person | user.Admin) -> int throws never {
+  { : !error
+    match (v : user.Person | user.Admin) : !error
+      Admin { age: age } | Person { age: age } =>
+        age : !error
+  }
+  !! 5963..5966: Or-pattern alternatives bind `age` with conflicting types: `string` vs `int`
 }
 function user.generic_class_destructure_or_pattern_same_binding_conflicting_types(v: user.Box<int> | user.Box<string>) -> int throws never {
   { : 1
@@ -219,7 +226,7 @@ function user.generic_class_destructure_or_pattern_same_binding_conflicting_type
       Box<int> { value: value } | Box<string> { value: value } =>
         1 : 1
   }
-  !! 5996..6005: Or-pattern alternatives bind `value` with conflicting types: `int` vs `string`
+  !! 6175..6184: Or-pattern alternatives bind `value` with conflicting types: `int` vs `string`
 }
 function user.nested_generic_class_destructure_duplicate_binding_name() -> int throws never {
   { : 0
@@ -236,14 +243,14 @@ function user.nested_class_destructure_field_pattern_type_mismatch() -> int thro
       _ =>
         0 : 0
   }
-  !! 6495..6501: type mismatch: expected int, got string
+  !! 6674..6680: type mismatch: expected int, got string
 }
 function user.class_destructure_unknown_renamed_field_span() -> int throws never {
   { : unknown
     let Person { missing: renamed } = Person { age: 1, flexible_age: 2, address: Address { zip: 3 } } : user.Person
     renamed : unknown
   }
-  !! 6605..6652: class `Person` has no field `missing`
+  !! 6784..6831: class `Person` has no field `missing`
 }
 function user.lambda_class_destructure_field_pattern_type_mismatch_span() -> int throws never {
   { : int
@@ -255,7 +262,7 @@ function user.lambda_class_destructure_field_pattern_type_mismatch_span() -> int
         }
     f(Person { age: 1, flexible_age: 2, address: Address { zip: 3 } }) : int
   }
-  !! 6930..6936: type mismatch: expected int, got string
+  !! 7109..7115: type mismatch: expected int, got string
 }
 lambda user.lambda_class_destructure_field_pattern_type_mismatch_span {
 }

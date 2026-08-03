@@ -1,31 +1,35 @@
 {
-  "name": "baml-playground-v2",
-  "version": "0.0.1",
-  "private": true,
   "description": "BAML Playground v2 - VSCode extension and web app",
-  "scripts": {
-    "build:wasm": "wasm-pack build ../baml_language/crates/bridge_wasm --target web --out-dir ../../../typescript2/pkg-playground/wasm --release --scope b",
-    "dev:wasm": "BRIDGE_WASM_FORCE_RERUN=1 npx nodemon --watch ../baml_language --ignore '**/target/**' --ext rs,toml --exec \"pnpm build:wasm\"",
-    "dev:webview": "pnpm --filter app-vscode-webview dev",
-    "dev:cargo": "cargo watch -C ../baml_language  --ignore '**/target/**' --skip-local-deps --watch-when-idle -w crates -x 'build -p baml_cli'",
-    "dev:vscode": "turbo run build --filter=app-vscode-webview && turbo run dev --filter=baml-language --filter=app-vscode-webview --filter=@b/pkg-playground '//#dev:cargo'",
-    "dev:promptfiddle": "turbo run dev --filter app-promptfiddle --filter @b/pkg-playground '//#dev:wasm'",
-    "dev:website": "turbo run dev --filter app-website",
-    "build": "turbo run build",
-    "vscode:package": "pnpm run vscode:package:clean && pnpm run vscode:package:build && pnpm run vscode:package:stage && pnpm run vscode:package:vsix",
-    "vscode:package:clean": "rm -rf app-vscode-webview/dist app-vscode-ext/dist app-vscode-ext/*.vsix",
-    "vscode:package:build": "pnpm run build:wasm && pnpm --filter @b/pkg-proto generate && pnpm --filter app-vscode-webview build && pnpm --filter baml-language build",
-    "vscode:package:stage": "rm -rf app-vscode-ext/dist/playground && mkdir -p app-vscode-ext/dist/playground && cp -R app-vscode-webview/dist/. app-vscode-ext/dist/playground/",
-    "vscode:package:vsix": "cd app-vscode-ext && pnpm dlx @vscode/vsce package --no-dependencies --allow-missing-repository --skip-license",
-    "typecheck": "turbo run typecheck",
-    "test": "turbo run test",
-    "lint": "turbo run lint",
-    "clean": "pnpm -r clean"
-  },
-  "packageManager": "pnpm@11.1.3",
   "devDependencies": {
+    "@biomejs/biome": "2.1.2",
+    "nodemon": "^3.1.9",
     "turbo": "^2.8.9",
-    "typescript": "^5.7.0",
-    "nodemon": "^3.1.9" 
-  }
+    "typescript": "^5.7.0"
+  },
+  "name": "baml-playground-v2",
+  "packageManager": "pnpm@11.1.3",
+  "private": true,
+  "scripts": {
+    "build": "turbo run build",
+    "build:wasm": "wasm-pack build ../baml_language/crates/bridge_wasm --target web --out-dir ../../../typescript2/pkg-playground/wasm --release --scope b",
+    "clean": "pnpm -r clean",
+    "dev:cargo": "cargo watch -C ../baml_language  --ignore '**/target/**' --skip-local-deps --watch-when-idle -w crates -x 'build -p baml_cli'",
+    "dev:promptfiddle": "turbo run dev --filter app-promptfiddle --filter @b/pkg-playground '//#dev:wasm'",
+    "dev:vscode": "turbo run build --filter=app-vscode-webview && turbo run dev --filter=baml-language --filter=app-vscode-webview --filter=@b/pkg-playground '//#dev:cargo'",
+    "dev:wasm": "BRIDGE_WASM_FORCE_RERUN=1 npx nodemon --watch ../baml_language --ignore '**/target/**' --ext rs,toml --exec \"pnpm build:wasm\"",
+    "dev:website": "turbo run dev --filter app-website",
+    "dev:webview": "pnpm --filter app-vscode-webview dev",
+    "format": "biome check",
+    "format:ci": "biome ci --changed --no-errors-on-unmatched",
+    "format:fix": "biome check --write",
+    "lint": "turbo run lint",
+    "test": "turbo run test",
+    "typecheck": "turbo run typecheck",
+    "vscode:package": "pnpm run vscode:package:clean && pnpm run vscode:package:build && pnpm run vscode:package:stage && pnpm run vscode:package:vsix",
+    "vscode:package:build": "pnpm run build:wasm && pnpm --filter @b/pkg-proto generate && pnpm --filter app-vscode-webview build && pnpm --filter baml-language build",
+    "vscode:package:clean": "rm -rf app-vscode-webview/dist app-vscode-ext/dist app-vscode-ext/*.vsix",
+    "vscode:package:stage": "rm -rf app-vscode-ext/dist/playground && mkdir -p app-vscode-ext/dist/playground && cp -R app-vscode-webview/dist/. app-vscode-ext/dist/playground/",
+    "vscode:package:vsix": "cd app-vscode-ext && pnpm dlx @vscode/vsce package --no-dependencies --allow-missing-repository --skip-license"
+  },
+  "version": "0.0.1"
 }

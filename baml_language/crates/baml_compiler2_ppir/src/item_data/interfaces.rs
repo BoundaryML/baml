@@ -6,19 +6,20 @@ use baml_compiler2_hir::{
 };
 use text_size::TextRange;
 
-use crate::item_data::common::{FieldData, FunctionParamData};
+use crate::item_data::common::{
+    FieldData, FunctionParamData, GenericParamData, lower_generic_params,
+};
 
 /// Span-free semantic data for an `interface` declaration.
 #[derive(Debug, Clone, PartialEq, Eq, salsa::Update)]
 pub struct InterfaceData<'db> {
     pub name: Name,
-    pub generic_params: Vec<Name>,
+    /// Generic type parameters, each with its conjunction of bounds.
+    pub generic_params: Vec<GenericParamData>,
     /// Every type reference in this interface's signature — bounds, `requires`
     /// targets, field types, associated-type bounds and defaults, and required
     /// method signatures. Scoped to the item.
     pub type_refs: TypeRefStore,
-    /// Parallel to `generic_params`. `Some` means `T extends <bound>`.
-    pub generic_param_bounds: Vec<Option<TypeRefId>>,
     /// Targets of `requires I1, I2, …`.
     pub requires: Vec<TypeRefId>,
     /// Field signatures. Interface fields cannot have default values.
@@ -43,8 +44,8 @@ pub struct AssociatedTypeData {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct InterfaceMethodSigData {
     pub name: Name,
-    pub generic_params: Vec<Name>,
-    pub generic_param_bounds: Vec<Option<TypeRefId>>,
+    /// Generic type parameters local to this method, each with its bounds.
+    pub generic_params: Vec<GenericParamData>,
     pub params: Vec<FunctionParamData>,
     pub return_type: Option<TypeRefId>,
     pub throws: Option<TypeRefId>,
@@ -59,6 +60,8 @@ pub struct InterfaceSourceMap {
     pub span: TextRange,
     /// Spans for every node in [`InterfaceData::type_refs`].
     pub type_refs: TypeRefSourceMap,
+    /// Name span per field, parallel to [`InterfaceData::fields`].
+    pub field_name_spans: Vec<TextRange>,
     /// Parallel to [`InterfaceData::associated_types`].
     pub associated_type_spans: Vec<AssociatedTypeSourceMap>,
     /// Parallel to [`InterfaceData::required_methods`].
@@ -74,6 +77,8 @@ pub struct AssociatedTypeSourceMap {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct InterfaceMethodSigSourceMap {
     pub span: TextRange,
+    /// Span of just the method's name.
+    pub name_span: TextRange,
     /// One span per parameter, parallel to `InterfaceMethodSigData::params`.
     pub param_spans: Vec<TextRange>,
 }
@@ -106,15 +111,22 @@ fn lower<'db>(
 ) -> (InterfaceData<'db>, InterfaceSourceMap) {
     let file = interface.file(db);
     let item_tree = crate::file_item_tree(db, file);
+    let item_source_map = crate::file_item_tree_source_map(db, file);
     let data = &item_tree[interface.id(db)];
+    // Name spans for fields / required methods live in the item-tree source map
+    // (parallel to `fields` / `required_methods`), like a class's field spans.
+    let field_name_spans = item_source_map
+        .interface_field_spans
+        .get(&interface.id(db))
+        .cloned()
+        .unwrap_or_default();
+    let method_name_spans = item_source_map
+        .interface_method_spans
+        .get(&interface.id(db));
 
     let mut type_refs = TypeRefBuilder::new();
 
-    let generic_param_bounds = data
-        .generic_param_bounds
-        .iter()
-        .map(|bound| bound.as_ref().map(|te| type_refs.lower(te)))
-        .collect();
+    let generic_params = lower_generic_params(&data.generic_params, &mut type_refs);
 
     let requires = data
         .requires
@@ -127,7 +139,7 @@ fn lower<'db>(
         .iter()
         .map(|field| FieldData {
             name: field.name.clone(),
-            type_ref: field.type_expr.as_ref().map(|te| type_refs.lower(te)),
+            type_ref: type_refs.lower(&field.type_expr),
             attributes: field.attributes.clone(),
             docstring: field.docstring.clone(),
         })
@@ -148,12 +160,7 @@ fn lower<'db>(
         .iter()
         .map(|method| InterfaceMethodSigData {
             name: method.name.clone(),
-            generic_params: method.generic_params.clone(),
-            generic_param_bounds: method
-                .generic_param_bounds
-                .iter()
-                .map(|bound| bound.as_ref().map(|te| type_refs.lower(te)))
-                .collect(),
+            generic_params: lower_generic_params(&method.generic_params, &mut type_refs),
             params: method
                 .params
                 .iter()
@@ -175,9 +182,8 @@ fn lower<'db>(
     (
         InterfaceData {
             name: data.name.clone(),
-            generic_params: data.generic_params.clone(),
+            generic_params,
             type_refs: store,
-            generic_param_bounds,
             requires,
             fields,
             associated_types,
@@ -193,6 +199,7 @@ fn lower<'db>(
         InterfaceSourceMap {
             span: data.span,
             type_refs: spans,
+            field_name_spans,
             associated_type_spans: data
                 .associated_types
                 .iter()
@@ -204,8 +211,13 @@ fn lower<'db>(
             required_method_spans: data
                 .required_methods
                 .iter()
-                .map(|method| InterfaceMethodSigSourceMap {
+                .enumerate()
+                .map(|(i, method)| InterfaceMethodSigSourceMap {
                     span: method.span,
+                    name_span: method_name_spans
+                        .and_then(|spans| spans.get(i))
+                        .copied()
+                        .unwrap_or_default(),
                     param_spans: method.params.iter().map(|param| param.span).collect(),
                 })
                 .collect(),

@@ -25,7 +25,7 @@ const PNG_B64: &str = concat!(
 // --- media: Image.from_base64 ---------------------------------------------
 
 #[test]
-fn test_image_from_base64_roundtrips_payload() {
+fn test_handles_image_from_base64_roundtrips_payload() {
     let img = Image::from_base64(PNG_B64.to_string(), Some("image/png".to_string())).unwrap();
     // `mime_type()` returns `string?`, so python's bare-string comparison
     // becomes a comparison against `Some`.
@@ -65,7 +65,7 @@ fn http_server() -> String {
 }
 
 #[test]
-fn test_http_get_response_fields_and_methods() {
+fn test_handles_http_get_response_fields_and_methods() {
     let http_server = http_server();
     let resp = fetch(http_server, Unset).unwrap();
     assert_eq!(resp.status_code, 200);
@@ -89,7 +89,7 @@ fn temp_file() -> std::path::PathBuf {
 }
 
 #[test]
-fn test_open_file_returns_file_handle() {
+fn test_handles_open_file_returns_file_handle() {
     let temp_file = temp_file();
     // DIVERGENCE(rust): python asserts `type(f).__name__ == "File"`; here
     // the annotated binding pins the static type instead.
@@ -99,7 +99,7 @@ fn test_open_file_returns_file_handle() {
 }
 
 #[test]
-fn test_file_cursor_state_persists_across_calls() {
+fn test_handles_file_cursor_state_persists_across_calls() {
     let temp_file = temp_file();
     let f = baml_open(temp_file.to_str().unwrap().to_string(), "r".to_string()).unwrap();
 

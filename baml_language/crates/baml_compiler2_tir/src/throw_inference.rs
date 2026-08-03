@@ -8,7 +8,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use baml_base::Name;
-use baml_compiler2_ast::{AstSourceMap, Expr, ExprBody, Literal};
+use baml_compiler2_ast::{AstSourceMap, BodyNode, Expr, ExprBody, Literal};
 use baml_compiler2_hir::{
     contributions::Definition,
     package::{PackageId, PackageItems, package_dependencies},
@@ -50,10 +50,6 @@ unsafe impl salsa::Update for FunctionThrowSets {
 }
 
 impl FunctionThrowSets {
-    pub fn direct_for(&self, name: &Name) -> Option<&BTreeSet<ThrowFact>> {
-        self.direct.get(name)
-    }
-
     pub fn transitive_for(&self, name: &Name) -> Option<&BTreeSet<ThrowFact>> {
         self.transitive.get(name)
     }
@@ -147,13 +143,14 @@ pub fn file_throw_facts(db: &dyn crate::Db, file: baml_base::SourceFile) -> File
         let func_data = baml_compiler2_ppir::item_data::function_data(db, func_loc);
         let short_name = &func_data.name;
         let key = function_key(db, func_loc, short_name);
+        let generic_env = crate::generic_env::function_generic_env(db, func_loc);
 
         let (direct, has_declared_contract) = extract_direct_and_declared(
             db,
             pkg_items,
             &func_ns,
             func_loc,
-            &func_data.generic_params,
+            generic_env.source_params(),
             &func_data.type_refs,
             &func_data.params,
         );
@@ -183,13 +180,14 @@ pub fn file_throw_facts(db: &dyn crate::Db, file: baml_base::SourceFile) -> File
             // Key as "ClassName.method_name" (with namespace prefix if any).
             let method_short = Name::new(format!("{class_name}.{method_name}"));
             let key = function_key(db, func_loc, &method_short);
+            let generic_env = crate::generic_env::function_generic_env(db, func_loc);
 
             let (direct, has_declared_contract) = extract_direct_and_declared(
                 db,
                 pkg_items,
                 &func_ns,
                 func_loc,
-                &method_data.generic_params,
+                generic_env.source_params(),
                 &method_data.type_refs,
                 &method_data.params,
             );
@@ -343,7 +341,7 @@ fn extract_direct_and_declared<'db>(
     pkg_items: &PackageItems<'db>,
     ns_context: &[Name],
     func_loc: baml_compiler2_hir::loc::FunctionLoc<'db>,
-    generic_params: &[Name],
+    generic_params: &[crate::ty::ParamTy],
     type_refs: &baml_compiler2_hir::type_ref::TypeRefStore,
     params: &[baml_compiler2_ppir::item_data::FunctionParamData],
 ) -> (BTreeSet<ThrowFact>, bool) {
@@ -418,30 +416,27 @@ pub fn collect_direct_throws<'db>(
         .then(|| baml_compiler2_ppir::function_body_source_map(db, func_loc))
         .flatten();
 
-    for (_, expr) in body.exprs.iter() {
-        if let Expr::Throw { value } = expr
-            && !is_catch_rethrow(*value, body, source_map.as_ref(), &catch_arm_bodies)
-        {
+    // Walk the body structurally rather than scanning the arena: a `throw`
+    // written inside a lambda belongs to that lambda's throw set, not to this
+    // function's. Only calling the lambda transfers the effect.
+    for node in body_nodes(body) {
+        let value = match node {
+            BodyNode::Expr(id) => match &body.exprs[id] {
+                Expr::Throw { value } => *value,
+                _ => continue,
+            },
+            BodyNode::Stmt(id) => match &body.stmts[id] {
+                baml_compiler2_ast::Stmt::Throw { value } => *value,
+                _ => continue,
+            },
+        };
+        if !is_catch_rethrow(value, body, source_map.as_ref(), &catch_arm_bodies) {
             facts.insert(throw_fact_from_expr(
                 db,
                 pkg_items,
                 ns_context,
                 param_types,
-                *value,
-                body,
-            ));
-        }
-    }
-    for (_, stmt) in body.stmts.iter() {
-        if let baml_compiler2_ast::Stmt::Throw { value } = stmt
-            && !is_catch_rethrow(*value, body, source_map.as_ref(), &catch_arm_bodies)
-        {
-            facts.insert(throw_fact_from_expr(
-                db,
-                pkg_items,
-                ns_context,
-                param_types,
-                *value,
+                value,
                 body,
             ));
         }
@@ -459,7 +454,7 @@ fn lower_param_types<'db>(
     db: &'db dyn crate::Db,
     pkg_items: &PackageItems<'db>,
     ns_context: &[Name],
-    generic_params: &[Name],
+    generic_params: &[crate::ty::ParamTy],
     bounds: &crate::lower_type_expr::TypeVarBoundsMap,
     type_refs: &baml_compiler2_hir::type_ref::TypeRefStore,
     params: &[baml_compiler2_ppir::item_data::FunctionParamData],
@@ -520,12 +515,16 @@ fn is_catch_rethrow(
 
 pub fn collect_call_targets(body: &ExprBody) -> BTreeSet<Name> {
     let mut targets = BTreeSet::new();
-    for (_, expr) in body.exprs.iter() {
-        if let Expr::Call { callee, .. } = expr {
-            if let Some(path) = expr_to_path(*callee, body) {
-                let joined = path.iter().map(Name::as_str).collect::<Vec<_>>().join(".");
-                targets.insert(Name::new(joined));
-            }
+    // Structural, not a flat arena scan: a call made inside a lambda body is an
+    // edge from the *lambda*, so charging it to the enclosing function would
+    // give the function the callee's throws without it ever calling anything.
+    for node in body_nodes(body) {
+        let BodyNode::Expr(id) = node else { continue };
+        if let Expr::Call { callee, .. } = &body.exprs[id]
+            && let Some(path) = expr_to_path(*callee, body)
+        {
+            let joined = path.iter().map(Name::as_str).collect::<Vec<_>>().join(".");
+            targets.insert(Name::new(joined));
         }
     }
     targets
@@ -694,8 +693,10 @@ fn lookup_type_in_scope<'db>(
 /// pairs whose arm-body span scopes the rethrows of that binding.
 fn collect_catch_arm_bodies(body: &ExprBody) -> Vec<(&str, baml_compiler2_ast::ExprId)> {
     let mut arms = Vec::new();
-    for (_, expr) in body.exprs.iter() {
-        if let Expr::Catch { clauses, .. } = expr {
+    // Structural: a `catch` inside a lambda scopes only that lambda's rethrows.
+    for node in body_nodes(body) {
+        let BodyNode::Expr(id) = node else { continue };
+        if let Expr::Catch { clauses, .. } = &body.exprs[id] {
             for clause in clauses {
                 if let Some(name) = body.patterns[clause.binding].binding_name(&body.patterns) {
                     for &arm_id in &clause.arms {
@@ -706,6 +707,16 @@ fn collect_catch_arm_bodies(body: &ExprBody) -> Vec<(&str, baml_compiler2_ast::E
         }
     }
     arms
+}
+
+/// Every node of `body` that belongs to *this* function, in pre-order.
+///
+/// Empty when the body has no root expression (a parse failure), which is the
+/// same set a flat arena scan would have found meaningful.
+fn body_nodes(body: &ExprBody) -> Vec<BodyNode> {
+    body.root_expr
+        .map(|root| body.reachable_excluding_lambdas(root))
+        .unwrap_or_default()
 }
 
 fn expr_to_path(expr_id: baml_compiler2_ast::ExprId, body: &ExprBody) -> Option<Vec<Name>> {

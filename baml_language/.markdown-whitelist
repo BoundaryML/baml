@@ -13,6 +13,7 @@ crates/baml_lsp_server/CONTRIBUTING.md
 # Test instructions
 TEST_INSTRUCTIONS.md
 sdk_tests/DEVELOPMENT.md
+sdk_tests/crates/parity_analysis.md
 
 # Type simplification test cases
 crates/baml_type/tests/simplify_sap_tests.md
@@ -20,6 +21,7 @@ crates/baml_type/tests/simplify_sap_tests.md
 # Architecture
 ARCHITECTURE_MINI.md
 ARCHITECTURE.md
+architecture/test-profiles.md
 
 # Type System Documentation
 TYPE_SYSTEM.md
@@ -36,6 +38,19 @@ TASK/REVIEW.md
 TASK/REVIEW-RESPONSE.md
 TASK/POST-IMPLEMENTATION-NOTES.md
 TASK/RECONCILIATION.md
+sdks/agent-docs/bridge-ref/ref-java-codegen-conventions.md
+sdks/agent-docs/bridge-ref/ref-java-state-of-completeness.md
+sdks/agent-docs/bridge-ref/ref-java-packaging.md
+sdks/agent-docs/bridge-ref/ref-java-examples.md
+sdks/agent-docs/bridge-ref/ref-java-inbound-encoding.md
+sdks/agent-docs/bridge-ref/ref-java-outbound-decoding.md
+sdks/agent-docs/bridge-ref/ref-java-type-mappings.md
+sdks/java/baml_bridge/PUBLISHING.md
+sdks/java/examples/quickstart/README.md
 
 # C++ SDK style guide
 sdks/cpp/STYLE.md
+
+# C# SDK documentation
+sdks/csharp/ABI.md
+sdks/csharp/DEVELOPMENT.md

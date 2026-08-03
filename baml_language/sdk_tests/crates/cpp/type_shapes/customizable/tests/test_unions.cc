@@ -28,7 +28,7 @@ static_assert(
     std::is_same<baml::variant<int64_t>, std::variant<int64_t>>::value,
     "a one-alternative baml::variant is a plain std::variant");
 
-BAML_TEST(round_trip_null_to_end) {
+BAML_TEST(unions_round_trip_null_to_end) {
   using U = std::optional<IntOrString>;
   BAML_ASSERT(baml_sdk::unions::round_trip_null_to_end(
                   U{IntOrString{int64_t{1}}}) == U{IntOrString{int64_t{1}}});
@@ -38,19 +38,19 @@ BAML_TEST(round_trip_null_to_end) {
       !baml_sdk::unions::round_trip_null_to_end(std::nullopt).has_value());
 }
 
-BAML_TEST(round_trip_dedup) {
+BAML_TEST(unions_round_trip_dedup) {
   BAML_ASSERT(baml_sdk::unions::round_trip_dedup(IntOrString{int64_t{2}}) ==
               IntOrString{int64_t{2}});
   BAML_ASSERT(baml_sdk::unions::round_trip_dedup(IntOrString{
                   std::string("x")}) == IntOrString{std::string("x")});
 }
 
-BAML_TEST(round_trip_singleton_unwrap) {
+BAML_TEST(unions_round_trip_singleton_unwrap) {
   // `int | int` collapses to plain int64_t.
   BAML_ASSERT_EQ(baml_sdk::unions::round_trip_singleton_unwrap(7), int64_t{7});
 }
 
-BAML_TEST(round_trip_optional_plus_null) {
+BAML_TEST(unions_round_trip_optional_plus_null) {
   using TOrString = baml::variant<T, std::string>;
   using U = std::optional<TOrString>;
   BAML_ASSERT(baml_sdk::unions::round_trip_optional_plus_null(
@@ -61,11 +61,26 @@ BAML_TEST(round_trip_optional_plus_null) {
                    .has_value());
 }
 
-BAML_TEST(round_trip_t) {
+BAML_TEST(unions_round_trip_str_or_int_list) {
+  using U = baml::variant<std::vector<int64_t>, std::vector<std::string>>;
+  const U strings = std::vector<std::string>{"hello"};
+  const U ints = std::vector<int64_t>{1, 2};
+  const U empty_strings = std::vector<std::string>{};
+  const U empty_ints = std::vector<int64_t>{};
+
+  BAML_ASSERT(baml_sdk::unions::round_trip_str_or_int_list(strings) == strings);
+  BAML_ASSERT(baml_sdk::unions::round_trip_str_or_int_list(ints) == ints);
+  BAML_ASSERT(baml_sdk::unions::round_trip_str_or_int_list(empty_strings) ==
+              empty_strings);
+  BAML_ASSERT(baml_sdk::unions::round_trip_str_or_int_list(empty_ints) ==
+              empty_ints);
+}
+
+BAML_TEST(unions_round_trip_t) {
   BAML_ASSERT(baml_sdk::unions::round_trip_t(T{4}) == T{4});
 }
 
-BAML_TEST(round_trip_union_container) {
+BAML_TEST(unions_round_trip_union_container) {
   const UnionContainer c{
       std::nullopt,                         // null_to_end
       IntOrString{std::string("d")},        // dedup
@@ -76,7 +91,7 @@ BAML_TEST(round_trip_union_container) {
   BAML_ASSERT(baml_sdk::unions::round_trip_union_container(c) == c);
 }
 
-BAML_TEST(match_dispatches_by_type) {
+BAML_TEST(unions_match_dispatches_by_type) {
   const IntOrString got =
       baml_sdk::unions::round_trip_dedup(IntOrString{int64_t{21}});
   const int64_t doubled = baml::match(
@@ -94,7 +109,7 @@ BAML_TEST(match_dispatches_by_type) {
   BAML_ASSERT_EQ(len, int64_t{5});
 }
 
-BAML_TEST(union_is_a_plain_std_variant) {
+BAML_TEST(unions_union_is_a_plain_std_variant) {
   IntOrString u = baml_sdk::unions::round_trip_dedup(IntOrString{int64_t{9}});
   BAML_ASSERT(std::holds_alternative<int64_t>(u));
   BAML_ASSERT_EQ(std::get<int64_t>(u), int64_t{9});

@@ -83,9 +83,8 @@ PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
 
 inline constexpr InboundClassValue::Impl_::Impl_(
     ::_pbi::ConstantInitialized) noexcept
-      : _cached_size_{0},
-        fields_{},
-        class_ty_{nullptr} {}
+      : fields_{},
+        _cached_size_{0} {}
 
 template <typename>
 PROTOBUF_CONSTEXPR InboundClassValue::InboundClassValue(::_pbi::ConstantInitialized)
@@ -186,8 +185,9 @@ PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
 
 inline constexpr InboundValue::Impl_::Impl_(
     ::_pbi::ConstantInitialized) noexcept
-      : value_{},
-        _cached_size_{0},
+      : _cached_size_{0},
+        value_type_{nullptr},
+        value_{},
         _oneof_case_{} {}
 
 template <typename>
@@ -243,7 +243,9 @@ inline constexpr CallFunctionArgs::Impl_::Impl_(
       : _cached_size_{0},
         kwargs_{},
         type_args_{},
-        call_id_{::uint64_t{0u}} {}
+        call_id_{::uint64_t{0u}},
+        call_target_{},
+        _oneof_case_{} {}
 
 template <typename>
 PROTOBUF_CONSTEXPR CallFunctionArgs::CallFunctionArgs(::_pbi::ConstantInitialized)
@@ -274,10 +276,19 @@ namespace v1 {
 
 class InboundValue::_Internal {
  public:
+  using HasBits =
+      decltype(::std::declval<InboundValue>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(InboundValue, _impl_._has_bits_);
   static constexpr ::int32_t kOneofCaseOffset =
       PROTOBUF_FIELD_OFFSET(::baml_bridge::cffi::v1::InboundValue, _impl_._oneof_case_);
 };
 
+void InboundValue::clear_value_type() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.value_type_ != nullptr) _impl_.value_type_->Clear();
+  _impl_._has_bits_[0] &= ~0x00000001u;
+}
 void InboundValue::set_allocated_list_value(::baml_bridge::cffi::v1::InboundListValue* PROTOBUF_NULLABLE list_value) {
   ::google::protobuf::Arena* message_arena = GetArena();
   clear_value();
@@ -395,8 +406,9 @@ PROTOBUF_NDEBUG_INLINE InboundValue::Impl_::Impl_(
     ::google::protobuf::internal::InternalVisibility visibility,
     ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
     const ::baml_bridge::cffi::v1::InboundValue& from_msg)
-      : value_{},
+      : _has_bits_{from._has_bits_},
         _cached_size_{0},
+        value_{},
         _oneof_case_{from._oneof_case_[0]} {}
 
 InboundValue::InboundValue(
@@ -412,6 +424,10 @@ InboundValue::InboundValue(
   _internal_metadata_.MergeFrom<std::string>(
       from._internal_metadata_);
   new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+  ::uint32_t cached_has_bits = _impl_._has_bits_[0];
+  _impl_.value_type_ = ((cached_has_bits & 0x00000001u) != 0)
+                ? ::google::protobuf::MessageLite::CopyConstruct(arena, *from._impl_.value_type_)
+                : nullptr;
   switch (value_case()) {
     case VALUE_NOT_SET:
       break;
@@ -458,12 +474,13 @@ InboundValue::InboundValue(
 PROTOBUF_NDEBUG_INLINE InboundValue::Impl_::Impl_(
     ::google::protobuf::internal::InternalVisibility visibility,
     ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
-      : value_{},
-        _cached_size_{0},
+      : _cached_size_{0},
+        value_{},
         _oneof_case_{} {}
 
 inline void InboundValue::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
   new (&_impl_) Impl_(internal_visibility(), arena);
+  _impl_.value_type_ = {};
 }
 InboundValue::~InboundValue() {
   // @@protoc_insertion_point(destructor:baml_bridge.cffi.v1.InboundValue)
@@ -473,6 +490,7 @@ inline void InboundValue::SharedDtor(MessageLite& self) {
   InboundValue& this_ = static_cast<InboundValue&>(self);
   this_._internal_metadata_.Delete<std::string>();
   ABSL_DCHECK(this_.GetArena() == nullptr);
+  delete this_._impl_.value_type_;
   if (this_.has_value()) {
     this_.clear_value();
   }
@@ -615,17 +633,17 @@ InboundValue::GetClassData() const {
   return InboundValue_class_data_.base();
 }
 PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1
-const ::_pbi::TcParseTable<0, 12, 6, 73, 2>
+const ::_pbi::TcParseTable<0, 13, 7, 73, 2>
 InboundValue::_table_ = {
   {
-    0,  // no _has_bits_
+    PROTOBUF_FIELD_OFFSET(InboundValue, _impl_._has_bits_),
     0, // no _extensions_
     13, 0,  // max_field_number, fast_idx_mask
     offsetof(decltype(_table_), field_lookup_table),
-    4294959105,  // skipmap
+    4294959104,  // skipmap
     offsetof(decltype(_table_), field_entries),
-    12,  // num_field_entries
-    6,  // num_aux_entries
+    13,  // num_field_entries
+    7,  // num_aux_entries
     offsetof(decltype(_table_), aux_entries),
     InboundValue_class_data_.base(),
     nullptr,  // post_loop_handler
@@ -634,10 +652,15 @@ InboundValue::_table_ = {
     ::_pbi::TcParser::GetTable<::baml_bridge::cffi::v1::InboundValue>(),  // to_prefetch
     #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
   }, {{
-    {::_pbi::TcParser::MiniParse, {}},
+    // .baml_bridge.cffi.v1.BamlTy value_type = 1;
+    {::_pbi::TcParser::FastMtS1,
+     {10, 0, 0, PROTOBUF_FIELD_OFFSET(InboundValue, _impl_.value_type_)}},
   }}, {{
     65535, 65535
   }}, {{
+    // .baml_bridge.cffi.v1.BamlTy value_type = 1;
+    {PROTOBUF_FIELD_OFFSET(InboundValue, _impl_.value_type_), _Internal::kHasBitsOffset + 0, 0,
+    (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
     // string string_value = 2;
     {PROTOBUF_FIELD_OFFSET(InboundValue, _impl_.value_.string_value_), _Internal::kOneofCaseOffset + 0, 0,
     (0 | ::_fl::kFcOneof | ::_fl::kUtf8String | ::_fl::kRepAString)},
@@ -651,19 +674,19 @@ InboundValue::_table_ = {
     {PROTOBUF_FIELD_OFFSET(InboundValue, _impl_.value_.bool_value_), _Internal::kOneofCaseOffset + 0, 0,
     (0 | ::_fl::kFcOneof | ::_fl::kBool)},
     // .baml_bridge.cffi.v1.InboundListValue list_value = 6;
-    {PROTOBUF_FIELD_OFFSET(InboundValue, _impl_.value_.list_value_), _Internal::kOneofCaseOffset + 0, 0,
+    {PROTOBUF_FIELD_OFFSET(InboundValue, _impl_.value_.list_value_), _Internal::kOneofCaseOffset + 0, 1,
     (0 | ::_fl::kFcOneof | ::_fl::kMessage | ::_fl::kTvTable)},
     // .baml_bridge.cffi.v1.InboundMapValue map_value = 7;
-    {PROTOBUF_FIELD_OFFSET(InboundValue, _impl_.value_.map_value_), _Internal::kOneofCaseOffset + 0, 1,
+    {PROTOBUF_FIELD_OFFSET(InboundValue, _impl_.value_.map_value_), _Internal::kOneofCaseOffset + 0, 2,
     (0 | ::_fl::kFcOneof | ::_fl::kMessage | ::_fl::kTvTable)},
     // .baml_bridge.cffi.v1.InboundClassValue class_value = 8;
-    {PROTOBUF_FIELD_OFFSET(InboundValue, _impl_.value_.class_value_), _Internal::kOneofCaseOffset + 0, 2,
+    {PROTOBUF_FIELD_OFFSET(InboundValue, _impl_.value_.class_value_), _Internal::kOneofCaseOffset + 0, 3,
     (0 | ::_fl::kFcOneof | ::_fl::kMessage | ::_fl::kTvTable)},
     // .baml_bridge.cffi.v1.InboundEnumValue enum_value = 9;
-    {PROTOBUF_FIELD_OFFSET(InboundValue, _impl_.value_.enum_value_), _Internal::kOneofCaseOffset + 0, 3,
+    {PROTOBUF_FIELD_OFFSET(InboundValue, _impl_.value_.enum_value_), _Internal::kOneofCaseOffset + 0, 4,
     (0 | ::_fl::kFcOneof | ::_fl::kMessage | ::_fl::kTvTable)},
     // .baml_bridge.cffi.v1.BamlHandle handle = 10;
-    {PROTOBUF_FIELD_OFFSET(InboundValue, _impl_.value_.handle_), _Internal::kOneofCaseOffset + 0, 4,
+    {PROTOBUF_FIELD_OFFSET(InboundValue, _impl_.value_.handle_), _Internal::kOneofCaseOffset + 0, 5,
     (0 | ::_fl::kFcOneof | ::_fl::kMessage | ::_fl::kTvTable)},
     // bytes uint8array_value = 11;
     {PROTOBUF_FIELD_OFFSET(InboundValue, _impl_.value_.uint8array_value_), _Internal::kOneofCaseOffset + 0, 0,
@@ -672,10 +695,11 @@ InboundValue::_table_ = {
     {PROTOBUF_FIELD_OFFSET(InboundValue, _impl_.value_.bigint_value_), _Internal::kOneofCaseOffset + 0, 0,
     (0 | ::_fl::kFcOneof | ::_fl::kUtf8String | ::_fl::kRepAString)},
     // .baml_bridge.cffi.v1.BamlTy ty_value = 13;
-    {PROTOBUF_FIELD_OFFSET(InboundValue, _impl_.value_.ty_value_), _Internal::kOneofCaseOffset + 0, 5,
+    {PROTOBUF_FIELD_OFFSET(InboundValue, _impl_.value_.ty_value_), _Internal::kOneofCaseOffset + 0, 6,
     (0 | ::_fl::kFcOneof | ::_fl::kMessage | ::_fl::kTvTable)},
   }},
   {{
+      {::_pbi::TcParser::GetTable<::baml_bridge::cffi::v1::BamlTy>()},
       {::_pbi::TcParser::GetTable<::baml_bridge::cffi::v1::InboundListValue>()},
       {::_pbi::TcParser::GetTable<::baml_bridge::cffi::v1::InboundMapValue>()},
       {::_pbi::TcParser::GetTable<::baml_bridge::cffi::v1::InboundClassValue>()},
@@ -684,7 +708,7 @@ InboundValue::_table_ = {
       {::_pbi::TcParser::GetTable<::baml_bridge::cffi::v1::BamlTy>()},
   }},
   {{
-    "\40\14\0\0\0\0\0\0\0\0\0\14\0\0\0\0"
+    "\40\0\14\0\0\0\0\0\0\0\0\0\14\0\0\0"
     "baml_bridge.cffi.v1.InboundValue"
     "string_value"
     "bigint_value"
@@ -697,7 +721,13 @@ PROTOBUF_NOINLINE void InboundValue::Clear() {
   // Prevent compiler warnings about cached_has_bits being unused
   (void) cached_has_bits;
 
+  cached_has_bits = _impl_._has_bits_[0];
+  if ((cached_has_bits & 0x00000001u) != 0) {
+    ABSL_DCHECK(_impl_.value_type_ != nullptr);
+    _impl_.value_type_->Clear();
+  }
   clear_value();
+  _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<std::string>();
 }
 
@@ -715,6 +745,14 @@ PROTOBUF_NOINLINE void InboundValue::Clear() {
   // @@protoc_insertion_point(serialize_to_array_start:baml_bridge.cffi.v1.InboundValue)
   ::uint32_t cached_has_bits = 0;
   (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // .baml_bridge.cffi.v1.BamlTy value_type = 1;
+  if ((cached_has_bits & 0x00000001u) != 0) {
+    target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+        1, *this_._impl_.value_type_, this_._impl_.value_type_->GetCachedSize(), target,
+        stream);
+  }
 
   switch (this_.value_case()) {
     case kStringValue: {
@@ -816,6 +854,14 @@ PROTOBUF_NOINLINE void InboundValue::Clear() {
   // Prevent compiler warnings about cached_has_bits being unused
   (void)cached_has_bits;
 
+   {
+    // .baml_bridge.cffi.v1.BamlTy value_type = 1;
+    cached_has_bits = this_._impl_._has_bits_[0];
+    if ((cached_has_bits & 0x00000001u) != 0) {
+      total_size += 1 +
+                    ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.value_type_);
+    }
+  }
   switch (this_.value_case()) {
     // string string_value = 2;
     case kStringValue: {
@@ -907,6 +953,16 @@ void InboundValue::MergeImpl(::google::protobuf::MessageLite& to_msg, const ::go
   ::uint32_t cached_has_bits = 0;
   (void) cached_has_bits;
 
+  cached_has_bits = from._impl_._has_bits_[0];
+  if ((cached_has_bits & 0x00000001u) != 0) {
+    ABSL_DCHECK(from._impl_.value_type_ != nullptr);
+    if (_this->_impl_.value_type_ == nullptr) {
+      _this->_impl_.value_type_ = ::google::protobuf::MessageLite::CopyConstruct(arena, *from._impl_.value_type_);
+    } else {
+      _this->_impl_.value_type_->MergeFrom(*from._impl_.value_type_);
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
   if (const uint32_t oneof_from_case = from._impl_._oneof_case_[0]) {
     const uint32_t oneof_to_case = _this->_impl_._oneof_case_[0];
     const bool oneof_needs_init = oneof_to_case != oneof_from_case;
@@ -1017,6 +1073,8 @@ void InboundValue::CopyFrom(const InboundValue& from) {
 void InboundValue::InternalSwap(InboundValue* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
   using ::std::swap;
   _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  swap(_impl_.value_type_, other->_impl_.value_type_);
   swap(_impl_.value_, other->_impl_.value_);
   swap(_impl_._oneof_case_[0], other->_impl_._oneof_case_[0]);
 }
@@ -1965,17 +2023,8 @@ void InboundMapEntry::InternalSwap(InboundMapEntry* PROTOBUF_RESTRICT PROTOBUF_N
 
 class InboundClassValue::_Internal {
  public:
-  using HasBits =
-      decltype(::std::declval<InboundClassValue>()._impl_._has_bits_);
-  static constexpr ::int32_t kHasBitsOffset =
-      8 * PROTOBUF_FIELD_OFFSET(InboundClassValue, _impl_._has_bits_);
 };
 
-void InboundClassValue::clear_class_ty() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  if (_impl_.class_ty_ != nullptr) _impl_.class_ty_->Clear();
-  _impl_._has_bits_[0] &= ~0x00000001u;
-}
 InboundClassValue::InboundClassValue(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
 #if defined(PROTOBUF_CUSTOM_VTABLE)
     : ::google::protobuf::MessageLite(arena, InboundClassValue_class_data_.base()) {
@@ -1989,9 +2038,8 @@ PROTOBUF_NDEBUG_INLINE InboundClassValue::Impl_::Impl_(
     ::google::protobuf::internal::InternalVisibility visibility,
     ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
     const ::baml_bridge::cffi::v1::InboundClassValue& from_msg)
-      : _has_bits_{from._has_bits_},
-        _cached_size_{0},
-        fields_{visibility, arena, from.fields_} {}
+      : fields_{visibility, arena, from.fields_},
+        _cached_size_{0} {}
 
 InboundClassValue::InboundClassValue(
     ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
@@ -2006,22 +2054,17 @@ InboundClassValue::InboundClassValue(
   _internal_metadata_.MergeFrom<std::string>(
       from._internal_metadata_);
   new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
-  ::uint32_t cached_has_bits = _impl_._has_bits_[0];
-  _impl_.class_ty_ = ((cached_has_bits & 0x00000001u) != 0)
-                ? ::google::protobuf::MessageLite::CopyConstruct(arena, *from._impl_.class_ty_)
-                : nullptr;
 
   // @@protoc_insertion_point(copy_constructor:baml_bridge.cffi.v1.InboundClassValue)
 }
 PROTOBUF_NDEBUG_INLINE InboundClassValue::Impl_::Impl_(
     ::google::protobuf::internal::InternalVisibility visibility,
     ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
-      : _cached_size_{0},
-        fields_{visibility, arena} {}
+      : fields_{visibility, arena},
+        _cached_size_{0} {}
 
 inline void InboundClassValue::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
   new (&_impl_) Impl_(internal_visibility(), arena);
-  _impl_.class_ty_ = {};
 }
 InboundClassValue::~InboundClassValue() {
   // @@protoc_insertion_point(destructor:baml_bridge.cffi.v1.InboundClassValue)
@@ -2031,7 +2074,6 @@ inline void InboundClassValue::SharedDtor(MessageLite& self) {
   InboundClassValue& this_ = static_cast<InboundClassValue&>(self);
   this_._internal_metadata_.Delete<std::string>();
   ABSL_DCHECK(this_.GetArena() == nullptr);
-  delete this_._impl_.class_ty_;
   this_._impl_.~Impl_();
 }
 
@@ -2087,17 +2129,17 @@ InboundClassValue::GetClassData() const {
   return InboundClassValue_class_data_.base();
 }
 PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1
-const ::_pbi::TcParseTable<1, 2, 2, 0, 2>
+const ::_pbi::TcParseTable<0, 1, 1, 0, 2>
 InboundClassValue::_table_ = {
   {
-    PROTOBUF_FIELD_OFFSET(InboundClassValue, _impl_._has_bits_),
+    0,  // no _has_bits_
     0, // no _extensions_
-    3, 8,  // max_field_number, fast_idx_mask
+    2, 0,  // max_field_number, fast_idx_mask
     offsetof(decltype(_table_), field_lookup_table),
-    4294967289,  // skipmap
+    4294967293,  // skipmap
     offsetof(decltype(_table_), field_entries),
-    2,  // num_field_entries
-    2,  // num_aux_entries
+    1,  // num_field_entries
+    1,  // num_aux_entries
     offsetof(decltype(_table_), aux_entries),
     InboundClassValue_class_data_.base(),
     nullptr,  // post_loop_handler
@@ -2109,22 +2151,15 @@ InboundClassValue::_table_ = {
     // repeated .baml_bridge.cffi.v1.InboundMapEntry fields = 2;
     {::_pbi::TcParser::FastMtR1,
      {18, 63, 0, PROTOBUF_FIELD_OFFSET(InboundClassValue, _impl_.fields_)}},
-    // .baml_bridge.cffi.v1.BamlTyClass class_ty = 3;
-    {::_pbi::TcParser::FastMtS1,
-     {26, 0, 1, PROTOBUF_FIELD_OFFSET(InboundClassValue, _impl_.class_ty_)}},
   }}, {{
     65535, 65535
   }}, {{
     // repeated .baml_bridge.cffi.v1.InboundMapEntry fields = 2;
-    {PROTOBUF_FIELD_OFFSET(InboundClassValue, _impl_.fields_), -1, 0,
+    {PROTOBUF_FIELD_OFFSET(InboundClassValue, _impl_.fields_), 0, 0,
     (0 | ::_fl::kFcRepeated | ::_fl::kMessage | ::_fl::kTvTable)},
-    // .baml_bridge.cffi.v1.BamlTyClass class_ty = 3;
-    {PROTOBUF_FIELD_OFFSET(InboundClassValue, _impl_.class_ty_), _Internal::kHasBitsOffset + 0, 1,
-    (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
   }},
   {{
       {::_pbi::TcParser::GetTable<::baml_bridge::cffi::v1::InboundMapEntry>()},
-      {::_pbi::TcParser::GetTable<::baml_bridge::cffi::v1::BamlTyClass>()},
   }},
   {{
   }},
@@ -2137,12 +2172,6 @@ PROTOBUF_NOINLINE void InboundClassValue::Clear() {
   (void) cached_has_bits;
 
   _impl_.fields_.Clear();
-  cached_has_bits = _impl_._has_bits_[0];
-  if ((cached_has_bits & 0x00000001u) != 0) {
-    ABSL_DCHECK(_impl_.class_ty_ != nullptr);
-    _impl_.class_ty_->Clear();
-  }
-  _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<std::string>();
 }
 
@@ -2170,14 +2199,6 @@ PROTOBUF_NOINLINE void InboundClassValue::Clear() {
         ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
             2, repfield, repfield.GetCachedSize(),
             target, stream);
-  }
-
-  cached_has_bits = this_._impl_._has_bits_[0];
-  // .baml_bridge.cffi.v1.BamlTyClass class_ty = 3;
-  if ((cached_has_bits & 0x00000001u) != 0) {
-    target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
-        3, *this_._impl_.class_ty_, this_._impl_.class_ty_->GetCachedSize(), target,
-        stream);
   }
 
   if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
@@ -2213,14 +2234,6 @@ PROTOBUF_NOINLINE void InboundClassValue::Clear() {
       }
     }
   }
-   {
-    // .baml_bridge.cffi.v1.BamlTyClass class_ty = 3;
-    cached_has_bits = this_._impl_._has_bits_[0];
-    if ((cached_has_bits & 0x00000001u) != 0) {
-      total_size += 1 +
-                    ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.class_ty_);
-    }
-  }
   if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
     total_size += this_._internal_metadata_.unknown_fields<std::string>(::google::protobuf::internal::GetEmptyString).size();
   }
@@ -2231,7 +2244,6 @@ PROTOBUF_NOINLINE void InboundClassValue::Clear() {
 void InboundClassValue::MergeImpl(::google::protobuf::MessageLite& to_msg, const ::google::protobuf::MessageLite& from_msg) {
   auto* const _this = static_cast<InboundClassValue*>(&to_msg);
   auto& from = static_cast<const InboundClassValue&>(from_msg);
-  ::google::protobuf::Arena* arena = _this->GetArena();
   // @@protoc_insertion_point(class_specific_merge_from_start:baml_bridge.cffi.v1.InboundClassValue)
   ABSL_DCHECK_NE(&from, _this);
   ::uint32_t cached_has_bits = 0;
@@ -2239,16 +2251,6 @@ void InboundClassValue::MergeImpl(::google::protobuf::MessageLite& to_msg, const
 
   _this->_internal_mutable_fields()->MergeFrom(
       from._internal_fields());
-  cached_has_bits = from._impl_._has_bits_[0];
-  if ((cached_has_bits & 0x00000001u) != 0) {
-    ABSL_DCHECK(from._impl_.class_ty_ != nullptr);
-    if (_this->_impl_.class_ty_ == nullptr) {
-      _this->_impl_.class_ty_ = ::google::protobuf::MessageLite::CopyConstruct(arena, *from._impl_.class_ty_);
-    } else {
-      _this->_impl_.class_ty_->MergeFrom(*from._impl_.class_ty_);
-    }
-  }
-  _this->_impl_._has_bits_[0] |= cached_has_bits;
   _this->_internal_metadata_.MergeFrom<std::string>(from._internal_metadata_);
 }
 
@@ -2263,9 +2265,7 @@ void InboundClassValue::CopyFrom(const InboundClassValue& from) {
 void InboundClassValue::InternalSwap(InboundClassValue* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
   using ::std::swap;
   _internal_metadata_.InternalSwap(&other->_internal_metadata_);
-  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
   _impl_.fields_.InternalSwap(&other->_impl_.fields_);
-  swap(_impl_.class_ty_, other->_impl_.class_ty_);
 }
 
 // ===================================================================
@@ -2890,6 +2890,8 @@ class CallFunctionArgs::_Internal {
       decltype(::std::declval<CallFunctionArgs>()._impl_._has_bits_);
   static constexpr ::int32_t kHasBitsOffset =
       8 * PROTOBUF_FIELD_OFFSET(CallFunctionArgs, _impl_._has_bits_);
+  static constexpr ::int32_t kOneofCaseOffset =
+      PROTOBUF_FIELD_OFFSET(::baml_bridge::cffi::v1::CallFunctionArgs, _impl_._oneof_case_);
 };
 
 CallFunctionArgs::CallFunctionArgs(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
@@ -2908,7 +2910,9 @@ PROTOBUF_NDEBUG_INLINE CallFunctionArgs::Impl_::Impl_(
       : _has_bits_{from._has_bits_},
         _cached_size_{0},
         kwargs_{visibility, arena, from.kwargs_},
-        type_args_{visibility, arena, from.type_args_} {}
+        type_args_{visibility, arena, from.type_args_},
+        call_target_{},
+        _oneof_case_{from._oneof_case_[0]} {}
 
 CallFunctionArgs::CallFunctionArgs(
     ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
@@ -2924,6 +2928,16 @@ CallFunctionArgs::CallFunctionArgs(
       from._internal_metadata_);
   new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
   _impl_.call_id_ = from._impl_.call_id_;
+  switch (call_target_case()) {
+    case CALL_TARGET_NOT_SET:
+      break;
+      case kFunctionName:
+        new (&_impl_.call_target_.function_name_) decltype(_impl_.call_target_.function_name_){arena, from._impl_.call_target_.function_name_};
+        break;
+      case kFunctionHandle:
+        _impl_.call_target_.function_handle_ = from._impl_.call_target_.function_handle_;
+        break;
+  }
 
   // @@protoc_insertion_point(copy_constructor:baml_bridge.cffi.v1.CallFunctionArgs)
 }
@@ -2932,7 +2946,9 @@ PROTOBUF_NDEBUG_INLINE CallFunctionArgs::Impl_::Impl_(
     ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
       : _cached_size_{0},
         kwargs_{visibility, arena},
-        type_args_{visibility, arena} {}
+        type_args_{visibility, arena},
+        call_target_{},
+        _oneof_case_{} {}
 
 inline void CallFunctionArgs::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
   new (&_impl_) Impl_(internal_visibility(), arena);
@@ -2946,8 +2962,31 @@ inline void CallFunctionArgs::SharedDtor(MessageLite& self) {
   CallFunctionArgs& this_ = static_cast<CallFunctionArgs&>(self);
   this_._internal_metadata_.Delete<std::string>();
   ABSL_DCHECK(this_.GetArena() == nullptr);
+  if (this_.has_call_target()) {
+    this_.clear_call_target();
+  }
   this_._impl_.~Impl_();
 }
+
+void CallFunctionArgs::clear_call_target() {
+// @@protoc_insertion_point(one_of_clear_start:baml_bridge.cffi.v1.CallFunctionArgs)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  switch (call_target_case()) {
+    case kFunctionName: {
+      _impl_.call_target_.function_name_.Destroy();
+      break;
+    }
+    case kFunctionHandle: {
+      // No need to clear
+      break;
+    }
+    case CALL_TARGET_NOT_SET: {
+      break;
+    }
+  }
+  _impl_._oneof_case_[0] = CALL_TARGET_NOT_SET;
+}
+
 
 inline void* PROTOBUF_NONNULL CallFunctionArgs::PlacementNew_(
     const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
@@ -3005,16 +3044,16 @@ CallFunctionArgs::GetClassData() const {
   return CallFunctionArgs_class_data_.base();
 }
 PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1
-const ::_pbi::TcParseTable<2, 3, 2, 0, 2>
+const ::_pbi::TcParseTable<2, 5, 2, 58, 2>
 CallFunctionArgs::_table_ = {
   {
     PROTOBUF_FIELD_OFFSET(CallFunctionArgs, _impl_._has_bits_),
     0, // no _extensions_
-    3, 24,  // max_field_number, fast_idx_mask
+    5, 24,  // max_field_number, fast_idx_mask
     offsetof(decltype(_table_), field_lookup_table),
-    4294967288,  // skipmap
+    4294967264,  // skipmap
     offsetof(decltype(_table_), field_entries),
-    3,  // num_field_entries
+    5,  // num_field_entries
     2,  // num_aux_entries
     offsetof(decltype(_table_), aux_entries),
     CallFunctionArgs_class_data_.base(),
@@ -3046,12 +3085,21 @@ CallFunctionArgs::_table_ = {
     // repeated .baml_bridge.cffi.v1.BamlTyArg type_args = 3;
     {PROTOBUF_FIELD_OFFSET(CallFunctionArgs, _impl_.type_args_), -1, 1,
     (0 | ::_fl::kFcRepeated | ::_fl::kMessage | ::_fl::kTvTable)},
+    // string function_name = 4;
+    {PROTOBUF_FIELD_OFFSET(CallFunctionArgs, _impl_.call_target_.function_name_), _Internal::kOneofCaseOffset + 0, 0,
+    (0 | ::_fl::kFcOneof | ::_fl::kUtf8String | ::_fl::kRepAString)},
+    // uint64 function_handle = 5;
+    {PROTOBUF_FIELD_OFFSET(CallFunctionArgs, _impl_.call_target_.function_handle_), _Internal::kOneofCaseOffset + 0, 0,
+    (0 | ::_fl::kFcOneof | ::_fl::kUInt64)},
   }},
   {{
       {::_pbi::TcParser::GetTable<::baml_bridge::cffi::v1::InboundMapEntry>()},
       {::_pbi::TcParser::GetTable<::baml_bridge::cffi::v1::BamlTyArg>()},
   }},
   {{
+    "\44\0\0\0\15\0\0\0"
+    "baml_bridge.cffi.v1.CallFunctionArgs"
+    "function_name"
   }},
 };
 PROTOBUF_NOINLINE void CallFunctionArgs::Clear() {
@@ -3064,6 +3112,7 @@ PROTOBUF_NOINLINE void CallFunctionArgs::Clear() {
   _impl_.kwargs_.Clear();
   _impl_.type_args_.Clear();
   _impl_.call_id_ = ::uint64_t{0u};
+  clear_call_target();
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<std::string>();
 }
@@ -3114,6 +3163,23 @@ PROTOBUF_NOINLINE void CallFunctionArgs::Clear() {
             target, stream);
   }
 
+  switch (this_.call_target_case()) {
+    case kFunctionName: {
+      const ::std::string& _s = this_._internal_function_name();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "baml_bridge.cffi.v1.CallFunctionArgs.function_name");
+      target = stream->WriteStringMaybeAliased(4, _s, target);
+      break;
+    }
+    case kFunctionHandle: {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          5, this_._internal_function_handle(), target);
+      break;
+    }
+    default:
+      break;
+  }
   if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
     target = stream->WriteRaw(
         this_._internal_metadata_.unknown_fields<std::string>(::google::protobuf::internal::GetEmptyString).data(),
@@ -3164,6 +3230,23 @@ PROTOBUF_NOINLINE void CallFunctionArgs::Clear() {
       }
     }
   }
+  switch (this_.call_target_case()) {
+    // string function_name = 4;
+    case kFunctionName: {
+      total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                      this_._internal_function_name());
+      break;
+    }
+    // uint64 function_handle = 5;
+    case kFunctionHandle: {
+      total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+          this_._internal_function_handle());
+      break;
+    }
+    case CALL_TARGET_NOT_SET: {
+      break;
+    }
+  }
   if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
     total_size += this_._internal_metadata_.unknown_fields<std::string>(::google::protobuf::internal::GetEmptyString).size();
   }
@@ -3174,6 +3257,7 @@ PROTOBUF_NOINLINE void CallFunctionArgs::Clear() {
 void CallFunctionArgs::MergeImpl(::google::protobuf::MessageLite& to_msg, const ::google::protobuf::MessageLite& from_msg) {
   auto* const _this = static_cast<CallFunctionArgs*>(&to_msg);
   auto& from = static_cast<const CallFunctionArgs&>(from_msg);
+  ::google::protobuf::Arena* arena = _this->GetArena();
   // @@protoc_insertion_point(class_specific_merge_from_start:baml_bridge.cffi.v1.CallFunctionArgs)
   ABSL_DCHECK_NE(&from, _this);
   ::uint32_t cached_has_bits = 0;
@@ -3190,6 +3274,32 @@ void CallFunctionArgs::MergeImpl(::google::protobuf::MessageLite& to_msg, const 
     }
   }
   _this->_impl_._has_bits_[0] |= cached_has_bits;
+  if (const uint32_t oneof_from_case = from._impl_._oneof_case_[0]) {
+    const uint32_t oneof_to_case = _this->_impl_._oneof_case_[0];
+    const bool oneof_needs_init = oneof_to_case != oneof_from_case;
+    if (oneof_needs_init) {
+      if (oneof_to_case != 0) {
+        _this->clear_call_target();
+      }
+      _this->_impl_._oneof_case_[0] = oneof_from_case;
+    }
+
+    switch (oneof_from_case) {
+      case kFunctionName: {
+        if (oneof_needs_init) {
+          _this->_impl_.call_target_.function_name_.InitDefault();
+        }
+        _this->_impl_.call_target_.function_name_.Set(from._internal_function_name(), arena);
+        break;
+      }
+      case kFunctionHandle: {
+        _this->_impl_.call_target_.function_handle_ = from._impl_.call_target_.function_handle_;
+        break;
+      }
+      case CALL_TARGET_NOT_SET:
+        break;
+    }
+  }
   _this->_internal_metadata_.MergeFrom<std::string>(from._internal_metadata_);
 }
 
@@ -3208,6 +3318,8 @@ void CallFunctionArgs::InternalSwap(CallFunctionArgs* PROTOBUF_RESTRICT PROTOBUF
   _impl_.kwargs_.InternalSwap(&other->_impl_.kwargs_);
   _impl_.type_args_.InternalSwap(&other->_impl_.type_args_);
   swap(_impl_.call_id_, other->_impl_.call_id_);
+  swap(_impl_.call_target_, other->_impl_.call_target_);
+  swap(_impl_._oneof_case_[0], other->_impl_._oneof_case_[0]);
 }
 
 // ===================================================================

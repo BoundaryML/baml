@@ -431,6 +431,36 @@ enum PlaygroundOpenTarget {
     Browser,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum PlaygroundExitSeverity {
+    Info,
+    Error,
+}
+
+fn playground_exit_severity(error: &anyhow::Error) -> PlaygroundExitSeverity {
+    if error
+        .downcast_ref::<playground_server::PlaygroundNotConfigured>()
+        .is_some()
+    {
+        PlaygroundExitSeverity::Info
+    } else {
+        PlaygroundExitSeverity::Error
+    }
+}
+
+fn log_playground_exit(error: &anyhow::Error) {
+    match playground_exit_severity(error) {
+        PlaygroundExitSeverity::Info => {
+            tracing::info!(
+                "Playground not configured; running without playground support: {error}"
+            );
+        }
+        PlaygroundExitSeverity::Error => {
+            tracing::error!("Playground server exited: {error}");
+        }
+    }
+}
+
 fn run_server_inner(
     playground_open_target: PlaygroundOpenTarget,
     workspace_roots: Vec<PathBuf>,
@@ -683,7 +713,7 @@ fn run_server_inner(
             )
             .await
             {
-                tracing::error!("Playground server exited: {e}");
+                log_playground_exit(&e);
             }
         });
     } else if matches!(playground_open_target, PlaygroundOpenTarget::Browser) {
@@ -988,6 +1018,21 @@ mod tests {
 
     fn framed(body: &str) -> Vec<u8> {
         format!("Content-Length: {}\r\n\r\n{body}", body.len()).into_bytes()
+    }
+
+    #[test]
+    fn missing_playground_configuration_is_not_an_error_exit() {
+        let unconfigured = anyhow::Error::new(playground_server::PlaygroundNotConfigured);
+        assert_eq!(
+            playground_exit_severity(&unconfigured),
+            PlaygroundExitSeverity::Info
+        );
+
+        let real_failure = anyhow::anyhow!("playground listener failed");
+        assert_eq!(
+            playground_exit_severity(&real_failure),
+            PlaygroundExitSeverity::Error
+        );
     }
 
     #[test]

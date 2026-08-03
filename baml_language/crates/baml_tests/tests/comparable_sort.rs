@@ -39,7 +39,7 @@ fn collect_compile_errors(source: &str) -> Vec<String> {
                 .map(|span| user_file_ids.contains(&span.file_id))
                 .unwrap_or(false)
         })
-        .map(|d| format!("[{}] {}", d.code(), d.message))
+        .map(|d| format!("[{}] {}", d.code(), d.message_with_primary_label()))
         .collect()
 }
 
@@ -300,9 +300,11 @@ async fn phase2_user_class_compare_direct_call_mir_optimized() {
 // `Sortable`-style blanket impl binding `SE = T.CE`, and user classes that
 // bind `CE` explicitly (to `never` or a concrete error).
 //
-// FINDING — a *defaulted* associated error breaks the fallible case: see
-// `phase3_defaulted_assoc_error_over_constrains_bound` below. That is why the
-// stdlib `Comparable.CompareError` is intentionally undefaulted.
+// Defaulting the associated error would work too — a bare bound pins nothing,
+// so an implementor that overrides the default still satisfies it (see
+// `phase3_defaulted_assoc_override_satisfies_bare_bound` below). The stdlib
+// leaves `Comparable.CompareError` undefaulted as a matter of style, not
+// necessity.
 
 const PHASE3_SCAFFOLD: &str = r#"
     interface Cmp2 {
@@ -426,13 +428,12 @@ fn phase3_out_of_body_impl_on_builtin_with_error_throws_it() {
     ));
 }
 
-// FINDING (documents *why* the stdlib `Comparable.CompareError` is undefaulted):
-// when the interface associated type has a default, a bare `T extends Cmp`
-// bound is silently constrained to that default, so an implementor that
-// overrides it (a fallible comparator) is rejected by the blanket impl —
-// `srt` does not resolve on its array. Pinned as a known limitation.
+// A defaulted associated type does not constrain a bare bound: `T extends
+// CmpD` pins nothing, so an implementor that overrides the default (a
+// fallible comparator with `CE = BoomD`) still satisfies the blanket impl and
+// `srt` resolves — the override's error type flows through `SE = T.CE`.
 #[test]
-fn phase3_defaulted_assoc_error_over_constrains_bound() {
+fn phase3_defaulted_assoc_override_satisfies_bare_bound() {
     let errors = collect_compile_errors(
         r#"
         interface CmpD {
@@ -468,8 +469,8 @@ fn phase3_defaulted_assoc_error_over_constrains_bound() {
         "#,
     );
     assert!(
-        errors.iter().any(|e| e.contains("srt")),
-        "expected the defaulted-assoc-type bug to block `srt` resolution; got:\n  {}",
+        errors.is_empty(),
+        "a defaulted-then-overridden associated type must satisfy the bare bound; got:\n  {}",
         errors.join("\n  ")
     );
 }
@@ -569,41 +570,37 @@ fn phase5_class_without_comparable_sort_is_compile_error() {
 //
 // Spikes for thoughts/sam-projects/array-sort/02-native-sort-fast-path-plan.md.
 //
-// FINDING (kills the plan's primary shape): the intended
-// `match (self) { int[] => …, bigint[] => …, …, _ => … }` dispatch cannot
-// work. Array type patterns do not discriminate element types — the runtime
-// `IsType` test for an array type is just the LIST type *tag* (`value_type_tag`
-// in `bex_vm/src/vm.rs` carries no element type), and the exhaustiveness
-// matrix mirrors that: the first array arm covers all of `T[]`, so every later
-// arm is `[E0063] unreachable arm` (pinned below). Per-arm refinement of `T`
-// never gets a chance to matter.
+// HISTORICAL CONTEXT, updated: when the native dispatch was designed, the
+// plan's primary `match (self) { int[] => …, bigint[] => …, …, _ => … }`
+// shape failed for *matching* reasons — array patterns lowered to the coarse
+// LIST tag (no element discrimination), the first array arm statically
+// covered all of `T[]` making later arms `unreachable arm` errors, and a
+// BAML-level `x is int` on a `T`-typed value folded to a constant-false test.
+// Those limitations are fixed: array type arms emit invariant
+// element-discriminating tests, a concrete array arm over `T[]` is
+// possible-but-not-covering (all arms reachable, `_` required), and `is int`
+// tests the realized frame `T` (see
+// `is_primitive_on_generic_value_tests_realized_type` in the corpus:
+// baml_src/ns_comparable_sort/comparable_sort.baml).
 //
-// SECOND FINDING: the pre-approved fallback "boolean `is`-test" cannot be a
-// *BAML-level* `is` either. `x is int` on a `T`-typed value compiles, but TIR
-// records the pattern type as the intersection of `T` and `int` — `Never` —
-// and MIR lowers a `Never` pattern type to a constant-false test
-// (`lower_pattern_test` → `convert_tir_ty_for_runtime`), so the test never fires at
-// runtime (pinned by `is_primitive_on_generic_value_folds_to_false` in the
-// corpus: baml_src/ns_comparable_sort/comparable_sort.baml).
-//
-// The dispatch therefore uses a single native boolean,
-// `root._is_primitive_array(self)`, which reads the first element's runtime
-// type *tag* (per-element tags DO discriminate int/bigint/string/float),
-// routing to a single `root._rust_sort(self)`. `T` stays fully symbolic — no
-// refinement needed, `_rust_sort` is itself generic over `T extends
-// Comparable` — and the homogeneity of `T[]` plus `T extends Comparable`
-// guarantees a primitive first element implies a primitive `T`. Like
-// `_compare_shim`, the native test dispatches on runtime *values*, not on
-// frame type arguments, so it is immune to type-arg plumbing gaps. `is_fast`
-// stands in for the native boolean; `fast_g` for `_rust_sort`; `slow_g` for
-// the `sort_by` path.
+// The shape still cannot be *typed*, though, for a different reason: inside
+// the `int[]` arm the scrutinee narrows to `int[]`, so `fast_g(xs)` infers
+// `T = int` and returns `int[]` — and the checker has no type-variable
+// refinement ("`T = int` within this arm" is per-realization knowledge it
+// does not track), so `int[]` cannot flow back to the enclosing `T[]` return.
+// Hence the shipped dispatch keeps the single native boolean
+// `root._is_primitive_array(self)` (reads the first element's runtime tag,
+// routing to one `root._rust_sort(self)`) — `T` stays fully symbolic and the
+// native test dispatches on runtime *values*, immune to type-arg plumbing.
+// `is_fast` stands in for the native boolean; `fast_g` for `_rust_sort`;
+// `slow_g` for the `sort_by` path.
 
 #[test]
-fn match_dispatch_array_type_arms_do_not_discriminate() {
-    // Documents WHY the dispatch is an element `is`-test rather than the
-    // plan's `match (self)` shape: the second and later array-type arms are
-    // unreachable (one LIST tag, no element type at runtime).
-    assert_compile_error_contains(
+fn match_dispatch_array_type_arms_reachable_but_t_is_not_refined() {
+    // The arms are all reachable now (no `unreachable arm`), but each arm's
+    // body fails the return check: the narrowed `int[]` result cannot be
+    // returned as `T[]` without type-variable refinement.
+    let errors = collect_compile_errors(
         r#"
         function fast_g<T extends baml.Comparable>(xs: T[]) -> T[] throws T.CompareError {
             return xs
@@ -619,7 +616,18 @@ fn match_dispatch_array_type_arms_do_not_discriminate() {
             }
         }
         "#,
-        "unreachable arm",
+    );
+    assert!(
+        !errors.iter().any(|e| e.contains("unreachable arm")),
+        "concrete array arms over T[] are reachable, got:\n  {}",
+        errors.join("\n  ")
+    );
+    assert!(
+        errors
+            .iter()
+            .any(|e| e.contains("expected `T[]`, found `int[]`")),
+        "expected the un-refined return mismatch, got:\n  {}",
+        errors.join("\n  ")
     );
 }
 

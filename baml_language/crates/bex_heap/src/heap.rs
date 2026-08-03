@@ -21,9 +21,9 @@ use std::{
     },
 };
 
-use ::bex_vm_types::Value;
+use ::bex_vm_types::{Value, errors::StackFrame, types::FutureId};
 use bex_external_types::{Handle, WeakHeapRef};
-use bex_vm_types::{HeapPtr, Object, ObjectIndex, WriteBarrier};
+use bex_vm_types::{HeapPtr, Object, WriteBarrier};
 
 use crate::{
     HeapDebuggerConfig, HeapDebuggerState, card_table::CardTable, chunked_vec::ChunkedVec,
@@ -50,6 +50,16 @@ pub enum Generation {
     Gen1,
     /// Gen2 old generation — long-lived objects.
     Gen2,
+}
+
+/// Error payload preserved from an unreachable, never-observed spawned
+/// future. The engine drains these after the GC pause.
+#[derive(Debug, Clone, PartialEq)]
+pub struct UnhandledSpawnError {
+    pub future_id: FutureId,
+    pub value: Value,
+    pub trace: Vec<StackFrame>,
+    pub cancelled: bool,
 }
 impl Generation {
     /// Check if this generation is young (Gen0 or Gen1).
@@ -184,6 +194,11 @@ pub struct BexHeap {
     /// it still has the class in hand — so the engine drain needs no heap read
     /// to dispatch.
     pending_finalizers: Mutex<Vec<(HeapPtr, String)>>,
+
+    /// Unobserved errors discovered while collecting unreachable futures.
+    /// Entries contain post-copy values and are drained before execution
+    /// resumes or another collection runs.
+    pending_unhandled_spawn_errors: Mutex<Vec<UnhandledSpawnError>>,
 
     /// BEP-042 fast path: `true` iff at least one compile-time `Class` opts into
     /// a `cleanup` finalizer (`has_cleanup`). Classes are fixed at compile time,
@@ -333,6 +348,7 @@ impl BexHeap {
             handles: RwLock::new(HashMap::new()),
             next_handle_key: AtomicUsize::new(0),
             pending_finalizers: Mutex::new(Vec::new()),
+            pending_unhandled_spawn_errors: Mutex::new(Vec::new()),
             has_finalizable_classes,
             tlab_size,
             growth_lock: Mutex::new(()),
@@ -431,12 +447,6 @@ impl BexHeap {
     /// this index are runtime allocations that can be garbage collected.
     pub fn compile_time_boundary(&self) -> usize {
         self.compile_time.len()
-    }
-
-    /// Check if an index refers to a compile-time object.
-    #[inline]
-    pub fn is_compile_time(&self, idx: ObjectIndex) -> bool {
-        idx.into_raw() < self.compile_time.len()
     }
 
     /// Check if a pointer refers to a compile-time object.
@@ -734,25 +744,6 @@ impl BexHeap {
         None
     }
 
-    /// Convert a runtime space index to a global ObjectIndex.
-    #[inline]
-    pub fn runtime_to_global(&self, runtime_idx: usize) -> ObjectIndex {
-        self.make_object_index(self.compile_time.len() + runtime_idx)
-    }
-
-    /// Convert a global ObjectIndex to a runtime space index.
-    /// Returns None if this is a compile-time object.
-    #[inline]
-    pub fn global_to_runtime(&self, idx: ObjectIndex) -> Option<usize> {
-        let raw = idx.into_raw();
-        let ct_len = self.compile_time.len();
-        if raw >= ct_len {
-            Some(raw - ct_len)
-        } else {
-            None
-        }
-    }
-
     /// Get the TLAB chunk size.
     pub fn tlab_size(&self) -> usize {
         self.tlab_size
@@ -791,31 +782,15 @@ impl BexHeap {
         }
     }
 
-    /// Get a mutable reference to a runtime object in Gen0.
-    ///
-    /// # Safety
-    ///
-    /// Caller must ensure exclusive access to this object.
-    #[inline]
-    #[allow(clippy::mut_from_ref)] // Interior mutability via UnsafeCell
-    pub unsafe fn get_runtime_object_mut(&self, runtime_idx: usize) -> &mut Object {
-        // SAFETY: Caller ensures exclusive access; Gen0 holds all runtime allocations
-        unsafe { &mut *(*self.gen0.get()).get_ptr(runtime_idx) }
-    }
-
     /// Get the current number of objects in the heap (compile-time + all
     /// runtime generations).
-    pub fn len(&self) -> usize {
+    #[cfg(any(test, feature = "heap_debug"))]
+    pub(crate) fn len(&self) -> usize {
         // SAFETY: Reading len is safe on each space (AtomicUsize loads).
         let runtime_len = unsafe {
             (*self.gen0.get()).len() + (*self.gen1.get()).len() + (*self.gen2.get()).len()
         };
         self.compile_time.len() + runtime_len
-    }
-
-    /// Check if the heap is empty.
-    pub fn is_empty(&self) -> bool {
-        self.len() == 0
     }
 
     /// Allocate a new TLAB chunk from Gen0 (the nursery).
@@ -900,6 +875,7 @@ impl BexHeap {
     /// - The pointer must be valid (not collected by GC)
     /// - Caller must ensure no concurrent writes to this object
     pub unsafe fn get_object(&self, idx: HeapPtr) -> &Object {
+        #[cfg(feature = "heap_debug")]
         self.debug_assert_valid_index(idx);
 
         // SAFETY: HeapPtr points directly to the object
@@ -1071,6 +1047,22 @@ impl BexHeap {
                 .pending_finalizers
                 .lock()
                 .expect("pending_finalizers lock poisoned"),
+        )
+    }
+
+    pub(crate) fn push_unhandled_spawn_error(&self, error: UnhandledSpawnError) {
+        self.pending_unhandled_spawn_errors
+            .lock()
+            .expect("pending_unhandled_spawn_errors lock poisoned")
+            .push(error);
+    }
+
+    pub fn take_unhandled_spawn_errors(&self) -> Vec<UnhandledSpawnError> {
+        std::mem::take(
+            &mut *self
+                .pending_unhandled_spawn_errors
+                .lock()
+                .expect("pending_unhandled_spawn_errors lock poisoned"),
         )
     }
 

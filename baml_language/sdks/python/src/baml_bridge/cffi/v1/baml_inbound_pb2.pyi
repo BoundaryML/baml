@@ -9,7 +9,8 @@ from typing import ClassVar as _ClassVar, Optional as _Optional, Union as _Union
 DESCRIPTOR: _descriptor.FileDescriptor
 
 class InboundValue(_message.Message):
-    __slots__ = ("string_value", "int_value", "float_value", "bool_value", "list_value", "map_value", "class_value", "enum_value", "handle", "uint8array_value", "bigint_value", "ty_value")
+    __slots__ = ("value_type", "string_value", "int_value", "float_value", "bool_value", "list_value", "map_value", "class_value", "enum_value", "handle", "uint8array_value", "bigint_value", "ty_value")
+    VALUE_TYPE_FIELD_NUMBER: _ClassVar[int]
     STRING_VALUE_FIELD_NUMBER: _ClassVar[int]
     INT_VALUE_FIELD_NUMBER: _ClassVar[int]
     FLOAT_VALUE_FIELD_NUMBER: _ClassVar[int]
@@ -22,6 +23,7 @@ class InboundValue(_message.Message):
     UINT8ARRAY_VALUE_FIELD_NUMBER: _ClassVar[int]
     BIGINT_VALUE_FIELD_NUMBER: _ClassVar[int]
     TY_VALUE_FIELD_NUMBER: _ClassVar[int]
+    value_type: _baml_type_pb2.BamlTy
     string_value: str
     int_value: int
     float_value: float
@@ -34,7 +36,7 @@ class InboundValue(_message.Message):
     uint8array_value: bytes
     bigint_value: str
     ty_value: _baml_type_pb2.BamlTy
-    def __init__(self, string_value: _Optional[str] = ..., int_value: _Optional[int] = ..., float_value: _Optional[float] = ..., bool_value: bool = ..., list_value: _Optional[_Union[InboundListValue, _Mapping]] = ..., map_value: _Optional[_Union[InboundMapValue, _Mapping]] = ..., class_value: _Optional[_Union[InboundClassValue, _Mapping]] = ..., enum_value: _Optional[_Union[InboundEnumValue, _Mapping]] = ..., handle: _Optional[_Union[_baml_handle_pb2.BamlHandle, _Mapping]] = ..., uint8array_value: _Optional[bytes] = ..., bigint_value: _Optional[str] = ..., ty_value: _Optional[_Union[_baml_type_pb2.BamlTy, _Mapping]] = ...) -> None: ...
+    def __init__(self, value_type: _Optional[_Union[_baml_type_pb2.BamlTy, _Mapping]] = ..., string_value: _Optional[str] = ..., int_value: _Optional[int] = ..., float_value: _Optional[float] = ..., bool_value: bool = ..., list_value: _Optional[_Union[InboundListValue, _Mapping]] = ..., map_value: _Optional[_Union[InboundMapValue, _Mapping]] = ..., class_value: _Optional[_Union[InboundClassValue, _Mapping]] = ..., enum_value: _Optional[_Union[InboundEnumValue, _Mapping]] = ..., handle: _Optional[_Union[_baml_handle_pb2.BamlHandle, _Mapping]] = ..., uint8array_value: _Optional[bytes] = ..., bigint_value: _Optional[str] = ..., ty_value: _Optional[_Union[_baml_type_pb2.BamlTy, _Mapping]] = ...) -> None: ...
 
 class InboundListValue(_message.Message):
     __slots__ = ("values",)
@@ -63,12 +65,10 @@ class InboundMapEntry(_message.Message):
     def __init__(self, string_key: _Optional[str] = ..., int_key: _Optional[int] = ..., bool_key: bool = ..., enum_key: _Optional[_Union[InboundEnumValue, _Mapping]] = ..., value: _Optional[_Union[InboundValue, _Mapping]] = ...) -> None: ...
 
 class InboundClassValue(_message.Message):
-    __slots__ = ("fields", "class_ty")
+    __slots__ = ("fields",)
     FIELDS_FIELD_NUMBER: _ClassVar[int]
-    CLASS_TY_FIELD_NUMBER: _ClassVar[int]
     fields: _containers.RepeatedCompositeFieldContainer[InboundMapEntry]
-    class_ty: _baml_type_pb2.BamlTyClass
-    def __init__(self, fields: _Optional[_Iterable[_Union[InboundMapEntry, _Mapping]]] = ..., class_ty: _Optional[_Union[_baml_type_pb2.BamlTyClass, _Mapping]] = ...) -> None: ...
+    def __init__(self, fields: _Optional[_Iterable[_Union[InboundMapEntry, _Mapping]]] = ...) -> None: ...
 
 class InboundEnumValue(_message.Message):
     __slots__ = ("name", "value")
@@ -87,14 +87,18 @@ class BamlTyArg(_message.Message):
     def __init__(self, type_var: _Optional[str] = ..., type_value: _Optional[_Union[_baml_type_pb2.BamlTy, _Mapping]] = ...) -> None: ...
 
 class CallFunctionArgs(_message.Message):
-    __slots__ = ("kwargs", "call_id", "type_args")
+    __slots__ = ("kwargs", "call_id", "type_args", "function_name", "function_handle")
     KWARGS_FIELD_NUMBER: _ClassVar[int]
     CALL_ID_FIELD_NUMBER: _ClassVar[int]
     TYPE_ARGS_FIELD_NUMBER: _ClassVar[int]
+    FUNCTION_NAME_FIELD_NUMBER: _ClassVar[int]
+    FUNCTION_HANDLE_FIELD_NUMBER: _ClassVar[int]
     kwargs: _containers.RepeatedCompositeFieldContainer[InboundMapEntry]
     call_id: int
     type_args: _containers.RepeatedCompositeFieldContainer[BamlTyArg]
-    def __init__(self, kwargs: _Optional[_Iterable[_Union[InboundMapEntry, _Mapping]]] = ..., call_id: _Optional[int] = ..., type_args: _Optional[_Iterable[_Union[BamlTyArg, _Mapping]]] = ...) -> None: ...
+    function_name: str
+    function_handle: int
+    def __init__(self, kwargs: _Optional[_Iterable[_Union[InboundMapEntry, _Mapping]]] = ..., call_id: _Optional[int] = ..., type_args: _Optional[_Iterable[_Union[BamlTyArg, _Mapping]]] = ..., function_name: _Optional[str] = ..., function_handle: _Optional[int] = ...) -> None: ...
 
 class CallAck(_message.Message):
     __slots__ = ("error",)

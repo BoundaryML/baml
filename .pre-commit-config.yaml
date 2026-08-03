@@ -33,6 +33,7 @@ repos:
         fail_fast: true
 
       - id: check-yaml
+        args: [--allow-multiple-documents]
         fail_fast: true
 
   - repo: local
@@ -100,3 +101,12 @@ repos:
         files: ^baml_language/
         priority: 4
         stages: [manual]
+
+      # Temporarily disabled while the Hawk check is paused in CI.
+      # - id: cargo-hawk
+      #   name: cargo hawk (dead public)
+      #   entry: bash -c 'cd baml_language && scripts/hawk'
+      #   language: system
+      #   pass_filenames: false
+      #   files: ^baml_language/(.*\.rs|.*Cargo\.toml|Cargo\.lock|hawk\.toml|scripts/hawk)$
+      #   priority: 5

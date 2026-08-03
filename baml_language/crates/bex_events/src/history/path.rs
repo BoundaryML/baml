@@ -17,11 +17,6 @@ pub struct BoundaryHistoryPath {
 
 impl BoundaryHistoryPath {
     #[must_use]
-    pub fn history_root(&self) -> PathBuf {
-        self.project_root.join(".baml").join(HISTORY_DIR_NAME)
-    }
-
-    #[must_use]
     pub fn thread_dir(&self, thread_id: u64) -> PathBuf {
         self.boundary_dir.join(format!("thread-{thread_id}"))
     }

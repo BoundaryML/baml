@@ -17,6 +17,8 @@ mod completion;
 pub mod decode;
 pub mod encode;
 pub mod error;
+mod function;
+pub mod host_value;
 pub mod loader;
 pub mod runtime;
 #[cfg(test)]
@@ -27,6 +29,8 @@ pub mod wire;
 
 pub use baml_value::{BamlMapKey, BamlValue, OptionalArg};
 pub use error::{DecodeError, Error, SdkError};
+pub use function::{BamlFunction, FunctionArgs};
+pub use host_value::{HostCallable, HostCallback, HostParam};
 // reexports
 pub use indexmap::IndexMap;
 pub use num_bigint::BigInt;
@@ -39,5 +43,13 @@ pub type Map<K, V> = indexmap::IndexMap<K, V>;
 /// loaded engine library must report the same version (the loader's
 /// handshake enforces it).
 pub fn get_version() -> &'static str {
-    version::CANONICAL_VERSION
+    get_toolchain_version()
+}
+
+pub fn get_toolchain_version() -> &'static str {
+    version::TOOLCHAIN_VERSION
+}
+
+pub fn get_bridge_runtime_version() -> &'static str {
+    version::BRIDGE_RUNTIME_VERSION
 }

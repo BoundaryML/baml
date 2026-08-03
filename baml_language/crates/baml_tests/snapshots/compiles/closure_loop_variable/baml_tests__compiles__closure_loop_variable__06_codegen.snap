@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 9299
 ---
 function boundary.LocalId.capture(self: boundary.LocalId, inputs: bool | null, output: bool | null, error: bool | null) -> boundary.LocalId {
 }
@@ -9,6 +8,12 @@ function boundary.id() -> boundary.LocalId {
 }
 
 function boundary.id.current() -> string {
+}
+
+function reflect.call_any(f: baml.AnyFunction<Returns = #0, Throws = #1>, args: map<string, unknown>) -> #0 {
+}
+
+function reflect.signature(f: baml.AnyFunction<Returns = unknown, Throws = unknown>) -> reflect.Signature {
 }
 
 function user.sum_array(arr: int[]) -> int {
@@ -24,14 +29,14 @@ function user.sum_array(arr: int[]) -> int {
     alloc_array 0
     store_var total
     load_var arr
-    load_type baml.iter.Iterable<Item = int, Error = never>
+    load_type baml.iter.Iterable<Error = never, Item = int>
     load_const "iter"
     virtual_call nargs=1 ntypeargs=0
     store_var _4
 
   L0:
     load_var _4
-    load_type baml.iter.Iterator<Item = int, Error = never>
+    load_type baml.iter.Iterator<Error = never, Item = int>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
     store_var _5
@@ -55,14 +60,14 @@ function user.sum_array(arr: int[]) -> int {
 
   L2:
     load_var total
-    load_type baml.iter.Iterable<Item = () -> void throws never, Error = never>
+    load_type baml.iter.Iterable<Error = never, Item = () -> void throws never>
     load_const "iter"
     virtual_call nargs=1 ntypeargs=0
     store_var _12
 
   L3:
     load_var _12
-    load_type baml.iter.Iterator<Item = () -> void throws never, Error = never>
+    load_type baml.iter.Iterator<Error = never, Item = () -> void throws never>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
     store_var _13

@@ -1,0 +1,217 @@
+name: BAML SDK Release - Publish C# NuGet
+
+# Publish only the exact package produced and exercised by
+# verify-csharp-product-slice.reusable.yaml. The trusted-publishing policy on
+# nuget.org must name this reusable workflow, publish2-csharp-sdk.yaml, and the
+# boundary-tools-prod environment.
+on:
+  workflow_call:
+    inputs:
+      release_plan_json:
+        description: "Frozen BAML language release-plan.json content"
+        type: string
+        required: true
+      source_sha:
+        description: "Exact repository commit whose verified package is published"
+        type: string
+        required: true
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  publish-nuget:
+    name: Publish and smoke C# NuGet
+    runs-on: ubuntu-24.04
+    environment: boundary-tools-prod
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.source_sha }}
+          persist-credentials: false
+
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 10.0.301
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: csharp-product-package
+          path: product-package
+
+      - id: package
+        name: Rebind the verified artifact to source and release identities
+        env:
+          RELEASE_PLAN_JSON: ${{ inputs.release_plan_json }}
+          SOURCE_SHA: ${{ inputs.source_sha }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+          printf '%s\n' "$RELEASE_PLAN_JSON" > expected-release-plan.json
+          diff -u \
+            <(jq -S . expected-release-plan.json) \
+            <(jq -S . product-package/release-plan.json)
+
+          canonical_version="$(jq -er \
+            '.canonical_version | select(type == "string" and length > 0)' \
+            expected-release-plan.json)"
+          nuget_version="$(jq -er \
+            '.registry_versions.nuget
+             | select(type == "string" and length > 0)' \
+            expected-release-plan.json)"
+          package="product-package/baml-bridge.$nuget_version.nupkg"
+          test -f "$package"
+          test "$(find product-package -maxdepth 1 \
+            -type f -name 'baml-bridge.*.nupkg' | wc -l)" -eq 1
+          (
+            cd product-package
+            test "$(wc -l < product-package.sha256)" -eq 1
+            sha256sum -c product-package.sha256
+          )
+          test "$(unzip -p "$package" baml-bridge.nuspec \
+            | sed -n 's#.*<version>\([^<]*\)</version>.*#\1#p')" = \
+            "$nuget_version"
+          scripts/baml-csharp-release-contract verify-product \
+            --release-plan expected-release-plan.json \
+            --source-sha "$SOURCE_SHA" \
+            --provenance product-package/native-provenance.json \
+            --manifest product-package/native-manifest.sha256 \
+            --package "$package"
+          scripts/baml-csharp-release-contract verify-generated-sources \
+            --root product-package/baml_client \
+            --manifest product-package/generated-sources.sha256
+
+          digest="$(sha256sum "$package" | cut -d ' ' -f 1)"
+          grep -Fxq "$digest  $(basename "$package")" \
+            product-package/product-package.sha256
+          {
+            echo "path=$package"
+            echo "version=$nuget_version"
+            echo "canonical_version=$canonical_version"
+            echo "digest=$digest"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Compare any existing immutable version by product payload
+        id: existing
+        env:
+          VERSION: ${{ steps.package.outputs.version }}
+          PACKAGE: ${{ steps.package.outputs.path }}
+        run: |
+          set -euo pipefail
+          normalizer=baml_language/sdks/csharp/bridge_csharp/tools/Baml.NuGetNormalizer/Baml.NuGetNormalizer.csproj
+          dotnet build "$normalizer" --configuration Release --nologo \
+            -p:NuGetAudit=false
+          normalized="${VERSION,,}"
+          url="https://api.nuget.org/v3-flatcontainer/baml-bridge/$normalized/baml-bridge.$normalized.nupkg"
+          status="$(curl --retry 3 --retry-all-errors --silent \
+            --output "$RUNNER_TEMP/existing.nupkg" \
+            --write-out '%{http_code}' "$url")"
+          case "$status" in
+            404)
+              echo "publish=true" >> "$GITHUB_OUTPUT"
+              echo "baml-bridge $VERSION is not present on nuget.org"
+              ;;
+            200)
+              dotnet run --project "$normalizer" \
+                --configuration Release --no-build --no-restore -- \
+                compare "$PACKAGE" "$RUNNER_TEMP/existing.nupkg"
+              echo "publish=false" >> "$GITHUB_OUTPUT"
+              echo "baml-bridge $VERSION already exists with identical product-owned content; skipping upload"
+              ;;
+            *)
+              echo "::error::nuget.org version probe returned HTTP $status"
+              exit 1
+              ;;
+          esac
+
+      - name: Exchange GitHub OIDC for a short-lived NuGet key
+        if: ${{ steps.existing.outputs.publish == 'true' }}
+        id: login
+        uses: NuGet/login@v1.2.0
+        with:
+          user: ${{ vars.NUGET_USER }}
+
+      - name: Publish the already-verified package
+        if: ${{ steps.existing.outputs.publish == 'true' }}
+        env:
+          NUGET_API_KEY: ${{ steps.login.outputs.NUGET_API_KEY }}
+          PACKAGE: ${{ steps.package.outputs.path }}
+        run: |
+          set -euo pipefail
+          dotnet nuget push "$PACKAGE" \
+            --api-key "$NUGET_API_KEY" \
+            --source https://api.nuget.org/v3/index.json
+
+      - name: Restore and execute the exact public version from a clean cache
+        env:
+          DIGEST: ${{ steps.package.outputs.digest }}
+          VERSION: ${{ steps.package.outputs.version }}
+        run: |
+          set -euo pipefail
+          consumer="$RUNNER_TEMP/public-csharp-consumer"
+          packages="$RUNNER_TEMP/public-csharp-packages"
+          publish="$RUNNER_TEMP/public-csharp-publish"
+          mkdir -p "$consumer/baml_client" "$packages" "$publish"
+          cp product-package/documentation/Baml.Bridge.DocumentationConsumer.csproj "$consumer/"
+          cp product-package/documentation/Program.cs "$consumer/"
+          cp -R product-package/baml_client/. "$consumer/baml_client/"
+          printf '%s\n' \
+            '<?xml version="1.0" encoding="utf-8"?>' \
+            '<configuration>' \
+            '  <packageSources>' \
+            '    <clear />' \
+            '    <add key="nuget.org" value="https://api.nuget.org/v3/index.json" protocolVersion="3" />' \
+            '  </packageSources>' \
+            '</configuration>' \
+            > "$consumer/NuGet.Config"
+
+          project="$consumer/Baml.Bridge.DocumentationConsumer.csproj"
+          restored=false
+          for attempt in $(seq 1 30); do
+            rm -rf "$packages" "$consumer/obj"
+            mkdir -p "$packages"
+            if NUGET_PACKAGES="$packages" dotnet restore "$project" \
+              --runtime linux-x64 \
+              --configfile "$consumer/NuGet.Config" \
+              --no-cache \
+              -p:NuGetAudit=false \
+              -p:BamlBridgePackageVersion="$VERSION" \
+              -p:BamlGeneratedSourceRoot="$consumer/baml_client"; then
+              restored=true
+              break
+            fi
+            echo "nuget.org has not indexed baml-bridge $VERSION yet (attempt $attempt/30)"
+            sleep 20
+          done
+          test "$restored" = true
+          test "$(find "$packages/baml-bridge" -type f \
+            -name '*.nupkg' | wc -l)" -eq 1
+          test -f "$packages/baml-bridge/${VERSION,,}/baml-bridge.${VERSION,,}.nupkg"
+
+          NUGET_PACKAGES="$packages" dotnet publish "$project" \
+            --configuration Release \
+            --runtime linux-x64 \
+            --self-contained false \
+            --no-restore \
+            --output "$publish" \
+            -p:NuGetAudit=false \
+            -p:BamlBridgePackageVersion="$VERSION" \
+            -p:BamlGeneratedSourceRoot="$consumer/baml_client"
+          test -f "$publish/libbridge_cffi.so"
+          env -u BAML_BRIDGE_CSHARP_NATIVE_LIBRARY \
+            dotnet "$publish/Baml.Bridge.DocumentationConsumer.dll" \
+            | grep -Fx 'csharp_documentation_consumer=ok'
+
+          registry_digest="$(sha256sum \
+            "$packages/baml-bridge/${VERSION,,}/baml-bridge.${VERSION,,}.nupkg" \
+            | cut -d ' ' -f 1)"
+          {
+            echo "Verified public baml-bridge $VERSION."
+            echo "Verified artifact SHA-256: $DIGEST"
+            echo "Repository-served SHA-256: $registry_digest"
+          } >> "$GITHUB_STEP_SUMMARY"

@@ -285,7 +285,9 @@ def main() -> None:
             "CGO_ENABLED": "1",
             "GOCACHE": str(root / "go-build-cache"),
             "GOMODCACHE": str(root / "go-module-cache"),
-            "GOPROXY": "https://proxy.golang.org,direct",
+            # No `direct` fallback: channel promotion must prove the immutable
+            # mirror tag has propagated through the public Go module proxy.
+            "GOPROXY": "https://proxy.golang.org",
             "GOSUMDB": "sum.golang.org",
             "GOWORK": "off",
         }
@@ -295,7 +297,14 @@ def main() -> None:
     run([str(cli), "generate", "--from", "."], cwd=consumer, env=env)
     if "replace " in (consumer / "go.mod").read_text(encoding="utf-8"):
         fail("external consumer unexpectedly contains a Go replace directive")
-    run(["go", "mod", "download", f"{GO_MODULE}@{module_version}"], cwd=consumer, env=env, attempts=4)
+    run(
+        # Reconcile the generated imports into the consumer's go.mod and go.sum.
+        # A named download does not add transitive requirements to the main module.
+        ["go", "mod", "tidy"],
+        cwd=consumer,
+        env=env,
+        attempts=6,
+    )
     module_json = json.loads(
         run(
             ["go", "list", "-m", "-json", GO_MODULE],

@@ -64,42 +64,34 @@ function InvalidAlias(i: I) -> string {
 
 //----
 //- diagnostics
-// warning: cannot access property 'value' on 'j': union contains non-class type map[string, recursive type alias JsonValue]
-//     ╭─[ type_aliases_jinja.baml:23:15 ]
-//     │
-//  23 │   prompt #"{{ j.value }}"#
-//     │               ───┬───
-//     │                  ╰───── cannot access property 'value' on 'j': union contains non-class type map[string, recursive type alias JsonValue]
-//     │
-//     │ Note: Error code: E0074
-// ────╯
-// warning: 'c' is a type alias C (resolves to type alias B (resolves to type alias A (resolves to float))), expected class
-//     ╭─[ type_aliases_jinja.baml:14:15 ]
-//     │
-//  14 │   prompt #"{{ c.value }}"#
-//     │               ───┬───
-//     │                  ╰───── 'c' is a type alias C (resolves to type alias B (resolves to type alias A (resolves to float))), expected class
-//     │
-//     │ Note: Error code: E0073
-// ────╯
-// warning: 'i' is a type alias I (resolves to type alias J (resolves to recursive type alias I)), expected class
-//     ╭─[ type_aliases_jinja.baml:31:15 ]
-//     │
-//  31 │   prompt #"{{ i.value }}"#
-//     │               ───┬───
-//     │                  ╰───── 'i' is a type alias I (resolves to type alias J (resolves to recursive type alias I)), expected class
-//     │
-//     │ Note: Error code: E0073
-// ────╯
-// warning: 'pid' is a type alias ProjectId (resolves to int), expected class
-//    ╭─[ type_aliases_jinja.baml:5:20 ]
-//    │
+// E0073
+//
+//   ⚠ 'pid' is a type alias ProjectId (resolves to int), expected class
+//    ╭─[type_aliases_jinja.baml:5:20]
 //  5 │   prompt #"Pid: {{ pid.id }}. Generate a fake name for it."#
-//    │                    ───┬──
-//    │                       ╰──── 'pid' is a type alias ProjectId (resolves to int), expected class
-//    │
-//    │ Note: Error code: E0073
-// ───╯
+//    ·                    ──────
+//    ╰────
+// E0073
+//
+//   ⚠ 'c' is a type alias C (resolves to type alias B (resolves to type alias A (resolves to float))), expected class
+//     ╭─[type_aliases_jinja.baml:14:15]
+//  14 │   prompt #"{{ c.value }}"#
+//     ·               ───────
+//     ╰────
+// E0074
+//
+//   ⚠ cannot access property 'value' on 'j': union contains non-class type map[string, recursive type alias JsonValue]
+//     ╭─[type_aliases_jinja.baml:23:15]
+//  23 │   prompt #"{{ j.value }}"#
+//     ·               ───────
+//     ╰────
+// E0073
+//
+//   ⚠ 'i' is a type alias I (resolves to type alias J (resolves to recursive type alias I)), expected class
+//     ╭─[type_aliases_jinja.baml:31:15]
+//  31 │   prompt #"{{ i.value }}"#
+//     ·               ───────
+//     ╰────
 //
 //- semantic_tokens
 // type_aliases_jinja.baml:1:1 (keyword) len=4 "type"

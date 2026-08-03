@@ -36,11 +36,10 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
           env: docs-${{ inputs.is_canary && 'prod' || 'dev' }}
 
-      - name: Setup Node.js and pnpm
-        uses: ./.github/actions/setup-node
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
         with:
-          node-action-version: 'v6'
-          install-dependencies: false
+          node-version: '20'
 
       - name: Install Fern
         run: npm install -g fern-api

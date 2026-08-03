@@ -18,7 +18,7 @@ workspace = true
 
 [dependencies]
 baml_base = { workspace = true }
-ariadne = { workspace = true }
 borsh = { workspace = true }
+miette = { workspace = true }
+owo-colors = { workspace = true }
 text-size = { workspace = true }
-

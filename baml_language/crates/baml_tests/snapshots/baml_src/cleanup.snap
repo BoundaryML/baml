@@ -3,34 +3,39 @@ source: crates/baml_tests/tests/baml_src.rs
 ---
 function cleanup.$init_test_ns_cleanup_cleanup(registry: testing.TestCollector) -> null {
     load_var registry
+    load_const "root.cleanup"
     load_const "cleanup_runs_once_on_explicit_double_call"
     make_closure .<lambda($init_test_ns_cleanup_cleanup, 0)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.cleanup"
     load_const "cleanup_runs_via_defer"
     make_closure .<lambda($init_test_ns_cleanup_cleanup, 1)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.cleanup"
     load_const "cleanup_explicit_then_defer_shares_one_latch"
     make_closure .<lambda($init_test_ns_cleanup_cleanup, 2)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.cleanup"
     load_const "cleanup_runs_once_per_distinct_instance"
     make_closure .<lambda($init_test_ns_cleanup_cleanup, 3)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_var registry
+    load_const "root.cleanup"
     load_const "cleanup_with_explicit_throws_never_is_accepted"
     make_closure .<lambda($init_test_ns_cleanup_cleanup, 4)>, 0
     load_const null
-    call testing.TestCollector.register_test
+    call testing.TestCollector.register_test_at
     pop 1
     load_const null
     return

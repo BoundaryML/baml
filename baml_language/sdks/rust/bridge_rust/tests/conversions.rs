@@ -10,8 +10,9 @@ use std::{collections::HashMap, convert::Infallible, sync::OnceLock};
 mod common;
 
 use baml_bridge::{
-    BamlValue, DecodeError, Error, Map, baml_value::internal::__BamlValuePrivate, decode, encode,
-    runtime, wire,
+    BamlValue, DecodeError, Error, Map,
+    baml_value::internal::{__BamlValuePrivate, class_ty, enum_ty, literal_string_ty, union_ty},
+    decode, encode, runtime, wire,
 };
 
 const BAML_SRC: &str = r#"
@@ -35,6 +36,14 @@ class TreeNode {
   next TreeNode?
 }
 
+class Wrapper<T> {
+  inner T
+}
+
+class Mixed<T> {
+  choice T | string | null
+}
+
 function rt_color(c: Color) -> Color { c }
 function rt_point(p: Point) -> Point { p }
 function make_point(x: int, y: int) -> Point { Point { x: x, y: y, tag: null } }
@@ -46,6 +55,25 @@ function rt_int_or_string(u: int | string) -> int | string { u }
 function rt_point_or_string(u: Point | string) -> Point | string { u }
 function rt_opt_union(u: int | string | null) -> int | string | null { u }
 function rt_status(s: "draft" | "sent") -> "draft" | "sent" { s }
+function rt_wrapper<T>(w: Wrapper<T>) -> Wrapper<T> { w }
+function rt_mixed<T>(m: Mixed<T>) -> Mixed<T> { m }
+function hc_call(callback: (int) -> string, x: int) -> string {
+    callback(x)
+}
+function hc_optionals(callback: (x: int, y?: int, z?: int) -> int, x: int) -> int[] {
+    [callback(x), callback(x, y = 2), callback(x, z = 3), callback(x, y = 2, z = 3)]
+}
+function hc_typed_throws(
+    callback: (int) -> string throws Point,
+    x: int,
+) -> string throws Point {
+    callback(x)
+}
+function hc_catches(callback: (int) -> string throws baml.errors.HostCallable, x: int) -> string {
+    callback(x) catch (e) {
+        _ => "caught:" + e.class_name
+    }
+}
 "#;
 
 fn ensure_runtime() {
@@ -64,7 +92,7 @@ fn ensure_runtime() {
 fn call<R: BamlValue>(fqn: &str, kwargs: Vec<(&str, wire::InboundValue)>) -> R {
     ensure_runtime();
     let kwargs = kwargs.into_iter().map(|(k, v)| (k, Some(v))).collect();
-    runtime::invoke_sync::<R, Infallible>(fqn, encode::kwargs(kwargs))
+    runtime::invoke_sync::<R, Infallible>(fqn, encode::kwargs(kwargs), vec![])
         .unwrap_or_else(|e| panic!("{fqn} failed: {e}"))
 }
 
@@ -99,6 +127,10 @@ impl __BamlValuePrivate for Color {
             }),
         }
     }
+
+    fn baml_ty() -> wire::BamlTy {
+        enum_ty("user.Color")
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -112,6 +144,7 @@ impl __BamlValuePrivate for Point {
     fn to_baml(&self) -> wire::InboundValue {
         encode::class(
             "user.Point",
+            vec![],
             vec![
                 ("x", self.x.to_baml()),
                 ("y", self.y.to_baml()),
@@ -128,6 +161,10 @@ impl __BamlValuePrivate for Point {
             tag: fields.take("tag")?,
         })
     }
+
+    fn baml_ty() -> wire::BamlTy {
+        class_ty("user.Point", vec![])
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -140,6 +177,7 @@ impl __BamlValuePrivate for TreeNode {
     fn to_baml(&self) -> wire::InboundValue {
         encode::class(
             "user.TreeNode",
+            vec![],
             vec![
                 ("value", self.value.to_baml()),
                 ("next", self.next.to_baml()),
@@ -153,6 +191,113 @@ impl __BamlValuePrivate for TreeNode {
             value: fields.take("value")?,
             next: fields.take("next")?,
         })
+    }
+
+    fn baml_ty() -> wire::BamlTy {
+        class_ty("user.TreeNode", vec![])
+    }
+}
+
+/// Generic class shape: a `<T: BamlValue>` struct whose instance carries
+/// its concrete type argument on the wire (`class_ty.type_args`), exactly
+/// as the Rust SDK generator emits it.
+#[derive(Debug, Clone, PartialEq)]
+struct Wrapper<T: BamlValue> {
+    inner: T,
+}
+
+impl<T: BamlValue> __BamlValuePrivate for Wrapper<T> {
+    fn to_baml(&self) -> wire::InboundValue {
+        encode::class(
+            "user.Wrapper",
+            vec![T::baml_ty()],
+            vec![("inner", self.inner.to_baml())],
+        )
+    }
+
+    fn from_baml(v: wire::BamlOutboundValue) -> Result<Self, DecodeError> {
+        let mut fields = decode::ClassFields::new(v, "user.Wrapper")?;
+        Ok(Wrapper {
+            inner: fields.take("inner")?,
+        })
+    }
+
+    fn baml_ty() -> wire::BamlTy {
+        class_ty("user.Wrapper", vec![T::baml_ty()])
+    }
+}
+
+/// The wire `BamlTy` for a concrete `T` — a generated SDK reaches it via
+/// this same private trait.
+fn ty_of<T: BamlValue>() -> wire::BamlTy {
+    <T as __BamlValuePrivate>::baml_ty()
+}
+
+/// Generic union enum shape (`T | string` → `TOrString<T>`): the `TypeVar`
+/// arm holds a bare `T` and carries no `From` (a blanket `From<T>` would
+/// overlap the concrete arm's `From<String>`); the concrete arm keeps its
+/// `From`.
+#[derive(Debug, Clone, PartialEq)]
+enum TOrString<T: BamlValue> {
+    T(T),
+    String(String),
+}
+
+impl<T: BamlValue> From<String> for TOrString<T> {
+    fn from(value: String) -> Self {
+        Self::String(value)
+    }
+}
+
+impl<T: BamlValue> __BamlValuePrivate for TOrString<T> {
+    fn to_baml(&self) -> wire::InboundValue {
+        match self {
+            Self::T(value) => value.to_baml(),
+            Self::String(value) => value.to_baml(),
+        }
+    }
+
+    fn from_baml(v: wire::BamlOutboundValue) -> Result<Self, DecodeError> {
+        let v = decode::unwrap(v);
+        if let Ok(value) = T::from_baml(v.clone()) {
+            return Ok(Self::T(value));
+        }
+        if let Ok(value) = String::from_baml(v.clone()) {
+            return Ok(Self::String(value));
+        }
+        Err(decode::no_union_arm("TOrString", &v))
+    }
+
+    fn baml_ty() -> wire::BamlTy {
+        union_ty(vec![T::baml_ty(), String::baml_ty()])
+    }
+}
+
+/// A generic class carrying a generic-union field (`Mixed<T> { choice: T |
+/// string | null }` → `Option<TOrString<T>>`).
+#[derive(Debug, Clone, PartialEq)]
+struct Mixed<T: BamlValue> {
+    choice: Option<TOrString<T>>,
+}
+
+impl<T: BamlValue> __BamlValuePrivate for Mixed<T> {
+    fn to_baml(&self) -> wire::InboundValue {
+        encode::class(
+            "user.Mixed",
+            vec![T::baml_ty()],
+            vec![("choice", self.choice.to_baml())],
+        )
+    }
+
+    fn from_baml(v: wire::BamlOutboundValue) -> Result<Self, DecodeError> {
+        let mut fields = decode::ClassFields::new(v, "user.Mixed")?;
+        Ok(Mixed {
+            choice: fields.take("choice")?,
+        })
+    }
+
+    fn baml_ty() -> wire::BamlTy {
+        class_ty("user.Mixed", vec![T::baml_ty()])
     }
 }
 
@@ -196,6 +341,10 @@ impl __BamlValuePrivate for IntOrString {
         }
         Err(decode::no_union_arm("IntOrString", &v))
     }
+
+    fn baml_ty() -> wire::BamlTy {
+        union_ty(vec![i64::baml_ty(), String::baml_ty()])
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -234,6 +383,10 @@ impl __BamlValuePrivate for PointOrString {
         }
         Err(decode::no_union_arm("PointOrString", &v))
     }
+
+    fn baml_ty() -> wire::BamlTy {
+        union_ty(vec![Point::baml_ty(), String::baml_ty()])
+    }
 }
 
 /// String-literal arms become unit variants carrying their wire value.
@@ -261,6 +414,10 @@ impl __BamlValuePrivate for DraftOrSent {
             }
         }
         Err(decode::no_union_arm("DraftOrSent", &v))
+    }
+
+    fn baml_ty() -> wire::BamlTy {
+        union_ty(vec![literal_string_ty("draft"), literal_string_ty("sent")])
     }
 }
 
@@ -437,6 +594,328 @@ fn round_trips_recursive_class_through_box() {
 }
 
 #[test]
+fn round_trips_generic_class_carrying_its_type_arg() {
+    ensure_runtime();
+    // `rt_wrapper<T>(w: Wrapper<T>) -> Wrapper<T>`: the instance carries its
+    // concrete `T` in `class_ty.type_args`, and the generic call binds `T`
+    // explicitly — the full generic-class-through-generic-function path.
+    let int_wrapped = Wrapper { inner: 5i64 };
+    let out = runtime::invoke_sync::<Wrapper<i64>, Infallible>(
+        "user.rt_wrapper",
+        encode::kwargs(vec![("w", Some(int_wrapped.to_baml()))]),
+        encode::type_args(vec![("T", ty_of::<i64>())]),
+    )
+    .expect("rt_wrapper<int> succeeds");
+    assert_eq!(out, int_wrapped);
+
+    // A nested generic instance (`Wrapper<Wrapper<string>>`) exercises the
+    // recursive `class_ty.type_args` construction.
+    let nested = Wrapper {
+        inner: Wrapper {
+            inner: "hi".to_string(),
+        },
+    };
+    let out = runtime::invoke_sync::<Wrapper<Wrapper<String>>, Infallible>(
+        "user.rt_wrapper",
+        encode::kwargs(vec![("w", Some(nested.to_baml()))]),
+        encode::type_args(vec![("T", ty_of::<Wrapper<String>>())]),
+    )
+    .expect("rt_wrapper<Wrapper<string>> succeeds");
+    assert_eq!(out, nested);
+}
+
+#[test]
+fn round_trips_generic_union_field() {
+    ensure_runtime();
+    // `rt_mixed<T>(m: Mixed<T>) -> Mixed<T>`: the union field `T | string |
+    // null` round-trips each arm, with `T` bound to int.
+    let cases = [
+        Mixed {
+            choice: Some(TOrString::T(7i64)),
+        },
+        Mixed {
+            choice: Some(TOrString::String("hi".to_string())),
+        },
+        Mixed { choice: None },
+    ];
+    for m in cases {
+        let out = runtime::invoke_sync::<Mixed<i64>, Infallible>(
+            "user.rt_mixed",
+            encode::kwargs(vec![("m", Some(m.to_baml()))]),
+            encode::type_args(vec![("T", ty_of::<i64>())]),
+        )
+        .expect("rt_mixed<int> succeeds");
+        assert_eq!(out, m);
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Host callables: closures crossing into BAML, exactly as the Rust SDK
+// generator will emit them (the executable spec for that emission).
+// ---------------------------------------------------------------------------
+
+/// The param spec the generated binding describes a `(int) -> string`
+/// callable with: one required (positional) parameter.
+static HC_ONE_INT: &[baml_bridge::HostParam] = &[baml_bridge::HostParam {
+    name: "x",
+    optional: false,
+}];
+
+#[test]
+fn host_callable_round_trips_sync_and_async() {
+    ensure_runtime();
+    let call = |handle: wire::InboundValue, x: i64| {
+        runtime::invoke_sync::<String, Infallible>(
+            "user.hc_call",
+            encode::kwargs(vec![("callback", Some(handle)), ("x", Some(x.to_baml()))]),
+            vec![],
+        )
+    };
+
+    let sync_cb = |x: i64| format!("got {x}");
+    assert_eq!(
+        call(
+            baml_bridge::host_value::callable_handle(sync_cb, HC_ONE_INT),
+            5
+        )
+        .unwrap(),
+        "got 5"
+    );
+
+    // A future-returning closure is driven on the bridge's dispatch
+    // runtime, even on the sync call path.
+    let async_cb = |x: i64| async move { format!("async {x}") };
+    assert_eq!(
+        call(
+            baml_bridge::host_value::callable_handle(async_cb, HC_ONE_INT),
+            7
+        )
+        .unwrap(),
+        "async 7"
+    );
+}
+
+#[test]
+fn host_callable_optionals_deliver_by_name() {
+    static PARAMS: &[baml_bridge::HostParam] = &[
+        baml_bridge::HostParam {
+            name: "x",
+            optional: false,
+        },
+        baml_bridge::HostParam {
+            name: "y",
+            optional: true,
+        },
+        baml_bridge::HostParam {
+            name: "z",
+            optional: true,
+        },
+    ];
+    ensure_runtime();
+    // An omitted optional arrives as `None`; the host default fills it.
+    let cb =
+        |x: i64, y: Option<i64>, z: Option<i64>| x * 100 + y.unwrap_or(8) * 10 + z.unwrap_or(9);
+    let result = runtime::invoke_sync::<Vec<i64>, Infallible>(
+        "user.hc_optionals",
+        encode::kwargs(vec![
+            (
+                "callback",
+                Some(baml_bridge::host_value::callable_handle(cb, PARAMS)),
+            ),
+            ("x", Some(5i64.to_baml())),
+        ]),
+        vec![],
+    )
+    .expect("hc_optionals succeeds");
+    assert_eq!(result, [589, 529, 583, 523]);
+}
+
+#[test]
+fn host_callable_typed_throw_propagates_as_the_declared_class() {
+    ensure_runtime();
+    // The closure's error type IS the declared BAML throws class — it
+    // crosses as that real class and lands in `Error::Thrown`.
+    let cb = |_x: i64| -> Result<String, Point> {
+        Err(Point {
+            x: 1,
+            y: 2,
+            tag: Some("thrown".to_string()),
+        })
+    };
+    let err = runtime::invoke_sync::<String, Point>(
+        "user.hc_typed_throws",
+        encode::kwargs(vec![
+            (
+                "callback",
+                Some(baml_bridge::host_value::callable_handle(cb, HC_ONE_INT)),
+            ),
+            ("x", Some(1i64.to_baml())),
+        ]),
+        vec![],
+    )
+    .expect_err("the typed host throw must propagate");
+    match err {
+        Error::Thrown { value, .. } => {
+            assert_eq!(
+                *value,
+                Point {
+                    x: 1,
+                    y: 2,
+                    tag: Some("thrown".to_string()),
+                }
+            );
+        }
+        other => panic!("expected the typed throw, got {other}"),
+    }
+}
+
+/// An arbitrary host error with no BAML representation.
+#[derive(Debug, Clone, PartialEq)]
+struct Boom(String);
+
+impl std::fmt::Display for Boom {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+impl std::error::Error for Boom {}
+
+#[test]
+fn host_callable_opaque_throw_rehydrates_the_original() {
+    ensure_runtime();
+    let raised = Boom("nope".to_string());
+    let cb = {
+        let raised = raised.clone();
+        move |_x: i64| -> Result<String, Boom> { Err(raised.clone()) }
+    };
+    // `baml.errors.HostCallable` is a normal throws member: decode with
+    // `E = HostCallable` and the throw arrives as `Error::Thrown` like any
+    // other declared error class — metadata 1:1 with the BAML instance,
+    // plus the rehydrated original the BAML side holds only as a handle.
+    let err = runtime::invoke_sync::<String, baml_bridge::HostCallable>(
+        "user.hc_call",
+        encode::kwargs(vec![
+            (
+                "callback",
+                Some(baml_bridge::host_value::callable_handle(cb, HC_ONE_INT)),
+            ),
+            ("x", Some(1i64.to_baml())),
+        ]),
+        vec![],
+    )
+    .expect_err("the opaque host throw must propagate");
+    let Error::Thrown { value, .. } = err else {
+        panic!("expected the HostCallable throw, got {err}");
+    };
+    assert_eq!(value.message, "nope");
+    // Erased in BAML; retained on the Rust side. The original comes back
+    // both by borrow (`downcast_ref`) and owned (`original` → `Arc::downcast`)
+    // — the concrete type stands in for the erased `class_name` metadata.
+    assert_eq!(value.downcast_ref::<Boom>(), Some(&raised));
+    assert_eq!(*value.original().downcast::<Boom>().unwrap(), raised);
+}
+
+/// A second host-error type, distinct from [`Boom`].
+#[derive(Debug)]
+struct Splat;
+
+impl std::fmt::Display for Splat {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "splat")
+    }
+}
+
+impl std::error::Error for Splat {}
+
+#[test]
+fn host_callable_opaque_throw_decodes_into_typed_hostcallable() {
+    ensure_runtime();
+    let raised = Boom("nope".to_string());
+    let cb = {
+        let raised = raised.clone();
+        move |_x: i64| -> Result<String, Boom> { Err(raised.clone()) }
+    };
+    // A caller that statically knows the host-error type decodes straight
+    // into `HostCallable<Boom>`: `from_baml` validates the rehydrated
+    // original really is a `Boom`, so `original()` is a `Arc<Boom>` with no
+    // runtime downcast at the use site.
+    let err = runtime::invoke_sync::<String, baml_bridge::HostCallable<Boom>>(
+        "user.hc_call",
+        encode::kwargs(vec![
+            (
+                "callback",
+                Some(baml_bridge::host_value::callable_handle(cb, HC_ONE_INT)),
+            ),
+            ("x", Some(1i64.to_baml())),
+        ]),
+        vec![],
+    )
+    .expect_err("the opaque host throw must propagate");
+    let Error::Thrown { value, .. } = err else {
+        panic!("expected the typed HostCallable throw, got {err}");
+    };
+    assert_eq!(value.message, "nope");
+    let original: std::sync::Arc<Boom> = value.original();
+    assert_eq!(*original, raised);
+}
+
+#[test]
+fn host_callable_typed_decode_rejects_wrong_type() {
+    ensure_runtime();
+    // The callback throws a `Boom`, but the caller optimistically decodes as
+    // `HostCallable<Splat>`. The rehydrated original is not a `Splat`, so
+    // `from_baml`'s validating downcast fails and `decode_result` folds it
+    // into `Error::Runtime` — the same fallback as any non-declared throw.
+    let cb = |_x: i64| -> Result<String, Boom> { Err(Boom("wrong type".to_string())) };
+    let err = runtime::invoke_sync::<String, baml_bridge::HostCallable<Splat>>(
+        "user.hc_call",
+        encode::kwargs(vec![
+            (
+                "callback",
+                Some(baml_bridge::host_value::callable_handle(cb, HC_ONE_INT)),
+            ),
+            ("x", Some(1i64.to_baml())),
+        ]),
+        vec![],
+    )
+    .expect_err("the opaque host throw must propagate");
+    match err {
+        Error::Runtime { class_name, .. } => {
+            assert_eq!(class_name.as_deref(), Some("baml.errors.HostCallable"));
+        }
+        other => panic!("expected the Runtime fallback for a wrong-typed decode, got {other}"),
+    }
+}
+
+#[test]
+fn host_callable_opaque_throw_is_catchable_in_baml() {
+    ensure_runtime();
+    // BAML's `catch (e)` intercepts the `baml.errors.HostCallable` throw
+    // and can read its `class_name` metadata (`hc_catches` returns
+    // `"caught:" + e.class_name`).
+    let cb = |_x: i64| -> Result<String, Boom> { Err(Boom("boom from host".to_string())) };
+    let result = runtime::invoke_sync::<String, Infallible>(
+        "user.hc_catches",
+        encode::kwargs(vec![
+            (
+                "callback",
+                Some(baml_bridge::host_value::callable_handle(cb, HC_ONE_INT)),
+            ),
+            ("x", Some(1i64.to_baml())),
+        ]),
+        vec![],
+    )
+    .expect("the BAML catch must recover");
+    // `class_name` is the full, compiler-dependent `type_name` — assert the
+    // catch fired and read the field, not the exact string.
+    assert!(
+        result.starts_with("caught:") && result.contains("Boom"),
+        "{result}"
+    );
+}
+
+#[test]
 fn class_fqn_drift_fails_loudly() {
     // Decoding an `Other` as `Point` must be a hard FQN mismatch, never a
     // positional coercion.
@@ -444,6 +923,7 @@ fn class_fqn_drift_fails_loudly() {
     let result = runtime::invoke_sync::<Point, Infallible>(
         "user.make_other",
         encode::kwargs(vec![("x", Some(1i64.to_baml()))]),
+        vec![],
     );
     match result {
         Err(Error::Decode(DecodeError::FqnMismatch { expected, got })) => {
@@ -464,6 +944,7 @@ fn wrong_wire_kind_fails_loudly() {
             ("x", Some(1i64.to_baml())),
             ("y", Some(2i64.to_baml())),
         ]),
+        vec![],
     );
     assert!(matches!(
         result,

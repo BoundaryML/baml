@@ -6,6 +6,10 @@ import { Construct } from 'constructs';
 const GITHUB_REPO = 'BoundaryML/baml';
 const GITHUB_OIDC_PROVIDER_ARN =
   'arn:aws:iam::277707123528:oidc-provider/token.actions.githubusercontent.com';
+const GITHUB_OIDC_SUBJECTS = [
+  `repo:${GITHUB_REPO}:ref:refs/heads/canary`,
+  `repo:${GITHUB_REPO}:ref:refs/tags/baml-language-source-*`,
+];
 
 export class PkgBoundarymlComStack extends cdk.Stack {
   public readonly bucket: s3.Bucket;
@@ -31,13 +35,13 @@ export class PkgBoundarymlComStack extends cdk.Stack {
 
     this.githubReleaseRole = new iam.Role(this, 'GitHubReleaseRole', {
       roleName: 'pkg-boundaryml-com-github-release',
-      description: `Assumed by GitHub Actions in ${GITHUB_REPO} from refs/heads/canary to publish to the pkg.boundaryml.com bucket`,
+      description: `Assumed by GitHub Actions in ${GITHUB_REPO} from canary or an immutable release tag to publish to the pkg.boundaryml.com bucket`,
       assumedBy: new iam.OpenIdConnectPrincipal(githubProvider, {
         StringEquals: {
           'token.actions.githubusercontent.com:aud': 'sts.amazonaws.com',
         },
         StringLike: {
-          'token.actions.githubusercontent.com:sub': `repo:${GITHUB_REPO}:ref:refs/heads/canary`,
+          'token.actions.githubusercontent.com:sub': GITHUB_OIDC_SUBJECTS,
         },
       }),
       maxSessionDuration: cdk.Duration.hours(1),

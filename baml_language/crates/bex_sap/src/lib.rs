@@ -30,6 +30,11 @@ impl CompiledSapModel {
         target: baml_type::RuntimeTy,
         stream_target: baml_type::RuntimeTy,
     ) -> Result<Self, sap_model::ConvertError> {
+        // A generic `T` can materialize as a union after the context's declared
+        // types were simplified. Normalize both runtime targets at the SAP
+        // boundary so the converter always receives its required flat form.
+        let target = type_ctx.normalize_parse_target(target);
+        let stream_target = type_ctx.normalize_parse_target(stream_target);
         let inner = CompiledSapModelInner::try_new(
             type_ctx,
             target,

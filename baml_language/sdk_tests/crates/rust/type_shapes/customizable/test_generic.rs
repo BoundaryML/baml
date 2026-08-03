@@ -39,17 +39,17 @@
 /// [Void { ... }, Class(... WrapperMarker ...)]" — the same shape as
 /// the streaming smoke's error.
 #[test]
-fn test_generic() {
-    // PROVISIONAL(rust-codegen): anonymous unions in a method's return
-    // position have no final Rust naming; this port assumes a synthesized
-    // enum `<Class><MethodCamelCase>Return` with one variant per arm
-    // (`String` for the `T = string` substitution here).
-    use baml_sdk::generics::{WrapperMethodsGetValueOrMarkerReturn, make_wrapper_methods};
+fn test_generic_generic() {
+    // ADAPTATION(rust): the anonymous `T | WrapperMarker` return union
+    // synthesizes the arm-named generic enum `TOrWrapperMarker<T>`; with
+    // `T = String` the returned string decodes into the `T` variant (decode
+    // trial order is declaration order).
+    use baml_sdk::generics::{TOrWrapperMarker, make_wrapper_methods};
 
     let w = make_wrapper_methods("hello".to_string()).unwrap();
     assert_eq!(
         w.get_value_or_marker().unwrap(),
-        WrapperMethodsGetValueOrMarkerReturn::String("hello".to_string())
+        TOrWrapperMarker::T("hello".to_string())
     );
 }
 
@@ -72,7 +72,7 @@ fn test_generic() {
 /// returned `WrapperMethods<string>`, the re-encoded receiver has empty
 /// class args and the call is rejected at the inbound boundary.
 #[test]
-fn test_generic_wrapper_get_value() {
+fn test_generic_generic_wrapper_get_value() {
     use baml_sdk::generics::make_wrapper_methods;
 
     let w = make_wrapper_methods("hello".to_string()).unwrap();

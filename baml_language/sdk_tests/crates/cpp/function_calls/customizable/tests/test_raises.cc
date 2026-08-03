@@ -20,7 +20,7 @@ static std::string header_text() {
   return out.str();
 }
 
-BAML_TEST(imports_symbols_reachable) {
+BAML_TEST(raises_imports_symbols_reachable) {
   // Port of python's test_imports: every raises_test symbol is reachable
   // at its qualified path. Compile-level analog of the import assertions -
   // the header scrapes below are namespace-blind, so without this a
@@ -32,24 +32,24 @@ BAML_TEST(imports_symbols_reachable) {
   (void)&baml_sdk::raises_test::Reparse;
 }
 
-BAML_TEST(union_throws_lists_all_names) {
+BAML_TEST(raises_union_throws_lists_all_names) {
   // A multi-member throws union lists every member, unqualified.
   BAML_ASSERT(header_text().find("/// Raises: ParseError, TimeoutError\n"
                                  "std::string LoadDoc(") != std::string::npos);
 }
 
-BAML_TEST(single_throws) {
+BAML_TEST(raises_single_throws) {
   BAML_ASSERT(header_text().find("/// Raises: ParseError\n"
                                  "std::string Reparse(") != std::string::npos);
 }
 
-BAML_TEST(summary_precedes_raises_block) {
+BAML_TEST(raises_summary_precedes_raises_block) {
   BAML_ASSERT(header_text().find("/// Load a document from a path.\n"
                                  "/// Raises: ParseError, TimeoutError\n"
                                  "std::string LoadDoc(") != std::string::npos);
 }
 
-BAML_TEST(inferred_contract_without_clause_still_raises) {
+BAML_TEST(raises_inferred_contract_without_clause_still_raises) {
   // No written `throws` clause, but the body throws ParseError -- the
   // inferred contract (callable_throws) still surfaces a Raises line.
   BAML_ASSERT(header_text().find("/// Raises: ParseError\n"
@@ -57,7 +57,7 @@ BAML_TEST(inferred_contract_without_clause_still_raises) {
               std::string::npos);
 }
 
-BAML_TEST(async_sibling_also_has_raises) {
+BAML_TEST(raises_async_sibling_also_has_raises) {
   // The Async sibling repeats the full doc block, and its return wraps the
   // declared throws set as the Future's second parameter.
   BAML_ASSERT(header_text().find(
@@ -68,7 +68,7 @@ BAML_TEST(async_sibling_also_has_raises) {
               std::string::npos);
 }
 
-BAML_TEST(method_raises_blocks) {
+BAML_TEST(raises_method_raises_blocks) {
   // Methods carry `Raises:` in the header exactly like free functions
   // (python's .pyi-stub analog): both flavors, both variants.
   BAML_ASSERT(header_text().find("  /// Raises: ParseError\n"
@@ -78,7 +78,7 @@ BAML_TEST(method_raises_blocks) {
                                  "create(") != std::string::npos);
 }
 
-BAML_TEST(non_throwing_function_has_no_raises_block) {
+BAML_TEST(raises_non_throwing_function_has_no_raises_block) {
   // The summary line abuts the declaration: no Raises line in between.
   BAML_ASSERT(header_text().find("/// A pure function that never throws.\n"
                                  "int64_t PureLen(") != std::string::npos);

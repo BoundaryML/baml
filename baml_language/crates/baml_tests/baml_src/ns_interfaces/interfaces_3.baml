@@ -269,7 +269,10 @@ test "wf3_concrete_field_shadows_interface_views_pins" {
     assert.equal(w3cf_main(), "N")
 }
 
-// wf3_bare_generic_interface_reflection_is_wildcard_pins
+// wf3: generic-interface reflection is per-instantiation. A bare generic head
+// (`reflect.type_of<W3bgBox>()`) is an arity error like any other type
+// position (pinned in tests/interfaces.rs); each written instantiation
+// reflects exactly its own implementors.
 interface W3bgBox<T> {
     function get(self) -> T throws never
 }
@@ -284,12 +287,12 @@ class W3bgStringBox {
     }
 }
 function w3bg_main() -> bool {
-    let bare = reflect.type_of<W3bgBox>()
-    return bare.implemented_by(reflect.type_of<W3bgIntBox>())
-        && bare.implemented_by(reflect.type_of<W3bgStringBox>())
-        && bare.implementors().length() == 2
+    let int_box = reflect.type_of<W3bgBox<int>>()
+    return int_box.implemented_by(reflect.type_of<W3bgIntBox>())
+        && !int_box.implemented_by(reflect.type_of<W3bgStringBox>())
+        && int_box.implementors().length() == 1
 }
-test "wf3_bare_generic_interface_reflection_is_wildcard_pins" {
+test "wf3_generic_interface_reflection_is_per_instantiation" {
     assert.is_true(w3bg_main())
 }
 

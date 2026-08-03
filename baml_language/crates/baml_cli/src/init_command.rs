@@ -19,9 +19,19 @@ use clap::Args;
 
 use crate::reporter::Reporter;
 
-/// `baml init` — scaffold a new project under the given directory
+/// Scaffold a new BAML project under the given directory
 /// (default `.`). Refuses to clobber an existing `baml.toml`.
+///
+/// Creates `baml.toml` and `baml_src/main.baml`. The destination directory may
+/// already exist, but it must not already contain a BAML manifest.
 #[derive(Args, Clone, Debug)]
+#[command(after_long_help = "\
+Examples:
+  Initialize the current directory:
+    baml init
+
+  Initialize a directory with an explicit project name:
+    baml init ./my-project --name my_project")]
 pub struct InitArgs {
     /// Directory to initialize. Defaults to the current directory.
     #[arg(value_name = "PATH", default_value = ".")]
@@ -29,7 +39,7 @@ pub struct InitArgs {
 
     /// Project name written to `baml.toml`'s `[package].name`. Defaults
     /// to the basename of `<PATH>` (or `baml-project` for `.`).
-    #[arg(long)]
+    #[arg(long, help_heading = "Project options")]
     pub name: Option<String>,
 }
 
@@ -44,9 +54,9 @@ impl InitArgs {
         // refuse if `baml.toml` already exists so we never clobber a
         // project the user already initialized.
         std::fs::create_dir_all(&self.path)
-            .with_context(|| format!("Failed to create directory {}", self.path.display()))?;
+            .with_context(|| format!("failed to create directory {}", self.path.display()))?;
         let canonical = std::fs::canonicalize(&self.path)
-            .with_context(|| format!("Failed to canonicalize path {}", self.path.display()))?;
+            .with_context(|| format!("failed to canonicalize path {}", self.path.display()))?;
         if canonical.join("baml.toml").exists() {
             anyhow::bail!(
                 "`{}` already exists. Refusing to overwrite an existing project.",
@@ -57,10 +67,20 @@ impl InitArgs {
     }
 }
 
-/// `baml new <PATH>` — create a fresh directory at `<PATH>` and
+/// Create a fresh directory at `<PATH>` and
 /// scaffold a project inside. Refuses to run if `<PATH>` already exists,
 /// the same way `cargo new` does.
+///
+/// Creates the destination directory, `baml.toml`, and
+/// `baml_src/main.baml`. Use `baml init` when the directory already exists.
 #[derive(Args, Clone, Debug)]
+#[command(after_long_help = "\
+Examples:
+  Create a project directory:
+    baml new ./my-project
+
+  Set an explicit project name:
+    baml new ./my-project --name my_project")]
 pub struct NewArgs {
     /// Directory to create. Errors if it already exists.
     #[arg(value_name = "PATH")]
@@ -68,7 +88,7 @@ pub struct NewArgs {
 
     /// Project name written to `baml.toml`'s `[package].name`. Defaults
     /// to the basename of `<PATH>`.
-    #[arg(long)]
+    #[arg(long, help_heading = "Project options")]
     pub name: Option<String>,
 }
 
@@ -87,9 +107,9 @@ impl NewArgs {
             );
         }
         std::fs::create_dir(&self.path)
-            .with_context(|| format!("Failed to create directory {}", self.path.display()))?;
+            .with_context(|| format!("failed to create directory {}", self.path.display()))?;
         let canonical = std::fs::canonicalize(&self.path)
-            .with_context(|| format!("Failed to canonicalize path {}", self.path.display()))?;
+            .with_context(|| format!("failed to canonicalize path {}", self.path.display()))?;
         scaffold(&canonical, self.name.as_deref(), reporter, "Created")
     }
 }
@@ -113,17 +133,17 @@ fn scaffold(
     let toml_path = canonical.join("baml.toml");
     reporter.spin("Creating", format!("baml.toml ({name})"));
     std::fs::write(&toml_path, render_baml_toml(&name))
-        .with_context(|| format!("Failed to write {}", toml_path.display()))?;
+        .with_context(|| format!("failed to write {}", toml_path.display()))?;
 
     let src_dir = canonical.join("baml_src");
     std::fs::create_dir_all(&src_dir)
-        .with_context(|| format!("Failed to create {}", src_dir.display()))?;
+        .with_context(|| format!("failed to create {}", src_dir.display()))?;
 
     let main_path = src_dir.join("main.baml");
     if !main_path.exists() {
         reporter.spin("Creating", "baml_src/main.baml");
         std::fs::write(&main_path, STARTER_MAIN_BAML)
-            .with_context(|| format!("Failed to write {}", main_path.display()))?;
+            .with_context(|| format!("failed to write {}", main_path.display()))?;
     }
 
     reporter.finish(verb, format!("{} ({name})", canonical.display()));
@@ -147,7 +167,7 @@ fn default_project_name(canonical: &Path) -> Option<String> {
 /// (or any control char) in the name produces an unparseable manifest.
 fn validate_project_name(name: &str) -> Result<()> {
     if name.is_empty() {
-        anyhow::bail!("Project name cannot be empty.");
+        anyhow::bail!("project name cannot be empty");
     }
     let bad: Vec<char> = name
         .chars()
@@ -155,7 +175,7 @@ fn validate_project_name(name: &str) -> Result<()> {
         .collect();
     if !bad.is_empty() {
         anyhow::bail!(
-            "Project name `{name}` contains invalid character(s) {bad:?}. \
+            "project name `{name}` contains invalid character(s) {bad:?}. \
              Use ASCII letters, digits, `-`, `_`, or `.`."
         );
     }
@@ -170,39 +190,11 @@ name = "{name}"
 # [scripts]
 # dev = "-f main"
 
-# Uncomment this to generate the Python SDK.
+# Add a client generator, then generate its SDK:
+#   baml generate add python/pydantic2
+#   baml generate
 #
-# Note: you also need to install the BAML runtime bridge for Python:
-#   uv add baml_bridge
-#   pip install baml_bridge
-#   conda install -c conda-forge baml_bridge
-#
-# [generator.python_client]
-# output_type = "python/pydantic"
-# output_dir = "./baml_python"
-# naming_convention = "preserve-case"
-
-# Uncomment this to generate the Node SDK.
-#
-# Note: you also need to install the BAML runtime bridge for Node.js:
-#   npm install @boundaryml/baml-bridge
-#   pnpm add @boundaryml/baml-bridge
-#   yarn add @boundaryml/baml-bridge
-#   bun add @boundaryml/baml-bridge
-#
-# [generator.node_client]
-# output_type = "typescript/node"
-# output_dir = "./baml_ts"
-# naming_convention = "preserve-case"
-
-# Uncomment this to generate the Go SDK. `sdk_import_path` must match the
-# import path of the generated `baml_sdk` directory in your Go module.
-#
-# [generator.go_client]
-# output_type = "go"
-# output_dir = "."
-# naming_convention = "language"
-# sdk_import_path = "example.com/my-project/baml_sdk"
+# Run `baml generate add --help` to see every supported output type.
 "#,
     )
 }
@@ -228,6 +220,7 @@ mod tests {
         let toml = std::fs::read_to_string(tmp.path().join("baml.toml")).unwrap();
         assert!(toml.contains("[package]"));
         assert!(toml.contains("name = "));
+        assert!(toml.contains("baml generate add python/pydantic2"));
         assert!(tmp.path().join("baml_src/main.baml").exists());
     }
 

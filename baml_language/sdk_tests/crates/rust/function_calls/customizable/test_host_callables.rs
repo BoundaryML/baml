@@ -1,32 +1,29 @@
 //! End-to-end tests for the host-callable round trip.
 //!
-//! The BAML fixture declares three functions whose first parameter is a
-//! typed `Callable`. The Python test passes a normal Python callable; the
-//! bridge auto-registers it via `register_host_callable` and emits the
-//! appropriate `Handle{HOST_VALUE_CALLABLE}` wire entry; the engine binds
-//! it to an `Object::HostClosure`; when BAML invokes it the
-//! `call_host_value` sysop fires the dispatch FFI; the Python dispatch
-//! callback in `bridge_python::host_value` invokes the user function and
-//! encodes the result back to the engine.
+//! The BAML fixture declares functions whose first parameter is a typed
+//! `Callable`. The Rust binding takes it as a closure bound by
+//! `HostCallback`; the bridge registers it and sends a
+//! `Handle{HOST_VALUE_CALLABLE}` wire entry; the engine binds it to an
+//! `Object::HostClosure`; when BAML invokes it the `call_host_value` sysop
+//! fires the dispatch FFI, which runs the closure on the bridge's dispatch
+//! runtime and encodes the result back to the engine.
 //!
-//! Rust surface: a callable argument is a closure
-//! (`call_with_callback(|x: i64| ..., 5)`). The host-callable bridge for
-//! Rust has not landed, so the API shapes here are provisional and marked
-//! at each site.
+//! A callback with an inferred `throws` desugars to a generic error param
+//! (`(int) -> string` ⇒ `<E>(cb: (int) -> string throws E) -> string throws
+//! E`), which the Rust signature realizes as `Error<E>` with `E` inferred
+//! from the closure: an infallible closure gives `Error<Infallible>`, a
+//! closure erroring with a BAML class gives `Error<ThatClass>`, and one
+//! erroring with an arbitrary `std::error::Error` gives `Error<HostCallable>`
+//! — the opaque host error, rehydratable via `HostCallable::downcast_ref` on
+//! the same host.
 
 use baml_sdk::host_callable_tests::{
     Person, ValidationError, call_callback_with_optional_args_all_set,
     call_callback_with_optional_args_all_unset, call_callback_with_optional_args_partially_set,
     call_int_callback, call_repeatedly, call_with_callback, call_with_class_callback,
     call_with_throwing, call_with_two_args, call_with_typed_throws,
-    call_with_typed_throws_propagating,
+    call_with_typed_throws_propagating, make_adder, make_counter, make_pair_builder,
 };
-
-// Provisional shapes for the throwing-callable cases: the generated callback
-// parameter is assumed to also accept a fallible closure
-// (`Fn(i64) -> Result<String, E>`), and the surfaced `baml_bridge::Error` is
-// assumed to expose the original host error via an anyhow-style
-// `downcast_ref`.
 
 /// Stand-in for python's builtin `ValueError`: an arbitrary host error value
 /// that must ride the bridge's host-value registry and come back out intact.
@@ -55,7 +52,7 @@ impl std::fmt::Display for KeyError {
 impl std::error::Error for KeyError {}
 
 #[test]
-fn test_simple_sync_callable_returns_string() {
+fn test_host_callables_simple_sync_callable_returns_string() {
     let cb = |x: i64| format!("got {x}");
 
     let result = call_with_callback(cb, 5).unwrap();
@@ -63,7 +60,7 @@ fn test_simple_sync_callable_returns_string() {
 }
 
 #[test]
-fn test_two_arg_callable_unpacks_positional_args() {
+fn test_host_callables_two_arg_callable_unpacks_positional_args() {
     let cb = |x: i64, prefix: String| format!("{prefix}:{x}");
 
     let result = call_with_two_args(cb, 7, "answer".to_string()).unwrap();
@@ -71,7 +68,7 @@ fn test_two_arg_callable_unpacks_positional_args() {
 }
 
 #[test]
-fn test_int_return_callable_round_trip() {
+fn test_host_callables_int_return_callable_round_trip() {
     let cb = |x: i64| x * 2;
 
     let result = call_int_callback(cb, 21).unwrap();
@@ -79,7 +76,40 @@ fn test_int_return_callable_round_trip() {
 }
 
 #[test]
-fn test_throwing_callable_round_trips_original_python_exception() {
+fn test_baml_closure_is_a_native_callable_with_host_language_arguments() {
+    let add_ten = make_adder(10).unwrap();
+    assert_eq!(add_ten.call((5,)).unwrap(), 15);
+    assert_eq!(add_ten.call((7,)).unwrap(), 17);
+}
+
+#[test]
+fn test_baml_closure_decodes_multiple_args_and_structured_return_values() {
+    let build = make_pair_builder(30).unwrap();
+    assert_eq!(
+        build.call((12, "Ada".to_string())).unwrap(),
+        Person {
+            name: "Ada".to_string(),
+            age: 42,
+        }
+    );
+    assert_eq!(
+        build.call((5, "Grace".to_string())).unwrap(),
+        Person {
+            name: "Grace".to_string(),
+            age: 35,
+        }
+    );
+}
+
+#[test]
+fn test_baml_closure_is_reusable_and_retains_mutable_captures() {
+    let next_value = make_counter(40).unwrap();
+    assert_eq!(next_value.call(()).unwrap(), 41);
+    assert_eq!(next_value.call(()).unwrap(), 42);
+}
+
+#[test]
+fn test_host_callables_throwing_callable_round_trips_original_python_exception() {
     // A native Python exception raised inside a host callable surfaces back
     // to the caller as the *same* exception object (`raised is caught`
     // identity), not flattened into a `BamlError(HostCallable(...))` wrapper.
@@ -97,8 +127,15 @@ fn test_throwing_callable_round_trips_original_python_exception() {
         move |_x: i64| -> Result<String, ValueError> { Err(raised.clone()) }
     };
 
+    // The closure errors with an arbitrary `std::error::Error`, so the
+    // callback's `Throws` — and thus `call_with_callback`'s `E` — is
+    // `HostCallable`: the opaque host error, transported through BAML and
+    // rehydrated to the original on the same host.
     let err = call_with_callback(cb, 1).expect_err("the host throw must surface to the caller");
-    let original = err
+    let baml_bridge::Error::Thrown { value, .. } = err else {
+        panic!("expected the opaque host throw as a HostCallable, got {err}");
+    };
+    let original = value
         .downcast_ref::<ValueError>()
         .expect("the original host error must round-trip");
     assert_eq!(original, &raised);
@@ -106,7 +143,7 @@ fn test_throwing_callable_round_trips_original_python_exception() {
 }
 
 #[test]
-fn test_throwing_callable_keyerror_round_trips_with_identity() {
+fn test_host_callables_throwing_callable_keyerror_round_trips_with_identity() {
     // The native-exception rehydration path is class-agnostic: any
     // `BaseException` subclass round-trips by reference, not just
     // `ValueError`. Different exception classes should not collide in the
@@ -119,11 +156,14 @@ fn test_throwing_callable_keyerror_round_trips_with_identity() {
     };
 
     let err = call_with_callback(cb, 1).expect_err("the host throw must surface to the caller");
-    assert_eq!(err.downcast_ref::<KeyError>(), Some(&raised));
+    let baml_bridge::Error::Thrown { value, .. } = err else {
+        panic!("expected the opaque host throw, got {err}");
+    };
+    assert_eq!(value.downcast_ref::<KeyError>(), Some(&raised));
 }
 
 #[test]
-fn test_throwing_callable_custom_python_exception_round_trips_with_identity() {
+fn test_host_callables_throwing_callable_custom_python_exception_round_trips_with_identity() {
     // A user-defined Python exception subclass also round-trips by identity —
     // the bridge doesn't care about the concrete type.
     #[derive(Debug, Clone, PartialEq)]
@@ -151,7 +191,10 @@ fn test_throwing_callable_custom_python_exception_round_trips_with_identity() {
     };
 
     let err = call_with_callback(cb, 1).expect_err("the host throw must surface to the caller");
-    let original = err
+    let baml_bridge::Error::Thrown { value, .. } = err else {
+        panic!("expected the opaque host throw, got {err}");
+    };
+    let original = value
         .downcast_ref::<MyDomainError>()
         .expect("the original host error must round-trip");
     assert_eq!(original, &raised);
@@ -159,7 +202,7 @@ fn test_throwing_callable_custom_python_exception_round_trips_with_identity() {
 }
 
 #[test]
-fn test_throwing_callable_bamlerror_wrapping_codegenned_class_is_caught_in_baml() {
+fn test_host_callables_throwing_callable_bamlerror_wrapping_codegenned_class_is_caught_in_baml() {
     // When the host raises `BamlError(value=<codegenned BAML class>)`, the
     // bridge unwraps the inner pydantic model and emits it as that real BAML
     // class on the wire — not as an opaque `HostCallable` with a stringified
@@ -188,7 +231,7 @@ fn test_throwing_callable_bamlerror_wrapping_codegenned_class_is_caught_in_baml(
 }
 
 #[test]
-fn test_throwing_callable_bamlerror_propagates_back_with_typed_fields() {
+fn test_host_callables_throwing_callable_bamlerror_propagates_back_with_typed_fields() {
     // The same `BamlError(ValidationError(...))` raised by the host, when
     // *not* caught in BAML, propagates back out to Python with all typed
     // fields preserved on the pydantic instance — the engine transports it as
@@ -207,39 +250,42 @@ fn test_throwing_callable_bamlerror_propagates_back_with_typed_fields() {
 
     let err = call_with_typed_throws_propagating(cb, 1)
         .expect_err("the uncaught typed throw must propagate to the caller");
-    // Provisional: `baml_bridge::Error<E>` is assumed to expose a declared typed
-    // throw as a `Thrown` variant carrying the codegenned class.
-    let decoded = match err {
-        baml_bridge::Error::Thrown(decoded) => decoded,
-        other => panic!("expected the typed throw, got {other}"),
+    // The callback's declared throws is a real BAML class, so it propagates as
+    // that class: `E = ValidationError`, surfaced in `Error::Thrown`.
+    let baml_bridge::Error::Thrown { value, .. } = err else {
+        panic!("expected the typed throw, got {err}");
     };
-    assert_eq!(decoded.code, 7);
-    assert_eq!(decoded.message, "propagated through");
-    assert_eq!(decoded.fields, ["x", "y"]);
+    assert_eq!(value.code, 7);
+    assert_eq!(value.message, "propagated through");
+    assert_eq!(value.fields, ["x", "y"]);
 }
 
 #[test]
-fn test_throwing_async_callable_round_trips_original_python_exception() {
-    // Async callables go through the same `run_if_coroutine` dispatch path;
-    // native exceptions raised inside the coroutine should round-trip by
-    // identity just like the sync case.
-    // Provisional: assumes the generated callback parameter also accepts a
-    // Future-returning (async) closure, driven to completion on the bridge's
-    // dispatch runtime even on the sync call path (python's
-    // `run_if_coroutine` equivalent).
+fn test_host_callables_throwing_async_callable_round_trips_original_python_exception() {
+    // Async callbacks are driven to completion on the bridge's dispatch
+    // runtime even on the sync call path; an opaque error raised inside the
+    // future round-trips by value just like the sync case.
     let raised = ValueError("async nope".to_string());
 
+    // A callback that returns a future (`|x| async { … }`) — the form
+    // `HostCallback` accepts; the future is driven on the dispatch runtime.
     let cb = {
         let raised = raised.clone();
-        async move |_x: i64| -> Result<String, ValueError> { Err(raised.clone()) }
+        move |_x: i64| {
+            let raised = raised.clone();
+            async move { Err::<String, ValueError>(raised) }
+        }
     };
 
     let err = call_with_callback(cb, 1).expect_err("the host throw must surface to the caller");
-    assert_eq!(err.downcast_ref::<ValueError>(), Some(&raised));
+    let baml_bridge::Error::Thrown { value, .. } = err else {
+        panic!("expected the opaque host throw, got {err}");
+    };
+    assert_eq!(value.downcast_ref::<ValueError>(), Some(&raised));
 }
 
 #[test]
-fn test_multiple_throws_in_flight_do_not_collide_in_registry() {
+fn test_host_callables_multiple_throws_in_flight_do_not_collide_in_registry() {
     // Each host throw mints a fresh host-value key; calls in quick succession
     // must not see the wrong original exception. Exercises the `next_key()`
     // minting + per-call cleanup invariant of the host-value registry.
@@ -259,16 +305,20 @@ fn test_multiple_throws_in_flight_do_not_collide_in_registry() {
         call_with_callback(cb_first, 1).expect_err("the host throw must surface to the caller");
     let err_second =
         call_with_callback(cb_second, 2).expect_err("the host throw must surface to the caller");
-    assert_eq!(err_first.downcast_ref::<ValueError>(), Some(&raised_first));
-    assert_eq!(
-        err_second.downcast_ref::<ValueError>(),
-        Some(&raised_second)
-    );
+    let (
+        baml_bridge::Error::Thrown { value: first, .. },
+        baml_bridge::Error::Thrown { value: second, .. },
+    ) = (err_first, err_second)
+    else {
+        panic!("expected both opaque host throws");
+    };
+    assert_eq!(first.downcast_ref::<ValueError>(), Some(&raised_first));
+    assert_eq!(second.downcast_ref::<ValueError>(), Some(&raised_second));
     // DIVERGENCE(rust): python's `ei1.value is not ei2.value` identity check
     // becomes value inequality of the two round-tripped errors.
     assert_ne!(
-        err_first.downcast_ref::<ValueError>(),
-        err_second.downcast_ref::<ValueError>()
+        first.downcast_ref::<ValueError>(),
+        second.downcast_ref::<ValueError>()
     );
 }
 
@@ -276,7 +326,7 @@ fn test_multiple_throws_in_flight_do_not_collide_in_registry() {
 // reason.
 #[test]
 #[ignore = "host-callable release fires only when the engine GCs the Object::HostClosure on its heap; one BAML call rarely triggers the GC heuristic, so for now the callable leaks until the engine collects."]
-fn test_release_fires_on_drop_of_callable() {
+fn test_host_callables_release_fires_on_drop_of_callable() {
     // After BAML finishes invoking the callable and the engine GCs the
     // `Object::HostClosure` it allocated, the registered release callback
     // removes the Python callable from the bridge's host-value table.
@@ -300,7 +350,7 @@ fn test_release_fires_on_drop_of_callable() {
 }
 
 #[test]
-fn test_lambda_round_trip() {
+fn test_host_callables_lambda_round_trip() {
     // Lambdas are callable and not pydantic models, so they hit the
     // callable-encoding branch in `_set_inbound_value`.
     let result = call_with_callback(|x: i64| format!("lambda-{x}"), 99).unwrap();
@@ -308,13 +358,10 @@ fn test_lambda_round_trip() {
 }
 
 #[test]
-fn test_async_callable_runs_to_completion() {
-    // Async callables are detected (via `asyncio.iscoroutine` on the return
-    // value) and run to completion on a fresh asyncio loop inside the
-    // dispatch thread.
-    // Provisional: assumes the generated callback parameter also accepts a
-    // Future-returning (async) closure on the sync call path.
-    let cb = async |x: i64| {
+fn test_host_callables_async_callable_runs_to_completion() {
+    // An async callback runs to completion on the bridge's dispatch runtime,
+    // even when invoked through the sync call path.
+    let cb = |x: i64| async move {
         // Minimal awaitable body — exercises the coroutine path.
         std::future::ready(()).await;
         format!("async-{x}")
@@ -325,7 +372,7 @@ fn test_async_callable_runs_to_completion() {
 }
 
 #[test]
-fn test_multiple_callable_keys_are_distinct() {
+fn test_host_callables_multiple_callable_keys_are_distinct() {
     // Two separately-registered callables must produce two distinct keys;
     // invoking one must not call the other.
     use std::sync::Arc;
@@ -356,7 +403,7 @@ fn test_multiple_callable_keys_are_distinct() {
 }
 
 #[test]
-fn test_class_callback_round_trips_pydantic_model() {
+fn test_host_callables_class_callback_round_trips_pydantic_model() {
     // A user-defined `Person` class round-trips through the callable
     // boundary: BAML encodes the `Person` for the engine→host call; the
     // Python dispatcher decodes it into the codegen-emitted pydantic model;
@@ -372,7 +419,7 @@ fn test_class_callback_round_trips_pydantic_model() {
 }
 
 #[test]
-fn test_call_repeatedly_invokes_callback_n_times() {
+fn test_host_callables_call_repeatedly_invokes_callback_n_times() {
     // Exercises N round-trips through `SysOp::BamlHostCallHostValue`: BAML's
     // `for` loop invokes the callable for each iteration; the result list
     // collects every callback return value.
@@ -396,7 +443,7 @@ fn test_call_repeatedly_invokes_callback_n_times() {
 }
 
 #[test]
-fn test_call_repeatedly_with_zero_n_returns_empty_list() {
+fn test_host_callables_call_repeatedly_with_zero_n_returns_empty_list() {
     // N == 0 should produce no callback invocations and an empty result list
     // — covers the loop's zero-iteration edge case.
     use std::sync::{Arc, Mutex};
@@ -416,7 +463,7 @@ fn test_call_repeatedly_with_zero_n_returns_empty_list() {
 }
 
 #[test]
-fn test_call_with_throwing_in_baml_catches_host_callable_error() {
+fn test_host_callables_call_with_throwing_in_baml_catches_host_callable_error() {
     // The BAML `catch (e)` clause around a host-callable invocation now
     // intercepts a host-thrown `baml.errors.HostCallable` and returns the
     // recovery branch.
@@ -433,9 +480,9 @@ fn test_call_with_throwing_in_baml_catches_host_callable_error() {
     // through the same unwinder a `throw` opcode uses, so an in-BAML `catch`
     // can intercept them like any other throw.
 
-    /// Named to mirror python's builtin `RuntimeError` — provisional: the
-    /// bridge is assumed to surface the host error type's name as the
-    /// `HostCallable`'s `class_name`.
+    /// Named to mirror python's builtin `RuntimeError`. The bridge surfaces
+    /// the host error type's `type_name` as the `HostCallable`'s `class_name`,
+    /// which the BAML `catch` reads.
     #[derive(Debug)]
     struct RuntimeError(String);
 
@@ -452,7 +499,14 @@ fn test_call_with_throwing_in_baml_catches_host_callable_error() {
     };
 
     let result = call_with_throwing(cb, 1).unwrap();
-    assert_eq!(result, "caught:RuntimeError");
+    // DIVERGENCE(rust): python's `class_name` is `type(e).__name__` (bare
+    // `RuntimeError`); Rust's is the full, compiler-dependent `type_name` (a
+    // module path), so the catch returns `"caught:" + <full path>` — assert
+    // the shape, not the exact string.
+    assert!(
+        result.starts_with("caught:") && result.contains("RuntimeError"),
+        "{result}"
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -467,9 +521,10 @@ fn test_call_with_throwing_in_baml_catches_host_callable_error() {
 // default fills it. The callback returns `x*100 + y*10 + z` so each test can
 // read off exactly which optionals were delivered.
 //
-// Provisional: an optional the BAML side omits is assumed to be delivered to
-// the Rust callback as `None`; the host's own language-level default (python's
-// `y: int = 8`) is an `unwrap_or`.
+// An optional the BAML side omits is delivered to the Rust callback as `None`
+// (an optional callable parameter is `Option<T>` in the closure's argument
+// tuple); the host's own default (python's `y: int = 8`) becomes an
+// `unwrap_or`.
 // ---------------------------------------------------------------------------
 
 fn optional_args_cb(x: i64, y: Option<i64>, z: Option<i64>) -> i64 {
@@ -477,7 +532,7 @@ fn optional_args_cb(x: i64, y: Option<i64>, z: Option<i64>) -> i64 {
 }
 
 #[test]
-fn test_optional_args_all_unset_apply_host_defaults() {
+fn test_host_callables_optional_args_all_unset_apply_host_defaults() {
     // `callback(x)` supplies neither optional. Both are dropped before
     // dispatch, so the Python callback runs with only `x` and its own
     // defaults fill `y`/`z` (8 and 9), yielding `5*100 + 8*10 + 9 = 589`.
@@ -488,7 +543,7 @@ fn test_optional_args_all_unset_apply_host_defaults() {
 }
 
 #[test]
-fn test_optional_args_partially_set_deliver_by_name() {
+fn test_host_callables_optional_args_partially_set_deliver_by_name() {
     // Two calls each supplying exactly one optional by name:
     // `callback(x, y = 2)` (→ `500 + 20 + 9 = 529`) then `callback(x, z = 3)`
     // (→ `500 + 80 + 3 = 583`). Optionals cross by name, so each supplied
@@ -502,7 +557,7 @@ fn test_optional_args_partially_set_deliver_by_name() {
 }
 
 #[test]
-fn test_optional_args_all_set_deliver_both() {
+fn test_host_callables_optional_args_all_set_deliver_both() {
     // `callback(x, y = 2, z = 3)` supplies both optionals; both arrive by
     // name and override the host defaults, yielding `500 + 20 + 3 = 523`.
     assert_eq!(

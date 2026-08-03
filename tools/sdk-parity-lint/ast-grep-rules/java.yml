@@ -1,0 +1,39 @@
+id: java-test
+language: Java
+rule:
+  all:
+    - kind: method_declaration
+    - has:
+        kind: marker_annotation
+        regex: '^@Test$'
+        stopBy: end
+    - has:
+        pattern: $NAME
+        kind: identifier
+        field: name
+constraints:
+  NAME:
+    regex: '^test_[A-Za-z0-9_]+$'
+---
+id: java-audit-test
+language: Java
+rule:
+  all:
+    - kind: method_declaration
+    - has:
+        all:
+          - any:
+              - kind: marker_annotation
+              - kind: annotation
+          - has:
+              kind: identifier
+              regex: 'Test$'
+              stopBy: end
+        stopBy: end
+---
+id: sdk-parity-lint-skip
+language: Java
+rule:
+  all:
+    - kind: line_comment
+    - regex: 'SDK_PARITY_LINT\(skip\):'

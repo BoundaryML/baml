@@ -1,9 +1,10 @@
 use std::collections::HashSet;
 
-use crate::{CodegenTypeError, Ty, ty::validate_ty};
+use crate::{CodegenTypeError, Ty};
 
 pub type SymbolPool = std::collections::HashMap<super::Name, Symbol>;
 
+#[derive(Clone)]
 pub enum Symbol {
     Function(Function),
     Class(Class),
@@ -24,6 +25,7 @@ pub struct Origin {
     pub span_start: u32,
 }
 
+#[derive(Clone)]
 pub struct Function {
     pub name: baml_base::Name,
     /// `TypeVar`s declared on this function. Empty for non-generic functions.
@@ -72,6 +74,7 @@ pub enum DefaultLiteral {
     EmptyMap,
 }
 
+#[derive(Clone)]
 pub struct Class {
     pub name: super::Name,
     /// `TypeVar`s declared on this class. Empty for non-generic classes.
@@ -92,12 +95,14 @@ pub struct Class {
     pub origin: Origin,
 }
 
+#[derive(Clone)]
 pub struct ClassProperty {
     pub name: baml_base::Name,
     pub docstring: Option<String>,
     pub ty: super::Ty,
 }
 
+#[derive(Clone)]
 pub struct Enum {
     pub name: super::Name,
     pub docstring: Option<String>,
@@ -105,12 +110,14 @@ pub struct Enum {
     pub origin: Origin,
 }
 
+#[derive(Clone)]
 pub struct EnumVariant {
     pub name: baml_base::Name,
     pub docstring: Option<String>,
     pub value: String,
 }
 
+#[derive(Clone)]
 pub struct TypeAlias {
     pub name: super::Name,
     pub resolves_to: super::Ty,
@@ -120,17 +127,6 @@ pub struct TypeAlias {
 }
 
 impl Symbol {
-    /// Validate this symbol's local structure. Pool-level alias resolution is
-    /// performed by [`validate_symbol_pool_map_keys`].
-    pub fn validate(&self) -> Result<(), CodegenTypeError> {
-        match self {
-            Symbol::Function(function) => function.validate(),
-            Symbol::Class(class) => class.validate(),
-            Symbol::Enum(_) => Ok(()),
-            Symbol::TypeAlias(type_alias) => type_alias.validate(),
-        }
-    }
-
     pub fn walk_all_unions(&self) -> HashSet<super::Ty> {
         match self {
             Symbol::Function(function) => function.walk_all_unions(),
@@ -161,16 +157,6 @@ pub fn validate_symbol_pool_map_keys(pool: &SymbolPool) -> Result<(), CodegenTyp
 }
 
 impl Function {
-    fn validate(&self) -> Result<(), CodegenTypeError> {
-        self.arguments
-            .iter()
-            .map(|args| validate_ty(&args.ty))
-            .collect::<Result<Vec<_>, _>>()?;
-        validate_ty(&self.return_type)?;
-
-        Ok(())
-    }
-
     fn walk_all_unions(&self) -> HashSet<super::Ty> {
         self.arguments
             .iter()
@@ -195,17 +181,6 @@ impl Function {
 }
 
 impl Class {
-    fn validate(&self) -> Result<(), CodegenTypeError> {
-        self.properties
-            .iter()
-            .map(|prop| validate_ty(&prop.ty))
-            .collect::<Result<Vec<_>, _>>()?;
-        for method in self.static_methods.iter().chain(&self.instance_methods) {
-            method.validate()?;
-        }
-        Ok(())
-    }
-
     fn walk_all_unions(&self) -> HashSet<super::Ty> {
         self.properties
             .iter()
@@ -231,10 +206,6 @@ impl Class {
 }
 
 impl TypeAlias {
-    fn validate(&self) -> Result<(), CodegenTypeError> {
-        validate_ty(&self.resolves_to)
-    }
-
     fn walk_all_unions(&self) -> HashSet<super::Ty> {
         self.resolves_to.walk_all_unions()
     }

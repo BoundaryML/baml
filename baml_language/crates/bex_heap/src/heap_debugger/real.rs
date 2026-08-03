@@ -7,7 +7,7 @@ use std::{
 };
 
 use bex_vm_types::{
-    FutureRead, HeapPtr, Object, ObjectIndex, Value,
+    FutureRead, HeapPtr, Object, Value,
     types::{ObjectType, SentinelKind},
 };
 
@@ -341,7 +341,6 @@ impl BexHeap {
                     self.debug_assert_valid_value(&value);
                 }
                 FutureRead::Pending(_)
-                | FutureRead::ErrorPending(_)
                 | FutureRead::Cancelled
                 | FutureRead::InternalError(_) => {}
             },
@@ -458,11 +457,5 @@ impl BexHeap {
     #[inline]
     pub(crate) unsafe fn make_heap_ptr(&self, ptr: *mut Object) -> HeapPtr {
         unsafe { HeapPtr::from_ptr(ptr, self.heap_epoch()) }
-    }
-
-    /// Create an ObjectIndex from a raw index.
-    /// In debug mode, includes the current epoch for stale pointer detection.
-    pub(crate) fn make_object_index(&self, raw: usize) -> ObjectIndex {
-        ObjectIndex::from_raw_epoch(raw, self.heap_epoch())
     }
 }

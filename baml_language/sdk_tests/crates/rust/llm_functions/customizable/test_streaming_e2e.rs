@@ -38,7 +38,7 @@ use crate::replay_harness::{replay_server, replay_server_async};
 
 /// Sync `next()` yields a stream of partials and drains to `StreamFinished`.
 #[test]
-fn test_stream() {
+fn test_streaming_e2e_stream() {
     use baml_sdk::lorem::stream_e2e_extract_stream;
 
     replay_server("replay_extract_string", || {
@@ -63,7 +63,7 @@ fn test_stream() {
 /// Async sibling (python routes it over the pyo3-tokio path as
 /// `next_async()` / `final_async()`).
 #[tokio::test]
-async fn test_stream_async() {
+async fn test_streaming_e2e_stream_async() {
     use baml_sdk::lorem::stream_e2e_extract_stream_async;
 
     replay_server_async("replay_extract_string", async {
@@ -87,7 +87,7 @@ async fn test_stream_async() {
 
 /// BAML-driven counterpart: the `S | StreamFinished` union stays engine-side.
 #[test]
-fn test_stream_collect_in_baml() {
+fn test_streaming_e2e_stream_collect_in_baml() {
     use baml_sdk::lorem::{StreamE2ECollectResult, stream_e2e_collect};
 
     replay_server("replay_extract_string", || {
@@ -116,7 +116,7 @@ fn test_stream_collect_in_baml() {
 
 /// Sync `next()` yields >= 10 doc partials; `final()` is a typed `StreamingDoc`.
 #[test]
-fn test_stream_doc() {
+fn test_streaming_e2e_stream_doc() {
     use baml_sdk::lorem::{StreamingDoc, stream_e2e_extract_doc_stream};
 
     replay_server("replay_extract_doc", || {
@@ -142,7 +142,7 @@ fn test_stream_doc() {
 
 /// Async sibling for a class `T` (python's pyo3-tokio path).
 #[tokio::test]
-async fn test_stream_doc_async() {
+async fn test_streaming_e2e_stream_doc_async() {
     use baml_sdk::lorem::{StreamingDoc, stream_e2e_extract_doc_stream_async};
 
     replay_server_async("replay_extract_doc", async {
@@ -170,7 +170,7 @@ async fn test_stream_doc_async() {
 /// BAML-driven counterpart: the `S | StreamFinished` union stays engine-side;
 /// only the concrete `StreamingDoc` crosses the FFI boundary.
 #[test]
-fn test_stream_doc_collect_in_baml() {
+fn test_streaming_e2e_stream_doc_collect_in_baml() {
     use baml_sdk::lorem::{StreamingDoc, stream_e2e_collect_doc};
 
     replay_server("replay_extract_doc", || {

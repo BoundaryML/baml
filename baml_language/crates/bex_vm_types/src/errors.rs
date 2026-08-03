@@ -171,28 +171,6 @@ pub enum VmBamlError {
 }
 
 impl VmBamlError {
-    /// Fully-qualified BAML class name this error surfaces as (e.g.
-    /// `"baml.errors.Io"`). Mirrors the codegen-generated `ErrorClass`
-    /// enum in `bex_vm`; kept here so crates that only depend on
-    /// `bex_vm_types` (notably `sys_native`'s `host_impls`) can check a
-    /// thrown `VmBamlError` against a declared `Ty` without round-tripping
-    /// through a heap-allocated `Instance`.
-    pub fn class_name(&self) -> &'static str {
-        match self {
-            Self::InvalidArgument { .. } => "baml.errors.InvalidArgument",
-            Self::ParseError { .. } => "baml.errors.ParseError",
-            Self::Io { .. } => "baml.errors.Io",
-            Self::Timeout { .. } => "baml.errors.Timeout",
-            Self::Unsupported { .. } => "baml.errors.Unsupported",
-            Self::AccessError { .. } => "baml.errors.AccessError",
-            Self::RenderPrompt { .. } => "baml.errors.RenderPrompt",
-            Self::NotImplemented { .. } => "baml.errors.NotImplemented",
-            Self::LlmClient { .. } => "baml.errors.LlmClient",
-            Self::DevOther { .. } => "baml.errors.DevOther",
-            Self::HostCallable { .. } => "baml.errors.HostCallable",
-        }
-    }
-
     /// Map this `baml.errors.*` value to its contract-level
     /// [`SysOpErrorCategory`] — the finite set of categories that sysop
     /// `#[throws(...)]` annotations reference.
@@ -286,10 +264,23 @@ pub enum VmInternalError {
     #[error("virtual call could not resolve interface method `{method}`")]
     UnresolvedVirtualCall { method: String },
 
+    /// A `VirtualLoadField`/`VirtualStoreField` could not resolve interface field
+    /// `field_index` of `interface` for the receiver's runtime concrete type — either
+    /// the impl registry has no rule for the pair, or the rule's `field_links` table
+    /// is shorter than the interface's declared field list. The type checker proves
+    /// the receiver implements the interface before emitting the access, and E0124
+    /// makes the table total, so either is a compiler/VM inconsistency rather than a
+    /// user-reachable condition.
+    #[error("virtual field access could not resolve field #{field_index} of `{interface}`")]
+    UnresolvedVirtualFieldAccess {
+        interface: String,
+        field_index: usize,
+    },
+
     /// A `LoadType` (or other materialization) could not fully realize a
     /// `TyTemplate` against the frame's realized type arguments — a frame
-    /// reference out of range, a `Wildcard` hole reaching a materialization
-    /// position, or an associated-type projection that did not reduce. Runtime
+    /// reference out of range, or an associated-type projection that did not
+    /// reduce. Runtime
     /// type arguments are realized, so the compiler guarantees such templates
     /// realize; a failure here is a compiler/VM inconsistency, surfaced loudly
     /// rather than erased to `unknown`.

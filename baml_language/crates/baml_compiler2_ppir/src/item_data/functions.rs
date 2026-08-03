@@ -7,7 +7,8 @@ use baml_compiler2_hir::{
 use text_size::TextRange;
 
 use crate::item_data::common::{
-    AssociatedTypeBindingData, AssociatedTypeBindingSourceMap, FunctionParamData,
+    AssociatedTypeBindingData, AssociatedTypeBindingSourceMap, FunctionParamData, GenericParamData,
+    lower_generic_params,
 };
 
 /// Span-free semantic data for a function's *signature*.
@@ -22,17 +23,16 @@ use crate::item_data::common::{
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FunctionData {
     pub name: Name,
-    pub generic_params: Vec<Name>,
+    /// Generic type parameters, each with its conjunction of bounds.
+    pub generic_params: Vec<GenericParamData>,
     /// Every type reference in this function's signature — bounds, parameter
     /// types, return type, throws. Scoped to the item, so edits to sibling items
     /// cannot renumber these ids.
     pub type_refs: TypeRefStore,
-    /// Parallel to `generic_params`. `Some` means `T extends <bound>`.
-    pub generic_param_bounds: Vec<Option<TypeRefId>>,
     pub params: Vec<FunctionParamData>,
     pub return_type: Option<TypeRefId>,
     pub throws: Option<TypeRefId>,
-    pub origin: ast::FunctionOrigin,
+    pub metadata: ast::FunctionMetadata,
     pub docstring: Option<String>,
     /// Set when the fn def had a `//baml:tagged_string` marker.
     pub is_tagged_template_tag: bool,
@@ -94,6 +94,43 @@ pub fn function_llm_meta<'db>(
         .as_ref()
         .map(|ast::DeclarativeMeta::Llm(llm)| FunctionLlmMeta {
             client_name: llm.client.clone(),
+        })
+}
+
+/// The span-carrying Jinja prompt of an LLM (`{ client …; prompt … }`) function,
+/// for prompt-template validation.
+///
+/// This is the body-ish sibling of [`function_llm_meta`]: because its value
+/// carries the prompt's source span, it re-runs whenever the prompt text *or its
+/// position* changes — it does not offer the span-free early cutoff
+/// `function_llm_meta` does. It mirrors [`function_body`](crate::function_body)'s
+/// span-carrying tracked shape and exists so prompt validation can front the item
+/// tree without reading it directly.
+///
+/// `None` for a non-LLM function or an LLM function without a `prompt`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LlmPromptBody {
+    pub text: String,
+    pub span: TextRange,
+}
+
+/// The [`LlmPromptBody`] for one function, or `None` when it has no LLM prompt.
+#[salsa::tracked]
+pub fn function_llm_prompt<'db>(
+    db: &'db dyn crate::Db,
+    function: FunctionLoc<'db>,
+) -> Option<std::sync::Arc<LlmPromptBody>> {
+    let item_tree = crate::file_item_tree(db, function.file(db));
+    item_tree[function.id(db)]
+        .declarative_meta
+        .as_ref()
+        .and_then(|ast::DeclarativeMeta::Llm(llm)| {
+            llm.prompt.as_ref().map(|prompt| {
+                std::sync::Arc::new(LlmPromptBody {
+                    text: prompt.text.clone(),
+                    span: prompt.span,
+                })
+            })
         })
 }
 
@@ -349,11 +386,7 @@ fn lower<'db>(
 
     let mut type_refs = TypeRefBuilder::new();
 
-    let generic_param_bounds = data
-        .generic_param_bounds
-        .iter()
-        .map(|bound| bound.as_ref().map(|te| type_refs.lower(te)))
-        .collect();
+    let generic_params = lower_generic_params(&data.generic_params, &mut type_refs);
 
     let params: Vec<FunctionParamData> = data
         .params
@@ -373,13 +406,12 @@ fn lower<'db>(
     (
         FunctionData {
             name: data.name.clone(),
-            generic_params: data.generic_params.clone(),
+            generic_params,
             type_refs: store,
-            generic_param_bounds,
             params,
             return_type,
             throws,
-            origin: data.origin,
+            metadata: data.metadata,
             docstring: data.docstring.clone(),
             is_tagged_template_tag: data.is_tagged_template_tag,
         },

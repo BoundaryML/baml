@@ -199,7 +199,12 @@ enum ObjectWire {
     ),
     Float(f64),
     Future(crate::Future),
-    UnscheduledFuture(UnscheduledFuture),
+    // Boxed like the other large variants (and like `Object`'s own
+    // `UnscheduledFuture`): the struct carries the spawn's `Future<T, E>` type
+    // arguments, which are `RealizedTy`s, so inline it would set the whole
+    // enum's size. Borsh treats `Box<T>` transparently, so the wire form is
+    // unchanged.
+    UnscheduledFuture(Box<UnscheduledFuture>),
     Type(Box<baml_type::RealizedTy>),
 }
 
@@ -232,7 +237,7 @@ impl BorshSerialize for Object {
             ),
             Self::Float(v) => ObjectWire::Float(*v),
             Self::Future(v) => ObjectWire::Future(v.clone()),
-            Self::UnscheduledFuture(v) => ObjectWire::UnscheduledFuture((**v).clone()),
+            Self::UnscheduledFuture(v) => ObjectWire::UnscheduledFuture(v.clone()),
             Self::Type(v) => ObjectWire::Type(v.clone()),
             Self::RustData(_) => {
                 return Err(std::io::Error::new(
@@ -299,7 +304,7 @@ impl BorshDeserialize for Object {
             }),
             ObjectWire::Float(v) => Self::Float(v),
             ObjectWire::Future(v) => Self::Future(v),
-            ObjectWire::UnscheduledFuture(v) => Self::UnscheduledFuture(Box::new(v)),
+            ObjectWire::UnscheduledFuture(v) => Self::UnscheduledFuture(v),
             ObjectWire::Type(v) => Self::Type(v),
         })
     }

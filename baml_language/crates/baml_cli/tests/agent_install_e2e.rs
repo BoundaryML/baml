@@ -95,7 +95,7 @@ fn spawn_stub_codeload(archive: Vec<u8>) -> String {
 fn install_command(server: &str, home: &std::path::Path, dir: &std::path::Path) -> Command {
     let mut command = Command::new(env!("CARGO_BIN_EXE_baml-cli"));
     command
-        .args(["agent", "install", "--dir"])
+        .args(["agent", "install", "--project"])
         .arg(dir)
         .env("BAML_HOME", home)
         .env(
@@ -156,7 +156,7 @@ fn init_warns_then_default_install_sets_up_skills_and_silences() {
     assert!(project.join("baml.toml").is_file());
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(
-        stderr.contains("No baml skill is installed, set it up with baml agent install."),
+        stderr.contains("no baml skill is installed; set it up with `baml agent install`"),
         "{stderr}"
     );
     // A generator section makes the step-3 `generate` genuinely succeed, so
@@ -258,7 +258,7 @@ fn headerless_archive_installs_without_provenance() {
 }
 
 #[test]
-fn unreachable_archive_fails_with_from_hint() {
+fn unreachable_archive_fails_with_source_hint() {
     let server = spawn_stub_codeload(skill_archive(Some(COMMIT)));
     let home = tempfile::tempdir().unwrap();
     let project = tempfile::tempdir().unwrap();
@@ -271,5 +271,5 @@ fn unreachable_archive_fails_with_from_hint() {
     let output = command.output().unwrap();
     assert!(!output.status.success());
     let stderr = String::from_utf8_lossy(&output.stderr);
-    assert!(stderr.contains("--from"), "{stderr}");
+    assert!(stderr.contains("--source"), "{stderr}");
 }

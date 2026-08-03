@@ -1,0 +1,28 @@
+{
+  "schema": 1,
+  "description": "Reviewed C# NuGet size baseline. The package threshold is a regression budget, while the 200 MB limit remains a separate registry-safety ceiling.",
+  "evidence": {
+    "workflow_run_id": "29989654236",
+    "source_sha": "ceae8ea6cf9a8af561b4f1aa81ae428ce504d6d4",
+    "measured_at": "2026-07-23",
+    "compressed_native_payload_bytes": 69559373
+  },
+  "compressed_package": {
+    "baseline_bytes": 70000000,
+    "max_regression_percent": 15,
+    "registry_safety_ceiling_bytes": 200000000
+  },
+  "native_assets": {
+    "max_regression_percent": 10,
+    "baseline_bytes_by_target": {
+      "aarch64-apple-darwin": 21359712,
+      "aarch64-pc-windows-msvc": 22662656,
+      "aarch64-unknown-linux-gnu": 21692688,
+      "aarch64-unknown-linux-musl": 21606408,
+      "x86_64-apple-darwin": 21773828,
+      "x86_64-pc-windows-msvc": 24630272,
+      "x86_64-unknown-linux-gnu": 24584488,
+      "x86_64-unknown-linux-musl": 24432880
+    }
+  }
+}

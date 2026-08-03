@@ -30,3 +30,9 @@ function lambda_param() -> int {
   let apply = (f: (value: int) -> int, x: int) -> int { f(x) };
   apply((value: int) -> int { value }, 1)
 }
+
+function match_pattern(cb: (value: int) -> int) -> int {
+  match (cb) {
+    let f: (value: int) -> int => f(1)
+  }
+}

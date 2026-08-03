@@ -1,0 +1,18 @@
+{
+  "slug": "valid-parentheses",
+  "id": 20,
+  "title": "Valid Parentheses",
+  "difficulty": "Easy",
+  "category": "Stack",
+  "statement": "Given a string `s` containing just the characters `()`, `[]` and `{}`, determine if the input string is **valid**.\n\nA string is valid if open brackets are closed by the same type of bracket, and in the correct order.\n\n**Example**\n\n```\n\"()[]{}\"  => true\n\"(]\"      => false\n\"([)]\"    => false\n```",
+  "signature": "function IsValid(s: string) -> bool",
+  "starter": "function IsValid(s: string) -> bool {\n  // Return true if every bracket is closed by the same type, in order.\n  return false;\n}",
+  "solution": "function IsValid(s: string) -> bool {\n  let stack: string[] = [];\n  let chars = s.chars();\n  let n = chars.length();\n  let i = 0;\n  while (i < n) {\n    let c = chars[i];\n    if (c == \"(\" || c == \"[\" || c == \"{\") {\n      stack.push(c);\n    } else {\n      let top = stack.pop();\n      if (top == null) {\n        return false;\n      }\n      if (c == \")\" && top != \"(\") {\n        return false;\n      }\n      if (c == \"]\" && top != \"[\") {\n        return false;\n      }\n      if (c == \"}\" && top != \"{\") {\n        return false;\n      }\n    }\n    i += 1;\n  }\n  return stack.length() == 0;\n}",
+  "tests": [
+    { "call": "IsValid(\"()\")", "expected": "true" },
+    { "call": "IsValid(\"()[]{}\")", "expected": "true" },
+    { "call": "IsValid(\"(]\")", "expected": "false" },
+    { "call": "IsValid(\"([)]\")", "expected": "false", "hidden": true },
+    { "call": "IsValid(\"{[]}\")", "expected": "true", "hidden": true }
+  ]
+}

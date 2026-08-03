@@ -7,11 +7,15 @@ python = "3.13"     # Will use uv for Python package management
 ruby = "3.2.2"
 node = "22"         # For pnpm
 java = "temurin-23"
+gradle = "8.14"     # sdk_tests/crates/java fixtures (compiled with --release 17)
+dotnet = "10.0.301"
 
 uv = "0.11.3"
 direnv = "2.37.1"
 sccache = "0.10.0"
 clang = "22.1.7" # LLVM tools for CI, including llvm-strip
+cmake = "4.3.3"
+ninja = "1.13.2"
 
 # Rust tools
 "cargo:bacon" = "latest"
@@ -24,6 +28,7 @@ clang = "22.1.7" # LLVM tools for CI, including llvm-strip
 "cargo:cargo-nextest" = "latest"
 "cargo:cargo-insta" = "latest"
 "cargo:cargo-shear" = "latest"
+"cargo:https://github.com/astral-sh/hawk" = { version = "rev:42b09e72b2bf79f75aa8ce5f4563576f2dedf4c1", crate = "cargo-hawk", locked = true, install_env = { RUSTC_BOOTSTRAP = "1", RUSTUP_TOOLCHAIN = "1.97.1" } }
 
 # Go tools
 # locked to match the version in .github/actions/setup-go/action.yml
@@ -32,9 +37,10 @@ clang = "22.1.7" # LLVM tools for CI, including llvm-strip
 
 # Protobuf compiler — needed by sdks/go/bridge_go/build.sh (bridge_ctypes uses vendored protoc).
 protoc = "27.1"
+"spm:apple/swift-protobuf" = "1.38.1"
 
 # Python tools
-"pipx:ruff" = "latest"
+"pipx:ruff" = "0.15.22"
 "pipx:maturin" = "latest"
 
 # Node tools
@@ -42,6 +48,7 @@ protoc = "27.1"
 "npm:@infisical/cli" = "latest"
 
 actionlint = "latest"
+ast-grep = "0.44.1"
 
 [tasks.pr-unresolved]
 run = "./scripts/pr-unresolved"

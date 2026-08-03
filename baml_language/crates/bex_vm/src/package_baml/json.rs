@@ -16,7 +16,7 @@
 
 use std::sync::Arc;
 
-use baml_type::{MediaKind, RealizedTy, TypeName};
+use baml_type::{MediaKind, RealizedTy, TyTemplate, TypeName};
 
 /// FQN of the recursive `json` type alias declared in `baml.json`.
 /// Mirrors `baml_base::qualified_name::BAML_JSON_JSON`; inlined here to
@@ -591,16 +591,6 @@ fn raise_serialize(
     }
 }
 
-/// Public helper for native methods outside `json.rs` that need to throw a
-/// `JsonSerializationError` without a path context (e.g. `Uint8Array.to_json`).
-pub fn raise_serialize_no_path(
-    vm: &mut BexVm,
-    message: impl Into<String>,
-    reason: &str,
-) -> VmRustFnError {
-    raise_serialize(vm, message, "", reason)
-}
-
 // ─── serde_json ↔ VM Value conversion (untyped) ──────────────────────────────
 
 /// Convert a `serde_json::Value` into a VM `Value`.
@@ -859,10 +849,34 @@ fn ty_value_to_serde(
             "uint8array",
         )),
 
-        RealizedTy::Union(_, _) => {
-            // Tagged structurally — dispatch on the runtime Value shape rather
-            // than trying each member. Matches json-alias union semantics.
-            Ok(value_to_serde(vm, value))
+        RealizedTy::Union(members, _) => {
+            // Select the first declared member that contains the runtime value,
+            // using the same ordered, decidable membership relation as `is` and
+            // typed match arms. Serialization then remains fully type-directed:
+            // a class/media/uint8array member behaves exactly as it would outside
+            // the union, and values outside every member fail the type contract.
+            let member = members.iter().find(|member| {
+                crate::type_match::value_matches_template(
+                    vm,
+                    value,
+                    &TyTemplate::from((*member).clone()),
+                    &[],
+                )
+                // A template built from a `RealizedTy` carries no frame refs
+                // and no projections, so substitution cannot fail.
+                .unwrap_or_else(|e| {
+                    unreachable!("realized union-member template failed to substitute: {e}")
+                })
+            });
+            match member {
+                Some(member) => ty_value_to_serde(vm, value, member, path),
+                None => Err(raise_serialize(
+                    vm,
+                    "value is not a member of the union",
+                    path,
+                    "union",
+                )),
+            }
         }
 
         RealizedTy::Resource { .. } | RealizedTy::PromptAst { .. } => Err(raise_serialize(
@@ -1047,14 +1061,21 @@ fn serialize_media(
     Ok(serde_json::Value::Object(obj))
 }
 
-fn read_media_value(vm: &BexVm, value: Value) -> Option<Arc<baml_builtins2::MediaValue>> {
+pub(crate) fn read_media_value(
+    vm: &BexVm,
+    value: Value,
+) -> Option<Arc<baml_builtins2::MediaValue>> {
     let ptr = value.as_object_ptr()?;
-    let inst = match vm.get_object(ptr) {
-        Object::Instance(inst) => inst,
+    let (class, data_value) = match vm.get_object(ptr) {
+        Object::Instance(inst) => (inst.class, inst.fields.first()?.load()),
         _ => return None,
     };
-    // Media classes have a single `_data: $rust_type` field.
-    let data_value = inst.fields.first()?.load();
+    let class_name = match vm.get_object(class) {
+        Object::Class(class) => class.name.render_dotted(false),
+        _ => return None,
+    };
+    media_kind_from_fqn(class_name.as_str())?;
+
     let data_ptr = data_value.as_object_ptr()?;
     match vm.get_object(data_ptr) {
         Object::RustData(arc) => arc.clone().downcast::<baml_builtins2::MediaValue>().ok(),

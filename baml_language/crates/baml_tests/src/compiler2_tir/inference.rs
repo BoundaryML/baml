@@ -466,7 +466,13 @@ fn function_type_throws_package_interface_exports_effect_params() {
         .lookup_function(&[], &Name::new("direct"))
         .expect("exported function");
 
-    assert_eq!(exported.generic_params, vec![Name::new("__effect_param_0")]);
+    assert_eq!(
+        exported.generic_params,
+        vec![baml_compiler2_tir::ty::ParamTy::new(
+            0,
+            Name::new("__effect_param_0")
+        )]
+    );
     assert_eq!(
         exported.params[0].ty.render_canonical(),
         "(value: int) -> string throws __effect_param_0"
@@ -524,9 +530,8 @@ implements ToJson for Dog {
 "#,
     );
 
-    let item_tree = baml_compiler2_hir::file_item_tree(&db, impl_file);
     assert_eq!(
-        item_tree.free_impls.len(),
+        baml_compiler2_ppir::item_data::file_free_impls(&db, impl_file).len(),
         1,
         "cross-file class target must remain a first-class out-of-body impl record"
     );
@@ -698,32 +703,31 @@ fn lambda_scope_retypes_capture_from_function_parameter() {
         .expect("lambda scope");
     let lambda_inference = infer_scope_types(&db, lambda_scope_id);
 
-    let item_tree = baml_compiler2_ppir::file_item_tree(&db, file);
-    let (main_id, _) = item_tree
-        .functions
+    let main_loc = *baml_compiler2_ppir::item_data::file_functions(&db, file)
         .iter()
-        .find(|(_, func)| func.name.as_str() == "main")
+        .find(|&&loc| {
+            baml_compiler2_ppir::item_data::function_data(&db, loc)
+                .name
+                .as_str()
+                == "main"
+        })
         .expect("main function");
-    let main_loc = baml_compiler2_hir::loc::FunctionLoc::new(&db, file, main_id);
     let main_body = baml_compiler2_ppir::function_body(&db, main_loc);
     let baml_compiler2_hir::body::FunctionBody::Expr(main_expr_body) = main_body.as_ref() else {
         panic!("main expression body");
     };
-    let lambda_body = main_expr_body
+    // The lambda's body is an expression in `main`'s own arena.
+    let root_expr = main_expr_body
         .exprs
         .iter()
         .find_map(|(_, expr)| {
-            if let baml_compiler2_ast::Expr::Lambda(func_def) = expr
-                && let Some(baml_compiler2_ast::FunctionBodyDef::Expr(lambda_body, _)) =
-                    &func_def.body
-            {
-                Some(lambda_body)
+            if let baml_compiler2_ast::Expr::Lambda(func_def) = expr {
+                func_def.body
             } else {
                 None
             }
         })
         .expect("lambda body");
-    let root_expr = lambda_body.root_expr.expect("lambda root expr");
 
     assert_eq!(
         lambda_inference
@@ -787,13 +791,13 @@ function demo() -> ((x: int) -> int throws never) -> int throws never {
     );
 }
 
-/// Helper: does compiling `source` produce a `type mismatch` diagnostic?
+/// Helper: does compiling `source` produce a type mismatch diagnostic?
 fn has_type_mismatch(source: &str) -> bool {
     let mut db = make_db();
     db.add_file("test.baml", source);
     baml_project::collect_compiler2_diagnostics(&db)
         .iter()
-        .any(|diag| diag.message.contains("type mismatch"))
+        .any(|diag| diag.id == baml_compiler_diagnostics::DiagnosticId::TypeMismatch)
 }
 
 // ─── B-236: reassigning an unannotated local across container kinds ──────────
@@ -986,5 +990,49 @@ fn narrowed_nullable_index_is_accepted() {
 }"#
         ),
         "a nullable index narrowed to non-null must stay allowed"
+    );
+}
+
+#[test]
+fn class_spread_requires_the_same_nominal_class_and_generic_arguments() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+class Left<T> { value T }
+class Right<T> { value T }
+class Wrapper<T, E> { body () -> T throws E }
+
+function infer_from_spread(source: Left<int>) -> int {
+  let copy = Left { ...source };
+  copy.value
+}
+
+function expected_type_supplies_omitted_arguments() -> Wrapper<int, null> {
+  Wrapper { body: () -> 1 }
+}
+
+function wrong_class() -> Left<int> {
+  Left<int> { ...Right<int> { value: 1 } }
+}
+
+function wrong_type_argument() -> Left<int> {
+  Left<int> { ...Left<string> { value: "bad" } }
+}
+"#,
+    );
+    let tir = render_tir(&db, file);
+    assert!(!tir.contains("cannot infer type parameter `T`"), "{tir}");
+    assert!(
+        !tir.contains("expected Wrapper<int, null>, got Wrapper<int, never>"),
+        "{tir}"
+    );
+    assert!(
+        tir.contains("type mismatch: expected Left<int>, got Right<int>"),
+        "{tir}"
+    );
+    assert!(
+        tir.contains("type mismatch: expected Left<int>, got Left<string>"),
+        "{tir}"
     );
 }

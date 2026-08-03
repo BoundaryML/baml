@@ -1,0 +1,165 @@
+[[production]]
+package = "baml"
+bin = "baml"
+reason = "shipped BAML toolchain wrapper"
+
+[[production]]
+package = "baml_cli"
+bin = "baml-cli"
+reason = "shipped BAML language CLI"
+
+[[production]]
+package = "baml_pack_host"
+bin = "baml-pack-host"
+reason = "shipped host for packed BAML programs"
+
+[[exclude]]
+crate = "bex_events"
+module = "prof::pb"
+reason = "prost-generated profiling wire types"
+
+[[exclude]]
+crate = "bex_events"
+module = "value::pb"
+reason = "prost-generated value wire types"
+
+[[exclude]]
+crate = "bridge_ctypes"
+module = "baml_bridge::cffi"
+reason = "prost-generated C FFI wire types"
+
+[[exclude]]
+crate = "bex_vm"
+module = "package_baml::generated"
+reason = "build-generated native function implementations"
+
+[[exclude]]
+crate = "bex_vm"
+file = "crates/bex_vm/src/debug.rs"
+reason = "developer-facing bytecode disassembly and VM debugging utilities"
+
+[[override]]
+lint = "hawk::dead_public"
+crate = "bex_vm_types"
+item = "types::ErrorClass::fqn"
+level = "expect"
+reason = "build-generated builtin metadata"
+
+[[override]]
+lint = "hawk::dead_public"
+crate = "bex_vm_types"
+item = "types::ErrorClass::name"
+level = "expect"
+reason = "build-generated builtin metadata"
+
+[[override]]
+lint = "hawk::dead_public"
+crate = "bex_vm_types"
+item = "types::ErrorClass::ALL"
+level = "expect"
+reason = "build-generated builtin metadata"
+
+[[override]]
+lint = "hawk::dead_public"
+crate = "bex_vm_types"
+item = "types::ErrorClass::ALL_NAMES"
+level = "expect"
+reason = "build-generated builtin metadata"
+
+[[override]]
+lint = "hawk::dead_public"
+crate = "bex_vm_types"
+item = "types::ErrorClass::from_name"
+level = "expect"
+reason = "build-generated builtin metadata"
+
+[[override]]
+lint = "hawk::dead_public"
+crate = "bex_vm_types"
+item = "types::PanicClass::fqn"
+level = "expect"
+reason = "build-generated builtin metadata"
+
+[[override]]
+lint = "hawk::dead_public"
+crate = "bex_vm_types"
+item = "types::PanicClass::name"
+level = "expect"
+reason = "build-generated builtin metadata"
+
+[[override]]
+lint = "hawk::dead_public"
+crate = "bex_vm_types"
+item = "types::PanicClass::ALL"
+level = "expect"
+reason = "build-generated builtin metadata"
+
+[[override]]
+lint = "hawk::dead_public"
+crate = "bex_vm_types"
+item = "types::PanicClass::ALL_NAMES"
+level = "expect"
+reason = "build-generated builtin metadata"
+
+[[override]]
+lint = "hawk::dead_public"
+crate = "bex_vm_types"
+item = "types::PanicClass::from_name"
+level = "expect"
+reason = "build-generated builtin metadata"
+
+[[override]]
+lint = "hawk::dead_public"
+crate = "bex_vm_types"
+item = "types::SysOp::allowed_error_categories"
+level = "expect"
+reason = "build-generated builtin metadata"
+
+[[override]]
+lint = "hawk::dead_public"
+crate = "bex_vm_types"
+item = "types::SysOp::allowed_panic_categories"
+level = "expect"
+reason = "build-generated builtin metadata"
+
+[[override]]
+lint = "hawk::unnecessary_public"
+crate = "bex_vm_types"
+item = "types::SysOp::path"
+level = "expect"
+reason = "build-generated builtin metadata"
+
+[[override]]
+lint = "hawk::dead_public"
+crate = "baml_type"
+item = "family::CodegenFunctionParamTy::optional"
+level = "expect"
+reason = "shared ty_family macro method; the FunctionParamTy expansion is used by cfg(test) code"
+
+[[override]]
+lint = "hawk::dead_public"
+crate = "baml_type"
+item = "family::FunctionParamTy::optional"
+level = "expect"
+reason = "shared ty_family macro method used by cfg(test) code"
+
+[[override]]
+lint = "hawk::dead_public"
+crate = "baml_type"
+item = "family::RealizedFunctionParamTy::optional"
+level = "expect"
+reason = "shared ty_family macro method; the FunctionParamTy expansion is used by cfg(test) code"
+
+[[override]]
+lint = "hawk::dead_public"
+crate = "baml_type"
+item = "family::RuntimeFunctionParamTy::optional"
+level = "expect"
+reason = "shared ty_family macro method; the FunctionParamTy expansion is used by cfg(test) code"
+
+[[override]]
+lint = "hawk::dead_public"
+crate = "baml_type"
+item = "family::TyTemplateFunctionParamTy::optional"
+level = "expect"
+reason = "shared ty_family macro method; the FunctionParamTy expansion is used by cfg(test) code"

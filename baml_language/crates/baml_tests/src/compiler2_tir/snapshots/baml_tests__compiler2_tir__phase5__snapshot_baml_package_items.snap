@@ -3,6 +3,7 @@ source: crates/baml_tests/src/compiler2_tir/phase5.rs
 expression: output
 ---
 namespace baml:
+  type AnyFunction
   class Array<T> { methods: [filled, generate, length, at, push, pop, remove_at, concat, for_each, filter, filter_map, reverse, sort_by, sort_by_key, slice, join, map, some, every, find, find_index, find_last, find_last_index, includes, index_of, last_index_of, reduce, flat_map, clear, shift, unshift, insert, splice] }
   class Bigint { methods: [abs, min, max, clamp, isqrt, pow, ilog, parse, random] }
   class Bool { methods: [] }
@@ -102,6 +103,7 @@ namespace baml.errors:
   class StackTrace { methods: [_to_string_impl, to_string] }
   class Timeout { methods: [] }
   class TypeMismatch { methods: [] }
+  class UnknownError { methods: [] }
   class Unsupported { methods: [] }
 namespace baml.events:
 namespace baml.fs:
@@ -176,14 +178,19 @@ namespace baml.iter:
 namespace baml.json:
   class JsonDecodeError { methods: [] }
   class JsonParseError { methods: [] }
+  class JsonPathError { methods: [] }
   class JsonSerializationError { methods: [] }
   type json
+  function _path_field
+  function _path_index
   function deserialize<T>
   function field
   function from<T>
   function from_json<T>
   function from_string<T>
   function parse
+  function path<T>
+  function path_or<T>
   function serialize<T>
   function stringify
   function stringify_pretty
@@ -214,6 +221,7 @@ namespace baml.llm:
   class StreamAccumulator { methods: [add_events, content, is_done, model, finish_reason, input_tokens, output_tokens] }
   class StreamCache<TStream, TFinal> { methods: [new] }
   class VertexAiOptions { methods: [] }
+  function __new_stream_cache<TStream, TFinal>
   function __sap_parse_final<TStream, TFinal>
   function __sap_parse_partial<TStream, TFinal>
   function assemble_prompt_ast
@@ -231,7 +239,6 @@ namespace baml.llm:
   function prompt_template_for
   function render_output_format
   function render_prompt
-  function render_prompt_values
   function stream_llm_function<TStream, TFinal>
 namespace baml.media:
   class Audio { methods: [url, file, base64, mime_type, from_url, from_file, from_base64] }
@@ -283,6 +290,11 @@ namespace baml.random:
   type Rng
   class SystemRandom { methods: [get, random, random_int] }
   class Xoshiro256PlusPlus { methods: [new, _new, random, random_int] }
+namespace baml.sap:
+  function parse<T>
+  function parse_type
+namespace baml.schema:
+  function json_schema
 namespace baml.spawn:
   class CancelToken { methods: [new, any, cancel, is_cancelled] }
   class SpawnParams<T, E> { methods: [] }
@@ -295,6 +307,7 @@ namespace baml.sys:
   class ProcessOptions { methods: [] }
   class ShellOutput { methods: [ok] }
   function argv
+  function collect_garbage
   function exec
   function exit
   function now_ms
@@ -323,6 +336,10 @@ namespace baml.toml:
   function item_from_json
   function item_to_json
   function table_from_json
+namespace baml.ws:
+  class WsStream { methods: [send, next, close] }
+  function _connect
+  function connect
 namespace baml.yaml:
   class YamlParseError { methods: [] }
   function deserialize<T>

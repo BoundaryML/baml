@@ -1,0 +1,25 @@
+{
+  "category": "Arrays & Hashing",
+  "difficulty": "Easy",
+  "id": 217,
+  "signature": "function ContainsDuplicate(nums: int[]) -> bool",
+  "slug": "contains-duplicate",
+  "solution": "function ContainsDuplicate(nums: int[]) -> bool {\n  let n = nums.length();\n  let i = 0;\n  while (i < n) {\n    let j = i + 1;\n    while (j < n) {\n      if (nums[i] == nums[j]) {\n        return true;\n      }\n      j += 1;\n    }\n    i += 1;\n  }\n  return false;\n}",
+  "starter": "function ContainsDuplicate(nums: int[]) -> bool {\n  // Return true if any value appears more than once.\n  return false;\n}",
+  "statement": "Given an integer array `nums`, return `true` if any value appears **at least twice** in the array, and `false` if every element is distinct.\n\n**Example**\n\n```\nnums = [1, 2, 3, 1]  => true\nnums = [1, 2, 3, 4]  => false\n```",
+  "tests": [
+    { "call": "ContainsDuplicate([1, 2, 3, 1])", "expected": "true" },
+    { "call": "ContainsDuplicate([1, 2, 3, 4])", "expected": "false" },
+    {
+      "call": "ContainsDuplicate([1, 1, 1, 3, 3, 4, 3, 2, 4, 2])",
+      "expected": "true"
+    },
+    { "call": "ContainsDuplicate([])", "expected": "false", "hidden": true },
+    {
+      "call": "ContainsDuplicate([-1, -2, -3, -1])",
+      "expected": "true",
+      "hidden": true
+    }
+  ],
+  "title": "Contains Duplicate"
+}

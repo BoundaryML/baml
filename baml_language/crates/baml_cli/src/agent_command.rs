@@ -33,22 +33,29 @@ pub(crate) enum AgentCommand {
 /// to avoid collisions in the agent skill registry, and is the only difference
 /// from the upstream skill files.
 #[derive(Args, Clone, Debug)]
-#[command(
-    after_long_help = "Note: skill names are prefixed with 'baml-' on install to avoid registry collisions (e.g. upstream 'core' becomes 'baml-core')."
-)]
+#[command(after_long_help = "\
+Examples:
+  Install the latest skills:
+    baml agent install
+
+  Install skills in a specific project:
+    baml agent install --project ./my-project
+
+  Install skills from a local archive:
+    baml agent install --source ./skills.tar.gz")]
 pub(crate) struct AgentInstallArgs {
-    /// Directory where project-local agent skills should be installed.
-    ///
-    /// When omitted, BAML installs at the nearest ancestor with baml.toml or
-    /// baml_src within the current git repo (else the repo root); outside a
-    /// git repo, at the nearest such ancestor below your home directory, else
-    /// the current directory.
-    #[arg(long, value_name = "PATH")]
+    /// Deprecated alias for `--project`.
+    #[arg(long, value_name = "PATH", hide = true)]
     pub dir: Option<PathBuf>,
 
     /// Install skills from a tar.gz URL, local tar.gz archive, or local directory.
-    #[arg(long, value_name = "URL_OR_PATH")]
-    pub from: Option<String>,
+    #[arg(
+        long,
+        alias = "from",
+        value_name = "URL_OR_PATH",
+        help_heading = "Source options"
+    )]
+    pub source: Option<String>,
 }
 
 #[derive(Debug)]
@@ -101,14 +108,14 @@ struct LoadedSkills {
     /// Commit of the skill repo the installed content came from, recovered
     /// from the tarball's pax global header (`comment=<sha>`, written by
     /// `git archive` and present in GitHub codeload tarballs). Present only
-    /// when installing from the default source; custom `--from` sources have
+    /// when installing from the default source; custom `--source` values have
     /// no commit identity to record, and archives without the header (or with
     /// a non-SHA comment) install fine with no recorded provenance.
     commit: Option<String>,
 }
 
 fn load_skills(args: &AgentInstallArgs) -> Result<LoadedSkills> {
-    if let Some(source) = &args.from {
+    if let Some(source) = &args.source {
         if is_http_url(source) {
             let archive = fetch_url_bytes(source)?;
             return Ok(LoadedSkills {
@@ -148,7 +155,7 @@ fn load_skills(args: &AgentInstallArgs) -> Result<LoadedSkills> {
         format!(
             "could not download the BAML agent skills from {url}; if GitHub is \
              unreachable, install from a local copy with \
-             `baml agent install --from <url-or-path>`"
+             `baml agent install --source <url-or-path>`"
         )
     })?;
     let loaded = skills_from_archive(&archive)?;
@@ -184,7 +191,7 @@ fn record_installed_commit(commit: &str) {
     }
 }
 
-/// Installs with no commit identity (custom `--from` sources, or a default
+/// Installs with no commit identity (custom `--source` values, or a default
 /// archive whose pax header carried no commit) drop any previously recorded
 /// provenance so the passive skill check doesn't report the installed content
 /// as up to date with (or behind) the official skill repo.
@@ -560,13 +567,13 @@ fn split_frontmatter(content: &str) -> Result<(&str, &str)> {
     let rest = content
         .strip_prefix("---\n")
         .or_else(|| content.strip_prefix("---\r\n"))
-        .ok_or_else(|| anyhow!("SKILL.md is missing opening frontmatter marker"))?;
+        .ok_or_else(|| anyhow!("`SKILL.md` is missing opening frontmatter marker"))?;
     let Some((closing_start, closing_marker)) = ["\n---\n", "\r\n---\r\n"]
         .into_iter()
         .filter_map(|marker| rest.find(marker).map(|index| (index, marker)))
         .min_by_key(|(index, _)| *index)
     else {
-        anyhow::bail!("SKILL.md is missing closing frontmatter marker");
+        anyhow::bail!("`SKILL.md` is missing closing frontmatter marker");
     };
     Ok((
         &rest[..closing_start],
@@ -577,9 +584,9 @@ fn split_frontmatter(content: &str) -> Result<(&str, &str)> {
 fn validate_skill_name(content: &str, expected_name: &str) -> Result<()> {
     let (frontmatter, _) = split_frontmatter(content)?;
     let got = frontmatter_name(frontmatter)
-        .ok_or_else(|| anyhow!("SKILL.md frontmatter is missing `name`"))?;
+        .ok_or_else(|| anyhow!("`SKILL.md` frontmatter is missing `name`"))?;
     if got != expected_name {
-        anyhow::bail!("SKILL.md frontmatter name must be `{expected_name}`, got `{got}`");
+        anyhow::bail!("`SKILL.md` frontmatter name must be `{expected_name}`, got `{got}`");
     }
     Ok(())
 }
@@ -606,7 +613,7 @@ fn replace_frontmatter_name(frontmatter: &str, name: &str) -> Result<String> {
         }
     }
     if !replaced {
-        anyhow::bail!("SKILL.md frontmatter is missing `name`");
+        anyhow::bail!("`SKILL.md` frontmatter is missing `name`");
     }
     Ok(out)
 }

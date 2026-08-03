@@ -35,11 +35,16 @@
  */
 
 /**
- * ABI version represented by `BamlApiV1`.
+ * ABI revision represented by `BamlApiV1`.
  *
  * This identifies the function-table contract, not the BAML product release.
+ *
+ * Revision 2 changes the `call_function` slot from the legacy four-argument
+ * name-plus-payload signature to the unified three-argument payload signature.
+ * Hosts and runtimes built against different revisions must reject one another
+ * before reading that slot.
  */
-#define BAML_API_V1_ABI_VERSION 1
+#define BAML_API_V1_ABI_VERSION 2
 
 /**
  * Handle-type values returned by media constructors and carried on the wire.
@@ -134,9 +139,7 @@ typedef uint32_t BamlCffiStatus;
 /**
  * Stable identity of an official host-language bridge.
  *
- * Discriminants are part of the C ABI and may never be reused. The C-facing
- * registration struct stores the raw value as a `u32`, so an unknown value
- * can be rejected without constructing an invalid Rust enum.
+ * Discriminants are part of the C ABI and may never be reused.
  */
 enum BamlBridgeLanguage
 #ifdef __cplusplus
@@ -149,6 +152,9 @@ enum BamlBridgeLanguage
   BAML_BRIDGE_LANGUAGE_RUST = 4,
   BAML_BRIDGE_LANGUAGE_C_SHARP = 5,
   BAML_BRIDGE_LANGUAGE_CPP = 6,
+  BAML_BRIDGE_LANGUAGE_JAVA = 7,
+  BAML_BRIDGE_LANGUAGE_SWIFT = 8,
+  BAML_BRIDGE_LANGUAGE_WEB = 9,
 };
 #ifndef __cplusplus
 typedef uint32_t BamlBridgeLanguage;
@@ -188,10 +194,7 @@ typedef void (*BamlResultCallback)(uint32_t call_id, const int8_t *content, size
 
 typedef void (*BamlRegisterCallbackFn)(BamlResultCallback callback);
 
-typedef void (*BamlCallFunctionFn)(const char *function_name,
-                                   const uint8_t *encoded_args,
-                                   size_t length,
-                                   uint32_t callback_id);
+typedef void (*BamlCallFunctionFn)(const uint8_t *encoded_args, size_t length, uint32_t callback_id);
 
 typedef uint64_t (*BamlNewFunctionCallFn)(void);
 
@@ -258,19 +261,44 @@ typedef BamlCffiStatus (*BamlMediaAccessorFn)(uint64_t key,
  * types, and semantics for the lifetime of ABI version 1. The `language`
  * field is a raw `uint32_t` at the C boundary and is validated before it is
  * interpreted as a `BamlBridgeLanguage` value. Consumers set `struct_size` to
- * the size they provide. `sdk_version` is borrowed for `sdk_version_len` bytes
- * only during `register_bridge`; it is copied before that function returns.
- * A zero length permits a null pointer. The version is UTF-8 and identifies
- * the BAML product release, independently of the table's ABI version.
+ * the size they provide. Each string pointer is borrowed for its corresponding
+ * length only during `register_bridge`; all strings are copied before that
+ * function returns. A zero length permits a null pointer. `sdk_version` is
+ * UTF-8 and identifies the canonical BAML toolchain required by the bridge,
+ * independently of the table's ABI version.
  */
 typedef struct BamlBridgeInfoV1 {
   size_t struct_size;
   uint32_t language;
   const uint8_t *sdk_version;
   size_t sdk_version_len;
+  const uint8_t *bridge_runtime_name;
+  size_t bridge_runtime_name_len;
+  const uint8_t *bridge_runtime_version;
+  size_t bridge_runtime_version_len;
 } BamlBridgeInfoV1;
 
 typedef struct BamlBuffer (*BamlRegisterBridgeFn)(const struct BamlBridgeInfoV1 *info);
+
+/**
+ * Receives an error from spawned work whose future became unreachable.
+ *
+ * `content` follows the same borrowed `BamlOutboundResult` contract as
+ * `BamlResultCallback`. `cancelled` is nonzero when shutdown cancellation
+ * caused the error. The callback must not unwind or throw across the C
+ * boundary.
+ */
+typedef void (*BamlUnhandledSpawnErrorCallback)(const int8_t *content,
+                                                size_t length,
+                                                int32_t cancelled);
+
+typedef void (*BamlRegisterUnhandledSpawnErrorCallbackFn)(BamlUnhandledSpawnErrorCallback callback);
+
+typedef struct BamlBuffer (*BamlShutdownRuntimeFn)(void);
+
+typedef struct BamlBuffer (*BamlInitializeRuntimeFromBytecodeWithMetadataFn)(const uint8_t *bytecode,
+                                                                             size_t length,
+                                                                             const char *baml_toml);
 
 /**
  * First version of the shared BAML C API.
@@ -283,7 +311,8 @@ typedef struct BamlBuffer (*BamlRegisterBridgeFn)(const struct BamlBridgeInfoV1 
  *
  * A host must not unload the native library while a returned buffer, owned
  * handle, registered callback, or asynchronous call can still reach it. The
- * ABI has no shutdown or callback-unregistration operation in V1.
+ * The ABI has no callback-unregistration operation in V1. Hosts must call
+ * `shutdown_runtime` before unloading the native library.
  *
  * No Rust panic may unwind across this ABI. Operations with a diagnostic or
  * callback result channel catch and translate expected implementation panics.
@@ -338,10 +367,11 @@ typedef struct BamlApiV1 {
   /**
    * Enqueue a BAML function call and return immediately.
    *
-   * `function_name` is a borrowed NUL-terminated UTF-8 string. `encoded_args`
-   * is borrowed for `length` bytes; zero length permits null. Both inputs
-   * need remain valid only for this call. Completion is delivered later to
-   * the registered result callback using `callback_id`.
+   * `encoded_args` is a borrowed protobuf-encoded `CallFunctionArgs` whose
+   * `call_target` selects either a function name or an owned function handle.
+   * It is borrowed for `length` bytes and need remain valid only for this
+   * call. Completion is delivered later to the registered result callback
+   * using `callback_id`.
    */
   BamlCallFunctionFn call_function;
   /**
@@ -427,7 +457,7 @@ typedef struct BamlApiV1 {
    */
   BamlMediaAccessorFn media_mime_type;
   /**
-   * Register the calling bridge and require an exact product-version match.
+   * Register the calling bridge and require an exact toolchain-version match.
    *
    * `info` and its version bytes are borrowed only for this call. The
    * returned owned buffer is empty on success or a UTF-8 diagnostic on
@@ -436,6 +466,18 @@ typedef struct BamlApiV1 {
    * only for an identical language/version pair.
    */
   BamlRegisterBridgeFn register_bridge;
+  /**
+   * Install the process-global unhandled-spawn callback; the first call wins.
+   */
+  BamlRegisterUnhandledSpawnErrorCallbackFn register_unhandled_spawn_error_callback;
+  /**
+   * Wait for spawned work, report unreachable errors, and release the runtime.
+   */
+  BamlShutdownRuntimeFn shutdown_runtime;
+  /**
+   * Replace the runtime from bytecode after validating embedded generation metadata.
+   */
+  BamlInitializeRuntimeFromBytecodeWithMetadataFn initialize_runtime_from_bytecode_with_metadata;
 } BamlApiV1;
 
 typedef const struct BamlApiV1 *(*BamlGetApiV1Fn)(void);
@@ -452,6 +494,14 @@ extern "C" {
  * only symbol a dynamically loaded host bridge needs to resolve.
  */
 BAML_CFFI_API const struct BamlApiV1 *baml_get_api_v1(void);
+
+/**
+ * Initialize generated bytecode after validating its embedded `baml.toml`.
+ */
+BAML_CFFI_API
+struct BamlBuffer initialize_runtime_from_bytecode_with_metadata(const uint8_t *bytecode,
+                                                                 size_t length,
+                                                                 const char *baml_toml);
 
 #ifdef __cplusplus
 }  // extern "C"

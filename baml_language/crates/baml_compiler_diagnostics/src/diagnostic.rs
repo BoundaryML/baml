@@ -4,8 +4,12 @@
 //! compiler error across all phases (parsing, HIR lowering, type checking).
 //! This enables centralized rendering and consistent error handling.
 
+use std::borrow::Cow;
+
 use baml_base::{FileId, Span};
 use borsh::{BorshDeserialize, BorshSerialize};
+
+use crate::message::{DiagnosticMessageHighlight, DiagnosticText};
 
 // ============================================================================
 // DiagnosticPhase - Tracks which compiler phase produced a diagnostic
@@ -14,7 +18,7 @@ use borsh::{BorshDeserialize, BorshSerialize};
 /// The compiler phase that produced a diagnostic.
 ///
 /// This enables grouping diagnostics by phase for display purposes
-/// (e.g., in `tools_onionskin` TUI or `baml_tests` snapshots).
+/// (e.g., in `baml_tests` snapshots).
 ///
 /// The Borsh derives serialize the variant as a declaration-order
 /// discriminant for the per-file diagnostics cache; reordering variants is a
@@ -30,18 +34,6 @@ pub enum DiagnosticPhase {
     Validation,
     /// Type inference phase (type mismatches, unknown variables)
     Type,
-}
-
-impl DiagnosticPhase {
-    /// Get a short display name for the phase.
-    pub fn name(&self) -> &'static str {
-        match self {
-            DiagnosticPhase::Parse => "parse",
-            DiagnosticPhase::Hir => "hir",
-            DiagnosticPhase::Validation => "validation",
-            DiagnosticPhase::Type => "type",
-        }
-    }
 }
 
 /// Unique identifier for a diagnostic category.
@@ -274,6 +266,10 @@ pub enum DiagnosticId {
     UnconstrainedImplTypeParam,
     /// `Self` used in an interface FIELD type (only valid in method signatures).
     SelfInInterfaceField,
+    /// Bare `Self` used in an associated type's DEFAULT. `Self` is universal, so it
+    /// cannot be resolved where the interface is used as an interface-existential
+    /// type (the implementor is hidden).
+    SelfInAssociatedTypeDefault,
     /// An `implements … for <target>` whose `for` target is not a single concrete
     /// type — a union, optional, interface ("dyn"), or `unknown`. Interfaces can
     /// only be implemented for a concrete type (or a concrete type constructor
@@ -353,6 +349,24 @@ pub enum DiagnosticId {
     /// a digit invalid for the base (`0b12`), or an integer literal whose
     /// magnitude exceeds `i64::MAX`.
     InvalidNumericLiteral,
+
+    // Builtin interfaces (BEP-062, E0153/E0154)
+    /// An `implements` block targets a compiler-builtin interface
+    /// (`baml.AnyFunction`), whose conformance is derived by the compiler
+    /// (every function type implements it) and cannot be written by hand.
+    BuiltinInterfaceNotImplementable,
+    /// A generic parameter's bound (`T extends X`) names a compiler-builtin
+    /// interface (`baml.AnyFunction`) that is only legal as a value type
+    /// (an existential), never as a bound.
+    BuiltinInterfaceNotABound,
+
+    // Projection bases (E0156)
+    /// The dotted projection shorthand (`Base.Member`) was written with the
+    /// interface itself as the base (`Iterator.Element`). A projection's base
+    /// is an implementor type, a bounded type variable, or `Self` — naming
+    /// the interface explicitly takes a qualified projection
+    /// (`(Base as Iterator).Element`). Rust's E0223 analog.
+    InterfaceProjectionBase,
 }
 
 impl DiagnosticId {
@@ -548,6 +562,7 @@ impl DiagnosticId {
             DiagnosticId::ImplTargetNotConcrete => "E0138",
             DiagnosticId::ImplViolatesOrphanRule => "E0139",
             DiagnosticId::ToStringMustImplementInterface => "E0140",
+            DiagnosticId::SelfInAssociatedTypeDefault => "E0157",
             DiagnosticId::DeferControlFlowEscape => "E0141",
             DiagnosticId::ToJsonMustImplementInterface => "E0142",
             DiagnosticId::FromJsonMustImplementInterface => "E0143",
@@ -566,6 +581,13 @@ impl DiagnosticId {
 
             // Numeric literal validation
             DiagnosticId::InvalidNumericLiteral => "E0152",
+            // BUG(e-code-collision): "E0153" is also assigned to
+            // `GenericSysOpMethodInInterfaceImpl` above. One of the two needs
+            // a fresh code; renumbering changes user-facing diagnostics, so it
+            // deserves its own change.
+            DiagnosticId::BuiltinInterfaceNotImplementable => "E0153",
+            DiagnosticId::BuiltinInterfaceNotABound => "E0154",
+            DiagnosticId::InterfaceProjectionBase => "E0156",
         }
     }
 }
@@ -592,34 +614,41 @@ pub struct Annotation {
     pub span: Span,
     /// Message for this annotation (optional).
     pub message: Option<String>,
+    /// Styled ranges within `message`.
+    pub message_highlights: Vec<DiagnosticMessageHighlight>,
     /// Whether this is the primary annotation.
     pub is_primary: bool,
 }
 
 impl Annotation {
     /// Create a primary annotation with a message.
-    pub fn primary(span: Span, message: impl Into<String>) -> Self {
+    pub fn primary(span: Span, message: impl Into<DiagnosticText>) -> Self {
+        let (message, message_highlights) = message.into().into_parts();
         Self {
             span,
-            message: Some(message.into()),
+            message: Some(message),
+            message_highlights,
             is_primary: true,
         }
     }
 
-    /// Create a primary annotation without a message.
-    pub fn primary_no_msg(span: Span) -> Self {
+    /// Create a primary annotation without a label.
+    pub fn primary_span(span: Span) -> Self {
         Self {
             span,
             message: None,
+            message_highlights: Vec::new(),
             is_primary: true,
         }
     }
 
     /// Create a secondary annotation with a message.
-    pub fn secondary(span: Span, message: impl Into<String>) -> Self {
+    pub fn secondary(span: Span, message: impl Into<DiagnosticText>) -> Self {
+        let (message, message_highlights) = message.into().into_parts();
         Self {
             span,
-            message: Some(message.into()),
+            message: Some(message),
+            message_highlights,
             is_primary: false,
         }
     }
@@ -632,26 +661,21 @@ pub struct RelatedInfo {
     pub span: Span,
     /// The message describing this related location.
     pub message: String,
+    /// Styled ranges within `message`.
+    pub message_highlights: Vec<DiagnosticMessageHighlight>,
     /// Optional file path for display purposes.
     pub file_path: Option<String>,
 }
 
 impl RelatedInfo {
     /// Create a new related info with a span and message.
-    pub fn new(span: Span, message: impl Into<String>) -> Self {
+    pub fn new(span: Span, message: impl Into<DiagnosticText>) -> Self {
+        let (message, message_highlights) = message.into().into_parts();
         Self {
             span,
-            message: message.into(),
+            message,
+            message_highlights,
             file_path: None,
-        }
-    }
-
-    /// Create a new related info with file path for display.
-    pub fn with_path(span: Span, message: impl Into<String>, path: impl Into<String>) -> Self {
-        Self {
-            span,
-            message: message.into(),
-            file_path: Some(path.into()),
         }
     }
 }
@@ -660,7 +684,7 @@ impl RelatedInfo {
 ///
 /// This type is inspired by `ruff_db::Diagnostic` and enables:
 /// - Centralized diagnostic collection via `Project::check()`
-/// - Multi-format rendering (Ariadne for CLI, LSP types for editors)
+/// - Multi-format rendering (Miette for CLI, LSP types for editors)
 /// - Consistent error handling across all compiler phases
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Diagnostic {
@@ -670,6 +694,8 @@ pub struct Diagnostic {
     pub severity: Severity,
     /// The main error message.
     pub message: String,
+    /// Styled ranges within `message`.
+    pub message_highlights: Vec<DiagnosticMessageHighlight>,
     /// Annotations pointing to relevant source locations.
     pub annotations: Vec<Annotation>,
     /// Related information (e.g., "first defined here").
@@ -680,11 +706,13 @@ pub struct Diagnostic {
 
 impl Diagnostic {
     /// Create a new diagnostic with a single primary span.
-    pub fn new(id: DiagnosticId, severity: Severity, message: impl Into<String>) -> Self {
+    pub fn new(id: DiagnosticId, severity: Severity, message: impl Into<DiagnosticText>) -> Self {
+        let (message, message_highlights) = message.into().into_parts();
         Self {
             id,
             severity,
-            message: message.into(),
+            message,
+            message_highlights,
             annotations: Vec::new(),
             related_info: Vec::new(),
             phase: DiagnosticPhase::default(),
@@ -692,12 +720,12 @@ impl Diagnostic {
     }
 
     /// Create an error diagnostic.
-    pub fn error(id: DiagnosticId, message: impl Into<String>) -> Self {
+    pub fn error(id: DiagnosticId, message: impl Into<DiagnosticText>) -> Self {
         Self::new(id, Severity::Error, message)
     }
 
     /// Create a warning diagnostic.
-    pub fn warning(id: DiagnosticId, message: impl Into<String>) -> Self {
+    pub fn warning(id: DiagnosticId, message: impl Into<DiagnosticText>) -> Self {
         Self::new(id, Severity::Warning, message)
     }
 
@@ -710,7 +738,7 @@ impl Diagnostic {
 
     /// Add a primary annotation at a span with a message.
     #[must_use]
-    pub fn with_primary(mut self, span: Span, message: impl Into<String>) -> Self {
+    pub fn with_primary(mut self, span: Span, message: impl Into<DiagnosticText>) -> Self {
         self.annotations.push(Annotation::primary(span, message));
         self
     }
@@ -718,35 +746,21 @@ impl Diagnostic {
     /// Add a primary annotation at a span using the main message.
     #[must_use]
     pub fn with_primary_span(mut self, span: Span) -> Self {
-        self.annotations
-            .push(Annotation::primary(span, self.message.clone()));
+        self.annotations.push(Annotation::primary_span(span));
         self
     }
 
     /// Add a secondary annotation at a span.
     #[must_use]
-    pub fn with_secondary(mut self, span: Span, message: impl Into<String>) -> Self {
+    pub fn with_secondary(mut self, span: Span, message: impl Into<DiagnosticText>) -> Self {
         self.annotations.push(Annotation::secondary(span, message));
         self
     }
 
     /// Add related information.
     #[must_use]
-    pub fn with_related(mut self, span: Span, message: impl Into<String>) -> Self {
+    pub fn with_related(mut self, span: Span, message: impl Into<DiagnosticText>) -> Self {
         self.related_info.push(RelatedInfo::new(span, message));
-        self
-    }
-
-    /// Add related information with file path.
-    #[must_use]
-    pub fn with_related_path(
-        mut self,
-        span: Span,
-        message: impl Into<String>,
-        path: impl Into<String>,
-    ) -> Self {
-        self.related_info
-            .push(RelatedInfo::with_path(span, message, path));
         self
     }
 
@@ -761,6 +775,19 @@ impl Diagnostic {
             .iter()
             .find(|a| a.is_primary)
             .map(|a| a.span)
+    }
+
+    /// Return the headline plus a distinct primary annotation label.
+    pub fn message_with_primary_label(&self) -> Cow<'_, str> {
+        self.annotations
+            .iter()
+            .find(|annotation| annotation.is_primary)
+            .and_then(|annotation| annotation.message.as_deref())
+            .filter(|message| *message != self.message)
+            .map_or_else(
+                || Cow::Borrowed(self.message.as_str()),
+                |message| Cow::Owned(format!("{}: {message}", self.message)),
+            )
     }
 
     /// Get the primary file ID.
@@ -814,6 +841,17 @@ mod tests {
 
         assert_eq!(diag.related_info.len(), 1);
         assert_eq!(diag.related_info[0].message, "First defined here");
+    }
+
+    #[test]
+    fn message_with_primary_label_preserves_span_detail() {
+        let diag = Diagnostic::error(DiagnosticId::TypeMismatch, "mismatched types")
+            .with_primary(test_span(), "expected `int`, found `string`");
+
+        assert_eq!(
+            diag.message_with_primary_label(),
+            "mismatched types: expected `int`, found `string`"
+        );
     }
 
     #[test]

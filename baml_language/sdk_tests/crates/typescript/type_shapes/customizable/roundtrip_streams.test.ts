@@ -20,11 +20,11 @@ import {
 import { Foo$stream } from "./baml_sdk/index.js";
 
 describe("roundtrip streams", () => {
-  it("round_trip_resume_stream", () => {
+  it("streams_round_trip_resume_stream", () => {
     const r = new Resume$stream({ name: "ada", email: null });
     expect(round_trip_resume_stream(r)).toEqual(r);
   });
-  it("round_trip_root_foo_stream", () => {
+  it("streams_round_trip_root_foo_stream", () => {
     const f = new Foo$stream({ v: 3 });
     expect(round_trip_root_foo_stream(f)).toEqual(f);
   });
@@ -33,16 +33,16 @@ describe("roundtrip streams", () => {
   // class type-args channel (`class_ty`), so the engine decodes it to an
   // `Instance` and accepts it into the generic class slot. (No `$types` is
   // passed, so the arg lowers to the unknown/top wildcard.)
-  it("round_trip_box_of_resume_stream", () => {
+  it("streams_round_trip_box_of_resume_stream", () => {
     const b = new Box({ v: new Resume$stream({ name: "grace", email: null }) });
     expect(round_trip_box_of_resume_stream(b)).toEqual(b);
   });
-  it("round_trip_resume_or_resume_stream", () => {
+  it("streams_round_trip_resume_or_resume_stream", () => {
     // Union arm `Resume` (the non-stream side) is host-constructible.
     const r = new Resume({ name: "hopper", email: null });
     expect(round_trip_resume_or_resume_stream(r)).toEqual(r);
   });
-  it("round_trip_resume_or_http_response", () => {
+  it("streams_round_trip_resume_or_http_response", () => {
     const r = new Resume({ name: "lovelace", email: "a@x.com" });
     expect(round_trip_resume_or_http_response(r)).toEqual(r);
   });

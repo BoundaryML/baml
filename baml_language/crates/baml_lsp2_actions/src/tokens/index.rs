@@ -87,6 +87,7 @@ pub(super) fn scope_resolution_index(db: &dyn Db, scope_id: ScopeId<'_>) -> Arc<
         index_function(
             db,
             scope_id.file(db),
+            body.root,
             &body.expr_body,
             &body.source_map,
             inference,
@@ -124,12 +125,23 @@ pub(super) fn build(db: &dyn Db, file: SourceFile) -> ResolutionIndex {
 fn index_function(
     db: &dyn Db,
     file: SourceFile,
+    root: Option<baml_compiler2_ast::ExprId>,
     expr_body: &ExprBody,
     source_map: &baml_compiler2_ast::AstSourceMap,
     inference: &ScopeInference<'_>,
     index: &mut ResolutionIndex,
 ) {
-    for (expr_id, expr) in expr_body.exprs.iter() {
+    // Only the expressions this scope's inference actually covers: lambda
+    // bodies share the arena but are typed by their own scope, so indexing them
+    // here would resolve them against the wrong tables.
+    let nodes = root
+        .map(|root| expr_body.reachable_excluding_lambdas(root))
+        .unwrap_or_default();
+    for node in nodes {
+        let baml_compiler2_ast::BodyNode::Expr(expr_id) = node else {
+            continue;
+        };
+        let expr = &expr_body.exprs[expr_id];
         match expr {
             Expr::Path(segments) if !segments.is_empty() => {
                 let seg_span = source_map.path_segment_span(expr_id, 0);
