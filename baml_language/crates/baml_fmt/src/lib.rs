@@ -137,9 +137,9 @@ mod format_options_tests {
 mod contextual_keyword_identifier_tests {
     use super::*;
 
-    /// `client` lexes as KW_CLIENT but is a legal identifier everywhere the
+    /// `client` lexes as `KW_CLIENT` but is a legal identifier everywhere the
     /// checker accepts one. The formatter must not die on it (it used to:
-    /// "Expected token/node of kind WORD, but found KW_CLIENT").
+    /// "Expected token/node of kind WORD, but found `KW_CLIENT`").
     #[test]
     fn test_client_as_identifier_formats() {
         let source = concat!(
