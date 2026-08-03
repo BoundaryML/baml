@@ -96,12 +96,12 @@ pub type UserBamlFile = (PathBuf, String);
 #[derive(Clone, Copy)]
 enum RuntimePayload<'a> {
     SourceFiles(&'a [UserBamlFile]),
-    Bytecode(&'a [u8]),
+    Bytecode(&'a [u8], Option<&'a str>),
 }
 
 impl RuntimePayload<'_> {
     fn is_bytecode(self) -> bool {
-        matches!(self, RuntimePayload::Bytecode(_))
+        matches!(self, RuntimePayload::Bytecode(_, _))
     }
 }
 
@@ -128,7 +128,20 @@ pub fn to_source_code_with_bytecode(
 ) -> HashMap<PathBuf, String> {
     to_source_code_internal(
         pool,
-        RuntimePayload::Bytecode(baml_bytecode),
+        RuntimePayload::Bytecode(baml_bytecode, None),
+        naming_convention,
+    )
+}
+
+pub fn to_source_code_with_bytecode_and_metadata(
+    pool: &SymbolPool,
+    baml_bytecode: &[u8],
+    embedded_baml_toml: &str,
+    naming_convention: NamingConvention,
+) -> HashMap<PathBuf, String> {
+    to_source_code_internal(
+        pool,
+        RuntimePayload::Bytecode(baml_bytecode, Some(embedded_baml_toml)),
         naming_convention,
     )
 }
@@ -380,7 +393,7 @@ fn render_root_init(top_children: &BTreeSet<String>, use_bytecode: bool) -> Stri
     out.push_str("from . import _inlinedbaml\n");
     out.push_str("from ._typemap import _TYPE_MAP\n\n");
     if use_bytecode {
-        out.push_str("BamlRuntime.initialize_runtime_from_bytecode(_inlinedbaml.BYTECODE)\n\n");
+        out.push_str("BamlRuntime.initialize_runtime_from_bytecode(_inlinedbaml.BYTECODE, _inlinedbaml.EMBEDDED_BAML_TOML)\n\n");
     } else {
         out.push_str("BamlRuntime.initialize_runtime(\n");
         out.push_str("    \"baml_src\", _inlinedbaml.FILES\n");
@@ -455,7 +468,9 @@ struct InlinedEntry {
 fn render_inlinedbaml(payload: RuntimePayload<'_>) -> String {
     match payload {
         RuntimePayload::SourceFiles(files) => render_inlinedbaml_source(files),
-        RuntimePayload::Bytecode(bytecode) => render_inlinedbaml_bytecode(bytecode),
+        RuntimePayload::Bytecode(bytecode, embedded_baml_toml) => {
+            render_inlinedbaml_bytecode(bytecode, embedded_baml_toml)
+        }
     }
 }
 
@@ -479,9 +494,15 @@ fn render_inlinedbaml_source(files: &[UserBamlFile]) -> String {
     out
 }
 
-fn render_inlinedbaml_bytecode(bytecode: &[u8]) -> String {
+fn render_inlinedbaml_bytecode(bytecode: &[u8], embedded_baml_toml: Option<&str>) -> String {
     let mut out = String::from("from __future__ import annotations\n\nBYTECODE: bytes = ");
     out.push_str(&py_bytes(bytecode));
+    out.push_str("\nEMBEDDED_BAML_TOML: str | None = ");
+    out.push_str(
+        &embedded_baml_toml
+            .map(py_string)
+            .unwrap_or_else(|| "None".to_string()),
+    );
     out.push('\n');
     out
 }
@@ -1577,7 +1598,7 @@ mod tests {
 
         let root = &out[&PathBuf::from("__init__.py")];
         assert!(
-            root.contains("BamlRuntime.initialize_runtime_from_bytecode(_inlinedbaml.BYTECODE)")
+            root.contains("BamlRuntime.initialize_runtime_from_bytecode(_inlinedbaml.BYTECODE, _inlinedbaml.EMBEDDED_BAML_TOML)")
         );
         assert!(!root.contains("BamlRuntime.initialize_runtime("));
         assert!(!root.contains("_inlinedbaml.FILES"));

@@ -179,7 +179,11 @@ public final class BamlFfi {
     // ---- Native methods (implemented in sdks/java/bridge_java) --------------
 
     /** Initialize the process-global runtime from serialized BAML bytecode. */
-    static native void nativeInitFromBytecode(byte[] bytecode);
+    static native void nativeInitFromBytecode(
+            byte[] bytecode,
+            String embeddedBamlToml,
+            String bridgeRuntimeVersion,
+            String toolchainVersion);
 
     static native void nativeShutdownRuntime();
 
@@ -276,7 +280,27 @@ public final class BamlFfi {
 
     /** Initialize the runtime from embedded bytecode (idempotent; replaces). */
     public static void initFromBytecode(byte[] bytecode) {
-        nativeInitFromBytecode(bytecode);
+        nativeInitFromBytecode(
+                bytecode,
+                null,
+                BamlVersion.BRIDGE_RUNTIME_VERSION,
+                BamlVersion.TOOLCHAIN_VERSION);
+    }
+
+    public static void initFromBytecode(byte[] bytecode, String embeddedBamlToml) {
+        nativeInitFromBytecode(
+                bytecode,
+                embeddedBamlToml,
+                BamlVersion.BRIDGE_RUNTIME_VERSION,
+                BamlVersion.TOOLCHAIN_VERSION);
+    }
+
+    public static String getToolchainVersion() {
+        return BamlVersion.TOOLCHAIN_VERSION;
+    }
+
+    public static String getBridgeRuntimeVersion() {
+        return BamlVersion.BRIDGE_RUNTIME_VERSION;
     }
 
     /**

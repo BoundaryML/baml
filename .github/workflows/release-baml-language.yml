@@ -85,6 +85,7 @@ jobs:
       maven_version: ${{ steps.plan.outputs.maven_version }}
       gradle_plugin_version: ${{ steps.plan.outputs.gradle_plugin_version }}
       swiftpm_version: ${{ steps.plan.outputs.swiftpm_version }}
+      go_version: ${{ steps.plan.outputs.go_version }}
       released_at: ${{ steps.plan.outputs.released_at }}
       git_tag: ${{ steps.plan.outputs.git_tag }}
       release_plan_json: ${{ steps.plan.outputs.release_plan_json }}
@@ -215,6 +216,7 @@ jobs:
           gradle_plugin_version="$(jq -r \
             .registry_versions.gradle_plugin release-plan.json)"
           swiftpm_version="$(jq -r .registry_versions.swiftpm release-plan.json)"
+          go_version="$(jq -r .registry_versions.go release-plan.json)"
           released_at="$(jq -r .released_at release-plan.json)"
           git_tag="$(jq -r .git_tag release-plan.json)"
           {
@@ -226,6 +228,7 @@ jobs:
             echo "maven_version=$maven_version"
             echo "gradle_plugin_version=$gradle_plugin_version"
             echo "swiftpm_version=$swiftpm_version"
+            echo "go_version=$go_version"
             echo "released_at=$released_at"
             echo "git_tag=$git_tag"
             echo "release_plan_json<<EOF"
@@ -414,11 +417,13 @@ jobs:
           if [[ "$vsix" != "$dest" ]]; then
             mv "$vsix" "$dest"
           fi
-      - name: Reject bundled native binaries
+      - name: Validate VSIX contents
         run: |
           set -euo pipefail
           vsix="typescript2/app-vscode-ext/baml-language-${{ needs.plan.outputs.version }}.vsix"
-          unzip -l "$vsix" | tee vsix-list.txt
+          unzip -Z1 "$vsix" | tee vsix-list.txt
+          grep -Fxq 'extension/readme.md' vsix-list.txt
+          grep -Fxq 'extension/baml-logo.png' vsix-list.txt
           ! grep -E 'dist/baml-cli|baml-cli|baml-pack-host' vsix-list.txt
       - uses: actions/upload-artifact@v4
         with:
@@ -598,11 +603,13 @@ jobs:
       - name: Assemble and test public module
         env:
           VERSION: ${{ needs.plan.outputs.version }}
+          GO_VERSION: ${{ needs.plan.outputs.go_version }}
         run: |
           set -euo pipefail
           scripts/assemble-go-sdk-mirror \
             --out "$RUNNER_TEMP/go-sdk-mirror" \
-            --version "$VERSION"
+            --version "$VERSION" \
+            --go-version "$GO_VERSION"
           cd "$RUNNER_TEMP/go-sdk-mirror"
           test "$(go list -m)" = "github.com/boundaryml/baml-go"
           go test ./...
@@ -1389,12 +1396,13 @@ jobs:
       - name: Publish immutable module tag
         env:
           SOURCE_SHA: ${{ needs.plan.outputs.source_sha }}
-          VERSION: ${{ needs.plan.outputs.version }}
+          CANONICAL_VERSION: ${{ needs.plan.outputs.version }}
+          GO_VERSION: ${{ needs.plan.outputs.go_version }}
         run: |
           set -euo pipefail
           export GIT_SSH_COMMAND="ssh -i ~/.ssh/baml_go_mirror_key -o IdentitiesOnly=yes"
-          tag="v$VERSION"
-          manifest_url="https://pkg.boundaryml.com/manifest/v1/version/$VERSION.json"
+          tag="$GO_VERSION"
+          manifest_url="https://pkg.boundaryml.com/manifest/v1/version/$CANONICAL_VERSION.json"
 
           # Do not expose an immutable Go module tag until the exact-version
           # manifest it needs is live and identifies this same module version.
@@ -1410,13 +1418,14 @@ jobs:
             sleep "$attempt"
           done
           jq -e \
-            --arg version "$VERSION" \
+            --arg version "$CANONICAL_VERSION" \
+            --arg go_version "$GO_VERSION" \
             --arg module "github.com/boundaryml/baml-go" \
             '
               .version == $version
               and .baml_bridge_go == {
                 "module": $module,
-                "version": ("v" + $version)
+                "version": $go_version
               }
               and (.cffi | type == "object" and length > 0)
             ' "$manifest" >/dev/null
@@ -1438,9 +1447,10 @@ jobs:
 
           cd /tmp/baml-go
           test "$(sed -n '1p' go.mod)" = "module github.com/boundaryml/baml-go"
-          if ! grep -qxF "const DefaultRuntimeVersion = \"$VERSION\"" version.go; then
-            echo "::error::version.go is not stamped for $VERSION"
-            grep -n "DefaultRuntimeVersion" version.go || true
+          if ! grep -qxF "const ToolchainVersion = \"$CANONICAL_VERSION\"" version.go ||
+             ! grep -qxF "const BridgeRuntimeVersion = \"$GO_VERSION\"" version.go; then
+            echo "::error::version.go is not stamped for $CANONICAL_VERSION / $GO_VERSION"
+            grep -n "ToolchainVersion\\|BridgeRuntimeVersion" version.go || true
             exit 1
           fi
           git add -A
@@ -1457,7 +1467,7 @@ jobs:
           if ! git diff --cached --quiet; then
             git -c user.name="github-actions[bot]" \
                 -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
-                commit -m "Sync BoundaryML/baml@$SOURCE_SHA for v$VERSION"
+                commit -m "Sync BoundaryML/baml@$SOURCE_SHA for $GO_VERSION"
           fi
           git -c user.name="github-actions[bot]" \
               -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \

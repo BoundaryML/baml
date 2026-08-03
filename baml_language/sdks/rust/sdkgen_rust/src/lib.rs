@@ -145,6 +145,24 @@ pub fn to_source_code_with_bytecode(
     baml_bytecode: &[u8],
     options: &RustGenOptions,
 ) -> Generated {
+    to_source_code_with_optional_metadata(pool, baml_bytecode, None, options)
+}
+
+pub fn to_source_code_with_bytecode_and_metadata(
+    pool: &SymbolPool,
+    baml_bytecode: &[u8],
+    embedded_baml_toml: &str,
+    options: &RustGenOptions,
+) -> Generated {
+    to_source_code_with_optional_metadata(pool, baml_bytecode, Some(embedded_baml_toml), options)
+}
+
+fn to_source_code_with_optional_metadata(
+    pool: &SymbolPool,
+    baml_bytecode: &[u8],
+    embedded_baml_toml: Option<&str>,
+    options: &RustGenOptions,
+) -> Generated {
     assert!(
         matches!(options.naming_convention, NamingConvention::PreserveCase),
         "only NamingConvention::PreserveCase is supported"
@@ -328,7 +346,7 @@ pub fn to_source_code_with_bytecode(
     );
     files.insert(
         PathBuf::from("src/_inlinedbaml.rs"),
-        FileContent::Text(render_inlinedbaml_module()),
+        FileContent::Text(render_inlinedbaml_module(embedded_baml_toml)),
     );
     files.insert(
         PathBuf::from("src/_runtime.rs"),
@@ -411,7 +429,11 @@ struct LeafItem {
 /// `_inlinedbaml.bin` (`include_bytes!` resolves relative to the
 /// containing source file) so rustc never has to parse the program as a
 /// byte-string literal.
-fn render_inlinedbaml_module() -> String {
+fn render_inlinedbaml_module(embedded_baml_toml: Option<&str>) -> String {
+    let embedded_baml_toml = match embedded_baml_toml {
+        Some(manifest) => quote!(::core::option::Option::Some(#manifest)),
+        None => quote!(::core::option::Option::None),
+    };
     render_rust_file(
         RUST_BANNER,
         quote! {
@@ -420,6 +442,8 @@ fn render_inlinedbaml_module() -> String {
             /// first call.
             pub(crate) static BYTECODE: &[u8] =
                 ::core::include_bytes!("_inlinedbaml.bin");
+            pub(crate) static EMBEDDED_BAML_TOML: ::core::option::Option<&str> =
+                #embedded_baml_toml;
         },
     )
 }
@@ -437,7 +461,10 @@ fn render_runtime_module() -> String {
 
             pub(crate) fn ensure_init() -> ::std::result::Result<(), ::baml_bridge::SdkError> {
                 INIT.get_or_init(|| {
-                    ::baml_bridge::runtime::initialize_from_bytecode(crate::_inlinedbaml::BYTECODE)
+                    ::baml_bridge::runtime::initialize_from_bytecode_with_metadata(
+                        crate::_inlinedbaml::BYTECODE,
+                        crate::_inlinedbaml::EMBEDDED_BAML_TOML,
+                    )
                 })
                 .clone()
             }

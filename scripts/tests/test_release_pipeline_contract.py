@@ -15,6 +15,7 @@ ROOT = Path(__file__).resolve().parents[2]
 CONTRACT_TOOL = ROOT / "scripts" / "baml-csharp-release-contract"
 VERSION_TOOL = ROOT / "scripts" / "baml-language-version"
 GO_RELEASE_SMOKE = ROOT / "scripts" / "smoke-go-release.py"
+GO_SDK_ASSEMBLER = ROOT / "scripts" / "assemble-go-sdk-mirror"
 PLATFORMS = ROOT / "release" / "platforms.json"
 RELEASE_WORKFLOW = ROOT / ".github" / "workflows" / "release-baml-language.yml"
 CI_WORKFLOW = ROOT / ".github" / "workflows" / "ci.yaml"
@@ -863,6 +864,22 @@ class WorkflowGraphTests(unittest.TestCase):
             "`repo:${GITHUB_REPO}:ref:*`",
             pkg_stack,
         )
+
+    def test_go_release_uses_both_frozen_version_identities(self) -> None:
+        release = RELEASE_WORKFLOW.read_text(encoding="utf-8")
+        assembler = GO_SDK_ASSEMBLER.read_text(encoding="utf-8")
+        build = job_block(release, "build-go-sdk")
+        publish = job_block(release, "publish-go-sdk")
+
+        self.assertIn("go_version: ${{ steps.plan.outputs.go_version }}", release)
+        self.assertIn('GO_VERSION: ${{ needs.plan.outputs.go_version }}', build)
+        self.assertIn('--go-version "$GO_VERSION"', build)
+        self.assertIn('GO_VERSION: ${{ needs.plan.outputs.go_version }}', publish)
+        self.assertIn('tag="$GO_VERSION"', publish)
+        self.assertIn('"version": $go_version', publish)
+        self.assertNotIn('tag="v$CANONICAL_VERSION"', publish)
+        self.assertIn('parser.add_argument("--go-version", required=True)', assembler)
+        self.assertIn("runtime_matches != [args.go_version]", assembler)
 
     def test_nightly_is_scheduled_and_pushes_only_cut_canary(self) -> None:
         release = RELEASE_WORKFLOW.read_text(encoding="utf-8")

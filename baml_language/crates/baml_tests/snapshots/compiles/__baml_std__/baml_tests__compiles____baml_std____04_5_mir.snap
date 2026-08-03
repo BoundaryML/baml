@@ -5391,7 +5391,7 @@ fn baml.json.path(j: int | float | string | bool | null | baml.json.json[] | map
     let _6: baml.json.JsonPathError
     let _7: string
     let _8: string
-    let _9: int | float | string | bool | null | (int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>)[] | map<string, int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>> // current
+    let _9: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json> // current
     let _10: int // i
     let _11: bool
     let _12: int
@@ -5419,7 +5419,7 @@ fn baml.json.path(j: int | float | string | bool | null | baml.json.json[] | map
     let _34: bool
     let _35: int
     let _36: int
-    let _37: int | float | string | bool | null | (int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>)[] | map<string, int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>>
+    let _37: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>
     let _38: string
     let _39: int
     let _40: int
@@ -8093,174 +8093,7 @@ fn baml.llm.from_shorthand = builtin(io)
 
 fn baml.llm.get_jinja_template = builtin(io)
 
-fn baml.llm.assemble_prompt_ast = builtin(io)
-
-fn baml.llm.render_prompt_values(values: unknown[]) -> unknown[] {
-    // Locals:
-    let _0: unknown[] // _0 // return
-    let _1: unknown[] // values // param
-    let _2: unknown[] // rendered
-    let _3: baml.iter.Iterator<Error = never, Item = unknown>
-    let _4: unknown
-    let _5: bool
-    let _6: unknown
-    let _7: unknown // value
-    let _8: void
-    let _9: string | image | audio | video | pdf | baml.llm.Role | baml.media.Audio | baml.media.Image | baml.media.Pdf | baml.media.Video
-    let _10: bool
-    let _11: unknown
-    let _12: baml.media.Image // media
-    let _13: unknown
-    let _14: baml.media.Pdf // media
-    let _15: unknown
-    let _16: baml.media.Audio // media
-    let _17: unknown
-    let _18: baml.media.Video // media
-    let _19: unknown
-    let _20: image // media
-    let _21: unknown
-    let _22: pdf // media
-    let _23: unknown
-    let _24: audio // media
-    let _25: unknown
-    let _26: video // media
-    let _27: unknown
-    let _28: type
-
-    bb0: {
-        _2 = []: unknown[];
-        _3 = virtual_call iter as baml.iter.Iterable<Error = never, Item = unknown>(copy _1) -> [bb1];
-    }
-
-    bb1: {
-        _4 = virtual_call next as baml.iter.Iterator<Error = never, Item = unknown>(copy _3) -> [bb2];
-    }
-
-    bb2: {
-        _5 = is_type(copy _4, baml.iter.Done);
-        branch copy _5 -> [bb23, bb3];
-    }
-
-    bb3: {
-        _6 = copy _4;
-        fresh_cell(_7);
-        _7 = copy _6;
-        _10 = is_type(copy _7, baml.llm.Role);
-        branch copy _10 -> [bb21, bb4];
-    }
-
-    bb4: {
-        _11 = copy _7;
-        _11 = narrow_bind copy _11 as Class(QualifiedTypeName { pkg: Dep("baml"), namespace: ["media"], name: "Image" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb20, bb5];
-    }
-
-    bb5: {
-        _13 = copy _7;
-        _13 = narrow_bind copy _13 as Class(QualifiedTypeName { pkg: Dep("baml"), namespace: ["media"], name: "Pdf" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb19, bb6];
-    }
-
-    bb6: {
-        _15 = copy _7;
-        _15 = narrow_bind copy _15 as Class(QualifiedTypeName { pkg: Dep("baml"), namespace: ["media"], name: "Audio" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb18, bb7];
-    }
-
-    bb7: {
-        _17 = copy _7;
-        _17 = narrow_bind copy _17 as Class(QualifiedTypeName { pkg: Dep("baml"), namespace: ["media"], name: "Video" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb17, bb8];
-    }
-
-    bb8: {
-        _19 = copy _7;
-        _19 = narrow_bind copy _19 as Media(Image, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb16, bb9];
-    }
-
-    bb9: {
-        _21 = copy _7;
-        _21 = narrow_bind copy _21 as Media(Pdf, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb15, bb10];
-    }
-
-    bb10: {
-        _23 = copy _7;
-        _23 = narrow_bind copy _23 as Media(Audio, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb14, bb11];
-    }
-
-    bb11: {
-        _25 = copy _7;
-        _25 = narrow_bind copy _25 as Media(Video, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb13, bb12];
-    }
-
-    bb12: {
-        _27 = copy _7;
-        _28 = load_type(unknown);
-        _9 = call const fn baml.String.from<copy _28>(copy _27) -> [bb22];
-    }
-
-    bb13: {
-        _26 = copy _25;
-        _9 = copy _26;
-        goto -> bb22;
-    }
-
-    bb14: {
-        _24 = copy _23;
-        _9 = copy _24;
-        goto -> bb22;
-    }
-
-    bb15: {
-        _22 = copy _21;
-        _9 = copy _22;
-        goto -> bb22;
-    }
-
-    bb16: {
-        _20 = copy _19;
-        _9 = copy _20;
-        goto -> bb22;
-    }
-
-    bb17: {
-        _18 = copy _17;
-        _9 = copy _18;
-        goto -> bb22;
-    }
-
-    bb18: {
-        _16 = copy _15;
-        _9 = copy _16;
-        goto -> bb22;
-    }
-
-    bb19: {
-        _14 = copy _13;
-        _9 = copy _14;
-        goto -> bb22;
-    }
-
-    bb20: {
-        _12 = copy _11;
-        _9 = copy _12;
-        goto -> bb22;
-    }
-
-    bb21: {
-        _9 = copy _7;
-        goto -> bb22;
-    }
-
-    bb22: {
-        _8 = call const fn baml.Array.push(copy _2, copy _9) -> [bb1];
-    }
-
-    bb23: {
-        _0 = copy _2;
-        goto -> bb24;
-    }
-
-    bb24: {
-        return;
-    }
-}
+fn baml.llm.assemble_prompt_ast = builtin(vm)
 
 fn baml.llm.render_output_format = builtin(io)
 
@@ -8373,7 +8206,6 @@ fn .<lambda(prompt, 0)>(ctx: baml.llm.Context) -> baml.llm.PromptAst {
     let _3: ((string) -> baml.llm.Role throws never, baml.llm.Context) -> baml.TaggedString throws never
     let _4: string[]
     let _5: unknown[]
-    let _6: unknown[]
 
     bb0: {
         _3 = copy capture[0];
@@ -8382,15 +8214,11 @@ fn .<lambda(prompt, 0)>(ctx: baml.llm.Context) -> baml.llm.PromptAst {
 
     bb1: {
         _4 = copy _2.0;
-        _6 = copy _2.1;
-        _5 = call const fn baml.llm.render_prompt_values(copy _6) -> [bb2];
+        _5 = copy _2.1;
+        _0 = call const fn baml.llm.assemble_prompt_ast(copy _4, copy _5) -> [bb2];
     }
 
     bb2: {
-        _0 = sys_op const fn baml.llm.assemble_prompt_ast(copy _4, copy _5) -> bb3;
-    }
-
-    bb3: {
         return;
     }
 }
@@ -12079,7 +11907,7 @@ fn baml.toml.Table.baml.ToJson.to_json(self: baml.toml.Table) -> int | float | s
     // Locals:
     let _0: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json> // _0 // return
     let _1: baml.toml.Table // self // param
-    let _2: map<string, int | float | string | bool | baml.time.PlainDate | baml.time.PlainDateTime | baml.time.PlainTime | baml.time.ZonedDateTime | baml.toml.Table | baml.toml.Item[]>
+    let _2: map<string, baml.toml.Item>
     let _3: type
 
     bb0: {
@@ -12114,7 +11942,7 @@ fn baml.toml.table_from_json(j: int | float | string | bool | null | baml.json.j
     let _0: baml.toml.Table // _0 // return
     let _1: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json> // j // param
     let _2: bool
-    let _3: map<string, int | float | string | bool | baml.time.PlainDate | baml.time.PlainDateTime | baml.time.PlainTime | baml.time.ZonedDateTime | baml.toml.Table | baml.toml.Item[]> // items
+    let _3: map<string, baml.toml.Item> // items
     let _4: string[]
     let _5: type
     let _6: type
@@ -12125,13 +11953,13 @@ fn baml.toml.table_from_json(j: int | float | string | bool | null | baml.json.j
     let _11: string // key
     let _12: string
     let _13: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>
-    let _14: map<string, int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>>
+    let _14: map<string, baml.json.json>
     let _15: string
     let _16: bool
     let _17: baml.json.json // item
     let _18: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>
     let _19: int | float | string | bool | baml.time.PlainDate | baml.time.PlainDateTime | baml.time.PlainTime | baml.time.ZonedDateTime | baml.toml.Table | baml.toml.Item[]
-    let _20: map<string, int | float | string | bool | baml.time.PlainDate | baml.time.PlainDateTime | baml.time.PlainTime | baml.time.ZonedDateTime | baml.toml.Table | baml.toml.Item[]>
+    let _20: map<string, baml.toml.Item>
     let _21: baml.json.JsonDecodeError
 
     bb0: {

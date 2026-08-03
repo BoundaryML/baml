@@ -329,6 +329,8 @@ impl GenerateArgs {
             return Ok(crate::ExitCode::Other);
         }
 
+        let embedded_baml_toml = build_embedded_baml_toml(&from)?;
+
         // Build the codegen SymbolPool from the compiler database.
         let pool = baml_project::build_symbol_pool(&db);
 
@@ -359,6 +361,7 @@ impl GenerateArgs {
                 let report = sdkgen_csharp::generate_into(sdkgen_csharp::CSharpGenerateRequest {
                     symbols: &pool,
                     program_bytes: &baml_bytecode,
+                    embedded_baml_toml: &embedded_baml_toml,
                     cli_version: release_version(),
                     required_bridge_version: baml_version::CANONICAL_VERSION,
                     program_identity: &generator.name,
@@ -382,9 +385,10 @@ impl GenerateArgs {
             // a binary file.
             let generated: Vec<(PathBuf, Vec<u8>)> = match generator.output_type {
                 OutputType::PythonPydantic | OutputType::PythonPydanticV1 => {
-                    sdkgen_python_pydantic2::to_source_code_with_bytecode(
+                    sdkgen_python_pydantic2::to_source_code_with_bytecode_and_metadata(
                         &pool,
                         &baml_bytecode,
+                        &embedded_baml_toml,
                         generator.naming_convention,
                     )
                     .into_iter()
@@ -392,9 +396,10 @@ impl GenerateArgs {
                     .collect()
                 }
                 OutputType::TypescriptNode => {
-                    sdkgen_typescript_shared::sdkgen_typescript::to_source_code_with_bytecode(
+                    sdkgen_typescript_shared::sdkgen_typescript::to_source_code_with_bytecode_and_metadata(
                         &pool,
                         &baml_bytecode,
+                        &embedded_baml_toml,
                         generator.naming_convention,
                     )
                     .into_iter()
@@ -402,9 +407,10 @@ impl GenerateArgs {
                     .collect()
                 }
                 OutputType::TypescriptWeb => {
-                    sdkgen_typescript_shared::sdkgen_typescript_web::to_source_code_with_bytecode(
+                    sdkgen_typescript_shared::sdkgen_typescript_web::to_source_code_with_bytecode_and_metadata(
                         &pool,
                         &baml_bytecode,
+                        &embedded_baml_toml,
                         generator.naming_convention,
                     )
                     .into_iter()
@@ -412,9 +418,10 @@ impl GenerateArgs {
                     .collect()
                 }
                 OutputType::Rust => {
-                    let generated = sdkgen_rust::to_source_code_with_bytecode(
+                    let generated = sdkgen_rust::to_source_code_with_bytecode_and_metadata(
                         &pool,
                         &baml_bytecode,
+                        &embedded_baml_toml,
                         &sdkgen_rust::RustGenOptions {
                             naming_convention: generator.naming_convention,
                             package_name: "baml_sdk".to_string(),
@@ -434,9 +441,10 @@ impl GenerateArgs {
                         .map(|(path, content)| (path, content.into_bytes()))
                         .collect()
                 }
-                OutputType::Go => sdkgen_go::try_to_source_code_with_bytecode_and_options(
+                OutputType::Go => sdkgen_go::try_to_source_code_with_bytecode_and_metadata_and_options(
                     &pool,
                     &baml_bytecode,
+                    &embedded_baml_toml,
                     &sdkgen_go::GoGenOptions {
                         naming_convention: generator.naming_convention,
                         sdk_import_path: generator
@@ -460,22 +468,29 @@ impl GenerateArgs {
                             path.strip_prefix(&from).unwrap_or(&path).to_path_buf()
                         })
                         .collect();
-                    sdkgen_cpp::to_source_code_with_bytecode(&pool, &source_paths, &baml_bytecode)
+                    sdkgen_cpp::to_source_code_with_bytecode_and_metadata(
+                        &pool,
+                        &source_paths,
+                        &baml_bytecode,
+                        &embedded_baml_toml,
+                    )
                         .into_iter()
                         .map(|(path, content)| (path, content.into_bytes()))
                         .collect()
                 }
-                OutputType::Java => sdkgen_java::to_source_code_with_bytecode(
+                OutputType::Java => sdkgen_java::to_source_code_with_bytecode_and_metadata(
                     &pool,
                     &baml_bytecode,
+                    &embedded_baml_toml,
                     generator.naming_convention,
                 )
                 .into_iter()
                 .map(|(path, content)| (path, content.into_bytes()))
                 .collect(),
-                OutputType::Swift => sdkgen_swift::to_source_code_with_bytecode(
+                OutputType::Swift => sdkgen_swift::to_source_code_with_bytecode_and_metadata(
                     &pool,
                     &baml_bytecode,
+                    &embedded_baml_toml,
                     generator.naming_convention,
                 )
                 .into_iter()
@@ -520,6 +535,32 @@ impl GenerateArgs {
         reporter.finish("Finished", format!("generated {total_files} file(s)"));
         Ok(crate::ExitCode::Success)
     }
+}
+
+fn build_embedded_baml_toml(project_root: &Path) -> Result<String> {
+    let path = project_root.join("baml.toml");
+    let content = std::fs::read_to_string(&path)
+        .with_context(|| format!("failed to read {}", path.display()))?;
+    let document = content
+        .parse::<DocumentMut>()
+        .with_context(|| format!("failed to parse {}", path.display()))?;
+    if document.contains_key("__baml_codegen") {
+        anyhow::bail!(
+            "{} uses reserved table `[__baml_codegen]`; remove it because `baml generate` owns generated-bytecode metadata.",
+            path.display()
+        );
+    }
+
+    let mut embedded = content;
+    if !embedded.ends_with('\n') {
+        embedded.push('\n');
+    }
+    embedded.push_str(
+        "\n[__baml_codegen]\nmetadata_version = 1\n\n[__baml_codegen.toolchain]\nversion = ",
+    );
+    embedded.push_str(&format!("{:?}", baml_version::CANONICAL_VERSION));
+    embedded.push('\n');
+    Ok(embedded)
 }
 
 /// Pseudo [`FileId`] for `baml.toml`. The manifest isn't a salsa source
@@ -819,8 +860,8 @@ mod tests {
 
     use super::{
         AddGeneratorArgs, Diagnostic, Generator, GeneratorDef, OutputType,
-        add_generator_to_manifest, discover_generators, is_valid_go_import_path,
-        parse_add_output_type,
+        add_generator_to_manifest, build_embedded_baml_toml, discover_generators,
+        is_valid_go_import_path, parse_add_output_type,
     };
 
     fn go_manifest(threshold: Option<i64>) -> String {
@@ -836,6 +877,42 @@ mod tests {
         let directory = tempfile::tempdir().unwrap();
         fs::write(directory.path().join("baml.toml"), content).unwrap();
         discover_generators(directory.path())
+    }
+
+    #[test]
+    fn embedded_manifest_preserves_project_content_and_appends_owned_metadata() {
+        let directory = tempfile::tempdir().unwrap();
+        let original = "# keep this byte-for-byte\n[package]\nname = \"test\"";
+        fs::write(directory.path().join("baml.toml"), original).unwrap();
+
+        let embedded = build_embedded_baml_toml(directory.path()).unwrap();
+
+        assert!(embedded.starts_with(original));
+        assert!(embedded.contains("\n[__baml_codegen]\nmetadata_version = 1\n"));
+        assert!(embedded.contains(&format!(
+            "\n[__baml_codegen.toolchain]\nversion = {:?}\n",
+            baml_version::CANONICAL_VERSION
+        )));
+        let parsed = embedded.parse::<toml_edit::DocumentMut>().unwrap();
+        assert_eq!(parsed["package"]["name"].as_str(), Some("test"));
+        assert_eq!(
+            fs::read_to_string(directory.path().join("baml.toml")).unwrap(),
+            original
+        );
+    }
+
+    #[test]
+    fn embedded_manifest_rejects_the_reserved_codegen_table() {
+        let directory = tempfile::tempdir().unwrap();
+        fs::write(
+            directory.path().join("baml.toml"),
+            "[package]\nname = \"test\"\n\n[__baml_codegen]\nmetadata_version = 99\n",
+        )
+        .unwrap();
+
+        let error = build_embedded_baml_toml(directory.path()).unwrap_err();
+
+        assert!(error.to_string().contains("uses reserved table"));
     }
 
     #[test]

@@ -1550,13 +1550,10 @@ function baml.llm.output_format_with(self: ?, prefix: string? = null, or_splitte
 function baml.llm.output_tokens(self: ?) -> int?  [builtin]
 function baml.llm.parse(self: ?, http_response_body: string) -> T  [builtin]
 function baml.llm.prompt(body: (role: (string) -> baml.llm.Role throws never, ctx: baml.llm.Context) -> baml.TaggedString throws never) -> (baml.llm.Context) -> baml.llm.PromptAst throws never  [expr] {
-  { let render = (ctx: baml.llm.Context) -> { { let t = body(make_role, ctx) } assemble_prompt_ast(t.parts, render_prompt_values(t.values)) } } render
+  { let render = (ctx: baml.llm.Context) -> { { let t = body(make_role, ctx) } assemble_prompt_ast(t.parts, t.values) } } render
 }
 function baml.llm.render_output_format(return_type: type) -> string  [builtin]
 function baml.llm.render_prompt(self: ?, template: string, args: map<string, unknown>, return_type: type) -> baml.llm.PromptAst  [builtin]
-function baml.llm.render_prompt_values(values: unknown[]) -> unknown[]  [expr] {
-  { let rendered: unknown[] = []; for value in values {  } rendered.push(match (value) { baml.llm.Role => value, media: baml.media.Image => media, media: baml.media.Pdf => media, media: baml.media.Audio => media, media: baml.media.Video => media, media: image => media, media: pdf => media, media: audio => media, media: video => media, _ => string.from(value) }) } rendered
-}
 function baml.llm.render_specialized_prompt(self: ?, template: string, args: map<string, unknown>, return_type: type, prompt_closure: (baml.llm.Context) -> baml.llm.PromptAst throws never?) -> baml.llm.PromptAst  [expr] {
   { let prompt = match (prompt_closure) { null => self.render_prompt(template, args, return_type), closure: (baml.llm.Context) -> baml.llm.PromptAst throws never => closure(build_prompt_context(self, return_type)) } } self.specialize_prompt(prompt)
 }

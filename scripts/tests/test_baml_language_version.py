@@ -72,8 +72,7 @@ class VersionToolTests(unittest.TestCase):
             "\n".join(
                 [
                     f'pub const CANONICAL_VERSION: &str = "{version}";',
-                    "#[allow(dead_code)]",
-                    f'const PYPI_VERSION: &str = "{version}";',
+                    f'pub const PYPI_VERSION: &str = "{version}";',
                     'pub const CHANNEL: &str = "canary";',
                     "#[allow(dead_code)]",
                     f'const STABLE_VERSION: &str = "{version}";',
@@ -96,7 +95,7 @@ class VersionToolTests(unittest.TestCase):
         ):
             self.write(
                 package,
-                json.dumps({"version": version, "name": "fixture"}, indent=2)
+                json.dumps({"name": "fixture", "version": version}, indent=2)
                 + "\n",
             )
         self.write(
@@ -105,11 +104,13 @@ class VersionToolTests(unittest.TestCase):
         )
         self.write(
             "baml_language/sdks/go/baml_go/version.go",
-            f'const DefaultRuntimeVersion = "{version}"\n',
+            f'const ToolchainVersion = "{version}"\n'
+            f'const BridgeRuntimeVersion = "v{version}"\n',
         )
         self.write(
             "baml_language/sdks/rust/bridge_rust/src/version.rs",
-            f'pub(crate) const CANONICAL_VERSION: &str = "{version}";\n',
+            f'pub(crate) const TOOLCHAIN_VERSION: &str = "{version}";\n'
+            f'pub(crate) const BRIDGE_RUNTIME_VERSION: &str = "{version}";\n',
         )
         self.write(
             "baml_language/sdks/rust/bridge_rust/Cargo.toml",
@@ -124,6 +125,42 @@ class VersionToolTests(unittest.TestCase):
             f"<Project>\n  <PropertyGroup>\n    <Version>{version}</Version>\n"
             "  </PropertyGroup>\n</Project>\n",
         )
+        self.write(
+            "baml_language/sdks/csharp/bridge_csharp/src/RuntimeIdentity.cs",
+            "internal static class RuntimeIdentity\n"
+            "{\n"
+            f'    internal const string ToolchainVersion = "{version}";\n'
+            f'    internal const string BridgeRuntimeVersion = "{version}";\n'
+            "}\n",
+        )
+        self.write(
+            "baml_language/sdks/java/baml_bridge/src/main/java/baml_bridge/BamlVersion.java",
+            "final class BamlVersion {\n"
+            f'    static final String TOOLCHAIN_VERSION = "{version}";\n'
+            f'    static final String BRIDGE_RUNTIME_VERSION = "{version}";\n'
+            "}\n",
+        )
+        self.write(
+            "baml_language/sdks/swift/Sources/BamlBridge/RuntimeIdentity.swift",
+            "public enum BamlBridgeIdentity {\n"
+            f'    public static let toolchainVersion = "{version}"\n'
+            f'    public static let bridgeRuntimeVersion = "{version}"\n'
+            "}\n",
+        )
+        self.write(
+            "baml_language/sdks/cpp/bridge_cpp/include/baml/version.h",
+            f'inline constexpr const char* kToolchainVersion = "{version}";\n'
+            f'inline constexpr const char* kBridgeRuntimeVersion = "{version}";\n',
+        )
+        for path in (
+            "baml_language/sdks/typescript/bridge_typescript/src/version.rs",
+            "baml_language/sdks/typescript/bridge_typescript_web/src/version.rs",
+        ):
+            self.write(
+                path,
+                f'pub(crate) const TOOLCHAIN_VERSION: &str = "{version}";\n'
+                f'pub(crate) const BRIDGE_RUNTIME_VERSION: &str = "{version}";\n',
+            )
         self.write(
             "baml_language/sdks/java/baml_bridge/build.gradle.kts",
             "val bamlVersion = \"fixture\"\nversion = bamlVersion\n",
@@ -202,7 +239,7 @@ if "build:debug" in sys.argv:
             ),
             "go": match(
                 "baml_language/sdks/go/baml_go/version.go",
-                r'^const DefaultRuntimeVersion = "([^"]+)"$',
+                r'^const ToolchainVersion = "([^"]+)"$',
             ),
             "csharp": match(
                 "baml_language/sdks/csharp/bridge_csharp/src/Baml.Bridge.csproj",
@@ -233,6 +270,7 @@ if "build:debug" in sys.argv:
                 "maven": "2.3.5",
                 "gradle_plugin": "2.3.5",
                 "swiftpm": "2.3.5",
+                "go": "v2.3.5",
             },
         )
         self.assertEqual(plan["released_at"], "2026-07-23T12:34:56Z")
@@ -253,6 +291,7 @@ if "build:debug" in sys.argv:
             "swiftpm",
         ):
             self.assertEqual(plan["registry_versions"][registry], canonical)
+        self.assertEqual(plan["registry_versions"]["go"], f"v{canonical}")
 
         self.run_tool("stamp", "--plan", str(plan_path))
         versions = self.surface_versions()
@@ -265,19 +304,41 @@ if "build:debug" in sys.argv:
         self.run_tool("check")
         self.assertEqual(set(self.surface_versions().values()), {"1.2.3"})
 
+    def test_replace_json_version_preserves_optional_comma(self) -> None:
+        package = self.write(
+            "package.json",
+            '{\n  "name": "fixture",\n  "version": "1.2.3",\n  "private": true\n}\n',
+        )
+        version_tool_module().replace_json_version(package, "2.3.4")
+        self.assertEqual(
+            package.read_text(encoding="utf-8"),
+            '{\n  "name": "fixture",\n  "version": "2.3.4",\n  "private": true\n}\n',
+        )
+
+        package.write_text(
+            '{\n  "name": "fixture",\n  "version": "1.2.3"\n}\n',
+            encoding="utf-8",
+        )
+        version_tool_module().replace_json_version(package, "2.3.4")
+        self.assertEqual(
+            package.read_text(encoding="utf-8"),
+            '{\n  "name": "fixture",\n  "version": "2.3.4"\n}\n',
+        )
+
     def test_exact_named_field_checks_reject_loose_version_text(self) -> None:
         rust_version = (
             self.root
             / "baml_language/sdks/rust/bridge_rust/src/version.rs"
         )
         rust_version.write_text(
-            'pub(crate) const CANONICAL_VERSION: &str = "9.9.9";\n'
+            'pub(crate) const TOOLCHAIN_VERSION: &str = "9.9.9";\n'
+            'pub(crate) const BRIDGE_RUNTIME_VERSION: &str = "1.2.3";\n'
             'pub(crate) const DECOY: &str = "1.2.3";\n',
             encoding="utf-8",
         )
         result = self.run_tool("check", check=False)
         self.assertNotEqual(result.returncode, 0)
-        self.assertIn("rust bridge CANONICAL_VERSION", result.stderr)
+        self.assertIn("rust bridge toolchain version", result.stderr)
 
         self.run_tool("sync")
         csharp = (
@@ -358,7 +419,7 @@ if "build:debug" in sys.argv:
             for key, value in self.env.items()
             if "NIGHTLY_LETTER" not in key and "VERSION_DATE" not in key
         }
-        env["PATH"] = f"{self.bin}:/usr/bin:/bin"
+        env["PATH"] = f"{self.bin}:{Path(sys.executable).parent}:/usr/bin:/bin"
         result = subprocess.run(
             [str(VERSION_TOOL), "compute", "--channel", "nightly"],
             cwd=self.root,

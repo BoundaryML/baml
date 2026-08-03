@@ -73,12 +73,17 @@ impl BamlRuntime {
     /// # Arguments
     /// * `bytecode` - borsh-encoded BAML bytecode program
     #[staticmethod]
-    fn initialize_runtime_from_bytecode(bytecode: Vec<u8>) -> PyResult<Self> {
-        match bridge_cffi::initialize_runtime_from_bytecode(&bytecode) {
+    #[pyo3(signature = (bytecode, embedded_baml_toml=None))]
+    fn initialize_runtime_from_bytecode(
+        bytecode: Vec<u8>,
+        embedded_baml_toml: Option<String>,
+    ) -> PyResult<Self> {
+        match bridge_cffi::initialize_runtime_from_bytecode(
+            &bytecode,
+            embedded_baml_toml.as_deref(),
+        ) {
             Ok(_bex) => Ok(BamlRuntime),
-            // Handle-returning site: can't hand back envelope bytes, so an
-            // SDK setup failure surfaces as BamlPanic(SdkPanic) (32c).
-            Err(e) => Err(bridge_error_to_sdk_panic(e)),
+            Err(e) => Err(crate::errors::bridge_error_to_initialization_error(e)),
         }
     }
 }

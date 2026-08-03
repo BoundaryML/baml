@@ -298,11 +298,11 @@ fn has_to_string_override(vm: &BexVm, value: Value) -> bool {
 /// sub-value of `value` whose runtime class overrides `baml.ToString`. An
 /// override node is recorded and *not* descended into — its `to_string` owns its
 /// whole subtree. Immutable and allocation-free so the garbage collector cannot
-/// move objects mid-walk. Matches the traversal order of [`render_to_string`] so
+/// move objects mid-walk. Matches the traversal order of [`render_to_sink`] so
 /// the two stay index-aligned. (Like the structural renderer, this does not
 /// guard against reference cycles — recursive *data* would already loop in the
 /// pre-existing walker; recursive *types* such as trees are acyclic.)
-fn collect_to_string_overrides(vm: &BexVm, value: Value, out: &mut Vec<HeapPtr>) {
+pub(super) fn collect_to_string_overrides(vm: &BexVm, value: Value, out: &mut Vec<HeapPtr>) {
     let ValueKind::Object(ptr) = value.kind() else {
         return;
     };
@@ -311,7 +311,7 @@ fn collect_to_string_overrides(vm: &BexVm, value: Value, out: &mut Vec<HeapPtr>)
         return;
     }
     // Snapshot children (owned), dropping the heap borrow / container lock before
-    // recursing — same discipline as `render_to_string`'s `DisplaySnap`. The
+    // recursing - same discipline as `render_to_sink`'s `DisplaySnap`. The
     // child order (array elements, then map values, then instance fields) matches
     // the renderer so the two stay index-aligned.
     let children: Vec<Value> = match vm.get_object(ptr) {
@@ -361,8 +361,9 @@ fn render_done(
     results: &[String],
 ) -> NativeCallResult {
     let mut state = StringRenderState::with_overrides(pending, results);
-    let rendered = render_to_string(vm, root, false, 0, &mut state);
-    NativeCallResult::Done(Value::object(vm.alloc_string(rendered)))
+    let mut sink = StringRenderSink::default();
+    render_to_sink(vm, root, false, 0, &mut state, &mut sink);
+    NativeCallResult::Done(Value::object(vm.alloc_string(sink.0)))
 }
 
 /// Drives pass 2/3 of `render_to_string_honoring_overrides`: accumulates each
@@ -451,7 +452,7 @@ const TRUNCATED_RENDER: &str = "…";
 /// rendering has empty override tables and strict depth/node/cycle guards:
 /// an error-reporting path must degrade to an ellipsis rather than dispatch,
 /// throw, or recurse forever.
-struct StringRenderState<'a> {
+pub(super) struct StringRenderState<'a> {
     pending: &'a [HeapPtr],
     results: &'a [String],
     counter: usize,
@@ -462,7 +463,7 @@ struct StringRenderState<'a> {
 }
 
 impl<'a> StringRenderState<'a> {
-    fn with_overrides(pending: &'a [HeapPtr], results: &'a [String]) -> Self {
+    pub(super) fn with_overrides(pending: &'a [HeapPtr], results: &'a [String]) -> Self {
         Self {
             pending,
             results,
@@ -515,6 +516,23 @@ impl<'a> StringRenderState<'a> {
     }
 }
 
+pub(super) trait StructuralRenderSink {
+    fn push_text(&mut self, text: &str);
+
+    fn try_push_special(&mut self, _vm: &BexVm, _value: Value) -> bool {
+        false
+    }
+}
+
+#[derive(Default)]
+struct StringRenderSink(String);
+
+impl StructuralRenderSink for StringRenderSink {
+    fn push_text(&mut self, text: &str) {
+        self.0.push_str(text);
+    }
+}
+
 /// Human-readable rendering used by `string.from` / the `baml.ToString` default.
 /// Structural: every value type renders to *something* and nothing throws. A
 /// node whose runtime class overrides `baml.ToString` (recorded
@@ -524,22 +542,33 @@ impl<'a> StringRenderState<'a> {
 /// `pending[state.counter]` is exactly the next override node — so the check is a
 /// pointer compare, not a per-node global lookup. With an empty `pending` this is
 /// a pure structural walk.
-fn render_to_string(
+pub(super) fn render_to_sink(
     vm: &BexVm,
     value: Value,
     nested: bool,
     depth: usize,
     state: &mut StringRenderState<'_>,
-) -> String {
+    sink: &mut impl StructuralRenderSink,
+) {
     if !state.consume_node(depth) {
-        return TRUNCATED_RENDER.to_string();
+        sink.push_text(TRUNCATED_RENDER);
+        return;
     }
 
     let ptr = match value.kind() {
-        ValueKind::Null => return "null".to_string(),
-        ValueKind::Int(i) => return i.to_string(),
-        ValueKind::Bool(b) => return b.to_string(),
-        ValueKind::OmittedArg => return String::new(),
+        ValueKind::Null => {
+            sink.push_text("null");
+            return;
+        }
+        ValueKind::Int(i) => {
+            sink.push_text(&i.to_string());
+            return;
+        }
+        ValueKind::Bool(b) => {
+            sink.push_text(&b.to_string());
+            return;
+        }
+        ValueKind::OmittedArg => return,
         ValueKind::Object(ptr) => ptr,
     };
 
@@ -551,7 +580,12 @@ fn render_to_string(
             .cloned()
             .unwrap_or_default();
         state.counter += 1;
-        return rendered;
+        sink.push_text(&rendered);
+        return;
+    }
+
+    if sink.try_push_special(vm, value) {
+        return;
     }
 
     // Only an object currently on the recursion stack is a cycle. Shared DAG
@@ -559,7 +593,8 @@ fn render_to_string(
     if let Some(active_objects) = &mut state.active_objects
         && !active_objects.insert(ptr)
     {
-        return TRUNCATED_RENDER.to_string();
+        sink.push_text(TRUNCATED_RENDER);
+        return;
     }
 
     // Capture an owned snapshot, dropping the heap borrow / container lock
@@ -650,76 +685,97 @@ fn render_to_string(
         other => DisplaySnap::Leaf(other.to_string()),
     };
 
-    let rendered = match snap {
-        DisplaySnap::Leaf(s) => s,
+    match snap {
+        DisplaySnap::Leaf(s) => sink.push_text(&s),
         DisplaySnap::Str(s) => {
             if nested {
-                format!("{s:?}")
+                sink.push_text(&format!("{s:?}"));
             } else {
-                s
+                sink.push_text(&s);
             }
         }
         DisplaySnap::Seq(values, mut truncated) => {
-            let mut parts: Vec<String> = Vec::with_capacity(values.len());
-            for v in &values {
+            sink.push_text("[");
+            let mut rendered_count = 0;
+            for value in &values {
                 if !state.can_render_node(depth + 1) {
                     truncated = true;
                     break;
                 }
-                parts.push(render_to_string(vm, *v, true, depth + 1, state));
+                if rendered_count != 0 {
+                    sink.push_text(", ");
+                }
+                render_to_sink(vm, *value, true, depth + 1, state, sink);
+                rendered_count += 1;
             }
             if truncated {
-                parts.push(TRUNCATED_RENDER.to_string());
+                if rendered_count != 0 {
+                    sink.push_text(", ");
+                }
+                sink.push_text(TRUNCATED_RENDER);
             }
-            format!("[{}]", parts.join(", "))
+            sink.push_text("]");
         }
         DisplaySnap::Entries(entries, mut truncated) => {
-            let mut parts: Vec<String> = Vec::with_capacity(entries.len());
-            for (k, v) in &entries {
+            sink.push_text("{");
+            let mut rendered_count = 0;
+            for (key, value) in &entries {
                 if !state.can_render_node(depth + 1) {
                     truncated = true;
                     break;
                 }
-                parts.push(format!(
-                    "{k:?}: {}",
-                    render_to_string(vm, *v, true, depth + 1, state)
-                ));
+                if rendered_count != 0 {
+                    sink.push_text(", ");
+                }
+                sink.push_text(&format!("{key:?}: "));
+                render_to_sink(vm, *value, true, depth + 1, state, sink);
+                rendered_count += 1;
             }
             if truncated {
-                parts.push(TRUNCATED_RENDER.to_string());
+                if rendered_count != 0 {
+                    sink.push_text(", ");
+                }
+                sink.push_text(TRUNCATED_RENDER);
             }
-            format!("{{{}}}", parts.join(", "))
+            sink.push_text("}");
         }
         DisplaySnap::Instance(class_name, paired, mut truncated) => {
             if paired.is_empty() {
                 if truncated {
-                    format!("{class_name} {{ {TRUNCATED_RENDER} }}")
+                    sink.push_text(&format!("{class_name} {{ {TRUNCATED_RENDER} }}"));
                 } else {
-                    class_name
+                    sink.push_text(&class_name);
                 }
             } else {
-                let mut parts: Vec<String> = Vec::with_capacity(paired.len());
-                for (name, v) in &paired {
+                sink.push_text(&class_name);
+                sink.push_text(" { ");
+                let mut rendered_count = 0;
+                for (name, value) in &paired {
                     if !state.can_render_node(depth + 1) {
                         truncated = true;
                         break;
                     }
-                    parts.push(format!(
-                        "{name}: {}",
-                        render_to_string(vm, *v, true, depth + 1, state)
-                    ));
+                    if rendered_count != 0 {
+                        sink.push_text(", ");
+                    }
+                    sink.push_text(name);
+                    sink.push_text(": ");
+                    render_to_sink(vm, *value, true, depth + 1, state, sink);
+                    rendered_count += 1;
                 }
                 if truncated {
-                    parts.push(TRUNCATED_RENDER.to_string());
+                    if rendered_count != 0 {
+                        sink.push_text(", ");
+                    }
+                    sink.push_text(TRUNCATED_RENDER);
                 }
-                format!("{class_name} {{ {} }}", parts.join(", "))
+                sink.push_text(" }");
             }
         }
-    };
+    }
     if let Some(active_objects) = &mut state.active_objects {
         active_objects.remove(&ptr);
     }
-    rendered
 }
 
 /// VM-heap-allocation-free structural rendering for diagnostics that already
@@ -728,7 +784,9 @@ fn render_to_string(
 /// truncates on excessive depth, node count, or an object cycle.
 pub(super) fn render_value_structural(vm: &BexVm, value: Value, nested: bool) -> String {
     let mut state = StringRenderState::diagnostic();
-    render_to_string(vm, value, nested, 0, &mut state)
+    let mut sink = StringRenderSink::default();
+    render_to_sink(vm, value, nested, 0, &mut state, &mut sink);
+    sink.0
 }
 
 fn deep_copy_value_recursive(

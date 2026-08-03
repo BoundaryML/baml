@@ -176,6 +176,118 @@ describe('ExecutionPanel StrictMode lifecycle', () => {
       ).toBe(true);
     });
   });
+
+  it('ignores stale CFG responses after a project update', async () => {
+    const port = new FakeRuntimePort();
+    const functions = [
+      { kind: 'expr' as const, name: 'Alpha', origin: 'userDefined' as const },
+      { kind: 'expr' as const, name: 'Zulu', origin: 'userDefined' as const },
+    ];
+
+    render(<ExecutionPanel port={port} />);
+
+    act(() => {
+      port.emit({
+        notification: { projects: ['project'], type: 'listProjects' },
+        type: 'playgroundNotification',
+      });
+      port.emit({
+        notification: {
+          project: 'project',
+          type: 'updateProject',
+          update: {
+            diagnostics: [],
+            functions,
+            generation: 1,
+            isBexCurrent: true,
+          },
+        },
+        type: 'playgroundNotification',
+      });
+    });
+
+    const cfgRequests = () =>
+      port.sent.filter(
+        (
+          message,
+        ): message is Extract<
+          WorkerInMessage,
+          { type: 'requestControlFlowGraph' }
+        > => message.type === 'requestControlFlowGraph',
+      );
+    await waitFor(() => expect(cfgRequests()).toHaveLength(2));
+    const staleRequests = new Map(
+      cfgRequests().map((request) => [request.functionName, request.requestId]),
+    );
+
+    act(() => {
+      port.emit({
+        notification: {
+          project: 'project',
+          type: 'updateProject',
+          update: {
+            diagnostics: [],
+            functions,
+            generation: 2,
+            isBexCurrent: true,
+          },
+        },
+        type: 'playgroundNotification',
+      });
+    });
+
+    await waitFor(() => expect(cfgRequests()).toHaveLength(4));
+    const currentRequests = new Map(
+      cfgRequests()
+        .slice(2)
+        .map((request) => [request.functionName, request.requestId]),
+    );
+
+    act(() => {
+      port.emit({
+        functionName: 'Alpha',
+        graph: graphFixtureWithNodeCount('Alpha', 1),
+        requestId: cfgRequestId(staleRequests, 'Alpha'),
+        type: 'controlFlowGraphResult',
+      });
+      port.emit({
+        functionName: 'Zulu',
+        graph: graphFixtureWithNodeCount('Zulu', 5),
+        requestId: cfgRequestId(staleRequests, 'Zulu'),
+        type: 'controlFlowGraphResult',
+      });
+    });
+
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Functions (2)' }),
+    );
+    const alpha = screen.getByRole('button', { name: 'Alpha' });
+    const zulu = screen.getByRole('button', { name: 'Zulu' });
+    expect(
+      alpha.compareDocumentPosition(zulu) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).not.toBe(0);
+
+    act(() => {
+      port.emit({
+        functionName: 'Alpha',
+        graph: graphFixtureWithNodeCount('Alpha', 1),
+        requestId: cfgRequestId(currentRequests, 'Alpha'),
+        type: 'controlFlowGraphResult',
+      });
+      port.emit({
+        functionName: 'Zulu',
+        graph: graphFixtureWithNodeCount('Zulu', 5),
+        requestId: cfgRequestId(currentRequests, 'Zulu'),
+        type: 'controlFlowGraphResult',
+      });
+    });
+
+    await waitFor(() => {
+      expect(
+        zulu.compareDocumentPosition(alpha) & Node.DOCUMENT_POSITION_FOLLOWING,
+      ).not.toBe(0);
+    });
+  });
 });
 
 describe('ExecutionPanel run history', () => {
@@ -1155,4 +1267,34 @@ function graphFixture(
       },
     },
   };
+}
+
+function graphFixtureWithNodeCount(
+  functionName: string,
+  nodeCount: number,
+): ControlFlowGraph {
+  const graph = graphFixture(functionName);
+  for (let id = 2; id <= nodeCount; id += 1) {
+    graph.nodes[String(id)] = {
+      id,
+      isContainer: false,
+      label: `node ${id}`,
+      logFilterKey: `${functionName}:${id}`,
+      nodeType: 'return',
+      parentNodeId: 1,
+      sourceExpr: null,
+    };
+  }
+  return graph;
+}
+
+function cfgRequestId(
+  requestIds: ReadonlyMap<string, number | undefined>,
+  functionName: string,
+): number {
+  const requestId = requestIds.get(functionName);
+  if (requestId === undefined) {
+    throw new Error(`missing CFG request ID for ${functionName}`);
+  }
+  return requestId;
 }

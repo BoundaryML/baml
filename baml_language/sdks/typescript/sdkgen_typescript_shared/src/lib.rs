@@ -85,6 +85,16 @@ pub fn to_source_code(
     naming_convention: NamingConvention,
     config: GeneratorConfig,
 ) -> HashMap<PathBuf, String> {
+    to_source_code_with_metadata(pool, baml_bytecode, None, naming_convention, config)
+}
+
+pub fn to_source_code_with_metadata(
+    pool: &SymbolPool,
+    baml_bytecode: &[u8],
+    embedded_baml_toml: Option<&str>,
+    naming_convention: NamingConvention,
+    config: GeneratorConfig,
+) -> HashMap<PathBuf, String> {
     // Only `PreserveCase` is wired up so far.
     assert!(
         matches!(naming_convention, NamingConvention::PreserveCase),
@@ -154,7 +164,7 @@ pub fn to_source_code(
     // Root-only data modules.
     out.insert(
         PathBuf::from("_inlinedbaml.ts"),
-        render_inlinedbaml(baml_bytecode),
+        render_inlinedbaml(baml_bytecode, embedded_baml_toml),
     );
     out.insert(
         PathBuf::from("_typemap.ts"),
@@ -185,7 +195,7 @@ fn init_ts_path(dir: &[String]) -> PathBuf {
     path
 }
 
-fn render_inlinedbaml(bytecode: &[u8]) -> String {
+fn render_inlinedbaml(bytecode: &[u8], embedded_baml_toml: Option<&str>) -> String {
     let mut out = String::from("export const BYTECODE = new Uint8Array([\n");
     for chunk in bytecode.chunks(24) {
         out.push_str("  ");
@@ -195,6 +205,10 @@ fn render_inlinedbaml(bytecode: &[u8]) -> String {
         out.push('\n');
     }
     out.push_str("]);\n");
+    let manifest = embedded_baml_toml
+        .map(ts_string)
+        .unwrap_or_else(|| "undefined".to_string());
+    let _ = writeln!(out, "export const BAML_TOML = {manifest};");
     out
 }
 
@@ -319,7 +333,9 @@ mod tests {
         assert!(!out.keys().any(|p| p.to_string_lossy().ends_with(".d.ts")));
         let root = &out[&PathBuf::from("index.ts")];
         assert!(root.contains(HEADER_LEN_MARKER));
-        assert!(root.contains("initializeRuntimeFromBytecode(_inlinedbaml.BYTECODE);"));
+        assert!(root.contains(
+            "initializeRuntimeFromBytecode(_inlinedbaml.BYTECODE, _inlinedbaml.BAML_TOML);"
+        ));
         assert!(root.contains("setTypeMap(_TYPE_MAP);"));
         assert!(root.contains("export * as baml from \"./baml/index.js\";"));
         assert!(!root.contains("export const b"));

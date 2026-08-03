@@ -30,6 +30,7 @@ mod future;
 pub(crate) mod id;
 mod int;
 pub mod json;
+mod llm;
 mod map;
 mod media;
 mod ops;
