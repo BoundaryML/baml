@@ -1,0 +1,33 @@
+---
+source: crates/baml_tests/src/type_spec/fixtures.rs
+expression: outcome.dump
+---
+467..472 'apply': throws __effect_param_0
+508..520 '{\n    f(v)\n}': int
+514..515 'f': (x: int) -> int throws __effect_param_0
+514..518 'f(v)': int
+516..517 'v': int
+531..535 'safe': throws never
+551..612 '{\n   ... v)\n}': int
+584..589 'apply': hir_ty=[(f: (x: int) -> int throws never, v: int) -> int throws never] tir=[(f: (x: int) -> int throws __effect_param_0, v: int) -> int throws __effect_param_0]
+584..610 'apply(... }, v)': int
+590..606 '(x) ->... + 1 }': hir_ty=[(x: int) -> int throws never] tir=[(x: int) -> int throws __effect_param_0]
+597..606 '{ x + 1 }': int
+599..600 'x': int
+599..604 'x + 1': int
+603..604 '1': 1
+608..609 'v': int
+623..628 'risky': hir_ty=[throws "neg"] tir=[throws string]
+644..730 '{\n   ... v)\n}': int
+678..683 'apply': hir_ty=[(f: (x: int) -> int throws "neg", v: int) -> int throws "neg"] tir=[(f: (x: int) -> int throws __effect_param_0, v: int) -> int throws __effect_param_0]
+678..728 'apply(... }, v)': int
+684..724 '(x) ->... } x }': hir_ty=[(x: int) -> int throws "neg"] tir=[(x: int) -> int throws __effect_param_0]
+691..724 '{ if (... } x }': int
+693..720 'if (x ...eg"; }': void
+697..698 'x': int
+697..702 'x < 0': bool
+701..702 '0': 0
+704..720 '{ thro...eg"; }': never
+712..717 '"neg"': "neg"
+721..722 'x': int
+726..727 'v': int
