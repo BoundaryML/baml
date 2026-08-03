@@ -1,6 +1,6 @@
 # baml_compiler2_hir_ty: rust-analyzer-style type inference
 
-Status: shipped through S13 (S0 harness, S1 body-owner ID, S4a interned
+Status: shipped through S13 + S10 (S0 harness, S1 body-owner ID, S4a interned
 repr, S4 declaration lowering, S4b oracle entry, S5 table, S6 core exprs,
 S7 bidirectional checking, S8 calls/constructors/fields, S9 lambdas +
 `resolve_value_path` consolidation + function values, S11 method calls:
@@ -19,8 +19,22 @@ positions], builtin `baml.Array`/`baml.Map` bridged structural [B-1080],
 reduce-seed widening through method generics [B-1134/B-742/B-267.1],
 push-arg empty-literal adoption [B-940], order-independent empty
 literals in generic args [B-1085], unconstrained holes erased to
-LOCAL errors [B-236 unchecked half]. Pending pin: pairwise bitwise
-dispatch (B-1075, with the stdlib interfaces).
+LOCAL errors [B-236 unchecked half]. S10a (patterns): the rustc
+usefulness port lifted from TIR verbatim (tests included), the lowering
+walk re-authored per TIR's per-shape table, validated against the
+92-function legacy corpus (pattern_corpus.rs verdict tables); generic
+destructures adopt args from the scrutinee [B-919], union-member
+claiming requires provable overlap so a rigid arm never covers `null`
+[B-633 live half], non-exhaustive matches type as Error. S10b (flow
+narrowing, the settled eager-forward design - no CFG, BAML control flow
+is structured): `flow` overlay (`BindingId -> Ty`, cloned at branches,
+capture-guarded), `CondFacts` with walk-time De Morgan [B-688],
+divergence-aware branch merge subsuming early-return narrowing, loop
+havoc + entry-join [B-735], assignments checked against DECLARED with
+narrow-on-assign [B-618], match residual accumulation and else-side
+subtraction gated on `consumes_matched` [B-774, B-1069]. 44 of 45
+fixtures green. Pending pin: pairwise bitwise dispatch (B-1075, with
+the stdlib interfaces).
 
 `baml_language/TYPE_SYSTEM.md` is the correctness authority. It is
 prescriptive: where the current TIR implementation disagrees with it, the spec
@@ -90,7 +104,7 @@ cutover. "Tested by" is the merge gate for the slice.
 | S7  | Expectation + canonicalizing union-join + Diverges/never             | coercion/never-tier fixtures                           |
 | S8  | Calls: fresh vars per site, variance-aware solve, 2-pass args        | call fixtures; invariant-position rejection tests      |
 | S9  | Lambdas: expectation-driven params, child scope; function VALUES outside call position; consolidate callee/path resolution into one `resolve_value_path` entry (r-a's `infer/path.rs` shape) | lambda fixtures; TIR differential                      |
-| S10 | S10a SHIPPED: pattern typing + exhaustiveness (lifted `exhaustiveness.rs` + `infer/pat.rs` walk; B-919 adoption, B-633 provable claiming, `covers_type` gate). Remaining S10b: flow narrowing per the settled FlowEnv/CondFacts design | patterns fixtures; pending narrowing pins |
+| S10 | SHIPPED (S10a patterns + exhaustiveness, S10b flow narrowing): lifted `exhaustiveness.rs`, `infer/pat.rs` walk, `infer/flow.rs` CondFacts/merge/loop/assign machinery; B-919/B-633/B-688/B-774/B-735/B-618/B-1069 all fixed with tir: fails fixtures | patterns + narrowing fixtures; pattern_corpus verdict tables |
 | S11 | Member resolution (CORE SHIPPED, before S10/S2/S3): receiver->owning-class table incl. builtin classes (alias-transparent), receiver-pinned class generics + turbofish/fresh method generics, self via `class_self_ty`, bound vs UFCS/static calls, methods as values. Remaining: probe/confirm discipline, `?.` | method fixtures; B-1136 sub-issue fixtures (obligations stubbed) |
 | I1  | Impl registry + nominal lookup; orphan check (E0139)                 | `C <: I` fixtures; orphan diagnostic parity vs TIR     |
 | I2  | ParamEnv: `T extends I` bounds; concreteness rules                   | generic-fn fixtures calling bound methods on `T`       |

@@ -1,0 +1,16 @@
+---
+source: crates/baml_tests/src/type_spec/fixtures.rs
+expression: outcome.dump
+---
+489..597 '{\n   ...int\n}': int
+495..509 'let best: int?': int | null
+505..509 'int?': hir_ty=[!error] tir=[int | null]
+512..516 'null': null
+526..531 'let x': int
+535..537 'xs': int[]
+538..563 '{\n   ...n    }': void
+548..552 'best': hir_ty=[int | null] tir=[<missing>]
+555..556 'x': int
+568..572 'best': hir_ty=[int | null] tir=[int]
+568..577 'best ?? 0': int
+576..577 '0': 0

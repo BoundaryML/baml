@@ -1,0 +1,12 @@
+---
+source: crates/baml_tests/src/type_spec/fixtures.rs
+expression: outcome.dump
+---
+361..449 '{\n   ...  }\n}': hir_ty=[string] tir=[string | int]
+367..447 'match ...n    }': hir_ty=[string] tir=[string | int]
+374..375 'v': int | string
+387..397 'let n: int': int
+394..397 'int': hir_ty=[!error] tir=[int]
+401..402 'd': string
+412..413 '_': hir_ty=[!error] tir=[int | string]
+417..418 'v': hir_ty=[string] tir=[int | string]

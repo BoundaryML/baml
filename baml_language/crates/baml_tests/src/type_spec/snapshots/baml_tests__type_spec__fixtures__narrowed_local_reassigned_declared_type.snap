@@ -1,0 +1,19 @@
+---
+source: crates/baml_tests/src/type_spec/fixtures.rs
+expression: outcome.dump
+---
+344..353 '{\n    5\n}': 5
+350..351 '5': 5
+384..478 '{\n   ...ing\n}': int | string
+390..395 'let v': int | string
+398..402 'pick': hir_ty=[() -> int | string throws !error] tir=[() -> int | string throws never]
+398..404 'pick()': int | string
+410..451 'if (v ...n    }': void
+414..415 'v': int | string
+414..422 'v is int': bool
+419..422 'int': hir_ty=[!error] tir=[int]
+424..451 '{\n   ...n    }': void
+434..435 'v': hir_ty=[int | string] tir=[int]
+438..442 'pick': hir_ty=[() -> int | string throws !error] tir=[() -> int | string throws never]
+438..444 'pick()': int | string
+456..457 'v': int | string

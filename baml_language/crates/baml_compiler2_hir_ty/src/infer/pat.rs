@@ -34,11 +34,20 @@ use crate::exhaustiveness::{
 };
 
 /// One lowered pattern: the matrix row piece, the refined scrutinee type
-/// the arm body sees, and whether the match is decided by type alone.
+/// the arm body sees, and two type-only verdicts:
+///
+/// - `covers_type`: the pattern matches EVERY scrutinee value
+///   (irrefutability - the S17 refutable-let check).
+/// - `consumes_matched`: the pattern matches every value of its OWN
+///   `matched_ty` (refutable by type alone - no literal, field, or length
+///   constraint). The gate for else-side subtraction and match residual
+///   accumulation (B-1069): a `Foo { x: 1 }` failing says nothing
+///   type-shaped about the scrutinee.
 pub(super) struct PatternOutcome {
     pub dpat: DPat,
     pub matched_ty: Ty,
     pub covers_type: bool,
+    pub consumes_matched: bool,
 }
 
 impl InferenceContext<'_> {
@@ -65,32 +74,40 @@ impl InferenceContext<'_> {
         let mut arm_tys = Vec::new();
         let mut matrix_arms: Vec<DPat> = Vec::new();
         let mut all_diverge = super::Diverges::Always;
+        // The residual accumulator (B-774): each unguarded arm that is
+        // refutable by type alone subtracts what it matched, so a later
+        // catch-all arm sees the complement - the catch-residual
+        // mechanism generalized to match.
+        let mut residual = scrut_resolved.clone();
         for &arm_id in arms {
             let arm = &body.match_arms[arm_id];
             let outcome = self.lower_pattern(body, arm.pattern, &scrut_resolved);
+            // A pattern irrefutable against the full scrutinee is really
+            // matching the residual; typed arms take their own refinement.
+            let narrow_ty = if outcome.covers_type {
+                residual.clone()
+            } else {
+                outcome.matched_ty.clone()
+            };
 
-            // Per-arm scrutinee narrowing: the arm body sees the refined
-            // type. Saved/restored - the minimal flow overlay S10b grows.
-            let saved = scrut_binding
-                .map(|binding| (binding, self.flow.insert(binding, outcome.matched_ty.clone())));
+            let saved_flow = self.flow.clone();
+            if let Some(binding) = scrut_binding {
+                self.flow.insert(binding, narrow_ty);
+            }
             self.diverges = super::Diverges::Maybe;
             if let Some(guard) = arm.guard {
                 self.check_expr(body, guard, &Ty::bool());
+                let guard_facts = self.condition_facts(body, guard);
+                self.apply_facts(&guard_facts.when_true);
             }
             let arm_ty = self.infer_expr(body, arm.body, &branch_expectation);
             all_diverge = all_diverge.and(self.diverges);
-            if let Some((binding, previous)) = saved {
-                match previous {
-                    Some(previous) => {
-                        self.flow.insert(binding, previous);
-                    }
-                    None => {
-                        self.flow.remove(&binding);
-                    }
-                }
-            }
+            self.flow = saved_flow;
             arm_tys.push(arm_ty);
             if arm.guard.is_none() {
+                if outcome.consumes_matched {
+                    residual = self.subtract_narrow(&residual, &outcome.matched_ty);
+                }
                 matrix_arms.push(outcome.dpat);
             }
         }
@@ -149,7 +166,7 @@ impl InferenceContext<'_> {
     /// a `Role = "user" | "assistant"` alias scrutinee projects onto its
     /// members. Var/error scrutinees pass through (the oracle requires
     /// var-free input; those matches sentinel out anyway).
-    fn matrix_scrut(&self, ty: &Ty) -> Ty {
+    pub(super) fn matrix_scrut(&self, ty: &Ty) -> Ty {
         if ty.has_infer() || ty.has_error() {
             return ty.clone();
         }
@@ -159,7 +176,7 @@ impl InferenceContext<'_> {
     /// The scrutinee's binding, when it is a bare local - the only
     /// narrowable reference shape in S10a (member chains are a documented
     /// later extension).
-    fn narrowable_binding(
+    pub(super) fn narrowable_binding(
         &self,
         body: &ExprBody,
         expr: ExprId,
@@ -205,6 +222,7 @@ impl InferenceContext<'_> {
                 dpat: DPat::wildcard(scrut.to_plain()),
                 matched_ty: scrut.clone(),
                 covers_type: true,
+                consumes_matched: true,
             },
             Pattern::Bind { subpat, .. } => {
                 let inner = match subpat {
@@ -213,6 +231,7 @@ impl InferenceContext<'_> {
                         dpat: DPat::wildcard(scrut.to_plain()),
                         matched_ty: scrut.clone(),
                         covers_type: true,
+                        consumes_matched: true,
                     },
                 };
                 // Chain semantics: every bind in a chain takes the
@@ -265,6 +284,7 @@ impl InferenceContext<'_> {
                 );
                 PatternOutcome {
                     covers_type: outcomes.iter().any(|outcome| outcome.covers_type),
+                    consumes_matched: outcomes.iter().all(|outcome| outcome.consumes_matched),
                     dpat: DPat::or(
                         outcomes.into_iter().map(|outcome| outcome.dpat).collect(),
                         scrut.to_plain(),
@@ -286,6 +306,7 @@ impl InferenceContext<'_> {
                 dpat: DPat::wildcard(scrut.to_plain()),
                 matched_ty: Ty::error(),
                 covers_type: false,
+                consumes_matched: false,
             };
         }
         let covers = provable_subtype(scrut, pat_ty, &self.facts);
@@ -324,6 +345,7 @@ impl InferenceContext<'_> {
                     dpat,
                     matched_ty: self.narrow_to(&matched, pat_ty),
                     covers_type: false,
+                    consumes_matched: true,
                 };
             }
             // Nothing provably claimed: possible-but-not-covering.
@@ -331,6 +353,7 @@ impl InferenceContext<'_> {
                 dpat: DPat::single(pat_ty.to_plain(), scrut.to_plain()),
                 matched_ty: pat_ty.clone(),
                 covers_type: false,
+                consumes_matched: true,
             };
         }
         PatternOutcome {
@@ -341,6 +364,7 @@ impl InferenceContext<'_> {
                 self.narrow_to(scrut, pat_ty)
             },
             covers_type: covers,
+            consumes_matched: true,
         }
     }
 
@@ -471,6 +495,7 @@ impl InferenceContext<'_> {
                 dpat: DPat::wildcard(scrut.to_plain()),
                 matched_ty: Ty::error(),
                 covers_type: false,
+                consumes_matched: false,
             };
         };
         let qtn = crate::lower::class_qualified_name(self.db, class);
@@ -571,6 +596,9 @@ impl InferenceContext<'_> {
             dpat,
             matched_ty: if head_covers { scrut.clone() } else { head },
             covers_type: head_covers && field_covers,
+            // The head is fully consumed only when every field sub-pattern
+            // is irrefutable for its field type.
+            consumes_matched: field_covers,
         }
     }
 
@@ -632,6 +660,7 @@ impl InferenceContext<'_> {
             dpat: DPat::slice(shape, sub_dpats, effective.to_plain()),
             matched_ty: effective,
             covers_type: covers && ascribed.is_none(),
+            consumes_matched: covers,
         }
     }
 
@@ -651,7 +680,7 @@ impl InferenceContext<'_> {
 /// A PROVABLE subtype verdict: ground on both sides and confirmed by the
 /// oracle. Rigid or unresolved pairs are not provable - the conservative
 /// direction for both coverage and claiming.
-fn provable_subtype(sub: &Ty, sup: &Ty, facts: &crate::facts::Facts<'_>) -> bool {
+pub(super) fn provable_subtype(sub: &Ty, sup: &Ty, facts: &crate::facts::Facts<'_>) -> bool {
     if sub == sup {
         return true;
     }

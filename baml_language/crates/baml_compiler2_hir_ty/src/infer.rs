@@ -16,6 +16,7 @@
 //! table under the lambda's scope. Constructs the engine does not handle
 //! yet still record the `Error` sentinel and upgrade slice by slice.
 
+pub(crate) mod flow;
 pub(crate) mod pat;
 pub mod unify;
 
@@ -339,26 +340,41 @@ impl<'db> InferenceContext<'db> {
                 else_branch,
             } => {
                 self.check_expr(body, *condition, &Ty::bool());
+                let facts = self.condition_facts(body, *condition);
                 let condition_diverges = self.diverges;
                 let branch_expectation = expected.adjust_for_branches(&mut self.table);
+                let base_flow = self.flow.clone();
 
+                self.apply_facts(&facts.when_true);
                 self.diverges = Diverges::Maybe;
                 let then_ty = self.infer_expr(body, *then_branch, &branch_expectation);
                 let then_diverges = self.diverges;
+                let then_flow = std::mem::replace(&mut self.flow, base_flow.clone());
+                let then_flow = (then_diverges == Diverges::Maybe).then_some(then_flow);
 
+                // The else path (written or implicit fall-through) carries
+                // the condition's false facts; the divergence-aware merge
+                // makes guard-with-early-return narrowing the ordinary
+                // rule (B-688), no special case.
+                self.apply_facts(&facts.when_false);
                 match else_branch {
                     Some(else_expr) => {
                         self.diverges = Diverges::Maybe;
                         let else_ty = self.infer_expr(body, *else_expr, &branch_expectation);
                         let else_diverges = self.diverges;
+                        let else_flow = std::mem::replace(&mut self.flow, base_flow.clone());
+                        let else_flow = (else_diverges == Diverges::Maybe).then_some(else_flow);
                         self.diverges = condition_diverges.or(then_diverges.and(else_diverges));
+                        self.merge_branch_flows(base_flow, then_flow, else_flow);
                         // The merge point: a canonical union, never a forced
                         // equality (joins happen at generation sites).
                         self.join(&[then_ty, else_ty])
                     }
                     None => {
-                        // No else: the if produces no value.
+                        let else_flow = std::mem::replace(&mut self.flow, base_flow.clone());
                         self.diverges = condition_diverges;
+                        self.merge_branch_flows(base_flow, then_flow, Some(else_flow));
+                        // No else: the if produces no value.
                         Ty::void()
                     }
                 }
@@ -494,6 +510,107 @@ impl<'db> InferenceContext<'db> {
             } => {
                 self.infer_let(body, *pattern, *initializer, *else_branch);
             }
+            Stmt::Return(value) => {
+                if let Some(value) = value {
+                    match self.return_ty.clone() {
+                        Some(return_ty) if !return_ty.has_error() => {
+                            self.check_expr(body, *value, &return_ty);
+                        }
+                        _ => {
+                            self.infer_expr(body, *value, &Expectation::None);
+                        }
+                    }
+                }
+                self.diverges = Diverges::Always;
+            }
+            Stmt::Throw { value } => {
+                // The thrown type feeds the throws channel in S12.
+                self.infer_expr(body, *value, &Expectation::None);
+                self.diverges = Diverges::Always;
+            }
+            // Loop-local terminators: the path past them is dead; the loop
+            // discipline restores divergence and flow at the loop boundary.
+            Stmt::Break | Stmt::Continue => {
+                self.diverges = Diverges::Always;
+            }
+            Stmt::Assign { target, value } => {
+                self.infer_assign(body, *target, *value, None);
+            }
+            Stmt::AssignOp { target, op, value } => {
+                self.infer_assign(body, *target, *value, Some(*op));
+            }
+            Stmt::While {
+                condition,
+                body: loop_body,
+                after,
+                ..
+            } => {
+                // Loop discipline (the no-fixpoint recipe): havoc the
+                // bindings the body assigns, run the body once under the
+                // condition's true facts, and the POST-loop environment is
+                // loop entry plus the false facts - a zero-iteration loop
+                // keeps no body narrowing (B-735).
+                for binding in self.assigned_bindings(body, *loop_body) {
+                    self.flow.remove(&binding);
+                }
+                self.check_expr(body, *condition, &Ty::bool());
+                let facts = self.condition_facts(body, *condition);
+                let entry_flow = self.flow.clone();
+                self.apply_facts(&facts.when_true);
+                let saved = self.diverges;
+                self.infer_expr(body, *loop_body, &Expectation::None);
+                if let Some(after) = after {
+                    self.infer_stmt(body, *after);
+                }
+                self.diverges = saved;
+                self.flow = entry_flow;
+                self.apply_facts(&facts.when_false);
+            }
+            Stmt::WhileLet {
+                pattern,
+                scrutinee,
+                body: loop_body,
+            } => {
+                for binding in self.assigned_bindings(body, *loop_body) {
+                    self.flow.remove(&binding);
+                }
+                let scrut_ty = self.infer_expr(body, *scrutinee, &Expectation::None);
+                let resolved = self.table.resolve_completely(&scrut_ty);
+                let scrut = self.matrix_scrut(&resolved);
+                let outcome = self.lower_pattern(body, *pattern, &scrut);
+                let entry_flow = self.flow.clone();
+                if let Some(binding) = self.narrowable_binding(body, *scrutinee) {
+                    self.flow.insert(binding, outcome.matched_ty);
+                }
+                let saved = self.diverges;
+                self.infer_expr(body, *loop_body, &Expectation::None);
+                self.diverges = saved;
+                self.flow = entry_flow;
+            }
+            Stmt::For {
+                binding,
+                collection,
+                body: loop_body,
+            } => {
+                for havoced in self.assigned_bindings(body, *loop_body) {
+                    self.flow.remove(&havoced);
+                }
+                let collection_ty = self.infer_expr(body, *collection, &Expectation::None);
+                let resolved = self.table.resolve_completely(&collection_ty);
+                let collection_ty = self.matrix_scrut(&resolved);
+                // List elements directly; the Iterator protocol (assoc
+                // `Item` through interfaces) joins with the I cluster.
+                let element = match collection_ty.kind() {
+                    TyKind::List(element, _) => element.clone(),
+                    _ => Ty::error(),
+                };
+                self.lower_pattern(body, *binding, &element);
+                let entry_flow = self.flow.clone();
+                let saved = self.diverges;
+                self.infer_expr(body, *loop_body, &Expectation::None);
+                self.diverges = saved;
+                self.flow = entry_flow;
+            }
             _ => {
                 let mut children = Vec::new();
                 body.stmt_children(stmt, &mut children);
@@ -554,6 +671,78 @@ impl<'db> InferenceContext<'db> {
         };
         self.finish_let_else(body, else_branch);
         self.result.type_of_binding.insert(pattern, binding_ty);
+    }
+
+    /// Assignment typing. The value checks against the DECLARED binding
+    /// type - never the narrowed overlay (B-618: a narrowed local may be
+    /// re-assigned anything its declaration admits) - then the overlay
+    /// re-narrows to the assigned value when it provably fits (the
+    /// narrow-on-assign rule), else clears to declared.
+    fn infer_assign(
+        &mut self,
+        body: &ExprBody,
+        target: ExprId,
+        value: ExprId,
+        op: Option<baml_compiler2_ast::AssignOp>,
+    ) {
+        let binding = self.narrowable_binding(body, target);
+        let declared = binding.map(|binding| self.binding_declared_ty(binding));
+        let assigned = match op {
+            None => match &declared {
+                Some(declared) if !declared.has_error() => {
+                    self.check_expr(body, value, declared)
+                }
+                _ => self.infer_expr(body, value, &Expectation::None),
+            },
+            Some(op) => {
+                // Compound assignment: `target op value` through the same
+                // operator machinery, the result checked against declared.
+                use baml_compiler2_ast::AssignOp;
+                let lhs = binding
+                    .map(|binding| self.binding_flow_ty(binding))
+                    .unwrap_or_else(|| self.infer_expr(body, target, &Expectation::None));
+                let rhs = self.infer_expr(body, value, &Expectation::None);
+                let result = match op {
+                    AssignOp::Add => self.dispatch_operator("Add", &lhs, Some(&rhs)),
+                    AssignOp::Sub => self.dispatch_operator("Subtract", &lhs, Some(&rhs)),
+                    AssignOp::Mul => self.dispatch_operator("Multiply", &lhs, Some(&rhs)),
+                    AssignOp::Div => self.dispatch_operator("Divide", &lhs, Some(&rhs)),
+                    AssignOp::Mod => self.dispatch_operator("Remainder", &lhs, Some(&rhs)),
+                    AssignOp::BitAnd
+                    | AssignOp::BitOr
+                    | AssignOp::BitXor
+                    | AssignOp::Shl
+                    | AssignOp::Shr => self.bitwise_hack_table(&lhs, &rhs),
+                };
+                if let Some(declared) = &declared
+                    && !declared.has_error()
+                    && !self.sub(&result, declared)
+                {
+                    self.result
+                        .type_mismatches
+                        .insert(value, (declared.clone(), result.clone()));
+                }
+                result
+            }
+        };
+        if let Some(declared) = &declared {
+            self.result.type_of_expr.insert(target, declared.clone());
+        }
+        if let Some(binding) = binding {
+            let resolved = self.table.resolve_completely(&assigned);
+            let narrowed = self.widen_fresh(&resolved);
+            let fits = match &declared {
+                Some(declared) if !declared.has_error() => {
+                    crate::infer::pat::provable_subtype(&narrowed, declared, &self.facts)
+                }
+                _ => false,
+            };
+            if fits {
+                self.flow.insert(binding, narrowed);
+            } else {
+                self.flow.remove(&binding);
+            }
+        }
     }
 
     /// The `let ... else` tail, shared by the bind and destructure paths.
@@ -1431,6 +1620,9 @@ impl<'db> InferenceContext<'db> {
                         .unwrap_or_else(Ty::error)
                 }
                 BindingKind::Parameter(param_index) => {
+                    if let Some(narrowed) = self.flow.get(&binding_id) {
+                        return narrowed.clone();
+                    }
                     let params = if Some(binding_id.scope) == self.owner_scope {
                         Some(&self.param_tys)
                     } else {
