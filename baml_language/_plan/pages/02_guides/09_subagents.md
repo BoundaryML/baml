@@ -16,11 +16,11 @@ function ResearchCity(city: string) -> CityGuide {
     prompt: `Research ${city}. ${ctx.transcript} ${ctx.output_format}`
 }
 
-function PlanTrip(request: string) -> Itinerary {
+function PlanTrip(trip_request: string) -> Itinerary {
     client: "openai/gpt-5.2"
     tools: [search_flights, ResearchCity]      // an agent, listed like any tool
     prompt: `
-        You are a travel agent. The brief: ${request}
+        You are a travel agent. The brief: ${trip_request}
         ${ctx.transcript}
         ${ctx.output_format}
     `

@@ -7,6 +7,7 @@ Middleware`.
 _plan/
 ├── outline.md
 ├── readme.md
+├── style.md          ← prose and structure rules for pages in this BEP
 └── pages/
     ├── 01_introduction/
     │   ├── 01_getting_started.md
@@ -15,16 +16,17 @@ _plan/
     ├── 02_guides/
     │   ├── 01_agents.md
     │   ├── 02_sessions.md
-    │   ├── 03_steering.md
-    │   ├── 04_models.md
-    │   ├── 05_tools.md
-    │   ├── 06_mcp.md
-    │   ├── 07_skills.md
-    │   ├── 08_subagents.md
-    │   ├── 09_policies.md
-    │   ├── 10_journal.md
-    │   ├── 11_durability.md    (design notes, not a user guide)
-    │   └── 12_serving.md
+    │   ├── 03_configuration.md
+    │   ├── 04_steering.md
+    │   ├── 05_models.md
+    │   ├── 06_tools.md
+    │   ├── 07_mcp.md
+    │   ├── 08_skills.md
+    │   ├── 09_subagents.md
+    │   ├── 10_policies.md
+    │   ├── 11_journal.md
+    │   ├── 12_durability.md    (design notes, not a user guide)
+    │   └── 13_serving.md
     ├── 03_examples/
     │   ├── 01_claude_code.md
     │   └── 02_background_jobs.md
@@ -34,7 +36,7 @@ _plan/
     │   └── 03_observability.md
     └── 05_appendix/
         ├── 01_comparisons.md
-        └── 02_design_principles.md
+        └── 02_alternatives_considered.md
 ```
 
 ## Introduction
@@ -64,7 +66,7 @@ _plan/
 - An LLM function is a typed function
 - An agent is a function with tools
 - Task mode
-- Configuration is not an argument
+- Configuring a run
 - Step budgets
 - Errors
 - Every call is recorded
@@ -74,24 +76,32 @@ _plan/
 - Arguments are session constants
 - Messages are events
 - Running turns
-- Configuration is not an argument
+- Configuring a session
 - Snapshots
 - Named instances
 
-### 03_steering.md
+### 03_configuration.md
+- Three kinds of configuration
+- `$` parameters
+- Changing configuration mid-run
+- Per-turn knobs
+- Precedence
+- Defaults in the function block
+
+### 04_steering.md
 - The two lanes
 - Queued messages
 - Interrupts
 - Sending events
 
-### 04_models.md
+### 05_models.md
 - What a client is
 - The three duties
 - Same-provider fidelity
 - Switching providers mid-session
 - Writing a client
 
-### 05_tools.md
+### 06_tools.md
 - A tool is a function
 - How the model sees tools
 - Argument validation
@@ -100,13 +110,13 @@ _plan/
 - Tools and the session
 - Dynamic toolboxes
 
-### 06_mcp.md
+### 07_mcp.md
 - MCP servers are toolboxes
 - Dynamic discovery
 - Schemas and validation
 - Replay caveat
 
-### 07_skills.md
+### 08_skills.md
 - Skills are not a primitive
 - The data
 - Always-on skills
@@ -114,13 +124,13 @@ _plan/
 - What falls out for free
 - Design notes
 
-### 08_subagents.md
+### 09_subagents.md
 - Calling an agent from an agent
 - Child sessions
 - Concurrency
 - Cancellation
 
-### 09_policies.md
+### 10_policies.md
 - What a policy is
 - Commands
 - The runner
@@ -128,19 +138,19 @@ _plan/
 - Composing a stack
 - Testing policies
 
-### 10_journal.md
+### 11_journal.md
 - What the journal is
 - Built-in events
 - Custom events
 - Journal stores
 - Compaction
 
-### 11_durability.md (design notes)
+### 12_durability.md (design notes)
 - The tiers
 - Implementation options for tier 2
 - Things to look out for
 
-### 12_serving.md
+### 13_serving.md
 - Generated SDKs
 - In-process sessions
 - Stateless sessions
@@ -193,15 +203,20 @@ _plan/
 - Pydantic AI
 - OpenAI Agents SDK
 - Flue
+- pi
 - LangGraph
 
-### 02_design_principles.md
-- The function defines the turn; the policy defines the session
-- The journal owns the data
-- Two lanes
-- Static templates, imperative changes, recorded causes
+### 02_alternatives_considered.md
+- One entry point; the runner option picks the handle type
+- Runners are infrastructure; identity is per-open
+- Passing function arguments versus run configuration
+- Static templates; mid-session change is a journaled command
+- The journal owns all state
+- Two lanes: data queues, control preempts
+- Tools are plain functions — no context parameter
+- `send` in, `emit` inside
+- Arguments are constants; messages are events
+- Event unions bind on the policy
+- Durability is tiered; tier 3 is out of scope
 - Streaming is not history
-- Configuration is not an argument
-- Tools are plain functions
-- One journal per session; sessions form a tree
-- Determinism where it pays, honesty where it does not
+- One journal per session, sessions form a tree

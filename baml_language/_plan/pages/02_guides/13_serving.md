@@ -12,7 +12,7 @@ from baml_sdk import b
 trip = b.PlanTrip("2 weeks in Japan")            # -> Itinerary
 
 # session
-s = b.session.PlanTrip.create(request="2 weeks in Japan")
+s = b.session.PlanTrip.create(trip_request="2 weeks in Japan")
 turn = s.run()
 if turn.is_done:
     print(turn.result.destination)
@@ -26,7 +26,7 @@ s2 = b.session.PlanTrip.resume(snap)
 ```typescript
 import { b } from "./baml_sdk";
 
-const s = await b.session.PlanTrip.create({ request: "2 weeks in Japan" });
+const s = await b.session.PlanTrip.create({ trip_request: "2 weeks in Japan" });
 const turn = await s.run();
 ```
 

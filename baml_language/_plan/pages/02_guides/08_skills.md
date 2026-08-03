@@ -122,11 +122,11 @@ class WithSkills {
 Wiring it up:
 
 ```baml
-function CodeAgent(task: string) -> Report {
+function CodeAgent(goal: string) -> Report {
     client: "anthropic/claude-sonnet-5"
     prompt: `
         You are a coding agent. Work the task to completion.
-        Task: ${task}
+        Goal: ${goal}
         ${ctx.transcript}
         ${ctx.output_format}
     `
@@ -137,9 +137,10 @@ let skills = [
     skill_from_file("skills/release-process.md"),
 ];
 
-let s = CodeAgent@session(task = t) with baml.session.options(
-    tools = [tool(read_file), tool(run_bash), skill_loader(skills)],
-    policy = WithSkills { skills: skills, inner: baml.session.ToolLoop { max_steps: 100 } },
+let s = CodeAgent@session(
+    goal = t,
+    $tools = [read_file, run_bash, skill_loader(skills)],
+    $policy = WithSkills { skills: skills, inner: baml.session.ToolLoop { max_steps: 100 } },
 );
 ```
 

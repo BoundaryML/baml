@@ -56,7 +56,7 @@ input like any message, delivered on the same data lane:
 s.send(PermissionGranted { call_id: "t7" });
 ```
 
-`send` is typed by the session's event union (`10_journal.md`). From the
+`send` is typed by the session's event union (`11_journal.md`). From the
 outside, a session has exactly two verbs: `send` for data (strings,
 messages, custom events) and `interrupt` for control.
 
@@ -66,4 +66,4 @@ forge the model's history.
 
 Inside a tool, the direction reverses, and the verb changes with it:
 `baml.session.emit(e)` is the running session emitting onto its own
-journal (`05_tools.md`).
+journal (`06_tools.md`).

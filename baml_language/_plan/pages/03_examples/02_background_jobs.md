@@ -8,26 +8,34 @@ reports, bulk enrichment, long research runs.
 ## Starting a job
 
 ```baml
-function PlanTrip(request: string) -> Itinerary {
+function PlanTrip(trip_request: string) -> Itinerary {
     client: "openai/gpt-5.2"
     tools: [search_flights, search_hotels]
     prompt: `
-        You are a travel agent. The brief: ${request}
+        You are a travel agent. The brief: ${trip_request}
         ${ctx.transcript}
         ${ctx.output_format}
     `
 }
 
-let job = PlanTrip@job(request = "3 weeks across South America")
-    with baml.session.options(id = "trip-9421");
+//# one Background runner per application — it owns the store and worker pool
+let jobs = baml.session.Background { store: pg_store, workers: baml.spawn.TaskGroup.new(8) };
+
+let job = PlanTrip@session(
+    trip_request = "3 weeks across South America",
+    $runner = jobs,
+    $id = "trip-9421",
+);
 // returns immediately; job : Job<Itinerary>
 ```
 
-`@job` takes the function's arguments; the `id` and other run configuration go in the `with` clause. The
-job runs under the configured journal store, so it survives the process
-that started it. Starting a job with an existing ID throws
-`baml.session.InstanceExists` — submissions are create-only by design, so
-a crashed submitter that retries cannot start the work twice.
+The `$runner` parameter selects the kind of run and changes the handle
+type: with `Background`, the expression returns `Job<Itinerary>` instead
+of `Session<Itinerary>` (`../02_guides/03_configuration.md`). The job
+runs under the runner's journal store, so it survives the process that
+started it. Job IDs are create-only by design: starting a job with an
+existing ID throws `baml.session.InstanceExists`, so a crashed submitter
+that retries cannot start the work twice.
 
 ## Polling
 
@@ -45,10 +53,10 @@ match (job.poll()) {
 `Itinerary` or throws. `job.cancel(reason)` requests an abort through the
 control lane.
 
-Re-attach from anywhere:
+Re-attach from anywhere with access to the runner's store:
 
 ```baml
-let job = baml.session.job<Itinerary>("trip-9421");
+let job = jobs.attach<Itinerary>("trip-9421");
 ```
 
 ## From another service
@@ -56,7 +64,7 @@ let job = baml.session.job<Itinerary>("trip-9421");
 ```python
 from baml_sdk import b
 
-job = b.job.PlanTrip.start(id="trip-9421", request="3 weeks across South America")
+job = b.job.PlanTrip.start(id="trip-9421", trip_request="3 weeks across South America")
 # ... later, possibly another process:
 job = b.job.PlanTrip.attach("trip-9421")
 status = job.poll()
@@ -75,7 +83,7 @@ The three are the same machinery with different lifetimes and lanes:
 | | Returns | Input after start | Backed by |
 |---|---|---|---|
 | Task: `PlanTrip(...)` | `Itinerary`, blocking | none | in-memory journal |
-| Job: `PlanTrip@job(...)` | `Job<Itinerary>`, immediate | control lane only (`cancel`) | journal store |
+| Job: `@session(..., $runner = jobs)` | `Job<Itinerary>`, immediate | control lane only (`cancel`) | journal store |
 | Session: `PlanTrip@session(...)` | `Session<Itinerary>` | both lanes (`send`, `interrupt`) | memory or store |
 
 A job is a task with a handle — or equivalently, a session without a
@@ -108,6 +116,6 @@ function enrich_batch(batch_id: string) -> string {
 }
 ```
 
-Because jobs settle (see `../02_guides/11_durability.md`), a crashed
+Because jobs settle (see `../02_guides/12_durability.md`), a crashed
 worker resumes the job from its last committed batch: completed steps and
 tool results are read from the journal, unfinished work re-runs.

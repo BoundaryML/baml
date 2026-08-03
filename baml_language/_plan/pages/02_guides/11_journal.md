@@ -40,8 +40,8 @@ What the journal is not:
 ```baml
 type Event = SessionStarted | UserMessage | AssistantMessage
            | ToolRequested | ToolCompleted | ToolFailed
-           | FinalProduced | ToolsChanged | StepCompleted
-           | ChildSpawned | ChildFinished
+           | FinalProduced | ToolsChanged | ClientChanged | PolicyChanged
+           | StepCompleted | ChildSpawned | ChildFinished
            | Interrupted | Usage | Compacted
 ```
 
@@ -53,7 +53,8 @@ type Event = SessionStarted | UserMessage | AssistantMessage
 | `ToolRequested` / `ToolCompleted` / `ToolFailed` | Tool lifecycle. |
 | `FinalProduced` | The model produces the function's return type. |
 | `ToolsChanged` | The mounted toolbox changes. |
-| `StepCompleted` | A durable step inside a tool commits (`11_durability.md`). |
+| `ClientChanged` / `PolicyChanged` | A setter changed the session's client or policy (`03_configuration.md`). |
+| `StepCompleted` | A durable step inside a tool commits (`12_durability.md`). |
 | `ChildSpawned` / `ChildFinished` | A child session starts / returns. |
 | `Interrupted` | An interrupt took effect. |
 | `Usage` | Token counts for one provider call. |
@@ -64,7 +65,7 @@ in future releases.
 
 `AssistantMessage` records both the canonical fields and the raw provider
 payload, plus which client produced it. Clients use this for
-same-provider fidelity (`04_models.md`). `Compacted { summary,
+same-provider fidelity (`05_models.md`). `Compacted { summary,
 through_seq }` changes rendering, not history: replaced entries stay in
 the journal.
 
@@ -102,8 +103,7 @@ function ReleaseAgent(goal: string) -> Report {
     prompt: `You are a release agent. ${goal} ${ctx.transcript} ${ctx.output_format}`
 }
 
-let s = ReleaseAgent@session(goal = g)
-    with baml.session.options(policy = ReleasePolicy { inner: baml.session.ToolLoop { max_steps: 50 } });
+let s = ReleaseAgent@session(goal = g, $policy = ReleasePolicy { inner: baml.session.ToolLoop { max_steps: 50 } });
 s.send(PermissionGranted { call_id: "t7" });   // typed by the union
 ```
 
@@ -131,7 +131,7 @@ class TodoUpdated {
 ## Journal stores
 
 Sessions used as values keep the journal in memory; `snapshot()` moves it
-out of the process. Named instances (`options(id = ...)`) and jobs read
+out of the process. Named instances (`$id = ...`) and jobs read
 and write through a store:
 
 ```baml
@@ -143,10 +143,10 @@ interface JournalStore {
 
 Built-in: in-memory and file-backed. Bring your own for Postgres or
 anything else — the interface is two functions. `append` takes a batch
-because events from one turn commit atomically (`11_durability.md`).
+because events from one turn commit atomically (`12_durability.md`).
 
 Tail a journal by polling past your last seen sequence number, or over
-SSE on served sessions (`12_serving.md`).
+SSE on served sessions (`13_serving.md`).
 
 ## Compaction
 

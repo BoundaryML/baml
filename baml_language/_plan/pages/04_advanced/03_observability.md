@@ -73,7 +73,7 @@ for entry in b.session.CodeAgent.tail("issue-17307"):
     print(entry.seq, entry.event.kind)
 ```
 
-This is the same endpoint UIs use (`../02_guides/12_serving.md`). An
+This is the same endpoint UIs use (`../02_guides/13_serving.md`). An
 operator attaching to a misbehaving agent sees exactly what the model
 saw — the transcript is derivable from the same events, which is what
 makes journal-based debugging trustworthy: there is no second, partial

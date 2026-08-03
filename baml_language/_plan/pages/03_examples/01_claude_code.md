@@ -13,12 +13,12 @@ class Report {
 }
 
 /// A coding agent that works in the current repository.
-function CodeAgent(task: string) -> Report {
+function CodeAgent(goal: string) -> Report {
     client: "anthropic/claude-sonnet-5"
     tools: [read_file, write_file, run_bash, sub_task]
     prompt: `
         You are a coding agent. Work the task to completion.
-        Task: ${task}
+        Goal: ${goal}
         ${ctx.transcript}
         ${ctx.output_format}
     `
@@ -32,7 +32,7 @@ function sub_task(goal: string) -> Report {
 ```
 
 An agent function can be listed in `tools:` directly
-(`../02_guides/08_subagents.md`); the wrapper here exists only because
+(`../02_guides/09_subagents.md`); the wrapper here exists only because
 the delegation is recursive — `sub_task` gives the self-call a distinct
 name and a description written for delegating, not for the task itself.
 
@@ -86,17 +86,17 @@ let policy = WithSteering { inner:
              baml.session.ToolLoop { max_steps: 100 } } };
 ```
 
-(`WithApproval` is shown in full in `../02_guides/09_policies.md`.)
+(`WithApproval` is shown in full in `../02_guides/10_policies.md`.)
 
 ## The app
 
-Three concerns, three lanes: render the journal tail, run turns, read the
-human.
+The app has three concurrent concerns: rendering the journal tail,
+running turns, and reading the human's input. Each runs on its own
+green thread.
 
 ```baml
 function main() -> null {
-    let s = CodeAgent@session(task = "fix the failing tests")
-        with baml.session.options(policy = policy);
+    let s = CodeAgent@session(goal = "fix the failing tests", $policy = policy);
 
     //# UI lane: tail the journal, render events as they land
     spawn {

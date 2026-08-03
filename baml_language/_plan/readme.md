@@ -13,7 +13,7 @@ The core additions:
 - **Sessions.** `MyFunc@session(...)` creates a long-lived conversation
   from any LLM function. Sessions serialize to a string, resume anywhere,
   and can be addressed by ID.
-- **Jobs.** `MyFunc@job(...)` runs a task in the background and returns a
+- **Jobs.** `MyFunc@session(..., $runner = jobs)` runs a task in the background and returns a
   pollable handle.
 - **The journal.** Every run records an append-only log of typed events.
   Snapshots, tracing, replay, evals, and provider portability are all
@@ -21,7 +21,7 @@ The core additions:
 - **Policies.** A small, optional API for changing session behavior:
   steering, approvals, budgets, dynamic tool mounting.
 
-Everything is layered. The sugar (`tools:`, `@session`, `@job`) desugars
+Everything is layered. The sugar (`tools:`, `@session`, `$` parameters) desugars
 into a public library (`baml.session.*`). You can drop down to the
 library at any point and lose nothing.
 
@@ -31,7 +31,7 @@ library at any point and lose nothing.
 |---|---|
 | `tools:` field on LLM functions | language |
 | `${ctx.transcript}` in prompts | language |
-| `MyFunc@session(...)`, `MyFunc@job(...)` | language |
+| `MyFunc@session(...)` with `$` configuration parameters | language |
 | `baml.session.*` (Journal, events, Session, Job, Policy, Toolbox) | stdlib |
 | Client interface: `render` / `invoke` / `ingest` | stdlib |
 | Session and job support in generated SDKs and `baml serve` | tooling |
@@ -51,17 +51,18 @@ library at any point and lose nothing.
 `03_concepts` (the vocabulary; read before the guides).
 
 **Guides** — one page per concept, in the order you meet them:
-`01_agents`, `02_sessions`, `03_steering`, `04_models`, `05_tools`,
-`06_mcp`, `07_skills`, `08_subagents`, `09_policies`, `10_journal`,
-`11_durability` (design notes), `12_serving`.
+`01_agents`, `02_sessions`, `03_configuration`, `04_steering`,
+`05_models`, `06_tools`, `07_mcp`, `08_skills`, `09_subagents`,
+`10_policies`, `11_journal`, `12_durability` (design notes),
+`13_serving`.
 
 **Examples** — the system composed:
 `01_claude_code` (steering, permissions, subagents, Esc),
-`02_background_jobs` (`@job`, polling, provider background mode).
+`02_background_jobs` (`$runner`, polling, provider background mode).
 
 **Advanced** — `01_errors_and_retries`, `02_evals`, `03_observability`.
 
 **Appendix** — `01_comparisons` (Pydantic AI, OpenAI Agents SDK, Flue,
-LangGraph), `02_design_principles` (the laws, and rejected alternatives).
+LangGraph), `02_alternatives_considered` (each decision, the options weighed, and why).
 
 `outline.md` lists every header for reference.

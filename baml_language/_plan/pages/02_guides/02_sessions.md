@@ -6,17 +6,17 @@
 same arguments as the function, type-checked the same way:
 
 ```baml
-function PlanTrip(request: string) -> Itinerary {
+function PlanTrip(trip_request: string) -> Itinerary {
     client: "openai/gpt-5.2"
     tools: [search_flights, search_hotels]
     prompt: `
-        You are a travel agent. The brief: ${request}
+        You are a travel agent. The brief: ${trip_request}
         ${ctx.transcript}
         ${ctx.output_format}
     `
 }
 
-let s = PlanTrip@session(request = "2 weeks in Japan, mid-range");
+let s = PlanTrip@session(trip_request = "2 weeks in Japan, mid-range");
 // s : Session<Itinerary>
 ```
 
@@ -51,7 +51,7 @@ template; messages are events rendered by `${ctx.transcript}`.
 for input:
 
 ```baml
-let s = PlanTrip@session(request = "2 weeks in Japan");
+let s = PlanTrip@session(trip_request = "2 weeks in Japan");
 match (s.run()) {
     let d: baml.session.Done<Itinerary> => print(d.result),
     let r: baml.session.Replied => print(r.message),
@@ -77,19 +77,20 @@ This is the difference between task mode and session mode: in a task,
 `Replied` is not a legal stopping point; in a session, it is. Errors (step
 budget, provider failure) throw, the same as task mode.
 
-## Configuration is not an argument
+## Configuring a session
 
-Call parentheses hold only the function's arguments. Everything about
-*how* the session runs — policy, client, budgets, identity, resumption —
-goes in a `with` clause, the same pattern `spawn` uses:
+Configuration travels as `$`-prefixed parameters next to the function's
+arguments, and behavior settings remain changeable mid-run through
+setters:
 
 ```baml
-let s = PlanTrip@session("2 weeks in Japan")
-    with baml.session.options(policy = my_policy, max_steps = 50);
+let s = PlanTrip@session(trip_request = "2 weeks in Japan", $policy = my_policy);
+s.set_client(cheap_client);        // takes effect on the next model call; journaled
 ```
 
-The namespaces never collide: a function with its own `policy` or `id`
-parameter works unchanged.
+Function parameters cannot start with `$`, so the namespaces never
+collide. `03_configuration.md` covers the full set of `$` parameters,
+setters, per-turn knobs on `run()`, and precedence.
 
 ## Snapshots
 
@@ -104,7 +105,7 @@ to continue on any machine with any provider. Resuming passes no function
 arguments — they come from the snapshot:
 
 ```baml
-let s = PlanTrip@session with baml.session.options(resume = snap);
+let s = PlanTrip@session($resume = snap);
 ```
 
 The stateless server pattern branches once, on the first turn:
@@ -112,9 +113,9 @@ The stateless server pattern branches once, on the first turn:
 ```baml
 function handle_turn(snap: string?, msg: string) -> string {
     let s = if let x: string = snap {
-        PlanTrip@session with baml.session.options(resume = x)
+        PlanTrip@session($resume = x)
     } else {
-        PlanTrip@session(request = msg)          // first turn: args, no snapshot
+        PlanTrip@session(trip_request = msg)          // first turn: args, no snapshot
     };
     s.send(msg);
     let reply = match (s.run()) {
@@ -135,14 +136,14 @@ per ticket, per user, per order:
 
 ```baml
 // get or create: args are used on create, checked against the journal on attach
-let s = PlanTrip@session(request = brief) with baml.session.options(id = `issue-${n}`);
+let s = PlanTrip@session(trip_request = brief, $id = `issue-${n}`);
 
 // create only: throws InstanceExists if the ID is taken
-let s = PlanTrip@session(request = brief) with baml.session.options(id = `issue-${n}`, new = true);
+let s = PlanTrip@session(trip_request = brief, $id = `issue-${n}`, $new = true);
 ```
 
 With `id`, the runtime loads the session from the configured journal store
-(`10_journal.md`), or creates it with the given arguments. Use
+(`11_journal.md`), or creates it with the given arguments. Use
 `new = true` when the creator must be unique, such as a webhook that must
 not double-create.
 

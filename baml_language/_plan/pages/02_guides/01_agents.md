@@ -30,11 +30,11 @@ Two placeholders matter for agents:
 ## An agent is a function with tools
 
 ```baml
-function PlanTrip(request: string) -> Itinerary {
+function PlanTrip(trip_request: string) -> Itinerary {
     client: "openai/gpt-5.2"
     tools: [search_flights, search_hotels]
     prompt: `
-        You are a travel agent. The brief: ${request}
+        You are a travel agent. The brief: ${trip_request}
         ${ctx.transcript}
         ${ctx.output_format}
     `
@@ -67,18 +67,19 @@ reply is recorded and the loop continues. When the agent needs to talk to
 a user, use a session (`02_sessions.md`). When it should run detached,
 use a job (`../03_examples/02_background_jobs.md`).
 
-## Configuration is not an argument
+## Configuring a run
 
-Call parentheses hold only the function's own arguments. How a run is
-configured — budgets, policies, clients — goes in a `with` clause, the
-same pattern `spawn` already uses:
+Configuration parameters share the call parentheses with the function's
+arguments, distinguished by a `$` prefix. Bare names go to the function;
+`$` names go to the runtime:
 
 ```baml
-let trip = PlanTrip("2 weeks in Japan") with baml.session.options(max_steps = 20);
+let trip = PlanTrip("2 weeks in Japan", $max_steps = 20);
 ```
 
-The two namespaces never mix, so a function is free to have its own
-`max_steps` parameter. The same clause works on `@session` and `@job`.
+Function parameters cannot start with `$`, so a function with its own
+`max_steps` parameter works unchanged. `03_configuration.md` covers the
+full set of `$` parameters, mid-run setters, and precedence.
 
 ## Step budgets
 
@@ -93,8 +94,8 @@ it throws `baml.session.StepBudgetExceeded`.
 - Handle failure at the call site:
 
 ```baml
-let trip = PlanTrip(request) catch_all (e) {
-    let t: baml.session.StepBudgetExceeded => fallback_itinerary(request),
+let trip = PlanTrip(trip_request) catch_all (e) {
+    let t: baml.session.StepBudgetExceeded => fallback_itinerary(trip_request),
     _ => throw e,
 };
 ```
@@ -103,7 +104,7 @@ let trip = PlanTrip(request) catch_all (e) {
 
 A task records a journal even when you never see it as a session — every
 model turn, tool call, and token count, in order. The journal is the
-trace. See `10_journal.md`.
+trace. See `11_journal.md`.
 
 An LLM function is the only place BAML talks to a model. Code that
 reaches a provider through raw HTTP gets none of this — no journal, no

@@ -13,10 +13,10 @@ function search_flights(origin: string, dest: string) -> Flight[] {
     )
 }
 
-function PlanTrip(request: string) -> Itinerary {
+function PlanTrip(trip_request: string) -> Itinerary {
     client: "openai/gpt-5.2"
     tools: [search_flights, search_hotels]
-    prompt: `You are a travel agent. ${request} ${ctx.transcript} ${ctx.output_format}`
+    prompt: `You are a travel agent. ${trip_request} ${ctx.transcript} ${ctx.output_format}`
 }
 ```
 
@@ -76,6 +76,18 @@ Anonymous functions have no name of their own, so `baml.session.tool`
 requires `name =` for closures. Tool names must be stable: they appear in
 the journal, and replay depends on them.
 
+A tools list accepts both forms. A named function goes in bare; its name,
+schema, and description come from reflection. A `Tool` value — from
+`baml.session.tool` for a closure, or from an MCP server — goes in as
+is. The two mix in one list:
+
+```baml
+tools = [read_file, run_bash, skill_loader(skills)].concat(gh.tools())
+```
+
+Wrapping a named function in `baml.session.tool` is needed only to
+rename it.
+
 ## Tools and the session
 
 Tools sometimes need to record something on the session — progress, a
@@ -94,7 +106,7 @@ function set_todos(items: string[]) -> string {
 - `baml.session.emit(event)` — append a custom event to the enclosing
   session's journal. Outside a session, this is a no-op.
 - `baml.session.step(name, fn)` — run `fn` with a durable checkpoint (see
-  `11_durability.md`). Outside a session, it just runs `fn`.
+  `12_durability.md`). Outside a session, it just runs `fn`.
 
 This keeps tool signatures clean and tools reusable in any context. The
 same design is used by `log.info`, which also resolves its destination
@@ -105,6 +117,6 @@ ambiently.
 The set of mounted tools can change during a session: an MCP server
 connects, an approval unlocks a capability, a policy narrows what the
 model may do. Tool changes are made by policies through commands
-(`MountTools`, `UnmountTools` — see `09_policies.md`) and recorded in
+(`MountTools`, `UnmountTools` — see `10_policies.md`) and recorded in
 the journal as `ToolsChanged` events. The `tools:` list on the function is
 the initial toolbox, nothing more.

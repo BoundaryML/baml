@@ -167,10 +167,10 @@ effect: approval granted, tool mounted, tool called.
 Composition is construction; the result is one policy:
 
 ```baml
-function PlanTrip(request: string) -> Itinerary {
+function PlanTrip(trip_request: string) -> Itinerary {
     client: "openai/gpt-5.2"
     tools: [search_flights, search_hotels, book_hotel]
-    prompt: `You are a travel agent. ${request} ${ctx.transcript} ${ctx.output_format}`
+    prompt: `You are a travel agent. ${trip_request} ${ctx.transcript} ${ctx.output_format}`
 }
 
 let policy = WithSteering { inner:
@@ -178,7 +178,7 @@ let policy = WithSteering { inner:
              WithBudget   { cap_usd: 2.0, spent: 0.0, inner:
              baml.session.ToolLoop { max_steps: 12 } } } };
 
-let s = PlanTrip@session(request = r) with baml.session.options(policy = policy);
+let s = PlanTrip@session(trip_request = r, $policy = policy);
 ```
 
 Events flow outside-in; commands flow inside-out. Put steering outermost

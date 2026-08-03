@@ -14,10 +14,10 @@ class Itinerary {
     daily_plan: string[] @description("one entry per day"),
 }
 
-function PlanTrip(request: string) -> Itinerary {
+function PlanTrip(trip_request: string) -> Itinerary {
     client: "openai/gpt-5.2"
     prompt: `
-        You are a travel agent. Plan this trip: ${request}
+        You are a travel agent. Plan this trip: ${trip_request}
         ${ctx.output_format}
     `
 }
@@ -43,11 +43,11 @@ function search_flights(origin: string, dest: string) -> Flight[] { /* ... */ }
 /// Find hotels in a city under a nightly budget.
 function search_hotels(city: string, max_nightly: float) -> Hotel[] { /* ... */ }
 
-function PlanTrip(request: string) -> Itinerary {
+function PlanTrip(trip_request: string) -> Itinerary {
     client: "openai/gpt-5.2"
     tools: [search_flights, search_hotels]
     prompt: `
-        You are a travel agent. Plan this trip: ${request}
+        You are a travel agent. Plan this trip: ${trip_request}
         ${ctx.transcript}
         ${ctx.output_format}
     `
@@ -68,7 +68,7 @@ produces an `Itinerary`. This is a task: one call, one typed result.
 Open the same function as a session:
 
 ```baml
-let s = PlanTrip@session(request = "2 weeks in Japan");
+let s = PlanTrip@session(trip_request = "2 weeks in Japan");
 
 match (s.run()) {
     let d: baml.session.Done<Itinerary> => print(d.result),
@@ -80,7 +80,7 @@ let turn2 = s.run();
 ```
 
 Sessions persist. `s.snapshot()` returns a string you can store anywhere;
-`PlanTrip@session with baml.session.options(resume = snap)` continues it on any
+`PlanTrip@session($resume = snap)` continues it on any
 machine.
 
 ## Run it from Python or TypeScript
@@ -90,7 +90,7 @@ from baml_sdk import b
 
 trip = b.PlanTrip("2 weeks in Japan")
 
-s = b.session.PlanTrip.create(request="2 weeks in Japan")
+s = b.session.PlanTrip.create(trip_request="2 weeks in Japan")
 turn = s.run()
 ```
 

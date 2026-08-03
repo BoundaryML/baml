@@ -17,12 +17,11 @@ Errors thrown to the caller:
 |---|---|---|
 | `baml.errors.ParseError` | The model's final output failed schema parsing after repair and feedback retries. | Fallback value, or re-run with a different client. |
 | `baml.session.StepBudgetExceeded` | The loop hit `max_steps` without producing the return type. | Raise the budget, tighten the prompt, or fall back. |
-| `baml.session.CostBudgetExceeded` | A `with_budget` policy stopped the session. | Report; resume later with a higher cap. |
 | `baml.errors.RateLimited` | Provider 429 after the client's retry policy is exhausted. | Backoff at the application level, or fallback client. |
 | `baml.errors.AuthFailed` | Provider rejected credentials. Not retried. | Configuration fix; nothing programmatic. |
 | `baml.errors.ProviderDown` | Network failures / 5xx after retries. | Fallback client. |
 | `baml.session.Interrupted` | The session was interrupted while this call was waiting on it. | Usually intentional; report. |
-| `baml.session.InstanceExists` | `options(id, new = true)` or `@job` with a taken ID. | Attach to the existing instance instead. |
+| `baml.session.InstanceExists` | `$new = true`, or a job started with a taken ID. | Attach to the existing instance instead. |
 | `baml.session.NotFound` | `resume` / attach with an unknown ID or corrupt snapshot. | Treat as fresh, or surface. |
 | `baml.session.Busy` | An operation on a named instance while another writer holds its lease. | Wait and retry, or route through the running instance. |
 | `baml.session.ToolNameConflict` | Two tools with the same name mounted on one toolbox. | Configuration fix at mount time; never reaches the model. |
@@ -131,7 +130,7 @@ class WithRetry {
 
 Only list tools that are idempotent. Retrying a `charge_card` tool is how
 customers get charged twice; for effectful tools, rely on steps and
-idempotency keys instead (`../02_guides/11_durability.md`).
+idempotency keys instead (`../02_guides/12_durability.md`).
 
 **5. Submissions — durability.** For jobs and named instances, the
 runtime retries interrupted attempts under a per-function budget
@@ -150,7 +149,7 @@ class CannotPlan {
     missing_info: string[] @description("what the user would need to provide"),
 }
 
-function PlanTrip(request: string) -> Itinerary | CannotPlan {
+function PlanTrip(trip_request: string) -> Itinerary | CannotPlan {
     // ...
 }
 ```
@@ -164,9 +163,9 @@ The loop treats any member of the return union as a valid final result.
 Ordinary BAML error handling, at the outermost sensible point:
 
 ```baml
-let trip = PlanTrip(request) catch_all (e) {
-    let t: baml.session.StepBudgetExceeded => fallback_itinerary(request),
-    let p: baml.errors.ParseError => fallback_itinerary(request),
+let trip = PlanTrip(trip_request) catch_all (e) {
+    let t: baml.session.StepBudgetExceeded => fallback_itinerary(trip_request),
+    let p: baml.errors.ParseError => fallback_itinerary(trip_request),
     _ => throw e,
 };
 ```

@@ -28,8 +28,8 @@ function TriageAgent(repo: string) -> Triage {
     `
 }
 
-let s = TriageAgent@session(repo = "boundaryml/baml")
-    with baml.session.options(tools = [tool(read_file), tool(run_bash)].concat(gh.tools()));
+let s = TriageAgent@session(repo = "boundaryml/baml",
+    $tools = [read_file, run_bash].concat(gh.tools()));
 ```
 
 `options(tools = ...)` provides the toolbox when the function declares
