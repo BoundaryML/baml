@@ -374,6 +374,29 @@ fn collect_hir_ty_nodes(
     }
 
     let mut nodes = Vec::new();
+    // Each function's inferred EFFECT, keyed at the function NAME range -
+    // the caret target for `throws` pins (S12); differential against
+    // TIR's callable_throws below.
+    for owner_id in baml_compiler2_ppir::file_body_owners(db, file) {
+        let baml_compiler2_hir::body::BodyOwnerId::Function(function) = owner_id else {
+            continue;
+        };
+        let Some(scope_id) = baml_compiler2_ppir::body_scope(db, owner_id) else {
+            continue;
+        };
+        let Some(owner) = owners.get(&scope_id.file_scope_id(db).index()) else {
+            continue;
+        };
+        let name_span =
+            baml_compiler2_ppir::item_data::function_source_map(db, function).name_span;
+        if !name_span.is_empty() {
+            nodes.push(TypedNode {
+                range: name_span,
+                kind: NodeKind::Expr,
+                ty: format!("throws {}", owner.result.throws.to_plain().render_canonical()),
+            });
+        }
+    }
     for owner in owners.values() {
         for (&expr_id, ty) in &owner.result.type_of_expr {
             if owner.source_map.is_synthetic_expr(expr_id) {
@@ -441,6 +464,24 @@ fn collect_tir_nodes(
 ) -> Vec<TypedNode> {
     let index = baml_compiler2_ppir::file_semantic_index(db, file);
     let mut nodes = Vec::new();
+
+    // TIR's effect per function, at the same name-range key as the
+    // hir_ty side.
+    for owner_id in baml_compiler2_ppir::file_body_owners(db, file) {
+        let baml_compiler2_hir::body::BodyOwnerId::Function(function) = owner_id else {
+            continue;
+        };
+        let name_span =
+            baml_compiler2_ppir::item_data::function_source_map(db, function).name_span;
+        if !name_span.is_empty() {
+            let throws = baml_compiler2_tir::callable::callable_throws(db, function);
+            nodes.push(TypedNode {
+                range: name_span,
+                kind: NodeKind::Expr,
+                ty: format!("throws {}", throws.render_canonical()),
+            });
+        }
+    }
 
     for (idx, scope) in index.scopes.iter().enumerate() {
         if !matches!(

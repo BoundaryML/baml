@@ -217,6 +217,22 @@ impl InferenceContext<'_> {
         pat: PatId,
         scrut: &Ty,
     ) -> PatternOutcome {
+        let outcome = self.lower_pattern_inner(body, pat, scrut);
+        // Every pattern node records its matched type (TIR's
+        // pattern_types single-write-point discipline) - binds overwrite
+        // with the identical value.
+        self.result
+            .type_of_binding
+            .insert(pat, outcome.matched_ty.clone());
+        outcome
+    }
+
+    fn lower_pattern_inner(
+        &mut self,
+        body: &ExprBody,
+        pat: PatId,
+        scrut: &Ty,
+    ) -> PatternOutcome {
         match &body.patterns[pat] {
             Pattern::Wildcard => PatternOutcome {
                 dpat: DPat::wildcard(scrut.to_plain()),

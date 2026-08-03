@@ -2,6 +2,7 @@
 source: crates/baml_tests/src/type_spec/fixtures.rs
 expression: outcome.dump
 ---
+411..412 'f': throws never
 422..486 '{\n   ...b.v\n}': hir_ty=[int] tir=[!error]
 428..433 'let b': hir_ty=[user.Box<int>] tir=[user.Box<!error>]
 436..451 'Box<_> { v: 5 }': hir_ty=[user.Box<int>] tir=[user.Box<!error>]

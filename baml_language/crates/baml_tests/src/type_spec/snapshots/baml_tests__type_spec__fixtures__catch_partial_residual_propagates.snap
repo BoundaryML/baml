@@ -1,0 +1,23 @@
+---
+source: crates/baml_tests/src/type_spec/fixtures.rs
+expression: outcome.dump
+---
+352..357 'risky': hir_ty=[throws 7 | "bad"] tir=[throws int | string]
+374..461 '{\n   ...w 7\n}': never
+412..447 'if (c)...n    }': void
+416..417 'c': bool
+419..447 '{\n   ...n    }': never
+435..440 '"bad"': "bad"
+458..459 '7': 7
+472..473 'g': hir_ty=[throws 7] tir=[throws int | string]
+490..586 '{\n   ...  r\n}': int
+516..521 'let r': int
+524..529 'risky': hir_ty=[(c: bool) -> int throws 7 | "bad"] tir=[(c: bool) -> int throws int | string]
+524..532 'risky(c)': int
+524..577 'risky(...n    }': hir_ty=[int] tir=[int | 0]
+530..531 'c': bool
+540..541 'e': hir_ty=[7 | "bad"] tir=[int | string]
+553..565 'let s: "bad"': "bad"
+560..565 '"bad"': "bad"
+569..570 '0': 0
+583..584 'r': int

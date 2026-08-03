@@ -2,6 +2,7 @@
 source: crates/baml_tests/src/type_spec/fixtures.rs
 expression: outcome.dump
 ---
+312..313 'f': hir_ty=[throws never] tir=[throws unknown]
 350..416 '{\n   ...ull\n}': hir_ty=[int | null] tir=[unknown]
 356..374 '(m.at(...[]).at': hir_ty=[(self: int[], index: int) -> int | null throws never] tir=[unknown]
 356..377 '(m.at(....at(v)': hir_ty=[int | null] tir=[unknown]

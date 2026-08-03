@@ -2,8 +2,10 @@
 source: crates/baml_tests/src/type_spec/fixtures.rs
 expression: outcome.dump
 ---
+321..325 'pick': throws never
 344..353 '{\n    5\n}': 5
 350..351 '5': 5
+364..365 'f': throws never
 384..478 '{\n   ...ing\n}': int | string
 390..395 'let v': int | string
 398..402 'pick': () -> int | string throws never
@@ -11,7 +13,7 @@ expression: outcome.dump
 410..451 'if (v ...n    }': void
 414..415 'v': int | string
 414..422 'v is int': bool
-419..422 'int': hir_ty=[!error] tir=[int]
+419..422 'int': int
 424..451 '{\n   ...n    }': void
 434..435 'v': hir_ty=[int | string] tir=[int]
 438..442 'pick': () -> int | string throws never

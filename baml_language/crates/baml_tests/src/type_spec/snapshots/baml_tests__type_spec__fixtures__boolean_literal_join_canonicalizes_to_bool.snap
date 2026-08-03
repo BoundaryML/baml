@@ -2,6 +2,7 @@
 source: crates/baml_tests/src/type_spec/fixtures.rs
 expression: outcome.dump
 ---
+382..383 'f': throws never
 401..498 '{\n   ...  v\n}': bool
 407..412 'let v': bool
 415..443 'if c {...alse }': hir_ty=[bool] tir=[true | false]

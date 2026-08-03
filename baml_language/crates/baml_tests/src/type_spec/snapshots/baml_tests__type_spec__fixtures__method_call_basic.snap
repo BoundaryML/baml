@@ -2,6 +2,7 @@
 source: crates/baml_tests/src/type_spec/fixtures.rs
 expression: outcome.dump
 ---
+204..205 'f': throws never
 225..353 '{\n   ...ull\n}': int | null
 231..236 'let n': int
 239..246 'xs.push': (self: int[], item: int) -> int throws never

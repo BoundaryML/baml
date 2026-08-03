@@ -2,6 +2,7 @@
 source: crates/baml_tests/src/type_spec/fixtures.rs
 expression: outcome.dump
 ---
+244..245 'f': throws never
 256..335 '{\n   ...dj;\n}': void
 262..278 'let ad...nt[][]': int[][]
 271..278 'int[][]': hir_ty=[!error] tir=[int[][]]

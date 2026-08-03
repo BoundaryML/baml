@@ -2,7 +2,9 @@
 source: crates/baml_tests/src/type_spec/fixtures.rs
 expression: outcome.dump
 ---
+399..400 'f': throws never
 430..451 '{\n   ...t[]\n}': hir_ty=[int[]] tir=[baml.Array<int>]
 436..437 'a': hir_ty=[int[]] tir=[baml.Array<int>]
+462..463 'g': throws never
 510..542 '{\n   ...nt>\n}': hir_ty=[map<string, int>] tir=[baml.Map<string, int>]
 516..517 'm': hir_ty=[map<string, int>] tir=[baml.Map<string, int>]

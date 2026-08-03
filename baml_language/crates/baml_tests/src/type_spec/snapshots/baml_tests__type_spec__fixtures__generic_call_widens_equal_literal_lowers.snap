@@ -2,10 +2,12 @@
 source: crates/baml_tests/src/type_spec/fixtures.rs
 expression: outcome.dump
 ---
+315..319 'pair': throws never
 342..356 '{\n   ... b]\n}': T[]
 348..354 '[a, b]': T[]
 349..350 'a': T
 352..353 'b': T
+367..368 'f': throws never
 380..429 '{\n   ...  p\n}': int[]
 386..391 'let p': int[]
 394..398 'pair': hir_ty=[(a: int, b: int) -> int[] throws never] tir=[(a: T, b: T) -> T[] throws never]

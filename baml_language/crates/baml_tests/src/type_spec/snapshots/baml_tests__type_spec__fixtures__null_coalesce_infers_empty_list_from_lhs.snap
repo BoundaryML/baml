@@ -2,6 +2,7 @@
 source: crates/baml_tests/src/type_spec/fixtures.rs
 expression: outcome.dump
 ---
+526..527 'f': throws never
 549..599 '{\n   ... ys\n}': hir_ty=[int[]] tir=[int[] | _[]]
 555..561 'let ys': hir_ty=[int[]] tir=[int[] | _[]]
 564..566 'xs': int[] | null

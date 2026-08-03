@@ -1,5 +1,7 @@
+// tir: fails
+//
 // S12: an omitted `throws` clause infers from the body - throw sites
-// widen and union with callee effects (callable_throws, fixpoint over
+// keep their literal types and union with callee effects (fixpoint over
 // mutual recursion); the callee reference renders the inferred effect.
 function f(c: bool) -> int {
     if (c) {
@@ -10,5 +12,5 @@ function f(c: bool) -> int {
 
 function g(c: bool) -> int {
     f(c)
- // ^ (c: bool) -> int throws string
+ // ^ (c: bool) -> int throws "bad"
 }

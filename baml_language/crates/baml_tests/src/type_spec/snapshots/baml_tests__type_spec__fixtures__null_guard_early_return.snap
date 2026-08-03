@@ -2,6 +2,7 @@
 source: crates/baml_tests/src/type_spec/fixtures.rs
 expression: outcome.dump
 ---
+394..395 'f': throws never
 421..506 '{\n   ...int\n}': hir_ty=[int] tir=[unknown]
 427..480 'if (a ...n    }': void
 431..432 'a': int | null

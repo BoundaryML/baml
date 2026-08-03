@@ -2,13 +2,16 @@
 source: crates/baml_tests/src/type_spec/fixtures.rs
 expression: outcome.dump
 ---
+692..696 'same': throws never
 726..739 '{\n    first\n}': T
 732..737 'first': T
+750..752 'ok': throws never
 762..799 '{\n   ...int\n}': hir_ty=[int] tir=[int | 1 | 2]
 768..772 'same': hir_ty=[(first: int, second: int) -> int throws never] tir=[(first: T, second: T) -> T throws never]
 768..778 'same(1, 2)': hir_ty=[int] tir=[int | 1 | 2]
 773..774 '1': 1
 776..777 '2': 2
+810..821 'disagreeing': throws never
 834..893 '{\n   ...ok"\n}': "ok"
 840..845 'let r': hir_ty=[!error] tir=[int | string]
 848..852 'same': hir_ty=[(first: !error, second: !error) -> !error throws never] tir=[(first: T, second: T) -> T throws never]

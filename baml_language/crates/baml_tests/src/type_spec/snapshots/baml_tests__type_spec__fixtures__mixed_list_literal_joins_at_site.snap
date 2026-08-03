@@ -2,6 +2,7 @@
 source: crates/baml_tests/src/type_spec/fixtures.rs
 expression: outcome.dump
 ---
+301..302 'f': throws never
 325..383 '{\n   ...  a\n}': (int | string)[]
 331..336 'let a': (int | string)[]
 339..347 '[1, "x"]': (int | string)[]

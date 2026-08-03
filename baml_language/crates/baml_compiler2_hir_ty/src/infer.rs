@@ -1810,20 +1810,23 @@ impl<'db> InferenceContext<'db> {
         if matches!(ty.kind(), TyKind::Never { .. }) || ty.has_error() {
             return;
         }
-        let widened = self.widen_fresh(ty);
+        // Thrown literals KEEP their literal types (no widening): catch
+        // arms match on literal error codes, and the canonical union at
+        // the channel is the generation site.
+        let contribution = ty.clone();
         if let Some(declared) = self.declared_throws.clone()
             && !declared.has_error()
             && self.throws_channels.len() == 1
-            && !self.sub(&widened, &declared)
+            && !self.sub(&contribution, &declared)
         {
             self.result
                 .type_mismatches
-                .insert(at, (declared, widened.clone()));
+                .insert(at, (declared, contribution.clone()));
         }
         self.throws_channels
             .last_mut()
             .expect("channel stack never empty")
-            .push(widened);
+            .push(contribution);
     }
 
     /// The endgame (S13 finalize): resolve bounded variables to fixpoint,

@@ -2,6 +2,7 @@
 source: crates/baml_tests/src/type_spec/fixtures.rs
 expression: outcome.dump
 ---
+443..444 'f': throws never
 454..543 '{\n   ...tal\n}': int
 460..469 'let total': int
 472..481 '[1, 2, 3]': int[]

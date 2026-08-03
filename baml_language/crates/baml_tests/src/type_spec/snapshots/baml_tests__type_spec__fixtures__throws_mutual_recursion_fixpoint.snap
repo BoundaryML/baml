@@ -1,0 +1,20 @@
+---
+source: crates/baml_tests/src/type_spec/fixtures.rs
+expression: outcome.dump
+---
+425..429 'ping': hir_ty=[throws "stop"] tir=[throws string]
+445..534 '{\n   ...(n)\n}': int
+479..520 'if (n ...n    }': void
+483..484 'n': int
+483..489 'n == 0': bool
+488..489 '0': 0
+491..520 '{\n   ...n    }': never
+507..513 '"stop"': "stop"
+525..529 'pong': hir_ty=[(n: int) -> int throws "stop"] tir=[(n: int) -> int throws string]
+525..532 'pong(n)': int
+530..531 'n': int
+545..549 'pong': hir_ty=[throws "stop"] tir=[throws string]
+565..608 '{\n   ...(n)\n}': int
+599..603 'ping': hir_ty=[(n: int) -> int throws "stop"] tir=[(n: int) -> int throws string]
+599..606 'ping(n)': int
+604..605 'n': int

@@ -2,6 +2,7 @@
 source: crates/baml_tests/src/type_spec/fixtures.rs
 expression: outcome.dump
 ---
+9..10 'g': throws never
 20..153 '{\n   ...(1)\n}': int
 26..34 'let base': int
 37..39 '10': 10
