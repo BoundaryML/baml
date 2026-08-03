@@ -1,0 +1,19 @@
+---
+source: crates/baml_tests/src/type_spec/fixtures.rs
+expression: outcome.dump
+---
+302..305 'tap': throws __effect_param_0
+336..348 '{\n    f(v)\n}': T
+342..343 'f': (x: T) -> T throws __effect_param_0
+342..346 'f(v)': T
+344..345 'v': T
+359..360 'g': throws never
+370..427 '{\n   ...  r\n}': int
+376..381 'let r': int
+384..387 'tap': hir_ty=[(v: int, f: (x: int) -> int throws never) -> int throws never] tir=[(v: T, f: (x: T) -> T throws __effect_param_0) -> T throws __effect_param_0]
+384..404 'tap(1,...{ x })': hir_ty=[int] tir=[1]
+388..389 '1': 1
+391..403 '(x) -> { x }': hir_ty=[(x: int) -> int throws never] tir=[(x: 1) -> 1 throws __effect_param_0]
+398..403 '{ x }': hir_ty=[int] tir=[1]
+400..401 'x': hir_ty=[int] tir=[1]
+424..425 'r': int

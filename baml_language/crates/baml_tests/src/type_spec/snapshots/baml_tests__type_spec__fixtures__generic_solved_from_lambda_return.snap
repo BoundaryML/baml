@@ -1,0 +1,19 @@
+---
+source: crates/baml_tests/src/type_spec/fixtures.rs
+expression: outcome.dump
+---
+252..257 'build': throws __effect_param_0
+286..300 '{\n   ...1)]\n}': T[]
+292..298 '[f(1)]': T[]
+293..294 'f': (x: int) -> T throws __effect_param_0
+293..297 'f(1)': T
+295..296 '1': 1
+311..312 'g': throws never
+327..390 '{\n   ...  r\n}': string[]
+333..338 'let r': string[]
+341..346 'build': hir_ty=[(f: (x: int) -> string throws never) -> string[] throws never] tir=[(f: (x: int) -> T throws __effect_param_0) -> T[] throws __effect_param_0]
+341..362 'build(..."s" })': hir_ty=[string[]] tir=["s"[]]
+347..361 '(x) -> { "s" }': hir_ty=[(x: int) -> string throws never] tir=[(x: int) -> "s" throws __effect_param_0]
+354..361 '{ "s" }': "s"
+356..359 '"s"': "s"
+387..388 'r': string[]
