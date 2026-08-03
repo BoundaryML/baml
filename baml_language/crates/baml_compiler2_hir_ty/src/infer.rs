@@ -112,9 +112,37 @@ pub fn infer_body<'db>(
         }
         BodyOwnerId::Let(_) => (Vec::new(), Vec::new(), None, None),
     };
-    let lower = lower_ctx_for_file(db, owner.file(db)).with_frame(frame);
+    let bounds = match owner {
+        BodyOwnerId::Function(function) => crate::lower::function_generic_bounds(db, function),
+        BodyOwnerId::Let(_) => FxHashMap::default(),
+    };
+    let lower = lower_ctx_for_file(db, owner.file(db))
+        .with_frame(frame)
+        .with_bounds(bounds.clone());
     let type_refs = baml_compiler2_ppir::body_type_refs(db, owner);
     let source_map = baml_compiler2_ppir::body_source_map(db, owner);
+    let plain_bounds = bounds
+        .into_iter()
+        .map(|(param, bounds)| {
+            (
+                param,
+                bounds
+                    .into_iter()
+                    .map(|bound| {
+                        baml_type::Interface::new(
+                            bound.name.clone(),
+                            bound.generics.iter().map(Ty::to_plain).collect(),
+                            bound
+                                .associated_types
+                                .iter()
+                                .map(|(name, ty)| (name.clone(), ty.to_plain()))
+                                .collect(),
+                        )
+                    })
+                    .collect(),
+            )
+        })
+        .collect();
     let mut ctx = InferenceContext::new(
         db,
         index,
@@ -124,6 +152,7 @@ pub fn infer_body<'db>(
         return_ty,
         type_refs,
         source_map,
+        plain_bounds,
     );
     ctx.declared_throws = declared_throws;
     if let Some(expr_body) = body.expr_body() {
@@ -275,10 +304,11 @@ impl<'db> InferenceContext<'db> {
         return_ty: Option<Ty>,
         type_refs: Arc<BodyTypeRefs>,
         source_map: Option<baml_compiler2_ast::AstSourceMap>,
+        bounds: FxHashMap<baml_type::ParamTy, Vec<baml_type::Interface>>,
     ) -> InferenceContext<'db> {
         InferenceContext {
             db,
-            facts: Facts::new(db),
+            facts: Facts::with_bounds(db, bounds),
             index,
             owner_scope,
             current_scope: owner_scope,
@@ -1073,24 +1103,67 @@ impl<'db> InferenceContext<'db> {
             match &rhs {
                 Some(rhs) => {
                     for rhs_member in operand_members(rhs) {
-                        match crate::ops::operator_output(
-                            self.db,
-                            interface,
-                            &lhs_member,
-                            Some(&rhs_member),
-                        ) {
+                        match self.member_operator_output(interface, &lhs_member, Some(&rhs_member))
+                        {
                             Some(output) => outputs.push(output),
                             None => return Ty::error(),
                         }
                     }
                 }
-                None => match crate::ops::operator_output(self.db, interface, &lhs_member, None) {
+                None => match self.member_operator_output(interface, &lhs_member, None) {
                     Some(output) => outputs.push(output),
                     None => return Ty::error(),
                 },
             }
         }
         self.union_of(&outputs)
+    }
+
+    /// One operand pair's operator result: a rigid operand dispatches
+    /// through its CARRIED bound (I2 - the spec's `T extends
+    /// baml.ops.Add<O>` example), yielding the bound's `Output` pin or
+    /// the symbolic projection; everything else asks the impl registry.
+    fn member_operator_output(&mut self, interface: &str, lhs: &Ty, rhs: Option<&Ty>) -> Option<Ty> {
+        if let TyKind::TypeVar(param, _) = lhs.kind() {
+            let bounds =
+                baml_type::normalize::TypeContext::type_var_bound(&self.facts, param);
+            let bound = bounds.iter().find(|bound| {
+                !bound.name.is_local()
+                    && bound.name.package().as_str() == "baml"
+                    && bound.name.namespace().len() == 1
+                    && bound.name.namespace()[0].as_str() == "ops"
+                    && bound.name.name().as_str() == interface
+                    && match rhs {
+                        Some(rhs) => {
+                            bound.generics.len() == 1
+                                && Ty::from_plain(&bound.generics[0]) == *rhs
+                        }
+                        None => bound.generics.is_empty(),
+                    }
+            })?;
+            if let Some((_, pinned)) = bound
+                .associated_types
+                .iter()
+                .find(|(name, _)| name.as_str() == "Output")
+            {
+                return Some(Ty::from_plain(pinned));
+            }
+            return Some(Ty::intern(TyKind::AssociatedTypeProjection {
+                base: lhs.clone(),
+                interface: baml_type::interned::InterfaceRef::new(
+                    bound.name.clone(),
+                    bound.generics.iter().map(Ty::from_plain).collect(),
+                    bound
+                        .associated_types
+                        .iter()
+                        .map(|(name, ty)| (name.clone(), Ty::from_plain(ty)))
+                        .collect(),
+                ),
+                member: baml_type::Name::new("Output"),
+                attr: TyAttr::default(),
+            }));
+        }
+        crate::ops::operator_output(self.db, interface, lhs, rhs)
     }
 
     /// The non-null part of a type: `Null` drops from unions (an all-null

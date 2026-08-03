@@ -1,9 +1,0 @@
----
-source: crates/baml_tests/src/type_spec/fixtures.rs
-expression: outcome.dump
----
-408..411 'add': throws never
-483..523 '{\n   ...put\n}': hir_ty=[!error] tir=[unknown]
-489..492 'lhs': T
-489..498 'lhs + rhs': hir_ty=[!error] tir=[unknown]
-495..498 'rhs': O

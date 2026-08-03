@@ -1,6 +1,6 @@
 # baml_compiler2_hir_ty: rust-analyzer-style type inference
 
-Status: shipped through S13 + S10 + S12 + I1 (S0 harness, S1 body-owner ID, S4a interned
+Status: shipped through S13 + S10 + S12 + I1 + I2 (S0 harness, S1 body-owner ID, S4a interned
 repr, S4 declaration lowering, S4b oracle entry, S5 table, S6 core exprs,
 S7 bidirectional checking, S8 calls/constructors/fields, S9 lambdas +
 `resolve_value_path` consolidation + function values, S11 method calls:
@@ -54,10 +54,17 @@ not replicated). `Facts::implements_interface` and
 requires-widening, and canonical union absorption (`C | I == I`) all
 light up; `ops.rs` is now a thin facade over the registry, so
 user-defined and in-class operator impls dispatch like the stdlib's.
-59 of 63 fixtures green. Pending pins: B-1075 pairwise bitwise, I4
-operator obligations, I2+I5 bounded-generic operators (the spec's
-`add<O, T extends baml.ops.Add<O>>` verbatim), I3 existential method
-calls.
+I2 (param env): declared
+bounds enter the frame (`function_generic_bounds` mirrors the frame's
+ParamTy identities: class prefix, interface Self-bound + params +
+assoc slots, own params), `Facts` carries them and `type_var_bound`
+answers - a rigid `T extends I` proves `T <: I` (join-observable),
+operators dispatch through CARRIED bounds yielding the Output pin or
+the symbolic projection, and `T.Output` projections LOWER to real
+nodes (interface determined from the unique declaring bound; reduction
+stays I5). The spec's bounded-add example is green verbatim. 61 of 64
+fixtures green. Pending pins: B-1075 pairwise bitwise, I4 operator
+obligations, I3 existential method calls.
 
 `baml_language/TYPE_SYSTEM.md` is the correctness authority. It is
 prescriptive: where the current TIR implementation disagrees with it, the spec
@@ -130,7 +137,7 @@ cutover. "Tested by" is the merge gate for the slice.
 | S10 | SHIPPED (S10a patterns + exhaustiveness, S10b flow narrowing): lifted `exhaustiveness.rs`, `infer/pat.rs` walk, `infer/flow.rs` CondFacts/merge/loop/assign machinery; B-919/B-633/B-688/B-774/B-735/B-618/B-1069 all fixed with tir: fails fixtures | patterns + narrowing fixtures; pattern_corpus verdict tables |
 | S11 | Member resolution (CORE SHIPPED, before S10/S2/S3): receiver->owning-class table incl. builtin classes (alias-transparent), receiver-pinned class generics + turbofish/fresh method generics, self via `class_self_ty`, bound vs UFCS/static calls, methods as values. Remaining: probe/confirm discipline, `?.` | method fixtures; B-1136 sub-issue fixtures (obligations stubbed) |
 | I1  | SHIPPED: `impls.rs` registry (free-shape normalization, blanket matching + bound re-entry, fact-poor match equality, conjunctive bounds); facts wired (implements_interface, interface_requires); ops.rs = facade. Orphan check E0139 joins S17 diagnostics | existential/blanket/requires/user-operator fixtures, join-absorption observable |
-| I2  | ParamEnv: `T extends I` bounds; concreteness rules                   | generic-fn fixtures calling bound methods on `T`       |
+| I2  | SHIPPED: param env - frame-keyed bound conjunctions into LowerCtx/Facts, type_var_bound live, carried-bound operator dispatch, projection lowering. Concreteness gating (`is_bounded_arg_admissible`) + call-site bound verification join I4's obligations | bounded-var join absorption, spec's bounded-add verbatim |
 | I3  | Interface members: virtual vs concrete pick, one-`Self` rule, fields | existential + bounded-param method fixtures            |
 | I4  | Generic/blanket impls; obligation queue (probe vs register)          | blanket-impl fixtures; replaces S11 stub               |
 | I5  | Associated types: projections, bindings, defaults, fuel              | traits-tier fixtures; stdlib `Iterator` shapes         |

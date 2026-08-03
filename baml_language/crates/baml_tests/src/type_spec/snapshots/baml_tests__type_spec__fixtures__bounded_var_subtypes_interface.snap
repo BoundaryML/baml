@@ -1,0 +1,14 @@
+---
+source: crates/baml_tests/src/type_spec/fixtures.rs
+expression: outcome.dump
+---
+268..269 'f': throws never
+351..423 '{\n   ...  u\n}': hir_ty=[baml.ops.Equals] tir=[T | baml.ops.Equals]
+357..362 'let u': hir_ty=[baml.ops.Equals] tir=[T | baml.ops.Equals]
+365..388 'if (c)... { e }': hir_ty=[baml.ops.Equals] tir=[T | baml.ops.Equals]
+369..370 'c': bool
+372..377 '{ x }': T
+374..375 'x': T
+383..388 '{ e }': baml.ops.Equals
+385..386 'e': baml.ops.Equals
+420..421 'u': hir_ty=[baml.ops.Equals] tir=[T | baml.ops.Equals]

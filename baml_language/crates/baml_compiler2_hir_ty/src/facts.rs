@@ -17,11 +17,24 @@ use baml_type::{
 
 pub struct Facts<'db> {
     db: &'db dyn baml_compiler2_ppir::Db,
+    /// The current scope's param env (I2): each rigid variable's declared
+    /// bound conjunction, as plain constraints (the trait's vocabulary).
+    bounds: rustc_hash::FxHashMap<ParamTy, Vec<Interface>>,
 }
 
 impl<'db> Facts<'db> {
     pub fn new(db: &'db dyn baml_compiler2_ppir::Db) -> Facts<'db> {
-        Facts { db }
+        Facts {
+            db,
+            bounds: rustc_hash::FxHashMap::default(),
+        }
+    }
+
+    pub fn with_bounds(
+        db: &'db dyn baml_compiler2_ppir::Db,
+        bounds: rustc_hash::FxHashMap<ParamTy, Vec<Interface>>,
+    ) -> Facts<'db> {
+        Facts { db, bounds }
     }
 
     /// Resolves a qualified name back to its definition through the owning
@@ -63,8 +76,8 @@ impl TypeContext for Facts<'_> {
         crate::impls::implements_interface(self.db, &concrete, &target)
     }
 
-    fn type_var_bound(&self, _param: &ParamTy) -> Vec<Interface> {
-        Vec::new()
+    fn type_var_bound(&self, param: &ParamTy) -> Vec<Interface> {
+        self.bounds.get(param).cloned().unwrap_or_default()
     }
 
     fn interface_requires(&self, sub: &Interface, sup: &Interface) -> bool {

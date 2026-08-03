@@ -30,6 +30,7 @@ use baml_compiler2_hir::{
     type_ref::{TypeRefId, TypeRefKind, TypeRefStore},
 };
 use baml_compiler2_ppir::item_data::MethodOwner;
+use rustc_hash::FxHashMap;
 use baml_type::{
     Freshness, Name, ParamTy, TyAttr, TypeName,
     interned::{FunctionParam, Ty, TyKind},
@@ -44,6 +45,10 @@ pub struct LowerCtx<'db> {
     /// The flattened generic frame, innermost params last (lookup searches
     /// in reverse so inner frames shadow outer ones).
     generic_params: Vec<ParamTy>,
+    /// The frame's declared interface bounds (I2's param env): each
+    /// param's CONJUNCTION. Projections (`T.Output`) determine their
+    /// interface through these.
+    bounds: FxHashMap<ParamTy, Vec<baml_type::interned::InterfaceRef>>,
 }
 
 /// A lowering context for type syntax written in `file`, with an empty
@@ -60,6 +65,7 @@ pub fn lower_ctx_for_file(
         package_items,
         ns_context: info.namespace_path,
         generic_params: Vec::new(),
+        bounds: FxHashMap::default(),
     }
 }
 
@@ -67,6 +73,15 @@ impl<'db> LowerCtx<'db> {
     #[must_use]
     pub fn with_frame(mut self, frame: Vec<ParamTy>) -> LowerCtx<'db> {
         self.generic_params = frame;
+        self
+    }
+
+    #[must_use]
+    pub fn with_bounds(
+        mut self,
+        bounds: FxHashMap<ParamTy, Vec<baml_type::interned::InterfaceRef>>,
+    ) -> LowerCtx<'db> {
+        self.bounds = bounds;
         self
     }
 
@@ -146,8 +161,40 @@ impl<'db> LowerCtx<'db> {
                     .collect();
                 self.lower_path(segments, args, bindings)
             }
-            // Associated projections arrive with I5.
-            TypeRefKind::AssociatedTypeProjection { .. } => Ty::error(),
+            // A projection node: `T.Output` / `(T as I).Output`. The
+            // qualifying interface is the written one, or determined from
+            // the base's bound conjunction (the unique bound declaring the
+            // member). Reduction stays with the fact oracle (I5); lowering
+            // just builds the node - the pure-lowering discipline.
+            TypeRefKind::AssociatedTypeProjection {
+                base,
+                interface,
+                member,
+            } => {
+                let base_ty = self.lower_type_ref(store, *base);
+                let qualifier = match interface {
+                    Some(interface) => match self.lower_type_ref(store, *interface).kind() {
+                        TyKind::Interface(name, args, pins, _) => {
+                            Some(baml_type::interned::InterfaceRef::new(
+                                name.clone(),
+                                args.to_vec().into_boxed_slice(),
+                                pins.to_vec(),
+                            ))
+                        }
+                        _ => None,
+                    },
+                    None => self.projection_interface_for(&base_ty, member),
+                };
+                match qualifier {
+                    Some(interface) => Ty::intern(TyKind::AssociatedTypeProjection {
+                        base: base_ty,
+                        interface,
+                        member: member.clone(),
+                        attr: attr(),
+                    }),
+                    None => Ty::error(),
+                }
+            }
             // `_` lowers to the var-less hole node; consumers apply policy
             // (signatures reject holes, inference instantiates them) - the
             // rust-analyzer pure-lowering + funnel discipline.
@@ -159,6 +206,60 @@ impl<'db> LowerCtx<'db> {
             // explicit; the diagnostic arrives with S17), `Error` was
             // already diagnosed at parse time.
             TypeRefKind::Error | TypeRefKind::Unknown => Ty::error(),
+        }
+    }
+
+    /// The interface a bare projection (`T.Output`) resolves through: for
+    /// a type-var base, the UNIQUE bound in its conjunction whose
+    /// interface declares `member` (0 or ambiguity is Error - S17's
+    /// diagnostic); for an interface-existential base, itself.
+    fn projection_interface_for(
+        &self,
+        base: &Ty,
+        member: &Name,
+    ) -> Option<baml_type::interned::InterfaceRef> {
+        let declares = |name: &TypeName| -> bool {
+            let def = self
+                .package_items
+                .lookup_type(name.namespace(), name.name())
+                .or_else(|| {
+                    let package = baml_compiler2_hir::package::PackageId::new(
+                        self.db,
+                        name.package().clone(),
+                    );
+                    baml_compiler2_ppir::package_items(self.db, package)
+                        .lookup_type(name.namespace(), name.name())
+                });
+            match def {
+                Some(Definition::Interface(interface)) => {
+                    baml_compiler2_ppir::item_data::interface_data(self.db, interface)
+                        .associated_types
+                        .iter()
+                        .any(|assoc| assoc.name == *member)
+                }
+                _ => false,
+            }
+        };
+        match base.kind() {
+            TyKind::TypeVar(param, _) => {
+                let candidates: Vec<&baml_type::interned::InterfaceRef> = self
+                    .bounds
+                    .get(param)
+                    .map(|bounds| bounds.iter().filter(|b| declares(&b.name)).collect())
+                    .unwrap_or_default();
+                match candidates.as_slice() {
+                    [only] => Some((*only).clone()),
+                    _ => None,
+                }
+            }
+            TyKind::Interface(name, args, pins, _) => Some(
+                baml_type::interned::InterfaceRef::new(
+                    name.clone(),
+                    args.to_vec().into_boxed_slice(),
+                    pins.to_vec(),
+                ),
+            ),
+            _ => None,
         }
     }
 
@@ -555,13 +656,124 @@ pub fn reject_holes(ty: &Ty) -> Ty {
     Ty::intern(ty.kind().map_children(reject_holes))
 }
 
+/// The declared interface bounds for a function's full generic frame
+/// (class prefix + own params; effect params unbounded), keyed by the
+/// same `ParamTy` identities `function_generic_frame` assigns.
+pub fn function_generic_bounds<'db>(
+    db: &'db dyn baml_compiler2_ppir::Db,
+    function: FunctionLoc<'db>,
+) -> FxHashMap<ParamTy, Vec<baml_type::interned::InterfaceRef>> {
+    let frame = function_generic_frame(db, function);
+    let ctx = lower_ctx_for_file(db, function.file(db)).with_frame(frame.clone());
+    let mut out = FxHashMap::default();
+    let as_ref = |ty: &Ty| match ty.kind() {
+        TyKind::Interface(name, args, pins, _) => Some(baml_type::interned::InterfaceRef::new(
+            name.clone(),
+            args.to_vec().into_boxed_slice(),
+            pins.to_vec(),
+        )),
+        _ => None,
+    };
+    let mut frame_iter = frame.iter();
+    match baml_compiler2_ppir::item_data::method_owner(db, function) {
+        Some(MethodOwner::Class(class)) => {
+            let class_data = baml_compiler2_ppir::item_data::class_data(db, class);
+            for bound in &class_data.generic_param_bounds {
+                let param = frame_iter.next();
+                if let (Some(param), Some(type_ref)) = (param, bound)
+                    && let Some(bound) =
+                        as_ref(&ctx.lower_type_ref(&class_data.type_refs, *type_ref))
+                {
+                    out.insert(param.clone(), vec![bound]);
+                }
+            }
+        }
+        Some(MethodOwner::Interface(interface)) => {
+            let data = baml_compiler2_ppir::item_data::interface_data(db, interface);
+            // `Self` (frame slot 0) is bounded by the interface itself at
+            // its own params.
+            if let Some(self_param) = frame_iter.next() {
+                let args: Vec<Ty> = data
+                    .generic_params
+                    .iter()
+                    .enumerate()
+                    .map(|(index, name)| {
+                        Ty::intern(TyKind::TypeVar(
+                            ParamTy::new(
+                                u32::try_from(index + 1).expect("frame index overflow"),
+                                name.clone(),
+                            ),
+                            TyAttr::default(),
+                        ))
+                    })
+                    .collect();
+                out.insert(
+                    self_param.clone(),
+                    vec![baml_type::interned::InterfaceRef::new(
+                        interface_qualified_name(db, interface),
+                        args.into_boxed_slice(),
+                        Vec::new(),
+                    )],
+                );
+            }
+            for bound in &data.generic_param_bounds {
+                let param = frame_iter.next();
+                if let (Some(param), Some(type_ref)) = (param, bound)
+                    && let Some(bound) = as_ref(&ctx.lower_type_ref(&data.type_refs, *type_ref))
+                {
+                    out.insert(param.clone(), vec![bound]);
+                }
+            }
+            // The associated-type frame slots carry their declared bounds
+            // when written (I5 consumes them for projections).
+            for assoc in &data.associated_types {
+                let param = frame_iter.next();
+                if let (Some(param), Some(type_ref)) = (param, assoc.bound)
+                    && let Some(bound) = as_ref(&ctx.lower_type_ref(&data.type_refs, type_ref))
+                {
+                    out.insert(param.clone(), vec![bound]);
+                }
+            }
+        }
+        Some(MethodOwner::FreeImpl(_)) | None => {}
+    }
+    let data = baml_compiler2_ppir::item_data::function_data(db, function);
+    for bound in &data.generic_param_bounds {
+        let param = frame_iter.next();
+        if let (Some(param), Some(type_ref)) = (param, bound)
+            && let Some(bound) = as_ref(&ctx.lower_type_ref(&data.type_refs, *type_ref))
+        {
+            out.insert(param.clone(), vec![bound]);
+        }
+    }
+    out
+}
+
+/// The qualified name an interface definition contributes.
+pub fn interface_qualified_name<'db>(
+    db: &'db dyn baml_compiler2_ppir::Db,
+    interface: baml_compiler2_hir::loc::InterfaceLoc<'db>,
+) -> TypeName {
+    let package = baml_compiler2_hir::file_package::file_package(db, interface.file(db));
+    TypeName::new(
+        package.package,
+        package.namespace_path,
+        baml_compiler2_ppir::item_data::interface_data(db, interface)
+            .name
+            .clone(),
+    )
+}
+
 pub fn function_signature<'db>(
     db: &'db dyn baml_compiler2_ppir::Db,
     function: FunctionLoc<'db>,
 ) -> FunctionSignature {
     let data = baml_compiler2_ppir::item_data::elaborated_function_data(db, function);
     let frame = function_generic_frame(db, function);
-    let ctx = lower_ctx_for_file(db, function.file(db)).with_frame(frame.clone());
+    let bounds = function_generic_bounds(db, function);
+    let ctx = lower_ctx_for_file(db, function.file(db))
+        .with_frame(frame.clone())
+        .with_bounds(bounds);
     // An unannotated `self` (elaboration leaves its slot `Unknown`) is
     // typed by the owner: the class's self type (through the builtin
     // bridging, so Array's `self` is `T[]`), or the interface's `Self`
