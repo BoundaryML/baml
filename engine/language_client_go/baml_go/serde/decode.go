@@ -110,8 +110,21 @@ func decodeListValue(valueList *cffi.CFFIValueList, typeMap TypeMap) (reflect.Va
 	if goElementType == typeMap.typeMap["INTERNAL.nil"] {
 		values := []any{}
 		for _, v := range valueList.Items {
-			decodedValue, _ := Decode(v, typeMap)
-			values = append(values, decodedValue.Elem())
+			decodedValue, goType := Decode(v, typeMap)
+			switch goType {
+			case reflect.TypeOf(int64(0)):
+				values = append(values, decodedValue.Int())
+			case reflect.TypeOf(float64(0)):
+				values = append(values, decodedValue.Float())
+			case reflect.TypeOf(false):
+				values = append(values, decodedValue.Bool())
+			default:
+				if decodedValue.IsValid() {
+					values = append(values, decodedValue.Interface())
+				} else {
+					values = append(values, nil)
+				}
+			}
 		}
 		return reflect.ValueOf(values), reflect.TypeOf(values)
 	} else {
