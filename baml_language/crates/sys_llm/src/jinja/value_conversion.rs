@@ -5,14 +5,6 @@ use minijinja::value::Value as JinjaValue;
 
 use super::{MAGIC_MEDIA_DELIMITER, RenderPromptError};
 
-/// Check if a class name corresponds to a media wrapper class (baml.media.{Image,Audio,Video,Pdf}).
-fn is_media_wrapper_class(class_name: &str) -> bool {
-    matches!(
-        class_name,
-        "baml.media.Image" | "baml.media.Audio" | "baml.media.Video" | "baml.media.Pdf"
-    )
-}
-
 /// Convert a `BexExternalValue` to a minijinja Value.
 ///
 /// `BexExternalValue` is already fully extracted from the VM heap,
@@ -55,14 +47,16 @@ pub(crate) fn external_value_to_jinja(
             class_name, fields, ..
         } => {
             // Media wrapper instances (e.g. baml.media.Image) should be unwrapped
-            // to their inner _data field and rendered as inline media content.
-            if is_media_wrapper_class(class_name) {
-                let data =
-                    fields
-                        .get("_data")
-                        .ok_or_else(|| RenderPromptError::ConversionError {
-                            reason: format!("Media wrapper `{class_name}` missing _data field"),
-                        })?;
+            // to their structural payload and rendered as inline media content.
+            if value.media_wrapper_kind().is_some() {
+                let data = value.media_wrapper_inner().ok_or_else(|| {
+                    RenderPromptError::ConversionError {
+                        reason: format!(
+                            "Media wrapper `{class_name}` missing {} field",
+                            bex_external_types::MEDIA_WRAPPER_DATA_FIELD
+                        ),
+                    }
+                })?;
                 return external_value_to_jinja(data, media_handles);
             }
             // Convert instance fields to a map for Jinja access
