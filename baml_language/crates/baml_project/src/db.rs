@@ -1209,7 +1209,7 @@ impl ProjectDatabase {
                         }
                     }
                     Expr::Path(segments) if segments.len() >= 2 => {
-                        segments.first().map(|segment| segment.as_str())
+                        segments.first().map(baml_db::Name::as_str)
                     }
                     _ => None,
                 }?;
@@ -1294,7 +1294,7 @@ impl ProjectDatabase {
         method_name: &baml_db::Name,
     ) -> Option<baml_compiler2_hir::loc::FunctionLoc<'db>> {
         let package = baml_compiler2_hir::file_package::file_package(self, iface_loc.file(self));
-        let package_id = baml_compiler2_hir::package::PackageId::new(self, package.package.clone());
+        let package_id = baml_compiler2_hir::package::PackageId::new(self, package.package);
         let aliases = baml_compiler2_tir::inference::package_resolved_aliases(self, package_id);
         let res_ctx =
             baml_compiler2_tir::package_interface::package_resolution_context(self, package_id);

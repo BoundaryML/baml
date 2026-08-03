@@ -1615,7 +1615,6 @@ pub struct MatchExpr {
     pub close_brace: t::RBrace,
 }
 
-
 impl FromCST for MatchExpr {
     fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
         let node = StrongAstError::assert_is_node(elem)?;

@@ -177,7 +177,7 @@ function testing.$invoke_collector(collector: (testing.TestCollector) -> void th
 }
 
 function testing.FailFast() -> (testing.TestSetChild[]) -> testing.TestSetReport throws never {
-  102   0   make_closure 1499 0   
+  102   0   make_closure 1501 0   
         1   return                
 }
 
@@ -202,7 +202,7 @@ function testing.PassRate(threshold: float) -> (testing.TestSetChild[]) -> testi
        15   pop 1                  
 
   74   16   load_var 1             (threshold)
-       17   make_closure 1494 1    
+       17   make_closure 1496 1    
        18   return                 
 }
 
@@ -241,7 +241,7 @@ function testing.Quorum(n: int, m: int) -> (() -> testing.TestReport throws neve
        27   pop 1                  
 
   10   28   load_var2 1 2          
-       29   make_closure 1478 2    
+       29   make_closure 1480 2    
        30   return                 
 }
 
@@ -260,12 +260,12 @@ function testing.Retry(max_attempts: int) -> (() -> testing.TestReport throws ne
        9    pop 1                  
 
   41   10   load_var 1             (max_attempts)
-       11   make_closure 1488 1    
+       11   make_closure 1490 1    
        12   return                 
 }
 
 function testing.Sequential() -> (testing.TestSetChild[]) -> testing.TestSetReport throws never {
-  96   0   make_closure 1497 0   
+  96   0   make_closure 1499 0   
        1   return                
 }
 
@@ -2785,7 +2785,7 @@ function testing.run_test(body: () -> void throws unknown, runner: ((() -> testi
         2    store_var 1            
 
   411   3    load_var 1             (body)
-        4    make_closure 1390 1    
+        4    make_closure 1392 1    
         5    store_var 3            (base_run)
 
   435   6    load_var 2             (runner)
