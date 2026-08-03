@@ -28,6 +28,25 @@
 //! a [barrier](SolverSession::push_barrier); [`SolverSession::assumes`] never scans past
 //! one. This is the structural form of what per-call `&mut HashSet::new()` used to do by
 //! construction.
+//!
+//! # Why answers to barriered goals are cacheable, and interior ones are not
+//!
+//! Tabled solvers normally have to track which answers were derived under a hypothesis
+//! about a goal still in progress — such answers are *provisional* and must not outlive
+//! the cycle that justified them. Barriers make that bookkeeping unnecessary at exactly
+//! the points where answers are recorded: a barriered goal cannot observe any hypothesis
+//! from an enclosing derivation, and every hypothesis it raises itself is discharged
+//! before it returns. Its verdict is therefore a pure function of its two operands and the
+//! fact source — the same everywhere it is posed — so it can be cached without qualifying
+//! it by the path that produced it.
+//!
+//! Interior steps have no such guarantee: they run *under* the enclosing goal's
+//! hypotheses, so their verdicts are conditional and are deliberately not recorded.
+//! Restricting the cache this way is also what keeps it cheap — probing costs a hash of
+//! both operands, which is affordable per absorption probe and would not be affordable on
+//! the structural steps the expanding-arm restriction exists to keep free.
+
+use rustc_hash::FxHashMap;
 
 use super::{NormalTy, TypeContext};
 
@@ -43,6 +62,15 @@ pub(super) struct SolverSession<'s> {
     /// belong to enclosing goals and are invisible here. A floor rather than a marker
     /// entry keeps `assumptions` a flat `Vec` of the pairs actually being scanned.
     floors: Vec<usize>,
+    /// Verdicts of barriered goals already decided in this session, keyed subtype-first,
+    /// or `None` in a session that recomputes every goal.
+    ///
+    /// Nested rather than keyed by a `(NormalTy, NormalTy)` tuple so a probe can be made
+    /// from two `&NormalTy`s: a tuple key would force a deep clone of both operands just
+    /// to ask the question, which is most of what the cache is meant to save. `Option`
+    /// rather than a separate enable flag so "caching disabled" and "cache holds entries"
+    /// cannot both be true — there is no map to record into when it is off.
+    answers: Option<FxHashMap<NormalTy, FxHashMap<NormalTy, bool>>>,
 }
 
 impl<'s> SolverSession<'s> {
@@ -51,6 +79,17 @@ impl<'s> SolverSession<'s> {
             facts,
             assumptions: Vec::new(),
             floors: Vec::new(),
+            answers: Some(FxHashMap::default()),
+        }
+    }
+
+    /// A session that recomputes every goal, for differential tests: the cache is an
+    /// optimization and must never be observable in a verdict.
+    #[cfg(test)]
+    pub(super) fn new_uncached(facts: &'s dyn TypeContext) -> Self {
+        Self {
+            answers: None,
+            ..Self::new(facts)
         }
     }
 
@@ -102,11 +141,25 @@ impl<'s> SolverSession<'s> {
     /// Decide `sub <: sup` as an independent goal, under its own barrier.
     ///
     /// This is the entry point for every probe that is not a continuation of the current
-    /// derivation — union-member absorption and the automaton's per-state algebra.
+    /// derivation — union-member absorption and the automaton's per-state algebra. Those
+    /// callers re-pose the same pairs across the automaton's fixpoint rounds and across
+    /// structurally identical unions elsewhere in a term, which is what the cache serves;
+    /// see the module docs for why a verdict recorded here is unconditional.
     pub(super) fn prove_subtype(&mut self, sub: &NormalTy, sup: &NormalTy) -> bool {
+        if let Some(answers) = &self.answers
+            && let Some(&proven) = answers.get(sub).and_then(|sups| sups.get(sup))
+        {
+            return proven;
+        }
         self.push_barrier();
         let proven = sub.is_subtype_of(sup, self);
         self.pop_barrier();
+        if let Some(answers) = &mut self.answers {
+            answers
+                .entry(sub.clone())
+                .or_default()
+                .insert(sup.clone(), proven);
+        }
         proven
     }
 }

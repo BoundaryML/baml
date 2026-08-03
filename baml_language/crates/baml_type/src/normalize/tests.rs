@@ -1666,3 +1666,101 @@ fn single_variant_enum_union_is_idempotent() {
         &ctx
     ));
 }
+
+// ── answer cache: verdict invisibility ───────────────────────────────────--
+
+/// A fact context and a spread of types exercising every arm the cache can reach:
+/// recursion (both α-equivalent and mutually recursive), nominal membership,
+/// `requires` chains, enum completeness, literals, invariant generics, type
+/// variables with bounds, and a reducible projection.
+fn cache_corpus() -> (Ctx, Vec<Ty>) {
+    let mut ctx = Ctx::default();
+    int_list_alias(&mut ctx, "A");
+    int_list_alias(&mut ctx, "B");
+    ctx.aliases
+        .insert(qtn("M"), union(vec![Ty::int(), list(alias("N"))]));
+    ctx.aliases
+        .insert(qtn("N"), union(vec![Ty::int(), list(alias("M"))]));
+    ctx.impls.push((qtn("Dog"), qtn("Animal")));
+    ctx.impls.push((qtn("Cat"), qtn("Animal")));
+    ctx.requires.push((qtn("Animal"), qtn("Thing")));
+    ctx.prim_impls.push(("int", qtn("Thing")));
+    ctx.enums
+        .insert(qtn("E"), vec![Name::new("X"), Name::new("Y")]);
+    ctx.var_bounds.insert(param(0, "T"), vec![iface("Animal")]);
+    ctx.projections
+        .push((class("Dog"), qtn("Animal"), Name::new("Food"), Ty::int()));
+
+    let corpus = vec![
+        Ty::int(),
+        Ty::string(),
+        lit_int(1),
+        union(vec![Ty::int(), Ty::string()]),
+        union(vec![lit_int(1), Ty::int()]),
+        alias("A"),
+        alias("B"),
+        list(alias("A")),
+        alias("M"),
+        alias("N"),
+        class("Dog"),
+        class("Cat"),
+        iface("Animal"),
+        iface("Thing"),
+        union(vec![class("Dog"), iface("Animal")]),
+        class1("Box", alias("A")),
+        class1("Box", Ty::int()),
+        enum_ty("E"),
+        union(vec![variant("E", "X"), variant("E", "Y")]),
+        typevar(0, "T"),
+        projection(class("Dog"), "Animal", "Food"),
+    ];
+    (ctx, corpus)
+}
+
+#[test]
+fn answer_cache_is_verdict_invisible() {
+    // The cache is an optimization; a cached session and a recomputing one must
+    // agree on every judgment, for every ordered pair. Cross-pair contamination
+    // (an answer recorded under one goal's hypotheses being served to another)
+    // would show up here as a disagreement.
+    let (ctx, corpus) = cache_corpus();
+    for a in &corpus {
+        for b in &corpus {
+            let cached = {
+                let s = &mut SolverSession::new(&ctx);
+                let (x, y) = (NormalTy::canonical(a, s), NormalTy::canonical(b, s));
+                (s.prove_subtype(&x, &y), x == y)
+            };
+            let uncached = {
+                let s = &mut SolverSession::new_uncached(&ctx);
+                let (x, y) = (NormalTy::canonical(a, s), NormalTy::canonical(b, s));
+                (s.prove_subtype(&x, &y), x == y)
+            };
+            assert_eq!(
+                cached, uncached,
+                "cache changed the verdict for `{a}` vs `{b}`"
+            );
+        }
+    }
+}
+
+#[test]
+fn answer_cache_survives_reuse_within_one_session() {
+    // Posing the same goal repeatedly in one session — the shape the automaton's
+    // fixpoint rounds produce — must be stable, not just fast.
+    let (ctx, corpus) = cache_corpus();
+    let s = &mut SolverSession::new(&ctx);
+    let canonical: Vec<NormalTy> = corpus.iter().map(|t| NormalTy::canonical(t, s)).collect();
+    let round = |s: &mut SolverSession<'_>| {
+        let mut out = Vec::new();
+        for a in &canonical {
+            for b in &canonical {
+                out.push(s.prove_subtype(a, b));
+            }
+        }
+        out
+    };
+    let first = round(s);
+    let second = round(s);
+    assert_eq!(first, second, "a repeated goal changed its answer");
+}
