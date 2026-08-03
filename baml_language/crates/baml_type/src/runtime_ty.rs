@@ -20,7 +20,13 @@ use crate::{
     RuntimeInterface, RuntimeTy, Ty, TyAttr, TypeName,
 };
 
-impl RuntimeTy {
+// Head-agnostic: none of these mention a nominal head, so they are defined for
+// every head representation rather than only the compiler's. A bare
+// `RuntimeTy::int()` still means `RuntimeTy<TypeName>` — a type path uses the
+// parameter's default — so the runtime spells its own instantiation explicitly.
+// The nominal constructors below stay at `TypeName`, since building a head from
+// a `&str` is exactly the thing only a name-headed type can do.
+impl<N: Clone> RuntimeTy<N> {
     // --- Primitive constructors (default TyAttr) ---
 
     /// `int` with default attributes.
@@ -75,12 +81,12 @@ impl RuntimeTy {
     // --- Compound constructors (default TyAttr) ---
 
     /// `T[]` (list) with default attributes.
-    pub fn list(inner: RuntimeTy) -> Self {
+    pub fn list(inner: RuntimeTy<N>) -> Self {
         RuntimeTy::List(Box::new(inner), TyAttr::default())
     }
 
     /// `map<K, V>` with default attributes.
-    pub fn map(key: RuntimeTy, value: RuntimeTy) -> Self {
+    pub fn map(key: RuntimeTy<N>, value: RuntimeTy<N>) -> Self {
         RuntimeTy::Map {
             key: Box::new(key),
             value: Box::new(value),
@@ -89,13 +95,13 @@ impl RuntimeTy {
     }
 
     /// `A | B | ...` (union) with default attributes.
-    pub fn union(members: impl IntoIterator<Item = RuntimeTy>) -> Self {
+    pub fn union(members: impl IntoIterator<Item = RuntimeTy<N>>) -> Self {
         RuntimeTy::Union(members.into_iter().collect(), TyAttr::default())
     }
 
     /// `T?` (optional) — sugar for `T | null`. Mirrors [`Ty::optional`]: the
     /// result is flattened and idempotent.
-    pub fn optional(inner: RuntimeTy) -> Self {
+    pub fn optional(inner: RuntimeTy<N>) -> Self {
         match inner {
             RuntimeTy::Union(mut members, attr) => {
                 if !members.iter().any(RuntimeTy::is_null) {
@@ -106,25 +112,6 @@ impl RuntimeTy {
             n @ RuntimeTy::Null { .. } => n,
             other => RuntimeTy::Union(vec![other, RuntimeTy::null()], TyAttr::default()),
         }
-    }
-
-    /// `Class(name)` with default attributes (local module path), no type args.
-    pub fn class(name: &str) -> Self {
-        RuntimeTy::Class(TypeName::local(name.into()), Vec::new(), TyAttr::default())
-    }
-
-    /// `Class(name, args)` — a parametric class instantiation.
-    pub fn class_with_args(name: TypeName, args: Vec<RuntimeTy>) -> Self {
-        RuntimeTy::Class(name, args, TyAttr::default())
-    }
-
-    /// `Class(name)` under the implicit `user` package, no type args.
-    pub fn user_class(name: &str) -> Self {
-        RuntimeTy::Class(
-            TypeName::local(Name::new(name)),
-            Vec::new(),
-            TyAttr::default(),
-        )
     }
 
     /// `unknown` (the top type) with default attributes.
@@ -171,10 +158,10 @@ impl RuntimeTy {
 
     /// Remove `null` from a nullable union, collapsing the result. The inverse
     /// of [`RuntimeTy::optional`]; mirrors [`Ty::strip_null`].
-    pub fn strip_null(&self) -> RuntimeTy {
+    pub fn strip_null(&self) -> RuntimeTy<N> {
         match self {
             RuntimeTy::Union(members, attr) => {
-                let non_null: Vec<RuntimeTy> =
+                let non_null: Vec<RuntimeTy<N>> =
                     members.iter().filter(|m| !m.is_null()).cloned().collect();
                 match non_null.len() {
                     0 => self.clone(),
@@ -198,6 +185,29 @@ impl RuntimeTy {
     // form: they need nominal facts, so callers go through
     // [`crate::normalize`]'s `TypeContext` entry points with the richest context
     // the site can reach.)
+}
+
+/// The nominal constructors, which only a name-headed type can offer: a head
+/// built from a `&str` is a name, and a runtime head has no such spelling.
+impl RuntimeTy {
+    /// `Class(name)` with default attributes (local module path), no type args.
+    pub fn class(name: &str) -> Self {
+        RuntimeTy::Class(TypeName::local(name.into()), Vec::new(), TyAttr::default())
+    }
+
+    /// `Class(name, args)` — a parametric class instantiation.
+    pub fn class_with_args(name: TypeName, args: Vec<RuntimeTy>) -> Self {
+        RuntimeTy::Class(name, args, TyAttr::default())
+    }
+
+    /// `Class(name)` under the implicit `user` package, no type args.
+    pub fn user_class(name: &str) -> Self {
+        RuntimeTy::Class(
+            TypeName::local(Name::new(name)),
+            Vec::new(),
+            TyAttr::default(),
+        )
+    }
 }
 
 impl<N: Clone + crate::HeadDisplay> std::fmt::Display for RuntimeTy<N> {
@@ -504,6 +514,32 @@ mod tests {
 
     fn def() -> TyAttr {
         TyAttr::default()
+    }
+
+    /// The head-free constructors build at any head, while a bare path still
+    /// means the compiler's.
+    ///
+    /// Both halves matter. The runtime needs `list`/`union`/`optional` at its
+    /// own head — they describe structure and mention no name — and every
+    /// existing `RuntimeTy::int()` call site must keep resolving to `TypeName`,
+    /// which it does because a type path applies the parameter's default.
+    #[test]
+    fn head_free_constructors_build_at_any_head() {
+        let at_default = RuntimeTy::optional(RuntimeTy::list(RuntimeTy::int()));
+        let _: RuntimeTy<QualifiedTypeName> = at_default.clone();
+
+        // The same structure at a head that is not a name at all.
+        let interned: RuntimeTy<u32> =
+            RuntimeTy::optional(RuntimeTy::list(RuntimeTy::<u32>::int()));
+        assert_eq!(interned.strip_null(), RuntimeTy::list(RuntimeTy::int()));
+        assert!(interned.is_nullable_union());
+
+        // Nominal construction stays name-only: a head built from a `&str` is a
+        // name, so it has no meaning at an interned head.
+        assert_eq!(
+            RuntimeTy::class_with_args(TypeName::local(Name::new("P")), vec![]),
+            RuntimeTy::class("P"),
+        );
     }
 
     fn qtn(name: &str) -> TypeName {

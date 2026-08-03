@@ -9,7 +9,11 @@
 
 use crate::{RealizedTy, TyAttr};
 
-impl RealizedTy {
+// Head-agnostic: none of these mention a nominal head, so they are defined for
+// every head representation rather than only the compiler's. A bare
+// `RealizedTy::int()` still means `RealizedTy<TypeName>` — a type path uses the
+// parameter's default — so the runtime spells its own instantiation explicitly.
+impl<N: Clone> RealizedTy<N> {
     // --- Primitive constructors (default TyAttr) ---
 
     /// `int` with default attributes.
@@ -51,7 +55,7 @@ impl RealizedTy {
     // --- Compound constructors (default TyAttr) ---
 
     /// `T[]` (list) with default attributes.
-    pub fn list(inner: RealizedTy) -> Self {
+    pub fn list(inner: RealizedTy<N>) -> Self {
         RealizedTy::List(Box::new(inner), TyAttr::default())
     }
 
@@ -68,10 +72,10 @@ impl RealizedTy {
 
     /// Remove `null` from a nullable union, collapsing the result. Mirrors
     /// [`crate::RuntimeTy::strip_null`].
-    pub fn strip_null(&self) -> RealizedTy {
+    pub fn strip_null(&self) -> RealizedTy<N> {
         match self {
             RealizedTy::Union(members, attr) => {
-                let non_null: Vec<RealizedTy> =
+                let non_null: Vec<RealizedTy<N>> =
                     members.iter().filter(|m| !m.is_null()).cloned().collect();
                 match non_null.len() {
                     0 => self.clone(),
