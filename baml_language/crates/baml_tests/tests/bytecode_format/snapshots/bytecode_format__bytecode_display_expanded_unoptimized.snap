@@ -177,7 +177,7 @@ function testing.$invoke_collector(collector: (testing.TestCollector) -> void th
 }
 
 function testing.FailFast() -> (testing.TestSetChild[]) -> testing.TestSetReport throws never {
-  102   0   make_closure 1498 0   
+  102   0   make_closure 1500 0   
         1   store_var 1           (_0)
         2   load_var 1            (_0)
         3   return                
@@ -204,7 +204,7 @@ function testing.PassRate(threshold: float) -> (testing.TestSetChild[]) -> testi
        15   pop 1                  
 
   74   16   load_var 1             (threshold)
-       17   make_closure 1493 1    
+       17   make_closure 1495 1    
        18   store_var 2            (_0)
        19   load_var 2             (_0)
        20   return                 
@@ -245,7 +245,7 @@ function testing.Quorum(n: int, m: int) -> (() -> testing.TestReport throws neve
        27   pop 1                  
 
   10   28   load_var2 1 2          
-       29   make_closure 1477 2    
+       29   make_closure 1479 2    
        30   store_var 3            (_0)
        31   load_var 3             (_0)
        32   return                 
@@ -266,14 +266,14 @@ function testing.Retry(max_attempts: int) -> (() -> testing.TestReport throws ne
        9    pop 1                  
 
   41   10   load_var 1             (max_attempts)
-       11   make_closure 1487 1    
+       11   make_closure 1489 1    
        12   store_var 2            (_0)
        13   load_var 2             (_0)
        14   return                 
 }
 
 function testing.Sequential() -> (testing.TestSetChild[]) -> testing.TestSetReport throws never {
-  96   0   make_closure 1496 0   
+  96   0   make_closure 1498 0   
        1   store_var 1           (_0)
        2   load_var 1            (_0)
        3   return                
@@ -2873,7 +2873,7 @@ function testing.run_test(body: () -> void throws unknown, runner: ((() -> testi
         2    store_var 1            
 
   411   3    load_var 1             (body)
-        4    make_closure 1390 1    
+        4    make_closure 1392 1    
         5    store_var 3            (base_run)
 
   435   6    load_var 2             (runner)
