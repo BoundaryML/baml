@@ -712,6 +712,68 @@ fn bounds_hold(
     true
 }
 
+/// The realized DIRECT-plus-transitive `requires` closure of an
+/// interface reference (excluding itself), fuel-bounded.
+/// Projection-carrying targets stay conservative until I5.
+pub fn direct_requires_closure(
+    db: &dyn baml_compiler2_ppir::Db,
+    root: &InterfaceTarget,
+    fuel: u32,
+) -> Vec<InterfaceTarget> {
+    let mut out = Vec::new();
+    let mut queue = vec![root.clone()];
+    let mut budget = fuel;
+    while let Some(current) = queue.pop() {
+        if budget == 0 {
+            break;
+        }
+        budget -= 1;
+        for required in direct_requires(db, &current) {
+            if required.name != root.name && !out.contains(&required) {
+                out.push(required.clone());
+                queue.push(required);
+            }
+        }
+    }
+    out
+}
+
+fn direct_requires(
+    db: &dyn baml_compiler2_ppir::Db,
+    of: &InterfaceTarget,
+) -> Vec<InterfaceTarget> {
+    let facts = crate::facts::Facts::new(db);
+    let Some(baml_compiler2_hir::contributions::Definition::Interface(interface)) =
+        facts.definition_of(&of.name)
+    else {
+        return Vec::new();
+    };
+    let data = baml_compiler2_ppir::item_data::interface_data(db, interface);
+    let frame = crate::lower::interface_generic_frame_params(&data.generic_params);
+    let ctx = crate::lower::lower_ctx_for_file(db, interface.file(db)).with_frame(frame.clone());
+    let bindings: FxHashMap<ParamTy, Ty> =
+        frame.into_iter().zip(of.args.iter().cloned()).collect();
+    data.requires
+        .iter()
+        .filter_map(|&required| {
+            let target = interface_target_of(&ctx.lower_type_ref(&data.type_refs, required))?;
+            Some(InterfaceTarget {
+                name: target.name.clone(),
+                args: target
+                    .args
+                    .iter()
+                    .map(|arg| substitute_bindings(arg, &bindings))
+                    .collect(),
+                pins: target
+                    .pins
+                    .iter()
+                    .map(|(name, ty)| (name.clone(), substitute_bindings(ty, &bindings)))
+                    .collect(),
+            })
+        })
+        .collect()
+}
+
 /// The transitive `requires` closure: whether interface `sub` (with its
 /// realized args) requires `sup`. Projection-carrying requires targets
 /// stay conservative until I5.

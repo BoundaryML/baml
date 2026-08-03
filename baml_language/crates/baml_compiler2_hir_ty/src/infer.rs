@@ -1408,6 +1408,16 @@ impl<'db> InferenceContext<'db> {
         let candidate =
             crate::method_resolution::lookup_method(self.db, &self.facts, &resolved, member);
         let Some(candidate) = candidate else {
+            // Interface members (I3): existential and bounded-var
+            // receivers dispatch virtually; methods bind their receiver.
+            if let Some(interface_member) = crate::method_resolution::lookup_interface_member(
+                self.db,
+                &self.facts,
+                &resolved,
+                member,
+            ) {
+                return (interface_member.ty, interface_member.is_method);
+            }
             return (self.field_access(&resolved, member), false);
         };
         let signature = function_signature(self.db, candidate.method);
@@ -1712,6 +1722,11 @@ impl<'db> InferenceContext<'db> {
                 .collect();
             instantiation.extend(own);
             return function_value_ty(&signature, &instantiation);
+        }
+        if let Some(interface_member) =
+            crate::method_resolution::lookup_interface_member(self.db, &self.facts, &resolved, member)
+        {
+            return interface_member.ty;
         }
         Ty::error()
     }

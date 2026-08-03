@@ -272,8 +272,11 @@ impl<'db> LowerCtx<'db> {
         let attr = TyAttr::default;
         let short = segments.last().expect("type paths are never empty");
 
-        // `Self` types arrive with I6.
-        if segments[0].as_str() == "Self" {
+        // `Self` resolves through the generic frame like any param (I2
+        // puts it at an interface frame's slot 0); outside an interface
+        // scope it falls through to Error below. `Self`-rooted paths
+        // beyond one segment stay Error until I6.
+        if segments[0].as_str() == "Self" && segments.len() > 1 {
             return Ty::error();
         }
 

@@ -10,14 +10,18 @@
 //! and interface-existential/type-var receivers (the I cluster), union
 //! receivers, and `$stream` companions.
 
-use baml_compiler2_hir::{contributions::Definition, loc::ClassLoc, loc::FunctionLoc};
+use baml_compiler2_hir::{
+    contributions::Definition,
+    loc::{ClassLoc, FunctionLoc, InterfaceLoc},
+};
 use baml_type::{
-    Literal, MediaKind, Name, TypeName,
+    Literal, MediaKind, Name, ParamTy, TyAttr, TypeName,
     interned::{Ty, TyKind},
     normalize::TypeContext as _,
 };
 
 use crate::facts::Facts;
+use crate::impls::InterfaceTarget;
 
 /// One resolved method: the function plus the receiver-driven
 /// instantiation of its owning class's generic params (the frame prefix
@@ -112,5 +116,293 @@ fn receiver_class<'db>(
             receiver_class(facts, &Ty::from_plain(&expanded), fuel)
         }
         _ => None,
+    }
+}
+
+/// A resolved INTERFACE member (I3): the member's type, fully
+/// instantiated for the receiver.
+pub struct InterfaceMember {
+    pub ty: Ty,
+    /// Methods bind their receiver; fields do not take one.
+    pub is_method: bool,
+}
+
+/// Resolves `name` as an interface member of `receiver` - an interface
+/// existential (`Self` = the existential, one-`Self` gated) or a rigid
+/// bounded var (`Self` = the variable; `Self`-typed params are sound).
+/// Root-wins tiering over the `requires` closure; distinct realized
+/// declarers are ambiguous (Error, S17's diagnostic). Concrete
+/// receivers' impl-provided members join with the impls-for-receiver
+/// step (pinned pending).
+pub fn lookup_interface_member<'db>(
+    db: &'db dyn baml_compiler2_ppir::Db,
+    facts: &Facts<'db>,
+    receiver: &Ty,
+    name: &Name,
+) -> Option<InterfaceMember> {
+    let (roots, existential): (Vec<InterfaceTarget>, bool) = match receiver.kind() {
+        TyKind::Interface(qtn, args, pins, _) => (
+            vec![InterfaceTarget {
+                name: qtn.clone(),
+                args: args.to_vec(),
+                pins: pins.to_vec(),
+            }],
+            true,
+        ),
+        TyKind::TypeVar(param, _) => (
+            baml_type::normalize::TypeContext::type_var_bound(facts, param)
+                .iter()
+                .map(InterfaceTarget::from_constraint)
+                .collect(),
+            false,
+        ),
+        _ => return None,
+    };
+    for root in &roots {
+        // Root-wins: the directly-named interface shadows its closure.
+        if let Some(member) = member_on_interface(db, facts, root, receiver, name, existential) {
+            return Some(member);
+        }
+        // Then the requires closure, deduped by realized identity;
+        // distinct declarers are ambiguous.
+        let mut found: Option<(InterfaceTarget, InterfaceMember)> = None;
+        for required in crate::impls::direct_requires_closure(db, root, 8) {
+            if let Some(member) =
+                member_on_interface(db, facts, &required, receiver, name, existential)
+            {
+                match &found {
+                    Some((seen, _)) if *seen != required => return None,
+                    Some(_) => {}
+                    None => found = Some((required.clone(), member)),
+                }
+            }
+        }
+        if let Some((_, member)) = found {
+            return Some(member);
+        }
+    }
+    None
+}
+
+/// A member declared DIRECTLY on `target`, instantiated for `receiver`.
+fn member_on_interface<'db>(
+    db: &'db dyn baml_compiler2_ppir::Db,
+    facts: &Facts<'db>,
+    target: &InterfaceTarget,
+    receiver: &Ty,
+    name: &Name,
+    existential: bool,
+) -> Option<InterfaceMember> {
+    let Some(Definition::Interface(interface)) = facts.definition_of(&target.name) else {
+        return None;
+    };
+    let data = baml_compiler2_ppir::item_data::interface_data(db, interface);
+    let instantiation = interface_instantiation(receiver, target, data);
+
+    // Fields first (mirroring the class path's field-before-method).
+    if let Some(field) = data.fields.iter().find(|field| field.name == *name) {
+        let frame = interface_frame(interface, db);
+        let ctx = crate::lower::lower_ctx_for_file(db, interface.file(db)).with_frame(frame);
+        let field_ty = ctx.lower_type_ref(&data.type_refs, field.type_ref);
+        return Some(InterfaceMember {
+            ty: crate::lower::substitute_params(&field_ty, &instantiation),
+            is_method: false,
+        });
+    }
+
+    // Default methods carry bodies (ordinary FunctionLocs).
+    if let Some(&method) = data.default_methods.iter().find(|&&method| {
+        baml_compiler2_ppir::item_data::function_data(db, method).name == *name
+    }) {
+        let signature = crate::lower::function_signature(db, method);
+        if existential && signature_breaks_one_self(&signature) {
+            return None;
+        }
+        return Some(InterfaceMember {
+            ty: instantiate_signature(&signature, &instantiation),
+            is_method: true,
+        });
+    }
+
+    // Required methods are signatures only.
+    if let Some(sig) = data.required_methods.iter().find(|sig| sig.name == *name) {
+        if !sig.generic_params.is_empty() {
+            // Method-own generics on required signatures: rare; joins
+            // with the obligations work.
+            return None;
+        }
+        let frame = interface_frame(interface, db);
+        let ctx = crate::lower::lower_ctx_for_file(db, interface.file(db)).with_frame(frame);
+        let self_var = Ty::intern(TyKind::TypeVar(
+            ParamTy::new(0, Name::new("Self")),
+            TyAttr::default(),
+        ));
+        let params: Box<[baml_type::interned::FunctionParam]> = sig
+            .params
+            .iter()
+            .map(|param| baml_type::interned::FunctionParam {
+                name: Some(param.name.clone()),
+                ty: match param.type_ref {
+                    Some(type_ref) if param.name.as_str() != "self" => {
+                        ctx.lower_type_ref(&data.type_refs, type_ref)
+                    }
+                    _ => self_var.clone(),
+                },
+                mode: if param.has_default {
+                    baml_type::FunctionParamMode::Optional
+                } else {
+                    baml_type::FunctionParamMode::Required
+                },
+            })
+            .collect();
+        let ret = sig
+            .return_type
+            .map(|type_ref| ctx.lower_type_ref(&data.type_refs, type_ref))
+            .unwrap_or_else(Ty::error);
+        // Interface signatures MUST declare throws (spec rule 1).
+        let throws = sig
+            .throws
+            .map(|type_ref| ctx.lower_type_ref(&data.type_refs, type_ref))
+            .unwrap_or_else(Ty::error);
+        let fn_ty = Ty::intern(TyKind::Function {
+            params,
+            ret,
+            throws,
+            attr: TyAttr::default(),
+        });
+        let signature_view = fn_ty.clone();
+        if existential && fn_breaks_one_self(&signature_view) {
+            return None;
+        }
+        return Some(InterfaceMember {
+            ty: crate::lower::substitute_params(&fn_ty, &instantiation),
+            is_method: true,
+        });
+    }
+    None
+}
+
+/// The interface frame's instantiation vector for a receiver:
+/// `[Self, args.., assoc..]` - `Self` is the receiver, args come from
+/// the reference, associated slots take the reference's pins or the
+/// symbolic projection through the receiver (reduction is I5's).
+fn interface_instantiation(
+    receiver: &Ty,
+    target: &InterfaceTarget,
+    data: &baml_compiler2_ppir::item_data::InterfaceData<'_>,
+) -> Vec<Ty> {
+    let mut out = vec![receiver.clone()];
+    for (index, _) in data.generic_params.iter().enumerate() {
+        out.push(target.args.get(index).cloned().unwrap_or_else(Ty::error));
+    }
+    let interface_ref = baml_type::interned::InterfaceRef::new(
+        target.name.clone(),
+        target.args.clone().into_boxed_slice(),
+        target.pins.clone(),
+    );
+    for assoc in &data.associated_types {
+        let slot = target
+            .pins
+            .iter()
+            .find(|(name, _)| *name == assoc.name)
+            .map(|(_, ty)| ty.clone())
+            .unwrap_or_else(|| {
+                Ty::intern(TyKind::AssociatedTypeProjection {
+                    base: receiver.clone(),
+                    interface: interface_ref.clone(),
+                    member: assoc.name.clone(),
+                    attr: TyAttr::default(),
+                })
+            });
+        out.push(slot);
+    }
+    out
+}
+
+fn interface_frame<'db>(
+    interface: InterfaceLoc<'db>,
+    db: &'db dyn baml_compiler2_ppir::Db,
+) -> Vec<ParamTy> {
+    let data = baml_compiler2_ppir::item_data::interface_data(db, interface);
+    let mut names = vec![Name::new("Self")];
+    names.extend(data.generic_params.iter().cloned());
+    names.extend(data.associated_types.iter().map(|assoc| assoc.name.clone()));
+    crate::lower::interface_generic_frame_params(&names)
+}
+
+fn instantiate_signature(
+    signature: &crate::lower::FunctionSignature,
+    instantiation: &[Ty],
+) -> Ty {
+    let params: Box<[baml_type::interned::FunctionParam]> = signature
+        .params
+        .iter()
+        .map(|param| baml_type::interned::FunctionParam {
+            name: Some(param.name.clone()),
+            ty: crate::lower::substitute_params(&param.ty, instantiation),
+            mode: if param.has_default {
+                baml_type::FunctionParamMode::Optional
+            } else {
+                baml_type::FunctionParamMode::Required
+            },
+        })
+        .collect();
+    Ty::intern(TyKind::Function {
+        params,
+        ret: crate::lower::substitute_params(&signature.ret, instantiation),
+        throws: crate::lower::substitute_params(&signature.throws, instantiation),
+        attr: TyAttr::default(),
+    })
+}
+
+/// The one-`Self` rule (spec: object safety for existential receivers):
+/// a NON-self parameter containing bare `Self`, or `Self` nested inside
+/// an invariant constructor in the return/throws, makes the method
+/// uncallable through an existential (a bare top-level `-> Self`
+/// collapses covariantly and stays legal). `Self.Assoc` projections are
+/// exempt - the existential's pins make them one concrete type.
+fn signature_breaks_one_self(signature: &crate::lower::FunctionSignature) -> bool {
+    let self_in = |ty: &Ty, top_ok: bool| -> bool { self_occurs(ty, top_ok) };
+    signature
+        .params
+        .iter()
+        .skip(1)
+        .any(|param| self_in(&param.ty, false))
+        || self_in(&signature.ret, true)
+        || self_in(&signature.throws, true)
+}
+
+fn fn_breaks_one_self(fn_ty: &Ty) -> bool {
+    let TyKind::Function {
+        params, ret, throws, ..
+    } = fn_ty.kind()
+    else {
+        return false;
+    };
+    params.iter().skip(1).any(|param| self_occurs(&param.ty, false))
+        || self_occurs(ret, true)
+        || self_occurs(throws, true)
+}
+
+/// Whether frame slot 0 (`Self`) occurs illegally: any occurrence in a
+/// non-top position, or a top occurrence when `top_ok` is false.
+/// Projection bases are exempt.
+fn self_occurs(ty: &Ty, top_ok: bool) -> bool {
+    match ty.kind() {
+        TyKind::TypeVar(param, _) if param.index() == 0 && param.as_str() == "Self" => !top_ok,
+        TyKind::AssociatedTypeProjection { .. } => false,
+        // Unions and optionals are covariant-transparent.
+        TyKind::Union(members, _) => members.iter().any(|member| self_occurs(member, top_ok)),
+        _ => {
+            let mut found = false;
+            let mut children = Vec::new();
+            baml_type::interned::for_each_child(ty.kind(), |child| children.push(child.clone()));
+            for child in children {
+                if self_occurs(&child, false) {
+                    found = true;
+                }
+            }
+            found
+        }
     }
 }
