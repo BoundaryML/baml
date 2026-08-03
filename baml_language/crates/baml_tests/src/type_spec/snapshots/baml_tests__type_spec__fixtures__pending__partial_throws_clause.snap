@@ -1,0 +1,12 @@
+---
+source: crates/baml_tests/src/type_spec/fixtures.rs
+expression: outcome.dump
+---
+536..537 'f': hir_ty=[throws 7 | user.AppError] tir=[throws int | user.AppError]
+554..665 '{\n   ...w 7\n}': never
+596..651 'if (c)...n    }': void
+600..601 'c': bool
+603..651 '{\n   ...n    }': never
+619..644 'AppErr... "x" }': user.AppError
+639..642 '"x"': "x"
+662..663 '7': 7

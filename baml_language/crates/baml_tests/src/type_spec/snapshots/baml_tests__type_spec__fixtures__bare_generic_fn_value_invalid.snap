@@ -1,0 +1,12 @@
+---
+source: crates/baml_tests/src/type_spec/fixtures.rs
+expression: outcome.dump
+---
+618..622 'same': throws never
+637..646 '{\n    a\n}': T
+643..644 'a': T
+657..658 'f': throws never
+671..746 '{\n   ...ok"\n}': "ok"
+677..682 'let a': hir_ty=[(a: !error) -> !error throws never] tir=[!error]
+685..689 'same': hir_ty=[(a: !error) -> !error throws never] tir=[(a: T) -> T throws never]
+740..744 '"ok"': "ok"
