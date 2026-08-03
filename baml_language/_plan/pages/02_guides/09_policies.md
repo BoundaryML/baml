@@ -41,7 +41,7 @@ class MountTools  { names: string[] }
 class UnmountTools{ names: string[] }
 class SpawnChild  { child_id: string, goal: string }
 class RetryTool   { call_id: string, after_ms: int }   // runner owns the clock
-class AwaitInput  { note: string? }              // end the turn as Said / wait
+class AwaitInput  { note: string? }              // end the turn as Replied / wait
 class FinishTurn  { result_json: string }        // end the turn as Done
 class CancelAll   { reason: string }
 type Command = CallModel | RunTool | RetryTool | MountTools | UnmountTools
@@ -58,7 +58,7 @@ The runner executes commands and is the only component that performs IO:
 `RunTool` → dispatch with validation, append `ToolCompleted` or
 `ToolFailed`; `MountTools`/`UnmountTools` → update the toolbox, append
 `ToolsChanged`; `CancelAll` → fire cancel tokens; `AwaitInput` /
-`FinishTurn` → end the current `run()` as `Said` or `Done`.
+`FinishTurn` → end the current `run()` as `Replied` or `Done`.
 
 You do not implement or call the runner. It is documented so the policy
 contract is precise: events in, commands out, effects elsewhere.
@@ -148,7 +148,7 @@ class WithApproval {
 ```
 
 The journal shows the whole flow: `ToolRequested` → `PermissionRequested`
-→ wait → `PermissionGranted` (via `s.emit`) → the held `RunTool`
+→ wait → `PermissionGranted` (via `s.send`) → the held `RunTool`
 executes. A resumed session still has the request pending, because it is
 an event, not a variable.
 
@@ -167,12 +167,18 @@ effect: approval granted, tool mounted, tool called.
 Composition is construction; the result is one policy:
 
 ```baml
+function PlanTrip(request: string) -> Itinerary {
+    client: "openai/gpt-5.2"
+    tools: [search_flights, search_hotels, book_hotel]
+    prompt: `You are a travel agent. ${request} ${ctx.transcript} ${ctx.output_format}`
+}
+
 let policy = WithSteering { inner:
              WithApproval { needs_ok: ["book_hotel"], held: {}, inner:
              WithBudget   { cap_usd: 2.0, spent: 0.0, inner:
              baml.session.ToolLoop { max_steps: 12 } } } };
 
-let s = PlanTrip@session(request = r, policy = policy);
+let s = PlanTrip@session(request = r) with baml.session.options(policy = policy);
 ```
 
 Events flow outside-in; commands flow inside-out. Put steering outermost

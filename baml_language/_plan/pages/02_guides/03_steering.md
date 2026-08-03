@@ -47,14 +47,23 @@ s.interrupt("user pressed esc");
 3. Hands the event to the policy. The default policy calls the model so
    it can react to the interruption.
 
-## Emitting events from outside
+## Sending events
 
-Applications append custom events to a running session with `emit`:
+`send` also accepts custom events — approvals and external signals are
+input like any message, delivered on the same data lane:
 
 ```baml
-s.emit(PermissionGranted { call_id: "t7" });
+s.send(PermissionGranted { call_id: "t7" });
 ```
 
-`emit` is typed by the session's event union (`10_journal.md`). Use it
-for approvals and external signals — input that the policy should react
-to but that is neither a user message nor an interrupt.
+`send` is typed by the session's event union (`10_journal.md`). From the
+outside, a session has exactly two verbs: `send` for data (strings,
+messages, custom events) and `interrupt` for control.
+
+Only custom events can be sent in. Built-in events (`AssistantMessage`,
+`ToolCompleted`, ...) are produced by the runner alone — a caller cannot
+forge the model's history.
+
+Inside a tool, the direction reverses, and the verb changes with it:
+`baml.session.emit(e)` is the running session emitting onto its own
+journal (`05_tools.md`).

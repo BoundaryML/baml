@@ -13,11 +13,28 @@ let tools = gh.tools();          // Tool[] — names, schemas, descriptions from
 MCP tools and local tools are the same type. Mix them in one toolbox:
 
 ```baml
-let s = TriageAgent@session(
-    repo = "boundaryml/baml",
-    tools = [tool(read_file), tool(run_bash)].concat(gh.tools()),
-);
+class Triage {
+    severity: "p0" | "p1" | "p2",
+    assignee: string?,
+    summary: string,
+}
+
+function TriageAgent(repo: string) -> Triage {
+    client: "anthropic/claude-sonnet-5"
+    prompt: `
+        Triage the latest issue in ${repo}. Reproduce it if you can.
+        ${ctx.transcript}
+        ${ctx.output_format}
+    `
+}
+
+let s = TriageAgent@session(repo = "boundaryml/baml")
+    with baml.session.options(tools = [tool(read_file), tool(run_bash)].concat(gh.tools()));
 ```
+
+`options(tools = ...)` provides the toolbox when the function declares
+none of its own; if the function has a `tools:` list, the two are
+merged.
 
 ## Dynamic discovery
 

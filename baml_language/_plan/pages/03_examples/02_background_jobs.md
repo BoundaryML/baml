@@ -8,11 +8,22 @@ reports, bulk enrichment, long research runs.
 ## Starting a job
 
 ```baml
-let job = PlanTrip@job(request = "3 weeks across South America", id = "trip-9421");
+function PlanTrip(request: string) -> Itinerary {
+    client: "openai/gpt-5.2"
+    tools: [search_flights, search_hotels]
+    prompt: `
+        You are a travel agent. The brief: ${request}
+        ${ctx.transcript}
+        ${ctx.output_format}
+    `
+}
+
+let job = PlanTrip@job(request = "3 weeks across South America")
+    with baml.session.options(id = "trip-9421");
 // returns immediately; job : Job<Itinerary>
 ```
 
-`@job` takes the function's arguments, like `@session`, plus an `id`. The
+`@job` takes the function's arguments; the `id` and other run configuration go in the `with` clause. The
 job runs under the configured journal store, so it survives the process
 that started it. Starting a job with an existing ID throws
 `baml.session.InstanceExists` — submissions are create-only by design, so

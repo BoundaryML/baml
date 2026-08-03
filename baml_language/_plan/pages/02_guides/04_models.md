@@ -46,7 +46,7 @@ append the events → hand them to the policy.
 fields (`content`, tool calls) and the raw provider payload (`raw_json`),
 plus the producing client's ID.
 
-When `render` encounters an `AssistantSaid`:
+When `render` encounters an `AssistantMessage`:
 
 - Produced by this client → replay `raw_json` verbatim. Reasoning blocks,
   tool call IDs, and provider-specific structures survive exactly.

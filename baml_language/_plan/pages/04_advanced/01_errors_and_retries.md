@@ -22,7 +22,7 @@ Errors thrown to the caller:
 | `baml.errors.AuthFailed` | Provider rejected credentials. Not retried. | Configuration fix; nothing programmatic. |
 | `baml.errors.ProviderDown` | Network failures / 5xx after retries. | Fallback client. |
 | `baml.session.Interrupted` | The session was interrupted while this call was waiting on it. | Usually intentional; report. |
-| `baml.session.InstanceExists` | `@session(id, new = true)` or `@job` with a taken ID. | Attach to the existing instance instead. |
+| `baml.session.InstanceExists` | `options(id, new = true)` or `@job` with a taken ID. | Attach to the existing instance instead. |
 | `baml.session.NotFound` | `resume` / attach with an unknown ID or corrupt snapshot. | Treat as fresh, or surface. |
 | `baml.session.Busy` | An operation on a named instance while another writer holds its lease. | Wait and retry, or route through the running instance. |
 | `baml.session.ToolNameConflict` | Two tools with the same name mounted on one toolbox. | Configuration fix at mount time; never reaches the model. |
@@ -80,7 +80,7 @@ client<llm> Primary {
 
 **2. Provider failure — fallback clients.** A fallback client tries
 providers in order; the journal records which one actually answered
-(every `AssistantSaid` carries its producer's ID, so mixed-provider
+(every `AssistantMessage` carries its producer's ID, so mixed-provider
 histories already render correctly):
 
 ```baml
@@ -178,5 +178,5 @@ freely, because their errors are information for the model.
 
 Every failure in this page is either an event (`ToolFailed`, settlement)
 or occurs adjacent to recorded evidence (retry attempts, fallback client
-IDs on `AssistantSaid`, `Usage` for every attempt). "Why did this run
+IDs on `AssistantMessage`, `Usage` for every attempt). "Why did this run
 fail" is answered by reading the journal, not by reproducing the failure.

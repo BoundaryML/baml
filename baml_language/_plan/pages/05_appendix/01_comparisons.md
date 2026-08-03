@@ -17,7 +17,7 @@ orientation, not scorekeeping.
 
 Differences that matter: BAML persists typed events (the journal) rather
 than provider messages, which is what enables cross-provider resume and
-built-in tracing; `Done | Said` distinguishes goal-reached from
+built-in tracing; `Done | Replied` distinguishes goal-reached from
 conversation-continuing, which `run()`-always-has-output does not; prompts
 and schemas are checked at compile time.
 

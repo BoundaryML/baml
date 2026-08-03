@@ -72,7 +72,7 @@ let s = PlanTrip@session(request = "2 weeks in Japan");
 
 match (s.run()) {
     let d: baml.session.Done<Itinerary> => print(d.result),
-    let r: baml.session.Said => print(r.message),   // the agent asked something
+    let r: baml.session.Replied => print(r.message),   // the agent asked something
 }
 
 s.send("make it 10 days, skip Tokyo");
@@ -80,7 +80,7 @@ let turn2 = s.run();
 ```
 
 Sessions persist. `s.snapshot()` returns a string you can store anywhere;
-`PlanTrip@session(resume = snap)` continues the conversation on any
+`PlanTrip@session with baml.session.options(resume = snap)` continues it on any
 machine.
 
 ## Run it from Python or TypeScript

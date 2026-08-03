@@ -71,7 +71,7 @@ waits behind data.
 | **Task** | A one-shot run: call the function, loop until it returns its type. |
 | **Job** | A task running in the background, addressed by a handle. |
 | **Session** | A long-lived run: turns over time, with state you can save. |
-| **Turn** | The result of one `run()`: `Done<T>` or `Said`. |
+| **Turn** | The result of one `run()`: `Done<T>` or `Replied`. |
 | **Policy** | Pure logic: `(state, journal, event) -> commands`. |
 | **Command** | What a policy wants done: call the model, run a tool, wait, finish. |
 | **Runner** | The loop that executes commands and performs all IO. |

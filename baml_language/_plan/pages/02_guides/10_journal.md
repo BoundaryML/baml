@@ -15,11 +15,11 @@ After one task run with two tool calls:
 
 ```
 seq 0   SessionStarted  PlanTrip {"request": "2 weeks in Japan"}
-seq 1   AssistantSaid   provider=openai/gpt-5.2  (decided to call a tool)
+seq 1   AssistantMessage   provider=openai/gpt-5.2  (decided to call a tool)
 seq 2   ToolRequested   t1 search_flights {"origin":"SFO","dest":"NRT"}
 seq 3   Usage           in=812 out=41
 seq 4   ToolCompleted   t1 [{"airline":"ANA","price":890.0}, ...]
-seq 5   AssistantSaid   provider=openai/gpt-5.2
+seq 5   AssistantMessage   provider=openai/gpt-5.2
 seq 6   ToolRequested   t2 search_hotels {"city":"Kyoto","max_nightly":150.0}
 seq 7   Usage           in=1204 out=38
 seq 8   ToolCompleted   t2 [...]
@@ -38,18 +38,18 @@ What the journal is not:
 ## Built-in events
 
 ```baml
-type Event = SessionStarted | UserMessage | AssistantSaid
+type Event = SessionStarted | UserMessage | AssistantMessage
            | ToolRequested | ToolCompleted | ToolFailed
            | FinalProduced | ToolsChanged | StepCompleted
            | ChildSpawned | ChildFinished
-           | Interrupted | Usage | Compacted | Custom
+           | Interrupted | Usage | Compacted
 ```
 
 | Event | Recorded when |
 |---|---|
 | `SessionStarted` | The session is created. Carries the function name and arguments. |
 | `UserMessage` | A message is injected into the conversation. |
-| `AssistantSaid` | The model produces a message. Canonical content + raw provider payload + provider ID. |
+| `AssistantMessage` | The model produces a message. Canonical content + raw provider payload + provider ID. |
 | `ToolRequested` / `ToolCompleted` / `ToolFailed` | Tool lifecycle. |
 | `FinalProduced` | The model produces the function's return type. |
 | `ToolsChanged` | The mounted toolbox changes. |
@@ -58,18 +58,17 @@ type Event = SessionStarted | UserMessage | AssistantSaid
 | `Interrupted` | An interrupt took effect. |
 | `Usage` | Token counts for one provider call. |
 | `Compacted` | Older entries were summarized. |
-| `Custom` | Untyped extension event. |
 
 Matching over events requires a `_` arm; new built-in events may be added
 in future releases.
 
-`AssistantSaid` records both the canonical fields and the raw provider
+`AssistantMessage` records both the canonical fields and the raw provider
 payload, plus which client produced it. Clients use this for
 same-provider fidelity (`04_models.md`). `Compacted { summary,
 through_seq }` changes rendering, not history: replaced entries stay in
 the journal.
 
-By default the transcript renders `UserMessage`, `AssistantSaid`, tool
+By default the transcript renders `UserMessage`, `AssistantMessage`, tool
 events, and compaction summaries. Everything else is journal-only unless
 opted in (see `Promptable` below).
 
@@ -97,14 +96,21 @@ class ReleasePolicy {
     }
 }
 
-let s = ReleaseAgent@session(goal = g, policy = ReleasePolicy { inner: baml.session.ToolLoop { max_steps: 50 } });
-s.emit(PermissionGranted { call_id: "t7" });   // typed by the union
+function ReleaseAgent(goal: string) -> Report {
+    client: "anthropic/claude-sonnet-5"
+    tools: [request_approval, run_bash]
+    prompt: `You are a release agent. ${goal} ${ctx.transcript} ${ctx.output_format}`
+}
+
+let s = ReleaseAgent@session(goal = g)
+    with baml.session.options(policy = ReleasePolicy { inner: baml.session.ToolLoop { max_steps: 50 } });
+s.send(PermissionGranted { call_id: "t7" });   // typed by the union
 ```
 
 Three producers can append custom events:
 
 ```baml
-s.emit(PermissionGranted { call_id: id });                    // 1. the application
+s.send(PermissionGranted { call_id: id });                    // 1. the application
 j.append(PermissionRequested { call_id: c, tool: t, why: w }); // 2. the policy, in update
 baml.session.emit(TodoUpdated { items: items });               // 3. a tool, ambient — no extra params
 ```
@@ -122,13 +128,10 @@ class TodoUpdated {
 }
 ```
 
-The escape hatch for untyped producers is the built-in
-`Custom { kind: string, data_json: string }`.
-
 ## Journal stores
 
 Sessions used as values keep the journal in memory; `snapshot()` moves it
-out of the process. Named instances (`@session(id = ...)`) and jobs read
+out of the process. Named instances (`options(id = ...)`) and jobs read
 and write through a store:
 
 ```baml

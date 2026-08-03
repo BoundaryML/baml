@@ -5,7 +5,8 @@
 A subagent is an agent function used by another agent. There is no special
 declaration. Two patterns:
 
-**As a tool.** The parent's model decides when to delegate:
+**As a tool.** An LLM function is a function, so it goes in `tools:`
+directly. The parent's model decides when to delegate:
 
 ```baml
 /// Research one city in depth for a traveler.
@@ -17,13 +18,27 @@ function ResearchCity(city: string) -> CityGuide {
 
 function PlanTrip(request: string) -> Itinerary {
     client: "openai/gpt-5.2"
-    tools: [search_flights, research_city_tool]
-    prompt: `...`
+    tools: [search_flights, ResearchCity]      // an agent, listed like any tool
+    prompt: `
+        You are a travel agent. The brief: ${request}
+        ${ctx.transcript}
+        ${ctx.output_format}
+    `
 }
+```
 
-/// Delegate city research to a focused subagent.
-function research_city_tool(city: string) -> string {
-    baml.json.to_string(ResearchCity(city))
+The docstring is the delegation description, the signature is the
+argument schema, and the return type is typed all the way through: the
+parent's model is told the call returns a `CityGuide`, and the result
+enters the parent's transcript as one, not as an opaque string.
+
+Wrap an agent in a plain function only when you actually need to reshape
+the interface — rename it, fix some arguments, or trim the result:
+
+```baml
+/// Research a city, keeping only what matters for a short trip.
+function quick_research(city: string) -> string {
+    ResearchCity(city).highlights.join("; ")
 }
 ```
 

@@ -24,11 +24,17 @@ function CodeAgent(task: string) -> Report {
     `
 }
 
-/// Delegate a focused task to a subagent; returns its report.
-function sub_task(goal: string) -> string {
-    baml.json.to_string(CodeAgent(goal))    // child session; Esc cancels it via the tree
+/// Delegate one focused task to a fresh subagent. Use for exploration
+/// and checks that would clutter your own context.
+function sub_task(goal: string) -> Report {
+    CodeAgent(goal)     // child session; Esc cancels it via the tree
 }
 ```
+
+An agent function can be listed in `tools:` directly
+(`../02_guides/08_subagents.md`); the wrapper here exists only because
+the delegation is recursive — `sub_task` gives the self-call a distinct
+name and a description written for delegating, not for the task itself.
 
 ## Custom events
 
@@ -59,7 +65,7 @@ class WithSteering {
                 //# buffer messages instead of firing the model immediately
                 let m: UserMessage => { st.queued_msgs.push(m.content); [] },
                 //# turn boundary: flush the buffer, then continue
-                let a: AssistantSaid => {
+                let a: AssistantMessage => {
                     if (st.queued_msgs.length() > 0) {
                         while let q: string = st.queued_msgs.shift() {
                             j.append(UserMessage { content: q });
@@ -89,7 +95,8 @@ human.
 
 ```baml
 function main() -> null {
-    let s = CodeAgent@session(task = "fix the failing tests", policy = policy);
+    let s = CodeAgent@session(task = "fix the failing tests")
+        with baml.session.options(policy = policy);
 
     //# UI lane: tail the journal, render events as they land
     spawn {
@@ -98,7 +105,7 @@ function main() -> null {
             for (let en in s.journal().read_from(seen)) {
                 seen = en.seq + 1;
                 match (en.event) {
-                    let a: AssistantSaid => print(`● ${a.content}`),
+                    let a: AssistantMessage => print(`● ${a.content}`),
                     let t: ToolRequested => print(`⚒ ${t.tool}(${t.args_json})`),
                     let p: PermissionRequested => print(`? allow ${p.tool}? [y/n]`),
                     let c: ChildSpawned => print(`↳ subagent: ${c.goal}`),
@@ -115,25 +122,29 @@ function main() -> null {
     //# human lane: stdin — say, approve, interrupt
     while (true) {
         let line = read_line();
-        if (line == "y")          { s.emit(PermissionGranted { call_id: pending_permission(s) }); }
-        else if (line == "n")     { s.emit(PermissionDenied  { call_id: pending_permission(s) }); }
+        if (line == "y")          { s.send(PermissionGranted { call_id: pending_permission(s) }); }
+        else if (line == "n")     { s.send(PermissionDenied  { call_id: pending_permission(s) }); }
         else if (line == "<esc>") { s.interrupt("user pressed esc"); }
         else if (line == "/quit") { return null; }
         else                      { s.send(line); }
     }
 }
 
-//# a fold over the journal: the most recent unanswered permission request
+//# a fold over the journal: the most recent unanswered permission request.
+//# Two passes — an answer can land after its request in the log.
 function pending_permission(s: Session<Report, CCEvent>) -> string {
     let answered: string[] = [];
-    let pending = "";
     for (let en in s.journal().read_from(0)) {
         match (en.event) {
             let g: PermissionGranted => answered.push(g.call_id),
             let d: PermissionDenied  => answered.push(d.call_id),
-            let p: PermissionRequested =>
-                if (!answered.includes(p.call_id)) { pending = p.call_id; },
             _ => { },
+        }
+    }
+    let pending = "";
+    for (let en in s.journal().read_from(0)) {
+        if let p: PermissionRequested = en.event {
+            if (!answered.includes(p.call_id)) { pending = p.call_id; }
         }
     }
     pending
@@ -150,7 +161,7 @@ function pending_permission(s: Session<Report, CCEvent>) -> string {
   the model gets to react.
 - **A `run_bash` attempt** round-trips through custom events:
   `ToolRequested` → the gate holds it, journals `PermissionRequested`,
-  ends the turn → UI renders the question → `emit(PermissionGranted)` →
+  ends the turn → UI renders the question → `send(PermissionGranted)` →
   the held command executes.
 - **Kill the process** at any point: `snapshot()`, restart, `resume` —
   the pending permission request is still pending, because it is an

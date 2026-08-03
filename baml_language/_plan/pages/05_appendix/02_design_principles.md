@@ -50,6 +50,20 @@ Token deltas travel on an ephemeral channel and are never journaled. The
 journal records final messages. A UI built only on the journal tail is
 correct; the stream is cosmetic.
 
+## Configuration is not an argument
+
+Call parentheses hold exactly the function's declared parameters,
+whether calling plainly, `@session`, or `@job`. Run configuration —
+`max_steps`, `policy`, `client`, `tools`, `id`, `new`, `resume` — lives
+in a `with baml.session.options(...)` clause, mirroring
+`spawn with baml.spawn.options(...)`.
+
+Rejected alternative: configuration as reserved keyword arguments on the
+call (`PlanTrip(request, max_steps = 20)`). It collides with the
+function's own parameter namespace — any function with a `max_steps` or
+`id` parameter becomes uncallable with configuration — and the collision
+set would grow with every future option.
+
 ## Tools are plain functions
 
 No decorators, no schema files, no context parameters. Schemas come from

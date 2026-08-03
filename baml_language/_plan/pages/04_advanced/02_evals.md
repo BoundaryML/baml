@@ -20,7 +20,22 @@ covers the layers above it.
 ## Scripted clients
 
 `Client` is an interface, so a fake provider drives the entire loop —
-runner, policy, toolbox, journal — deterministically:
+runner, policy, toolbox, journal — deterministically. The agent under
+test:
+
+```baml
+function PlanTrip(request: string) -> Itinerary {
+    client: "openai/gpt-5.2"
+    tools: [search_flights, search_hotels]
+    prompt: `
+        You are a travel agent. The brief: ${request}
+        ${ctx.transcript}
+        ${ctx.output_format}
+    `
+}
+```
+
+The fake provider and the test:
 
 ```baml
 class ScriptedClient {
@@ -47,7 +62,8 @@ test "agent completes after one tool round-trip" {
         [ToolRequested { call_id: "t1", tool: "search_flights", args_json: `{"origin":"SFO","dest":"NRT"}` }],
         [FinalProduced { result_json: `{"destination":"Japan","days":14,"flights":[],"hotel":null,"daily_plan":[]}` }],
     ] };
-    let s = PlanTrip@session(request = "2 weeks in Japan", client = fake);
+    let s = PlanTrip@session(request = "2 weeks in Japan")
+        with baml.session.options(client = fake);
     match (s.run()) {
         let d: baml.session.Done<Itinerary> => assert.equal(d.result.days, 14),
         _ => assert.is_true(false),

@@ -67,15 +67,23 @@ reply is recorded and the loop continues. When the agent needs to talk to
 a user, use a session (`02_sessions.md`). When it should run detached,
 use a job (`../03_examples/02_background_jobs.md`).
 
-## Step budgets
+## Configuration is not an argument
 
-Every task has a step budget; the default is 12 model turns.
+Call parentheses hold only the function's own arguments. How a run is
+configured — budgets, policies, clients — goes in a `with` clause, the
+same pattern `spawn` already uses:
 
 ```baml
-let trip = PlanTrip("2 weeks in Japan", max_steps = 20);
+let trip = PlanTrip("2 weeks in Japan") with baml.session.options(max_steps = 20);
 ```
 
-Exhausting the budget throws `baml.session.StepBudgetExceeded`.
+The two namespaces never mix, so a function is free to have its own
+`max_steps` parameter. The same clause works on `@session` and `@job`.
+
+## Step budgets
+
+Every task has a step budget; the default is 12 model turns. Exhausting
+it throws `baml.session.StepBudgetExceeded`.
 
 ## Errors
 

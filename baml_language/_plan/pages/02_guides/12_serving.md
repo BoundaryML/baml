@@ -62,7 +62,7 @@ GET  /v1/session/PlanTrip/{id}/turns/{receipt}   read the outcome (blocks or pol
 GET  /v1/session/PlanTrip/{id}/events?from={seq} journal tail (SSE)
 GET  /v1/session/PlanTrip/{id}/stream            token deltas (SSE, ephemeral)
 POST /v1/session/PlanTrip/{id}/interrupt
-POST /v1/session/PlanTrip/{id}/emit              custom events
+POST /v1/session/PlanTrip/{id}/events            send a custom event
 ```
 
 Submission is asynchronous: the POST returns a receipt once the message is

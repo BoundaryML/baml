@@ -64,6 +64,7 @@ _plan/
 - An LLM function is a typed function
 - An agent is a function with tools
 - Task mode
+- Configuration is not an argument
 - Step budgets
 - Errors
 - Every call is recorded
@@ -73,6 +74,7 @@ _plan/
 - Arguments are session constants
 - Messages are events
 - Running turns
+- Configuration is not an argument
 - Snapshots
 - Named instances
 
@@ -80,7 +82,7 @@ _plan/
 - The two lanes
 - Queued messages
 - Interrupts
-- Emitting events from outside
+- Sending events
 
 ### 04_models.md
 - What a client is
@@ -199,6 +201,7 @@ _plan/
 - Two lanes
 - Static templates, imperative changes, recorded causes
 - Streaming is not history
+- Configuration is not an argument
 - Tools are plain functions
 - One journal per session; sessions form a tree
 - Determinism where it pays, honesty where it does not

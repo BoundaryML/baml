@@ -6,6 +6,16 @@
 same arguments as the function, type-checked the same way:
 
 ```baml
+function PlanTrip(request: string) -> Itinerary {
+    client: "openai/gpt-5.2"
+    tools: [search_flights, search_hotels]
+    prompt: `
+        You are a travel agent. The brief: ${request}
+        ${ctx.transcript}
+        ${ctx.output_format}
+    `
+}
+
 let s = PlanTrip@session(request = "2 weeks in Japan, mid-range");
 // s : Session<Itinerary>
 ```
@@ -44,7 +54,7 @@ for input:
 let s = PlanTrip@session(request = "2 weeks in Japan");
 match (s.run()) {
     let d: baml.session.Done<Itinerary> => print(d.result),
-    let r: baml.session.Said => print(r.message),
+    let r: baml.session.Replied => print(r.message),
 }
 
 s.send("make it 10 days");
@@ -57,15 +67,29 @@ something to do.
 `run()` returns a union:
 
 ```baml
-type Turn<T> = Done<T> | Said
+type Turn<T> = Done<T> | Replied
 
 class Done<T> { result: T }        // the agent produced the final typed answer
-class Said    { message: string }  // the agent replied and is waiting for input
+class Replied    { message: string }  // the agent replied and is waiting for input
 ```
 
 This is the difference between task mode and session mode: in a task,
-`Said` is not a legal stopping point; in a session, it is. Errors (step
+`Replied` is not a legal stopping point; in a session, it is. Errors (step
 budget, provider failure) throw, the same as task mode.
+
+## Configuration is not an argument
+
+Call parentheses hold only the function's arguments. Everything about
+*how* the session runs — policy, client, budgets, identity, resumption —
+goes in a `with` clause, the same pattern `spawn` uses:
+
+```baml
+let s = PlanTrip@session("2 weeks in Japan")
+    with baml.session.options(policy = my_policy, max_steps = 50);
+```
+
+The namespaces never collide: a function with its own `policy` or `id`
+parameter works unchanged.
 
 ## Snapshots
 
@@ -76,25 +100,26 @@ let snap = s.snapshot();
 ```
 
 The snapshot is the journal: the arguments, every event, everything needed
-to continue on any machine with any provider.
+to continue on any machine with any provider. Resuming passes no function
+arguments — they come from the snapshot:
 
 ```baml
-let s = PlanTrip@session(resume = snap);
+let s = PlanTrip@session with baml.session.options(resume = snap);
 ```
 
-`resume` accepts `string?`; `null` starts a fresh session. Arguments come
-from the snapshot — passing arguments together with a non-null `resume`
-is an error.
-
-The stateless server pattern is three lines:
+The stateless server pattern branches once, on the first turn:
 
 ```baml
 function handle_turn(snap: string?, msg: string) -> string {
-    let s = PlanTrip@session(resume = snap);
+    let s = if let x: string = snap {
+        PlanTrip@session with baml.session.options(resume = x)
+    } else {
+        PlanTrip@session(request = msg)          // first turn: args, no snapshot
+    };
     s.send(msg);
     let reply = match (s.run()) {
         let d: baml.session.Done<Itinerary> => baml.json.to_string(d.result),
-        let r: baml.session.Said => r.message,
+        let r: baml.session.Replied => r.message,
     };
     baml.json.to_string({ "reply": reply, "snapshot": s.snapshot() })
 }
@@ -109,14 +134,17 @@ Sessions can be addressed by ID instead of carried as values — one session
 per ticket, per user, per order:
 
 ```baml
-let s = PlanTrip@session(id = `issue-${n}`);              // get or create
-let s = PlanTrip@session(id = `issue-${n}`, new = true);  // create only
+// get or create: args are used on create, checked against the journal on attach
+let s = PlanTrip@session(request = brief) with baml.session.options(id = `issue-${n}`);
+
+// create only: throws InstanceExists if the ID is taken
+let s = PlanTrip@session(request = brief) with baml.session.options(id = `issue-${n}`, new = true);
 ```
 
 With `id`, the runtime loads the session from the configured journal store
-(`10_journal.md`), or creates it. With `new = true`, creation fails with
-`baml.session.InstanceExists` if the ID is taken — use this when the
-creator must be unique, such as a webhook that must not double-create.
+(`10_journal.md`), or creates it with the given arguments. Use
+`new = true` when the creator must be unique, such as a webhook that must
+not double-create.
 
 An ID names exactly one journal. Two calls with the same ID talk to the
 same conversation.
