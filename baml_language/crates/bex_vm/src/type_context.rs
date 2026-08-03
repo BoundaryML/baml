@@ -219,6 +219,20 @@ impl TypeContext for BexVm {
 /// of severed here); until then, opacity is the termination guarantee.
 pub(crate) struct StructuralEquivCtx<'a>(pub(crate) &'a BexVm);
 
+/// Impl selection's answer to "is this pattern position the same type as the value's?"
+///
+/// Selection runs *inside* the resolver, so the relation it consults must be one that
+/// cannot come back around to ask the resolver — hence [`StructuralEquivCtx`] rather than
+/// the VM's full fact set. Naming the strategy keeps that constraint attached to the
+/// decision instead of implicit in which context happened to be in scope at the call.
+pub(crate) struct DispatchCompare<'a>(pub(crate) &'a BexVm);
+
+impl baml_type::TemplateCompare for DispatchCompare<'_> {
+    fn same_type(&mut self, pattern: &Ty, concrete: &Ty) -> bool {
+        StructuralEquivCtx(self.0).equivalent(pattern, concrete)
+    }
+}
+
 impl TypeContext for StructuralEquivCtx<'_> {
     fn alias_def(&self, name: &QualifiedTypeName) -> Option<Ty> {
         // Same alias facts as the full context — non-re-entrant, and required

@@ -581,6 +581,219 @@ impl TyTemplate {
     }
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// MATCHING
+// ═══════════════════════════════════════════════════════════════════════════
+
+/// How a match decides that a pattern position and the concrete type there are the same
+/// type.
+///
+/// The matcher is purely structural about *shape* — which constructor, which arity, which
+/// name — but the moment a position carries no frame reference the question stops being
+/// structural and becomes a type-relation one: `int | string` and `string | int` are the
+/// same type, so a pattern spelling one must match a value spelling the other. Which
+/// relation answers that is the caller's to choose, because the honest answer depends on
+/// how much the caller may consult without re-entering whatever asked: dispatch decides it
+/// against a deliberately fact-poor view, while a solver deciding the same question as a
+/// goal can afford the full one.
+///
+/// Taking `&mut self` so a strategy may carry and update state (a session, a budget).
+pub trait TemplateCompare {
+    fn same_type(&mut self, pattern: &Ty, concrete: &Ty) -> bool;
+}
+
+impl TyTemplate {
+    /// Match this pattern against a concrete type, binding each [`TyTemplate::TypeArgRef`]
+    /// it contains into `bindings` by frame index.
+    ///
+    /// Returns whether the pattern applies. `bindings` is left in an unspecified state on
+    /// failure — a caller that tries several patterns must discard it between attempts —
+    /// but is complete for every index the pattern mentions on success.
+    ///
+    /// A frame index outside `bindings` fails the match rather than panicking: the arity
+    /// belongs to whoever supplied the pattern, and a malformed one should decline to
+    /// apply rather than take down its consumer.
+    pub fn match_against<C: TemplateCompare>(
+        &self,
+        concrete: &RealizedTy,
+        bindings: &mut [Option<RealizedTy>],
+        cmp: &mut C,
+    ) -> bool {
+        // A pattern with no frame references and no unreduced projection *is* a realized
+        // type, so the question is entirely "same type?" and the strategy answers it.
+        if let Ok(realized) = <&RealizedTy>::try_from(self) {
+            return cmp.same_type(realized.as_ty(), concrete.as_ty());
+        }
+
+        match self {
+            TyTemplate::TypeArgRef(index) => match bindings.get_mut(*index as usize) {
+                Some(slot @ None) => {
+                    *slot = Some(concrete.clone());
+                    true
+                }
+                // A repeated parameter has to bind consistently, and consistency is a
+                // type question, not a spelling one.
+                Some(Some(bound)) => cmp.same_type(bound.as_ty(), concrete.as_ty()),
+                None => false,
+            },
+            TyTemplate::List(inner, _) => match concrete {
+                RealizedTy::List(elem, _) => inner.match_against(elem, bindings, cmp),
+                _ => false,
+            },
+            TyTemplate::Map { key, value, .. } => match concrete {
+                RealizedTy::Map {
+                    key: concrete_key,
+                    value: concrete_value,
+                    ..
+                } => {
+                    key.match_against(concrete_key, bindings, cmp)
+                        && value.match_against(concrete_value, bindings, cmp)
+                }
+                _ => false,
+            },
+            TyTemplate::Class(name, args, _) => match concrete {
+                RealizedTy::Class(concrete_name, concrete_args, _) => {
+                    name == concrete_name && match_all(args, concrete_args, bindings, cmp)
+                }
+                _ => false,
+            },
+            TyTemplate::Interface(name, args, assoc, _) => match concrete {
+                RealizedTy::Interface(concrete_name, concrete_args, concrete_assoc, _) => {
+                    // Every *concrete* binding must be met by a same-named pattern
+                    // binding, matched by name rather than position because the two
+                    // declaration orders need not agree; surplus pattern bindings do not
+                    // constrain. The direction is deliberate and matches the compiler's
+                    // selection matcher, so runtime dispatch can never select an impl
+                    // compile-time selection would have rejected.
+                    name == concrete_name
+                        && match_all(args, concrete_args, bindings, cmp)
+                        && concrete_assoc.iter().all(|(concrete_member, concrete_ty)| {
+                            assoc
+                                .iter()
+                                .find(|(member, _)| member == concrete_member)
+                                .is_some_and(|(_, pattern_ty)| {
+                                    pattern_ty.match_against(concrete_ty, bindings, cmp)
+                                })
+                        })
+                }
+                _ => false,
+            },
+            // A projection that survived to matching was never resolved to a witness, and
+            // a value's type carries no unreduced projection for it to pair with.
+            TyTemplate::AssociatedTypeProjection { .. } => false,
+            TyTemplate::Function {
+                params,
+                ret,
+                throws,
+                ..
+            } => match concrete {
+                RealizedTy::Function {
+                    params: concrete_params,
+                    ret: concrete_ret,
+                    throws: concrete_throws,
+                    ..
+                } => {
+                    params.len() == concrete_params.len()
+                        && params.iter().zip(concrete_params).all(|(p, c)| {
+                            p.name == c.name
+                                && p.mode == c.mode
+                                && p.ty.match_against(&c.ty, bindings, cmp)
+                        })
+                        && ret.match_against(concrete_ret, bindings, cmp)
+                        && throws.match_against(concrete_throws, bindings, cmp)
+                }
+                _ => false,
+            },
+            TyTemplate::Future(value, error, _) => match concrete {
+                RealizedTy::Future(concrete_value, concrete_error, _) => {
+                    value.match_against(concrete_value, bindings, cmp)
+                        && error.match_against(concrete_error, bindings, cmp)
+                }
+                _ => false,
+            },
+            TyTemplate::Union(members, _) => match concrete {
+                RealizedTy::Union(concrete_members, _) => {
+                    match_union(members, concrete_members, bindings, cmp)
+                }
+                _ => false,
+            },
+            // Every realized leaf took the fast path above.
+            _ => false,
+        }
+    }
+}
+
+/// Match positional arguments pairwise. Arity must agree — a constructor applied to a
+/// different number of arguments is a different type, not a partial match.
+fn match_all<C: TemplateCompare>(
+    patterns: &[TyTemplate],
+    concretes: &[RealizedTy],
+    bindings: &mut [Option<RealizedTy>],
+    cmp: &mut C,
+) -> bool {
+    patterns.len() == concretes.len()
+        && patterns
+            .iter()
+            .zip(concretes)
+            .all(|(pattern, concrete)| pattern.match_against(concrete, bindings, cmp))
+}
+
+/// Pair union members off order-insensitively: every pattern member must take a *distinct*
+/// concrete member, with bindings consistent across the pairing as a whole.
+///
+/// Equal cardinality is required. Canonical unions are deduplicated antichains, so a
+/// pattern with fewer members than the value denotes a strictly smaller type rather than a
+/// partial view of it.
+fn match_union<C: TemplateCompare>(
+    patterns: &[TyTemplate],
+    concretes: &[RealizedTy],
+    bindings: &mut [Option<RealizedTy>],
+    cmp: &mut C,
+) -> bool {
+    if patterns.len() != concretes.len() {
+        return false;
+    }
+    match_union_from(
+        patterns,
+        concretes,
+        &mut vec![false; concretes.len()],
+        bindings,
+        cmp,
+    )
+}
+
+/// The search behind [`match_union`], and it has to be a search: a greedy pairing can bind
+/// a type variable to the wrong member and fail a pairing that exists. Matching
+/// `[T, int]` against `[int, string]` must reach `T = string`, which means undoing the
+/// first, locally-successful pairing of `T` with `int`.
+fn match_union_from<C: TemplateCompare>(
+    patterns: &[TyTemplate],
+    concretes: &[RealizedTy],
+    taken: &mut [bool],
+    bindings: &mut [Option<RealizedTy>],
+    cmp: &mut C,
+) -> bool {
+    let Some((first, rest)) = patterns.split_first() else {
+        return true;
+    };
+    for (index, concrete) in concretes.iter().enumerate() {
+        if taken[index] {
+            continue;
+        }
+        let restore = bindings.to_vec();
+        if first.match_against(concrete, bindings, cmp) {
+            taken[index] = true;
+            if match_union_from(rest, concretes, taken, bindings, cmp) {
+                return true;
+            }
+            taken[index] = false;
+        }
+        // Undo whatever the failed branch bound before trying the next pairing.
+        bindings.clone_from_slice(&restore);
+    }
+    false
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -814,5 +1027,206 @@ mod tests {
                 crate::TyAttr::default()
             )
         );
+    }
+}
+
+#[cfg(test)]
+mod match_tests {
+    use super::*;
+    use crate::{Freshness, Literal, QualifiedTypeName};
+
+    /// Compares by the fact-free canonical algebra, which is enough to exercise the
+    /// matcher: union order-insensitivity and literal-vs-base distinctness are
+    /// structural, and no test here declares an alias or a membership.
+    struct FactFree;
+    impl TemplateCompare for FactFree {
+        fn same_type(&mut self, pattern: &Ty, concrete: &Ty) -> bool {
+            #[expect(
+                deprecated,
+                reason = "structural comparison is the whole fact set here"
+            )]
+            crate::normalize::NoFacts.equivalent(pattern, concrete)
+        }
+    }
+
+    fn tmpl(t: RealizedTy) -> TyTemplate {
+        TyTemplate::from(t)
+    }
+    fn qtn(name: &str) -> QualifiedTypeName {
+        QualifiedTypeName::local(Name::new(name))
+    }
+    fn slots(n: usize) -> Vec<Option<RealizedTy>> {
+        vec![None; n]
+    }
+    fn class_pattern(name: &str, args: Vec<TyTemplate>) -> TyTemplate {
+        TyTemplate::Class(qtn(name), args, TyAttr::default())
+    }
+    fn class_value(name: &str, args: Vec<RealizedTy>) -> RealizedTy {
+        RealizedTy::Class(qtn(name), args, TyAttr::default())
+    }
+
+    #[test]
+    fn union_pairing_backtracks_out_of_a_dead_end() {
+        // `[T, int]` against `[int, string]`: pairing `T` with `int` succeeds locally
+        // but strands `int`, so the search has to undo it and reach `T = string`.
+        let pattern = TyTemplate::Union(
+            vec![TyTemplate::TypeArgRef(0), tmpl(RealizedTy::int())],
+            TyAttr::default(),
+        );
+        let value = RealizedTy::Union(
+            vec![RealizedTy::int(), RealizedTy::string()],
+            TyAttr::default(),
+        );
+        let mut bindings = slots(1);
+        assert!(pattern.match_against(&value, &mut bindings, &mut FactFree));
+        assert_eq!(bindings[0], Some(RealizedTy::string()));
+    }
+
+    #[test]
+    fn union_pairing_requires_equal_cardinality() {
+        // A pattern of two members denotes a smaller type than a value of three, not a
+        // partial view of it.
+        let pattern = TyTemplate::Union(
+            vec![tmpl(RealizedTy::int()), tmpl(RealizedTy::string())],
+            TyAttr::default(),
+        );
+        let value = RealizedTy::Union(
+            vec![
+                RealizedTy::int(),
+                RealizedTy::string(),
+                RealizedTy::Bool {
+                    attr: TyAttr::default(),
+                },
+            ],
+            TyAttr::default(),
+        );
+        assert!(!pattern.match_against(&value, &mut slots(0), &mut FactFree));
+    }
+
+    #[test]
+    fn a_repeated_frame_reference_must_bind_consistently() {
+        let pattern = class_pattern(
+            "Pair",
+            vec![TyTemplate::TypeArgRef(0), TyTemplate::TypeArgRef(0)],
+        );
+        assert!(pattern.match_against(
+            &class_value("Pair", vec![RealizedTy::int(), RealizedTy::int()]),
+            &mut slots(1),
+            &mut FactFree,
+        ));
+        assert!(!pattern.match_against(
+            &class_value("Pair", vec![RealizedTy::int(), RealizedTy::string()]),
+            &mut slots(1),
+            &mut FactFree,
+        ));
+    }
+
+    #[test]
+    fn a_frame_reference_past_the_declared_arity_declines() {
+        // The arity belongs to whoever supplied the pattern; a malformed one must not
+        // take down the consumer asking whether it applies.
+        let pattern = TyTemplate::TypeArgRef(7);
+        assert!(!pattern.match_against(&RealizedTy::int(), &mut slots(1), &mut FactFree));
+    }
+
+    #[test]
+    fn a_literal_pattern_does_not_match_its_base() {
+        // Matching is invariant: only the top level of a *selection subject* folds a
+        // literal to its base, and that fold happens before the matcher is reached.
+        let one = RealizedTy::Literal(Literal::Int(1), Freshness::Regular, TyAttr::default());
+        let pattern = TyTemplate::from(one.clone());
+        assert!(pattern.match_against(&one, &mut slots(0), &mut FactFree));
+        assert!(!pattern.match_against(&RealizedTy::int(), &mut slots(0), &mut FactFree));
+    }
+
+    #[test]
+    fn interface_bindings_may_be_wider_in_the_pattern_but_not_in_the_value() {
+        // These patterns carry a frame reference, which is what routes them through the
+        // structural interface arm at all: a fully-realized interface pattern is a
+        // realized type, so it is compared as one and never reaches this rule.
+        let bind = |member: &str, ty: TyTemplate| (Name::new(member), ty);
+        let concrete_bind = |member: &str, ty: RealizedTy| (Name::new(member), ty);
+
+        // Surplus *pattern* bindings do not constrain: every binding the value carries
+        // is still met, and the frame reference binds from it.
+        let wide_pattern = TyTemplate::Interface(
+            qtn("I"),
+            vec![],
+            vec![
+                bind("Item", TyTemplate::TypeArgRef(0)),
+                bind("Error", tmpl(RealizedTy::string())),
+            ],
+            TyAttr::default(),
+        );
+        let value = RealizedTy::Interface(
+            qtn("I"),
+            vec![],
+            vec![concrete_bind("Item", RealizedTy::int())],
+            TyAttr::default(),
+        );
+        let mut bindings = slots(1);
+        assert!(wide_pattern.match_against(&value, &mut bindings, &mut FactFree));
+        assert_eq!(bindings[0], Some(RealizedTy::int()));
+
+        // A binding the value carries and the pattern lacks is unmet, so it does not.
+        let narrow_pattern = TyTemplate::Interface(
+            qtn("I"),
+            vec![],
+            vec![bind("Item", TyTemplate::TypeArgRef(0))],
+            TyAttr::default(),
+        );
+        let wide_value = RealizedTy::Interface(
+            qtn("I"),
+            vec![],
+            vec![
+                concrete_bind("Item", RealizedTy::int()),
+                concrete_bind("Error", RealizedTy::string()),
+            ],
+            TyAttr::default(),
+        );
+        assert!(!narrow_pattern.match_against(&wide_value, &mut slots(1), &mut FactFree));
+    }
+
+    #[test]
+    fn interface_bindings_match_by_name_not_position() {
+        // Declaration orders need not agree, so the pairing is by name. A frame
+        // reference in the second-declared binding pins that it is not positional.
+        let pattern = TyTemplate::Interface(
+            qtn("I"),
+            vec![],
+            vec![
+                (Name::new("Error"), tmpl(RealizedTy::string())),
+                (Name::new("Item"), TyTemplate::TypeArgRef(0)),
+            ],
+            TyAttr::default(),
+        );
+        let value = RealizedTy::Interface(
+            qtn("I"),
+            vec![],
+            vec![
+                (Name::new("Item"), RealizedTy::int()),
+                (Name::new("Error"), RealizedTy::string()),
+            ],
+            TyAttr::default(),
+        );
+        let mut bindings = slots(1);
+        assert!(pattern.match_against(&value, &mut bindings, &mut FactFree));
+        assert_eq!(bindings[0], Some(RealizedTy::int()));
+    }
+
+    #[test]
+    fn an_unreduced_projection_never_matches() {
+        // A value's type carries no unreduced projection to pair with.
+        let pattern = TyTemplate::AssociatedTypeProjection {
+            base: Box::new(TyTemplate::TypeArgRef(0)),
+            interface: Box::new(TyTemplateInterface {
+                name: qtn("I"),
+                generics: vec![],
+                associated_types: vec![],
+            }),
+            member: Name::new("Item"),
+            attr: TyAttr::default(),
+        };
+        assert!(!pattern.match_against(&RealizedTy::int(), &mut slots(1), &mut FactFree));
     }
 }

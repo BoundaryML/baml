@@ -22,7 +22,10 @@ use bex_vm_types::{
     types::{Object, RuntimeImplRule},
 };
 
-use crate::{BexVm, type_context::StructuralEquivCtx};
+use crate::{
+    BexVm,
+    type_context::{DispatchCompare, StructuralEquivCtx},
+};
 
 /// The runtime impl resolver over a running VM. Holding the `&BexVm` here —
 /// rather than threading it through every helper — keeps the whole selection
@@ -249,7 +252,11 @@ impl<'vm> ImplResolver<'vm> {
         let base = concrete_base(concrete_ty);
         let concrete_ty = &*base;
         let mut bindings: Vec<Option<RealizedTy>> = vec![None; rule.generic_param_bounds.len()];
-        if !self.match_template(&rule.for_ty_pattern, concrete_ty, &mut bindings) {
+        if !rule.for_ty_pattern.match_against(
+            concrete_ty,
+            &mut bindings,
+            &mut DispatchCompare(self.vm),
+        ) {
             return None;
         }
         // The for-type pattern must constrain every generic param — a param the
@@ -328,191 +335,6 @@ impl<'vm> ImplResolver<'vm> {
         ex_qtn == iface
             && (requested_args.is_empty() || self.ty_args_equivalent(ex_args, requested_args))
             && self.associated_bindings_equivalent(ex_assoc, requested_assoc)
-    }
-
-    /// Unify a `TyTemplate` pattern against a concrete `RealizedTy`, binding each
-    /// `TypeArgRef(n)` into `bindings[n]`. A repeated param must bind consistently.
-    fn match_template(
-        self,
-        pattern: &TyTemplate,
-        concrete: &RealizedTy,
-        bindings: &mut [Option<RealizedTy>],
-    ) -> bool {
-        // A fully-realized pattern carries no frame refs or holes: compare it to the
-        // concrete type semantically (union-order-insensitive, matching the type
-        // checker) through the canonical fact-opaque `StructuralEquivCtx`. The
-        // flattened successor to the old `Concrete(t)` arm.
-        if let Ok(realized) = <&RealizedTy>::try_from(pattern) {
-            return StructuralEquivCtx(self.vm).equivalent(realized.as_ty(), concrete.as_ty());
-        }
-
-        match pattern {
-            TyTemplate::TypeArgRef(n) => {
-                match bindings.get_mut(*n as usize) {
-                    Some(slot @ None) => {
-                        *slot = Some(concrete.clone());
-                        true
-                    }
-                    // A repeated param must bind consistently; compare semantically so a
-                    // union binds the same regardless of member order.
-                    Some(Some(bound)) => {
-                        StructuralEquivCtx(self.vm).equivalent(bound.as_ty(), concrete.as_ty())
-                    }
-                    None => false,
-                }
-            }
-            TyTemplate::List(inner, _) => match concrete {
-                RealizedTy::List(elem, _) => self.match_template(inner, elem, bindings),
-                _ => false,
-            },
-            TyTemplate::Map { key, value, .. } => match concrete {
-                RealizedTy::Map {
-                    key: ckey,
-                    value: cvalue,
-                    ..
-                } => {
-                    self.match_template(key, ckey, bindings)
-                        && self.match_template(value, cvalue, bindings)
-                }
-                _ => false,
-            },
-            TyTemplate::Class(name, args, _) => match concrete {
-                RealizedTy::Class(cname, cargs, _) => {
-                    name == cname && self.all_match(args, cargs, bindings)
-                }
-                _ => false,
-            },
-            TyTemplate::Interface(name, args, assoc, _) => match concrete {
-                RealizedTy::Interface(cname, cargs, cassoc, _) => {
-                    // Each *concrete* binding must match a same-named pattern binding, found
-                    // order-insensitively; extra pattern bindings don't constrain. This
-                    // direction mirrors the compiler's selection matcher
-                    // (`match_ty_pattern_into`'s `Interface` arm, which iterates the concrete
-                    // bindings and requires each in the pattern) so runtime dispatch never
-                    // selects an impl compile-time selection would reject. A positional,
-                    // length-locked `zip` would instead diverge if the two declaration orders
-                    // differed. (A top-level interface for-type is rejected by
-                    // `is_valid_impl_subject`; this is only reached for a nested interface
-                    // argument, where the binding sets coincide in well-formed code.)
-                    name == cname
-                        && self.all_match(args, cargs, bindings)
-                        && cassoc.iter().all(|(cn, ct)| {
-                            assoc
-                                .iter()
-                                .find(|(an, _)| an == cn)
-                                .is_some_and(|(_, at)| self.match_template(at, ct, bindings))
-                        })
-                }
-                _ => false,
-            },
-            // A symbolic projection whose witness type was not resolved at compile
-            // time — never a match: a runtime value's concrete type carries no
-            // unresolved projection to unify with.
-            TyTemplate::AssociatedTypeProjection { .. } => false,
-            TyTemplate::Function {
-                params,
-                ret,
-                throws,
-                ..
-            } => match concrete {
-                RealizedTy::Function {
-                    params: cparams,
-                    ret: cret,
-                    throws: cthrows,
-                    ..
-                } => {
-                    params.len() == cparams.len()
-                        && params.iter().zip(cparams).all(|(p, cp)| {
-                            p.name == cp.name
-                                && p.mode == cp.mode
-                                && self.match_template(&p.ty, &cp.ty, bindings)
-                        })
-                        && self.match_template(ret, cret, bindings)
-                        && self.match_template(throws, cthrows, bindings)
-                }
-                _ => false,
-            },
-            TyTemplate::Future(value, error, _) => match concrete {
-                RealizedTy::Future(cvalue, cerror, _) => {
-                    self.match_template(value, cvalue, bindings)
-                        && self.match_template(error, cerror, bindings)
-                }
-                _ => false,
-            },
-            // Order-insensitive union match: each pattern member must pair with a
-            // distinct concrete member, with type-var bindings consistent across the
-            // chosen pairing (so `Box<T | int>` matches a value `Box<int | string>`).
-            TyTemplate::Union(parts, _) => match concrete {
-                RealizedTy::Union(cparts, _) => self.match_union(parts, cparts, bindings),
-                _ => false,
-            },
-            // Realized leaves are handled by the fast path above.
-            _ => false,
-        }
-    }
-
-    /// Pairwise-unify positional template args against concrete args (same arity).
-    fn all_match(
-        self,
-        patterns: &[TyTemplate],
-        concretes: &[RealizedTy],
-        bindings: &mut [Option<RealizedTy>],
-    ) -> bool {
-        patterns.len() == concretes.len()
-            && patterns
-                .iter()
-                .zip(concretes)
-                .all(|(p, c)| self.match_template(p, c, bindings))
-    }
-
-    /// Match union members order-insensitively: every pattern member must pair with a
-    /// *distinct* concrete member (a perfect matching), with type-var bindings
-    /// consistent across the pairing. Backtracks — restoring `bindings` after a failed
-    /// branch — because a greedy pairing can bind a type var to the wrong member
-    /// (e.g. `[T, int]` against `[int, string]` must pick `T = string`, not `T = int`).
-    fn match_union(
-        self,
-        patterns: &[TyTemplate],
-        concretes: &[RealizedTy],
-        bindings: &mut [Option<RealizedTy>],
-    ) -> bool {
-        if patterns.len() != concretes.len() {
-            return false;
-        }
-        self.match_union_rec(
-            patterns,
-            concretes,
-            &mut vec![false; concretes.len()],
-            bindings,
-        )
-    }
-
-    fn match_union_rec(
-        self,
-        patterns: &[TyTemplate],
-        concretes: &[RealizedTy],
-        used: &mut [bool],
-        bindings: &mut [Option<RealizedTy>],
-    ) -> bool {
-        let Some((first, rest)) = patterns.split_first() else {
-            return true;
-        };
-        for (i, concrete) in concretes.iter().enumerate() {
-            if used[i] {
-                continue;
-            }
-            let snapshot = bindings.to_vec();
-            if self.match_template(first, concrete, bindings) {
-                used[i] = true;
-                if self.match_union_rec(rest, concretes, used, bindings) {
-                    return true;
-                }
-                used[i] = false;
-            }
-            // Restore bindings mutated by the (failed) trial before trying the next.
-            bindings.clone_from_slice(&snapshot);
-        }
-        false
     }
 
     /// Whether a matched impl's implemented-interface instantiation satisfies the
@@ -830,7 +652,6 @@ mod tests {
     #[test]
     fn concrete_literal_pattern_matches_only_the_literal() {
         let vm = crate::vm::tests::test_vm(Vec::new());
-        let resolver = ImplResolver::new(&vm);
         let one = RealizedTy::Literal(Literal::Int(1), Freshness::Regular, TyAttr::default());
         let pattern = TyTemplate::from(RealizedTy::Literal(
             Literal::Int(1),
@@ -838,7 +659,8 @@ mod tests {
             TyAttr::default(),
         ));
         let mut binds: Vec<Option<RealizedTy>> = Vec::new();
-        assert!(resolver.match_template(&pattern, &one, &mut binds));
-        assert!(!resolver.match_template(&pattern, &RealizedTy::int(), &mut binds));
+        let cmp = &mut DispatchCompare(&vm);
+        assert!(pattern.match_against(&one, &mut binds, cmp));
+        assert!(!pattern.match_against(&RealizedTy::int(), &mut binds, cmp));
     }
 }
