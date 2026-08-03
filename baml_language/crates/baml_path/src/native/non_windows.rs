@@ -34,6 +34,10 @@ pub(super) fn vfs_path_from_native_path(path: &Path) -> Result<VfsPathBuf, FsPat
     VfsPathBuf::new(encoded)
 }
 
+#[expect(
+    clippy::unnecessary_wraps,
+    reason = "keep the platform conversion contract fallible for Windows"
+)]
 pub(super) fn native_path_from_vfs_path(path: &VfsPathBuf) -> Result<PathBuf, FsPathError> {
     Ok(PathBuf::from(path.as_str()))
 }
