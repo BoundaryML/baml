@@ -68,6 +68,40 @@ pub type TyTemplate = baml_type::TyTemplate<TypeHead>;
 
 /// [`baml_type::RuntimeInterface`] at the runtime's head.
 pub type RuntimeInterface = baml_type::RuntimeInterface<TypeHead>;
+
+/// A head that could not be named when converting a type out of the VM.
+///
+/// Carries the tag rather than a stand-in name: a boundary that cannot say what
+/// a type *is* must fail rather than hand the host something that looks like a
+/// real type but names nothing.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct UnnameableHead(pub baml_type::typetag::TypeTag);
+
+impl std::fmt::Display for UnnameableHead {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "type head #{} names no loaded declaration",
+            self.0.as_i64()
+        )
+    }
+}
+
+impl std::error::Error for UnnameableHead {}
+
+/// Re-anchor a runtime type onto names, for handing it outside the VM.
+///
+/// A [`TypeHead`] is a live pointer into this process's heap, so it is
+/// meaningless in an FFI payload or a file. Every boundary out of the VM
+/// converts through here — see [`TypeHead::declared_name`].
+pub fn name_headed(ty: &RuntimeTy) -> Result<baml_type::RuntimeTy, UnnameableHead> {
+    ty.try_map_heads(&mut |head| head.declared_name().ok_or(UnnameableHead(head.tag())))
+}
+
+/// [`name_headed`] for a realized type.
+pub fn name_headed_realized(ty: &RealizedTy) -> Result<baml_type::RealizedTy, UnnameableHead> {
+    ty.try_map_heads(&mut |head| head.declared_name().ok_or(UnnameableHead(head.tag())))
+}
 pub use types::{
     ArrayContainer, ArrayReadGuard, ArrayWriteGuard, AtomicValueSlot, BoundMethod, CaptureCategory,
     CaptureOption, Class, ClassField, CleanupLatch, ClientBuildMeta, ClientBuildType, CollectorRef,

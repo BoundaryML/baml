@@ -485,7 +485,7 @@ impl TyTemplateInterface {
     }
 }
 
-impl fmt::Display for TyTemplate {
+impl<N: Clone + crate::HeadDisplay> fmt::Display for TyTemplate<N> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         // Render through `Ty`'s `Display` so every shared construct (list-postfix
         // parenthesization, `future<…>` casing, function `throws` handling, …)
@@ -496,11 +496,11 @@ impl fmt::Display for TyTemplate {
     }
 }
 
-impl TyTemplate {
+impl<N: Clone> TyTemplate<N> {
     /// A lossy [`Ty`] view for rendering only: frame refs become
     /// `TypeVar("#n")`. Every other node maps structurally, so
     /// [`fmt::Display`] can delegate to `Ty`'s renderer.
-    fn to_display_ty(&self) -> crate::Ty {
+    fn to_display_ty(&self) -> crate::Ty<N> {
         use crate::Ty;
         match self {
             Self::TypeArgRef(n) => Ty::TypeVar(

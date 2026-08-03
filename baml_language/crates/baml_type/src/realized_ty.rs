@@ -87,7 +87,7 @@ impl RealizedTy {
     }
 }
 
-impl std::fmt::Display for RealizedTy {
+impl<N: Clone + crate::HeadDisplay> std::fmt::Display for RealizedTy<N> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         // Zero-cost borrowed upcast; rendering lives on `Ty`.
         std::fmt::Display::fmt(self.as_ty(), f)

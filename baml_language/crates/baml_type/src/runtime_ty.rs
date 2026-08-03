@@ -200,7 +200,7 @@ impl RuntimeTy {
     // the site can reach.)
 }
 
-impl std::fmt::Display for RuntimeTy {
+impl<N: Clone + crate::HeadDisplay> std::fmt::Display for RuntimeTy<N> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         std::fmt::Display::fmt(self.as_ty(), f)
     }

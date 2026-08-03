@@ -131,6 +131,36 @@ impl TypeHead {
         Self::unresolved(TypeTag::of_head(&name.render_dotted(false)))
     }
 
+    /// The fully-qualified name of the declaration this head points at, or
+    /// `None` if the head is unresolved or does not point at a declaration.
+    ///
+    /// The inverse of [`of_name`](Self::of_name), and the boundary conversion: a
+    /// head is a live pointer into this process's heap, so anything leaving the
+    /// VM — an FFI payload, a serialized artifact, a host-facing value —
+    /// converts back to names first. Pair it with `try_map_heads` to carry a
+    /// whole type across.
+    #[must_use]
+    pub fn declared_name(self) -> Option<baml_type::TypeName> {
+        if !self.is_resolved() {
+            return None;
+        }
+        // SAFETY: as in `head_display_name` — a resolved head points into the
+        // heap's compile-time region, which is never moved or collected, and
+        // this reads a declaration that is immutable after load.
+        #[expect(
+            unsafe_code,
+            reason = "recovering a head's name requires reading its declaration"
+        )]
+        let object = unsafe { self.ptr.get() };
+        match object {
+            crate::Object::Class(class) => Some(class.name.clone()),
+            crate::Object::Enum(enm) => Some(enm.name.clone()),
+            crate::Object::Interface(iface) => Some(iface.name.clone()),
+            crate::Object::TypeAlias(alias) => Some(alias.name.clone()),
+            _ => None,
+        }
+    }
+
     /// Whether the pointer cache has been filled — false for a head straight out
     /// of emit or a decoder, true once the loader has bound it.
     #[must_use]
@@ -178,6 +208,37 @@ impl TypeHead {
             "forwarding an unresolved head: the collector reached a head the loader never bound",
         );
         self.ptr = moved;
+    }
+}
+
+/// A head names itself by reaching its declaration — the runtime counterpart of
+/// a `QualifiedTypeName` answering from the name it already is.
+///
+/// Unresolved heads, and the tag of something that is not a declaration, render
+/// as their tag rather than a guess: a display path must never invent a name,
+/// and this is reached from `Display`, which cannot report an error.
+impl baml_type::HeadDisplay for TypeHead {
+    fn head_display_name(&self) -> String {
+        if !self.is_resolved() {
+            return format!("<unresolved type #{}>", self.tag.as_i64());
+        }
+        // SAFETY: a resolved head points at a declaration object, and every
+        // declaration lives in the heap's compile-time region — never moved,
+        // never collected (see `BexHeap::compile_time_ptr`) — so the pointer
+        // stays valid for as long as the heap does. Read-only, and declarations
+        // are immutable after load, so no aliasing obligation arises either.
+        #[expect(
+            unsafe_code,
+            reason = "naming a head requires reading the declaration it points at"
+        )]
+        let object = unsafe { self.ptr.get() };
+        match object {
+            crate::Object::Class(class) => class.name.display_name().to_string(),
+            crate::Object::Enum(enm) => enm.name.display_name().to_string(),
+            crate::Object::Interface(iface) => iface.name.display_name().to_string(),
+            crate::Object::TypeAlias(alias) => alias.name.display_name().to_string(),
+            _ => format!("<type #{}>", self.tag.as_i64()),
+        }
     }
 }
 
@@ -374,6 +435,47 @@ mod tests {
         // that names a primitive.
         let primitive = borsh::to_vec(&TypeTag::from_i64(baml_type::typetag::INT)).expect("encode");
         assert!(TypeHead::try_from_slice(&primitive).is_err());
+    }
+
+    /// A heap-headed type renders by reaching its declaration, so the runtime
+    /// gets real names out of `Display` without a package-map lookup — and an
+    /// unresolved head degrades to its tag instead of inventing one.
+    #[test]
+    fn a_heap_headed_type_renders_through_its_declaration() {
+        use baml_type::{RealizedTy, TyAttr};
+
+        let name = baml_type::TypeName::new(
+            baml_base::Name::new("demo"),
+            vec![],
+            baml_base::Name::new("Person"),
+        );
+        let mut declaration = crate::Object::Class(Box::new(crate::types::Class {
+            name: name.clone(),
+            fields: vec![],
+            description: None,
+            alias: None,
+            docstring: None,
+            other: Default::default(),
+            type_tag: TypeTag::of_head(&name.render_dotted(false)),
+            ty_attr: TyAttr::default(),
+            has_cleanup: false,
+            generic_param_count: 0,
+            runtime_type: None,
+        }));
+
+        let mut head = TypeHead::of_name(&name);
+        let unresolved: RealizedTy<TypeHead> = RealizedTy::Class(head, vec![], TyAttr::default());
+        assert_eq!(
+            unresolved.to_string(),
+            format!("<unresolved type #{}>", head.tag().as_i64()),
+        );
+
+        head.resolve(ptr_to(&mut declaration));
+        let ty: RealizedTy<TypeHead> = RealizedTy::List(
+            Box::new(RealizedTy::Class(head, vec![], TyAttr::default())),
+            TyAttr::default(),
+        );
+        assert_eq!(ty.to_string(), "demo.Person[]");
     }
 
     /// Dynamic tags are disjoint from every content-addressed one, so a
