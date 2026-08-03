@@ -5624,33 +5624,141 @@ function baml.llm.render_prompt_values(values: unknown[]) -> unknown[] {
     load_var _4
     is_type baml.iter.Done
     pop_jump_if_false L1
-    jump L5
+    jump L21
 
   L1:
     load_var _4
     store_var_load_var value
     is_type baml.llm.Role
     pop_jump_if_false L2
-    jump L3
+    jump L19
 
   L2:
+    load_var value
+    store_var _11
+    load_var _11
+    narrow_bind baml.media.Image, slot=7
+    pop_jump_if_false L3
+    jump L18
+
+  L3:
+    load_var value
+    store_var _13
+    load_var _13
+    narrow_bind baml.media.Pdf, slot=8
+    pop_jump_if_false L4
+    jump L17
+
+  L4:
+    load_var value
+    store_var _15
+    load_var _15
+    narrow_bind baml.media.Audio, slot=9
+    pop_jump_if_false L5
+    jump L16
+
+  L5:
+    load_var value
+    store_var _17
+    load_var _17
+    narrow_bind baml.media.Video, slot=10
+    pop_jump_if_false L6
+    jump L15
+
+  L6:
+    load_var value
+    store_var _19
+    load_var _19
+    pop 1
+    load_const false
+    pop_jump_if_false L7
+    jump L14
+
+  L7:
+    load_var value
+    store_var _21
+    load_var _21
+    pop 1
+    load_const false
+    pop_jump_if_false L8
+    jump L13
+
+  L8:
+    load_var value
+    store_var _23
+    load_var _23
+    pop 1
+    load_const false
+    pop_jump_if_false L9
+    jump L12
+
+  L9:
+    load_var value
+    store_var _25
+    load_var _25
+    pop 1
+    load_const false
+    pop_jump_if_false L10
+    jump L11
+
+  L10:
     load_type unknown
     load_var value
     call baml.String.from
     store_var _9
-    jump L4
+    jump L20
 
-  L3:
+  L11:
+    load_var _25
+    store_var _9
+    jump L20
+
+  L12:
+    load_var _23
+    store_var _9
+    jump L20
+
+  L13:
+    load_var _21
+    store_var _9
+    jump L20
+
+  L14:
+    load_var _19
+    store_var _9
+    jump L20
+
+  L15:
+    load_var _17
+    store_var _9
+    jump L20
+
+  L16:
+    load_var _15
+    store_var _9
+    jump L20
+
+  L17:
+    load_var _13
+    store_var _9
+    jump L20
+
+  L18:
+    load_var _11
+    store_var _9
+    jump L20
+
+  L19:
     load_var value
     store_var _9
 
-  L4:
+  L20:
     load_var2 2 6
     call baml.Array.push
     pop 1
     jump L0
 
-  L5:
+  L21:
     load_var rendered
     return
 }

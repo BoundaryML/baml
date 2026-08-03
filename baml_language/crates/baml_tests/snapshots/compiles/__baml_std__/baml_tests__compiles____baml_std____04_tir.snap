@@ -2557,10 +2557,26 @@ function baml.llm.render_prompt_values(values: unknown[]) -> unknown[] throws ne
     let rendered: unknown[] = [] : unknown[]
     for value in values
       { : int
-        rendered.push(match (value) { Role => value, _ => string.from(value) }) : int
-          match (value : unknown) : baml.llm.Role | string
+        rendered.push(match (value) { Role => value, media: baml.media.Image => media, media: baml.media.Pdf => media, media: baml.media.Audio => media, media: baml.media.Video => media, media: image => media, media: pdf => media, media: audio => media, media: video => media, _ => string.from(value) }) : int
+          match (value : unknown) : baml.llm.Role | baml.media.Image | baml.media.Pdf | baml.media.Audio | baml.media.Video | image | pdf | audio | video | string
             Role =>
               value : baml.llm.Role
+            media: baml.media.Image =>
+              media : baml.media.Image
+            media: baml.media.Pdf =>
+              media : baml.media.Pdf
+            media: baml.media.Audio =>
+              media : baml.media.Audio
+            media: baml.media.Video =>
+              media : baml.media.Video
+            media: image =>
+              media : image
+            media: pdf =>
+              media : pdf
+            media: audio =>
+              media : audio
+            media: video =>
+              media : video
             _ =>
               string.from<T>(value) : string
       }

@@ -8106,10 +8106,26 @@ fn baml.llm.render_prompt_values(values: unknown[]) -> unknown[] {
     let _6: unknown
     let _7: unknown // value
     let _8: void
-    let _9: string | baml.llm.Role
+    let _9: string | image | audio | video | pdf | baml.llm.Role | baml.media.Audio | baml.media.Image | baml.media.Pdf | baml.media.Video
     let _10: bool
     let _11: unknown
-    let _12: type
+    let _12: baml.media.Image // media
+    let _13: unknown
+    let _14: baml.media.Pdf // media
+    let _15: unknown
+    let _16: baml.media.Audio // media
+    let _17: unknown
+    let _18: baml.media.Video // media
+    let _19: unknown
+    let _20: image // media
+    let _21: unknown
+    let _22: pdf // media
+    let _23: unknown
+    let _24: audio // media
+    let _25: unknown
+    let _26: video // media
+    let _27: unknown
+    let _28: type
 
     bb0: {
         _2 = []: unknown[];
@@ -8122,7 +8138,7 @@ fn baml.llm.render_prompt_values(values: unknown[]) -> unknown[] {
 
     bb2: {
         _5 = is_type(copy _4, baml.iter.Done);
-        branch copy _5 -> [bb7, bb3];
+        branch copy _5 -> [bb23, bb3];
     }
 
     bb3: {
@@ -8130,30 +8146,118 @@ fn baml.llm.render_prompt_values(values: unknown[]) -> unknown[] {
         fresh_cell(_7);
         _7 = copy _6;
         _10 = is_type(copy _7, baml.llm.Role);
-        branch copy _10 -> [bb5, bb4];
+        branch copy _10 -> [bb21, bb4];
     }
 
     bb4: {
         _11 = copy _7;
-        _12 = load_type(unknown);
-        _9 = call const fn baml.String.from<copy _12>(copy _11) -> [bb6];
+        _11 = narrow_bind copy _11 as Class(QualifiedTypeName { pkg: Dep("baml"), namespace: ["media"], name: "Image" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb20, bb5];
     }
 
     bb5: {
-        _9 = copy _7;
-        goto -> bb6;
+        _13 = copy _7;
+        _13 = narrow_bind copy _13 as Class(QualifiedTypeName { pkg: Dep("baml"), namespace: ["media"], name: "Pdf" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb19, bb6];
     }
 
     bb6: {
-        _8 = call const fn baml.Array.push(copy _2, copy _9) -> [bb1];
+        _15 = copy _7;
+        _15 = narrow_bind copy _15 as Class(QualifiedTypeName { pkg: Dep("baml"), namespace: ["media"], name: "Audio" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb18, bb7];
     }
 
     bb7: {
-        _0 = copy _2;
-        goto -> bb8;
+        _17 = copy _7;
+        _17 = narrow_bind copy _17 as Class(QualifiedTypeName { pkg: Dep("baml"), namespace: ["media"], name: "Video" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb17, bb8];
     }
 
     bb8: {
+        _19 = copy _7;
+        _19 = narrow_bind copy _19 as Media(Image, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb16, bb9];
+    }
+
+    bb9: {
+        _21 = copy _7;
+        _21 = narrow_bind copy _21 as Media(Pdf, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb15, bb10];
+    }
+
+    bb10: {
+        _23 = copy _7;
+        _23 = narrow_bind copy _23 as Media(Audio, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb14, bb11];
+    }
+
+    bb11: {
+        _25 = copy _7;
+        _25 = narrow_bind copy _25 as Media(Video, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb13, bb12];
+    }
+
+    bb12: {
+        _27 = copy _7;
+        _28 = load_type(unknown);
+        _9 = call const fn baml.String.from<copy _28>(copy _27) -> [bb22];
+    }
+
+    bb13: {
+        _26 = copy _25;
+        _9 = copy _26;
+        goto -> bb22;
+    }
+
+    bb14: {
+        _24 = copy _23;
+        _9 = copy _24;
+        goto -> bb22;
+    }
+
+    bb15: {
+        _22 = copy _21;
+        _9 = copy _22;
+        goto -> bb22;
+    }
+
+    bb16: {
+        _20 = copy _19;
+        _9 = copy _20;
+        goto -> bb22;
+    }
+
+    bb17: {
+        _18 = copy _17;
+        _9 = copy _18;
+        goto -> bb22;
+    }
+
+    bb18: {
+        _16 = copy _15;
+        _9 = copy _16;
+        goto -> bb22;
+    }
+
+    bb19: {
+        _14 = copy _13;
+        _9 = copy _14;
+        goto -> bb22;
+    }
+
+    bb20: {
+        _12 = copy _11;
+        _9 = copy _12;
+        goto -> bb22;
+    }
+
+    bb21: {
+        _9 = copy _7;
+        goto -> bb22;
+    }
+
+    bb22: {
+        _8 = call const fn baml.Array.push(copy _2, copy _9) -> [bb1];
+    }
+
+    bb23: {
+        _0 = copy _2;
+        goto -> bb24;
+    }
+
+    bb24: {
         return;
     }
 }
