@@ -1,0 +1,23 @@
+---
+source: crates/baml_tests/src/type_spec/fixtures.rs
+expression: outcome.dump
+---
+492..497 'apply': throws __effect_param_0
+533..545 '{\n    f(v)\n}': int
+539..540 'f': (x: int) -> int throws __effect_param_0
+539..543 'f(v)': int
+541..542 'v': int
+556..557 'g': hir_ty=[throws "neg"] tir=[throws string]
+573..655 '{\n   ... v)\n}': int
+603..608 'apply': hir_ty=[(f: (x: int) -> int throws "neg", v: int) -> int throws "neg"] tir=[(f: (x: int) -> int throws __effect_param_0, v: int) -> int throws __effect_param_0]
+603..653 'apply(... }, v)': int
+609..649 '(x) ->... } x }': hir_ty=[(x: int) -> int throws "neg"] tir=[(x: int) -> int throws __effect_param_0]
+616..649 '{ if (... } x }': int
+618..645 'if (x ...eg"; }': void
+622..623 'x': int
+622..627 'x < 0': bool
+626..627 '0': 0
+629..645 '{ thro...eg"; }': never
+637..642 '"neg"': "neg"
+646..647 'x': int
+651..652 'v': int
