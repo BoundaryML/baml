@@ -2204,6 +2204,17 @@ test my_test {
         // The `implements … for …` block merges onto same-file `MyClass`, so it
         // is an in-class impl — its docstring is intentionally absent today.
         // A cross-file (free) impl keeps its docstring.
+        let in_class_impl = *item_data::class_impls(&db, class)
+            .first()
+            .expect("MyClass has an in-class impl");
+        assert_eq!(
+            item_data::impl_block_data(&db, in_class_impl)
+                .docstring
+                .as_deref(),
+            None,
+            "in-class impl docstrings are absent today"
+        );
+
         let file_b = db.add_file(
             "spans_b.baml",
             "/// Free impl docs.\nimplements MyIface for int {\n  function m(self) -> int { 2 }\n}\n",

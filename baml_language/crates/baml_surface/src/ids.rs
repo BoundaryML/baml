@@ -174,20 +174,20 @@ impl SymbolId {
         if let Symbol::Function(function) = symbol {
             match function.owner(db) {
                 Some(FunctionOwner::Class(class)) => {
-                    return Some(Self::member_id(
+                    return Self::member_id(
                         db,
                         Symbol::Class(class),
                         IdKind::Method,
                         &function.name(db),
-                    ));
+                    );
                 }
                 Some(FunctionOwner::Interface(iface)) => {
-                    return Some(Self::member_id(
+                    return Self::member_id(
                         db,
                         Symbol::Interface(iface),
                         IdKind::Method,
                         &function.name(db),
-                    ));
+                    );
                 }
                 Some(FunctionOwner::Impl(_)) => return None,
                 None => {}
@@ -225,21 +225,22 @@ impl SymbolId {
             Member::Variant(_) => IdKind::Variant,
             Member::AssocType(_) => IdKind::AssocType,
         };
-        Some(Self::member_id(db, owner, kind, &member.name(db)))
+        Self::member_id(db, owner, kind, &member.name(db))
     }
 
-    fn member_id(db: &dyn Db, owner: Symbol<'_>, kind: IdKind, member: &Name) -> Self {
-        let owner_name = owner
-            .name(db)
-            .unwrap_or_else(|| unreachable!("member owners are named items"));
+    /// `None` when the owner has no name — an impl block, which is identified
+    /// structurally rather than by path, so its members cannot be addressed
+    /// this way.
+    fn member_id(db: &dyn Db, owner: Symbol<'_>, kind: IdKind, member: &Name) -> Option<Self> {
+        let owner_name = owner.name(db)?;
         let pkg = baml_compiler2_hir::file_package::file_package(db, owner.file(db));
-        Self {
+        Some(Self {
             kind,
             package: pkg.package.to_string(),
             namespace: pkg.namespace_path.iter().map(ToString::to_string).collect(),
             name: owner_name.to_string(),
             member: Some(member.to_string()),
-        }
+        })
     }
 
     /// Resolve this id against a database. Kind-directed: a `T:` id only
@@ -341,10 +342,17 @@ fn resolve_in_package<'db>(
         match item_path {
             [] => return Some(Resolved::Namespace(namespace)),
             [item] => {
-                let symbol = namespace
+                // `continue`, not `?`: a miss here must fall back to a shorter
+                // namespace prefix, or a name that is both a namespace and a
+                // type in its parent (`baml.json`) would never resolve as the
+                // type. Matches the `[item, member]` arm below.
+                if let Some(symbol) = namespace
                     .type_named(db, item)
-                    .or_else(|| namespace.value_named(db, item))?;
-                return Some(Resolved::Symbol(symbol));
+                    .or_else(|| namespace.value_named(db, item))
+                {
+                    return Some(Resolved::Symbol(symbol));
+                }
+                continue;
             }
             [item, member] => {
                 // `String.split` — implicit member drill-in.

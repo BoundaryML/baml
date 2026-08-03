@@ -17,6 +17,12 @@ fn make_db() -> ProjectDatabase {
 fn assert_package_exports_fully() {
     let db = make_db();
     let export = export_package(&db, Package::named(&db, "assert"));
+    // Without this the test still passes if `assert` stops resolving: the
+    // export becomes an empty document and the snapshot is accepted as-is.
+    assert!(
+        !export.items.is_empty(),
+        "the assert package resolves and exports items"
+    );
     insta::assert_snapshot!(serde_json::to_string_pretty(&export).unwrap());
 }
 

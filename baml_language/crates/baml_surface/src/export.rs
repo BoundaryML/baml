@@ -1,9 +1,11 @@
 //! The export IR: one serializable document describing a package's surface.
 //!
 //! A direct projection of the handle layer — every field corresponds to a
-//! handle method, every list is sorted, and the whole document is
-//! deterministic for a given source state, so committed artifacts diff
-//! meaningfully.
+//! handle method, and the whole document is deterministic for a given source
+//! state, so committed artifacts diff meaningfully. Ordering is by list kind:
+//! items, impls, methods, and id lists are name- or id-sorted, while member
+//! lists (fields, variants, associated types, required methods) keep
+//! declaration order, which is the meaningful order for a reader.
 //!
 //! Types are exported as [`TyRef`] — a canonical display string plus a
 //! resolved head reference — rather than as structural trees. That is the

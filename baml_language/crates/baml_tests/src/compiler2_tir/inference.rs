@@ -1095,6 +1095,7 @@ interface Encoder {
 
     let pick = &methods[1];
     assert_eq!(pick.name.as_str(), "pick");
+    assert!(pick.diagnostics.is_empty(), "{:?}", pick.diagnostics);
     assert_eq!(pick.generic_params.len(), 1);
     let (param, bounds) = &pick.generic_params[0];
     assert_eq!(param.name().as_str(), "T");
