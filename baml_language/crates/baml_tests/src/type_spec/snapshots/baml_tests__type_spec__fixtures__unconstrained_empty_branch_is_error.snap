@@ -1,0 +1,14 @@
+---
+source: crates/baml_tests/src/type_spec/fixtures.rs
+expression: outcome.dump
+---
+506..587 '{\n   ...op;\n}': void
+512..519 'let top': hir_ty=[int[] | !error[]] tir=[int[] | _[]]
+522..546 'if c {...{ [] }': hir_ty=[int[] | !error[]] tir=[int[] | _[]]
+525..526 'c': bool
+527..534 '{ [1] }': int[]
+529..532 '[1]': int[]
+530..531 '1': 1
+540..546 '{ [] }': hir_ty=[!error[]] tir=[_[]]
+542..544 '[]': hir_ty=[!error[]] tir=[_[]]
+581..584 'top': hir_ty=[int[] | !error[]] tir=[int[] | _[]]

@@ -1442,24 +1442,76 @@ impl<'db> InferenceContext<'db> {
         )
     }
 
-    /// The endgame: resolve bounded variables (the ruling-1 skeleton -
-    /// widen fresh lowers, lowers must AGREE, checked against the uppers;
-    /// S13 adds defaulting rounds and the full policy), drain the deferred
-    /// residue, then substitute solved variables out of every recorded
-    /// type. The S13 finalization invariant (no `Infer` reaches the result)
-    /// lands with `finalize_var`.
+    /// The endgame (S13 finalize): resolve bounded variables to fixpoint,
+    /// drain the deferred residue, then FINALIZE every recorded type -
+    /// substitute solutions, replace each surviving variable or hole with
+    /// the Error sentinel LOCALLY (rust-analyzer's replace-with-error
+    /// discipline, never poison-to-top; rulings 2/3 - the diagnostics land
+    /// with S17), and re-canonicalize the unions that `union_of` left
+    /// syntactic while variables were live. The invariant afterward: no
+    /// `Infer` reaches the result.
     fn finish(mut self) -> InferenceResult {
         self.resolve_bounded_vars();
         self.drain_deferred_subs();
-        let mut result = self.result;
+        let mut result = std::mem::take(&mut self.result);
         for ty in result
             .type_of_expr
             .values_mut()
             .chain(result.type_of_binding.values_mut())
         {
-            *ty = self.table.resolve_completely(ty);
+            *ty = self.finalize_ty(ty);
+        }
+        for (expected, actual) in result.type_mismatches.values_mut() {
+            *expected = self.finalize_ty(expected);
+            *actual = self.finalize_ty(actual);
         }
         result
+    }
+
+    /// One recorded type, finalized: solved variables substituted,
+    /// survivors erased to the local Error sentinel, unions
+    /// re-canonicalized (skipped for error-carrying types - the canonical
+    /// algebra is Error-tolerant and would collapse them arbitrarily).
+    fn finalize_ty(&mut self, ty: &Ty) -> Ty {
+        let resolved = self.table.resolve_completely(ty);
+        let erased = erase_infer(&resolved);
+        if erased.has_error() {
+            return erased;
+        }
+        self.canonicalize_unions(&erased)
+    }
+
+    /// Rebuilds `ty` with every union node in canonical form, bottom-up.
+    /// Idempotent on already-canonical types; repairs the syntactic unions
+    /// `union_of` built while a member still carried a variable.
+    ///
+    /// Presentation order: `null` moves LAST - the optional convention
+    /// (`T?` reads `T | null`, the spec's own notation). The shared
+    /// canonical sort is an internal detail load-bearing for the TIR-era
+    /// tier snapshots, so the convention applies at this crate's result
+    /// boundary; it folds into the shared algebra at cutover (S16).
+    fn canonicalize_unions(&self, ty: &Ty) -> Ty {
+        match ty.kind() {
+            TyKind::Union(members, _) => {
+                let members: Vec<Ty> = members
+                    .iter()
+                    .map(|member| self.canonicalize_unions(member))
+                    .collect();
+                let joined = canonical_union_interned(&members, &self.facts);
+                match joined.kind() {
+                    TyKind::Union(members, attr) => {
+                        let (mut ordered, nulls): (Vec<Ty>, Vec<Ty>) = members
+                            .iter()
+                            .cloned()
+                            .partition(|member| !matches!(member.kind(), TyKind::Null { .. }));
+                        ordered.extend(nulls);
+                        Ty::intern(TyKind::Union(ordered.into(), attr.clone()))
+                    }
+                    _ => joined,
+                }
+            }
+            _ => Ty::intern(ty.kind().map_children(|child| self.canonicalize_unions(child))),
+        }
     }
 
     /// Derives solutions from accumulated bounds, iterating because one
@@ -1469,7 +1521,8 @@ impl<'db> InferenceContext<'db> {
             let mut progressed = false;
             for (var, bounds) in self.table.unsolved_bounded_vars() {
                 // Bounds must be ground to decide; classes whose bounds
-                // still mention other unsolved vars wait for a later round.
+                // still mention other unsolved vars wait for a later round
+                // (a cycle that never grounds is erased at finalize).
                 let lowers: Vec<Ty> = bounds
                     .lowers
                     .iter()
@@ -1484,35 +1537,38 @@ impl<'db> InferenceContext<'db> {
                     continue;
                 }
                 let solution = if lowers.is_empty() {
-                    // No values flowed in: a single agreed upper is the
-                    // answer (the general meet arrives with S13).
-                    let mut uppers = uppers;
-                    uppers.dedup();
-                    match uppers.as_slice() {
-                        [only] => only.clone(),
-                        _ => continue,
+                    // No values flowed in: the MINIMUM upper is the meet
+                    // when one exists (BAML has no intersections, so
+                    // incomparable uppers have no representable meet -
+                    // unresolved, erased at finalize).
+                    let minimum = uppers.iter().find(|candidate| {
+                        uppers
+                            .iter()
+                            .all(|upper| is_subtype_interned(candidate, upper, &self.facts))
+                    });
+                    match minimum {
+                        Some(minimum) => minimum.clone(),
+                        None => continue,
                     }
                 } else {
                     // Ruling 1: widen fresh literals, then all lowers must
-                    // agree; disagreement is a mismatch (Error until the
-                    // S17 diagnostic), and the choice is checked against
-                    // every upper.
-                    let mut widened: Vec<Ty> =
+                    // AGREE (equality, not adjacency-dedup); disagreement
+                    // is a mismatch (Error until the S17 diagnostic), and
+                    // the choice is checked against every upper.
+                    let widened: Vec<Ty> =
                         lowers.iter().map(|ty| self.widen_fresh(ty)).collect();
-                    widened.dedup();
-                    match widened.as_slice() {
-                        [only] => {
-                            let candidate = only.clone();
-                            if uppers
-                                .iter()
-                                .all(|upper| is_subtype_interned(&candidate, upper, &self.facts))
-                            {
-                                candidate
-                            } else {
-                                Ty::error()
-                            }
+                    let first = widened.first().expect("non-empty lowers").clone();
+                    if widened.iter().all(|lower| *lower == first) {
+                        if uppers
+                            .iter()
+                            .all(|upper| is_subtype_interned(&first, upper, &self.facts))
+                        {
+                            first
+                        } else {
+                            Ty::error()
                         }
-                        _ => Ty::error(),
+                    } else {
+                        Ty::error()
                     }
                 };
                 self.table.solve(var, solution);
@@ -1562,6 +1618,18 @@ fn function_value_ty(signature: &crate::lower::FunctionSignature, instantiation:
         throws: substitute_params(&signature.throws, instantiation),
         attr: TyAttr::default(),
     })
+}
+
+/// Replaces every `Infer` node (unsolved variable or hole) with the Error
+/// sentinel, in place - the finalize half of rulings 2/3.
+fn erase_infer(ty: &Ty) -> Ty {
+    if !ty.has_infer() {
+        return ty.clone();
+    }
+    if matches!(ty.kind(), TyKind::Infer { .. }) {
+        return Ty::error();
+    }
+    Ty::intern(ty.kind().map_children(|child| erase_infer(child)))
 }
 
 /// A fresh literal widens to its base primitive at binding sites (the spec's
