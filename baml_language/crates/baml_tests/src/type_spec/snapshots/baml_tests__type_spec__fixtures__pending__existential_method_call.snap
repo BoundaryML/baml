@@ -1,0 +1,8 @@
+---
+source: crates/baml_tests/src/type_spec/fixtures.rs
+expression: outcome.dump
+---
+327..328 'f': throws never
+357..403 '{\n   ...ing\n}': hir_ty=[!error] tir=[string]
+363..374 't.to_string': hir_ty=[!error] tir=[() -> string throws never]
+363..376 't.to_string()': hir_ty=[!error] tir=[string]

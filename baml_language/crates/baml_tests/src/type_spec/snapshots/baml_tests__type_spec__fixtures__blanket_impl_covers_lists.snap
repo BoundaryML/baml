@@ -1,0 +1,20 @@
+---
+source: crates/baml_tests/src/type_spec/fixtures.rs
+expression: outcome.dump
+---
+372..373 'f': throws never
+404..472 '{\n   ...  e\n}': baml.ops.Equals
+410..432 'let e:...Equals': baml.ops.Equals
+417..432 'baml.ops.Equals': hir_ty=[!error] tir=[baml.ops.Equals]
+435..437 'xs': int[]
+469..470 'e': baml.ops.Equals
+603..615 'join_absorbs': throws never
+675..748 '{\n   ...  u\n}': hir_ty=[baml.ops.Equals] tir=[int[] | baml.ops.Equals]
+681..686 'let u': hir_ty=[baml.ops.Equals] tir=[int[] | baml.ops.Equals]
+689..713 'if (c)... { e }': hir_ty=[baml.ops.Equals] tir=[int[] | baml.ops.Equals]
+693..694 'c': bool
+696..702 '{ xs }': int[]
+698..700 'xs': int[]
+708..713 '{ e }': baml.ops.Equals
+710..711 'e': baml.ops.Equals
+745..746 'u': hir_ty=[baml.ops.Equals] tir=[int[] | baml.ops.Equals]

@@ -54,18 +54,26 @@ impl TypeContext for Facts<'_> {
         )
     }
 
-    // -- Interface facts: conservative until the impl registry (I1+) ----------
+    // -- Interface facts (I1: the impl registry answers; bounds and
+    // projections stay conservative until I2/I5) ------------------------------
 
-    fn implements_interface(&self, _concrete: &Ty, _interface: &Interface) -> bool {
-        false
+    fn implements_interface(&self, concrete: &Ty, interface: &Interface) -> bool {
+        let concrete = crate::impls::interned_ty(concrete);
+        let target = crate::impls::InterfaceTarget::from_constraint(interface);
+        crate::impls::implements_interface(self.db, &concrete, &target)
     }
 
     fn type_var_bound(&self, _param: &ParamTy) -> Vec<Interface> {
         Vec::new()
     }
 
-    fn interface_requires(&self, _sub: &Interface, _sup: &Interface) -> bool {
-        false
+    fn interface_requires(&self, sub: &Interface, sup: &Interface) -> bool {
+        crate::impls::interface_requires(
+            self.db,
+            &crate::impls::InterfaceTarget::from_constraint(sub),
+            &crate::impls::InterfaceTarget::from_constraint(sup),
+            8,
+        )
     }
 
     fn associated_type_bound(&self, _interface: &Interface, _assoc: Name) -> Vec<Interface> {

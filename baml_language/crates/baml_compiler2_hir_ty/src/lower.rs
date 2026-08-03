@@ -487,6 +487,15 @@ pub fn class_self_ty<'db>(db: &'db dyn baml_compiler2_ppir::Db, class: ClassLoc<
     class_ty(class_qualified_name(db, class), args)
 }
 
+/// A generic frame from bare interface param names (no `Self` slot -
+/// the registry's `requires` lowering; the full interface frame with
+/// `Self` at index 0 stays `function_generic_frame`'s).
+pub fn interface_generic_frame_params(names: &[Name]) -> Vec<ParamTy> {
+    let mut frame = Vec::new();
+    extend_frame(&mut frame, names);
+    frame
+}
+
 /// The root generic frame for a class.
 pub fn class_generic_frame<'db>(
     db: &'db dyn baml_compiler2_ppir::Db,

@@ -26,6 +26,7 @@
 
 pub mod callable;
 pub mod exhaustiveness;
+pub mod impls;
 pub mod facts;
 pub mod infer;
 pub mod lower;

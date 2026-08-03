@@ -256,9 +256,6 @@ struct InferenceContext<'db> {
     /// owner's channel; lambdas and `catch` bases push their own.
     throws_channels: Vec<Vec<Ty>>,
     table: InferenceTable,
-    /// Operator impls, built lazily on the first dispatching operator
-    /// (becomes a salsa query with S3's incremental firewall).
-    operators: Option<crate::ops::OperatorRegistry>,
     /// The irreducible `Sub` residue: pairs that were neither ground nor
     /// var-headed nor decomposable when emitted; re-examined at finish once
     /// resolution has run. Generalizes into the obligation worklist at I4.
@@ -295,7 +292,6 @@ impl<'db> InferenceContext<'db> {
             declared_throws: None,
             throws_channels: vec![Vec::new()],
             table: InferenceTable::new(),
-            operators: None,
             deferred_subs: Vec::new(),
             diverges: Diverges::Maybe,
             result: InferenceResult::default(),
@@ -1072,22 +1068,23 @@ impl<'db> InferenceContext<'db> {
         if undispatchable(&lhs) || rhs.as_ref().is_some_and(undispatchable) {
             return Ty::error();
         }
-        if self.operators.is_none() {
-            self.operators = Some(crate::ops::OperatorRegistry::build(self.db));
-        }
-        let registry = self.operators.as_ref().expect("just built");
         let mut outputs = Vec::new();
         for lhs_member in operand_members(&lhs) {
             match &rhs {
                 Some(rhs) => {
                     for rhs_member in operand_members(rhs) {
-                        match registry.output(interface, &lhs_member, Some(&rhs_member)) {
+                        match crate::ops::operator_output(
+                            self.db,
+                            interface,
+                            &lhs_member,
+                            Some(&rhs_member),
+                        ) {
                             Some(output) => outputs.push(output),
                             None => return Ty::error(),
                         }
                     }
                 }
-                None => match registry.output(interface, &lhs_member, None) {
+                None => match crate::ops::operator_output(self.db, interface, &lhs_member, None) {
                     Some(output) => outputs.push(output),
                     None => return Ty::error(),
                 },
