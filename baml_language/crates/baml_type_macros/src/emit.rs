@@ -28,6 +28,7 @@ pub(crate) fn emit(family: &Family) -> TokenStream {
         out.extend(gen_member_enum(family, member));
         out.extend(gen_accessors(family, member));
         out.extend(gen_head_visitors(family, member));
+        out.extend(gen_head_mappers(family, member));
     }
     // Satellites are generated only for deep members; shallow members reuse
     // their child's satellite (e.g. `ConcreteTy::Function` holds
@@ -464,6 +465,258 @@ fn visit_expr(
     Some(crate::convert::unsupported(ty))
 }
 
+// ── Head mappers ─────────────────────────────────────────────────────────────
+//
+// The visitors above reach every head at a *fixed* representation. Re-anchoring
+// the runtime onto heap-backed heads needs the other direction: rebuild the same
+// tree at a *different* head type. That cannot be a `visit_heads_mut` — an
+// in-place rewrite cannot change a value's type — so it is a structural map,
+// generated for the same reason the visitors are. A head-bearing variant added
+// later gets its mapping with it, instead of silently keeping the old head type
+// on a hand-maintained conversion.
+//
+// The fallible form is the primitive: resolving a name to a heap pointer can
+// fail, and a failed lookup must surface rather than fill a stand-in head.
+// `map_heads` is the infallible wrapper, for total directions like recovering a
+// name from an anchored head.
+
+/// A method-level parameter named `preferred`, or `preferred2` if the family's
+/// head parameter already claims that name.
+fn fresh_param(head: &Ident, preferred: &str) -> Ident {
+    if head == preferred {
+        format_ident!("{preferred}2")
+    } else {
+        format_ident!("{preferred}")
+    }
+}
+
+/// The bounds declared on the head parameter, to be reapplied to the mapped-to
+/// parameter — the target of a map must satisfy whatever the family requires of
+/// a head, and duplicating a literal `Clone` here would drift from the DSL.
+fn head_bounds(generics: &Generics) -> Option<TokenStream> {
+    generics.params.iter().find_map(|p| match p {
+        GenericParam::Type(t) if !t.bounds.is_empty() => {
+            let bounds = &t.bounds;
+            Some(quote!(#bounds))
+        }
+        GenericParam::Type(_) | GenericParam::Lifetime(_) | GenericParam::Const(_) => None,
+    })
+}
+
+/// A mapper names the mapped-to type (`Ty<M>`), so unlike the visitors it cannot
+/// tolerate a lifetime or const parameter riding alongside the head.
+fn mapper_generics_ok(generics: &Generics) -> Result<(), TokenStream> {
+    if generics.params.len() == 1 {
+        return Ok(());
+    }
+    Err(quote! {
+        ::core::compile_error!(
+            "ty_family: head mappers require the head to be the family's only \
+             generic parameter; naming the mapped-to type is impossible otherwise"
+        );
+    })
+}
+
+fn mapper_docs(param: &Ident, m: &Ident) -> (String, String) {
+    (
+        format!(
+            " Rebuild this type with every `{param}` head replaced by the `{m}` that\n\
+              `f` resolves it to, failing on the first head `f` rejects.\n\n\
+              This is the only way to change a type's head representation: heads sit\n\
+              in the type, so re-anchoring them produces a different type rather\n\
+              than mutating this one."
+        ),
+        format!(
+            " Rebuild this type with every `{param}` head replaced by `f`'s result.\n\n\
+              The total counterpart of `try_map_heads`, for directions that cannot\n\
+              fail — recovering a name from an anchored head, say."
+        ),
+    )
+}
+
+/// The mapper pair for a member enum: a match rebuilding each variant.
+fn gen_head_mappers(family: &Family, member: &Member) -> TokenStream {
+    let param = match head_param(family) {
+        Ok(Some(p)) => p,
+        Ok(None) => return TokenStream::new(),
+        Err(e) => return e,
+    };
+    if let Err(e) = mapper_generics_ok(&family.generics) {
+        return e;
+    }
+    let name = &member.name;
+    let arms = member_variants(family, member).map(|v| map_arm(family, param, name, v));
+    mapper_impl(
+        family,
+        param,
+        name,
+        &family.generics,
+        quote! { match self { #(#arms)* } },
+    )
+}
+
+/// The satellite analogue: a plain struct, so a field-wise rebuild.
+fn gen_sat_head_mappers(family: &Family, sat_name: &Ident, sat: &Satellite) -> TokenStream {
+    let param = match head_param(family) {
+        Ok(Some(p)) => p,
+        Ok(None) => return TokenStream::new(),
+        Err(e) => return e,
+    };
+    if let Err(e) = mapper_generics_ok(&sat.generics) {
+        return e;
+    }
+    let inits = sat.fields.iter().filter_map(|field| {
+        let fid = field.ident.as_ref()?;
+        let place = quote!((&self.#fid));
+        let expr = map_expr(family, param, &field.ty, place);
+        Some(quote!(#fid: #expr))
+    });
+    mapper_impl(
+        family,
+        param,
+        sat_name,
+        &sat.generics,
+        quote! { #sat_name { #(#inits),* } },
+    )
+}
+
+/// The shared `try_map_heads` / `map_heads` impl block; `body` is the expression
+/// producing the rebuilt value (a match for an enum, a literal for a struct).
+fn mapper_impl(
+    family: &Family,
+    param: &Ident,
+    name: &Ident,
+    generics: &Generics,
+    body: TokenStream,
+) -> TokenStream {
+    let (impl_g, ty_g, where_c) = generics.split_for_impl();
+    let m = fresh_param(param, "M");
+    let e = fresh_param(param, "E");
+    let f = fresh_param(param, "F");
+    let m_bound = head_bounds(&family.generics).map(|b| quote!(#m: #b,));
+    let (try_doc, total_doc) = mapper_docs(param, &m);
+    quote! {
+        impl #impl_g #name #ty_g #where_c {
+            #[doc = #try_doc]
+            pub fn try_map_heads<#m, #e, #f>(
+                &self,
+                f: &mut #f,
+            ) -> ::core::result::Result<#name<#m>, #e>
+            where
+                #m_bound
+                #f: ::core::ops::FnMut(&#param) -> ::core::result::Result<#m, #e>,
+            {
+                ::core::result::Result::Ok(#body)
+            }
+
+            #[doc = #total_doc]
+            pub fn map_heads<#m, #f>(&self, f: &mut #f) -> #name<#m>
+            where
+                #m_bound
+                #f: ::core::ops::FnMut(&#param) -> #m,
+            {
+                match self.try_map_heads::<#m, ::core::convert::Infallible, _>(
+                    &mut |__head: &#param| ::core::result::Result::Ok(f(__head)),
+                ) {
+                    ::core::result::Result::Ok(__mapped) => __mapped,
+                    // `Infallible` is uninhabited, so this arm is unreachable by
+                    // type, not by argument.
+                    ::core::result::Result::Err(__never) => match __never {},
+                }
+            }
+        }
+    }
+}
+
+/// One rebuild arm. Unlike [`head_arm`], *every* field is bound and reproduced —
+/// a map returns a whole value, so the head-free fields must be carried across
+/// rather than skipped.
+fn map_arm(family: &Family, param: &Ident, name: &Ident, v: &MVariant) -> TokenStream {
+    let id = &v.ident;
+    match &v.fields {
+        Fields::Unit => quote! { #name::#id => #name::#id, },
+        Fields::Named(named) => {
+            let mut binds = Vec::new();
+            let mut inits = Vec::new();
+            for field in &named.named {
+                let Some(fid) = field.ident.as_ref() else {
+                    continue;
+                };
+                let expr = map_expr(family, param, &field.ty, quote!(#fid));
+                binds.push(quote!(#fid));
+                inits.push(quote!(#fid: #expr));
+            }
+            quote! { #name::#id { #(#binds),* } => #name::#id { #(#inits),* }, }
+        }
+        Fields::Unnamed(unnamed) => {
+            let mut pats = Vec::new();
+            let mut inits = Vec::new();
+            for (i, field) in unnamed.unnamed.iter().enumerate() {
+                let b = format_ident!("f{}", i);
+                inits.push(map_expr(family, param, &field.ty, quote!(#b)));
+                pats.push(quote!(#b));
+            }
+            quote! { #name::#id ( #(#pats),* ) => #name::#id ( #(#inits),* ), }
+        }
+    }
+}
+
+/// An expression rebuilding what `place` (a shared reference) holds, with heads
+/// mapped through `f`. `?` inside propagates out of the generated method, so
+/// every wrapper is expanded as a block or `match` rather than a closure.
+fn map_expr(family: &Family, param: &Ident, ty: &syn::Type, place: TokenStream) -> TokenStream {
+    // Head-free payloads (a `TyAttr`, a field `Name`, a discriminant) are carried
+    // across unchanged. Spelled as a call rather than `place.clone()` so a
+    // non-`Clone` payload is a type error here instead of silently cloning the
+    // reference.
+    if !mentions(ty, param) {
+        return quote! { ::core::clone::Clone::clone(#place) };
+    }
+    if crate::convert::path_head(ty).is_some_and(|id| id == param) {
+        return quote! { f(#place)? };
+    }
+    if let Some(id) = crate::convert::path_head(ty)
+        && (*id == family.master_ident || family.satellites.iter().any(|s| s.name == *id))
+    {
+        return quote! { #place.try_map_heads(f)? };
+    }
+    if let Some(inner) = crate::convert::wrapper_arg(ty, "Box") {
+        let inner_expr = map_expr(family, param, inner, quote!((&**#place)));
+        return quote! { ::std::boxed::Box::new(#inner_expr) };
+    }
+    if let Some(inner) = crate::convert::wrapper_arg(ty, "Vec") {
+        let inner_expr = map_expr(family, param, inner, quote!(__head_item));
+        return quote! {{
+            let mut __head_out = ::std::vec::Vec::with_capacity(#place.len());
+            for __head_item in #place.iter() {
+                __head_out.push(#inner_expr);
+            }
+            __head_out
+        }};
+    }
+    if let Some(inner) = crate::convert::wrapper_arg(ty, "Option") {
+        let inner_expr = map_expr(family, param, inner, quote!(__head_item));
+        return quote! {
+            match #place.as_ref() {
+                ::core::option::Option::Some(__head_item) => {
+                    ::core::option::Option::Some(#inner_expr)
+                }
+                ::core::option::Option::None => ::core::option::Option::None,
+            }
+        };
+    }
+    if let syn::Type::Tuple(t) = ty {
+        // Trailing comma so a one-element tuple stays a tuple rather than
+        // collapsing to a parenthesized expression.
+        let parts = t.elems.iter().enumerate().map(|(i, et)| {
+            let idx = Index::from(i);
+            map_expr(family, param, et, quote!((&#place.#idx)))
+        });
+        return quote! { ( #(#parts,)* ) };
+    }
+    crate::convert::unsupported(ty)
+}
+
 /// Whether `ty` mentions `param` anywhere, including inside generic arguments.
 fn mentions(ty: &syn::Type, param: &Ident) -> bool {
     fn walk(ts: TokenStream, param: &Ident) -> bool {
@@ -490,6 +743,7 @@ fn gen_satellite(family: &Family, member: &Member, sat: &Satellite) -> TokenStre
     });
 
     let visitors = gen_sat_head_visitors(family, &sat_name, sat);
+    let mappers = gen_sat_head_mappers(family, &sat_name, sat);
     let doc = format!(
         " Companion of [`{}`] for the `{}` member of the family.",
         sat.name, member.name
@@ -507,6 +761,7 @@ fn gen_satellite(family: &Family, member: &Member, sat: &Satellite) -> TokenStre
         }
         #methods
         #visitors
+        #mappers
     }
 }
 

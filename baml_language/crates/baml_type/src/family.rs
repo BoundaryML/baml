@@ -506,6 +506,57 @@ mod tests {
         assert!(none.is_empty());
     }
 
+    /// `map_heads` rebuilds the whole tree at a different head type, carrying
+    /// every head-free payload across unchanged.
+    ///
+    /// This is how the runtime will re-anchor a serialized `RuntimeTy<TypeName>`
+    /// onto heap-backed heads at load, so the properties that matter are that no
+    /// head is missed (the mapped-back value equals the original) and that
+    /// nothing *but* the heads changes — a dropped `Name` or `TyAttr` would be a
+    /// silent loss the head walkers cannot catch.
+    #[test]
+    fn map_heads_rebuilds_at_a_new_head() {
+        // Covers a satellite inside a `Vec` (`Function::params`), a satellite
+        // behind a `Box` (the projection's `interface`), a head in a `Vec` of
+        // nested types, and one in a `Vec<(Name, _)>` tuple element.
+        let t: Interned = Ty::AssociatedTypeProjection {
+            base: Box::new(Ty::Function {
+                params: vec![FunctionParamTy::required(
+                    Some(Name::new("x")),
+                    Ty::Class(1, vec![Ty::Enum(2, a())], a()),
+                )],
+                ret: Box::new(Ty::Void { attr: a() }),
+                throws: Box::new(Ty::Never { attr: a() }),
+                attr: a(),
+            }),
+            interface: Box::new(crate::Interface::new(
+                3,
+                vec![Ty::TypeAlias(4, a())],
+                vec![(Name::new("Item"), Ty::EnumVariant(5, Name::new("V"), a()))],
+            )),
+            member: Name::new("Out"),
+            attr: a(),
+        };
+
+        let renamed: Ty<String> = t.map_heads(&mut |head| format!("h{head}"));
+        let mut seen = Vec::new();
+        renamed.visit_heads(&mut |head| seen.push(head.clone()));
+        assert_eq!(seen, ["h1", "h2", "h3", "h4", "h5"]);
+
+        // Mapping back is the identity: every head was reached, and every
+        // non-head field survived the round trip.
+        let back: Interned = renamed.map_heads(&mut |head| head[1..].parse().unwrap());
+        assert_eq!(back, t);
+
+        // The fallible form stops at the first head it cannot resolve — a
+        // failed head lookup must surface, not leave a stand-in behind.
+        let rejected: Result<Ty<String>, u32> = t.try_map_heads(&mut |head| match head {
+            3 => Err(*head),
+            _ => Ok(format!("h{head}")),
+        });
+        assert_eq!(rejected, Err(3));
+    }
+
     /// A type variable nested inside a concrete container: representable in
     /// `RuntimeTy` but not `RealizedTy`.
     fn with_typevar() -> Ty {
