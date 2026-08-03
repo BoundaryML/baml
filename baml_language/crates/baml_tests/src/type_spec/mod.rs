@@ -18,3 +18,4 @@
 pub(crate) mod harness;
 
 mod fixtures;
+mod pattern_corpus;

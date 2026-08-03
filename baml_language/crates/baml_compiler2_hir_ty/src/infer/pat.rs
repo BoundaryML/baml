@@ -25,7 +25,7 @@ use baml_compiler2_ast::{ExprBody, ExprId, MatchArmId, PatId, Pattern};
 use baml_type::{
     Freshness, TyAttr,
     interned::{Ty, TyKind},
-    normalize::{TypeContext as _, is_subtype_interned},
+    normalize::{TypeContext as _, is_subtype_interned, normalize_interned},
 };
 
 use super::{Expectation, InferenceContext};
@@ -50,12 +50,14 @@ impl InferenceContext<'_> {
     pub(super) fn infer_match(
         &mut self,
         body: &ExprBody,
+        match_expr: ExprId,
         scrutinee: ExprId,
         arms: &[MatchArmId],
         expected: &Expectation,
     ) -> Ty {
         let scrut_ty = self.infer_expr(body, scrutinee, &Expectation::None);
-        let scrut_resolved = self.table.resolve_completely(&scrut_ty);
+        let resolved = self.table.resolve_completely(&scrut_ty);
+        let scrut_resolved = self.matrix_scrut(&resolved);
         let scrut_binding = self.narrowable_binding(body, scrutinee);
         let branch_expectation = expected.adjust_for_branches(&mut self.table);
 
@@ -103,6 +105,7 @@ impl InferenceContext<'_> {
         if !report.missing.is_empty() {
             // Non-exhaustive: the match can fall through, which the type
             // system rejects. S17 renders the witnesses as E0062.
+            self.result.non_exhaustive_matches.insert(match_expr);
             return Ty::error();
         }
         self.join(&arm_tys)
@@ -113,7 +116,8 @@ impl InferenceContext<'_> {
     /// result is always bool. S10b reads the outcome for narrowing.
     pub(super) fn infer_is(&mut self, body: &ExprBody, scrutinee: ExprId, pattern: PatId) -> Ty {
         let scrut_ty = self.infer_expr(body, scrutinee, &Expectation::None);
-        let scrut_resolved = self.table.resolve_completely(&scrut_ty);
+        let resolved = self.table.resolve_completely(&scrut_ty);
+        let scrut_resolved = self.matrix_scrut(&resolved);
         self.lower_pattern(body, pattern, &scrut_resolved);
         Ty::bool()
     }
@@ -136,7 +140,20 @@ impl InferenceContext<'_> {
             None => Ty::error(),
         };
         let resolved = self.table.resolve_completely(&init_ty);
+        let resolved = self.matrix_scrut(&resolved);
         self.lower_pattern(body, pattern, &resolved);
+    }
+
+    /// The canonical scrutinee for pattern analysis (TIR's
+    /// `matrix_normalize_scrut`): aliases expanded, unions canonical - so
+    /// a `Role = "user" | "assistant"` alias scrutinee projects onto its
+    /// members. Var/error scrutinees pass through (the oracle requires
+    /// var-free input; those matches sentinel out anyway).
+    fn matrix_scrut(&self, ty: &Ty) -> Ty {
+        if ty.has_infer() || ty.has_error() {
+            return ty.clone();
+        }
+        normalize_interned(ty, &self.facts)
     }
 
     /// The scrutinee's binding, when it is a bare local - the only
@@ -346,6 +363,13 @@ impl InferenceContext<'_> {
     fn dpat_for_type(&self, pat_ty: &Ty, col: &Ty) -> DPat {
         let col_plain = col.to_plain();
         let pat_plain = pat_ty.to_plain();
+        // The universal coverage rule first: a pattern the whole column
+        // provably fits is a wildcard at this column, whatever its shape
+        // (a same-union pattern must not decompose into per-member
+        // singles that no longer align with UnionMember ctors).
+        if provable_subtype(col, pat_ty, &self.facts) {
+            return DPat::wildcard(col_plain);
+        }
         match pat_ty.kind() {
             TyKind::Literal(..) | TyKind::EnumVariant(..) | TyKind::Null { .. } => {
                 DPat::single(pat_plain, col_plain)
@@ -634,11 +658,11 @@ fn provable_subtype(sub: &Ty, sup: &Ty, facts: &crate::facts::Facts<'_>) -> bool
     if sub.has_infer() || sup.has_infer() || sub.has_error() || sup.has_error() {
         return false;
     }
-    if sub.has_typevar() || sup.has_typevar() {
-        // Same-variable identity was handled above; distinct rigid pairs
-        // need the bounds oracle (I2) to prove anything.
-        return false;
-    }
+    // Rigid variables go to the oracle too: its typevar arms are already
+    // conservative (`T <: T`, `T <: unknown`, `never <: T` prove; a rigid
+    // against an unrelated concrete does not - which is exactly the B-633
+    // rule). The corpus pinned the case this matters for: a synthetic
+    // effect var IS covered by `throws unknown`.
     is_subtype_interned(sub, sup, facts)
 }
 

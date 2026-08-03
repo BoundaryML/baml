@@ -63,6 +63,9 @@ pub struct InferenceResult {
     /// `(expected, actual)`. Recorded always (rust-analyzer's discipline);
     /// rendered as diagnostics in S17.
     pub type_mismatches: FxHashMap<ExprId, (Ty, Ty)>,
+    /// Match expressions whose unguarded arms do not cover the scrutinee.
+    /// The expression types as Error; S17 renders E0062 with witnesses.
+    pub non_exhaustive_matches: rustc_hash::FxHashSet<ExprId>,
 }
 
 /// Infers types for one body owner (function or top-level let), keyed by the
@@ -455,7 +458,7 @@ impl<'db> InferenceContext<'db> {
                 scrutinee, arms, ..
             } => {
                 let arms = arms.clone();
-                self.infer_match(body, *scrutinee, &arms, expected)
+                self.infer_match(body, expr, *scrutinee, &arms, expected)
             }
             Expr::Is { scrutinee, pattern } => self.infer_is(body, *scrutinee, *pattern),
             // Not yet implemented: visit children generically, record the
