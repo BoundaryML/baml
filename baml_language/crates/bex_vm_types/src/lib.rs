@@ -41,6 +41,33 @@ pub use runtime_compile::{
 };
 pub use task_group::{TaskGroupInner, TaskGroupPermit, TaskGroupTicket};
 pub use type_head::TypeHead;
+
+// ── The runtime's instantiation of the `baml_type` family ────────────────────
+//
+// The runtime carries the *same* types the compiler does, at a different head:
+// a [`TypeHead`] (tag identity + pointer) instead of a `TypeName` that must be
+// looked up in a package map. These aliases name that instantiation, so runtime
+// code writes `bex_vm_types::RuntimeTy` where compiler code writes
+// `baml_type::RuntimeTy`.
+//
+// The shadowing is deliberate. A module that needs both forms gets a name
+// collision and must say which it means — which is exactly the place where
+// mixing a compiled type with a loaded one would otherwise pass silently.
+
+/// [`baml_type::RuntimeTy`] at the runtime's head. Declaration-facing: keeps
+/// type variables and projections for reflection and dispatch.
+pub type RuntimeTy = baml_type::RuntimeTy<TypeHead>;
+
+/// [`baml_type::RealizedTy`] at the runtime's head. Value-facing: no type
+/// variables, so it is what a live value's type is.
+pub type RealizedTy = baml_type::RealizedTy<TypeHead>;
+
+/// [`baml_type::TyTemplate`] at the runtime's head. Signature-facing: leaves may
+/// be positional `TypeArgRef`s awaiting a frame's type arguments.
+pub type TyTemplate = baml_type::TyTemplate<TypeHead>;
+
+/// [`baml_type::RuntimeInterface`] at the runtime's head.
+pub type RuntimeInterface = baml_type::RuntimeInterface<TypeHead>;
 pub use types::{
     ArrayContainer, ArrayReadGuard, ArrayWriteGuard, AtomicValueSlot, BoundMethod, CaptureCategory,
     CaptureOption, Class, ClassField, CleanupLatch, ClientBuildMeta, ClientBuildType, CollectorRef,

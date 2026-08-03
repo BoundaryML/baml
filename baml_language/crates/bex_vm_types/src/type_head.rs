@@ -48,13 +48,27 @@ use crate::HeapPtr;
 /// is correct whether or not either pointer has been forwarded yet. Only
 /// *dereferencing* requires an up-to-date pointer.
 ///
-/// # Serialization
+/// # Unresolved heads, and serialization
 ///
-/// Deliberately not `Borsh`. A head is a live pointer into this process's heap
-/// and can have no meaning in a file or across an FFI boundary, so
-/// `RealizedTy<TypeHead>` is *statically* unserializable — a compile error at
-/// the boundary rather than a runtime failure. Anything crossing a boundary
-/// converts to a name-headed type first.
+/// Because the tag is the whole identity, the pointer is a *cache* of the
+/// tag→declaration lookup rather than part of the value. A head is therefore
+/// meaningful before that cache is filled: [`unresolved`](Self::unresolved)
+/// builds one that compares, orders, and hashes correctly but cannot yet be
+/// dereferenced. Emit produces those — there is no heap at compile time — and
+/// the loader fills each pointer in via [`resolve`](Self::resolve).
+///
+/// Serialization follows from the same fact: only the tag is written, and
+/// decoding yields an unresolved head. That is not lossy, because the pointer
+/// was never identity — a round trip through a file returns *the same head*,
+/// just with a cold cache. It is why a compiled `Program` can hold
+/// `RealizedTy<TypeHead>` at all despite `Object`'s Borsh impl being
+/// context-free: there is nothing to resolve *at decode time*, only at load.
+///
+/// The cost is that "unresolved" is not distinguishable in the type system, so
+/// a head the loader misses fails on its first dereference. Loading therefore
+/// ends by asserting no unresolved head survives, and `resolve`/`forward_to`
+/// each assert the state they expect, so a double-resolve or a forward of a
+/// never-resolved head is caught where it happens rather than downstream.
 ///
 /// # GC obligation
 ///
@@ -89,8 +103,60 @@ impl TypeHead {
         Self { ptr, tag }
     }
 
+    /// A head that knows *which* declaration it names but not yet *where* it
+    /// lives — the form emit produces, since there is no heap at compile time
+    /// and the tag alone is the identity. Dereferencing one before
+    /// [`resolve`](Self::resolve) is a null dereference.
+    #[must_use]
+    pub fn unresolved(tag: TypeTag) -> Self {
+        debug_assert!(
+            tag.is_head(),
+            "a type head must carry a declared head's tag, not a primitive",
+        );
+        Self {
+            ptr: HeapPtr::null(),
+            tag,
+        }
+    }
+
+    /// The unresolved head a fully-qualified name denotes.
+    ///
+    /// Tags for declared heads are content-addressed from the name, so this is a
+    /// pure function — no registry, no heap, nothing to look up. It is the one
+    /// place a name becomes a head, so the rendering that feeds the hash cannot
+    /// drift between the emitter that mints a declaration's `type_tag` and the
+    /// references pointing at it. Both use `render_dotted(false)`.
+    #[must_use]
+    pub fn of_name(name: &baml_type::TypeName) -> Self {
+        Self::unresolved(TypeTag::of_head(&name.render_dotted(false)))
+    }
+
+    /// Whether the pointer cache has been filled — false for a head straight out
+    /// of emit or a decoder, true once the loader has bound it.
+    #[must_use]
+    pub fn is_resolved(self) -> bool {
+        !self.ptr.as_ptr().is_null()
+    }
+
+    /// Fill in the access path for a head that arrived from emit or a decoder.
+    ///
+    /// The identity does not change — this only populates the cache — so
+    /// resolving late, or in any order, is safe. Resolving twice is not: it
+    /// means the loader visited one head through two paths and the second write
+    /// could disagree with the first.
+    pub fn resolve(&mut self, definition: HeapPtr) {
+        debug_assert!(
+            !self.is_resolved(),
+            "a head is resolved once; re-resolving means two loader paths reached it",
+        );
+        self.ptr = definition;
+    }
+
     /// Where the declaration lives — for dereferencing it, and for the collector
     /// to trace. Not an identity; compare [`tag`](Self::tag) instead.
+    ///
+    /// Null until [`resolve`](Self::resolve) has run; see
+    /// [`is_resolved`](Self::is_resolved).
     #[must_use]
     pub fn ptr(self) -> HeapPtr {
         self.ptr
@@ -107,6 +173,10 @@ impl TypeHead {
     /// Identity is untouched: a moved head remains equal to, and hashes and
     /// orders with, every other reference to the same declaration.
     pub fn forward_to(&mut self, moved: HeapPtr) {
+        debug_assert!(
+            self.is_resolved(),
+            "forwarding an unresolved head: the collector reached a head the loader never bound",
+        );
         self.ptr = moved;
     }
 }
@@ -137,6 +207,34 @@ impl Ord for TypeHead {
 impl std::hash::Hash for TypeHead {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         self.tag.hash(state);
+    }
+}
+
+// Only the tag crosses a boundary — the pointer is a per-process cache of the
+// tag→declaration lookup, so writing it would be meaningless and reading it back
+// would be unsound. Decoding therefore yields an unresolved head, which the
+// loader binds. Hand-written rather than derived so `ptr` cannot be folded in by
+// someone adding a `#[derive]`.
+
+impl borsh::BorshSerialize for TypeHead {
+    fn serialize<W: std::io::Write>(&self, writer: &mut W) -> std::io::Result<()> {
+        self.tag.serialize(writer)
+    }
+}
+
+impl borsh::BorshDeserialize for TypeHead {
+    fn deserialize_reader<R: std::io::Read>(reader: &mut R) -> std::io::Result<Self> {
+        let tag = TypeTag::deserialize_reader(reader)?;
+        if !tag.is_head() {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                format!("type head carries a non-head tag ({})", tag.as_i64()),
+            ));
+        }
+        Ok(Self {
+            ptr: HeapPtr::null(),
+            tag,
+        })
     }
 }
 
@@ -238,6 +336,44 @@ mod tests {
             before.ptr(),
             "only the access path changed, and it is not identity",
         );
+    }
+
+    /// A head survives serialization as *the same head* with a cold pointer
+    /// cache — the property that lets a compiled `Program` carry heap-headed
+    /// types even though `Object`'s decoder has no heap to resolve against.
+    #[test]
+    fn serialization_keeps_identity_and_drops_the_cache() {
+        use borsh::BorshDeserialize;
+
+        let mut definition = slot();
+        let resolved = TypeHead::new(ptr_to(&mut definition), TypeTag::of_head("demo.Person"));
+        assert!(resolved.is_resolved());
+
+        let decoded = TypeHead::try_from_slice(&borsh::to_vec(&resolved).expect("serialize"))
+            .expect("decode");
+        assert_eq!(decoded, resolved, "a decoded head is the same head");
+        assert!(!decoded.is_resolved(), "the pointer cache does not travel");
+
+        // Emit builds heads this way, with no heap in sight: the tag is
+        // content-addressed from the name, so it needs nothing to look up.
+        let name = baml_type::TypeName::new(
+            baml_base::Name::new("demo"),
+            vec![],
+            baml_base::Name::new("Person"),
+        );
+        assert_eq!(TypeHead::of_name(&name), resolved);
+        assert!(!TypeHead::of_name(&name).is_resolved());
+
+        // And the loader binds it without disturbing identity.
+        let mut loaded = TypeHead::of_name(&name);
+        loaded.resolve(ptr_to(&mut definition));
+        assert_eq!(loaded, resolved);
+        assert!(loaded.is_resolved());
+
+        // A non-head tag on the wire is rejected rather than producing a head
+        // that names a primitive.
+        let primitive = borsh::to_vec(&TypeTag::from_i64(baml_type::typetag::INT)).expect("encode");
+        assert!(TypeHead::try_from_slice(&primitive).is_err());
     }
 
     /// Dynamic tags are disjoint from every content-addressed one, so a
