@@ -7,7 +7,8 @@ use crate::{
     ArrayContainer, BoundMethod, Class, CollectorRef, Enum, Function, GenericFunction, HostClosure,
     Instance, MapContainer, Uint8ArrayContainer, UnscheduledFuture, Value, Variant,
     types::{
-        Array, Cell, Closure, FunctionType, FutureType, InterfaceDef, Map, Package, RuntimeImplRule,
+        Array, Cell, Closure, FunctionType, FutureType, InterfaceDef, Map, Package,
+        RuntimeImplRule, TypeAliasDef,
     },
 };
 
@@ -41,6 +42,11 @@ pub enum Object {
 
     /// Enum object.
     Enum(Box<Enum>),
+
+    /// Type-alias object. A declaration, not a value — only recursive aliases
+    /// reach the runtime, and they exist so a nominal reference can point at the
+    /// indirection rather than expand it away.
+    TypeAlias(Box<TypeAliasDef>),
 
     /// Enum value object.
     Variant(Variant),
@@ -178,6 +184,7 @@ enum ObjectWire {
     Class(Box<Class>),
     Instance(Instance),
     Enum(Box<Enum>),
+    TypeAlias(Box<TypeAliasDef>),
     Variant(Variant),
     Closure(Closure),
     BoundMethod(BoundMethod),
@@ -229,6 +236,7 @@ impl BorshSerialize for Object {
             Self::Class(v) => ObjectWire::Class(v.clone()),
             Self::Instance(v) => ObjectWire::Instance(v.clone()),
             Self::Enum(v) => ObjectWire::Enum(v.clone()),
+            Self::TypeAlias(v) => ObjectWire::TypeAlias(v.clone()),
             Self::Variant(v) => ObjectWire::Variant(v.clone()),
             Self::Closure(v) => ObjectWire::Closure(v.clone()),
             Self::BoundMethod(v) => ObjectWire::BoundMethod(v.clone()),
@@ -357,6 +365,7 @@ impl BorshDeserialize for Object {
             ObjectWire::Class(v) => Self::Class(v),
             ObjectWire::Instance(v) => Self::Instance(v),
             ObjectWire::Enum(v) => Self::Enum(v),
+            ObjectWire::TypeAlias(v) => Self::TypeAlias(v),
             ObjectWire::Variant(v) => Self::Variant(v),
             ObjectWire::Closure(v) => Self::Closure(v),
             ObjectWire::BoundMethod(v) => Self::BoundMethod(v),
@@ -417,6 +426,7 @@ impl std::fmt::Display for Object {
             Object::Class(class) => class.fmt(f),
             Object::Instance(instance) => instance.fmt(f),
             Object::Enum(enm) => enm.fmt(f),
+            Object::TypeAlias(alias) => alias.fmt(f),
             Object::Variant(value) => value.fmt(f),
             Object::Closure(closure) => {
                 let captures_len = closure.captures.len();
@@ -476,6 +486,7 @@ pub enum ObjectType {
     String,
     Bigint,
     Enum,
+    TypeAlias,
     Variant,
     Future(FutureType),
     UnscheduledFuture,
@@ -501,6 +512,7 @@ impl ObjectType {
             Object::Class(_) => Self::Class,
             Object::Instance(_) => Self::Instance,
             Object::Enum(_) => Self::Enum,
+            Object::TypeAlias(_) => Self::TypeAlias,
             Object::Variant(_) => Self::Enum,
             Object::String(_) => Self::String,
             Object::Bigint(_) => Self::Bigint,
@@ -547,6 +559,7 @@ impl std::fmt::Display for ObjectType {
             ObjectType::Cell => write!(f, "cell"),
             ObjectType::Class => write!(f, "class"),
             ObjectType::Enum => write!(f, "enum"),
+            ObjectType::TypeAlias => write!(f, "type_alias"),
             ObjectType::Variant => write!(f, "variant"),
             ObjectType::Future(future_type) => write!(f, "{future_type}"),
             ObjectType::UnscheduledFuture => write!(f, "unscheduled_future"),

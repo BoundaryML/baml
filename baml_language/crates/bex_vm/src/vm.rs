@@ -1424,6 +1424,7 @@ fn value_type_tag(value: Value) -> i64 {
                 Object::Collector(_) => type_tags::COLLECTOR,
                 Object::Type(_) => type_tags::TYPE,
                 Object::Class(_) => type_tags::UNKNOWN,
+                Object::TypeAlias(_) => type_tags::UNKNOWN,
                 Object::Interface(_) => type_tags::UNKNOWN,
                 Object::Package(_) => type_tags::UNKNOWN,
                 Object::ImplRule(_) => type_tags::UNKNOWN,
@@ -2080,14 +2081,26 @@ impl BexVm {
 
     /// The recursive type-alias definition for `qtn`, if any (only recursive
     /// aliases survive to runtime; non-recursive ones are expanded inline).
-    pub fn recursive_type_alias(&self, qtn: &baml_type::TypeName) -> Option<&baml_type::RuntimeTy> {
+    ///
+    /// Reads through the package's `Object::TypeAlias` rather than a side map —
+    /// the indirection a nominal reference will eventually point at directly.
+    pub fn recursive_type_alias(
+        &self,
+        qtn: &baml_type::TypeName,
+    ) -> Option<&baml_type::RealizedTy> {
         let local = bex_vm_types::types::LocalName {
             namespace: qtn.namespace().clone(),
             name: qtn.name().clone(),
         };
-        self.package_for_type(qtn)?
-            .recursive_type_aliases
-            .get(&local)
+        let alias_ptr = *self.package_for_type(qtn)?.type_aliases.get(&local)?;
+        // SAFETY: a package's alias map holds only compile-time
+        // `Object::TypeAlias` pointers, valid for the heap's lifetime.
+        #[expect(unsafe_code, reason = "deref a compile-time alias pointer")]
+        let object = unsafe { alias_ptr.get() };
+        match object {
+            Object::TypeAlias(alias) => Some(&alias.definition),
+            _ => None,
+        }
     }
 
     /// Get mutable access to an object via `HeapPtr`.
@@ -2639,12 +2652,13 @@ impl BexVm {
             // `Object::Function` is NOT a function-pointer value — it is the
             // internal function representation that acts as the type constructor
             // for the callables above, so like the other compile-time definition
-            // objects (a package, class, enum, interface, or impl rule) it is
-            // never a *data value* reaching a type test.
+            // objects (a package, class, enum, interface, type alias, or impl
+            // rule) it is never a *data value* reaching a type test.
             Object::Function(_)
             | Object::Package(_)
             | Object::Class(_)
             | Object::Enum(_)
+            | Object::TypeAlias(_)
             | Object::Interface(_)
             | Object::ImplRule(_) => return None,
 

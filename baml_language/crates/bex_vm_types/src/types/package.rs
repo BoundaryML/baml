@@ -1,7 +1,7 @@
 use std::sync::{Arc, atomic::AtomicBool};
 
 use baml_base::Name;
-use baml_type::{RuntimeTy, TyTemplate};
+use baml_type::TyTemplate;
 use borsh::{BorshDeserialize, BorshSerialize};
 use indexmap::IndexMap;
 
@@ -37,7 +37,10 @@ pub struct Package {
     /// runtime projection of the package surface, shared by static and dynamic
     /// packages so reflection never has to deserialize compiler IR.
     pub functions: IndexMap<LocalName, HeapPtr>,
-    pub recursive_type_aliases: IndexMap<LocalName, RuntimeTy>,
+    /// Recursive type aliases defined in the package, each an
+    /// `Object::TypeAlias`. Non-recursive aliases are expanded at lowering and
+    /// never reach here.
+    pub type_aliases: IndexMap<LocalName, HeapPtr>,
     /// Enriched, source-less compiler interface for mounting this package under
     /// an alias in a later `Package.compile` call.
     pub interface_blob: Vec<u8>,
@@ -120,7 +123,8 @@ pub struct ProgramPackage {
     /// Implemented-interface `ObjectIndex` → the impl rules of it declared in
     /// this package (may target an interface from a dependency).
     pub impl_rules: IndexMap<ObjectIndex, Vec<ProgramImplRule>>,
-    pub recursive_type_aliases: IndexMap<LocalName, RuntimeTy>,
+    /// `borsh(PackageInterface)`, captured at build time and embedded in packs.
+    pub type_aliases: IndexMap<LocalName, ObjectIndex>,
     /// `borsh(PackageInterface)`, captured at build time and embedded in packs.
     pub interface_blob: Vec<u8>,
     /// The package's synthesized `$init_test`, if present.
@@ -130,7 +134,7 @@ pub struct ProgramPackage {
 impl ProgramPackage {
     /// Sort every per-kind map and each impl-rule list into the content-determined
     /// order the serialized `Program` requires, so the bytes are reproducible
-    /// regardless of the source maps' iteration order (`recursive_type_aliases` in
+    /// regardless of the source maps' iteration order (`type_aliases` in
     /// particular is sourced from a per-process-seeded `std::HashMap`).
     ///
     /// Impl rules key on their rendered `for_ty_pattern`; that `Display` drops
@@ -146,7 +150,7 @@ impl ProgramPackage {
         self.exported_names.dedup();
         self.classes.sort_keys();
         self.enums.sort_keys();
-        self.recursive_type_aliases.sort_keys();
+        self.type_aliases.sort_keys();
         self.interfaces.sort_keys();
         self.functions.sort_keys();
         self.impl_rules.sort_keys();

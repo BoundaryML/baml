@@ -15,6 +15,7 @@ mod future;
 mod interface;
 mod object;
 mod package;
+mod type_alias;
 mod type_value;
 mod value;
 
@@ -33,6 +34,7 @@ pub use interface::*;
 pub use object::*;
 pub use package::*;
 pub use tokio_util::sync::CancellationToken;
+pub use type_alias::*;
 pub use type_value::*;
 pub use value::*;
 
@@ -153,19 +155,27 @@ impl Program {
     }
 
     /// Flatten every package's recursive type aliases into one
-    /// `TypeName → RuntimeTy` map (only recursive aliases survive; non-recursive
+    /// `TypeName → RealizedTy` map (only recursive aliases survive; non-recursive
     /// ones are expanded inline), reconstructing each qualified name from its
     /// package + `LocalName`. The shape output-format rendering consumes.
-    pub fn recursive_type_aliases(&self) -> IndexMap<baml_type::TypeName, RuntimeTy> {
+    ///
+    /// Aliases are `Object::TypeAlias` declarations, so this dereferences each
+    /// through the object pool rather than reading a side map.
+    pub fn recursive_type_aliases(&self) -> IndexMap<baml_type::TypeName, baml_type::RealizedTy> {
         let mut out = IndexMap::new();
         for (pkg_name, package) in &self.packages {
-            for (local, ty) in &package.recursive_type_aliases {
+            for (local, idx) in &package.type_aliases {
+                let Some(Object::TypeAlias(alias)) = self.objects.get(idx.raw()) else {
+                    // An index that does not resolve to an alias means the pool
+                    // and the package map disagree — skip rather than guess.
+                    continue;
+                };
                 let qtn = baml_type::TypeName::new(
                     pkg_name.clone(),
                     local.namespace.clone(),
                     local.name.clone(),
                 );
-                out.insert(qtn, ty.clone());
+                out.insert(qtn, alias.definition.clone());
             }
         }
         out

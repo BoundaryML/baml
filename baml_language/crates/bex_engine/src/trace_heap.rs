@@ -350,6 +350,7 @@ impl TraceSnapshotBuilder {
                 })
             }
             Object::Function(_)
+            | Object::TypeAlias(_)
             | Object::Class(_)
             | Object::Enum(_)
             | Object::Interface(_)
@@ -442,6 +443,7 @@ fn unsupported_object_message(object: &Object) -> String {
         Object::Function(_) => "function",
         Object::Class(_) => "class",
         Object::Enum(_) => "enum",
+        Object::TypeAlias(_) => "type alias",
         Object::Interface(_) => "interface",
         Object::Package(_) => "package",
         Object::ImplRule(_) => "impl rule",

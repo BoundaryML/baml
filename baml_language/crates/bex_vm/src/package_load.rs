@@ -359,7 +359,7 @@ fn fill_package_slots(
             interfaces: resolve_members(heap, &pkg.interfaces),
             impl_rules,
             functions: resolve_members(heap, &pkg.functions),
-            recursive_type_aliases: pkg.recursive_type_aliases.clone(),
+            type_aliases: resolve_members(heap, &pkg.type_aliases),
             interface_blob: pkg.interface_blob.clone(),
             test_init: pkg
                 .test_init
@@ -409,7 +409,7 @@ pub fn lookup_type_by_fqn(packages: &PackageIndex, fqn: &str) -> Option<HeapPtr>
 /// rendering), reconstructing each qualified name from its package + `LocalName`.
 pub fn all_recursive_type_aliases(
     packages: &PackageIndex,
-) -> IndexMap<baml_type::TypeName, baml_type::RuntimeTy> {
+) -> IndexMap<baml_type::TypeName, baml_type::RealizedTy> {
     let mut out = IndexMap::new();
     for (pkg_name, pkg_ptr) in packages.iter() {
         // SAFETY: `packages` only ever holds compile-time `Object::Package`
@@ -419,13 +419,20 @@ pub fn all_recursive_type_aliases(
         let Some(package) = object.as_package() else {
             continue;
         };
-        for (local, ty) in &package.recursive_type_aliases {
+        for (local, alias_ptr) in &package.type_aliases {
+            // SAFETY: as above — a package's alias map only holds compile-time
+            // `Object::TypeAlias` pointers, allocated alongside the package.
+            #[expect(unsafe_code, reason = "deref a compile-time alias pointer")]
+            let alias_object = unsafe { alias_ptr.get() };
+            let Object::TypeAlias(alias) = alias_object else {
+                continue;
+            };
             let qtn = baml_type::TypeName::new(
                 pkg_name.clone(),
                 local.namespace.clone(),
                 local.name.clone(),
             );
-            out.insert(qtn, ty.clone());
+            out.insert(qtn, alias.definition.clone());
         }
     }
     out

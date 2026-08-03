@@ -1898,9 +1898,12 @@ impl BexEngine {
             function_global_indices: Arc::new(bytecode.function_global_indices),
             class_definitions: Arc::new(class_definitions),
             enum_definitions: Arc::new(enum_definitions),
-            type_alias_definitions: Arc::new(bex_vm::package_load::all_recursive_type_aliases(
-                &packages,
-            )),
+            type_alias_definitions: Arc::new(
+                bex_vm::package_load::all_recursive_type_aliases(&packages)
+                    .into_iter()
+                    .map(|(name, ty)| (name, baml_type::RuntimeTy::from(ty)))
+                    .collect(),
+            ),
             runtime_io,
         };
 

@@ -1777,6 +1777,7 @@ enum PoolObjKind {
     Class,
     Enum,
     Interface,
+    TypeAlias,
     /// A named function (fully-qualified name interned in `function_indices`).
     NamedFn(String),
     /// A lambda / interned literal — attributed to a file by proximity, not name.
@@ -1832,10 +1833,23 @@ fn decompose_units_after_prefix(
     let mut class_owner: Vec<usize> = Vec::new();
     let mut enum_owner: Vec<usize> = Vec::new();
     let mut iface_owner: Vec<usize> = Vec::new();
+    // Only *recursive* aliases become pool objects, and which ones those are is a
+    // whole-package property (see Pass 3c) — so aliases are attributed by name
+    // rather than positionally, the way named functions and lets are.
+    let mut alias_name_to_file: HashMap<baml_type::TypeName, usize> = HashMap::new();
     // fq name -> file for named functions / lets (matches `Function::name`).
     let mut func_name_to_file: HashMap<String, usize> = HashMap::new();
     let mut let_name_to_file: HashMap<String, usize> = HashMap::new();
     for (fi, file) in all_files.iter().enumerate() {
+        for &alias_loc in baml_compiler2_ppir::item_data::file_type_aliases(db, *file) {
+            let alias_data = baml_compiler2_ppir::item_data::type_alias_data(db, alias_loc);
+            let qtn = baml_compiler2_hir_ty::lower::qualify_def(
+                db,
+                Definition::TypeAlias(alias_loc),
+                &alias_data.name,
+            );
+            alias_name_to_file.entry(qtn).or_insert(fi);
+        }
         // Owner vectors are consumed by walking the object pool in emission order,
         // so they must be built in the SAME order the `Object::Class`/`Enum`/
         // `Interface` entries are emitted — the firewall enumeration (source order),
@@ -1905,7 +1919,16 @@ fn decompose_units_after_prefix(
             // No regular functions at all (e.g. a dirty-only emit whose sole
             // tail-producing file declares only a top-level `let`): the tail
             // begins right after the class/enum/interface definition prefix.
-            tail_start = prefix_objects + class_owner.len() + enum_owner.len() + iface_owner.len();
+            let n_aliases = program
+                .objects
+                .iter()
+                .filter(|o| matches!(o, Object::TypeAlias(_)))
+                .count();
+            tail_start = prefix_objects
+                + class_owner.len()
+                + enum_owner.len()
+                + iface_owner.len()
+                + n_aliases;
         }
     }
 
@@ -1932,6 +1955,15 @@ fn decompose_units_after_prefix(
                 })?;
                 ei += 1;
                 (o, PoolObjKind::Enum)
+            }
+            Object::TypeAlias(alias) => {
+                let o = *alias_name_to_file.get(&alias.name).ok_or_else(|| {
+                    LoweringError::Internal(format!(
+                        "type-alias object {idx} (`{}`) is declared in no source file",
+                        alias.name.render_dotted(false)
+                    ))
+                })?;
+                (o, PoolObjKind::TypeAlias)
             }
             Object::Interface(_) => {
                 let o = *iface_owner.get(ii).ok_or_else(|| {
@@ -2040,6 +2072,11 @@ fn decompose_units_after_prefix(
                 units[u].interfaces.push(obj);
                 LocalRef::Interface(u32::try_from(off).expect("interface offset fits u32"))
             }
+            PoolObjKind::TypeAlias => {
+                let off = units[u].type_alias_objects.len();
+                units[u].type_alias_objects.push(obj);
+                LocalRef::TypeAlias(u32::try_from(off).expect("type-alias offset fits u32"))
+            }
             PoolObjKind::NamedFn(_) | PoolObjKind::CodeAnon => {
                 let off = units[u].code.len();
                 units[u].code.push(obj);
@@ -2089,11 +2126,14 @@ fn decompose_units_after_prefix(
 
     // ---- Rewrite code operands to the symbolic convention + build imports ---
     for (u, unit) in units.iter_mut().enumerate() {
-        let n_local_objects =
-            unit.classes.len() + unit.enums.len() + unit.interfaces.len() + unit.code.len();
-        let c = unit.classes.len();
-        let e = unit.enums.len();
-        let i = unit.interfaces.len();
+        let n_classes = unit.classes.len();
+        let n_enums = unit.enums.len();
+        let n_ifaces = unit.interfaces.len();
+        let n_aliases = unit.type_alias_objects.len();
+        // Every bucket the unit owns, in the flat-local order `flat_local`
+        // encodes — imports start right after. Must stay in step with the
+        // linker's own `n_local_objects`, or an import decodes as a local.
+        let n_local_objects = n_classes + n_enums + n_ifaces + n_aliases + unit.code.len();
         // The unit's local global space is [functions 0..F_u][lets F_u..]; its
         // size is where import globals start (§2a).
         let n_local_globals = (func_next[u] + local_let_count[u]) as usize;
@@ -2108,9 +2148,10 @@ fn decompose_units_after_prefix(
         let flat_local = |abs: usize| -> usize {
             match obj_localref[abs - prefix_objects] {
                 LocalRef::Class(k) => k as usize,
-                LocalRef::Enum(k) => c + k as usize,
-                LocalRef::Interface(k) => c + e + k as usize,
-                LocalRef::Code(k) => c + e + i + k as usize,
+                LocalRef::Enum(k) => n_classes + k as usize,
+                LocalRef::Interface(k) => n_classes + n_enums + k as usize,
+                LocalRef::TypeAlias(k) => n_classes + n_enums + n_ifaces + k as usize,
+                LocalRef::Code(k) => n_classes + n_enums + n_ifaces + n_aliases + k as usize,
             }
         };
 
@@ -2180,7 +2221,10 @@ fn decompose_units_after_prefix(
     for idx in prefix_objects..tail_start {
         let u = obj_owner[idx];
         match &obj_kind[idx - prefix_objects] {
-            PoolObjKind::Class | PoolObjKind::Enum | PoolObjKind::Interface => {
+            PoolObjKind::Class
+            | PoolObjKind::Enum
+            | PoolObjKind::Interface
+            | PoolObjKind::TypeAlias => {
                 let fq = def_object_fq(&program.objects[ObjectIndex::from_raw(idx)]);
                 units[u]
                     .exports
@@ -2287,7 +2331,8 @@ fn local_ref_sort_key(r: LocalRef) -> (u8, u32) {
         LocalRef::Class(k) => (0, k),
         LocalRef::Enum(k) => (1, k),
         LocalRef::Interface(k) => (2, k),
-        LocalRef::Code(k) => (3, k),
+        LocalRef::TypeAlias(k) => (3, k),
+        LocalRef::Code(k) => (4, k),
     }
 }
 
@@ -2297,6 +2342,7 @@ fn def_object_fq(obj: &Object) -> String {
         Object::Class(c) => c.name.to_string(),
         Object::Enum(e) => e.name.to_string(),
         Object::Interface(i) => i.name.to_string(),
+        Object::TypeAlias(a) => a.name.to_string(),
         _ => unreachable!("def_object_fq on non-definition object"),
     }
 }
@@ -2355,6 +2401,7 @@ fn obj_variant_name(obj: &Object) -> &'static str {
         Object::Function(_) => "Function",
         Object::Class(_) => "Class",
         Object::Enum(_) => "Enum",
+        Object::TypeAlias(_) => "TypeAlias",
         Object::Interface(_) => "Interface",
         Object::Package(_) => "Package",
         Object::ImplRule(_) => "ImplRule",
@@ -2517,6 +2564,7 @@ fn build_package_fragment(
             Object::Class(c) => Ok(c.name.to_string()),
             Object::Enum(e) => Ok(e.name.to_string()),
             Object::Interface(i) => Ok(i.name.to_string()),
+            Object::TypeAlias(a) => Ok(a.name.to_string()),
             Object::Function(_) => Err(LoweringError::Internal(format!(
                 "package refs unnamed function object {raw}"
             ))),
@@ -2540,9 +2588,8 @@ fn build_package_fragment(
     for (local, &idx) in &pkg.functions {
         frag.functions.push((local.clone(), obj_fq(idx)?));
     }
-    for (local, ty) in &pkg.recursive_type_aliases {
-        frag.recursive_type_aliases
-            .push((local.clone(), ty.clone()));
+    for (local, &idx) in &pkg.type_aliases {
+        frag.type_aliases.push((local.clone(), obj_fq(idx)?));
     }
     for (&iface_idx, rules) in &pkg.impl_rules {
         let iface_fq = obj_fq(iface_idx)?;
@@ -2881,30 +2928,6 @@ fn generate_impl(
     // Client values (including sub-clients, retry policies) flow through the $init pipeline.
     // Pass 7 is intentionally empty.
 
-    // --- Pass 7.5: Recursive type alias definitions (ctx.output_format bridge) ---
-    // Mirrors the legacy pipeline: only recursive aliases are stored per package
-    // (`Package.recursive_type_aliases`); non-recursive aliases are expanded inline
-    // by `convert_tir_ty_for_runtime`. This is required for correct output_format rendering at runtime.
-    for cache in alias_caches.values() {
-        for (qtn, tir_ty) in &cache.aliases {
-            if cache.recursive.contains(qtn) {
-                let mir_ty = cache.convert(tir_ty);
-                tables
-                    .program_packages
-                    .entry(qtn.package().clone())
-                    .or_default()
-                    .recursive_type_aliases
-                    .insert(
-                        bex_vm_types::types::LocalName {
-                            namespace: qtn.namespace().clone(),
-                            name: qtn.name().clone(),
-                        },
-                        mir_ty,
-                    );
-            }
-        }
-    }
-
     build_packages(
         db,
         &all_files,
@@ -2932,8 +2955,7 @@ fn generate_impl(
                     pkg.interface_blob.clone_from(&base_pkg.interface_blob);
                     pkg.test_init = base_pkg.test_init;
                     pkg.impl_rules.clone_from(&base_pkg.impl_rules);
-                    pkg.recursive_type_aliases
-                        .clone_from(&base_pkg.recursive_type_aliases);
+                    pkg.type_aliases.clone_from(&base_pkg.type_aliases);
                 }
                 None => {
                     tables
@@ -3010,10 +3032,13 @@ impl EmitTables {
     /// recoverable from the artifact: name→slot maps are stored on the
     /// `Program`; class/enum/interface metadata (field order, variant order)
     /// lives in the pool objects; class type tags are content hashes stored on
-    /// each class object. Per-package
-    /// `impl_rules` and `recursive_type_aliases` are cleared — the trailing
-    /// whole-program passes regenerate them from all files exactly as a full
-    /// compile does (keeping them would double the rule vectors).
+    /// each class object. Per-package `impl_rules` are cleared — the trailing
+    /// whole-program pass regenerates them from all files exactly as a full
+    /// compile does (keeping them would double the rule vectors). Type-alias
+    /// entries are kept, because their `Object::TypeAlias`es are emitted
+    /// per declaring file (Pass 3c) and the builtin group is not re-emitted on
+    /// this path; the spliced pool preserves the base's object indices, so the
+    /// entries stay valid exactly as the class/enum/interface ones do.
     fn from_stdlib_program(base: &Program) -> Self {
         let mut tables = EmitTables::default();
 
@@ -3064,7 +3089,6 @@ impl EmitTables {
             .map(|(pkg_name, pkg)| {
                 let mut pkg = pkg.clone();
                 pkg.impl_rules.clear();
-                pkg.recursive_type_aliases.clear();
                 (pkg_name.clone(), pkg)
             })
             .collect();
@@ -3545,6 +3569,66 @@ fn emit_file_group(
             _ => None,
         })
         .collect();
+
+    // --- Pass 3c: Recursive type alias definitions ---
+    // Each recursive alias becomes an `Object::TypeAlias` so a package can
+    // reference it by index (non-recursive aliases are expanded inline at
+    // lowering and never reach here). Emitted with the other declarations rather
+    // than after the code pass: the pool is group-major/pass-major, so an object
+    // appended later would fall outside every bucket the linker reproduces.
+    let mut emitted_aliases = HashSet::new();
+    for file in files {
+        let pkg_info = file_package(db, *file);
+        let cache = &alias_caches[&pkg_info.package];
+        for &alias_loc in baml_compiler2_ppir::item_data::file_type_aliases(db, *file) {
+            let alias_data = baml_compiler2_ppir::item_data::type_alias_data(db, alias_loc);
+            let qtn = baml_compiler2_hir_ty::lower::qualify_def(
+                db,
+                Definition::TypeAlias(alias_loc),
+                &alias_data.name,
+            );
+            // A package's alias cache also carries its dependencies' aliases
+            // (`resolved_aliases_for_package` unions them in), so iterating the
+            // cache would re-emit an imported alias under every importer. Walking
+            // declarations instead emits each alias exactly once, in the file that
+            // declares it — which is also what per-file dirty tracking needs.
+            if !cache.recursive.contains(&qtn) || !emitted_aliases.insert(qtn.clone()) {
+                continue;
+            }
+            let tir_ty = &cache.aliases[&qtn];
+            let mir_ty = cache.convert(tir_ty);
+            // Aliases have no type-parameter list, so nothing is in scope for the
+            // right-hand side to reference — a non-realized alias body means
+            // lowering produced something impossible, not a program to carry.
+            let definition = baml_type::RealizedTy::try_from(&mir_ty).map_err(|e| {
+                LoweringError::Internal(format!(
+                    "type alias `{}` lowered to a non-realized type (`{}`); aliases \
+                     cannot be generic, so this is a compiler bug",
+                    qtn.render_dotted(false),
+                    e.variant,
+                ))
+            })?;
+            let fq_name = qtn.render_dotted(false);
+            let obj_idx = program.add_object(Object::TypeAlias(Box::new(
+                bex_vm_types::types::TypeAliasDef {
+                    name: qtn.clone(),
+                    type_tag: claim_type_tag(type_tags, &fq_name)?,
+                    definition,
+                },
+            )));
+            program_packages
+                .entry(qtn.package().clone())
+                .or_default()
+                .type_aliases
+                .insert(
+                    bex_vm_types::types::LocalName {
+                        namespace: qtn.namespace().clone(),
+                        name: qtn.name().clone(),
+                    },
+                    ObjectIndex::from_raw(obj_idx),
+                );
+        }
+    }
 
     // --- Pass 4: Compile each function ---
     if rayon::current_num_threads() > 1 {

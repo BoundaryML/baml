@@ -681,7 +681,7 @@ impl BamlClassReflectPackage for PackageBamlImpl {
             interfaces: IndexMap::new(),
             impl_rules: IndexMap::new(),
             functions: IndexMap::new(),
-            recursive_type_aliases: program_package.recursive_type_aliases.clone(),
+            type_aliases: IndexMap::new(),
             interface_blob: artifact.interface_blob,
             test_init: None,
             mounted_types: IndexMap::new(),
@@ -1615,6 +1615,13 @@ fn graft_session_submission(
         .iter()
         .map(|(name, index)| (name.clone(), objects[index.raw()]))
         .collect::<IndexMap<_, _>>();
+    // Recursive aliases are pooled declarations now, so they relocate exactly
+    // like classes: resolve each index against the freshly linked image.
+    let new_type_aliases = program_package
+        .type_aliases
+        .iter()
+        .map(|(name, index)| (name.clone(), objects[index.raw()]))
+        .collect::<IndexMap<_, _>>();
     let new_type_values = allocate_runtime_declaration_types(
         vm,
         package_ptr,
@@ -1755,9 +1762,7 @@ fn graft_session_submission(
     package.enums.extend(new_enums);
     package.interfaces.extend(new_interfaces);
     package.functions.extend(new_functions);
-    package
-        .recursive_type_aliases
-        .extend(program_package.recursive_type_aliases);
+    package.type_aliases.extend(new_type_aliases);
     for (interface, rules) in new_impl_rules {
         package
             .impl_rules
@@ -1820,7 +1825,7 @@ impl BamlClassReflectSession for PackageBamlImpl {
             interfaces: IndexMap::new(),
             impl_rules: IndexMap::new(),
             functions: IndexMap::new(),
-            recursive_type_aliases: IndexMap::new(),
+            type_aliases: IndexMap::new(),
             interface_blob: Vec::new(),
             test_init: None,
             mounted_types: IndexMap::new(),

@@ -113,7 +113,7 @@ fn runtime_package_mint_cycle_survives_when_rooted_and_collects_when_dropped() {
             interfaces: IndexMap::new(),
             impl_rules: IndexMap::new(),
             functions: IndexMap::new(),
-            recursive_type_aliases: IndexMap::new(),
+            type_aliases: IndexMap::new(),
             interface_blob: Vec::new(),
             test_init: None,
             mounted_types: IndexMap::new(),

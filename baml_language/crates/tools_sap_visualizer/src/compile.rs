@@ -146,7 +146,11 @@ pub fn compile_baml_to_sap(baml_source: &str, type_expr: &str) -> Result<Compile
     let parse_ty = parse_field_ty
         .ok_or_else(|| format!("Synthetic class {PARSE_CLASS} not found in compiled output"))?;
 
-    let type_alias_definitions = program.recursive_type_aliases().into_iter().collect();
+    let type_alias_definitions = program
+        .recursive_type_aliases()
+        .into_iter()
+        .map(|(name, ty)| (name, baml_type::RuntimeTy::from(ty)))
+        .collect();
     let type_ctx =
         sap_model::TypeCtx::new(&class_defs, Arc::new(enum_defs), &type_alias_definitions);
 

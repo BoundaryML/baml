@@ -714,6 +714,7 @@ pub fn value_to_serde(vm: &BexVm, v: Value) -> serde_json::Value {
             Object::Instance(_)
             | Object::Class(_)
             | Object::Enum(_)
+            | Object::TypeAlias(_)
             | Object::Interface(_)
             | Object::Package(_)
             | Object::ImplRule(_)

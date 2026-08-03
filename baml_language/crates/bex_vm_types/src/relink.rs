@@ -227,6 +227,7 @@ pub fn visit_object_operands(object: &mut crate::Object, visit: impl FnMut(Index
         // Inert at relink time: no cross-function index operands.
         Object::Class(..)
         | Object::Enum(..)
+        | Object::TypeAlias(..)
         | Object::Interface(..)
         | Object::Package(..)
         | Object::ImplRule(..)
