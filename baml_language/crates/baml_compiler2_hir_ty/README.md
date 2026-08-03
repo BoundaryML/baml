@@ -1,6 +1,6 @@
 # baml_compiler2_hir_ty: rust-analyzer-style type inference
 
-Status: shipped through S13 + S10 (S0 harness, S1 body-owner ID, S4a interned
+Status: shipped through S13 + S10 + S12 (S0 harness, S1 body-owner ID, S4a interned
 repr, S4 declaration lowering, S4b oracle entry, S5 table, S6 core exprs,
 S7 bidirectional checking, S8 calls/constructors/fields, S9 lambdas +
 `resolve_value_path` consolidation + function values, S11 method calls:
@@ -32,7 +32,17 @@ capture-guarded), `CondFacts` with walk-time De Morgan [B-688],
 divergence-aware branch merge subsuming early-return narrowing, loop
 havoc + entry-join [B-735], assignments checked against DECLARED with
 narrow-on-assign [B-618], match residual accumulation and else-side
-subtraction gated on `consumes_matched` [B-774, B-1069]. 44 of 45
+subtraction gated on `consumes_matched` [B-774, B-1069]. S12 (throws):
+effect inference IS type inference on the error channel - omitted
+clauses infer from throw sites + callee effects via the crate's first
+salsa query (`callable_throws`, `cycle_initial = never` fixpoint over
+mutual recursion), effect VARIABLES in the table default unconstrained
+to `never` (BAML's only defaulting rule; value vars stay ruling-2
+errors), lambdas own their channel, `catch` subtracts handled arms on
+the error channel and propagates the residual, declared clauses are
+the contract every contribution checks against - including rigid-var
+clauses (B-1082's rule: defer through bounds, never skip). The
+`throws !error` sentinel is gone from every signature render. 46 of 47
 fixtures green. Pending pin: pairwise bitwise dispatch (B-1075, with
 the stdlib interfaces).
 
@@ -112,7 +122,7 @@ cutover. "Tested by" is the merge gate for the slice.
 | I4  | Generic/blanket impls; obligation queue (probe vs register)          | blanket-impl fixtures; replaces S11 stub               |
 | I5  | Associated types: projections, bindings, defaults, fuel              | traits-tier fixtures; stdlib `Iterator` shapes         |
 | I6  | `Self` + interface default-method bodies as inference roots          | default-body fixtures                                  |
-| S12 | Throws: effect vars in the table, `throws T \| _`, effect params     | throws fixtures; TIR differential                      |
+| S12 | SHIPPED: callable_throws salsa fixpoint; effect vars default never; lambda channels; catch residual on the error channel; declared-clause contracts incl. rigid vars (B-1082). `throws T \| _` partials join with obligations (I4) | throws + catch fixtures |
 | S13 | SHIPPED: finalize - resolve-all to fixpoint (minimum-upper meets, all-equal-lowers agreement), local Infer-to-Error erasure (rulings 2/3; r-a's replace-with-error discipline), post-substitution union re-canonicalization (null-last at this crate's boundary). Diagnostics land with S17 | `[]`-inference fixtures; no-infer-leak invariant |
 | I7  | Coherence overlap moves in (existing ACI engine, unchanged)          | differential vs TIR on coherence diagnostic fixtures   |
 | S15 | Parity: stdlib corpus (`__baml_std__`) + full differential sweep     | every fixture diffed; divergence list = spec fixes only|

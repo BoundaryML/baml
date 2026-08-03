@@ -5,12 +5,12 @@ expression: outcome.dump
 454..543 '{\n   ...tal\n}': int
 460..469 'let total': int
 472..481 '[1, 2, 3]': int[]
-472..488 '[1, 2,...reduce': hir_ty=[(self: int[], reducer: (int, int) -> int throws !error, initial: int) -> int throws !error] tir=[(self: int[], reducer: (A, int) -> A throws E, initial: A) -> A throws E]
+472..488 '[1, 2,...reduce': hir_ty=[(self: int[], reducer: (int, int) -> int throws never, initial: int) -> int throws never] tir=[(self: int[], reducer: (A, int) -> A throws E, initial: A) -> A throws E]
 472..512 '[1, 2,... }, 0)': hir_ty=[int] tir=[0]
 473..474 '1': 1
 476..477 '2': 2
 479..480 '3': 3
-489..508 '(a, b)... + b }': hir_ty=[(a: int, b: int) -> int throws !error] tir=[(a: 0, b: int) -> 0 throws E]
+489..508 '(a, b)... + b }': hir_ty=[(a: int, b: int) -> int throws never] tir=[(a: 0, b: int) -> 0 throws E]
 499..508 '{ a + b }': hir_ty=[!error] tir=[int]
 501..502 'a': hir_ty=[int] tir=[0]
 501..506 'a + b': hir_ty=[!error] tir=[int]

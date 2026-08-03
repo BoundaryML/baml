@@ -20,7 +20,7 @@
 
 use baml_type::interned::{InferVar, Ty, TyKind, for_each_child};
 use ena::unify as ut;
-use rustc_hash::FxHashMap;
+use rustc_hash::{FxHashMap, FxHashSet};
 
 /// Local ena key for [`InferVar`] (orphan rules keep `UnifyKey` out of
 /// `baml_type`).
@@ -96,6 +96,11 @@ pub struct InferenceTable {
     /// Bounds per CLASS, keyed by the root's index; var-var unions merge the
     /// two roots' entries.
     bounds: FxHashMap<u32, VarBounds>,
+    /// Creation indices of EFFECT variables (the throws channel). Their
+    /// finalize default differs: an unconstrained effect is `never` -
+    /// BAML's only defaulting rule (S12) - where an unconstrained value
+    /// variable is an error (ruling 2).
+    effect_vars: FxHashSet<u32>,
 }
 
 impl InferenceTable {
@@ -111,6 +116,26 @@ impl InferenceTable {
     /// [`InferenceTable::new_var`] wrapped as a type.
     pub fn new_var_ty(&mut self) -> Ty {
         Ty::infer_var(self.new_var())
+    }
+
+    /// An EFFECT variable: identical to a value variable except at
+    /// finalize, where unconstrained effects default to `never`.
+    pub fn new_effect_var_ty(&mut self) -> Ty {
+        let var = self.new_var();
+        self.effect_vars.insert(var.index());
+        Ty::infer_var(var)
+    }
+
+    /// Defaults every still-unsolved effect variable's class to `never`.
+    /// Run before the finalize erasure so effects never become errors.
+    pub fn default_unsolved_effects_to_never(&mut self) {
+        let indices: Vec<u32> = self.effect_vars.iter().copied().collect();
+        for index in indices {
+            let root = self.vars.find(VarKey(InferVar::new(index)));
+            if matches!(self.vars.probe_value(root), VarValue::Unknown) {
+                self.vars.union_value(root, VarValue::Known(Ty::never()));
+            }
+        }
     }
 
     /// Replaces a solved variable at the ROOT of `ty` with its solution,

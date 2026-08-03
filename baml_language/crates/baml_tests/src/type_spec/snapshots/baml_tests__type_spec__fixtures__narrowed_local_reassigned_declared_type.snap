@@ -6,7 +6,7 @@ expression: outcome.dump
 350..351 '5': 5
 384..478 '{\n   ...ing\n}': int | string
 390..395 'let v': int | string
-398..402 'pick': hir_ty=[() -> int | string throws !error] tir=[() -> int | string throws never]
+398..402 'pick': () -> int | string throws never
 398..404 'pick()': int | string
 410..451 'if (v ...n    }': void
 414..415 'v': int | string
@@ -14,6 +14,6 @@ expression: outcome.dump
 419..422 'int': hir_ty=[!error] tir=[int]
 424..451 '{\n   ...n    }': void
 434..435 'v': hir_ty=[int | string] tir=[int]
-438..442 'pick': hir_ty=[() -> int | string throws !error] tir=[() -> int | string throws never]
+438..442 'pick': () -> int | string throws never
 438..444 'pick()': int | string
 456..457 'v': int | string

@@ -56,10 +56,14 @@ use crate::{
 /// boundaries, after resolve-all guarantees no inference variables remain.
 /// Grows one map per slice; consumers must treat a missing entry as "not
 /// inferred", never as an error.
-#[derive(Debug, Default, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct InferenceResult {
     pub type_of_expr: FxHashMap<ExprId, Ty>,
     pub type_of_binding: FxHashMap<PatId, Ty>,
+    /// The owner's effect: the declared clause when written, else the
+    /// canonical union of the body's throw sites and callee throws
+    /// (`never` when nothing throws) - S12.
+    pub throws: Ty,
     /// Definite check failures, keyed by the checked expression:
     /// `(expected, actual)`. Recorded always (rust-analyzer's discipline);
     /// rendered as diagnostics in S17.
@@ -67,6 +71,18 @@ pub struct InferenceResult {
     /// Match expressions whose unguarded arms do not cover the scrutinee.
     /// The expression types as Error; S17 renders E0062 with witnesses.
     pub non_exhaustive_matches: rustc_hash::FxHashSet<ExprId>,
+}
+
+impl Default for InferenceResult {
+    fn default() -> InferenceResult {
+        InferenceResult {
+            type_of_expr: FxHashMap::default(),
+            type_of_binding: FxHashMap::default(),
+            throws: Ty::never(),
+            type_mismatches: FxHashMap::default(),
+            non_exhaustive_matches: rustc_hash::FxHashSet::default(),
+        }
+    }
 }
 
 /// Infers types for one body owner (function or top-level let), keyed by the
@@ -84,16 +100,17 @@ pub fn infer_body<'db>(
     // The owner's generic frame makes `T` in body annotations resolve; the
     // signature gives parameter references their types and the body its
     // return expectation.
-    let (frame, param_tys, return_ty) = match owner {
+    let (frame, param_tys, return_ty, declared_throws) = match owner {
         BodyOwnerId::Function(function) => {
             let signature = function_signature(db, function);
             (
                 function_generic_frame(db, function),
                 signature.params.into_iter().map(|param| param.ty).collect(),
                 Some(signature.ret),
+                signature.throws_declared.then_some(signature.throws),
             )
         }
-        BodyOwnerId::Let(_) => (Vec::new(), Vec::new(), None),
+        BodyOwnerId::Let(_) => (Vec::new(), Vec::new(), None, None),
     };
     let lower = lower_ctx_for_file(db, owner.file(db)).with_frame(frame);
     let type_refs = baml_compiler2_ppir::body_type_refs(db, owner);
@@ -108,6 +125,7 @@ pub fn infer_body<'db>(
         type_refs,
         source_map,
     );
+    ctx.declared_throws = declared_throws;
     if let Some(expr_body) = body.expr_body() {
         ctx.infer_expr_body(expr_body);
     }
@@ -229,6 +247,14 @@ struct InferenceContext<'db> {
     type_refs: Arc<BodyTypeRefs>,
     /// The owner's declared return type, the body root's expectation.
     return_ty: Option<Ty>,
+    /// The owner's DECLARED throws clause, when written: the contract
+    /// every throw site and callee effect is checked against. `None`
+    /// means the effect is inferred instead (from the channel below).
+    declared_throws: Option<Ty>,
+    /// The effect-channel stack: contributions from `throw` sites and
+    /// callee throws accumulate into the top. The bottom entry is the
+    /// owner's channel; lambdas and `catch` bases push their own.
+    throws_channels: Vec<Vec<Ty>>,
     table: InferenceTable,
     /// Operator impls, built lazily on the first dispatching operator
     /// (becomes a salsa query with S3's incremental firewall).
@@ -266,6 +292,8 @@ impl<'db> InferenceContext<'db> {
             param_tys,
             type_refs,
             return_ty,
+            declared_throws: None,
+            throws_channels: vec![Vec::new()],
             table: InferenceTable::new(),
             operators: None,
             deferred_subs: Vec::new(),
@@ -451,8 +479,8 @@ impl<'db> InferenceContext<'db> {
                 Ty::never()
             }
             Expr::Throw { value } => {
-                // The thrown type feeds the throws channel in S12.
-                self.infer_expr(body, *value, &Expectation::None);
+                let thrown = self.infer_expr(body, *value, &Expectation::None);
+                self.record_throw(*value, &thrown);
                 self.diverges = Diverges::Always;
                 Ty::never()
             }
@@ -477,6 +505,10 @@ impl<'db> InferenceContext<'db> {
                 self.infer_match(body, expr, *scrutinee, &arms, expected)
             }
             Expr::Is { scrutinee, pattern } => self.infer_is(body, *scrutinee, *pattern),
+            Expr::Catch { base, clauses } => {
+                let clauses = clauses.clone();
+                self.infer_catch(body, *base, &clauses, expected)
+            }
             // Not yet implemented: visit children generically, record the
             // sentinel.
             _ => {
@@ -524,8 +556,8 @@ impl<'db> InferenceContext<'db> {
                 self.diverges = Diverges::Always;
             }
             Stmt::Throw { value } => {
-                // The thrown type feeds the throws channel in S12.
-                self.infer_expr(body, *value, &Expectation::None);
+                let thrown = self.infer_expr(body, *value, &Expectation::None);
+                self.record_throw(*value, &thrown);
                 self.diverges = Diverges::Always;
             }
             // Loop-local terminators: the path past them is dead; the loop
@@ -1168,13 +1200,21 @@ impl<'db> InferenceContext<'db> {
         args: &[baml_compiler2_ast::CallArg],
     ) -> Ty {
         let (callee_fn_ty, bound_receiver) = self.infer_callee(body, call, callee);
-        let TyKind::Function { params, ret, .. } = callee_fn_ty.kind() else {
+        let TyKind::Function {
+            params,
+            ret,
+            throws,
+            ..
+        } = callee_fn_ty.kind()
+        else {
             // Not callable (or not yet typed): visit the args, sentinel out.
             for arg in args {
                 self.infer_expr(body, arg.expr, &Expectation::None);
             }
             return Ty::error();
         };
+        let callee_throws = throws.clone();
+        self.record_throw(callee, &callee_throws);
         // A bound method call: the receiver already fills the `self` slot,
         // so written arguments match against the remaining parameters.
         let params: Vec<Ty> = params
@@ -1338,7 +1378,7 @@ impl<'db> InferenceContext<'db> {
             let instantiation: Vec<Ty> = signature
                 .generic_params
                 .iter()
-                .map(|_| self.table.new_var_ty())
+                .map(|param| self.fresh_generic_arg(param))
                 .collect();
             return function_value_ty(&signature, &instantiation);
         }
@@ -1393,11 +1433,10 @@ impl<'db> InferenceContext<'db> {
         let ret_expectation =
             annotated_ret.or_else(|| expected_fn.as_ref().map(|(_, ret)| ret.clone()));
 
-        let throws_ty = signature
+        let written_throws = signature
             .as_ref()
             .and_then(|sig| sig.throws)
-            .map(|type_ref| self.lower_body_annotation(type_ref))
-            .unwrap_or_else(Ty::error);
+            .map(|type_ref| self.lower_body_annotation(type_ref));
 
         // The scope the lambda opened, by source range (restricted to the
         // enclosing scope's subtree to disambiguate synthetic companions
@@ -1417,6 +1456,10 @@ impl<'db> InferenceContext<'db> {
         // The body types in the owner's run and table, but under the
         // lambda's metadata scope (the semantic index keys its expressions
         // there), and its divergence is the lambda's, not the owner's.
+        // The lambda's OWN effect channel: contributions inside the body
+        // belong to the lambda, not the enclosing function - defining a
+        // throwing lambda throws nothing; calling it does.
+        self.throws_channels.push(Vec::new());
         let ret_ty = match def.body {
             Some(lambda_body) => {
                 let saved_scope = self.current_scope;
@@ -1440,6 +1483,14 @@ impl<'db> InferenceContext<'db> {
             }
             None => ret_expectation.unwrap_or_else(Ty::error),
         };
+        let channel = self.throws_channels.pop().expect("pushed above");
+        let throws_ty = written_throws.unwrap_or_else(|| {
+            if channel.is_empty() {
+                Ty::never()
+            } else {
+                self.union_of(&channel)
+            }
+        });
 
         let params: Box<[baml_type::interned::FunctionParam]> = def
             .params
@@ -1483,14 +1534,27 @@ impl<'db> InferenceContext<'db> {
                 self.instantiate_holes(&lowered)
             })
             .collect();
-        (0..generic_params.len())
-            .map(|index| {
+        generic_params
+            .iter()
+            .enumerate()
+            .map(|(index, param)| {
                 explicit
                     .get(index)
                     .cloned()
-                    .unwrap_or_else(|| self.table.new_var_ty())
+                    .unwrap_or_else(|| self.fresh_generic_arg(param))
             })
             .collect()
+    }
+
+    /// A fresh variable for one generic param at a use site: synthetic
+    /// effect params get EFFECT variables (unconstrained defaults to
+    /// `never`, not Error - S12's defaulting rule).
+    fn fresh_generic_arg(&mut self, param: &baml_type::ParamTy) -> Ty {
+        if baml_type::is_synthetic_effect_param(param.name()) {
+            self.table.new_effect_var_ty()
+        } else {
+            self.table.new_var_ty()
+        }
     }
 
     /// Object-constructor typing: resolve the class, instantiate its
@@ -1572,11 +1636,11 @@ impl<'db> InferenceContext<'db> {
         {
             let signature = function_signature(self.db, candidate.method);
             let mut instantiation = candidate.class_args;
-            instantiation.extend(
-                signature.generic_params[instantiation.len()..]
-                    .iter()
-                    .map(|_| self.table.new_var_ty()),
-            );
+            let own: Vec<Ty> = signature.generic_params[instantiation.len()..]
+                .iter()
+                .map(|param| self.fresh_generic_arg(param))
+                .collect();
+            instantiation.extend(own);
             return function_value_ty(&signature, &instantiation);
         }
         Ty::error()
@@ -1663,6 +1727,105 @@ impl<'db> InferenceContext<'db> {
         )
     }
 
+    /// `base catch (e) { arms }` / `catch_all`: narrowing on the ERROR
+    /// channel. The base's effect contributions collect into their own
+    /// channel; the clause binding takes that union; arms subtract what
+    /// they provably handle (the pattern set-subtraction machinery); the
+    /// residual propagates to the enclosing channel. The result joins the
+    /// base value with the arm values. Exhaustiveness of `catch_all` is
+    /// S17's diagnostic.
+    fn infer_catch(
+        &mut self,
+        body: &ExprBody,
+        base: ExprId,
+        clauses: &[baml_compiler2_ast::CatchClause],
+        expected: &Expectation,
+    ) -> Ty {
+        let branch_expectation = expected.adjust_for_branches(&mut self.table);
+        self.throws_channels.push(Vec::new());
+        let base_ty = self.infer_expr(body, base, &branch_expectation);
+        let channel = self.throws_channels.pop().expect("pushed above");
+        let caught: Vec<Ty> = channel
+            .iter()
+            .map(|ty| self.finalize_incoming_effect(ty))
+            .collect();
+        let caught = if caught.is_empty() {
+            Ty::never()
+        } else {
+            self.union_of(&caught)
+        };
+        let caught = {
+            let resolved = self.table.resolve_completely(&caught);
+            self.matrix_scrut(&resolved)
+        };
+
+        let mut arm_tys = vec![base_ty];
+        let mut residual = caught.clone();
+        for clause in clauses {
+            self.result
+                .type_of_binding
+                .insert(clause.binding, caught.clone());
+            if let Some(stack) = clause.stack_trace_binding {
+                self.result.type_of_binding.insert(stack, Ty::string());
+            }
+            for &arm_id in &clause.arms {
+                let arm = &body.catch_arms[arm_id];
+                let outcome = self.lower_pattern(body, arm.pattern, &caught);
+                let consumes = outcome.consumes_matched;
+                let matched = outcome.matched_ty.clone();
+                self.diverges = Diverges::Maybe;
+                let arm_ty = self.infer_expr(body, arm.body, &branch_expectation);
+                arm_tys.push(arm_ty);
+                if consumes {
+                    residual = self.subtract_narrow(&residual, &matched);
+                }
+            }
+        }
+        if !matches!(residual.kind(), TyKind::Never { .. }) {
+            self.record_throw(base, &residual);
+        }
+        self.join(&arm_tys)
+    }
+
+    /// A caught effect contribution, resolved for the error channel: still
+    /// live variables resolve where possible (an unconstrained effect is
+    /// `never` here too).
+    fn finalize_incoming_effect(&mut self, ty: &Ty) -> Ty {
+        let resolved = self.table.resolve_completely(ty);
+        if resolved.has_infer() {
+            // Effect vars inside the base that never got constrained: the
+            // conservative read for catching purposes is Error-free
+            // emptiness - drop to never; real obligations arrive with I4.
+            return Ty::never();
+        }
+        resolved
+    }
+
+    /// One effect contribution: a thrown value or a callee's throws,
+    /// accumulated into the current channel and, when the owner DECLARED
+    /// its clause, checked against that contract - including when the
+    /// clause mentions rigid type vars (the check defers through bounds
+    /// rather than being skipped: B-1082's rule).
+    fn record_throw(&mut self, at: ExprId, ty: &Ty) {
+        if matches!(ty.kind(), TyKind::Never { .. }) || ty.has_error() {
+            return;
+        }
+        let widened = self.widen_fresh(ty);
+        if let Some(declared) = self.declared_throws.clone()
+            && !declared.has_error()
+            && self.throws_channels.len() == 1
+            && !self.sub(&widened, &declared)
+        {
+            self.result
+                .type_mismatches
+                .insert(at, (declared, widened.clone()));
+        }
+        self.throws_channels
+            .last_mut()
+            .expect("channel stack never empty")
+            .push(widened);
+    }
+
     /// The endgame (S13 finalize): resolve bounded variables to fixpoint,
     /// drain the deferred residue, then FINALIZE every recorded type -
     /// substitute solutions, replace each surviving variable or hole with
@@ -1674,7 +1837,27 @@ impl<'db> InferenceContext<'db> {
     fn finish(mut self) -> InferenceResult {
         self.resolve_bounded_vars();
         self.drain_deferred_subs();
+        // BAML's only defaulting rule: an unconstrained EFFECT is `never`
+        // (a value variable erases to Error instead - ruling 2).
+        self.table.default_unsolved_effects_to_never();
+        let throws = match self.declared_throws.clone() {
+            Some(declared) => declared,
+            None => {
+                let contributions = self.throws_channels[0].clone();
+                let resolved: Vec<Ty> = contributions
+                    .iter()
+                    .map(|ty| self.finalize_ty(ty))
+                    .filter(|ty| !ty.has_error())
+                    .collect();
+                if resolved.is_empty() {
+                    Ty::never()
+                } else {
+                    self.union_of(&resolved)
+                }
+            }
+        };
         let mut result = std::mem::take(&mut self.result);
+        result.throws = throws;
         for ty in result
             .type_of_expr
             .values_mut()

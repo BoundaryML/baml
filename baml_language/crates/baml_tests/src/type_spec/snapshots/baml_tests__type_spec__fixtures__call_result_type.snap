@@ -8,7 +8,7 @@ expression: outcome.dump
 46..47 'b': int
 71..143 '{\n   ...  r\n}': int
 77..82 'let r': int
-85..88 'add': hir_ty=[(a: int, b: int) -> int throws !error] tir=[(a: int, b: int) -> int throws never]
+85..88 'add': (a: int, b: int) -> int throws never
 85..94 'add(1, 2)': int
 89..90 '1': 1
 92..93 '2': 2

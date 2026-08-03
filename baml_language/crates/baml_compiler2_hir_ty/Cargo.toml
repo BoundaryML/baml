@@ -7,6 +7,7 @@ edition = "2024"
 workspace = true
 
 [dependencies]
+salsa = { workspace = true }
 baml_base = { workspace = true }
 baml_compiler2_ast = { workspace = true }
 baml_compiler2_hir = { workspace = true }

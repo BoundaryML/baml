@@ -3,9 +3,9 @@ source: crates/baml_tests/src/type_spec/fixtures.rs
 expression: outcome.dump
 ---
 427..513 '{\n   ...int\n}': int[]
-433..452 'baml.A...nerate': hir_ty=[(length: int, f: (int) -> int throws !error) -> int[] throws !error] tir=[(length: int, f: (int) -> T throws E) -> T[] throws E]
+433..452 'baml.A...nerate': hir_ty=[(length: int, f: (int) -> int throws never) -> int[] throws never] tir=[(length: int, f: (int) -> T throws E) -> T[] throws E]
 433..469 'baml.A...{ i })': int[]
 453..454 '3': 3
-456..468 '(i) -> { i }': hir_ty=[(i: int) -> int throws !error] tir=[(i: int) -> int throws E]
+456..468 '(i) -> { i }': hir_ty=[(i: int) -> int throws never] tir=[(i: int) -> int throws E]
 463..468 '{ i }': int
 465..466 'i': int

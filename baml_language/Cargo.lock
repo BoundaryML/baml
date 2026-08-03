@@ -863,6 +863,7 @@ dependencies = [
  "baml_type",
  "ena",
  "rustc-hash 2.1.2",
+ "salsa",
 ]
 
 [[package]]

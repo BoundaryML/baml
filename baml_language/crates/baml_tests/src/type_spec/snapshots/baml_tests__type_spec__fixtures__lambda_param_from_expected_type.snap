@@ -7,9 +7,9 @@ expression: outcome.dump
 278..282 'f(v)': int
 280..281 'v': int
 306..395 '{\n   ...int\n}': int
-312..317 'apply': hir_ty=[(f: (x: int) -> int throws never, v: int) -> int throws !error] tir=[(f: (x: int) -> int throws never, v: int) -> int throws never]
+312..317 'apply': (f: (x: int) -> int throws never, v: int) -> int throws never
 312..339 'apply(...}, 41)': int
-318..334 '(x) ->... + 1 }': hir_ty=[(x: int) -> int throws !error] tir=[(x: int) -> int throws never]
+318..334 '(x) ->... + 1 }': (x: int) -> int throws never
 325..334 '{ x + 1 }': int
 327..328 'x': int
 327..332 'x + 1': int

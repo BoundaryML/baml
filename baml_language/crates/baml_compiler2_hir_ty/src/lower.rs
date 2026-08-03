@@ -516,10 +516,14 @@ pub struct FunctionSignature {
     pub generic_params: Vec<ParamTy>,
     pub params: Vec<SignatureParam>,
     pub ret: Ty,
-    /// `Error` when the declaration omitted `throws`: the inferred effect
-    /// arrives with S12, and `Error` (not `never`) keeps the omission
-    /// honest until then.
+    /// The declared clause when written, else the INFERRED effect via
+    /// `callable_throws` (S12) - body-derived, fixpoint over mutual
+    /// recursion, `never` when nothing throws.
     pub throws: Ty,
+    /// Whether `throws` was written. The owner's own inference checks its
+    /// throw sites against a DECLARED clause (the contract) and ignores an
+    /// inferred one (which is derived FROM those sites).
+    pub throws_declared: bool,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -585,15 +589,21 @@ pub fn function_signature<'db>(
         .return_type
         .map(|ret| reject_holes(&ctx.lower_type_ref(&data.type_refs, ret)))
         .unwrap_or_else(Ty::error);
+    let throws_declared = data.throws.is_some();
     let throws = data
         .throws
         .map(|throws| reject_holes(&ctx.lower_type_ref(&data.type_refs, throws)))
-        .unwrap_or_else(Ty::error);
+        .unwrap_or_else(|| {
+            // Omitted: the body-inferred effect, fixpoint over mutual
+            // recursion (S12's callable_throws).
+            Ty::from_plain(&crate::callable::callable_throws(db, function).0)
+        });
     FunctionSignature {
         generic_params: frame,
         params,
         ret,
         throws,
+        throws_declared,
     }
 }
 
