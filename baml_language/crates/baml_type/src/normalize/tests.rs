@@ -1596,14 +1596,11 @@ fn unguarded_mu_subtyping_is_not_vacuously_true() {
         ])),
     };
     let ctx = Ctx::default();
-    assert!(!NormalTy::String.is_subtype_of(&unguarded, &ctx, &mut HashSet::new()));
-    assert!(!unguarded.is_subtype_of(&NormalTy::String, &ctx, &mut HashSet::new()));
+    let s = &mut SolverSession::new(&ctx);
+    assert!(!s.prove_subtype(&NormalTy::String, &unguarded));
+    assert!(!s.prove_subtype(&unguarded, &NormalTy::String));
     // Identity across the guard stays reflexive.
-    assert!(
-        unguarded
-            .clone()
-            .is_subtype_of(&unguarded, &ctx, &mut HashSet::new())
-    );
+    assert!(s.prove_subtype(&unguarded, &unguarded));
 }
 
 #[test]

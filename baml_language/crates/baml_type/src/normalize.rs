@@ -32,6 +32,7 @@
 
 use std::collections::HashSet;
 
+use self::solve::SolverSession;
 use crate::{
     FunctionParamMode, FunctionParamTy, Interface, Literal, MediaKind, Name, ParamTy,
     QualifiedTypeName, Ty, TyAttr,
@@ -226,7 +227,7 @@ pub trait TypeContext {
     where
         Self: Sized,
     {
-        NormalTy::canonical_render(ty, self)
+        NormalTy::canonical_render(ty, &mut SolverSession::new(self))
     }
 
     /// Whether `a` and `b` denote the same type under the current context —
@@ -265,7 +266,8 @@ pub trait TypeContext {
         if heads_definitely_differ(a, b) {
             return false;
         }
-        NormalTy::canonical(a, self) == NormalTy::canonical(b, self)
+        let s = &mut SolverSession::new(self);
+        NormalTy::canonical(a, s) == NormalTy::canonical(b, s)
     }
 
     /// Whether every value of `sub` is also a value of `sup` under the current
@@ -298,9 +300,10 @@ pub trait TypeContext {
         {
             return false;
         }
-        let sub = NormalTy::canonical(sub, self);
-        let sup = NormalTy::canonical(sup, self);
-        sub.is_subtype_of(&sup, self, &mut HashSet::new())
+        let s = &mut SolverSession::new(self);
+        let sub = NormalTy::canonical(sub, s);
+        let sup = NormalTy::canonical(sup, s);
+        s.prove_subtype(&sub, &sup)
     }
 
     /// Whether no value of type `a` can ever be `==`-equal to a value of type `b` —
@@ -339,7 +342,10 @@ pub trait TypeContext {
     where
         Self: Sized,
     {
-        NormalTy::canonical(a, self).is_disjoint_from(&NormalTy::canonical(b, self))
+        let s = &mut SolverSession::new(self);
+        let a = NormalTy::canonical(a, s);
+        let b = NormalTy::canonical(b, s);
+        a.is_disjoint_from(&b)
     }
 
     /// Whether a broad `==` between operands of types `a` and `b` is always `true`.
@@ -359,8 +365,9 @@ pub trait TypeContext {
     where
         Self: Sized,
     {
-        let a = NormalTy::canonical(a, self);
-        a.is_unoverridable_singleton() && a == NormalTy::canonical(b, self)
+        let s = &mut SolverSession::new(self);
+        let a = NormalTy::canonical(a, s);
+        a.is_unoverridable_singleton() && a == NormalTy::canonical(b, s)
     }
 
     /// The statically-known result of a broad `==` between operands of types `a` and
@@ -379,8 +386,9 @@ pub trait TypeContext {
     where
         Self: Sized,
     {
-        let a = NormalTy::canonical(a, self);
-        let b = NormalTy::canonical(b, self);
+        let s = &mut SolverSession::new(self);
+        let a = NormalTy::canonical(a, s);
+        let b = NormalTy::canonical(b, s);
         if a.is_disjoint_from(&b) {
             Some(false)
         } else if a.is_unoverridable_singleton() && a == b {
@@ -537,10 +545,10 @@ impl NormalTy {
     /// only when recursion is present — the μ-canonicalization automaton
     /// ([`mu`]), which makes the result a unique representative of the
     /// equirecursive equivalence class.
-    fn canonical<C: TypeContext>(ty: &Ty, ctx: &C) -> NormalTy {
-        let (t, saw_mu) = Self::canonical_bottom_up(ty, ctx);
+    fn canonical(ty: &Ty, s: &mut SolverSession<'_>) -> NormalTy {
+        let (t, saw_mu) = Self::canonical_bottom_up(ty, s);
         if saw_mu && t.contains_mu() {
-            mu::canonicalize_mu(t, ctx)
+            mu::canonicalize_mu(t, s)
         } else {
             t
         }
@@ -551,10 +559,10 @@ impl NormalTy {
     /// directly (root-unfold-once: a recursive alias exposes its head
     /// constructor; nested recursion stays folded as alias names), so `normalize`
     /// never calls [`Self::into_ty`] on a μ root.
-    fn canonical_render<C: TypeContext>(ty: &Ty, ctx: &C) -> Ty {
-        let (t, saw_mu) = Self::canonical_bottom_up(ty, ctx);
+    fn canonical_render(ty: &Ty, s: &mut SolverSession<'_>) -> Ty {
+        let (t, saw_mu) = Self::canonical_bottom_up(ty, s);
         if saw_mu && t.contains_mu() {
-            mu::canonicalize_mu_with_render(t, ctx).1
+            mu::canonicalize_mu_with_render(t, s).1
         } else {
             t.into_ty()
         }
@@ -562,11 +570,11 @@ impl NormalTy {
 
     /// The shared pre-automaton pipeline: named intermediate → strict binder
     /// resolution → bottom-up algebra (with open-member absorption deferred).
-    fn canonical_bottom_up<C: TypeContext>(ty: &Ty, ctx: &C) -> (NormalTy, bool) {
-        let named = NormalTy::from_ty(ty, ctx, &mut HashSet::new(), PROJECTION_REDUCTION_FUEL);
+    fn canonical_bottom_up(ty: &Ty, s: &mut SolverSession<'_>) -> (NormalTy, bool) {
+        let named = NormalTy::from_ty(ty, s, &mut HashSet::new(), PROJECTION_REDUCTION_FUEL);
         let mut saw_mu = false;
         let resolved = named.resolve_binders(&mut Vec::new(), &mut saw_mu);
-        (resolved.canonicalize(ctx, saw_mu), saw_mu)
+        (resolved.canonicalize(s, saw_mu), saw_mu)
     }
 
     /// Whether a μ-binder survives in this term — the automaton trigger. Checked
@@ -1084,9 +1092,9 @@ impl std::hash::Hash for MuDisplay {
 impl NormalTy<Named> {
     // ── conversion in: Ty → NormalTy<Named> ────────────────────────────────
 
-    fn from_ty<C: TypeContext>(
+    fn from_ty(
         ty: &Ty,
-        ctx: &C,
+        s: &mut SolverSession<'_>,
         expanding: &mut HashSet<QualifiedTypeName>,
         // Remaining projection-reduction steps along this path. Reducing a
         // projection (`(int as Foo).Assoc` → `string`) is a pure type-level
@@ -1131,17 +1139,17 @@ impl NormalTy<Named> {
             // Freshness is a compiler-only widening flag, irrelevant to type identity.
             Ty::Literal(lit, _freshness, _) => NormalTy::Literal(lit.clone()),
             Ty::Class(qn, args, _) => {
-                NormalTy::Class(qn.clone(), Self::from_tys(args, ctx, expanding, fuel))
+                NormalTy::Class(qn.clone(), Self::from_tys(args, s, expanding, fuel))
             }
             Ty::Interface(qn, args, bindings, _) => {
                 let mut bindings: Vec<_> = bindings
                     .iter()
-                    .map(|(name, ty)| (name.clone(), Self::from_ty(ty, ctx, expanding, fuel)))
+                    .map(|(name, ty)| (name.clone(), Self::from_ty(ty, s, expanding, fuel)))
                     .collect();
                 bindings.sort_by(|(a, _), (b, _)| a.cmp(b));
                 NormalTy::Interface(
                     qn.clone(),
-                    Self::from_tys(args, ctx, expanding, fuel),
+                    Self::from_tys(args, s, expanding, fuel),
                     bindings,
                 )
             }
@@ -1150,13 +1158,13 @@ impl NormalTy<Named> {
             // Evolving containers are the list/map analogues during inference;
             // their type identity is the same as the frozen form.
             Ty::List(inner, _) | Ty::EvolvingList(inner, _) => {
-                NormalTy::List(Box::new(Self::from_ty(inner, ctx, expanding, fuel)))
+                NormalTy::List(Box::new(Self::from_ty(inner, s, expanding, fuel)))
             }
             Ty::Map { key, value, .. } | Ty::EvolvingMap(key, value, _) => NormalTy::Map {
-                key: Box::new(Self::from_ty(key, ctx, expanding, fuel)),
-                value: Box::new(Self::from_ty(value, ctx, expanding, fuel)),
+                key: Box::new(Self::from_ty(key, s, expanding, fuel)),
+                value: Box::new(Self::from_ty(value, s, expanding, fuel)),
             },
-            Ty::Union(members, _) => NormalTy::Union(Self::from_tys(members, ctx, expanding, fuel)),
+            Ty::Union(members, _) => NormalTy::Union(Self::from_tys(members, s, expanding, fuel)),
             Ty::Function {
                 params,
                 ret,
@@ -1167,16 +1175,16 @@ impl NormalTy<Named> {
                     .iter()
                     .map(|p| NormalParam {
                         name: p.name.clone(),
-                        ty: Self::from_ty(&p.ty, ctx, expanding, fuel),
+                        ty: Self::from_ty(&p.ty, s, expanding, fuel),
                         mode: p.mode,
                     })
                     .collect(),
-                ret: Box::new(Self::from_ty(ret, ctx, expanding, fuel)),
-                throws: Box::new(Self::from_ty(throws, ctx, expanding, fuel)),
+                ret: Box::new(Self::from_ty(ret, s, expanding, fuel)),
+                throws: Box::new(Self::from_ty(throws, s, expanding, fuel)),
             },
             Ty::Future(value, error, _) => NormalTy::Future(
-                Box::new(Self::from_ty(value, ctx, expanding, fuel)),
-                Box::new(Self::from_ty(error, ctx, expanding, fuel)),
+                Box::new(Self::from_ty(value, s, expanding, fuel)),
+                Box::new(Self::from_ty(error, s, expanding, fuel)),
             ),
             Ty::TypeVar(name, _) => NormalTy::TypeVar(name.clone()),
             Ty::AssociatedTypeProjection {
@@ -1193,15 +1201,15 @@ impl NormalTy<Named> {
                 // impl; fuel guards a cyclic reduction.
                 if fuel > 0
                     && let ProjectionStep::Reduced(reduced) =
-                        ctx.project(base, interface, member, fuel)
+                        s.facts().project(base, interface, member, fuel)
                 {
-                    return Self::from_ty(&reduced, ctx, expanding, fuel - 1);
+                    return Self::from_ty(&reduced, s, expanding, fuel - 1);
                 }
                 // Not reducible — symbolic base or exhausted fuel: an opaque leaf,
                 // equal only to a structurally-identical projection.
                 NormalTy::AssociatedTypeProjection {
-                    base: Box::new(Self::from_ty(base, ctx, expanding, fuel)),
-                    interface: Box::new(Self::from_ty(&interface.to_ty(), ctx, expanding, fuel)),
+                    base: Box::new(Self::from_ty(base, s, expanding, fuel)),
+                    interface: Box::new(Self::from_ty(&interface.to_ty(), s, expanding, fuel)),
                     member: member.clone(),
                 }
             }
@@ -1212,13 +1220,13 @@ impl NormalTy<Named> {
                     // result in a μ-binder over `qn`.
                     return NormalTy::RecVar(qn.clone());
                 }
-                let Some(def) = ctx.alias_def(qn) else {
+                let Some(def) = s.facts().alias_def(qn) else {
                     // Fail-safe: an unresolvable alias is opaque, never equated
                     // to an expansion we cannot see.
                     return NormalTy::OpaqueAlias(qn.clone());
                 };
                 expanding.insert(qn.clone());
-                let body = Self::from_ty(&def, ctx, expanding, fuel);
+                let body = Self::from_ty(&def, s, expanding, fuel);
                 expanding.remove(qn);
                 if body.mentions_rec_var(qn) {
                     NormalTy::Mu {
@@ -1232,14 +1240,14 @@ impl NormalTy<Named> {
         }
     }
 
-    fn from_tys<C: TypeContext>(
+    fn from_tys(
         tys: &[Ty],
-        ctx: &C,
+        s: &mut SolverSession<'_>,
         expanding: &mut HashSet<QualifiedTypeName>,
         fuel: u32,
     ) -> Vec<NormalTy<Named>> {
         tys.iter()
-            .map(|t| Self::from_ty(t, ctx, expanding, fuel))
+            .map(|t| Self::from_ty(t, s, expanding, fuel))
             .collect()
     }
 
@@ -1546,44 +1554,44 @@ impl NormalTy {
     /// unions reduced by the full set algebra. `saw_mu` is the recursive-type
     /// flag from [`NormalTy::resolve_binders`]; when clear, the μ-related guards
     /// below vanish from the hot path.
-    fn canonicalize<C: TypeContext>(self, ctx: &C, saw_mu: bool) -> NormalTy {
+    fn canonicalize(self, s: &mut SolverSession<'_>, saw_mu: bool) -> NormalTy {
         match self {
             NormalTy::Class(qn, args) => NormalTy::Class(
                 qn,
                 args.into_iter()
-                    .map(|a| a.canonicalize(ctx, saw_mu))
+                    .map(|a| a.canonicalize(s, saw_mu))
                     .collect(),
             ),
             NormalTy::Interface(qn, args, bindings) => {
                 let mut bindings: Vec<_> = bindings
                     .into_iter()
-                    .map(|(name, ty)| (name, ty.canonicalize(ctx, saw_mu)))
+                    .map(|(name, ty)| (name, ty.canonicalize(s, saw_mu)))
                     .collect();
                 bindings.sort_by(|(a, _), (b, _)| a.cmp(b));
                 NormalTy::Interface(
                     qn,
                     args.into_iter()
-                        .map(|a| a.canonicalize(ctx, saw_mu))
+                        .map(|a| a.canonicalize(s, saw_mu))
                         .collect(),
                     bindings,
                 )
             }
-            NormalTy::List(inner) => NormalTy::List(Box::new(inner.canonicalize(ctx, saw_mu))),
+            NormalTy::List(inner) => NormalTy::List(Box::new(inner.canonicalize(s, saw_mu))),
             NormalTy::Map { key, value } => NormalTy::Map {
-                key: Box::new(key.canonicalize(ctx, saw_mu)),
-                value: Box::new(value.canonicalize(ctx, saw_mu)),
+                key: Box::new(key.canonicalize(s, saw_mu)),
+                value: Box::new(value.canonicalize(s, saw_mu)),
             },
             NormalTy::Future(value, error) => NormalTy::Future(
-                Box::new(value.canonicalize(ctx, saw_mu)),
-                Box::new(error.canonicalize(ctx, saw_mu)),
+                Box::new(value.canonicalize(s, saw_mu)),
+                Box::new(error.canonicalize(s, saw_mu)),
             ),
             NormalTy::AssociatedTypeProjection {
                 base,
                 interface,
                 member,
             } => NormalTy::AssociatedTypeProjection {
-                base: Box::new(base.canonicalize(ctx, saw_mu)),
-                interface: Box::new(interface.canonicalize(ctx, saw_mu)),
+                base: Box::new(base.canonicalize(s, saw_mu)),
+                interface: Box::new(interface.canonicalize(s, saw_mu)),
                 member,
             },
             NormalTy::Function {
@@ -1596,7 +1604,7 @@ impl NormalTy {
                 let mut required = Vec::new();
                 let mut optional = Vec::new();
                 for p in params {
-                    let ty = p.ty.canonicalize(ctx, saw_mu);
+                    let ty = p.ty.canonicalize(s, saw_mu);
                     match p.mode {
                         FunctionParamMode::Required => required.push(NormalParam {
                             name: None,
@@ -1614,8 +1622,8 @@ impl NormalTy {
                 required.extend(optional);
                 NormalTy::Function {
                     params: required,
-                    ret: Box::new(ret.canonicalize(ctx, saw_mu)),
-                    throws: Box::new(throws.canonicalize(ctx, saw_mu)),
+                    ret: Box::new(ret.canonicalize(s, saw_mu)),
+                    throws: Box::new(throws.canonicalize(s, saw_mu)),
                 }
             }
             // A binder stays put here even if an algebra step strands it —
@@ -1626,14 +1634,14 @@ impl NormalTy {
             // self-heals downstream.
             NormalTy::Mu { binder, body } => NormalTy::Mu {
                 binder,
-                body: Box::new(body.canonicalize(ctx, saw_mu)),
+                body: Box::new(body.canonicalize(s, saw_mu)),
             },
             NormalTy::Union(members) => {
                 let members = members
                     .into_iter()
-                    .map(|m| m.canonicalize(ctx, saw_mu))
+                    .map(|m| m.canonicalize(s, saw_mu))
                     .collect();
-                Self::canonicalize_union(members, ctx, saw_mu)
+                Self::canonicalize_union(members, s, saw_mu)
             }
             leaf => leaf,
         }
@@ -1651,13 +1659,8 @@ impl NormalTy {
     /// [`Self::is_subtype_of`]'s bidirectional escape, so a hole argument still
     /// matches anything. The `unknown` top type does *not* — it is a real,
     /// distinct argument (`Box<unknown>` is not `Box<int>`).
-    fn invariant_compatible<C: TypeContext>(
-        &self,
-        other: &NormalTy,
-        ctx: &C,
-        assumptions: &mut HashSet<(NormalTy, NormalTy)>,
-    ) -> bool {
-        self.is_subtype_of(other, ctx, assumptions) && other.is_subtype_of(self, ctx, assumptions)
+    fn invariant_compatible(&self, other: &NormalTy, s: &mut SolverSession<'_>) -> bool {
+        self.is_subtype_of(other, s) && other.is_subtype_of(self, s)
     }
 
     /// Whether pin `(member, value)` required of `var <: qn<args, …>` is *tautological* —
@@ -1667,13 +1670,12 @@ impl NormalTy {
     /// before delegating to the variable's bounds. Extra pins on the projection's own
     /// qualifier don't disqualify: a qualifier narrows which interface view is meant, it
     /// never changes the member's value.
-    fn pin_is_tautological<C: TypeContext>(
+    fn pin_is_tautological(
         var: &ParamTy,
         qn: &QualifiedTypeName,
         args: &[NormalTy],
         pin: &(Name, NormalTy),
-        ctx: &C,
-        assumptions: &mut HashSet<(NormalTy, NormalTy)>,
+        s: &mut SolverSession<'_>,
     ) -> bool {
         let (member, value) = pin;
         let NormalTy::AssociatedTypeProjection {
@@ -1692,7 +1694,7 @@ impl NormalTy {
                     && iface_args
                         .iter()
                         .zip(args)
-                        .all(|(a, b)| a.invariant_compatible(b, ctx, assumptions)))
+                        .all(|(a, b)| a.invariant_compatible(b, s)))
     }
 
     /// Equirecursive subtyping with co-inductive assumptions. Operands must
@@ -1702,12 +1704,7 @@ impl NormalTy {
     /// (`C <: I`, `A <: B` via requires, `T <: I` via bound). There are no
     /// representation-changing coercions: `int` is a subtype of neither `bigint`
     /// nor `float`; the only widenings are literal-into-base and variant-into-enum.
-    fn is_subtype_of<C: TypeContext>(
-        &self,
-        sup: &NormalTy,
-        ctx: &C,
-        assumptions: &mut HashSet<(NormalTy, NormalTy)>,
-    ) -> bool {
+    fn is_subtype_of(&self, sup: &NormalTy, s: &mut SolverSession<'_>) -> bool {
         if self == sup {
             return true;
         }
@@ -1755,18 +1752,17 @@ impl NormalTy {
             NormalTy::Mu { .. } | NormalTy::TypeVar(_) | NormalTy::AssociatedTypeProjection { .. }
         ) || matches!(sup, NormalTy::Mu { .. });
         if !expanding {
-            return self.is_subtype_of_inner(sup, ctx, assumptions);
+            return self.is_subtype_of_inner(sup, s);
         }
         // On the (few) expanding arms, probe by linear scan rather than cloning
         // to hash: the pairs on the current path are bounded by the
         // expanding-arm recursion depth, so a scan beats hashing the whole tree.
-        if assumptions.iter().any(|(a, b)| a == self && b == sup) {
+        if s.assumes(self, sup) {
             return true;
         }
-        let pair = (self.clone(), sup.clone());
-        assumptions.insert(pair.clone());
-        let result = self.is_subtype_of_inner(sup, ctx, assumptions);
-        assumptions.remove(&pair);
+        s.push_assumption(self.clone(), sup.clone());
+        let result = self.is_subtype_of_inner(sup, s);
+        s.pop_assumption();
         result
     }
 
@@ -1774,12 +1770,7 @@ impl NormalTy {
     /// `is_subtype_of`, which owns the reflexivity / sentinel fast paths and the
     /// co-inductive assumption bookkeeping (only performed on the expanding
     /// arms — see the termination argument there).
-    fn is_subtype_of_inner<C: TypeContext>(
-        &self,
-        sup: &NormalTy,
-        ctx: &C,
-        assumptions: &mut HashSet<(NormalTy, NormalTy)>,
-    ) -> bool {
+    fn is_subtype_of_inner(&self, sup: &NormalTy, s: &mut SolverSession<'_>) -> bool {
         match (self, sup) {
             // The coinductive assumption probe is sound only on contractive
             // operands: unfolding a μ with an unguarded spine re-injects the μ
@@ -1796,17 +1787,13 @@ impl NormalTy {
             // μ-unfolding (equirecursive). The closed-term substitution needs no
             // index shifting, and the outer `is_subtype_of` recorded this pair on
             // the expanding-arm assumption set.
-            (NormalTy::Mu { .. }, _) => self.unfold().is_subtype_of(sup, ctx, assumptions),
-            (_, NormalTy::Mu { .. }) => self.is_subtype_of(&sup.unfold(), ctx, assumptions),
+            (NormalTy::Mu { .. }, _) => self.unfold().is_subtype_of(sup, s),
+            (_, NormalTy::Mu { .. }) => self.is_subtype_of(&sup.unfold(), s),
 
             // Union decomposition. `Union <: T` must precede `T <: Union` so a
             // union on the left is not mistaken for a single member of the right.
-            (NormalTy::Union(members), _) => members
-                .iter()
-                .all(|m| m.is_subtype_of(sup, ctx, assumptions)),
-            (_, NormalTy::Union(members)) => members
-                .iter()
-                .any(|m| self.is_subtype_of(m, ctx, assumptions)),
+            (NormalTy::Union(members), _) => members.iter().all(|m| m.is_subtype_of(sup, s)),
+            (_, NormalTy::Union(members)) => members.iter().any(|m| self.is_subtype_of(m, s)),
 
             // A type variable is a subtype of `sup` if *any* of its bounds is.
             // The bounds are a conjunction (Rust's `T: A + B`): a value filling
@@ -1820,32 +1807,37 @@ impl NormalTy {
             // definitionally (Rust's `T: Iterator` proves `T: Iterator<Item =
             // <T as Iterator>::Item>`). Such pins arise when an interface's own
             // signature (`-> Iterator<Item = Self.Item>`) is realized at a rigid `Self`.
-            (NormalTy::TypeVar(name), NormalTy::Interface(qn, args, pins))
-                if pins.iter().any(|pin| {
-                    Self::pin_is_tautological(name, qn, args, pin, ctx, assumptions)
-                }) =>
-            {
-                let stripped = NormalTy::Interface(
-                    qn.clone(),
-                    args.clone(),
-                    pins.iter()
-                        .filter(|pin| {
-                            !Self::pin_is_tautological(name, qn, args, pin, ctx, assumptions)
+            (NormalTy::TypeVar(name), _) => {
+                // Tautology is decided once, here, rather than in a match guard
+                // that the arm body would then re-decide per pin: the predicate
+                // consults the context and recurses, so evaluating it twice both
+                // doubles that work and makes it depend on arm order.
+                let stripped = match sup {
+                    NormalTy::Interface(qn, args, pins) => {
+                        let tautological: Vec<bool> = pins
+                            .iter()
+                            .map(|pin| Self::pin_is_tautological(name, qn, args, pin, s))
+                            .collect();
+                        tautological.iter().any(|&t| t).then(|| {
+                            NormalTy::Interface(
+                                qn.clone(),
+                                args.clone(),
+                                pins.iter()
+                                    .zip(&tautological)
+                                    .filter(|(_, taut)| !**taut)
+                                    .map(|(pin, _)| pin.clone())
+                                    .collect(),
+                            )
                         })
-                        .cloned()
-                        .collect(),
-                );
-                ctx.type_var_bound(name).iter().any(|bound| {
-                    NormalTy::canonical(&bound.to_ty(), ctx).is_subtype_of(
-                        &stripped,
-                        ctx,
-                        assumptions,
-                    )
-                })
+                    }
+                    _ => None,
+                };
+                let sup = stripped.as_ref().unwrap_or(sup);
+                s.facts()
+                    .type_var_bound(name)
+                    .iter()
+                    .any(|bound| NormalTy::canonical(&bound.to_ty(), s).is_subtype_of(sup, s))
             }
-            (NormalTy::TypeVar(name), _) => ctx.type_var_bound(name).iter().any(|bound| {
-                NormalTy::canonical(&bound.to_ty(), ctx).is_subtype_of(sup, ctx, assumptions)
-            }),
 
             // A still-symbolic associated-type projection is a subtype of `sup` if
             // any of its associated type's declared bounds is — the projection
@@ -1862,15 +1854,10 @@ impl NormalTy {
                 },
                 _,
             ) => (**iface).clone().into_interface().is_some_and(|i| {
-                ctx.associated_type_bound(&i, member.clone())
+                s.facts()
+                    .associated_type_bound(&i, member.clone())
                     .iter()
-                    .any(|bound| {
-                        NormalTy::canonical(&bound.to_ty(), ctx).is_subtype_of(
-                            sup,
-                            ctx,
-                            assumptions,
-                        )
-                    })
+                    .any(|bound| NormalTy::canonical(&bound.to_ty(), s).is_subtype_of(sup, s))
             }),
 
             // BEP-062: `baml.AnyFunction` is a compiler builtin implemented by
@@ -1889,8 +1876,8 @@ impl NormalTy {
                         .iter()
                         .find_map(|(n, ty)| (n.as_str() == name).then_some(ty))
                 };
-                pin("Returns").is_none_or(|r| ret.is_subtype_of(r, ctx, assumptions))
-                    && pin("Throws").is_none_or(|t| throws.is_subtype_of(t, ctx, assumptions))
+                pin("Returns").is_none_or(|r| ret.is_subtype_of(r, s))
+                    && pin("Throws").is_none_or(|t| throws.is_subtype_of(t, s))
             }
 
             // BEP-062: `AnyFunction`'s pins are covariant, unlike every other
@@ -1909,9 +1896,9 @@ impl NormalTy {
                 && sup_qn.is_builtin_root_type("AnyFunction") =>
             {
                 sup_bindings.iter().all(|(name, sup_pin)| {
-                    sub_bindings.iter().any(|(n, sub_pin)| {
-                        n == name && sub_pin.is_subtype_of(sup_pin, ctx, assumptions)
-                    })
+                    sub_bindings
+                        .iter()
+                        .any(|(n, sub_pin)| n == name && sub_pin.is_subtype_of(sup_pin, s))
                 })
             }
 
@@ -1919,7 +1906,7 @@ impl NormalTy {
             (sub, NormalTy::Interface(qn, args, bindings))
                 if !matches!(sub, NormalTy::Interface(..)) =>
             {
-                ctx.implements_interface(
+                s.facts().implements_interface(
                     &sub.clone().into_ty(),
                     &Self::interface_constraint(qn, args, bindings),
                 )
@@ -1928,7 +1915,7 @@ impl NormalTy {
             (
                 NormalTy::Interface(sub_qn, sub_args, sub_bindings),
                 NormalTy::Interface(sup_qn, sup_args, sup_bindings),
-            ) => ctx.interface_requires(
+            ) => s.facts().interface_requires(
                 &Self::interface_constraint(sub_qn, sub_args, sub_bindings),
                 &Self::interface_constraint(sup_qn, sup_args, sup_bindings),
             ),
@@ -1946,18 +1933,16 @@ impl NormalTy {
             {
                 a1.iter()
                     .zip(a2.iter())
-                    .all(|(a, b)| a.invariant_compatible(b, ctx, assumptions))
+                    .all(|(a, b)| a.invariant_compatible(b, s))
             }
-            (NormalTy::List(a), NormalTy::List(b)) => a.invariant_compatible(b, ctx, assumptions),
+            (NormalTy::List(a), NormalTy::List(b)) => a.invariant_compatible(b, s),
             (NormalTy::Map { key: k1, value: v1 }, NormalTy::Map { key: k2, value: v2 }) => {
-                k1.invariant_compatible(k2, ctx, assumptions)
-                    && v1.invariant_compatible(v2, ctx, assumptions)
+                k1.invariant_compatible(k2, s) && v1.invariant_compatible(v2, s)
             }
 
             // Future is an invariant container.
             (NormalTy::Future(v1, e1), NormalTy::Future(v2, e2)) => {
-                v1.invariant_compatible(v2, ctx, assumptions)
-                    && e1.invariant_compatible(e2, ctx, assumptions)
+                v1.invariant_compatible(v2, s) && e1.invariant_compatible(e2, s)
             }
             // Literal types are subtypes of their (same-representation) base only.
             (NormalTy::Literal(Literal::Int(_)), NormalTy::Int) => true,
@@ -1982,9 +1967,9 @@ impl NormalTy {
                     throws: t2,
                 },
             ) => {
-                r1.is_subtype_of(r2, ctx, assumptions)
-                    && t1.is_subtype_of(t2, ctx, assumptions)
-                    && NormalParam::list_subtype(p1, p2, ctx, assumptions)
+                r1.is_subtype_of(r2, s)
+                    && t1.is_subtype_of(t2, s)
+                    && NormalParam::list_subtype(p1, p2, s)
             }
 
             _ => false,
@@ -2172,9 +2157,9 @@ impl NormalTy {
     /// Reduce a union of already-canonical members to canonical form: flatten,
     /// remove `never`, absorb under `unknown`, collapse complete enums, absorb
     /// subtype-members, then sort/dedup and unwrap singletons.
-    fn canonicalize_union<C: TypeContext>(
+    fn canonicalize_union(
         members: Vec<NormalTy>,
-        ctx: &C,
+        s: &mut SolverSession<'_>,
         saw_mu: bool,
     ) -> NormalTy {
         // Flatten one level (members are canonical, but a μ-unfold or alias could
@@ -2196,9 +2181,9 @@ impl NormalTy {
         flat.sort();
         flat.dedup();
 
-        Self::collapse_complete_enums(&mut flat, ctx);
+        Self::collapse_complete_enums(&mut flat, s);
         Self::collapse_complete_bools(&mut flat);
-        let mut flat = Self::absorb_subtypes(&flat, ctx, saw_mu);
+        let mut flat = Self::absorb_subtypes(&flat, s, saw_mu);
 
         flat.sort();
         flat.dedup();
@@ -2213,7 +2198,7 @@ impl NormalTy {
     /// (`E.A | E.B | … == E`). A bare `Enum(E)` already present absorbs its
     /// variants via the subtype pass, so this only handles the
     /// all-variants-no-enum case.
-    fn collapse_complete_enums<C: TypeContext>(members: &mut Vec<NormalTy>, ctx: &C) {
+    fn collapse_complete_enums(members: &mut Vec<NormalTy>, s: &mut SolverSession<'_>) {
         // Distinct enums that have at least one variant present.
         let mut enums: Vec<QualifiedTypeName> = members
             .iter()
@@ -2226,7 +2211,7 @@ impl NormalTy {
         enums.dedup();
 
         for e in enums {
-            let Some(all) = ctx.enum_variants(&e) else {
+            let Some(all) = s.facts().enum_variants(&e) else {
                 continue; // unknown enum → no collapse (fail-safe)
             };
             let present: HashSet<&Name> = members
@@ -2348,9 +2333,9 @@ impl NormalTy {
     /// conservative (a union keeps a member another semantically covers) — the
     /// μ-canonicalization automaton re-runs absorption over closed, ε-closed
     /// per-state read-backs and completes it.
-    fn absorb_subtypes<C: TypeContext>(
+    fn absorb_subtypes(
         members: &[NormalTy],
-        ctx: &C,
+        s: &mut SolverSession<'_>,
         saw_mu: bool,
     ) -> Vec<NormalTy> {
         let n = members.len();
@@ -2373,13 +2358,16 @@ impl NormalTy {
                 if i == j || !keep[j] || members[j].is_sentinel() || open[j] {
                     continue;
                 }
-                if !members[i].is_subtype_of(&members[j], ctx, &mut HashSet::new()) {
+                // Each pair is an independent goal: a hypothesis assumed while
+                // deciding one pair must not leak into a sibling pair, which is
+                // not under it. `prove_subtype` gives each its own barrier.
+                if !s.prove_subtype(&members[i], &members[j]) {
                     continue;
                 }
                 // `members[i] <: members[j]`. Drop `i`, unless they are mutual
                 // subtypes (equivalent but not structurally equal — e.g. cyclic
                 // `requires`); then keep the lower index deterministically.
-                let mutual = members[j].is_subtype_of(&members[i], ctx, &mut HashSet::new());
+                let mutual = s.prove_subtype(&members[j], &members[i]);
                 if !mutual || j < i {
                     keep[i] = false;
                     break;
@@ -2558,19 +2546,14 @@ impl<P: MuPhase> NormalParam<P> {
 impl NormalParam {
     /// Function parameter-list subtyping (contravariant): required params
     /// positional and matched in order, optional params matched by name.
-    fn list_subtype<C: TypeContext>(
-        sub: &[NormalParam],
-        sup: &[NormalParam],
-        ctx: &C,
-        assumptions: &mut HashSet<(NormalTy, NormalTy)>,
-    ) -> bool {
+    fn list_subtype(sub: &[NormalParam], sup: &[NormalParam], s: &mut SolverSession<'_>) -> bool {
         let sub_required: Vec<&NormalParam> = sub.iter().filter(|p| p.is_required()).collect();
         let sup_required: Vec<&NormalParam> = sup.iter().filter(|p| p.is_required()).collect();
         if sub_required.len() != sup_required.len() {
             return false;
         }
         for (sub, sup) in sub_required.iter().zip(sup_required.iter()) {
-            if !sup.ty.is_subtype_of(&sub.ty, ctx, assumptions) {
+            if !sup.ty.is_subtype_of(&sub.ty, s) {
                 return false;
             }
         }
@@ -2584,7 +2567,7 @@ impl NormalParam {
             else {
                 return false;
             };
-            if !sup.ty.is_subtype_of(&sub.ty, ctx, assumptions) {
+            if !sup.ty.is_subtype_of(&sub.ty, s) {
                 return false;
             }
         }
@@ -2593,6 +2576,7 @@ impl NormalParam {
 }
 
 mod mu;
+mod solve;
 
 #[cfg(test)]
 mod tests;

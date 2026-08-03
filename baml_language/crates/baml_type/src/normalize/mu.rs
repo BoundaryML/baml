@@ -80,9 +80,9 @@
 //! oracle, the renderer **bails** and the pipeline degrades to the sound
 //! pre-automaton form (see [`canonicalize_mu`]).
 
-use std::collections::{BTreeMap, BTreeSet, HashSet};
+use std::collections::{BTreeMap, BTreeSet};
 
-use super::{MuDisplay, NormalParam, NormalTy, TypeContext};
+use super::{MuDisplay, NormalParam, NormalTy, solve::SolverSession};
 use crate::{FunctionParamMode, Name, QualifiedTypeName, Ty, TyAttr};
 
 /// Canonicalize a term containing at least one μ-binder.
@@ -93,11 +93,11 @@ use crate::{FunctionParamMode, Name, QualifiedTypeName, Ty, TyAttr};
 /// display must never reach a fact oracle. The fallback degrades only
 /// *completeness* (two such spellings may miss an equivalence), never
 /// soundness.
-pub(super) fn canonicalize_mu<C: TypeContext>(term: NormalTy, ctx: &C) -> NormalTy {
+pub(super) fn canonicalize_mu(term: NormalTy, solver: &mut SolverSession<'_>) -> NormalTy {
     let out = Builder::default()
         .build(&term)
         .epsilon_close()
-        .minimize_and_absorb(ctx)
+        .minimize_and_absorb(solver)
         .read_back();
     out.unwrap_or(term)
 }
@@ -106,14 +106,14 @@ pub(super) fn canonicalize_mu<C: TypeContext>(term: NormalTy, ctx: &C) -> Normal
 /// (a recursive alias exposes its head constructor; nested recursion folds to
 /// alias names). The bail fallback renders the input term via its interim
 /// (legacy) displays — a correct, merely less-canonical spelling.
-pub(super) fn canonicalize_mu_with_render<C: TypeContext>(
+pub(super) fn canonicalize_mu_with_render(
     term: NormalTy,
-    ctx: &C,
+    solver: &mut SolverSession<'_>,
 ) -> (NormalTy, Ty) {
     let minimal = Builder::default()
         .build(&term)
         .epsilon_close()
-        .minimize_and_absorb(ctx);
+        .minimize_and_absorb(solver);
     if let (Some(t), Some(r)) = (minimal.read_back(), minimal.render_root()) {
         return (t, r);
     }
@@ -518,10 +518,10 @@ impl<'a> Closed<'a> {
     /// Interleave partition refinement with the per-state union algebra to a
     /// fixpoint (an absorption redirect can resurface ε-edges, hence the
     /// re-closure inside the loop).
-    fn minimize_and_absorb<C: TypeContext>(mut self, ctx: &C) -> Minimal<'a> {
+    fn minimize_and_absorb(mut self, solver: &mut SolverSession<'_>) -> Minimal<'a> {
         loop {
             minimize(&mut self.auto, self.root);
-            if !algebra_pass(&mut self.auto, self.root, ctx) {
+            if !algebra_pass(&mut self.auto, self.root, solver) {
                 break;
             }
             epsilon_close(&mut self.auto, self.root);
@@ -827,7 +827,7 @@ fn local_key(auto: &Automaton<'_>, s: StateId) -> LocalKey {
 ///   function of the minimal automaton);
 /// - a state with a member whose materialization **bailed**: no sound `Ty`
 ///   spelling exists to hand the fact oracles.
-fn algebra_pass<C: TypeContext>(auto: &mut Automaton<'_>, root: StateId, ctx: &C) -> bool {
+fn algebra_pass(auto: &mut Automaton<'_>, root: StateId, solver: &mut SolverSession<'_>) -> bool {
     let cyclic = cyclic_states(auto, root);
     let mut changed = false;
     // Member read-backs are pure in the automaton and members recur across
@@ -843,7 +843,7 @@ fn algebra_pass<C: TypeContext>(auto: &mut Automaton<'_>, root: StateId, ctx: &C
         let mut members: BTreeSet<StateId> = before.clone();
         members.retain(|&m| !auto.is_never(m));
 
-        collapse_complete_enums(auto, &mut members, ctx);
+        collapse_complete_enums(auto, &mut members, solver);
         collapse_complete_bools(auto, &mut members);
 
         let absorb = !(cyclic.contains(&s) && auto.representative_name(s).is_none());
@@ -876,15 +876,11 @@ fn algebra_pass<C: TypeContext>(auto: &mut Automaton<'_>, root: StateId, ctx: &C
                     if i == j || !keep[j] || items[j].0.is_sentinel() {
                         continue;
                     }
-                    if !items[i]
-                        .0
-                        .is_subtype_of(&items[j].0, ctx, &mut HashSet::new())
-                    {
+                    // Independent goals, one barrier each — see `absorb_subtypes`.
+                    if !solver.prove_subtype(&items[i].0, &items[j].0) {
                         continue;
                     }
-                    let mutual = items[j]
-                        .0
-                        .is_subtype_of(&items[i].0, ctx, &mut HashSet::new());
+                    let mutual = solver.prove_subtype(&items[j].0, &items[i].0);
                     if !mutual || j < i {
                         keep[i] = false;
                         break;
@@ -937,10 +933,10 @@ fn algebra_pass<C: TypeContext>(auto: &mut Automaton<'_>, root: StateId, ctx: &C
 
 /// Replace a complete set of an enum's variant states with the enum state
 /// (`E.A | E.B | … == E`), finding or allocating it.
-fn collapse_complete_enums<C: TypeContext>(
+fn collapse_complete_enums(
     auto: &mut Automaton<'_>,
     members: &mut BTreeSet<StateId>,
-    ctx: &C,
+    solver: &mut SolverSession<'_>,
 ) {
     let mut enums: BTreeSet<NameId> = BTreeSet::new();
     for &m in members.iter() {
@@ -949,7 +945,7 @@ fn collapse_complete_enums<C: TypeContext>(
         }
     }
     for e in enums {
-        let Some(all) = ctx.enum_variants(auto.names.get(e.0)) else {
+        let Some(all) = solver.facts().enum_variants(auto.names.get(e.0)) else {
             continue; // unknown enum → no collapse (fail-safe)
         };
         let present: BTreeSet<&Name> = members
