@@ -1054,6 +1054,9 @@ impl FromCST for ClassDecl {
                 SyntaxKind::BLOCK_ATTRIBUTE => {
                     items.push(ClassItem::BlockAttribute(BlockAttribute::from_cst(elem)?));
                 }
+                SyntaxKind::HEADER_COMMENT => {
+                    items.push(ClassItem::HeaderComment(t::HeaderComment::from_cst(elem)?));
+                }
                 SyntaxKind::COMMA | SyntaxKind::SEMICOLON => {
                     // Stray delimiter not following a field - skip silently
                 }
@@ -1492,6 +1495,7 @@ pub enum ImplementsItem {
     FieldLink(InterfaceFieldLink, Option<ClassFieldDelimiter>),
     Field(ClassField, Option<ClassFieldDelimiter>),
     Function(FunctionDecl),
+    HeaderComment(t::HeaderComment),
 }
 
 impl ImplementsItem {
@@ -1521,6 +1525,10 @@ impl Printable for ImplementsItem {
                 info
             }
             ImplementsItem::Function(function) => function.print(shape, printer),
+            ImplementsItem::HeaderComment(header) => {
+                printer.print_raw_token(header);
+                PrintInfo::default_single_line()
+            }
         }
     }
 
@@ -1530,6 +1538,7 @@ impl Printable for ImplementsItem {
             ImplementsItem::FieldLink(link, _) => link.leftmost_token(),
             ImplementsItem::Field(field, _) => field.leftmost_token(),
             ImplementsItem::Function(function) => function.leftmost_token(),
+            ImplementsItem::HeaderComment(header) => header.span(),
         }
     }
 
@@ -1545,6 +1554,7 @@ impl Printable for ImplementsItem {
                 Self::delimiter_rightmost(delimiter.as_ref(), || field.rightmost_token())
             }
             ImplementsItem::Function(function) => function.rightmost_token(),
+            ImplementsItem::HeaderComment(header) => header.span(),
         }
     }
 }
@@ -1626,6 +1636,11 @@ impl FromCST for ImplementsBlock {
                 }
                 SyntaxKind::FUNCTION_DEF => {
                     items.push(ImplementsItem::Function(FunctionDecl::from_cst(elem)?));
+                }
+                SyntaxKind::HEADER_COMMENT => {
+                    items.push(ImplementsItem::HeaderComment(t::HeaderComment::from_cst(
+                        elem,
+                    )?));
                 }
                 SyntaxKind::COMMA | SyntaxKind::SEMICOLON => {}
                 SyntaxKind::R_BRACE => {
@@ -1716,6 +1731,7 @@ pub enum ClassItem {
     Function(FunctionDecl),
     Implements(ImplementsBlock),
     BlockAttribute(BlockAttribute),
+    HeaderComment(t::HeaderComment),
     Unknown(TextRange),
 }
 
@@ -1727,6 +1743,9 @@ impl FromCST for ClassItem {
             SyntaxKind::IMPLEMENTS_BLOCK => ClassItem::Implements(ImplementsBlock::from_cst(elem)?),
             SyntaxKind::BLOCK_ATTRIBUTE => {
                 ClassItem::BlockAttribute(BlockAttribute::from_cst(elem)?)
+            }
+            SyntaxKind::HEADER_COMMENT => {
+                ClassItem::HeaderComment(t::HeaderComment::from_cst(elem)?)
             }
             found => {
                 return Err(StrongAstError::UnexpectedKindDesc {
@@ -1764,6 +1783,10 @@ impl Printable for ClassItem {
             ClassItem::Function(function) => function.print(shape, printer),
             ClassItem::Implements(block) => block.print(shape, printer),
             ClassItem::BlockAttribute(attr) => attr.print(shape, printer),
+            ClassItem::HeaderComment(header) => {
+                printer.print_raw_token(header);
+                PrintInfo::default_single_line()
+            }
             ClassItem::Unknown(range) => {
                 printer.print_input_range(*range);
                 PrintInfo::default_multi_lined()
@@ -1776,6 +1799,7 @@ impl Printable for ClassItem {
             ClassItem::Function(function) => function.leftmost_token(),
             ClassItem::Implements(block) => block.leftmost_token(),
             ClassItem::BlockAttribute(attr) => attr.leftmost_token(),
+            ClassItem::HeaderComment(header) => header.span(),
             ClassItem::Unknown(range) => *range,
         }
     }
@@ -1789,6 +1813,7 @@ impl Printable for ClassItem {
             ClassItem::Function(function) => function.rightmost_token(),
             ClassItem::Implements(block) => block.rightmost_token(),
             ClassItem::BlockAttribute(attr) => attr.rightmost_token(),
+            ClassItem::HeaderComment(header) => header.span(),
             ClassItem::Unknown(range) => *range,
         }
     }
@@ -2509,7 +2534,9 @@ pub enum ConfigItemKey {
 impl FromCST for ConfigItemKey {
     fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
         match elem.kind() {
-            SyntaxKind::WORD => t::Word::from_cst(elem).map(ConfigItemKey::Word),
+            SyntaxKind::WORD | SyntaxKind::KW_CLIENT => {
+                t::Word::from_cst(elem).map(ConfigItemKey::Word)
+            }
             SyntaxKind::STRING_LITERAL => {
                 t::QuotedString::from_cst(elem).map(ConfigItemKey::String)
             }
