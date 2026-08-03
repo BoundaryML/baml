@@ -52,6 +52,15 @@ const NODE_MODULES = new Set([
   "process", "node:process", "net", "node:net", "path", "node:path",
 ]);
 
+// Some node modules expose their API as an interface on an exported value
+// rather than free function declarations (`path` → `PlatformPath`,
+// `process` → `NodeJS.Process`). Pool those interfaces' members into the
+// module container.
+const NODE_MODULE_INTERFACES = new Map([
+  ["path", new Set(["PlatformPath"])],
+  ["process", new Set(["Process"])],
+]);
+
 // ── setup ────────────────────────────────────────────────────────────────────
 
 const args = process.argv.slice(2);
@@ -181,10 +190,19 @@ function walkNodeModuleFile(filePath) {
   const sourceFile = ts.createSourceFile(filePath, text, ts.ScriptTarget.Latest, false);
 
   function visitModuleBody(moduleName, body) {
+    const bareName = moduleName.replace(/^node:/, "");
     for (const stmt of body.statements ?? []) {
       if (ts.isFunctionDeclaration(stmt) && stmt.name) {
-        const container = containerFor(`node:${moduleName.replace(/^node:/, "")}`, "module", "node");
+        const container = containerFor(`node:${bareName}`, "module", "node");
         addMember(container, stmt, sourceFile, { since: "node", isStatic: false });
+      } else if (
+        ts.isInterfaceDeclaration(stmt) &&
+        NODE_MODULE_INTERFACES.get(bareName)?.has(stmt.name.text)
+      ) {
+        const container = containerFor(`node:${bareName}`, "module", "node");
+        for (const member of stmt.members) {
+          addMember(container, member, sourceFile, { since: "node", isStatic: false });
+        }
       } else if (ts.isModuleDeclaration(stmt) && stmt.body && ts.isModuleBlock(stmt.body)) {
         visitModuleBody(moduleName, stmt.body);
       }

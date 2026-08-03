@@ -1,0 +1,120 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+tool_repo="$(cd "${script_dir}/../.." && pwd -P)"
+invocation_dir="$(pwd -P)"
+output_file="${script_dir}/report/matrix.md"
+skip_extract=0
+
+absolute_path() {
+    case "$1" in
+        /*) printf '%s\n' "$1" ;;
+        *) printf '%s/%s\n' "${invocation_dir}" "$1" ;;
+    esac
+}
+
+usage() {
+    cat <<'EOF'
+Usage: tools/stdlib-matrix/run [--output PATH] [--skip-extract]
+
+Compare the BAML stdlib surface against the TypeScript stdlib and write a
+markdown matrix report (structure-only pass: deterministic name matching).
+
+The data/ intermediates (BAML export IR, TS surface) are regenerated on every
+run: they are gitignored, derived from the compiler at HEAD and the
+lockfile-pinned typescript/@types/node packages. --skip-extract reuses
+existing data/ files instead.
+EOF
+}
+
+while (($# > 0)); do
+    case "$1" in
+        --output)
+            output_file="$(absolute_path "$2")"
+            shift 2
+            ;;
+        --skip-extract)
+            skip_extract=1
+            shift
+            ;;
+        -h|--help)
+            usage
+            exit 0
+            ;;
+        *)
+            echo "stdlib-matrix: unknown argument: $1" >&2
+            usage >&2
+            exit 2
+            ;;
+    esac
+done
+
+baml_bin="${BAML_BIN:-${tool_repo}/baml_language/target/debug/baml-cli}"
+if [[ ! -x "${baml_bin}" ]]; then
+    echo "stdlib-matrix: local baml-cli not found at ${baml_bin}" >&2
+    echo "Build it with: cargo build --manifest-path baml_language/Cargo.toml -p baml_cli --bin baml-cli" >&2
+    exit 2
+fi
+if ! command -v jq >/dev/null 2>&1; then
+    echo "stdlib-matrix: jq is required to decode BAML output" >&2
+    exit 2
+fi
+
+temporary_dir="$(mktemp -d "${TMPDIR:-/tmp}/stdlib-matrix.XXXXXX")"
+temporary_output=""
+cleanup() {
+    if [[ -n "${temporary_output}" ]]; then
+        rm -f "${temporary_output}"
+    fi
+    rm -rf "${temporary_dir}"
+}
+trap cleanup EXIT
+
+data_dir="${script_dir}/data"
+mkdir -p "${data_dir}"
+if ((skip_extract == 0)); then
+    if ! command -v node >/dev/null 2>&1; then
+        echo "stdlib-matrix: node is required to extract the TS surface (or pass --skip-extract to reuse data/)" >&2
+        exit 2
+    fi
+    node "${script_dir}/extractors/ts-surface.mjs" --repo-root "${tool_repo}" > "${temporary_dir}/ts_surface.json"
+    mv "${temporary_dir}/ts_surface.json" "${data_dir}/ts_surface.json"
+    "${baml_bin}" describe baml --export > "${temporary_dir}/baml_surface.json"
+    mv "${temporary_dir}/baml_surface.json" "${data_dir}/baml_surface.json"
+elif [[ ! -f "${data_dir}/ts_surface.json" || ! -f "${data_dir}/baml_surface.json" ]]; then
+    echo "stdlib-matrix: --skip-extract passed but data/ is incomplete; run once without it" >&2
+    exit 2
+fi
+
+cd "${tool_repo}"
+if ! "${baml_bin}" run --output-format json --from tools/stdlib-matrix build_matrix -- \
+    --baml_surface_file "${data_dir}/baml_surface.json" \
+    --ts_surface_file "${data_dir}/ts_surface.json" \
+    --output_file "${output_file}" > "${temporary_dir}/result.json"; then
+    echo "stdlib-matrix: matrix construction failed" >&2
+    exit 2
+fi
+
+if ! resolved_output="$(jq -er '.output_file' "${temporary_dir}/result.json")"; then
+    echo "stdlib-matrix: BAML returned an invalid result" >&2
+    exit 2
+fi
+mkdir -p "$(dirname "${resolved_output}")"
+temporary_output="$(mktemp "${resolved_output}.XXXXXX")"
+if ! jq -er '.markdown' "${temporary_dir}/result.json" > "${temporary_output}"; then
+    echo "stdlib-matrix: BAML returned an invalid report" >&2
+    exit 2
+fi
+chmod 0644 "${temporary_output}"
+mv "${temporary_output}" "${resolved_output}"
+temporary_output=""
+
+matched="$(jq -er '.report.totals.matched' "${temporary_dir}/result.json")"
+baml_only="$(jq -er '.report.totals.baml_only' "${temporary_dir}/result.json")"
+ts_only="$(jq -er '.report.totals.ts_only' "${temporary_dir}/result.json")"
+containers="$(jq -er '.report.totals.containers' "${temporary_dir}/result.json")"
+
+echo "Wrote ${resolved_output}"
+echo "${containers} containers: ${matched} matched, ${baml_only} BAML-only, ${ts_only} TS-only"
