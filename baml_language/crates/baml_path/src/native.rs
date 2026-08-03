@@ -32,10 +32,6 @@ impl NativePathBuf {
     pub fn as_path(&self) -> &Path {
         &self.0
     }
-
-    pub fn into_path_buf(self) -> PathBuf {
-        self.0
-    }
 }
 
 impl TryFrom<&NativePathBuf> for VfsPathBuf {

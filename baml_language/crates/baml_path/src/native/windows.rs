@@ -110,10 +110,8 @@ mod tests {
             );
         }
 
-        assert_eq!(
-            NativePathBuf::try_from(&expected).unwrap().into_path_buf(),
-            native
-        );
+        let decoded = NativePathBuf::try_from(&expected).unwrap();
+        assert_eq!(decoded.as_path(), native.as_path());
     }
 
     #[test]
@@ -122,9 +120,7 @@ mod tests {
         let encoded = VfsPathBuf::try_from(&NativePathBuf::new(native.clone()).unwrap()).unwrap();
 
         assert_eq!(encoded.as_str(), "/server/share/workspace % 01/main.baml");
-        assert_eq!(
-            NativePathBuf::try_from(&encoded).unwrap().into_path_buf(),
-            native
-        );
+        let decoded = NativePathBuf::try_from(&encoded).unwrap();
+        assert_eq!(decoded.as_path(), native.as_path());
     }
 }
