@@ -40,6 +40,18 @@ func stringValue(s string) *cffi.CFFIValueHolder {
 	return &cffi.CFFIValueHolder{Value: &cffi.CFFIValueHolder_StringValue{StringValue: s}}
 }
 
+func intValue(i int64) *cffi.CFFIValueHolder {
+	return &cffi.CFFIValueHolder{Value: &cffi.CFFIValueHolder_IntValue{IntValue: i}}
+}
+
+func floatValue(f float64) *cffi.CFFIValueHolder {
+	return &cffi.CFFIValueHolder{Value: &cffi.CFFIValueHolder_FloatValue{FloatValue: f}}
+}
+
+func boolValue(b bool) *cffi.CFFIValueHolder {
+	return &cffi.CFFIValueHolder{Value: &cffi.CFFIValueHolder_BoolValue{BoolValue: b}}
+}
+
 func nullValue() *cffi.CFFIValueHolder {
 	return &cffi.CFFIValueHolder{Value: &cffi.CFFIValueHolder_NullValue{}}
 }
@@ -81,14 +93,19 @@ func TestDecodeUntypedListOfObjects(t *testing.T) {
 }
 
 func TestDecodeUntypedListOfScalars(t *testing.T) {
-	holder := untypedList(stringValue("a"), stringValue("b"))
+	holder := untypedList(
+		stringValue("a"),
+		intValue(7),
+		floatValue(2.5),
+		boolValue(true),
+	)
 
 	var decoded reflect.Value
 	require.NotPanics(t, func() {
 		decoded, _ = Decode(holder, untypedTypeMap())
 	})
 
-	assert.Equal(t, []any{"a", "b"}, decoded.Interface())
+	assert.Equal(t, []any{"a", int64(7), 2.5, true}, decoded.Interface())
 }
 
 func TestDecodeUntypedListWithNullElement(t *testing.T) {
