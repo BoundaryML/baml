@@ -1,0 +1,14 @@
+---
+source: crates/baml_tests/src/type_spec/fixtures.rs
+expression: outcome.dump
+---
+541..542 'f': throws never
+591..666 '{\n   ...  u\n}': user.C | user.Loop
+597..602 'let u': user.C | user.Loop
+605..628 'if (b)... { l }': user.C | user.Loop
+609..610 'b': bool
+612..617 '{ c }': user.C
+614..615 'c': user.C
+623..628 '{ l }': user.Loop
+625..626 'l': user.Loop
+663..664 'u': user.C | user.Loop

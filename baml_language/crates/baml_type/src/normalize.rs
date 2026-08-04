@@ -488,7 +488,24 @@ pub fn definitely_equal<C: TypeContext>(a: &Ty, b: &Ty, ctx: &C) -> bool {
 impl NormalTy {
     /// Normalize and canonicalize a [`Ty`] in one step (the shared entry point).
     fn canonical<C: TypeContext>(ty: &Ty, ctx: &C) -> NormalTy {
-        NormalTy::from_ty(ty, ctx, &mut HashSet::new(), PROJECTION_REDUCTION_FUEL).canonicalize(ctx)
+        Self::canonical_with(ty, ctx, &mut HashSet::new())
+    }
+
+    /// [`Self::canonical`] with the caller's co-inductive assumption set
+    /// threaded through the union algebra (`absorb_subtypes`' subtype
+    /// probes). The expanding arms of `is_subtype_of` MUST use this: a
+    /// bound canonicalized under a FRESH set re-enters the very subtype
+    /// question that triggered it, and a self-referential bound
+    /// (`T extends Foo<T | int>`) then recurses unboundedly - a stack
+    /// overflow, B-1091. Threading extends the declared co-inductive
+    /// semantics to the re-entry instead of restarting it.
+    fn canonical_with<C: TypeContext>(
+        ty: &Ty,
+        ctx: &C,
+        assumptions: &mut HashSet<(NormalTy, NormalTy)>,
+    ) -> NormalTy {
+        NormalTy::from_ty(ty, ctx, &mut HashSet::new(), PROJECTION_REDUCTION_FUEL)
+            .canonicalize(ctx, assumptions)
     }
 }
 
@@ -1022,39 +1039,43 @@ impl NormalTy {
 
     /// Rewrite to a unique canonical form: children canonicalized bottom-up,
     /// unions reduced by the full set algebra.
-    fn canonicalize<C: TypeContext>(self, ctx: &C) -> NormalTy {
+    fn canonicalize<C: TypeContext>(
+        self,
+        ctx: &C,
+        assumptions: &mut HashSet<(NormalTy, NormalTy)>,
+    ) -> NormalTy {
         match self {
             NormalTy::Class(qn, args) => {
-                NormalTy::Class(qn, args.into_iter().map(|a| a.canonicalize(ctx)).collect())
+                NormalTy::Class(qn, args.into_iter().map(|a| a.canonicalize(ctx, assumptions)).collect())
             }
             NormalTy::Interface(qn, args, bindings) => {
                 let mut bindings: Vec<_> = bindings
                     .into_iter()
-                    .map(|(name, ty)| (name, ty.canonicalize(ctx)))
+                    .map(|(name, ty)| (name, ty.canonicalize(ctx, assumptions)))
                     .collect();
                 bindings.sort_by(|(a, _), (b, _)| a.cmp(b));
                 NormalTy::Interface(
                     qn,
-                    args.into_iter().map(|a| a.canonicalize(ctx)).collect(),
+                    args.into_iter().map(|a| a.canonicalize(ctx, assumptions)).collect(),
                     bindings,
                 )
             }
-            NormalTy::List(inner) => NormalTy::List(Box::new(inner.canonicalize(ctx))),
+            NormalTy::List(inner) => NormalTy::List(Box::new(inner.canonicalize(ctx, assumptions))),
             NormalTy::Map { key, value } => NormalTy::Map {
-                key: Box::new(key.canonicalize(ctx)),
-                value: Box::new(value.canonicalize(ctx)),
+                key: Box::new(key.canonicalize(ctx, assumptions)),
+                value: Box::new(value.canonicalize(ctx, assumptions)),
             },
             NormalTy::Future(value, error) => NormalTy::Future(
-                Box::new(value.canonicalize(ctx)),
-                Box::new(error.canonicalize(ctx)),
+                Box::new(value.canonicalize(ctx, assumptions)),
+                Box::new(error.canonicalize(ctx, assumptions)),
             ),
             NormalTy::AssociatedTypeProjection {
                 base,
                 interface,
                 member,
             } => NormalTy::AssociatedTypeProjection {
-                base: Box::new(base.canonicalize(ctx)),
-                interface: Box::new(interface.canonicalize(ctx)),
+                base: Box::new(base.canonicalize(ctx, assumptions)),
+                interface: Box::new(interface.canonicalize(ctx, assumptions)),
                 member,
             },
             NormalTy::Function {
@@ -1067,7 +1088,7 @@ impl NormalTy {
                 let mut required = Vec::new();
                 let mut optional = Vec::new();
                 for p in params {
-                    let ty = p.ty.canonicalize(ctx);
+                    let ty = p.ty.canonicalize(ctx, assumptions);
                     match p.mode {
                         FunctionParamMode::Required => required.push(NormalParam {
                             name: None,
@@ -1085,12 +1106,12 @@ impl NormalTy {
                 required.extend(optional);
                 NormalTy::Function {
                     params: required,
-                    ret: Box::new(ret.canonicalize(ctx)),
-                    throws: Box::new(throws.canonicalize(ctx)),
+                    ret: Box::new(ret.canonicalize(ctx, assumptions)),
+                    throws: Box::new(throws.canonicalize(ctx, assumptions)),
                 }
             }
             NormalTy::Mu { var, body } => {
-                let body = body.canonicalize(ctx);
+                let body = body.canonicalize(ctx, assumptions);
                 // A μ whose body no longer mentions its variable is not actually
                 // recursive (an absorption may have removed the back-edge).
                 if body.mentions_rec_var(&var) {
@@ -1103,8 +1124,8 @@ impl NormalTy {
                 }
             }
             NormalTy::Union(members) => {
-                let members = members.into_iter().map(|m| m.canonicalize(ctx)).collect();
-                Self::canonicalize_union(members, ctx)
+                let members = members.into_iter().map(|m| m.canonicalize(ctx, assumptions)).collect();
+                Self::canonicalize_union(members, ctx, assumptions)
             }
             leaf => leaf,
         }
@@ -1298,7 +1319,7 @@ impl NormalTy {
                         .collect(),
                 );
                 ctx.type_var_bound(name).iter().any(|bound| {
-                    NormalTy::canonical(&bound.to_ty(), ctx).is_subtype_of(
+                    NormalTy::canonical_with(&bound.to_ty(), ctx, assumptions).is_subtype_of(
                         &stripped,
                         ctx,
                         assumptions,
@@ -1306,7 +1327,8 @@ impl NormalTy {
                 })
             }
             (NormalTy::TypeVar(name), _) => ctx.type_var_bound(name).iter().any(|bound| {
-                NormalTy::canonical(&bound.to_ty(), ctx).is_subtype_of(sup, ctx, assumptions)
+                NormalTy::canonical_with(&bound.to_ty(), ctx, assumptions)
+                    .is_subtype_of(sup, ctx, assumptions)
             }),
 
             // A still-symbolic associated-type projection is a subtype of `sup` if
@@ -1327,7 +1349,7 @@ impl NormalTy {
                 ctx.associated_type_bound(&i, member.clone())
                     .iter()
                     .any(|bound| {
-                        NormalTy::canonical(&bound.to_ty(), ctx).is_subtype_of(
+                        NormalTy::canonical_with(&bound.to_ty(), ctx, assumptions).is_subtype_of(
                             sup,
                             ctx,
                             assumptions,
@@ -1598,7 +1620,11 @@ impl NormalTy {
     /// Reduce a union of already-canonical members to canonical form: flatten,
     /// remove `never`, absorb under `unknown`, collapse complete enums, absorb
     /// subtype-members, then sort/dedup and unwrap singletons.
-    fn canonicalize_union<C: TypeContext>(members: Vec<NormalTy>, ctx: &C) -> NormalTy {
+    fn canonicalize_union<C: TypeContext>(
+        members: Vec<NormalTy>,
+        ctx: &C,
+        assumptions: &mut HashSet<(NormalTy, NormalTy)>,
+    ) -> NormalTy {
         // Flatten one level (members are canonical, but a μ-unfold or alias could
         // surface a nested union) and drop `never`.
         let mut flat: Vec<NormalTy> = Vec::new();
@@ -1620,7 +1646,7 @@ impl NormalTy {
 
         Self::collapse_complete_enums(&mut flat, ctx);
         Self::collapse_complete_bool(&mut flat);
-        let mut flat = Self::absorb_subtypes(&flat, ctx);
+        let mut flat = Self::absorb_subtypes(&flat, ctx, assumptions);
 
         flat.sort();
         flat.dedup();
@@ -1687,7 +1713,11 @@ impl NormalTy {
     /// Remove any member subsumed by another (`X | Y == Y` when `X <: Y`). Covers
     /// literal-into-base, variant-into-enum, `C | I == I`, `A | B == B`, and
     /// `T | I == I`. Error-recovery sentinels never absorb or are absorbed.
-    fn absorb_subtypes<C: TypeContext>(members: &[NormalTy], ctx: &C) -> Vec<NormalTy> {
+    fn absorb_subtypes<C: TypeContext>(
+        members: &[NormalTy],
+        ctx: &C,
+        assumptions: &mut HashSet<(NormalTy, NormalTy)>,
+    ) -> Vec<NormalTy> {
         let n = members.len();
         let mut keep = vec![true; n];
         for i in 0..n {
@@ -1698,13 +1728,13 @@ impl NormalTy {
                 if i == j || !keep[j] || members[j].is_sentinel() {
                     continue;
                 }
-                if !members[i].is_subtype_of(&members[j], ctx, &mut HashSet::new()) {
+                if !members[i].is_subtype_of(&members[j], ctx, assumptions) {
                     continue;
                 }
                 // `members[i] <: members[j]`. Drop `i`, unless they are mutual
                 // subtypes (equivalent but not structurally equal — e.g. cyclic
                 // `requires`); then keep the lower index deterministically.
-                let mutual = members[j].is_subtype_of(&members[i], ctx, &mut HashSet::new());
+                let mutual = members[j].is_subtype_of(&members[i], ctx, assumptions);
                 if !mutual || j < i {
                     keep[i] = false;
                     break;
@@ -1855,7 +1885,7 @@ impl NormalTy {
     /// [`NormalTy::canonical`] for the interned representation.
     fn canonical_interned<C: TypeContext>(ty: &interned::Ty, ctx: &C) -> NormalTy {
         NormalTy::from_interned(ty, ctx, &mut HashSet::new(), PROJECTION_REDUCTION_FUEL)
-            .canonicalize(ctx)
+            .canonicalize(ctx, &mut HashSet::new())
     }
 
     /// [`NormalTy::from_ty`], mirrored over `interned::TyKind`. The one
@@ -2070,6 +2100,6 @@ pub fn canonical_union_interned<C: TypeContext>(members: &[interned::Ty], ctx: &
             })
             .collect(),
     )
-    .canonicalize(ctx);
+    .canonicalize(ctx, &mut HashSet::new());
     interned::Ty::from_plain(&normal.into_ty())
 }

@@ -1391,3 +1391,32 @@ mod interned_entry {
         assert!(normalize_interned(&messy, &ctx) == it(&Ty::int()));
     }
 }
+
+#[test]
+fn self_referential_bound_subtyping_terminates() {
+    // B-1091 regression: `T extends Foo<T | int>` - the bound mentions its
+    // own variable, so the TypeVar subtype arm re-canonicalizes the bound
+    // while proving through it. Before `canonical_with` (assumption
+    // threading), that re-entry restarted the co-inductive set and the
+    // chain `canonical -> absorb_subtypes -> is_subtype(T, int) ->
+    // canonical(bound) -> ...` recursed to a stack overflow. These three
+    // calls TERMINATING is the test; the verdicts pin the co-inductive
+    // semantics.
+    let mut ctx = Ctx::default();
+    let foo = QualifiedTypeName::local(Name::new("Foo"));
+    let bound = Ty::Interface(
+        foo,
+        vec![Ty::union(vec![Ty::type_var("T"), Ty::int()])],
+        vec![],
+        TyAttr::default(),
+    );
+    ctx.var_bounds
+        .insert(ParamTy::new(0, Name::new("T")), vec![bound.clone()]);
+
+    // Proves through the carried bound (reflexive at the bound itself).
+    assert!(is_subtype(&Ty::type_var("T"), &bound, &ctx));
+    // The bound does not place `T` inside `int`.
+    assert!(!is_subtype(&Ty::type_var("T"), &Ty::int(), &ctx));
+    // Canonicalizing the bound itself terminates.
+    let _ = normalize(&bound, &ctx);
+}

@@ -455,7 +455,7 @@ pub fn impls_for_type<'db>(
             if !match_pattern(&facts.for_ty_pattern, concrete, &params, &mut bindings, &eq) {
                 continue;
             }
-            if !bounds_hold(db, facts, &bindings, BLANKET_IMPL_BOUND_DEPTH) {
+            if !bounds_hold(db, facts, &bindings, BLANKET_IMPL_BOUND_DEPTH, &mut Vec::new()) {
                 continue;
             }
             let resolved = ResolvedImpl {
@@ -544,7 +544,13 @@ pub fn resolve_impl<'db>(
     if !is_realized(concrete) || !interface.args.iter().all(is_realized) {
         return None;
     }
-    resolve_within_depth(db, concrete, interface, BLANKET_IMPL_BOUND_DEPTH)
+    resolve_within_depth(
+        db,
+        concrete,
+        interface,
+        BLANKET_IMPL_BOUND_DEPTH,
+        &mut Vec::new(),
+    )
 }
 
 fn is_realized(ty: &Ty) -> bool {
@@ -556,9 +562,24 @@ fn resolve_within_depth<'db>(
     concrete: &Ty,
     interface: &InterfaceTarget,
     depth: u32,
+    in_progress: &mut Vec<(Ty, InterfaceTarget)>,
 ) -> Option<ResolvedImpl<'db>> {
+    // CYCLE DETECTION (rustc's obligation-stack shape): a goal already
+    // being resolved on this path has no finite proof - inductive
+    // failure, immediately. The depth budget stays as the backstop for
+    // GROWING chains (`Wrap<Wrap<...>>` bounds that never repeat a
+    // goal), exactly the split rustc makes between cycle detection and
+    // `recursion_limit`.
+    if in_progress
+        .iter()
+        .any(|(ty, target)| ty == concrete && target == interface)
+    {
+        return None;
+    }
+    in_progress.push((concrete.clone(), interface.clone()));
     let eq = AliasOnlyFacts::new(db);
-    for package in search_roots(db, concrete, interface) {
+    let mut resolved = None;
+    'search: for package in search_roots(db, concrete, interface) {
         for &block in package_impl_locs(db, package) {
             let Some(facts) = impl_facts(db, block) else {
                 continue;
@@ -566,17 +587,19 @@ fn resolve_within_depth<'db>(
             let Some(bindings) = match_impl_head(db, facts, concrete, interface, &eq) else {
                 continue;
             };
-            if !bounds_hold(db, facts, &bindings, depth) {
+            if !bounds_hold(db, facts, &bindings, depth, in_progress) {
                 continue;
             }
-            return Some(ResolvedImpl {
+            resolved = Some(ResolvedImpl {
                 block,
                 facts,
                 bindings,
             });
+            break 'search;
         }
     }
-    None
+    in_progress.pop();
+    resolved
 }
 
 /// Every package a qualified name on either side points into - the
@@ -921,6 +944,7 @@ fn bounds_hold(
     facts: &ImplFacts<'_>,
     bindings: &FxHashMap<ParamTy, Ty>,
     depth: u32,
+    in_progress: &mut Vec<(Ty, InterfaceTarget)>,
 ) -> bool {
     for (param, bounds) in &facts.generic_params {
         let Some(actual) = bindings.get(param) else {
@@ -943,7 +967,9 @@ fn bounds_hold(
             if !is_realized(actual) || !bound.args.iter().all(is_realized) {
                 continue;
             }
-            if depth == 0 || resolve_within_depth(db, actual, &bound, depth - 1).is_none() {
+            if depth == 0
+                || resolve_within_depth(db, actual, &bound, depth - 1, in_progress).is_none()
+            {
                 return false;
             }
         }
@@ -1034,10 +1060,29 @@ pub fn interface_requires(
     self_ty: &Ty,
     fuel: u32,
 ) -> bool {
+    interface_requires_inner(db, sub, sup, self_ty, fuel, &mut Vec::new())
+}
+
+fn interface_requires_inner(
+    db: &dyn baml_compiler2_ppir::Db,
+    sub: &InterfaceTarget,
+    sup: &InterfaceTarget,
+    self_ty: &Ty,
+    fuel: u32,
+    visited: &mut Vec<InterfaceTarget>,
+) -> bool {
     if fuel == 0 {
         return false;
     }
+    // Cycle detection: a `requires` loop (rejected upstream as
+    // InterfaceRequiresCycle, guarded here as defense-in-depth) revisits
+    // a realized head - no new facts lie that way.
+    if visited.contains(sub) {
+        return false;
+    }
+    visited.push(sub.clone());
     let eq = AliasOnlyFacts::new(db);
+    let mut holds = false;
     for required in direct_requires(db, sub, self_ty) {
         if required.name == sup.name
             && required.args.len() == sup.args.len()
@@ -1047,13 +1092,16 @@ pub fn interface_requires(
                 .zip(&sup.args)
                 .all(|(a, b)| equivalent_interned(a, b, &eq))
         {
-            return true;
+            holds = true;
+            break;
         }
-        if interface_requires(db, &required, sup, self_ty, fuel - 1) {
-            return true;
+        if interface_requires_inner(db, &required, sup, self_ty, fuel - 1, visited) {
+            holds = true;
+            break;
         }
     }
-    false
+    visited.pop();
+    holds
 }
 
 /// The interface existential a target denotes - the default SUBJECT for
