@@ -144,12 +144,12 @@ pub(crate) fn run_differential(fixture: &str) -> DifferentialOutcome {
 /// hir_ty's recorded error channel for one file: type mismatches (rendered
 /// `expected X, got Y`, rust-analyzer's wording) and non-exhaustive
 /// matches, each at its expression's source range.
-struct ErrorChannel {
-    mismatches: BTreeMap<(u32, u32), Vec<String>>,
-    non_exhaustive: Vec<TextRange>,
+pub(crate) struct ErrorChannel {
+    pub(crate) mismatches: BTreeMap<(u32, u32), Vec<String>>,
+    pub(crate) non_exhaustive: Vec<TextRange>,
 }
 
-fn collect_hir_ty_error_channel(db: &ProjectDatabase, file: baml_base::SourceFile) -> ErrorChannel {
+pub(crate) fn collect_hir_ty_error_channel(db: &ProjectDatabase, file: baml_base::SourceFile) -> ErrorChannel {
     let mut mismatches: BTreeMap<(u32, u32), Vec<String>> = BTreeMap::new();
     let mut non_exhaustive = Vec::new();
     for owner in baml_compiler2_ppir::file_body_owners(db, file) {
@@ -507,7 +507,7 @@ fn parse_annotation_line(line: &str) -> Option<(usize, usize, &str)> {
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
-enum NodeKind {
+pub(crate) enum NodeKind {
     Expr,
     Pattern,
     /// A binding re-keyed to just its introduced name (`x`, not `let x`) --
@@ -515,10 +515,10 @@ enum NodeKind {
     BindingName,
 }
 
-struct TypedNode {
-    range: TextRange,
-    kind: NodeKind,
-    ty: String,
+pub(crate) struct TypedNode {
+    pub(crate) range: TextRange,
+    pub(crate) kind: NodeKind,
+    pub(crate) ty: String,
 }
 
 /// Per-body-owner hir_ty inference state paired with the maps needed to
@@ -533,7 +533,7 @@ struct OwnerInference {
 /// inferred expression and binding with its source range.
 /// Compiler-synthesized nodes are skipped: fixtures assert what the user
 /// wrote.
-fn collect_hir_ty_nodes(
+pub(crate) fn collect_hir_ty_nodes(
     db: &ProjectDatabase,
     file: baml_base::SourceFile,
     fixture: &str,
@@ -649,7 +649,7 @@ fn collect_hir_ty_nodes(
 /// (functions and their lambdas, via the same per-scope projections the LSP
 /// uses) and renders each inferred expression and binding with its source
 /// range.
-fn collect_tir_nodes(
+pub(crate) fn collect_tir_nodes(
     db: &ProjectDatabase,
     file: baml_base::SourceFile,
     fixture: &str,
@@ -766,7 +766,7 @@ fn collect_tir_nodes(
 }
 
 /// TIR error-severity diagnostics for `file`, rendered one per line.
-fn tir_error_diagnostics(db: &ProjectDatabase, file: baml_base::SourceFile) -> Vec<String> {
+pub(crate) fn tir_error_diagnostics(db: &ProjectDatabase, file: baml_base::SourceFile) -> Vec<String> {
     let index = baml_compiler2_ppir::file_semantic_index(db, file);
     let mut out = Vec::new();
     for scope_id in &index.scope_ids {
