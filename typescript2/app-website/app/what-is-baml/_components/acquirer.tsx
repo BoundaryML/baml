@@ -29,12 +29,14 @@ export function Acquirer() {
 
   return (
     <span className="acq">
-      {/* The widest name reserves the space so the headline never reflows. */}
+      {/* The widest name reserves the space so the headline never reflows. The
+          question mark rides inside, so the slack falls after it rather than
+          opening a gap between the name and the punctuation. */}
       <span aria-hidden="true" className="acq-ghost">
-        Microsoft
+        Microsoft?
       </span>
       <span className={`acq-name${out ? ' acq-name--out' : ''}`}>
-        {ACQUIRERS[i]}
+        {ACQUIRERS[i]}?
       </span>
     </span>
   );

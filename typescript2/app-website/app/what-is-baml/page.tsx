@@ -216,7 +216,12 @@ const SECTIONS: Section[] = [
     title: 'Observability and profiling',
     body: 'Agents write more code than any human can read. Telemetry is the only way to understand what happened. BAML traces every function instead of sampling a percentage. It’s 6x faster than OpenTelemetry in Rust, 200x faster in Python, and the traces 1000x smaller.',
     readMore: 'How BAML keeps tracing fast enough to always leave on',
-    tabs: ['Always-on Observability', 'Data Enrichment', 'Agents Using Traces'],
+    tabs: [
+      'Always-on Observability',
+      'Data Enrichment',
+      'Agents Using Traces',
+      'Runs at Scale',
+    ],
   },
   {
     id: 'tooling',
@@ -263,7 +268,7 @@ const SECTIONS: Section[] = [
     art: '/elephants/elephant-adoption.png',
     title: '{elephant} I’m hyped. How do I port my codebase to BAML?',
     sign: 'Do not rewrite your codebase in BAML.',
-    body: 'You can if you want. But we went the extra mile in the other direction: every type, every function, every method crosses the bridge to your language. Even generics. Even lambdas. Sh{lamb}t just works.',
+    body: 'You can if you want. But we went the extra mile in the other direction: every type, every function, every method crosses the bridge to your language. Even generics. Even lambdas. Even tracing. Sh{lamb}t just works.',
     readMore: 'Incremental adoption',
     matrix: {
       features: ['Function', 'Type', 'Error', 'Method', 'Generic', 'Lambda'],
@@ -299,8 +304,8 @@ const SECTIONS: Section[] = [
     id: 'money',
     num: 9,
     art: '/elephants/elephant-money.png',
-    title: '{elephant} Are you trying to get bought by {acquirer}?',
-    body: 'No thank you. The BAML language is and will always be open: Apache-2, free, no internet required. We’re building Boundary Web Services, and it starts with observability, because when you create the language, the runtime, and the tracing layer, you can build things nobody else can. And we think you’ll love paying for some of them. Some of you will want to build your own cloud. Godspeed. The language took two years to build, the cloud needs about three more months. [Reach out](mailto:vbv@boundaryml.com?subject=I%20want%20to%20send%20BAML%20monies) if you want in early.',
+    title: '{elephant} Are you trying to get bought by {acquirer}',
+    body: 'No thank you.\nThe BAML language is and will always be open. Apache-2, free, works offline.\nWe make money on Boundary Web Services. Build the language, the runtime, and the tracing layer, and you can make things nobody else can. We think you’ll love paying for some of them.\nSome of you may wish to build your own cloud. Here’s the [source](https://github.com/boundaryml/baml). Claudespeed.\nFor the rest, we’re launching with observability, and saving you from Datadog. [Reach out](mailto:vbv@boundaryml.com?subject=I%20want%20to%20send%20BAML%20monies) if you want in early.',
   },
 ];
 
