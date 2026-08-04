@@ -1036,3 +1036,69 @@ function wrong_type_argument() -> Left<int> {
         "{tir}"
     );
 }
+
+/// The declaration-site interface surface: required-method signatures resolve
+/// with `Self` symbolic (a projection over the rigid `Self` bound by the
+/// interface), method-level generic bounds resolve to interfaces, and field
+/// types resolve in the same scope. Locks the surface queries the handle
+/// layer reads.
+#[test]
+fn interface_declaration_surface_resolves_symbolically() {
+    use baml_compiler2_tir::interfaces::{
+        resolve_interface_fields, resolve_interface_required_methods,
+    };
+
+    let mut db = make_db();
+    let file = db.add_file(
+        "iface.baml",
+        r#"
+interface Encoder {
+  type Error
+
+  limit int
+
+  function encode(self, value: string) -> string throws Self.Error
+  function pick<T extends Encoder>(self, options: T[]) -> T throws never
+}
+"#,
+    );
+
+    let iface_loc = *baml_compiler2_ppir::item_data::file_interfaces(&db, file)
+        .iter()
+        .find(|&&i| {
+            baml_compiler2_ppir::item_data::interface_data(&db, i)
+                .name
+                .as_str()
+                == "Encoder"
+        })
+        .unwrap();
+
+    let fields = resolve_interface_fields(&db, iface_loc);
+    assert!(fields.diagnostics.is_empty(), "{:?}", fields.diagnostics);
+    assert_eq!(fields.fields.len(), 1);
+    assert_eq!(fields.fields[0].0.as_str(), "limit");
+    assert_eq!(fields.fields[0].1.render_canonical(), "int");
+
+    let methods = resolve_interface_required_methods(&db, iface_loc);
+    assert_eq!(methods.len(), 2);
+
+    let encode = &methods[0];
+    assert_eq!(encode.name.as_str(), "encode");
+    assert!(encode.diagnostics.is_empty(), "{:?}", encode.diagnostics);
+    assert!(encode.generic_params.is_empty());
+    // `Self` stays symbolic: the receiver is the rigid `Self` variable and the
+    // declared throws is a projection through the interface bound.
+    assert_eq!(
+        encode.function_ty.render_canonical(),
+        "(self: Self, value: string) -> string throws (Self as user.Encoder).Error"
+    );
+
+    let pick = &methods[1];
+    assert_eq!(pick.name.as_str(), "pick");
+    assert!(pick.diagnostics.is_empty(), "{:?}", pick.diagnostics);
+    assert_eq!(pick.generic_params.len(), 1);
+    let (param, bounds) = &pick.generic_params[0];
+    assert_eq!(param.name().as_str(), "T");
+    assert_eq!(bounds.len(), 1);
+    assert_eq!(bounds[0].name.render_user_facing(), "Encoder");
+}

@@ -19,6 +19,7 @@ pub(crate) mod commands;
 pub(crate) mod describe_command;
 #[cfg(test)]
 mod describe_command_tests;
+pub(crate) mod describe_render;
 pub(crate) mod diagnostics_cache;
 #[cfg(test)]
 mod diagnostics_cache_oracle;

@@ -703,10 +703,10 @@ mod tests {
         assert!(files[0].ends_with("loose.baml"));
         assert_eq!(root, std::fs::canonicalize(tmp.path()).unwrap());
         // The builtin `baml` package is present even with no user files.
-        let pkgs = baml_lsp2_actions::non_user_package_names(&db);
+        let baml_pkg = baml_surface::Package::named(&db, "baml");
         assert!(
-            pkgs.contains("baml"),
-            "stdlib `baml` package missing from default state: {pkgs:?}"
+            !baml_pkg.namespaces(&db).is_empty(),
+            "stdlib `baml` package missing from default state"
         );
     }
 

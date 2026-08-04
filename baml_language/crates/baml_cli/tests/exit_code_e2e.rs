@@ -37,6 +37,10 @@ fn run_baml_cli(built: &Path, dir: &Path, args: &[&str]) -> Output {
     }
     cmd.current_dir(dir);
     cmd.env("BAML_CLI_ALLOW_DIRECT", "1");
+    // Pin the human output preset: under a coding agent the inherited
+    // CLAUDECODE/AI_AGENT/… environment flips `--output-preset auto` to
+    // `agent`, which disables the progress lines some assertions read.
+    cmd.env("BAML_OUTPUT_PRESET", "human");
     cmd.env("BAML_HOME", &home);
     // Share the bytecode cache across the suite so only the first invocation
     // pays the stdlib compile; see `common::shared_cache_dir`.
@@ -771,6 +775,9 @@ test "streams" {
         .args(["test", "--from", ".", "--logs", "INFO"])
         .current_dir(tmp.path())
         .env("BAML_CLI_ALLOW_DIRECT", "1")
+        // Pin the human preset so inherited agent env (CLAUDECODE/AI_AGENT/…)
+        // cannot flip `--output-preset auto` to `agent` and hide progress lines.
+        .env("BAML_OUTPUT_PRESET", "human")
         .env("BAML_HOME", &home)
         .env("BAML_CACHE_DIR", common::shared_cache_dir())
         .stdout(Stdio::piped())
@@ -2004,4 +2011,45 @@ fn generate_without_baml_toml_reports_no_generators() {
         stderr.contains("[generator"),
         "Expected a missing-generator hint, got: {stderr}",
     );
+}
+
+/// `describe X --json` emits the typed drill-in document whose ids match
+/// `--export` — the contract the stdlib-matrix tooling keys on.
+#[test]
+fn describe_json_drill_carries_surface_ids() {
+    let built = &common::baml_cli();
+    let tmp = tempfile::tempdir().unwrap();
+    common::write_project(
+        tmp.path(),
+        "function greet(name: string) -> string { name }\n",
+    );
+
+    let output = run_baml_cli(
+        built,
+        tmp.path(),
+        &["describe", "baml.time.Duration", "--json"],
+    );
+    assert!(output.status.success(), "{output:?}");
+    let doc: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(doc["id"], "T:baml.time.Duration");
+    assert_eq!(doc["kind"], "class");
+    assert!(
+        doc["methods"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|m| m["id"] == "M:baml.time.Duration.abs"),
+        "method ids present"
+    );
+
+    let output = run_baml_cli(
+        built,
+        tmp.path(),
+        &["describe", "baml.time.Duration.abs", "--json"],
+    );
+    assert!(output.status.success(), "{output:?}");
+    let doc: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(doc["member_kind"], "method");
+    assert_eq!(doc["id"], "M:baml.time.Duration.abs");
+    assert_eq!(doc["signature"]["returns"]["display"], "baml.time.Duration");
 }

@@ -256,6 +256,9 @@ impl baml_compiler2_emit::Db for ProjectDatabase {
 }
 
 #[salsa::db]
+impl baml_surface::Db for ProjectDatabase {}
+
+#[salsa::db]
 impl baml_lsp2_actions::Db for ProjectDatabase {}
 
 impl ProjectDatabase {
@@ -1522,8 +1525,7 @@ impl ProjectDatabase {
         let offset = text_size::TextSize::from(byte_offset);
 
         // 2. Find CST token at offset
-        let Some(token) = baml_lsp2_actions::utils::find_token_at_offset(self, source_file, offset)
-        else {
+        let Some(token) = baml_lsp2_actions::find_token_at_offset(self, source_file, offset) else {
             return empty;
         };
 

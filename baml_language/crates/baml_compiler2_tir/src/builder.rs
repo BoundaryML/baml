@@ -10414,62 +10414,15 @@ impl<'db> TypeInferenceBuilder<'db> {
         let lookup_val = pkg_items.lookup_value(&path[..path.len() - 1], item);
         if let Some(Definition::Function(func_loc)) = lookup_val {
             let db = self.context.db();
-            let pkg_info = baml_compiler2_hir::file_package::file_package(db, func_loc.file(db));
-            let ns_context = pkg_info.namespace_path;
             self.resolutions.insert(
                 expr_id,
                 crate::inference::MemberResolution::Free { func_loc },
             );
-            let sig = baml_compiler2_ppir::item_data::elaborated_function_data(db, func_loc);
-            let function_generic_env = crate::generic_env::function_generic_env(db, func_loc);
-            let mut diags = Vec::new();
-            let sig_scope = crate::lower_type_expr::ScopeCtx {
-                db,
-                package_items: pkg_items,
-                ns_context: &ns_context,
-                generic_params: function_generic_env.source_params(),
-                bounds: crate::lower_type_expr::function_in_scope_generic_param_bounds(
-                    db, func_loc,
-                ),
-                self_ty: None,
-            };
-            let ty = Ty::Function {
-                params: sig
-                    .params
-                    .iter()
-                    .map(|param| FunctionParamTy {
-                        name: Some(param.name.clone()),
-                        ty: crate::lower_type_expr::lower_type_ref(
-                            &sig.type_refs,
-                            param.type_ref,
-                            &sig_scope,
-                            &mut diags,
-                        ),
-                        mode: if param.has_default {
-                            FunctionParamMode::Optional
-                        } else {
-                            FunctionParamMode::Required
-                        },
-                    })
-                    .collect(),
-                ret: Box::new(
-                    sig.return_type
-                        .map(|id| {
-                            crate::lower_type_expr::lower_type_ref(
-                                &sig.type_refs,
-                                id,
-                                &sig_scope,
-                                &mut diags,
-                            )
-                        })
-                        .unwrap_or(Ty::Unknown {
-                            attr: TyAttr::default(),
-                        }),
-                ),
-                throws: Box::new(crate::callable::callable_throws(db, func_loc).clone()),
-                attr: TyAttr::default(),
-            };
-            return Some(ty);
+            // Signature diags are reported at the definition site, not here.
+            let sig = crate::callable::function_signature_ty(db, func_loc);
+            return Some(
+                sig.to_function_ty(crate::callable::callable_throws(db, func_loc).clone()),
+            );
         }
 
         // Try as a type (class/enum)
@@ -10589,65 +10542,11 @@ impl<'db> TypeInferenceBuilder<'db> {
         if let Some(def) = self.package_items.lookup_value(&self.ns_context, name) {
             match def {
                 Definition::Function(func_loc) => {
-                    // Get function signature to build the function type
                     let db = self.context.db();
-                    let sig =
-                        baml_compiler2_ppir::item_data::elaborated_function_data(db, func_loc);
-                    let function_generic_env =
-                        crate::generic_env::function_generic_env(db, func_loc);
-                    let sig_ns =
-                        baml_compiler2_hir::file_package::file_package(db, func_loc.file(db))
-                            .namespace_path;
-                    let mut diags = Vec::new();
-                    let sig_scope = crate::lower_type_expr::ScopeCtx {
-                        db,
-                        package_items: self.package_items,
-                        ns_context: &sig_ns,
-                        generic_params: function_generic_env.source_params(),
-                        bounds: crate::lower_type_expr::function_in_scope_generic_param_bounds(
-                            db, func_loc,
-                        ),
-                        self_ty: None,
-                    };
-
                     // Note: diags from referenced function signatures are not
                     // reported here — they'll be reported at the definition site.
-                    Ty::Function {
-                        params: sig
-                            .params
-                            .iter()
-                            .map(|param| FunctionParamTy {
-                                name: Some(param.name.clone()),
-                                ty: crate::lower_type_expr::lower_type_ref(
-                                    &sig.type_refs,
-                                    param.type_ref,
-                                    &sig_scope,
-                                    &mut diags,
-                                ),
-                                mode: if param.has_default {
-                                    FunctionParamMode::Optional
-                                } else {
-                                    FunctionParamMode::Required
-                                },
-                            })
-                            .collect(),
-                        ret: Box::new(
-                            sig.return_type
-                                .map(|id| {
-                                    crate::lower_type_expr::lower_type_ref(
-                                        &sig.type_refs,
-                                        id,
-                                        &sig_scope,
-                                        &mut diags,
-                                    )
-                                })
-                                .unwrap_or(Ty::Unknown {
-                                    attr: TyAttr::default(),
-                                }),
-                        ),
-                        throws: Box::new(crate::callable::callable_throws(db, func_loc).clone()),
-                        attr: TyAttr::default(),
-                    }
+                    let sig = crate::callable::function_signature_ty(db, func_loc);
+                    sig.to_function_ty(crate::callable::callable_throws(db, func_loc).clone())
                 }
                 // A top-level `let` value reference — including the synthetic
                 // binding that a `client<llm> ...` declaration lowers to — has
@@ -12727,6 +12626,11 @@ impl<'db> TypeInferenceBuilder<'db> {
                         .or_insert_with(|| Ty::TypeVar(gp.clone(), TyAttr::default()));
                 }
 
+                // Lowered under the call site's concrete type-arg bindings, so
+                // this cannot reuse the declaration-site
+                // `callable::function_signature_ty` — that query's result has
+                // the declaration's rigid type variables, not this call's
+                // instantiation.
                 let sig = baml_compiler2_ppir::item_data::elaborated_function_data(db, func_loc);
                 let mut diags = Vec::new();
 
@@ -13091,6 +12995,10 @@ impl<'db> TypeInferenceBuilder<'db> {
                 // `bindings` is complete for this method — one snapshot serves
                 // every param and the return type below.
                 let generic_params: Vec<_> = bindings.keys().cloned().collect();
+                // Lowered under the call site's concrete type-arg bindings, so
+                // this cannot reuse the declaration-site
+                // `callable::function_signature_ty` (see the note on the
+                // class-member path above).
                 let sig = baml_compiler2_ppir::item_data::elaborated_function_data(db, func_loc);
                 let mut diags = Vec::new();
                 // Build the class type for self parameter resolution.
