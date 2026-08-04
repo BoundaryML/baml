@@ -1,0 +1,24 @@
+---
+source: crates/baml_tests/src/type_spec/fixtures.rs
+expression: outcome.dump
+---
+1328..1333 'drive': throws E
+1444..1478 '{\n   ...n    }': O
+1454..1466 'driver.drive': hir_ty=[(self: D, input: user.Task<T>) -> O throws E] tir=[(input: user.Task<T>) -> O throws E]
+1454..1472 'driver...(self)': O
+1467..1471 'self': user.Task<T>
+1624..1629 'drive': throws never
+1670..1697 '{\n   ...n    }': hir_ty=[!error] tir=[T]
+1680..1691 'input.value': hir_ty=[!error] tir=[T]
+1710..1718 'generate': throws never
+1739..1771 '{\n   ..." }\n}': user.Generate<T>
+1745..1769 'Genera... "g" }': user.Generate<T>
+1764..1767 '"g"': "g"
+1782..1787 'repro': throws never
+1825..1923 '{\n   ...  r\n}': hir_ty=[int] tir=[unknown]
+1831..1836 'let r': hir_ty=[int] tir=[unknown]
+1839..1849 'task.drive': hir_ty=[(self: user.Task<int>, driver: !error) -> int throws never] tir=[(driver: D) -> O throws E]
+1839..1861 'task.d...ate())': hir_ty=[int] tir=[unknown]
+1850..1858 'generate': hir_ty=[() -> user.Generate<!error> throws never] tir=[() -> user.Generate<T> throws never]
+1850..1860 'generate()': hir_ty=[user.Generate<!error>] tir=[user.Generate<unknown>]
+1920..1921 'r': hir_ty=[int] tir=[unknown]

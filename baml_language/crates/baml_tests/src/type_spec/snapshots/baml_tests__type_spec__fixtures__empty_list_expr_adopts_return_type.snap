@@ -1,0 +1,9 @@
+---
+source: crates/baml_tests/src/type_spec/fixtures.rs
+expression: outcome.dump
+---
+437..441 'grow': throws never
+469..518 '{\n   ...  a\n}': bigint[]
+475..480 'let a': hir_ty=[bigint[]] tir=[bigint[] (evolving)]
+483..485 '[]': hir_ty=[bigint[]] tir=[_[]]
+515..516 'a': bigint[]

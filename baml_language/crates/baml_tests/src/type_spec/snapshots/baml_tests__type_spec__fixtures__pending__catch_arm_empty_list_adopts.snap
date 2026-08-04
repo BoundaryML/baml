@@ -1,0 +1,18 @@
+---
+source: crates/baml_tests/src/type_spec/fixtures.rs
+expression: outcome.dump
+---
+607..611 'docs': throws user.Io
+638..671 '{\n   ..." }\n}': never
+650..669 'Io { m... "x" }': user.Io
+664..667 '"x"': "x"
+682..691 'use_catch': throws never
+716..787 '{\n   ...  r\n}': hir_ty=[int[] | !error[]] tir=[int[] | _[]]
+722..727 'let r': hir_ty=[int[] | !error[]] tir=[int[] | _[]]
+730..734 'docs': () -> int[] throws user.Io
+730..736 'docs()': int[]
+730..762 'docs()...> [] }': hir_ty=[int[] | !error[]] tir=[int[] | _[]]
+748..749 'e': user.Io
+753..754 '_': user.Io
+758..760 '[]': hir_ty=[!error[]] tir=[_[]]
+784..785 'r': hir_ty=[int[] | !error[]] tir=[int[] | _[]]
