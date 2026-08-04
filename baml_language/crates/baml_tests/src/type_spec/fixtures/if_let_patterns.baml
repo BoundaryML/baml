@@ -1,8 +1,3 @@
-// tir: fails
-//
-// (TIR types the ascribed binding `unknown` and does not narrow the
-// else branch to the residual - both spec-ahead here.)
-//
 // R3 (S15 residue): `if let PAT = scrutinee { then } else { else }`: the pattern types
 // its bindings (the S10 walk - array/rest destructures included), the
 // then-branch sees the scrutinee narrowed to the matched type, the
@@ -19,7 +14,7 @@ function f(xs: int[]) -> int throws never {
 }
 
 function g(v: int | string) -> int throws never {
-    if let let s: string = v {
+    if let s: string = v {
         let t = s;
          // ^ string
         0

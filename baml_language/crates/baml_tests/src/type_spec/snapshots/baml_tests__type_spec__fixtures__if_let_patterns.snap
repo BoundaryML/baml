@@ -2,31 +2,30 @@
 source: crates/baml_tests/src/type_spec/fixtures.rs
 expression: outcome.dump
 ---
-466..467 'f': throws never
-499..615 '{\n   ...  }\n}': hir_ty=[int] tir=[int | 0]
-505..613 'if let...n    }': hir_ty=[int] tir=[int | 0]
-512..528 '[let a...let r]': int[]
-513..518 'let a': int
-522..527 'let r': int[]
-531..533 'xs': int[]
-534..590 '{\n   ...n    }': int
-544..549 'let k': int[]
-552..553 'r': int[]
-583..584 'a': int
-596..613 '{\n   ...n    }': 0
-606..607 '0': 0
-626..627 'g': throws never
-665..815 '{\n   ...  }\n}': 1
-671..681 'if let let': hir_ty=[!error / void] tir=[never / void]
-674..677 'let': hir_ty=[!error] tir=[never]
-682..683 's': hir_ty=[!error] tir=[unknown]
-685..691 'string': hir_ty=[<missing>] tir=[unknown]
-694..695 'v': int | string
-696..753 '{\n   ...n    }': 0
-706..711 'let t': hir_ty=[!error] tir=[unknown]
-714..715 's': hir_ty=[!error] tir=[unknown]
-746..747 '0': 0
-759..813 '{\n   ...n    }': 1
-769..774 'let w': int | string
-777..778 'v': int | string
-806..807 '1': 1
+321..322 'f': throws never
+354..470 '{\n   ...  }\n}': hir_ty=[int] tir=[int | 0]
+360..468 'if let...n    }': hir_ty=[int] tir=[int | 0]
+367..383 '[let a...let r]': int[]
+368..373 'let a': int
+377..382 'let r': int[]
+386..388 'xs': int[]
+389..445 '{\n   ...n    }': int
+399..404 'let k': int[]
+407..408 'r': int[]
+438..439 'a': int
+451..468 '{\n   ...n    }': 0
+461..462 '0': 0
+481..482 'g': throws never
+520..666 '{\n   ...  }\n}': 0 | 1
+526..664 'if let...n    }': 0 | 1
+529..542 'let s: string': string
+536..542 'string': string
+545..546 'v': int | string
+547..604 '{\n   ...n    }': 0
+557..562 'let t': string
+565..566 's': string
+597..598 '0': 0
+610..664 '{\n   ...n    }': 1
+620..625 'let w': int
+628..629 'v': int
+657..658 '1': 1
