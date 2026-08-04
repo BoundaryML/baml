@@ -50,6 +50,12 @@ use crate::{
     },
 };
 
+/// The unit-type identification (ruling: interim until tuples): `void`
+/// and `null` both denote the single-value unit.
+fn is_unit(ty: &Ty) -> bool {
+    matches!(ty.kind(), TyKind::Void { .. } | TyKind::Null { .. })
+}
+
 /// The implicit `baml.spawn.SpawnParams<V, E>` a spawn's `with` chain
 /// threads (BEP-034).
 fn spawn_params_ty(value: Ty, error: Ty) -> Ty {
@@ -1014,6 +1020,15 @@ impl<'db> InferenceContext<'db> {
         if actual == expected || actual.has_error() || expected.has_error() {
             return true;
         }
+        // RULING (interim until tuple types): `void` and `null` are the
+        // same UNIT type - a void-returning body evaluates to null, and
+        // both spellings are mutually assignable (TIR's behavior).
+        // Identified leaf-side so renders keep the written spelling and
+        // the shared algebra is untouched; when tuples land, `void`
+        // becomes the empty tuple and this arm is deleted.
+        if is_unit(&actual) && is_unit(&expected) {
+            return true;
+        }
         match (actual.kind(), expected.kind()) {
             // A variable flowing into a context: upper bound. A value
             // flowing into a variable: lower bound. (Var-var records on
@@ -1140,6 +1155,9 @@ impl<'db> InferenceContext<'db> {
     fn eq_piece(&mut self, a: &Ty, b: &Ty) -> bool {
         let a = self.table.resolve_completely(a);
         let b = self.table.resolve_completely(b);
+        if is_unit(&a) && is_unit(&b) {
+            return true;
+        }
         if !a.has_infer() && !b.has_infer() {
             return equivalent_interned(&a, &b, &self.facts);
         }

@@ -1,4 +1,4 @@
-// pending: ruling 1 - void and null are the same unit type (interim)
+// Ruling 1 (S15): void and null are the same unit type (interim).
 //
 // Until tuple types give `void` a home as the empty tuple, `void` and
 // `null` are mutually-subtyping spellings of the unit type (TIR's
