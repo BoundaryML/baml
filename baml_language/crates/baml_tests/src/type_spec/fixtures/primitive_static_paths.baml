@@ -1,6 +1,5 @@
-// pending: A3 primitive-name static paths (S15 ledger, 610 nodes)
-//
-// `float.nan()` / `int.max_value()`: a primitive KEYWORD head maps
+// A3 (S15 ledger): `float.nan()` / `int.max_value()` - a primitive
+// KEYWORD head maps
 // through the receiver-class table (`float` -> `baml.Float`) into the
 // existing S11 type-qualified static-method path.
 function f() -> float throws never {

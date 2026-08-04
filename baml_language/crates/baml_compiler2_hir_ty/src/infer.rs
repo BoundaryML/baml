@@ -1519,9 +1519,7 @@ impl<'db> InferenceContext<'db> {
             // receiver). Class generics have no receiver to pin them, so
             // they instantiate fresh alongside the method's own.
             if segments.len() >= 2
-                && let Some(baml_compiler2_hir::contributions::Definition::Class(class)) = self
-                    .lower
-                    .resolve_type_definition(&segments[..segments.len() - 1])
+                && let Some(class) = self.static_class_for(&segments[..segments.len() - 1])
             {
                 let member = segments.last().expect("checked len");
                 let method = baml_compiler2_ppir::item_data::class_data(self.db, class)
@@ -1637,7 +1635,67 @@ impl<'db> InferenceContext<'db> {
                 .collect();
             return function_value_ty(signature, &instantiation);
         }
+        // A type-qualified static as a VALUE (`let f = float.nan;`,
+        // `Array.filled`): the same resolution the call path uses, with
+        // every generic fresh (only a call site can spell turbofish).
+        if segments.len() >= 2
+            && let Some(class) = self.static_class_for(&segments[..segments.len() - 1])
+            && let Some(member) = segments.last()
+            && let Some(method) = baml_compiler2_ppir::item_data::class_data(self.db, class)
+                .methods
+                .iter()
+                .copied()
+                .find(|&method| {
+                    baml_compiler2_ppir::item_data::function_data(self.db, method).name == *member
+                })
+        {
+            let signature = function_signature(self.db, method);
+            let instantiation: Vec<Ty> = signature
+                .generic_params
+                .iter()
+                .map(|param| self.fresh_generic_arg(param))
+                .collect();
+            return function_value_ty(signature, &instantiation);
+        }
         Ty::error()
+    }
+
+    /// The class owning a TYPE-QUALIFIED static path's members: a
+    /// resolved class path (`Array.filled`, `baml.Array.generate`), or a
+    /// primitive KEYWORD head (`float.nan()`, `int.max_value()`) mapped
+    /// through the language's builtin-class correspondence - the same
+    /// rule the S11 receiver-class table applies to VALUES, applied to
+    /// the written primitive name (`float`'s statics live on
+    /// `class baml.Float`).
+    fn static_class_for(
+        &self,
+        prefix: &[baml_type::Name],
+    ) -> Option<baml_compiler2_hir::loc::ClassLoc<'db>> {
+        use baml_compiler2_hir::contributions::Definition;
+        if let Some(Definition::Class(class)) = self.lower.resolve_type_definition(prefix) {
+            return Some(class);
+        }
+        let [single] = prefix else {
+            return None;
+        };
+        let name = match single.as_str() {
+            "int" => "Int",
+            "bigint" => "Bigint",
+            "float" => "Float",
+            "string" => "String",
+            "bool" => "Bool",
+            "uint8array" => "Uint8Array",
+            _ => return None,
+        };
+        let qtn = baml_type::TypeName::new(
+            baml_type::Name::new("baml"),
+            Vec::new(),
+            baml_type::Name::new(name),
+        );
+        match self.facts.definition_of(&qtn) {
+            Some(Definition::Class(class)) => Some(class),
+            _ => None,
+        }
     }
 
     /// Lambda typing (rust-analyzer's `deduce_closure_signature` shape).
