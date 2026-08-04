@@ -202,7 +202,9 @@ fn member_on_interface<'db>(
     // Fields first (mirroring the class path's field-before-method).
     if let Some(field) = data.fields.iter().find(|field| field.name == *name) {
         let frame = interface_frame(interface, db);
-        let ctx = crate::lower::lower_ctx_for_file(db, interface.file(db)).with_frame(frame);
+        let ctx = crate::lower::lower_ctx_for_file(db, interface.file(db))
+            .with_frame(frame)
+            .with_bounds(crate::lower::interface_scope_bounds(db, interface));
         let field_ty = ctx.lower_type_ref(&data.type_refs, field.type_ref);
         return Some(InterfaceMember {
             ty: crate::lower::substitute_params(&field_ty, &instantiation),
@@ -232,7 +234,9 @@ fn member_on_interface<'db>(
             return None;
         }
         let frame = interface_frame(interface, db);
-        let ctx = crate::lower::lower_ctx_for_file(db, interface.file(db)).with_frame(frame);
+        let ctx = crate::lower::lower_ctx_for_file(db, interface.file(db))
+            .with_frame(frame)
+            .with_bounds(crate::lower::interface_scope_bounds(db, interface));
         let self_var = Ty::intern(TyKind::TypeVar(
             ParamTy::new(0, Name::new("Self")),
             TyAttr::default(),
@@ -285,8 +289,9 @@ fn member_on_interface<'db>(
 /// The interface frame's instantiation vector for a receiver:
 /// `[Self, args.., assoc..]` - `Self` is the receiver, args come from
 /// the reference, associated slots take the reference's pins or the
-/// symbolic projection through the receiver (reduction is I5's).
-fn interface_instantiation(
+/// symbolic projection through the receiver (which I5's oracle reduces
+/// when the facts determine it).
+pub(crate) fn interface_instantiation(
     receiver: &Ty,
     target: &InterfaceTarget,
     data: &baml_compiler2_ppir::item_data::InterfaceData<'_>,
@@ -323,11 +328,7 @@ fn interface_frame<'db>(
     interface: InterfaceLoc<'db>,
     db: &'db dyn baml_compiler2_ppir::Db,
 ) -> Vec<ParamTy> {
-    let data = baml_compiler2_ppir::item_data::interface_data(db, interface);
-    let mut names = vec![Name::new("Self")];
-    names.extend(data.generic_params.iter().cloned());
-    names.extend(data.associated_types.iter().map(|assoc| assoc.name.clone()));
-    crate::lower::interface_generic_frame_params(&names)
+    crate::lower::interface_frame(db, interface)
 }
 
 fn instantiate_signature(

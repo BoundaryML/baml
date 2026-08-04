@@ -89,17 +89,130 @@ impl TypeContext for Facts<'_> {
         )
     }
 
-    fn associated_type_bound(&self, _interface: &Interface, _assoc: Name) -> Vec<Interface> {
-        Vec::new()
+    fn associated_type_bound(&self, interface: &Interface, assoc: Name) -> Vec<Interface> {
+        // The declared `type assoc extends J`, realized at the qualifier's
+        // args with `Self` left symbolic (the trait's contract: the oracle
+        // is a function of the reference, not an implementor) - rustc's
+        // `explicit_item_bounds` instantiated.
+        let target = crate::impls::InterfaceTarget::from_constraint(interface);
+        let symbolic_self = baml_type::interned::Ty::intern(baml_type::interned::TyKind::TypeVar(
+            ParamTy::new(0, Name::new("Self")),
+            baml_type::TyAttr::default(),
+        ));
+        crate::impls::realized_assoc_bound(self.db, &target, &symbolic_self, &assoc)
+            .and_then(|bound| bound.to_plain().as_interface())
+            .into_iter()
+            .collect()
     }
 
+    /// Single-step projection reduction, in rustc's `project.rs` candidate
+    /// order: param-env candidates first (the qualifier's own pin, then a
+    /// rigid var's carried bounds elaborated through the `requires`
+    /// closure - several DISAGREEING candidates are an ambiguity and stay
+    /// Opaque, never pick-first), then the base's own reference (an
+    /// existential's pin or its interface's default), then impl candidates
+    /// (the registry; binding-else-default inside `resolved_pin`). An
+    /// unpinned member of a written reference realizes its declared
+    /// DEFAULT - the spec's fill-at-reference rule, deliberately broader
+    /// than rustc (documented at `realized_assoc_default`).
     fn project(
         &self,
-        _base: &Ty,
-        _interface: &Interface,
-        _member: &Name,
+        base: &Ty,
+        interface: &Interface,
+        member: &Name,
+        // Single-step: the canonical `from_ty` walk decrements its own
+        // fuel across the reduction chain (the TIR-side precedent).
         _fuel: u32,
     ) -> ProjectionStep {
+        use baml_type::normalize::equivalent_interned;
+        if let Some((_, pin)) = interface
+            .associated_types
+            .iter()
+            .find(|(name, _)| name == member)
+        {
+            return ProjectionStep::Reduced(pin.clone());
+        }
+        let target = crate::impls::InterfaceTarget::from_constraint(interface);
+        let eq = crate::impls::AliasOnlyFacts::new(self.db);
+        if let Ty::TypeVar(param, _) = base {
+            let base_interned = crate::impls::interned_ty(base);
+            let mut candidates: Vec<baml_type::interned::Ty> = Vec::new();
+            for bound in self.type_var_bound(param) {
+                let have = crate::impls::InterfaceTarget::from_constraint(&bound);
+                let mut heads = vec![have.clone()];
+                heads.extend(crate::impls::direct_requires_closure(self.db, &have, 8));
+                for head in heads {
+                    let head_matches = head.name == target.name
+                        && head.args.len() == target.args.len()
+                        && head
+                            .args
+                            .iter()
+                            .zip(&target.args)
+                            .all(|(a, b)| equivalent_interned(a, b, &eq));
+                    if !head_matches {
+                        continue;
+                    }
+                    let value = head
+                        .pins
+                        .iter()
+                        .find(|(name, _)| name == member)
+                        .map(|(_, ty)| ty.clone())
+                        .or_else(|| {
+                            crate::impls::realized_assoc_default(
+                                self.db,
+                                &head,
+                                &base_interned,
+                                member,
+                            )
+                        });
+                    if let Some(value) = value
+                        && !candidates
+                            .iter()
+                            .any(|have| equivalent_interned(have, &value, &eq))
+                    {
+                        candidates.push(value);
+                    }
+                }
+            }
+            // A rigid var reaches no impl, so the param env decides alone.
+            return match candidates.as_slice() {
+                [only] => ProjectionStep::Reduced(only.to_plain()),
+                _ => ProjectionStep::Opaque,
+            };
+        }
+        if let Ty::Interface(name, args, pins, _) = base {
+            if let Some((_, pin)) = pins.iter().find(|(pin_name, _)| pin_name == member) {
+                return ProjectionStep::Reduced(pin.clone());
+            }
+            // An existential fixes an omitted defaulted member to the
+            // default, with `Self` = the base itself (so a
+            // Self-referencing default resolves against the base's pins).
+            let base_target = crate::impls::InterfaceTarget {
+                name: name.clone(),
+                args: args.iter().map(crate::impls::interned_ty).collect(),
+                pins: pins
+                    .iter()
+                    .map(|(pin_name, ty)| (pin_name.clone(), crate::impls::interned_ty(ty)))
+                    .collect(),
+            };
+            let base_interned = crate::impls::interned_ty(base);
+            if let Some(default) = crate::impls::realized_assoc_default(
+                self.db,
+                &base_target,
+                &base_interned,
+                member,
+            ) {
+                return ProjectionStep::Reduced(default.to_plain());
+            }
+            return ProjectionStep::Opaque;
+        }
+        let base_interned = crate::impls::interned_ty(base);
+        if let Some(resolved) = crate::impls::resolve_impl(self.db, &base_interned, &target)
+            && let Some(pin) =
+                crate::impls::resolved_pin(self.db, &resolved, &base_interned, member)
+        {
+            return ProjectionStep::Reduced(pin.to_plain());
+        }
         ProjectionStep::Opaque
     }
 }

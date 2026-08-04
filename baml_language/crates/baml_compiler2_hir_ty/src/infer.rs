@@ -101,14 +101,19 @@ pub fn infer_body<'db>(
     // The owner's generic frame makes `T` in body annotations resolve; the
     // signature gives parameter references their types and the body its
     // return expectation.
-    let (frame, param_tys, return_ty, declared_throws) = match owner {
+    let (frame, param_tys, return_ty, declared_throws_ref) = match owner {
         BodyOwnerId::Function(function) => {
             let signature = function_signature(db, function);
+            let data = baml_compiler2_ppir::item_data::elaborated_function_data(db, function);
             (
                 function_generic_frame(db, function),
                 signature.params.into_iter().map(|param| param.ty).collect(),
                 Some(signature.ret),
-                signature.throws_declared.then_some(signature.throws),
+                // The owner checks its throw sites against the RAW written
+                // clause (holes preserved - a partial clause opens the
+                // contract), never the caller-facing surface, which for a
+                // partial clause is derived FROM those sites.
+                data.throws.map(|throws| (&data.type_refs, throws)),
             )
         }
         BodyOwnerId::Let(_) => (Vec::new(), Vec::new(), None, None),
@@ -144,6 +149,18 @@ pub fn infer_body<'db>(
             )
         })
         .collect();
+    // Split the declared clause into its named part and openness (spec
+    // rule 3: `throws T | _` names T and opens the remainder to
+    // inference); nested holes in named members stay ruling-4 errors.
+    let (declared_throws, declared_throws_open) = match declared_throws_ref
+        .map(|(store, throws)| lower.lower_type_ref(store, throws))
+    {
+        Some(raw) => {
+            let (named, open) = crate::lower::throws_clause_parts(&raw);
+            (Some(named), open)
+        }
+        None => (None, false),
+    };
     let mut ctx = InferenceContext::new(
         db,
         index,
@@ -156,6 +173,7 @@ pub fn infer_body<'db>(
         plain_bounds,
     );
     ctx.declared_throws = declared_throws;
+    ctx.declared_throws_open = declared_throws_open;
     if let Some(expr_body) = body.expr_body() {
         ctx.infer_expr_body(expr_body);
     }
@@ -277,10 +295,15 @@ struct InferenceContext<'db> {
     type_refs: Arc<BodyTypeRefs>,
     /// The owner's declared return type, the body root's expectation.
     return_ty: Option<Ty>,
-    /// The owner's DECLARED throws clause, when written: the contract
-    /// every throw site and callee effect is checked against. `None`
-    /// means the effect is inferred instead (from the channel below).
+    /// The owner's DECLARED throws clause's NAMED part, when written: the
+    /// contract every throw site and callee effect is checked against.
+    /// `None` means the effect is inferred instead (from the channel
+    /// below).
     declared_throws: Option<Ty>,
+    /// Whether the declared clause carried an open slot (`throws T | _`,
+    /// spec rule 3): the contract check is suspended and the final effect
+    /// is the named part unioned with the inferred set.
+    declared_throws_open: bool,
     /// The effect-channel stack: contributions from `throw` sites and
     /// callee throws accumulate into the top. The bottom entry is the
     /// owner's channel; lambdas and `catch` bases push their own.
@@ -324,6 +347,7 @@ impl<'db> InferenceContext<'db> {
             type_refs,
             return_ty,
             declared_throws: None,
+            declared_throws_open: false,
             throws_channels: vec![Vec::new()],
             table: InferenceTable::new(),
             deferred_subs: Vec::new(),
@@ -1973,7 +1997,10 @@ impl<'db> InferenceContext<'db> {
         // arms match on literal error codes, and the canonical union at
         // the channel is the generation site.
         let contribution = ty.clone();
+        // An OPEN clause (`throws T | _`) admits every contribution; the
+        // remainder joins the surface at finalize instead of erroring.
         if let Some(declared) = self.declared_throws.clone()
+            && !self.declared_throws_open
             && !declared.has_error()
             && self.throws_channels.len() == 1
             && !self.sub(&contribution, &declared)
@@ -2010,14 +2037,21 @@ impl<'db> InferenceContext<'db> {
         // (a value variable erases to Error instead - ruling 2).
         self.table.default_unsolved_effects_to_never();
         let throws = match self.declared_throws.clone() {
-            Some(declared) => declared,
-            None => {
+            // A closed clause IS the surface (declared wins, rule 1).
+            Some(declared) if !self.declared_throws_open => declared,
+            // Open or omitted: the inferred set, with an open clause's
+            // named part joining the union (spec rule 3 - callers see
+            // declared + inferred).
+            declared => {
                 let contributions = self.throws_channels[0].clone();
-                let resolved: Vec<Ty> = contributions
+                let mut resolved: Vec<Ty> = contributions
                     .iter()
                     .map(|ty| self.finalize_ty(ty))
                     .filter(|ty| !ty.has_error())
                     .collect();
+                if let Some(named) = declared {
+                    resolved.push(named);
+                }
                 if resolved.is_empty() {
                     Ty::never()
                 } else {

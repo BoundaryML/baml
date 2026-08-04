@@ -19,13 +19,14 @@
 //! kind. Diagnostics are not emitted yet (S17); every failure lowers to the
 //! `Error` sentinel.
 //!
-//! Not yet mirrored (later slices): `Self` types (I6), associated-type
-//! projections and interface associated-type defaults (I5), generic bounds
-//! into a param env (I2), map-key validation and other diagnostics (S17).
+//! Not yet mirrored (later slices): `Self`-rooted paths naming the
+//! IMPLEMENTOR's own members inside default-method bodies (I6; `Self` as a
+//! frame var and dotted `Self.Assoc` projections lower here already),
+//! map-key validation and other diagnostics (S17).
 
 use baml_compiler2_hir::{
     contributions::Definition,
-    loc::{ClassLoc, FunctionLoc, TypeAliasLoc},
+    loc::{ClassLoc, FunctionLoc, InterfaceLoc, TypeAliasLoc},
     package::PackageId,
     type_ref::{TypeRefId, TypeRefKind, TypeRefStore},
 };
@@ -259,6 +260,33 @@ impl<'db> LowerCtx<'db> {
                     pins.to_vec(),
                 ),
             ),
+            // A chained step (`T.Item.Sub`): the previous member's
+            // declared bound (`type Item extends J`), realized at its
+            // qualifier, is what declares the next member.
+            TyKind::AssociatedTypeProjection {
+                base: prev_base,
+                interface,
+                member: prev_member,
+                ..
+            } => {
+                let target = crate::impls::InterfaceTarget {
+                    name: interface.name.clone(),
+                    args: interface.generics.to_vec(),
+                    pins: interface.associated_types.to_vec(),
+                };
+                let bound =
+                    crate::impls::realized_assoc_bound(self.db, &target, prev_base, prev_member)?;
+                match bound.kind() {
+                    TyKind::Interface(name, args, pins, _) if declares(name) => {
+                        Some(baml_type::interned::InterfaceRef::new(
+                            name.clone(),
+                            args.to_vec().into_boxed_slice(),
+                            pins.to_vec(),
+                        ))
+                    }
+                    _ => None,
+                }
+            }
             _ => None,
         }
     }
@@ -271,14 +299,6 @@ impl<'db> LowerCtx<'db> {
     fn lower_path(&self, segments: &[Name], args: Vec<Ty>, bindings: Vec<(Name, Ty)>) -> Ty {
         let attr = TyAttr::default;
         let short = segments.last().expect("type paths are never empty");
-
-        // `Self` resolves through the generic frame like any param (I2
-        // puts it at an interface frame's slot 0); outside an interface
-        // scope it falls through to Error below. `Self`-rooted paths
-        // beyond one segment stay Error until I6.
-        if segments[0].as_str() == "Self" && segments.len() > 1 {
-            return Ty::error();
-        }
 
         if let Some(def) = self.resolve_type(segments) {
             return self.lower_definition(def, short, args, bindings);
@@ -318,7 +338,36 @@ impl<'db> LowerCtx<'db> {
             }
         }
 
-        // Fallback 3 (associated projections) arrives with I5.
+        // Fallback 3: an associated projection written as a dotted path
+        // (`T.Item`, `Self.Item`, chained `T.Item.Sub`): the head names
+        // an in-scope generic param (`Self` is an interface frame's slot
+        // 0), and each further segment projects through the interface its
+        // base determines (the unique declaring bound; a chained step
+        // resolves through the previous member's declared bound).
+        if segments.len() > 1
+            && args.is_empty()
+            && bindings.is_empty()
+            && let Some(param) = self
+                .generic_params
+                .iter()
+                .rev()
+                .find(|param| param.name() == &segments[0])
+        {
+            let mut ty = Ty::intern(TyKind::TypeVar(param.clone(), attr()));
+            for member in &segments[1..] {
+                let Some(interface) = self.projection_interface_for(&ty, member) else {
+                    return Ty::error();
+                };
+                ty = Ty::intern(TyKind::AssociatedTypeProjection {
+                    base: ty,
+                    interface,
+                    member: member.clone(),
+                    attr: attr(),
+                });
+            }
+            return ty;
+        }
+
         Ty::error()
     }
 
@@ -600,6 +649,21 @@ pub fn interface_generic_frame_params(names: &[Name]) -> Vec<ParamTy> {
     frame
 }
 
+/// The full interface frame: `[Self, params.., assoc..]` - the positional
+/// discipline every interface-scoped type (member signatures, fields,
+/// associated-type bounds and defaults) lowers in, instantiated by
+/// `interface_instantiation`'s vector of the same shape.
+pub fn interface_frame<'db>(
+    db: &'db dyn baml_compiler2_ppir::Db,
+    interface: InterfaceLoc<'db>,
+) -> Vec<ParamTy> {
+    let data = baml_compiler2_ppir::item_data::interface_data(db, interface);
+    let mut names = vec![Name::new("Self")];
+    names.extend(data.generic_params.iter().cloned());
+    names.extend(data.associated_types.iter().map(|assoc| assoc.name.clone()));
+    interface_generic_frame_params(&names)
+}
+
 /// The root generic frame for a class.
 pub fn class_generic_frame<'db>(
     db: &'db dyn baml_compiler2_ppir::Db,
@@ -693,49 +757,12 @@ pub fn function_generic_bounds<'db>(
         }
         Some(MethodOwner::Interface(interface)) => {
             let data = baml_compiler2_ppir::item_data::interface_data(db, interface);
-            // `Self` (frame slot 0) is bounded by the interface itself at
-            // its own params.
-            if let Some(self_param) = frame_iter.next() {
-                let args: Vec<Ty> = data
-                    .generic_params
-                    .iter()
-                    .enumerate()
-                    .map(|(index, name)| {
-                        Ty::intern(TyKind::TypeVar(
-                            ParamTy::new(
-                                u32::try_from(index + 1).expect("frame index overflow"),
-                                name.clone(),
-                            ),
-                            TyAttr::default(),
-                        ))
-                    })
-                    .collect();
-                out.insert(
-                    self_param.clone(),
-                    vec![baml_type::interned::InterfaceRef::new(
-                        interface_qualified_name(db, interface),
-                        args.into_boxed_slice(),
-                        Vec::new(),
-                    )],
-                );
-            }
-            for bound in &data.generic_param_bounds {
-                let param = frame_iter.next();
-                if let (Some(param), Some(type_ref)) = (param, bound)
-                    && let Some(bound) = as_ref(&ctx.lower_type_ref(&data.type_refs, *type_ref))
-                {
-                    out.insert(param.clone(), vec![bound]);
-                }
-            }
-            // The associated-type frame slots carry their declared bounds
-            // when written (I5 consumes them for projections).
-            for assoc in &data.associated_types {
-                let param = frame_iter.next();
-                if let (Some(param), Some(type_ref)) = (param, assoc.bound)
-                    && let Some(bound) = as_ref(&ctx.lower_type_ref(&data.type_refs, type_ref))
-                {
-                    out.insert(param.clone(), vec![bound]);
-                }
+            // The shared interface param env (`Self` bound, param bounds,
+            // associated-slot bounds), keyed by the same frame-prefix
+            // identities this function's frame starts with.
+            out.extend(interface_scope_bounds(db, interface));
+            for _ in 0..(1 + data.generic_params.len() + data.associated_types.len()) {
+                frame_iter.next();
             }
         }
         Some(MethodOwner::FreeImpl(_)) | None => {}
@@ -745,6 +772,66 @@ pub fn function_generic_bounds<'db>(
         let param = frame_iter.next();
         if let (Some(param), Some(type_ref)) = (param, bound)
             && let Some(bound) = as_ref(&ctx.lower_type_ref(&data.type_refs, *type_ref))
+        {
+            out.insert(param.clone(), vec![bound]);
+        }
+    }
+    out
+}
+
+/// The interface scope's param env, keyed by `interface_frame`
+/// identities: `Self` (slot 0) bounded by the interface itself at its own
+/// params, each generic param's declared bound, and each associated
+/// slot's declared bound (I5 consumes those for projections). The single
+/// env every interface-scoped lowering shares - member signatures via
+/// `function_generic_bounds`, required-method and field lowering, and
+/// associated-type bounds/defaults - so `Self.Member` projections resolve
+/// their qualifying interface identically everywhere.
+pub fn interface_scope_bounds<'db>(
+    db: &'db dyn baml_compiler2_ppir::Db,
+    interface: baml_compiler2_hir::loc::InterfaceLoc<'db>,
+) -> FxHashMap<ParamTy, Vec<baml_type::interned::InterfaceRef>> {
+    let data = baml_compiler2_ppir::item_data::interface_data(db, interface);
+    let frame = interface_frame(db, interface);
+    let ctx = lower_ctx_for_file(db, interface.file(db)).with_frame(frame.clone());
+    let as_ref = |ty: &Ty| match ty.kind() {
+        TyKind::Interface(name, args, pins, _) => Some(baml_type::interned::InterfaceRef::new(
+            name.clone(),
+            args.to_vec().into_boxed_slice(),
+            pins.to_vec(),
+        )),
+        _ => None,
+    };
+    let mut out = FxHashMap::default();
+    let mut frame_iter = frame.iter();
+    if let Some(self_param) = frame_iter.next() {
+        let args: Vec<Ty> = frame
+            .iter()
+            .skip(1)
+            .take(data.generic_params.len())
+            .map(|param| Ty::intern(TyKind::TypeVar(param.clone(), TyAttr::default())))
+            .collect();
+        out.insert(
+            self_param.clone(),
+            vec![baml_type::interned::InterfaceRef::new(
+                interface_qualified_name(db, interface),
+                args.into_boxed_slice(),
+                Vec::new(),
+            )],
+        );
+    }
+    for bound in &data.generic_param_bounds {
+        let param = frame_iter.next();
+        if let (Some(param), Some(type_ref)) = (param, bound)
+            && let Some(bound) = as_ref(&ctx.lower_type_ref(&data.type_refs, *type_ref))
+        {
+            out.insert(param.clone(), vec![bound]);
+        }
+    }
+    for assoc in &data.associated_types {
+        let param = frame_iter.next();
+        if let (Some(param), Some(type_ref)) = (param, assoc.bound)
+            && let Some(bound) = as_ref(&ctx.lower_type_ref(&data.type_refs, type_ref))
         {
             out.insert(param.clone(), vec![bound]);
         }
@@ -816,7 +903,17 @@ pub fn function_signature<'db>(
     let throws_declared = data.throws.is_some();
     let throws = data
         .throws
-        .map(|throws| reject_holes(&ctx.lower_type_ref(&data.type_refs, throws)))
+        .map(|throws| {
+            let lowered = ctx.lower_type_ref(&data.type_refs, throws);
+            if throws_clause_parts(&lowered).1 {
+                // A PARTIAL clause (`throws T | _`, spec rule 3): callers
+                // see the merged surface (declared + inferred), which is
+                // what `callable_throws` computes through the body run.
+                Ty::from_plain(&crate::callable::callable_throws(db, function).0)
+            } else {
+                reject_holes(&lowered)
+            }
+        })
         .unwrap_or_else(|| {
             // Omitted: the body-inferred effect, fixpoint over mutual
             // recursion (S12's callable_throws).
@@ -856,4 +953,101 @@ pub fn type_alias_value<'db>(db: &'db dyn baml_compiler2_ppir::Db, alias: TypeAl
     data.value
         .map(|value| reject_holes(&ctx.lower_type_ref(&data.type_refs, value)))
         .unwrap_or_else(Ty::error)
+}
+
+/// One associated type's bound or default, lowered once in the interface
+/// frame. Wrapped for the manual `salsa::Update` impl (the
+/// `CallableThrows` precedent).
+#[derive(Debug, Clone, PartialEq)]
+pub struct AssocTypeLowering(pub Option<Ty>);
+
+// SAFETY: PartialEq-driven overwrite, the CallableThrows precedent.
+#[allow(unsafe_code)]
+unsafe impl salsa::Update for AssocTypeLowering {
+    #[allow(unsafe_code)]
+    unsafe fn maybe_update(old_pointer: *mut Self, new_value: Self) -> bool {
+        #[allow(unsafe_code)]
+        unsafe {
+            let changed = *old_pointer != new_value;
+            if changed {
+                std::ptr::drop_in_place(old_pointer);
+                std::ptr::write(old_pointer, new_value);
+            }
+            changed
+        }
+    }
+}
+
+/// The DEFAULT of associated type `member` on `interface` (`type member =
+/// ...`), lowered ONCE in the interface frame with `Self` symbolic (frame
+/// slot 0) - rustc's discipline for default associated types (the trait
+/// definition lowers them with `Self` as an ordinary param); realization
+/// at a site is positional substitution via `interface_instantiation`.
+/// `None` when `member` is undeclared or has no default.
+#[salsa::tracked(returns(ref))]
+// A salsa query key must be owned; the by-value `Name` is the contract.
+#[allow(clippy::needless_pass_by_value)]
+pub fn interface_assoc_default<'db>(
+    db: &'db dyn baml_compiler2_ppir::Db,
+    interface: InterfaceLoc<'db>,
+    member: Name,
+) -> AssocTypeLowering {
+    AssocTypeLowering(lower_assoc_type_ref(db, interface, &member, |assoc| assoc.default))
+}
+
+/// The declared BOUND of associated type `member` on `interface` (`type
+/// member extends J`), lowered once in the interface frame - rustc's
+/// `explicit_item_bounds`: what a still-rigid projection is provable
+/// against. `None` when `member` is undeclared or unbounded.
+#[salsa::tracked(returns(ref))]
+// A salsa query key must be owned; the by-value `Name` is the contract.
+#[allow(clippy::needless_pass_by_value)]
+pub fn interface_assoc_bound<'db>(
+    db: &'db dyn baml_compiler2_ppir::Db,
+    interface: InterfaceLoc<'db>,
+    member: Name,
+) -> AssocTypeLowering {
+    AssocTypeLowering(lower_assoc_type_ref(db, interface, &member, |assoc| assoc.bound))
+}
+
+fn lower_assoc_type_ref<'db>(
+    db: &'db dyn baml_compiler2_ppir::Db,
+    interface: InterfaceLoc<'db>,
+    member: &Name,
+    select: impl Fn(&baml_compiler2_ppir::item_data::AssociatedTypeData) -> Option<TypeRefId>,
+) -> Option<Ty> {
+    let data = baml_compiler2_ppir::item_data::interface_data(db, interface);
+    let assoc = data.associated_types.iter().find(|assoc| assoc.name == *member)?;
+    let type_ref = select(assoc)?;
+    let ctx = lower_ctx_for_file(db, interface.file(db))
+        .with_frame(interface_frame(db, interface))
+        .with_bounds(interface_scope_bounds(db, interface));
+    Some(ctx.lower_type_ref(&data.type_refs, type_ref))
+}
+
+/// Splits a lowered `throws` clause into its named members and whether it
+/// carries an open slot (`_`): spec Functions rule 3, `throws T | _`
+/// declares the named types AND opens the remainder to inference. The
+/// hole is only meaningful as a top-level member; nested holes stay
+/// ruling-4 rejections through `reject_holes` on the named part.
+pub fn throws_clause_parts(ty: &Ty) -> (Ty, bool) {
+    let members: Vec<&Ty> = match ty.kind() {
+        TyKind::Union(members, _) => members.iter().collect(),
+        _ => vec![ty],
+    };
+    let mut named = Vec::new();
+    let mut open = false;
+    for member in members {
+        if matches!(member.kind(), TyKind::Infer { var: None, .. }) {
+            open = true;
+        } else {
+            named.push(reject_holes(member));
+        }
+    }
+    let named = match named.len() {
+        0 => Ty::never(),
+        1 => named.pop().expect("checked len"),
+        _ => Ty::intern(TyKind::Union(named.into(), TyAttr::default())),
+    };
+    (named, open)
 }

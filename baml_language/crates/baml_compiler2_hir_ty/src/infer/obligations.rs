@@ -23,10 +23,10 @@
 //! a class's bounds, deferring variable-carrying bounds to post-hoc
 //! verification - the doc-inference "one solve budget" shape.
 //!
-//! Two kinds this slice; projections join with I5, and PROBE mode (a
-//! speculative attempt with no committed bindings, for candidate
-//! selection) is the table's existing snapshot/rollback when a consumer
-//! arrives.
+//! Two kinds. Projections discharge through the canonical algebra since
+//! I5 (reduction + declared-bound proving); PROBE mode (a speculative
+//! attempt with no committed bindings, for candidate selection) is the
+//! table's existing snapshot/rollback when a consumer arrives.
 
 use baml_compiler2_ast::ExprId;
 use baml_type::{
@@ -152,10 +152,15 @@ impl InferenceContext<'_> {
                 carried_satisfies(&have, &target)
                     || crate::impls::interface_requires(self.db, &have, &target, 8)
             }
-            // Associated projections are symbolic stand-ins; their bound
-            // oracle joins with I5. Conservatively satisfied (TIR's
-            // vacuous rule) rather than spuriously failed.
-            TyKind::AssociatedTypeProjection { .. } => true,
+            // A projection: a reducible one reduces inside the canonical
+            // algebra (the oracle is live since I5); a still-symbolic one
+            // proves against its declared bound through the algebra's
+            // projection-subtype rule (`associated_type_bound`).
+            // Fail-closed - TIR's vacuous rule retired with I5.
+            TyKind::AssociatedTypeProjection { .. } => {
+                let existential = interface_as_existential(interface);
+                self.sub(ty, &existential)
+            }
             _ => crate::impls::implements_interface(self.db, ty, &target),
         }
     }

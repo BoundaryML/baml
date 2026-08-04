@@ -305,6 +305,114 @@ pub struct ResolvedImpl<'db> {
     pub bindings: FxHashMap<ParamTy, Ty>,
 }
 
+impl ResolvedImpl<'_> {
+    /// The interface this impl provides, realized through the match's
+    /// bindings.
+    pub fn implemented(&self) -> InterfaceTarget {
+        InterfaceTarget {
+            name: self.facts.interface.name.clone(),
+            args: self
+                .facts
+                .interface
+                .args
+                .iter()
+                .map(|arg| substitute_bindings(arg, &self.bindings))
+                .collect(),
+            pins: self
+                .facts
+                .interface
+                .pins
+                .iter()
+                .map(|(name, ty)| (name.clone(), substitute_bindings(ty, &self.bindings)))
+                .collect(),
+        }
+    }
+}
+
+/// The realized value of associated `member` under a resolved impl: the
+/// impl's own binding substituted through the match, else the interface's
+/// default realized at the receiver - rustc's `leaf_def` walk (the
+/// default fills only when the impl omits the binding).
+pub(crate) fn resolved_pin(
+    db: &dyn baml_compiler2_ppir::Db,
+    resolved: &ResolvedImpl<'_>,
+    self_ty: &Ty,
+    member: &Name,
+) -> Option<Ty> {
+    if let Some((_, declared)) = resolved
+        .facts
+        .associated_types
+        .iter()
+        .find(|(name, _)| name == member)
+    {
+        return Some(substitute_bindings(declared, &resolved.bindings));
+    }
+    realized_assoc_default(db, &resolved.implemented(), self_ty, member)
+}
+
+/// The interface's declared DEFAULT for `member`, realized at a use site:
+/// `Self` = `self_ty`, generic and associated slots via the shared
+/// positional instantiation (a Self-referencing default like `type Items
+/// = Self.Item[]` becomes a projection on `self_ty` that the canonical
+/// walk re-reduces, fuel-bounded). This implements the spec's
+/// fill-at-reference rule ("associated types with defaults may be omitted
+/// and will use said defaults") - deliberately BROADER than rustc, where
+/// a rigid projection never reduces to a trait-definition default; in
+/// BAML the written reference itself fixes omitted defaulted members.
+pub(crate) fn realized_assoc_default(
+    db: &dyn baml_compiler2_ppir::Db,
+    target: &InterfaceTarget,
+    self_ty: &Ty,
+    member: &Name,
+) -> Option<Ty> {
+    let (interface, data) = assoc_realization_env(db, target)?;
+    let lowered = crate::lower::interface_assoc_default(db, interface, member.clone())
+        .0
+        .as_ref()?;
+    let instantiation = crate::method_resolution::interface_instantiation(self_ty, target, data);
+    Some(crate::lower::substitute_params(lowered, &instantiation))
+}
+
+/// The declared BOUND of `member` (`type member extends J`), realized at
+/// the reference - rustc's `explicit_item_bounds` instantiated: what a
+/// still-symbolic projection is provable against.
+pub(crate) fn realized_assoc_bound(
+    db: &dyn baml_compiler2_ppir::Db,
+    target: &InterfaceTarget,
+    self_ty: &Ty,
+    member: &Name,
+) -> Option<Ty> {
+    let (interface, data) = assoc_realization_env(db, target)?;
+    let lowered = crate::lower::interface_assoc_bound(db, interface, member.clone())
+        .0
+        .as_ref()?;
+    let instantiation = crate::method_resolution::interface_instantiation(self_ty, target, data);
+    Some(crate::lower::substitute_params(lowered, &instantiation))
+}
+
+/// The interface definition and its data for a realization, arity-gated
+/// (a bare or mis-applied reference realizes nothing - fail-safe, the
+/// diagnostic is S17's).
+fn assoc_realization_env<'db>(
+    db: &'db dyn baml_compiler2_ppir::Db,
+    target: &InterfaceTarget,
+) -> Option<(
+    baml_compiler2_hir::loc::InterfaceLoc<'db>,
+    &'db baml_compiler2_ppir::item_data::InterfaceData<'db>,
+)> {
+    let facts = crate::facts::Facts::new(db);
+    let Some(baml_compiler2_hir::contributions::Definition::Interface(interface)) =
+        facts.definition_of(&target.name)
+    else {
+        return None;
+    };
+    let data = baml_compiler2_ppir::item_data::interface_data(db, interface);
+    if data.generic_params.len() != target.args.len() {
+        return None;
+    }
+    Some((interface, data))
+}
+
 /// Whether realized `concrete` implements realized `interface`. The
 /// public fact: searches the root packages derivable from every
 /// qualified name on both sides (a single guessed root misses
@@ -348,7 +456,7 @@ fn resolve_within_depth<'db>(
             let Some(facts) = impl_facts(db, block) else {
                 continue;
             };
-            let Some(bindings) = match_impl_head(facts, concrete, interface, &eq) else {
+            let Some(bindings) = match_impl_head(db, facts, concrete, interface, &eq) else {
                 continue;
             };
             if !bounds_hold(db, facts, &bindings, depth) {
@@ -422,6 +530,7 @@ fn collect_packages(ty: &Ty, out: &mut Vec<Name>) {
 /// for-target and every interface arg against ONE shared binding set,
 /// then the associated-pin gate. Declared bounds are NOT checked here.
 fn match_impl_head(
+    db: &dyn baml_compiler2_ppir::Db,
     facts: &ImplFacts<'_>,
     concrete: &Ty,
     interface: &InterfaceTarget,
@@ -454,19 +563,42 @@ fn match_impl_head(
             return None;
         }
     }
-    // Every pin the REQUEST carries must equal the impl's binding
-    // substituted through the match; a pin the impl leaves undeclared
-    // passes vacuously (the interface default fills it - I5 refines).
+    // Every pin the REQUEST carries must equal what this impl realizes
+    // for that member: the impl's binding substituted through the match,
+    // else the interface DEFAULT realized at this impl (rustc's
+    // `leaf_def`). A member the interface neither binds nor defaults
+    // fails closed - the request pins something this impl cannot supply.
     for (name, requested) in &interface.pins {
-        if let Some((_, declared)) = facts
+        let supplied = match facts
             .associated_types
             .iter()
             .find(|(declared_name, _)| declared_name == name)
         {
-            let substituted = substitute_bindings(declared, &bindings);
-            if !equivalent_interned(&substituted, requested, eq) {
-                return None;
+            Some((_, declared)) => Some(substitute_bindings(declared, &bindings)),
+            None => {
+                let implemented = InterfaceTarget {
+                    name: facts.interface.name.clone(),
+                    args: facts
+                        .interface
+                        .args
+                        .iter()
+                        .map(|arg| substitute_bindings(arg, &bindings))
+                        .collect(),
+                    pins: facts
+                        .interface
+                        .pins
+                        .iter()
+                        .map(|(pin_name, ty)| {
+                            (pin_name.clone(), substitute_bindings(ty, &bindings))
+                        })
+                        .collect(),
+                };
+                realized_assoc_default(db, &implemented, concrete, name)
             }
+        };
+        match supplied {
+            Some(supplied) if equivalent_interned(&supplied, requested, eq) => {}
+            _ => return None,
         }
     }
     Some(bindings)
@@ -713,8 +845,11 @@ fn bounds_hold(
 }
 
 /// The realized DIRECT-plus-transitive `requires` closure of an
-/// interface reference (excluding itself), fuel-bounded.
-/// Projection-carrying targets stay conservative until I5.
+/// interface reference (excluding itself), fuel-bounded. A `requires`
+/// target mentioning `Self` (`requires Iterable<Item = Self.Item>`)
+/// lowers its pins to Error here - the params-only frame has no `Self`
+/// slot; realizing those pins against the sub-interface's implementor
+/// joins with I6's `Self` work.
 pub fn direct_requires_closure(
     db: &dyn baml_compiler2_ppir::Db,
     root: &InterfaceTarget,
@@ -775,8 +910,8 @@ fn direct_requires(
 }
 
 /// The transitive `requires` closure: whether interface `sub` (with its
-/// realized args) requires `sup`. Projection-carrying requires targets
-/// stay conservative until I5.
+/// realized args) requires `sup`. `Self`-mentioning requires targets
+/// stay conservative until I6 (see `direct_requires_closure`).
 pub fn interface_requires(
     db: &dyn baml_compiler2_ppir::Db,
     sub: &InterfaceTarget,

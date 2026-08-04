@@ -72,8 +72,39 @@ permits `a.eq(b)` on two existentials at type level - tir: fails).
 The I2 frame work made `Self` a real path resolution (the S4-era
 always-Error guard now defers to the frame). In-body impl methods
 reach concrete receivers via the class method list; out-of-body impl
-members join with the symbolic resolvers (I4). 66 of 68 fixtures green. Pending pins: B-1075 pairwise bitwise, I4 operator
-obligations.
+members join with the symbolic resolvers (I4 remainder). I4
+(obligations): rust-analyzer's fulfillment semantics over BAML's facts -
+`Implements`/`Operator` obligations REGISTER during the walk when
+information is missing (never guess), discharge at finish INTERLEAVED
+with bound resolution to fixpoint (stall-on-ambiguity, retried; the
+ground-subset rule for a class's bounds breaks the `?A`/`?O` operator
+deadlock), still-stalled obligations fail CLOSED through finalize.
+Call-site bounds check on generic functions/methods; `a + b` on an
+unsolved generic chains obligations instead of the reduce-interior
+sentinel. I5 (associated types): the `project`/`associated_type_bound`
+facts are live - reduction in rustc's `project.rs` candidate order
+(param-env first: qualifier pin, then carried bounds ELABORATED through
+the requires closure, disagreement = ambiguity = Opaque; then the
+base's own reference; then impl candidates via the registry with
+binding-else-default, rustc's `leaf_def`), defaults lowered ONCE per
+`(interface, assoc)` with symbolic `Self` in the interface frame and
+realized by the shared positional instantiation, declared assoc bounds
+(`type Item extends J`) instantiated as rustc's `explicit_item_bounds`
+for still-rigid projections, and the pin gate in impl matching is exact
+(default-filled, fail-closed). One documented spec DIVERGENCE from
+rustc: a written interface reference fills omitted defaulted members
+(spec: "associated types with defaults may be omitted and will use
+said defaults"), so a bare `T extends Iterator` pins `Error = never`
+through the default - exactly what makes the spec's `first` example
+sound (`throws never` verifies; the fixture is green verbatim, TIR
+fails it). Dotted projection paths (`T.Item`, `Self.Item`, chained
+`T.Item.Sub` through the previous member's bound) lower via the frame;
+`interface_scope_bounds` is the one interface param env every
+interface-scoped lowering shares. Partial throws clauses (`throws T |
+_`, spec Functions rule 3) ride along: the open slot suspends the
+contract check and the surface callers see is declared-union-inferred.
+72 fixtures green, 1 pending pin: B-1075 pairwise bitwise (stdlib
+interfaces, outside this branch).
 
 `baml_language/TYPE_SYSTEM.md` is the correctness authority. It is
 prescriptive: where the current TIR implementation disagrees with it, the spec
@@ -149,8 +180,8 @@ cutover. "Tested by" is the merge gate for the slice.
 | I2  | SHIPPED: param env - frame-keyed bound conjunctions into LowerCtx/Facts, type_var_bound live, carried-bound operator dispatch, projection lowering. Concreteness gating (`is_bounded_arg_admissible`) + call-site bound verification join I4's obligations | bounded-var join absorption, spec's bounded-add verbatim |
 | I3  | SHIPPED: interface fields + methods on existential/rigid receivers (root-wins over requires closure, per-receiver Self, one-Self gate); in-body impl methods via class list. Out-of-body impl members + unions -> I4 symbolic resolvers | existential/bounded method + field fixtures; one-Self rejection pin |
 | I4  | SHIPPED: the obligation worklist (Implements + Operator kinds; register-and-fulfill, stall-on-ambiguity, fixpoint interleave with ground-subset bound resolution, fail-closed). Probe = table snapshot/rollback when candidate selection needs it. Out-of-body impl members + union receivers + symbolic resolvers remain here | operator-deferral fixtures (single + chained); reduce interior sentinel gone |
-| I5  | Associated types: projections, bindings, defaults, fuel              | traits-tier fixtures; stdlib `Iterator` shapes         |
-| I6  | `Self` + interface default-method bodies as inference roots          | default-body fixtures                                  |
+| I5  | DONE - projection reduction (rustc candidate order), assoc defaults + declared bounds, exact pin gate, partial throws | spec `first` example verbatim; `partial_throws_clause` |
+| I6  | `Self` + interface default-method bodies as inference roots; `Self` in `requires` targets (closure pins) | default-body fixtures                                  |
 | S12 | SHIPPED: callable_throws salsa fixpoint; effect vars default never; lambda channels; catch residual on the error channel; declared-clause contracts incl. rigid vars (B-1082). `throws T \| _` partials join with obligations (I4) | throws + catch fixtures |
 | S13 | SHIPPED: finalize - resolve-all to fixpoint (minimum-upper meets, all-equal-lowers agreement), local Infer-to-Error erasure (rulings 2/3; r-a's replace-with-error discipline), post-substitution union re-canonicalization (null-last at this crate's boundary). Diagnostics land with S17 | `[]`-inference fixtures; no-infer-leak invariant |
 | I7  | Coherence overlap moves in (existing ACI engine, unchanged)          | differential vs TIR on coherence diagnostic fixtures   |

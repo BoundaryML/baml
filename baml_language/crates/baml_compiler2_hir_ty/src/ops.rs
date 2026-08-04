@@ -8,7 +8,7 @@
 
 use baml_type::{Name, TypeName, interned::Ty};
 
-use crate::impls::{InterfaceTarget, resolve_impl, substitute_bindings};
+use crate::impls::{InterfaceTarget, resolve_impl, resolved_pin};
 
 /// The `Output` of the unique impl matching `baml.ops.<interface><rhs>`
 /// for `lhs`, or `None` when the operands do not support the operator.
@@ -29,10 +29,8 @@ pub fn operator_output(
         pins: Vec::new(),
     };
     let resolved = resolve_impl(db, lhs, &target)?;
-    let (_, output) = resolved
-        .facts
-        .associated_types
-        .iter()
-        .find(|(name, _)| name.as_str() == "Output")?;
-    Some(substitute_bindings(output, &resolved.bindings))
+    // Binding-else-default through the shared `leaf_def` read, so an
+    // operator interface with a defaulted `Output` resolves like any
+    // other associated member.
+    resolved_pin(db, &resolved, lhs, &Name::new("Output"))
 }

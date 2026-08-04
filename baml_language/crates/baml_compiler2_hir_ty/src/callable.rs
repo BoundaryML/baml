@@ -58,8 +58,13 @@ pub fn callable_throws<'db>(
     if let Some(throws_ref) = data.throws {
         let frame = crate::lower::function_generic_frame(db, function);
         let ctx = crate::lower::lower_ctx_for_file(db, function.file(db)).with_frame(frame);
-        let lowered = crate::lower::reject_holes(&ctx.lower_type_ref(&data.type_refs, throws_ref));
-        return CallableThrows(lowered.to_plain());
+        let lowered = ctx.lower_type_ref(&data.type_refs, throws_ref);
+        // A PARTIAL clause (`throws T | _`, spec Functions rule 3) keeps
+        // inferring: fall through to the body run, whose finalize unions
+        // the named members with the inferred set.
+        if !crate::lower::throws_clause_parts(&lowered).1 {
+            return CallableThrows(crate::lower::reject_holes(&lowered).to_plain());
+        }
     }
     let result =
         crate::infer::infer_body(db, baml_compiler2_hir::body::BodyOwnerId::Function(function));
