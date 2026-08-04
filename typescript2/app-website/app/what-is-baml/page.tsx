@@ -5,6 +5,7 @@ import { DiscordCta } from '@/components/discord-cta';
 import { EapCta } from '@/components/eap-cta';
 import { FooterSection } from '@/components/footer-section';
 import { Navbar } from '@/components/navbar';
+import { Acquirer } from './_components/acquirer';
 import { DroppedFootnote } from './_components/dropped-footnote';
 import { LostEvents } from './_components/lost-events';
 import { RoomRebus } from './_components/room-rebus';
@@ -25,18 +26,27 @@ export const metadata = createMetadata({
 const INK = '#1A1612';
 const MUTED = '#5C5852';
 
-// {lamb} renders the BAML mark inline, standing in for a letter.
+// {lamb} stands in for a letter mid-word (Sh{lamb}t). A bare "BAML" only gets
+// the mark when it opens a sentence: marking every mention put too much purple
+// on the page. Lowercase `baml` is the CLI, never the wordmark.
 function withLamb(text: string, prefix: number) {
-  const chunks = text.split('{lamb}');
-  return chunks.map((chunk, i) => (
-    // biome-ignore lint/suspicious/noArrayIndexKey: positional split output
-    <span key={`${prefix}-${i}`}>
-      {chunk}
-      {i < chunks.length - 1 ? (
-        <img alt="" className="wib-inline-lamb" src="/bamllogopurple.svg" />
-      ) : null}
-    </span>
-  ));
+  return text.split(/(\{lamb\}|(?<=^|[.!?]\s)BAML)/).map((chunk, i) => {
+    const key = `${prefix}-${i}`;
+    if (chunk === '{lamb}') {
+      return (
+        <img alt="" className="wib-inline-lamb" key={key} src="/bamllogopurple.svg" />
+      );
+    }
+    if (chunk === 'BAML') {
+      return (
+        <span className="baml-mark" key={key}>
+          <img alt="" src="/bamllogopurple.svg" />
+          BAML
+        </span>
+      );
+    }
+    return <span key={key}>{chunk}</span>;
+  });
 }
 
 // Body copy supports `code` spans, [label](href) links, and {lamb}.
@@ -137,7 +147,7 @@ const PLATFORMS = [
 const HOSTS = [
   { icon: '/logos/python.svg', name: 'Python' },
   { icon: '/logos/nodejs.svg', name: 'TypeScript', tag: 'Node' },
-  { icon: '/logos/wasm.svg', name: 'TypeScript', tag: 'WASM' },
+  { icon: '/logos/wasm.svg', name: 'TypeScript', tag: 'Web' },
   { icon: '/logos/java.svg', name: 'Java' },
   { icon: '/logos/csharp.svg', name: 'C#' },
   { icon: '/logos/dotnet.svg', name: '.NET' },
@@ -158,11 +168,19 @@ type Section = {
   id: string;
   num: number;
   title: string;
+  // Placeholder art for the elephant-in-the-room sections.
+  art?: string;
+  // A shouted line that reads as a sign, not a sentence. The prose underneath
+  // starts fresh rather than trying to flow out of it.
+  sign?: string;
   body: string;
   hook?: string;
   // The business section has neither: no explorer, no deep-dive link.
   readMore?: string;
   tabs?: (string | Tab)[];
+  // Adoption is a two-axis explorer instead of tabs: pick a BAML feature and a
+  // host language, see that one definition cross the bridge.
+  matrix?: { features: string[]; languages: string[] };
 };
 
 const SECTIONS: Section[] = [
@@ -172,15 +190,15 @@ const SECTIONS: Section[] = [
     title: 'AI functions',
     body: 'Calling a model should feel like calling a function, not wiring up an SDK. In BAML it’s a typed function: declare the input and output types, get structured data back. Malformed output gets repaired against your types by schema-aligned parsing, so every model gets better at structured output.',
     readMore: 'AI functions in BAML',
+    // Flat by design. The variants inside these (Heal JSON's malformed /
+    // missing / wrong-type cases, Switch Models' provider list) are toggles
+    // that swap one line of the snippet, not sub-tabs.
     tabs: [
-      'Typed call',
-      {
-        name: 'Self-healing',
-        sub: ['malformed JSON', 'missing field', 'wrong type'],
-      },
-      { name: 'Streaming', sub: ['partial objects', 'tokens'] },
-      { name: 'Reliability', sub: ['swap models', 'retries', 'fallbacks'] },
-      { name: 'Agents', sub: ['tool calling', 'voice'] },
+      'AI Functions',
+      'Heal JSON',
+      'Streaming',
+      'Switch Models',
+      'AI Classes',
     ],
   },
   {
@@ -190,61 +208,106 @@ const SECTIONS: Section[] = [
     body: 'Every invariant you can’t enforce is one an agent will eventually violate. Start with type erasure: we don’t do it, so there’s no `any` or unchecked cast for a model to hide behind. In BAML, invalid states don’t compile.',
     hook: 'there are no escape hatches for an agent to grab.',
     readMore: 'The BAML language',
-    tabs: ['no any', 'exhaustive match', 'typed errors', 'invalid state'],
+    tabs: ['No Any', 'switch < match', 'Typed Errors', 'Local Reasoning'],
   },
   {
     id: 'observability',
     num: 3,
     title: 'Observability and profiling',
-    body: 'Observability only pays off in hindsight: if you knew what to trace, you’d have traced it already. BAML traces every function by default. 6x faster than OTEL in Rust, 200x faster than in Python, and writes traces 1000x smaller, which is why it can stay on, even in prod.',
+    body: 'Agents write more code than any human can read. Telemetry is the only way to understand what happened. BAML traces every function instead of sampling a percentage. It’s 6x faster than OpenTelemetry in Rust, 200x faster in Python, and the traces 1000x smaller.',
     readMore: 'How BAML keeps tracing fast enough to always leave on',
-    tabs: ['traced run', 'profiler', 'agent reads trace'],
+    tabs: ['Always-on Observability', 'Data Enrichment', 'Agents Using Traces'],
   },
   {
     id: 'tooling',
     num: 4,
     title: 'Agent-first toolchain',
-    body: 'For ten years, tooling was built for humans: LSPs, autocomplete, breakpoints, hover docs. It’s about time the real author of the code got fair treatment. An LSP for you, `baml describe` and friends for them. And a really fast compiler for both.',
+    body: 'For decades, tooling was built for humans: LSPs, autocomplete, hover docs. It’s about time the real author of the code got fair treatment. An LSP for you, `baml describe` and friends for them. And a really fast compiler for both.',
     readMore: 'The BAML toolchain',
-    tabs: ['baml describe', 'baml run', 'baml run -e', 'baml pack'],
+    tabs: [
+      'Compile Faster',
+      'Build Cheaper',
+      'Search Better',
+      'Run Directly',
+      'Ship Anywhere',
+    ],
   },
   {
     id: 'workflows',
     num: 4,
     title: 'Workflow primitives',
-    body: 'How has everyone accepted async as a good idea? Every agent framework is trying to do concurrency on top of languages that lack it. Like Go, BAML has green threads. Unlike Go, you can await what they return.',
+    body: 'How has everyone accepted async as a good idea? Half your codebase ends up as two copies of the same function, one sync and one async. Like Go, BAML has green threads. Unlike Go, you can await what they return.',
     readMore: 'Workflows in BAML',
-    tabs: ['concurrency', 'cancellation', 'retries', 'why not async'],
+    tabs: [
+      'No Function Coloring',
+      'Cancel Anything',
+      'Limit Concurrency',
+      'Customize Execution',
+    ],
   },
   {
     id: 'evals',
     num: 5,
     title: 'Better testing',
-    body: 'Engineers spent twenty years squashing flaky tests. Then models made every test flaky by definition. BAML tests can grade distributions. Cases can be hard-coded examples, golden datasets, or real prod traces. Yesterday’s outage becomes today’s regression test.',
+    body: 'Engineers spent twenty years squashing flaky tests. Then AI made everything flaky. BAML tests can grade distributions. Cases can be hard-coded examples, golden datasets, or real prod traces.',
     readMore: 'Evals in BAML',
-    tabs: ['testset from data', 'from prod trace', 'Quorum', 'PassRate', 'LLM judge'],
+    tabs: ['Batteries Included', 'Tests from Data', 'Handle Flakiness'],
   },
   {
     id: 'adopting',
     num: 6,
-    // The 🐘 marks the two elephant-in-the-room sections: will I have to
-    // rewrite everything, and how do these people make money.
-    title: '🐘 Incremental adoption',
-    body: 'We’re not going to pretend you should rewrite your codebase in BAML. That’s how working systems become broken ones. You can write a whole app in BAML if you want. But we went the extra mile in the other direction: every type, every function, every method crosses the bridge to your language. Even generics. Even lambdas. Sh{lamb}t just works.',
+    // {elephant} marks the four elephant-in-the-room sections: will I have to
+    // rewrite everything, can models write this, where are the packages, and
+    // how do these people make money. The art is a placeholder until the
+    // generated lamb/elephant images land.
+    art: '/elephants/elephant-adoption.png',
+    title: '{elephant} I’m hyped. How do I port my codebase to BAML?',
+    sign: 'Do not rewrite your codebase in BAML.',
+    body: 'You can if you want. But we went the extra mile in the other direction: every type, every function, every method crosses the bridge to your language. Even generics. Even lambdas. Sh{lamb}t just works.',
     readMore: 'Incremental adoption',
-    tabs: ['call from Python', 'call from TypeScript', 'pass a lambda', 'generics'],
+    matrix: {
+      features: ['Function', 'Type', 'Error', 'Method', 'Generic', 'Lambda'],
+      languages: [
+        'Python',
+        'TypeScript',
+        'Go',
+        'Rust',
+        'Java',
+        'C#',
+        'C++',
+        'Kotlin',
+        'Swift',
+      ],
+    },
+  },
+  {
+    id: 'models-write',
+    num: 7,
+    art: '/elephants/elephant-models.png',
+    title: '{elephant} Can models actually write BAML?',
+    body: 'Decide for yourself. BAML reads like TypeScript and is already an official language on GitHub, so models should know most of it. We don’t leave the rest up to vibes. We measure how agents write programs: how long it takes, what it costs, how many turns. `baml describe` wasn’t a coincidence. It’s a science.\nAnd remember, today is the worst the models will ever be at BAML.',
+    readMore: 'agent-tries-baml',
+  },
+  {
+    id: 'packages',
+    num: 8,
+    art: '/elephants/elephant-packages.png',
+    title: '{elephant} Is there an ecosystem?',
+    body: '`npm install is-even`. It depends on `is-odd`? That depends on `is-number`?! 🤯 We’re rethinking package management from first principles. For now, we’ve shipped a thorough standard library. For anything else, ask Claude to port what you need, or pass functions over the bridge.\nBesides, no packages means no supply chain attacks. QED.',
   },
   {
     id: 'money',
-    num: 7,
-    title: '🐘 Making money?',
-    body: 'Yes please. BAML is and always will be open: Apache-2, free, no internet required. The Boundary Cloud starts with observability, but when you create the language, the runtime, and the tracing layer, you can build things nobody else can. And we think you’ll love paying for some of them. The language took two years to build, the cloud needs about three more months. [Reach out](mailto:vbv@boundaryml.com?subject=I%20want%20to%20send%20BAML%20monies) if you want in early.',
+    num: 9,
+    art: '/elephants/elephant-money.png',
+    title: '{elephant} Are you trying to get bought by {acquirer}?',
+    body: 'No thank you. The BAML language is and will always be open: Apache-2, free, no internet required. We’re building Boundary Web Services, and it starts with observability, because when you create the language, the runtime, and the tracing layer, you can build things nobody else can. And we think you’ll love paying for some of them. Some of you will want to build your own cloud. Godspeed. The language took two years to build, the cloud needs about three more months. [Reach out](mailto:vbv@boundaryml.com?subject=I%20want%20to%20send%20BAML%20monies) if you want in early.',
   },
 ];
 
 const CSS = `
 .wib {
-  --ink: ${INK}; --muted: ${MUTED}; --faint: #A79E90; --border: #D9D3C4; --panel: #FBF8F1; --accent: #6D28D9;
+  /* Very light purple ground, replacing the cream that read as AI-generated. */
+  --ink: ${INK}; --muted: ${MUTED}; --faint: #9E9AAB; --border: #DDD8E8; --panel: #F7F5FC; --accent: #6D28D9;
   --mono: var(--font-geist-mono), ui-monospace, SFMono-Regular, Menlo, monospace;
   /* type scale */
   --fs-display: clamp(30px, 4.5vw, 42px);
@@ -274,7 +337,15 @@ const CSS = `
 .wib-code .tok-type { color: #0E7490; }
 
 .wib-hero h1 { font-size: var(--fs-display); font-weight: 640; letter-spacing: -0.02em;
-  line-height: 1.06; margin: 0 0 var(--sp-7); }
+  line-height: 1.06; margin: 0 0 var(--sp-5); }
+/* Says what BAML is before anything says how it is different. Everything below
+   is contrast, and contrast needs a subject. */
+.wib-acro { color: var(--accent); font-weight: 700; }
+/* reads as a sign rather than a shouted sentence: its own line, spaced out */
+.wib-sign { margin: 0 0 var(--sp-3); font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.06em; color: var(--accent); font-size: var(--fs-body); }
+.wib-deck { margin: 0 0 var(--sp-7); font-size: var(--fs-lead); font-weight: 400;
+  line-height: 1.5; color: var(--ink); }
 .wib-hero p { color: #2b2620; margin: 0 0 var(--sp-4); font-size: var(--fs-lead); line-height: 1.5; }
 .wib-borrow-list { margin: var(--sp-3) 0 var(--sp-2); padding: 0; list-style: none; font-size: var(--fs-lead);
   display: flex; flex-direction: column; gap: var(--sp-2); color: var(--ink); }
@@ -346,6 +417,17 @@ a.wib-feature:hover { text-decoration: none; transform: translateY(-2px);
 .wib-hosts li.soon { color: var(--faint); border-color: #EDE7D9; background: transparent; }
 .wib-hosts li.soon img { opacity: 0.3; filter: saturate(0.5); }
 .wib-hosts li.soon .host-tag { background: #fff; border-color: #E4DCCB; color: var(--faint); }
+/* Sits right after the incremental-adoption card, so the ask lands the moment
+   the reader learns they don't have to rewrite anything, rather than only at
+   the foot of the page. The full unit, with the editor picker, is at #try-baml.
+   Width matches the install unit's own 560px so the header lines up with it. */
+.wib-try-top { margin: var(--sp-5) 0 0; max-width: 560px; }
+.wib-try-h { display: flex; flex-wrap: wrap; align-items: baseline;
+  justify-content: space-between; gap: var(--sp-2); margin: 0 0 var(--sp-3); }
+.wib-try-h-t { font-family: var(--mono); font-size: var(--fs-label);
+  letter-spacing: 0.1em; text-transform: uppercase; color: #a79a80; }
+/* the way out for anyone not ready to install yet */
+.wib-try-h-alt { font-size: var(--fs-meta); color: var(--muted); }
 .wib-lead { margin: var(--sp-8) 0 var(--sp-4); font-size: var(--fs-lead); color: var(--ink); }
 .wib-cards { display: grid; grid-template-columns: repeat(2, 1fr); gap: var(--sp-3); margin: 0 0 var(--sp-2); }
 a.wib-card { display: block; padding: var(--sp-4) var(--sp-5); border: 1px solid var(--border); border-radius: var(--r-md);
@@ -386,6 +468,22 @@ a.wib-card:hover { text-decoration: none; border-color: #cdbfa4; transform: tran
 .wib-room.is-explained .wib-room-cap { opacity: 1; }
 .wib-section { margin: var(--sp-16) 0 0; scroll-margin-top: var(--anchor-offset); }
 .wib-section h2 { font-size: var(--fs-h2); font-weight: 640; letter-spacing: -0.015em; margin: 0 0 var(--sp-4); }
+/* body paragraphs: a real gap between them, none after the last */
+.wib-section > p { margin: 0 0 var(--sp-4); }
+.wib-section > p:last-of-type { margin-bottom: 0; }
+/* placeholder art for the elephant sections; swap the images, not the CSS */
+.wib-elephant { height: 1.1em; width: auto; display: inline-block;
+  vertical-align: -0.12em; margin-right: 0.3em; }
+/* cycling acquirer name: the ghost copy holds the width so the line never reflows */
+.acq { position: relative; display: inline-grid; vertical-align: baseline; }
+.acq-ghost, .acq-name { grid-area: 1 / 1; white-space: nowrap; }
+.acq-ghost { visibility: hidden; }
+.acq-name { color: var(--accent); transition: opacity 260ms ease, transform 260ms ease; }
+.acq-name--out { opacity: 0; transform: translateY(-0.18em); }
+@media (prefers-reduced-motion: reduce) {
+  .acq-name { transition: none; }
+  .acq-name--out { opacity: 1; transform: none; }
+}
 .wib-more { margin: var(--sp-4) 0 0; font-size: var(--fs-meta); }
 
 .wib-art { margin: var(--sp-6) 0 0; border: 1px dashed #c9bfac; border-radius: var(--r-md); background: #fdfbf5;
@@ -451,6 +549,17 @@ a.wib-card:hover { text-decoration: none; border-color: #cdbfa4; transform: tran
   min-width: 7.5em; }
 .wib-art-tab--sub { background: transparent; border-style: dashed; }
 .wib-art-note { margin: var(--sp-4) 0 0; font-size: var(--fs-meta); color: #a79a80; }
+/* adoption matrix: wide, so it scrolls inside itself rather than the page */
+.wib-matrix-scroll { overflow-x: auto; }
+.wib-matrix { border-collapse: collapse; font-family: var(--mono);
+  font-size: var(--fs-label); color: var(--muted); }
+.wib-matrix th { font-weight: 500; text-align: left; padding: var(--sp-1) var(--sp-2);
+  white-space: nowrap; }
+.wib-matrix thead th { color: var(--faint); }
+.wib-matrix tbody th { color: var(--ink); padding-right: var(--sp-3); }
+.wib-matrix td { padding: 2px; }
+.wib-matrix-cell { display: block; width: 100%; height: 18px; min-width: 42px;
+  border: 1px dashed var(--border); border-radius: var(--r-xs); background: #fff; }
 
 /* Floating Try BAML. Rides along while you read, steps aside when the real
    install unit is on screen. */
@@ -481,6 +590,72 @@ a.wib-fab img { height: 1.1em; width: auto; }
   .wib { padding: var(--sp-12) var(--sp-4) var(--sp-24); }
 }
 `;
+
+// Section titles can carry two tokens: {elephant} renders the section's art
+// (placeholder until the generated lamb/elephant images land) and {acquirer}
+// renders the cycling company name.
+function renderTitle(s: Section) {
+  return s.title.split(/(\{elephant\}|\{acquirer\})/).map((part, i) => {
+    if (part === '{elephant}') {
+      return s.art ? (
+        // biome-ignore lint/suspicious/noArrayIndexKey: positional split
+        <img alt="" className="wib-elephant" key={i} src={s.art} />
+      ) : null;
+    }
+    if (part === '{acquirer}') {
+      // biome-ignore lint/suspicious/noArrayIndexKey: positional split
+      return <Acquirer key={i} />;
+    }
+    // biome-ignore lint/suspicious/noArrayIndexKey: positional split
+    return <span key={i}>{part}</span>;
+  });
+}
+
+// Adoption's explorer: one axis of BAML features, one of host languages. Click
+// a cell to see that definition cross the bridge. Grid shown so the shape of
+// the thing is legible before it is interactive.
+function MatrixPlaceholder({
+  features,
+  languages,
+}: NonNullable<Section['matrix']>) {
+  return (
+    <div className="wib-art">
+      <div className="wib-art-h">
+        <span>two-axis explorer</span>
+        <span>placeholder</span>
+      </div>
+      <div className="wib-matrix-scroll">
+        <table className="wib-matrix">
+          <thead>
+            <tr>
+              <th />
+              {languages.map((l) => (
+                <th key={l}>{l}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {features.map((f) => (
+              <tr key={f}>
+                <th scope="row">{f}</th>
+                {languages.map((l) => (
+                  <td key={l}>
+                    <span className="wib-matrix-cell" />
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <p className="wib-art-note">
+        Pick a feature and a language. One BAML definition on the left, the
+        generated interface and usage on the right. Click a cell to zoom in,
+        escape to zoom back out.
+      </p>
+    </div>
+  );
+}
 
 function Placeholder({ tabs }: { tabs: (string | Tab)[] }) {
   const rows = tabs.map((t) => (typeof t === 'string' ? { name: t } : t));
@@ -525,20 +700,25 @@ export default function WhatIsBamlPage() {
       <main className="wib">
         <div className="wib-hero">
           <h1>Modern programming languages weren&rsquo;t built for agents.</h1>
+          <p className="wib-deck">
+            {inline('BAML is ')}
+            {/* the initials spell it out, so they carry the mark's color */}
+            <span className="wib-acro">B</span>asically{' '}
+            <span className="wib-acro">A</span>{' '}
+            <span className="wib-acro">M</span>ade-up{' '}
+            <span className="wib-acro">L</span>anguage.
+          </p>
           <p>
-            We built{' '}
-            <span className="baml-mark">
-              <img src="/bamllogopurple.svg" alt="" />
-              BAML
-            </span>{' '}
-            to fight slop. That means no escape hatches (like{' '}
+            We designed it to fight slop. As you read the code, it should feel
+            like TypeScript (unions,
+            generics, lambdas), but with no escape hatches (like{' '}
             <code className="wib-code">
               <span className="tok-kw">as</span>{' '}
               <span className="tok-type">any</span>
             </code>
-            ). Almost everything else feels like TypeScript (unions, generics,
-            lambdas). BAML has the:
+            ).
           </p>
+          <p>{inline('BAML has the:')}</p>
           <ul className="wib-borrow-list">
             {BORROWS.map((b) => (
               <li className={b.cls} key={b.lang}>
@@ -573,7 +753,7 @@ export default function WhatIsBamlPage() {
 
         <a className="wib-feature" href="#adopting">
           <span className="wib-feature-t">Incremental adoption</span>
-          <p className="wib-feature-l">BAML runs standalone on:</p>
+          <p className="wib-feature-l">{inline('BAML runs standalone on:')}</p>
           <ul className="wib-hosts">
             {PLATFORMS.map((p) => (
               <li key={p.name}>
@@ -598,22 +778,37 @@ export default function WhatIsBamlPage() {
             ))}
           </ul>
           <p className="wib-hosts-note">
-            But not JavaScript. We only support languages that took more than 10
-            days to build.
+            But not JavaScript. Never JavaScript. Plz stop.
           </p>
           <p className="wib-feature-l">
-            Type-safe like OpenAPI, but performant like FFI.
+            Type-safe like OpenAPI, but capable like FFI.
           </p>
         </a>
+
+        <div className="wib-try-top">
+          <div className="wib-try-h">
+            <span className="wib-try-h-t">Try BAML</span>
+            <span className="wib-try-h-alt">
+              or keep scrolling to see code
+            </span>
+          </div>
+          <TryBaml compact />
+        </div>
 
         {SECTIONS.map((s) => (
           <Fragment key={s.id}>
             {/* rebus: the two elephants sit inside the O's */}
             {s.id === 'adopting' ? <RoomRebus /> : null}
             <section className="wib-section" id={s.id}>
-            <h2>{s.title}</h2>
-            <p>{inline(s.body)}</p>
+            <h2>{renderTitle(s)}</h2>
+            {s.sign ? <p className="wib-sign">{s.sign}</p> : null}
+            {/* a newline in body starts a new paragraph */}
+            {s.body.split('\n').map((para, i) => (
+              // biome-ignore lint/suspicious/noArrayIndexKey: positional split
+              <p key={i}>{inline(para)}</p>
+            ))}
             {s.id === 'observability' ? <LostEvents /> : null}
+            {s.matrix ? <MatrixPlaceholder {...s.matrix} /> : null}
             {s.tabs?.length ? <Placeholder tabs={s.tabs} /> : null}
             {s.readMore ? (
               <p className="wib-more">
