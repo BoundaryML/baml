@@ -4,9 +4,9 @@ expression: report
 ---
 files: 115
 nodes compared: 60439
-agreements: 47894
+agreements: 47996
 one-sided (coverage): 206
-conflicts: 12339 across 1875 distinct pairs
+conflicts: 12237 across 1872 distinct pairs
 hir_ty error-channel entries: 2680
 tir diagnostics: 0
 panics: 0
@@ -2703,7 +2703,7 @@ ns_yaml/yaml.baml:3792..3964 `{\n    {\n...l\n    }\n}`: expected void, got null
 [626x] hir_ty=[!error] tir=[string]
     at ns_arrays/sort_comparable.baml:1490..1496 `string`
     at ns_arrays/sort_comparable.baml:1515..1521 `string`
-[557x] hir_ty=[!error] tir=[int]
+[555x] hir_ty=[!error] tir=[int]
     at ns_array_rest_binding/array_rest_binding.baml:709..713 `r[0]`
     at ns_array_rest_binding/array_rest_binding.baml:709..719 `r[0] * 100`
 [276x] hir_ty=[!error] tir=[float]
@@ -2736,9 +2736,6 @@ ns_yaml/yaml.baml:3792..3964 `{\n    {\n...l\n    }\n}`: expected void, got null
 [89x] hir_ty=[!error] tir=[unknown]
     at ns_bigints/bigints.baml:21883..21896 `(42n).to_json`
     at ns_bigints/bigints.baml:21961..21992 `(999999999...9n).to_json`
-[87x] hir_ty=[!error] tir=[uint8array]
-    at ns_byte_strings/byte_strings.baml:1065..1096 `{\n    let...;\n    x\n}`
-    at ns_byte_strings/byte_strings.baml:1071..1076 `let x`
 [86x] hir_ty=[baml.json.json] tir=[int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>]
     at ns_from_json_interface/from_json_interface.baml:4211..4232 `let j: baml.json.json`
     at ns_from_json_interface/from_json_interface.baml:4318..4319 `j`
@@ -2781,9 +2778,6 @@ ns_yaml/yaml.baml:3792..3964 `{\n    {\n...l\n    }\n}`: expected void, got null
 [46x] hir_ty=[!error] tir=[(self: baml.TypeValue, other: type) -> bool throws never]
     at ns_interfaces/interfaces.baml:25124..25161 `reflect.ty....implements`
     at ns_interfaces/interfaces.baml:25475..25513 `reflect.ty....implements`
-[46x] hir_ty=[!error] tir=[int | null]
-    at ns_arrays/sort_comparable.baml:4507..4518 `other.value`
-    at ns_byte_strings/byte_strings.baml:1726..1791 `{\n    let...ta.at(0)\n}`
 [45x] hir_ty=[1] tir=[int]
     at ns_cancel_cascade/cancel_cascade.baml:3497..3498 `1`
     at ns_closures/closures.baml:2670..2671 `1`
@@ -2796,6 +2790,9 @@ ns_yaml/yaml.baml:3792..3964 `{\n    {\n...l\n    }\n}`: expected void, got null
 [42x] hir_ty=[int] tir=[int | string]
     at ns_is_operator/is_operator.baml:1538..1557 `let v: int | string`
     at ns_is_operator/is_operator.baml:1567..1568 `v`
+[40x] hir_ty=[!error] tir=[int | null]
+    at ns_arrays/sort_comparable.baml:4507..4518 `other.value`
+    at ns_csv/csv_smoke.baml:3038..3055 `rec.get<int>("n")`
 [38x] hir_ty=[!error] tir=[() -> int throws never]
     at ns_arrays/sum.baml:1917..1930 `int.max_value`
     at ns_arrays/sum.baml:2193..2206 `int.max_value`
@@ -3426,9 +3423,6 @@ ns_yaml/yaml.baml:3792..3964 `{\n    {\n...l\n    }\n}`: expected void, got null
 [5x] hir_ty=[!error] tir=[(msg: string) -> string throws never]
     at ns_interfaces/interfaces.baml:8248..8259 `default.log`
     at ns_interfaces/interfaces.baml:49119..49130 `default.log`
-[5x] hir_ty=[!error] tir=[(self: baml.Uint8Array, index: int) -> int | null throws never]
-    at ns_byte_strings/byte_strings.baml:1779..1786 `data.at`
-    at ns_byte_strings/byte_strings.baml:4082..4100 `b"\x41\x42\x43".at`
 [5x] hir_ty=[!error] tir=[(self: baml.future.Future<int, never>) -> bool throws never]
     at ns_future_methods/future_methods.baml:800..812 `f.is_settled`
     at ns_future_methods/future_methods.baml:824..835 `f.is_result`
@@ -4206,9 +4200,6 @@ ns_yaml/yaml.baml:3792..3964 `{\n    {\n...l\n    }\n}`: expected void, got null
 [2x] hir_ty=[!error] tir=[(self: baml.Float, exp: float) -> float throws never]
     at ns_floats/floats.baml:13468..13483 `float.nan().pow`
     at ns_floats/floats.baml:13555..13570 `float.nan().pow`
-[2x] hir_ty=[!error] tir=[(self: baml.Uint8Array) -> int throws never]
-    at ns_byte_strings/byte_strings.baml:3895..3910 `b"hello".length`
-    at ns_byte_strings/byte_strings.baml:3979..3989 `b"".length`
 [2x] hir_ty=[!error] tir=[(self: int[], item: int) -> int throws never]
     at ns_arrays/arrays.baml:35482..35494 `grid[0].push`
     at ns_arrays/arrays.baml:36002..36014 `grid[0].push`

@@ -465,6 +465,12 @@ impl<'db> InferenceContext<'db> {
                 TyAttr::default(),
             )),
             Expr::Null => Ty::null(),
+            // A byte-string literal (`b"..."`) IS a `uint8array` value -
+            // its own expr kind, not a `Literal` (no literal TYPE per
+            // byte-string; TIR agrees).
+            Expr::ByteStringLiteral(_) => Ty::intern(TyKind::Uint8Array {
+                attr: TyAttr::default(),
+            }),
             Expr::Path(segments) => self.resolve_value_path(expr, segments),
             Expr::Block { stmts, tail_expr } => {
                 let entry_diverges = self.diverges;
