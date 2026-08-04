@@ -108,7 +108,7 @@ impl<'db> LowerCtx<'db> {
             }
             TypeRefKind::List { inner } => Ty::list(self.lower_type_ref(store, *inner)),
             TypeRefKind::Map { key, value } => Ty::intern(TyKind::Map {
-                key: self.lower_type_ref(store, *key),
+                key: self.checked_map_key(self.lower_type_ref(store, *key)),
                 value: self.lower_type_ref(store, *value),
                 attr: attr(),
             }),
@@ -290,6 +290,28 @@ impl<'db> LowerCtx<'db> {
         }
     }
 
+    /// Map keys are strings by the language's contract: the VM's backing
+    /// store assumes it, map literals cannot spell a non-string key, and
+    /// `baml.Map`'s docstring states it (B-267). A key type PROVABLY not
+    /// a subtype of `string` lowers to the Error sentinel (the lowering
+    /// discipline for invalid positions; S17 renders the diagnostic).
+    /// Symbolic keys - rigid vars (the stdlib's own `Map<K, V>` scope),
+    /// inference holes, error recovery - stay untouched, fail-safe.
+    fn checked_map_key(&self, key: Ty) -> Ty {
+        if key.has_infer() || key.has_typevar() || key.has_error() {
+            return key;
+        }
+        let facts = crate::facts::Facts::new(self.db);
+        let string = Ty::intern(TyKind::String {
+            attr: TyAttr::default(),
+        });
+        if baml_type::normalize::is_subtype_interned(&key, &string, &facts) {
+            key
+        } else {
+            Ty::error()
+        }
+    }
+
     // -- Path resolution -------------------------------------------------------
 
     /// Lowers a resolved (or fallback-resolved) type path. Mirrors TIR's
@@ -383,7 +405,18 @@ impl<'db> LowerCtx<'db> {
                 let data = baml_compiler2_ppir::item_data::class_data(self.db, class_loc);
                 enforce_arity(&mut args, data.generic_params.len());
                 let qtn = self.qualify(def, short);
-                class_ty(qtn, args)
+                let ty = class_ty(qtn, args);
+                // The `baml.Map<K, V>` spelling bridges to the structural
+                // map (B-1080), so it gets the same key validation as the
+                // `map<k, v>` syntax.
+                if let TyKind::Map { key, value, attr } = ty.kind() {
+                    return Ty::intern(TyKind::Map {
+                        key: self.checked_map_key(key.clone()),
+                        value: value.clone(),
+                        attr: attr.clone(),
+                    });
+                }
+                ty
             }
             Definition::Interface(interface_loc) => {
                 let data = baml_compiler2_ppir::item_data::interface_data(self.db, interface_loc);
