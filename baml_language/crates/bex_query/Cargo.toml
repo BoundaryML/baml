@@ -27,8 +27,10 @@ default = ["native"]
 native = ["dep:memmap2"]
 
 [dependencies]
+base64 = { workspace = true }
 bex_events = { workspace = true }
 memmap2 = { workspace = true, optional = true }
+prost = { workspace = true }
 rustc-hash = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

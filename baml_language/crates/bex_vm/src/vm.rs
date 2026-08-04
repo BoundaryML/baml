@@ -117,6 +117,9 @@ pub struct VmCaptureMask {
 
 pub struct VmCallInputCapture<'a> {
     pub call: TraceCallKey,
+    /// The callee's profiling function id (dictionary/prof id space);
+    /// `0` = unassigned (synthetic frames, host closures).
+    pub function_id: u32,
     pub entries: &'a [(String, Value)],
     pub heap: &'a BexHeap,
     pub permit: PermitProof<'a>,
@@ -181,6 +184,9 @@ pub enum VmCallCaptureKind {
 pub struct VmCallCaptureEvent {
     pub thread_id: u64,
     pub call_id: u64,
+    /// The captured call's profiling function id (same id space as the
+    /// prof `CallFunction` records); `0` = unassigned.
+    pub function_id: u32,
     pub kind: VmCallCaptureKind,
     pub value: Value,
 }
@@ -222,6 +228,10 @@ pub struct BytecodeFrame {
     pub(crate) parent_call_id: u64,
     /// Resolved output/error capture behavior for this bytecode call.
     pub(crate) capture_mask: VmCaptureMask,
+    /// The callee's profiling function id — the same value `prof_enter_call`
+    /// records — so return/unwind capture sites can stamp value captures
+    /// with function identity. `0` = unassigned (synthetic entry frames).
+    pub(crate) function_id: u32,
 }
 
 impl RootHaver for BytecodeFrame {
@@ -322,6 +332,7 @@ pub(crate) mod tests {
             current_call_id: 0,
             pending_sysop_call_id: None,
             pending_sysop_capture_mask: VmCaptureMask::disabled(),
+            pending_sysop_function_id: 0,
             value_capture_auto_enabled: false,
             pending_call_captures: Vec::new(),
             call_input_capture_hook: None,
@@ -700,6 +711,11 @@ pub struct BexVm {
     /// Resolved output/error capture behavior for the sys-op call currently
     /// yielded to the engine.
     pub pending_sysop_capture_mask: VmCaptureMask,
+
+    /// The profiling function id of the sys-op call currently yielded to the
+    /// engine (set alongside `pending_sysop_call_id`); `0` = unassigned
+    /// (host closures). The engine forwards it into value captures.
+    pub pending_sysop_function_id: u32,
 
     /// Host/boundary default used to resolve function-level `Auto` capture.
     pub value_capture_auto_enabled: bool,
@@ -1259,6 +1275,7 @@ impl BexVm {
             current_call_id: 0,
             pending_sysop_call_id: None,
             pending_sysop_capture_mask: VmCaptureMask::disabled(),
+            pending_sysop_function_id: 0,
             value_capture_auto_enabled: false,
             pending_call_captures: Vec::new(),
             call_input_capture_hook: None,
@@ -1345,34 +1362,43 @@ impl BexVm {
     pub fn queue_engine_call_output_capture(
         &mut self,
         call_id: u64,
+        function_id: u32,
         mask: VmCaptureMask,
         value: Value,
     ) {
         if !mask.output {
             return;
         }
-        self.queue_call_capture(call_id, VmCallCaptureKind::Output, value);
+        self.queue_call_capture(call_id, function_id, VmCallCaptureKind::Output, value);
     }
 
     pub fn queue_engine_call_error_origin_capture(
         &mut self,
         call_id: u64,
+        function_id: u32,
         mask: VmCaptureMask,
         value: Value,
     ) {
         if !mask.error || !self.note_throw_origin(value, false) {
             return;
         }
-        self.queue_call_capture(call_id, VmCallCaptureKind::Error, value);
+        self.queue_call_capture(call_id, function_id, VmCallCaptureKind::Error, value);
     }
 
-    fn queue_call_capture(&mut self, call_id: u64, kind: VmCallCaptureKind, value: Value) {
+    fn queue_call_capture(
+        &mut self,
+        call_id: u64,
+        function_id: u32,
+        kind: VmCallCaptureKind,
+        value: Value,
+    ) {
         if call_id == 0 {
             return;
         }
         self.pending_call_captures.push(VmCallCaptureEvent {
             thread_id: self.prof_thread_id,
             call_id,
+            function_id,
             kind,
             value,
         });
@@ -1381,6 +1407,7 @@ impl BexVm {
     fn maybe_queue_call_output(
         &mut self,
         call_id: u64,
+        function_id: u32,
         parent_call_id: u64,
         mask: VmCaptureMask,
         value: Value,
@@ -1388,7 +1415,7 @@ impl BexVm {
         if parent_call_id == 0 || !mask.output {
             return;
         }
-        self.queue_call_capture(call_id, VmCallCaptureKind::Output, value);
+        self.queue_call_capture(call_id, function_id, VmCallCaptureKind::Output, value);
     }
 
     fn note_throw_origin(&mut self, value: Value, is_rethrow: bool) -> bool {
@@ -1437,6 +1464,7 @@ impl BexVm {
     fn maybe_queue_call_error_origin(
         &mut self,
         call_id: u64,
+        function_id: u32,
         parent_call_id: u64,
         mask: VmCaptureMask,
         value: Value,
@@ -1448,7 +1476,7 @@ impl BexVm {
         if !self.note_throw_origin(value, is_rethrow) {
             return;
         }
-        self.queue_call_capture(call_id, VmCallCaptureKind::Error, value);
+        self.queue_call_capture(call_id, function_id, VmCallCaptureKind::Error, value);
     }
 
     fn trace_call_key_for_call_id(&self, call_id: u64) -> Option<TraceCallKey> {
@@ -1510,6 +1538,7 @@ impl BexVm {
     fn maybe_capture_named_inputs(
         &self,
         call_id: u64,
+        function_id: u32,
         entries: &[(String, Value)],
         mask: VmCaptureMask,
     ) {
@@ -1524,6 +1553,7 @@ impl BexVm {
         };
         hook.capture_call_input(VmCallInputCapture {
             call,
+            function_id,
             entries,
             heap: self.heap.as_ref(),
             permit: self.proof(),
@@ -1534,6 +1564,7 @@ impl BexVm {
         &self,
         param_names: &[String],
         call_id: u64,
+        function_id: u32,
         locals_offset: StackIndex,
         arg_count: usize,
         mask: VmCaptureMask,
@@ -1551,7 +1582,7 @@ impl BexVm {
             let value = self.stack[StackIndex::from_raw(base + index)];
             entries.push((name, value));
         }
-        self.maybe_capture_named_inputs(call_id, &entries, mask);
+        self.maybe_capture_named_inputs(call_id, function_id, &entries, mask);
     }
 
     /// The declared element type of `value` when it is an `Object::Array`, else
@@ -2452,6 +2483,7 @@ impl BexVm {
                     call_id,
                     parent_call_id,
                     capture_mask: VmCaptureMask::disabled(),
+                    function_id: entry_function_id,
                 }));
 
                 // Entry functions need the same frame-local pre-allocation as normal
@@ -2465,6 +2497,30 @@ impl BexVm {
             FunctionKind::NativeUnresolved => {
                 unreachable!("entry point kind is not directly invokable: {callable_kind:?}");
             }
+        }
+    }
+
+    /// The profiling function id of a callable entry point (the dictionary/
+    /// prof id space — the same value `prof_enter_call` records). Mirrors the
+    /// `Function`/`Closure`/`GenericFunction` normalization in
+    /// [`Self::set_entry_point_with_type_args`]. `0` when unassigned or the
+    /// function object can't be resolved (e.g. host closures).
+    #[must_use]
+    pub fn callable_function_id(&self, function: HeapPtr) -> u32 {
+        match self.get_object(function) {
+            Object::Function(f) => f.function_id,
+            Object::Closure(closure) => match unsafe { closure.function.get() } {
+                Object::Function(f) => f.function_id,
+                _ => 0,
+            },
+            Object::GenericFunction(gf) => {
+                let inner = self.globals.get(self.proof(), gf.function);
+                match inner.as_object_ptr().map(|p| unsafe { p.get() }) {
+                    Some(Object::Function(f)) => f.function_id,
+                    _ => 0,
+                }
+            }
+            _ => 0,
         }
     }
 
@@ -2603,6 +2659,7 @@ impl BexVm {
             call_id,
             parent_call_id,
             capture_mask: VmCaptureMask::disabled(),
+            function_id: 0, // synthetic; not in the profiling function table
         }));
     }
 
@@ -2678,6 +2735,7 @@ impl BexVm {
             call_id,
             parent_call_id,
             capture_mask: VmCaptureMask::disabled(),
+            function_id: 0, // synthetic; not in the profiling function table
         }));
     }
 
@@ -3706,12 +3764,14 @@ impl BexVm {
                 frame_call_id,
                 frame_parent_call_id,
                 frame_capture_mask,
+                frame_function_id,
                 frame_locals_offset,
             ) = (
                 frame.faulting_pc,
                 frame.call_id,
                 frame.parent_call_id,
                 frame.capture_mask,
+                frame.function_id,
                 frame.locals_offset,
             );
 
@@ -3726,11 +3786,13 @@ impl BexVm {
                 frame_call_id,
                 frame_parent_call_id,
                 frame_capture_mask,
+                frame_function_id,
             ));
             innermost_bc = false;
-            if let Some((call_id, parent_call_id, capture_mask)) = origin_capture {
+            if let Some((call_id, parent_call_id, capture_mask, function_id)) = origin_capture {
                 self.maybe_queue_call_error_origin(
                     call_id,
+                    function_id,
                     parent_call_id,
                     capture_mask,
                     exception_value,
@@ -4230,6 +4292,7 @@ impl BexVm {
         let call_id = self.mint_call_id();
         self.pending_sysop_call_id = Some(call_id);
         self.pending_sysop_capture_mask = capture_mask;
+        self.pending_sysop_function_id = function_id;
         if let Some(ring) = self.prof_ring {
             Self::prof_push_record(
                 ring,
@@ -4501,7 +4564,7 @@ impl BexVm {
                 (name, *value)
             })
             .collect();
-        self.maybe_capture_named_inputs(call_id, &entries, capture_mask);
+        self.maybe_capture_named_inputs(call_id, function_id, &entries, capture_mask);
         Ok(VmExecState::SysOp {
             operation: sys_op,
             args: call_args,
@@ -4748,6 +4811,7 @@ impl BexVm {
                         );
                         self.maybe_queue_call_output(
                             call_id,
+                            callee_function_id,
                             self.current_call_id,
                             capture_mask,
                             v,
@@ -4768,6 +4832,7 @@ impl BexVm {
                         if let VmError::Thrown(value) = vm_error {
                             self.maybe_queue_call_error_origin(
                                 call_id,
+                                callee_function_id,
                                 self.current_call_id,
                                 capture_mask,
                                 value,
@@ -4870,6 +4935,7 @@ impl BexVm {
                 self.maybe_capture_call_inputs(
                     &callee_param_names,
                     call_id,
+                    callee_function_id,
                     locals_offset,
                     arg_count,
                     capture_mask,
@@ -4883,6 +4949,7 @@ impl BexVm {
                     call_id,
                     parent_call_id,
                     capture_mask,
+                    function_id: callee_function_id,
                 }));
                 self.allocate_real_locals_for_frame(callee_ptr)?;
 
@@ -6572,14 +6639,22 @@ impl BexVm {
                     let Frame::Bytecode(bf) = &self.frames[*frame_idx] else {
                         unreachable!()
                     };
-                    let (popped_call_id, popped_parent_call_id, capture_mask, locals_offset) = (
+                    let (
+                        popped_call_id,
+                        popped_parent_call_id,
+                        capture_mask,
+                        popped_function_id,
+                        locals_offset,
+                    ) = (
                         bf.call_id,
                         bf.parent_call_id,
                         bf.capture_mask,
+                        bf.function_id,
                         bf.locals_offset,
                     );
                     self.maybe_queue_call_output(
                         popped_call_id,
+                        popped_function_id,
                         popped_parent_call_id,
                         capture_mask,
                         result,

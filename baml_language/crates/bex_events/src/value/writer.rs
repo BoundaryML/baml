@@ -214,6 +214,11 @@ impl<S: ValueArtifactSink> ValueWriter<S> {
         Ok(ValueWriteOutcome { value_ref })
     }
 
+    /// Consume the writer and return its sink (tests / byte-sink callers).
+    pub fn into_sink(self) -> S {
+        self.sink
+    }
+
     pub fn append_capture_loss(&mut self, record: &CaptureLossRecord) -> io::Result<()> {
         let mut encoded = Vec::new();
         encode_capture_loss(&mut encoded, record)

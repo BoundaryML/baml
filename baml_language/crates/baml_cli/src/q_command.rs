@@ -110,12 +110,25 @@ fn newest_run_key(baml_dir: &std::path::Path) -> Option<String> {
     None
 }
 
+/// Table cells cap long payloads (hydrated JSON) at a preview width; the
+/// full body is in `--format json`.
+const CELL_PREVIEW_CHARS: usize = 96;
+
 fn col_cell(col: &ColData, row: usize) -> String {
     match col {
         ColData::U32(v) => v.get(row).map(u32::to_string).unwrap_or_default(),
         ColData::U64(v) => v.get(row).map(u64::to_string).unwrap_or_default(),
         ColData::F64(v) => v.get(row).map(|f| format!("{f:.3}")).unwrap_or_default(),
         ColData::Str(v) => v.get(row).cloned().unwrap_or_default(),
+        ColData::Json(v) => {
+            let cell = v.get(row).cloned().unwrap_or_default();
+            if cell.chars().count() > CELL_PREVIEW_CHARS {
+                let preview: String = cell.chars().take(CELL_PREVIEW_CHARS).collect();
+                format!("{preview}\u{2026}")
+            } else {
+                cell
+            }
+        }
     }
 }
 
@@ -124,7 +137,7 @@ fn col_len(col: &ColData) -> usize {
         ColData::U32(v) => v.len(),
         ColData::U64(v) => v.len(),
         ColData::F64(v) => v.len(),
-        ColData::Str(v) => v.len(),
+        ColData::Str(v) | ColData::Json(v) => v.len(),
     }
 }
 
@@ -177,6 +190,11 @@ pub(crate) fn render_json(table: &BqlTable) -> String {
                 ColData::U64(v) => serde_json::json!(v.get(row)),
                 ColData::F64(v) => serde_json::json!(v.get(row)),
                 ColData::Str(v) => serde_json::json!(v.get(row)),
+                // Hydrated values embed as REAL JSON, not an escaped string.
+                ColData::Json(v) => v
+                    .get(row)
+                    .and_then(|s| serde_json::from_str(s).ok())
+                    .unwrap_or(serde_json::Value::Null),
             };
             obj.insert(name.clone(), value);
         }

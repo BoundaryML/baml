@@ -426,3 +426,486 @@ fn sort_limit_and_rollup_compose() {
     assert_eq!(col_str(&table, "fn"), ["app.leaf"]);
     let _ = std::fs::remove_dir_all(&baml);
 }
+
+// ---------------------------------------------------------------------------
+// Value stages (§8.2 ValueSet / §8.4 get / §8.5 showcase queries)
+// ---------------------------------------------------------------------------
+
+/// One synthetic boundary with captured values: two `app.leaf` call
+/// input/output pairs (identical outputs → one CID). Call 10's rows carry
+/// the capture-time `function_id` (17); call 14's rows carry it only with
+/// `all_capture_ids` (else they rely on the raw firehose written under
+/// `with_raw` — the pre-id fallback join). Returns (baml_dir, run_key).
+fn write_value_run(
+    dir_tag: &str,
+    with_raw: bool,
+    all_capture_ids: bool,
+    output_scale: i64,
+) -> (std::path::PathBuf, String) {
+    use bex_events::ids::BoundaryId;
+    use bex_events::prof::cct::meta::{MetaRecord, MetaWriter};
+    use bex_events::run::TraceCallKey;
+    use bex_events::store::canon::{self, CanonValue, Presence};
+    use bex_events::value::{
+        ByteValueArtifactSink, DagRef, ValueCapture, ValueCaptureKind, ValueCodec, ValueWriter,
+    };
+
+    let baml_dir =
+        std::env::temp_dir().join(format!("bql-values-{dir_tag}-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&baml_dir);
+    std::fs::create_dir_all(&baml_dir).unwrap();
+
+    // Session (dict + sealed segment) — reuses the tally fixture.
+    write_session(&baml_dir, 1_000_000, false);
+    let session_name = session_key(&baml_dir);
+    // The dict write is idempotent; re-derive the revision stem so the
+    // boundary meta names the REAL dictionary (fn-name resolution).
+    let revision = write_dict(&baml_dir);
+
+    // Raw firehose: CallFunction records joining calls 10/14 → fn 17.
+    if with_raw {
+        use bex_events::prof::cct::raw::{RAW_HEADER_LEN, RAW_MAGIC, RAW_VERSION};
+        let raw_dir = baml_dir.join("sessions").join(&session_name).join("raw");
+        std::fs::create_dir_all(&raw_dir).unwrap();
+        let mut file = vec![0u8; RAW_HEADER_LEN];
+        file[0..8].copy_from_slice(&RAW_MAGIC);
+        file[8..10].copy_from_slice(&RAW_VERSION.to_le_bytes());
+        file[10..12].copy_from_slice(&u16::try_from(RAW_HEADER_LEN).unwrap().to_le_bytes());
+        file[16..32].copy_from_slice(&[7; 16]);
+        file[32..40].copy_from_slice(&1u64.to_le_bytes());
+        file[40] = 3; // clock kind
+        file[41] = 1;
+        file[48..56].copy_from_slice(&1u64.to_le_bytes());
+        file[56..64].copy_from_slice(&1u64.to_le_bytes());
+        let mut frame = Vec::new();
+        for (call, function) in [(1u64, 16u32), (10, 17), (14, 17)] {
+            let rec = RawRecord::CallFunction {
+                flags: 0,
+                thread_id: BexThreadId(1),
+                call_id: BexCallId(call),
+                parent_call_id: BexCallId(0),
+                function_id: FunctionId(function),
+                ts_ticks: 1_000 + call,
+                call_site: None,
+            };
+            let mut buf = [0u8; MAX_RECORD_LEN];
+            let n = rec.encode(&mut buf);
+            frame.extend_from_slice(&buf[..n]);
+        }
+        file.extend_from_slice(&u32::try_from(frame.len()).unwrap().to_le_bytes());
+        file.extend_from_slice(&frame);
+        std::fs::write(raw_dir.join("raw-000001.bamlprof"), file).unwrap();
+    }
+
+    // Boundary meta: begin → bound(session) → complete.
+    let boundary_id = BoundaryId::from_bytes([0xAB; 16]);
+    let run_name = format!("1700000000000-main-{}", boundary_id.to_wire_string());
+    let run_dir = baml_dir.join("history").join(&run_name);
+    std::fs::create_dir_all(run_dir.join("thread-1")).unwrap();
+    let mut meta = MetaWriter::create(run_dir.join("boundary.bamlmeta")).unwrap();
+    meta.append(&MetaRecord::BoundaryBegin {
+        boundary_id: boundary_id.to_wire_string(),
+        target: "main".to_string(),
+        source: "test".to_string(),
+        created_ms: 1_700_000_000_000,
+        project_id: "p".to_string(),
+        revision_id: revision.clone(),
+        capture_defaults: "llm_boundary".to_string(),
+    })
+    .unwrap();
+    meta.append(&MetaRecord::BoundaryBound {
+        session_dir: format!(".baml/sessions/{session_name}"),
+        first_seg_seq: 0,
+        partition_id: 1,
+        boundary_local_id: 1,
+    })
+    .unwrap();
+    meta.append(&MetaRecord::BoundaryComplete {
+        status: "succeeded".to_string(),
+        completed_ms: 1_700_000_000_100,
+        last_seg_seq: 0,
+        counts: serde_json::json!({}),
+        diagnostics: Vec::new(),
+        dump_refs: Vec::new(),
+    })
+    .unwrap();
+
+    // Values: two input/output pairs into the CAS + .bamlvalue records.
+    let mut store = bex_events::store::Store::open(&baml_dir.join("store"), [7; 16]).unwrap();
+    let mut writer = ValueWriter::new(ByteValueArtifactSink::new(), boundary_id).unwrap();
+    let call_key = |call: u64| TraceCallKey {
+        process_euid: bex_events::ids::ProcessEuid([7; 16]),
+        engine_id: bex_events::ids::EngineId(1),
+        thread_id: BexThreadId(1),
+        call_id: BexCallId(call),
+    };
+    let put = |value: &CanonValue,
+               kind: ValueCaptureKind,
+               call: u64,
+               function_id: u32,
+               store: &mut bex_events::store::Store,
+               writer: &mut ValueWriter<ByteValueArtifactSink>| {
+        let encoded = canon::encode(value);
+        store.put_encoded(&encoded, 1).unwrap();
+        writer
+            .append_body_with_capture_dag_and_promotion(
+                ValueCodec::CanonicalDag,
+                Vec::new(),
+                Some(ValueCapture {
+                    kind,
+                    call: call_key(call),
+                    function_id,
+                }),
+                Some(DagRef {
+                    root_cid: encoded.root_cid,
+                    node_codec_version: canon::NODE_CODEC_VERSION,
+                    logical_len: encoded.logical_len,
+                }),
+                None,
+            )
+            .unwrap();
+    };
+    let item = |name: &str| CanonValue::Class {
+        definition_key: "class:app.Item".to_string(),
+        fields: vec![
+            (
+                "name".to_string(),
+                Presence::Value,
+                Some(CanonValue::String(name.to_string())),
+            ),
+            (
+                "quantity".to_string(),
+                Presence::Value,
+                Some(CanonValue::Int(2)),
+            ),
+        ],
+    };
+    // Capture-carried fn identity: call 10's two rows always carry fn 17
+    // (the capture-time stamp); call 14's rows carry it only in the
+    // `all_capture_ids` variant, else 0 (pre-id records — resolved through
+    // the raw-join fallback when a raw firehose exists).
+    let call_14_fid = if all_capture_ids { 17 } else { 0 };
+    put(
+        &item("pour over"),
+        ValueCaptureKind::CallInput,
+        10,
+        17,
+        &mut store,
+        &mut writer,
+    );
+    put(
+        &item("croissant"),
+        ValueCaptureKind::CallInput,
+        14,
+        call_14_fid,
+        &mut store,
+        &mut writer,
+    );
+    // Identical outputs (scaled by the fixture knob) → one shared CID.
+    let output = CanonValue::Float(3.5 * output_scale as f64);
+    put(
+        &output,
+        ValueCaptureKind::CallOutput,
+        10,
+        17,
+        &mut store,
+        &mut writer,
+    );
+    put(
+        &output,
+        ValueCaptureKind::CallOutput,
+        14,
+        call_14_fid,
+        &mut store,
+        &mut writer,
+    );
+    store.seal_active().unwrap();
+    std::fs::write(
+        run_dir.join("thread-1").join("value-0.bamlvalue"),
+        writer.into_sink().bytes(),
+    )
+    .unwrap();
+
+    (baml_dir, run_name)
+}
+
+#[test]
+fn values_lists_hydrates_and_joins_fn_names() {
+    let (baml_dir, run) = write_value_run("full", true, false, 1);
+    let mut engine = ObserveEngine::new(baml_dir.clone());
+
+    // Listing without get: rows + cids, honest note about bodies.
+    let table = bql::run(&mut engine, Some(&run), "values(role=[input, output])").unwrap();
+    assert_eq!(table.rows(), 4);
+    assert!(table.footer.sealed && !table.footer.torn);
+
+    // The exact-source fn join names the calls; fn= filters work.
+    let table = bql::run(
+        &mut engine,
+        Some(&run),
+        "values(role=[input, output], fn=\"app.leaf\") | get(max_bytes=8kb)",
+    )
+    .unwrap();
+    assert_eq!(table.rows(), 4, "all four captures are app.leaf calls");
+    let body_col = table
+        .columns
+        .iter()
+        .find(|(name, _)| name == "body")
+        .map(|(_, c)| c)
+        .unwrap();
+    let ColData::Json(bodies) = body_col else {
+        panic!("body is a Json column")
+    };
+    assert!(
+        bodies
+            .iter()
+            .any(|b| b.contains("\"quantity\":2") && b.contains("pour over")),
+        "input hydrates through the CAS: {bodies:?}"
+    );
+    assert!(
+        bodies.iter().any(|b| b == "3.5"),
+        "output hydrates: {bodies:?}"
+    );
+}
+
+#[test]
+fn values_resolve_fn_from_capture_ids_without_raw() {
+    // No raw firehose at all — every row carries its capture-time
+    // function_id, so fn names resolve through the dictionary alone.
+    let (baml_dir, run) = write_value_run("capids", false, true, 1);
+    let mut engine = ObserveEngine::new(baml_dir.clone());
+
+    let table = bql::run(
+        &mut engine,
+        Some(&run),
+        "values(role=[input, output], fn=\"app.leaf\") | get(max_bytes=8kb)",
+    )
+    .unwrap();
+    assert_eq!(table.rows(), 4, "capture-carried ids name all four rows");
+    assert!(
+        !table
+            .footer
+            .degraded
+            .iter()
+            .any(|n| n.contains("no exact source")),
+        "ids on every row = exact coverage, no degraded note: {:?}",
+        table.footer.degraded
+    );
+    let fn_col = col_str(&table, "fn");
+    assert!(
+        fn_col.iter().all(|f| f == "app.leaf"),
+        "dictionary resolves fn 17: {fn_col:?}"
+    );
+    let ColData::Json(bodies) = table.column("body").unwrap() else {
+        panic!("body is a Json column")
+    };
+    assert!(
+        bodies
+            .iter()
+            .any(|b| b.contains("\"quantity\":2") && b.contains("pour over")),
+        "bodies hydrate without any raw file: {bodies:?}"
+    );
+
+    // instances(source=values) names functions from the capture ids too.
+    let table = bql::run(&mut engine, Some(&run), "instances(source=values)").unwrap();
+    assert_eq!(table.rows(), 2);
+    let fn_col = col_str(&table, "fn");
+    assert!(
+        fn_col.iter().all(|f| f == "app.leaf"),
+        "instances name fns without raw: {fn_col:?}"
+    );
+    let _ = std::fs::remove_dir_all(&baml_dir);
+}
+
+#[test]
+fn values_without_exact_source_gates_fn_filter() {
+    let (baml_dir, run) = write_value_run("noraw", false, false, 1);
+    let mut engine = ObserveEngine::new(baml_dir.clone());
+
+    // Listing works (with a degraded note), but fn= fails closed.
+    let table = bql::run(&mut engine, Some(&run), "values()").unwrap();
+    assert_eq!(table.rows(), 4);
+    assert!(
+        table
+            .footer
+            .degraded
+            .iter()
+            .any(|n| n.contains("no exact source")),
+        "degraded notes name the gap: {:?}",
+        table.footer.degraded
+    );
+
+    let err = bql::run(
+        &mut engine,
+        Some(&run),
+        "values(fn=\"app.leaf\") | get(max_bytes=8kb)",
+    )
+    .unwrap_err();
+    assert_eq!(err.code, "E_NO_EXACT_SOURCE");
+    assert!(err.remedy.contains("BAML_PROFILE_RAW"), "{}", err.remedy);
+}
+
+#[test]
+fn stats_by_cid_shows_dedupe_and_instances_lists_calls() {
+    let (baml_dir, run) = write_value_run("dedup", true, false, 1);
+    let mut engine = ObserveEngine::new(baml_dir.clone());
+
+    let table = bql::run(
+        &mut engine,
+        Some(&run),
+        "values(role=output) | stats(by=cid)",
+    )
+    .unwrap();
+    assert_eq!(table.rows(), 1, "identical outputs share one CID");
+    let ColData::U64(n) = &table.columns.iter().find(|(c, _)| c == "n").unwrap().1 else {
+        panic!("n column")
+    };
+    assert_eq!(n[0], 2, "the dedupe view counts both captures");
+
+    let table = bql::run(&mut engine, Some(&run), "instances(source=values)").unwrap();
+    assert_eq!(table.rows(), 2, "two distinct calls captured");
+
+    // No captures at all → the honest exact-source error.
+    let empty = std::env::temp_dir().join(format!("bql-values-empty-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&empty);
+    write_session(&empty, 1_000_000, false);
+    let run_dir = empty
+        .join("history")
+        .join("1700000000001-x-baml_id_1_AAAAAAAAAAAAAAAAAAAAAA");
+    std::fs::create_dir_all(&run_dir).unwrap();
+    let mut engine = ObserveEngine::new(empty.clone());
+    let err = bql::run(
+        &mut engine,
+        Some("1700000000001-x-baml_id_1_AAAAAAAAAAAAAAAAAAAAAA"),
+        "instances()",
+    )
+    .unwrap_err();
+    assert_eq!(err.code, "E_NO_EXACT_SOURCE");
+    let _ = std::fs::remove_dir_all(&empty);
+    let _ = std::fs::remove_dir_all(&baml_dir);
+}
+
+#[test]
+fn vdiff_matches_inputs_and_compares_outputs() {
+    let (dir_a, run_a) = write_value_run("vda", true, false, 1);
+    // Same inputs, different outputs (scale 2) in a SEPARATE root; copy
+    // run B's artifacts into root A so one engine sees both runs.
+    let (dir_b, run_b) = write_value_run("vdb", true, false, 2);
+    let from = dir_b.join("history").join(&run_b);
+    let to_name = format!("{}9", &run_b[..run_b.len() - 1]); // distinct key
+    let to = dir_a.join("history").join(&to_name);
+    std::fs::create_dir_all(to.join("thread-1")).unwrap();
+    std::fs::copy(from.join("boundary.bamlmeta"), to.join("boundary.bamlmeta")).unwrap();
+    std::fs::copy(
+        from.join("thread-1/value-0.bamlvalue"),
+        to.join("thread-1/value-0.bamlvalue"),
+    )
+    .unwrap();
+    // Merge B's store packs so B's output CIDs resolve in root A.
+    for entry in std::fs::read_dir(dir_b.join("store/packs")).unwrap() {
+        let p = entry.unwrap().path();
+        std::fs::copy(&p, dir_a.join("store/packs").join(p.file_name().unwrap())).unwrap();
+    }
+
+    let mut engine = ObserveEngine::new(dir_a.clone());
+    let table = bql::run(
+        &mut engine,
+        None,
+        &format!("vdiff(a=\"{run_a}\", b=\"{to_name}\")"),
+    )
+    .unwrap();
+    assert_eq!(table.rows(), 2, "two input-matched calls");
+    let ColData::U32(equal) = &table
+        .columns
+        .iter()
+        .find(|(c, _)| c == "outputs_equal")
+        .unwrap()
+        .1
+    else {
+        panic!("outputs_equal column")
+    };
+    assert!(
+        equal.iter().all(|&e| e == 0),
+        "the fix changed every output"
+    );
+    let _ = std::fs::remove_dir_all(&dir_a);
+    let _ = std::fs::remove_dir_all(&dir_b);
+}
+
+#[test]
+fn get_budget_elides_and_reports() {
+    use bex_events::store::canon::{CanonValue, Presence};
+    let (baml_dir, run) = write_value_run("budget", true, false, 1);
+    // Add one oversized capture: a 64 KiB string field.
+    {
+        use bex_events::ids::BoundaryId;
+        use bex_events::run::TraceCallKey;
+        use bex_events::store::canon;
+        use bex_events::value::{
+            ByteValueArtifactSink, DagRef, ValueCapture, ValueCaptureKind, ValueCodec, ValueWriter,
+        };
+        let big = CanonValue::Class {
+            definition_key: "class:app.Doc".to_string(),
+            fields: vec![(
+                "body".to_string(),
+                Presence::Value,
+                Some(CanonValue::String("x".repeat(64 * 1024))),
+            )],
+        };
+        let encoded = canon::encode(&big);
+        let mut store = bex_events::store::Store::open(&baml_dir.join("store"), [8; 16]).unwrap();
+        store.put_encoded(&encoded, 2).unwrap();
+        store.seal_active().unwrap();
+        let boundary_id = BoundaryId::from_bytes([0xAB; 16]);
+        let mut writer = ValueWriter::new(ByteValueArtifactSink::new(), boundary_id).unwrap();
+        writer
+            .append_body_with_capture_dag_and_promotion(
+                ValueCodec::CanonicalDag,
+                Vec::new(),
+                Some(ValueCapture {
+                    kind: ValueCaptureKind::CallInput,
+                    call: TraceCallKey {
+                        process_euid: bex_events::ids::ProcessEuid([7; 16]),
+                        engine_id: bex_events::ids::EngineId(1),
+                        thread_id: BexThreadId(1),
+                        call_id: BexCallId(10),
+                    },
+                    function_id: 17,
+                }),
+                Some(DagRef {
+                    root_cid: encoded.root_cid,
+                    node_codec_version: canon::NODE_CODEC_VERSION,
+                    logical_len: encoded.logical_len,
+                }),
+                None,
+            )
+            .unwrap();
+        let run_dir = baml_dir.join("history").join(&run);
+        std::fs::write(
+            run_dir.join("thread-1").join("value-1.bamlvalue"),
+            writer.into_sink().bytes(),
+        )
+        .unwrap();
+    }
+
+    let mut engine = ObserveEngine::new(baml_dir.clone());
+    let table = bql::run(
+        &mut engine,
+        Some(&run),
+        "values(role=input) | get(max_bytes=1kb)",
+    )
+    .unwrap();
+    let ColData::Json(bodies) = &table.columns.iter().find(|(c, _)| c == "body").unwrap().1 else {
+        panic!("body column")
+    };
+    assert!(
+        bodies.iter().any(|b| b.contains("$elided")),
+        "oversized subtree elided whole: {bodies:?}"
+    );
+    assert!(
+        table.footer.degraded.iter().any(|n| n.contains("elided")),
+        "elision is footer-visible: {:?}",
+        table.footer.degraded
+    );
+    let _ = std::fs::remove_dir_all(&baml_dir);
+}

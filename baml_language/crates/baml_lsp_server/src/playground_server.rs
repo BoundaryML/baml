@@ -570,6 +570,7 @@ fn drain_captured_values_and_broadcast(
             let capture = ValueCapture {
                 kind: value_capture_kind_from_bex(draft.kind),
                 call: draft.call,
+                function_id: draft.function_id,
             };
             match history_store.append_value_body(
                 draft.boundary_id,

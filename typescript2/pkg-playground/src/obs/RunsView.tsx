@@ -25,6 +25,7 @@ import {
 
 import { cn } from '../lib/utils';
 import {
+  asBqlTable,
   asLeftHeavy,
   asRunMeta,
   asRunsList,
@@ -32,6 +33,7 @@ import {
   asTopFunctions,
   FOLD_ROW_FUNCTION,
   FrameKind,
+  type BqlTableResult,
   type LeftHeavyColumns,
   type RunsListColumns,
   type TimelineColumns,
@@ -265,6 +267,8 @@ const RunDetail: FC<{
   const [topFunctions, setTopFunctions] = useState<TopFunctionsColumns | null>(
     null,
   );
+  const [values, setValues] = useState<BqlTableResult | null>(null);
+  const [valuesError, setValuesError] = useState<string | null>(null);
   const [containerRef, width] = useElementWidth<HTMLDivElement>();
   const pixelWidth = Math.min(8192, Math.max(256, Math.round(width || 1024)));
 
@@ -331,6 +335,30 @@ const RunDetail: FC<{
     [client, runKey],
   );
 
+  // Captured values (§8.2 ValueSet), hydrated via the BQL surface — the
+  // same query `baml q` runs: values() | get(max_bytes=16kb).
+  useEffect(() => {
+    if (!connected) return;
+    let cancelled = false;
+    client
+      .query('bql', { run: runKey, q: 'values() | get(max_bytes=16kb)' })
+      .then((frame) => {
+        if (cancelled) return;
+        if (frame.kind === FrameKind.BqlTable) {
+          setValues(asBqlTable(frame));
+          setValuesError(null);
+        } else {
+          setValuesError('values unavailable');
+        }
+      })
+      .catch((error) => {
+        if (!cancelled) setValuesError(String(error));
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [client, connected, runKey]);
+
   const fnName = useCallback(
     (id: number): string => names.get(id) ?? `fn#${id}`,
     [names],
@@ -370,6 +398,9 @@ const RunDetail: FC<{
         ) : (
           <EmptySection text={leftHeavy ? 'No calls' : 'Loading profile…'} />
         )}
+
+        <SectionLabel>Captured values</SectionLabel>
+        <CapturedValues error={valuesError} values={values} />
 
         <SectionLabel>Top functions</SectionLabel>
         {topFunctions && topFunctions.functionId.length > 0 ? (
@@ -663,6 +694,81 @@ const LeftHeavyFlame: FC<{
       <div className="h-4 truncate text-[10px] text-vsc-text-faint">
         {hover ?? ''}
       </div>
+    </div>
+  );
+};
+
+// ---------------------------------------------------------------------------
+// Captured values (hydrated via BQL `values() | get(...)`)
+// ---------------------------------------------------------------------------
+
+const CapturedValues: FC<{
+  values: BqlTableResult | null;
+  error: string | null;
+}> = ({ values, error }) => {
+  if (error) {
+    return <EmptySection text={`Values unavailable: ${error}`} />;
+  }
+  if (!values) {
+    return <EmptySection text="Loading values…" />;
+  }
+  const col = (name: string): Array<string | number> =>
+    values.columns.find((c) => c.name === name)?.values ?? [];
+  const role = col('role');
+  const fn = col('fn');
+  const body = col('body');
+  const cid = col('cid');
+  if (values.rows === 0) {
+    return (
+      <EmptySection text="No captured values — opt calls in with $id = boundary.id().capture(...)" />
+    );
+  }
+  const pretty = (raw: string): string => {
+    try {
+      return JSON.stringify(JSON.parse(raw), null, 2);
+    } catch {
+      return raw;
+    }
+  };
+  return (
+    <div className="px-2 pb-2">
+      <table className="w-full border-collapse text-[11px]">
+        <thead>
+          <tr className="text-left text-vsc-text-faint">
+            <th className="py-0.5 pr-3 font-normal">role</th>
+            <th className="py-0.5 pr-3 font-normal">fn</th>
+            <th className="py-0.5 pr-3 font-normal">value</th>
+          </tr>
+        </thead>
+        <tbody>
+          {role.map((r, i) => (
+            <tr
+              className="border-t border-vsc-border-subtle align-top"
+              key={`${cid[i] ?? i}-${i}`}
+            >
+              <td className="py-1 pr-3 text-vsc-text-muted">{String(r)}</td>
+              <td className="py-1 pr-3 text-vsc-accent">
+                {String(fn[i] ?? '') || '—'}
+              </td>
+              <td className="py-1 pr-3">
+                <details>
+                  <summary className="cursor-pointer truncate max-w-[560px] text-vsc-text">
+                    {String(body[i] ?? '').slice(0, 120) || '—'}
+                  </summary>
+                  <pre className="mt-1 max-h-64 overflow-auto rounded border border-vsc-border-subtle bg-vsc-surface p-2 text-[10px] leading-4">
+                    {pretty(String(body[i] ?? ''))}
+                  </pre>
+                </details>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      {values.footer.degraded.length > 0 && (
+        <div className="mt-1 text-[10px] text-vsc-yellow">
+          {values.footer.degraded.join(' · ')}
+        </div>
+      )}
     </div>
   );
 };

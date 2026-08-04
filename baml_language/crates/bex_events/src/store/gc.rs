@@ -300,7 +300,7 @@ fn tombstone(log: &Path, pack_path: &Path, action: &str, bytes: u64, at_ms: u64)
 #[cfg(test)]
 mod tests {
     use super::super::canon::{CanonValue, encode};
-    use super::super::{Store, pack};
+    use super::super::Store;
     use super::*;
 
     fn setup(name: &str) -> std::path::PathBuf {

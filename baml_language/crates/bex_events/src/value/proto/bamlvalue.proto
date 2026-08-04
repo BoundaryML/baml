@@ -104,6 +104,10 @@ message SourceLocationV1 {
 message ValueCaptureV1 {
   ValueCaptureKind kind = 1;
   TraceCallKeyV1 call = 2;
+  // Profiling function id of the captured call (the dictionary/prof id
+  // space). Additive: 0 encodes as absent — records written before this
+  // field carry no function identity and decode as 0.
+  uint32 function_id = 3;
 }
 
 message LogEventV1 {

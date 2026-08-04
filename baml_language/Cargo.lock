@@ -1425,8 +1425,10 @@ dependencies = [
 name = "bex_query"
 version = "0.0.0-beta"
 dependencies = [
+ "base64",
  "bex_events",
  "memmap2",
+ "prost",
  "rustc-hash 2.1.2",
  "serde",
  "serde_json",

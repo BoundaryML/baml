@@ -555,3 +555,62 @@ fn canon_cids_are_frozen() {
     let wire = bex_events::store::canon::cid_wire(&root);
     assert!(wire.starts_with("bamlv_1_"), "{wire}");
 }
+
+#[test]
+fn canon_fixture_decodes_and_reencodes_to_the_same_root() {
+    use bex_events::store::canon::{self, CanonValue, DagSource};
+    use rustc_hash::FxHashMap;
+
+    // Fixture layout (build_canon_fixture): root_cid + logical_len u64 +
+    // repeated [cid, len u32, bytes] for every node/chunk in emission
+    // order. CIDs are domain-separated, so one map serves both lookups.
+    struct FixtureSource(FxHashMap<[u8; 32], Vec<u8>>);
+    impl DagSource for FixtureSource {
+        fn node(&mut self, cid: &[u8; 32]) -> Option<Vec<u8>> {
+            self.0.get(cid).cloned()
+        }
+        fn chunk(&mut self, cid: &[u8; 32]) -> Option<Vec<u8>> {
+            self.0.get(cid).cloned()
+        }
+    }
+
+    let bytes = std::fs::read(golden_dir().join("canon.bamlcanon")).expect("fixture exists");
+    let root_cid: [u8; 32] = bytes[0..32].try_into().unwrap();
+    let mut entries = FxHashMap::default();
+    let mut at = 40; // skip root cid + logical_len
+    while at < bytes.len() {
+        let cid: [u8; 32] = bytes[at..at + 32].try_into().unwrap();
+        let len = u32::from_le_bytes(bytes[at + 32..at + 36].try_into().unwrap()) as usize;
+        entries.insert(cid, bytes[at + 36..at + 36 + len].to_vec());
+        at += 36 + len;
+    }
+    let mut src = FixtureSource(entries);
+    let root_bytes = src.0[&root_cid].clone();
+
+    let decoded = canon::decode(&root_bytes, &mut src).expect("frozen fixture decodes");
+
+    // Structural spot-checks against the fixture builder's value.
+    let CanonValue::Map(ref entries) = decoded else {
+        panic!("fixture root is a map")
+    };
+    let get = |k: &str| entries.iter().find(|(key, _)| key == k).map(|(_, v)| v);
+    assert_eq!(get("aa"), Some(&CanonValue::Int(-7)));
+    assert!(matches!(get("nan"), Some(CanonValue::Float(f)) if f.is_nan()));
+    assert_eq!(get("big"), Some(&CanonValue::Bigint("42".to_string())));
+    assert!(
+        matches!(get("long"), Some(CanonValue::String(s)) if s.len() == 200_000),
+        "chunked string reassembles"
+    );
+    assert!(
+        matches!(get("wide"), Some(CanonValue::List(items)) if items.len() == 300),
+        "segmented list splices"
+    );
+
+    // The inverse proof: re-encoding the decoded value reproduces the
+    // exact frozen root CID.
+    let re = canon::encode(&decoded);
+    assert_eq!(
+        re.root_cid, root_cid,
+        "decode∘encode is the identity on the fixture"
+    );
+}

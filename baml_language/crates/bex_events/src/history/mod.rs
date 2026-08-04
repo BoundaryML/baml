@@ -1352,6 +1352,7 @@ mod tests {
                 ValueCapture {
                     kind: ValueCaptureKind::RootOutput,
                     call: trace,
+                    function_id: 0,
                 },
                 ValueCodec::BamlOutboundValue,
                 vec![1, 2, 3],
@@ -1508,6 +1509,7 @@ mod tests {
                 ValueCapture {
                     kind: ValueCaptureKind::RootOutput,
                     call: root,
+                    function_id: 0,
                 },
                 ValueCodec::BamlOutboundValue,
                 vec![1, 2, 3],
@@ -1523,6 +1525,7 @@ mod tests {
                 ValueCapture {
                     kind: ValueCaptureKind::CallOutput,
                     call: child_trace,
+                    function_id: 0,
                 },
                 ValueCodec::BamlOutboundValue,
                 vec![4, 5, 6],
@@ -1592,6 +1595,7 @@ mod tests {
                 ValueCapture {
                     kind: ValueCaptureKind::CallOutput,
                     call: thread_one,
+                    function_id: 0,
                 },
                 ValueCodec::BamlOutboundValue,
                 vec![1],
@@ -1603,6 +1607,7 @@ mod tests {
                 ValueCapture {
                     kind: ValueCaptureKind::CallOutput,
                     call: thread_two,
+                    function_id: 0,
                 },
                 ValueCodec::BamlOutboundValue,
                 vec![2],
@@ -1796,6 +1801,7 @@ mod tests {
                 ValueCapture {
                     kind: ValueCaptureKind::RootOutput,
                     call: trace,
+                    function_id: 0,
                 },
                 ValueCodec::BamlOutboundValue,
                 large_body.clone(),
@@ -1878,6 +1884,7 @@ mod tests {
                 capture: Some(ValueCapture {
                     kind: ValueCaptureKind::RootOutput,
                     call: trace,
+                    function_id: 0,
                 }),
                 dag_ref: None,
                 promoted_by: None,
@@ -1920,6 +1927,7 @@ mod tests {
                 ValueCapture {
                     kind: ValueCaptureKind::RootOutput,
                     call: trace,
+                    function_id: 0,
                 },
                 ValueCodec::BamlOutboundValue,
                 large_body.clone(),
@@ -1992,6 +2000,7 @@ mod tests {
                 ValueCapture {
                     kind: ValueCaptureKind::CallInput,
                     call: input_call,
+                    function_id: 0,
                 },
                 ValueCodec::BamlOutboundValue,
                 vec![0, 1],
@@ -2003,6 +2012,7 @@ mod tests {
                 ValueCapture {
                     kind: ValueCaptureKind::CallOutput,
                     call: output_call,
+                    function_id: 0,
                 },
                 ValueCodec::BamlOutboundValue,
                 vec![1, 2, 3],
@@ -2014,6 +2024,7 @@ mod tests {
                 ValueCapture {
                     kind: ValueCaptureKind::CallError,
                     call: error_call,
+                    function_id: 0,
                 },
                 ValueCodec::BamlOutboundValue,
                 vec![4, 5],

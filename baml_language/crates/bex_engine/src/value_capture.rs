@@ -59,6 +59,10 @@ pub struct TraceLogMetadata {
 pub struct TraceValueDraft {
     pub boundary_id: BoundaryId,
     pub call: TraceCallKey,
+    /// The captured call's profiling function id (dictionary/prof id
+    /// space); `0` = unknown. Written into the `ValueCapture` record so
+    /// query-side fn-name resolution needs no raw firehose.
+    pub function_id: u32,
     pub kind: CaptureKind,
     pub log: Option<TraceLogMetadata>,
     pub snapshot: TraceSnapshotHandle,
@@ -347,6 +351,7 @@ impl TraceCaptureProducer {
         &self,
         boundary_id: BoundaryId,
         call: TraceCallKey,
+        function_id: u32,
         kind: CaptureKind,
     ) -> Result<CaptureReservation, CaptureSkipReason> {
         let mut inner = self
@@ -406,15 +411,32 @@ impl TraceCaptureProducer {
             producer: self.clone(),
             boundary_id,
             call,
+            function_id,
             kind,
             committed: false,
         })
     }
 
+    /// [`Self::capture_with_fn`] without function identity (`function_id`
+    /// 0). Kept for callers/tests that have no function id in hand.
     pub fn capture_with(
         &self,
         boundary_id: BoundaryId,
         call: TraceCallKey,
+        kind: CaptureKind,
+        copy_snapshot: impl FnOnce(&TraceHeap) -> TraceSnapshotHandle,
+    ) -> Result<(), CaptureSkipReason> {
+        self.capture_with_fn(boundary_id, call, 0, kind, copy_snapshot)
+    }
+
+    /// Capture a value stamped with the captured call's profiling
+    /// `function_id` (dictionary/prof id space; `0` = unknown), so the
+    /// written `ValueCapture` record carries function identity.
+    pub fn capture_with_fn(
+        &self,
+        boundary_id: BoundaryId,
+        call: TraceCallKey,
+        function_id: u32,
         kind: CaptureKind,
         copy_snapshot: impl FnOnce(&TraceHeap) -> TraceSnapshotHandle,
     ) -> Result<(), CaptureSkipReason> {
@@ -423,7 +445,7 @@ impl TraceCaptureProducer {
             CaptureKind::LogBody,
             "log captures must use capture_log_with"
         );
-        let reservation = self.try_reserve(boundary_id, call, kind)?;
+        let reservation = self.try_reserve(boundary_id, call, function_id, kind)?;
         let snapshot = copy_snapshot(self.trace_heap());
         reservation.commit(snapshot);
         Ok(())
@@ -435,7 +457,7 @@ impl TraceCaptureProducer {
         call: TraceCallKey,
         copy_snapshot: impl FnOnce(&TraceHeap) -> (TraceLogMetadata, TraceSnapshotHandle),
     ) -> Result<(), CaptureSkipReason> {
-        let reservation = self.try_reserve(boundary_id, call, CaptureKind::LogBody)?;
+        let reservation = self.try_reserve(boundary_id, call, 0, CaptureKind::LogBody)?;
         let (log, snapshot) = copy_snapshot(self.trace_heap());
         reservation.commit_log(snapshot, log);
         Ok(())
@@ -486,6 +508,7 @@ impl TraceCaptureProducer {
             draft: TraceValueDraft {
                 boundary_id,
                 call,
+                function_id: 0,
                 kind,
                 log: None,
                 snapshot,
@@ -683,6 +706,7 @@ impl TraceCaptureProducer {
                     Some(ValueCapture {
                         kind: value_capture_kind(draft.kind),
                         call: draft.call,
+                        function_id: draft.function_id,
                     }),
                     dag_ref,
                     draft.promoted_by.clone(),
@@ -935,6 +959,7 @@ struct CaptureReservation {
     producer: TraceCaptureProducer,
     boundary_id: BoundaryId,
     call: TraceCallKey,
+    function_id: u32,
     kind: CaptureKind,
     committed: bool,
 }
@@ -974,6 +999,7 @@ impl CaptureReservation {
         inner.pending.push_back(TraceValueDraft {
             boundary_id: self.boundary_id,
             call: self.call,
+            function_id: self.function_id,
             kind: self.kind,
             log,
             snapshot,
@@ -1284,7 +1310,7 @@ mod tests {
         let producer = TraceCaptureProducer::new(TraceCaptureConfig::enabled(1));
         drop(
             producer
-                .try_reserve(boundary_id(), trace_key(), CaptureKind::RootError)
+                .try_reserve(boundary_id(), trace_key(), 0, CaptureKind::RootError)
                 .unwrap(),
         );
 

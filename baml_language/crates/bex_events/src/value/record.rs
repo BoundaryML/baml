@@ -118,6 +118,9 @@ impl ValueCaptureKind {
 pub struct ValueCapture {
     pub kind: ValueCaptureKind,
     pub call: TraceCallKey,
+    /// Profiling function id of the captured call (the dictionary/prof id
+    /// space). `0` = unknown (pre-existing records, synthetic frames).
+    pub function_id: u32,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -412,6 +415,7 @@ impl TryFrom<crate::value::pb::ValueCaptureV1> for ValueCapture {
         Ok(Self {
             kind,
             call: call.try_into()?,
+            function_id: value.function_id,
         })
     }
 }
@@ -433,6 +437,7 @@ impl From<&ValueCapture> for crate::value::pb::ValueCaptureV1 {
                 ValueCaptureKind::CallInput => crate::value::pb::ValueCaptureKind::CallInput as i32,
             },
             call: Some(value.call.into()),
+            function_id: value.function_id,
         }
     }
 }

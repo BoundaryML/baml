@@ -268,6 +268,7 @@ mod tests {
                         thread_id: 1,
                         call_id: 1,
                     }),
+                    function_id: 0,
                 }),
                 run_started: None,
                 run_completed: Some(run_completed_proto()),

@@ -82,6 +82,9 @@ pub enum ColData {
     U64(Vec<u64>),
     F64(Vec<f64>),
     Str(Vec<String>),
+    /// Serialized JSON per cell (hydrated values): renders as an object in
+    /// JSON output, as a truncated preview in tables, as Str on the wire.
+    Json(Vec<String>),
 }
 
 impl ColData {
@@ -91,7 +94,7 @@ impl ColData {
             ColData::U32(v) => v.len(),
             ColData::U64(v) => v.len(),
             ColData::F64(v) => v.len(),
-            ColData::Str(v) => v.len(),
+            ColData::Str(v) | ColData::Json(v) => v.len(),
         }
     }
 
@@ -106,6 +109,7 @@ impl ColData {
             ColData::U64(_) => "u64",
             ColData::F64(_) => "f64",
             ColData::Str(_) => "str",
+            ColData::Json(_) => "json",
         }
     }
 
@@ -114,7 +118,7 @@ impl ColData {
             ColData::U32(v) => v.truncate(k),
             ColData::U64(v) => v.truncate(k),
             ColData::F64(v) => v.truncate(k),
-            ColData::Str(v) => v.truncate(k),
+            ColData::Str(v) | ColData::Json(v) => v.truncate(k),
         }
     }
 }
@@ -187,7 +191,7 @@ impl BqlTable {
                     s.extend_from_slice(v);
                     Shifted::F64(s)
                 }
-                ColData::Str(v) => {
+                ColData::Str(v) | ColData::Json(v) => {
                     let mut s = Vec::with_capacity(v.len() + 1);
                     s.push(String::new());
                     s.extend(v.iter().cloned());
@@ -239,9 +243,13 @@ enum Tok {
     Str(String),
     /// Duration literal, already in nanoseconds.
     Dur(u64),
+    /// Byte-size literal (`64kb`), already in bytes.
+    Size(u64),
     Pipe,
     LParen,
     RParen,
+    LBracket,
+    RBracket,
     Comma,
     /// `=` (named argument).
     Assign,
@@ -281,6 +289,13 @@ const DURATION_UNITS: &[(&str, u64)] = &[
     ("d", 86_400 * 1_000_000_000),
 ];
 
+const SIZE_UNITS: &[(&str, u64)] = &[
+    ("b", 1),
+    ("kb", 1024),
+    ("mb", 1024 * 1024),
+    ("gb", 1024 * 1024 * 1024),
+];
+
 fn lex(src: &str) -> Result<Vec<(Tok, usize)>, BqlError> {
     let bytes = src.as_bytes();
     let mut out = Vec::new();
@@ -300,6 +315,14 @@ fn lex(src: &str) -> Result<Vec<(Tok, usize)>, BqlError> {
             }
             b')' => {
                 out.push((Tok::RParen, at));
+                i += 1;
+            }
+            b'[' => {
+                out.push((Tok::LBracket, at));
+                i += 1;
+            }
+            b']' => {
+                out.push((Tok::RBracket, at));
                 i += 1;
             }
             b',' => {
@@ -417,8 +440,30 @@ fn lex(src: &str) -> Result<Vec<(Tok, usize)>, BqlError> {
                 } else {
                     let Some(&(_, unit_ns)) = DURATION_UNITS.iter().find(|(u, _)| *u == unit)
                     else {
+                        // Byte-size literal (`64kb`, `4mb`) — §8.4 budgets.
+                        if let Some(&(_, mult)) = SIZE_UNITS
+                            .iter()
+                            .find(|(u, _)| *u == unit.to_ascii_lowercase())
+                        {
+                            if saw_dot {
+                                return Err(BqlError::parse(format!(
+                                    "byte sizes are integers ('{num}{unit}' at byte {start})"
+                                )));
+                            }
+                            let v: u64 = num.parse().map_err(|_| {
+                                BqlError::parse(format!("bad integer '{num}' at byte {start}"))
+                            })?;
+                            let bytes = v.checked_mul(mult).ok_or_else(|| {
+                                BqlError::parse(format!(
+                                    "size '{num}{unit}' overflows at byte {start}"
+                                ))
+                            })?;
+                            out.push((Tok::Size(bytes), at));
+                            i = i.max(unit_start + unit.len());
+                            continue;
+                        }
                         return Err(BqlError::parse(format!(
-                            "unknown duration unit '{unit}' at byte {unit_start} (use ns/us/ms/s/m/h/d)"
+                            "unknown unit '{unit}' at byte {unit_start} (durations: ns/us/ms/s/m/h/d; sizes: b/kb/mb/gb)"
                         )));
                     };
                     let ns = if saw_dot {
@@ -482,6 +527,8 @@ enum ValueAst {
     Str(String),
     Ident(String),
     Dur(u64),
+    Size(u64),
+    List(Vec<ValueAst>),
 }
 
 impl ValueAst {
@@ -492,6 +539,8 @@ impl ValueAst {
             ValueAst::Str(s) => format!("string \"{s}\""),
             ValueAst::Ident(s) => format!("identifier {s}"),
             ValueAst::Dur(ns) => format!("duration {ns}ns"),
+            ValueAst::Size(b) => format!("size {b}b"),
+            ValueAst::List(items) => format!("list of {} value(s)", items.len()),
         }
     }
 }
@@ -548,6 +597,28 @@ impl Parser {
             Some(Tok::Str(s)) => Ok(ValueAst::Str(s)),
             Some(Tok::Ident(s)) => Ok(ValueAst::Ident(s)),
             Some(Tok::Dur(ns)) => Ok(ValueAst::Dur(ns)),
+            Some(Tok::Size(b)) => Ok(ValueAst::Size(b)),
+            Some(Tok::LBracket) => {
+                let mut items = Vec::new();
+                if self.peek() == Some(&Tok::RBracket) {
+                    self.next();
+                    return Ok(ValueAst::List(items));
+                }
+                loop {
+                    items.push(self.value()?);
+                    let pos = self.pos();
+                    match self.next() {
+                        Some(Tok::Comma) => {}
+                        Some(Tok::RBracket) => break,
+                        _ => {
+                            return Err(BqlError::parse(format!(
+                                "expected ',' or ']' in list at {pos}"
+                            )));
+                        }
+                    }
+                }
+                Ok(ValueAst::List(items))
+            }
             _ => Err(BqlError::parse(format!("expected a value at {pos}"))),
         }
     }
@@ -638,6 +709,7 @@ fn parse(src: &str) -> Result<Vec<StageAst>, BqlError> {
 enum SetKind {
     RunSet,
     CtxSet,
+    ValueSet,
     Table,
 }
 
@@ -646,6 +718,7 @@ fn kind_name(kind: Option<SetKind>) -> &'static str {
         None => "nothing (source position)",
         Some(SetKind::RunSet) => "RunSet",
         Some(SetKind::CtxSet) => "CtxSet",
+        Some(SetKind::ValueSet) => "ValueSet",
         Some(SetKind::Table) => "Table",
     }
 }
@@ -705,12 +778,31 @@ enum PlanStage {
         by: Metric,
     },
     Stats,
+    /// `stats(by=cid)` over a ValueSet: dedupe view (§8.5).
+    StatsByCid,
     Limit {
         k: usize,
     },
+    /// §8.2 ValueSet source: a run's captured values.
+    Values {
+        roles: Vec<String>,
+        fn_pattern: Option<String>,
+    },
+    /// §8.4 bounded hydration sink.
+    Get {
+        max_bytes: usize,
+        max_depth: u32,
+    },
+    /// §8.2 exact-instance gate.
+    Instances,
+    /// §8.5 verify-my-fix: two runs' outputs compared on matched inputs.
+    VDiff {
+        a: String,
+        b: String,
+    },
 }
 
-const STAGE_LIST: &str = "runs, run, ctx, calls, errors, rollup, where, sort, top, stats, limit";
+const STAGE_LIST: &str = "runs, run, ctx, calls, errors, rollup, where, sort, top, stats, limit, values, get, instances, vdiff";
 
 /// Reject named keys outside `named`, more than `max_pos` positional args,
 /// and comparison args unless `allow_cmp`.
@@ -1040,9 +1132,206 @@ fn plan_stage(stage: &StageAst, kind: Option<SetKind>) -> Result<(PlanStage, Set
             Ok((PlanStage::Top { k, by }, SetKind::Table))
         }
         "stats" => {
+            if kind == Some(SetKind::ValueSet) {
+                check_args(stage, &["by"], 0, false)?;
+                match named_value(stage, "by") {
+                    Some(ValueAst::Ident(by)) if by == "cid" => {}
+                    Some(other) => {
+                        return Err(BqlError::bad_arg(
+                            format!(
+                                "'stats(by=...)' over values supports only by=cid in v1, got {}",
+                                other.describe()
+                            ),
+                            "use stats(by=cid) for the dedupe view",
+                        ));
+                    }
+                    None => {
+                        return Err(BqlError::bad_arg(
+                            "'stats' over values needs a grouping in v1",
+                            "use stats(by=cid) for the dedupe view",
+                        ));
+                    }
+                }
+                return Ok((PlanStage::StatsByCid, SetKind::Table));
+            }
             require_ctx_input(stage, kind)?;
             check_args(stage, &[], 0, false)?;
             Ok((PlanStage::Stats, SetKind::Table))
+        }
+        "values" => {
+            match kind {
+                None | Some(SetKind::RunSet) => {}
+                other => {
+                    return Err(BqlError::new(
+                        "E_TYPE",
+                        format!(
+                            "'values' expects a run scope (RunSet or source position), got {}",
+                            kind_name(other)
+                        ),
+                        "aggregates cannot produce instances (§8.2): use values() after runs()/run(id=...) or as the source with the request's run",
+                    ));
+                }
+            }
+            check_args(stage, &["role", "fn"], 0, false)?;
+            let mut roles = Vec::new();
+            match named_value(stage, "role") {
+                None => {}
+                Some(ValueAst::Ident(r) | ValueAst::Str(r)) => roles.push(r.clone()),
+                Some(ValueAst::List(items)) => {
+                    for item in items {
+                        match item {
+                            ValueAst::Ident(r) | ValueAst::Str(r) => roles.push(r.clone()),
+                            other => {
+                                return Err(BqlError::bad_arg(
+                                    format!(
+                                        "'values(role=[...])' expects role names, got {}",
+                                        other.describe()
+                                    ),
+                                    "roles: input, output, error, log",
+                                ));
+                            }
+                        }
+                    }
+                }
+                Some(other) => {
+                    return Err(BqlError::bad_arg(
+                        format!(
+                            "'values(role=...)' expects a role or [role, ...], got {}",
+                            other.describe()
+                        ),
+                        "example: values(role=[input, output])",
+                    ));
+                }
+            }
+            for role in &roles {
+                if !matches!(role.as_str(), "input" | "output" | "error" | "log") {
+                    return Err(BqlError::bad_arg(
+                        format!("unknown role '{role}'"),
+                        "roles: input, output, error, log",
+                    ));
+                }
+            }
+            let fn_pattern = match named_value(stage, "fn") {
+                None => None,
+                Some(ValueAst::Str(p)) => Some(p.clone()),
+                Some(other) => {
+                    return Err(BqlError::bad_arg(
+                        format!(
+                            "'values(fn=...)' expects a quoted glob, got {}",
+                            other.describe()
+                        ),
+                        "example: values(fn=\"*line_total*\")",
+                    ));
+                }
+            };
+            Ok((PlanStage::Values { roles, fn_pattern }, SetKind::ValueSet))
+        }
+        "get" => {
+            match kind {
+                Some(SetKind::ValueSet) => {}
+                other => {
+                    return Err(BqlError::new(
+                        "E_TYPE",
+                        format!("'get' expects ValueSet input, got {}", kind_name(other)),
+                        "pipe values(...) into get(...): run(id=...) | values(role=[input, output]) | get(max_bytes=64kb)",
+                    ));
+                }
+            }
+            check_args(stage, &["max_bytes", "depth", "as"], 0, false)?;
+            if named_value(stage, "as").is_some() {
+                return Err(BqlError::bad_arg(
+                    "'get(as=Type)' typed hydration is not implemented in v1",
+                    "omit as=; values hydrate as schema-erased JSON",
+                ));
+            }
+            let max_bytes = match named_value(stage, "max_bytes") {
+                None => 64 * 1024,
+                Some(ValueAst::Size(b)) => usize::try_from(*b).unwrap_or(usize::MAX),
+                Some(ValueAst::Int(v)) if *v > 0 => usize::try_from(*v).unwrap_or(usize::MAX),
+                Some(other) => {
+                    return Err(BqlError::bad_arg(
+                        format!(
+                            "'get(max_bytes=...)' expects a byte size, got {}",
+                            other.describe()
+                        ),
+                        "sizes look like 64kb, 4mb, or a plain byte count",
+                    ));
+                }
+            };
+            let max_depth = match named_value(stage, "depth") {
+                None => 32,
+                Some(ValueAst::Int(v)) if *v >= 0 => u32::try_from(*v).unwrap_or(u32::MAX),
+                Some(other) => {
+                    return Err(BqlError::bad_arg(
+                        format!(
+                            "'get(depth=...)' expects a non-negative integer, got {}",
+                            other.describe()
+                        ),
+                        "example: get(max_bytes=64kb, depth=3)",
+                    ));
+                }
+            };
+            Ok((
+                PlanStage::Get {
+                    max_bytes,
+                    max_depth,
+                },
+                SetKind::Table,
+            ))
+        }
+        "instances" => {
+            match kind {
+                None | Some(SetKind::RunSet) => {}
+                other => {
+                    return Err(BqlError::new(
+                        "E_TYPE",
+                        format!("'instances' expects a run scope, got {}", kind_name(other)),
+                        "use instances() after runs()/run(id=...) or as the source",
+                    ));
+                }
+            }
+            check_args(stage, &["source"], 0, false)?;
+            match named_value(stage, "source") {
+                None => {}
+                Some(ValueAst::Ident(source)) if source == "values" => {}
+                Some(ValueAst::Ident(source)) => {
+                    return Err(BqlError::new(
+                        "E_NO_EXACT_SOURCE",
+                        format!("exact source '{source}' is not readable in v1"),
+                        "v1 derives instances from value join keys: instances(source=values); flight/trace sources are roadmap",
+                    ));
+                }
+                Some(other) => {
+                    return Err(BqlError::bad_arg(
+                        format!(
+                            "'instances(source=...)' expects an identifier, got {}",
+                            other.describe()
+                        ),
+                        "example: instances(source=values)",
+                    ));
+                }
+            }
+            Ok((PlanStage::Instances, SetKind::Table))
+        }
+        "vdiff" => {
+            require_source_position(stage, kind)?;
+            check_args(stage, &["a", "b"], 0, false)?;
+            let run_arg = |key: &str| -> Result<String, BqlError> {
+                match named_value(stage, key) {
+                    Some(ValueAst::Str(s)) if !s.is_empty() => Ok(s.clone()),
+                    _ => Err(BqlError::bad_arg(
+                        format!("'vdiff' requires {key}=\"<run key>\""),
+                        "example: vdiff(a=\"<before run>\", b=\"<after run>\"); list keys with runs()",
+                    )),
+                }
+            };
+            Ok((
+                PlanStage::VDiff {
+                    a: run_arg("a")?,
+                    b: run_arg("b")?,
+                },
+                SetKind::Table,
+            ))
         }
         "limit" => {
             let Some(kind) = kind else {
@@ -1119,7 +1408,15 @@ enum State {
     Start,
     Runs(Vec<RunEntry>),
     Ctx(CtxState),
+    Values(ValueState),
     Table(BqlTable),
+}
+
+/// A resolved ValueSet: one run's captured values (§8.2).
+struct ValueState {
+    run_dir: std::path::PathBuf,
+    rows: Vec<crate::values::ValueRow>,
+    truncated: bool,
 }
 
 /// Execution context: degradation notes + the percentile-fallback flag,
@@ -1308,12 +1605,101 @@ fn ctx_from(
                 "pipe through run(id) or pass a run key",
             )),
         },
+        State::Values(_) => Err(BqlError::new(
+            "E_TYPE",
+            format!("stage '{stage}' expects CtxSet input, got ValueSet"),
+            "value pipelines end in get(...) / stats(by=cid) / limit(k)",
+        )),
         State::Table(_) => Err(BqlError::new(
             "E_TYPE",
             format!("stage '{stage}' expects CtxSet input, got Table"),
             "apply ctx transforms before the sink stage",
         )),
     }
+}
+
+/// Resolve a run scope (RunSet or the source position) to one run's key +
+/// boundary dir + bound session — the value plane's `ctx_from`.
+fn run_scope(
+    engine: &mut ObserveEngine,
+    state: State,
+    stage: &'static str,
+    default_run: Option<&str>,
+    exec: &mut ExecNotes,
+) -> Result<Option<(String, std::path::PathBuf, Option<String>)>, BqlError> {
+    let key = match state {
+        State::Start => match default_run {
+            Some(key) => key.to_string(),
+            None => {
+                return Err(BqlError::bad_arg(
+                    format!("'{stage}' requires a run in scope"),
+                    "pass a run key with the request, or pipe run(id=\"...\") first",
+                ));
+            }
+        },
+        State::Runs(entries) => match entries.as_slice() {
+            [] => {
+                exec.notes
+                    .push("RunSet is empty: no runs matched, no values".to_string());
+                return Ok(None);
+            }
+            [only] => only.key.clone(),
+            many => {
+                return Err(BqlError::new(
+                    "E_MULTI_RUN_CTX",
+                    format!(
+                        "RunSet has {} runs; '{stage}' needs a single run in v1",
+                        many.len()
+                    ),
+                    "pipe through run(id) or pass a run key",
+                ));
+            }
+        },
+        _ => {
+            return Err(BqlError::new(
+                "E_TYPE",
+                format!("'{stage}' expects a run scope"),
+                "use runs()/run(id=...) or the request's run key",
+            ));
+        }
+    };
+    // Resolve dir + bound session via the run index (the boundary's meta).
+    let (now_ns, _) = now_epoch();
+    let sessions = runs::list_sessions(engine.root(), now_ns);
+    let rows = runs::list_runs(engine.root(), &sessions);
+    let row = rows.iter().find(|r| run_key_of(r) == key);
+    let dir = row.map_or_else(
+        || engine.root().join("history").join(&key),
+        |r| r.dir.clone(),
+    );
+    if !dir.is_dir() {
+        return Err(BqlError::bad_arg(
+            format!("run '{key}' has no boundary dir"),
+            "list valid run keys with runs()",
+        ));
+    }
+    let session = row.map(|r| r.session_dir.clone()).filter(|s| !s.is_empty());
+    Ok(Some((key, dir, session)))
+}
+
+/// List one run's values with the exact-source fn join.
+fn load_values(
+    engine: &mut ObserveEngine,
+    key: &str,
+    dir: &std::path::Path,
+    session: Option<&str>,
+) -> Result<crate::values::RunValues, BqlError> {
+    // Names come from the run's dictionary (already loaded on open).
+    if engine.run_epoch(key).is_none() {
+        let _ = engine.open_run(key);
+    }
+    let names = engine.names(key).cloned();
+    crate::values::list_run_values(engine.root(), dir, session, names.as_ref()).map_err(|err| {
+        BqlError::bad_arg(
+            format!("cannot read values of run '{key}': {err}"),
+            "the run's .bamlvalue segments are unreadable",
+        )
+    })
 }
 
 fn now_epoch() -> (u64, u64) {
@@ -1438,6 +1824,340 @@ fn runs_to_table(mut entries: Vec<RunEntry>, exec: &mut ExecNotes) -> BqlTable {
             first_ts_ns: 0,
             last_ts_ns: 0,
             degraded: Vec::new(),
+        },
+    }
+}
+
+fn value_footer(values: &ValueState, exec: &mut ExecNotes) -> Completeness {
+    let _ = exec;
+    Completeness {
+        sealed: !values.truncated,
+        torn: values.truncated,
+        first_ts_ns: 0,
+        last_ts_ns: 0,
+        degraded: Vec::new(),
+    }
+}
+
+/// ValueSet listing WITHOUT hydration (pipeline ended before `get`).
+fn values_to_table(values: ValueState, exec: &mut ExecNotes) -> BqlTable {
+    if !values.rows.is_empty() {
+        exec.notes.push(
+            "values listed without bodies; pipe | get(max_bytes=64kb) to hydrate".to_string(),
+        );
+    }
+    let footer = value_footer(&values, exec);
+    let mut rows = values.rows;
+    if rows.len() > DEFAULT_ROW_LIMIT {
+        exec.notes.push(format!(
+            "result truncated to {DEFAULT_ROW_LIMIT} rows (implicit limit); add limit(k) to choose"
+        ));
+        rows.truncate(DEFAULT_ROW_LIMIT);
+    }
+    let n = rows.len();
+    let mut value_id = Vec::with_capacity(n);
+    let mut role = Vec::with_capacity(n);
+    let mut kind = Vec::with_capacity(n);
+    let mut thread = Vec::with_capacity(n);
+    let mut call = Vec::with_capacity(n);
+    let mut fn_name = Vec::with_capacity(n);
+    let mut bytes = Vec::with_capacity(n);
+    let mut cid = Vec::with_capacity(n);
+    let mut promoted = Vec::with_capacity(n);
+    for row in &rows {
+        value_id.push(row.value_id.clone());
+        role.push(row.role.to_string());
+        kind.push(row.kind.to_string());
+        thread.push(row.thread_id);
+        call.push(row.call_id);
+        fn_name.push(row.fn_name.clone().unwrap_or_default());
+        bytes.push(row.original_bytes);
+        cid.push(
+            row.cid
+                .map(|c| bex_events::store::canon::cid_wire(&c))
+                .unwrap_or_default(),
+        );
+        promoted.push(row.promoted_by.clone().unwrap_or_default());
+    }
+    BqlTable {
+        columns: vec![
+            ("value".to_string(), ColData::Str(value_id)),
+            ("role".to_string(), ColData::Str(role)),
+            ("kind".to_string(), ColData::Str(kind)),
+            ("thread".to_string(), ColData::U64(thread)),
+            ("call".to_string(), ColData::U64(call)),
+            ("fn".to_string(), ColData::Str(fn_name)),
+            ("bytes".to_string(), ColData::U64(bytes)),
+            ("cid".to_string(), ColData::Str(cid)),
+            ("promoted_by".to_string(), ColData::Str(promoted)),
+        ],
+        footer,
+    }
+}
+
+/// `get(...)`: the hydration sink (§8.4 bounded, elision-honest).
+fn hydrate_to_table(
+    engine: &mut ObserveEngine,
+    values: ValueState,
+    max_bytes: usize,
+    max_depth: u32,
+    exec: &mut ExecNotes,
+) -> BqlTable {
+    let footer = value_footer(&values, exec);
+    let mut rows = values.rows;
+    if rows.len() > DEFAULT_ROW_LIMIT {
+        exec.notes.push(format!(
+            "result truncated to {DEFAULT_ROW_LIMIT} rows (implicit limit); add limit(k) to choose"
+        ));
+        rows.truncate(DEFAULT_ROW_LIMIT);
+    }
+    let store = bex_events::store::Store::open(&engine.root().join("store"), [0; 16]).ok();
+    if store.is_none() && rows.iter().any(|r| r.cid.is_some()) {
+        exec.notes.push(
+            "value store unreadable: canonical bodies fall back to inline copies".to_string(),
+        );
+    }
+    let mut elided_total = 0usize;
+    let n = rows.len();
+    let mut value_id = Vec::with_capacity(n);
+    let mut role = Vec::with_capacity(n);
+    let mut thread = Vec::with_capacity(n);
+    let mut call = Vec::with_capacity(n);
+    let mut fn_name = Vec::with_capacity(n);
+    let mut cid = Vec::with_capacity(n);
+    let mut body = Vec::with_capacity(n);
+    for row in &rows {
+        value_id.push(row.value_id.clone());
+        role.push(row.role.to_string());
+        thread.push(row.thread_id);
+        call.push(row.call_id);
+        fn_name.push(row.fn_name.clone().unwrap_or_default());
+        cid.push(
+            row.cid
+                .map(|c| bex_events::store::canon::cid_wire(&c))
+                .unwrap_or_default(),
+        );
+        let json = match row.hydrate(store.as_ref(), &values.run_dir, max_bytes, max_depth) {
+            Ok(hydrated) => {
+                elided_total += hydrated.elided.len();
+                hydrated.json
+            }
+            Err(err) => serde_json::json!({ "$unavailable": err.to_string() }),
+        };
+        body.push(json.to_string());
+    }
+    if elided_total > 0 {
+        exec.notes.push(format!(
+            "{elided_total} subtree(s) elided by the {max_bytes}-byte budget; raise get(max_bytes=...) or descend by cid"
+        ));
+    }
+    BqlTable {
+        columns: vec![
+            ("value".to_string(), ColData::Str(value_id)),
+            ("role".to_string(), ColData::Str(role)),
+            ("thread".to_string(), ColData::U64(thread)),
+            ("call".to_string(), ColData::U64(call)),
+            ("fn".to_string(), ColData::Str(fn_name)),
+            ("cid".to_string(), ColData::Str(cid)),
+            ("body".to_string(), ColData::Json(body)),
+        ],
+        footer,
+    }
+}
+
+/// `instances(source=values)`: exact call instances from value join keys.
+fn instances_to_table(listed: crate::values::RunValues, exec: &mut ExecNotes) -> BqlTable {
+    use std::collections::BTreeMap;
+    let mut by_call: BTreeMap<(u64, u64), (Option<String>, Vec<&'static str>, u64)> =
+        BTreeMap::new();
+    for row in &listed.rows {
+        let entry = by_call.entry((row.thread_id, row.call_id)).or_insert((
+            row.fn_name.clone(),
+            Vec::new(),
+            0,
+        ));
+        if entry.0.is_none() {
+            entry.0.clone_from(&row.fn_name);
+        }
+        if !entry.1.contains(&row.role) {
+            entry.1.push(row.role);
+        }
+        entry.2 += 1;
+    }
+    if listed.fn_join == crate::values::FnJoin::NoExactSource {
+        exec.notes.push(
+            "fn names unavailable: no exact source (re-run with BAML_PROFILE_RAW=1)".to_string(),
+        );
+    }
+    let n = by_call.len();
+    let mut thread = Vec::with_capacity(n);
+    let mut call = Vec::with_capacity(n);
+    let mut fn_name = Vec::with_capacity(n);
+    let mut roles = Vec::with_capacity(n);
+    let mut captures = Vec::with_capacity(n);
+    for ((t, c), (f, r, count)) in by_call {
+        thread.push(t);
+        call.push(c);
+        fn_name.push(f.unwrap_or_default());
+        roles.push(r.join("+"));
+        captures.push(count);
+    }
+    BqlTable {
+        columns: vec![
+            ("thread".to_string(), ColData::U64(thread)),
+            ("call".to_string(), ColData::U64(call)),
+            ("fn".to_string(), ColData::Str(fn_name)),
+            ("roles".to_string(), ColData::Str(roles)),
+            ("captures".to_string(), ColData::U64(captures)),
+        ],
+        footer: Completeness {
+            sealed: !listed.truncated,
+            torn: listed.truncated,
+            ..Completeness::default()
+        },
+    }
+}
+
+/// `stats(by=cid)`: the §8.5 dedupe view — how often each distinct content
+/// address appears.
+fn stats_by_cid_table(values: ValueState, exec: &mut ExecNotes) -> BqlTable {
+    use std::collections::BTreeMap;
+    let footer = value_footer(&values, exec);
+    let mut groups: BTreeMap<String, (u64, u64, Vec<&'static str>)> = BTreeMap::new();
+    let mut no_cid = 0u64;
+    for row in &values.rows {
+        let Some(c) = row.cid else {
+            no_cid += 1;
+            continue;
+        };
+        let entry = groups
+            .entry(bex_events::store::canon::cid_wire(&c))
+            .or_insert((0, 0, Vec::new()));
+        entry.0 += 1;
+        entry.1 += row.original_bytes;
+        if !entry.2.contains(&row.role) {
+            entry.2.push(row.role);
+        }
+    }
+    if no_cid > 0 {
+        exec.notes.push(format!(
+            "{no_cid} value(s) have no CID (no canonical body) and are excluded from the dedupe view"
+        ));
+    }
+    let mut rows: Vec<(String, u64, u64, String)> = groups
+        .into_iter()
+        .map(|(cid, (n, bytes, roles))| (cid, n, bytes, roles.join("+")))
+        .collect();
+    rows.sort_by(|a, b| b.1.cmp(&a.1).then(a.0.cmp(&b.0)));
+    let n = rows.len();
+    let mut cid = Vec::with_capacity(n);
+    let mut count = Vec::with_capacity(n);
+    let mut bytes = Vec::with_capacity(n);
+    let mut roles = Vec::with_capacity(n);
+    for (c, cnt, b, r) in rows {
+        cid.push(c);
+        count.push(cnt);
+        bytes.push(b);
+        roles.push(r);
+    }
+    BqlTable {
+        columns: vec![
+            ("cid".to_string(), ColData::Str(cid)),
+            ("n".to_string(), ColData::U64(count)),
+            ("bytes".to_string(), ColData::U64(bytes)),
+            ("roles".to_string(), ColData::Str(roles)),
+        ],
+        footer,
+    }
+}
+
+/// `vdiff(a=, b=)`: match calls across two runs by INPUT CID, compare
+/// output CIDs (§8.5 verify-my-fix; CID equality is the Merkle
+/// short-circuit — bodies are never fetched).
+fn vdiff_table(
+    a_key: &str,
+    a: crate::values::RunValues,
+    b_key: &str,
+    b: crate::values::RunValues,
+    exec: &mut ExecNotes,
+) -> BqlTable {
+    use std::collections::BTreeMap;
+    // Per side: call -> (input cid, output cid).
+    fn calls_of(
+        listed: &crate::values::RunValues,
+    ) -> BTreeMap<(u64, u64), (Option<[u8; 32]>, Option<[u8; 32]>, Option<String>)> {
+        let mut out: BTreeMap<(u64, u64), (Option<[u8; 32]>, Option<[u8; 32]>, Option<String>)> =
+            BTreeMap::new();
+        for row in &listed.rows {
+            let entry = out.entry((row.thread_id, row.call_id)).or_default();
+            match row.role {
+                "input" => entry.0 = row.cid,
+                "output" | "error" => entry.1 = row.cid,
+                _ => {}
+            }
+            if entry.2.is_none() {
+                entry.2.clone_from(&row.fn_name);
+            }
+        }
+        out
+    }
+    let a_calls = calls_of(&a);
+    let b_calls = calls_of(&b);
+    // Index side B by input cid (first match wins per input).
+    let mut b_by_input: BTreeMap<[u8; 32], Vec<((u64, u64), Option<[u8; 32]>)>> = BTreeMap::new();
+    for (call, (input, output, _)) in &b_calls {
+        if let Some(input) = input {
+            b_by_input.entry(*input).or_default().push((*call, *output));
+        }
+    }
+    let mut matched = 0u64;
+    let mut unmatched_a = 0u64;
+    let mut fn_name = Vec::new();
+    let mut input_cid = Vec::new();
+    let mut out_a = Vec::new();
+    let mut out_b = Vec::new();
+    let mut equal = Vec::new();
+    for (_call, (input, output_a, f)) in &a_calls {
+        let Some(input) = input else { continue };
+        let Some(candidates) = b_by_input.get_mut(input) else {
+            unmatched_a += 1;
+            continue;
+        };
+        let Some((_b_call, output_b)) = candidates.pop() else {
+            unmatched_a += 1;
+            continue;
+        };
+        matched += 1;
+        fn_name.push(f.clone().unwrap_or_default());
+        input_cid.push(bex_events::store::canon::cid_wire(input));
+        out_a.push(
+            output_a
+                .map(|c| bex_events::store::canon::cid_wire(&c))
+                .unwrap_or_default(),
+        );
+        out_b.push(
+            output_b
+                .map(|c| bex_events::store::canon::cid_wire(&c))
+                .unwrap_or_default(),
+        );
+        equal.push(u32::from(*output_a == output_b));
+    }
+    let unmatched_b: u64 = b_by_input.values().map(|v| v.len() as u64).sum();
+    exec.notes.push(format!(
+        "vdiff {a_key} vs {b_key}: {matched} input-matched call(s); {unmatched_a} unmatched in a, {unmatched_b} in b"
+    ));
+    BqlTable {
+        columns: vec![
+            ("fn".to_string(), ColData::Str(fn_name)),
+            ("input_cid".to_string(), ColData::Str(input_cid)),
+            ("output_a".to_string(), ColData::Str(out_a)),
+            ("output_b".to_string(), ColData::Str(out_b)),
+            ("outputs_equal".to_string(), ColData::U32(equal)),
+        ],
+        footer: Completeness {
+            sealed: !(a.truncated || b.truncated),
+            torn: a.truncated || b.truncated,
+            ..Completeness::default()
         },
     }
 }
@@ -1594,6 +2314,121 @@ fn apply(
             };
             Ok(State::Table(table))
         }
+        PlanStage::Values { roles, fn_pattern } => {
+            let Some((run_key, run_dir, session)) =
+                run_scope(engine, state, "values", default_run, exec)?
+            else {
+                return Ok(State::Values(ValueState {
+                    run_dir: std::path::PathBuf::new(),
+                    rows: Vec::new(),
+                    truncated: false,
+                }));
+            };
+            let listed = load_values(engine, &run_key, &run_dir, session.as_deref())?;
+            if fn_pattern.is_some() && listed.fn_join == crate::values::FnJoin::NoExactSource {
+                return Err(BqlError::new(
+                    "E_NO_EXACT_SOURCE",
+                    "filtering values by function name needs an exact source, and none covers this run",
+                    "re-run with BAML_PROFILE_RAW=1 (raw firehose), arm the flight recorder, or drop the fn= filter",
+                ));
+            }
+            if listed.fn_join == crate::values::FnJoin::NoExactSource && !listed.rows.is_empty() {
+                exec.notes.push(
+                    "fn names unavailable: no exact source for this run (re-run with BAML_PROFILE_RAW=1 to join call->function)"
+                        .to_string(),
+                );
+            }
+            let mut rows = listed.rows;
+            if !roles.is_empty() {
+                rows.retain(|r| roles.iter().any(|want| want == r.role));
+            }
+            if let Some(pattern) = fn_pattern {
+                rows.retain(|r| r.fn_name.as_deref().is_some_and(|f| glob_match(pattern, f)));
+            }
+            if rows.is_empty() {
+                exec.notes.push(
+                    "no captured values matched: capture defaults are llm_boundary - opt calls in with $id = boundary.id().capture(...)"
+                        .to_string(),
+                );
+            }
+            let _ = run_key;
+            Ok(State::Values(ValueState {
+                run_dir,
+                rows,
+                truncated: listed.truncated,
+            }))
+        }
+        PlanStage::Get {
+            max_bytes,
+            max_depth,
+        } => {
+            let State::Values(values) = state else {
+                return Err(BqlError::new(
+                    "E_TYPE",
+                    "'get' expects ValueSet input",
+                    "pipe values(...) into get(...)",
+                ));
+            };
+            Ok(State::Table(hydrate_to_table(
+                engine, values, *max_bytes, *max_depth, exec,
+            )))
+        }
+        PlanStage::Instances => {
+            let Some((run_key, run_dir, session)) =
+                run_scope(engine, state, "instances", default_run, exec)?
+            else {
+                return Ok(State::Table(BqlTable {
+                    columns: vec![("thread".to_string(), ColData::U64(Vec::new()))],
+                    footer: Completeness {
+                        sealed: true,
+                        ..Completeness::default()
+                    },
+                }));
+            };
+            let listed = load_values(engine, &run_key, &run_dir, session.as_deref())?;
+            if listed.rows.is_empty() {
+                return Err(BqlError::new(
+                    "E_NO_EXACT_SOURCE",
+                    format!("no exact source covers run '{run_key}': no captured values"),
+                    "opt calls in with $id = boundary.id().capture(...), arm the flight recorder, or request a bounded full trace",
+                ));
+            }
+            Ok(State::Table(instances_to_table(listed, exec)))
+        }
+        PlanStage::StatsByCid => {
+            let State::Values(values) = state else {
+                return Err(BqlError::new(
+                    "E_TYPE",
+                    "'stats(by=cid)' expects ValueSet input",
+                    "pipe values(...) into stats(by=cid)",
+                ));
+            };
+            Ok(State::Table(stats_by_cid_table(values, exec)))
+        }
+        PlanStage::VDiff { a, b } => {
+            let side = |engine: &mut ObserveEngine, key: &str, exec: &mut ExecNotes| {
+                let scoped = run_scope(
+                    engine,
+                    State::Runs(vec![RunEntry {
+                        key: key.to_string(),
+                        row: None,
+                    }]),
+                    "vdiff",
+                    None,
+                    exec,
+                )?;
+                let Some((run_key, run_dir, session)) = scoped else {
+                    return Err(BqlError::bad_arg(
+                        format!("run '{key}' not found"),
+                        "list valid run keys with runs()",
+                    ));
+                };
+                load_values(engine, &run_key, &run_dir, session.as_deref())
+            };
+            let side_a = side(engine, a, exec)?;
+            let side_b = side(engine, b, exec)?;
+            Ok(State::Table(vdiff_table(a, side_a, b, side_b, exec)))
+        }
         PlanStage::Limit { k } => match state {
             State::Runs(mut entries) => {
                 entries.truncate(*k);
@@ -1602,6 +2437,10 @@ fn apply(
             State::Ctx(mut ctx) => {
                 ctx.rows.truncate(*k);
                 Ok(State::Ctx(ctx))
+            }
+            State::Values(mut values) => {
+                values.rows.truncate(*k);
+                Ok(State::Values(values))
             }
             State::Table(mut table) => {
                 for (_, col) in &mut table.columns {
@@ -1639,6 +2478,7 @@ pub fn run(
         }
         State::Runs(entries) => runs_to_table(entries, &mut exec),
         State::Ctx(ctx) => ctx_to_table(ctx, &mut exec),
+        State::Values(values) => values_to_table(values, &mut exec),
         State::Table(table) => table,
     };
     table.footer.degraded = exec.into_degraded();

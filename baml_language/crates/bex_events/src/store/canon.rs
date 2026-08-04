@@ -639,6 +639,637 @@ fn scan_node(bytes: &[u8], refs: &mut NodeRefs) -> Option<()> {
     }
 }
 
+// ---------------------------------------------------------------------------
+// Decode: the exact inverse of `encode` (§8.4 `get()` hydration path).
+//
+// The decoder walks the FROZEN layout above, fetching referenced nodes and
+// chunks through a [`DagSource`]. Hydration is byte- and depth-budgeted
+// (§8.4 "bounded by construction"): when a budget binds, the subtree is
+// **elided whole** — never decoded partially — replaced by a synthetic
+// [`CanonValue::Omitted`] with [`ELIDED_REASON`], and its CID is recorded
+// in [`DecodeBudget::elided`] as the child handle for selective descent.
+// ---------------------------------------------------------------------------
+
+/// Synthetic `Omitted.reason` for budget/depth-elided subtrees. DECODE-side
+/// only — the encoder never produces it; engine reasons stay 0..=4.
+pub const ELIDED_REASON: u8 = 255;
+
+/// Hostile-input guard: segment trees deeper than this are malformed (a
+/// legitimate 128-ary tree of u64-count entries is ≤ 10 levels).
+const SEGMENT_DEPTH_MAX: u32 = 64;
+
+/// Where a decode fetches referenced bytes from (the CAS, a test map, …).
+pub trait DagSource {
+    /// Canonical node bytes for `cid` ([`ChunkKind::Node`]-class content).
+    fn node(&mut self, cid: &[u8; 32]) -> Option<Vec<u8>>;
+    /// Raw chunk bytes for `cid` ([`ChunkKind::Chunk`]-class content).
+    fn chunk(&mut self, cid: &[u8; 32]) -> Option<Vec<u8>>;
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub enum DecodeError {
+    /// Structurally invalid canonical bytes (never store corruption — packs
+    /// are CRC-checked below this layer).
+    Malformed(&'static str),
+    MissingNode([u8; 32]),
+    MissingChunk([u8; 32]),
+}
+
+impl std::fmt::Display for DecodeError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            DecodeError::Malformed(what) => write!(f, "malformed canonical value: {what}"),
+            DecodeError::MissingNode(cid) => {
+                write!(f, "missing value node {}", cid_wire(cid))
+            }
+            DecodeError::MissingChunk(cid) => {
+                write!(f, "missing value chunk {}", cid_wire(cid))
+            }
+        }
+    }
+}
+
+/// §8.4 `get()` budget: fetched-byte ceiling + ref-descent ceiling.
+/// Segment/chunk internals count toward bytes but NOT depth (they are
+/// encoding plumbing, invisible to the value's logical shape).
+#[derive(Debug)]
+pub struct DecodeBudget {
+    pub max_bytes: usize,
+    pub max_depth: u32,
+    /// Bytes of referenced nodes/chunks fetched so far.
+    pub spent: usize,
+    /// CIDs elided by budget or depth — the handles to descend into next.
+    pub elided: Vec<[u8; 32]>,
+}
+
+impl DecodeBudget {
+    #[must_use]
+    pub fn unbounded() -> DecodeBudget {
+        DecodeBudget {
+            max_bytes: usize::MAX,
+            max_depth: u32::MAX,
+            spent: 0,
+            elided: Vec::new(),
+        }
+    }
+
+    /// The `get(max_bytes=…, depth=…)` shape.
+    #[must_use]
+    pub fn bounded(max_bytes: usize, max_depth: u32) -> DecodeBudget {
+        DecodeBudget {
+            max_bytes,
+            max_depth,
+            spent: 0,
+            elided: Vec::new(),
+        }
+    }
+
+    fn remaining(&self) -> usize {
+        self.max_bytes.saturating_sub(self.spent)
+    }
+
+    fn elide(&mut self, cid: [u8; 32]) -> CanonValue {
+        self.elided.push(cid);
+        CanonValue::Omitted {
+            reason: ELIDED_REASON,
+            message: cid_wire(&cid),
+        }
+    }
+}
+
+/// Full decode of one canonical value from its root node bytes.
+pub fn decode(root: &[u8], src: &mut dyn DagSource) -> Result<CanonValue, DecodeError> {
+    let mut budget = DecodeBudget::unbounded();
+    decode_budgeted(root, src, &mut budget)
+}
+
+/// Budgeted decode; inspect `budget.elided`/`spent` afterwards.
+pub fn decode_budgeted(
+    root: &[u8],
+    src: &mut dyn DagSource,
+    budget: &mut DecodeBudget,
+) -> Result<CanonValue, DecodeError> {
+    decode_node_bytes(root, src, budget, 0)
+}
+
+/// Bounds-checked little-endian reader over one node's bytes.
+struct Rd<'a> {
+    b: &'a [u8],
+    at: usize,
+}
+
+impl<'a> Rd<'a> {
+    fn new(b: &'a [u8]) -> Rd<'a> {
+        Rd { b, at: 0 }
+    }
+    fn u8(&mut self) -> Result<u8, DecodeError> {
+        let v = *self
+            .b
+            .get(self.at)
+            .ok_or(DecodeError::Malformed("truncated u8"))?;
+        self.at += 1;
+        Ok(v)
+    }
+    fn u16(&mut self) -> Result<u16, DecodeError> {
+        let s = self
+            .b
+            .get(self.at..self.at + 2)
+            .ok_or(DecodeError::Malformed("truncated u16"))?;
+        self.at += 2;
+        Ok(u16::from_le_bytes(s.try_into().expect("2 bytes")))
+    }
+    fn u32(&mut self) -> Result<u32, DecodeError> {
+        let s = self
+            .b
+            .get(self.at..self.at + 4)
+            .ok_or(DecodeError::Malformed("truncated u32"))?;
+        self.at += 4;
+        Ok(u32::from_le_bytes(s.try_into().expect("4 bytes")))
+    }
+    fn u64(&mut self) -> Result<u64, DecodeError> {
+        let s = self
+            .b
+            .get(self.at..self.at + 8)
+            .ok_or(DecodeError::Malformed("truncated u64"))?;
+        self.at += 8;
+        Ok(u64::from_le_bytes(s.try_into().expect("8 bytes")))
+    }
+    fn take(&mut self, n: usize) -> Result<&'a [u8], DecodeError> {
+        let s = self
+            .b
+            .get(
+                self.at
+                    ..self
+                        .at
+                        .checked_add(n)
+                        .ok_or(DecodeError::Malformed("length overflow"))?,
+            )
+            .ok_or(DecodeError::Malformed("truncated bytes"))?;
+        self.at += n;
+        Ok(s)
+    }
+    fn cid(&mut self) -> Result<[u8; 32], DecodeError> {
+        Ok(self.take(32)?.try_into().expect("32 bytes"))
+    }
+    fn str(&mut self) -> Result<String, DecodeError> {
+        let len = self.u32()? as usize;
+        let bytes = self.take(len)?;
+        String::from_utf8(bytes.to_vec()).map_err(|_| DecodeError::Malformed("non-UTF-8 string"))
+    }
+    fn done(&self) -> bool {
+        self.at == self.b.len()
+    }
+}
+
+/// One child slot as written by `put_child`.
+enum RawSlot<'a> {
+    Inline(&'a [u8]),
+    Ref([u8; 32]),
+}
+
+fn read_raw_slot<'a>(rd: &mut Rd<'a>) -> Result<RawSlot<'a>, DecodeError> {
+    match rd.u8()? {
+        0 => {
+            let len = rd.u16()? as usize;
+            Ok(RawSlot::Inline(rd.take(len)?))
+        }
+        1 => Ok(RawSlot::Ref(rd.cid()?)),
+        _ => Err(DecodeError::Malformed("unknown slot marker")),
+    }
+}
+
+/// Fetch a referenced node's bytes, charging the byte budget. `None` means
+/// the budget elided it (caller substitutes the placeholder).
+fn fetch_node(
+    cid: [u8; 32],
+    src: &mut dyn DagSource,
+    budget: &mut DecodeBudget,
+) -> Result<Option<Vec<u8>>, DecodeError> {
+    if budget.remaining() == 0 {
+        return Ok(None);
+    }
+    let bytes = src.node(&cid).ok_or(DecodeError::MissingNode(cid))?;
+    budget.spent += bytes.len();
+    if budget.spent > budget.max_bytes {
+        return Ok(None);
+    }
+    Ok(Some(bytes))
+}
+
+/// Decode a VALUE-position ref (a real child, not a segment): depth-gated.
+fn decode_ref(
+    cid: [u8; 32],
+    src: &mut dyn DagSource,
+    budget: &mut DecodeBudget,
+    depth: u32,
+) -> Result<CanonValue, DecodeError> {
+    if depth >= budget.max_depth {
+        return Ok(budget.elide(cid));
+    }
+    let Some(bytes) = fetch_node(cid, src, budget)? else {
+        return Ok(budget.elide(cid));
+    };
+    decode_node_bytes(&bytes, src, budget, depth + 1)
+}
+
+/// LIST-context slot: an element (inline or ref), where a ref may be an
+/// internal SEGMENT node to splice.
+fn decode_list_slot(
+    slot: RawSlot<'_>,
+    src: &mut dyn DagSource,
+    budget: &mut DecodeBudget,
+    depth: u32,
+    seg_depth: u32,
+    out: &mut Vec<CanonValue>,
+) -> Result<(), DecodeError> {
+    match slot {
+        RawSlot::Inline(inner) => {
+            out.push(decode_node_bytes(inner, src, budget, depth)?);
+            Ok(())
+        }
+        RawSlot::Ref(cid) => {
+            if seg_depth > SEGMENT_DEPTH_MAX {
+                return Err(DecodeError::Malformed("segment tree too deep"));
+            }
+            let Some(bytes) = fetch_node(cid, src, budget)? else {
+                out.push(budget.elide(cid));
+                return Ok(());
+            };
+            if bytes.first() == Some(&tag::SEGMENT) {
+                let mut rd = Rd::new(&bytes);
+                let _ = rd.u8()?; // SEGMENT
+                let header = rd.u8()?;
+                if header != tag::LIST {
+                    return Err(DecodeError::Malformed("list segment with wrong header"));
+                }
+                let n = rd.u32()? as usize;
+                for _ in 0..n {
+                    let slot = read_raw_slot(&mut rd)?;
+                    decode_list_slot(slot, src, budget, depth, seg_depth + 1, out)?;
+                }
+                Ok(())
+            } else {
+                // A real element: charge depth for the descent.
+                if depth >= budget.max_depth {
+                    budget.spent -= bytes.len(); // not descended; refund
+                    out.push(budget.elide(cid));
+                    return Ok(());
+                }
+                out.push(decode_node_bytes(&bytes, src, budget, depth + 1)?);
+                Ok(())
+            }
+        }
+    }
+}
+
+/// MAP-context slot: an inline entry `[key][value-slot]`, or a ref to an
+/// internal SEGMENT of entries.
+fn decode_map_slot(
+    slot: RawSlot<'_>,
+    src: &mut dyn DagSource,
+    budget: &mut DecodeBudget,
+    depth: u32,
+    seg_depth: u32,
+    out: &mut Vec<(String, CanonValue)>,
+) -> Result<(), DecodeError> {
+    match slot {
+        RawSlot::Inline(entry) => {
+            let mut rd = Rd::new(entry);
+            let key_len = rd.u32()?;
+            let key = if key_len == u32::MAX {
+                // Indirect key (> MAX_DIRECT_KEY): a string-node slot.
+                let key_slot = read_raw_slot(&mut rd)?;
+                let key_value = match key_slot {
+                    RawSlot::Inline(inner) => decode_node_bytes(inner, src, budget, depth)?,
+                    RawSlot::Ref(cid) => {
+                        // Keys are structural: never elide, never depth-gate
+                        // (a map without its keys is not a map).
+                        let bytes = src.node(&cid).ok_or(DecodeError::MissingNode(cid))?;
+                        budget.spent += bytes.len();
+                        decode_node_bytes(&bytes, src, budget, depth)?
+                    }
+                };
+                match key_value {
+                    CanonValue::String(s) => s,
+                    _ => return Err(DecodeError::Malformed("indirect map key is not a string")),
+                }
+            } else {
+                let bytes = rd.take(key_len as usize)?;
+                String::from_utf8(bytes.to_vec())
+                    .map_err(|_| DecodeError::Malformed("non-UTF-8 map key"))?
+            };
+            let value = match read_raw_slot(&mut rd)? {
+                RawSlot::Inline(inner) => decode_node_bytes(inner, src, budget, depth)?,
+                RawSlot::Ref(cid) => decode_ref(cid, src, budget, depth)?,
+            };
+            if !rd.done() {
+                return Err(DecodeError::Malformed("trailing bytes in map entry"));
+            }
+            out.push((key, value));
+            Ok(())
+        }
+        RawSlot::Ref(cid) => {
+            if seg_depth > SEGMENT_DEPTH_MAX {
+                return Err(DecodeError::Malformed("segment tree too deep"));
+            }
+            let Some(bytes) = fetch_node(cid, src, budget)? else {
+                // An elided segment loses ENTRIES, not a value — surface it
+                // as an elided entry keyed by the cid so nothing silently
+                // disappears.
+                out.push((format!("$elided:{}", cid_wire(&cid)), budget.elide(cid)));
+                return Ok(());
+            };
+            if bytes.first() != Some(&tag::SEGMENT) {
+                return Err(DecodeError::Malformed("map slot ref is not a segment"));
+            }
+            let mut rd = Rd::new(&bytes);
+            let _ = rd.u8()?;
+            let header = rd.u8()?;
+            if header != tag::MAP {
+                return Err(DecodeError::Malformed("map segment with wrong header"));
+            }
+            let n = rd.u32()? as usize;
+            for _ in 0..n {
+                let slot = read_raw_slot(&mut rd)?;
+                decode_map_slot(slot, src, budget, depth, seg_depth + 1, out)?;
+            }
+            Ok(())
+        }
+    }
+}
+
+fn decode_node_bytes(
+    bytes: &[u8],
+    src: &mut dyn DagSource,
+    budget: &mut DecodeBudget,
+    depth: u32,
+) -> Result<CanonValue, DecodeError> {
+    let mut rd = Rd::new(bytes);
+    match rd.u8()? {
+        tag::NULL => Ok(CanonValue::Null),
+        tag::BOOL => Ok(CanonValue::Bool(rd.u8()? != 0)),
+        tag::INT => Ok(CanonValue::Int(i64::from_le_bytes(
+            rd.take(8)?.try_into().expect("8 bytes"),
+        ))),
+        tag::FLOAT => Ok(CanonValue::Float(f64::from_bits(rd.u64()?))),
+        tag::BIGINT => Ok(CanonValue::Bigint(rd.str()?)),
+        tag::STRING => {
+            let len = rd.u32()? as usize;
+            let body = rd.take(len)?;
+            Ok(CanonValue::String(
+                String::from_utf8(body.to_vec())
+                    .map_err(|_| DecodeError::Malformed("non-UTF-8 string body"))?,
+            ))
+        }
+        tag::BYTES => {
+            let len = rd.u32()? as usize;
+            Ok(CanonValue::Bytes(rd.take(len)?.to_vec()))
+        }
+        tag::CHUNKED => {
+            let inner = rd.u8()?;
+            let logical_len = rd.u64()?;
+            let count = rd.u32()? as usize;
+            let mut cids = Vec::with_capacity(count);
+            for _ in 0..count {
+                cids.push(rd.cid()?);
+            }
+            // Never assemble a partial body (§8.4 "never decode a partial
+            // value as whole"): if the whole body cannot fit the budget,
+            // elide it and hand back the chunk CIDs.
+            let logical =
+                usize::try_from(logical_len).map_err(|_| DecodeError::Malformed("body too big"))?;
+            if logical > budget.remaining() {
+                let placeholder = cids.first().copied().map_or(
+                    CanonValue::Omitted {
+                        reason: ELIDED_REASON,
+                        message: "empty chunked body".to_string(),
+                    },
+                    |first| {
+                        for extra in cids.iter().skip(1) {
+                            budget.elided.push(*extra);
+                        }
+                        budget.elide(first)
+                    },
+                );
+                return Ok(placeholder);
+            }
+            let mut body = Vec::with_capacity(logical);
+            for cid in &cids {
+                let chunk = src.chunk(cid).ok_or(DecodeError::MissingChunk(*cid))?;
+                budget.spent += chunk.len();
+                body.extend_from_slice(&chunk);
+            }
+            if body.len() as u64 != logical_len {
+                return Err(DecodeError::Malformed("chunked body length mismatch"));
+            }
+            match inner {
+                tag::STRING => Ok(CanonValue::String(
+                    String::from_utf8(body)
+                        .map_err(|_| DecodeError::Malformed("non-UTF-8 chunked string"))?,
+                )),
+                tag::BYTES => Ok(CanonValue::Bytes(body)),
+                _ => Err(DecodeError::Malformed("chunked body with unknown kind")),
+            }
+        }
+        tag::LIST => {
+            let total = rd.u64()?;
+            let n = rd.u32()? as usize;
+            let mut items = Vec::with_capacity(usize::try_from(total).unwrap_or(0).min(4096));
+            for _ in 0..n {
+                let slot = read_raw_slot(&mut rd)?;
+                decode_list_slot(slot, src, budget, depth, 0, &mut items)?;
+            }
+            Ok(CanonValue::List(items))
+        }
+        tag::MAP => {
+            let total = rd.u64()?;
+            let n = rd.u32()? as usize;
+            let mut entries = Vec::with_capacity(usize::try_from(total).unwrap_or(0).min(4096));
+            for _ in 0..n {
+                let slot = read_raw_slot(&mut rd)?;
+                decode_map_slot(slot, src, budget, depth, 0, &mut entries)?;
+            }
+            Ok(CanonValue::Map(entries))
+        }
+        tag::CLASS => {
+            let definition_key = rd.str()?;
+            let n = rd.u32()? as usize;
+            let mut fields = Vec::with_capacity(n.min(4096));
+            for _ in 0..n {
+                let name = rd.str()?;
+                let presence = match rd.u8()? {
+                    0 => Presence::Absent,
+                    1 => Presence::Null,
+                    2 => Presence::Value,
+                    3 => Presence::DefaultFilled,
+                    _ => return Err(DecodeError::Malformed("unknown presence byte")),
+                };
+                let value = if matches!(presence, Presence::Value | Presence::DefaultFilled) {
+                    Some(match read_raw_slot(&mut rd)? {
+                        RawSlot::Inline(inner) => decode_node_bytes(inner, src, budget, depth)?,
+                        RawSlot::Ref(cid) => decode_ref(cid, src, budget, depth)?,
+                    })
+                } else {
+                    None
+                };
+                fields.push((name, presence, value));
+            }
+            Ok(CanonValue::Class {
+                definition_key,
+                fields,
+            })
+        }
+        tag::ENUM => Ok(CanonValue::Enum {
+            definition_key: rd.str()?,
+            variant: rd.str()?,
+        }),
+        tag::MEDIA => {
+            let kind = rd.str()?;
+            let mime = match rd.u8()? {
+                0 => None,
+                1 => Some(rd.str()?),
+                _ => return Err(DecodeError::Malformed("unknown media mime flag")),
+            };
+            let content_kind = rd.u8()?;
+            let body = match read_raw_slot(&mut rd)? {
+                RawSlot::Inline(inner) => decode_node_bytes(inner, src, budget, depth)?,
+                RawSlot::Ref(cid) => decode_ref(cid, src, budget, depth)?,
+            };
+            let content = match body {
+                CanonValue::Bytes(b) => String::from_utf8(b)
+                    .map_err(|_| DecodeError::Malformed("non-UTF-8 media content"))?,
+                CanonValue::String(s) => s,
+                // Budget-elided media body: keep the placeholder text.
+                CanonValue::Omitted { message, .. } => message,
+                _ => return Err(DecodeError::Malformed("media body is not bytes")),
+            };
+            Ok(CanonValue::Media {
+                kind,
+                mime,
+                content_kind,
+                content,
+            })
+        }
+        tag::OMITTED => Ok(CanonValue::Omitted {
+            reason: rd.u8()?,
+            message: rd.str()?,
+        }),
+        tag::SEGMENT => Err(DecodeError::Malformed("segment node at value position")),
+        _ => Err(DecodeError::Malformed("unknown node tag")),
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Schema-erased JSON rendering (the `get()` output shape).
+// ---------------------------------------------------------------------------
+
+/// Engine omission-reason names (frozen mapping, trace_heap
+/// `canonical_code`).
+fn omission_reason_name(reason: u8) -> &'static str {
+    match reason {
+        0 => "omittedArgument",
+        1 => "unsupportedValue",
+        2 => "hostOwnedValue",
+        3 => "invalidRuntimeValue",
+        4 => "cyclicReference",
+        ELIDED_REASON => "elided",
+        _ => "unknown",
+    }
+}
+
+/// Render a decoded value as schema-erased JSON: classes become objects
+/// (plus `$type`), enums/media/bytes/omissions become tagged objects,
+/// budget-elided subtrees become `{"$elided": "<cid>"}`.
+#[must_use]
+pub fn to_json(value: &CanonValue) -> serde_json::Value {
+    use serde_json::{Map, Value, json};
+    match value {
+        CanonValue::Null => Value::Null,
+        CanonValue::Bool(b) => json!(b),
+        CanonValue::Int(i) => json!(i),
+        CanonValue::Float(f) => {
+            if f.is_finite() {
+                serde_json::Number::from_f64(*f).map_or_else(|| json!(f.to_string()), Value::Number)
+            } else {
+                json!(f.to_string())
+            }
+        }
+        CanonValue::Bigint(s) => json!({ "$bigint": s }),
+        CanonValue::String(s) => json!(s),
+        CanonValue::Bytes(b) => {
+            use base64::Engine as _;
+            json!({
+                "$bytes": {
+                    "len": b.len(),
+                    "base64": base64::engine::general_purpose::STANDARD.encode(b),
+                }
+            })
+        }
+        CanonValue::List(items) => Value::Array(items.iter().map(to_json).collect()),
+        CanonValue::Map(entries) => {
+            let mut obj = Map::new();
+            for (key, value) in entries {
+                obj.insert(key.clone(), to_json(value));
+            }
+            Value::Object(obj)
+        }
+        CanonValue::Class {
+            definition_key,
+            fields,
+        } => {
+            let mut obj = Map::new();
+            obj.insert(
+                "$type".to_string(),
+                json!(
+                    definition_key
+                        .strip_prefix("class:")
+                        .unwrap_or(definition_key)
+                ),
+            );
+            for (name, presence, value) in fields {
+                match presence {
+                    Presence::Absent => {}
+                    Presence::Null => {
+                        obj.insert(name.clone(), Value::Null);
+                    }
+                    Presence::Value | Presence::DefaultFilled => {
+                        if let Some(value) = value {
+                            obj.insert(name.clone(), to_json(value));
+                        }
+                    }
+                }
+            }
+            Value::Object(obj)
+        }
+        CanonValue::Enum {
+            definition_key,
+            variant,
+        } => json!({
+            "$enum": definition_key.strip_prefix("enum:").unwrap_or(definition_key),
+            "value": variant,
+        }),
+        CanonValue::Media {
+            kind,
+            mime,
+            content_kind,
+            content,
+        } => json!({
+            "$media": {
+                "kind": kind,
+                "mime": mime,
+                "content_kind": match content_kind { 0 => "url", 1 => "base64", 2 => "file", _ => "unknown" },
+                "content": content,
+            }
+        }),
+        CanonValue::Omitted { reason, message } if *reason == ELIDED_REASON => {
+            json!({ "$elided": message })
+        }
+        CanonValue::Omitted { reason, message } => json!({
+            "$omitted": { "reason": omission_reason_name(*reason), "message": message }
+        }),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -802,6 +1433,260 @@ mod tests {
         }
         assert_eq!(reached_nodes.len(), encoded.nodes.len());
         assert_eq!(reached_chunks.len(), encoded.chunks.len());
+    }
+
+    struct MapSource {
+        nodes: FxHashMap<[u8; 32], Vec<u8>>,
+        chunks: FxHashMap<[u8; 32], Vec<u8>>,
+    }
+
+    impl MapSource {
+        fn of(encoded: &CanonEncoded) -> MapSource {
+            MapSource {
+                nodes: encoded.nodes.iter().cloned().collect(),
+                chunks: encoded.chunks.iter().cloned().collect(),
+            }
+        }
+        fn root_bytes(&self, encoded: &CanonEncoded) -> Vec<u8> {
+            self.nodes[&encoded.root_cid].clone()
+        }
+    }
+
+    impl DagSource for MapSource {
+        fn node(&mut self, cid: &[u8; 32]) -> Option<Vec<u8>> {
+            self.nodes.get(cid).cloned()
+        }
+        fn chunk(&mut self, cid: &[u8; 32]) -> Option<Vec<u8>> {
+            self.chunks.get(cid).cloned()
+        }
+    }
+
+    fn round_trip(value: &CanonValue) -> CanonValue {
+        let encoded = encode(value);
+        let mut src = MapSource::of(&encoded);
+        let root = src.root_bytes(&encoded);
+        decode(&root, &mut src).expect("decodes")
+    }
+
+    /// The kitchen-sink value in ALREADY-CANONICAL shape (sorted map keys,
+    /// sorted class fields, canonical bigint) so decode == input exactly.
+    fn kitchen_sink() -> CanonValue {
+        CanonValue::Map(vec![
+            ("aa".into(), CanonValue::Int(-7)),
+            ("big".into(), CanonValue::Bigint("42".into())),
+            (
+                "cls".into(),
+                CanonValue::Class {
+                    definition_key: "class:user.Box".into(),
+                    fields: vec![
+                        ("label".into(), Presence::Null, None),
+                        ("width".into(), Presence::Value, Some(CanonValue::Int(3))),
+                    ],
+                },
+            ),
+            (
+                "enm".into(),
+                CanonValue::Enum {
+                    definition_key: "enum:user.Color".into(),
+                    variant: "Red".into(),
+                },
+            ),
+            ("flt".into(), CanonValue::Float(-0.0)),
+            (
+                "lst".into(),
+                CanonValue::List(vec![
+                    CanonValue::Bool(true),
+                    CanonValue::Null,
+                    CanonValue::Bytes(vec![1, 2, 3]),
+                ]),
+            ),
+            (
+                "med".into(),
+                CanonValue::Media {
+                    kind: "image".into(),
+                    mime: Some("image/png".into()),
+                    content_kind: 0,
+                    content: "https://example.test/x.png".into(),
+                },
+            ),
+            (
+                "omt".into(),
+                CanonValue::Omitted {
+                    reason: 4,
+                    message: "CyclicReference".into(),
+                },
+            ),
+            ("str".into(), CanonValue::String("hello".into())),
+        ])
+    }
+
+    #[test]
+    fn decode_round_trips_every_variant() {
+        let value = kitchen_sink();
+        assert_eq!(round_trip(&value), value);
+    }
+
+    #[test]
+    fn decode_round_trips_chunked_wide_and_deep() {
+        // Chunked string (3 chunk slots, 2 distinct after dedupe).
+        let long = CanonValue::String("y".repeat(CHUNK_BYTES * 2 + 10));
+        assert_eq!(round_trip(&long), long);
+
+        // Wide list (segment splice) and wide map.
+        let wide_list = CanonValue::List((0..1000).map(CanonValue::Int).collect());
+        assert_eq!(round_trip(&wide_list), wide_list);
+
+        let wide_map = CanonValue::Map(
+            (0..300)
+                .map(|i| (format!("k{i:04}"), CanonValue::Int(i)))
+                .collect(),
+        );
+        assert_eq!(round_trip(&wide_map), wide_map);
+
+        // Indirect (long) map key.
+        let long_key = CanonValue::Map(vec![
+            ("a".into(), CanonValue::Int(1)),
+            ("k".repeat(MAX_DIRECT_KEY + 10), CanonValue::Int(2)),
+        ]);
+        assert_eq!(round_trip(&long_key), long_key);
+
+        // Nested classes through refs.
+        let nested = CanonValue::Class {
+            definition_key: "class:user.Outer".into(),
+            fields: vec![(
+                "inner".into(),
+                Presence::Value,
+                Some(CanonValue::Class {
+                    definition_key: "class:user.Inner".into(),
+                    fields: vec![(
+                        "data".into(),
+                        Presence::Value,
+                        Some(CanonValue::String("x".repeat(5000))),
+                    )],
+                }),
+            )],
+        };
+        assert_eq!(round_trip(&nested), nested);
+    }
+
+    #[test]
+    fn decode_canonicalizes_non_canonical_input() {
+        // Unsorted map with a duplicate key + sloppy bigint decode to the
+        // canonical twin (sorted, last-dup-wins, minimal decimal).
+        let sloppy = CanonValue::Map(vec![
+            ("b".into(), CanonValue::Bigint("+007".into())),
+            ("a".into(), CanonValue::Int(1)),
+            ("b".into(), CanonValue::Bigint("0042".into())),
+        ]);
+        let canonical = CanonValue::Map(vec![
+            ("a".into(), CanonValue::Int(1)),
+            ("b".into(), CanonValue::Bigint("42".into())),
+        ]);
+        assert_eq!(round_trip(&sloppy), canonical);
+    }
+
+    #[test]
+    fn decode_reencode_is_byte_identical() {
+        // Strongest inverse proof: decode → encode reproduces the SAME
+        // root CID and node/chunk set.
+        for value in [
+            kitchen_sink(),
+            CanonValue::String("z".repeat(CHUNK_BYTES * 3 + 7)),
+            CanonValue::List(
+                (0..500)
+                    .map(|i| CanonValue::String(format!("s{i}")))
+                    .collect(),
+            ),
+        ] {
+            let encoded = encode(&value);
+            let mut src = MapSource::of(&encoded);
+            let root = src.root_bytes(&encoded);
+            let decoded = decode(&root, &mut src).expect("decodes");
+            let re = encode(&decoded);
+            assert_eq!(re.root_cid, encoded.root_cid, "root CID must round-trip");
+            assert_eq!(re.nodes.len(), encoded.nodes.len());
+            assert_eq!(re.chunks.len(), encoded.chunks.len());
+        }
+    }
+
+    #[test]
+    fn budget_elides_whole_subtrees_and_reports_cids() {
+        // A class with one huge field and one small field: a byte budget
+        // keeps the small field and elides the huge one WHOLE.
+        let value = CanonValue::Class {
+            definition_key: "class:user.Doc".into(),
+            fields: vec![
+                (
+                    "body".into(),
+                    Presence::Value,
+                    Some(CanonValue::String("x".repeat(CHUNK_BYTES * 2))),
+                ),
+                ("title".into(), Presence::Value, Some(CanonValue::Int(7))),
+            ],
+        };
+        let encoded = encode(&value);
+        let mut src = MapSource::of(&encoded);
+        let root = src.root_bytes(&encoded);
+        let mut budget = DecodeBudget::bounded(1024, u32::MAX);
+        let decoded = decode_budgeted(&root, &mut src, &mut budget).expect("decodes");
+        assert!(!budget.elided.is_empty(), "elided CIDs reported");
+        let CanonValue::Class { fields, .. } = &decoded else {
+            panic!("class expected")
+        };
+        let body = fields.iter().find(|f| f.0 == "body").unwrap();
+        assert!(
+            matches!(&body.2, Some(CanonValue::Omitted { reason, .. }) if *reason == ELIDED_REASON),
+            "huge field elided whole: {body:?}"
+        );
+        let title = fields.iter().find(|f| f.0 == "title").unwrap();
+        assert_eq!(title.2, Some(CanonValue::Int(7)), "small field survives");
+
+        // Depth budget: depth=0 elides every ref child but keeps inlines.
+        let mut depth0 = DecodeBudget::bounded(usize::MAX, 0);
+        let shallow = decode_budgeted(&root, &mut src, &mut depth0).expect("decodes");
+        let CanonValue::Class { fields, .. } = &shallow else {
+            panic!("class expected")
+        };
+        assert_eq!(
+            fields.iter().find(|f| f.0 == "title").unwrap().2,
+            Some(CanonValue::Int(7)),
+            "inline children are free at any depth"
+        );
+    }
+
+    #[test]
+    fn decode_missing_node_errors() {
+        let value = CanonValue::List(vec![CanonValue::String("q".repeat(5000))]);
+        let encoded = encode(&value);
+        let mut src = MapSource::of(&encoded);
+        let root = src.root_bytes(&encoded);
+        src.nodes.retain(|cid, _| *cid == encoded.root_cid);
+        assert!(matches!(
+            decode(&root, &mut src),
+            Err(DecodeError::MissingNode(_))
+        ));
+    }
+
+    #[test]
+    fn to_json_shapes() {
+        let json = to_json(&kitchen_sink());
+        assert_eq!(json["aa"], serde_json::json!(-7));
+        assert_eq!(json["big"]["$bigint"], "42");
+        assert_eq!(json["cls"]["$type"], "user.Box");
+        assert_eq!(json["cls"]["width"], 3);
+        assert_eq!(json["cls"]["label"], serde_json::Value::Null);
+        assert_eq!(json["enm"]["$enum"], "user.Color");
+        assert_eq!(json["enm"]["value"], "Red");
+        assert_eq!(json["lst"][2]["$bytes"]["len"], 3);
+        assert_eq!(json["med"]["$media"]["kind"], "image");
+        assert_eq!(json["omt"]["$omitted"]["reason"], "cyclicReference");
+        assert_eq!(json["str"], "hello");
+        // Elided placeholder renders as a handle.
+        let elided = to_json(&CanonValue::Omitted {
+            reason: ELIDED_REASON,
+            message: "bamlv_1_XYZ".into(),
+        });
+        assert_eq!(elided["$elided"], "bamlv_1_XYZ");
     }
 
     #[test]

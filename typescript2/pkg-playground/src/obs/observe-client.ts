@@ -26,7 +26,8 @@ export type ObsQueryMethod =
   | 'run_meta'
   | 'timeline'
   | 'left_heavy'
-  | 'top_functions';
+  | 'top_functions'
+  | 'bql';
 
 export interface ObsQueryParams {
   /** Run key — required by every method except `runs`. */
@@ -35,6 +36,8 @@ export interface ObsQueryParams {
   pixelWidth?: number;
   /** Row limit (e.g. top_functions). */
   limit?: number;
+  /** BQL pipeline (method `bql` only, query-op only). */
+  q?: string;
 }
 
 interface PendingQuery {
@@ -267,6 +270,7 @@ function wireParams(
   if (params.run !== undefined) out.run = params.run;
   if (params.pixelWidth !== undefined) out.pixel_width = params.pixelWidth;
   if (params.limit !== undefined) out.limit = params.limit;
+  if (params.q !== undefined) out.q = params.q;
   return out;
 }
 

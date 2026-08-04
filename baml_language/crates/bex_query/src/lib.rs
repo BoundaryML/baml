@@ -18,7 +18,9 @@ pub mod cct;
 pub mod engine;
 pub mod runs;
 pub mod source;
+pub mod values;
 
 pub use bql::{BqlError, BqlTable, ColData, Completeness};
 pub use engine::ObserveEngine;
 pub use source::{ByteRange, FileId, Poll, SegmentSource};
+pub use values::{FnJoin, Hydrated, RunValues, ValueRow};

@@ -618,8 +618,40 @@ across sessions; update as phases land. Source of truth for *what is done and wh
       user.main 90.1ms / user.work 2 calls / user.helper 400,000 calls p50=1µs, names from dict,
       footer sealed=true torn=false. `baml q 'runs(last=24h)'` lists the boundary w/ status+revision.
       `baml clean --dry-run` reports safely. **The design's §2 user stories are live.**
-- [ ] REMAINING P7: MCP tool; studio query box + language service (P8); more stages
-      (series/diff/values/events); snapshot pinning; full footers on named /api/obs methods.
+- [x] **VALUES FOLDED INTO BQL (goal.md, 2026-08-04)** — the §8.2/§8.4/§8.5 value plane:
+      · canon.rs DECODER (exact inverse of the frozen encoder; DagSource fetch; §8.4 budgets —
+        byte+depth, whole-subtree elision w/ ELIDED_REASON=255 + elided-CID handles; never partial)
+        + schema-erased to_json; golden decode∘encode-identity test on canon.bamlcanon (root CID
+        reproduced); round-trip/budget/missing-node tests (16 canon tests).
+      · bex_query/values.rs: run value listing (.bamlvalue capture rows w/ role/kind/call key/CID/
+        promoted_by), call→fn join via the RAW FIREHOSE exact source (honest: absent → degraded note,
+        fn= filter → E_NO_EXACT_SOURCE w/ remedies), hydration Dag→inline→blob w/ BamlOutboundValue
+        prost-mirror fallback. Session-path normalization fix (Bound stores relative path).
+      · bql.rs: SetKind::ValueSet; stages values(role=[…], fn=glob)/get(max_bytes=64kb, depth)/
+        instances(source=values)/vdiff(a=,b=)/stats(by=cid); lexer lists [a,b] + byte sizes 64kb/4mb;
+        ColData::Json (real JSON in --format json, 96-char preview in tables, Str on the BQF1 wire);
+        E_NO_EXACT_SOURCE + budget-elision footer notes; E_MISSING_BLOCK via hydrate errors.
+      · ValueWriter::into_sink (additive). 15 bql integration tests incl. hermetic value-run fixture
+        (meta+CAS+raw+dict), exact-source gating, dedupe view, vdiff, budget elision.
+      · VERIFIED e2e on the release CLI (demo): run → ctx narrows → values(fn="*line_total*")|get →
+        quantity:2→3.5 reveal → stats(by=cid) n=2 dedupe → fix → vdiff outputs_equal=0 on matched
+        input CIDs. Docs updated (demo/baml-q.md full stage ref, AGENTS.md pure-CLI hunt + §3½
+        verify-my-fix, deck slide → real query). GATES: bex_events 214+goldens BYTE-FROZEN, bex_query
+        10+15+8+6, prof_gate 38/38, baml_cli full, lsp 78, clippy 0.
+- [x] **ZERO-ENV VALUES + STUDIO PANEL (2026-08-04 follow-up)**: captures now CARRY function_id
+      (VM capture sites → engine drafts via capture_with_fn → ValueCaptureV1 field 3 additive, goldens
+      frozen; root id via callable_function_id, sysop tuple widened, frame pushes stamped; host-closure
+      pairs/trampolines/logs stay 0 by design). values.rs resolves fn names capture-id-first, raw join
+      kept as fallback for old artifacts → `baml run` + `values(fn=…)` needs NO env vars (proof: names
+      resolve with zero raw files on disk). Studio Runs tab gained a **Captured values** panel
+      (TS: FrameKind.BqlTable=9 decoder asBqlTable, client `bql` op, expandable JSON rows + degraded
+      notes) driven by the same `values() | get(16kb)` query as the CLI; wire path verified end-to-end
+      against the live server with the shipped decoder (6 hydrated named values). Docs → zero-env.
+      Release CLI + webview dist rebuilt. Batteries: workspace check 0, bex_events 214+goldens,
+      prof_gate 38/38, bex_vm, bex_query 8+16+6, baml_cli, lsp 78, pkg-playground 148+1; clippy 0.
+- [ ] REMAINING P7: MCP tool; studio query box + language service (P8); series/delta/diff(align=fqn)
+      aggregate compare; events/dumps stages; snapshot pinning; --schema; full footers on named
+      /api/obs methods.
 
 ## PH progress
 

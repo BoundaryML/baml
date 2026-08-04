@@ -1760,6 +1760,7 @@ fn drain_wasm_captured_values(
             let capture = ValueCapture {
                 kind: value_capture_kind_from_bex(draft.kind),
                 call: draft.call,
+                function_id: draft.function_id,
             };
             match history_store.borrow_mut().append_value_body(
                 draft.boundary_id,
@@ -2187,6 +2188,7 @@ mod history_tests {
                 ValueCapture {
                     kind: ValueCaptureKind::RootOutput,
                     call: trace,
+                    function_id: 0,
                 },
                 ValueCodec::BamlOutboundValue,
                 vec![1, 2, 3],

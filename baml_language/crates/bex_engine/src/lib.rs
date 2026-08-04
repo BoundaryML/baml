@@ -322,6 +322,9 @@ pub struct BexCallResult {
 struct RootValueCaptureContext {
     boundary_id: bex_events::ids::BoundaryId,
     call: bex_events::run::TraceCallKey,
+    /// The root entry function's profiling function id (dictionary/prof id
+    /// space); `0` = unassigned (host closures, synthetic entries).
+    function_id: u32,
     producer: TraceCaptureProducer,
 }
 
@@ -353,9 +356,10 @@ struct EngineCallInputCaptureHook {
 
 impl VmCallInputCaptureHook for EngineCallInputCaptureHook {
     fn capture_call_input(&self, capture: VmCallInputCapture<'_>) {
-        let _ = self.producer.capture_with(
+        let _ = self.producer.capture_with_fn(
             self.boundary_id,
             capture.call,
+            capture.function_id,
             CaptureKind::CallInput,
             |trace_heap| {
                 trace_heap.copy_named_values_from_bex_heap(
@@ -2107,6 +2111,7 @@ impl BexEngine {
     ) -> Option<u64> {
         let call_id = vm.pending_sysop_call_id.take();
         vm.pending_sysop_capture_mask = VmCaptureMask::disabled();
+        vm.pending_sysop_function_id = 0;
         if vm.prof_ring.is_none() {
             return call_id;
         }
@@ -2138,6 +2143,7 @@ impl BexEngine {
         let thread_id = BexThreadId(vm.prof_thread_id);
         let pending_sysop_call_id = vm.pending_sysop_call_id.take();
         vm.pending_sysop_capture_mask = VmCaptureMask::disabled();
+        vm.pending_sysop_function_id = 0;
         if vm.prof_ring.is_none() {
             return;
         }
@@ -3185,6 +3191,9 @@ impl BexEngine {
                 )),
             })
             .collect::<Result<indexmap::IndexMap<_, _>, _>>()?;
+        // The root entry function's profiling id, resolved before the entry
+        // frame is pushed so root value captures carry function identity.
+        let entry_function_id = thread.vm.callable_function_id(entry_ptr);
         thread
             .vm
             .set_entry_point_with_type_args(entry_ptr, &vm_args, type_args);
@@ -3209,6 +3218,7 @@ impl BexEngine {
                         thread_id: entry_call_ref.thread_id,
                         call_id: entry_call_ref.call_id,
                     },
+                    function_id: entry_function_id,
                     producer: value_capture.clone(),
                 });
         let log_capture = boundary
@@ -3233,9 +3243,10 @@ impl BexEngine {
         );
         if let (Some(capture), Some(entries)) = (root_capture.as_ref(), root_input_values.as_ref())
         {
-            let _ = capture.producer.capture_with(
+            let _ = capture.producer.capture_with_fn(
                 capture.boundary_id,
                 capture.call,
+                capture.function_id,
                 CaptureKind::RootInput,
                 |trace_heap| {
                     trace_heap.copy_named_values_from_bex_heap(&self.heap, thread.proof(), entries)
@@ -4258,12 +4269,13 @@ impl BexEngine {
         kind: CaptureKind,
         value: Value,
     ) {
-        let _ =
-            capture
-                .producer
-                .capture_with(capture.boundary_id, capture.call, kind, |trace_heap| {
-                    trace_heap.copy_value_from_bex_heap(&self.heap, thread.proof(), value)
-                });
+        let _ = capture.producer.capture_with_fn(
+            capture.boundary_id,
+            capture.call,
+            capture.function_id,
+            kind,
+            |trace_heap| trace_heap.copy_value_from_bex_heap(&self.heap, thread.proof(), value),
+        );
     }
 
     fn drain_vm_call_captures(
@@ -4286,11 +4298,15 @@ impl BexEngine {
                 thread_id: BexThreadId(event.thread_id),
                 call_id: BexCallId(event.call_id),
             };
-            let _ = capture
-                .producer
-                .capture_with(capture.boundary_id, call, kind, |trace_heap| {
+            let _ = capture.producer.capture_with_fn(
+                capture.boundary_id,
+                call,
+                event.function_id,
+                kind,
+                |trace_heap| {
                     trace_heap.copy_value_from_bex_heap(&self.heap, thread.proof(), event.value)
-                });
+                },
+            );
         }
     }
 
@@ -4515,7 +4531,7 @@ impl BexEngine {
         host_callable_throws_contract: Option<&RuntimeTy>,
         root_capture: Option<&RootValueCaptureContext>,
         call_capture: Option<&CallValueCaptureContext>,
-        origin_call_capture: Option<(u64, VmCaptureMask)>,
+        origin_call_capture: Option<(u64, u32, VmCaptureMask)>,
     ) -> Result<Option<ThreadOutcome>, EngineError> {
         let materialized = match op_err.payload {
             sys_types::OpErrorPayload::HostThrown(thrown) => {
@@ -4529,10 +4545,10 @@ impl BexEngine {
         } else {
             materialized
         };
-        if let Some((call_id, mask)) = origin_call_capture {
+        if let Some((call_id, function_id, mask)) = origin_call_capture {
             thread
                 .vm
-                .queue_engine_call_error_origin_capture(call_id, mask, vm_value);
+                .queue_engine_call_error_origin_capture(call_id, function_id, mask, vm_value);
             self.drain_vm_call_captures(thread, call_capture);
         }
         let unwind_result = thread.vm.try_handle_external_exception(vm_value);
@@ -5329,6 +5345,7 @@ impl BexEngine {
                     // no token fired) closes Cancelled, matching the
                     // Cancelled frames its injected throw then unwinds.
                     let sysop_capture_mask = thread.vm.pending_sysop_capture_mask;
+                    let sysop_function_id = thread.vm.pending_sysop_function_id;
                     let sysop_capture_call = self.prof_end_sysop(
                         &mut thread.vm,
                         match &outcome {
@@ -5336,8 +5353,8 @@ impl BexEngine {
                             Err(op_err) => Self::prof_sysop_error_status(op_err),
                         },
                     );
-                    let sysop_origin_capture =
-                        sysop_capture_call.map(|call_id| (call_id, sysop_capture_mask));
+                    let sysop_origin_capture = sysop_capture_call
+                        .map(|call_id| (call_id, sysop_function_id, sysop_capture_mask));
 
                     match outcome {
                         Ok(external) => {
@@ -5410,10 +5427,13 @@ impl BexEngine {
                                 } else {
                                     self.convert_external_to_vm_value(&mut thread, external)?
                                 };
-                                if let Some((call_id, mask)) = sysop_origin_capture {
-                                    thread
-                                        .vm
-                                        .queue_engine_call_output_capture(call_id, mask, value);
+                                if let Some((call_id, function_id, mask)) = sysop_origin_capture {
+                                    thread.vm.queue_engine_call_output_capture(
+                                        call_id,
+                                        function_id,
+                                        mask,
+                                        value,
+                                    );
                                     self.drain_vm_call_captures(&mut thread, call_capture.as_ref());
                                 }
                                 thread.vm.stack.push(value);

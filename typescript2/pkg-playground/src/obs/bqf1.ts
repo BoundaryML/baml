@@ -48,6 +48,7 @@ export const FrameKind = {
   Status: 6,
   LiveTotals: 7,
   RecentCalls: 8,
+  BqlTable: 9,
 } as const;
 export type FrameKind = (typeof FrameKind)[keyof typeof FrameKind];
 
@@ -367,6 +368,74 @@ export function asTopFunctions(frame: BqfFrame): TopFunctionsColumns {
 export interface StatusColumns {
   code: Uint32Array;
   message: string[];
+}
+
+/**
+ * Generic BQL result (kind 9): free-form data columns + a final Str meta
+ * column. Frame row 0 is a meta row (sentinels; the meta col's row 0 holds
+ * `{"columns":[{name,type}...],"rows":N,"footer":{...}}`); data row i is
+ * frame row i+1 — so an empty result still ships its footer.
+ */
+export interface BqlTableResult {
+  columns: Array<{ name: string; values: Array<string | number> }>;
+  rows: number;
+  footer: {
+    sealed: boolean;
+    torn: boolean;
+    degraded: string[];
+  };
+}
+
+export function asBqlTable(frame: BqfFrame): BqlTableResult {
+  expectKind(frame, FrameKind.BqlTable, 'BqlTable');
+  const metaCol = frame.cols[frame.cols.length - 1];
+  if (!metaCol || metaCol.type !== 'str') {
+    throw new BqfDecodeError('BQF1 BqlTable: missing meta column');
+  }
+  const metaRaw = metaCol.data[0] ?? '';
+  let meta: {
+    columns?: Array<{ name?: string; type?: string }>;
+    rows?: number;
+    footer?: { sealed?: boolean; torn?: boolean; degraded?: string[] };
+  };
+  try {
+    meta = JSON.parse(metaRaw) as typeof meta;
+  } catch {
+    throw new BqfDecodeError('BQF1 BqlTable: bad meta JSON');
+  }
+  const described = meta.columns ?? [];
+  const dataRows = Math.max(0, frame.nrows - 1);
+  const columns: BqlTableResult['columns'] = [];
+  for (let i = 0; i < described.length && i < frame.cols.length - 1; i += 1) {
+    const col = frame.cols[i]!;
+    const values: Array<string | number> = [];
+    for (let row = 1; row <= dataRows; row += 1) {
+      switch (col.type) {
+        case 'u32':
+          values.push(col.data[row] ?? 0);
+          break;
+        case 'u64':
+          values.push(Number(col.data[row] ?? 0n));
+          break;
+        case 'f64':
+          values.push(col.data[row] ?? 0);
+          break;
+        case 'str':
+          values.push(col.data[row] ?? '');
+          break;
+      }
+    }
+    columns.push({ name: described[i]?.name ?? `col${i}`, values });
+  }
+  return {
+    columns,
+    rows: dataRows,
+    footer: {
+      sealed: meta.footer?.sealed ?? true,
+      torn: meta.footer?.torn ?? false,
+      degraded: meta.footer?.degraded ?? [],
+    },
+  };
 }
 
 export function asStatus(frame: BqfFrame): StatusColumns {

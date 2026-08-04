@@ -341,6 +341,7 @@ impl RunBoundary {
                         Some(ValueCapture {
                             kind: value_capture_kind(draft.kind),
                             call: draft.call,
+                            function_id: draft.function_id,
                         }),
                         dag_ref,
                     )
