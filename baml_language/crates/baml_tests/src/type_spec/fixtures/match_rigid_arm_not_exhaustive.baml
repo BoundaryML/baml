@@ -13,5 +13,6 @@ class Holder<T> {
 function bad_pop<T>(h: Holder<T>) -> T {
     let r = match (h.items.pop()) { let x: T => x };
      // ^ !error
+  //        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ non-exhaustive
     r
 }

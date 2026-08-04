@@ -38,7 +38,7 @@ use baml_compiler2_hir::{
 use baml_type::{
     Freshness, Literal, TyAttr,
     interned::{Ty, TyKind},
-    normalize::{canonical_union_interned, is_subtype_interned},
+    normalize::{canonical_union_interned, equivalent_interned, is_subtype_interned},
 };
 use rustc_hash::FxHashMap;
 
@@ -904,13 +904,13 @@ impl<'db> InferenceContext<'db> {
                     a_args.iter().cloned().zip(b_args.iter().cloned()).collect();
                 let mut ok = true;
                 for (a, b) in pairs {
-                    ok &= self.table.unify(&a, &b).is_ok();
+                    ok &= self.eq_piece(&a, &b);
                 }
                 ok
             }
             (TyKind::List(a, _), TyKind::List(b, _)) => {
                 let (a, b) = (a.clone(), b.clone());
-                self.table.unify(&a, &b).is_ok()
+                self.eq_piece(&a, &b)
             }
             (
                 TyKind::Map {
@@ -921,14 +921,14 @@ impl<'db> InferenceContext<'db> {
                 },
             ) => {
                 let (ak, av, bk, bv) = (ak.clone(), av.clone(), bk.clone(), bv.clone());
-                let key_ok = self.table.unify(&ak, &bk).is_ok();
-                let value_ok = self.table.unify(&av, &bv).is_ok();
+                let key_ok = self.eq_piece(&ak, &bk);
+                let value_ok = self.eq_piece(&av, &bv);
                 key_ok && value_ok
             }
             (TyKind::Future(av, ae, _), TyKind::Future(bv, be, _)) => {
                 let (av, ae, bv, be) = (av.clone(), ae.clone(), bv.clone(), be.clone());
-                let value_ok = self.table.unify(&av, &bv).is_ok();
-                let error_ok = self.table.unify(&ae, &be).is_ok();
+                let value_ok = self.eq_piece(&av, &bv);
+                let error_ok = self.eq_piece(&ae, &be);
                 value_ok && error_ok
             }
             // Function types: contravariant params, covariant ret/throws.
@@ -974,6 +974,23 @@ impl<'db> InferenceContext<'db> {
                 }
             }
         }
+    }
+
+    /// One invariant piece of a decayed Sub: SEMANTIC equality. A ground
+    /// pair asks the canonical oracle (`equivalent` reduces projections,
+    /// expands aliases, normalizes unions - `(C as I).Item` IS `int` when
+    /// the impl binds it); a variable-carrying pair unifies through the
+    /// table. Structural table unification on ground pairs was a real
+    /// bug: it judged `(IntStore as Store).Item[] </: int[]` and recorded
+    /// a mismatch whose two sides FINALIZE to the same type - the first
+    /// catch of the error-channel contract.
+    fn eq_piece(&mut self, a: &Ty, b: &Ty) -> bool {
+        let a = self.table.resolve_completely(a);
+        let b = self.table.resolve_completely(b);
+        if !a.has_infer() && !b.has_infer() {
+            return equivalent_interned(&a, &b, &self.facts);
+        }
+        self.table.unify(&a, &b).is_ok()
     }
 
     /// A union of members that may still contain inference variables. The
