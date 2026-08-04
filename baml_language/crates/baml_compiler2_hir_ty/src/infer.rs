@@ -506,6 +506,10 @@ impl<'db> InferenceContext<'db> {
                 attr: TyAttr::default(),
             }),
             Expr::Path(segments) => self.resolve_value_path(expr, segments),
+            Expr::Index { base, index } => self.infer_index(body, expr, *base, *index, false),
+            Expr::OptionalIndex { base, index } => {
+                self.infer_index(body, expr, *base, *index, true)
+            }
             Expr::Block { stmts, tail_expr } => {
                 let entry_diverges = self.diverges;
                 for stmt in stmts {
@@ -878,6 +882,37 @@ impl<'db> InferenceContext<'db> {
         value: ExprId,
         op: Option<baml_compiler2_ast::AssignOp>,
     ) {
+        // An INDEX target (`xs[0] = v`, `xs[0] += v`): the element type
+        // comes from the same `baml.ops.Index` dispatch as a read, the
+        // value checks against it (expectation propagation - an empty
+        // literal on the right adopts the element type), and a compound
+        // op dispatches on (element, value) with the result checked
+        // against the element. No binding narrows: the container's
+        // declared element type is the contract.
+        if let Expr::Index { base, index } = &body.exprs[target] {
+            let (base, index) = (*base, *index);
+            let element = self.infer_index(body, target, base, index, false);
+            self.result.type_of_expr.insert(target, element.clone());
+            match op {
+                None => {
+                    if !element.has_error() {
+                        self.check_expr(body, value, &element);
+                    } else {
+                        self.infer_expr(body, value, &Expectation::None);
+                    }
+                }
+                Some(op) => {
+                    let rhs = self.infer_expr(body, value, &Expectation::None);
+                    let result = self.compound_op_result(op, &element, &rhs);
+                    if !element.has_error() && !self.sub(&result, &element) {
+                        self.result
+                            .type_mismatches
+                            .insert(value, (element, result));
+                    }
+                }
+            }
+            return;
+        }
         let binding = self.narrowable_binding(body, target);
         let declared = binding.map(|binding| self.binding_declared_ty(binding));
         let assigned = match op {
@@ -890,23 +925,12 @@ impl<'db> InferenceContext<'db> {
             Some(op) => {
                 // Compound assignment: `target op value` through the same
                 // operator machinery, the result checked against declared.
-                use baml_compiler2_ast::AssignOp;
+                
                 let lhs = binding
                     .map(|binding| self.binding_flow_ty(binding))
                     .unwrap_or_else(|| self.infer_expr(body, target, &Expectation::None));
                 let rhs = self.infer_expr(body, value, &Expectation::None);
-                let result = match op {
-                    AssignOp::Add => self.dispatch_operator("Add", &lhs, Some(&rhs)),
-                    AssignOp::Sub => self.dispatch_operator("Subtract", &lhs, Some(&rhs)),
-                    AssignOp::Mul => self.dispatch_operator("Multiply", &lhs, Some(&rhs)),
-                    AssignOp::Div => self.dispatch_operator("Divide", &lhs, Some(&rhs)),
-                    AssignOp::Mod => self.dispatch_operator("Remainder", &lhs, Some(&rhs)),
-                    AssignOp::BitAnd => self.dispatch_operator("BitAnd", &lhs, Some(&rhs)),
-                    AssignOp::BitOr => self.dispatch_operator("BitOr", &lhs, Some(&rhs)),
-                    AssignOp::BitXor => self.dispatch_operator("BitXor", &lhs, Some(&rhs)),
-                    AssignOp::Shl => self.dispatch_operator("ShiftLeft", &lhs, Some(&rhs)),
-                    AssignOp::Shr => self.dispatch_operator("ShiftRight", &lhs, Some(&rhs)),
-                };
+                let result = self.compound_op_result(op, &lhs, &rhs);
                 if let Some(declared) = &declared
                     && !declared.has_error()
                     && !self.sub(&result, declared)
@@ -1234,6 +1258,61 @@ impl<'db> InferenceContext<'db> {
                 };
                 self.operator_or_obligation(expr, interface, &lhs_ty, Some(&rhs_ty))
             }
+        }
+    }
+
+    /// One compound-assignment step: `lhs op rhs` through the operator
+    /// machinery, shared by binding and index targets.
+    fn compound_op_result(
+        &mut self,
+        op: baml_compiler2_ast::AssignOp,
+        lhs: &Ty,
+        rhs: &Ty,
+    ) -> Ty {
+        use baml_compiler2_ast::AssignOp;
+        match op {
+            AssignOp::Add => self.dispatch_operator("Add", lhs, Some(rhs)),
+            AssignOp::Sub => self.dispatch_operator("Subtract", lhs, Some(rhs)),
+            AssignOp::Mul => self.dispatch_operator("Multiply", lhs, Some(rhs)),
+            AssignOp::Div => self.dispatch_operator("Divide", lhs, Some(rhs)),
+            AssignOp::Mod => self.dispatch_operator("Remainder", lhs, Some(rhs)),
+            AssignOp::BitAnd => self.dispatch_operator("BitAnd", lhs, Some(rhs)),
+            AssignOp::BitOr => self.dispatch_operator("BitOr", lhs, Some(rhs)),
+            AssignOp::BitXor => self.dispatch_operator("BitXor", lhs, Some(rhs)),
+            AssignOp::Shl => self.dispatch_operator("ShiftLeft", lhs, Some(rhs)),
+            AssignOp::Shr => self.dispatch_operator("ShiftRight", lhs, Some(rhs)),
+        }
+    }
+
+    /// `base[idx]` dispatches through `baml.ops.Index` (the ruling:
+    /// Rust's `ops::Index` shape - stdlib blankets cover lists, maps,
+    /// and uint8array; MIR rewrites statically-typed cases to direct
+    /// instructions). The OPTIONAL form (`base?[idx]`) unwraps a
+    /// nullable base, dispatches on the payload, and rewraps the result
+    /// with `| null`; a nullable base in the PLAIN form reaches dispatch
+    /// as the union, whose `null` member has no impl - the mismatch
+    /// records (TIR's `NullableMemberAccess`, rendered at S17).
+    fn infer_index(
+        &mut self,
+        body: &ExprBody,
+        expr: ExprId,
+        base: ExprId,
+        index: ExprId,
+        optional: bool,
+    ) -> Ty {
+        let base_ty = self.infer_expr(body, base, &Expectation::None);
+        let index_ty = self.infer_expr(body, index, &Expectation::None);
+        let subject = if optional {
+            let resolved = self.table.resolve_completely(&base_ty);
+            self.remove_null(&resolved)
+        } else {
+            base_ty
+        };
+        let element = self.operator_or_obligation(expr, "Index", &subject, Some(&index_ty));
+        if optional {
+            self.union_of(&[element, Ty::null()])
+        } else {
+            element
         }
     }
 

@@ -6142,6 +6142,24 @@ function baml.ops.Equals.neq(self: baml.ops.Equals, other: #0) -> bool {
     return
 }
 
+function baml.ops.Index<int>$for$T[].index(self: #0[], idx: int) -> #0 {
+    load_var2 1 2
+    load_array_element
+    return
+}
+
+function baml.ops.Index<int>$for$uint8array.index(self: uint8array, idx: int) -> int {
+    load_var2 1 2
+    load_array_element
+    return
+}
+
+function baml.ops.Index<string>$for$map<string, V>.index(self: map<string, #0>, idx: string) -> #0 {
+    load_var2 1 2
+    load_map_element
+    return
+}
+
 function baml.ops.Multiply<bigint>$for$bigint.mul(self: bigint, rhs: bigint) -> bigint {
 }
 

@@ -8825,6 +8825,66 @@ fn baml.ops.Equals$for$map<string, V>.eq(self: map<string, V>, other: Self) -> b
     }
 }
 
+fn baml.ops.Index<int>$for$T[].index(self: T[], idx: int) -> T {
+    // Locals:
+    let _0: T // _0 // return
+    let _1: T[] // self // param
+    let _2: int // idx // param
+    let _3: T[]
+    let _4: int
+
+    bb0: {
+        _3 = copy _1;
+        _4 = copy _2;
+        _0 = copy _3[_4];
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn baml.ops.Index<string>$for$map<string, V>.index(self: map<string, V>, idx: string) -> V {
+    // Locals:
+    let _0: V // _0 // return
+    let _1: map<string, V> // self // param
+    let _2: string // idx // param
+    let _3: map<string, V>
+    let _4: string
+
+    bb0: {
+        _3 = copy _1;
+        _4 = copy _2;
+        _0 = copy _3[_4];
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn baml.ops.Index<int>$for$uint8array.index(self: uint8array, idx: int) -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: uint8array // self // param
+    let _2: int // idx // param
+    let _3: uint8array
+    let _4: int
+
+    bb0: {
+        _3 = copy _1;
+        _4 = copy _2;
+        _0 = copy _3[_4];
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
 fn baml.ops.Add<int>$for$int.add = builtin(vm)
 
 fn baml.ops.Subtract<int>$for$int.sub = builtin(vm)

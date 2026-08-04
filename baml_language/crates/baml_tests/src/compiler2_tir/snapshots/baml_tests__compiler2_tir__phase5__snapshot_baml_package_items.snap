@@ -260,6 +260,7 @@ namespace baml.ops:
   type Compare
   type Divide
   type Equals
+  type Index
   type Multiply
   type Negate
   type Remainder

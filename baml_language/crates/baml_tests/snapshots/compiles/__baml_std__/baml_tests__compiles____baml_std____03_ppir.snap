@@ -1755,6 +1755,17 @@ function baml.ops.neq(self: ?, other: Self) -> bool  [expr] {
   {  } false
 }
 
+--- <builtin>/baml/ns_ops/index.baml ---
+function baml.ops.index(self: ?, idx: int) -> T  [expr] {
+  {  } self[idx]
+}
+function baml.ops.index(self: ?, idx: string) -> V  [expr] {
+  {  } self[idx]
+}
+function baml.ops.index(self: ?, idx: int) -> int  [expr] {
+  {  } self[idx]
+}
+
 --- <builtin>/baml/ns_ops/math.baml ---
 function baml.ops.__union_add(a: unknown, b: unknown) -> unknown  [builtin]
 function baml.ops.__union_div(a: unknown, b: unknown) -> unknown  [builtin]

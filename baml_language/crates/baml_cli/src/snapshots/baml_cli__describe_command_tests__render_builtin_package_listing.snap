@@ -243,6 +243,7 @@ interface        baml.ops.ShiftRight              <builtin>/baml/ns_ops/bitwise.
 interface        baml.ops.Equals                  <builtin>/baml/ns_ops/comparison.baml:1
 interface        baml.ops.Compare                 <builtin>/baml/ns_ops/comparison.baml:8
 function         baml.ops.equals_equals           <builtin>/baml/ns_ops/comparison.baml:34
+interface        baml.ops.Index                   <builtin>/baml/ns_ops/index.baml:19
 interface        baml.ops.Add                     <builtin>/baml/ns_ops/math.baml:25
 interface        baml.ops.Subtract                <builtin>/baml/ns_ops/math.baml:31
 interface        baml.ops.Multiply                <builtin>/baml/ns_ops/math.baml:37

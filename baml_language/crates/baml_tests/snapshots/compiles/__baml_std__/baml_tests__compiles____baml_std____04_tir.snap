@@ -2846,6 +2846,23 @@ function baml.ops.eq(self: unknown, other: !error) -> bool throws never {
   }
 }
 
+--- <builtin>/baml/ns_ops/index.baml ---
+function baml.ops.index(self: unknown, idx: int) -> T throws never {
+  { : T
+    self[idx] : T
+  }
+}
+function baml.ops.index(self: unknown, idx: string) -> V throws never {
+  { : V
+    self[idx] : V
+  }
+}
+function baml.ops.index(self: unknown, idx: int) -> int throws never {
+  { : int
+    self[idx] : int
+  }
+}
+
 --- <builtin>/baml/ns_ops/math.baml ---
 
 --- <builtin>/baml/ns_panics/panics.baml ---
