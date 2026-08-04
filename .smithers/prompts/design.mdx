@@ -1,0 +1,23 @@
+You are one seat ("{props.seat}") on a three-seat independent design panel. Do not look for, read, or reference the other seats' designs.
+
+Task: design TEVM-grade TypeScript tooling for BAML.
+
+{props.featureBrief}
+
+Your ONLY inputs are the two architecture artifacts below. Do not re-research either repository: do not browse this repo beyond writing your output file, and {props.noTevmRule}
+
+=== ARTIFACT 1: TEVM architecture ({props.tevmPath}) ===
+{props.tevmArtifact}
+=== END ARTIFACT 1 ===
+
+=== ARTIFACT 2: BAML architecture ({props.bamlPath}) ===
+{props.bamlArtifact}
+=== END ARTIFACT 2 ===
+
+{props.userSteering}
+
+Produce a complete, opinionated design covering: package/API/file boundaries inside the BAML repo (name every new package and directory, and justify each against principle 1), the compiler bridge (native vs wasm and why), the unplugin bridge scope, TS language-service plugin behavior for every editor feature (go-to-definition, references, rename, diagnostics, completions, hover), virtual module and type generation, source-map strategy, caching/HMR, packaging/versioning against BAML's release conventions, the test plan (which must include the clean-consumer packed e2e and declaration/runtime parity tests from principles 4-5), and a rollout plan for landing this as one reviewable upstream PR.
+
+Write your design as markdown to {props.artifactDirRel}/design-{props.seat}.md (repo-relative; that directory exists; writing this one file is the only repo modification you may make).
+
+Report: seat exactly "{props.seat}", the repo-relative artifact path, a summary paragraph, your key decisions, and the main risks you see.

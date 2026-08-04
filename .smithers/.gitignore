@@ -1,0 +1,12 @@
+# Runtime state for the temporary Smithers workflow pack. Only the workflow
+# script, its validation test, package.json, and this file are ever committed;
+# the workflow's final cleanup task deletes those too before the draft PR is
+# finalized.
+node_modules/
+smithers.db
+smithers.db-*
+artifacts/
+logs/
+executions/
+sandboxes/
+.worktrees/

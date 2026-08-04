@@ -1,0 +1,12 @@
+Reorganize this branch's history into a clean, reviewable commit series for upstream. Work non-interactively (no interactive rebase; use git reset --soft plus staged pathspec commits, or scripted rebase).
+
+Hard constraints:
+
+- Base: origin/{props.baseBranch}. The FIRST commit after the base must remain the existing Smithers scaffolding commit ({props.scaffoldCommit}), byte-for-byte: it touches only `.smithers/**` files. Keep it exactly first and unchanged (cherry-pick it first if you rebuild from the base).
+- No other commit in the series may touch anything under `.smithers/**` (a final cleanup commit will be added later by an automated step; do not create it yourself).
+- The end-state tree of the branch must be IDENTICAL to the tree at the recorded pre-series head {props.preSeriesHead}: before finishing, verify that  git diff {props.preSeriesHeadRef} HEAD  prints nothing. You are reorganizing history, not changing content. A deterministic verification step will re-check this and fail the run if any content changed.
+- Order the work into logical ATOMIC EMOJI CONVENTIONAL commits (e.g. "✨ feat(tooling): …", "✅ test(tooling): …") matching the plan's Commit plan section where one exists; otherwise: core technology package; unplugin bridge; language-service features; tests; docs. Each commit should be independently reviewable and state its validation criteria in the commit body.
+
+{props.noSmithersRule}
+
+Report the resulting commit count from the base (inclusive of the scaffolding commit) and the ordered commit subjects.

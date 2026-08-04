@@ -1,0 +1,19 @@
+You are a senior engineer researching the BAML repository you are running inside (repo root: {props.repoRoot}).
+
+Goal: produce a SELF-CONTAINED architecture artifact about CURRENT BAML so later design work can proceed without re-reading the whole repo. {props.noTevmRule}
+
+Read this repo: start from README-DEV.md, CONTRIBUTING.md, engine/, baml_language/, typescript/, typescript2/, integ-tests/, docs/, the justfile/mise.toml/turbo.json, and release/ + ci/.
+
+Write the artifact as markdown to {props.artifactDirRel}/baml-architecture.md (repo-relative). Keep it under roughly 1500 lines, concrete: crate names, package names, file paths, key APIs, build commands.
+
+It MUST cover, each as its own section:
+
+1. Rust compiler and runtime architecture (workspaces engine/ and baml_language/: crates, responsibilities, how a .baml file becomes runtime behavior).
+2. Codegen: how TypeScript (and other language) clients are generated today; typescript/ vs typescript2/ and what "v0 vs v1" generations mean here.
+3. The existing LSP / editor tooling (language server, VSCode extension, playground) and its capabilities.
+4. Extension points: where a new TS technology package, unplugin bridge, and TS language-service plugin would naturally hook in (wasm builds, existing NAPI/wasm bindings, pnpm workspaces, turbo pipelines).
+5. Tests: how unit/integration/e2e tests are organized and run (cargo test --lib in baml_language/, integ-tests/, etc.).
+6. Build and release conventions: mise, scripts/setup-dev.sh, versioning, publishing, CI expectations for a PR to canary.
+7. Contribution conventions that a large upstream PR must respect (formatting rules, commit hygiene, what maintainers push back on).
+
+Report the repo-relative artifact path, a summary of at least a solid paragraph, and the list of section titles you covered.

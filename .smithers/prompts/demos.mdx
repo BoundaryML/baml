@@ -1,0 +1,14 @@
+Produce REAL terminal recordings proving this branch's features work, using charmbracelet vhs (install via brew if absent). No fakery: every recording drives the actual built artifacts from this branch.
+
+Record at minimum (write .tape files under {props.artifactDirRel}/demos/, output GIFs beside them):
+
+1. Editor LSP: nvim (or tsserver protocol driver) showing hover docs and go-to-definition from a .ts consumer into a .baml file.
+2. Type safety: a type error on a BAML-derived type surfacing in the editor/tsc output.
+3. Build: a real bundler (vite or esbuild) building a project with a direct .baml import.
+4. Clean consumer: npm-packing the packages into a fresh project and running the typecheck/build with zero internal env vars.
+
+Then publish the GIFs so they render on GitHub: commit them to an "assets/lsp-demo" (or similar) branch on the "fork" git remote (never the PR branch), push, and use raw.githubusercontent.com URLs. Append a "## Demos" section embedding them to the PR body of {props.prUrl} via gh pr edit (preserve the existing body).
+
+{props.smithersRule}
+
+Report the GIF paths, the assets branch name and commit, and a summary.

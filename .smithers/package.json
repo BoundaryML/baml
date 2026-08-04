@@ -1,0 +1,27 @@
+{
+  "name": "baml-smithers-workflows",
+  "private": true,
+  "type": "module",
+  "description": "Temporary Smithers workflow pack for the TEVM-grade TypeScript tooling upstream effort. Every file in .smithers/ is workflow scaffolding and is removed by the workflow's final cleanup task before the draft PR is finalized.",
+  "//": [
+    "smthrs and zod are provided as node_modules symlinks into the local Smithers",
+    "working tree (/Users/williamcory/smithers), matching that repo's own",
+    ".smithers/node_modules layout. Run the workflow with the WORKING-TREE CLI:",
+    "  bun /Users/williamcory/smithers/apps/cli/src/index.js up .smithers/workflows/upstream-ts-tooling.tsx",
+    "never with a published Smithers build. Validate the graph before running:",
+    "  bun /Users/williamcory/smithers/apps/cli/src/index.js graph .smithers/workflows/upstream-ts-tooling.tsx --input '{}'",
+    "  bun run --cwd .smithers test",
+    "Tests MUST run with .smithers as the cwd (bun run --cwd .smithers test, or",
+    "cd .smithers && bun run test): the prompts are *.mdx modules loaded by the",
+    "mdxPlugin preload wired in .smithers/bunfig.toml, and bunfig only applies",
+    "when bun starts in this directory. A bare `bun test ./.smithers/...` from",
+    "the repo root skips the preload and fails to import the workflow."
+  ],
+  "scripts": {
+    "test": "bun test ./workflows/upstream-ts-tooling.validation.test.tsx"
+  },
+  "dependencies": {
+    "smthrs": "*",
+    "zod": "^4"
+  }
+}
