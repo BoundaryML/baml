@@ -6,7 +6,7 @@ expression: outcome.dump
 649..807 '{\n   ...ull\n}': hir_ty=[(T as baml.iter.Iterator).Item | null] tir=[null | (T as baml.iter.Iterator).Item]
 655..660 'let r': hir_ty=[(T as baml.iter.Iterator).Item | null] tir=[null | (T as baml.iter.Iterator).Item]
 663..754 'match ...n    }': hir_ty=[(T as baml.iter.Iterator).Item | null] tir=[null | (T as baml.iter.Iterator).Item]
-670..677 'it.next': hir_ty=[(self: T) -> baml.iter.Done | (T as baml.iter.Iterator).Item throws (T as baml.iter.Iterator).Error] tir=[() -> (T as baml.iter.Iterator).Item | baml.iter.Done throws (T as baml.iter.Iterator).Error]
+670..677 'it.next': hir_ty=[(self: T) -> baml.iter.Done | (T as baml.iter.Iterator).Item throws never] tir=[() -> (T as baml.iter.Iterator).Item | baml.iter.Done throws (T as baml.iter.Iterator).Error]
 670..679 'it.next()': hir_ty=[baml.iter.Done | (T as baml.iter.Iterator).Item] tir=[(T as baml.iter.Iterator).Item | baml.iter.Done]
 691..705 'baml.iter.Done': baml.iter.Done
 709..713 'null': null

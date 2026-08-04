@@ -50,6 +50,13 @@ use crate::{
     },
 };
 
+/// Reduction budget for the finalize-time projection pass: bounds a
+/// reduction CHAIN (`(A as I).X` -> `(B as J).Y` -> ...), the same
+/// discipline as the canonical walk's fuel. Any real chain is far
+/// shorter; a cyclic binding is a declaration-level error caught
+/// elsewhere.
+const PROJECTION_FINALIZE_FUEL: u32 = 32;
+
 /// Inference side tables for one body owner, keyed by arena ids, mirroring
 /// rust-analyzer's `InferenceResult`. Types are the hash-consed
 /// `baml_type::interned` representation (this crate's native vocabulary);
@@ -2085,7 +2092,55 @@ impl<'db> InferenceContext<'db> {
         if erased.has_error() {
             return erased;
         }
-        self.canonicalize_unions(&erased)
+        let reduced = self.reduce_projections(&erased, PROJECTION_FINALIZE_FUEL);
+        self.canonicalize_unions(&reduced)
+    }
+
+    /// Post-substitution projection normalization (rustc's
+    /// instantiate-then-normalize; rust-analyzer normalizes projections at
+    /// the result boundary the same way): every projection the oracle can
+    /// determine reduces, so results and renders show what the type IS -
+    /// `(IntStore as Store).Item` finalizes as `int`. Targeted rather than
+    /// full canonicalization, which would also expand nominal aliases;
+    /// renders keep those by design.
+    fn reduce_projections(&self, ty: &Ty, fuel: u32) -> Ty {
+        if fuel == 0 || !ty.has_projection() {
+            return ty.clone();
+        }
+        let rebuilt = Ty::intern(
+            ty.kind()
+                .map_children(|child| self.reduce_projections(child, fuel)),
+        );
+        if let TyKind::AssociatedTypeProjection {
+            base,
+            interface,
+            member,
+            ..
+        } = rebuilt.kind()
+        {
+            let plain_base = base.to_plain();
+            let plain_interface = baml_type::Interface::new(
+                interface.name.clone(),
+                interface.generics.iter().map(Ty::to_plain).collect(),
+                interface
+                    .associated_types
+                    .iter()
+                    .map(|(name, pin)| (name.clone(), pin.to_plain()))
+                    .collect(),
+            );
+            if let baml_type::normalize::ProjectionStep::Reduced(step) =
+                baml_type::normalize::TypeContext::project(
+                    &self.facts,
+                    &plain_base,
+                    &plain_interface,
+                    member,
+                    fuel,
+                )
+            {
+                return self.reduce_projections(&Ty::from_plain(&step), fuel - 1);
+            }
+        }
+        rebuilt
     }
 
     /// Rebuilds `ty` with every union node in canonical form, bottom-up.

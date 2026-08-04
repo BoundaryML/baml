@@ -19,10 +19,9 @@
 //! kind. Diagnostics are not emitted yet (S17); every failure lowers to the
 //! `Error` sentinel.
 //!
-//! Not yet mirrored (later slices): `Self`-rooted paths naming the
-//! IMPLEMENTOR's own members inside default-method bodies (I6; `Self` as a
-//! frame var and dotted `Self.Assoc` projections lower here already),
-//! map-key validation and other diagnostics (S17).
+//! Not yet mirrored (later slices): free-impl method frames (their
+//! bodies as inference roots), map-key validation and other diagnostics
+//! (S17).
 
 use baml_compiler2_hir::{
     contributions::Definition,

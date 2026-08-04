@@ -413,6 +413,85 @@ fn assoc_realization_env<'db>(
     Some((interface, data))
 }
 
+/// Every impl a realized `concrete` type matches, across every package
+/// in the compilation (enumeration has no interface side to derive
+/// search roots from, and coherence guarantees the set is
+/// overlap-free; per-package visibility gating is I7/S17's). The
+/// candidate source for concrete-receiver interface members - the
+/// rust-analyzer trait-impl candidate tier of method resolution.
+/// Candidates whose implemented interface still carries impl variables
+/// after the for-target match (`implement<O> Add<O> for int` - `O` is
+/// not determined by the receiver) are SKIPPED: surfacing them needs
+/// call-site variable introduction (the probe machinery), and leaking
+/// raw impl params into a body's inference would collide with its
+/// frame. Fail-safe, not fail-wrong.
+pub fn impls_for_type<'db>(
+    db: &'db dyn baml_compiler2_ppir::Db,
+    concrete: &Ty,
+) -> Vec<ResolvedImpl<'db>> {
+    if !is_realized(concrete) {
+        return Vec::new();
+    }
+    let eq = AliasOnlyFacts::new(db);
+    let mut out = Vec::new();
+    for package in all_packages(db) {
+        for &block in package_impl_locs(db, package) {
+            let Some(facts) = impl_facts(db, block) else {
+                continue;
+            };
+            let params: Vec<ParamTy> = facts
+                .generic_params
+                .iter()
+                .map(|(param, _)| param.clone())
+                .collect();
+            // Bare-blanket guard, as in `match_impl_head`.
+            if let TyKind::TypeVar(param, _) = facts.for_ty_pattern.kind()
+                && params.contains(param)
+                && !is_concrete_receiver(concrete)
+            {
+                continue;
+            }
+            let mut bindings = FxHashMap::default();
+            if !match_pattern(&facts.for_ty_pattern, concrete, &params, &mut bindings, &eq) {
+                continue;
+            }
+            if !bounds_hold(db, facts, &bindings, BLANKET_IMPL_BOUND_DEPTH) {
+                continue;
+            }
+            let resolved = ResolvedImpl {
+                block,
+                facts,
+                bindings,
+            };
+            let implemented = resolved.implemented();
+            if implemented.args.iter().any(Ty::has_typevar)
+                || implemented
+                    .pins
+                    .iter()
+                    .any(|(_, ty)| ty.has_typevar())
+            {
+                continue;
+            }
+            out.push(resolved);
+        }
+    }
+    out
+}
+
+/// Every package contributing files to the compilation, deduplicated.
+fn all_packages(db: &dyn baml_compiler2_ppir::Db) -> Vec<PackageId<'_>> {
+    let mut names: Vec<Name> = baml_compiler2_hir::compiler2_all_files(db)
+        .into_iter()
+        .map(|file| baml_compiler2_hir::file_package::file_package(db, file).package)
+        .collect();
+    names.sort();
+    names.dedup();
+    names
+        .into_iter()
+        .map(|name| PackageId::new(db, name))
+        .collect()
+}
+
 /// Whether realized `concrete` implements realized `interface`. The
 /// public fact: searches the root packages derivable from every
 /// qualified name on both sides (a single guessed root misses
@@ -845,14 +924,19 @@ fn bounds_hold(
 }
 
 /// The realized DIRECT-plus-transitive `requires` closure of an
-/// interface reference (excluding itself), fuel-bounded. A `requires`
-/// target mentioning `Self` (`requires Iterable<Item = Self.Item>`)
-/// lowers its pins to Error here - the params-only frame has no `Self`
-/// slot; realizing those pins against the sub-interface's implementor
-/// joins with I6's `Self` work.
+/// interface reference (excluding itself), fuel-bounded. `self_ty` is
+/// the SUBJECT the closure is elaborated for (the rigid var, the
+/// existential, the concrete receiver) - rustc's elaboration
+/// instantiates super-predicates with the subject's `Self`, which is
+/// what realizes a `Self`-mentioning target (`requires Iterable<Item =
+/// Self.Item>` becomes `Iterable<Item = (subject as I).Item>`, and the
+/// projection reduces through the oracle wherever the facts determine
+/// it). One subject threads the whole closure: whoever implements the
+/// root implements every required interface (the requires contract).
 pub fn direct_requires_closure(
     db: &dyn baml_compiler2_ppir::Db,
     root: &InterfaceTarget,
+    self_ty: &Ty,
     fuel: u32,
 ) -> Vec<InterfaceTarget> {
     let mut out = Vec::new();
@@ -863,7 +947,7 @@ pub fn direct_requires_closure(
             break;
         }
         budget -= 1;
-        for required in direct_requires(db, &current) {
+        for required in direct_requires(db, &current, self_ty) {
             if required.name != root.name && !out.contains(&required) {
                 out.push(required.clone());
                 queue.push(required);
@@ -873,21 +957,22 @@ pub fn direct_requires_closure(
     out
 }
 
+/// The realized direct `requires` targets of `of`, for subject
+/// `self_ty`: lowered in the full interface frame (so `Self` and
+/// sibling associated names resolve), realized by the shared positional
+/// instantiation.
 fn direct_requires(
     db: &dyn baml_compiler2_ppir::Db,
     of: &InterfaceTarget,
+    self_ty: &Ty,
 ) -> Vec<InterfaceTarget> {
-    let facts = crate::facts::Facts::new(db);
-    let Some(baml_compiler2_hir::contributions::Definition::Interface(interface)) =
-        facts.definition_of(&of.name)
-    else {
+    let Some((interface, data)) = assoc_realization_env(db, of) else {
         return Vec::new();
     };
-    let data = baml_compiler2_ppir::item_data::interface_data(db, interface);
-    let frame = crate::lower::interface_generic_frame_params(&data.generic_params);
-    let ctx = crate::lower::lower_ctx_for_file(db, interface.file(db)).with_frame(frame.clone());
-    let bindings: FxHashMap<ParamTy, Ty> =
-        frame.into_iter().zip(of.args.iter().cloned()).collect();
+    let ctx = crate::lower::lower_ctx_for_file(db, interface.file(db))
+        .with_frame(crate::lower::interface_frame(db, interface))
+        .with_bounds(crate::lower::interface_scope_bounds(db, interface));
+    let instantiation = crate::method_resolution::interface_instantiation(self_ty, of, data);
     data.requires
         .iter()
         .filter_map(|&required| {
@@ -897,12 +982,14 @@ fn direct_requires(
                 args: target
                     .args
                     .iter()
-                    .map(|arg| substitute_bindings(arg, &bindings))
+                    .map(|arg| crate::lower::substitute_params(arg, &instantiation))
                     .collect(),
                 pins: target
                     .pins
                     .iter()
-                    .map(|(name, ty)| (name.clone(), substitute_bindings(ty, &bindings)))
+                    .map(|(name, ty)| {
+                        (name.clone(), crate::lower::substitute_params(ty, &instantiation))
+                    })
                     .collect(),
             })
         })
@@ -910,45 +997,23 @@ fn direct_requires(
 }
 
 /// The transitive `requires` closure: whether interface `sub` (with its
-/// realized args) requires `sup`. `Self`-mentioning requires targets
-/// stay conservative until I6 (see `direct_requires_closure`).
+/// realized args) requires `sup`, for subject `self_ty` (heads compare
+/// by name + args; pins are outputs, not part of the relation).
 pub fn interface_requires(
     db: &dyn baml_compiler2_ppir::Db,
     sub: &InterfaceTarget,
     sup: &InterfaceTarget,
+    self_ty: &Ty,
     fuel: u32,
 ) -> bool {
     if fuel == 0 {
         return false;
     }
-    let facts = crate::facts::Facts::new(db);
-    let Some(baml_compiler2_hir::contributions::Definition::Interface(interface)) =
-        facts.definition_of(&sub.name)
-    else {
-        return false;
-    };
-    let data = baml_compiler2_ppir::item_data::interface_data(db, interface);
-    let frame = crate::lower::interface_generic_frame_params(&data.generic_params);
-    let ctx = crate::lower::lower_ctx_for_file(db, interface.file(db)).with_frame(frame.clone());
     let eq = AliasOnlyFacts::new(db);
-    let bindings: FxHashMap<ParamTy, Ty> = frame.into_iter().zip(sub.args.iter().cloned()).collect();
-    for &required in &data.requires {
-        let Some(required) = interface_target_of(&ctx.lower_type_ref(&data.type_refs, required))
-        else {
-            continue;
-        };
-        let realized = InterfaceTarget {
-            name: required.name.clone(),
-            args: required
-                .args
-                .iter()
-                .map(|arg| substitute_bindings(arg, &bindings))
-                .collect(),
-            pins: Vec::new(),
-        };
-        if realized.name == sup.name
-            && realized.args.len() == sup.args.len()
-            && realized
+    for required in direct_requires(db, sub, self_ty) {
+        if required.name == sup.name
+            && required.args.len() == sup.args.len()
+            && required
                 .args
                 .iter()
                 .zip(&sup.args)
@@ -956,9 +1021,21 @@ pub fn interface_requires(
         {
             return true;
         }
-        if interface_requires(db, &realized, sup, fuel - 1) {
+        if interface_requires(db, &required, sup, self_ty, fuel - 1) {
             return true;
         }
     }
     false
+}
+
+/// The interface existential a target denotes - the default SUBJECT for
+/// a requires walk with no better one (rustc's `dyn A: B` elaboration
+/// takes `Self` = the existential itself).
+pub fn target_existential(target: &InterfaceTarget) -> Ty {
+    Ty::intern(TyKind::Interface(
+        target.name.clone(),
+        target.args.clone().into(),
+        target.pins.clone().into(),
+        baml_type::TyAttr::default(),
+    ))
 }

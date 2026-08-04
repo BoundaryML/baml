@@ -1,0 +1,29 @@
+---
+source: crates/baml_tests/src/type_spec/fixtures.rs
+expression: outcome.dump
+---
+905..914 'roundtrip': throws never
+968..1067 '{\n   ...e }\n}': hir_ty=[bool] tir=[bool | false]
+974..979 'let v': hir_ty=[(T as user.Sink).Item] tir=[(Self as user.Sink).Item]
+982..989 'io.pull': hir_ty=[(self: T) -> (T as user.Sink).Item throws never] tir=[() -> (Self as user.Sink).Item throws never]
+982..991 'io.pull()': hir_ty=[(T as user.Sink).Item] tir=[(Self as user.Sink).Item]
+1029..1065 'if (c)...alse }': hir_ty=[bool] tir=[bool | false]
+1033..1034 'c': bool
+1036..1050 '{ io.push(v) }': bool
+1038..1045 'io.push': hir_ty=[(self: T, item: (T as user.Sink).Item) -> bool throws never] tir=[(item: (T as user.Sink).Item) -> bool throws never]
+1038..1048 'io.push(v)': bool
+1046..1047 'v': hir_ty=[(T as user.Sink).Item] tir=[(Self as user.Sink).Item]
+1056..1065 '{ false }': false
+1058..1063 'false': false
+1162..1166 'pull': throws never
+1193..1228 '{\n   ...     }': int
+1207..1218 'self.buffer': int
+1298..1302 'push': throws never
+1341..1369 '{\n   ...     }': true
+1355..1359 'true': true
+1388..1396 'concrete': throws never
+1426..1471 '{\n   ...  x\n}': int
+1432..1437 'let x': int
+1440..1446 'p.pull': hir_ty=[(self: user.Pipe) -> int throws never] tir=[() -> int throws never]
+1440..1448 'p.pull()': int
+1468..1469 'x': int

@@ -137,6 +137,11 @@ impl Ty {
     pub fn has_typevar(&self) -> bool {
         self.0.flags.contains(TypeFlags::HAS_TYPEVAR)
     }
+
+    /// Whether this type contains an associated-type projection.
+    pub fn has_projection(&self) -> bool {
+        self.0.flags.contains(TypeFlags::HAS_PROJECTION)
+    }
 }
 
 impl Clone for Ty {

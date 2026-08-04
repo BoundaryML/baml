@@ -1,0 +1,22 @@
+---
+source: crates/baml_tests/src/type_spec/fixtures.rs
+expression: outcome.dump
+---
+493..497 'pair': throws never
+532..631 '{\n   ...n    }': (Self as user.Store).Item[]
+542..547 'let a': (Self as user.Store).Item
+550..558 'self.get': hir_ty=[(self: Self) -> (Self as user.Store).Item throws never] tir=[() -> (Self as user.Store).Item throws never]
+550..560 'self.get()': (Self as user.Store).Item
+610..625 '[a, self.get()]': (Self as user.Store).Item[]
+611..612 'a': (Self as user.Store).Item
+614..622 'self.get': hir_ty=[(self: Self) -> (Self as user.Store).Item throws never] tir=[() -> (Self as user.Store).Item throws never]
+614..624 'self.get()': (Self as user.Store).Item
+730..733 'get': throws never
+760..794 '{\n   ...     }': int
+774..784 'self.value': int
+813..824 'use_default': throws never
+860..907 '{\n   ...  r\n}': int[]
+866..871 'let r': int[]
+874..880 's.pair': hir_ty=[(self: user.IntStore) -> int[] throws never] tir=[() -> int[] throws never]
+874..882 's.pair()': int[]
+904..905 'r': int[]

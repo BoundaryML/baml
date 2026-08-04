@@ -103,8 +103,34 @@ fails it). Dotted projection paths (`T.Item`, `Self.Item`, chained
 interface-scoped lowering shares. Partial throws clauses (`throws T |
 _`, spec Functions rule 3) ride along: the open slot suspends the
 contract check and the surface callers see is declared-union-inferred.
-72 fixtures green, 1 pending pin: B-1075 pairwise bitwise (stdlib
-interfaces, outside this branch).
+I6 (`Self` + inheritance): interface default-method bodies
+type as ordinary inference roots with NO new machinery - the I2 frame
+(`Self` at slot 0), the I3 bound-driven member lookup, and the I5
+projections compose (`self.get()` inside a default body types
+`(Self as I).Item`, the spec's universal reading). What I6 adds:
+concrete receivers resolve INHERITED members through the impls they
+match - `impls_for_type` enumeration + the rust-analyzer trait-impl
+candidate tier in the member ladder (class-inherent first, then impl
+providers with root-wins across `requires`, ambiguity fails closed;
+candidates whose implemented head still carries undetermined impl
+params are skipped fail-safe pending probe machinery). `Self` in
+`requires` targets realizes for real: targets lower in the full
+interface frame and instantiate against the elaboration SUBJECT
+(rustc's super-predicate instantiation; a `requires Source<Item =
+Self.Item>` pin becomes `(T as Sink).Item` on a rigid `T`), with the
+subject threaded through the whole closure - `direct_requires_closure`
+and `interface_requires` take it explicitly; the fact boundary with no
+better subject uses the existential itself (rustc's `dyn A: B` shape).
+And finalize gained post-substitution projection NORMALIZATION
+(rustc's instantiate-then-normalize): every oracle-determinable
+projection reduces at the result boundary, so `s.pair()` on a concrete
+receiver renders `int[]`, not `(IntStore as Store).Item[]` - targeted,
+not full canonicalization, which would expand nominal aliases renders
+keep. TIR divergences pinned: `Self` left unrealized through TIR's
+requires closure (errors a sound program), and the unreduced-default
+throws-contract error on stdlib `collect`. 75 fixtures green, 1
+pending pin: B-1075 pairwise bitwise (stdlib interfaces, outside this
+branch).
 
 `baml_language/TYPE_SYSTEM.md` is the correctness authority. It is
 prescriptive: where the current TIR implementation disagrees with it, the spec
@@ -181,7 +207,7 @@ cutover. "Tested by" is the merge gate for the slice.
 | I3  | SHIPPED: interface fields + methods on existential/rigid receivers (root-wins over requires closure, per-receiver Self, one-Self gate); in-body impl methods via class list. Out-of-body impl members + unions -> I4 symbolic resolvers | existential/bounded method + field fixtures; one-Self rejection pin |
 | I4  | SHIPPED: the obligation worklist (Implements + Operator kinds; register-and-fulfill, stall-on-ambiguity, fixpoint interleave with ground-subset bound resolution, fail-closed). Probe = table snapshot/rollback when candidate selection needs it. Out-of-body impl members + union receivers + symbolic resolvers remain here | operator-deferral fixtures (single + chained); reduce interior sentinel gone |
 | I5  | DONE - projection reduction (rustc candidate order), assoc defaults + declared bounds, exact pin gate, partial throws | spec `first` example verbatim; `partial_throws_clause` |
-| I6  | `Self` + interface default-method bodies as inference roots; `Self` in `requires` targets (closure pins) | default-body fixtures                                  |
+| I6  | DONE - default bodies as roots (frames composed), concrete-receiver impl tier, `Self`-in-requires realization, finalize projection normalization | `interface_default_method_body`, `requires_self_pins_realize`, `stdlib_iterator_collect` |
 | S12 | SHIPPED: callable_throws salsa fixpoint; effect vars default never; lambda channels; catch residual on the error channel; declared-clause contracts incl. rigid vars (B-1082). `throws T \| _` partials join with obligations (I4) | throws + catch fixtures |
 | S13 | SHIPPED: finalize - resolve-all to fixpoint (minimum-upper meets, all-equal-lowers agreement), local Infer-to-Error erasure (rulings 2/3; r-a's replace-with-error discipline), post-substitution union re-canonicalization (null-last at this crate's boundary). Diagnostics land with S17 | `[]`-inference fixtures; no-infer-leak invariant |
 | I7  | Coherence overlap moves in (existing ACI engine, unchanged)          | differential vs TIR on coherence diagnostic fixtures   |

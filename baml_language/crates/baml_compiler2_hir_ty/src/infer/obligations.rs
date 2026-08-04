@@ -140,7 +140,7 @@ impl InferenceContext<'_> {
                 carried.iter().any(|have| {
                     let have = InterfaceTarget::from_constraint(have);
                     carried_satisfies(&have, &target)
-                        || crate::impls::interface_requires(self.db, &have, &target, 8)
+                        || crate::impls::interface_requires(self.db, &have, &target, ty, 8)
                 })
             }
             TyKind::Interface(name, args, pins, _) => {
@@ -150,7 +150,7 @@ impl InferenceContext<'_> {
                     pins: pins.to_vec(),
                 };
                 carried_satisfies(&have, &target)
-                    || crate::impls::interface_requires(self.db, &have, &target, 8)
+                    || crate::impls::interface_requires(self.db, &have, &target, ty, 8)
             }
             // A projection: a reducible one reduces inside the canonical
             // algebra (the oracle is live since I5); a still-symbolic one

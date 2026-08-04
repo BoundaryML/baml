@@ -81,10 +81,16 @@ impl TypeContext for Facts<'_> {
     }
 
     fn interface_requires(&self, sub: &Interface, sup: &Interface) -> bool {
+        let sub = crate::impls::InterfaceTarget::from_constraint(sub);
+        // No better subject at this fact boundary: `Self` in `sub`'s
+        // requires targets realizes as the existential itself (rustc's
+        // `dyn A: B` elaboration).
+        let subject = crate::impls::target_existential(&sub);
         crate::impls::interface_requires(
             self.db,
-            &crate::impls::InterfaceTarget::from_constraint(sub),
+            &sub,
             &crate::impls::InterfaceTarget::from_constraint(sup),
+            &subject,
             8,
         )
     }
@@ -140,7 +146,12 @@ impl TypeContext for Facts<'_> {
             for bound in self.type_var_bound(param) {
                 let have = crate::impls::InterfaceTarget::from_constraint(&bound);
                 let mut heads = vec![have.clone()];
-                heads.extend(crate::impls::direct_requires_closure(self.db, &have, 8));
+                heads.extend(crate::impls::direct_requires_closure(
+                    self.db,
+                    &have,
+                    &base_interned,
+                    8,
+                ));
                 for head in heads {
                     let head_matches = head.name == target.name
                         && head.args.len() == target.args.len()

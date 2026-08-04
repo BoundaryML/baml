@@ -6,9 +6,13 @@
 //! `string`'s on `class baml.String`, and so on) - and the receiver's
 //! structure supplies the class generic arguments.
 //!
-//! Not yet resolved here (later slices): methods via `implements` blocks
-//! and interface-existential/type-var receivers (the I cluster), union
-//! receivers, and `$stream` companions.
+//! The full ladder (the callers' order): class-inherent methods, then
+//! interface members - existential and rigid-bounded receivers through
+//! their bounds (I3), concrete receivers through the impls they match
+//! (I6, the rust-analyzer trait-impl candidate tier) - then fields.
+//! Not yet resolved here (later slices): union receivers, `$stream`
+//! companions, and free-impl method bodies as inference roots (their
+//! member TYPES already resolve through the interface signature).
 
 use baml_compiler2_hir::{
     contributions::Definition,
@@ -156,7 +160,9 @@ pub fn lookup_interface_member<'db>(
                 .collect(),
             false,
         ),
-        _ => return None,
+        // Concrete receivers resolve through the impls they match - the
+        // trait-impl candidate tier (I6).
+        _ => return lookup_impl_member(db, facts, receiver, name),
     };
     for root in &roots {
         // Root-wins: the directly-named interface shadows its closure.
@@ -166,7 +172,7 @@ pub fn lookup_interface_member<'db>(
         // Then the requires closure, deduped by realized identity;
         // distinct declarers are ambiguous.
         let mut found: Option<(InterfaceTarget, InterfaceMember)> = None;
-        for required in crate::impls::direct_requires_closure(db, root, 8) {
+        for required in crate::impls::direct_requires_closure(db, root, receiver, 8) {
             if let Some(member) =
                 member_on_interface(db, facts, &required, receiver, name, existential)
             {
@@ -182,6 +188,48 @@ pub fn lookup_interface_member<'db>(
         }
     }
     None
+}
+
+/// Concrete receivers: the rust-analyzer trait-impl candidate tier of
+/// method resolution. Class-inherent methods were tried first (the
+/// caller's ladder); here every impl the receiver matches contributes
+/// its interface's members - fields, required signatures, and DEFAULT
+/// methods realized at `Self` = the receiver, unpinned associated slots
+/// as symbolic projections the oracle reduces through the impl's
+/// bindings (I5). Root-wins across providers (a provider another
+/// provider `requires` is shadowed - the most-derived interface wins,
+/// mirroring the symbolic receivers' tiering); distinct survivors are
+/// ambiguous (None; S17 renders). Free-impl method BODIES as inference
+/// roots are separate future work - the member TYPE here comes from the
+/// interface signature either way.
+fn lookup_impl_member<'db>(
+    db: &'db dyn baml_compiler2_ppir::Db,
+    facts: &Facts<'db>,
+    receiver: &Ty,
+    name: &Name,
+) -> Option<InterfaceMember> {
+    let mut providers: Vec<(InterfaceTarget, InterfaceMember)> = Vec::new();
+    for resolved in crate::impls::impls_for_type(db, receiver) {
+        let implemented = resolved.implemented();
+        if let Some(member) = member_on_interface(db, facts, &implemented, receiver, name, false)
+            && !providers.iter().any(|(seen, _)| *seen == implemented)
+        {
+            providers.push((implemented, member));
+        }
+    }
+    if providers.len() > 1 {
+        let heads: Vec<InterfaceTarget> = providers.iter().map(|(target, _)| target.clone()).collect();
+        providers.retain(|(target, _)| {
+            !heads.iter().any(|other| {
+                other.name != target.name
+                    && crate::impls::interface_requires(db, other, target, receiver, 8)
+            })
+        });
+    }
+    match providers.len() {
+        1 => providers.pop().map(|(_, member)| member),
+        _ => None,
+    }
 }
 
 /// A member declared DIRECTLY on `target`, instantiated for `receiver`.
