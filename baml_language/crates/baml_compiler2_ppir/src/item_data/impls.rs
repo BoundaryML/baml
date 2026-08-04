@@ -41,6 +41,9 @@ pub struct ImplBlockData<'db> {
     pub field_links: Vec<InterfaceFieldLinkData>,
     pub associated_type_bindings: Vec<AssociatedTypeBindingData>,
     pub methods: Vec<FunctionLoc<'db>>,
+    /// Leading `///` docstring — populated for free `implements … for …`
+    /// blocks; in-body blocks carry none today.
+    pub docstring: Option<String>,
 }
 
 /// Spans for an `ImplBlock`, parallel to [`ImplBlockData`].
@@ -133,6 +136,7 @@ fn lower<'db>(
                 .iter()
                 .map(|method| FunctionLoc::new(db, file, *method))
                 .collect(),
+            docstring: data.docstring.clone(),
         },
         ImplBlockSourceMap {
             span: data.span,

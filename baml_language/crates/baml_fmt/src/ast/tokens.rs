@@ -596,7 +596,11 @@ impl Word {
 impl FromCST for Word {
     fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
         let token = StrongAstError::assert_is_token(elem)?;
-        StrongAstError::assert_kind_token(&token, SyntaxKind::WORD)?;
+        // `client` lexes as KW_CLIENT but remains a valid identifier (field,
+        // parameter, object key, ...) — mirror the parser's allowance.
+        if token.kind() != SyntaxKind::KW_CLIENT {
+            StrongAstError::assert_kind_token(&token, SyntaxKind::WORD)?;
+        }
         Ok(Self::new_from_span(token.text_range()))
     }
 }

@@ -1405,6 +1405,9 @@ impl<'db> SemanticIndexBuilder<'db> {
                 associated_type_bindings: impl_block.associated_type_bindings.clone(),
                 methods: block_method_ids.clone(),
                 span: impl_block.span,
+                // In-body `implements` blocks don't carry a docstring today —
+                // the AST `ImplementsBlock` has no field for one.
+                docstring: None,
             };
             self.item_tree.alloc_impl(&iface_head, &c.name, block);
             method_ids.extend(block_method_ids);
@@ -1465,6 +1468,7 @@ impl<'db> SemanticIndexBuilder<'db> {
             associated_type_bindings: imp.associated_type_bindings.clone(),
             methods: method_ids,
             span: imp.span,
+            docstring: imp.docstring.clone(),
         };
         let impl_id = self.item_tree.alloc_impl(&iface_head, &for_head, block);
         if let Some(scope) = impl_scope {

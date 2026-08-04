@@ -868,9 +868,7 @@ mod tests {
         assert_eq!(report.logs.len(), 2);
         assert_eq!(report.logs[0].metadata, fake_log_metadata());
         assert_eq!(report.logs[0].body, "42");
-        assert!(report.logs[1].body.contains("MapValue"));
-        assert!(report.logs[1].body.contains("user"));
-        assert!(report.logs[1].body.contains("ada"));
+        assert_eq!(report.logs[1].body, r#"{"user": "ada", "count": 42}"#);
         assert_eq!(producer.trace_heap().retained_snapshot_count(), 0);
         assert!(producer.drain().is_empty());
     }

@@ -1294,7 +1294,9 @@ impl FromCST for FunctionTypeParam {
 
         let mut it = SyntaxNodeIter::new(&node);
 
-        let name = if let Some(name) = it.next_if_kind(SyntaxKind::WORD) {
+        let name = if let Some(name) =
+            it.next_if(|e| matches!(e.kind(), SyntaxKind::WORD | SyntaxKind::KW_CLIENT))
+        {
             let name = t::Word::new_from_span(name.text_range());
             let question = it
                 .next_if_kind(SyntaxKind::QUESTION)

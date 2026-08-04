@@ -413,7 +413,7 @@ function run_test(body: TestBody, runner: TestRunner?) -> TestReport {
     let result = {
       body()
       RunReport { outcome: "pass", duration_ms: 0, message: null }
-    } catch_all (e) {
+    } catch_all (e, ctx) {
       let p: baml.panics.UserPanic => {
         RunReport { outcome: "fail", duration_ms: 0, message: p.message }
       },
@@ -421,10 +421,10 @@ function run_test(body: TestBody, runner: TestRunner?) -> TestReport {
         RunReport { outcome: "fail", duration_ms: 0, message: p.message }
       },
       baml.panics.Panic => {
-        RunReport { outcome: "fail", duration_ms: 0, message: null }
+        RunReport { outcome: "fail", duration_ms: 0, message: ctx.to_string() }
       },
       _ => {
-        RunReport { outcome: "fail", duration_ms: 0, message: null }
+        RunReport { outcome: "fail", duration_ms: 0, message: ctx.to_string() }
       }
     }
     TestReport {

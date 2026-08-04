@@ -108,4 +108,9 @@ pub use tokens::{
     semantic_highlight_style, semantic_tokens,
 };
 pub use type_info::{FunctionParamInfo, TypeInfo, type_at};
+// Editor primitive: cursor-position token lookup. First-class API — callers
+// (e.g. `baml_project`'s playground cursor context) must not depend on the
+// `utils` module's internals, which are otherwise private to this crate's
+// feature implementations.
 pub use usages::usages_at;
+pub use utils::find_token_at_offset;

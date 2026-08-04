@@ -376,7 +376,36 @@ impl BexExternalAdt {
     }
 }
 
+/// Field of the stdlib media wrapper classes (`baml.media.*`) that holds the
+/// structural media payload. The wrapper layout is private to the stdlib;
+/// host code must reach the payload through
+/// [`BexExternalValue::media_wrapper_inner`], never by naming this field
+/// elsewhere.
+pub const MEDIA_WRAPPER_DATA_FIELD: &str = "_data";
+
 impl BexExternalValue {
+    /// If this is an instance of a stdlib media wrapper class
+    /// (`baml.media.{Image,Audio,Video,Pdf}`), the media kind it wraps.
+    pub fn media_wrapper_kind(&self) -> Option<baml_type::MediaKind> {
+        match self {
+            BexExternalValue::Instance { class_name, .. } => {
+                baml_type::MediaKind::from_wrapper_class_name(class_name)
+            }
+            _ => None,
+        }
+    }
+
+    /// The structural media payload of a media wrapper instance. `None` when
+    /// this is not a media wrapper, or when the wrapper is missing its
+    /// payload field (malformed; callers decide whether that is an error).
+    pub fn media_wrapper_inner(&self) -> Option<&BexExternalValue> {
+        self.media_wrapper_kind()?;
+        match self {
+            BexExternalValue::Instance { fields, .. } => fields.get(MEDIA_WRAPPER_DATA_FIELD),
+            _ => None,
+        }
+    }
+
     /// Construct the transient carrier for an inbound value paired with its
     /// exact host-known type. This reuses the external union representation so
     /// existing type-directed VM materialization can honor `value_type`, while
