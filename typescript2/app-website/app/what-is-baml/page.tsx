@@ -305,7 +305,7 @@ const SECTIONS: Section[] = [
     num: 9,
     art: '/elephants/elephant-money.png',
     title: '{elephant} Are you trying to get bought by {acquirer}',
-    body: 'No thank you.\nThe BAML language is and will always be open. Apache-2, free, works offline.\nWe make money on Boundary Web Services. Build the language, the runtime, and the tracing layer, and you can make things nobody else can. We think you’ll love paying for some of them.\nSome of you may wish to build your own cloud. Here’s the [source](https://github.com/boundaryml/baml). Claudespeed.\nFor the rest, we’re launching with observability, and saving you from Datadog. [Reach out](mailto:vbv@boundaryml.com?subject=I%20want%20to%20send%20BAML%20monies) if you want in early.',
+    body: 'No thank you.\nThe BAML language is and will always be open. Apache-2, free, works offline.\nWe make money on Boundary Web Services. Build the language, the runtime, and the tracing layer, and you can make things nobody else can. We think you’ll love paying for some of them.\nSome of you may wish to build your own cloud. Good luck and Claudespeed.\nFor the rest, we’re launching with observability, and saving you from Datadog. [Reach out](mailto:vbv@boundaryml.com?subject=I%20want%20to%20send%20BAML%20monies) if you want in early.',
   },
 ];
 
