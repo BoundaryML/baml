@@ -5,7 +5,7 @@ expression: outcome.dump
 276..277 'f': throws never
 307..435 '{\n   ...+ j\n}': int
 313..322 'let k: -1': -1
-320..322 '-1': hir_ty=[!error] tir=[-1]
+320..322 '-1': -1
 325..327 '-1': -1
 326..327 '1': 1
 346..351 'let m': int

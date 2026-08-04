@@ -5,6 +5,6 @@ expression: outcome.dump
 639..640 'f': throws never
 689..755 '{\n   ...  x\n}': T
 695..714 'let z:...| int>': hir_ty=[user.Foo<int | T>] tir=[user.Foo<T | int>]
-702..714 'Foo<T | int>': hir_ty=[!error] tir=[user.Foo<T | int>]
+702..714 'Foo<T | int>': hir_ty=[user.Foo<int | T>] tir=[user.Foo<T | int>]
 717..718 'x': T
 752..753 'x': T

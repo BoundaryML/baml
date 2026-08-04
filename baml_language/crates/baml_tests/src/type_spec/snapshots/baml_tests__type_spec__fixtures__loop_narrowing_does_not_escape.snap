@@ -5,7 +5,7 @@ expression: outcome.dump
 457..458 'f': throws never
 489..597 '{\n   ...int\n}': int
 495..509 'let best: int?': int | null
-505..509 'int?': hir_ty=[!error] tir=[int | null]
+505..509 'int?': int | null
 512..516 'null': null
 526..531 'let x': int
 535..537 'xs': int[]

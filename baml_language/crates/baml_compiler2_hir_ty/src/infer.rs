@@ -495,13 +495,21 @@ impl<'db> InferenceContext<'db> {
                 }
             }
         }
-        // Patterns the walk did not type (destructures, match arms - later
-        // slices) record the sentinel so coverage stays visible.
-        for (pat_id, _) in body.patterns.iter() {
-            self.result
-                .type_of_binding
-                .entry(pat_id)
-                .or_insert_with(Ty::error);
+        // Backfill patterns the walk did not type. A TYPE-EXPRESSION
+        // node (an annotation or ascription, or an OR of them) records
+        // the type it DENOTES - typed coverage, TIR's convention (A2);
+        // everything else records the sentinel so gaps stay visible.
+        let unfilled: Vec<PatId> = body
+            .patterns
+            .iter()
+            .map(|(pat_id, _)| pat_id)
+            .filter(|pat_id| !self.result.type_of_binding.contains_key(pat_id))
+            .collect();
+        for pat_id in unfilled {
+            let ty = self
+                .pattern_ascription_ty(body, pat_id)
+                .unwrap_or_else(Ty::error);
+            self.result.type_of_binding.insert(pat_id, ty);
         }
     }
 
@@ -872,14 +880,9 @@ impl<'db> InferenceContext<'db> {
     ) {
         let binding_ty = match &body.patterns[pattern] {
             Pattern::Bind { subpat, .. } => {
-                let annotation = subpat.and_then(|sub| {
-                    matches!(body.patterns[sub], Pattern::Type(_))
-                        .then(|| self.type_refs.pattern_types.get(&sub).copied())
-                        .flatten()
-                });
+                let annotation = subpat.and_then(|sub| self.pattern_ascription_ty(body, sub));
                 match annotation {
-                    Some(type_ref) => {
-                        let annotation_ty = self.lower_body_annotation(type_ref);
+                    Some(annotation_ty) => {
                         if let Some(init) = initializer {
                             self.check_expr(body, init, &annotation_ty);
                         }
@@ -995,6 +998,35 @@ impl<'db> InferenceContext<'db> {
             } else {
                 self.flow.remove(&binding);
             }
+        }
+    }
+
+    /// The TYPE a binding's `:`-ascribed sub-pattern denotes, when it is
+    /// a pure type ascription: a `Pattern::Type`, or an OR of type
+    /// ascriptions - `let v: int | string` parses its annotation as an
+    /// or-pattern, and the binding's recorded type is the WRITTEN union
+    /// (ruling 3: bindings record what the user wrote; narrowing is for
+    /// uses). Structural sub-patterns return None (the destructure walk
+    /// owns those).
+    fn pattern_ascription_ty(&mut self, body: &ExprBody, sub: PatId) -> Option<Ty> {
+        match &body.patterns[sub] {
+            Pattern::Type(_) => {
+                let type_ref = self.type_refs.pattern_types.get(&sub).copied()?;
+                Some(self.lower_body_annotation(type_ref))
+            }
+            Pattern::Or(alternatives) => {
+                let alternatives = alternatives.clone();
+                let mut members = Vec::new();
+                for alt in alternatives {
+                    if !matches!(body.patterns[alt], Pattern::Type(_)) {
+                        return None;
+                    }
+                    let type_ref = self.type_refs.pattern_types.get(&alt).copied()?;
+                    members.push(self.lower_body_annotation(type_ref));
+                }
+                Some(Ty::union(members))
+            }
+            _ => None,
         }
     }
 
@@ -1398,7 +1430,7 @@ impl<'db> InferenceContext<'db> {
                         .all(|member| matches!(member.kind(), TyKind::Future(..))) =>
             {
                 let mut values = Vec::new();
-                for member in members.iter() {
+                for member in members {
                     if let TyKind::Future(value, error, _) = member.kind() {
                         values.push(value.clone());
                         let error = error.clone();

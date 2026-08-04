@@ -5,7 +5,7 @@ expression: outcome.dump
 244..245 'f': throws never
 256..335 '{\n   ...dj;\n}': void
 262..278 'let ad...nt[][]': int[][]
-271..278 'int[][]': hir_ty=[!error] tir=[int[][]]
+271..278 'int[][]': int[][]
 281..283 '[]': int[][]
 289..297 'adj.push': (self: int[][], item: int[]) -> int throws never
 289..301 'adj.push([])': int

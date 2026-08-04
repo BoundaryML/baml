@@ -8,7 +8,7 @@ expression: outcome.dump
 627..628 'f': throws never
 646..698 '{\n   ...  e\n}': user.Greet
 652..664 'let e: Greet': user.Greet
-659..664 'Greet': hir_ty=[!error] tir=[user.Greet]
+659..664 'Greet': user.Greet
 667..668 'g': user.Guy
 695..696 'e': user.Greet
 879..891 'join_absorbs': throws never

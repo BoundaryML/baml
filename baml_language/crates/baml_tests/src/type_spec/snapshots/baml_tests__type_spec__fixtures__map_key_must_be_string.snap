@@ -5,9 +5,9 @@ expression: outcome.dump
 537..538 'f': throws never
 561..695 '{\n   ...  0\n}': 0
 567..587 'let m:..., int>': hir_ty=[map<!error, int>] tir=[map<int, int>]
-574..587 'map<int, int>': hir_ty=[!error] tir=[map<int, int>]
+574..587 'map<int, int>': hir_ty=[map<!error, int>] tir=[map<int, int>]
 590..592 '{}': hir_ty=[map<!error, !error>] tir=[map<int, int>]
 625..651 'let k:..., int>': map<"a" | "b", int>
-632..651 'map<"a..., int>': hir_ty=[!error] tir=[map<"a" | "b", int>]
+632..651 'map<"a..., int>': map<"a" | "b", int>
 654..656 '{}': map<"a" | "b", int>
 692..693 '0': 0

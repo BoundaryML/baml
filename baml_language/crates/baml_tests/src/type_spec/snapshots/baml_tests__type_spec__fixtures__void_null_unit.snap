@@ -8,6 +8,6 @@ expression: outcome.dump
 425..426 'f': throws never
 449..497 '{\n   ...  0\n}': 0
 455..466 'let v: void': void
-462..466 'void': hir_ty=[!error] tir=[void]
+462..466 'void': void
 469..473 'null': null
 494..495 '0': 0

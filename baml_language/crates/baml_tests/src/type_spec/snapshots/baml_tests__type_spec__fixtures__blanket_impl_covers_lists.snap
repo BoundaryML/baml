@@ -5,7 +5,7 @@ expression: outcome.dump
 372..373 'f': throws never
 404..472 '{\n   ...  e\n}': baml.ops.Equals
 410..432 'let e:...Equals': baml.ops.Equals
-417..432 'baml.ops.Equals': hir_ty=[!error] tir=[baml.ops.Equals]
+417..432 'baml.ops.Equals': baml.ops.Equals
 435..437 'xs': int[]
 469..470 'e': baml.ops.Equals
 603..615 'join_absorbs': throws never

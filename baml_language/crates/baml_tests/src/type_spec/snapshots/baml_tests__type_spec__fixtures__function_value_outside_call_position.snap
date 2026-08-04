@@ -8,7 +8,7 @@ expression: outcome.dump
 61..62 'g': throws never
 72..218 '{\n   ...int\n}': int
 78..113 'let c:... never': (x: int) -> int throws never
-85..113 '(x: in... never': hir_ty=[!error] tir=[(x: int) -> int throws never]
+85..113 '(x: in... never': (x: int) -> int throws never
 116..119 'inc': (x: int) -> int throws never
 199..200 'c': (x: int) -> int throws never
 199..203 'c(1)': int

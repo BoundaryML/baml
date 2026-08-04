@@ -1,5 +1,6 @@
-// pending: ruling 3 - a binding's recorded type is the pattern's
-// DECLARED type (S15 ledger)
+// Ruling 3 (S15): a binding's recorded type is the pattern's DECLARED
+// type. A union annotation parses as an OR of type ascriptions - the
+// recorded type is the written union.
 //
 // Flow narrowing affects USES, not the binding's recorded type: with
 // `let v: int | string = 3`, the binding is `int | string` (what the
