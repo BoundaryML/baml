@@ -1,0 +1,9 @@
+---
+source: crates/baml_tests/src/type_spec/fixtures.rs
+expression: outcome.dump
+---
+550..551 'f': throws never
+593..629 '{\n   ...int\n}': hir_ty=[int | bigint] tir=[bigint]
+599..600 'x': int | bigint
+599..604 'x & y': hir_ty=[int | bigint] tir=[bigint]
+603..604 'y': int

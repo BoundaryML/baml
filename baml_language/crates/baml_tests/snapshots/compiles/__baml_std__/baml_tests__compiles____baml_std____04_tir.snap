@@ -2792,6 +2792,8 @@ class baml.net.Datagram$stream {
   addr: string | null
 }
 
+--- <builtin>/baml/ns_ops/bitwise.baml ---
+
 --- <builtin>/baml/ns_ops/comparison.baml ---
 function baml.ops.Equals.neq(self: baml.ops.Equals, other: Self) -> bool throws never {
   { : bool

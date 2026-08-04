@@ -802,11 +802,11 @@ impl<'db> InferenceContext<'db> {
                     AssignOp::Mul => self.dispatch_operator("Multiply", &lhs, Some(&rhs)),
                     AssignOp::Div => self.dispatch_operator("Divide", &lhs, Some(&rhs)),
                     AssignOp::Mod => self.dispatch_operator("Remainder", &lhs, Some(&rhs)),
-                    AssignOp::BitAnd
-                    | AssignOp::BitOr
-                    | AssignOp::BitXor
-                    | AssignOp::Shl
-                    | AssignOp::Shr => self.bitwise_hack_table(&lhs, &rhs),
+                    AssignOp::BitAnd => self.dispatch_operator("BitAnd", &lhs, Some(&rhs)),
+                    AssignOp::BitOr => self.dispatch_operator("BitOr", &lhs, Some(&rhs)),
+                    AssignOp::BitXor => self.dispatch_operator("BitXor", &lhs, Some(&rhs)),
+                    AssignOp::Shl => self.dispatch_operator("ShiftLeft", &lhs, Some(&rhs)),
+                    AssignOp::Shr => self.dispatch_operator("ShiftRight", &lhs, Some(&rhs)),
                 };
                 if let Some(declared) = &declared
                     && !declared.has_error()
@@ -1098,6 +1098,9 @@ impl<'db> InferenceContext<'db> {
                 };
                 self.operator_or_obligation(expr, interface, &lhs_ty, Some(&rhs_ty))
             }
+            // Bitwise dispatches through the `baml.ops` interfaces like
+            // every other operator (decision 3B); the stdlib grew them
+            // with B-1075 and the hack table is gone.
             BinaryOp::BitAnd
             | BinaryOp::BitOr
             | BinaryOp::BitXor
@@ -1105,7 +1108,15 @@ impl<'db> InferenceContext<'db> {
             | BinaryOp::Shr => {
                 let lhs_ty = self.infer_expr(body, lhs, &Expectation::None);
                 let rhs_ty = self.infer_expr(body, rhs, &Expectation::None);
-                self.bitwise_hack_table(&lhs_ty, &rhs_ty)
+                let interface = match op {
+                    BinaryOp::BitAnd => "BitAnd",
+                    BinaryOp::BitOr => "BitOr",
+                    BinaryOp::BitXor => "BitXor",
+                    BinaryOp::Shl => "ShiftLeft",
+                    BinaryOp::Shr => "ShiftRight",
+                    _ => unreachable!("outer match arm"),
+                };
+                self.operator_or_obligation(expr, interface, &lhs_ty, Some(&rhs_ty))
             }
         }
     }
@@ -1285,56 +1296,6 @@ impl<'db> InferenceContext<'db> {
             }
         }
         self.join(&[inner, rhs])
-    }
-
-    /// HACK: bitwise operators do NOT go through interfaces yet. The
-    /// ruling (README decision 3B) says every dispatching operator must,
-    /// but the stdlib has no `baml.ops` bitwise interfaces to dispatch
-    /// through (`ns_ops` holds only `math.baml` and `comparison.baml`), so
-    /// this table mirrors TIR's `infer_bitwise` exactly: int&int is int,
-    /// any int/bigint mix is bigint, everything else is the Error sentinel
-    /// (TIR's `InvalidBinaryOp`, S17's diagnostic). DELETE this table - and
-    /// route these five operators through `dispatch_operator` - when the
-    /// bitwise interfaces land in the stdlib and TIR switches off its own
-    /// table.
-    fn bitwise_hack_table(&mut self, lhs: &Ty, rhs: &Ty) -> Ty {
-        #[derive(Clone, Copy, PartialEq)]
-        enum Base {
-            Int,
-            Bigint,
-        }
-        fn base_of(ty: &Ty) -> Option<Base> {
-            match ty.kind() {
-                TyKind::Int { .. } | TyKind::Literal(Literal::Int(_), _, _) => Some(Base::Int),
-                TyKind::Bigint { .. } | TyKind::Literal(Literal::Bigint(_), _, _) => {
-                    Some(Base::Bigint)
-                }
-                TyKind::Union(members, _) => {
-                    let mut result: Option<Base> = None;
-                    for member in members {
-                        let base = base_of(member)?;
-                        result = Some(match result {
-                            None => base,
-                            Some(seen) if seen == base => seen,
-                            // An int|bigint union widens to bigint,
-                            // matching the mixed-operand rule below.
-                            Some(_) => Base::Bigint,
-                        });
-                    }
-                    result
-                }
-                _ => None,
-            }
-        }
-        let lhs = self.table.resolve_completely(lhs);
-        let rhs = self.table.resolve_completely(rhs);
-        match (base_of(&lhs), base_of(&rhs)) {
-            (Some(Base::Int), Some(Base::Int)) => Ty::int(),
-            (Some(_), Some(_)) => Ty::intern(TyKind::Bigint {
-                attr: TyAttr::default(),
-            }),
-            _ => Ty::error(),
-        }
     }
 
     /// Call typing: direct calls to resolved functions instantiate the

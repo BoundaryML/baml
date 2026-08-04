@@ -5939,6 +5939,42 @@ function baml.ops.Add<int>$for$int.add(self: int, rhs: int) -> int {
 function baml.ops.Add<string>$for$string.add(self: string, rhs: string) -> string {
 }
 
+function baml.ops.BitAnd<bigint>$for$bigint.bit_and(self: bigint, rhs: bigint) -> bigint {
+}
+
+function baml.ops.BitAnd<bigint>$for$int.bit_and(self: int, rhs: bigint) -> bigint {
+}
+
+function baml.ops.BitAnd<int>$for$bigint.bit_and(self: bigint, rhs: int) -> bigint {
+}
+
+function baml.ops.BitAnd<int>$for$int.bit_and(self: int, rhs: int) -> int {
+}
+
+function baml.ops.BitOr<bigint>$for$bigint.bit_or(self: bigint, rhs: bigint) -> bigint {
+}
+
+function baml.ops.BitOr<bigint>$for$int.bit_or(self: int, rhs: bigint) -> bigint {
+}
+
+function baml.ops.BitOr<int>$for$bigint.bit_or(self: bigint, rhs: int) -> bigint {
+}
+
+function baml.ops.BitOr<int>$for$int.bit_or(self: int, rhs: int) -> int {
+}
+
+function baml.ops.BitXor<bigint>$for$bigint.bit_xor(self: bigint, rhs: bigint) -> bigint {
+}
+
+function baml.ops.BitXor<bigint>$for$int.bit_xor(self: int, rhs: bigint) -> bigint {
+}
+
+function baml.ops.BitXor<int>$for$bigint.bit_xor(self: bigint, rhs: int) -> bigint {
+}
+
+function baml.ops.BitXor<int>$for$int.bit_xor(self: int, rhs: int) -> int {
+}
+
 function baml.ops.Compare$for$bigint.lt(self: bigint, other: bigint) -> bool {
 }
 
@@ -6155,6 +6191,30 @@ function baml.ops.Remainder<int>$for$float.rem(self: float, rhs: int) -> float {
 }
 
 function baml.ops.Remainder<int>$for$int.rem(self: int, rhs: int) -> int {
+}
+
+function baml.ops.ShiftLeft<bigint>$for$bigint.shl(self: bigint, rhs: bigint) -> bigint {
+}
+
+function baml.ops.ShiftLeft<bigint>$for$int.shl(self: int, rhs: bigint) -> bigint {
+}
+
+function baml.ops.ShiftLeft<int>$for$bigint.shl(self: bigint, rhs: int) -> bigint {
+}
+
+function baml.ops.ShiftLeft<int>$for$int.shl(self: int, rhs: int) -> int {
+}
+
+function baml.ops.ShiftRight<bigint>$for$bigint.shr(self: bigint, rhs: bigint) -> bigint {
+}
+
+function baml.ops.ShiftRight<bigint>$for$int.shr(self: int, rhs: bigint) -> bigint {
+}
+
+function baml.ops.ShiftRight<int>$for$bigint.shr(self: bigint, rhs: int) -> bigint {
+}
+
+function baml.ops.ShiftRight<int>$for$int.shr(self: int, rhs: int) -> int {
 }
 
 function baml.ops.Subtract<bigint>$for$bigint.sub(self: bigint, rhs: bigint) -> bigint {

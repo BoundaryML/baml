@@ -8560,6 +8560,46 @@ fn baml.net.UdpSocket._recv_from = builtin(io)
 
 fn baml.net.UdpSocket.close = builtin(io)
 
+fn baml.ops.BitAnd<int>$for$int.bit_and = builtin(vm)
+
+fn baml.ops.BitOr<int>$for$int.bit_or = builtin(vm)
+
+fn baml.ops.BitXor<int>$for$int.bit_xor = builtin(vm)
+
+fn baml.ops.ShiftLeft<int>$for$int.shl = builtin(vm)
+
+fn baml.ops.ShiftRight<int>$for$int.shr = builtin(vm)
+
+fn baml.ops.BitAnd<bigint>$for$int.bit_and = builtin(vm)
+
+fn baml.ops.BitOr<bigint>$for$int.bit_or = builtin(vm)
+
+fn baml.ops.BitXor<bigint>$for$int.bit_xor = builtin(vm)
+
+fn baml.ops.ShiftLeft<bigint>$for$int.shl = builtin(vm)
+
+fn baml.ops.ShiftRight<bigint>$for$int.shr = builtin(vm)
+
+fn baml.ops.BitAnd<int>$for$bigint.bit_and = builtin(vm)
+
+fn baml.ops.BitOr<int>$for$bigint.bit_or = builtin(vm)
+
+fn baml.ops.BitXor<int>$for$bigint.bit_xor = builtin(vm)
+
+fn baml.ops.ShiftLeft<int>$for$bigint.shl = builtin(vm)
+
+fn baml.ops.ShiftRight<int>$for$bigint.shr = builtin(vm)
+
+fn baml.ops.BitAnd<bigint>$for$bigint.bit_and = builtin(vm)
+
+fn baml.ops.BitOr<bigint>$for$bigint.bit_or = builtin(vm)
+
+fn baml.ops.BitXor<bigint>$for$bigint.bit_xor = builtin(vm)
+
+fn baml.ops.ShiftLeft<bigint>$for$bigint.shl = builtin(vm)
+
+fn baml.ops.ShiftRight<bigint>$for$bigint.shr = builtin(vm)
+
 fn baml.ops.Equals.neq(self: baml.ops.Equals, other: Self) -> bool {
     // Locals:
     let _0: bool // _0 // return

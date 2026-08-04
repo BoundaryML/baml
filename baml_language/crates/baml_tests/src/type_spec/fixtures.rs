@@ -30,6 +30,12 @@ fn fixtures_root() -> PathBuf {
 }
 
 fn fixture_paths(dir: &Path, allow_empty: bool) -> Vec<PathBuf> {
+    // A missing directory is an empty one: `pending/` disappears with its
+    // last promoted fixture (git tracks no empty dirs), and empty pending
+    // is the GOAL state, not an error.
+    if allow_empty && !dir.exists() {
+        return Vec::new();
+    }
     let mut paths: Vec<_> = std::fs::read_dir(dir)
         .unwrap_or_else(|err| panic!("cannot read fixture dir {}: {err}", dir.display()))
         .map(|entry| entry.expect("readable dir entry").path())

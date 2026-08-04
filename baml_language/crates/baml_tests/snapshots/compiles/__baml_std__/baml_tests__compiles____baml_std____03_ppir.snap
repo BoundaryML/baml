@@ -1684,6 +1684,28 @@ function baml.net.write(self: ?, data: uint8array, timeout: root.time.Duration? 
   {  } self._write(data, _timeout_nanos(timeout))
 }
 
+--- <builtin>/baml/ns_ops/bitwise.baml ---
+function baml.ops.bit_and(self: ?, rhs: int) -> int  [builtin]
+function baml.ops.bit_and(self: ?, rhs: bigint) -> bigint  [builtin]
+function baml.ops.bit_and(self: ?, rhs: int) -> bigint  [builtin]
+function baml.ops.bit_and(self: ?, rhs: bigint) -> bigint  [builtin]
+function baml.ops.bit_or(self: ?, rhs: int) -> int  [builtin]
+function baml.ops.bit_or(self: ?, rhs: bigint) -> bigint  [builtin]
+function baml.ops.bit_or(self: ?, rhs: int) -> bigint  [builtin]
+function baml.ops.bit_or(self: ?, rhs: bigint) -> bigint  [builtin]
+function baml.ops.bit_xor(self: ?, rhs: int) -> int  [builtin]
+function baml.ops.bit_xor(self: ?, rhs: bigint) -> bigint  [builtin]
+function baml.ops.bit_xor(self: ?, rhs: int) -> bigint  [builtin]
+function baml.ops.bit_xor(self: ?, rhs: bigint) -> bigint  [builtin]
+function baml.ops.shl(self: ?, rhs: int) -> int  [builtin]
+function baml.ops.shl(self: ?, rhs: bigint) -> bigint  [builtin]
+function baml.ops.shl(self: ?, rhs: int) -> bigint  [builtin]
+function baml.ops.shl(self: ?, rhs: bigint) -> bigint  [builtin]
+function baml.ops.shr(self: ?, rhs: int) -> int  [builtin]
+function baml.ops.shr(self: ?, rhs: bigint) -> bigint  [builtin]
+function baml.ops.shr(self: ?, rhs: int) -> bigint  [builtin]
+function baml.ops.shr(self: ?, rhs: bigint) -> bigint  [builtin]
+
 --- <builtin>/baml/ns_ops/comparison.baml ---
 function baml.ops.eq(self: ?, other: Self) -> bool  [builtin]
 function baml.ops.eq(self: ?, other: Self) -> bool  [builtin]
