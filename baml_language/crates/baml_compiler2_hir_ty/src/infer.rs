@@ -616,6 +616,59 @@ impl<'db> InferenceContext<'db> {
                     }
                 }
             }
+            Expr::IfLet {
+                pattern,
+                scrutinee,
+                then_branch,
+                else_branch,
+            } => {
+                // `if let PAT = scrut`: the pattern types its bindings
+                // (the S10 walk), the then-branch sees the scrutinee
+                // narrowed to the matched type, the else-branch the
+                // RESIDUAL (consumes-gated, B-1069's rule); branch join
+                // and the divergence-aware merge follow the If arm.
+                let scrut_ty = self.infer_expr(body, *scrutinee, &Expectation::None);
+                let resolved = self.table.resolve_completely(&scrut_ty);
+                let scrut = self.matrix_scrut(&resolved);
+                let outcome = self.lower_pattern(body, *pattern, &scrut);
+                let condition_diverges = self.diverges;
+                let branch_expectation = expected.adjust_for_branches(&mut self.table);
+                let base_flow = self.flow.clone();
+
+                if let Some(binding) = self.narrowable_binding(body, *scrutinee) {
+                    self.flow.insert(binding, outcome.matched_ty.clone());
+                }
+                self.diverges = Diverges::Maybe;
+                let then_ty = self.infer_expr(body, *then_branch, &branch_expectation);
+                let then_diverges = self.diverges;
+                let then_flow = std::mem::replace(&mut self.flow, base_flow.clone());
+                let then_flow = (then_diverges == Diverges::Maybe).then_some(then_flow);
+
+                if outcome.consumes_matched
+                    && let Some(binding) = self.narrowable_binding(body, *scrutinee)
+                {
+                    let residual = self.subtract_narrow(&scrut, &outcome.matched_ty);
+                    self.flow.insert(binding, residual);
+                }
+                match else_branch {
+                    Some(else_expr) => {
+                        self.diverges = Diverges::Maybe;
+                        let else_ty = self.infer_expr(body, *else_expr, &branch_expectation);
+                        let else_diverges = self.diverges;
+                        let else_flow = std::mem::replace(&mut self.flow, base_flow.clone());
+                        let else_flow = (else_diverges == Diverges::Maybe).then_some(else_flow);
+                        self.diverges = condition_diverges.or(then_diverges.and(else_diverges));
+                        self.merge_branch_flows(base_flow, then_flow, else_flow);
+                        self.join(&[then_ty, else_ty])
+                    }
+                    None => {
+                        let else_flow = std::mem::replace(&mut self.flow, base_flow.clone());
+                        self.diverges = condition_diverges;
+                        self.merge_branch_flows(base_flow, then_flow, Some(else_flow));
+                        Ty::void()
+                    }
+                }
+            }
             Expr::Array { elements } => {
                 // With an expected element type, elements are CHECKED against
                 // it; otherwise they synthesize and JOIN (fresh literals
