@@ -2202,6 +2202,27 @@ impl<'db> InferenceContext<'db> {
                     .map(|ty| self.table.resolve_completely(ty))
                     .partition(|ty| !ty.has_infer());
                 if lowers.is_empty() && uppers.is_empty() {
+                    // GENERALIZATION (rustc's combine/generalize shape):
+                    // a var whose only information is one var-carrying
+                    // lower (or several identical ones) and no uppers is
+                    // an ALIAS of that lower - solving it is
+                    // occurs-guarded union-find aliasing, not a
+                    // premature meet, and it is what lets impl SELECTION
+                    // see the concrete head behind a call argument
+                    // (B-898: `?D` alias `Generate<?F>`). DISTINCT
+                    // var-carrying lowers stay deferred - that is the
+                    // operator-deadlock rule, untouched. Runs only in
+                    // the finish fixpoint, so no later bound can arrive
+                    // after the alias commits.
+                    if deferred_uppers.is_empty()
+                        && let Some((first, rest)) = deferred_lowers.split_first()
+                        && rest.iter().all(|lower| lower == first)
+                    {
+                        let widened = self.widen_fresh(first);
+                        if self.table.unify(&Ty::infer_var(var), &widened).is_ok() {
+                            progressed = true;
+                        }
+                    }
                     continue;
                 }
                 let var_ty = Ty::infer_var(var);

@@ -275,7 +275,7 @@ impl TypeContext for AliasOnlyFacts<'_> {
 
 /// A concrete receiver: a value whose runtime type pins a single static
 /// impl. A bare blanket `implement<T> I for T` applies ONLY to these.
-fn is_concrete_receiver(ty: &Ty) -> bool {
+pub(crate) fn is_concrete_receiver(ty: &Ty) -> bool {
     matches!(
         ty.kind(),
         TyKind::Class(..)
@@ -490,6 +490,34 @@ fn all_packages(db: &dyn baml_compiler2_ppir::Db) -> Vec<PackageId<'_>> {
         .into_iter()
         .map(|name| PackageId::new(db, name))
         .collect()
+}
+
+/// Every impl block implementing `interface_name`, drawn from the
+/// packages the goal's qualified names point into plus the interface's
+/// own package - SELECTION's candidate set (rustc's candidate assembly
+/// for a goal that may still carry inference variables). The orphan
+/// rule makes these roots complete, exactly as in `search_roots`.
+pub(crate) fn impl_candidates<'db>(
+    db: &'db dyn baml_compiler2_ppir::Db,
+    goal: &Ty,
+    interface_name: &TypeName,
+) -> Vec<&'db ImplFacts<'db>> {
+    let mut names: Vec<Name> = vec![interface_name.package().clone()];
+    collect_packages(goal, &mut names);
+    names.sort();
+    names.dedup();
+    let mut out = Vec::new();
+    for name in names {
+        let package = PackageId::new(db, name);
+        for &block in package_impl_locs(db, package) {
+            if let Some(facts) = impl_facts(db, block)
+                && facts.interface.name == *interface_name
+            {
+                out.push(facts);
+            }
+        }
+    }
+    out
 }
 
 /// Whether realized `concrete` implements realized `interface`. The

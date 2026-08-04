@@ -92,19 +92,28 @@ impl InferenceContext<'_> {
             Obligation::Implements { ty, interface, at } => {
                 let ty = self.table.resolve_completely(ty);
                 let interface = self.resolve_interface_ref(interface);
-                if ty.has_infer() || interface_has_infer(&interface) {
-                    return Attempt::Stalled;
-                }
                 if ty.has_error() {
                     return Attempt::Done;
                 }
-                if !self.implements_holds(&ty, &interface) {
-                    let expected = interface_as_existential(&interface);
-                    self.result
-                        .type_mismatches
-                        .insert(*at, (expected, ty.clone()));
+                if !ty.has_infer() && !interface_has_infer(&interface) {
+                    if !self.implements_holds(&ty, &interface) {
+                        let expected = interface_as_existential(&interface);
+                        self.result
+                            .type_mismatches
+                            .insert(*at, (expected, ty.clone()));
+                    }
+                    return Attempt::Done;
                 }
-                Attempt::Done
+                // Variable-bearing goal: rustc's SELECTION, licensed by a
+                // known concrete head (candidates filter by it). A goal
+                // whose head is itself unknown - a bare inference var, a
+                // rigid var, an existential - stays Stalled: nothing
+                // filters the candidate set, and guessing is the one
+                // thing fulfillment never does.
+                if crate::impls::is_concrete_receiver(&ty) {
+                    return self.select_impl(&ty, &interface, *at);
+                }
+                Attempt::Stalled
             }
             Obligation::Operator {
                 interface,
@@ -123,6 +132,146 @@ impl InferenceContext<'_> {
                 Attempt::Done
             }
         }
+    }
+
+    /// rustc's impl SELECTION for a variable-bearing goal (the impl
+    /// inversion B-898 needs): every candidate is tried under a table
+    /// snapshot and rolled back; EXACTLY ONE applying confirms it - the
+    /// header unification commits, constraining the goal's inference
+    /// variables. Zero applicable is a definite failure (the mismatch
+    /// records); several is genuine ambiguity - Stalled, retried once
+    /// more information may prune, failing closed through finalize
+    /// (rustc's "type annotations needed"). Committing on uniqueness is
+    /// sound because coherence (I7) guarantees at most one impl per
+    /// realized instance.
+    fn select_impl(&mut self, goal: &Ty, interface: &InterfaceRef, at: ExprId) -> Attempt {
+        let candidates = crate::impls::impl_candidates(self.db, goal, &interface.name);
+        let mut applicable = None;
+        for facts in candidates {
+            let snapshot = self.table.snapshot();
+            let applies = self.confirm_impl(goal, interface, facts).is_some();
+            self.table.rollback_to(snapshot);
+            if applies {
+                if applicable.is_some() {
+                    return Attempt::Stalled;
+                }
+                applicable = Some(facts);
+            }
+        }
+        let Some(facts) = applicable else {
+            let expected = interface_as_existential(interface);
+            self.result
+                .type_mismatches
+                .insert(at, (expected, goal.clone()));
+            return Attempt::Done;
+        };
+        let instantiation = self
+            .confirm_impl(goal, interface, facts)
+            .expect("the unique applicable candidate re-confirms");
+        // The impl's declared bounds at this instantiation become NESTED
+        // obligations (rustc's confirmation side conditions) - the
+        // fulfillment loop discharges them next round.
+        for (param, bounds) in &facts.generic_params {
+            let Some(arg) = instantiation.get(param) else {
+                continue;
+            };
+            for bound in bounds {
+                let interface = InterfaceRef::new(
+                    bound.name.clone(),
+                    bound
+                        .args
+                        .iter()
+                        .map(|ty| crate::impls::substitute_bindings(ty, &instantiation))
+                        .collect::<Vec<_>>()
+                        .into_boxed_slice(),
+                    bound
+                        .pins
+                        .iter()
+                        .map(|(name, ty)| {
+                            (
+                                name.clone(),
+                                crate::impls::substitute_bindings(ty, &instantiation),
+                            )
+                        })
+                        .collect(),
+                );
+                self.register_obligation(Obligation::Implements {
+                    ty: arg.clone(),
+                    interface,
+                    at,
+                });
+            }
+        }
+        Attempt::Done
+    }
+
+    /// CONFIRMATION (rustc's shape): instantiate the impl header with
+    /// FRESH inference variables for its params and unify the goal
+    /// against it - the for-target, each interface arg, then every
+    /// requested pin against the impl's binding-else-default. Returns
+    /// the param instantiation on success; any failed unification (or a
+    /// pin the impl can neither bind nor default) rejects the candidate,
+    /// and the caller's snapshot discards the partial bindings.
+    fn confirm_impl(
+        &mut self,
+        goal: &Ty,
+        interface: &InterfaceRef,
+        facts: &crate::impls::ImplFacts<'_>,
+    ) -> Option<rustc_hash::FxHashMap<baml_type::ParamTy, Ty>> {
+        // Bare-blanket guard, as in the ground matcher: `implement<T> I
+        // for T` applies only to concrete receivers.
+        if let TyKind::TypeVar(param, _) = facts.for_ty_pattern.kind()
+            && facts.generic_params.iter().any(|(p, _)| p == param)
+            && !crate::impls::is_concrete_receiver(goal)
+        {
+            return None;
+        }
+        if facts.interface.args.len() != interface.generics.len() {
+            return None;
+        }
+        let instantiation: rustc_hash::FxHashMap<baml_type::ParamTy, Ty> = facts
+            .generic_params
+            .iter()
+            .map(|(param, _)| (param.clone(), self.table.new_var_ty()))
+            .collect();
+        let for_ty = crate::impls::substitute_bindings(&facts.for_ty_pattern, &instantiation);
+        self.table.unify(goal, &for_ty).ok()?;
+        for (pattern, requested) in facts.interface.args.iter().zip(interface.generics.iter()) {
+            let pattern = crate::impls::substitute_bindings(pattern, &instantiation);
+            self.table.unify(requested, &pattern).ok()?;
+        }
+        for (name, requested) in &interface.associated_types {
+            let supplied = facts
+                .associated_types
+                .iter()
+                .find(|(declared, _)| declared == name)
+                .map(|(_, ty)| crate::impls::substitute_bindings(ty, &instantiation))
+                .or_else(|| {
+                    let implemented = InterfaceTarget {
+                        name: facts.interface.name.clone(),
+                        args: facts
+                            .interface
+                            .args
+                            .iter()
+                            .map(|ty| crate::impls::substitute_bindings(ty, &instantiation))
+                            .collect(),
+                        pins: facts
+                            .interface
+                            .pins
+                            .iter()
+                            .map(|(pin, ty)| {
+                                (
+                                    pin.clone(),
+                                    crate::impls::substitute_bindings(ty, &instantiation),
+                                )
+                            })
+                            .collect(),
+                    };
+                    crate::impls::realized_assoc_default(self.db, &implemented, goal, name)
+                })?;
+            self.table.unify(requested, &supplied).ok()?;
+        }
+        Some(instantiation)
     }
 
     /// Whether ground `ty` implements `interface`: carried bounds for a
