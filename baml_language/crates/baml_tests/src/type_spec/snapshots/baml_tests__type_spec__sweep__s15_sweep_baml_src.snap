@@ -4,9 +4,9 @@ expression: report
 ---
 files: 116
 nodes compared: 60529
-agreements: 51428
+agreements: 51482
 one-sided (coverage): 88
-conflicts: 9013 across 1577 distinct pairs
+conflicts: 8959 across 1567 distinct pairs
 hir_ty error-channel entries: 96
 tir diagnostics: 0
 panics: 0
@@ -116,7 +116,7 @@ ns_to_json_interface/to_json_interface.baml:1125..1207 `{\n       ...\n        }
 [691x] hir_ty=[(a: int, b: int) -> bool throws never] tir=[(a: T, b: T) -> bool throws never]
     at ns_array_rest_binding/array_rest_binding.baml:868..884 `baml.deep_equals`
     at ns_array_rest_binding/array_rest_binding.baml:1176..1192 `baml.deep_equals`
-[246x] hir_ty=[!error] tir=[string]
+[244x] hir_ty=[!error] tir=[string]
     at ns_bigints/bigints.baml:22418..22433 `42n.to_string()`
     at ns_comparable_sort/comparable_sort.baml:4194..4215 `"caught:" + e.message`
 [240x] hir_ty=[(a: bool, b: bool) -> bool throws never] tir=[(a: T, b: T) -> bool throws never]
@@ -140,9 +140,6 @@ ns_to_json_interface/to_json_interface.baml:1125..1207 `{\n       ...\n        }
 [89x] hir_ty=[() -> void throws baml.errors.InvalidArgument / null] tir=[() -> void throws unknown / null]
     at ns_arrays/arrays.baml:17100..17328 `{\n    let...pected))\n}`
     at ns_arrays/arrays.baml:17358..17580 `{\n    let...pected))\n}`
-[81x] hir_ty=[!error] tir=[unknown]
-    at ns_bigints/bigints.baml:21883..21896 `(42n).to_json`
-    at ns_bigints/bigints.baml:21961..21992 `(999999999...9n).to_json`
 [79x] hir_ty=[int] tir=[int | -1]
     at ns_array_rest_binding/array_rest_binding.baml:642..786 `{\n    mat...1\n    }\n}`
     at ns_array_rest_binding/array_rest_binding.baml:648..784 `match ([1,...> -1\n    }`
@@ -155,15 +152,18 @@ ns_to_json_interface/to_json_interface.baml:1125..1207 `{\n       ...\n        }
 [66x] hir_ty=[bool] tir=[true]
     at ns_bigints/bigints.baml:5064..5075 `{ 1n < 2n }`
     at ns_bigints/bigints.baml:5066..5073 `1n < 2n`
+[65x] hir_ty=[!error] tir=[unknown]
+    at ns_bigints/bigints.baml:21883..21896 `(42n).to_json`
+    at ns_bigints/bigints.baml:21961..21992 `(999999999...9n).to_json`
 [45x] hir_ty=[1] tir=[int]
     at ns_cancel_cascade/cancel_cascade.baml:3497..3498 `1`
     at ns_closures/closures.baml:2670..2671 `1`
 [43x] hir_ty=[() -> void throws baml.csv.CsvError / null] tir=[() -> void throws unknown / null]
     at ns_csv/csv.baml:2608..2685 `{\n    ass...|b;1|2")\n}`
     at ns_csv/csv.baml:2970..3035 `{\n    ass...\"hi\"")\n}`
-[40x] hir_ty=[!error] tir=[() -> string throws never]
-    at ns_errorcontext/errorcontext.baml:9766..9779 `ctx.to_string`
-    at ns_errorcontext/errorcontext.baml:13074..13087 `ctx.to_string`
+[38x] hir_ty=[!error] tir=[() -> string throws never]
+    at ns_inferred_generic_type_args/inferred_generic_type_args.baml:9518..9538 `default.element_type`
+    at ns_instantiation_expr/instantiation_expr.baml:2490..2495 `let f`
 [36x] hir_ty=[(a: !error, b: !error) -> bool throws never] tir=[(a: T, b: T) -> bool throws never]
     at ns_arrays/arrays.baml:12197..12213 `baml.deep_equals`
     at ns_arrays/sum.baml:948..964 `baml.deep_equals`
@@ -245,9 +245,6 @@ ns_to_json_interface/to_json_interface.baml:1125..1207 `{\n       ...\n        }
 [23x] hir_ty=[string] tir=["done" | string]
     at ns_csv/csv.baml:22280..22450 `{\n       ...\n        }`
     at ns_csv/csv.baml:22280..22594 `{\n       ...\n        }`
-[22x] hir_ty=[string] tir=[baml.errors.ErrorContext]
-    at ns_errorcontext/errorcontext.baml:1067..1070 `ctx`
-    at ns_errorcontext/errorcontext.baml:1789..1792 `ctx`
 [21x] hir_ty=["boom"] tir=[string]
     at ns_defer/defer.baml:2773..2774 `e`
     at ns_defer/defer.baml:2782..2783 `_`
@@ -392,9 +389,6 @@ ns_to_json_interface/to_json_interface.baml:1125..1207 `{\n       ...\n        }
 [11x] hir_ty=[int] tir=[int | 99]
     at ns_arrays/sort_comparable.baml:4987..5108 `Comparable...> 99\n    }`
     at ns_exceptions/exceptions.baml:33897..33933 `s13_middle...{ _ => 99 }`
-[11x] hir_ty=[string | !error] tir=[string]
-    at ns_errorcontext/errorcontext.baml:9718..9787 `{\n  ec_to...g()\n  }\n}`
-    at ns_errorcontext/errorcontext.baml:9722..9785 `ec_tostrin...ring()\n  }`
 [10x] hir_ty=[!error] tir=[user.enums.EnumsShape.Rectangle]
     at ns_enums/enums.baml:677..705 `{\n    Enu...ectangle\n}`
     at ns_enums/enums.baml:683..703 `EnumsShape.Rectangle`
@@ -464,15 +458,9 @@ ns_to_json_interface/to_json_interface.baml:1125..1207 `{\n       ...\n        }
 [9x] hir_ty=[throws "boom"] tir=[throws string]
     at ns_defer/defer.baml:2491..2513 `defer_call_throws_boom`
     at ns_defer/defer.baml:2551..2574 `defer_call_throws_risky`
-[8x] hir_ty=[!error] tir=[() -> baml.errors.ErrorContext throws never]
-    at ns_errorcontext/errorcontext.baml:1098..1112 `ctx.root_cause`
-    at ns_errorcontext/errorcontext.baml:1946..1961 `ctx2.root_cause`
 [8x] hir_ty=[!error] tir=[(string) -> baml.llm.Role throws never]
     at ns_prompt_tag_runtime/prompt_tag_runtime.baml:1862..1866 `role`
     at ns_prompt_tag_runtime/prompt_tag_runtime.baml:1895..1899 `role`
-[8x] hir_ty=[!error] tir=[baml.errors.ErrorContext]
-    at ns_errorcontext/errorcontext.baml:1098..1114 `ctx.root_cause()`
-    at ns_errorcontext/errorcontext.baml:1946..1963 `ctx2.root_cause()`
 [8x] hir_ty=["fallback"] tir=[string]
     at ns_exceptions/exceptions.baml:24004..24005 `e`
     at ns_exceptions/exceptions.baml:24077..24078 `_`
@@ -488,6 +476,9 @@ ns_to_json_interface/to_json_interface.baml:1125..1207 `{\n       ...\n        }
 [8x] hir_ty=[(self: baml.csv.CsvReader) -> string[] | null throws baml.csv.CsvError | baml.errors.Io] tir=[() -> string[] | null throws baml.csv.CsvError | baml.errors.Io]
     at ns_csv/csv.baml:9723..9732 `r.headers`
     at ns_csv/csv.baml:11173..11182 `r.headers`
+[8x] hir_ty=[(self: baml.errors.ErrorContext) -> baml.errors.ErrorContext throws never] tir=[() -> baml.errors.ErrorContext throws never]
+    at ns_errorcontext/errorcontext.baml:1098..1112 `ctx.root_cause`
+    at ns_errorcontext/errorcontext.baml:1946..1961 `ctx2.root_cause`
 [8x] hir_ty=[(self: baml.fs.File) -> string throws baml.errors.InvalidArgument | baml.errors.Io | baml.errors.ParseError] tir=[() -> string throws baml.errors.Io | baml.errors.InvalidArgument | baml.errors.ParseError]
     at ns_fs/fs.baml:2463..2472 `file.text`
     at ns_fs/fs.baml:6355..6361 `f.text`
@@ -530,6 +521,9 @@ ns_to_json_interface/to_json_interface.baml:1125..1207 `{\n       ...\n        }
 [8x] hir_ty=[string] tir=["none" | string]
     at ns_csv/csv.baml:11238..11360 `match (r.n...|"),\n    }`
     at ns_csv/csv.baml:18806..18938 `match (r.n...l>",\n    }`
+[8x] hir_ty=[string] tir=[string | "LOST: cause chain wiped by the defer re-raise"]
+    at ns_errorcontext/errorcontext.baml:8806..9005 `{\n  ec_de...  }\n  }\n}`
+    at ns_errorcontext/errorcontext.baml:8810..9003 `ec_deferun...n    }\n  }`
 [8x] hir_ty=[string] tir=[string | "other"]
     at ns_generic_match_rigid/generic_match_rigid.baml:4205..4286 `{\n    mat...,\n    }\n}`
     at ns_generic_match_rigid/generic_match_rigid.baml:4211..4284 `match (x) ...er",\n    }`
@@ -575,6 +569,9 @@ ns_to_json_interface/to_json_interface.baml:1125..1207 `{\n       ...\n        }
 [7x] hir_ty=[int] tir=[1 | int]
     at ns_arrays/arrays.baml:28239..28300 `[1, 2, 3, ...c * x }, 1)`
     at ns_optional_function_parameters/optional_function_parameters.baml:2863..2908 `{\n  if (v... value }\n}`
+[7x] hir_ty=[string | !error] tir=[string]
+    at ns_exceptions/exceptions.baml:16761..16891 `{\n    s5b...e\n    }\n}`
+    at ns_exceptions/exceptions.baml:16767..16889 `s5b_overfl...sage\n    }`
 [6x] hir_ty=[!error] tir=[() -> int throws never]
     at ns_generic_match_subtype/generic_match_subtype.baml:2537..2567 `unwrap_or(...: 0 }).area`
     at ns_generic_match_subtype/generic_match_subtype.baml:3089..3109 `unwrap_or(o, d).area`
@@ -662,6 +659,15 @@ ns_to_json_interface/to_json_interface.baml:1125..1207 `{\n       ...\n        }
 [6x] hir_ty=[int[] | string[]] tir=[int[]]
     at ns_patterns_new_runtime/patterns_new_runtime.baml:12846..12858 `[let x: int]`
     at ns_patterns_new_runtime/patterns_new_runtime.baml:12862..12863 `v`
+[6x] hir_ty=[string] tir=[string | "GARBAGE: outer context slot was recolored before the inner throw"]
+    at ns_errorcontext/errorcontext.baml:7372..7754 `{\n  ec_ha...  }\n  }\n}`
+    at ns_errorcontext/errorcontext.baml:7376..7752 `ec_hazard_...n    }\n  }`
+[6x] hir_ty=[string] tir=[string | "MISSED: enclosing handled error not found in chain"]
+    at ns_errorcontext/errorcontext.baml:2725..3049 `{\n  ec_ha...  }\n  }\n}`
+    at ns_errorcontext/errorcontext.baml:2729..3047 `ec_hazard_...n    }\n  }`
+[6x] hir_ty=[string] tir=[string | "no cause found"]
+    at ns_errorcontext/errorcontext.baml:1756..2079 `{\n  ec_ne...  }\n  }\n}`
+    at ns_errorcontext/errorcontext.baml:1760..2077 `ec_nested_...n    }\n  }`
 [5x] hir_ty=[!error] tir=[(msg: string) -> string throws never]
     at ns_interfaces/interfaces.baml:8248..8259 `default.log`
     at ns_interfaces/interfaces.baml:49119..49130 `default.log`
@@ -791,9 +797,6 @@ ns_to_json_interface/to_json_interface.baml:1125..1207 `{\n       ...\n        }
 [4x] hir_ty=[!error] tir=[int | user.iter_impl_generics_only.core.Done]
     at ns_iter_impl_generics_only/iter.baml:6589..6597 `p.peek()`
     at ns_iter_impl_generics_only/iter.baml:6695..6703 `p.next()`
-[4x] hir_ty=[!error] tir=[string | "LOST: cause chain wiped by the defer re-raise"]
-    at ns_errorcontext/errorcontext.baml:8857..8999 `{\n      m...   }\n    }`
-    at ns_errorcontext/errorcontext.baml:8865..8993 `match (ctx...e"\n      }`
 [4x] hir_ty=[!error] tir=[string | "no match"]
     at ns_control_flow/control_flow.baml:2866..2946 `{\n    if ..."\n    }\n}`
     at ns_control_flow/control_flow.baml:2872..2944 `if let o: ...tch"\n    }`
@@ -995,18 +998,18 @@ ns_to_json_interface/to_json_interface.baml:1125..1207 `{\n       ...\n        }
 [4x] hir_ty=[never] tir=[baml.panics.NegativeBitShift]
     at ns_bigints/bigints.baml:5573..5601 `baml.panic...iveBitShift`
     at ns_bigints/bigints.baml:18747..18775 `baml.panic...iveBitShift`
-[4x] hir_ty=[string | !error] tir=[string | "GARBAGE: outer context slot was recolored before the inner throw"]
-    at ns_errorcontext/errorcontext.baml:7372..7754 `{\n  ec_ha...  }\n  }\n}`
-    at ns_errorcontext/errorcontext.baml:7376..7752 `ec_hazard_...n    }\n  }`
-[4x] hir_ty=[string | !error] tir=[string | "LOST: cause chain wiped by the defer re-raise"]
-    at ns_errorcontext/errorcontext.baml:8806..9005 `{\n  ec_de...  }\n  }\n}`
-    at ns_errorcontext/errorcontext.baml:8810..9003 `ec_deferun...n    }\n  }`
-[4x] hir_ty=[string | !error] tir=[string | "MISSED: enclosing handled error not found in chain"]
-    at ns_errorcontext/errorcontext.baml:2725..3049 `{\n  ec_ha...  }\n  }\n}`
-    at ns_errorcontext/errorcontext.baml:2729..3047 `ec_hazard_...n    }\n  }`
-[4x] hir_ty=[string | !error] tir=[string | "no cause found"]
-    at ns_errorcontext/errorcontext.baml:1756..2079 `{\n  ec_ne...  }\n  }\n}`
-    at ns_errorcontext/errorcontext.baml:1760..2077 `ec_nested_...n    }\n  }`
+[4x] hir_ty=[string] tir=[string | "LOST: cause chain wiped by a stacked defer re-raise"]
+    at ns_errorcontext/errorcontext.baml:11792..11997 `{\n  ec_st...  }\n  }\n}`
+    at ns_errorcontext/errorcontext.baml:11796..11995 `ec_stackde...n    }\n  }`
+[4x] hir_ty=[string] tir=[string | "MISCHAINED: gap over-covered"]
+    at ns_errorcontext/errorcontext.baml:5333..5756 `{\n  let r...  }\n  }\n}`
+    at ns_errorcontext/errorcontext.baml:5564..5754 `ec_gap_fai...n    }\n  }`
+[4x] hir_ty=[string] tir=[string | "no root cause found"]
+    at ns_errorcontext/errorcontext.baml:6521..6692 `{\n  ec_si...  }\n  }\n}`
+    at ns_errorcontext/errorcontext.baml:6525..6690 `ec_sibling...n    }\n  }`
+[4x] hir_ty=[string] tir=[string | "unexpected non-string error"]
+    at ns_errorcontext/errorcontext.baml:1036..1213 `{\n  ec_si...  }\n  }\n}`
+    at ns_errorcontext/errorcontext.baml:1040..1211 `ec_single_...n    }\n  }`
 [4x] hir_ty=[string | T] tir=[T | string]
     at ns_generic_match_rigid/generic_match_rigid.baml:4952..4969 `let p: T | string`
     at ns_generic_match_rigid/generic_match_rigid.baml:4959..4969 `T | string`
@@ -1301,9 +1304,6 @@ ns_to_json_interface/to_json_interface.baml:1125..1207 `{\n       ...\n        }
 [3x] hir_ty=[user.patterns_new_runtime.Wrap2 | int[][]] tir=[int[][] | user.patterns_new_runtime.Wrap2]
     at ns_patterns_new_runtime/patterns_new_runtime.baml:9589..9590 `v`
     at ns_patterns_new_runtime/patterns_new_runtime.baml:9602..9666 `[[let x, ....t x, ..]] }`
-[2x] hir_ty=[!error] tir=["no cause" | "MISCHAINED: rethrow self-linked"]
-    at ns_errorcontext/errorcontext.baml:4308..4454 `{\n      m...   }\n    }`
-    at ns_errorcontext/errorcontext.baml:4316..4448 `match (ctx...d"\n      }`
 [2x] hir_ty=[!error] tir=[(a: int, b: string) -> string throws never]
     at ns_instantiation_expr/instantiation_expr.baml:2035..2040 `let f`
     at ns_instantiation_expr/instantiation_expr.baml:2066..2067 `f`
@@ -1337,9 +1337,6 @@ ns_to_json_interface/to_json_interface.baml:1125..1207 `{\n       ...\n        }
 [2x] hir_ty=[!error] tir=[U[]]
     at ns_arrays/sort_comparable.baml:11797..11814 `{\n    xs.sort()\n}`
     at ns_arrays/sort_comparable.baml:11803..11812 `xs.sort()`
-[2x] hir_ty=[!error] tir=[baml.errors.ErrorContext | null]
-    at ns_errorcontext/errorcontext.baml:4323..4333 `ctx2.cause`
-    at ns_errorcontext/errorcontext.baml:5623..5633 `ctx2.cause`
 [2x] hir_ty=[!error] tir=[baml.future.FutureState.Cancelled]
     at ns_cancel_cascade/cancel_cascade.baml:4809..4842 `baml.futur...e.Cancelled`
     at ns_future_methods/future_methods.baml:2307..2340 `baml.futur...e.Cancelled`
@@ -1352,30 +1349,9 @@ ns_to_json_interface/to_json_interface.baml:1125..1207 `{\n       ...\n        }
 [2x] hir_ty=[!error] tir=[image]
     at ns_json_to_from_string/json_to_from_string.baml:9711..9767 `image.from...image/png")`
     at ns_json_to_from_string/json_to_from_string.baml:10006..10062 `image.from...image/png")`
-[2x] hir_ty=[!error] tir=[string | "GARBAGE: outer context slot was recolored before the inner throw"]
-    at ns_errorcontext/errorcontext.baml:7552..7734 `{\n       ...\n        }`
-    at ns_errorcontext/errorcontext.baml:7564..7724 `match (ctx...          }`
-[2x] hir_ty=[!error] tir=[string | "LOST: cause chain wiped by a stacked defer re-raise"]
-    at ns_errorcontext/errorcontext.baml:11843..11991 `{\n      m...   }\n    }`
-    at ns_errorcontext/errorcontext.baml:11851..11985 `match (ctx...e"\n      }`
-[2x] hir_ty=[!error] tir=[string | "MISCHAINED: gap over-covered"]
-    at ns_errorcontext/errorcontext.baml:5608..5750 `{\n      m...   }\n    }`
-    at ns_errorcontext/errorcontext.baml:5616..5744 `match (ctx...d"\n      }`
-[2x] hir_ty=[!error] tir=[string | "MISSED: enclosing handled error not found in chain"]
-    at ns_errorcontext/errorcontext.baml:2861..3029 `{\n       ...\n        }`
-    at ns_errorcontext/errorcontext.baml:2873..3019 `match (ctx...          }`
 [2x] hir_ty=[!error] tir=[string | "admin"]
     at ns_control_flow/control_flow.baml:3132..3219 `{\n    if ..."\n    }\n}`
     at ns_control_flow/control_flow.baml:3138..3217 `if let Use...min"\n    }`
-[2x] hir_ty=[!error] tir=[string | "no cause found"]
-    at ns_errorcontext/errorcontext.baml:1927..2059 `{\n       ...\n        }`
-    at ns_errorcontext/errorcontext.baml:1939..2049 `match (ctx...          }`
-[2x] hir_ty=[!error] tir=[string | "no root cause found"]
-    at ns_errorcontext/errorcontext.baml:6570..6686 `{\n      m...   }\n    }`
-    at ns_errorcontext/errorcontext.baml:6578..6680 `match (ctx...d"\n      }`
-[2x] hir_ty=[!error] tir=[string | "unexpected non-string error"]
-    at ns_errorcontext/errorcontext.baml:1083..1207 `{\n      m...   }\n    }`
-    at ns_errorcontext/errorcontext.baml:1091..1201 `match (ctx...r"\n      }`
 [2x] hir_ty=[!error] tir=[unknown | null]
     at ns_tostring_sugar/tostring_sugar.baml:5642..5653 `x.to_string`
     at ns_tostring_sugar/tostring_sugar.baml:5737..5748 `x.to_string`
@@ -1466,6 +1442,9 @@ ns_to_json_interface/to_json_interface.baml:1125..1207 `{\n       ...\n        }
 [2x] hir_ty=["E" | "N" | "S" | "W"] tir=["N" | "E" | "S" | "W"]
     at ns_match_types/match_types.baml:8690..8840 `{\n    mat..."\n    }\n}`
     at ns_match_types/match_types.baml:8696..8838 `match (d) ... "W"\n    }`
+[2x] hir_ty=["MISCHAINED: rethrow self-linked" | "no cause"] tir=["no cause" | "MISCHAINED: rethrow self-linked"]
+    at ns_errorcontext/errorcontext.baml:4308..4454 `{\n      m...   }\n    }`
+    at ns_errorcontext/errorcontext.baml:4316..4448 `match (ctx...d"\n      }`
 [2x] hir_ty=["all zero" | "x nonzero" | "y nonzero" | "z nonzero"] tir=["all zero" | "z nonzero" | "y nonzero" | "x nonzero"]
     at ns_match_basics/match_basics.baml:12277..12502 `{\n    mat..."\n    }\n}`
     at ns_match_basics/match_basics.baml:12283..12500 `match (x) ...ero"\n    }`
@@ -1802,6 +1781,9 @@ ns_to_json_interface/to_json_interface.baml:1125..1207 `{\n       ...\n        }
 [2x] hir_ty=[(self: baml.csv.CsvWriter, row: user.csv.MdRow) -> null throws baml.csv.CsvError | baml.errors.Io] tir=[(row: T) -> null throws baml.csv.CsvError | baml.errors.Io]
     at ns_csv/csv.baml:48035..48046 `w.write_row`
     at ns_csv/csv.baml:48196..48207 `w.write_row`
+[2x] hir_ty=[(self: baml.errors.ErrorContext) -> string throws never] tir=[() -> string throws never]
+    at ns_errorcontext/errorcontext.baml:9766..9779 `ctx.to_string`
+    at ns_errorcontext/errorcontext.baml:13074..13087 `ctx.to_string`
 [2x] hir_ty=[(self: baml.iter.Iterator<Error = never, Item = int>) -> int throws never] tir=[() -> int throws never]
     at ns_iter/iter.baml:828..836 `it.count`
     at ns_iter/iter.baml:7401..7416 `xs.iter().count`
@@ -2234,24 +2216,12 @@ ns_to_json_interface/to_json_interface.baml:1125..1207 `{\n       ...\n        }
 [2x] hir_ty=[string] tir=[string | "rate limited" | "unknown"]
     at ns_exceptions/exceptions.baml:39451..39679 `{\n    s15..."\n    }\n}`
     at ns_exceptions/exceptions.baml:39457..39677 `s15_fails_...own"\n    }`
+[2x] hir_ty=[string] tir=[string | "unreachable" | "no cause" | "MISCHAINED: rethrow self-linked"]
+    at ns_errorcontext/errorcontext.baml:3941..4460 `{\n  // Th...  }\n  }\n}`
+    at ns_errorcontext/errorcontext.baml:4167..4458 `(\n    ec_...n    }\n  }`
 [2x] hir_ty=[string] tir=[string | "was int"]
     at ns_exceptions/exceptions.baml:5254..5352 `{\n    s2b..."\n    }\n}`
     at ns_exceptions/exceptions.baml:5260..5350 `s2b_fails_...int"\n    }`
-[2x] hir_ty=[string | !error] tir=[string | "LOST: cause chain wiped by a stacked defer re-raise"]
-    at ns_errorcontext/errorcontext.baml:11792..11997 `{\n  ec_st...  }\n  }\n}`
-    at ns_errorcontext/errorcontext.baml:11796..11995 `ec_stackde...n    }\n  }`
-[2x] hir_ty=[string | !error] tir=[string | "MISCHAINED: gap over-covered"]
-    at ns_errorcontext/errorcontext.baml:5333..5756 `{\n  let r...  }\n  }\n}`
-    at ns_errorcontext/errorcontext.baml:5564..5754 `ec_gap_fai...n    }\n  }`
-[2x] hir_ty=[string | !error] tir=[string | "no root cause found"]
-    at ns_errorcontext/errorcontext.baml:6521..6692 `{\n  ec_si...  }\n  }\n}`
-    at ns_errorcontext/errorcontext.baml:6525..6690 `ec_sibling...n    }\n  }`
-[2x] hir_ty=[string | !error] tir=[string | "unexpected non-string error"]
-    at ns_errorcontext/errorcontext.baml:1036..1213 `{\n  ec_si...  }\n  }\n}`
-    at ns_errorcontext/errorcontext.baml:1040..1211 `ec_single_...n    }\n  }`
-[2x] hir_ty=[string | !error] tir=[string | "unreachable" | "no cause" | "MISCHAINED: rethrow self-linked"]
-    at ns_errorcontext/errorcontext.baml:3941..4460 `{\n  // Th...  }\n  }\n}`
-    at ns_errorcontext/errorcontext.baml:4167..4458 `(\n    ec_...n    }\n  }`
 [2x] hir_ty=[string | user.class_type_args_at_runtime.Foo<int>] tir=[user.class_type_args_at_runtime.Foo<int> | string]
     at ns_class_type_args_at_runtime/class_type_args_at_runtime.baml:3369..3370 `f`
     at ns_class_type_args_at_runtime/class_type_args_at_runtime.baml:3408..3409 `_`

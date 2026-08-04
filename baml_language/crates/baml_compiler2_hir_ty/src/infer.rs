@@ -2403,8 +2403,30 @@ impl<'db> InferenceContext<'db> {
             self.result
                 .type_of_binding
                 .insert(clause.binding, caught.clone());
-            if let Some(stack) = clause.stack_trace_binding {
-                self.result.type_of_binding.insert(stack, Ty::string());
+            if let Some(context) = clause.stack_trace_binding {
+                // The second binding (`catch (e, ctx)`) is the full error
+                // CONTEXT - `baml.errors.ErrorContext` (the AST field's
+                // "stack trace" name understates it; TIR resolves the
+                // class). Lookup-gated, fail-safe to Error.
+                let context_ty = match self.facts.definition_of(&baml_type::TypeName::new(
+                    baml_type::Name::new("baml"),
+                    vec![baml_type::Name::new("errors")],
+                    baml_type::Name::new("ErrorContext"),
+                )) {
+                    Some(baml_compiler2_hir::contributions::Definition::Class(_)) => {
+                        Ty::intern(TyKind::Class(
+                            baml_type::TypeName::new(
+                                baml_type::Name::new("baml"),
+                                vec![baml_type::Name::new("errors")],
+                                baml_type::Name::new("ErrorContext"),
+                            ),
+                            Box::new([]),
+                            TyAttr::default(),
+                        ))
+                    }
+                    _ => Ty::error(),
+                };
+                self.result.type_of_binding.insert(context, context_ty);
             }
             for &arm_id in &clause.arms {
                 let arm = &body.catch_arms[arm_id];
