@@ -10,11 +10,17 @@ describe('workspace path model', () => {
     );
 
     expect(paths.rootUri.path).toBe('/D:/Repo with space/100%/baml_src');
-    expect(paths.rootUri.toString()).toBe('file:///d%3A/Repo%20with%20space/100%25/baml_src');
-    expect(paths.configUri.path).toBe('/D:/Repo with space/100%/baml_src.code-workspace');
+    expect(paths.rootUri.toString()).toBe(
+      'file:///d%3A/Repo%20with%20space/100%25/baml_src',
+    );
+    expect(paths.configUri.path).toBe(
+      '/D:/Repo with space/100%/baml_src.code-workspace',
+    );
 
     const file = paths.fileUri('nested\\main.baml');
-    expect(file.path).toBe('/D:/Repo with space/100%/baml_src/nested/main.baml');
+    expect(file.path).toBe(
+      '/D:/Repo with space/100%/baml_src/nested/main.baml',
+    );
     expect(paths.isAllowedUri(file)).toBe(true);
     expect(paths.relativeFilename(file)).toBe('nested/main.baml');
   });
@@ -26,7 +32,9 @@ describe('workspace path model', () => {
 
     expect(native.rootUri.toString()).toBe(slash.rootUri.toString());
     expect(slash.rootUri.toString()).toBe(vfs.rootUri.toString());
-    expect(native.fileUri('main.baml').toString()).toBe(vfs.fileUri('main.baml').toString());
+    expect(native.fileUri('main.baml').toString()).toBe(
+      vfs.fileUri('main.baml').toString(),
+    );
   });
 
   it('preserves UNC authority while deriving descendants and ancestors', () => {
@@ -41,7 +49,9 @@ describe('workspace path model', () => {
     expect(file.toString()).toBe(
       'file://server/share/repo/baml_src/nested/main.baml',
     );
-    expect(paths.relativeFilename(URI.parse(file.toString()))).toBe('nested/main.baml');
+    expect(paths.relativeFilename(URI.parse(file.toString()))).toBe(
+      'nested/main.baml',
+    );
     expect(paths.rootAncestorUris().map((uri) => uri.toString())).toEqual([
       'file://server/share',
       'file://server/share/repo',
@@ -54,19 +64,28 @@ describe('workspace path model', () => {
 
     expect(paths.isAllowedUri(paths.rootUri)).toBe(true);
     expect(paths.isAllowedUri(paths.configUri)).toBe(true);
-    expect(paths.isAllowedUri(URI.file('D:\\repo\\baml_src-other\\main.baml'))).toBe(false);
-    expect(paths.isAllowedUri(URI.parse('untitled:/D:/repo/baml_src/main.baml'))).toBe(false);
-    expect(paths.relativeFilename(URI.parse('file://other/D:/repo/baml_src/main.baml'))).toBeNull();
+    expect(
+      paths.isAllowedUri(URI.file('D:\\repo\\baml_src-other\\main.baml')),
+    ).toBe(false);
+    expect(
+      paths.isAllowedUri(URI.parse('untitled:/D:/repo/baml_src/main.baml')),
+    ).toBe(false);
+    expect(
+      paths.relativeFilename(
+        URI.parse('file://other/D:/repo/baml_src/main.baml'),
+      ),
+    ).toBeNull();
   });
 
   it('normalizes portable relative keys and rejects ambiguous or escaping keys', () => {
     const paths = createWorkspacePathModel(URI, '/workspace');
 
-    expect(paths.normalizeFilename('nested\\main.baml')).toBe('nested/main.baml');
-    expect(paths.parentDirectoryUris('a\\b\\main.baml').map((uri) => uri.path)).toEqual([
-      '/workspace/a',
-      '/workspace/a/b',
-    ]);
+    expect(paths.normalizeFilename('nested\\main.baml')).toBe(
+      'nested/main.baml',
+    );
+    expect(
+      paths.parentDirectoryUris('a\\b\\main.baml').map((uri) => uri.path),
+    ).toEqual(['/workspace/a', '/workspace/a/b']);
 
     for (const filename of [
       '',
@@ -77,7 +96,9 @@ describe('workspace path model', () => {
       './main.baml',
       'nested//main.baml',
     ]) {
-      expect(() => paths.fileUri(filename), filename).toThrow(/normalized relative path/);
+      expect(() => paths.fileUri(filename), filename).toThrow(
+        /normalized relative path/,
+      );
     }
   });
 

@@ -20,12 +20,14 @@ function splitRelativeFilename(filename: string): string[] {
   const parts = normalized.split('/');
 
   if (
-    normalized.length === 0
-    || normalized.startsWith('/')
-    || /^[A-Za-z]:(?:\/|$)/.test(normalized)
-    || parts.some((part) => part === '' || part === '.' || part === '..')
+    normalized.length === 0 ||
+    normalized.startsWith('/') ||
+    /^[A-Za-z]:(?:\/|$)/.test(normalized) ||
+    parts.some((part) => part === '' || part === '.' || part === '..')
   ) {
-    throw new Error(`Workspace filename must be a normalized relative path: ${filename}`);
+    throw new Error(
+      `Workspace filename must be a normalized relative path: ${filename}`,
+    );
   }
 
   return parts;
@@ -36,40 +38,37 @@ function splitRelativeFilename(filename: string): string[] {
  * URIs. File-map keys remain portable, workspace-relative slash paths; all
  * absolute identity and containment checks use the URI representation.
  */
-export function createWorkspacePathModel<
-  U extends UriLike<U>,
->(uri: UriApi<U>, workspaceRoot: string) {
+export function createWorkspacePathModel<U extends UriLike<U>>(
+  uri: UriApi<U>,
+  workspaceRoot: string,
+) {
   const parsedRoot = uri.file(workspaceRoot || '/workspace');
   const rootPath = normalizeRootPath(parsedRoot.path);
-  const rootUri = parsedRoot.path === rootPath
-    ? parsedRoot
-    : parsedRoot.with({ path: rootPath });
+  const rootUri =
+    parsedRoot.path === rootPath
+      ? parsedRoot
+      : parsedRoot.with({ path: rootPath });
   const configUri = rootUri.with({ path: `${rootPath}.code-workspace` });
   const rootPrefix = rootPath.endsWith('/') ? rootPath : `${rootPath}/`;
   const rootScheme = rootUri.scheme.toLowerCase();
   const rootAuthority = rootUri.authority.toLowerCase();
 
-  const hasWorkspaceIdentity = (candidate: Pick<U, 'scheme' | 'authority'>): boolean => (
-    candidate.scheme.toLowerCase() === rootScheme
-    && candidate.authority.toLowerCase() === rootAuthority
-  );
+  const hasWorkspaceIdentity = (
+    candidate: Pick<U, 'scheme' | 'authority'>,
+  ): boolean =>
+    candidate.scheme.toLowerCase() === rootScheme &&
+    candidate.authority.toLowerCase() === rootAuthority;
 
-  const isWorkspaceUri = (candidate: U): boolean => (
-    hasWorkspaceIdentity(candidate)
-    && (candidate.path === rootPath || candidate.path.startsWith(rootPrefix))
-  );
+  const isWorkspaceUri = (candidate: U): boolean =>
+    hasWorkspaceIdentity(candidate) &&
+    (candidate.path === rootPath || candidate.path.startsWith(rootPrefix));
 
-  const isAllowedUri = (candidate: U): boolean => (
-    isWorkspaceUri(candidate)
-    || (
-      hasWorkspaceIdentity(candidate)
-      && candidate.path === configUri.path
-    )
-  );
+  const isAllowedUri = (candidate: U): boolean =>
+    isWorkspaceUri(candidate) ||
+    (hasWorkspaceIdentity(candidate) && candidate.path === configUri.path);
 
-  const normalizeFilename = (filename: string): string => (
-    splitRelativeFilename(filename).join('/')
-  );
+  const normalizeFilename = (filename: string): string =>
+    splitRelativeFilename(filename).join('/');
 
   const fileUri = (filename: string): U => {
     const normalizedFilename = normalizeFilename(filename);
@@ -81,7 +80,10 @@ export function createWorkspacePathModel<
   };
 
   const relativeFilename = (candidate: U): string | null => {
-    if (!hasWorkspaceIdentity(candidate) || !candidate.path.startsWith(rootPrefix)) {
+    if (
+      !hasWorkspaceIdentity(candidate) ||
+      !candidate.path.startsWith(rootPrefix)
+    ) {
       return null;
     }
     return candidate.path.slice(rootPrefix.length);
@@ -111,14 +113,14 @@ export function createWorkspacePathModel<
   };
 
   return {
-    rootUri,
     configUri,
-    rootPath,
+    fileUri,
     isAllowedUri,
     normalizeFilename,
-    fileUri,
+    parentDirectoryUris,
     relativeFilename,
     rootAncestorUris,
-    parentDirectoryUris,
+    rootPath,
+    rootUri,
   };
 }
