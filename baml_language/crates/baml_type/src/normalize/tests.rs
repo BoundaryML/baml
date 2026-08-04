@@ -1764,3 +1764,19 @@ fn answer_cache_survives_reuse_within_one_session() {
     let second = round(s);
     assert_eq!(first, second, "a repeated goal changed its answer");
 }
+
+// ── clause supply ──────────────────────────────────────────────────────────
+
+#[test]
+fn the_default_clause_world_is_empty() {
+    // A context that keeps the default supplies no clauses for any interface — the
+    // empty world is a value (membership over it is an honest "no"), so fact-only
+    // contexts and stubs need no opt-out and no separate "no clauses" type.
+    let ctx = Ctx::default();
+    let mut visited = false;
+    ctx.for_each_clause(&qtn("Anything"), &mut |_| {
+        visited = true;
+        std::ops::ControlFlow::Continue(())
+    });
+    assert!(!visited);
+}

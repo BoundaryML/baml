@@ -30,12 +30,12 @@
 //! absorb, or equate, so a missing fact can only yield "not *necessarily*
 //! equivalent / subtype", never a false claim of equivalence or membership.
 
-use std::collections::HashSet;
+use std::{collections::HashSet, ops::ControlFlow};
 
 use self::solve::SolverSession;
 use crate::{
-    FunctionParamMode, FunctionParamTy, Interface, Literal, MediaKind, Name, ParamTy,
-    QualifiedTypeName, Ty, TyAttr,
+    FunctionParamMode, FunctionParamTy, ImplClause, Interface, Literal, MediaKind, Name, ParamTy,
+    QualifiedTypeName, Ty, TyAttr, TypeName,
 };
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -175,6 +175,38 @@ pub trait TypeContext {
     /// `from_ty` walk, which decrements its own fuel) ignores it.
     fn project(&self, base: &Ty, interface: &Interface, member: &Name, fuel: u32)
     -> ProjectionStep;
+
+    /// Visit every clause implementing `interface`, in this context's contractual
+    /// order, stopping early on [`ControlFlow::Break`].
+    ///
+    /// This is the seam that turns membership from a fact somebody else decides into
+    /// a goal the solver decides itself: a context that *answers* membership has to
+    /// run its own search, which cannot see the search asking it — while a context
+    /// that merely *supplies clauses* imposes no such constraint, because one search
+    /// consumes them and can see its own cycles. Clauses live on the same trait as
+    /// the facts because both are non-re-entrant enumerations of one world's data.
+    ///
+    /// **Enumeration order is part of the contract**: deterministic and identical
+    /// across runs, because a decision that depends on which of several applicable
+    /// clauses was seen first would otherwise vary between two builds of one program.
+    ///
+    /// **Defaulted to the empty world** — no interface has any implementation here —
+    /// which is a value, not an absence: contexts that deliberately reason without
+    /// clauses (fact profiles, test stubs) simply keep the default, and membership
+    /// over them is an honest "no". Fail-safe like every fact: a context that should
+    /// supply clauses but does not loses completeness (memberships go unproven),
+    /// never soundness. The callback shape rather than an iterator keeps the method
+    /// on the vtable (`impl Iterator` cannot be dyn-dispatched) while preserving
+    /// laziness — `Break` stops exactly where an iterator consumer would stop — and
+    /// allocating nothing; the clause lifetime is tied to `&self`, so a visitor may
+    /// collect clauses that outlive the walk.
+    fn for_each_clause<'a>(
+        &'a self,
+        interface: &TypeName,
+        visit: &mut dyn FnMut(ImplClause<'a>) -> ControlFlow<()>,
+    ) {
+        let _ = (interface, visit);
+    }
 
     // ── type algebra (defaulted; the canonical implementation) ──────────────
     //

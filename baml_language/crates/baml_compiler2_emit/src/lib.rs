@@ -673,9 +673,9 @@ fn build_packages(
                             let bound_ty = lower_constraint_head(store, id, generics, bounds);
                             split_interface(&bound_ty, resolved, generics).map(
                                 |(interface, args, assoc)| InterfaceBound {
-                                    interface,
-                                    args,
-                                    assoc,
+                                    name: interface,
+                                    generics: args,
+                                    associated_types: assoc,
                                 },
                             )
                         })

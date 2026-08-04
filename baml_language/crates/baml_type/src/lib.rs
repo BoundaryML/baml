@@ -31,6 +31,7 @@ pub use baml_base::{Literal, MediaKind, Name, Span};
 use borsh::{BorshDeserialize, BorshSerialize};
 
 mod attr;
+pub mod clause;
 mod codegen_ty;
 mod defs;
 mod family;
@@ -45,6 +46,7 @@ pub mod template;
 pub mod throw_facts;
 pub mod typetag;
 pub use attr::*;
+pub use clause::{ClauseId, ImplClause};
 pub use defs::*;
 pub use family::*;
 pub use names::*;

@@ -43,20 +43,15 @@ pub struct InterfaceMethodDef {
     pub errors: baml_type::RuntimeTy,
 }
 
-/// A single interface bound on an impl's generic parameter — `T extends I`, or a
-/// generic / associated-bound form (`T extends Container<U>`, `T extends
-/// Iterator<Item = int>`). `args` and `assoc` are `TyTemplate`s over the impl's
-/// params (`U` → `TypeArgRef`); the resolver substitutes them with the match
-/// bindings and then checks the bound type argument implements `interface` *at
-/// those args/assoc* — the runtime twin of a `T: Iface<Args, Assoc = …>`
-/// predicate instantiated with the impl substitutions (rustc). Bounds are
-/// interfaces, not types, so an intersection of bounds is a *set* of these.
-#[derive(Clone, Debug, PartialEq, Eq, BorshSerialize, BorshDeserialize)]
-pub struct InterfaceBound {
-    pub interface: baml_type::TypeName,
-    pub args: Vec<baml_type::TyTemplate>,
-    pub assoc: Vec<(baml_type::Name, baml_type::TyTemplate)>,
-}
+/// A single interface bound on an impl's generic parameter — `T extends I`, or a generic
+/// / associated-bound form (`T extends Container<U>`, `T extends Iterator<Item = int>`).
+///
+/// This is exactly an interface *constraint* over the impl's own parameters, which the
+/// type family already spells as [`baml_type::TyTemplateInterface`] — the same shape that
+/// qualifies an associated-type projection. An alias rather than a struct of its own, so
+/// the bake keeps the name it reads best by while everything that reasons about bounds
+/// reasons about one type.
+pub type InterfaceBound = baml_type::TyTemplateInterface;
 
 /// A resolved interface-method implementation in a [`RuntimeImplRule`]: the
 /// callee's fully-qualified name plus the `frame` it must be invoked with.

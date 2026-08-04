@@ -272,12 +272,12 @@ impl<'vm> ImplResolver<'vm> {
                 // Container<U>`), so substitute them with the bindings, then require
                 // the arg to implement the interface at that exact instantiation.
                 let req_args: Vec<RealizedTy> = bound
-                    .args
+                    .generics
                     .iter()
                     .map(|t| self.substitute_checked(t, &type_args))
                     .collect();
                 let req_assoc: Vec<(Name, RealizedTy)> = bound
-                    .assoc
+                    .associated_types
                     .iter()
                     .map(|(n, t)| (n.clone(), self.substitute_checked(t, &type_args)))
                     .collect();
@@ -295,19 +295,13 @@ impl<'vm> ImplResolver<'vm> {
                 // the interface's `requires` closure; not handled here.)
                 if self.interface_existential_satisfies_bound(
                     &type_args[param],
-                    &bound.interface,
+                    &bound.name,
                     &req_args,
                     &req_assoc,
                 ) {
                     continue;
                 }
-                if !self.prove(
-                    &type_args[param],
-                    &bound.interface,
-                    &req_args,
-                    &req_assoc,
-                    stack,
-                ) {
+                if !self.prove(&type_args[param], &bound.name, &req_args, &req_assoc, stack) {
                     return None;
                 }
             }

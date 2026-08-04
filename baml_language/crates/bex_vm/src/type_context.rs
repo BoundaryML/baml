@@ -29,8 +29,11 @@
 //! stricter than the compiler where it would break a proven-exhaustive match —
 //! see the List/Map-invariance sequencing constraint).
 
+use std::ops::ControlFlow;
+
 use baml_type::{
-    Interface, Name, ParamTy, QualifiedTypeName, RealizedTy, Ty, normalize::TypeContext,
+    ClauseId, ImplClause, Interface, Name, ParamTy, QualifiedTypeName, RealizedTy, Ty, TypeName,
+    normalize::TypeContext,
 };
 use bex_vm_types::types::Object;
 
@@ -179,6 +182,50 @@ impl TypeContext for BexVm {
         match template.substitute_with_fuel(&bound_args, self, fuel) {
             Ok(reduced) => ProjectionStep::Reduced(reduced.into()),
             Err(_) => ProjectionStep::Opaque,
+        }
+    }
+
+    /// The VM as a clause supplier.
+    ///
+    /// The baked table is already in clause form — `RuntimeImplRule` carries the
+    /// `for`-pattern, the interface's arguments and bindings, and the per-parameter
+    /// bounds as templates over the impl's own generics — so supplying a clause is
+    /// borrowing those fields, not building anything. What the rule *also* carries
+    /// (methods, field links) stays behind: that is what a caller reads once a
+    /// clause has been selected, not what decides the selection.
+    ///
+    /// **Order** is the program-wide impl table's: packages in load order
+    /// (dependencies first), and within a package the order the bake fixed — both
+    /// deterministic for a given program, as the trait contract requires.
+    ///
+    /// The clause's [`ClauseId`] is the rule's heap *object* pointer, so whoever
+    /// selected a clause can recover the rule — and therefore the method table —
+    /// without a second search.
+    fn for_each_clause<'a>(
+        &'a self,
+        interface: &TypeName,
+        visit: &mut dyn FnMut(ImplClause<'a>) -> ControlFlow<()>,
+    ) {
+        // An interface no package loaded has no implementations anywhere, which is
+        // a legitimate answer rather than a failure.
+        let Some(interface_ptr) = self.lookup_interface(interface) else {
+            return;
+        };
+        for &rule_ptr in self.packages.impl_rules_of(interface_ptr) {
+            let Some(rule) = self.get_object(rule_ptr).as_impl_rule() else {
+                continue;
+            };
+            let clause = ImplClause {
+                id: ClauseId(rule_ptr.as_ptr() as u64),
+                num_vars: rule.generic_param_bounds.len(),
+                self_pattern: &rule.for_ty_pattern,
+                iface_args: &rule.interface_args,
+                iface_assoc: &rule.interface_assoc,
+                bounds: &rule.generic_param_bounds,
+            };
+            if visit(clause).is_break() {
+                return;
+            }
         }
     }
 }
