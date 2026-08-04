@@ -25,6 +25,7 @@
 //! backend; it only appears in the S15 differential sweep.
 
 pub mod callable;
+pub mod coherence;
 pub mod exhaustiveness;
 pub mod impls;
 pub mod facts;

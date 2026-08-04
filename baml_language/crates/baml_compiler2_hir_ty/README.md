@@ -128,9 +128,31 @@ receiver renders `int[]`, not `(IntStore as Store).Item[]` - targeted,
 not full canonicalization, which would expand nominal aliases renders
 keep. TIR divergences pinned: `Self` left unrealized through TIR's
 requires closure (errors a sound program), and the unreduced-default
-throws-contract error on stdlib `collect`. 75 fixtures green, 1
-pending pin: B-1075 pairwise bitwise (stdlib interfaces, outside this
-branch).
+throws-contract error on stdlib `collect`. I7 (coherence): `coherence.rs` lifts TIR's overlap
+engine + walk (reference, never a dependency) - symmetric first-order
+equality unification with both impls' params renamed to disjoint
+unification variables (rustc's overlap check with fresh inference
+vars), three-valued `Overlap` with Kleene conjunction, ACI union
+covering via a budgeted MRV+backtracking search (the NP-hard ceiling
+degrades to `Unknown`, never a guess), occurs check, depth backstop
+for distinct recursive aliases, bound refutation at PRINCIPAL ground
+witnesses through the I1 registry, the E0138 subject gate on
+alias-expanded heads, and per-package + dependency-closure checking
+whose completeness rests on the orphan rule (knowability). The orphan
+rule itself (E0139, RFC-2451 covered) ships alongside. Both surface as
+LOCATION-KEYED tracked queries (`package_coherence_violations` /
+`package_orphan_violations`) - span-free, unlike TIR's span-carrying
+query, so whitespace edits do not invalidate; S17 renders. The lifted
+engine keeps TIR's full unit corpus (3-SAT reduction, pigeonhole,
+collapse/covering cases) plus new orphan tests; a differential suite
+in `baml_tests` runs BOTH engines' coherence over identical sources
+and they agree pair-for-pair (spans compared by containment - TIR
+anchors in-body violations on the interface-target name; ours is the
+block). Marked carry-over: `cover`'s registry-blind conservatism for
+concrete-vs-interface membership (refining it through the live
+registry changes accepted programs - its own deliberate step).
+75 fixtures green, 1 pending pin: B-1075 pairwise bitwise (stdlib
+interfaces, outside this branch).
 
 `baml_language/TYPE_SYSTEM.md` is the correctness authority. It is
 prescriptive: where the current TIR implementation disagrees with it, the spec
@@ -210,7 +232,7 @@ cutover. "Tested by" is the merge gate for the slice.
 | I6  | DONE - default bodies as roots (frames composed), concrete-receiver impl tier, `Self`-in-requires realization, finalize projection normalization | `interface_default_method_body`, `requires_self_pins_realize`, `stdlib_iterator_collect` |
 | S12 | SHIPPED: callable_throws salsa fixpoint; effect vars default never; lambda channels; catch residual on the error channel; declared-clause contracts incl. rigid vars (B-1082). `throws T \| _` partials join with obligations (I4) | throws + catch fixtures |
 | S13 | SHIPPED: finalize - resolve-all to fixpoint (minimum-upper meets, all-equal-lowers agreement), local Infer-to-Error erasure (rulings 2/3; r-a's replace-with-error discipline), post-substitution union re-canonicalization (null-last at this crate's boundary). Diagnostics land with S17 | `[]`-inference fixtures; no-infer-leak invariant |
-| I7  | Coherence overlap moves in (existing ACI engine, unchanged)          | differential vs TIR on coherence diagnostic fixtures   |
+| I7  | DONE - overlap engine + walk lifted (location-keyed queries), orphan rule; unit corpus carried + differential suite vs TIR | `coherence.rs` tests; `type_spec/coherence.rs` differential |
 | S15 | Parity: stdlib corpus (`__baml_std__`) + full differential sweep     | every fixture diffed; divergence list = spec fixes only|
 | S16 | Cutover: `ScopeInference` facade, dep inversion, delete TIR paths    | full CI matrix; snapshot diffs reviewed per feature    |
 | S17 | Diagnostics: split `Unknown`/`Error`/`BuiltinUnknown`; mismatch map  | diagnostic_errors-tier snapshots                       |

@@ -17,5 +17,6 @@
 
 pub(crate) mod harness;
 
+mod coherence;
 mod fixtures;
 mod pattern_corpus;
