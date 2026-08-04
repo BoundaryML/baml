@@ -4,9 +4,9 @@ expression: report
 ---
 files: 116
 nodes compared: 60529
-agreements: 50348
+agreements: 50724
 one-sided (coverage): 88
-conflicts: 10093 across 1793 distinct pairs
+conflicts: 9717 across 1788 distinct pairs
 hir_ty error-channel entries: 2700
 tir diagnostics: 0
 panics: 0
@@ -2720,7 +2720,7 @@ ns_yaml/yaml.baml:3792..3964 `{\n    {\n...l\n    }\n}`: expected void, got null
 [691x] hir_ty=[(a: int, b: int) -> bool throws never] tir=[(a: T, b: T) -> bool throws never]
     at ns_array_rest_binding/array_rest_binding.baml:868..884 `baml.deep_equals`
     at ns_array_rest_binding/array_rest_binding.baml:1176..1192 `baml.deep_equals`
-[413x] hir_ty=[!error] tir=[string]
+[300x] hir_ty=[!error] tir=[string]
     at ns_arrays/sort_comparable.baml:1490..1496 `string`
     at ns_arrays/sort_comparable.baml:1515..1521 `string`
 [240x] hir_ty=[(a: bool, b: bool) -> bool throws never] tir=[(a: T, b: T) -> bool throws never]
@@ -2729,7 +2729,7 @@ ns_yaml/yaml.baml:3792..3964 `{\n    {\n...l\n    }\n}`: expected void, got null
 [240x] hir_ty=[(a: string, b: string) -> bool throws never] tir=[(a: T, b: T) -> bool throws never]
     at ns_arrays/arrays.baml:10142..10158 `baml.deep_equals`
     at ns_arrays/arrays.baml:28366..28382 `baml.deep_equals`
-[205x] hir_ty=[!error] tir=[int]
+[178x] hir_ty=[!error] tir=[int]
     at ns_array_rest_binding/array_rest_binding.baml:5304..5309 `let a`
     at ns_array_rest_binding/array_rest_binding.baml:5342..5343 `a`
 [132x] hir_ty=[(a: int[], b: int[]) -> bool throws never] tir=[(a: T, b: T) -> bool throws never]
@@ -2756,21 +2756,12 @@ ns_yaml/yaml.baml:3792..3964 `{\n    {\n...l\n    }\n}`: expected void, got null
 [79x] hir_ty=[int] tir=[int | 0]
     at ns_array_rest_binding/array_rest_binding.baml:4058..4172 `{\n    mat...0\n    }\n}`
     at ns_array_rest_binding/array_rest_binding.baml:4064..4170 `match (v) ...=> 0\n    }`
-[75x] hir_ty=[!error] tir=[bool]
-    at ns_fs/fs_from_rust.baml:1996..2324 `{\n    let...write:")\n}`
-    at ns_fs/fs_from_rust.baml:2287..2322 `msg.starts...to write:")`
 [67x] hir_ty=[() -> void throws baml.errors.ParseError / null] tir=[() -> void throws unknown / null]
     at ns_bigints/bigints.baml:6953..7024 `{\n    ass...12345n))\n}`
     at ns_bigints/bigints.baml:7052..7153 `{\n    ass...99999n))\n}`
 [66x] hir_ty=[bool] tir=[true]
     at ns_bigints/bigints.baml:5064..5075 `{ 1n < 2n }`
     at ns_bigints/bigints.baml:5066..5073 `1n < 2n`
-[59x] hir_ty=[!error] tir=[(self: baml.TypeValue) -> string throws never]
-    at ns_class_type_args_at_runtime/class_type_args_at_runtime.baml:464..494 `reflect.ty...).to_string`
-    at ns_class_type_args_at_runtime/class_type_args_at_runtime.baml:617..647 `reflect.ty...).to_string`
-[46x] hir_ty=[!error] tir=[(self: baml.TypeValue, other: type) -> bool throws never]
-    at ns_interfaces/interfaces.baml:25124..25161 `reflect.ty....implements`
-    at ns_interfaces/interfaces.baml:25475..25513 `reflect.ty....implements`
 [45x] hir_ty=[1] tir=[int]
     at ns_cancel_cascade/cancel_cascade.baml:3497..3498 `1`
     at ns_closures/closures.baml:2670..2671 `1`
@@ -2804,9 +2795,6 @@ ns_yaml/yaml.baml:3792..3964 `{\n    {\n...l\n    }\n}`: expected void, got null
 [34x] hir_ty=[() -> void throws baml.json.JsonDecodeError | baml.json.JsonParseError / null] tir=[() -> void throws unknown / null]
     at ns_from_json_interface/from_json_interface.baml:2432..2496 `{\n    ass...), 20.5)\n}`
     at ns_from_json_interface/from_json_interface.baml:3025..3098 `{\n    ass..., "Ada")\n}`
-[33x] hir_ty=[!error] tir=[type[]]
-    at ns_interfaces/interfaces.baml:27127..27136 `let impls`
-    at ns_interfaces/interfaces.baml:27139..27183 `reflect.ty...lementors()`
 [31x] hir_ty=[!error] tir=[baml.json.json]
     at ns_bigints/bigints.baml:21883..21898 `(42n).to_json()`
     at ns_bigints/bigints.baml:21961..21994 `(999999999...).to_json()`
@@ -2861,6 +2849,9 @@ ns_yaml/yaml.baml:3792..3964 `{\n    {\n...l\n    }\n}`: expected void, got null
 [23x] hir_ty=[!error] tir=[baml.iter.Iterator<Item = int, Error = never>]
     at ns_iter/iter.baml:230..275 `baml.iter....or = never>`
     at ns_iter/iter.baml:480..525 `baml.iter....or = never>`
+[23x] hir_ty=[!error] tir=[bool]
+    at ns_fs/fs_from_rust.baml:1996..2324 `{\n    let...write:")\n}`
+    at ns_fs/fs_from_rust.baml:2287..2322 `msg.starts...to write:")`
 [23x] hir_ty=[(a: float, b: float) -> bool throws never] tir=[(a: T, b: T) -> bool throws never]
     at ns_arrays/reductions.baml:797..813 `baml.deep_equals`
     at ns_arrays/reductions.baml:896..912 `baml.deep_equals`
@@ -2891,9 +2882,6 @@ ns_yaml/yaml.baml:3792..3964 `{\n    {\n...l\n    }\n}`: expected void, got null
 [20x] hir_ty=[() -> void throws baml.errors.InvalidArgument | baml.errors.Io | baml.errors.ParseError / null] tir=[() -> void throws unknown / null]
     at ns_fs/fs.baml:2540..2603 `{\n    ass... BAML!")\n}`
     at ns_fs/fs.baml:3746..3790 `{\n    ass...ng_fn())\n}`
-[19x] hir_ty=[!error] tir=[(self: type[]) -> int throws never]
-    at ns_interfaces/interfaces.baml:27195..27207 `impls.length`
-    at ns_interfaces/interfaces.baml:27547..27595 `reflect.ty...rs().length`
 [19x] hir_ty=[() -> void throws baml.errors.Io / null] tir=[() -> void throws unknown / null]
     at ns_cancel_cascade/cancel_cascade.baml:1409..1477 `{\n    ass...nt_fn())\n}`
     at ns_cancel_cascade/cancel_cascade.baml:1981..2075 `{\n    ass...d(), 0))\n}`
@@ -2906,9 +2894,6 @@ ns_yaml/yaml.baml:3792..3964 `{\n    {\n...l\n    }\n}`: expected void, got null
 [19x] hir_ty=[string] tir=["missing" | string]
     at ns_csv/csv.baml:8514..8630 `match (com...zip,\n    }`
     at ns_csv/csv.baml:8652..8746 `match (esc...w.b,\n    }`
-[18x] hir_ty=[!error] tir=[(self: baml.TypeValue) -> type[] throws never]
-    at ns_interfaces/interfaces.baml:27139..27181 `reflect.ty...mplementors`
-    at ns_interfaces/interfaces.baml:27547..27586 `reflect.ty...mplementors`
 [18x] hir_ty=[!error] tir=[baml.csv.CsvErrorKind]
     at ns_csv/csv.baml:22556..22562 `e.kind`
     at ns_csv/csv.baml:23419..23425 `e.kind`
@@ -3017,9 +3002,6 @@ ns_yaml/yaml.baml:3792..3964 `{\n    {\n...l\n    }\n}`: expected void, got null
 [11x] hir_ty=[!error] tir=[baml.llm.PromptAst]
     at ns_prompt_tag_runtime/prompt_tag_runtime.baml:1925..1936 `render(ctx)`
     at ns_prompt_tag_runtime/prompt_tag_runtime.baml:2599..2610 `render(ctx)`
-[11x] hir_ty=[!error] tir=[type]
-    at ns_interfaces/interfaces.baml:27226..27234 `impls[0]`
-    at ns_interfaces/interfaces.baml:27276..27284 `impls[1]`
 [11x] hir_ty=[(self: baml.fs.File, data: string) -> int throws baml.errors.InvalidArgument | baml.errors.Io] tir=[(data: string) -> int throws baml.errors.Io | baml.errors.InvalidArgument]
     at ns_csv/csv.baml:50501..50509 `wf.write`
     at ns_fs/fs.baml:7526..7536 `file.write`
@@ -4091,6 +4073,9 @@ ns_yaml/yaml.baml:3792..3964 `{\n    {\n...l\n    }\n}`: expected void, got null
 [2x] hir_ty=[!error] tir=[string | "unexpected non-string error"]
     at ns_errorcontext/errorcontext.baml:1083..1207 `{\n      m...   }\n    }`
     at ns_errorcontext/errorcontext.baml:1091..1201 `match (ctx...r"\n      }`
+[2x] hir_ty=[!error] tir=[type]
+    at ns_reflect_type_of/reflect_type_of.baml:4857..4861 `type`
+    at ns_reflect_type_of/reflect_type_of.baml:4900..4904 `type`
 [2x] hir_ty=[!error] tir=[unknown | null]
     at ns_tostring_sugar/tostring_sugar.baml:5642..5653 `x.to_string`
     at ns_tostring_sugar/tostring_sugar.baml:5737..5748 `x.to_string`
