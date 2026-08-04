@@ -50,6 +50,40 @@ use crate::{
     },
 };
 
+/// Negate a numeric literal into the negative literal TYPE (ruling 2:
+/// `-1` is a type, TS parity). Freshness carries through. `None` skips
+/// the fold: non-numeric literals, and an int result outside BAML's i63
+/// value range (`-INT_MIN` = 2^62) - the unfolded dispatch result stands
+/// and the VM raises the catchable overflow, identical to the
+/// through-a-variable path (TIR's `fold_int` rule).
+fn negate_literal(lit: &Literal, freshness: Freshness) -> Option<Ty> {
+    // BAML ints are i63 (the VM tags the low bit).
+    const INT_MIN: i64 = -(1 << 62);
+    const INT_MAX: i64 = (1 << 62) - 1;
+    let negated = match lit {
+        Literal::Int(n) => {
+            let v = n.checked_neg()?;
+            if !(INT_MIN..=INT_MAX).contains(&v) {
+                return None;
+            }
+            Literal::Int(v)
+        }
+        Literal::Bigint(n) => Literal::Bigint(-n.clone()),
+        // The float's WRITTEN digits are preserved exactly: negation is a
+        // sign-prefix toggle, never a parse/format round trip.
+        Literal::Float(text) => Literal::Float(match text.strip_prefix('-') {
+            Some(rest) => rest.to_owned(),
+            None => format!("-{text}"),
+        }),
+        Literal::String(_) | Literal::Bool(_) => return None,
+    };
+    Some(Ty::intern(TyKind::Literal(
+        negated,
+        freshness,
+        TyAttr::default(),
+    )))
+}
+
 /// Reduction budget for the finalize-time projection pass: bounds a
 /// reduction CHAIN (`(A as I).X` -> `(B as J).Y` -> ...), the same
 /// discipline as the canonical walk's fuel. Any real chain is far
@@ -1216,7 +1250,22 @@ impl<'db> InferenceContext<'db> {
             }
             baml_compiler2_ast::UnaryOp::Neg => {
                 let ty = self.infer_expr(body, operand, &Expectation::None);
-                self.operator_or_obligation(operand, "Negate", &ty, None)
+                let dispatched = self.operator_or_obligation(operand, "Negate", &ty, None);
+                // Negative LITERAL types (ruling 2, TS parity, TIR's
+                // discipline): dispatch through `Negate` is the semantic
+                // gate above; a literal operand then constant-FOLDS to
+                // the negated literal, preserving freshness, so `-1` has
+                // type `-1`. An i63-range overflow (`-INT_MIN`) skips the
+                // fold and keeps the dispatch result - the VM throws the
+                // same catchable IntegerOverflow either way.
+                let resolved = self.table.resolve_completely(&ty);
+                if let TyKind::Literal(lit, freshness, _) = resolved.kind()
+                    && !dispatched.has_error()
+                    && let Some(folded) = negate_literal(lit, *freshness)
+                {
+                    return folded;
+                }
+                dispatched
             }
         }
     }

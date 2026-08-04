@@ -4,9 +4,9 @@ expression: report
 ---
 files: 115
 nodes compared: 60439
-agreements: 47996
+agreements: 48305
 one-sided (coverage): 206
-conflicts: 12237 across 1872 distinct pairs
+conflicts: 11928 across 1839 distinct pairs
 hir_ty error-channel entries: 2680
 tir diagnostics: 0
 panics: 0
@@ -437,7 +437,7 @@ ns_closures/closures.baml:4731..4806 `{\n    ass...7, 12]))\n}`: expected void, 
 ns_closures/closures.baml:5221..5292 `{\n    ass...(), 42))\n}`: expected void, got null
 ns_closures/closures.baml:5910..5917 `"Hello"`: expected user.closures.ClsEmployee2, got "Hello"
 ns_closures/closures.baml:5945..6029 `{\n    ass...Alice"))\n}`: expected void, got null
-ns_closures/closures.baml:6480..6482 `-1`: expected user.closures.ClsWorker, got int
+ns_closures/closures.baml:6480..6482 `-1`: expected user.closures.ClsWorker, got -1
 ns_closures/closures.baml:6590..6692 `{\n    ass...(), -1))\n}`: expected void, got null
 ns_comparable_sort/comparable_sort.baml:3978..4024 `{\n    ass...in(), 7)\n}`: expected void, got null
 ns_comparable_sort/comparable_sort.baml:4281..4341 `{\n    ass...kaboom")\n}`: expected void, got null
@@ -2715,9 +2715,6 @@ ns_yaml/yaml.baml:3792..3964 `{\n    {\n...l\n    }\n}`: expected void, got null
 [240x] hir_ty=[(a: bool, b: bool) -> bool throws never] tir=[(a: T, b: T) -> bool throws never]
     at ns_arrays/arrays.baml:5314..5330 `baml.deep_equals`
     at ns_arrays/arrays.baml:7584..7600 `baml.deep_equals`
-[157x] hir_ty=[int] tir=[-1]
-    at ns_array_rest_binding/array_rest_binding.baml:776..778 `-1`
-    at ns_array_rest_binding/array_rest_binding.baml:1076..1078 `-1`
 [145x] hir_ty=[!error] tir=[bool]
     at ns_cancel_cascade/cancel_cascade.baml:967..972 `let _`
     at ns_cancel_cascade/cancel_cascade.baml:975..990 `waiter.cancel()`
@@ -2877,9 +2874,6 @@ ns_yaml/yaml.baml:3792..3964 `{\n    {\n...l\n    }\n}`: expected void, got null
 [24x] hir_ty=[(self: baml.http.Server, handler: (req: baml.http.Request) -> baml.http.Response throws never, tls_config?: baml.http.TlsConfig | null, allow_http1?: bool, allow_http2?: bool, max_body_size?: int, max_connections?: int, header_read_timeout?: baml.time.Duration) -> never throws baml.errors.Io] tir=[(handler: (req: baml.http.Request) -> baml.http.Response throws never, tls_config?: baml.http.TlsConfig | null, allow_http1?: bool, allow_http2?: bool, max_body_size?: int, max_connections?: int, header_read_timeout?: baml.time.Duration) -> never throws baml.errors.Io]
     at ns_http_server/http_server.baml:890..902 `server.serve`
     at ns_http_server/http_server.baml:1586..1598 `server.serve`
-[24x] hir_ty=[int] tir=[-2]
-    at ns_arrays/arrays.baml:20960..20962 `-2`
-    at ns_arrays/arrays.baml:32852..32854 `-2`
 [23x] hir_ty=[!error] tir=[baml.iter.Iterator<Item = int, Error = never>]
     at ns_iter/iter.baml:230..275 `baml.iter....or = never>`
     at ns_iter/iter.baml:480..525 `baml.iter....or = never>`
@@ -3000,9 +2994,6 @@ ns_yaml/yaml.baml:3792..3964 `{\n    {\n...l\n    }\n}`: expected void, got null
 [15x] hir_ty=[() -> string throws baml.json.JsonParseError | baml.json.JsonSerializationError] tir=[() -> string throws baml.json.JsonSerializationError | baml.json.JsonParseError]
     at ns_json_auto_derive/json_auto_derive.baml:3353..3377 `array_of_int_to_json_str`
     at ns_json_auto_derive/json_auto_derive.baml:3943..3969 `array_of_c...to_json_str`
-[15x] hir_ty=[bigint] tir=[-1n]
-    at ns_bigints/bigints.baml:5376..5379 `-1n`
-    at ns_bigints/bigints.baml:10559..10562 `-1n`
 [14x] hir_ty=[(a: bool[], b: bool[]) -> bool throws never] tir=[(a: T, b: T) -> bool throws never]
     at ns_cancel_token/cancel_token.baml:1859..1875 `baml.deep_equals`
     at ns_closures/closures.baml:2227..2243 `baml.deep_equals`
@@ -3012,9 +3003,6 @@ ns_yaml/yaml.baml:3792..3964 `{\n    {\n...l\n    }\n}`: expected void, got null
 [14x] hir_ty=[(self: baml.time.Duration) -> bigint throws never] tir=[() -> bigint throws never]
     at ns_time/time.baml:3537..3588 `baml.time....illiseconds`
     at ns_time/time.baml:3706..3759 `baml.time....nanoseconds`
-[14x] hir_ty=[int | !error] tir=[int]
-    at ns_cancel_cascade/cancel_cascade.baml:1187..1194 `let got`
-    at ns_cancel_cascade/cancel_cascade.baml:1332..1335 `got`
 [14x] hir_ty=[string | !error] tir=[string]
     at ns_csv/csv_smoke.baml:4520..4528 `let step`
     at ns_csv/csv_smoke.baml:4906..4910 `step`
@@ -3033,6 +3021,9 @@ ns_yaml/yaml.baml:3792..3964 `{\n    {\n...l\n    }\n}`: expected void, got null
 [13x] hir_ty=[bool] tir=[false]
     at ns_bigints/bigints.baml:17691..17698 `5 == 5n`
     at ns_floats/floats.baml:23995..24005 `1.5 == 2.5`
+[13x] hir_ty=[int | !error] tir=[int]
+    at ns_cancel_cascade/cancel_cascade.baml:1187..1194 `let got`
+    at ns_cancel_cascade/cancel_cascade.baml:1332..1335 `got`
 [13x] hir_ty=[throws never] tir=[throws __effect_param_0]
     at ns_tagged_template_runtime/tagged_template_runtime.baml:1191..1219 `tt_parts_b..._order_main`
     at ns_tagged_template_runtime/tagged_template_runtime.baml:1703..1735 `tt_capture..._local_main`
@@ -3093,18 +3084,9 @@ ns_yaml/yaml.baml:3792..3964 `{\n    {\n...l\n    }\n}`: expected void, got null
 [11x] hir_ty=[bool] tir=[true | false]
     at ns_class_type_args_at_runtime/class_type_args_at_runtime.baml:2738..2819 `{\n    mat...,\n    }\n}`
     at ns_class_type_args_at_runtime/class_type_args_at_runtime.baml:2744..2817 `match (f) ...lse,\n    }`
-[11x] hir_ty=[float] tir=[-1.0]
-    at ns_builtins/builtins.baml:1045..1049 `-1.0`
-    at ns_floats/floats.baml:3180..3184 `-1.0`
 [11x] hir_ty=[float | !error | null] tir=[float | null]
     at ns_arrays/arrays.baml:4159..4167 `xs.at(0)`
     at ns_arrays/arrays.baml:4186..4194 `xs.at(1)`
-[11x] hir_ty=[int] tir=[-4]
-    at ns_arrays/arrays.baml:14886..14888 `-4`
-    at ns_arrays/arrays.baml:18601..18603 `-4`
-[11x] hir_ty=[int] tir=[-5]
-    at ns_arrays/sum.baml:1325..1327 `-5`
-    at ns_ints/ints.baml:2448..2450 `-5`
 [10x] hir_ty=[!error] tir=[user.enums.EnumsShape.Rectangle]
     at ns_enums/enums.baml:677..705 `{\n    Enu...ectangle\n}`
     at ns_enums/enums.baml:683..703 `EnumsShape.Rectangle`
@@ -3141,9 +3123,6 @@ ns_yaml/yaml.baml:3792..3964 `{\n    {\n...l\n    }\n}`: expected void, got null
 [10x] hir_ty=[(x: int) -> int throws never] tir=[(x: int) -> int throws E]
     at ns_arrays/arrays.baml:6734..6794 `(x: int) -...   x\n    }`
     at ns_arrays/arrays.baml:8542..8563 `(x: int) -> int { x }`
-[10x] hir_ty=[int] tir=[-3]
-    at ns_arrays/arrays.baml:29876..29878 `-3`
-    at ns_arrays/arrays.baml:31004..31006 `-3`
 [10x] hir_ty=[int] tir=[int | 1 | 2 | 3]
     at ns_exceptions/exceptions.baml:2991..3088 `{\n    s1_...3\n    }\n}`
     at ns_exceptions/exceptions.baml:2997..3086 `s1_fails_4...=> 3\n    }`
@@ -3186,10 +3165,7 @@ ns_yaml/yaml.baml:3792..3964 `{\n    {\n...l\n    }\n}`: expected void, got null
 [9x] hir_ty=[(self: baml.time.Instant) -> bigint throws never] tir=[() -> bigint throws never]
     at ns_time/time.baml:973..1045 `baml.time....nanoseconds`
     at ns_time/time.baml:1150..1222 `baml.time....nanoseconds`
-[9x] hir_ty=[float] tir=[-0.0]
-    at ns_comparable_sort/comparable_sort.baml:15893..15897 `-0.0`
-    at ns_comparable_sort/comparable_sort.baml:15990..15994 `-0.0`
-[9x] hir_ty=[int | !error] tir=[int | -1]
+[9x] hir_ty=[-1 | !error] tir=[int | -1]
     at ns_array_rest_binding/array_rest_binding.baml:642..786 `{\n    mat...1\n    }\n}`
     at ns_array_rest_binding/array_rest_binding.baml:648..784 `match ([1,...> -1\n    }`
 [9x] hir_ty=[throws "boom"] tir=[throws string]
@@ -3321,9 +3297,6 @@ ns_yaml/yaml.baml:3792..3964 `{\n    {\n...l\n    }\n}`: expected void, got null
 [7x] hir_ty=[(self: baml.time.ZonedDateTime) -> baml.time.Instant throws never] tir=[() -> baml.time.Instant throws never]
     at ns_time/datetime.baml:5683..5695 `z.to_instant`
     at ns_time/datetime.baml:6854..6913 `dt.to_zone....to_instant`
-[7x] hir_ty=[float] tir=[-1.5]
-    at ns_arrays/sum.baml:2873..2877 `-1.5`
-    at ns_floats/floats.baml:6851..6855 `-1.5`
 [7x] hir_ty=[int] tir=[1 | int]
     at ns_arrays/arrays.baml:28239..28300 `[1, 2, 3, ...c * x }, 1)`
     at ns_optional_function_parameters/optional_function_parameters.baml:2863..2908 `{\n  if (v... value }\n}`
@@ -3402,9 +3375,6 @@ ns_yaml/yaml.baml:3792..3964 `{\n    {\n...l\n    }\n}`: expected void, got null
 [6x] hir_ty=[bool] tir=[bool | true]
     at ns_arrays/arrays.baml:22913..23076 `[1, 2, 3]....\n        }`
     at ns_http_server/http_server.baml:8283..8351 `{\n    tls...e\n    }\n}`
-[6x] hir_ty=[int] tir=[-10]
-    at ns_ints/ints.baml:12904..12907 `-10`
-    at ns_ints/ints.baml:13095..13098 `-10`
 [6x] hir_ty=[int] tir=[int | -1 | -2]
     at ns_closures/closures.baml:6406..6535 `{\n  let w... -2\n  }\n}`
     at ns_closures/closures.baml:6476..6533 `run(-1) ca... => -2\n  }`
@@ -3525,9 +3495,6 @@ ns_yaml/yaml.baml:3792..3964 `{\n    {\n...l\n    }\n}`: expected void, got null
 [5x] hir_ty=[baml.panics.DivisionByZero | user.exceptions.AppError] tir=[user.exceptions.AppError | baml.panics.DivisionByZero]
     at ns_exceptions/exceptions.baml:22768..22805 `AppError |...isionByZero`
     at ns_exceptions/exceptions.baml:23232..23269 `AppError |...isionByZero`
-[5x] hir_ty=[int] tir=[-7]
-    at ns_ints/ints.baml:1167..1169 `-7`
-    at ns_ints/ints.baml:4173..4175 `-7`
 [5x] hir_ty=[never] tir=[baml.panics.Cancelled]
     at ns_cancel_cascade/cancel_cascade.baml:1224..1245 `baml.panics.Cancelled`
     at ns_cancel_cascade/cancel_cascade.baml:1894..1915 `baml.panics.Cancelled`
@@ -3759,18 +3726,9 @@ ns_yaml/yaml.baml:3792..3964 `{\n    {\n...l\n    }\n}`: expected void, got null
 [4x] hir_ty=[baml.iter.Iterator<Error = baml.csv.CsvError | baml.errors.Io, Item = user.csv.IntRow>] tir=[baml.iter.Iterator<Item = user.csv.IntRow, Error = baml.csv.CsvError | baml.errors.Io>]
     at ns_csv/csv.baml:25390..25406 `r.rows<IntRow>()`
     at ns_csv/csv.baml:32524..32540 `r.rows<IntRow>()`
-[4x] hir_ty=[bigint] tir=[-2n]
-    at ns_bigints/bigints.baml:8920..8923 `-2n`
-    at ns_bigints/bigints.baml:8934..8937 `-2n`
-[4x] hir_ty=[bigint] tir=[-7n]
-    at ns_bigints/bigints.baml:6418..6421 `-7n`
-    at ns_bigints/bigints.baml:6423..6426 `-7n`
 [4x] hir_ty=[bigint] tir=[3n]
     at ns_bigints/bigints.baml:4708..4719 `{ 1n + 2n }`
     at ns_bigints/bigints.baml:4710..4717 `1n + 2n`
-[4x] hir_ty=[float] tir=[-2.5]
-    at ns_floats/floats.baml:7899..7903 `-2.5`
-    at ns_operators/operators.baml:2916..2920 `-2.5`
 [4x] hir_ty=[float] tir=[0.30000000000000004]
     at ns_floats/floats.baml:24937..24946 `0.1 + 0.2`
     at ns_floats/floats.baml:25956..25965 `0.1 * 3.0`
@@ -3783,9 +3741,6 @@ ns_yaml/yaml.baml:3792..3964 `{\n    {\n...l\n    }\n}`: expected void, got null
 [4x] hir_ty=[int] tir=[6]
     at ns_ints/ints.baml:21343..21358 `0b1100 ^ 0b1010`
     at ns_patterns_new_runtime/patterns_new_runtime.baml:20041..20105 `{\n    mat...1\n    }\n}`
-[4x] hir_ty=[int] tir=[bigint]
-    at ns_bigints/bigints.baml:3080..3082 `-7`
-    at ns_bigints/bigints.baml:3093..3098 `2 + 3`
 [4x] hir_ty=[int] tir=[int | 10 | 20 | 30 | 40 | 99]
     at ns_exceptions/exceptions.baml:36609..36772 `s15_risky_...\n        }`
     at ns_exceptions/exceptions.baml:41048..41188 `{\n    s16...9\n    }\n}`
@@ -4122,15 +4077,9 @@ ns_yaml/yaml.baml:3792..3964 `{\n    {\n...l\n    }\n}`: expected void, got null
 [3x] hir_ty=[baml.iter.Iterator<Error = E2, Item = R>] tir=[baml.iter.Iterator<Item = int, Error = never>]
     at ns_iter/iter.baml:7870..7989 `[1, 2, 3, ...    }\n  })`
     at ns_iter/iter.baml:10750..10783 `it.map((x:... { x * 2 })`
-[3x] hir_ty=[float] tir=[-2.0]
-    at ns_floats/floats.baml:6868..6872 `-2.0`
-    at ns_floats/floats.baml:7408..7412 `-2.0`
-[3x] hir_ty=[float] tir=[-3.0]
-    at ns_floats/floats.baml:6358..6362 `-3.0`
-    at ns_floats/floats.baml:7916..7920 `-3.0`
-[3x] hir_ty=[int] tir=[-8]
-    at ns_ints/ints.baml:12028..12030 `-8`
-    at ns_time/datetime.baml:8088..8090 `-8`
+[3x] hir_ty=[int] tir=[-1]
+    at ns_exceptions/exceptions.baml:14563..14568 `0 - 1`
+    at ns_operators/operators.baml:920..925 `1 - 2`
 [3x] hir_ty=[int] tir=[1]
     at ns_operators/operators.baml:1122..1128 `10 % 3`
     at ns_operators/operators.baml:1701..1708 `10 >> 3`
@@ -4143,6 +4092,9 @@ ns_yaml/yaml.baml:3792..3964 `{\n    {\n...l\n    }\n}`: expected void, got null
 [3x] hir_ty=[int] tir=[21]
     at ns_patterns_new_runtime/patterns_new_runtime.baml:20273..20339 `{\n    mat...c\n    }\n}`
     at ns_patterns_new_runtime/patterns_new_runtime.baml:20279..20337 `match (7) ... + c\n    }`
+[3x] hir_ty=[int] tir=[bigint]
+    at ns_bigints/bigints.baml:3093..3098 `2 + 3`
+    at ns_bigints/bigints.baml:3109..3132 `bigint_nonliteral_inc()`
 [3x] hir_ty=[int] tir=[int | 99]
     at ns_arrays/sort_comparable.baml:4987..5108 `Comparable...> 99\n    }`
     at ns_exceptions/exceptions.baml:33897..33933 `s13_middle...{ _ => 99 }`
@@ -5058,6 +5010,12 @@ ns_yaml/yaml.baml:3792..3964 `{\n    {\n...l\n    }\n}`: expected void, got null
 [2x] hir_ty=[(x: user.interfaces.Ufp1Cat | user.interfaces.Ufp1Dog) -> string throws never] tir=[(x: user.interfaces.Ufp1Dog | user.interfaces.Ufp1Cat) -> string throws never]
     at ns_interfaces/interfaces_3.baml:10112..10125 `ufp1_describe`
     at ns_interfaces/interfaces_3.baml:10146..10159 `ufp1_describe`
+[2x] hir_ty=[-1 | 0 | 1] tir=[-1 | 1 | 0]
+    at ns_comparable_sort/comparable_sort.baml:7555..7695 `{\n       ...\n        }`
+    at ns_comparable_sort/comparable_sort.baml:7569..7685 `if (self.p... else { 0 }`
+[2x] hir_ty=[-1 | 0 | 1 | 2 | 3] tir=[0 | 1 | 2 | 3 | -1]
+    at ns_match_basics/match_basics.baml:15243..15348 `{\n    mat...1\n    }\n}`
+    at ns_match_basics/match_basics.baml:15249..15346 `match (n) ...> -1\n    }`
 [2x] hir_ty=[0 | 10 | 11 | 12 | 20] tir=[11 | 12 | 10 | 20 | 0]
     at ns_match_basics/match_basics.baml:5925..6126 `{\n    let...0\n    }\n}`
     at ns_match_basics/match_basics.baml:5969..6124 `match (out...=> 0\n    }`
@@ -5088,9 +5046,6 @@ ns_yaml/yaml.baml:3792..3964 `{\n    {\n...l\n    }\n}`: expected void, got null
 [2x] hir_ty=[baml.panics.DivisionByZero | user.exceptions.AppError] tir=[baml.panics.DivisionByZero]
     at ns_exceptions/exceptions.baml:24021..24058 `AppError |...isionByZero`
     at ns_exceptions/exceptions.baml:26038..26075 `AppError |...isionByZero`
-[2x] hir_ty=[bigint] tir=[-255n]
-    at ns_bigints/bigints.baml:23225..23231 `-0xFFn`
-    at ns_bigints/bigints.baml:23233..23238 `-255n`
 [2x] hir_ty=[bigint] tir=[12n]
     at ns_bigints/bigints.baml:4894..4905 `{ 3n * 4n }`
     at ns_bigints/bigints.baml:4896..4903 `3n * 4n`
@@ -5121,33 +5076,12 @@ ns_yaml/yaml.baml:3792..3964 `{\n    {\n...l\n    }\n}`: expected void, got null
 [2x] hir_ty=[bool] tir=[true | bool]
     at ns_generic_union_returns/generic_union_returns.baml:888..1047 `{\n  let p...r",\n  }\n}`
     at ns_generic_union_returns/generic_union_returns.baml:945..1045 `match (par...ever",\n  }`
-[2x] hir_ty=[float] tir=[-3.7]
-    at ns_floats/floats.baml:8099..8103 `-3.7`
-    at ns_floats/floats.baml:9514..9518 `-3.7`
 [2x] hir_ty=[float] tir=[0.3333333333333333]
     at ns_floats/floats.baml:25017..25026 `1.0 / 3.0`
     at ns_floats/floats.baml:25113..25122 `1.0 / 3.0`
 [2x] hir_ty=[float] tir=[float | -1.0]
     at ns_operators/operators.baml:17500..17580 `{\n    drv...> -1.0 }\n}`
     at ns_operators/operators.baml:17506..17578 `drv_float_...o => -1.0 }`
-[2x] hir_ty=[int] tir=[-1 | 1 | 0]
-    at ns_comparable_sort/comparable_sort.baml:7555..7695 `{\n       ...\n        }`
-    at ns_comparable_sort/comparable_sort.baml:7569..7685 `if (self.p... else { 0 }`
-[2x] hir_ty=[int] tir=[-100]
-    at ns_arrays/arrays.baml:33489..33493 `-100`
-    at ns_strings/strings.baml:6092..6096 `-100`
-[2x] hir_ty=[int] tir=[-255]
-    at ns_ints/ints.baml:20096..20101 `-0xFF`
-    at ns_ints/ints.baml:20103..20107 `-255`
-[2x] hir_ty=[int] tir=[-493]
-    at ns_ints/ints.baml:20197..20203 `-0o755`
-    at ns_ints/ints.baml:20205..20209 `-493`
-[2x] hir_ty=[int] tir=[-6]
-    at ns_strings/strings.baml:7736..7738 `-6`
-    at ns_strings/strings.baml:9882..9884 `-6`
-[2x] hir_ty=[int] tir=[0 | 1 | 2 | 3 | -1]
-    at ns_match_basics/match_basics.baml:15243..15348 `{\n    mat...1\n    }\n}`
-    at ns_match_basics/match_basics.baml:15249..15346 `match (n) ...> -1\n    }`
 [2x] hir_ty=[int] tir=[0 | 1 | 2 | 3 | int]
     at ns_match_basics/match_basics.baml:7677..7814 `{\n    let...0\n    }\n}`
     at ns_match_basics/match_basics.baml:7699..7812 `match (x) ...* 10\n    }`
@@ -7009,6 +6943,12 @@ ns_yaml/yaml.baml:3792..3964 `{\n    {\n...l\n    }\n}`: expected void, got null
     at ns_comparable_sort/comparable_sort.baml:14675..14685 `dispatch_f`
 [1x] hir_ty=[(xs: user.comparable_sort.ScorePts[]) -> user.comparable_sort.ScorePts[] throws never] tir=[(xs: T[]) -> T[] throws (T as baml.Comparable).CompareError]
     at ns_comparable_sort/comparable_sort.baml:11043..11048 `gsort`
+[1x] hir_ty=[-1 | !error] tir=[int]
+    at ns_generic_union_returns/generic_union_returns.baml:1870..1896 `empty_json...gth() ?? -1`
+[1x] hir_ty=[-4611686018427387904.0] tir=[-4611686018427388000.0]
+    at ns_floats/floats.baml:9679..9701 `-4611686018427387904.0`
+[1x] hir_ty=[-7] tir=[bigint]
+    at ns_bigints/bigints.baml:3080..3082 `-7`
 [1x] hir_ty=[0 | !error] tir=[int]
     at ns_generic_union_returns/generic_union_returns.baml:1920..1943 `metadata?.length() ?? 0`
 [1x] hir_ty=[0 | 1 | null] tir=[null | 0 | 1]
@@ -7065,14 +7005,6 @@ ns_yaml/yaml.baml:3792..3964 `{\n    {\n...l\n    }\n}`: expected void, got null
     at ns_ops_bitwise/ops_bitwise.baml:1873..1892 `band<bigint>(6n, 3)`
 [1x] hir_ty=[bigint] tir=[(bigint as baml.ops.ShiftLeft<int>).Output]
     at ns_ops_bitwise/ops_bitwise.baml:1975..1995 `bshl<bigint>(1n, 70)`
-[1x] hir_ty=[bigint] tir=[-3n]
-    at ns_bigints/bigints.baml:9598..9601 `-3n`
-[1x] hir_ty=[bigint] tir=[-5n]
-    at ns_bigints/bigints.baml:12373..12376 `-5n`
-[1x] hir_ty=[bigint] tir=[-8n]
-    at ns_bigints/bigints.baml:11288..11291 `-8n`
-[1x] hir_ty=[bigint] tir=[-99999999999999999999n]
-    at ns_bigints/bigints.baml:8312..8334 `-99999999999999999999n`
 [1x] hir_ty=[bigint] tir=[0n]
     at ns_bigints/bigints.baml:15235..15245 `15n & 240n`
 [1x] hir_ty=[bigint] tir=[1180591620717411303424n]
@@ -7089,20 +7021,8 @@ ns_yaml/yaml.baml:3792..3964 `{\n    {\n...l\n    }\n}`: expected void, got null
     at ns_is_operator/is_operator.baml:13539..13543 `bool`
 [1x] hir_ty=[bool | T] tir=[T | bool]
     at ns_generic_match_rigid/generic_match_rigid.baml:4939..4940 `x`
-[1x] hir_ty=[float] tir=[-0.0015]
-    at ns_floats/floats.baml:18418..18425 `-0.0015`
-[1x] hir_ty=[float] tir=[-0.25]
-    at ns_floats/floats.baml:17859..17864 `-0.25`
-[1x] hir_ty=[float] tir=[-0.75]
-    at ns_floats/floats.baml:8319..8324 `-0.75`
 [1x] hir_ty=[float] tir=[-18446744073709552000.0]
     at ns_floats/floats.baml:10028..10056 `-922337203...808.0 * 2.0`
-[1x] hir_ty=[float] tir=[-3.5]
-    at ns_floats/floats.baml:4395..4399 `-3.5`
-[1x] hir_ty=[float] tir=[-3.75]
-    at ns_floats/floats.baml:8301..8306 `-3.75`
-[1x] hir_ty=[float] tir=[-4611686018427388000.0]
-    at ns_floats/floats.baml:9679..9701 `-4611686018427387904.0`
 [1x] hir_ty=[float] tir=[0.25]
     at ns_operators/operators.baml:15334..15343 `1.0 / 4.0`
 [1x] hir_ty=[float] tir=[1000000000000.0]
@@ -7115,18 +7035,10 @@ ns_yaml/yaml.baml:3792..3964 `{\n    {\n...l\n    }\n}`: expected void, got null
     at ns_ops_bitwise/ops_bitwise.baml:1816..1831 `band<int>(6, 3)`
 [1x] hir_ty=[int] tir=[(int as baml.ops.ShiftLeft<int>).Output]
     at ns_ops_bitwise/ops_bitwise.baml:1917..1932 `bshl<int>(1, 4)`
-[1x] hir_ty=[int] tir=[-16]
-    at ns_ops_bitwise/ops_bitwise.baml:556..559 `-16`
-[1x] hir_ty=[int] tir=[-256]
-    at ns_operators/operators.baml:2020..2024 `-256`
-[1x] hir_ty=[int] tir=[-30]
-    at ns_time/datetime.baml:7493..7496 `-30`
-[1x] hir_ty=[int] tir=[-4611686018427387903]
-    at ns_ints/ints.baml:1625..1645 `-4611686018427387903`
-[1x] hir_ty=[int] tir=[-5 / 5]
-    at ns_operators/operators.baml:3061..3064 `--5`
-[1x] hir_ty=[int] tir=[-50]
-    at ns_match_optimization/match_optimization.baml:10646..10649 `-50`
+[1x] hir_ty=[int] tir=[-2]
+    at ns_operators/operators.baml:2700..2706 `-5 + 3`
+[1x] hir_ty=[int] tir=[-4]
+    at ns_ops_bitwise/ops_bitwise.baml:556..564 `-16 >> 2`
 [1x] hir_ty=[int] tir=[100 | int]
     at ns_arrays/arrays.baml:27901..27961 `[1, 2, 3]....+ x }, 100)`
 [1x] hir_ty=[int] tir=[11]
