@@ -879,6 +879,23 @@ impl<'db> InferenceContext<'db> {
                 self.table.add_lower_bound(*var, actual.clone());
                 true
             }
+            // A union flowing into a context decomposes universally:
+            // `A | B <: C` iff `A <: C` and `B <: C` (set semantics -
+            // sound and complete regardless of variables). Decomposing
+            // lets a VAR-CARRYING member meet the expectation instead of
+            // deferring the whole pair to the residue, where the member's
+            // variable would never receive a bound and erase (B-616: a
+            // catch arm's `?E[]` member gets `?E := int` from the return
+            // check here). Ground unions skip this arm and keep the
+            // single oracle verdict below.
+            (TyKind::Union(members, _), _) if actual.has_infer() => {
+                let members: Vec<Ty> = members.to_vec();
+                let mut ok = true;
+                for member in members {
+                    ok &= self.sub(&member, &expected);
+                }
+                ok
+            }
             // Invariant constructors: Sub decays to Eq of the pieces.
             (TyKind::Class(a_name, a_args, _), TyKind::Class(b_name, b_args, _))
                 if a_name == b_name && a_args.len() == b_args.len() =>
