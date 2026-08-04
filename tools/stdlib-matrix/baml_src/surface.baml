@@ -59,6 +59,35 @@ function last_segment(path: string) -> string {
     path.substring(cut + 1, path.length())
 }
 
+/// How a BAML type is spelled in source, given its companion class's
+/// qualified name.
+///
+/// The stdlib backs each primitive with a companion class (`class baml.String`
+/// carries `string`'s methods, `class Array<T>` carries `T[]`'s) — an
+/// implementation detail of where methods live, not a type users write. The
+/// matrix compares languages as written, so members are attributed to the
+/// spelling: `string.to_upper_case`, not `String.to_upper_case`. The table
+/// mirrors `PrimitiveType::builtin_class_path` and `head.rs`'s container
+/// normalization; anything not backing a primitive keeps its own name.
+function type_display_name(qualified: string) -> string {
+    match (qualified) {
+        "baml.Int" => "int",
+        "baml.Bigint" => "bigint",
+        "baml.Float" => "float",
+        "baml.Bool" => "bool",
+        "baml.Null" => "null",
+        "baml.String" => "string",
+        "baml.Uint8Array" => "uint8array",
+        "baml.media.Image" => "image",
+        "baml.media.Audio" => "audio",
+        "baml.media.Video" => "video",
+        "baml.media.Pdf" => "pdf",
+        "baml.Array" => "T[]",
+        "baml.Map" => "map<K, V>",
+        _ => last_segment(qualified),
+    }
+}
+
 function first_doc_line(text: string?) -> string? {
     let out: string? = null;
     if let t: string = text {
@@ -222,7 +251,7 @@ function pool_item_members(
     origin: string,
     acc: PoolAccumulator,
 ) -> void {
-    let prefix = item.name;
+    let prefix = type_display_name(strip_kind_prefix(item.id));
     let own_names: map<string, bool> = {};
 
     let fields: ExportField[] = item.fields ?? [];
@@ -273,9 +302,14 @@ function pool_item_members(
                     if (impl_method.name.includes("$")) {
                         acc.synthetic_hidden += 1;
                     } else {
+                        // Attributed as a projection, not as a direct method:
+                        // `sort` is reached through `Sortable`, and the impl's
+                        // own `for_ty` is the receiver as written (`T[]`,
+                        // `bigint`), which may be more general than the item
+                        // the impl attaches to.
                         acc.members.push(PooledMember {
                             key: apply_synonyms(match_key(impl_method.name), row.synonyms),
-                            display: `${prefix}.${impl_method.name}`,
+                            display: `(${impl_record.for_ty.display} as ${impl_record.interface}).${impl_method.name}`,
                             origin: origin,
                             static: is_static_member(impl_method.signature),
                             signature: rendered_signature(impl_method.signature),

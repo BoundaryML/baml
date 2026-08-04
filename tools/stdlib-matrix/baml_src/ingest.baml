@@ -44,6 +44,27 @@ function load_baml_surface(path: string) -> PackageExportDoc {
     doc
 }
 
+/// Reads a previously generated canonical report, for use as a comparison
+/// baseline. A file that cannot be decoded is an error, never a silent "no
+/// baseline": treating an unreadable report as absent would let `--check` pass
+/// against a corrupt or stale-format artifact.
+function load_report(path: string) -> MatrixReport {
+    let report = baml.json.to<MatrixReport>(baml.json.parse(baml.fs.read(path))) catch (_) {
+        baml.json.JsonParseError => throw baml.errors.InvalidArgument {
+            message: `${path} is not valid JSON; regenerate it with tools/stdlib-matrix/run`,
+        },
+        baml.json.JsonDecodeError => throw baml.errors.InvalidArgument {
+            message: `${path} does not match the current report model, probably written by an older tool; regenerate it with tools/stdlib-matrix/run`,
+        },
+    };
+    if (report.format_version != 1) {
+        throw baml.errors.InvalidArgument {
+            message: `${path} has report format_version ${report.format_version} (expected 1); regenerate it with tools/stdlib-matrix/run`,
+        };
+    }
+    report
+}
+
 function load_ts_surface(path: string) -> TsSurfaceDoc {
     let doc = baml.json.from_string<TsSurfaceDoc>(baml.fs.read(path));
     if (doc.format_version != 1) {

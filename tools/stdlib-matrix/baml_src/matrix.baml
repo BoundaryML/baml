@@ -95,7 +95,11 @@ function build_container_report(
     }
 }
 
-function build_matrix_report(export_doc: PackageExportDoc, ts_doc: TsSurfaceDoc) -> MatrixReport {
+function build_matrix_report(
+    export_doc: PackageExportDoc,
+    ts_doc: TsSurfaceDoc,
+    baml_surface_sha256: string,
+) -> MatrixReport {
     let rows = container_mapping();
     let uncompared_baml = uncompared_baml_surfaces();
     let uncompared_ts = uncompared_ts_surfaces();
@@ -127,9 +131,12 @@ function build_matrix_report(export_doc: PackageExportDoc, ts_doc: TsSurfaceDoc)
 
     MatrixReport {
         format_version: 1,
-        export_format_version: export_doc.format_version,
-        typescript_version: ts_doc.typescript_version,
-        types_node_version: ts_doc.types_node_version,
+        provenance: MatrixProvenance {
+            baml_surface_sha256: baml_surface_sha256,
+            export_format_version: export_doc.format_version,
+            typescript_version: ts_doc.typescript_version,
+            types_node_version: ts_doc.types_node_version,
+        },
         uncompared_baml: uncompared_baml,
         uncompared_ts: uncompared_ts,
         containers: containers,

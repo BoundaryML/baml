@@ -128,7 +128,7 @@ test "the FromJson override decodes throws and leaves string values intact" {
                     assert.equal(spec.panics.length(), 1);
                     assert.equal(spec.panics.at(0)?.display ?? "", "baml.panics.IndexOutOfBounds");
                 } else {
-                    baml.sys.panic("throws_spec missing after rename");
+                    baml.sys.panic("throws_spec missing — the FromJson override did not run");
                 }
             } else {
                 baml.sys.panic("index_of signature missing");
@@ -212,4 +212,130 @@ test "mapping gap detection flags unscoped and stale surfaces" {
     assert.equal(gaps.length(), 2);
     assert.is_true((gaps.at(0) ?? "").includes("baml"));
     assert.is_true((gaps.at(1) ?? "").includes("baml.nonexistent"));
+}
+
+// ── ratchet ─────────────────────────────────────────────────────────────────
+// Baselines are produced by the real renderer rather than hand-written, so
+// these also guard the summary table's parse/render round trip.
+
+function fixture_report_with_sha(
+    key: string,
+    matched: int,
+    baml_only: int,
+    ts_only: int,
+    sha: string,
+) -> MatrixReport {
+    MatrixReport {
+        format_version: 1,
+        provenance: MatrixProvenance {
+            baml_surface_sha256: sha,
+            export_format_version: 1,
+            typescript_version: "5.8.3-test",
+            types_node_version: null,
+        },
+        uncompared_baml: [],
+        uncompared_ts: [],
+        containers: [
+            ContainerReport {
+                key: key,
+                note: null,
+                baml_origins: ["baml.X"],
+                ts_origins: ["X"],
+                matched: matched,
+                baml_only: baml_only,
+                ts_only: ts_only,
+                synthetic_hidden: 0,
+                rows: [],
+            },
+        ],
+        totals: MatrixTotals {
+            containers: 1,
+            matched: matched,
+            baml_only: baml_only,
+            ts_only: ts_only,
+            synthetic_hidden: 0,
+        },
+    }
+}
+
+/// Same inputs every time, so a difference in counts alone leaves the report
+/// up to date — the ratchet keys on provenance, not on the body.
+function fixture_report(key: string, matched: int, baml_only: int, ts_only: int) -> MatrixReport {
+    fixture_report_with_sha(key, matched, baml_only, ts_only, "sha-unchanged")
+}
+
+test "an unchanged run is up to date and reports no deltas" {
+    let report = fixture_report("string", 10, 5, 7);
+    let comparison = compare_to_baseline(report, report);
+    assert.is_true(comparison.up_to_date);
+    assert.is_true(comparison.baseline_present);
+    assert.is_true(!comparison.body_differs);
+    assert.equal(comparison.deltas.length(), 0);
+    assert.equal(comparison.regressions.length(), 0);
+}
+
+test "a changed BAML surface makes the report stale and names the input" {
+    let baseline = fixture_report_with_sha("string", 10, 5, 7, "sha-old");
+    let now = fixture_report_with_sha("string", 9, 5, 7, "sha-new");
+    let comparison = compare_to_baseline(baseline, now);
+    assert.is_true(!comparison.up_to_date);
+    assert.equal(comparison.input_changes.length(), 1);
+    assert.is_true((comparison.input_changes.at(0) ?? "").includes("BAML stdlib surface changed"));
+    assert.equal(comparison.regressions.length(), 1);
+    assert.is_true((comparison.regressions.at(0) ?? "").includes("shrank"));
+}
+
+test "a TypeScript version bump is an input change on its own" {
+    let baseline = fixture_report("string", 10, 5, 7);
+    let now = fixture_report("string", 10, 5, 7);
+    now.provenance.typescript_version = "9.9.9-next";
+    let comparison = compare_to_baseline(baseline, now);
+    assert.is_true(!comparison.up_to_date);
+    assert.equal(comparison.input_changes.length(), 1);
+    assert.is_true((comparison.input_changes.at(0) ?? "").includes("TypeScript"));
+}
+
+test "a structure-only difference leaves the report up to date but is flagged" {
+    // Same inputs, different counts: only the tool can have changed, which a
+    // developer fixes by regenerating rather than something CI should fail on.
+    let baseline = fixture_report("string", 10, 5, 7);
+    let now = fixture_report("string", 12, 3, 5);
+    let comparison = compare_to_baseline(baseline, now);
+    assert.is_true(comparison.up_to_date);
+    assert.is_true(comparison.body_differs);
+    assert.equal(comparison.input_changes.length(), 0);
+    assert.equal(comparison.deltas.length(), 0);
+}
+
+test "dropping a container is a regression and adding one is an improvement" {
+    let baseline = fixture_report_with_sha("string", 10, 5, 7, "sha-old");
+    let now = fixture_report_with_sha("bigint", 1, 1, 1, "sha-new");
+    let comparison = compare_to_baseline(baseline, now);
+    assert.equal(comparison.regressions.length(), 1);
+    assert.is_true((comparison.regressions.at(0) ?? "").includes("no longer compared"));
+    assert.equal(comparison.improvements.length(), 1);
+    assert.is_true((comparison.improvements.at(0) ?? "").includes("newly compared"));
+}
+
+test "the canonical report round-trips through JSON" {
+    let report = fixture_report_with_sha("string", 10, 5, 7, "abc123def456789");
+    let decoded = baml.json.to<MatrixReport>(baml.json.parse(baml.json.serialize(report)));
+    assert.equal(decoded.provenance.baml_surface_sha256, "abc123def456789");
+    assert.equal(decoded.provenance.typescript_version, "5.8.3-test");
+    assert.is_true(decoded.provenance.types_node_version == null);
+    assert.equal(decoded.containers.length(), 1);
+    assert.equal(decoded.totals.matched, 10);
+    // A round-tripped report must compare equal to its source, or the ratchet
+    // would report drift on every run.
+    assert.is_true(compare_to_baseline(decoded, report).up_to_date);
+    assert.is_true(!compare_to_baseline(decoded, report).body_differs);
+}
+
+test "a missing baseline is reported, not treated as a regression" {
+    let report = fixture_report("string", 10, 5, 7);
+    let comparison = compare_to_baseline(null, report);
+    assert.is_true(!comparison.baseline_present);
+    assert.is_true(!comparison.up_to_date);
+    assert.equal(comparison.regressions.length(), 0);
+    assert.equal(comparison.deltas.length(), 0);
 }

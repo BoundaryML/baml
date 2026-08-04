@@ -212,19 +212,87 @@ class MatrixTotals {
     synthetic_hidden: int,
 }
 
-class MatrixReport {
-    format_version: int,
+/// Identifies the inputs a report was built from — the ratchet key.
+///
+/// BAML's own surface is fingerprinted by hashing the export document, not by
+/// a version or a commit. We are the team building BAML, so we run this
+/// against intermediate states — arbitrary commits, and working trees with
+/// uncommitted work — where the release version has not moved even though the
+/// stdlib has; and the git hash has the opposite problem, moving constantly
+/// for commits that never touch the stdlib. Hashing the export changes exactly
+/// when the surface changes, in every one of those states.
+///
+/// The other languages are consumed as published releases, so their surface
+/// tracks the version and a version string is the sharper, cheaper key there.
+///
+/// The hash is computed by the `run` wrapper: BAML has no hashing API.
+class MatrixProvenance {
+    baml_surface_sha256: string,
     export_format_version: int,
     typescript_version: string,
     types_node_version: string?,
+}
+
+class MatrixReport {
+    format_version: int,
+    provenance: MatrixProvenance,
     uncompared_baml: UncomparedEntry[],
     uncompared_ts: UncomparedEntry[],
     containers: ContainerReport[],
     totals: MatrixTotals,
 }
 
+// ── ratchet ─────────────────────────────────────────────────────────────────
+
+/// Per-container counts, carried in deltas so a reader sees both sides.
+class ContainerCounts {
+    key: string,
+    matched: int,
+    baml_only: int,
+    ts_only: int,
+}
+
+/// How one container's counts moved between the baseline report and this
+/// run. `status` is "added", "removed", or "changed" — unchanged containers
+/// are not recorded.
+class ContainerDelta {
+    key: string,
+    status: string,
+    baseline: ContainerCounts?,
+    current: ContainerCounts?,
+}
+
+/// The verdict of comparing a fresh run against a baseline report.
+///
+/// `up_to_date` is keyed on provenance, not on the document body: the body is
+/// expected to drift once LLM alignment lands, while the inputs are exactly
+/// what determines whether the report still describes reality. `body_differs`
+/// is advisory — with identical inputs it means the tool itself changed
+/// between the two reports, not something CI should fail on.
+class BaselineComparison {
+    up_to_date: bool,
+    baseline_present: bool,
+    body_differs: bool,
+    input_changes: string[],
+    deltas: ContainerDelta[],
+    regressions: string[],
+    improvements: string[],
+    neutral: string[],
+}
+
+class CheckResult {
+    markdown: string,
+    output_file: string,
+    json_file: string,
+    comparison: BaselineComparison,
+    report: MatrixReport,
+}
+
+/// `report` is the canonical artifact — the wrapper writes it to `json_file`,
+/// and `markdown` is a rendered view of exactly that structure.
 class MatrixResult {
     markdown: string,
     output_file: string,
+    json_file: string,
     report: MatrixReport,
 }

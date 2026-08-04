@@ -6,7 +6,10 @@ script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 tool_repo="$(cd "${script_dir}/../.." && pwd -P)"
 invocation_dir="$(pwd -P)"
 output_file="${script_dir}/report/matrix.md"
+json_file="${script_dir}/report/matrix.json"
 skip_extract=0
+check_only=0
+baseline_file=""
 
 absolute_path() {
     case "$1" in
@@ -17,15 +20,25 @@ absolute_path() {
 
 usage() {
     cat <<'EOF'
-Usage: tools/stdlib-matrix/run [--output PATH] [--skip-extract]
+Usage: tools/stdlib-matrix/run [--output PATH] [--json-output PATH]
+                               [--skip-extract] [--check --baseline PATH]
 
-Compare the BAML stdlib surface against the TypeScript stdlib and write a
-markdown matrix report (structure-only pass: deterministic name matching).
+Compare the BAML stdlib surface against the TypeScript stdlib (structure-only
+pass: deterministic name matching) and write two artifacts: report/matrix.json,
+the canonical structured report, and report/matrix.md, a rendered view of it.
 
 The data/ intermediates (BAML export IR, TS surface) are regenerated on every
 run: they are gitignored, derived from the compiler at HEAD and the
 lockfile-pinned typescript/@types/node packages. --skip-extract reuses
 existing data/ files instead.
+
+The report is not checked into the repository: it is a generated artifact.
+CI publishes matrix.json per run; locally it lands in report/ (gitignored).
+
+--check writes nothing and instead compares this run against a baseline report
+given by --baseline, exiting 1 when the baseline's recorded inputs no longer
+match the current ones — a changed BAML stdlib surface, TypeScript release, or
+export format. Exit codes: 0 up to date, 1 out of date, 2 tool error.
 EOF
 }
 
@@ -35,9 +48,21 @@ while (($# > 0)); do
             output_file="$(absolute_path "$2")"
             shift 2
             ;;
+        --json-output)
+            json_file="$(absolute_path "$2")"
+            shift 2
+            ;;
         --skip-extract)
             skip_extract=1
             shift
+            ;;
+        --check)
+            check_only=1
+            shift
+            ;;
+        --baseline)
+            baseline_file="$(absolute_path "$2")"
+            shift 2
             ;;
         -h|--help)
             usage
@@ -50,6 +75,16 @@ while (($# > 0)); do
             ;;
     esac
 done
+
+if ((check_only == 1)) && [[ -z "${baseline_file}" ]]; then
+    echo "stdlib-matrix: --check needs --baseline PATH (a previously generated matrix.json)" >&2
+    echo "Reports are CI artifacts, not checked in, so there is no default baseline." >&2
+    exit 2
+fi
+if ((check_only == 0)) && [[ -n "${baseline_file}" ]]; then
+    echo "stdlib-matrix: --baseline only applies with --check" >&2
+    exit 2
+fi
 
 baml_bin="${BAML_BIN:-${tool_repo}/baml_language/target/debug/baml-cli}"
 if [[ ! -x "${baml_bin}" ]]; then
@@ -88,33 +123,99 @@ elif [[ ! -f "${data_dir}/ts_surface.json" || ! -f "${data_dir}/baml_surface.jso
     exit 2
 fi
 
+# The ratchet keys on the BAML surface's content hash rather than a version or
+# commit, because this runs against intermediate and uncommitted states where
+# neither of those tracks the stdlib. BAML has no hashing API, so it is
+# computed here.
+if command -v shasum >/dev/null 2>&1; then
+    baml_surface_sha256="$(shasum -a 256 "${data_dir}/baml_surface.json" | cut -d' ' -f1)"
+elif command -v sha256sum >/dev/null 2>&1; then
+    baml_surface_sha256="$(sha256sum "${data_dir}/baml_surface.json" | cut -d' ' -f1)"
+else
+    echo "stdlib-matrix: neither shasum nor sha256sum is available to fingerprint the BAML surface" >&2
+    exit 2
+fi
+
+# `--baseline_file` exists only on check_matrix, so it is passed only there.
+target="build_matrix"
+target_args=()
+if ((check_only == 1)); then
+    target="check_matrix"
+    target_args=(--baseline_file "${baseline_file}")
+fi
+
 cd "${tool_repo}"
-if ! "${baml_bin}" run --output-format json --from tools/stdlib-matrix build_matrix -- \
+if ! "${baml_bin}" run --output-format json --from tools/stdlib-matrix "${target}" -- \
     --baml_surface_file "${data_dir}/baml_surface.json" \
     --ts_surface_file "${data_dir}/ts_surface.json" \
-    --output_file "${output_file}" > "${temporary_dir}/result.json"; then
+    --output_file "${output_file}" \
+    --json_file "${json_file}" \
+    --baml_surface_sha256 "${baml_surface_sha256}" \
+    ${target_args[@]+"${target_args[@]}"} > "${temporary_dir}/result.json"; then
     echo "stdlib-matrix: matrix construction failed" >&2
     exit 2
+fi
+
+if ((check_only == 1)); then
+    if [[ "$(jq -er '.comparison.baseline_present' "${temporary_dir}/result.json")" != "true" ]]; then
+        echo "stdlib-matrix: no baseline report at ${baseline_file}" >&2
+        exit 1
+    fi
+    if [[ "$(jq -er '.comparison.up_to_date' "${temporary_dir}/result.json")" == "true" ]]; then
+        echo "This run matches the baseline report (inputs unchanged)"
+        if [[ "$(jq -er '.comparison.body_differs' "${temporary_dir}/result.json")" == "true" ]]; then
+            echo "Note: the comparison differs from the baseline even though the inputs match," \
+                 "which means the tool changed between the two reports."
+        fi
+        exit 0
+    fi
+    echo "This run no longer matches the baseline report:" >&2
+    jq -r '.comparison.input_changes[] | "  input: \(.)"' "${temporary_dir}/result.json" >&2
+    jq -r '.comparison.regressions[] | "  regression: \(.)"' "${temporary_dir}/result.json" >&2
+    jq -r '.comparison.improvements[] | "  improvement: \(.)"' "${temporary_dir}/result.json" >&2
+    jq -r '.comparison.neutral[] | "  changed:     \(.)"' "${temporary_dir}/result.json" >&2
+    if [[ "$(jq -er '.comparison.body_differs' "${temporary_dir}/result.json")" == "false" ]]; then
+        echo "  the comparison itself is unchanged — only the inputs' fingerprint moved," \
+             "so the comparison is unaffected and needs no review" >&2
+    elif [[ "$(jq -er '.comparison.deltas | length' "${temporary_dir}/result.json")" == "0" ]]; then
+        echo "  (per-container counts are unchanged; the difference is in member rows)" >&2
+    fi
+    echo "Review the differences, then adopt this run's report as the new baseline." >&2
+    exit 1
 fi
 
 if ! resolved_output="$(jq -er '.output_file' "${temporary_dir}/result.json")"; then
     echo "stdlib-matrix: BAML returned an invalid result" >&2
     exit 2
 fi
-mkdir -p "$(dirname "${resolved_output}")"
-temporary_output="$(mktemp "${resolved_output}.XXXXXX")"
-if ! jq -er '.markdown' "${temporary_dir}/result.json" > "${temporary_output}"; then
-    echo "stdlib-matrix: BAML returned an invalid report" >&2
+if ! resolved_json="$(jq -er '.json_file' "${temporary_dir}/result.json")"; then
+    echo "stdlib-matrix: BAML returned an invalid result" >&2
     exit 2
 fi
-chmod 0644 "${temporary_output}"
-mv "${temporary_output}" "${resolved_output}"
-temporary_output=""
+
+# The JSON report is canonical; the markdown is a rendered view of it. Both are
+# written atomically so a failure never leaves the pair disagreeing.
+write_artifact() {
+    local destination="$1"
+    shift
+    mkdir -p "$(dirname "${destination}")"
+    temporary_output="$(mktemp "${destination}.XXXXXX")"
+    if ! jq "$@" "${temporary_dir}/result.json" > "${temporary_output}"; then
+        echo "stdlib-matrix: BAML returned an invalid report" >&2
+        exit 2
+    fi
+    chmod 0644 "${temporary_output}"
+    mv "${temporary_output}" "${destination}"
+    temporary_output=""
+}
+
+write_artifact "${resolved_json}" -e '.report'
+write_artifact "${resolved_output}" -er '.markdown'
 
 matched="$(jq -er '.report.totals.matched' "${temporary_dir}/result.json")"
 baml_only="$(jq -er '.report.totals.baml_only' "${temporary_dir}/result.json")"
 ts_only="$(jq -er '.report.totals.ts_only' "${temporary_dir}/result.json")"
 containers="$(jq -er '.report.totals.containers' "${temporary_dir}/result.json")"
 
-echo "Wrote ${resolved_output}"
+echo "Wrote ${resolved_json} (canonical) and ${resolved_output}"
 echo "${containers} containers: ${matched} matched, ${baml_only} BAML-only, ${ts_only} TS-only"

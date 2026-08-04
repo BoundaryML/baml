@@ -17,14 +17,63 @@ function build_matrix(
     baml_surface_file: string = "tools/stdlib-matrix/data/baml_surface.json",
     ts_surface_file: string = "tools/stdlib-matrix/data/ts_surface.json",
     output_file: string = "tools/stdlib-matrix/report/matrix.md",
+    json_file: string = "tools/stdlib-matrix/report/matrix.json",
+    baml_surface_sha256: string = "",
 ) -> MatrixResult {
+    if (baml_surface_sha256.length() == 0) {
+        throw baml.errors.InvalidArgument {
+            message: "baml_surface_sha256 is required — it is the ratchet key; the run wrapper computes it",
+        };
+    }
     let export_doc = load_baml_surface(baml_surface_file);
     let ts_doc = load_ts_surface(ts_surface_file);
-    let report = build_matrix_report(export_doc, ts_doc);
+    let report = build_matrix_report(export_doc, ts_doc, baml_surface_sha256);
     MatrixResult {
         markdown: render_matrix_markdown(report),
         output_file: output_file,
+        json_file: json_file,
         report: report,
+    }
+}
+
+/// Ratchet mode: build the matrix and compare it against `baseline_file` —
+/// any previously generated canonical report — without writing anything. The
+/// wrapper turns `comparison` into an exit code.
+///
+/// The baseline is supplied, never discovered: reports are CI artifacts rather
+/// than checked-in files, so there is no well-known path to compare against.
+/// CI passes the previous run's artifact; a human can pass any two reports.
+function check_matrix(
+    baml_surface_file: string = "tools/stdlib-matrix/data/baml_surface.json",
+    ts_surface_file: string = "tools/stdlib-matrix/data/ts_surface.json",
+    output_file: string = "tools/stdlib-matrix/report/matrix.md",
+    json_file: string = "tools/stdlib-matrix/report/matrix.json",
+    baml_surface_sha256: string = "",
+    baseline_file: string = "",
+) -> CheckResult {
+    if (baseline_file.length() == 0) {
+        throw baml.errors.InvalidArgument {
+            message: "baseline_file is required — pass a previously generated report to compare against",
+        };
+    }
+    let result = build_matrix(
+        baml_surface_file = baml_surface_file,
+        ts_surface_file = ts_surface_file,
+        output_file = output_file,
+        json_file = json_file,
+        baml_surface_sha256 = baml_surface_sha256,
+    );
+    let baseline: MatrixReport? = if (baml.fs.exists(baseline_file)) {
+        load_report(baseline_file)
+    } else {
+        null
+    };
+    CheckResult {
+        markdown: result.markdown,
+        output_file: output_file,
+        json_file: json_file,
+        comparison: compare_to_baseline(baseline, result.report),
+        report: result.report,
     }
 }
 
