@@ -265,11 +265,11 @@ fn member_on_interface<'db>(
         baml_compiler2_ppir::item_data::function_data(db, method).name == *name
     }) {
         let signature = crate::lower::function_signature(db, method);
-        if existential && signature_breaks_one_self(&signature) {
+        if existential && signature_breaks_one_self(signature) {
             return None;
         }
         return Some(InterfaceMember {
-            ty: instantiate_signature(&signature, &instantiation),
+            ty: instantiate_signature(signature, &instantiation),
             is_method: true,
         });
     }

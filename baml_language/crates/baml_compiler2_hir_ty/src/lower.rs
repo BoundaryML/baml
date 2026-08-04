@@ -718,8 +718,7 @@ fn extend_frame(frame: &mut Vec<ParamTy>, names: &[Name]) {
 
 // -- Item queries -------------------------------------------------------------
 
-/// A function's elaborated signature, lowered. Becomes a salsa query with
-/// the S3 incremental work.
+/// A function's elaborated signature, lowered.
 #[derive(Debug, Clone, PartialEq)]
 pub struct FunctionSignature {
     pub generic_params: Vec<ParamTy>,
@@ -886,6 +885,44 @@ pub fn interface_qualified_name<'db>(
     )
 }
 
+// SAFETY: PartialEq-driven overwrite, the CallableThrows precedent.
+#[allow(unsafe_code)]
+unsafe impl salsa::Update for FunctionSignature {
+    #[allow(unsafe_code)]
+    unsafe fn maybe_update(old_pointer: *mut Self, new_value: Self) -> bool {
+        #[allow(unsafe_code)]
+        unsafe {
+            let changed = *old_pointer != new_value;
+            if changed {
+                std::ptr::drop_in_place(old_pointer);
+                std::ptr::write(old_pointer, new_value);
+            }
+            changed
+        }
+    }
+}
+
+fn function_signature_cycle_initial<'db>(
+    _db: &'db dyn baml_compiler2_ppir::Db,
+    _id: salsa::Id,
+    _function: FunctionLoc<'db>,
+) -> FunctionSignature {
+    // The fixpoint seed for the signature/throws/inference cycle (an
+    // omitted or partial throws clause reads `callable_throws`, which
+    // runs `infer_body`, which reads the signature): a degenerate empty
+    // signature; iteration converges to the real one.
+    FunctionSignature {
+        generic_params: Vec::new(),
+        params: Vec::new(),
+        ret: Ty::error(),
+        throws: Ty::never(),
+        throws_declared: false,
+    }
+}
+
+/// TRACKED (S2/S3): the signature firewall - a body edit that leaves the
+/// signature unchanged cuts off every caller's re-inference.
+#[salsa::tracked(returns(ref), cycle_initial = function_signature_cycle_initial)]
 pub fn function_signature<'db>(
     db: &'db dyn baml_compiler2_ppir::Db,
     function: FunctionLoc<'db>,

@@ -93,15 +93,79 @@ impl Default for InferenceResult {
     }
 }
 
-/// Infers types for one body owner (function or top-level let), keyed by the
-/// S1 `BodyOwnerId` (rust-analyzer's `DefWithBodyId` shape). Lambdas are
-/// typed inside their owner's run; parameter defaults get their own
-/// inference root later. Becomes a salsa query when the incremental firewall
-/// work (S3) lands.
+// SAFETY: PartialEq-driven overwrite, the CallableThrows precedent. The
+// equality comparison IS the S3 firewall: an edit that re-executes
+// `infer_body` but reproduces the same result cuts off every downstream
+// consumer.
+#[allow(unsafe_code)]
+unsafe impl salsa::Update for InferenceResult {
+    #[allow(unsafe_code)]
+    unsafe fn maybe_update(old_pointer: *mut Self, new_value: Self) -> bool {
+        #[allow(unsafe_code)]
+        unsafe {
+            let changed = *old_pointer != new_value;
+            if changed {
+                std::ptr::drop_in_place(old_pointer);
+                std::ptr::write(old_pointer, new_value);
+            }
+            changed
+        }
+    }
+}
+
+fn infer_function_body_cycle_initial<'db>(
+    _db: &'db dyn baml_compiler2_ppir::Db,
+    _id: salsa::Id,
+    _function: baml_compiler2_hir::loc::FunctionLoc<'db>,
+) -> InferenceResult {
+    // The fixpoint seed for the signature/throws cycle
+    // (`infer_body -> function_signature -> callable_throws ->
+    // infer_body`): an empty result whose effect is `never`, consistent
+    // with `callable_throws`' own seed.
+    InferenceResult::default()
+}
+
+/// TRACKED (S2/S3): the crate's central query, per function. Inputs are
+/// span-free by construction - the ppir body, the item type refs, the
+/// body type refs, and the semantic index's structural joins (the
+/// lambda-scope map replaced the last span dependence) - and the
+/// PartialEq-driven `Update` gives downstream consumers early cutoff on
+/// unchanged results.
+#[salsa::tracked(returns(ref), cycle_initial = infer_function_body_cycle_initial)]
+fn infer_function_body<'db>(
+    db: &'db dyn baml_compiler2_ppir::Db,
+    function: baml_compiler2_hir::loc::FunctionLoc<'db>,
+) -> InferenceResult {
+    infer_body_impl(db, BodyOwnerId::Function(function))
+}
+
+/// TRACKED (S2/S3): top-level `let` bodies (no signature/throws cycle -
+/// lets declare no clause and no callers instantiate them).
+#[salsa::tracked(returns(ref))]
+fn infer_let_body<'db>(
+    db: &'db dyn baml_compiler2_ppir::Db,
+    let_binding: baml_compiler2_hir::loc::LetLoc<'db>,
+) -> InferenceResult {
+    infer_body_impl(db, BodyOwnerId::Let(let_binding))
+}
+
+/// Infers types for one body owner (function or top-level let), keyed by
+/// the S1 `BodyOwnerId` (rust-analyzer's `DefWithBodyId` shape). Lambdas
+/// are typed inside their owner's run; parameter defaults get their own
+/// inference root later. A plain dispatcher over the per-loc tracked
+/// queries (ppir's `body`/`body_scope` shape - `BodyOwnerId` is an
+/// ordinary enum, not a salsa struct).
 pub fn infer_body<'db>(
     db: &'db dyn baml_compiler2_ppir::Db,
     owner: BodyOwnerId<'db>,
-) -> InferenceResult {
+) -> &'db InferenceResult {
+    match owner {
+        BodyOwnerId::Function(function) => infer_function_body(db, function),
+        BodyOwnerId::Let(let_binding) => infer_let_body(db, let_binding),
+    }
+}
+
+fn infer_body_impl(db: &dyn baml_compiler2_ppir::Db, owner: BodyOwnerId<'_>) -> InferenceResult {
     let body = baml_compiler2_ppir::body(db, owner);
     let index = baml_compiler2_ppir::file_semantic_index(db, owner.file(db));
     let owner_scope = baml_compiler2_ppir::body_scope(db, owner).map(|s| s.file_scope_id(db));
@@ -114,8 +178,8 @@ pub fn infer_body<'db>(
             let data = baml_compiler2_ppir::item_data::elaborated_function_data(db, function);
             (
                 function_generic_frame(db, function),
-                signature.params.into_iter().map(|param| param.ty).collect(),
-                Some(signature.ret),
+                signature.params.iter().map(|param| param.ty.clone()).collect(),
+                Some(signature.ret.clone()),
                 // The owner checks its throw sites against the RAW written
                 // clause (holes preserved - a partial clause opens the
                 // contract), never the caller-facing surface, which for a
@@ -133,7 +197,6 @@ pub fn infer_body<'db>(
         .with_frame(frame)
         .with_bounds(bounds.clone());
     let type_refs = baml_compiler2_ppir::body_type_refs(db, owner);
-    let source_map = baml_compiler2_ppir::body_source_map(db, owner);
     let plain_bounds = bounds
         .into_iter()
         .map(|(param, bounds)| {
@@ -176,7 +239,6 @@ pub fn infer_body<'db>(
         param_tys,
         return_ty,
         type_refs,
-        source_map,
         plain_bounds,
     );
     ctx.declared_throws = declared_throws;
@@ -282,7 +344,6 @@ struct InferenceContext<'db> {
     current_scope: Option<FileScopeId>,
     /// Expression spans, for locating the `ScopeKind::Lambda` scope that a
     /// `Expr::Lambda` node opened (scopes are keyed by source range).
-    source_map: Option<baml_compiler2_ast::AstSourceMap>,
     /// Parameter types for each lambda scope this run has walked, deduced by
     /// `infer_lambda`; the lambda-scope analog of `param_tys`.
     lambda_params: FxHashMap<FileScopeId, Vec<Ty>>,
@@ -337,8 +398,7 @@ impl<'db> InferenceContext<'db> {
         param_tys: Vec<Ty>,
         return_ty: Option<Ty>,
         type_refs: Arc<BodyTypeRefs>,
-        source_map: Option<baml_compiler2_ast::AstSourceMap>,
-        bounds: FxHashMap<baml_type::ParamTy, Vec<baml_type::Interface>>,
+            bounds: FxHashMap<baml_type::ParamTy, Vec<baml_type::Interface>>,
     ) -> InferenceContext<'db> {
         InferenceContext {
             db,
@@ -346,7 +406,6 @@ impl<'db> InferenceContext<'db> {
             index,
             owner_scope,
             current_scope: owner_scope,
-            source_map,
             lambda_params: FxHashMap::default(),
             flow: FxHashMap::default(),
             lower,
@@ -1393,7 +1452,7 @@ impl<'db> InferenceContext<'db> {
                 let signature = function_signature(self.db, function);
                 let instantiation = self.instantiation_args(call, &signature.generic_params);
                 self.register_call_bounds(function, &instantiation, call);
-                let fn_ty = function_value_ty(&signature, &instantiation);
+                let fn_ty = function_value_ty(signature, &instantiation);
                 self.result.type_of_expr.insert(callee, fn_ty.clone());
                 return (fn_ty, false);
             }
@@ -1426,7 +1485,7 @@ impl<'db> InferenceContext<'db> {
                         .collect();
                     let own_params = signature.generic_params[class_count..].to_vec();
                     instantiation.extend(self.instantiation_args(call, &own_params));
-                    let fn_ty = function_value_ty(&signature, &instantiation);
+                    let fn_ty = function_value_ty(signature, &instantiation);
                     self.result.type_of_expr.insert(callee, fn_ty.clone());
                     return (fn_ty, false);
                 }
@@ -1486,7 +1545,7 @@ impl<'db> InferenceContext<'db> {
         let mut instantiation = candidate.class_args;
         instantiation.extend(self.instantiation_args(call, &own_params));
         self.register_call_bounds(candidate.method, &instantiation, call);
-        let fn_ty = function_value_ty(&signature, &instantiation);
+        let fn_ty = function_value_ty(signature, &instantiation);
         let bound = signature
             .params
             .first()
@@ -1521,7 +1580,7 @@ impl<'db> InferenceContext<'db> {
                 .iter()
                 .map(|param| self.fresh_generic_arg(param))
                 .collect();
-            return function_value_ty(&signature, &instantiation);
+            return function_value_ty(signature, &instantiation);
         }
         Ty::error()
     }
@@ -1579,16 +1638,15 @@ impl<'db> InferenceContext<'db> {
             .and_then(|sig| sig.throws)
             .map(|type_ref| self.lower_body_annotation(type_ref));
 
-        // The scope the lambda opened, by source range (restricted to the
-        // enclosing scope's subtree to disambiguate synthetic companions
-        // sharing a span). Registering the deduced params there is what
-        // makes the body's parameter references resolve.
-        let lambda_scope = self.source_map.as_ref().and_then(|map| {
-            let span = map.expr_span(expr);
-            match self.current_scope {
-                Some(scope) => self.index.lambda_scope_for_within(scope, span),
-                None => self.index.lambda_scope_for(span),
-            }
+        // The scope the lambda opened, via the semantic index's SPAN-FREE
+        // lambda join (keyed by the lambda expression itself). Registering
+        // the deduced params there is what makes the body's parameter
+        // references resolve.
+        let lambda_scope = self.current_scope.and_then(|scope| {
+            self.index.lambda_scope(ExprMetadataKey::new(
+                ExprMetadataScope::Body(scope),
+                expr,
+            ))
         });
         if let Some(scope) = lambda_scope {
             self.lambda_params.insert(scope, param_tys.clone());
@@ -1821,7 +1879,7 @@ impl<'db> InferenceContext<'db> {
                 .map(|param| self.fresh_generic_arg(param))
                 .collect();
             instantiation.extend(own);
-            return function_value_ty(&signature, &instantiation);
+            return function_value_ty(signature, &instantiation);
         }
         if let Some(interface_member) =
             crate::method_resolution::lookup_interface_member(self.db, &self.facts, &resolved, member)

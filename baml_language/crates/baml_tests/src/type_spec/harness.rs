@@ -560,7 +560,7 @@ fn collect_hir_ty_nodes(
             OwnerInference {
                 body,
                 source_map,
-                result: infer_body(db, owner),
+                result: infer_body(db, owner).clone(),
             },
         );
     }

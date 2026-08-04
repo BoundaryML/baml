@@ -25,7 +25,7 @@ mod tests {
                     == name
             })
             .unwrap_or_else(|| panic!("function `{name}` not found"));
-        function_signature(db, function)
+        function_signature(db, function).clone()
     }
 
     fn param_renders(signature: &FunctionSignature) -> Vec<String> {

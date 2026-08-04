@@ -212,8 +212,8 @@ cutover. "Tested by" is the merge gate for the slice.
 | --- | -------------------------------------------------------------------- | ------------------------------------------------------ |
 | S0  | Harness + engine stub: `//^ ty` checks, infer-dump snapshots, corpus | corpus red in `fixtures/pending/`, asserted to fail    |
 | S1  | HIR: unified body-owner ID + `body(owner)` queries                   | unit tests; downstream snapshots byte-identical        |
-| S2  | HIR: span-free body `TypeRefStore` + source map                      | parity with spanned annotations; snapshots identical   |
-| S3  | HIR: per-body semantic-index projections (PartialEq cutoff)          | IncrementalTestDb: comment edit re-runs nothing        |
+| S2  | DONE - inference fully span-free (lambda-scope map replaced the last span join) | corpus green under the structural join         |
+| S3  | DONE - `infer_function_body`/`infer_let_body`/`function_signature` tracked (PartialEq cutoff; per-loc dispatcher, cycle seeds) | IncrementalTestDb: signature firewall scenarios |
 | S4a | Interned recursive `Ty` (`baml_type::interned`): global hash-cons pool, `TyKind` with handle children, O(1) `TypeFlags`, plain conversions | round-trip / sharing / flags / ordering / eviction unit tests |
 | S4  | Decl lowering: `TypeRef -> Ty`, generic frames, item-sig queries     | lowering unit tests + differential vs TIR lowering     |
 | S4b | Normalize port: `NormalTy::from_interned` entry (or fork) so subtyping is native to the interned repr | ported normalize test suite; verdict parity vs plain entry |

@@ -79,6 +79,8 @@ pub struct SemanticIndexBuilder<'db> {
 
     /// Expression to lexical scope mappings, sorted by arena-safe key at the end.
     expr_scopes: Vec<(ExprMetadataKey, FileScopeId)>,
+    /// Lambda expression -> the `Lambda` scope it opened (span-free join).
+    lambda_scopes: Vec<(ExprMetadataKey, FileScopeId)>,
 
     /// Path root resolutions, sorted by arena-safe expression key at the end.
     path_resolutions: Vec<(ExprMetadataKey, PathResolution)>,
@@ -111,6 +113,7 @@ impl<'db> SemanticIndexBuilder<'db> {
             scope_stack: Vec::new(),
             class_depth: 0,
             expr_scopes: Vec::new(),
+            lambda_scopes: Vec::new(),
             path_resolutions: Vec::new(),
             expr_metadata_scope_stack: Vec::new(),
             path_root_references: Vec::new(),
@@ -180,6 +183,7 @@ impl<'db> SemanticIndexBuilder<'db> {
 
         // Sort expr_scopes for binary search
         self.expr_scopes.sort_by_key(|(key, _)| *key);
+        self.lambda_scopes.sort_by_key(|(key, _)| *key);
 
         // Sort path_resolutions for binary search
         self.path_resolutions.sort_by_key(|(key, _)| *key);
@@ -212,6 +216,7 @@ impl<'db> SemanticIndexBuilder<'db> {
         FileSemanticIndex {
             scopes: self.scopes,
             expr_scopes: self.expr_scopes,
+            lambda_scopes: self.lambda_scopes,
             scope_bindings: self.scope_bindings,
             scope_ids,
             item_scopes: self.item_scopes,
@@ -1117,8 +1122,10 @@ impl<'db> SemanticIndexBuilder<'db> {
         body: &ast::ExprBody,
         source_map: &ast::AstSourceMap,
     ) {
+        let key = self.current_expr_metadata_key(expr_id);
         self.push_scope(ScopeKind::Lambda, None, source_map.expr_span(expr_id));
         let scope_id = self.current_scope_id();
+        self.lambda_scopes.push((key, scope_id));
         for (idx, param) in lambda.params.iter().enumerate() {
             self.scope_bindings[scope_id.index() as usize]
                 .params
