@@ -4,9 +4,9 @@ expression: report
 ---
 files: 116
 nodes compared: 60529
-agreements: 51482
+agreements: 51510
 one-sided (coverage): 88
-conflicts: 8959 across 1567 distinct pairs
+conflicts: 8931 across 1561 distinct pairs
 hir_ty error-channel entries: 96
 tir diagnostics: 0
 panics: 0
@@ -116,9 +116,9 @@ ns_to_json_interface/to_json_interface.baml:1125..1207 `{\n       ...\n        }
 [691x] hir_ty=[(a: int, b: int) -> bool throws never] tir=[(a: T, b: T) -> bool throws never]
     at ns_array_rest_binding/array_rest_binding.baml:868..884 `baml.deep_equals`
     at ns_array_rest_binding/array_rest_binding.baml:1176..1192 `baml.deep_equals`
-[244x] hir_ty=[!error] tir=[string]
+[240x] hir_ty=[!error] tir=[string]
     at ns_bigints/bigints.baml:22418..22433 `42n.to_string()`
-    at ns_comparable_sort/comparable_sort.baml:4194..4215 `"caught:" + e.message`
+    at ns_comparable_sort/comparable_sort.baml:5363..5375 `self[0].name`
 [240x] hir_ty=[(a: bool, b: bool) -> bool throws never] tir=[(a: T, b: T) -> bool throws never]
     at ns_arrays/arrays.baml:5314..5330 `baml.deep_equals`
     at ns_arrays/arrays.baml:7584..7600 `baml.deep_equals`
@@ -266,9 +266,6 @@ ns_to_json_interface/to_json_interface.baml:1125..1207 `{\n       ...\n        }
 [19x] hir_ty=[string] tir=["missing" | string]
     at ns_csv/csv.baml:8514..8630 `match (com...zip,\n    }`
     at ns_csv/csv.baml:8652..8746 `match (esc...w.b,\n    }`
-[18x] hir_ty=[!error] tir=[baml.csv.CsvErrorKind]
-    at ns_csv/csv.baml:22556..22562 `e.kind`
-    at ns_csv/csv.baml:23419..23425 `e.kind`
 [18x] hir_ty=[() -> void throws !error / null] tir=[() -> void throws unknown / null]
     at ns_arrays/arrays.baml:1912..2082 `{\n    let...pected))\n}`
     at ns_arrays/arrays.baml:2115..2308 `{\n    let...pected))\n}`
@@ -305,9 +302,6 @@ ns_to_json_interface/to_json_interface.baml:1125..1207 `{\n       ...\n        }
 [16x] hir_ty=[int] tir=[0 | int]
     at ns_arrays/arrays.baml:27751..27812 `[1, 2, 3, ...c + x }, 0)`
     at ns_is_operator/is_operator.baml:14929..15007 `{\n    let...ngth() }\n}`
-[15x] hir_ty=[!error] tir=[bool]
-    at ns_fs/fs_from_rust.baml:1996..2324 `{\n    let...write:")\n}`
-    at ns_fs/fs_from_rust.baml:2287..2322 `msg.starts...to write:")`
 [15x] hir_ty=[() -> string throws baml.json.JsonParseError | baml.json.JsonSerializationError] tir=[() -> string throws baml.json.JsonSerializationError | baml.json.JsonParseError]
     at ns_json_auto_derive/json_auto_derive.baml:3353..3377 `array_of_int_to_json_str`
     at ns_json_auto_derive/json_auto_derive.baml:3943..3969 `array_of_c...to_json_str`
@@ -323,6 +317,9 @@ ns_to_json_interface/to_json_interface.baml:1125..1207 `{\n       ...\n        }
 [14x] hir_ty=[user.control_flow.Err | user.control_flow.Ok] tir=[user.control_flow.Ok | user.control_flow.Err]
     at ns_control_flow/control_flow.baml:2887..2888 `r`
     at ns_control_flow/control_flow.baml:3023..3024 `r`
+[13x] hir_ty=[!error] tir=[bool]
+    at ns_interfaces_associated_types/interfaces_associated_types.baml:8940..8961 `item.same_label(item)`
+    at ns_iter/iter.baml:956..970 `let some_large`
 [13x] hir_ty=[!error] tir=[void]
     at ns_array_rest_binding/array_rest_binding.baml:5296..5368 `if let [le...h();\n    }`
     at ns_arrays/sort_comparable.baml:4446..4592 `if let a: ...          }`
@@ -425,9 +422,6 @@ ns_to_json_interface/to_json_interface.baml:1125..1207 `{\n       ...\n        }
 [10x] hir_ty=[void | null] tir=[void]
     at ns_floats/floats.baml:21643..21696 `if (r < 0....se { null }`
     at ns_floats/floats.baml:22459..22507 `if (r < mi...se { null }`
-[9x] hir_ty=[!error] tir=[string | null]
-    at ns_csv/csv.baml:28630..28638 `e.column`
-    at ns_generic_union_returns/generic_union_returns.baml:1971..1992 `children?.at(0)?.name`
 [9x] hir_ty=["caught"] tir=[string]
     at ns_lexical_scoping/lexical_scoping.baml:4900..4901 `e`
     at ns_lexical_scoping/lexical_scoping.baml:4913..4919 `string`
@@ -461,6 +455,9 @@ ns_to_json_interface/to_json_interface.baml:1125..1207 `{\n       ...\n        }
 [8x] hir_ty=[!error] tir=[(string) -> baml.llm.Role throws never]
     at ns_prompt_tag_runtime/prompt_tag_runtime.baml:1862..1866 `role`
     at ns_prompt_tag_runtime/prompt_tag_runtime.baml:1895..1899 `role`
+[8x] hir_ty=[!error] tir=[string | null]
+    at ns_generic_union_returns/generic_union_returns.baml:1971..1992 `children?.at(0)?.name`
+    at ns_interfaces/interfaces_3.baml:11797..11804 `x?.name`
 [8x] hir_ty=["fallback"] tir=[string]
     at ns_exceptions/exceptions.baml:24004..24005 `e`
     at ns_exceptions/exceptions.baml:24077..24078 `_`
@@ -569,9 +566,6 @@ ns_to_json_interface/to_json_interface.baml:1125..1207 `{\n       ...\n        }
 [7x] hir_ty=[int] tir=[1 | int]
     at ns_arrays/arrays.baml:28239..28300 `[1, 2, 3, ...c * x }, 1)`
     at ns_optional_function_parameters/optional_function_parameters.baml:2863..2908 `{\n  if (v... value }\n}`
-[7x] hir_ty=[string | !error] tir=[string]
-    at ns_exceptions/exceptions.baml:16761..16891 `{\n    s5b...e\n    }\n}`
-    at ns_exceptions/exceptions.baml:16767..16889 `s5b_overfl...sage\n    }`
 [6x] hir_ty=[!error] tir=[() -> int throws never]
     at ns_generic_match_subtype/generic_match_subtype.baml:2537..2567 `unwrap_or(...: 0 }).area`
     at ns_generic_match_subtype/generic_match_subtype.baml:3089..3109 `unwrap_or(o, d).area`
@@ -668,6 +662,9 @@ ns_to_json_interface/to_json_interface.baml:1125..1207 `{\n       ...\n        }
 [6x] hir_ty=[string] tir=[string | "no cause found"]
     at ns_errorcontext/errorcontext.baml:1756..2079 `{\n  ec_ne...  }\n  }\n}`
     at ns_errorcontext/errorcontext.baml:1760..2077 `ec_nested_...n    }\n  }`
+[6x] hir_ty=[string | !error] tir=[string]
+    at ns_exceptions/exceptions.baml:16761..16891 `{\n    s5b...e\n    }\n}`
+    at ns_exceptions/exceptions.baml:16767..16889 `s5b_overfl...sage\n    }`
 [5x] hir_ty=[!error] tir=[(msg: string) -> string throws never]
     at ns_interfaces/interfaces.baml:8248..8259 `default.log`
     at ns_interfaces/interfaces.baml:49119..49130 `default.log`
@@ -998,6 +995,12 @@ ns_to_json_interface/to_json_interface.baml:1125..1207 `{\n       ...\n        }
 [4x] hir_ty=[never] tir=[baml.panics.NegativeBitShift]
     at ns_bigints/bigints.baml:5573..5601 `baml.panic...iveBitShift`
     at ns_bigints/bigints.baml:18747..18775 `baml.panic...iveBitShift`
+[4x] hir_ty=[string] tir=["no throw" | string]
+    at ns_arrays/sort_comparable.baml:5190..5365 `{\n       ...sage\n    }`
+    at ns_arrays/sort_comparable.baml:10192..10304 `{\n       ...sage\n    }`
+[4x] hir_ty=[string] tir=["none" | "no-throw" | string]
+    at ns_csv/csv.baml:28309..28655 `{\n    let...,\n    }\n}`
+    at ns_csv/csv.baml:28357..28653 `{\n       ...?"),\n    }`
 [4x] hir_ty=[string] tir=[string | "LOST: cause chain wiped by a stacked defer re-raise"]
     at ns_errorcontext/errorcontext.baml:11792..11997 `{\n  ec_st...  }\n  }\n}`
     at ns_errorcontext/errorcontext.baml:11796..11995 `ec_stackde...n    }\n  }`
@@ -1265,9 +1268,6 @@ ns_to_json_interface/to_json_interface.baml:1125..1207 `{\n       ...\n        }
 [3x] hir_ty=[never] tir=[user.interfaces_associated_types.CaeKaboom]
     at ns_interfaces_associated_types/interfaces_associated_types.baml:2359..2360 `e`
     at ns_interfaces_associated_types/interfaces_associated_types.baml:2372..2392 `let error: CaeKaboom`
-[3x] hir_ty=[string] tir=["no throw" | string]
-    at ns_arrays/sort_comparable.baml:5190..5365 `{\n       ...sage\n    }`
-    at ns_arrays/sort_comparable.baml:10192..10304 `{\n       ...sage\n    }`
 [3x] hir_ty=[throws "fallback"] tir=[throws string]
     at ns_exceptions/exceptions.baml:23805..23816 `s9_risky_12`
     at ns_exceptions/exceptions.baml:26661..26673 `s9c_risky_19`
@@ -1538,9 +1538,6 @@ ns_to_json_interface/to_json_interface.baml:1125..1207 `{\n       ...\n        }
 [2x] hir_ty=["negative one" | "other" | "zero"] tir=["negative one" | "zero" | "other"]
     at ns_match_basics/match_basics.baml:8269..8382 `{\n    let..."\n    }\n}`
     at ns_match_basics/match_basics.baml:8291..8380 `match (x) ...her"\n    }`
-[2x] hir_ty=["no-throw" | "none" | !error] tir=["none" | "no-throw" | string]
-    at ns_csv/csv.baml:28309..28655 `{\n    let...,\n    }\n}`
-    at ns_csv/csv.baml:28357..28653 `{\n       ...?"),\n    }`
 [2x] hir_ty=["non-positive" | "positive"] tir=["positive" | "non-positive"]
     at ns_exceptions/exceptions.baml:16614..16690 `{\n    let...itive" }\n}`
     at ns_exceptions/exceptions.baml:16639..16688 `if (y > 0)...positive" }`
@@ -2192,9 +2189,9 @@ ns_to_json_interface/to_json_interface.baml:1125..1207 `{\n       ...\n        }
 [2x] hir_ty=[string] tir=["?" | string]
     at ns_csv/csv.baml:24090..24201 `match (r.s...?"),\n    }`
     at ns_csv/csv_smoke.baml:4801..4867 `match (lin...ingify(l) }`
-[2x] hir_ty=[string] tir=["none" | "no-throw" | string]
-    at ns_csv/csv.baml:28809..29181 `{\n    let...,\n    }\n}`
-    at ns_csv/csv.baml:28909..29179 `{\n       ...nd),\n    }`
+[2x] hir_ty=[string] tir=["no error thrown" | string]
+    at ns_fs/fs_from_rust.baml:2133..2255 `{\n       ...sage\n    }`
+    at ns_fs/fs_from_rust.baml:3416..3532 `{\n       ...sage\n    }`
 [2x] hir_ty=[string] tir=["null" | string]
     at ns_csv/csv.baml:25865..25995 `match (bam....n),\n    }`
     at ns_csv/csv.baml:26011..26144 `match (bam....n),\n    }`
@@ -2369,8 +2366,6 @@ ns_to_json_interface/to_json_interface.baml:1125..1207 `{\n       ...\n        }
     at ns_arrays/sort_comparable.baml:4548..4557 `a.compare`
 [1x] hir_ty=[!error] tir=[(predicate: (int) -> bool throws E2) -> user.iter_impl_generics_only.core.Iterator<int, E2> throws never]
     at ns_iter_impl_generics_only/iter.baml:3969..4041 `user.iter_... 4]).filter`
-[1x] hir_ty=[!error] tir=[(self: baml.String, prefix: string) -> bool throws never]
-    at ns_fs/fs_from_rust.baml:2287..2302 `msg.starts_with`
 [1x] hir_ty=[!error] tir=[(self: int[]) -> int throws never]
     at ns_array_rest_binding/array_rest_binding.baml:5351..5359 `r.length`
 [1x] hir_ty=[!error] tir=[(value: U) -> U throws never]
@@ -2559,8 +2554,6 @@ ns_to_json_interface/to_json_interface.baml:1125..1207 `{\n       ...\n        }
     at ns_interfaces/interfaces.baml:15336..15342 `others`
 [1x] hir_ty=["."] tir=[string]
     at ns_for_loops/for_loops.baml:6654..6657 `"."`
-[1x] hir_ty=["?" | !error] tir=[string]
-    at ns_csv/csv.baml:28630..28645 `e.column ?? "?"`
 [1x] hir_ty=["Blue" | "Green" | "Red"] tir=["Red" | "Green" | "Blue"]
     at ns_csv/csv_smoke.baml:2284..2437 `match (r.c...\n        }`
 [1x] hir_ty=["ExtractDoc" / "input" / (client: baml.llm.Client, function_name: string, args: map<string, unknown>, prompt_closure?: ((baml.llm.Context) -> baml.llm.PromptAst throws never) | null) -> baml.http.Request throws baml.errors.InvalidArgument | baml.errors.LlmClient | baml.errors.RenderPrompt / (client: baml.llm.Client, function_name: string, args: map<string, unknown>, prompt_closure?: ((baml.llm.Context) -> baml.llm.PromptAst throws never) | null) -> baml.llm.PromptAst throws baml.errors.InvalidArgument | baml.errors.LlmClient | baml.errors.RenderPrompt / (client: baml.llm.Client, function_name: string, args: map<string, unknown>, prompt_closure?: ((baml.llm.Context) -> baml.llm.PromptAst throws never) | null) -> baml.llm.Stream<user.streaming_parsing.Doc$stream | null, user.streaming_parsing.Doc> throws baml.errors.DevOther | baml.errors.InvalidArgument | baml.errors.Io | baml.errors.LlmClient | baml.errors.RenderPrompt | baml.errors.Timeout / (json: string) -> user.streaming_parsing.Doc throws baml.errors.ParseError / (self: baml.llm.Client, sse: baml.http.SseStream) -> baml.llm.Stream<user.streaming_parsing.Doc$stream | null, user.streaming_parsing.Doc> throws baml.errors.InvalidArgument | baml.errors.LlmClient / baml.http.Request / baml.http.SseStream / baml.llm.Client / baml.llm.PromptAst / baml.llm.Stream<user.streaming_parsing.Doc$stream | null, user.streaming_parsing.Doc> / map<string, string> / string / user.streaming_parsing.Doc] tir=["ExtractDoc" / "input" / (client: baml.llm.Client, function_name: string, args: map<string, unknown>, prompt_closure?: ((baml.llm.Context) -> baml.llm.PromptAst throws never) | null) -> baml.http.Request throws baml.errors.InvalidArgument | baml.errors.LlmClient | baml.errors.RenderPrompt / (client: baml.llm.Client, function_name: string, args: map<string, unknown>, prompt_closure?: ((baml.llm.Context) -> baml.llm.PromptAst throws never) | null) -> baml.llm.PromptAst throws baml.errors.InvalidArgument | baml.errors.LlmClient | baml.errors.RenderPrompt / (client: baml.llm.Client, function_name: string, args: map<string, unknown>, prompt_closure?: ((baml.llm.Context) -> baml.llm.PromptAst throws never) | null) -> baml.llm.Stream<TStream, TFinal> throws baml.errors.DevOther | baml.errors.InvalidArgument | baml.errors.Io | baml.errors.LlmClient | baml.errors.RenderPrompt | baml.errors.Timeout / (json: string) -> TFinal throws baml.errors.ParseError / (sse: baml.http.SseStream) -> baml.llm.Stream<TStream, TFinal> throws baml.errors.InvalidArgument | baml.errors.LlmClient / baml.http.Request / baml.http.SseStream / baml.llm.Client / baml.llm.PromptAst / baml.llm.Stream<user.streaming_parsing.Doc$stream | null, user.streaming_parsing.Doc> / map<string, unknown> / string / user.streaming_parsing.Doc]
@@ -2601,10 +2594,6 @@ ns_to_json_interface/to_json_interface.baml:1125..1207 `{\n       ...\n        }
     at ns_interfaces_associated_types/interfaces_associated_types.baml:9083..9147 `if apd_hol...{ "false" }`
 [1x] hir_ty=["hello from spawn" / () -> string throws never] tir=["hello from spawn" / () -> "hello from spawn" throws unknown]
     at ns_spawn_basic/spawn_basic.baml:570..592 `{ "hello from spawn" }`
-[1x] hir_ty=["no error thrown" | !error] tir=["no error thrown" | string]
-    at ns_fs/fs_from_rust.baml:2133..2255 `{\n       ...sage\n    }`
-[1x] hir_ty=["no throw" | !error] tir=["no throw" | string]
-    at ns_comparable_sort/comparable_sort.baml:4113..4221 `{\n       ...sage\n    }`
 [1x] hir_ty=["off" | "on"] tir=["on" | "off"]
     at ns_interfaces/interfaces.baml:20138..20245 `match (s) ...off"\n    }`
 [1x] hir_ty=["one" | null / () -> void throws never] tir=["one" | null / () -> void throws unknown]
@@ -3847,8 +3836,6 @@ ns_to_json_interface/to_json_interface.baml:1125..1207 `{\n       ...\n        }
     at ns_arrays/arrays.baml:28383..28457 `["a", "b",... + x }, "")`
 [1x] hir_ty=[string] tir=["hello world"]
     at ns_operators/operators.baml:15722..15740 `"hello" + " world"`
-[1x] hir_ty=[string] tir=["no error thrown" | string]
-    at ns_fs/fs_from_rust.baml:3416..3532 `{\n       ...sage\n    }`
 [1x] hir_ty=[string] tir=[(Self as user.projection_patterns.Labeled).Label]
     at ns_projection_patterns/projection_patterns.baml:3987..3997 `Self.Label`
 [1x] hir_ty=[string] tir=[(T as user.projection_patterns.Labeled).Label]

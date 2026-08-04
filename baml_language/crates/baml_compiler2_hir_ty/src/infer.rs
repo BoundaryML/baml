@@ -2298,6 +2298,34 @@ impl<'db> InferenceContext<'db> {
         })
     }
 
+    /// The `BindingId` a pattern introduces, searched within the current
+    /// owner's scope subtree (PatIds are per-body arenas; the subtree
+    /// restriction keeps other bodies' ids apart). The reverse of
+    /// `LocalBinding.bind_pattern`, for bindings introduced by non-let
+    /// constructs (catch clauses).
+    fn binding_for_pattern(&self, pattern: baml_compiler2_ast::PatId) -> Option<BindingId> {
+        let owner = self.owner_scope?;
+        let descendants = self
+            .index
+            .scopes
+            .get(owner.index() as usize)?
+            .descendants
+            .clone();
+        let subtree = std::iter::once(owner).chain(
+            (descendants.start.index()..descendants.end.index())
+                .map(baml_compiler2_hir::scope::FileScopeId::new),
+        );
+        for scope_id in subtree {
+            let bindings = self.index.scope_bindings.get(scope_id.index() as usize)?;
+            for (index, binding) in bindings.bindings.iter().enumerate() {
+                if binding.bind_pattern == pattern {
+                    return Some(BindingId::local(scope_id, index));
+                }
+            }
+        }
+        None
+    }
+
     /// Resolves a path expression to a local binding or a parameter through
     /// the semantic index. Owner parameters come from the lowered signature;
     /// lambda parameters from the signatures `infer_lambda` deduced.
@@ -2433,8 +2461,17 @@ impl<'db> InferenceContext<'db> {
                 let outcome = self.lower_pattern(body, arm.pattern, &caught);
                 let consumes = outcome.consumes_matched;
                 let matched = outcome.matched_ty.clone();
+                // The clause binding NARROWS to the arm's matched type
+                // inside the arm body - the match-arm discipline applied
+                // to `e` (`Boom => e.m` sees `Boom`, not the caught
+                // union).
+                let entry_flow = self.flow.clone();
+                if let Some(binding) = self.binding_for_pattern(clause.binding) {
+                    self.flow.insert(binding, matched.clone());
+                }
                 self.diverges = Diverges::Maybe;
                 let arm_ty = self.infer_expr(body, arm.body, &branch_expectation);
+                self.flow = entry_flow;
                 arm_tys.push(arm_ty);
                 if consumes {
                     residual = self.subtract_narrow(&residual, &matched);
