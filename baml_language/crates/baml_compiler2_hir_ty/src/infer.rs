@@ -50,6 +50,27 @@ use crate::{
     },
 };
 
+/// The implicit `baml.spawn.SpawnParams<V, E>` a spawn's `with` chain
+/// threads (BEP-034).
+fn spawn_params_ty(value: Ty, error: Ty) -> Ty {
+    Ty::intern(TyKind::Class(
+        baml_type::TypeName::new(
+            baml_type::Name::new("baml"),
+            vec![baml_type::Name::new("spawn")],
+            baml_type::Name::new("SpawnParams"),
+        ),
+        Box::new([value, error]),
+        TyAttr::default(),
+    ))
+}
+
+fn is_spawn_params_qtn(qtn: &baml_type::TypeName) -> bool {
+    qtn.package().as_str() == "baml"
+        && qtn.namespace().len() == 1
+        && qtn.namespace()[0].as_str() == "spawn"
+        && qtn.name().as_str() == "SpawnParams"
+}
+
 /// Negate a numeric literal into the negative literal TYPE (ruling 2:
 /// `-1` is a type, TS parity). Freshness carries through. `None` skips
 /// the fold: non-numeric literals, and an int result outside BAML's i63
@@ -507,6 +528,15 @@ impl<'db> InferenceContext<'db> {
             }),
             Expr::Path(segments) => self.resolve_value_path(expr, segments),
             Expr::Index { base, index } => self.infer_index(body, expr, *base, *index, false),
+            Expr::Spawn {
+                name,
+                with_exprs,
+                body: spawn_body,
+            } => {
+                let (name, with_exprs, spawn_body) = (*name, with_exprs.clone(), *spawn_body);
+                self.infer_spawn(body, name, &with_exprs, spawn_body)
+            }
+            Expr::Await { future } => self.infer_await(body, expr, *future),
             Expr::OptionalIndex { base, index } => {
                 self.infer_index(body, expr, *base, *index, true)
             }
@@ -1257,6 +1287,129 @@ impl<'db> InferenceContext<'db> {
                     _ => unreachable!("outer match arm"),
                 };
                 self.operator_or_obligation(expr, interface, &lhs_ty, Some(&rhs_ty))
+            }
+        }
+    }
+
+    /// `spawn name? with...? { body } : Future<T, E>` (BEP-034; rustc's
+    /// async-block shape). The body arrives as a synthetic 0-arg lambda
+    /// and types through the ordinary lambda path - its OWN effect
+    /// channel (the S12 discipline) is the future's error side, read
+    /// straight off the lambda's fn type. Fresh literals widen out of
+    /// both slots. `with` transformers fold left-to-right over
+    /// `SpawnParams<T, E>`: each checks against
+    /// `(SpawnParams<cur>) -> SpawnParams<unknown, unknown>`, the
+    /// concrete input binding a generic transformer's params through
+    /// ordinary unification (TIR needs a value-ref workaround here;
+    /// inference variables make it unnecessary), and the transformer's
+    /// OUTPUT args seed the next link.
+    fn infer_spawn(
+        &mut self,
+        body: &ExprBody,
+        name: Option<ExprId>,
+        with_exprs: &[ExprId],
+        spawn_body: ExprId,
+    ) -> Ty {
+        if let Some(name_id) = name {
+            self.infer_expr(body, name_id, &Expectation::None);
+        }
+        let lambda_ty = self.infer_expr(body, spawn_body, &Expectation::None);
+        let resolved = self.table.resolve_completely(&lambda_ty);
+        let (value, error) = match resolved.kind() {
+            TyKind::Function { ret, throws, .. } => (ret.clone(), throws.clone()),
+            _ => (resolved.clone(), Ty::never()),
+        };
+        let mut cur_value = self.widen_fresh(&value);
+        let mut cur_error = self.widen_fresh(&error);
+        for &with_id in with_exprs {
+            let unknown = || Ty::intern(TyKind::Unknown {
+                attr: TyAttr::default(),
+            });
+            // The expected RETURN is `SpawnParams<unknown, unknown>`, not
+            // bare `unknown`: a non-transformer fails the check with a
+            // readable mismatch instead of coercing into the open slot.
+            let expected = Ty::intern(TyKind::Function {
+                params: Box::new([baml_type::interned::FunctionParam {
+                    name: None,
+                    ty: spawn_params_ty(cur_value.clone(), cur_error.clone()),
+                    mode: baml_type::FunctionParamMode::Required,
+                }]),
+                ret: spawn_params_ty(unknown(), unknown()),
+                throws: unknown(),
+                attr: TyAttr::default(),
+            });
+            let got = self.check_expr(body, with_id, &expected);
+            let got = self.table.resolve_completely(&got);
+            if let TyKind::Function { ret, .. } = got.kind() {
+                let ret = self.table.resolve_completely(ret);
+                if let TyKind::Class(qn, args, _) = ret.kind()
+                    && is_spawn_params_qtn(qn)
+                    && args.len() == 2
+                {
+                    cur_value = args[0].clone();
+                    cur_error = args[1].clone();
+                }
+            }
+            // Anything else already recorded its mismatch through the
+            // check; the current link carries forward.
+        }
+        Ty::intern(TyKind::Future(cur_value, cur_error, TyAttr::default()))
+    }
+
+    /// `await e : T` for `e : Future<T, E>`; `E` joins the effect
+    /// channel like any throw site. DISTRIBUTES over a union of futures
+    /// (BEP-034: `Future` is invariant, so mixed spawns join as a union
+    /// of futures, not a future of unions) - values union, each error
+    /// side contributes. `never` passes through (an unreachable await);
+    /// a still-unsolved operand is DEMANDED structurally (unified with
+    /// `Future<?V, ?E>`); a non-future records the mismatch against
+    /// `Future<unknown, unknown>` (TIR's expected render).
+    fn infer_await(&mut self, body: &ExprBody, expr: ExprId, future: ExprId) -> Ty {
+        let fut = self.infer_expr(body, future, &Expectation::None);
+        let resolved = self.table.resolve_completely(&fut);
+        match resolved.kind() {
+            TyKind::Future(value, error, _) => {
+                let (value, error) = (value.clone(), error.clone());
+                self.record_throw(expr, &error);
+                value
+            }
+            TyKind::Union(members, _)
+                if !members.is_empty()
+                    && members
+                        .iter()
+                        .all(|member| matches!(member.kind(), TyKind::Future(..))) =>
+            {
+                let mut values = Vec::new();
+                for member in members.iter() {
+                    if let TyKind::Future(value, error, _) = member.kind() {
+                        values.push(value.clone());
+                        let error = error.clone();
+                        self.record_throw(expr, &error);
+                    }
+                }
+                self.union_of(&values)
+            }
+            TyKind::Never { .. } => resolved,
+            TyKind::Infer { .. } => {
+                let value = self.table.new_var_ty();
+                let error = self.table.new_effect_var_ty();
+                let demanded =
+                    Ty::intern(TyKind::Future(value.clone(), error.clone(), TyAttr::default()));
+                let _ = self.table.unify(&resolved, &demanded);
+                self.record_throw(expr, &error);
+                value
+            }
+            _ if resolved.has_error() => resolved,
+            _ => {
+                let unknown = || Ty::intern(TyKind::Unknown {
+                    attr: TyAttr::default(),
+                });
+                let expected =
+                    Ty::intern(TyKind::Future(unknown(), unknown(), TyAttr::default()));
+                self.result
+                    .type_mismatches
+                    .insert(expr, (expected, resolved));
+                Ty::error()
             }
         }
     }
