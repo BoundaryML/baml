@@ -571,7 +571,7 @@ export function Story() {
           BAML <span>· a programming language for AI software</span>
         </a>
         <span className="l4-head-install font-mono">
-          brew install boundaryml/tap/baml
+          brew install baml
         </span>
       </header>
 
@@ -602,7 +602,7 @@ export function Story() {
               'Built to be written, read, and operated by agents as much as by you.'
             }
           </p>
-          <Terminal lines={['brew install boundaryml/tap/baml']} />
+          <Terminal lines={['brew install baml']} />
           <p className="l4-scroll-hint">scroll ↓</p>
         </div>
       </Section>
@@ -1215,7 +1215,7 @@ export function Story() {
       <Section id="close">
         <div className="l4-close">
           <h2>{'Try it'}</h2>
-          <Terminal lines={['brew install boundaryml/tap/baml']} />
+          <Terminal lines={['brew install baml']} />
           <a
             className="l4-close-link"
             href="https://new.boundaryml.com/quickstart"

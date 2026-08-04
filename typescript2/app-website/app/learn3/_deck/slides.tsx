@@ -958,7 +958,7 @@ export function getSlides(): Slide[] {
       title: 'Try it',
       node: (
         <div className="l2-close">
-          <Terminal lines={['brew install boundaryml/tap/baml']} />
+          <Terminal lines={['brew install baml']} />
           <a
             className="l2-close-link font-mono"
             href="https://new.boundaryml.com/quickstart"

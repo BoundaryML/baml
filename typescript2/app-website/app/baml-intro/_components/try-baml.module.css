@@ -133,6 +133,31 @@
   outline-offset: 2px;
 }
 
+/* host-language logos in the "call from" row, sized to match the inline svgs */
+.optBtn .logo {
+  width: 12px;
+  height: 12px;
+  object-fit: contain;
+}
+
+/* Footer on the compact unit: where to go once BAML runs. */
+.next {
+  padding: 7px 0.95rem 8px;
+  margin: 0;
+  font-size: 11px;
+  color: #6f6a63;
+  letter-spacing: 0.02em;
+  background: #f6f1e4;
+  border-top: 1px solid #e7e2d6;
+}
+.next a {
+  color: #6d28d9;
+  text-decoration: none;
+}
+.next a:hover {
+  text-decoration: underline;
+}
+
 .row {
   word-break: break-word;
   white-space: pre-wrap;
@@ -141,6 +166,13 @@
   color: #6d28d9;
 }
 .cmt {
+  color: #8a8580;
+}
+
+/* Terminal output under a command. Indented to the width of the `$ ` prompt so
+   it reads as a reply rather than another thing to run. */
+.out {
+  padding-left: 2ch;
   color: #8a8580;
 }
 
