@@ -11,6 +11,8 @@ mod explicit_type_args;
 #[cfg(test)]
 mod inference;
 #[cfg(test)]
+mod package_interface;
+#[cfg(test)]
 mod phase3a;
 mod phase3a_recursion;
 #[cfg(test)]

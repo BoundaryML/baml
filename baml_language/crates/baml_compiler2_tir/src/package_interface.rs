@@ -1,21 +1,23 @@
 //! Package interface types and resolution context.
 //!
 //! `PackageInterface` is a fully-resolved typed summary of everything a package
-//! exports — classes, enums, type aliases, functions, and throw sets.
-//! Dependent packages consume this instead of reaching into raw `ItemTree` /
-//! `TypeExpr` data.
+//! exports — classes, enums, type aliases, interfaces, functions, throw sets,
+//! and the namespace set. Dependent packages consume this instead of reaching
+//! into raw `ItemTree` / `TypeExpr` data. (Interface rows and the other slice
+//! 6a enrichments are derived but not yet consumed — resolution still walks
+//! dependency source items; the consumption rewires land in follow-up PRs.)
 //!
 //! `PackageResolutionContext` bundles a package's own `PackageItems` with its
 //! dependencies' `PackageInterface`s, providing unified lookup methods.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use baml_base::{Name, SourceFile};
 use baml_compiler2_ast::BuiltinKind;
 use baml_compiler2_hir::{
     contributions::Definition,
     file_package,
-    loc::{ClassLoc, EnumLoc, FunctionLoc, TypeAliasLoc},
+    loc::{ClassLoc, EnumLoc, FunctionLoc, InterfaceLoc, TypeAliasLoc},
     package::{PackageId, PackageItems, package_dependencies},
 };
 use rustc_hash::{FxHashMap, FxHashSet};
@@ -49,9 +51,10 @@ pub fn stdlib_honest_derivations() -> usize {
 /// Serializes with Borsh so the six stdlib packages' interfaces can be cached
 /// once per compiler build (B-694 "export data") and seeded back into a fresh
 /// database, skipping the cold re-derivation. Every leaf (`Ty`,
-/// `QualifiedTypeName`, `Name`, `FunctionParamTy`, `BuiltinKind`,
-/// `FunctionThrowSets`) is Borsh-ready; the `FxHashMap` members serialize
-/// deterministically because Borsh sorts map entries by key.
+/// `QualifiedTypeName`, `Name`, `FunctionParamTy`, `ParamTy`,
+/// `baml_type::Interface`, `BuiltinKind`, `FunctionThrowSets`) is Borsh-ready;
+/// the `FxHashMap` members serialize deterministically because Borsh sorts map
+/// entries by key, and `BTreeSet` is ordered by construction.
 #[derive(Debug, Clone, PartialEq, borsh::BorshSerialize, borsh::BorshDeserialize)]
 pub struct PackageInterface {
     /// All exported types: namespace path -> name -> `ExportedType`
@@ -60,6 +63,12 @@ pub struct PackageInterface {
     pub functions: FxHashMap<Vec<Name>, FxHashMap<Name, ExportedFunction>>,
     /// Throw sets for all functions in this package (transitive, fully inferred).
     pub throw_sets: FunctionThrowSets,
+    /// The package's *full* namespace-path set — every namespace `package_items`
+    /// resolves, whether or not it exports a type or function (the root
+    /// namespace is `[]`). A source-less consumer needs this to distinguish "a
+    /// namespace with nothing visible" from "no such namespace" (BEP-066 slice
+    /// 6a; nothing reads it yet).
+    pub namespaces: BTreeSet<Vec<Name>>,
 }
 
 /// A type exported from a package.
@@ -67,9 +76,15 @@ pub struct PackageInterface {
 pub enum ExportedType {
     Class {
         qtn: QualifiedTypeName,
-        fields: Vec<(Name, Ty)>,
+        /// Fields in declaration order: name, resolved type, and the span-free
+        /// schema attributes (`@alias`/`@description`).
+        fields: Vec<(Name, Ty, ExportedFieldAttrs)>,
         methods: Vec<ExportedFunction>,
         generic_params: Vec<ParamTy>,
+        /// Per-parameter interface-bound conjunctions, parallel to
+        /// `generic_params` (`T extends A & B` yields two entries in `T`'s
+        /// `Vec`; an unbounded parameter yields an empty one).
+        generic_param_bounds: Vec<Vec<baml_type::Interface>>,
     },
     Enum {
         qtn: QualifiedTypeName,
@@ -79,6 +94,73 @@ pub enum ExportedType {
         qtn: QualifiedTypeName,
         resolved: Ty,
     },
+    /// An interface declaration's full loc-free surface (BEP-066 slice 6a).
+    /// Derived but not yet consumed: today's resolution paths deliberately
+    /// treat these rows as absent (see `resolve_type_in_own_then_deps`) until
+    /// the dualized resolution context lands in a follow-up PR.
+    ///
+    /// Every type below is lowered at the interface's *own declaration scope*:
+    /// the declared generic parameters are rigid `TypeVar`s and `Self` is the
+    /// symbolic rigid `Self` type variable (`self_param`), so `Self.X` mentions
+    /// survive as symbolic `AssociatedTypeProjection`s a consumer realizes by
+    /// substitution.
+    Interface {
+        qtn: QualifiedTypeName,
+        /// The symbolic `Self` parameter of the interface's generic
+        /// environment — the `TypeVar` that `Self` lowers to in every type
+        /// below.
+        self_param: ParamTy,
+        /// The declared generic parameters (excluding `Self` and the
+        /// associated-type parameters).
+        generic_params: Vec<ParamTy>,
+        /// Per-parameter interface-bound conjunctions, parallel to
+        /// `generic_params`.
+        param_bounds: Vec<Vec<baml_type::Interface>>,
+        /// The transitive `requires` closure, pre-flattened and pre-realized
+        /// with argument/associated-type substitutions (symbolic `Self`,
+        /// identity generic arguments; defaults left unfilled) — see
+        /// [`crate::interfaces::interface_requires_closure_symbolic`], the
+        /// single derivation shared with the checker's closure walk.
+        requires: Vec<baml_type::Interface>,
+        /// Associated types in declaration order.
+        associated_types: Vec<ExportedAssociatedType>,
+        /// Fields in declaration order, types resolved in the interface's own
+        /// scope (the same data [`crate::interfaces::resolve_interface_fields`]
+        /// carries), plus schema attributes.
+        fields: Vec<(Name, Ty, ExportedFieldAttrs)>,
+        /// Required methods first (declaration order), then default methods
+        /// (declaration order) — `InterfaceData` splits them, so the original
+        /// interleaving is not recoverable here. Signatures keep `Self`
+        /// symbolic; a default method's `callable_throws` is the body-inferred
+        /// contract from [`crate::callable::callable_throws`], a required
+        /// method's is its declared clause (`unknown` when unwritten, matching
+        /// `signature::lower_signature`'s `Missing` slot convention).
+        methods: Vec<ExportedFunction>,
+    },
+}
+
+/// Span-free field-level schema attributes exported with a class or interface
+/// field. Mirrors emit's `extract_schema_attrs` reading of `@alias` /
+/// `@description` (malformed attributes are diagnosed at HIR validation and
+/// skipped here).
+#[derive(Debug, Clone, Default, PartialEq, borsh::BorshSerialize, borsh::BorshDeserialize)]
+pub struct ExportedFieldAttrs {
+    pub alias: Option<String>,
+    pub description: Option<String>,
+}
+
+/// An interface's associated type, exported loc-free.
+#[derive(Debug, Clone, PartialEq, borsh::BorshSerialize, borsh::BorshDeserialize)]
+pub struct ExportedAssociatedType {
+    pub name: Name,
+    /// The declared `extends` bound, realized at the interface's identity
+    /// arguments with `Self` symbolic (`None` when unbounded or not an
+    /// interface — the declaration checker owns that diagnostic).
+    pub bound: Option<baml_type::Interface>,
+    /// The declared default, lowered ONCE with symbolic `Self` — exactly what
+    /// [`crate::interfaces::interface_associated_type_default`] produces — so a
+    /// consumer realizes it by substituting its receiver and arguments.
+    pub default: Option<Ty>,
 }
 
 /// A function exported from a package (free function or method).
@@ -92,7 +174,25 @@ pub struct ExportedFunction {
     /// Function-level generic parameters, including any synthetic callback
     /// effect parameters introduced by bounded signature elaboration.
     pub generic_params: Vec<ParamTy>,
+    /// Per-parameter interface-bound conjunctions, parallel to
+    /// `generic_params` (synthetic effect parameters are unbounded, so their
+    /// entries are empty).
+    pub generic_param_bounds: Vec<Vec<baml_type::Interface>>,
     pub builtin_kind: Option<BuiltinKind>,
+    /// For a class method written in an `implements I { … }` block: `I`'s
+    /// qualified name, resolved through the constraint-head lowering
+    /// (`resolve_ref_to_interface_identity`). `None` for free functions, plain
+    /// methods, and interface methods (an interface method's owner is its
+    /// enclosing `ExportedType::Interface`).
+    pub interface_target: Option<QualifiedTypeName>,
+    /// Stable, loc-free fully-qualified identifier: `pkg.ns….name`, methods
+    /// qualified by their owner (`pkg.ns….Owner.name`) — the same dotted
+    /// rendering as MIR's `ItemRef` `Display` for `Free`/`Method`. Two
+    /// same-named methods (a plain method plus an `implements`-block one)
+    /// share this string and are disambiguated by `interface_target`; MIR's
+    /// implements-scoped symbol naming is reconstructed from the pair by the
+    /// consumer (impls-table PR).
+    pub callable_fqn: String,
 }
 
 /// The typed export surface a single file contributes to its package.
@@ -253,6 +353,13 @@ impl ExportedType {
             ),
             ExportedType::Enum { qtn, .. } => Ty::Enum(qtn.clone(), TyAttr::default()),
             ExportedType::TypeAlias { qtn, .. } => Ty::TypeAlias(qtn.clone(), TyAttr::default()),
+            // Mirrors `def_to_ty`'s Interface arm (empty args/assoc — the
+            // own-package resolution shape). Unreachable through today's
+            // resolution paths, which skip dep-interface rows until the
+            // dualized resolution context lands (BEP-066 slice 6a follow-up).
+            ExportedType::Interface { qtn, .. } => {
+                Ty::Interface(qtn.clone(), vec![], vec![], TyAttr::default())
+            }
         }
     }
 }
@@ -265,15 +372,117 @@ fn exported_function<'db>(
     name: &Name,
 ) -> ExportedFunction {
     let sig = crate::callable::function_signature_ty(db, func_loc);
+    let bounds_map = crate::lower_type_expr::function_in_scope_generic_param_bounds(db, func_loc);
     ExportedFunction {
         name: name.clone(),
         params: sig.params.clone(),
         return_type: sig.return_type.clone(),
         declared_throws: sig.declared_throws.clone(),
         callable_throws: crate::callable::callable_throws(db, func_loc).clone(),
+        generic_param_bounds: sig
+            .generic_params
+            .iter()
+            .map(|param| bounds_map.get(param).cloned().unwrap_or_default())
+            .collect(),
         generic_params: sig.generic_params.clone(),
         builtin_kind: sig.builtin_kind,
+        interface_target: method_implements_target_qtn(db, func_loc),
+        callable_fqn: callable_fqn_of(db, func_loc),
     }
+}
+
+/// The interface a class method's `implements I { … }` block targets, resolved
+/// to its qualified name through the constraint-head lowering (the arena twin
+/// `impl_data` uses). `None` for anything but an implements-block method, or
+/// when the target does not resolve to an interface (diagnosed on its own
+/// path).
+fn method_implements_target_qtn<'db>(
+    db: &'db dyn crate::Db,
+    func_loc: baml_compiler2_hir::loc::FunctionLoc<'db>,
+) -> Option<QualifiedTypeName> {
+    let target = baml_compiler2_ppir::item_data::method_interface_target(db, func_loc).as_ref()?;
+    let pkg_info = file_package::file_package(db, func_loc.file(db));
+    let pkg_items =
+        baml_compiler2_ppir::package_items(db, PackageId::new(db, pkg_info.package.clone()));
+    crate::interfaces::resolve_ref_to_interface_identity(
+        db,
+        &target.type_refs,
+        target.target,
+        pkg_items,
+        &pkg_info.namespace_path,
+    )
+    .map(|resolved| resolved.qtn)
+}
+
+/// The stable loc-free fully-qualified name for a declared callable:
+/// `pkg.ns….name`, with methods qualified by their owning class or interface
+/// (`pkg.ns….Owner.name`) — the dotted rendering MIR's `ItemRef` `Display`
+/// uses for `Free`/`Method`.
+fn callable_fqn_of<'db>(
+    db: &'db dyn crate::Db,
+    func_loc: baml_compiler2_hir::loc::FunctionLoc<'db>,
+) -> String {
+    use baml_compiler2_ppir::item_data::{MethodOwner, method_owner};
+    let pkg_info = file_package::file_package(db, func_loc.file(db));
+    let name = baml_compiler2_ppir::item_data::function_data(db, func_loc)
+        .name
+        .clone();
+    let owner = match method_owner(db, func_loc) {
+        Some(MethodOwner::Class(class_loc)) => Some(
+            baml_compiler2_ppir::item_data::class_data(db, class_loc)
+                .name
+                .clone(),
+        ),
+        Some(MethodOwner::Interface(iface_loc)) => Some(
+            baml_compiler2_ppir::item_data::interface_data(db, iface_loc)
+                .name
+                .clone(),
+        ),
+        // Free-impl methods are not exported through the fragments; if one
+        // reaches here it renders unqualified (the impls-table PR owns them).
+        Some(MethodOwner::FreeImpl(_)) | None => None,
+    };
+    dotted_fqn(
+        &pkg_info.package,
+        &pkg_info.namespace_path,
+        owner.as_ref(),
+        &name,
+    )
+}
+
+/// `pkg.ns….[owner.]name` — one join for every `callable_fqn` producer.
+fn dotted_fqn(package: &Name, namespace: &[Name], owner: Option<&Name>, name: &Name) -> String {
+    let mut parts: Vec<&str> = Vec::with_capacity(namespace.len() + 3);
+    parts.push(package.as_str());
+    parts.extend(namespace.iter().map(Name::as_str));
+    if let Some(owner) = owner {
+        parts.push(owner.as_str());
+    }
+    parts.push(name.as_str());
+    parts.join(".")
+}
+
+/// Extract the span-free `@alias`/`@description` schema attributes from a
+/// field's HIR attributes — the same reading as emit's `extract_schema_attrs`
+/// (invalid usage is diagnosed at HIR validation; malformed entries are
+/// skipped).
+fn exported_field_attrs(attrs: &[baml_compiler2_hir::item_tree::Attribute]) -> ExportedFieldAttrs {
+    let mut out = ExportedFieldAttrs::default();
+    for attr in attrs {
+        match attr.name.as_str() {
+            "description" | "alias" if attr.args.len() == 1 => {
+                let value =
+                    baml_compiler2_ast::parse_string_attr_value(attr.args[0].value.as_str());
+                if attr.name.as_str() == "description" {
+                    out.description = value;
+                } else {
+                    out.alias = value;
+                }
+            }
+            _ => {}
+        }
+    }
+    out
 }
 
 // ── Per-item lowering helpers ──────────────────────────────────────────────
@@ -310,7 +519,11 @@ fn lower_class_export<'db>(
             &field_scope,
             &mut diags,
         );
-        fields.push((field.name.clone(), field_ty));
+        fields.push((
+            field.name.clone(),
+            field_ty,
+            exported_field_attrs(&field.attributes),
+        ));
     }
 
     // Lower methods
@@ -320,12 +533,20 @@ fn lower_class_export<'db>(
         methods.push(exported_function(db, method_loc, &method_data.name));
     }
 
+    let generic_params = class_generic_env.params().to_vec();
+    let bounds_map = crate::lower_type_expr::class_generic_param_bounds(db, class_loc);
+    let generic_param_bounds = generic_params
+        .iter()
+        .map(|param| bounds_map.get(param).cloned().unwrap_or_default())
+        .collect();
+
     let qtn = qualify_def(db, Definition::Class(class_loc), name);
     ExportedType::Class {
         qtn,
         fields,
         methods,
-        generic_params: class_generic_env.params().to_vec(),
+        generic_params,
+        generic_param_bounds,
     }
 }
 
@@ -377,6 +598,185 @@ fn lower_alias_export<'db>(
     ExportedType::TypeAlias { qtn, resolved }
 }
 
+/// Lower an interface definition into its `ExportedType::Interface` (BEP-066
+/// slice 6a). Reuses the declaration-scope substrate `interfaces.rs` already
+/// maintains — nothing here lowers a `TypeRef` on its own:
+///
+/// - `requires`: [`crate::interfaces::interface_requires_closure_symbolic`]
+///   (the closure walker at identity arguments, symbolic `Self`);
+/// - associated types: [`crate::interfaces::interface_associated_type_default`]
+///   for defaults, [`associated_type_declared_bound`] for bounds — both keep
+///   `Self` symbolic;
+/// - fields: [`crate::interfaces::resolve_interface_fields`];
+/// - methods: [`crate::interfaces::resolve_interface_required_methods`] and
+///   [`crate::interfaces::resolve_interface_default_methods`].
+///
+/// [`associated_type_declared_bound`]: crate::builder::associated_projection::associated_type_declared_bound
+fn lower_interface_export<'db>(
+    db: &'db dyn crate::Db,
+    iface_loc: InterfaceLoc<'db>,
+    name: &Name,
+) -> ExportedType {
+    let iface = baml_compiler2_ppir::item_data::interface_data(db, iface_loc);
+    let qtn = qualify_def(db, Definition::Interface(iface_loc), name);
+
+    let env = crate::generic_env::interface_generic_env(db, iface_loc);
+    let (self_param, declared_params) = env.interface_param_parts();
+    let self_param = self_param.clone();
+    let generic_params = declared_params.to_vec();
+    let identity_args: Vec<Ty> = generic_params
+        .iter()
+        .map(|p| Ty::TypeVar(p.clone(), TyAttr::default()))
+        .collect();
+
+    let bounds_map = crate::lower_type_expr::interface_generic_param_bounds(db, iface_loc);
+    let param_bounds: Vec<Vec<baml_type::Interface>> = generic_params
+        .iter()
+        .map(|param| bounds_map.get(param).cloned().unwrap_or_default())
+        .collect();
+
+    let requires = crate::interfaces::interface_requires_closure_symbolic(db, iface_loc);
+
+    // The interface at its identity instantiation (no pins) — the qualifier
+    // `associated_type_declared_bound` realizes each bound against.
+    let identity_iface = baml_type::Interface::new(qtn.clone(), identity_args, Vec::new());
+    let associated_types = iface
+        .associated_types
+        .iter()
+        .map(|assoc| ExportedAssociatedType {
+            name: assoc.name.clone(),
+            bound: assoc.bound.and_then(|_| {
+                crate::builder::associated_projection::associated_type_declared_bound(
+                    db,
+                    &identity_iface,
+                    &assoc.name,
+                )
+                .into_iter()
+                .next()
+            }),
+            default: crate::interfaces::interface_associated_type_default(
+                db,
+                iface_loc,
+                assoc.name.clone(),
+            )
+            .map(|(ty, _diags)| ty),
+        })
+        .collect();
+
+    // `resolve_interface_fields` lowers `iface.fields` in order, so the two
+    // run parallel. Class-field AST lowering hoists `@alias`/`@description`
+    // off the outer type expression into `FieldData::attributes`; the
+    // interface-field lowering does not, leaving them on the field's outer
+    // `TypeRef` — read both homes so the export is complete either way.
+    let fields = crate::interfaces::resolve_interface_fields(db, iface_loc)
+        .fields
+        .iter()
+        .zip(&iface.fields)
+        .map(|((field_name, ty, attrs), field_data)| {
+            let mut exported = exported_field_attrs(attrs);
+            let type_attrs = exported_field_attrs(&iface.type_refs[field_data.type_ref].attrs);
+            exported.alias = exported.alias.or(type_attrs.alias);
+            exported.description = exported.description.or(type_attrs.description);
+            (field_name.clone(), ty.clone(), exported)
+        })
+        .collect();
+
+    // Required methods first, then default methods — each list in declaration
+    // order (`InterfaceData` splits them; the original interleaving is lost).
+    let mut methods = Vec::new();
+    let resolved_required = crate::interfaces::resolve_interface_required_methods(db, iface_loc);
+    for (sig, resolved) in iface.required_methods.iter().zip(resolved_required) {
+        // A required method has no body: its effective throws contract is its
+        // declared clause (`unknown` when unwritten — `lower_signature`'s
+        // `Missing` slot convention, which `function_ty` already encodes).
+        if let Some(exported) =
+            exported_interface_method(&qtn, resolved, sig.throws.is_some(), None, None)
+        {
+            methods.push(exported);
+        }
+    }
+    let resolved_default = crate::interfaces::resolve_interface_default_methods(db, iface_loc);
+    for (&func_loc, resolved) in iface.default_methods.iter().zip(resolved_default) {
+        let declared_throws_written =
+            baml_compiler2_ppir::item_data::elaborated_function_data(db, func_loc)
+                .throws
+                .is_some();
+        // A default method has a body: pair the symbolic signature with the
+        // same effective-throws oracle every exported function carries.
+        let callable_throws = crate::callable::callable_throws(db, func_loc).clone();
+        let builtin_kind = crate::callable::function_signature_ty(db, func_loc).builtin_kind;
+        if let Some(exported) = exported_interface_method(
+            &qtn,
+            resolved,
+            declared_throws_written,
+            Some(callable_throws),
+            builtin_kind,
+        ) {
+            methods.push(exported);
+        }
+    }
+
+    ExportedType::Interface {
+        qtn,
+        self_param,
+        generic_params,
+        param_bounds,
+        requires,
+        associated_types,
+        fields,
+        methods,
+    }
+}
+
+/// Repackage a [`ResolvedInterfaceMethod`](crate::interfaces::ResolvedInterfaceMethod)
+/// (symbolic-`Self` declaration surface) as an [`ExportedFunction`].
+/// `callable_throws` is `None` for a required method (the declared clause *is*
+/// the contract) and the body-inferred oracle value for a default method.
+/// `None` only if the resolved surface is not a `Ty::Function` (an internal
+/// invariant break — the row is dropped rather than fabricated).
+fn exported_interface_method(
+    iface_qtn: &QualifiedTypeName,
+    resolved: &crate::interfaces::ResolvedInterfaceMethod,
+    declared_throws_written: bool,
+    callable_throws: Option<Ty>,
+    builtin_kind: Option<BuiltinKind>,
+) -> Option<ExportedFunction> {
+    let Ty::Function {
+        params,
+        ret,
+        throws,
+        ..
+    } = &resolved.function_ty
+    else {
+        return None;
+    };
+    Some(ExportedFunction {
+        name: resolved.name.clone(),
+        params: params.clone(),
+        return_type: (**ret).clone(),
+        declared_throws: declared_throws_written.then(|| (**throws).clone()),
+        callable_throws: callable_throws.unwrap_or_else(|| (**throws).clone()),
+        generic_params: resolved
+            .generic_params
+            .iter()
+            .map(|(param, _)| param.clone())
+            .collect(),
+        generic_param_bounds: resolved
+            .generic_params
+            .iter()
+            .map(|(_, bounds)| bounds.clone())
+            .collect(),
+        builtin_kind,
+        interface_target: None,
+        callable_fqn: dotted_fqn(
+            iface_qtn.package(),
+            iface_qtn.namespace(),
+            Some(iface_qtn.name()),
+            &resolved.name,
+        ),
+    })
+}
+
 /// Lower a free-function definition into its `ExportedFunction`.
 fn lower_function_export<'db>(
     db: &'db dyn crate::Db,
@@ -418,9 +818,9 @@ pub fn file_interface_fragment(db: &dyn crate::Db, file: SourceFile) -> FileInte
     // Structural exports, keyed by `Name` with keep-first semantics. A file's
     // *first* contribution of a name is the one `namespace_items` would elect as
     // `contribs[0]` when this is the winning file, so this reproduces the
-    // resolver's within-file choice exactly. A first contribution that is not a
-    // Class/Enum/TypeAlias (e.g. an interface) still *claims* the name — leaving
-    // no structural export — matching the reference derivation's `_ => continue`.
+    // resolver's within-file choice exactly. A first contribution of any other
+    // definition kind still *claims* the name — leaving no structural export —
+    // matching the reference derivation's `_ => continue`.
     let mut types: FxHashMap<Name, ExportedType> = FxHashMap::default();
     let mut claimed_types: FxHashSet<Name> = FxHashSet::default();
     for (name, contrib) in &contributions.types {
@@ -431,6 +831,7 @@ pub fn file_interface_fragment(db: &dyn crate::Db, file: SourceFile) -> FileInte
             Definition::Class(class_loc) => lower_class_export(db, pkg_items, class_loc, name),
             Definition::Enum(enum_loc) => lower_enum_export(db, enum_loc, name),
             Definition::TypeAlias(ta_loc) => lower_alias_export(db, pkg_items, ta_loc, name),
+            Definition::Interface(iface_loc) => lower_interface_export(db, iface_loc, name),
             _ => continue,
         };
         types.insert(name.clone(), exported);
@@ -526,11 +927,18 @@ fn fold_package_interface<'db>(db: &'db dyn crate::Db, pkg_id: PackageId<'db>) -
         }
     }
 
+    // The FULL namespace set — every namespace `package_items` resolves,
+    // including ones with no exported type or function. `BTreeSet` for a
+    // deterministic (and borsh-stable) order regardless of the map's hash
+    // iteration.
+    let namespaces: BTreeSet<Vec<Name>> = pkg_items.namespaces.keys().cloned().collect();
+
     let throw_sets = function_throw_sets(db, pkg_id);
     PackageInterface {
         types,
         functions,
         throw_sets: throw_sets.clone(),
+        namespaces,
     }
 }
 
@@ -626,7 +1034,14 @@ impl<'db> PackageResolutionContext<'db> {
             for (dep_name, dep_iface) in &self.dep_interfaces {
                 if &path[0] == dep_name {
                     if let Some(exported) = dep_iface.lookup_type(&path[1..path.len() - 1], item) {
-                        return Some((ResolvedSource::Builtin, exported.to_ty()));
+                        // Interface rows are exported (BEP-066 slice 6a) but not
+                        // yet consumable through this path — treat them exactly
+                        // as the pre-export derivation did (absent), preserving
+                        // resolution byte-for-byte until the dualized resolution
+                        // context lands in a follow-up PR.
+                        if !matches!(exported, ExportedType::Interface { .. }) {
+                            return Some((ResolvedSource::Builtin, exported.to_ty()));
+                        }
                     }
                 }
             }
@@ -647,7 +1062,11 @@ impl<'db> PackageResolutionContext<'db> {
         }
         for (_dep_name, dep_iface) in &self.dep_interfaces {
             if let Some(exported) = dep_iface.lookup_type(namespace, item) {
-                return Some((ResolvedSource::Builtin, exported.to_ty()));
+                // See the interface-row guard in `resolve_type`: exported but
+                // deliberately invisible here until consumption lands.
+                if !matches!(exported, ExportedType::Interface { .. }) {
+                    return Some((ResolvedSource::Builtin, exported.to_ty()));
+                }
             }
         }
         None
