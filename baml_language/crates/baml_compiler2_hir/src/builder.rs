@@ -764,8 +764,13 @@ impl<'db> SemanticIndexBuilder<'db> {
         // at the end of this function.
         let enclosing_lambda = self.lambda_stack.last().copied();
 
+        // Span-free scope join, keyed by the template expression — the same
+        // registration `walk_lambda_expr` does for real lambdas, so type
+        // inference can enter this scope without spans.
+        let key = self.current_expr_metadata_key(expr_id);
         self.push_scope(ScopeKind::Lambda, None, source_map.expr_span(expr_id));
         let scope_id = self.current_scope_id();
+        self.lambda_scopes.push((key, scope_id));
         // Mark this as a synthetic template body: it is a Lambda scope for
         // capture-analysis purposes, but TIR types its body inline in the
         // enclosing scope, so `inference_owner_scope` must climb past it.

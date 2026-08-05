@@ -437,6 +437,13 @@ struct InferenceContext<'db> {
     /// callee throws accumulate into the top. The bottom entry is the
     /// owner's channel; lambdas and `catch` bases push their own.
     throws_channels: Vec<Vec<Ty>>,
+    /// Name-visible parameters of enclosing tagged-template bodies (the
+    /// tag's `body` lambda params, e.g. `prompt`'s `role`/`ctx`). A stack
+    /// frame per nested template; the semantic index cannot register these
+    /// as bindings (the tag is a cross-file item, resolving it during the
+    /// index walk would cycle), so path resolution consults this instead -
+    /// TIR's `template_body_params`, name-keyed.
+    template_params: Vec<FxHashMap<baml_type::Name, Ty>>,
     table: InferenceTable,
     /// The irreducible `Sub` residue: pairs that were neither ground nor
     /// var-headed nor decomposable when emitted; re-examined at finish once
@@ -476,6 +483,7 @@ impl<'db> InferenceContext<'db> {
             declared_throws: None,
             declared_throws_open: false,
             throws_channels: vec![Vec::new()],
+            template_params: Vec::new(),
             table: InferenceTable::new(),
             deferred_subs: Vec::new(),
             obligations: Vec::new(),
@@ -669,6 +677,68 @@ impl<'db> InferenceContext<'db> {
                     }
                 }
             }
+            Expr::Template { tag, .. } => match tag {
+                baml_compiler2_ast::TemplateTag::Default { elaborated } => {
+                    // Untagged backtick (BEP-049 §11): the value IS the
+                    // desugared `string.from`-wrapped `+` concat, which
+                    // types every `${expr}` in place on its original span.
+                    self.infer_expr(body, *elaborated, &Expectation::None)
+                }
+                baml_compiler2_ast::TemplateTag::Custom { tag, body: flatten } => {
+                    // Tagged template (BEP-049 §10): the result is the TAG
+                    // fn's return type (`prompt` yields the `(Context) ->
+                    // PromptAst` render closure). The desugared flatten
+                    // block types under the template's synthetic Lambda
+                    // scope with the tag's body-lambda params name-visible;
+                    // its effects and divergence stay the deferred
+                    // closure's, not the enclosing function's - the
+                    // `infer_lambda` discipline.
+                    let tag_ty = self.infer_expr(body, *tag, &Expectation::None);
+                    let resolved = self.table.resolve_completely(&tag_ty);
+                    let (result, frame) = match resolved.kind() {
+                        TyKind::Function { params, ret, .. } => {
+                            let mut frame = FxHashMap::default();
+                            if let Some(first) = params.first()
+                                && let TyKind::Function {
+                                    params: body_params,
+                                    ..
+                                } = first.ty.kind()
+                            {
+                                for param in body_params.iter() {
+                                    if let Some(name) = &param.name {
+                                        frame.insert(name.clone(), param.ty.clone());
+                                    }
+                                }
+                            }
+                            (ret.clone(), frame)
+                        }
+                        _ => (Ty::error(), FxHashMap::default()),
+                    };
+                    let template_scope = self.current_scope.and_then(|scope| {
+                        self.index.lambda_scope(ExprMetadataKey::new(
+                            ExprMetadataScope::Body(scope),
+                            expr,
+                        ))
+                    });
+                    let saved_scope = self.current_scope;
+                    if template_scope.is_some() {
+                        self.current_scope = template_scope;
+                    }
+                    self.template_params.push(frame);
+                    self.throws_channels.push(Vec::new());
+                    let saved_diverges =
+                        std::mem::replace(&mut self.diverges, Diverges::Maybe);
+                    self.infer_expr(body, *flatten, &Expectation::None);
+                    self.diverges = saved_diverges;
+                    // The tag's `body` param declares the flatten block's
+                    // effect contract (`throws never` for `prompt`); the
+                    // contract diagnostic is S17's, so the channel drops.
+                    self.throws_channels.pop();
+                    self.template_params.pop();
+                    self.current_scope = saved_scope;
+                    result
+                }
+            },
             Expr::Array { elements } => {
                 // With an expected element type, elements are CHECKED against
                 // it; otherwise they synthesize and JOIN (fresh literals
@@ -1834,6 +1904,9 @@ impl<'db> InferenceContext<'db> {
     fn infer_callee(&mut self, body: &ExprBody, call: ExprId, callee: ExprId) -> (Ty, bool) {
         if let Expr::Path(segments) = &body.exprs[callee]
             && !self.path_resolves_locally(callee)
+            && !segments
+                .first()
+                .is_some_and(|root| self.template_param_root(root))
         {
             // A path that names a function is a direct call.
             if let Some(baml_compiler2_hir::contributions::Definition::Function(function)) =
@@ -1890,9 +1963,23 @@ impl<'db> InferenceContext<'db> {
                 self.result.type_of_expr.insert(callee, ty.clone());
                 return (ty, bound);
             }
-            Expr::Path(segments) if segments.len() >= 2 && self.path_resolves_locally(callee) => {
+            Expr::Path(segments)
+                if segments.len() >= 2
+                    && (self.path_resolves_locally(callee)
+                        || segments
+                            .first()
+                            .is_some_and(|root| self.template_param_root(root))) =>
+            {
                 let segments = segments.clone();
-                let root = self.infer_path(callee);
+                let root = if self.path_resolves_locally(callee) {
+                    self.infer_path(callee)
+                } else {
+                    // Guard admitted a tagged-template body param root.
+                    segments
+                        .first()
+                        .and_then(|root| self.template_param_ty(root))
+                        .unwrap_or_else(Ty::error)
+                };
                 let receiver = segments[1..segments.len() - 1]
                     .iter()
                     .fold(root, |ty, segment| self.field_access(&ty, segment));
@@ -1993,6 +2080,19 @@ impl<'db> InferenceContext<'db> {
             // segments are member accesses (the AST cannot split `b.v` into
             // base+member before name resolution).
             let root_ty = self.infer_path(expr);
+            return segments
+                .iter()
+                .skip(1)
+                .fold(root_ty, |ty, segment| self.field_access(&ty, segment));
+        }
+        // Tagged-template body params (`prompt`'s `role`/`ctx`): the
+        // semantic index cannot register them (the tag is a cross-file
+        // item), so they resolve here, shadowing package items exactly as
+        // locals do, with the same root + member-access fold.
+        if let Some(root_ty) = segments
+            .first()
+            .and_then(|root| self.template_param_ty(root))
+        {
             return segments
                 .iter()
                 .skip(1)
@@ -2392,6 +2492,20 @@ impl<'db> InferenceContext<'db> {
             return interface_member.ty;
         }
         Ty::error()
+    }
+
+    /// The type of a tagged-template body param in scope, innermost frame
+    /// winning (template params shadow package items, like locals).
+    fn template_param_ty(&self, name: &baml_type::Name) -> Option<Ty> {
+        self.template_params
+            .iter()
+            .rev()
+            .find_map(|frame| frame.get(name))
+            .cloned()
+    }
+
+    fn template_param_root(&self, name: &baml_type::Name) -> bool {
+        self.template_param_ty(name).is_some()
     }
 
     /// Whether a path expression names a local binding or parameter (which
