@@ -2100,6 +2100,16 @@ impl<'db> InferenceContext<'db> {
             {
                 return (fn_ty, true);
             }
+            // `recv.to_string()` with no real `implements baml.ToString`
+            // member is likewise sugar for `string.from(recv)` (TIR's
+            // operator-style fallback; total, `throws never`, honoring
+            // overrides via the runtime shim) - the same lang-item tier.
+            if field.has_error()
+                && member.as_str() == "to_string"
+                && let Some(fn_ty) = self.string_from_callee(resolved.clone())
+            {
+                return (fn_ty, true);
+            }
             return (field, false);
         };
         let signature = function_signature(self.db, candidate.method);
@@ -2137,6 +2147,29 @@ impl<'db> InferenceContext<'db> {
         let signature = function_signature(self.db, function);
         // The desugar targets are single-`<T>`-generic by contract;
         // anything else is stdlib drift this tier must not paper over.
+        if signature.generic_params.len() != 1 {
+            return None;
+        }
+        Some(function_value_ty(signature, &[target]))
+    }
+
+    /// The instantiated `string.from` callee backing the `to_string`
+    /// operator-style fallback - a class STATIC (`baml.String.from<T>`),
+    /// resolved through the same static-class correspondence written
+    /// `string.from(..)` calls use, its `T` pinned to the receiver.
+    fn string_from_callee(&mut self, target: Ty) -> Option<Ty> {
+        let class = self.static_class_for(std::slice::from_ref(&baml_type::Name::new("string")))?;
+        let method = baml_compiler2_ppir::item_data::class_data(self.db, class)
+            .methods
+            .iter()
+            .copied()
+            .find(|&method| {
+                baml_compiler2_ppir::item_data::function_data(self.db, method)
+                    .name
+                    .as_str()
+                    == "from"
+            })?;
+        let signature = function_signature(self.db, method);
         if signature.generic_params.len() != 1 {
             return None;
         }

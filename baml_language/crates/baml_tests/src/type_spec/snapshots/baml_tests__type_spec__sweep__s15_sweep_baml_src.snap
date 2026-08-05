@@ -4,9 +4,9 @@ expression: report
 ---
 files: 116
 nodes compared: 60529
-agreements: 51812
+agreements: 51848
 one-sided (coverage): 88
-conflicts: 8629 across 1547 distinct pairs
+conflicts: 8593 across 1562 distinct pairs
 hir_ty error-channel entries: 71
 tir diagnostics: 0
 panics: 0
@@ -97,9 +97,9 @@ ns_to_json_interface/to_json_interface.baml:1125..1207 `{\n       ...\n        }
 [240x] hir_ty=[(a: string, b: string) -> bool throws never] tir=[(a: T, b: T) -> bool throws never]
     at ns_arrays/arrays.baml:10142..10158 `baml.deep_equals`
     at ns_arrays/arrays.baml:28366..28382 `baml.deep_equals`
-[171x] hir_ty=[!error] tir=[string]
-    at ns_bigints/bigints.baml:22418..22433 `42n.to_string()`
+[137x] hir_ty=[!error] tir=[string]
     at ns_control_flow/control_flow.baml:3496..3519 `{\n       ...alue\n    }`
+    at ns_control_flow/control_flow.baml:3506..3513 `s.value`
 [133x] hir_ty=[(a: int[], b: int[]) -> bool throws never] tir=[(a: T, b: T) -> bool throws never]
     at ns_arrays/arrays.baml:1146..1162 `baml.deep_equals`
     at ns_arrays/arrays.baml:1383..1399 `baml.deep_equals`
@@ -199,9 +199,6 @@ ns_to_json_interface/to_json_interface.baml:1125..1207 `{\n       ...\n        }
 [24x] hir_ty=[(self: baml.http.Server, handler: (req: baml.http.Request) -> baml.http.Response throws never, tls_config?: baml.http.TlsConfig | null, allow_http1?: bool, allow_http2?: bool, max_body_size?: int, max_connections?: int, header_read_timeout?: baml.time.Duration) -> never throws baml.errors.Io] tir=[(handler: (req: baml.http.Request) -> baml.http.Response throws never, tls_config?: baml.http.TlsConfig | null, allow_http1?: bool, allow_http2?: bool, max_body_size?: int, max_connections?: int, header_read_timeout?: baml.time.Duration) -> never throws baml.errors.Io]
     at ns_http_server/http_server.baml:890..902 `server.serve`
     at ns_http_server/http_server.baml:1586..1598 `server.serve`
-[23x] hir_ty=[!error] tir=[unknown]
-    at ns_bigints/bigints.baml:22418..22431 `42n.to_string`
-    at ns_floats/floats.baml:31935..31951 `(-0.0).to_string`
 [23x] hir_ty=[(arr: int[]) -> user.iter_impl_generics_only.core.ArrayIterator<int> throws never] tir=[(arr: T[]) -> user.iter_impl_generics_only.core.ArrayIterator<T> throws never]
     at ns_iter_impl_generics_only/iter.baml:364..415 `user.iter_...terator.new`
     at ns_iter_impl_generics_only/iter.baml:647..698 `user.iter_...terator.new`
@@ -379,6 +376,9 @@ ns_to_json_interface/to_json_interface.baml:1125..1207 `{\n       ...\n        }
 [10x] hir_ty=[int | float | string | bool | (int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>)[] | map<string, int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>> | null] tir=[int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>]
     at ns_generic_union_returns/generic_union_returns.baml:984..999 `let value: json`
     at ns_generic_union_returns/generic_union_returns.baml:995..999 `json`
+[10x] hir_ty=[string] tir=[string | "other"]
+    at ns_generic_match_rigid/generic_match_rigid.baml:4205..4286 `{\n    mat...,\n    }\n}`
+    at ns_generic_match_rigid/generic_match_rigid.baml:4211..4284 `match (x) ...er",\n    }`
 [10x] hir_ty=[void | null] tir=[void]
     at ns_floats/floats.baml:21643..21696 `if (r < 0....se { null }`
     at ns_floats/floats.baml:22459..22507 `if (r < mi...se { null }`
@@ -481,12 +481,6 @@ ns_to_json_interface/to_json_interface.baml:1125..1207 `{\n       ...\n        }
 [8x] hir_ty=[string] tir=[string | "LOST: cause chain wiped by the defer re-raise"]
     at ns_errorcontext/errorcontext.baml:8806..9005 `{\n  ec_de...  }\n  }\n}`
     at ns_errorcontext/errorcontext.baml:8810..9003 `ec_deferun...n    }\n  }`
-[8x] hir_ty=[string] tir=[string | "other"]
-    at ns_generic_match_rigid/generic_match_rigid.baml:4205..4286 `{\n    mat...,\n    }\n}`
-    at ns_generic_match_rigid/generic_match_rigid.baml:4211..4284 `match (x) ...er",\n    }`
-[8x] hir_ty=[string | !error] tir=[string]
-    at ns_control_flow/control_flow.baml:3466..3552 `{\n    if ...e\n    }\n}`
-    at ns_control_flow/control_flow.baml:3472..3550 `if let s: ...sage\n    }`
 [7x] hir_ty=[!error[]] tir=[int[]]
     at ns_arrays/arrays.baml:9326..9328 `[]`
     at ns_arrays/arrays.baml:28982..28984 `[]`
@@ -622,6 +616,9 @@ ns_to_json_interface/to_json_interface.baml:1125..1207 `{\n       ...\n        }
 [6x] hir_ty=[string] tir=[string | "no cause found"]
     at ns_errorcontext/errorcontext.baml:1756..2079 `{\n  ec_ne...  }\n  }\n}`
     at ns_errorcontext/errorcontext.baml:1760..2077 `ec_nested_...n    }\n  }`
+[6x] hir_ty=[string | !error] tir=[string]
+    at ns_control_flow/control_flow.baml:3466..3552 `{\n    if ...e\n    }\n}`
+    at ns_control_flow/control_flow.baml:3472..3550 `if let s: ...sage\n    }`
 [5x] hir_ty=[!error] tir=[(msg: string) -> string throws never]
     at ns_interfaces/interfaces.baml:8248..8259 `default.log`
     at ns_interfaces/interfaces.baml:49119..49130 `default.log`
@@ -970,6 +967,9 @@ ns_to_json_interface/to_json_interface.baml:1125..1207 `{\n       ...\n        }
 [3x] hir_ty=[!error] tir=[(self: Self) -> string throws never]
     at ns_interfaces/interfaces.baml:16561..16573 `let describe`
     at ns_interfaces/interfaces.baml:16576..16600 `IdmrDescribable.describe`
+[3x] hir_ty=[!error] tir=[unknown]
+    at ns_from_json_interface/from_json_interface.baml:7603..7621 `Box<int>.from_json`
+    at ns_json_auto_derive/json_auto_derive.baml:16429..16448 `Box6<int>.from_json`
 [3x] hir_ty=["X" | "from_b"] tir=[string]
     at ns_defer/defer.baml:6966..6967 `e`
     at ns_defer/defer.baml:6975..6976 `_`
@@ -1276,9 +1276,6 @@ ns_to_json_interface/to_json_interface.baml:1125..1207 `{\n       ...\n        }
 [2x] hir_ty=[!error] tir=[image]
     at ns_json_to_from_string/json_to_from_string.baml:9711..9767 `image.from...image/png")`
     at ns_json_to_from_string/json_to_from_string.baml:10006..10062 `image.from...image/png")`
-[2x] hir_ty=[!error] tir=[unknown | null]
-    at ns_tostring_sugar/tostring_sugar.baml:5642..5653 `x.to_string`
-    at ns_tostring_sugar/tostring_sugar.baml:5737..5748 `x.to_string`
 [2x] hir_ty=[!error] tir=[user.instantiation_expr.User]
     at ns_instantiation_expr/instantiation_expr.baml:2858..2930 `{\n    let...Ada\"}")\n}`
     at ns_instantiation_expr/instantiation_expr.baml:2905..2928 `f("{\"name\":\"Ada\"}")`
@@ -1480,9 +1477,6 @@ ns_to_json_interface/to_json_interface.baml:1125..1207 `{\n       ...\n        }
 [2x] hir_ty=["other"] tir=[string]
     at ns_exceptions/exceptions.baml:2328..2329 `e`
     at ns_exceptions/exceptions.baml:2362..2363 `_`
-[2x] hir_ty=["other" | !error] tir=[string | "other"]
-    at ns_patterns_new_runtime/patterns_new_runtime.baml:18232..18349 `{\n    mat..."\n    }\n}`
-    at ns_patterns_new_runtime/patterns_new_runtime.baml:18238..18347 `match (cb)...her"\n    }`
 [2x] hir_ty=["other" | "self"] tir=["self" | "other"]
     at ns_self_frame_slot/self_frame_slot.baml:1485..1587 `{\n       ...   }\n    }`
     at ns_self_frame_slot/self_frame_slot.baml:1495..1581 `match (oth...\n        }`
@@ -1921,6 +1915,15 @@ ns_to_json_interface/to_json_interface.baml:1125..1207 `{\n       ...\n        }
 [2x] hir_ty=[(value: () -> int throws never) -> (() -> int throws never) throws never] tir=[(value: T) -> T throws never]
     at ns_lambdas/lambdas.baml:6503..6517 `baml.deep_copy`
     at ns_lambdas/lambdas.baml:6538..6552 `baml.deep_copy`
+[2x] hir_ty=[(value: T) -> string throws never] tir=[unknown]
+    at ns_tostring_sugar/tostring_sugar.baml:4299..4310 `x.to_string`
+    at ns_tostring_sugar/tostring_sugar.baml:5237..5248 `x.to_string`
+[2x] hir_ty=[(value: int | null) -> string throws never] tir=[unknown | null]
+    at ns_tostring_sugar/tostring_sugar.baml:5642..5653 `x.to_string`
+    at ns_tostring_sugar/tostring_sugar.baml:5737..5748 `x.to_string`
+[2x] hir_ty=[(value: int) -> string throws never] tir=[unknown]
+    at ns_patterns_new_runtime/patterns_new_runtime.baml:16895..16909 `f(2).to_string`
+    at ns_patterns_new_runtime/patterns_new_runtime.baml:18303..18317 `f(3).to_string`
 [2x] hir_ty=[(value: string) -> baml.json.json throws baml.json.JsonSerializationError] tir=[(value: T) -> baml.json.json throws baml.json.JsonSerializationError]
     at ns_to_json_interface/to_json_interface.baml:3004..3018 `baml.json.from`
     at ns_to_json_interface/to_json_interface.baml:6446..6460 `baml.json.from`
@@ -1936,6 +1939,12 @@ ns_to_json_interface/to_json_interface.baml:1125..1207 `{\n       ...\n        }
 [2x] hir_ty=[(value: user.to_json_interface.User) -> baml.json.json throws baml.json.JsonSerializationError] tir=[(value: T) -> baml.json.json throws baml.json.JsonSerializationError]
     at ns_to_json_interface/to_json_interface.baml:1634..1648 `baml.json.from`
     at ns_to_json_interface/to_json_interface.baml:3813..3827 `baml.json.from`
+[2x] hir_ty=[(value: user.tostring_sugar.Line) -> string throws never] tir=[unknown]
+    at ns_tostring_sugar/tostring_sugar.baml:3101..3112 `l.to_string`
+    at ns_tostring_sugar/tostring_sugar.baml:3589..3600 `l.to_string`
+[2x] hir_ty=[(value: user.tostring_sugar.Point) -> string throws never] tir=[unknown]
+    at ns_tostring_sugar/tostring_sugar.baml:2147..2158 `p.to_string`
+    at ns_tostring_sugar/tostring_sugar.baml:6233..6244 `p.to_string`
 [2x] hir_ty=[(x: int | string | bool | user.match_enum_types.Color | user.match_enum_types.Status) -> string throws never] tir=[(x: user.match_enum_types.Color | user.match_enum_types.Status | int | string | bool) -> string throws never]
     at ns_match_enum_types/match_enum_types.baml:2635..2650 `classify_switch`
     at ns_match_enum_types/match_enum_types.baml:2716..2731 `classify_switch`
@@ -3364,8 +3373,20 @@ ns_to_json_interface/to_json_interface.baml:1125..1207 `{\n       ...\n        }
     at ns_to_json_interface/to_json_interface.baml:6960..6974 `baml.json.from`
 [1x] hir_ty=[(value: !error) -> string throws never] tir=[(value: T) -> string throws never]
     at ns_tagged_template_runtime/tagged_template_runtime.baml:6503..6514 `string.from`
+[1x] hir_ty=[(value: "hi") -> string throws never] tir=[unknown]
+    at ns_tostring_sugar/tostring_sugar.baml:1786..1800 `"hi".to_string`
+[1x] hir_ty=[(value: -0.0) -> string throws never] tir=[unknown]
+    at ns_floats/floats.baml:31935..31951 `(-0.0).to_string`
+[1x] hir_ty=[(value: 255) -> string throws never] tir=[unknown]
+    at ns_ints/ints.baml:21581..21595 `0xFF.to_string`
 [1x] hir_ty=[(value: 42n) -> baml.json.json throws baml.json.JsonSerializationError] tir=[unknown]
     at ns_bigints/bigints.baml:21883..21896 `(42n).to_json`
+[1x] hir_ty=[(value: 42n) -> string throws never] tir=[unknown]
+    at ns_bigints/bigints.baml:22418..22431 `42n.to_string`
+[1x] hir_ty=[(value: 5) -> string throws never] tir=[unknown]
+    at ns_tostring_sugar/tostring_sugar.baml:1667..1680 `(5).to_string`
+[1x] hir_ty=[(value: 7) -> string throws never] tir=[unknown]
+    at ns_ints/ints.baml:19002..19013 `7.to_string`
 [1x] hir_ty=[(value: 99999999999999999999n) -> baml.json.json throws baml.json.JsonSerializationError] tir=[unknown]
     at ns_bigints/bigints.baml:21961..21992 `(999999999...9n).to_json`
 [1x] hir_ty=[(value: T) -> baml.json.json throws baml.json.JsonSerializationError] tir=[unknown]
@@ -3384,6 +3405,12 @@ ns_to_json_interface/to_json_interface.baml:1125..1207 `{\n       ...\n        }
     at ns_to_json_interface/to_json_interface.baml:3075..3089 `baml.json.from`
 [1x] hir_ty=[(value: float) -> baml.json.json throws baml.json.JsonSerializationError] tir=[unknown]
     at ns_json_auto_derive/json_auto_derive.baml:2182..2191 `f.to_json`
+[1x] hir_ty=[(value: float) -> string throws never] tir=[unknown]
+    at ns_floats/floats.baml:32018..32040 `(-0.0).abs().to_string`
+[1x] hir_ty=[(value: int | !error) -> string throws never] tir=[unknown]
+    at ns_interfaces_associated_types/interfaces_associated_types.baml:1453..1477 `generic_result.to_string`
+[1x] hir_ty=[(value: int | string) -> string throws never] tir=[unknown]
+    at ns_interfaces_associated_types/interfaces_associated_types.baml:1418..1442 `default_result.to_string`
 [1x] hir_ty=[(value: int) -> baml.json.json throws baml.json.JsonSerializationError] tir=[unknown]
     at ns_json_auto_derive/json_auto_derive.baml:1905..1914 `n.to_json`
 [1x] hir_ty=[(value: int) -> user.iter_impl_generics_only.core.OutOfBodyBox<int> throws never] tir=[(value: T) -> user.iter_impl_generics_only.core.OutOfBodyBox<T> throws never]
@@ -3394,6 +3421,8 @@ ns_to_json_interface/to_json_interface.baml:1125..1207 `{\n       ...\n        }
     at ns_json_auto_derive/json_auto_derive.baml:3252..3261 `a.to_json`
 [1x] hir_ty=[(value: int[]) -> string throws never] tir=[(value: T) -> string throws never]
     at ns_to_string_interface/to_string_interface.baml:785..796 `string.from`
+[1x] hir_ty=[(value: int[]) -> string throws never] tir=[unknown]
+    at ns_tostring_sugar/tostring_sugar.baml:1855..1874 `[1, 2, 3].to_string`
 [1x] hir_ty=[(value: map<string, int>) -> baml.json.json throws baml.json.JsonSerializationError] tir=[(value: T) -> baml.json.json throws baml.json.JsonSerializationError]
     at ns_to_json_interface/to_json_interface.baml:3440..3454 `baml.json.from`
 [1x] hir_ty=[(value: map<string, int>) -> baml.json.json throws baml.json.JsonSerializationError] tir=[unknown]
@@ -3408,6 +3437,8 @@ ns_to_json_interface/to_json_interface.baml:1125..1207 `{\n       ...\n        }
     at ns_to_string_interface/to_string_interface.baml:682..693 `string.from`
 [1x] hir_ty=[(value: string[]) -> string throws never] tir=[(value: T) -> string throws never]
     at ns_to_string_interface/to_string_interface.baml:839..850 `string.from`
+[1x] hir_ty=[(value: true) -> string throws never] tir=[unknown]
+    at ns_tostring_sugar/tostring_sugar.baml:1706..1720 `true.to_string`
 [1x] hir_ty=[(value: user.builtins.BuiltinsPerson) -> string throws never] tir=[(value: T) -> string throws never]
     at ns_builtins/builtins.baml:1854..1865 `string.from`
 [1x] hir_ty=[(value: user.cleanup.CleanupResource) -> bool throws never / bool / throws never / user.cleanup.CleanupResource / void] tir=[(value: T) -> bool throws never / bool / throws never / user.cleanup.CleanupResource / void]
@@ -3488,6 +3519,8 @@ ns_to_json_interface/to_json_interface.baml:1125..1207 `{\n       ...\n        }
     at ns_to_string_interface/to_string_interface.baml:3130..3141 `string.from`
 [1x] hir_ty=[(value: user.tostring_sugar.Line) -> string throws never] tir=[(value: T) -> string throws never]
     at ns_tostring_sugar/tostring_sugar.baml:3686..3697 `string.from`
+[1x] hir_ty=[(value: user.tostring_sugar.PointShow[]) -> string throws never] tir=[unknown]
+    at ns_tostring_sugar/tostring_sugar.baml:2659..2721 `[PointShow...].to_string`
 [1x] hir_ty=[(x: !error) -> !error throws never] tir=[(x: T) -> T throws never]
     at ns_instantiation_expr/instantiation_expr.baml:4168..4206 `user.insta...lified.q_id`
 [1x] hir_ty=[(x: T) -> baml.json.json throws baml.json.JsonParseError | baml.json.JsonSerializationError] tir=[(x: T) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError]
