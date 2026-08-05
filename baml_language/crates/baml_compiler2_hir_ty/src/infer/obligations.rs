@@ -68,7 +68,7 @@ enum Attempt {
     Done,
 }
 
-impl InferenceContext<'_> {
+impl<'db> InferenceContext<'db> {
     pub(super) fn register_obligation(&mut self, obligation: Obligation) {
         self.obligations.push(obligation);
     }
@@ -168,9 +168,20 @@ impl InferenceContext<'_> {
         let instantiation = self
             .confirm_impl(goal, interface, facts)
             .expect("the unique applicable candidate re-confirms");
-        // The impl's declared bounds at this instantiation become NESTED
-        // obligations (rustc's confirmation side conditions) - the
-        // fulfillment loop discharges them next round.
+        self.register_impl_bound_obligations(facts, &instantiation, at);
+        Attempt::Done
+    }
+
+    /// The impl's declared bounds at `instantiation` become NESTED
+    /// obligations (rustc's confirmation side conditions) - the
+    /// fulfillment loop discharges them next round. Shared by selection
+    /// and the method probe.
+    fn register_impl_bound_obligations(
+        &mut self,
+        facts: &crate::impls::ImplFacts<'_>,
+        instantiation: &rustc_hash::FxHashMap<baml_type::ParamTy, Ty>,
+        at: ExprId,
+    ) {
         for (param, bounds) in &facts.generic_params {
             let Some(arg) = instantiation.get(param) else {
                 continue;
@@ -181,7 +192,7 @@ impl InferenceContext<'_> {
                     bound
                         .args
                         .iter()
-                        .map(|ty| crate::impls::substitute_bindings(ty, &instantiation))
+                        .map(|ty| crate::impls::substitute_bindings(ty, instantiation))
                         .collect::<Vec<_>>()
                         .into_boxed_slice(),
                     bound
@@ -190,7 +201,7 @@ impl InferenceContext<'_> {
                         .map(|(name, ty)| {
                             (
                                 name.clone(),
-                                crate::impls::substitute_bindings(ty, &instantiation),
+                                crate::impls::substitute_bindings(ty, instantiation),
                             )
                         })
                         .collect(),
@@ -202,7 +213,6 @@ impl InferenceContext<'_> {
                 });
             }
         }
-        Attempt::Done
     }
 
     /// CONFIRMATION (rustc's shape): instantiate the impl header with
@@ -218,24 +228,10 @@ impl InferenceContext<'_> {
         interface: &InterfaceRef,
         facts: &crate::impls::ImplFacts<'_>,
     ) -> Option<rustc_hash::FxHashMap<baml_type::ParamTy, Ty>> {
-        // Bare-blanket guard, as in the ground matcher: `implement<T> I
-        // for T` applies only to concrete receivers.
-        if let TyKind::TypeVar(param, _) = facts.for_ty_pattern.kind()
-            && facts.generic_params.iter().any(|(p, _)| p == param)
-            && !crate::impls::is_concrete_receiver(goal)
-        {
-            return None;
-        }
         if facts.interface.args.len() != interface.generics.len() {
             return None;
         }
-        let instantiation: rustc_hash::FxHashMap<baml_type::ParamTy, Ty> = facts
-            .generic_params
-            .iter()
-            .map(|(param, _)| (param.clone(), self.table.new_var_ty()))
-            .collect();
-        let for_ty = crate::impls::substitute_bindings(&facts.for_ty_pattern, &instantiation);
-        self.table.unify(goal, &for_ty).ok()?;
+        let instantiation = self.confirm_impl_subject(goal, facts)?;
         for (pattern, requested) in facts.interface.args.iter().zip(interface.generics.iter()) {
             let pattern = crate::impls::substitute_bindings(pattern, &instantiation);
             self.table.unify(requested, &pattern).ok()?;
@@ -269,9 +265,150 @@ impl InferenceContext<'_> {
                     };
                     crate::impls::realized_assoc_default(self.db, &implemented, goal, name)
                 })?;
-            self.table.unify(requested, &supplied).ok()?;
+            // Normalize-then-unify (the `sub` entry's discipline): a
+            // GROUND requested pin may be a reducible projection -
+            // `chain`'s `Item = (.. as Iterator).Item` IS `int` - and
+            // structural unification would reject the candidate on
+            // spelling. Var-carrying pins skip reduction (the oracle's
+            // plain conversion erases inference vars) and unify as
+            // variables.
+            let requested = if requested.has_projection() && !requested.has_infer() {
+                self.reduce_projections(requested, super::PROJECTION_FINALIZE_FUEL)
+            } else {
+                requested.clone()
+            };
+            let supplied = if supplied.has_projection() && !supplied.has_infer() {
+                self.reduce_projections(&supplied, super::PROJECTION_FINALIZE_FUEL)
+            } else {
+                supplied
+            };
+            self.table.unify(&requested, &supplied).ok()?;
         }
         Some(instantiation)
+    }
+
+    /// The SUBJECT half of confirmation, shared with the method probe:
+    /// the impl's params instantiate as FRESH inference variables and
+    /// the goal unifies against the for-target - which merely LINKS the
+    /// goal's variables to the impl's, committing nothing the caller's
+    /// snapshot cannot discard. Bare-blanket guard as in the ground
+    /// matcher: `implement<T> I for T` applies only to concrete
+    /// receivers.
+    fn confirm_impl_subject(
+        &mut self,
+        goal: &Ty,
+        facts: &crate::impls::ImplFacts<'_>,
+    ) -> Option<rustc_hash::FxHashMap<baml_type::ParamTy, Ty>> {
+        if let TyKind::TypeVar(param, _) = facts.for_ty_pattern.kind()
+            && facts.generic_params.iter().any(|(p, _)| p == param)
+            && !crate::impls::is_concrete_receiver(goal)
+        {
+            return None;
+        }
+        let instantiation: rustc_hash::FxHashMap<baml_type::ParamTy, Ty> = facts
+            .generic_params
+            .iter()
+            .map(|(param, _)| (param.clone(), self.table.new_var_ty()))
+            .collect();
+        let for_ty = crate::impls::substitute_bindings(&facts.for_ty_pattern, &instantiation);
+        self.table.unify(goal, &for_ty).ok()?;
+        Some(instantiation)
+    }
+
+    /// rust-analyzer's METHOD PROBE for a receiver still carrying
+    /// inference variables (`ArrayIterator<?T>.filter`): the ground
+    /// registry fails safe on such types, so candidates are tried
+    /// NON-COMMITTALLY under a table snapshot - subject confirmation
+    /// plus "does its interface declare the member" - and exactly ONE
+    /// applying re-confirms for real, its header unification LINKING
+    /// the receiver's variables to the impl's fresh ones (rustc's
+    /// probe-in-snapshot, then confirm-the-pick; the variables are
+    /// never forced early, so the deferral model is untouched). Zero
+    /// or several candidates resolve nothing - several is rustc's
+    /// "type annotations needed" family, S17's diagnostic. Licensed by
+    /// a concrete head, like variable-bearing selection.
+    pub(super) fn probe_impl_member(
+        &mut self,
+        receiver: &Ty,
+        name: &baml_type::Name,
+        at: ExprId,
+    ) -> Option<crate::method_resolution::InterfaceMember<'db>> {
+        if !crate::impls::is_concrete_receiver(receiver) {
+            return None;
+        }
+        let mut applicable = None;
+        for facts in crate::impls::all_impl_facts(self.db) {
+            let snapshot = self.table.snapshot();
+            let applies = self.probe_candidate(receiver, name, facts).is_some();
+            self.table.rollback_to(snapshot);
+            if applies {
+                if applicable.is_some() {
+                    return None;
+                }
+                applicable = Some(facts);
+            }
+        }
+        let facts = applicable?;
+        let (member, instantiation) = self
+            .probe_candidate(receiver, name, facts)
+            .expect("the unique applicable candidate re-confirms");
+        self.register_impl_bound_obligations(facts, &instantiation, at);
+        Some(member)
+    }
+
+    /// One probe candidate: subject confirmation, then the member
+    /// resolved on the interface this impl provides, realized through
+    /// the confirmation's bindings (args and pins in terms of the
+    /// now-linked variables - `filter`'s signature comes back MENTIONING
+    /// the receiver's `?T`, and later argument checks bound it like any
+    /// other evidence).
+    fn probe_candidate(
+        &mut self,
+        receiver: &Ty,
+        name: &baml_type::Name,
+        facts: &crate::impls::ImplFacts<'_>,
+    ) -> Option<(
+        crate::method_resolution::InterfaceMember<'db>,
+        rustc_hash::FxHashMap<baml_type::ParamTy, Ty>,
+    )> {
+        let instantiation = self.confirm_impl_subject(receiver, facts)?;
+        // The target's pins carry the impl's OWN associated bindings
+        // (`type Item = T`) alongside any header pins: the member's
+        // `Self.Item` slots must realize through the confirmation's
+        // variables, not stay symbolic projections over a receiver the
+        // oracle refuses (it is var-carrying by construction here).
+        let mut pins: Vec<(baml_type::Name, Ty)> = facts
+            .interface
+            .pins
+            .iter()
+            .chain(facts.associated_types.iter())
+            .map(|(pin, ty)| {
+                (
+                    pin.clone(),
+                    crate::impls::substitute_bindings(ty, &instantiation),
+                )
+            })
+            .collect();
+        pins.dedup_by(|(a, _), (b, _)| a == b);
+        let implemented = InterfaceTarget {
+            name: facts.interface.name.clone(),
+            args: facts
+                .interface
+                .args
+                .iter()
+                .map(|arg| crate::impls::substitute_bindings(arg, &instantiation))
+                .collect(),
+            pins,
+        };
+        let member = crate::method_resolution::member_on_interface(
+            self.db,
+            &self.facts,
+            &implemented,
+            receiver,
+            name,
+            false,
+        )?;
+        Some((member, instantiation))
     }
 
     /// Whether ground `ty` implements `interface`: carried bounds for a

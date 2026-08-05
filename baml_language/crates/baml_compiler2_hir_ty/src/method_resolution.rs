@@ -251,7 +251,7 @@ fn lookup_impl_member<'db>(
 }
 
 /// A member declared DIRECTLY on `target`, instantiated for `receiver`.
-fn member_on_interface<'db>(
+pub(crate) fn member_on_interface<'db>(
     db: &'db dyn baml_compiler2_ppir::Db,
     facts: &Facts<'db>,
     target: &InterfaceTarget,

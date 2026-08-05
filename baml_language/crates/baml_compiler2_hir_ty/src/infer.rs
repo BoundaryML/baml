@@ -452,6 +452,10 @@ struct InferenceContext<'db> {
     /// The obligation worklist (I4): registered during the walk,
     /// discharged at finish interleaved with bound resolution.
     obligations: Vec<obligations::Obligation>,
+    /// The expression whose CHECK is currently relating types - r-a's
+    /// `ObligationCause`: obligations born inside a structural `sub`
+    /// recursion anchor their eventual diagnostic here.
+    obligation_anchor: Option<ExprId>,
     diverges: Diverges,
     result: InferenceResult,
 }
@@ -487,6 +491,7 @@ impl<'db> InferenceContext<'db> {
             table: InferenceTable::new(),
             deferred_subs: Vec::new(),
             obligations: Vec::new(),
+            obligation_anchor: None,
             diverges: Diverges::Maybe,
             result: InferenceResult::default(),
         }
@@ -533,7 +538,10 @@ impl<'db> InferenceContext<'db> {
     /// recorded against the checked expression, never dropped.
     fn check_expr(&mut self, body: &ExprBody, expr: ExprId, expected: &Ty) -> Ty {
         let ty = self.infer_expr(body, expr, &Expectation::has_type(expected.clone()));
-        if !self.sub(&ty, expected) {
+        let saved_anchor = self.obligation_anchor.replace(expr);
+        let fits = self.sub(&ty, expected);
+        self.obligation_anchor = saved_anchor;
+        if !fits {
             self.result
                 .type_mismatches
                 .insert(expr, (expected.clone(), ty.clone()));
@@ -1345,6 +1353,68 @@ impl<'db> InferenceContext<'db> {
                 if !actual.has_infer() && !expected.has_infer() {
                     is_subtype_interned(&actual, &expected, &self.facts)
                 } else {
+                    // A SAME-INTERFACE pair with variables: identity is
+                    // INVARIANT (args positional, pins by name) - rustc
+                    // unifies `dyn Trait<X>` against `Trait<?R>`
+                    // directly. Requires-closure upcasts between
+                    // DIFFERENT interfaces keep the oracle/obligation
+                    // road; a requested pin the actual side lacks falls
+                    // through (the fill-at-reference default is the
+                    // oracle's business).
+                    if let (
+                        TyKind::Interface(a_name, a_args, a_pins, _),
+                        TyKind::Interface(b_name, b_args, b_pins, _),
+                    ) = (actual.kind(), expected.kind())
+                        && a_name == b_name
+                        && a_args.len() == b_args.len()
+                        && b_pins.iter().all(|(pin, _)| {
+                            a_pins.iter().any(|(a_pin, _)| a_pin == pin)
+                        })
+                    {
+                        let arg_pairs: Vec<(Ty, Ty)> = a_args
+                            .iter()
+                            .cloned()
+                            .zip(b_args.iter().cloned())
+                            .collect();
+                        let pin_pairs: Vec<(Ty, Ty)> = b_pins
+                            .iter()
+                            .filter_map(|(pin, b_ty)| {
+                                a_pins
+                                    .iter()
+                                    .find(|(a_pin, _)| a_pin == pin)
+                                    .map(|(_, a_ty)| (a_ty.clone(), b_ty.clone()))
+                            })
+                            .collect();
+                        let mut ok = true;
+                        for (a, b) in arg_pairs.into_iter().chain(pin_pairs) {
+                            ok &= self.eq_piece(&a, &b);
+                        }
+                        return ok;
+                    }
+                    // An interface EXPECTATION in a var-carrying pair is
+                    // an Implements GOAL, not an inert pair: rustc
+                    // registers the trait obligation and confirmation
+                    // unifies, which both proves the goal and BINDS the
+                    // expectation's variables (`int[] <: Iterable<Item =
+                    // ?R>` confirms through the `T[]` impl, pinning `?R
+                    // := int`). Fulfillment handles ground goals, var
+                    // goals via selection, and ambiguity by stalling.
+                    if let TyKind::Interface(name, args, pins, _) = expected.kind()
+                        && !matches!(actual.kind(), TyKind::Infer { .. })
+                        && let Some(anchor) = self.obligation_anchor
+                    {
+                        let interface = baml_type::interned::InterfaceRef::new(
+                            name.clone(),
+                            args.to_vec().into_boxed_slice(),
+                            pins.to_vec(),
+                        );
+                        self.register_obligation(obligations::Obligation::Implements {
+                            ty: actual,
+                            interface,
+                            at: anchor,
+                        });
+                        return true;
+                    }
                     self.deferred_subs.push((actual, expected));
                     true
                 }
@@ -2153,27 +2223,23 @@ impl<'db> InferenceContext<'db> {
         let Some(candidate) = candidate else {
             // Interface members (I3): existential and bounded-var
             // receivers dispatch virtually; methods bind their receiver.
-            if let Some(interface_member) = crate::method_resolution::lookup_interface_member(
+            // A receiver still CARRYING inference variables probes the
+            // impls by unification instead (r-a's snapshot probe; the
+            // ground registry fails safe on such types).
+            let interface_member = crate::method_resolution::lookup_interface_member(
                 self.db,
                 &self.facts,
                 &resolved,
                 member,
-            ) {
-                // A default method's OWN generics fill from THIS call
-                // site (turbofish or fresh vars) on top of the
-                // receiver-pinned interface prefix - the same
-                // owner-prefix + own-suffix instantiation the
-                // class-method path below performs.
-                if let Some(pending) = interface_member.pending_own {
-                    let signature = function_signature(self.db, pending.method);
-                    let own_params = signature.generic_params[pending.prefix.len()..].to_vec();
-                    let mut instantiation = pending.prefix;
-                    instantiation.extend(self.instantiation_args(call, &own_params));
-                    self.register_call_bounds(pending.method, &instantiation, call);
-                    let fn_ty = function_value_ty(signature, &instantiation);
-                    return (fn_ty, interface_member.is_method);
-                }
-                return (interface_member.ty, interface_member.is_method);
+            )
+            .or_else(|| {
+                resolved
+                    .has_infer()
+                    .then(|| self.probe_impl_member(&resolved, member, call))
+                    .flatten()
+            });
+            if let Some(interface_member) = interface_member {
+                return self.interface_member_callee(interface_member, call);
             }
             let field = self.field_access(&resolved, member);
             // `recv.to_json()` is language sugar for `baml.json.from(recv)`
@@ -2211,6 +2277,28 @@ impl<'db> InferenceContext<'db> {
             .first()
             .is_some_and(|param| param.name.as_str() == "self");
         (fn_ty, bound)
+    }
+
+    /// An interface member in CALLEE position: a default method's OWN
+    /// generics fill from the call site (turbofish or fresh vars) on
+    /// top of the receiver-pinned interface prefix - the same
+    /// owner-prefix + own-suffix instantiation the class-method path
+    /// performs. Shared by the ground interface road and the probe.
+    fn interface_member_callee(
+        &mut self,
+        interface_member: crate::method_resolution::InterfaceMember<'db>,
+        call: ExprId,
+    ) -> (Ty, bool) {
+        if let Some(pending) = interface_member.pending_own {
+            let signature = function_signature(self.db, pending.method);
+            let own_params = signature.generic_params[pending.prefix.len()..].to_vec();
+            let mut instantiation = pending.prefix;
+            instantiation.extend(self.instantiation_args(call, &own_params));
+            self.register_call_bounds(pending.method, &instantiation, call);
+            let fn_ty = function_value_ty(signature, &instantiation);
+            return (fn_ty, interface_member.is_method);
+        }
+        (interface_member.ty, interface_member.is_method)
     }
 
     /// The instantiated stdlib callee a json desugar lowers to

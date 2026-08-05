@@ -520,6 +520,24 @@ pub(crate) fn impl_candidates<'db>(
     out
 }
 
+/// Every impl block in the project, for the method PROBE's candidate
+/// assembly: the receiver's interface is unknown there, so no name
+/// filter applies - all packages, the same walk the ground registry
+/// (`impls_for_type`) does.
+pub(crate) fn all_impl_facts<'db>(
+    db: &'db dyn baml_compiler2_ppir::Db,
+) -> Vec<&'db ImplFacts<'db>> {
+    let mut out = Vec::new();
+    for package in all_packages(db) {
+        for &block in package_impl_locs(db, package) {
+            if let Some(facts) = impl_facts(db, block) {
+                out.push(facts);
+            }
+        }
+    }
+    out
+}
+
 /// Whether realized `concrete` implements realized `interface`. The
 /// public fact: searches the root packages derivable from every
 /// qualified name on both sides (a single guessed root misses
