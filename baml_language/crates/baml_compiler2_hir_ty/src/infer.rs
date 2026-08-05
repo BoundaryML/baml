@@ -456,6 +456,12 @@ struct InferenceContext<'db> {
     /// `ObligationCause`: obligations born inside a structural `sub`
     /// recursion anchor their eventual diagnostic here.
     obligation_anchor: Option<ExprId>,
+    /// One frame per enclosing `OptionalChain` (chains nest through
+    /// arguments): a `?.` link whose base was nullable sets the top
+    /// frame, and the chain BOUNDARY unions `null` back into its
+    /// result - TS short-circuit semantics, where intermediate links
+    /// see the non-null type.
+    chain_nullable: Vec<bool>,
     diverges: Diverges,
     result: InferenceResult,
 }
@@ -492,6 +498,7 @@ impl<'db> InferenceContext<'db> {
             deferred_subs: Vec::new(),
             obligations: Vec::new(),
             obligation_anchor: None,
+            chain_nullable: Vec::new(),
             diverges: Diverges::Maybe,
             result: InferenceResult::default(),
         }
@@ -865,6 +872,28 @@ impl<'db> InferenceContext<'db> {
             Expr::MemberAccess { base, member } => {
                 let base_ty = self.infer_expr(body, *base, &Expectation::None);
                 self.field_access(&base_ty, member)
+            }
+            // TS short-circuit chains: the boundary owns the `| null`.
+            Expr::OptionalChain { expr: inner } => {
+                self.chain_nullable.push(false);
+                let ty = self.infer_expr(body, *inner, &Expectation::None);
+                let nullable = self.chain_nullable.pop().expect("pushed above");
+                if nullable {
+                    self.union_of(&[ty, Ty::null()])
+                } else {
+                    ty
+                }
+            }
+            Expr::OptionalMemberAccess { base, member } => {
+                let base_ty = self.infer_expr(body, *base, &Expectation::None);
+                let nonnull = self.peel_chain_null(&base_ty);
+                self.field_access(&nonnull, member)
+            }
+            Expr::OptionalCall { callee, args } => {
+                let callee_ty = self.infer_expr(body, *callee, &Expectation::None);
+                let nonnull = self.peel_chain_null(&callee_ty);
+                let args = args.clone();
+                self.check_call_args(body, *callee, &nonnull, false, &args)
             }
             Expr::Lambda(def) => self.infer_lambda(body, expr, def, expected),
             Expr::Match {
@@ -1871,8 +1900,9 @@ impl<'db> InferenceContext<'db> {
     ) -> Ty {
         let base_ty = self.infer_expr(body, base, &Expectation::None);
         let subject = if optional {
-            let resolved = self.table.resolve_completely(&base_ty);
-            self.remove_null(&resolved)
+            // Chain semantics: the base's null peels here and the
+            // enclosing OptionalChain boundary re-unions it.
+            self.peel_chain_null(&base_ty)
         } else {
             base_ty
         };
@@ -1917,10 +1947,25 @@ impl<'db> InferenceContext<'db> {
             }
         };
         if optional {
-            self.union_of(&[element, Ty::null()])
-        } else {
-            element
+            // A nullable INDEX short-circuits too (`arr?.[i]` with
+            // `i: int?` is null at runtime when `i` is): mark the chain
+            // frame; the boundary owns the `| null`.
+            let index_ty = self
+                .result
+                .type_of_expr
+                .get(&index)
+                .cloned()
+                .map(|ty| self.table.resolve_completely(&ty));
+            let index_nullable = index_ty
+                .map(|ty| self.remove_null(&ty) != ty)
+                .unwrap_or(false);
+            if index_nullable
+                && let Some(top) = self.chain_nullable.last_mut()
+            {
+                *top = true;
+            }
         }
+        element
     }
 
     fn infer_unary(
@@ -2077,6 +2122,20 @@ impl<'db> InferenceContext<'db> {
 
     /// The non-null part of a type: `Null` drops from unions (an all-null
     /// type leaves `never`).
+    /// A `?.` link's base: null peels off (marking the enclosing chain
+    /// frame so the BOUNDARY re-unions it) and the link proceeds on the
+    /// non-null part - TS short-circuit semantics.
+    fn peel_chain_null(&mut self, ty: &Ty) -> Ty {
+        let resolved = self.table.resolve_completely(ty);
+        let nonnull = self.remove_null(&resolved);
+        if nonnull != resolved
+            && let Some(top) = self.chain_nullable.last_mut()
+        {
+            *top = true;
+        }
+        nonnull
+    }
+
     fn remove_null(&mut self, ty: &Ty) -> Ty {
         let resolved = self.table.resolve_completely(ty);
         match resolved.kind() {
@@ -2129,6 +2188,21 @@ impl<'db> InferenceContext<'db> {
         args: &[baml_compiler2_ast::CallArg],
     ) -> Ty {
         let (callee_fn_ty, bound_receiver) = self.infer_callee(body, call, callee);
+        self.check_call_args(body, callee, &callee_fn_ty, bound_receiver, args)
+    }
+
+    /// The argument/return half of a call, shared by ordinary calls and
+    /// `?.()` (which strips the callee's null first): labeled args match
+    /// by name, lambdas check in the second pass, the callee's throws
+    /// join the effect channel.
+    fn check_call_args(
+        &mut self,
+        body: &ExprBody,
+        callee: ExprId,
+        callee_fn_ty: &Ty,
+        bound_receiver: bool,
+        args: &[baml_compiler2_ast::CallArg],
+    ) -> Ty {
         let TyKind::Function {
             params,
             ret,
@@ -2256,6 +2330,16 @@ impl<'db> InferenceContext<'db> {
                 self.result.type_of_expr.insert(callee, ty.clone());
                 return (ty, bound);
             }
+            // `x?.method(..)`: the link peels the receiver's null (the
+            // chain boundary re-unions it) and dispatches on the rest.
+            Expr::OptionalMemberAccess { base, member } => {
+                let member = member.clone();
+                let receiver = self.infer_expr(body, *base, &Expectation::None);
+                let nonnull = self.peel_chain_null(&receiver);
+                let (ty, bound) = self.member_callee(call, &nonnull, &member);
+                self.result.type_of_expr.insert(callee, ty.clone());
+                return (ty, bound);
+            }
             Expr::Path(segments)
                 if segments.len() >= 2
                     && (self.path_resolves_locally(callee)
@@ -2292,6 +2376,22 @@ impl<'db> InferenceContext<'db> {
     /// or a field holding a function value.
     fn member_callee(&mut self, call: ExprId, receiver: &Ty, member: &baml_type::Name) -> (Ty, bool) {
         let resolved = self.structurally_resolve(receiver);
+        // Callee position on a UNION: every member must yield the
+        // member as a callable with IDENTICAL parameters and boundness
+        // (the forced case; differing signatures are S17's ambiguity) -
+        // returns JOIN, throws union. Aliases expand as in
+        // `field_access`.
+        let expanded = self.expand_alias_ty(&resolved);
+        if let TyKind::Union(union_members, _) = expanded.kind() {
+            let union_members = union_members.to_vec();
+            if let Some(joined) = self.union_member_callee(call, &union_members, member) {
+                return joined;
+            }
+            // No per-member resolution: FALL THROUGH - the
+            // operator-style sugars at the bottom of the ladder are
+            // TOTAL and apply to the WHOLE union
+            // (`(int | null).to_string()` is `string.from<int | null>`).
+        }
         let candidate =
             crate::method_resolution::lookup_method(self.db, &self.facts, &resolved, member);
         let Some(candidate) = candidate else {
@@ -2351,6 +2451,56 @@ impl<'db> InferenceContext<'db> {
             .first()
             .is_some_and(|param| param.name.as_str() == "self");
         (fn_ty, bound)
+    }
+
+    /// Callee position on a UNION receiver: every member must yield the
+    /// member as a callable with IDENTICAL parameters and boundness (the
+    /// forced case; differing signatures are S17's ambiguity) - returns
+    /// JOIN, throws union. `None` when any member misses or disagrees;
+    /// the caller falls through to the whole-union sugar tiers.
+    fn union_member_callee(
+        &mut self,
+        call: ExprId,
+        union_members: &[Ty],
+        member: &baml_type::Name,
+    ) -> Option<(Ty, bool)> {
+        let mut resolved_fns = Vec::new();
+        for member_ty in union_members {
+            let (ty, bound) = self.member_callee(call, member_ty, member);
+            if ty.has_error() {
+                return None;
+            }
+            resolved_fns.push((ty, bound));
+        }
+        let (first, first_bound) = resolved_fns.first()?.clone();
+        let TyKind::Function {
+            params: first_params,
+            ..
+        } = first.kind()
+        else {
+            return None;
+        };
+        let mut rets = Vec::new();
+        let mut throws_parts = Vec::new();
+        for (fn_ty, bound) in &resolved_fns {
+            let TyKind::Function { params, ret, throws, .. } = fn_ty.kind() else {
+                return None;
+            };
+            if *bound != first_bound || params != first_params {
+                return None;
+            }
+            rets.push(ret.clone());
+            throws_parts.push(throws.clone());
+        }
+        let ret = self.join(&rets);
+        let throws = self.union_of(&throws_parts);
+        let fn_ty = Ty::intern(TyKind::Function {
+            params: first_params.clone(),
+            ret,
+            throws,
+            attr: TyAttr::default(),
+        });
+        Some((fn_ty, first_bound))
     }
 
     /// An interface member in CALLEE position: a default method's OWN
@@ -2840,6 +2990,24 @@ impl<'db> InferenceContext<'db> {
     /// position has no turbofish.
     fn field_access(&mut self, base_ty: &Ty, member: &baml_type::Name) -> Ty {
         let resolved = self.structurally_resolve(base_ty);
+        // TS's union-member rule (TIR follows): a member on a UNION
+        // resolves on EVERY member type and the results JOIN; a member
+        // type lacking it - null included: handle null first - fails
+        // the whole access. Aliases expand so `json` answers as its
+        // union.
+        let expanded = self.expand_alias_ty(&resolved);
+        if let TyKind::Union(members, _) = expanded.kind() {
+            let members = members.to_vec();
+            let mut tys = Vec::new();
+            for member_ty in &members {
+                let ty = self.field_access(member_ty, member);
+                if ty.has_error() {
+                    return Ty::error();
+                }
+                tys.push(ty);
+            }
+            return self.join(&tys);
+        }
         if let TyKind::Class(qtn, args, _) = resolved.kind()
             && let Some(baml_compiler2_hir::contributions::Definition::Class(class)) =
                 self.facts.definition_of(qtn)
@@ -2890,7 +3058,15 @@ impl<'db> InferenceContext<'db> {
     /// recursive `baml.json.json` union answers structurally.
     fn expectation_shape(&mut self, expected: &Expectation) -> Option<Ty> {
         let ty = expected.only_has_type()?;
-        let mut resolved = self.table.shallow_resolve(ty);
+        let resolved = self.table.shallow_resolve(ty);
+        Some(self.expand_alias_ty(&resolved))
+    }
+
+    /// Nominal aliases expanded through the oracle (fuel-bounded), for
+    /// the tiers that need a type's SHAPE - the recursive
+    /// `baml.json.json` union answers structurally.
+    fn expand_alias_ty(&mut self, ty: &Ty) -> Ty {
+        let mut resolved = ty.clone();
         let mut fuel = 8u32;
         while let TyKind::TypeAlias(qtn, _) = resolved.kind() {
             if fuel == 0 {
@@ -2902,7 +3078,7 @@ impl<'db> InferenceContext<'db> {
                 None => break,
             }
         }
-        Some(resolved)
+        resolved
     }
 
     /// The element an ARRAY literal adopts from its expectation: the
