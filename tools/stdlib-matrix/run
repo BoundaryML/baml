@@ -10,6 +10,7 @@ json_file="${script_dir}/report/matrix.json"
 skip_extract=0
 check_only=0
 baseline_file=""
+use_llm=0
 
 absolute_path() {
     case "$1" in
@@ -34,6 +35,12 @@ existing data/ files instead.
 
 The report is not checked into the repository: it is a generated artifact.
 CI publishes matrix.json per run; locally it lands in report/ (gitignored).
+
+--llm adds a second pass: the members left unmatched by name are sent to a
+model, which proposes equivalences a name matcher cannot see (string.iter vs
+[Symbol.iterator]). Requires ANTHROPIC_API_KEY in the environment. Aligned
+rows are reported separately from deterministic matches and carry the model's
+confidence.
 
 --check writes nothing and instead compares this run against a baseline report
 given by --baseline, exiting 1 when the baseline's recorded inputs no longer
@@ -63,6 +70,10 @@ while (($# > 0)); do
         --baseline)
             baseline_file="$(absolute_path "$2")"
             shift 2
+            ;;
+        --llm)
+            use_llm=1
+            shift
             ;;
         -h|--help)
             usage
@@ -142,6 +153,12 @@ target_args=()
 if ((check_only == 1)); then
     target="check_matrix"
     target_args=(--baseline_file "${baseline_file}")
+elif ((use_llm == 1)); then
+    if [[ -z "${ANTHROPIC_API_KEY:-}" ]]; then
+        echo "stdlib-matrix: --llm requires ANTHROPIC_API_KEY in the environment" >&2
+        exit 2
+    fi
+    target="build_matrix_aligned"
 fi
 
 cd "${tool_repo}"
@@ -217,5 +234,11 @@ baml_only="$(jq -er '.report.totals.baml_only' "${temporary_dir}/result.json")"
 ts_only="$(jq -er '.report.totals.ts_only' "${temporary_dir}/result.json")"
 containers="$(jq -er '.report.totals.containers' "${temporary_dir}/result.json")"
 
+if ((use_llm == 1)); then
+    aligned="$(jq -er '.report.totals.aligned' "${temporary_dir}/result.json")"
+    rejected="$(jq -er '.rejected | length' "${temporary_dir}/result.json")"
+    echo "LLM alignment: ${aligned} pairs applied, ${rejected} claims rejected"
+    jq -r '.rejected[] | "  rejected: \(.)"' "${temporary_dir}/result.json" >&2
+fi
 echo "Wrote ${resolved_json} (canonical) and ${resolved_output}"
 echo "${containers} containers: ${matched} matched, ${baml_only} BAML-only, ${ts_only} TS-only"

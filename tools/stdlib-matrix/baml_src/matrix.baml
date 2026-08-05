@@ -2,12 +2,11 @@
 // assemble the full MatrixReport.
 
 function status_rank(status: string) -> string {
-    if (status == "matched") {
-        "0"
-    } else if (status == "baml_only") {
-        "1"
-    } else {
-        "2"
+    match (status) {
+        "matched" => "0",
+        "aligned" => "1",
+        "baml_only" => "2",
+        _ => "3",
     }
 }
 
@@ -30,6 +29,7 @@ function build_container_report(
                 ts: null,
                 baml_alternates: [],
                 ts_alternates: [],
+                alignment: null,
             });
             key_order.push(member.key);
         }
@@ -52,6 +52,7 @@ function build_container_report(
                 ts: member,
                 baml_alternates: [],
                 ts_alternates: [],
+                alignment: null,
             });
             key_order.push(member.key);
         }
@@ -70,15 +71,15 @@ function build_container_report(
     );
 
     let matched = 0;
+    let aligned = 0;
     let baml_only = 0;
     let ts_only = 0;
     for (let member_row in rows) {
-        if (member_row.status == "matched") {
-            matched += 1;
-        } else if (member_row.status == "baml_only") {
-            baml_only += 1;
-        } else {
-            ts_only += 1;
+        match (member_row.status) {
+            "matched" => { matched += 1; },
+            "aligned" => { aligned += 1; },
+            "baml_only" => { baml_only += 1; },
+            _ => { ts_only += 1; },
         }
     }
 
@@ -88,6 +89,7 @@ function build_container_report(
         baml_origins: row.baml_types.concat(row.baml_namespaces),
         ts_origins: row.ts_containers,
         matched: matched,
+        aligned: aligned,
         baml_only: baml_only,
         ts_only: ts_only,
         synthetic_hidden: baml_pool.synthetic_hidden,
@@ -113,6 +115,7 @@ function build_matrix_report(
     let index = index_export(export_doc);
     let containers: ContainerReport[] = [];
     let matched = 0;
+    let aligned = 0;
     let baml_only = 0;
     let ts_only = 0;
     let synthetic_hidden = 0;
@@ -123,6 +126,7 @@ function build_matrix_report(
             pool_ts_side(ts_doc, row),
         );
         matched += report.matched;
+        aligned += report.aligned;
         baml_only += report.baml_only;
         ts_only += report.ts_only;
         synthetic_hidden += report.synthetic_hidden;
@@ -143,6 +147,7 @@ function build_matrix_report(
         totals: MatrixTotals {
             containers: containers.length(),
             matched: matched,
+            aligned: aligned,
             baml_only: baml_only,
             ts_only: ts_only,
             synthetic_hidden: synthetic_hidden,

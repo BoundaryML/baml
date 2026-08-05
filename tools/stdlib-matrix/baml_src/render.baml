@@ -54,12 +54,21 @@ function signature_cell(member: PooledMember?) -> string {
 }
 
 function render_status_label(status: string) -> string {
-    if (status == "baml_only") {
-        "BAML only"
-    } else if (status == "ts_only") {
-        "TS only"
+    match (status) {
+        "baml_only" => "BAML only",
+        "ts_only" => "TS only",
+        "aligned" => "aligned",
+        _ => status,
+    }
+}
+
+/// Aligned rows carry the model's confidence and reasoning; deterministic
+/// rows carry nothing, which is itself the signal that no judgment was needed.
+function alignment_cell(member_row: MemberRow) -> string {
+    if let info: AlignmentInfo = member_row.alignment {
+        escape_cell(`${info.confidence}: ${info.reason}`)
     } else {
-        status
+        ""
     }
 }
 
@@ -70,7 +79,8 @@ function render_member_row(member_row: MemberRow) -> string {
         `| ${member_cell(member_row.ts, member_row.ts_alternates)} `,
         `| ${signature_cell(member_row.baml)} `,
         `| ${signature_cell(member_row.ts)} `,
-        `| ${throws_cell(member_row.baml)} |`,
+        `| ${throws_cell(member_row.baml)} `,
+        `| ${alignment_cell(member_row)} |`,
     ]
     .join("")
 }
@@ -85,10 +95,10 @@ function render_container_section(report: ContainerReport) -> string {
         out.push(`> ${note}`);
     }
     out.push("");
-    out.push(`matched ${report.matched} · BAML only ${report.baml_only} · TS only ${report.ts_only}`);
+    out.push(`matched ${report.matched} · aligned ${report.aligned} · BAML only ${report.baml_only} · TS only ${report.ts_only}`);
     out.push("");
-    out.push("| status | BAML member | TS member | BAML signature | TS signature | BAML throws |");
-    out.push("| --- | --- | --- | --- | --- | --- |");
+    out.push("| status | BAML member | TS member | BAML signature | TS signature | BAML throws | alignment |");
+    out.push("| --- | --- | --- | --- | --- | --- | --- |");
     for (let member_row in report.rows) {
         out.push(render_member_row(member_row));
     }
@@ -155,13 +165,15 @@ function render_matrix_markdown(report: MatrixReport) -> string {
     out.push("");
     out.push("## Summary");
     out.push("");
-    out.push("| container | matched | BAML only | TS only | note |");
-    out.push("| --- | --- | --- | --- | --- |");
+    out.push("| container | matched | aligned | BAML only | TS only | note |");
+    out.push("| --- | --- | --- | --- | --- | --- |");
     for (let container in report.containers) {
-        out.push(`| ${container.key} | ${container.matched} | ${container.baml_only} | ${container.ts_only} | ${optional_cell(container.note)} |`);
+        out.push(`| ${container.key} | ${container.matched} | ${container.aligned} | ${container.baml_only} | ${container.ts_only} | ${optional_cell(container.note)} |`);
     }
     out.push("");
-    out.push(`Totals: ${report.totals.matched} matched · ${report.totals.baml_only} BAML only · ${report.totals.ts_only} TS only across ${report.totals.containers} containers (${report.totals.synthetic_hidden} compiler-synthesized BAML members hidden).`);
+    out.push(`Totals: ${report.totals.matched} matched · ${report.totals.aligned} aligned · ${report.totals.baml_only} BAML only · ${report.totals.ts_only} TS only across ${report.totals.containers} containers (${report.totals.synthetic_hidden} compiler-synthesized BAML members hidden).`);
+    out.push("");
+    out.push("*matched* is deterministic name agreement; *aligned* is a model's judgment that two differently-named members are the same operation, and carries its confidence and reasoning.");
     out.push("");
     out.push("## Uncompared surfaces");
     out.push("");

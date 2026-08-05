@@ -218,6 +218,19 @@ test "mapping gap detection flags unscoped and stale surfaces" {
 // Baselines are produced by the real renderer rather than hand-written, so
 // these also guard the summary table's parse/render round trip.
 
+// BUG(baml compiler): a struct literal may omit a required, non-optional
+// field. It compiles clean and the field is `null` at runtime, so a value
+// typed `int` holds `null`. Minimal repro (verified 2026-08-05):
+//
+//   class Two { a: int, b: int }
+//   let t = Two { a: 1 };     // no error
+//   `${t.b}`                  // → "null"
+//
+// It surfaced here rather than at the literal: adding `aligned: int` to the
+// report model left this fixture silently short a field, and the only symptom
+// was `JsonDecodeError { message: "expected integer" }` from the round-trip
+// test — decoding caught what construction did not. Keep the fixtures in step
+// with the models by hand until literals are checked for completeness.
 function fixture_report_with_sha(
     key: string,
     matched: int,
@@ -242,6 +255,7 @@ function fixture_report_with_sha(
                 baml_origins: ["baml.X"],
                 ts_origins: ["X"],
                 matched: matched,
+                aligned: 0,
                 baml_only: baml_only,
                 ts_only: ts_only,
                 synthetic_hidden: 0,
@@ -251,6 +265,7 @@ function fixture_report_with_sha(
         totals: MatrixTotals {
             containers: 1,
             matched: matched,
+            aligned: 0,
             baml_only: baml_only,
             ts_only: ts_only,
             synthetic_hidden: 0,

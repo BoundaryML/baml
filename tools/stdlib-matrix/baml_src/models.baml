@@ -164,6 +164,16 @@ class MemberRow {
     ts: PooledMember?,
     baml_alternates: string[],
     ts_alternates: string[],
+    /// Present only on "aligned" rows: why a model judged these equivalent.
+    alignment: AlignmentInfo?,
+}
+
+/// A model's judgment about one pair, carried so a reader can weigh it. An
+/// aligned row is a claim, not a fact — unlike a deterministic match, which
+/// follows from the names.
+class AlignmentInfo {
+    confidence: string,
+    reason: string,
 }
 
 /// An explicit name equivalence for the deterministic pass: the BAML member's
@@ -198,6 +208,9 @@ class ContainerReport {
     baml_origins: string[],
     ts_origins: string[],
     matched: int,
+    /// Pairs a model judged equivalent, counted apart from `matched` so the
+    /// deterministic figure stays comparable across runs.
+    aligned: int,
     baml_only: int,
     ts_only: int,
     synthetic_hidden: int,
@@ -207,6 +220,7 @@ class ContainerReport {
 class MatrixTotals {
     containers: int,
     matched: int,
+    aligned: int,
     baml_only: int,
     ts_only: int,
     synthetic_hidden: int,
@@ -290,6 +304,17 @@ class CheckResult {
 
 /// `report` is the canonical artifact — the wrapper writes it to `json_file`,
 /// and `markdown` is a rendered view of exactly that structure.
+/// `build_matrix_aligned`'s result: the same artifacts plus what the model
+/// contributed and what was thrown out.
+class AlignedMatrixResult {
+    markdown: string,
+    output_file: string,
+    json_file: string,
+    report: MatrixReport,
+    applied: int,
+    rejected: string[],
+}
+
 class MatrixResult {
     markdown: string,
     output_file: string,

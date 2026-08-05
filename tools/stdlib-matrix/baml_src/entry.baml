@@ -77,6 +77,34 @@ function check_matrix(
     }
 }
 
+/// The full pass: structure-only matching, then LLM alignment over the
+/// residue. Reads ANTHROPIC_API_KEY from the environment.
+function build_matrix_aligned(
+    baml_surface_file: string = "tools/stdlib-matrix/data/baml_surface.json",
+    ts_surface_file: string = "tools/stdlib-matrix/data/ts_surface.json",
+    output_file: string = "tools/stdlib-matrix/report/matrix.md",
+    json_file: string = "tools/stdlib-matrix/report/matrix.json",
+    baml_surface_sha256: string = "",
+) -> AlignedMatrixResult {
+    let base = build_matrix(
+        baml_surface_file = baml_surface_file,
+        ts_surface_file = ts_surface_file,
+        output_file = output_file,
+        json_file = json_file,
+        baml_surface_sha256 = baml_surface_sha256,
+    );
+    //# enrich the structure-only report with model-judged equivalences
+    let outcome = align_report(base.report);
+    AlignedMatrixResult {
+        markdown: render_matrix_markdown(outcome.report),
+        output_file: output_file,
+        json_file: json_file,
+        report: outcome.report,
+        applied: outcome.applied,
+        rejected: outcome.rejected,
+    }
+}
+
 function main() -> MatrixResult {
     build_matrix()
 }
