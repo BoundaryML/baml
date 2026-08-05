@@ -4,9 +4,9 @@ expression: report
 ---
 files: 116
 nodes compared: 60529
-agreements: 51848
+agreements: 51901
 one-sided (coverage): 88
-conflicts: 8593 across 1562 distinct pairs
+conflicts: 8540 across 1529 distinct pairs
 hir_ty error-channel entries: 71
 tir diagnostics: 0
 panics: 0
@@ -154,6 +154,9 @@ ns_to_json_interface/to_json_interface.baml:1125..1207 `{\n       ...\n        }
 [31x] hir_ty=[() -> void throws baml.errors.Io | baml.errors.Timeout / null] tir=[() -> void throws unknown / null]
     at ns_http_server/http_server.baml:1333..1391 `{\n    ass...: ping")\n}`
     at ns_http_server/http_server.baml:1861..1908 `{\n    ass...(), 503)\n}`
+[31x] hir_ty=[(a: !error, b: !error) -> bool throws never] tir=[(a: T, b: T) -> bool throws never]
+    at ns_arrays/arrays.baml:12197..12213 `baml.deep_equals`
+    at ns_bigints/bigints.baml:4803..4819 `baml.deep_equals`
 [31x] hir_ty=[bool] tir=[false | true]
     at ns_arrays/arrays.baml:5052..5261 `{\n       ...true\n    }`
     at ns_arrays/arrays.baml:7344..7531 `{\n       ...true\n    }`
@@ -190,9 +193,6 @@ ns_to_json_interface/to_json_interface.baml:1125..1207 `{\n       ...\n        }
 [24x] hir_ty=[() -> never throws baml.errors.Io / never] tir=[() -> never throws unknown / never]
     at ns_http_server/http_server.baml:880..1074 `{\n       ...  })\n    }`
     at ns_http_server/http_server.baml:1576..1727 `{\n       ...  })\n    }`
-[24x] hir_ty=[(a: !error, b: !error) -> bool throws never] tir=[(a: T, b: T) -> bool throws never]
-    at ns_arrays/arrays.baml:12197..12213 `baml.deep_equals`
-    at ns_bigints/bigints.baml:4803..4819 `baml.deep_equals`
 [24x] hir_ty=[(self: Future<never, baml.errors.Io>) -> bool throws never] tir=[(self: baml.future.Future<never, baml.errors.Io>) -> bool throws never]
     at ns_http_server/http_server.baml:1282..1293 `task.cancel`
     at ns_http_server/http_server.baml:1796..1807 `task.cancel`
@@ -337,9 +337,6 @@ ns_to_json_interface/to_json_interface.baml:1125..1207 `{\n       ...\n        }
 [11x] hir_ty=[int] tir=[int | 99]
     at ns_arrays/sort_comparable.baml:4987..5108 `Comparable...> 99\n    }`
     at ns_exceptions/exceptions.baml:33897..33933 `s13_middle...{ _ => 99 }`
-[10x] hir_ty=[!error] tir=[user.enums.EnumsShape.Rectangle]
-    at ns_enums/enums.baml:677..705 `{\n    Enu...ectangle\n}`
-    at ns_enums/enums.baml:683..703 `EnumsShape.Rectangle`
 [10x] hir_ty=["origin"] tir=[string]
     at ns_errorcontext/errorcontext.baml:8726..8727 `e`
     at ns_errorcontext/errorcontext.baml:8740..8741 `_`
@@ -742,9 +739,6 @@ ns_to_json_interface/to_json_interface.baml:1125..1207 `{\n       ...\n        }
 [4x] hir_ty=[!error] tir=[user.iter_impl_generics_only.core.Iterator<int, never>]
     at ns_iter_impl_generics_only/iter.baml:2805..2898 `user.iter_... { x * 2 })`
     at ns_iter_impl_generics_only/iter.baml:3969..4074 `user.iter_...% 2 == 0 })`
-[4x] hir_ty=[!error] tir=[user.match_call_scrutinee.Decision.Gamma]
-    at ns_match_call_scrutinee/match_call_scrutinee.baml:962..976 `Decision.Gamma`
-    at ns_match_call_scrutinee/match_call_scrutinee.baml:1419..1433 `Decision.Gamma`
 [4x] hir_ty=[!error] tir=[user.prompt_tag_runtime.Labeled]
     at ns_prompt_tag_runtime/prompt_tag_runtime.baml:4924..4927 `{v}`
     at ns_prompt_tag_runtime/prompt_tag_runtime.baml:4925..4926 `v`
@@ -787,9 +781,6 @@ ns_to_json_interface/to_json_interface.baml:1125..1207 `{\n       ...\n        }
 [4x] hir_ty=[() -> void throws string / null] tir=[() -> void throws unknown / null]
     at ns_arrays/arrays.baml:7024..7258 `{\n    let...pected))\n}`
     at ns_arrays/arrays.baml:11572..11778 `{\n    let...pected))\n}`
-[4x] hir_ty=[(a: baml.future.FutureState, b: baml.future.FutureState) -> bool throws never] tir=[(a: T, b: T) -> bool throws never]
-    at ns_cancel_cascade/cancel_cascade.baml:4747..4763 `baml.deep_equals`
-    at ns_future_methods/future_methods.baml:1877..1893 `baml.deep_equals`
 [4x] hir_ty=[(a: user.deep_copy.Node, b: user.deep_copy.Node) -> bool throws never] tir=[(a: T, b: T) -> bool throws never]
     at ns_deep_copy/deep_copy.baml:6403..6419 `baml.deep_equals`
     at ns_deep_copy/deep_copy.baml:6799..6815 `baml.deep_equals`
@@ -997,9 +988,6 @@ ns_to_json_interface/to_json_interface.baml:1125..1207 `{\n       ...\n        }
 [3x] hir_ty=[(a: user.classes.PointXYZW, b: user.classes.PointXYZW) -> bool throws never] tir=[(a: T, b: T) -> bool throws never]
     at ns_classes/classes.baml:4863..4879 `baml.deep_equals`
     at ns_classes/classes.baml:5153..5169 `baml.deep_equals`
-[3x] hir_ty=[(a: user.enums.EnumsShape, b: user.enums.EnumsShape) -> bool throws never] tir=[(a: T, b: T) -> bool throws never]
-    at ns_enums/enums.baml:932..948 `baml.deep_equals`
-    at ns_enums/enums.baml:1047..1063 `baml.deep_equals`
 [3x] hir_ty=[(a: user.operators.Vec2, b: user.operators.Vec2) -> bool throws never] tir=[(a: T, b: T) -> bool throws never]
     at ns_operators/operators.baml:7069..7085 `baml.deep_equals`
     at ns_operators/operators.baml:7245..7261 `baml.deep_equals`
@@ -1267,9 +1255,6 @@ ns_to_json_interface/to_json_interface.baml:1125..1207 `{\n       ...\n        }
 [2x] hir_ty=[!error] tir=[U[]]
     at ns_arrays/sort_comparable.baml:11797..11814 `{\n    xs.sort()\n}`
     at ns_arrays/sort_comparable.baml:11803..11812 `xs.sort()`
-[2x] hir_ty=[!error] tir=[baml.future.FutureState.Cancelled]
-    at ns_cancel_cascade/cancel_cascade.baml:4809..4842 `baml.futur...e.Cancelled`
-    at ns_future_methods/future_methods.baml:2307..2340 `baml.futur...e.Cancelled`
 [2x] hir_ty=[!error] tir=[baml.iter.Peekable<int, never>]
     at ns_iter/iter.baml:14341..14346 `let p`
     at ns_iter/iter.baml:14349..14395 `baml.iter.....peekable()`
@@ -1291,48 +1276,12 @@ ns_to_json_interface/to_json_interface.baml:1125..1207 `{\n       ...\n        }
 [2x] hir_ty=[!error] tir=[user.iter_impl_generics_only.core.Peekable<int, never>]
     at ns_iter_impl_generics_only/iter.baml:6477..6482 `let p`
     at ns_iter_impl_generics_only/iter.baml:6485..6555 `user.iter_....peekable()`
-[2x] hir_ty=[!error] tir=[user.json_to_from_string.Color.Blue]
-    at ns_json_to_from_string/json_to_from_string.baml:9132..9142 `Color.Blue`
-    at ns_json_to_from_string/json_to_from_string.baml:9256..9266 `Color.Blue`
-[2x] hir_ty=[!error] tir=[user.match_call_scrutinee.Coin.Heads]
-    at ns_match_call_scrutinee/match_call_scrutinee.baml:2986..2996 `Coin.Heads`
-    at ns_match_call_scrutinee/match_call_scrutinee.baml:3247..3257 `Coin.Heads`
-[2x] hir_ty=[!error] tir=[user.match_call_scrutinee.Coin.Heads | user.match_call_scrutinee.Coin.Tails]
-    at ns_match_call_scrutinee/match_call_scrutinee.baml:2951..3030 `{\n    mat...,\n    }\n}`
-    at ns_match_call_scrutinee/match_call_scrutinee.baml:2957..3028 `match (whi...ils,\n    }`
-[2x] hir_ty=[!error] tir=[user.match_call_scrutinee.Decision.Alpha]
-    at ns_match_call_scrutinee/match_call_scrutinee.baml:905..919 `Decision.Alpha`
-    at ns_match_call_scrutinee/match_call_scrutinee.baml:1665..1679 `Decision.Alpha`
-[2x] hir_ty=[!error] tir=[user.match_call_scrutinee.Decision.Alpha | user.match_call_scrutinee.Decision.Beta | user.match_call_scrutinee.Decision.Gamma]
-    at ns_match_call_scrutinee/match_call_scrutinee.baml:870..985 `{\n    mat...,\n    }\n}`
-    at ns_match_call_scrutinee/match_call_scrutinee.baml:876..983 `match (whi...mma,\n    }`
-[2x] hir_ty=[!error] tir=[user.match_call_scrutinee.Decision.Beta]
-    at ns_match_call_scrutinee/match_call_scrutinee.baml:934..947 `Decision.Beta`
-    at ns_match_call_scrutinee/match_call_scrutinee.baml:4213..4226 `Decision.Beta`
-[2x] hir_ty=[!error] tir=[user.match_call_scrutinee.Hand.One]
-    at ns_match_call_scrutinee/match_call_scrutinee.baml:3485..3493 `Hand.One`
-    at ns_match_call_scrutinee/match_call_scrutinee.baml:3878..3886 `Hand.One`
-[2x] hir_ty=[!error] tir=[user.match_call_scrutinee.Hand.One | user.match_call_scrutinee.Hand.Two | user.match_call_scrutinee.Hand.Three | user.match_call_scrutinee.Hand.Four | user.match_call_scrutinee.Hand.Five]
-    at ns_match_call_scrutinee/match_call_scrutinee.baml:3450..3598 `{\n    mat...,\n    }\n}`
-    at ns_match_call_scrutinee/match_call_scrutinee.baml:3456..3596 `match (whi...ive,\n    }`
-[2x] hir_ty=[!error] tir=[user.match_enum_types.Status.Active]
-    at ns_match_enum_types/match_enum_types.baml:1406..1419 `Status.Active`
-    at ns_match_enum_types/match_enum_types.baml:1839..1852 `Status.Active`
-[2x] hir_ty=[!error] tir=[user.match_types.Status.Active]
-    at ns_match_types/match_types.baml:7781..7794 `Status.Active`
-    at ns_match_types/match_types.baml:8349..8362 `Status.Active`
-[2x] hir_ty=[!error] tir=[user.match_types.Status.Pending]
-    at ns_match_types/match_types.baml:7896..7910 `Status.Pending`
-    at ns_match_types/match_types.baml:8208..8222 `Status.Pending`
 [2x] hir_ty=[!error] tir=[user.null_handling.NhProfile | null]
     at ns_null_handling/null_handling.baml:1079..1092 `user?.profile`
     at ns_null_handling/null_handling.baml:1370..1383 `user?.profile`
 [2x] hir_ty=[!error] tir=[user.prompt_tag_runtime.Point]
     at ns_prompt_tag_runtime/prompt_tag_runtime.baml:3757..3760 `{p}`
     at ns_prompt_tag_runtime/prompt_tag_runtime.baml:3758..3759 `p`
-[2x] hir_ty=[!error] tir=[user.to_json_interface.E.A]
-    at ns_to_json_interface/to_json_interface.baml:7994..7997 `E.A`
-    at ns_to_json_interface/to_json_interface.baml:8654..8657 `E.A`
 [2x] hir_ty=[!error / () -> string throws never] tir=[() -> string throws never]
     at ns_instantiation_expr/instantiation_expr.baml:2498..2512 `describe<User>`
     at ns_instantiation_expr/instantiation_expr.baml:3697..3708 `describe<T>`
@@ -2239,6 +2188,15 @@ ns_to_json_interface/to_json_interface.baml:1125..1207 `{\n       ...\n        }
 [2x] hir_ty=[user.json_auto_derive.OuterTo] tir=[user.json_auto_derive.BAliasTo]
     at ns_json_auto_derive/json_auto_derive.baml:24107..24121 `let b: OuterTo`
     at ns_json_auto_derive/json_auto_derive.baml:24114..24121 `OuterTo`
+[2x] hir_ty=[user.match_call_scrutinee.Coin] tir=[user.match_call_scrutinee.Coin.Heads | user.match_call_scrutinee.Coin.Tails]
+    at ns_match_call_scrutinee/match_call_scrutinee.baml:2951..3030 `{\n    mat...,\n    }\n}`
+    at ns_match_call_scrutinee/match_call_scrutinee.baml:2957..3028 `match (whi...ils,\n    }`
+[2x] hir_ty=[user.match_call_scrutinee.Decision] tir=[user.match_call_scrutinee.Decision.Alpha | user.match_call_scrutinee.Decision.Beta | user.match_call_scrutinee.Decision.Gamma]
+    at ns_match_call_scrutinee/match_call_scrutinee.baml:870..985 `{\n    mat...,\n    }\n}`
+    at ns_match_call_scrutinee/match_call_scrutinee.baml:876..983 `match (whi...mma,\n    }`
+[2x] hir_ty=[user.match_call_scrutinee.Hand] tir=[user.match_call_scrutinee.Hand.One | user.match_call_scrutinee.Hand.Two | user.match_call_scrutinee.Hand.Three | user.match_call_scrutinee.Hand.Four | user.match_call_scrutinee.Hand.Five]
+    at ns_match_call_scrutinee/match_call_scrutinee.baml:3450..3598 `{\n    mat...,\n    }\n}`
+    at ns_match_call_scrutinee/match_call_scrutinee.baml:3456..3596 `match (whi...ive,\n    }`
 [2x] hir_ty=[user.match_types.Bird | user.match_types.Cat | user.match_types.Dog | user.match_types.Fish] tir=[user.match_types.Cat | user.match_types.Dog | user.match_types.Bird | user.match_types.Fish]
     at ns_match_types/match_types.baml:11906..11912 `animal`
     at ns_match_types/match_types.baml:13443..13449 `animal`
@@ -2301,10 +2259,6 @@ ns_to_json_interface/to_json_interface.baml:1125..1207 `{\n       ...\n        }
     at ns_interfaces_class_generics/interfaces_class_generics.baml:2555..2565 `value.echo`
 [1x] hir_ty=[!error] tir=[0 | int]
     at ns_iter/iter.baml:6716..6854 `baml.iter.... x\n  }, 0)`
-[1x] hir_ty=[!error] tir=[baml.future.FutureState.Error]
-    at ns_future_methods/future_methods.baml:2873..2902 `baml.futur...State.Error`
-[1x] hir_ty=[!error] tir=[baml.future.FutureState.Pending]
-    at ns_future_methods/future_methods.baml:1923..1954 `baml.futur...ate.Pending`
 [1x] hir_ty=[!error] tir=[float]
     at ns_interfaces/interfaces.baml:23511..23547 `m.as<SgidC...>.convert()`
 [1x] hir_ty=[!error] tir=[user.comparable_sort.Kaboom]
@@ -2319,8 +2273,6 @@ ns_to_json_interface/to_json_interface.baml:1125..1207 `{\n       ...\n        }
     at ns_generic_union_returns/generic_union_returns.baml:1971..1986 `children?.at(0)`
 [1x] hir_ty=[!error] tir=[user.generic_union_returns.ParsedStatus | null]
     at ns_generic_union_returns/generic_union_returns.baml:2025..2040 `statuses?.at(0)`
-[1x] hir_ty=[!error] tir=[user.generic_union_returns.ParsedStatus.Ready]
-    at ns_generic_union_returns/generic_union_returns.baml:2044..2062 `ParsedStatus.Ready`
 [1x] hir_ty=[!error] tir=[user.interfaces.ApssSerializer]
     at ns_interfaces/interfaces.baml:9666..9686 `h.as<ApssSerializer>`
 [1x] hir_ty=[!error] tir=[user.interfaces.ApwuAnimal]
@@ -2365,10 +2317,6 @@ ns_to_json_interface/to_json_interface.baml:1125..1207 `{\n       ...\n        }
     at ns_interfaces_associated_types/interfaces_associated_types.baml:4317..4359 `wrapped.as... = string>>`
 [1x] hir_ty=[!error] tir=[user.interfaces_associated_types.RdfSource<Item = int>]
     at ns_interfaces_associated_types/interfaces_associated_types.baml:13165..13196 `RdfSource<...> { value }`
-[1x] hir_ty=[!error] tir=[user.is_operator.Status.Active]
-    at ns_is_operator/is_operator.baml:5261..5274 `Status.Active`
-[1x] hir_ty=[!error] tir=[user.is_operator.Status.Inactive]
-    at ns_is_operator/is_operator.baml:5499..5514 `Status.Inactive`
 [1x] hir_ty=[!error] tir=[user.json_auto_derive.Box6]
     at ns_json_auto_derive/json_auto_derive.baml:16429..16438 `Box6<int>`
 [1x] hir_ty=[!error] tir=[user.json_auto_derive.Box6<int>]
@@ -2379,46 +2327,10 @@ ns_to_json_interface/to_json_interface.baml:1125..1207 `{\n       ...\n        }
     at ns_json_auto_derive/json_auto_derive.baml:17192..17222 `Box7<Secre...rom_json(j)`
 [1x] hir_ty=[!error] tir=[user.json_auto_derive.SecretBoth]
     at ns_json_auto_derive/json_auto_derive.baml:23454..23487 `SecretBoth...arsed_json)`
-[1x] hir_ty=[!error] tir=[user.json_to_from_string.Color.Red]
-    at ns_json_to_from_string/json_to_from_string.baml:5283..5292 `Color.Red`
-[1x] hir_ty=[!error] tir=[user.match_call_scrutinee.Coin.Tails]
-    at ns_match_call_scrutinee/match_call_scrutinee.baml:3011..3021 `Coin.Tails`
-[1x] hir_ty=[!error] tir=[user.match_call_scrutinee.Hand.Five]
-    at ns_match_call_scrutinee/match_call_scrutinee.baml:3580..3589 `Hand.Five`
-[1x] hir_ty=[!error] tir=[user.match_call_scrutinee.Hand.Four]
-    at ns_match_call_scrutinee/match_call_scrutinee.baml:3556..3565 `Hand.Four`
-[1x] hir_ty=[!error] tir=[user.match_call_scrutinee.Hand.Three]
-    at ns_match_call_scrutinee/match_call_scrutinee.baml:3531..3541 `Hand.Three`
-[1x] hir_ty=[!error] tir=[user.match_call_scrutinee.Hand.Two]
-    at ns_match_call_scrutinee/match_call_scrutinee.baml:3508..3516 `Hand.Two`
-[1x] hir_ty=[!error] tir=[user.match_enum_types.Color.Green]
-    at ns_match_enum_types/match_enum_types.baml:3477..3488 `Color.Green`
-[1x] hir_ty=[!error] tir=[user.match_enum_types.Color.Red]
-    at ns_match_enum_types/match_enum_types.baml:1342..1351 `Color.Red`
-[1x] hir_ty=[!error] tir=[user.match_enum_types.Status.Inactive]
-    at ns_match_enum_types/match_enum_types.baml:2651..2666 `Status.Inactive`
-[1x] hir_ty=[!error] tir=[user.match_types.Direction.South]
-    at ns_match_types/match_types.baml:8931..8946 `Direction.South`
-[1x] hir_ty=[!error] tir=[user.patterns_new_runtime.Direction.North]
-    at ns_patterns_new_runtime/patterns_new_runtime.baml:44568..44583 `Direction.North`
-[1x] hir_ty=[!error] tir=[user.patterns_new_runtime.Direction.West]
-    at ns_patterns_new_runtime/patterns_new_runtime.baml:44703..44717 `Direction.West`
 [1x] hir_ty=[!error] tir=[user.self_frame_slot.Crate<T>]
     at ns_self_frame_slot/self_frame_slot.baml:9046..9050 `Self`
 [1x] hir_ty=[!error] tir=[user.self_frame_slot.Croc]
     at ns_self_frame_slot/self_frame_slot.baml:8681..8685 `Self`
-[1x] hir_ty=[!error] tir=[user.to_json_interface.Color.Green]
-    at ns_to_json_interface/to_json_interface.baml:6975..6986 `Color.Green`
-[1x] hir_ty=[!error] tir=[user.to_json_interface.F.Y]
-    at ns_to_json_interface/to_json_interface.baml:8996..8999 `F.Y`
-[1x] hir_ty=[!error / "GoogleEnvEnterpriseOptionsClient" / "gemini-2.0-flash" / "google-ai" / "key" / "options-project" / "test-express-key" / "us-west1" / 0 / baml.llm.Client / baml.llm.Client[] / baml.llm.GoogleAiOptions / baml.llm.PrimitiveClient / baml.llm.PrimitiveClientOptions / map<string, string> / map<string, unknown> / null / true] tir=["GoogleEnvEnterpriseOptionsClient" / "gemini-2.0-flash" / "google-ai" / "key" / "options-project" / "test-express-key" / "us-west1" / baml.llm.GoogleAiOptions / baml.llm.PrimitiveClient / baml.llm.PrimitiveClientOptions / map<string, string> / map<string, unknown> / null / true]
-    at ns_google_llm_env/google_llm_env.baml:1257..1538 `client<llm...}\n    }\n}`
-[1x] hir_ty=[!error / "ParseCompanionsTestClient" / "gpt-4o-mini" / "http://localhost:1234" / "openai" / "test-key" / 0 / baml.llm.Client / baml.llm.Client[] / baml.llm.PrimitiveClient / baml.llm.PrimitiveClientOptions / map<string, string> / map<string, unknown> / null] tir=["ParseCompanionsTestClient" / "gpt-4o-mini" / "http://localhost:1234" / "openai" / "test-key" / baml.llm.PrimitiveClient / baml.llm.PrimitiveClientOptions / map<string, string> / map<string, unknown> / null]
-    at ns_parse_companions/parse_companions.baml:555..732 `client<llm..."\n    }\n}`
-[1x] hir_ty=[!error / "StreamParseClient" / "gpt-4o" / "http://localhost:1234" / "openai" / "test-key" / 0 / baml.llm.Client / baml.llm.Client[] / baml.llm.PrimitiveClient / baml.llm.PrimitiveClientOptions / map<string, string> / map<string, unknown> / null] tir=["StreamParseClient" / "gpt-4o" / "http://localhost:1234" / "openai" / "test-key" / baml.llm.PrimitiveClient / baml.llm.PrimitiveClientOptions / map<string, string> / map<string, unknown> / null]
-    at ns_streaming_parsing/streaming_parsing.baml:1618..1782 `client<llm..."\n    }\n}`
-[1x] hir_ty=[!error / "TestClient" / "gpt-4o-mini" / "http://localhost:1234" / "openai" / "test-key" / 0 / baml.llm.Client / baml.llm.Client[] / baml.llm.PrimitiveClient / baml.llm.PrimitiveClientOptions / map<string, string> / map<string, unknown> / null] tir=["TestClient" / "gpt-4o-mini" / "http://localhost:1234" / "openai" / "test-key" / baml.llm.PrimitiveClient / baml.llm.PrimitiveClientOptions / map<string, string> / map<string, unknown> / null]
-    at ns_type_reflection/type_reflection.baml:561..723 `client<llm..."\n    }\n}`
 [1x] hir_ty=[!error / (a: !error, b: !error) -> !error throws never] tir=[(a: A, b: B) -> B throws never / (a: int, b: string) -> string throws never]
     at ns_instantiation_expr/instantiation_expr.baml:2043..2060 `pair<int, string>`
 [1x] hir_ty=[!error / (x: !error) -> !error throws never] tir=[(x: T) -> T throws never]
@@ -2445,6 +2357,8 @@ ns_to_json_interface/to_json_interface.baml:1125..1207 `{\n       ...\n        }
     at ns_type_reflection/type_reflection.baml:769..837 `function G...t #"hi"#\n}`
 [1x] hir_ty=["GetFoo" / (client: baml.llm.Client, function_name: string, args: map<string, unknown>, prompt_closure?: ((baml.llm.Context) -> baml.llm.PromptAst throws never) | null) -> user.type_reflection.Foo throws baml.errors.DevOther | baml.errors.InvalidArgument | baml.errors.Io | baml.errors.LlmClient | baml.errors.RenderPrompt | baml.errors.Timeout / baml.llm.Client / map<string, unknown> / user.type_reflection.Foo] tir=["GetFoo" / (client: baml.llm.Client, function_name: string, args: map<string, unknown>, prompt_closure?: ((baml.llm.Context) -> baml.llm.PromptAst throws never) | null) -> T throws baml.errors.DevOther | baml.errors.InvalidArgument | baml.errors.Io | baml.errors.LlmClient | baml.errors.RenderPrompt | baml.errors.Timeout / baml.llm.Client / map<string, unknown> / user.type_reflection.Foo]
     at ns_type_reflection/type_reflection.baml:794..837 `{\n    cli...t #"hi"#\n}`
+[1x] hir_ty=["GoogleEnvEnterpriseOptionsClient" / "gemini-2.0-flash" / "google-ai" / "key" / "options-project" / "test-express-key" / "us-west1" / 0 / baml.llm.Client / baml.llm.ClientType.Primitive / baml.llm.Client[] / baml.llm.GoogleAiOptions / baml.llm.PrimitiveClient / baml.llm.PrimitiveClientOptions / map<string, string> / map<string, unknown> / null / true] tir=["GoogleEnvEnterpriseOptionsClient" / "gemini-2.0-flash" / "google-ai" / "key" / "options-project" / "test-express-key" / "us-west1" / baml.llm.GoogleAiOptions / baml.llm.PrimitiveClient / baml.llm.PrimitiveClientOptions / map<string, string> / map<string, unknown> / null / true]
+    at ns_google_llm_env/google_llm_env.baml:1257..1538 `client<llm...}\n    }\n}`
 [1x] hir_ty=["GoogleEnvEnterprisePrompt" / "input" / (client: baml.llm.Client, function_name: string, args: map<string, unknown>, prompt_closure?: ((baml.llm.Context) -> baml.llm.PromptAst throws never) | null) -> baml.http.Request throws baml.errors.InvalidArgument | baml.errors.LlmClient | baml.errors.RenderPrompt / (client: baml.llm.Client, function_name: string, args: map<string, unknown>, prompt_closure?: ((baml.llm.Context) -> baml.llm.PromptAst throws never) | null) -> baml.llm.PromptAst throws baml.errors.InvalidArgument | baml.errors.LlmClient | baml.errors.RenderPrompt / (client: baml.llm.Client, function_name: string, args: map<string, unknown>, prompt_closure?: ((baml.llm.Context) -> baml.llm.PromptAst throws never) | null) -> baml.llm.Stream<string | null, string> throws baml.errors.DevOther | baml.errors.InvalidArgument | baml.errors.Io | baml.errors.LlmClient | baml.errors.RenderPrompt | baml.errors.Timeout / (json: string) -> string throws baml.errors.ParseError / (self: baml.llm.Client, sse: baml.http.SseStream) -> baml.llm.Stream<string | null, string> throws baml.errors.InvalidArgument | baml.errors.LlmClient / baml.http.Request / baml.http.SseStream / baml.llm.Client / baml.llm.PromptAst / baml.llm.Stream<string | null, string> / map<string, string> / string] tir=["GoogleEnvEnterprisePrompt" / "input" / (client: baml.llm.Client, function_name: string, args: map<string, unknown>, prompt_closure?: ((baml.llm.Context) -> baml.llm.PromptAst throws never) | null) -> baml.http.Request throws baml.errors.InvalidArgument | baml.errors.LlmClient | baml.errors.RenderPrompt / (client: baml.llm.Client, function_name: string, args: map<string, unknown>, prompt_closure?: ((baml.llm.Context) -> baml.llm.PromptAst throws never) | null) -> baml.llm.PromptAst throws baml.errors.InvalidArgument | baml.errors.LlmClient | baml.errors.RenderPrompt / (client: baml.llm.Client, function_name: string, args: map<string, unknown>, prompt_closure?: ((baml.llm.Context) -> baml.llm.PromptAst throws never) | null) -> baml.llm.Stream<TStream, TFinal> throws baml.errors.DevOther | baml.errors.InvalidArgument | baml.errors.Io | baml.errors.LlmClient | baml.errors.RenderPrompt | baml.errors.Timeout / (json: string) -> TFinal throws baml.errors.ParseError / (sse: baml.http.SseStream) -> baml.llm.Stream<TStream, TFinal> throws baml.errors.InvalidArgument | baml.errors.LlmClient / baml.http.Request / baml.http.SseStream / baml.llm.Client / baml.llm.PromptAst / baml.llm.Stream<string | null, string> / map<string, unknown> / string]
     at ns_google_llm_env/google_llm_env.baml:1540..1684 `function G...input}"#\n}`
 [1x] hir_ty=["GoogleEnvEnterprisePrompt" / "input" / (client: baml.llm.Client, function_name: string, args: map<string, unknown>, prompt_closure?: ((baml.llm.Context) -> baml.llm.PromptAst throws never) | null) -> string throws baml.errors.DevOther | baml.errors.InvalidArgument | baml.errors.Io | baml.errors.LlmClient | baml.errors.RenderPrompt | baml.errors.Timeout / baml.llm.Client / map<string, string> / string] tir=["GoogleEnvEnterprisePrompt" / "input" / (client: baml.llm.Client, function_name: string, args: map<string, unknown>, prompt_closure?: ((baml.llm.Context) -> baml.llm.PromptAst throws never) | null) -> T throws baml.errors.DevOther | baml.errors.InvalidArgument | baml.errors.Io | baml.errors.LlmClient | baml.errors.RenderPrompt | baml.errors.Timeout / baml.llm.Client / map<string, unknown> / string]
@@ -2457,12 +2371,18 @@ ns_to_json_interface/to_json_interface.baml:1125..1207 `{\n       ...\n        }
     at ns_parse_companions/parse_companions.baml:940..1090 `function P...mat }}"#\n}`
 [1x] hir_ty=["ParseCompanionsParseOptPayload" / (client: baml.llm.Client, function_name: string, args: map<string, unknown>, prompt_closure?: ((baml.llm.Context) -> baml.llm.PromptAst throws never) | null) -> user.parse_companions.ParseCompanionsOptPayload throws baml.errors.DevOther | baml.errors.InvalidArgument | baml.errors.Io | baml.errors.LlmClient | baml.errors.RenderPrompt | baml.errors.Timeout / baml.llm.Client / map<string, unknown> / user.parse_companions.ParseCompanionsOptPayload] tir=["ParseCompanionsParseOptPayload" / (client: baml.llm.Client, function_name: string, args: map<string, unknown>, prompt_closure?: ((baml.llm.Context) -> baml.llm.PromptAst throws never) | null) -> T throws baml.errors.DevOther | baml.errors.InvalidArgument | baml.errors.Io | baml.errors.LlmClient | baml.errors.RenderPrompt | baml.errors.Timeout / baml.llm.Client / map<string, unknown> / user.parse_companions.ParseCompanionsOptPayload]
     at ns_parse_companions/parse_companions.baml:1011..1090 `{\n    cli...mat }}"#\n}`
+[1x] hir_ty=["ParseCompanionsTestClient" / "gpt-4o-mini" / "http://localhost:1234" / "openai" / "test-key" / 0 / baml.llm.Client / baml.llm.ClientType.Primitive / baml.llm.Client[] / baml.llm.PrimitiveClient / baml.llm.PrimitiveClientOptions / map<string, string> / map<string, unknown> / null] tir=["ParseCompanionsTestClient" / "gpt-4o-mini" / "http://localhost:1234" / "openai" / "test-key" / baml.llm.PrimitiveClient / baml.llm.PrimitiveClientOptions / map<string, string> / map<string, unknown> / null]
+    at ns_parse_companions/parse_companions.baml:555..732 `client<llm..."\n    }\n}`
 [1x] hir_ty=["PtRenderPerson" / (baml.llm.Context) -> baml.llm.PromptAst throws never / (body: (role: (string) -> baml.llm.Role throws never, ctx: baml.llm.Context) -> baml.TaggedString throws never) -> ((baml.llm.Context) -> baml.llm.PromptAst throws never) throws never / (client: baml.llm.Client, function_name: string, args: map<string, unknown>, prompt_closure?: ((baml.llm.Context) -> baml.llm.PromptAst throws never) | null) -> baml.http.Request throws baml.errors.InvalidArgument | baml.errors.LlmClient | baml.errors.RenderPrompt / (client: baml.llm.Client, function_name: string, args: map<string, unknown>, prompt_closure?: ((baml.llm.Context) -> baml.llm.PromptAst throws never) | null) -> baml.llm.PromptAst throws baml.errors.InvalidArgument | baml.errors.LlmClient | baml.errors.RenderPrompt / (client: baml.llm.Client, function_name: string, args: map<string, unknown>, prompt_closure?: ((baml.llm.Context) -> baml.llm.PromptAst throws never) | null) -> baml.llm.Stream<user.prompt_tag_runtime.Person$stream | null, user.prompt_tag_runtime.Person> throws baml.errors.DevOther | baml.errors.InvalidArgument | baml.errors.Io | baml.errors.LlmClient | baml.errors.RenderPrompt | baml.errors.Timeout / (client: baml.llm.Client, function_name: string, args: map<string, unknown>, prompt_closure?: ((baml.llm.Context) -> baml.llm.PromptAst throws never) | null) -> user.prompt_tag_runtime.Person throws baml.errors.DevOther | baml.errors.InvalidArgument | baml.errors.Io | baml.errors.LlmClient | baml.errors.RenderPrompt | baml.errors.Timeout / baml.http.Request / baml.llm.Client / baml.llm.PromptAst / baml.llm.Stream<user.prompt_tag_runtime.Person$stream | null, user.prompt_tag_runtime.Person> / map<string, unknown> / user.prompt_tag_runtime.Person] tir=["PtRenderPerson" / (baml.llm.Context) -> baml.llm.PromptAst throws never / (body: (role: (string) -> baml.llm.Role throws never, ctx: baml.llm.Context) -> baml.TaggedString throws never) -> ((baml.llm.Context) -> baml.llm.PromptAst throws never) throws never / (client: baml.llm.Client, function_name: string, args: map<string, unknown>, prompt_closure?: ((baml.llm.Context) -> baml.llm.PromptAst throws never) | null) -> T throws baml.errors.DevOther | baml.errors.InvalidArgument | baml.errors.Io | baml.errors.LlmClient | baml.errors.RenderPrompt | baml.errors.Timeout / (client: baml.llm.Client, function_name: string, args: map<string, unknown>, prompt_closure?: ((baml.llm.Context) -> baml.llm.PromptAst throws never) | null) -> baml.http.Request throws baml.errors.InvalidArgument | baml.errors.LlmClient | baml.errors.RenderPrompt / (client: baml.llm.Client, function_name: string, args: map<string, unknown>, prompt_closure?: ((baml.llm.Context) -> baml.llm.PromptAst throws never) | null) -> baml.llm.PromptAst throws baml.errors.InvalidArgument | baml.errors.LlmClient | baml.errors.RenderPrompt / (client: baml.llm.Client, function_name: string, args: map<string, unknown>, prompt_closure?: ((baml.llm.Context) -> baml.llm.PromptAst throws never) | null) -> baml.llm.Stream<TStream, TFinal> throws baml.errors.DevOther | baml.errors.InvalidArgument | baml.errors.Io | baml.errors.LlmClient | baml.errors.RenderPrompt | baml.errors.Timeout / baml.http.Request / baml.llm.Client / baml.llm.PromptAst / baml.llm.Stream<user.prompt_tag_runtime.Person$stream | null, user.prompt_tag_runtime.Person> / map<string, unknown> / user.prompt_tag_runtime.Person]
     at ns_prompt_tag_runtime/prompt_tag_runtime.baml:6465..6548 `{\n    cli...format}`\n}`
 [1x] hir_ty=["SayHello" / "input" / (client: baml.llm.Client, function_name: string, args: map<string, unknown>, prompt_closure?: ((baml.llm.Context) -> baml.llm.PromptAst throws never) | null) -> baml.http.Request throws baml.errors.InvalidArgument | baml.errors.LlmClient | baml.errors.RenderPrompt / (client: baml.llm.Client, function_name: string, args: map<string, unknown>, prompt_closure?: ((baml.llm.Context) -> baml.llm.PromptAst throws never) | null) -> baml.llm.PromptAst throws baml.errors.InvalidArgument | baml.errors.LlmClient | baml.errors.RenderPrompt / (client: baml.llm.Client, function_name: string, args: map<string, unknown>, prompt_closure?: ((baml.llm.Context) -> baml.llm.PromptAst throws never) | null) -> baml.llm.Stream<string | null, string> throws baml.errors.DevOther | baml.errors.InvalidArgument | baml.errors.Io | baml.errors.LlmClient | baml.errors.RenderPrompt | baml.errors.Timeout / (json: string) -> string throws baml.errors.ParseError / (self: baml.llm.Client, sse: baml.http.SseStream) -> baml.llm.Stream<string | null, string> throws baml.errors.InvalidArgument | baml.errors.LlmClient / baml.http.Request / baml.http.SseStream / baml.llm.Client / baml.llm.PromptAst / baml.llm.Stream<string | null, string> / map<string, string> / string] tir=["SayHello" / "input" / (client: baml.llm.Client, function_name: string, args: map<string, unknown>, prompt_closure?: ((baml.llm.Context) -> baml.llm.PromptAst throws never) | null) -> baml.http.Request throws baml.errors.InvalidArgument | baml.errors.LlmClient | baml.errors.RenderPrompt / (client: baml.llm.Client, function_name: string, args: map<string, unknown>, prompt_closure?: ((baml.llm.Context) -> baml.llm.PromptAst throws never) | null) -> baml.llm.PromptAst throws baml.errors.InvalidArgument | baml.errors.LlmClient | baml.errors.RenderPrompt / (client: baml.llm.Client, function_name: string, args: map<string, unknown>, prompt_closure?: ((baml.llm.Context) -> baml.llm.PromptAst throws never) | null) -> baml.llm.Stream<TStream, TFinal> throws baml.errors.DevOther | baml.errors.InvalidArgument | baml.errors.Io | baml.errors.LlmClient | baml.errors.RenderPrompt | baml.errors.Timeout / (json: string) -> TFinal throws baml.errors.ParseError / (sse: baml.http.SseStream) -> baml.llm.Stream<TStream, TFinal> throws baml.errors.InvalidArgument | baml.errors.LlmClient / baml.http.Request / baml.http.SseStream / baml.llm.Client / baml.llm.PromptAst / baml.llm.Stream<string | null, string> / map<string, unknown> / string]
     at ns_streaming_parsing/streaming_parsing.baml:1968..2083 `function S...put }}"#\n}`
 [1x] hir_ty=["SayHello" / "input" / (client: baml.llm.Client, function_name: string, args: map<string, unknown>, prompt_closure?: ((baml.llm.Context) -> baml.llm.PromptAst throws never) | null) -> string throws baml.errors.DevOther | baml.errors.InvalidArgument | baml.errors.Io | baml.errors.LlmClient | baml.errors.RenderPrompt | baml.errors.Timeout / baml.llm.Client / map<string, string> / string] tir=["SayHello" / "input" / (client: baml.llm.Client, function_name: string, args: map<string, unknown>, prompt_closure?: ((baml.llm.Context) -> baml.llm.PromptAst throws never) | null) -> T throws baml.errors.DevOther | baml.errors.InvalidArgument | baml.errors.Io | baml.errors.LlmClient | baml.errors.RenderPrompt | baml.errors.Timeout / baml.llm.Client / map<string, unknown> / string]
     at ns_streaming_parsing/streaming_parsing.baml:2011..2083 `{\n    cli...put }}"#\n}`
+[1x] hir_ty=["StreamParseClient" / "gpt-4o" / "http://localhost:1234" / "openai" / "test-key" / 0 / baml.llm.Client / baml.llm.ClientType.Primitive / baml.llm.Client[] / baml.llm.PrimitiveClient / baml.llm.PrimitiveClientOptions / map<string, string> / map<string, unknown> / null] tir=["StreamParseClient" / "gpt-4o" / "http://localhost:1234" / "openai" / "test-key" / baml.llm.PrimitiveClient / baml.llm.PrimitiveClientOptions / map<string, string> / map<string, unknown> / null]
+    at ns_streaming_parsing/streaming_parsing.baml:1618..1782 `client<llm..."\n    }\n}`
+[1x] hir_ty=["TestClient" / "gpt-4o-mini" / "http://localhost:1234" / "openai" / "test-key" / 0 / baml.llm.Client / baml.llm.ClientType.Primitive / baml.llm.Client[] / baml.llm.PrimitiveClient / baml.llm.PrimitiveClientOptions / map<string, string> / map<string, unknown> / null] tir=["TestClient" / "gpt-4o-mini" / "http://localhost:1234" / "openai" / "test-key" / baml.llm.PrimitiveClient / baml.llm.PrimitiveClientOptions / map<string, string> / map<string, unknown> / null]
+    at ns_type_reflection/type_reflection.baml:561..723 `client<llm..."\n    }\n}`
 [1x] hir_ty=["all zero" | "y nonzero" | "z nonzero"] tir=["all zero" | "z nonzero" | "y nonzero"]
     at ns_match_basics/match_basics.baml:12308..12468 `match (y) ...\n        }`
 [1x] hir_ty=["boom" | user.exceptions.AppError2] tir=[string]
@@ -3369,8 +3289,6 @@ ns_to_json_interface/to_json_interface.baml:1125..1207 `{\n       ...\n        }
     at ns_to_json_interface/to_json_interface.baml:8621..8640 `baml.json.to_string`
 [1x] hir_ty=[(value: !error) -> !error throws never] tir=[(value: T) -> T throws never]
     at ns_instantiation_expr/instantiation_expr.baml:1707..1721 `baml.deep_copy`
-[1x] hir_ty=[(value: !error) -> baml.json.json throws baml.json.JsonSerializationError] tir=[(value: T) -> baml.json.json throws baml.json.JsonSerializationError]
-    at ns_to_json_interface/to_json_interface.baml:6960..6974 `baml.json.from`
 [1x] hir_ty=[(value: !error) -> string throws never] tir=[(value: T) -> string throws never]
     at ns_tagged_template_runtime/tagged_template_runtime.baml:6503..6514 `string.from`
 [1x] hir_ty=[(value: "hi") -> string throws never] tir=[unknown]
@@ -3487,6 +3405,8 @@ ns_to_json_interface/to_json_interface.baml:1125..1207 `{\n       ...\n        }
     at ns_json_auto_derive/json_auto_derive.baml:758..767 `u.to_json`
 [1x] hir_ty=[(value: user.to_json_interface.C) -> baml.json.json throws baml.json.JsonSerializationError] tir=[(value: T) -> baml.json.json throws baml.json.JsonSerializationError]
     at ns_to_json_interface/to_json_interface.baml:7972..7986 `baml.json.from`
+[1x] hir_ty=[(value: user.to_json_interface.Color.Green) -> baml.json.json throws baml.json.JsonSerializationError] tir=[(value: T) -> baml.json.json throws baml.json.JsonSerializationError]
+    at ns_to_json_interface/to_json_interface.baml:6960..6974 `baml.json.from`
 [1x] hir_ty=[(value: user.to_json_interface.D) -> baml.json.json throws baml.json.JsonSerializationError] tir=[(value: T) -> baml.json.json throws baml.json.JsonSerializationError]
     at ns_to_json_interface/to_json_interface.baml:8245..8259 `baml.json.from`
 [1x] hir_ty=[(value: user.to_json_interface.Outer) -> baml.json.json throws baml.json.JsonSerializationError] tir=[(value: T) -> baml.json.json throws baml.json.JsonSerializationError]

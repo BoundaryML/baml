@@ -2240,6 +2240,16 @@ impl<'db> InferenceContext<'db> {
                 .collect();
             return function_value_ty(signature, &instantiation);
         }
+        // Enum VARIANT values (`Shape.Rectangle`): the variant's singleton
+        // literal type - the same product the type-position path gives
+        // (`lower_path` fallback 2; r-a resolves the value namespace to
+        // the variant the same way).
+        if segments.len() >= 2 {
+            let ty = self.lower.lower_type_path(segments);
+            if matches!(ty.kind(), TyKind::EnumVariant(..)) {
+                return ty;
+            }
+        }
         // `Type.from_json(j)` is language sugar for `baml.json.to<Type>(j)`
         // - the decode counterpart of the `to_json` desugar, same lang-item
         // discipline. The prefix is any written type (class, enum, alias,
