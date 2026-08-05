@@ -4,12 +4,28 @@ on:
   pull_request:
     paths:
       - "typescript2/**"
+      - "baml_language/crates/baml_tooling_api/**"
+      - "baml_language/crates/bridge_ctypes/**"
+      - "baml_language/crates/bridge_wasm/**"
+      - "baml_language/crates/baml_lsp2_actions/**"
+      - "baml_language/sdks/typescript/bridge_tooling/**"
+      - "baml_language/sdks/typescript/sdkgen_typescript_shared/**"
+      - "scripts/baml-language-version"
+      - "release/platforms.json"
       - ".github/actions/setup-node2/**"
       - ".github/workflows/typescript2.yml"
   push:
     branches: [main, canary]
     paths:
       - "typescript2/**"
+      - "baml_language/crates/baml_tooling_api/**"
+      - "baml_language/crates/bridge_ctypes/**"
+      - "baml_language/crates/bridge_wasm/**"
+      - "baml_language/crates/baml_lsp2_actions/**"
+      - "baml_language/sdks/typescript/bridge_tooling/**"
+      - "baml_language/sdks/typescript/sdkgen_typescript_shared/**"
+      - "scripts/baml-language-version"
+      - "release/platforms.json"
       - ".github/actions/setup-node2/**"
       - ".github/workflows/typescript2.yml"
   merge_group:
@@ -50,3 +66,37 @@ jobs:
           fi
           pnpm format:ci --since="$base" --reporter=github
         working-directory: typescript2
+
+  ts-tooling:
+    name: TypeScript tooling packages
+    runs-on: blacksmith-4vcpu-ubuntu-2404
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: useblacksmith/checkout@v1
+        with:
+          persist-credentials: false
+      - name: Setup Node.js
+        uses: ./.github/actions/setup-node2
+      - name: Setup Rust
+        uses: ./.github/actions/setup-rust
+        with:
+          enable-cross: false
+          workspace: baml_language
+      - name: Generate tooling protobuf
+        run: pnpm --filter @boundaryml/baml-tooling generate:protocol
+        working-directory: typescript2
+      - name: Check generated tooling protocol is current
+        run: git diff --exit-code -- pkg-baml-tooling/src/generated/tooling.ts
+        working-directory: typescript2
+      - name: Typecheck and test tooling package
+        run: pnpm --filter @boundaryml/baml-tooling typecheck && pnpm --filter @boundaryml/baml-tooling test && pnpm --filter @boundaryml/baml-tooling build
+        working-directory: typescript2
+      - name: Build native tooling bridge for e2e
+        run: pnpm build:debug
+        working-directory: baml_language/sdks/typescript/bridge_tooling
+      - name: Run packed/e2e contract suite
+        run: pnpm --filter @b/pkg-ts-tooling-e2e typecheck && pnpm --filter @b/pkg-ts-tooling-e2e test
+        working-directory: typescript2
+        env:
+          BAML_TOOLING_BRIDGE_PATH: ${{ github.workspace }}/baml_language/sdks/typescript/bridge_tooling/baml-tooling-node.js

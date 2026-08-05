@@ -183,6 +183,39 @@ jobs:
           pnpm build:clean
           pnpm build:napi-release --target ${{ matrix._.target }} ${{ matrix._.napi_args }}
 
+      - name: Build tooling native addon (${{ matrix._.target }})
+        working-directory: baml_language/sdks/typescript/bridge_tooling
+        run: |
+          pnpm install --ignore-scripts
+          pnpm build:release --target ${{ matrix._.target }} ${{ matrix._.napi_args }}
+
+      - name: Assemble tooling per-platform npm package
+        working-directory: baml_language/sdks/typescript/bridge_tooling
+        run: |
+          set -euo pipefail
+          pnpm exec napi create-npm-dirs
+          pnpm exec napi artifacts --output-dir . --npm-dir npm
+          keep_dir="$(dirname "$(find npm -name 'baml_tooling_node.*.node' | head -1)")"
+          test -n "$keep_dir"
+          find npm -mindepth 1 -maxdepth 1 -type d ! -path "$keep_dir" -exec rm -rf {} +
+
+      - name: Upload tooling per-platform npm package
+        uses: actions/upload-artifact@v7
+        with:
+          name: nodejs-tooling-platform-${{ matrix._.target }}
+          path: baml_language/sdks/typescript/bridge_tooling/npm
+          if-no-files-found: error
+
+      - name: Upload tooling umbrella loader
+        if: matrix._.target == 'x86_64-unknown-linux-gnu'
+        uses: actions/upload-artifact@v7
+        with:
+          name: nodejs-tooling-umbrella
+          path: |
+            baml_language/sdks/typescript/bridge_tooling/baml-tooling-node.js
+            baml_language/sdks/typescript/bridge_tooling/baml-tooling-node.d.ts
+          if-no-files-found: error
+
       - name: Assemble per-platform npm package
         working-directory: baml_language/sdks/typescript/bridge_typescript
         run: |

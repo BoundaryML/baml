@@ -60,6 +60,17 @@ jobs:
           # so `npm publish` of the umbrella includes the built JS/types.
           name: nodejs-umbrella-dist
           path: baml_language/sdks/typescript/bridge_typescript/dist
+      - name: Download tooling per-platform npm packages
+        uses: actions/download-artifact@v4
+        with:
+          pattern: nodejs-tooling-platform-*
+          path: baml_language/sdks/typescript/bridge_tooling/npm
+          merge-multiple: true
+      - name: Download tooling umbrella loader
+        uses: actions/download-artifact@v4
+        with:
+          name: nodejs-tooling-umbrella
+          path: baml_language/sdks/typescript/bridge_tooling
       - name: Setup Node.js
         # The publisher only uses npm. Avoid the repository composite here because
         # it always enables pnpm caching, whose post-job save fails when this job
@@ -116,6 +127,11 @@ jobs:
           #   can attach the channel dist-tag (napi prepublish cannot set one).
           # --no-gh-release: GitHub releases are handled by publish-github-release.
           napi pre-publish -t npm --no-gh-release --skip-optional-publish
+      - name: Wire tooling umbrella optionalDependencies
+        working-directory: baml_language/sdks/typescript/bridge_tooling
+        run: |
+          set -euo pipefail
+          napi pre-publish -t npm --no-gh-release --skip-optional-publish
       - name: Publish to npm
         working-directory: baml_language/sdks/typescript/bridge_typescript
         env:
@@ -171,3 +187,9 @@ jobs:
           done
           # Umbrella package lives in the working directory.
           publish_if_needed "."
+          echo "Publishing @boundaryml/baml-bridge-tooling packages with dist-tag '$tag'"
+          tooling_dir="../bridge_tooling"
+          for dir in "$tooling_dir"/npm/*/; do
+            publish_if_needed "$dir"
+          done
+          publish_if_needed "$tooling_dir"
