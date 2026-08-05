@@ -8,8 +8,8 @@ expression: outcome.dump
 1050..1068 'driver...(self)': O
 1063..1067 'self': user.Task<T>
 1220..1225 'drive': throws never
-1266..1293 '{\n   ...n    }': hir_ty=[!error] tir=[T]
-1276..1287 'input.value': hir_ty=[!error] tir=[T]
+1266..1293 '{\n   ...n    }': T
+1276..1287 'input.value': T
 1306..1314 'generate': throws never
 1335..1367 '{\n   ..." }\n}': user.Generate<T>
 1341..1365 'Genera... "g" }': user.Generate<T>

@@ -606,8 +606,18 @@ pub fn function_generic_frame<'db>(
                 .collect();
             extend_frame(&mut frame, &associated);
         }
-        // Free-impl generic frames arrive with the interface slices (I3/I4).
-        Some(MethodOwner::FreeImpl(_)) | None => {}
+        // Free impls (`implements<T extends I> J for T[]`): the impl's own
+        // generics are the owner prefix, mirroring the class arm.
+        Some(MethodOwner::FreeImpl(impl_loc)) => {
+            let data = baml_compiler2_ppir::item_data::impl_block_data(db, impl_loc);
+            if let baml_compiler2_ppir::item_data::ImplSubjectData::Free { generics, .. } =
+                &data.subject
+            {
+                let names: Vec<Name> = generics.iter().map(|param| param.name.clone()).collect();
+                extend_frame(&mut frame, &names);
+            }
+        }
+        None => {}
     }
     let data = baml_compiler2_ppir::item_data::elaborated_function_data(db, function);
     extend_frame(&mut frame, &data.user_generic_params);
@@ -804,7 +814,30 @@ pub fn function_generic_bounds<'db>(
                 frame_iter.next();
             }
         }
-        Some(MethodOwner::FreeImpl(_)) | None => {}
+        Some(MethodOwner::FreeImpl(impl_loc)) => {
+            // The impl's declared bounds (`implements<T extends I> ...`),
+            // conjunctive per param, keyed by the frame-prefix identities
+            // this function's frame starts with.
+            let impl_data = baml_compiler2_ppir::item_data::impl_block_data(db, impl_loc);
+            if let baml_compiler2_ppir::item_data::ImplSubjectData::Free { generics, .. } =
+                &impl_data.subject
+            {
+                for param_data in generics {
+                    let Some(param) = frame_iter.next() else { break };
+                    let bounds: Vec<_> = param_data
+                        .bounds
+                        .iter()
+                        .filter_map(|&type_ref| {
+                            as_ref(&ctx.lower_type_ref(&impl_data.type_refs, type_ref))
+                        })
+                        .collect();
+                    if !bounds.is_empty() {
+                        out.insert(param.clone(), bounds);
+                    }
+                }
+            }
+        }
+        None => {}
     }
     let data = baml_compiler2_ppir::item_data::function_data(db, function);
     for bound in &data.generic_param_bounds {
@@ -959,7 +992,24 @@ pub fn function_signature<'db>(
                 frame.first().cloned().expect("interface frame starts with Self"),
                 TyAttr::default(),
             ))),
-            Some(MethodOwner::FreeImpl(_)) => Some(Ty::error()),
+            // Free-impl `self` is the for-target (`T[]` in
+            // `implements<T> J for T[]`), lowered in the impl's frame -
+            // the prefix of this function's frame, so indices line up.
+            Some(MethodOwner::FreeImpl(impl_loc)) => {
+                let data = baml_compiler2_ppir::item_data::impl_block_data(db, impl_loc);
+                match &data.subject {
+                    baml_compiler2_ppir::item_data::ImplSubjectData::Free {
+                        for_target, ..
+                    } => {
+                        let ictx = lower_ctx_for_file(db, impl_loc.file(db))
+                            .with_frame(frame.clone());
+                        Some(ictx.lower_type_ref(&data.type_refs, *for_target))
+                    }
+                    baml_compiler2_ppir::item_data::ImplSubjectData::InClass {
+                        class, ..
+                    } => Some(class_self_ty(db, *class)),
+                }
+            }
             None => None,
         }
     };

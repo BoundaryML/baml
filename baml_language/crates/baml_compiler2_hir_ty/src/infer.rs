@@ -1627,14 +1627,39 @@ impl<'db> InferenceContext<'db> {
         optional: bool,
     ) -> Ty {
         let base_ty = self.infer_expr(body, base, &Expectation::None);
-        let index_ty = self.infer_expr(body, index, &Expectation::None);
         let subject = if optional {
             let resolved = self.table.resolve_completely(&base_ty);
             self.remove_null(&resolved)
         } else {
             base_ty
         };
-        let element = self.operator_or_obligation(expr, "Index", &subject, Some(&index_ty));
+        // Builtin indexing first (rustc's `try_index_step` order: the
+        // structural forms index directly - the bytecode special case
+        // TIR shares), the `baml.ops.Index` interface otherwise (generic
+        // `T extends Index<..>` bounds). The structural tier is what lets
+        // a rigid-element `T[]` index without `root.Concrete` evidence.
+        let resolved_subject = self.table.resolve_completely(&subject);
+        let element = match resolved_subject.kind() {
+            TyKind::List(element, _) => {
+                let element = element.clone();
+                self.check_expr(body, index, &Ty::int());
+                element
+            }
+            TyKind::Map { key, value, .. } => {
+                let key = key.clone();
+                let value = value.clone();
+                self.check_expr(body, index, &key);
+                value
+            }
+            TyKind::Uint8Array { .. } => {
+                self.check_expr(body, index, &Ty::int());
+                Ty::int()
+            }
+            _ => {
+                let index_ty = self.infer_expr(body, index, &Expectation::None);
+                self.operator_or_obligation(expr, "Index", &resolved_subject, Some(&index_ty))
+            }
+        };
         if optional {
             self.union_of(&[element, Ty::null()])
         } else {
