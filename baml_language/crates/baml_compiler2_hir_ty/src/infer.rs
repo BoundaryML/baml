@@ -1925,7 +1925,19 @@ impl<'db> InferenceContext<'db> {
             ) {
                 return (interface_member.ty, interface_member.is_method);
             }
-            return (self.field_access(&resolved, member), false);
+            let field = self.field_access(&resolved, member);
+            // `recv.to_json()` is language sugar for `baml.json.from(recv)`
+            // (universal serialization; TIR's builder lowers the call the
+            // same way). It is a FALLBACK tier: an `implements baml.ToJson`
+            // method or a field named `to_json` resolves above. `bound`
+            // makes the receiver fill the `value: T` slot.
+            if field.has_error()
+                && member.as_str() == "to_json"
+                && let Some(fn_ty) = self.json_desugar_callee("from", resolved.clone())
+            {
+                return (fn_ty, true);
+            }
+            return (field, false);
         };
         let signature = function_signature(self.db, candidate.method);
         let class_count = candidate.class_args.len();
@@ -1939,6 +1951,33 @@ impl<'db> InferenceContext<'db> {
             .first()
             .is_some_and(|param| param.name.as_str() == "self");
         (fn_ty, bound)
+    }
+
+    /// The instantiated stdlib callee a json desugar lowers to
+    /// (`baml.json.from` for `recv.to_json()`, `baml.json.to` for
+    /// `Type.from_json(j)`), its one generic pinned to `target`. The
+    /// r-a/rustc lang-item discipline (`infer_expr_await` resolving
+    /// `LangItem::Future`): the sugar types as a call to the known
+    /// library function, so parameter, result, and throws charge exactly
+    /// as the runtime-lowered call's real signature says.
+    fn json_desugar_callee(&mut self, name: &str, target: Ty) -> Option<Ty> {
+        let segments = [
+            baml_type::Name::new("baml"),
+            baml_type::Name::new("json"),
+            baml_type::Name::new(name),
+        ];
+        let Some(baml_compiler2_hir::contributions::Definition::Function(function)) =
+            self.lower.resolve_value(&segments)
+        else {
+            return None;
+        };
+        let signature = function_signature(self.db, function);
+        // The desugar targets are single-`<T>`-generic by contract;
+        // anything else is stdlib drift this tier must not paper over.
+        if signature.generic_params.len() != 1 {
+            return None;
+        }
+        Some(function_value_ty(signature, &[target]))
     }
 
     /// The one home for value-position path typing (rust-analyzer's
@@ -1991,6 +2030,24 @@ impl<'db> InferenceContext<'db> {
                 .map(|param| self.fresh_generic_arg(param))
                 .collect();
             return function_value_ty(signature, &instantiation);
+        }
+        // `Type.from_json(j)` is language sugar for `baml.json.to<Type>(j)`
+        // - the decode counterpart of the `to_json` desugar, same lang-item
+        // discipline. The prefix is any written type (class, enum, alias,
+        // or an in-scope generic param) through the same resolution
+        // annotations use; a real `from_json` static (an `implements
+        // baml.FromJson` impl) already resolved above.
+        if segments.len() >= 2
+            && segments
+                .last()
+                .is_some_and(|segment| segment.as_str() == "from_json")
+        {
+            let target = self.lower.lower_type_path(&segments[..segments.len() - 1]);
+            if !target.has_error()
+                && let Some(fn_ty) = self.json_desugar_callee("to", target)
+            {
+                return fn_ty;
+            }
         }
         Ty::error()
     }

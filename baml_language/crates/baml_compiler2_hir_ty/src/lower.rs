@@ -529,6 +529,14 @@ impl<'db> LowerCtx<'db> {
         self.resolve_type(segments)
     }
 
+    /// A dotted TYPE path in value position (the `Type` prefix of
+    /// `Type.from_json`), resolved exactly as a written annotation path -
+    /// classes, enums, aliases, and in-scope generic params - with no
+    /// written args or bindings.
+    pub fn lower_type_path(&self, segments: &[Name]) -> Ty {
+        self.lower_path(segments, Vec::new(), Vec::new())
+    }
+
     /// [`LowerCtx::qualify`], exposed for constructor typing.
     pub fn qualify_definition(&self, def: Definition<'db>, short: &Name) -> TypeName {
         self.qualify(def, short)
