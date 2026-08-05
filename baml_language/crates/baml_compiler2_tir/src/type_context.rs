@@ -58,7 +58,7 @@ impl baml_type::normalize::TypeContext for GlobalTypeContext<'_, '_> {
             concrete,
             interface,
             self.aliases,
-            |actual, bound| baml_type::normalize::is_subtype(actual, bound, self),
+            |actual, bound| baml_type::normalize::is_subtype(actual, bound, self).holds(),
         )
     }
 
@@ -68,7 +68,7 @@ impl baml_type::normalize::TypeContext for GlobalTypeContext<'_, '_> {
 
     fn interface_requires(&self, sub: &baml_type::Interface, sup: &baml_type::Interface) -> bool {
         crate::interfaces::interface_requires(self.db, self.res_ctx, sub, sup, |a, b| {
-            baml_type::normalize::equivalent(a, b, self)
+            baml_type::normalize::equivalent(a, b, self).holds()
         })
     }
 
@@ -118,7 +118,7 @@ impl baml_type::normalize::TypeContext for GlobalTypeContext<'_, '_> {
                         .generics
                         .iter()
                         .zip(&interface.generics)
-                        .all(|(h, i)| self.equivalent(h, i))
+                        .all(|(h, i)| self.equivalent(h, i).holds())
                     && let Some((_, pin)) = have.associated_types.iter().find(|(n, _)| n == member)
                 {
                     return ProjectionStep::Reduced(pin.clone());

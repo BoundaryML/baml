@@ -3253,6 +3253,7 @@ fn runtime_ty_assignable_with_aliases(
         expected.as_ty(),
         &baml_type::normalize::NoFacts,
     )
+    .holds()
 }
 
 /// An erased generic host object can know its nominal class without knowing

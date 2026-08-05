@@ -224,11 +224,10 @@ fn projection_reduces_to_its_binding() {
         projections: vec![(class("C"), qtn("Foo"), Name::new("Assoc"), Ty::string())],
         ..Ctx::default()
     };
-    assert!(equivalent(
-        &projection(class("C"), "Foo", "Assoc"),
-        &Ty::string(),
-        &ctx,
-    ));
+    assert_eq!(
+        equivalent(&projection(class("C"), "Foo", "Assoc"), &Ty::string(), &ctx,),
+        Truth::Yes
+    );
 }
 
 #[test]
@@ -253,11 +252,10 @@ fn cyclic_projection_reduction_terminates_and_stays_opaque() {
         ],
         ..Ctx::default()
     };
-    assert!(!equivalent(
-        &projection(class("C"), "I", "A"),
-        &Ty::int(),
-        &ctx,
-    ));
+    assert_eq!(
+        equivalent(&projection(class("C"), "I", "A"), &Ty::int(), &ctx,),
+        Truth::No
+    );
 }
 
 // ── union algebra ────────────────────────────────────────────────────────--
@@ -266,50 +264,61 @@ fn cyclic_projection_reduction_terminates_and_stays_opaque() {
 fn union_aci() {
     let ctx = Ctx::default();
     // Commutativity.
-    assert!(equivalent(
-        &union(vec![Ty::int(), Ty::string()]),
-        &union(vec![Ty::string(), Ty::int()]),
-        &ctx,
-    ));
+    assert_eq!(
+        equivalent(
+            &union(vec![Ty::int(), Ty::string()]),
+            &union(vec![Ty::string(), Ty::int()]),
+            &ctx,
+        ),
+        Truth::Yes
+    );
     // Idempotence.
-    assert!(equivalent(
-        &union(vec![Ty::int(), Ty::int()]),
-        &Ty::int(),
-        &ctx
-    ));
+    assert_eq!(
+        equivalent(&union(vec![Ty::int(), Ty::int()]), &Ty::int(), &ctx),
+        Truth::Yes
+    );
     // Associativity / flattening.
-    assert!(equivalent(
-        &union(vec![Ty::int(), union(vec![Ty::string(), Ty::bool()])]),
-        &union(vec![union(vec![Ty::int(), Ty::string()]), Ty::bool()]),
-        &ctx,
-    ));
+    assert_eq!(
+        equivalent(
+            &union(vec![Ty::int(), union(vec![Ty::string(), Ty::bool()])]),
+            &union(vec![union(vec![Ty::int(), Ty::string()]), Ty::bool()]),
+            &ctx,
+        ),
+        Truth::Yes
+    );
 }
 
 #[test]
 fn never_is_removed_unknown_absorbs() {
     let ctx = Ctx::default();
-    assert!(equivalent(
-        &union(vec![
-            Ty::int(),
-            Ty::Never {
+    assert_eq!(
+        equivalent(
+            &union(vec![
+                Ty::int(),
+                Ty::Never {
+                    attr: TyAttr::default()
+                }
+            ]),
+            &Ty::int(),
+            &ctx,
+        ),
+        Truth::Yes
+    );
+    assert_eq!(
+        equivalent(
+            &union(vec![
+                Ty::int(),
+                Ty::BuiltinUnknown {
+                    attr: TyAttr::default()
+                }
+            ]),
+            &Ty::BuiltinUnknown {
                 attr: TyAttr::default()
-            }
-        ]),
-        &Ty::int(),
-        &ctx,
-    ));
-    assert!(equivalent(
-        &union(vec![
-            Ty::int(),
-            Ty::BuiltinUnknown {
-                attr: TyAttr::default()
-            }
-        ]),
-        &Ty::BuiltinUnknown {
-            attr: TyAttr::default()
-        },
-        &ctx,
-    ));
+            },
+            &ctx,
+        ),
+        Truth::Yes
+    );
 }
 
 #[test]
@@ -320,31 +329,45 @@ fn literal_types_are_subtypes_of_their_base_only() {
     // `42 <: float` would be an int→float coercion, which is not a subtype
     // relation.
     let ctx = Ctx::default();
-    assert!(is_subtype(&lit_int(42), &Ty::int(), &ctx));
-    assert!(is_subtype(&lit_float("3.14"), &Ty::float(), &ctx));
-    assert!(is_subtype(
-        &Ty::Literal(
-            Literal::String("hello".to_string()),
-            Freshness::Regular,
-            TyAttr::default(),
+    assert_eq!(is_subtype(&lit_int(42), &Ty::int(), &ctx), Truth::Yes);
+    assert_eq!(
+        is_subtype(&lit_float("3.14"), &Ty::float(), &ctx),
+        Truth::Yes
+    );
+    assert_eq!(
+        is_subtype(
+            &Ty::Literal(
+                Literal::String("hello".to_string()),
+                Freshness::Regular,
+                TyAttr::default(),
+            ),
+            &Ty::string(),
+            &ctx
         ),
-        &Ty::string(),
-        &ctx
-    ));
-    assert!(is_subtype(
-        &Ty::Literal(Literal::Bool(true), Freshness::Regular, TyAttr::default()),
-        &Ty::bool(),
-        &ctx
-    ));
-    assert!(!is_subtype(&lit_int(42), &Ty::float(), &ctx));
+        Truth::Yes
+    );
+    assert_eq!(
+        is_subtype(
+            &Ty::Literal(Literal::Bool(true), Freshness::Regular, TyAttr::default()),
+            &Ty::bool(),
+            &ctx
+        ),
+        Truth::Yes
+    );
+    assert_eq!(is_subtype(&lit_int(42), &Ty::float(), &ctx), Truth::No);
     // Union / optional membership.
-    assert!(is_subtype(
-        &lit_int(42),
-        &union(vec![Ty::string(), Ty::int()]),
-        &ctx
-    ));
-    assert!(is_subtype(&lit_int(42), &Ty::optional(Ty::int()), &ctx));
-    assert!(is_subtype(&Ty::null(), &Ty::optional(Ty::string()), &ctx));
+    assert_eq!(
+        is_subtype(&lit_int(42), &union(vec![Ty::string(), Ty::int()]), &ctx),
+        Truth::Yes
+    );
+    assert_eq!(
+        is_subtype(&lit_int(42), &Ty::optional(Ty::int()), &ctx),
+        Truth::Yes
+    );
+    assert_eq!(
+        is_subtype(&Ty::null(), &Ty::optional(Ty::string()), &ctx),
+        Truth::Yes
+    );
 }
 
 #[test]
@@ -354,30 +377,31 @@ fn numeric_types_do_not_widen_across_representations() {
     // conversions are explicit or FFI-boundary coercions, never subtyping. The
     // same holds under an (invariant) container.
     let ctx = Ctx::default();
-    assert!(!is_subtype(&Ty::int(), &Ty::float(), &ctx));
-    assert!(!is_subtype(&Ty::int(), &bigint(), &ctx));
-    assert!(!is_subtype(&Ty::list(Ty::int()), &Ty::list(bigint()), &ctx));
+    assert_eq!(is_subtype(&Ty::int(), &Ty::float(), &ctx), Truth::No);
+    assert_eq!(is_subtype(&Ty::int(), &bigint(), &ctx), Truth::No);
+    assert_eq!(
+        is_subtype(&Ty::list(Ty::int()), &Ty::list(bigint()), &ctx),
+        Truth::No
+    );
 }
 
 #[test]
 fn literal_into_base_absorption() {
     let ctx = Ctx::default();
     // `int | 99 == int`.
-    assert!(equivalent(
-        &union(vec![lit_int(99), Ty::int()]),
-        &Ty::int(),
-        &ctx
-    ));
+    assert_eq!(
+        equivalent(&union(vec![lit_int(99), Ty::int()]), &Ty::int(), &ctx),
+        Truth::Yes
+    );
     assert_eq!(
         normalize(&union(vec![lit_int(99), Ty::int()]), &ctx),
         Ty::int()
     );
     // A bare literal does not absorb into a different base.
-    assert!(!equivalent(
-        &union(vec![lit_int(99), Ty::string()]),
-        &Ty::int(),
-        &ctx
-    ));
+    assert_eq!(
+        equivalent(&union(vec![lit_int(99), Ty::string()]), &Ty::int(), &ctx),
+        Truth::No
+    );
 }
 
 #[test]
@@ -386,11 +410,14 @@ fn optional_is_union_with_null() {
     let null = Ty::Null {
         attr: TyAttr::default(),
     };
-    assert!(equivalent(
-        &Ty::optional(Ty::int()),
-        &union(vec![Ty::int(), null]),
-        &ctx,
-    ));
+    assert_eq!(
+        equivalent(
+            &Ty::optional(Ty::int()),
+            &union(vec![Ty::int(), null]),
+            &ctx,
+        ),
+        Truth::Yes
+    );
 }
 
 // ── enums ──────────────────────────────────────────────────────────────────
@@ -402,34 +429,42 @@ fn enum_completeness_collapse() {
         .insert(qtn("Side"), vec![Name::new("Left"), Name::new("Right")]);
 
     // All variants present → the enum.
-    assert!(equivalent(
-        &union(vec![variant("Side", "Left"), variant("Side", "Right")]),
-        &enum_ty("Side"),
-        &ctx,
-    ));
+    assert_eq!(
+        equivalent(
+            &union(vec![variant("Side", "Left"), variant("Side", "Right")]),
+            &enum_ty("Side"),
+            &ctx,
+        ),
+        Truth::Yes
+    );
     // An incomplete set does NOT collapse.
-    assert!(!equivalent(
-        &variant("Side", "Left"),
-        &enum_ty("Side"),
-        &ctx
-    ));
+    assert_eq!(
+        equivalent(&variant("Side", "Left"), &enum_ty("Side"), &ctx),
+        Truth::No
+    );
     // A bare enum absorbs its own variants.
-    assert!(equivalent(
-        &union(vec![variant("Side", "Left"), enum_ty("Side")]),
-        &enum_ty("Side"),
-        &ctx,
-    ));
+    assert_eq!(
+        equivalent(
+            &union(vec![variant("Side", "Left"), enum_ty("Side")]),
+            &enum_ty("Side"),
+            &ctx,
+        ),
+        Truth::Yes
+    );
 }
 
 #[test]
 fn unknown_enum_does_not_collapse() {
     // No `enum_variants` fact registered → fail-safe: keep the variants.
     let ctx = Ctx::default();
-    assert!(!equivalent(
-        &union(vec![variant("Side", "Left"), variant("Side", "Right")]),
-        &enum_ty("Side"),
-        &ctx,
-    ));
+    assert_eq!(
+        equivalent(
+            &union(vec![variant("Side", "Left"), variant("Side", "Right")]),
+            &enum_ty("Side"),
+            &ctx,
+        ),
+        Truth::No
+    );
 }
 
 // ── interface absorption ─────────────────────────────────────────────────--
@@ -439,20 +474,32 @@ fn concrete_implements_interface() {
     let mut ctx = Ctx::default();
     ctx.impls.push((qtn("Dog"), qtn("Animal")));
 
-    assert!(is_subtype(&class("Dog"), &iface("Animal"), &ctx));
+    assert_eq!(
+        is_subtype(&class("Dog"), &iface("Animal"), &ctx),
+        Truth::Yes
+    );
     // `Dog | Animal == Animal`.
-    assert!(equivalent(
-        &union(vec![class("Dog"), iface("Animal")]),
-        &iface("Animal"),
-        &ctx,
-    ));
+    assert_eq!(
+        equivalent(
+            &union(vec![class("Dog"), iface("Animal")]),
+            &iface("Animal"),
+            &ctx,
+        ),
+        Truth::Yes
+    );
     // A non-implementor is not absorbed.
-    assert!(!is_subtype(&class("Rock"), &iface("Animal"), &ctx));
-    assert!(!equivalent(
-        &union(vec![class("Rock"), iface("Animal")]),
-        &iface("Animal"),
-        &ctx,
-    ));
+    assert_eq!(
+        is_subtype(&class("Rock"), &iface("Animal"), &ctx),
+        Truth::No
+    );
+    assert_eq!(
+        equivalent(
+            &union(vec![class("Rock"), iface("Animal")]),
+            &iface("Animal"),
+            &ctx,
+        ),
+        Truth::No
+    );
 }
 
 #[test]
@@ -460,14 +507,23 @@ fn interface_requires_absorption() {
     let mut ctx = Ctx::default();
     ctx.requires.push((qtn("Compare"), qtn("Equals")));
 
-    assert!(is_subtype(&iface("Compare"), &iface("Equals"), &ctx));
+    assert_eq!(
+        is_subtype(&iface("Compare"), &iface("Equals"), &ctx),
+        Truth::Yes
+    );
     // `Compare | Equals == Equals`.
-    assert!(equivalent(
-        &union(vec![iface("Compare"), iface("Equals")]),
-        &iface("Equals"),
-        &ctx,
-    ));
-    assert!(!is_subtype(&iface("Equals"), &iface("Compare"), &ctx));
+    assert_eq!(
+        equivalent(
+            &union(vec![iface("Compare"), iface("Equals")]),
+            &iface("Equals"),
+            &ctx,
+        ),
+        Truth::Yes
+    );
+    assert_eq!(
+        is_subtype(&iface("Equals"), &iface("Compare"), &ctx),
+        Truth::No
+    );
 }
 
 #[test]
@@ -475,15 +531,24 @@ fn type_var_bound_absorption() {
     let mut ctx = Ctx::default();
     ctx.var_bounds.insert(param(0, "T"), vec![iface("Animal")]);
 
-    assert!(is_subtype(&typevar(0, "T"), &iface("Animal"), &ctx));
+    assert_eq!(
+        is_subtype(&typevar(0, "T"), &iface("Animal"), &ctx),
+        Truth::Yes
+    );
     // `T | Animal == Animal` when `T: Animal`.
-    assert!(equivalent(
-        &union(vec![typevar(0, "T"), iface("Animal")]),
-        &iface("Animal"),
-        &ctx,
-    ));
+    assert_eq!(
+        equivalent(
+            &union(vec![typevar(0, "T"), iface("Animal")]),
+            &iface("Animal"),
+            &ctx,
+        ),
+        Truth::Yes
+    );
     // A different type variable is not absorbed and not equivalent.
-    assert!(!equivalent(&typevar(0, "T"), &typevar(1, "U"), &ctx));
+    assert_eq!(
+        equivalent(&typevar(0, "T"), &typevar(1, "U"), &ctx),
+        Truth::No
+    );
 }
 
 #[test]
@@ -491,8 +556,14 @@ fn type_var_bounds_use_full_param_identity() {
     let mut ctx = Ctx::default();
     ctx.var_bounds.insert(param(1, "T"), vec![iface("Animal")]);
 
-    assert!(!is_subtype(&typevar(0, "T"), &iface("Animal"), &ctx));
-    assert!(is_subtype(&typevar(1, "T"), &iface("Animal"), &ctx));
+    assert_eq!(
+        is_subtype(&typevar(0, "T"), &iface("Animal"), &ctx),
+        Truth::No
+    );
+    assert_eq!(
+        is_subtype(&typevar(1, "T"), &iface("Animal"), &ctx),
+        Truth::Yes
+    );
 }
 
 #[test]
@@ -505,24 +576,42 @@ fn type_var_conjunction_bound() {
     ctx.requires.push((qtn("Compare"), qtn("Equals")));
 
     // Each conjunct is provable on its own…
-    assert!(is_subtype(&typevar(0, "T"), &iface("Animal"), &ctx));
-    assert!(is_subtype(&typevar(0, "T"), &iface("Compare"), &ctx));
+    assert_eq!(
+        is_subtype(&typevar(0, "T"), &iface("Animal"), &ctx),
+        Truth::Yes
+    );
+    assert_eq!(
+        is_subtype(&typevar(0, "T"), &iface("Compare"), &ctx),
+        Truth::Yes
+    );
     // …including transitively through a conjunct's `requires`.
-    assert!(is_subtype(&typevar(0, "T"), &iface("Equals"), &ctx));
+    assert_eq!(
+        is_subtype(&typevar(0, "T"), &iface("Equals"), &ctx),
+        Truth::Yes
+    );
     // An interface that no conjunct provides is not a supertype.
-    assert!(!is_subtype(&typevar(0, "T"), &iface("Serialize"), &ctx));
+    assert_eq!(
+        is_subtype(&typevar(0, "T"), &iface("Serialize"), &ctx),
+        Truth::No
+    );
 
     // Union absorption follows the same per-conjunct rule.
-    assert!(equivalent(
-        &union(vec![typevar(0, "T"), iface("Equals")]),
-        &iface("Equals"),
-        &ctx,
-    ));
-    assert!(!equivalent(
-        &union(vec![typevar(0, "T"), iface("Serialize")]),
-        &iface("Serialize"),
-        &ctx,
-    ));
+    assert_eq!(
+        equivalent(
+            &union(vec![typevar(0, "T"), iface("Equals")]),
+            &iface("Equals"),
+            &ctx,
+        ),
+        Truth::Yes
+    );
+    assert_eq!(
+        equivalent(
+            &union(vec![typevar(0, "T"), iface("Serialize")]),
+            &iface("Serialize"),
+            &ctx,
+        ),
+        Truth::No
+    );
 }
 
 // ── invariant generics ───────────────────────────────────────────────────--
@@ -530,22 +619,31 @@ fn type_var_conjunction_bound() {
 #[test]
 fn generics_are_invariant_up_to_equivalence() {
     let ctx = Ctx::default();
-    assert!(!equivalent(
-        &class1("Box", Ty::int()),
-        &class1("Box", Ty::string()),
-        &ctx
-    ));
+    assert_eq!(
+        equivalent(
+            &class1("Box", Ty::int()),
+            &class1("Box", Ty::string()),
+            &ctx
+        ),
+        Truth::No
+    );
     // Equivalent argument spellings make the containers equivalent.
-    assert!(equivalent(
-        &class1("Box", union(vec![lit_int(1), Ty::int()])),
-        &class1("Box", Ty::int()),
-        &ctx,
-    ));
-    assert!(!is_subtype(
-        &class1("Box", Ty::int()),
-        &class1("Box", Ty::string()),
-        &ctx
-    ));
+    assert_eq!(
+        equivalent(
+            &class1("Box", union(vec![lit_int(1), Ty::int()])),
+            &class1("Box", Ty::int()),
+            &ctx,
+        ),
+        Truth::Yes
+    );
+    assert_eq!(
+        is_subtype(
+            &class1("Box", Ty::int()),
+            &class1("Box", Ty::string()),
+            &ctx
+        ),
+        Truth::No
+    );
 }
 
 // ── subtype basics ───────────────────────────────────────────────────────--
@@ -560,37 +658,44 @@ fn subtype_basics() {
         attr: TyAttr::default(),
     };
 
-    assert!(is_subtype(&lit_int(1), &Ty::int(), &ctx));
-    assert!(is_subtype(&variant("Side", "Left"), &enum_ty("Side"), &ctx));
-    assert!(is_subtype(&never, &Ty::int(), &ctx));
-    assert!(is_subtype(&Ty::int(), &unknown, &ctx));
-    assert!(!is_subtype(&unknown, &Ty::int(), &ctx));
+    assert_eq!(is_subtype(&lit_int(1), &Ty::int(), &ctx), Truth::Yes);
+    assert_eq!(
+        is_subtype(&variant("Side", "Left"), &enum_ty("Side"), &ctx),
+        Truth::Yes
+    );
+    assert_eq!(is_subtype(&never, &Ty::int(), &ctx), Truth::Yes);
+    assert_eq!(is_subtype(&Ty::int(), &unknown, &ctx), Truth::Yes);
+    assert_eq!(is_subtype(&unknown, &Ty::int(), &ctx), Truth::No);
 
     // No numeric coercion across representations.
-    assert!(!is_subtype(
-        &Ty::int(),
-        &Ty::Bigint {
-            attr: TyAttr::default()
-        },
-        &ctx
-    ));
+    assert_eq!(
+        is_subtype(
+            &Ty::int(),
+            &Ty::Bigint {
+                attr: TyAttr::default()
+            },
+            &ctx
+        ),
+        Truth::No
+    );
 
     // Union decomposition.
-    assert!(is_subtype(
-        &Ty::int(),
-        &union(vec![Ty::int(), Ty::string()]),
-        &ctx
-    ));
-    assert!(is_subtype(
-        &union(vec![Ty::int(), Ty::string()]),
-        &union(vec![Ty::string(), Ty::int(), Ty::bool()]),
-        &ctx,
-    ));
-    assert!(!is_subtype(
-        &union(vec![Ty::int(), Ty::string()]),
-        &Ty::int(),
-        &ctx
-    ));
+    assert_eq!(
+        is_subtype(&Ty::int(), &union(vec![Ty::int(), Ty::string()]), &ctx),
+        Truth::Yes
+    );
+    assert_eq!(
+        is_subtype(
+            &union(vec![Ty::int(), Ty::string()]),
+            &union(vec![Ty::string(), Ty::int(), Ty::bool()]),
+            &ctx,
+        ),
+        Truth::Yes
+    );
+    assert_eq!(
+        is_subtype(&union(vec![Ty::int(), Ty::string()]), &Ty::int(), &ctx),
+        Truth::No
+    );
 }
 
 // ── subtyping: variance, holes, unions (flip de-risk) ─────────────────────--
@@ -612,27 +717,27 @@ fn invariant_arg_distinguishes_top_from_recovery_hole() {
         attr: TyAttr::default(),
     };
 
-    assert!(!is_subtype(
-        &class1("Box", top.clone()),
-        &class1("Box", Ty::int()),
-        &ctx
-    ));
-    assert!(!is_subtype(
-        &class1("Box", Ty::int()),
-        &class1("Box", top),
-        &ctx
-    ));
+    assert_eq!(
+        is_subtype(&class1("Box", top.clone()), &class1("Box", Ty::int()), &ctx),
+        Truth::No
+    );
+    assert_eq!(
+        is_subtype(&class1("Box", Ty::int()), &class1("Box", top), &ctx),
+        Truth::No
+    );
 
-    assert!(is_subtype(
-        &class1("Box", hole.clone()),
-        &class1("Box", Ty::int()),
-        &ctx
-    ));
-    assert!(is_subtype(
-        &class1("Box", Ty::int()),
-        &class1("Box", hole),
-        &ctx
-    ));
+    assert_eq!(
+        is_subtype(
+            &class1("Box", hole.clone()),
+            &class1("Box", Ty::int()),
+            &ctx
+        ),
+        Truth::Yes
+    );
+    assert_eq!(
+        is_subtype(&class1("Box", Ty::int()), &class1("Box", hole), &ctx),
+        Truth::Yes
+    );
 }
 
 #[test]
@@ -663,10 +768,10 @@ fn function_subtyping_is_contravariant_in_params_covariant_in_return() {
         throws: Box::new(never),
         attr: TyAttr::default(),
     };
-    assert!(is_subtype(&foo, &expected, &ctx));
+    assert_eq!(is_subtype(&foo, &expected, &ctx), Truth::Yes);
     // The reverse fails: `int | string` (foo's param) is not <: `int`, so the
     // contravariant direction rejects it.
-    assert!(!is_subtype(&expected, &foo, &ctx));
+    assert_eq!(is_subtype(&expected, &foo, &ctx), Truth::No);
 }
 
 #[test]
@@ -684,8 +789,11 @@ fn function_throws_is_covariant() {
     let never = Ty::Never {
         attr: TyAttr::default(),
     };
-    assert!(is_subtype(&mk(never.clone()), &mk(Ty::int()), &ctx));
-    assert!(!is_subtype(&mk(Ty::int()), &mk(never), &ctx));
+    assert_eq!(
+        is_subtype(&mk(never.clone()), &mk(Ty::int()), &ctx),
+        Truth::Yes
+    );
+    assert_eq!(is_subtype(&mk(Ty::int()), &mk(never), &ctx), Truth::No);
 }
 
 #[test]
@@ -702,8 +810,8 @@ fn function_required_param_names_are_insignificant() {
         }),
         attr: TyAttr::default(),
     };
-    assert!(equivalent(&mk(Some("a")), &mk(Some("b")), &ctx));
-    assert!(equivalent(&mk(Some("a")), &mk(None), &ctx));
+    assert_eq!(equivalent(&mk(Some("a")), &mk(Some("b")), &ctx), Truth::Yes);
+    assert_eq!(equivalent(&mk(Some("a")), &mk(None), &ctx), Truth::Yes);
 }
 
 #[test]
@@ -728,13 +836,13 @@ fn function_optional_params_follow_the_superset_rule() {
     let one = func(vec![req.clone(), opt_filter.clone()]);
 
     // More optionals <: fewer optionals; the reverse fails (missing `max`).
-    assert!(is_subtype(&two, &one, &ctx));
-    assert!(!is_subtype(&one, &two, &ctx));
+    assert_eq!(is_subtype(&two, &one, &ctx), Truth::Yes);
+    assert_eq!(is_subtype(&one, &two, &ctx), Truth::No);
 
     // Optional order does not matter: reordered forms are mutual subtypes.
     let two_reordered = func(vec![req, opt_filter, opt_max]);
-    assert!(is_subtype(&two, &two_reordered, &ctx));
-    assert!(is_subtype(&two_reordered, &two, &ctx));
+    assert_eq!(is_subtype(&two, &two_reordered, &ctx), Truth::Yes);
+    assert_eq!(is_subtype(&two_reordered, &two, &ctx), Truth::Yes);
 }
 
 #[test]
@@ -754,8 +862,8 @@ fn function_optional_and_required_params_are_incomparable() {
         }),
         attr: TyAttr::default(),
     };
-    assert!(!is_subtype(&mk(true), &mk(false), &ctx));
-    assert!(!is_subtype(&mk(false), &mk(true), &ctx));
+    assert_eq!(is_subtype(&mk(true), &mk(false), &ctx), Truth::No);
+    assert_eq!(is_subtype(&mk(false), &mk(true), &ctx), Truth::No);
 }
 
 #[test]
@@ -765,23 +873,28 @@ fn interface_membership_through_unions() {
     ctx.impls.push((qtn("Cat"), qtn("Animal")));
 
     // A concrete implementor is a subtype of an interface wrapped in a union.
-    assert!(is_subtype(
-        &class("Dog"),
-        &union(vec![iface("Animal"), Ty::null()]),
-        &ctx,
-    ));
+    assert_eq!(
+        is_subtype(
+            &class("Dog"),
+            &union(vec![iface("Animal"), Ty::null()]),
+            &ctx,
+        ),
+        Truth::Yes
+    );
     // A union of implementors is a subtype of the interface (left-union rule).
-    assert!(is_subtype(
-        &union(vec![class("Dog"), class("Cat")]),
-        &iface("Animal"),
-        &ctx,
-    ));
+    assert_eq!(
+        is_subtype(
+            &union(vec![class("Dog"), class("Cat")]),
+            &iface("Animal"),
+            &ctx,
+        ),
+        Truth::Yes
+    );
     // …but `null` is not a member of the bare interface.
-    assert!(!is_subtype(
-        &Ty::optional(class("Dog")),
-        &iface("Animal"),
-        &ctx
-    ));
+    assert_eq!(
+        is_subtype(&Ty::optional(class("Dog")), &iface("Animal"), &ctx),
+        Truth::No
+    );
 }
 
 #[test]
@@ -791,19 +904,24 @@ fn type_var_is_reflexive_independent_of_its_bound() {
     // special-cased this before bound expansion; the canonical algebra gets it
     // from reflexivity + the right-union rule.)
     let ctx = Ctx::default();
-    assert!(is_subtype(&typevar(0, "T"), &typevar(0, "T"), &ctx));
-    assert!(is_subtype(
-        &typevar(0, "T"),
-        &union(vec![typevar(0, "T"), typevar(1, "U")]),
-        &ctx,
-    ));
-    assert!(is_subtype(
-        &typevar(0, "T"),
-        &Ty::optional(typevar(0, "T")),
-        &ctx
-    ));
+    assert_eq!(
+        is_subtype(&typevar(0, "T"), &typevar(0, "T"), &ctx),
+        Truth::Yes
+    );
+    assert_eq!(
+        is_subtype(
+            &typevar(0, "T"),
+            &union(vec![typevar(0, "T"), typevar(1, "U")]),
+            &ctx,
+        ),
+        Truth::Yes
+    );
+    assert_eq!(
+        is_subtype(&typevar(0, "T"), &Ty::optional(typevar(0, "T")), &ctx),
+        Truth::Yes
+    );
     // An unbounded `T` is not a subtype of an unrelated concrete type.
-    assert!(!is_subtype(&typevar(0, "T"), &Ty::int(), &ctx));
+    assert_eq!(is_subtype(&typevar(0, "T"), &Ty::int(), &ctx), Truth::No);
 }
 
 #[test]
@@ -832,13 +950,19 @@ fn symbolic_associated_type_projection_subtypes_via_its_bound() {
             .expect("iface() builds an interface existential"),
     );
 
-    assert!(is_subtype(&iter_proj, &iface("Summarizable"), &ctx));
+    assert_eq!(
+        is_subtype(&iter_proj, &iface("Summarizable"), &ctx),
+        Truth::Yes
+    );
     // …including transitively through the bound's `requires`.
-    assert!(is_subtype(&iter_proj, &iface("Displayable"), &ctx));
+    assert_eq!(
+        is_subtype(&iter_proj, &iface("Displayable"), &ctx),
+        Truth::Yes
+    );
     // Not a subtype of an interface the bound doesn't provide.
-    assert!(!is_subtype(&iter_proj, &iface("Unrelated"), &ctx));
+    assert_eq!(is_subtype(&iter_proj, &iface("Unrelated"), &ctx), Truth::No);
     // Reflexivity still holds (the projection is equal to itself).
-    assert!(is_subtype(&iter_proj, &iter_proj, &ctx));
+    assert_eq!(is_subtype(&iter_proj, &iter_proj, &ctx), Truth::Yes);
 }
 
 // ── aliases & recursion ──────────────────────────────────────────────────--
@@ -847,11 +971,14 @@ fn symbolic_associated_type_projection_subtypes_via_its_bound() {
 fn non_recursive_alias_expands() {
     let mut ctx = Ctx::default();
     ctx.aliases.insert(qtn("MyInt"), Ty::int());
-    assert!(equivalent(
-        &Ty::TypeAlias(qtn("MyInt"), TyAttr::default()),
-        &Ty::int(),
-        &ctx
-    ));
+    assert_eq!(
+        equivalent(
+            &Ty::TypeAlias(qtn("MyInt"), TyAttr::default()),
+            &Ty::int(),
+            &ctx
+        ),
+        Truth::Yes
+    );
 }
 
 #[test]
@@ -859,8 +986,8 @@ fn unresolved_alias_is_opaque() {
     let ctx = Ctx::default();
     let a = Ty::TypeAlias(qtn("Missing"), TyAttr::default());
     // Equal only to itself; never equated to a concrete type (fail-safe).
-    assert!(equivalent(&a, &a, &ctx));
-    assert!(!equivalent(&a, &Ty::int(), &ctx));
+    assert_eq!(equivalent(&a, &a, &ctx), Truth::Yes);
+    assert_eq!(equivalent(&a, &Ty::int(), &ctx), Truth::No);
 }
 
 #[test]
@@ -877,10 +1004,10 @@ fn recursive_alias_terminates() {
     );
     let alias = Ty::TypeAlias(tree.clone(), TyAttr::default());
 
-    assert!(equivalent(&alias, &alias, &ctx));
-    assert!(is_subtype(&alias, &alias, &ctx));
+    assert_eq!(equivalent(&alias, &alias, &ctx), Truth::Yes);
+    assert_eq!(is_subtype(&alias, &alias, &ctx), Truth::Yes);
     // The recursive alias is not equivalent to a flat unrelated type.
-    assert!(!equivalent(&alias, &Ty::int(), &ctx));
+    assert_eq!(equivalent(&alias, &Ty::int(), &ctx), Truth::No);
 }
 
 // ── bool completeness ────────────────────────────────────────────────────--
@@ -891,22 +1018,24 @@ fn complete_bool_literals_collapse_to_bool() {
     // analogue of enum completeness, context-free.
     let ctx = Ctx::default();
     let both = union(vec![lit_bool(true), lit_bool(false)]);
-    assert!(equivalent(&both, &Ty::bool(), &ctx));
-    assert!(is_subtype(&Ty::bool(), &both, &ctx));
-    assert!(is_subtype(&both, &Ty::bool(), &ctx));
-    assert!(equivalent(
-        &union(vec![lit_bool(true), lit_bool(false), Ty::int()]),
-        &union(vec![Ty::bool(), Ty::int()]),
-        &ctx,
-    ));
+    assert_eq!(equivalent(&both, &Ty::bool(), &ctx), Truth::Yes);
+    assert_eq!(is_subtype(&Ty::bool(), &both, &ctx), Truth::Yes);
+    assert_eq!(is_subtype(&both, &Ty::bool(), &ctx), Truth::Yes);
+    assert_eq!(
+        equivalent(
+            &union(vec![lit_bool(true), lit_bool(false), Ty::int()]),
+            &union(vec![Ty::bool(), Ty::int()]),
+            &ctx,
+        ),
+        Truth::Yes
+    );
     // A single literal does not collapse (absorption into a present base still
     // applies).
-    assert!(!equivalent(&lit_bool(true), &Ty::bool(), &ctx));
-    assert!(equivalent(
-        &union(vec![Ty::bool(), lit_bool(true)]),
-        &Ty::bool(),
-        &ctx
-    ));
+    assert_eq!(equivalent(&lit_bool(true), &Ty::bool(), &ctx), Truth::No);
+    assert_eq!(
+        equivalent(&union(vec![Ty::bool(), lit_bool(true)]), &Ty::bool(), &ctx),
+        Truth::Yes
+    );
     // Through recursion: the collapse applies inside μ-bodies too.
     let mut ctx = Ctx::default();
     ctx.aliases.insert(
@@ -915,7 +1044,7 @@ fn complete_bool_literals_collapse_to_bool() {
     );
     ctx.aliases
         .insert(qtn("B"), union(vec![Ty::bool(), list(alias("B"))]));
-    assert!(equivalent(&alias("A"), &alias("B"), &ctx));
+    assert_eq!(equivalent(&alias("A"), &alias("B"), &ctx), Truth::Yes);
 }
 
 // ── equirecursive canonical forms ────────────────────────────────────────--
@@ -933,13 +1062,13 @@ fn alpha_equivalent_recursive_aliases() {
     let mut ctx = Ctx::default();
     int_list_alias(&mut ctx, "A");
     int_list_alias(&mut ctx, "B");
-    assert!(equivalent(&alias("A"), &alias("B"), &ctx));
-    assert!(is_subtype(&alias("A"), &alias("B"), &ctx));
-    assert!(is_subtype(&alias("B"), &alias("A"), &ctx));
+    assert_eq!(equivalent(&alias("A"), &alias("B"), &ctx), Truth::Yes);
+    assert_eq!(is_subtype(&alias("A"), &alias("B"), &ctx), Truth::Yes);
+    assert_eq!(is_subtype(&alias("B"), &alias("A"), &ctx), Truth::Yes);
 
     ctx.aliases.insert(qtn("R"), class1("Box", alias("R")));
     ctx.aliases.insert(qtn("S"), class1("Box", alias("S")));
-    assert!(equivalent(&alias("R"), &alias("S"), &ctx));
+    assert_eq!(equivalent(&alias("R"), &alias("S"), &ctx), Truth::Yes);
 }
 
 #[test]
@@ -949,14 +1078,16 @@ fn recursive_alias_spelling_invariance() {
     int_list_alias(&mut ctx, "A");
     let body = union(vec![Ty::int(), list(alias("A"))]);
     let twice = union(vec![Ty::int(), list(body.clone())]);
-    assert!(equivalent(&alias("A"), &body, &ctx));
-    assert!(equivalent(&alias("A"), &twice, &ctx));
-    assert!(equivalent(&list(alias("A")), &list(body.clone()), &ctx));
-    assert!(equivalent(
-        &class1("Box", alias("A")),
-        &class1("Box", body),
-        &ctx
-    ));
+    assert_eq!(equivalent(&alias("A"), &body, &ctx), Truth::Yes);
+    assert_eq!(equivalent(&alias("A"), &twice, &ctx), Truth::Yes);
+    assert_eq!(
+        equivalent(&list(alias("A")), &list(body.clone()), &ctx),
+        Truth::Yes
+    );
+    assert_eq!(
+        equivalent(&class1("Box", alias("A")), &class1("Box", body), &ctx),
+        Truth::Yes
+    );
 }
 
 #[test]
@@ -967,12 +1098,11 @@ fn mutually_recursive_aliases_are_equivalent() {
         .insert(qtn("A"), union(vec![Ty::int(), list(alias("B"))]));
     ctx.aliases
         .insert(qtn("B"), union(vec![Ty::int(), list(alias("A"))]));
-    assert!(equivalent(&alias("A"), &alias("B"), &ctx));
-    assert!(equivalent(
-        &alias("A"),
-        &union(vec![Ty::int(), list(alias("A"))]),
-        &ctx
-    ));
+    assert_eq!(equivalent(&alias("A"), &alias("B"), &ctx), Truth::Yes);
+    assert_eq!(
+        equivalent(&alias("A"), &union(vec![Ty::int(), list(alias("A"))]), &ctx),
+        Truth::Yes
+    );
 }
 
 #[test]
@@ -985,21 +1115,24 @@ fn unguarded_members_are_vacuous() {
         .insert(qtn("A"), union(vec![alias("A"), list(alias("A"))]));
     ctx.aliases.insert(qtn("B"), list(alias("B")));
     ctx.aliases.insert(qtn("C"), alias("C"));
-    assert!(equivalent(&alias("A"), &alias("B"), &ctx));
-    assert!(equivalent(
-        &alias("C"),
-        &Ty::Never {
-            attr: TyAttr::default()
-        },
-        &ctx
-    ));
+    assert_eq!(equivalent(&alias("A"), &alias("B"), &ctx), Truth::Yes);
+    assert_eq!(
+        equivalent(
+            &alias("C"),
+            &Ty::Never {
+                attr: TyAttr::default()
+            },
+            &ctx
+        ),
+        Truth::Yes
+    );
     // The soundness regression: before ε-closure, the assumption-set probe
     // fired on `string ≤ A` through the unguarded member without crossing a
     // constructor, wrongly answering `true`.
-    assert!(!is_subtype(&Ty::string(), &alias("A"), &ctx));
-    assert!(!is_subtype(&class("Dog"), &alias("A"), &ctx));
+    assert_eq!(is_subtype(&Ty::string(), &alias("A"), &ctx), Truth::No);
+    assert_eq!(is_subtype(&class("Dog"), &alias("A"), &ctx), Truth::No);
     // The guarded content is still there.
-    assert!(is_subtype(&list(alias("A")), &alias("A"), &ctx));
+    assert_eq!(is_subtype(&list(alias("A")), &alias("A"), &ctx), Truth::Yes);
 }
 
 #[test]
@@ -1023,8 +1156,9 @@ fn normalize_is_idempotent_on_recursive_aliases() {
         let once = ctx.normalize(&t);
         let twice = ctx.normalize(&once);
         assert_eq!(once, twice, "normalize must be idempotent for {t:?}");
-        assert!(
+        assert_eq!(
             equivalent(&t, &once, &ctx),
+            Truth::Yes,
             "normalize must preserve identity for {t:?}"
         );
     }
@@ -1065,7 +1199,7 @@ fn absorption_completes_across_recursion() {
     ctx.impls.push((qtn("Box"), qtn("I")));
     ctx.aliases
         .insert(qtn("A"), union(vec![iface("I"), class1("Box", alias("A"))]));
-    assert!(equivalent(&alias("A"), &iface("I"), &ctx));
+    assert_eq!(equivalent(&alias("A"), &iface("I"), &ctx), Truth::Yes);
     assert_eq!(ctx.normalize(&alias("A")), iface("I"));
 }
 
@@ -1092,11 +1226,10 @@ fn catch_result_union_equals_base() {
     // `(... catch ...) < 0` widens to `int | 99` vs `int`; exact-type ordering
     // needs these to be equivalent so the comparison is accepted.
     let ctx = Ctx::default();
-    assert!(equivalent(
-        &union(vec![Ty::int(), lit_int(99)]),
-        &Ty::int(),
-        &ctx
-    ));
+    assert_eq!(
+        equivalent(&union(vec![Ty::int(), lit_int(99)]), &Ty::int(), &ctx),
+        Truth::Yes
+    );
 }
 
 // ── concrete-type disjointness (`==` always-false fold) ──────────────────--
@@ -1182,30 +1315,37 @@ fn containers_are_invariant_even_when_the_element_is_a_genuine_subtype() {
     // routing through this relation instead of the legacy element-covariant one.
     let mut ctx = Ctx::default();
     ctx.impls.push((qtn("Dog"), qtn("Animal")));
-    assert!(is_subtype(&class("Dog"), &iface("Animal"), &ctx));
+    assert_eq!(
+        is_subtype(&class("Dog"), &iface("Animal"), &ctx),
+        Truth::Yes
+    );
 
-    assert!(!is_subtype(
-        &Ty::list(class("Dog")),
-        &Ty::list(iface("Animal")),
-        &ctx,
-    ));
-    assert!(!is_subtype(
-        &map_ty(Ty::string(), class("Dog")),
-        &map_ty(Ty::string(), iface("Animal")),
-        &ctx,
-    ));
+    assert_eq!(
+        is_subtype(&Ty::list(class("Dog")), &Ty::list(iface("Animal")), &ctx,),
+        Truth::No
+    );
+    assert_eq!(
+        is_subtype(
+            &map_ty(Ty::string(), class("Dog")),
+            &map_ty(Ty::string(), iface("Animal")),
+            &ctx,
+        ),
+        Truth::No
+    );
     // A generic class is invariant in its argument for the same reason.
-    assert!(!is_subtype(
-        &class1("Box", class("Dog")),
-        &class1("Box", iface("Animal")),
-        &ctx,
-    ));
+    assert_eq!(
+        is_subtype(
+            &class1("Box", class("Dog")),
+            &class1("Box", iface("Animal")),
+            &ctx,
+        ),
+        Truth::No
+    );
     // Reflexive same-instantiation still holds.
-    assert!(is_subtype(
-        &Ty::list(class("Dog")),
-        &Ty::list(class("Dog")),
-        &ctx,
-    ));
+    assert_eq!(
+        is_subtype(&Ty::list(class("Dog")), &Ty::list(class("Dog")), &ctx,),
+        Truth::Yes
+    );
 }
 
 #[test]
@@ -1425,25 +1565,22 @@ fn every_function_implements_bare_any_function() {
         attr: TyAttr::default(),
     };
     let filled = any_function(vec![("Returns", Ty::unknown()), ("Throws", Ty::unknown())]);
-    assert!(is_subtype(
-        &simple_fn(Ty::string(), never.clone()),
-        &filled,
-        &ctx
-    ));
-    assert!(is_subtype(
-        &simple_fn(class("Doc"), class("HttpError")),
-        &filled,
-        &ctx
-    ));
-    assert!(is_subtype(
-        &simple_fn(Ty::string(), never),
-        &any_function(vec![]),
-        &ctx
-    ));
+    assert_eq!(
+        is_subtype(&simple_fn(Ty::string(), never.clone()), &filled, &ctx),
+        Truth::Yes
+    );
+    assert_eq!(
+        is_subtype(&simple_fn(class("Doc"), class("HttpError")), &filled, &ctx),
+        Truth::Yes
+    );
+    assert_eq!(
+        is_subtype(&simple_fn(Ty::string(), never), &any_function(vec![]), &ctx),
+        Truth::Yes
+    );
     // Non-function values do not conform through the derived rule; they fall
     // to the ordinary nominal fact, which this context does not claim.
-    assert!(!is_subtype(&Ty::int(), &filled, &ctx));
-    assert!(!is_subtype(&class("Doc"), &filled, &ctx));
+    assert_eq!(is_subtype(&Ty::int(), &filled, &ctx), Truth::No);
+    assert_eq!(is_subtype(&class("Doc"), &filled, &ctx), Truth::No);
 }
 
 #[test]
@@ -1457,33 +1594,32 @@ fn any_function_pins_check_the_functions_channels_covariantly() {
         ("Throws", Ty::unknown()),
     ]);
     // `int <: int | string` fits the `Returns` pin; `bool` does not.
-    assert!(is_subtype(
-        &simple_fn(Ty::int(), never.clone()),
-        &ret_pin,
-        &ctx
-    ));
-    assert!(!is_subtype(
-        &simple_fn(Ty::bool(), never.clone()),
-        &ret_pin,
-        &ctx
-    ));
+    assert_eq!(
+        is_subtype(&simple_fn(Ty::int(), never.clone()), &ret_pin, &ctx),
+        Truth::Yes
+    );
+    assert_eq!(
+        is_subtype(&simple_fn(Ty::bool(), never.clone()), &ret_pin, &ctx),
+        Truth::No
+    );
     // A non-throwing function (`throws never`) fits every `Throws` pin; a
     // mismatched error class does not.
     let throws_pin = any_function(vec![
         ("Returns", Ty::unknown()),
         ("Throws", class("ToolError")),
     ]);
-    assert!(is_subtype(&simple_fn(Ty::int(), never), &throws_pin, &ctx));
-    assert!(is_subtype(
-        &simple_fn(Ty::int(), class("ToolError")),
-        &throws_pin,
-        &ctx
-    ));
-    assert!(!is_subtype(
-        &simple_fn(Ty::int(), class("IoError")),
-        &throws_pin,
-        &ctx
-    ));
+    assert_eq!(
+        is_subtype(&simple_fn(Ty::int(), never), &throws_pin, &ctx),
+        Truth::Yes
+    );
+    assert_eq!(
+        is_subtype(&simple_fn(Ty::int(), class("ToolError")), &throws_pin, &ctx),
+        Truth::Yes
+    );
+    assert_eq!(
+        is_subtype(&simple_fn(Ty::int(), class("IoError")), &throws_pin, &ctx),
+        Truth::No
+    );
 }
 
 #[test]
@@ -1507,11 +1643,11 @@ fn any_function_existentials_are_covariant_in_their_pins() {
         ("Throws", class("ToolError")),
     ]);
     let bare = any_function(vec![("Returns", Ty::unknown()), ("Throws", Ty::unknown())]);
-    assert!(is_subtype(&narrow, &wide, &ctx));
-    assert!(is_subtype(&narrow, &bare, &ctx));
-    assert!(is_subtype(&wide, &bare, &ctx));
-    assert!(!is_subtype(&wide, &narrow, &ctx));
-    assert!(!is_subtype(&bare, &narrow, &ctx));
+    assert_eq!(is_subtype(&narrow, &wide, &ctx), Truth::Yes);
+    assert_eq!(is_subtype(&narrow, &bare, &ctx), Truth::Yes);
+    assert_eq!(is_subtype(&wide, &bare, &ctx), Truth::Yes);
+    assert_eq!(is_subtype(&wide, &narrow, &ctx), Truth::No);
+    assert_eq!(is_subtype(&bare, &narrow, &ctx), Truth::No);
     // The carve-out is AnyFunction-specific: an unrelated same-shape interface
     // still goes through the invariant `interface_requires` fact, which this
     // context does not claim.
@@ -1521,7 +1657,7 @@ fn any_function_existentials_are_covariant_in_their_pins() {
         vec![(Name::new("Returns"), Ty::int())],
         TyAttr::default(),
     );
-    assert!(!is_subtype(&other, &any_function(vec![]), &ctx));
+    assert_eq!(is_subtype(&other, &any_function(vec![]), &ctx), Truth::No);
 }
 
 // ── review regressions: renderer totality, unguarded members, qualifiers ──--
@@ -1537,9 +1673,9 @@ fn nested_union_member_recursion_renders_totally() {
         union(vec![Ty::string(), list(union(vec![alias("A"), Ty::int()]))]),
     );
     let n = ctx.normalize(&alias("A"));
-    assert!(equivalent(&alias("A"), &n, &ctx));
+    assert_eq!(equivalent(&alias("A"), &n, &ctx), Truth::Yes);
     assert_eq!(ctx.normalize(&n), n, "idempotent");
-    assert!(!equivalent(&alias("A"), &Ty::int(), &ctx));
+    assert_eq!(equivalent(&alias("A"), &Ty::int(), &ctx), Truth::No);
 }
 
 #[test]
@@ -1549,8 +1685,9 @@ fn unguarded_mu_member_is_not_vacuously_absorbing() {
     ctx.aliases
         .insert(qtn("A"), union(vec![alias("A"), list(alias("A"))]));
     // string | A must NOT be equivalent to A.
-    assert!(
-        !equivalent(&union(vec![Ty::string(), alias("A")]), &alias("A"), &ctx),
+    assert_eq!(
+        equivalent(&union(vec![Ty::string(), alias("A")]), &alias("A"), &ctx),
+        Truth::No,
         "string was unsoundly absorbed into the non-contractive mu"
     );
 }
@@ -1577,7 +1714,7 @@ fn projection_qualifier_on_cycle_terminates() {
         ]),
     );
     let n = ctx.normalize(&alias("A"));
-    assert!(equivalent(&alias("A"), &n, &ctx));
+    assert_eq!(equivalent(&alias("A"), &n, &ctx), Truth::Yes);
 }
 
 #[test]
@@ -1592,9 +1729,9 @@ fn map_value_union_recursion_renders_totally() {
         ]),
     );
     let n = ctx.normalize(&alias("J"));
-    assert!(equivalent(&alias("J"), &n, &ctx));
+    assert_eq!(equivalent(&alias("J"), &n, &ctx), Truth::Yes);
     assert_eq!(ctx.normalize(&n), n, "idempotent");
-    assert!(!equivalent(&alias("J"), &Ty::int(), &ctx));
+    assert_eq!(equivalent(&alias("J"), &Ty::int(), &ctx), Truth::No);
 }
 
 // ── review regressions: unguarded members, disjointness, rendering ───────--
@@ -1609,13 +1746,12 @@ fn unguarded_mu_member_does_not_absorb_siblings() {
     ctx.aliases
         .insert(qtn("A"), union(vec![alias("A"), list(alias("A"))]));
     let u = union(vec![Ty::string(), alias("A")]);
-    assert!(is_subtype(&Ty::string(), &u, &ctx));
-    assert!(!equivalent(&u, &alias("A"), &ctx));
-    assert!(equivalent(
-        &u,
-        &union(vec![Ty::string(), list(alias("A"))]),
-        &ctx
-    ));
+    assert_eq!(is_subtype(&Ty::string(), &u, &ctx), Truth::Yes);
+    assert_eq!(equivalent(&u, &alias("A"), &ctx), Truth::No);
+    assert_eq!(
+        equivalent(&u, &union(vec![Ty::string(), list(alias("A"))]), &ctx),
+        Truth::Yes
+    );
 }
 
 #[test]
@@ -1626,7 +1762,7 @@ fn overlapping_recursive_types_are_not_disjoint() {
     // so structural `!=` on invariant args must not fire across a μ.)
     let mut ctx = Ctx::default();
     int_list_alias(&mut ctx, "A");
-    assert!(is_subtype(&list(alias("A")), &alias("A"), &ctx));
+    assert_eq!(is_subtype(&list(alias("A")), &alias("A"), &ctx), Truth::Yes);
     assert!(!ctx.definitely_disjoint(&alias("A"), &list(alias("A"))));
     let d = union(vec![Ty::bool(), list(alias("A"))]);
     assert!(!ctx.definitely_disjoint(&alias("A"), &d));
@@ -1695,9 +1831,9 @@ fn union_nested_recursion_renders_via_subset_cover() {
         union(vec![Ty::int(), list(union(vec![alias("A"), null()]))]),
     );
     let a = alias("A");
-    assert!(equivalent(&a, &a, &ctx));
+    assert_eq!(equivalent(&a, &a, &ctx), Truth::Yes);
     let rendered = ctx.normalize(&a);
-    assert!(equivalent(&a, &rendered, &ctx));
+    assert_eq!(equivalent(&a, &rendered, &ctx), Truth::Yes);
     assert_eq!(ctx.normalize(&rendered), rendered, "idempotent");
 }
 
@@ -1710,17 +1846,20 @@ fn single_variant_enum_union_is_idempotent() {
     ctx.enums.insert(qtn("E"), vec![Name::new("A")]);
     let v = variant("E", "A");
     let vv = union(vec![v.clone(), v.clone()]);
-    assert!(equivalent(&vv, &v, &ctx));
-    assert!(is_subtype(&vv, &v, &ctx));
-    assert!(is_subtype(&v, &vv, &ctx));
+    assert_eq!(equivalent(&vv, &v, &ctx), Truth::Yes);
+    assert_eq!(is_subtype(&vv, &v, &ctx), Truth::Yes);
+    assert_eq!(is_subtype(&v, &vv, &ctx), Truth::Yes);
     // The two-variant collapse is unaffected.
     ctx.enums
         .insert(qtn("F"), vec![Name::new("X"), Name::new("Y")]);
-    assert!(equivalent(
-        &union(vec![variant("F", "X"), variant("F", "Y")]),
-        &enum_ty("F"),
-        &ctx
-    ));
+    assert_eq!(
+        equivalent(
+            &union(vec![variant("F", "X"), variant("F", "Y")]),
+            &enum_ty("F"),
+            &ctx
+        ),
+        Truth::Yes
+    );
 }
 
 // ── answer cache: verdict invisibility ───────────────────────────────────--
@@ -1842,30 +1981,34 @@ fn the_default_clause_world_is_empty() {
 #[test]
 fn step_budget_exhaustion_fails_closed_and_recovers() {
     // `A[] <: A` for `type A = int | A[]` needs at least one co-inductive
-    // hypothesis, so a zero pool must refuse it — answering `false`, never
-    // panicking or over-claiming — while any pool that covers the derivation
-    // proves it again.
+    // hypothesis, so a zero pool must refuse it — and the surface reports the
+    // refusal as what it is: `Unknown`, an artifact of the budget, never a
+    // definite `No` (and never a panic or an over-claim). Any pool that covers
+    // the derivation proves it again.
     let mut ctx = Ctx::default();
     int_list_alias(&mut ctx, "A");
     let (sub, sup) = (list(alias("A")), alias("A"));
-    assert!(is_subtype(&sub, &sup, &ctx));
+    assert_eq!(is_subtype(&sub, &sup, &ctx), Truth::Yes);
 
     ctx.limits = Some(Limits {
         step_budget: 0,
         ..Limits::DEFAULT
     });
-    assert!(!is_subtype(&sub, &sup, &ctx));
+    assert_eq!(
+        is_subtype(&sub, &sup, &ctx),
+        Truth::Unknown(Indeterminacy::BudgetExhausted)
+    );
     // Fail-closed is still total and still reflexive: the structural fast path
     // spends nothing, and normalization keeps producing a term.
-    assert!(equivalent(&sup, &sup, &ctx));
+    assert_eq!(equivalent(&sup, &sup, &ctx), Truth::Yes);
     let rendered = normalize(&sup, &ctx);
-    assert!(equivalent(&rendered, &sup, &ctx));
+    assert_eq!(equivalent(&rendered, &sup, &ctx), Truth::Yes);
 
     ctx.limits = Some(Limits {
         step_budget: 1_000,
         ..Limits::DEFAULT
     });
-    assert!(is_subtype(&sub, &sup, &ctx));
+    assert_eq!(is_subtype(&sub, &sup, &ctx), Truth::Yes);
 }
 
 #[test]
@@ -1911,6 +2054,240 @@ fn the_store_is_verdict_invisible_at_every_budget() {
             }
         }
     }
+}
+
+// ── the three-valued surface ───────────────────────────────────────────────
+
+#[test]
+fn kleene_combinators_compose_verdicts() {
+    use Truth::{No, Yes};
+    let unknown = Truth::Unknown(Indeterminacy::BudgetExhausted);
+    // Conjunction: one definite refutation settles it, even against an open side.
+    assert_eq!(Yes.and(Yes), Yes);
+    assert_eq!(Yes.and(No), No);
+    assert_eq!(No.and(Yes), No);
+    assert_eq!(No.and(No), No);
+    assert_eq!(No.and(unknown), No);
+    assert_eq!(unknown.and(No), No);
+    assert_eq!(Yes.and(unknown), unknown);
+    assert_eq!(unknown.and(Yes), unknown);
+    assert_eq!(unknown.and(unknown), unknown);
+    // Disjunction: one definite proof settles it — an open side never masks it.
+    assert_eq!(Yes.or(Yes), Yes);
+    assert_eq!(Yes.or(No), Yes);
+    assert_eq!(No.or(Yes), Yes);
+    assert_eq!(No.or(No), No);
+    assert_eq!(Yes.or(unknown), Yes);
+    assert_eq!(unknown.or(Yes), Yes);
+    assert_eq!(No.or(unknown), unknown);
+    assert_eq!(unknown.or(No), unknown);
+    assert_eq!(unknown.or(unknown), unknown);
+}
+
+#[test]
+fn a_starved_refutation_is_unknown_never_no() {
+    // `string <: A` for `type A = int | A[]` is a definite refutation — but only
+    // a funded walk can make it: a zero pool is refused at the μ-unfolding arm,
+    // and the surface must report the refusal as what it is rather than launder
+    // it into a statement about the types.
+    let mut ctx = Ctx::default();
+    int_list_alias(&mut ctx, "A");
+    assert_eq!(is_subtype(&Ty::string(), &alias("A"), &ctx), Truth::No);
+    ctx.limits = Some(Limits {
+        step_budget: 0,
+        ..Limits::DEFAULT
+    });
+    assert_eq!(
+        is_subtype(&Ty::string(), &alias("A"), &ctx),
+        Truth::Unknown(Indeterminacy::BudgetExhausted)
+    );
+    // Verdicts that consume no steps stay definite at any budget: nominal-head
+    // misses are decided before a session exists…
+    assert_eq!(is_subtype(&class("Dog"), &class("Cat"), &ctx), Truth::No);
+    // …and purely structural walks never charge, so their refutations hold.
+    assert_eq!(is_subtype(&Ty::int(), &Ty::string(), &ctx), Truth::No);
+    assert_eq!(equivalent(&Ty::int(), &Ty::string(), &ctx), Truth::No);
+}
+
+#[test]
+fn a_zero_budget_still_decides_uncharged_equivalences() {
+    // The structural stages (flatten/sort/dedup, ε-closure, minimization) never
+    // charge, so spellings they alone reconcile stay `Yes` at any budget —
+    // decided by positive identity of the (possibly partial) forms, which is
+    // sound because every rewrite a partial form did apply is fact-justified.
+    let mut ctx = Ctx::default();
+    int_list_alias(&mut ctx, "A");
+    ctx.limits = Some(Limits {
+        step_budget: 0,
+        ..Limits::DEFAULT
+    });
+    assert_eq!(
+        equivalent(
+            &union(vec![Ty::int(), Ty::string()]),
+            &union(vec![Ty::string(), Ty::int()]),
+            &ctx
+        ),
+        Truth::Yes
+    );
+    // Even a respelled recursive alias: the automaton identifies `int | A[]`
+    // with `A` by bisimulation, no absorption (hence no step) required.
+    assert_eq!(
+        equivalent(&union(vec![Ty::int(), list(alias("A"))]), &alias("A"), &ctx),
+        Truth::Yes
+    );
+}
+
+/// An equivalent pair whose identity judgment *must* spend steps:
+/// `T | Animal | N ≡ Animal | N` for `T: Animal`. Absorbing `T` into its bound
+/// rides the type-variable expanding arm, which charges before the bound is
+/// even consulted — and no structural stage can dedup a type variable, so
+/// (unlike μ-respellings, which ε-closure and minimization reconcile for free)
+/// the absorption cannot happen without the probe.
+///
+/// The shared noise member `N` is what opens the cost gap the fallback lives
+/// in: its argument union pays a quadratic set of charged type-variable probes
+/// during canonicalization and absorbs *nothing*, so its form is identical in
+/// both operands at every budget — the directed mutual-inclusion walk passes it
+/// by reflexivity for free, while the identity phase pays its full cost twice.
+fn absorbing_pair(ctx: &mut Ctx) -> (Ty, Ty) {
+    ctx.var_bounds.insert(param(0, "T"), vec![iface("Animal")]);
+    let mut noise_members: Vec<Ty> = (1..=4).map(|i| typevar(i, "U")).collect();
+    noise_members.push(class("K"));
+    let noise = class1("Box", union(noise_members));
+    (
+        union(vec![typevar(0, "T"), iface("Animal"), noise.clone()]),
+        union(vec![iface("Animal"), noise]),
+    )
+}
+
+#[test]
+fn equivalence_is_never_underclaimed_by_starvation() {
+    // Correct-or-`Unknown` at every pool size: the pair is equivalent, so no
+    // budget may manufacture a `No` — under-claiming equivalence is as wrong as
+    // over-claiming it. A starved identity phase must degrade to the relational
+    // fallback, and a starved fallback to `Unknown`.
+    for budget in 0..=256 {
+        let mut ctx = Ctx::default();
+        let (lhs, rhs) = absorbing_pair(&mut ctx);
+        ctx.limits = Some(Limits {
+            step_budget: budget,
+            ..Limits::DEFAULT
+        });
+        assert_ne!(
+            equivalent(&lhs, &rhs, &ctx),
+            Truth::No,
+            "budget {budget} manufactured a refutation of an equivalence"
+        );
+    }
+    let mut ctx = Ctx::default();
+    let (lhs, rhs) = absorbing_pair(&mut ctx);
+    assert_eq!(equivalent(&lhs, &rhs, &ctx), Truth::Yes);
+}
+
+#[test]
+fn a_starved_identity_falls_back_to_mutual_inclusion() {
+    // The fallback arm earns its keep at pool sizes where canonicalization is
+    // cut (the identity phase alone answers `Unknown`) while the directed
+    // mutual-inclusion walk fits in the fresh second pool: the composed
+    // judgment still proves the equivalence. Scan for such sizes rather than
+    // pinning one, so the test tracks the pipeline's real step costs instead of
+    // encoding them.
+    let mut witnessed = false;
+    for budget in 0..=256 {
+        let mut ctx = Ctx::default();
+        let (lhs, rhs) = absorbing_pair(&mut ctx);
+        ctx.limits = Some(Limits {
+            step_budget: budget,
+            ..Limits::DEFAULT
+        });
+        let identity_only = {
+            let s = &mut SolverSession::new(&ctx);
+            let (identity, _, _) = s.equivalent_by_identity(&lhs, &rhs);
+            identity
+        };
+        if matches!(identity_only, Truth::Unknown(_)) && equivalent(&lhs, &rhs, &ctx) == Truth::Yes
+        {
+            witnessed = true;
+        }
+    }
+    assert!(
+        witnessed,
+        "no pool size starved the identity phase while funding the fallback walk"
+    );
+}
+
+#[test]
+fn normalize_mints_an_identity_only_for_funded_walks() {
+    let mut ctx = Ctx::default();
+    int_list_alias(&mut ctx, "A");
+    // `A | A[]`: absorbing `A[]` into `A` rides charged μ-probes.
+    let lhs = union(vec![alias("A"), list(alias("A"))]);
+
+    // Funded: canonical tier — the token is minted, and re-normalizing the
+    // render reaches the same form, hence the same live token.
+    {
+        let s = &mut SolverSession::new(&ctx);
+        let first = s.normalize(&lhs);
+        let id = first.identity.expect("a funded walk is canonical-tier");
+        let again = s.normalize(&first.ty);
+        assert_eq!(
+            again.identity,
+            Some(id),
+            "idempotent renders must share one live identity"
+        );
+    }
+
+    // Starved: the render is still a faithful spelling of the same type, but it
+    // is no identity — the absent token is what forces relations over it back
+    // through goals.
+    ctx.limits = Some(Limits {
+        step_budget: 0,
+        ..Limits::DEFAULT
+    });
+    let partial = {
+        let s = &mut SolverSession::new(&ctx);
+        s.normalize(&lhs)
+    };
+    assert_eq!(
+        partial.identity, None,
+        "a limit-touched walk must not mint an identity"
+    );
+    ctx.limits = None;
+    assert_eq!(equivalent(&partial.ty, &lhs, &ctx), Truth::Yes);
+}
+
+#[test]
+fn definite_collapses_never_conclude_from_partial_forms() {
+    // `Box<A | A[]>` and `Box<A>` carry the same argument, so they are not
+    // disjoint — but only absorption knows it, and absorption charges. A
+    // starved walk leaves `A | A[]` unabsorbed, and comparing that partial form
+    // structurally against `Box<A>`'s canonical argument is exactly the
+    // ground-inequality trap: the collapse family must decline instead. (Today
+    // the μ-guard on `arg_forces_disjoint` would independently decline these
+    // operands; the refusal gate is what keeps the contract when charge sites
+    // widen to the nominal-fact arms in Phase 2.)
+    let mut ctx = Ctx::default();
+    int_list_alias(&mut ctx, "A");
+    let boxed_wide = class1("Box", union(vec![alias("A"), list(alias("A"))]));
+    let boxed = class1("Box", alias("A"));
+    assert!(!ctx.definitely_disjoint(&boxed_wide, &boxed));
+    assert_eq!(ctx.constant_equality(&boxed_wide, &boxed), None);
+
+    ctx.limits = Some(Limits {
+        step_budget: 0,
+        ..Limits::DEFAULT
+    });
+    assert!(!ctx.definitely_disjoint(&boxed_wide, &boxed));
+    assert_eq!(ctx.constant_equality(&boxed_wide, &boxed), None);
+
+    // The gate never dulls uncharged conclusions: purely structural
+    // disjointness holds at any budget.
+    assert!(ctx.definitely_disjoint(&class1("Box", Ty::int()), &class1("Box", Ty::string())));
+    assert_eq!(
+        ctx.constant_equality(&lit_int(1), &lit_int(1)),
+        Some(true),
+        "singleton equality is uncharged and stays concluded at budget zero"
+    );
 }
 
 // ── the answer store ───────────────────────────────────────────────────────

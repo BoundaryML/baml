@@ -1135,7 +1135,7 @@ pub fn validate_impl_signatures<'db>(
                 },
             );
             // Field types are invariant — the class field must be the same type.
-            if !baml_type::normalize::equivalent(&declared, class_field_ty, &ctx) {
+            if !baml_type::normalize::equivalent(&declared, class_field_ty, &ctx).holds() {
                 diags.push((
                     crate::infer_context::TirTypeError::InterfaceFieldTypeMismatch {
                         interface: iface_qtn.clone(),
@@ -1323,7 +1323,7 @@ pub fn validate_impl_signatures<'db>(
         );
 
         if !method_generic_arity_matches
-            || !baml_type::normalize::is_subtype(&impl_fn, &iface_fn, &ctx)
+            || !baml_type::normalize::is_subtype(&impl_fn, &iface_fn, &ctx).holds()
         {
             diags.push((
                 crate::infer_context::TirTypeError::InterfaceMethodSignatureMismatch {
@@ -1445,7 +1445,7 @@ pub fn validate_impl_signatures<'db>(
                 associated_types: assoc.clone(),
             };
             if !implements_interface(db, &for_ty, &required_iface, aliases, |a, b| {
-                baml_type::normalize::is_subtype(a, b, &ctx)
+                baml_type::normalize::is_subtype(a, b, &ctx).holds()
             }) {
                 diags.push((
                     crate::infer_context::TirTypeError::MissingRequiredInterface {
@@ -2008,7 +2008,8 @@ fn match_impl_head<'db>(
             .all(|(name, requested_ty)| {
                 match data.associated_types.iter().find(|(n, _)| n == name) {
                     Some((_, impl_ty)) => AliasEquivCtx(aliases)
-                        .equivalent(&substitute_ty(impl_ty, &bindings), requested_ty),
+                        .equivalent(&substitute_ty(impl_ty, &bindings), requested_ty)
+                        .holds(),
                     None => true,
                 }
             });

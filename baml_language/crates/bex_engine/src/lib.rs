@@ -1125,7 +1125,7 @@ fn enforce_host_throw_contract(
     let on_contract = runtime_ty.as_ref().is_some_and(|rt: &RuntimeTy| {
         // The VM is the runtime `TypeContext`; operands upcast to `Ty` by a
         // zero-cost borrow.
-        baml_type::normalize::is_subtype(rt.as_ty(), contract.as_ty(), &thread.vm)
+        baml_type::normalize::is_subtype(rt.as_ty(), contract.as_ty(), &thread.vm).holds()
     });
     if on_contract {
         return value;

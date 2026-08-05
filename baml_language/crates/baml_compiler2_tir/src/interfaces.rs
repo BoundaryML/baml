@@ -127,10 +127,10 @@ fn carried_bound_satisfies(
             .generics
             .iter()
             .zip(&bound.generics)
-            .all(|(h, b)| ctx.equivalent(h, b))
+            .all(|(h, b)| ctx.equivalent(h, b).holds())
         && bound.associated_types.iter().all(|(bound_name, bound_ty)| {
             have.associated_types.iter().any(|(have_name, have_ty)| {
-                have_name == bound_name && ctx.equivalent(have_ty, bound_ty)
+                have_name == bound_name && ctx.equivalent(have_ty, bound_ty).holds()
             })
         })
 }
@@ -588,7 +588,7 @@ pub fn match_ty_pattern_into(
     }
 
     if !contains_bound_typevar(pattern, generic_params)
-        && AliasEquivCtx(aliases).equivalent(pattern, concrete)
+        && AliasEquivCtx(aliases).equivalent(pattern, concrete).holds()
     {
         return Some(());
     }
@@ -605,7 +605,10 @@ pub fn match_ty_pattern_into(
             |param: &ParamTy| generic_params.contains(param) && !bindings.contains_key(param);
         if !crate::generics::contains_typevar_where(pattern, &unbound) {
             let substituted = crate::generics::substitute_ty(pattern, bindings);
-            if AliasEquivCtx(aliases).equivalent(&substituted, concrete) {
+            if AliasEquivCtx(aliases)
+                .equivalent(&substituted, concrete)
+                .holds()
+            {
                 return Some(());
             }
         }
@@ -692,7 +695,7 @@ pub fn match_ty_pattern_into(
             match_ty_pattern_into(p_ret, c_ret, generic_params, aliases, bindings)?;
             match_ty_pattern_into(p_throws, c_throws, generic_params, aliases, bindings)
         }
-        _ if AliasEquivCtx(aliases).equivalent(pattern, concrete) => Some(()),
+        _ if AliasEquivCtx(aliases).equivalent(pattern, concrete).holds() => Some(()),
         _ => None,
     }
 }
@@ -752,7 +755,13 @@ fn bind_type_var(
     aliases: &std::collections::HashMap<QualifiedTypeName, Ty>,
 ) -> Option<()> {
     match bindings.get(param) {
-        Some(existing) if AliasEquivCtx(aliases).equivalent(existing, concrete) => Some(()),
+        Some(existing)
+            if AliasEquivCtx(aliases)
+                .equivalent(existing, concrete)
+                .holds() =>
+        {
+            Some(())
+        }
         Some(_) => None,
         None => {
             bindings.insert(param.clone(), concrete.clone());

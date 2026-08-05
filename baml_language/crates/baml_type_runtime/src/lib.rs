@@ -207,7 +207,7 @@ fn solve_var(param: &ParamTy, occ: &[(Variance, Ty)]) -> Result<Option<Ty>, Infe
         None => None,
         Some((first, rest)) => {
             for other in rest {
-                if !NoFacts.equivalent(first, other) {
+                if !NoFacts.equivalent(first, other).holds() {
                     return fail(format!(
                         "`{param}` would have to be both `{first}` and `{other}` at the same \
                          time. Because `{param}` appears inside a list, map, or class type, it \
@@ -226,7 +226,7 @@ fn solve_var(param: &ParamTy, occ: &[(Variance, Ty)]) -> Result<Option<Ty>, Infe
         Some(eq) => {
             // T == eq; every lower must be <: eq and eq <: every upper.
             if let Some(l) = &lower
-                && !NoFacts.is_subtype(l, &eq)
+                && !NoFacts.is_subtype(l, &eq).holds()
             {
                 return fail(format!(
                     "`{param}` would have to be both `{eq}` and `{l}` at the same time: one \
@@ -235,7 +235,7 @@ fn solve_var(param: &ParamTy, occ: &[(Variance, Ty)]) -> Result<Option<Ty>, Infe
                 ));
             }
             for u in &uppers {
-                if !NoFacts.is_subtype(&eq, u) {
+                if !NoFacts.is_subtype(&eq, u).holds() {
                     return fail(format!(
                         "one argument fixes `{param}` to `{eq}` (where it appears inside a list, \
                          map, or class type), but a function argument only accepts `{u}` for \
@@ -247,7 +247,7 @@ fn solve_var(param: &ParamTy, occ: &[(Variance, Ty)]) -> Result<Option<Ty>, Infe
         }
         None => match (lower, upper) {
             (Some(l), Some(u)) => {
-                if !NoFacts.is_subtype(&l, &u) {
+                if !NoFacts.is_subtype(&l, &u).holds() {
                     return fail(format!(
                         "`{param}` can't satisfy every argument at once: one argument supplies a \
                          `{l}` for `{param}`, while a function argument only accepts `{u}` for \
@@ -311,9 +311,9 @@ fn meet_all(param: &ParamTy, tys: &[&Ty]) -> Result<Option<Ty>, InferError> {
     reason = "fact-free by necessity — see the `NoFacts` import note"
 )]
 fn meet_ty(a: &Ty, b: &Ty) -> Ty {
-    if NoFacts.is_subtype(a, b) {
+    if NoFacts.is_subtype(a, b).holds() {
         a.clone()
-    } else if NoFacts.is_subtype(b, a) {
+    } else if NoFacts.is_subtype(b, a).holds() {
         b.clone()
     } else {
         Ty::Never {
@@ -585,7 +585,7 @@ fn union_atoms(actual: &Ty) -> Vec<Ty> {
     reason = "fact-free by necessity — see the `NoFacts` import note"
 )]
 fn covers(concrete: &Ty, atom: &Ty) -> bool {
-    NoFacts.is_subtype(atom, concrete)
+    NoFacts.is_subtype(atom, concrete).holds()
 }
 
 /// Merge a fresh best-effort solve into an existing bindings map, unioning with

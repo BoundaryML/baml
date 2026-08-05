@@ -29,6 +29,17 @@
 //! safe**: when the context cannot answer, the algebra declines to collapse,
 //! absorb, or equate, so a missing fact can only yield "not *necessarily*
 //! equivalent / subtype", never a false claim of equivalence or membership.
+//!
+//! # Verdicts
+//!
+//! The relation entry points answer in three values ([`Truth`]): `Yes` and `No`
+//! are definite for the supplied facts, while `Unknown` means a search limit
+//! ([`Limits`]) cut the derivation — the algebra distinguishes "disproved" from
+//! "could not decide", and each consumer collapses the distinction explicitly
+//! ([`Truth::holds`]) where its fail-closed direction allows. The *interior* of
+//! the search deliberately stays `bool` (fail-closed at each refusal, for the
+//! structural combinator sites); the refusal state a derivation accumulates is
+//! what maps its final `false` onto `No` versus `Unknown` at the entry points.
 
 use std::{collections::HashSet, ops::ControlFlow};
 
@@ -126,6 +137,7 @@ impl Default for Limits {
 /// and that is a real `No`, not a give-up). `Unknown` carries why the question
 /// was left open; its cause determines whether re-asking can ever help.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[must_use = "a dropped verdict decides nothing — collapse with `holds()` or match on it"]
 pub enum Truth {
     Yes,
     No,
@@ -150,6 +162,45 @@ impl Truth {
     pub fn holds(self) -> bool {
         matches!(self, Truth::Yes)
     }
+
+    /// Kleene conjunction: a single definite `No` refutes the conjunction even
+    /// when the other side is open (an `Unknown` weakens only what a proof
+    /// would have needed, never what a refutation already settled).
+    pub fn and(self, other: Truth) -> Truth {
+        match (self, other) {
+            (Truth::No, _) | (_, Truth::No) => Truth::No,
+            (Truth::Yes, Truth::Yes) => Truth::Yes,
+            (Truth::Unknown(cause), _) | (_, Truth::Unknown(cause)) => Truth::Unknown(cause),
+        }
+    }
+
+    /// Kleene disjunction: a single definite `Yes` proves the disjunction even
+    /// when the other side is open — an `Unknown` must never mask a proof.
+    pub fn or(self, other: Truth) -> Truth {
+        match (self, other) {
+            (Truth::Yes, _) | (_, Truth::Yes) => Truth::Yes,
+            (Truth::No, Truth::No) => Truth::No,
+            (Truth::Unknown(cause), _) | (_, Truth::Unknown(cause)) => Truth::Unknown(cause),
+        }
+    }
+}
+
+/// The result of the session's identity-carrying
+/// [`normalize`](solve::SolverSession::normalize): a rendered canonical-or-partial
+/// form, plus the identity token that says which.
+///
+/// `ty` is always [`TypeContext::equivalent`] to the input — a faithful rendering
+/// in either tier. `identity` is present only for **canonical-tier** forms (no
+/// search limit touched the walk): it is the O(1) identity handle — two live
+/// tokens from one store are equal iff the types are the same (see [`CanonId`]).
+/// Its *absence* is the typed enforcement that a partially-normalized form is
+/// never an identity: relations over such a type are decided by posing goals,
+/// not by comparing renders (which are canonical only up to recursion-variable
+/// naming even on the canonical tier — see [`TypeContext::normalize`]).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Normalized {
+    pub ty: Ty,
+    pub identity: Option<CanonId>,
 }
 
 /// Semantic lookups the type algebra needs, supplied by the caller over its own
@@ -381,14 +432,27 @@ pub trait TypeContext {
     /// themselves), and fact sets with a mutual `requires` cycle (mutual
     /// subtypes as existentials, nominally distinct — rejected in well-formed
     /// programs by the interface `requires`-cycle check).
-    fn equivalent(&self, a: &Ty, b: &Ty) -> bool
+    ///
+    /// # The three-valued verdict
+    ///
+    /// `Yes` and `No` are definite for this world's facts. `Unknown` means a
+    /// search limit ([`Self::limits`]) cut the derivation before it could decide
+    /// — which under the default limits no real workload reaches. When the
+    /// identity phase is cut, the judgment first falls back to the relation
+    /// itself (mutual [`Self::is_subtype`] over the partially-normalized forms,
+    /// under one fresh step pool), so a limit-starved identity comparison
+    /// degrades to `Unknown` — **never** to a false `No`: under-claiming
+    /// equivalence would be as wrong as over-claiming it. Consumers whose
+    /// conservative direction is "treat undecided as not equivalent" collapse
+    /// with [`Truth::holds`].
+    fn equivalent(&self, a: &Ty, b: &Ty) -> Truth
     where
         Self: Sized,
     {
         // Reflexivity fast path: structurally identical spellings (attrs
         // included) trivially canonicalize to the same form.
         if a == b {
-            return true;
+            return Truth::Yes;
         }
         // Cheap definite-mismatch filter. MIR impl dispatch probes every
         // candidate impl's pattern against the receiver through `equivalent`
@@ -397,15 +461,23 @@ pub trait TypeContext {
         // the outermost constructor alone, without the two allocation-heavy
         // canonicalization walks below.
         if heads_definitely_differ(a, b) {
-            return false;
+            return Truth::No;
         }
-        let s = &mut SolverSession::new(self);
-        NormalTy::canonical(a, s) == NormalTy::canonical(b, s)
+        SolverSession::new(self).decide_equivalent(a, b)
     }
 
     /// Whether every value of `sub` is also a value of `sup` under the current
     /// context (the subset relation).
-    fn is_subtype(&self, sub: &Ty, sup: &Ty) -> bool
+    ///
+    /// # The three-valued verdict
+    ///
+    /// `Yes` and `No` are definite for this world's facts; `Unknown` means a
+    /// search limit ([`Self::limits`]) cut the derivation — unreached by real
+    /// workloads under the default limits. `Yes` is trustworthy even from a
+    /// limit-touched run (a refusal can only hide proofs, never manufacture
+    /// one). Consumers whose conservative direction is "treat undecided as not
+    /// a subtype" collapse with [`Truth::holds`].
+    fn is_subtype(&self, sub: &Ty, sup: &Ty) -> Truth
     where
         Self: Sized,
     {
@@ -415,7 +487,7 @@ pub trait TypeContext {
         // fast path — so the two allocation-heavy canonicalization walks below
         // would only rediscover `true`.
         if sub == sup {
-            return true;
+            return Truth::Yes;
         }
         // Narrow definite-mismatch filter. Unlike `equivalent`, differing heads
         // do NOT generally refute subtyping (a literal is a subtype of its base,
@@ -431,12 +503,9 @@ pub trait TypeContext {
         if !matches!((sub, sup), (Ty::Interface(..), Ty::Interface(..)))
             && heads_definitely_differ(sub, sup)
         {
-            return false;
+            return Truth::No;
         }
-        let s = &mut SolverSession::new(self);
-        let sub = NormalTy::canonical(sub, s);
-        let sup = NormalTy::canonical(sup, s);
-        s.prove_subtype(&sub, &sup)
+        SolverSession::new(self).decide_subtype(sub, sup)
     }
 
     /// Whether no value of type `a` can ever be `==`-equal to a value of type `b` —
@@ -471,13 +540,21 @@ pub trait TypeContext {
     ///   generic `T`, or an error sentinel): it could still resolve to match.
     /// - Functions (not invariant — contravariant/covariant), interfaces, bare
     ///   type variables, and a bare `unknown`.
+    /// - **Anything a search limit touched** ([`Self::limits`]): disjointness is
+    ///   concluded from structural comparison of canonical forms, and a
+    ///   partially-normalized form can differ structurally from the canonical
+    ///   form of the *same* type — so a limit-cut walk yields no conclusion.
     fn definitely_disjoint(&self, a: &Ty, b: &Ty) -> bool
     where
         Self: Sized,
     {
         let s = &mut SolverSession::new(self);
-        let a = NormalTy::canonical(a, s);
-        let b = NormalTy::canonical(b, s);
+        let Some(a) = s.canonical_definite(a) else {
+            return false;
+        };
+        let Some(b) = s.canonical_definite(b) else {
+            return false;
+        };
         a.is_disjoint_from(&b)
     }
 
@@ -494,13 +571,21 @@ pub trait TypeContext {
     ///   `Equals` today is not a stable basis for baking in a constant — the
     ///   built-in reflexive equality is guaranteed only for types whose `Equals` the
     ///   orphan rule forbids overriding (primitives, `null`).
+    /// - **Anything a search limit touched** ([`Self::limits`]): the collapse
+    ///   family uniformly declines to conclude from a partially-normalized form
+    ///   (see [`Self::definitely_disjoint`]).
     fn definitely_equal(&self, a: &Ty, b: &Ty) -> bool
     where
         Self: Sized,
     {
         let s = &mut SolverSession::new(self);
-        let a = NormalTy::canonical(a, s);
-        a.is_unoverridable_singleton() && a == NormalTy::canonical(b, s)
+        let Some(a) = s.canonical_definite(a) else {
+            return false;
+        };
+        if !a.is_unoverridable_singleton() {
+            return false;
+        }
+        s.canonical_definite(b).is_some_and(|b| a == b)
     }
 
     /// The statically-known result of a broad `==` between operands of types `a` and
@@ -514,14 +599,15 @@ pub trait TypeContext {
     /// - `None` — the result is not statically determined.
     ///
     /// See those two methods for the exact rules and their dynamic-package
-    /// soundness.
+    /// soundness — including the shared refusal discipline: a canonicalization
+    /// walk a search limit touched concludes nothing (`None`).
     fn constant_equality(&self, a: &Ty, b: &Ty) -> Option<bool>
     where
         Self: Sized,
     {
         let s = &mut SolverSession::new(self);
-        let a = NormalTy::canonical(a, s);
-        let b = NormalTy::canonical(b, s);
+        let a = s.canonical_definite(a)?;
+        let b = s.canonical_definite(b)?;
         if a.is_disjoint_from(&b) {
             Some(false)
         } else if a.is_unoverridable_singleton() && a == b {
@@ -603,13 +689,13 @@ pub fn normalize<C: TypeContext>(ty: &Ty, ctx: &C) -> Ty {
 
 /// Free-function form of [`TypeContext::equivalent`], for a context held by value.
 /// Pending removal once every caller uses the method form.
-pub fn equivalent<C: TypeContext>(a: &Ty, b: &Ty, ctx: &C) -> bool {
+pub fn equivalent<C: TypeContext>(a: &Ty, b: &Ty, ctx: &C) -> Truth {
     ctx.equivalent(a, b)
 }
 
 /// Free-function form of [`TypeContext::is_subtype`], for a context held by value.
 /// Pending removal once every caller uses the method form.
-pub fn is_subtype<C: TypeContext>(sub: &Ty, sup: &Ty, ctx: &C) -> bool {
+pub fn is_subtype<C: TypeContext>(sub: &Ty, sup: &Ty, ctx: &C) -> Truth {
     ctx.is_subtype(sub, sup)
 }
 
@@ -679,11 +765,25 @@ impl NormalTy {
     /// constructor; nested recursion stays folded as alias names), so `normalize`
     /// never calls [`Self::into_ty`] on a μ root.
     fn canonical_render(ty: &Ty, s: &mut SolverSession<'_>) -> Ty {
+        match Self::canonical_and_render(ty, s) {
+            (_, Some(rendered)) => rendered,
+            (t, None) => t.into_ty(),
+        }
+    }
+
+    /// [`Self::canonical`] alongside the μ path's root render, for callers that
+    /// need the canonical form *and* a rendering (the session's identity-carrying
+    /// [`normalize`](SolverSession::normalize)). A `None` render means the form
+    /// renders itself ([`Self::into_ty`]) — returned this way rather than
+    /// rendered here so the no-μ path costs no clone when the caller consumes
+    /// the form for the render.
+    fn canonical_and_render(ty: &Ty, s: &mut SolverSession<'_>) -> (NormalTy, Option<Ty>) {
         let (t, saw_mu) = Self::canonical_bottom_up(ty, s);
         if saw_mu && t.contains_mu() {
-            mu::canonicalize_mu_with_render(t, s).1
+            let (form, rendered) = mu::canonicalize_mu_with_render(t, s);
+            (form, Some(rendered))
         } else {
-            t.into_ty()
+            (t, None)
         }
     }
 
@@ -2703,6 +2803,8 @@ impl NormalParam {
 mod mu;
 mod solve;
 mod store;
+
+pub use store::CanonId;
 
 #[cfg(test)]
 mod tests;

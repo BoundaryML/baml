@@ -3103,7 +3103,7 @@ impl<'db> LoweringContext<'db> {
             pkg_id,
             recv,
             &self.resolved_aliases.aliases,
-            |a, b| baml_type::normalize::is_subtype(a, b, &gctx),
+            |a, b| baml_type::normalize::is_subtype(a, b, &gctx).holds(),
         )
     }
 

@@ -638,7 +638,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             self.package_id,
             base_ty,
             self.aliases,
-            |a, b| self.is_subtype(a, b),
+            |a, b| self.is_subtype(a, b).holds(),
         )
     }
 

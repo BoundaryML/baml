@@ -1472,7 +1472,7 @@ mod tests {
             TyAttr::default(),
         );
         assert!(
-            baml_type::normalize::is_subtype(&projection, &bar, &gctx),
+            baml_type::normalize::is_subtype(&projection, &bar, &gctx).holds(),
             "expected (Self as Foo).Assoc <: Bar via the declared `extends Bar` bound",
         );
     }
@@ -1513,7 +1513,7 @@ mod tests {
             attr: TyAttr::default(),
         };
         assert!(
-            baml_type::normalize::equivalent(&projection, &string_ty, &gctx),
+            baml_type::normalize::equivalent(&projection, &string_ty, &gctx).holds(),
             "(int as Foo).Assoc should reduce to (be equivalent to) string",
         );
     }

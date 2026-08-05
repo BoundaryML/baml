@@ -459,7 +459,7 @@ pub(crate) fn scope_types_equivalent(
         aliases,
         bounds,
     };
-    baml_type::normalize::equivalent(a, b, &gctx)
+    baml_type::normalize::equivalent(a, b, &gctx).holds()
 }
 
 /// Resolve `member` through a set of interface roots — a type variable's bound
@@ -822,7 +822,7 @@ pub(crate) fn resolve_concrete_realized_interface(
             base,
             interface,
             aliases,
-            |a, b| baml_type::normalize::is_subtype(a, b, &gctx),
+            |a, b| baml_type::normalize::is_subtype(a, b, &gctx).holds(),
         )
     };
     resolved.map(|resolved| resolved.implemented_interface(db))
@@ -858,7 +858,7 @@ pub(crate) fn resolve_concrete_projection(
 
     let mut declarers: Vec<baml_type::Interface> = Vec::new();
     for resolved in crate::interfaces::impls_for_type(db, pkg_id, base, aliases, |a, b| {
-        baml_type::normalize::is_subtype(a, b, &gctx)
+        baml_type::normalize::is_subtype(a, b, &gctx).holds()
     }) {
         let interface = resolved.implemented_interface(db);
         if interface_declares_member(db, &interface.name, member) && !declarers.contains(&interface)
@@ -891,7 +891,7 @@ pub(crate) fn resolve_concrete_projection(
                             res_ctx,
                             &head(other),
                             &head(d),
-                            |a, b| baml_type::normalize::equivalent(a, b, &gctx),
+                            |a, b| baml_type::normalize::equivalent(a, b, &gctx).holds(),
                         )
                 })
             })

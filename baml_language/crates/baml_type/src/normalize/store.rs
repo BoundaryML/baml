@@ -10,8 +10,14 @@
 //!
 //! # Weak canonical identity
 //!
-//! The store also owns the canonical interner: each distinct canonical form it has been
-//! asked to intern gets a [`CanonId`], and the id **value space is never reused** — a
+//! The store also owns the canonical interner: each distinct form it has been
+//! asked to intern gets a [`CanonId`]. (Sessions intern goal keys for whatever
+//! forms their walks produced — a limit-starved walk interns a *partial* form,
+//! which is fine for cache keying since probes hit only on the identical form.
+//! What upholds the public identity contract is the minting gate at the
+//! boundary: only canonical-tier forms are ever handed out as identity tokens,
+//! so two escaped ids compare form-equality *of canonical representatives*,
+//! which is type identity.) The id **value space is never reused** — a
 //! slot's generation is bumped on eviction, and a slot whose generation would wrap is
 //! retired instead. That one property carries the whole identity contract:
 //!
@@ -47,10 +53,18 @@ use crate::{Name, QualifiedTypeName};
 
 /// A weak handle to one canonical form in one store — the O(1) identity token.
 ///
-/// See the module docs for the contract. `Copy` and 8 bytes, so it travels freely;
-/// deliberately neither `Ord` nor serializable.
+/// This is the external identity handle the algebra hands out (a
+/// [`Normalized`](super::Normalized) carries one for a canonical-tier form):
+/// `a == b` means the two ids name the same type, unconditionally; `a != b`
+/// means different types only while both ids are live in their store — either
+/// side evicted, the comparison says nothing, and the holder re-normalizes to
+/// refresh. See the module docs for why that contract holds.
+///
+/// `Copy` and 8 bytes, so it travels freely; deliberately neither `Ord` (minted
+/// in first-encounter order, so an ordering would leak query order into
+/// observable output) nor serializable (meaningless outside its store).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub(super) struct CanonId {
+pub struct CanonId {
     slot: u32,
     generation: u32,
 }

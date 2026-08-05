@@ -570,7 +570,7 @@ impl EqualsDriver {
             // of the resolver, not on its re-entrant path, so the membership lookup this
             // may trigger bottoms out in the resolver's fact-opaque internals without
             // looping.
-            (Object::Type(x), Object::Type(y)) => step(vm.equivalent(x.as_ty(), y.as_ty())),
+            (Object::Type(x), Object::Type(y)) => step(vm.equivalent(x.as_ty(), y.as_ty()).holds()),
             (Object::Type(_), _) => Cmp::NotEqual,
 
             // `Sentinel` (heap_debug builds only) is an internal freed/uninit

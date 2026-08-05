@@ -1045,7 +1045,9 @@ mod match_tests {
                 deprecated,
                 reason = "structural comparison is the whole fact set here"
             )]
-            crate::normalize::NoFacts.equivalent(pattern, concrete)
+            crate::normalize::NoFacts
+                .equivalent(pattern, concrete)
+                .holds()
         }
     }
 

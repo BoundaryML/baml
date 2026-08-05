@@ -276,7 +276,9 @@ pub(crate) struct DispatchCompare<'a>(pub(crate) &'a BexVm);
 
 impl baml_type::TemplateCompare for DispatchCompare<'_> {
     fn same_type(&mut self, pattern: &Ty, concrete: &Ty) -> bool {
-        StructuralEquivCtx(self.0).equivalent(pattern, concrete)
+        StructuralEquivCtx(self.0)
+            .equivalent(pattern, concrete)
+            .holds()
     }
 }
 

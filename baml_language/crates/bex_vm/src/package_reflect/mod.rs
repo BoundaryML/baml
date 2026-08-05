@@ -221,7 +221,7 @@ fn value_fits(vm: &BexVm, value: Value, expected: &RealizedTy) -> bool {
     let actual: Ty = actual.into();
     let expected: Ty = expected.clone().into();
     // The VM itself is the runtime `TypeContext`.
-    normalize::is_subtype(&actual, &expected, vm)
+    normalize::is_subtype(&actual, &expected, vm).holds()
 }
 
 /// `reflect.call_any<R, E>(f, args) -> R throws E | InvalidArgumentError`.

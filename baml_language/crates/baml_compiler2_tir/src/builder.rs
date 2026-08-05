@@ -1975,9 +1975,9 @@ impl<'db> TypeInferenceBuilder<'db> {
         // interface-implementor coverage.
         let covered_by_declared = |eff: &Ty| {
             declared.contains(eff)
-                || declared
-                    .iter()
-                    .any(|decl| matches!(decl, Ty::Interface(..)) && self.is_subtype(eff, decl))
+                || declared.iter().any(|decl| {
+                    matches!(decl, Ty::Interface(..)) && self.is_subtype(eff, decl).holds()
+                })
         };
         let extra_facts: BTreeSet<Ty> = if has_open_slot {
             BTreeSet::new()
@@ -2002,7 +2002,9 @@ impl<'db> TypeInferenceBuilder<'db> {
                 .filter(|decl| {
                     !(effective.contains(*decl)
                         || matches!(decl, Ty::Interface(..))
-                            && effective.iter().any(|eff| self.is_subtype(eff, decl)))
+                            && effective
+                                .iter()
+                                .any(|eff| self.is_subtype(eff, decl).holds()))
                 })
                 .map(crate::ty::Ty::render_user_facing)
                 .collect()
@@ -2075,7 +2077,7 @@ impl<'db> TypeInferenceBuilder<'db> {
     }
 
     fn argument_matches_expected(&self, got: &Ty, expected: &Ty) -> bool {
-        if self.is_subtype(got, expected) {
+        if self.is_subtype(got, expected).holds() {
             return true;
         }
 
@@ -2091,12 +2093,12 @@ impl<'db> TypeInferenceBuilder<'db> {
             (Ty::Class(class_name, expected_args, _), Ty::List(actual_inner, _))
                 if class_name.is_builtin_root_type("Array") && expected_args.len() == 1 =>
             {
-                self.equivalent(actual_inner, &expected_args[0])
+                self.equivalent(actual_inner, &expected_args[0]).holds()
             }
             (Ty::Class(class_name, expected_args, _), Ty::EvolvingList(actual_inner, _))
                 if class_name.is_builtin_root_type("Array") && expected_args.len() == 1 =>
             {
-                self.equivalent(actual_inner, &expected_args[0])
+                self.equivalent(actual_inner, &expected_args[0]).holds()
             }
             (
                 Ty::Class(class_name, expected_args, _),
@@ -2107,8 +2109,8 @@ impl<'db> TypeInferenceBuilder<'db> {
                 }
                 | Ty::EvolvingMap(actual_key, actual_val, _),
             ) if class_name.is_builtin_root_type("Map") && expected_args.len() == 2 => {
-                self.equivalent(actual_key, &expected_args[0])
-                    && self.equivalent(actual_val, &expected_args[1])
+                self.equivalent(actual_key, &expected_args[0]).holds()
+                    && self.equivalent(actual_val, &expected_args[1]).holds()
             }
             _ => false,
         }
@@ -2136,7 +2138,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             return None;
         };
 
-        if !self.is_subtype(&expanded_got, &expanded_expected) {
+        if !self.is_subtype(&expanded_got, &expanded_expected).holds() {
             return None;
         }
 
@@ -2590,7 +2592,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 }
 
                 let got = self.infer_expr(arg_expr, body);
-                if !self.is_subtype(&got, &boundary_local_id_ty()) {
+                if !self.is_subtype(&got, &boundary_local_id_ty()).holds() {
                     self.context.report_simple(
                         TirTypeError::RuntimeIdArgumentTypeMismatch { got },
                         arg_expr,
@@ -4610,7 +4612,7 @@ impl<'db> TypeInferenceBuilder<'db> {
 
     fn report_result_type_mismatch(&mut self, expr_id: ExprId, got: &Ty, expected: &Ty) {
         if !matches!(expected, Ty::Unknown { .. } | Ty::Error { .. })
-            && !self.is_subtype(got, expected)
+            && !self.is_subtype(got, expected).holds()
         {
             self.context.report(
                 TirTypeError::TypeMismatch {
@@ -5212,7 +5214,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 },
                 expr_id,
             );
-        } else if !self.is_subtype(&base_ty, &target_ty)
+        } else if !self.is_subtype(&base_ty, &target_ty).holds()
             && !matches!(base_ty, Ty::Unknown { .. } | Ty::Error { .. })
             && !matches!(target_ty, Ty::Unknown { .. } | Ty::Error { .. })
         {
@@ -5409,7 +5411,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             }
             _ => return,
         };
-        if !self.is_subtype(&index_ty, &expected_key) {
+        if !self.is_subtype(&index_ty, &expected_key).holds() {
             self.context.report(
                 TirTypeError::TypeMismatch {
                     expected: expected_key,
@@ -5588,10 +5590,12 @@ impl<'db> TypeInferenceBuilder<'db> {
                     // side here: the transformer's parameter must accept the
                     // link's `SpawnParams`.
                     let input_ok = !is_value_ref
-                        || self.is_subtype(
-                            &spawn_params_ty(cur_value.clone(), cur_error.clone()),
-                            &params[0].ty,
-                        );
+                        || self
+                            .is_subtype(
+                                &spawn_params_ty(cur_value.clone(), cur_error.clone()),
+                                &params[0].ty,
+                            )
+                            .holds();
                     if let Ty::Class(qn, args, _) = ret.as_ref()
                         && input_ok
                         && is_spawn_params_qtn(qn)
@@ -5900,7 +5904,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 unreachable!("container is Map/EvolvingMap by construction")
             };
             let string_ty = Ty::string();
-            if !fields.is_empty() && !self.is_subtype(&string_ty, key_ty) {
+            if !fields.is_empty() && !self.is_subtype(&string_ty, key_ty).holds() {
                 self.context.report(
                     TirTypeError::TypeMismatch {
                         expected: key_ty.as_ref().clone(),
@@ -5918,7 +5922,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         } else {
             let inferred = self.infer_map_object_expr(body, fields);
             if !matches!(expected, Ty::Unknown { .. } | Ty::Error { .. })
-                && !self.is_subtype(&inferred, expected)
+                && !self.is_subtype(&inferred, expected).holds()
             {
                 self.context.report(
                     TirTypeError::TypeMismatch {
@@ -6120,7 +6124,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         // expression is fully typed before MIR lowering.
         for (spread_expr, spread_ty) in &spread_types {
             if !matches!(spread_ty, Ty::Unknown { .. } | Ty::Error { .. })
-                && !self.is_subtype(spread_ty, &ty)
+                && !self.is_subtype(spread_ty, &ty).holds()
             {
                 self.context.report(
                     TirTypeError::TypeMismatch {
@@ -6212,14 +6216,14 @@ impl<'db> TypeInferenceBuilder<'db> {
         let lit_ty = self.lower_object_type_name(expr_id, path, obj_type_args);
         let declared_mismatch = if let Ty::Class(lit_qtn, _, _) = &lit_ty {
             lit_qtn != expected_qtn
-                || (!obj_type_args.is_empty() && !self.is_subtype(&lit_ty, expected))
+                || (!obj_type_args.is_empty() && !self.is_subtype(&lit_ty, expected).holds())
         } else {
             false
         };
         if declared_mismatch {
             let inferred = self.infer_expr(expr_id, body);
             if !matches!(inferred, Ty::Unknown { .. } | Ty::Error { .. })
-                && !self.is_subtype(&inferred, expected)
+                && !self.is_subtype(&inferred, expected).holds()
             {
                 self.context.report(
                     TirTypeError::TypeMismatch {
@@ -6322,7 +6326,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         } else {
             let inferred = self.infer_expr(expr_id, body);
             if !matches!(expected, Ty::Unknown { .. } | Ty::Error { .. })
-                && !self.is_subtype(&inferred, expected)
+                && !self.is_subtype(&inferred, expected).holds()
             {
                 // BEP-044 wf3 #G18: if the value almost implements the
                 // expected interface via a blanket rule but a generic
@@ -6336,7 +6340,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                         &inferred,
                         expected,
                         self.aliases,
-                        |a, b| self.is_subtype(a, b),
+                        |a, b| self.is_subtype(a, b).holds(),
                     )
                 } else {
                     None
@@ -6794,7 +6798,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                             let annotated =
                                 self.lower_lambda_type_expr(te, &all_generic_params, te.span);
                             // Check annotation is compatible with expected
-                            if !self.is_subtype(&expected_param_ty, &annotated) {
+                            if !self.is_subtype(&expected_param_ty, &annotated).holds() {
                                 parameter_mismatch = true;
                             }
                             annotated
@@ -6881,7 +6885,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                         Vec::new(),
                     );
                 } else if !crate::generics::contains_typevar(expected_fn_ty)
-                    && !self.is_subtype(&result, expected_fn_ty)
+                    && !self.is_subtype(&result, expected_fn_ty).holds()
                 {
                     self.context.report(
                         TirTypeError::TypeMismatch {
@@ -6909,7 +6913,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             _ => {
                 // Non-function expected type: fall through to infer-then-check
                 let inferred = self.infer_expr(expr_id, body);
-                if !self.is_subtype(&inferred, expected) {
+                if !self.is_subtype(&inferred, expected).holds() {
                     self.context.report(
                         TirTypeError::TypeMismatch {
                             expected: expected.clone(),
@@ -7066,7 +7070,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 } else {
                     let inferred = self.infer_expr(expr_id, body);
                     if !matches!(expected, Ty::Unknown { .. } | Ty::Error { .. })
-                        && !self.is_subtype(&inferred, expected)
+                        && !self.is_subtype(&inferred, expected).holds()
                     {
                         self.context.report(
                             TirTypeError::TypeMismatch {
@@ -7138,7 +7142,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                     // silently passing as its inferred `EvolvingMap`/`Map`.
                     let inferred = self.infer_expr(expr_id, body);
                     if !matches!(expected, Ty::Unknown { .. } | Ty::Error { .. })
-                        && !self.is_subtype(&inferred, expected)
+                        && !self.is_subtype(&inferred, expected).holds()
                     {
                         self.context.report(
                             TirTypeError::TypeMismatch {
@@ -7179,7 +7183,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                     // Value doesn't match — infer (produces fresh literal) and
                     // let the subtype check report the error.
                     let inferred = self.infer_expr(expr_id, body);
-                    if !self.is_subtype(&inferred, expected) {
+                    if !self.is_subtype(&inferred, expected).holds() {
                         self.context.report(
                             TirTypeError::TypeMismatch {
                                 expected: expected.clone(),
@@ -7230,7 +7234,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                     &rhs_ty,
                     expr_id,
                 );
-                if !self.is_subtype(&ty, expected) {
+                if !self.is_subtype(&ty, expected).holds() {
                     self.context.report(
                         TirTypeError::TypeMismatch {
                             expected: expected.clone(),
@@ -7269,7 +7273,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                         TirTypeError::VoidUsedAsValue
                     };
                     self.context.report_simple(err, expr_id);
-                } else if !self.is_subtype(&inferred, expected) {
+                } else if !self.is_subtype(&inferred, expected).holds() {
                     self.context.report(
                         TirTypeError::TypeMismatch {
                             expected: expected.clone(),
@@ -7620,7 +7624,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                     expected
                     && !is_structural_pattern
                 {
-                    if !self.is_subtype(&elem_ty, &expected) {
+                    if !self.is_subtype(&elem_ty, &expected).holds() {
                         // Anchor the diagnostic to the binding pattern: the
                         // bad annotation is what's wrong, not the iterable.
                         let err = TirTypeError::TypeMismatch {
@@ -7718,7 +7722,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                     if !adopt_container_literal {
                         if !matches!(decl_ty, Ty::Unknown { .. } | Ty::Error { .. })
                             && !matches!(value_ty, Ty::Unknown { .. } | Ty::Error { .. })
-                            && !self.is_subtype(&value_ty, decl_ty)
+                            && !self.is_subtype(&value_ty, decl_ty).holds()
                         {
                             self.context.report(
                                 TirTypeError::TypeMismatch {
@@ -8046,7 +8050,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         {
             return true;
         }
-        if self.is_subtype(value_ty, current_ty) {
+        if self.is_subtype(value_ty, current_ty).holds() {
             return true;
         }
         match current_ty {
@@ -8908,7 +8912,10 @@ impl<'db> TypeInferenceBuilder<'db> {
             let constraint_expanded = self.expand_alias_chains(constraint.clone());
             // Irrefutable: every scrutinee value matches, and the scrutinee
             // type is the exact (possibly narrower) description of them.
-            if self.is_subtype(&incoming_expanded, &constraint_expanded) {
+            if self
+                .is_subtype(&incoming_expanded, &constraint_expanded)
+                .holds()
+            {
                 return incoming.clone();
             }
             // Provably dead — only when the oracle's verdict is trustworthy:
@@ -9124,7 +9131,9 @@ impl<'db> TypeInferenceBuilder<'db> {
                 {
                     continue;
                 }
-                if !self.is_subtype(first_ty, other_ty) || !self.is_subtype(other_ty, first_ty) {
+                if !self.is_subtype(first_ty, other_ty).holds()
+                    || !self.is_subtype(other_ty, first_ty).holds()
+                {
                     let err = TirTypeError::OrPatternBindingTypeMismatch {
                         name: name.clone(),
                         first_type: first_ty.clone(),
@@ -11574,7 +11583,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             && formal_args
                 .iter()
                 .zip(view_args)
-                .all(|(f, v)| crate::generics::contains_typevar(f) || self.equivalent(f, v))
+                .all(|(f, v)| crate::generics::contains_typevar(f) || self.equivalent(f, v).holds())
     }
 
     fn interface_view_in_requires_closure(
@@ -11625,7 +11634,7 @@ impl<'db> TypeInferenceBuilder<'db> {
 
     fn merge_interface_inference_candidate(&self, current: &mut Option<Ty>, candidate: Ty) -> bool {
         match current {
-            Some(existing) => self.equivalent(existing, &candidate),
+            Some(existing) => self.equivalent(existing, &candidate).holds(),
             slot @ None => {
                 *slot = Some(candidate);
                 true
@@ -12412,7 +12421,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                         .generics
                         .iter()
                         .zip(target_iface_args)
-                        .all(|(a, b)| self.equivalent(a, b))
+                        .all(|(a, b)| self.equivalent(a, b).holds())
             })
             .map(|source| source.class_field)
     }
@@ -13403,7 +13412,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                     self.assign_local(local_name.clone(), new_ty.clone());
                     self.sync_let_binding_type(&local_name, new_ty.clone());
                     new_ty
-                } else if !self.is_subtype(&widened_arg, elem_ty) {
+                } else if !self.is_subtype(&widened_arg, elem_ty).holds() {
                     self.context.report(
                         TirTypeError::TypeMismatch {
                             expected: *elem_ty.clone(),
@@ -13491,7 +13500,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                     };
                     self.assign_local(local_name.clone(), new_ty.clone());
                     self.sync_let_binding_type(&local_name, new_ty);
-                } else if !self.is_subtype(&widened_val, elem_ty) {
+                } else if !self.is_subtype(&widened_val, elem_ty).holds() {
                     self.context.report(
                         TirTypeError::TypeMismatch {
                             expected: *elem_ty.clone(),
@@ -13538,7 +13547,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                     };
                     self.assign_local(local_name.clone(), new_ty.clone());
                     self.sync_let_binding_type(&local_name, new_ty);
-                } else if !self.is_subtype(&widened_val, val_ty) {
+                } else if !self.is_subtype(&widened_val, val_ty).holds() {
                     // The key was validated by `check_index_key_type` above.
                     self.context.report(
                         TirTypeError::TypeMismatch {
@@ -13928,10 +13937,10 @@ impl<'db> TypeInferenceBuilder<'db> {
 
         // Subtype shortcuts: if either side already covers the other, the
         // intersection is the narrower side.
-        if self.is_subtype(&a, &b) {
+        if self.is_subtype(&a, &b).holds() {
             return a;
         }
-        if self.is_subtype(&b, &a) {
+        if self.is_subtype(&b, &a).holds() {
             return b;
         }
         // Distribute over unions: (X | Y) ∩ T = (X ∩ T) | (Y ∩ T).
@@ -14005,7 +14014,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             Vec::new(),
             TyAttr::default(),
         );
-        self.is_subtype(&ty, &compare)
+        self.is_subtype(&ty, &compare).holds()
     }
 
     /// The `??` / `||` optional-chaining lints, shared by the synthesis and checking
@@ -14145,7 +14154,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                     // Exact-type equality via the canonical algebra, so equivalent
                     // spellings agree — e.g. a `catch` result typed `int | 99`
                     // canonicalizes to `int`, matching `int` on the other side.
-                    let same_type = self.equivalent(&lhs_base, &rhs_base);
+                    let same_type = self.equivalent(&lhs_base, &rhs_base).holds();
                     if !same_type {
                         self.context.report_simple(
                             TirTypeError::OrderingDifferentTypes {
@@ -14237,9 +14246,9 @@ impl<'db> TypeInferenceBuilder<'db> {
                 let inner_lhs = crate::narrowing::remove_null(lhs);
                 // If RHS is a subtype of the unwrapped LHS (e.g. int? ?? 1 → int),
                 // return the unwrapped LHS directly instead of building a union.
-                if self.is_subtype(rhs, &inner_lhs) {
+                if self.is_subtype(rhs, &inner_lhs).holds() {
                     inner_lhs
-                } else if self.is_subtype(&inner_lhs, rhs) {
+                } else if self.is_subtype(&inner_lhs, rhs).holds() {
                     rhs.clone()
                 } else {
                     Self::join_types(&inner_lhs, rhs)
@@ -14301,7 +14310,10 @@ impl<'db> TypeInferenceBuilder<'db> {
         // `int`s); dedup so each base contributes one pair to the operator product.
         let mut deduped: Vec<Ty> = Vec::with_capacity(members.len());
         for member in members {
-            if !deduped.iter().any(|seen| self.equivalent(seen, &member)) {
+            if !deduped
+                .iter()
+                .any(|seen| self.equivalent(seen, &member).holds())
+            {
                 deduped.push(member);
             }
         }
@@ -15334,7 +15346,7 @@ impl crate::exhaustiveness::PatCtx for TypeInferenceBuilder<'_> {
     }
 
     fn interface_ctor_covers_column(&self, iface_ty: &Ty, col_ty: &Ty) -> bool {
-        self.is_subtype(col_ty, iface_ty)
+        self.is_subtype(col_ty, iface_ty).holds()
     }
 
     fn list_element_type(&self, ty: &Ty) -> Ty {
@@ -15624,11 +15636,11 @@ impl TypeInferenceBuilder<'_> {
                         && pat_args
                             .iter()
                             .zip(scrut_args.iter())
-                            .all(|(a, b)| self.equivalent(a, b)))) =>
+                            .all(|(a, b)| self.equivalent(a, b).holds()))) =>
             {
                 true
             }
-            _ => self.is_subtype(&pat, &scrut) || self.is_subtype(&scrut, &pat),
+            _ => self.is_subtype(&pat, &scrut).holds() || self.is_subtype(&scrut, &pat).holds(),
         }
     }
 
@@ -16093,7 +16105,7 @@ impl TypeInferenceBuilder<'_> {
             // above. Without it, `let a: Animal` against `Animal | string`
             // targets no union member and degrades to a catch-all.
             (Ty::Interface(..), _) | (_, Ty::Interface(..)) => {
-                self.is_subtype(a, b) || self.is_subtype(b, a)
+                self.is_subtype(a, b).holds() || self.is_subtype(b, a).holds()
             }
             // Self-overlap for atoms that aren't covered above. These have a
             // single inhabited "kind" that's identified by discriminant —
@@ -16174,10 +16186,12 @@ impl TypeInferenceBuilder<'_> {
                         .zip(args2.iter())
                         .all(|(x, y)| self.dispatch_args_compatible(x, y))
             }
-            _ => self.equivalent(
-                &Self::widen_literal_members(&a),
-                &Self::widen_literal_members(&b),
-            ),
+            _ => self
+                .equivalent(
+                    &Self::widen_literal_members(&a),
+                    &Self::widen_literal_members(&b),
+                )
+                .holds(),
         }
     }
 
@@ -16515,7 +16529,7 @@ impl TypeInferenceBuilder<'_> {
             // present ctors so the row is still specialized (not falsely
             // flagged unreachable).
             _ if self.contains_in_scope_rigid_or_projection(&expanded) => {
-                if self.equivalent(&expanded, scrut_ty) {
+                if self.equivalent(&expanded, scrut_ty).holds() {
                     DPat::wildcard(scrut_ty.clone())
                 } else {
                     DPat::single(self.normalize(&expanded), scrut_ty.clone())
@@ -16551,7 +16565,7 @@ impl TypeInferenceBuilder<'_> {
             // nothing else.
             _ => {
                 let scrut_expanded = self.expand_alias_chains(scrut_ty.clone());
-                if self.is_subtype(&scrut_expanded, &expanded)
+                if self.is_subtype(&scrut_expanded, &expanded).holds()
                     || Self::ty_contains_unresolved(&expanded)
                     || Self::ty_contains_unresolved(&scrut_expanded)
                 {
@@ -16731,7 +16745,7 @@ impl TypeInferenceBuilder<'_> {
                             && pattern_args
                                 .iter()
                                 .zip(member_args.iter())
-                                .all(|(a, b)| self.equivalent(a, b)));
+                                .all(|(a, b)| self.equivalent(a, b).holds()));
                     if args_compatible && !candidates.contains(&member) {
                         candidates.push(member);
                     }
@@ -17088,8 +17102,8 @@ impl TypeInferenceBuilder<'_> {
             if let Some(expected) = self.pattern_expected_ty(rest_pat, body)
                 && !Self::ty_contains_unresolved(&rest_ty)
                 && !crate::generics::contains_typevar(&rest_ty)
-                && !(self.is_subtype(expected.ty(), &rest_ty)
-                    && self.is_subtype(&rest_ty, expected.ty()))
+                && !(self.is_subtype(expected.ty(), &rest_ty).holds()
+                    && self.is_subtype(&rest_ty, expected.ty()).holds())
             {
                 let got = expected.into_ty();
                 let err = TirTypeError::TypeMismatch {

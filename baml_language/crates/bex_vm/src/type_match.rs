@@ -58,7 +58,7 @@ pub(crate) fn value_matches_template(
             message: e.to_string(),
         }
     })?;
-    Ok(normalize::is_subtype(&value_ty, expected.as_ty(), vm))
+    Ok(normalize::is_subtype(&value_ty, expected.as_ty(), vm).holds())
 }
 
 /// Whether `actual` is *invariantly* the type denoted by `template` (resolved
@@ -77,7 +77,7 @@ pub(crate) fn class_type_arg_matches<C: normalize::TypeContext>(
             message: e.to_string(),
         }
     })?;
-    Ok(normalize::equivalent(actual, expected.as_ty(), ctx))
+    Ok(normalize::equivalent(actual, expected.as_ty(), ctx).holds())
 }
 
 #[cfg(test)]
@@ -140,7 +140,7 @@ mod tests {
         let Ok(expected) = template.substitute(&frame, &EmptyCtx) else {
             return false;
         };
-        baml_type::normalize::is_subtype(actual.as_ty(), expected.as_ty(), &EmptyCtx)
+        baml_type::normalize::is_subtype(actual.as_ty(), expected.as_ty(), &EmptyCtx).holds()
     }
 
     /// The invariant class-arg relation over the empty context

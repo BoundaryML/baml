@@ -72,7 +72,7 @@
 use std::{borrow::Cow, ops::ControlFlow};
 
 use super::{
-    Indeterminacy, Limits, NormalTy, Truth, TypeContext,
+    Indeterminacy, Limits, NormalTy, Normalized, Truth, TypeContext,
     store::{Answer, Answers, CanonId, Cost, MembershipGoal},
 };
 use crate::{
@@ -176,6 +176,13 @@ enum ScopeKind {
     /// must observe refusals in candidates' bound discharge — a starved search
     /// yields *no* selection, never a different one.
     Selection,
+    /// An algebra entry point's observation scope: records nothing, but collects
+    /// the support state that decides whether a fail-closed interior `false`
+    /// surfaces as a definite `No` or an open `Unknown` — and whether a
+    /// canonicalization walk produced the full canonical form or a partial one.
+    /// The interior stays `bool`; this scope is where its refusals become
+    /// three-valued.
+    Verdict,
 }
 
 /// One recording scope: a point where a completed answer may enter the store, with
@@ -354,7 +361,7 @@ impl<'s> SolverSession<'s> {
     fn push_scope(&mut self, kind: ScopeKind, steps_at_entry: u64) {
         match kind {
             ScopeKind::MembershipGoal(_) => self.member_depth += 1,
-            ScopeKind::SubtypeRoot | ScopeKind::Selection => {}
+            ScopeKind::SubtypeRoot | ScopeKind::Selection | ScopeKind::Verdict => {}
         }
         self.scopes.push(Scope {
             kind,
@@ -375,7 +382,7 @@ impl<'s> SolverSession<'s> {
             .unwrap_or_else(|| unreachable!("scope push/pop mismatch"));
         match scope.kind {
             ScopeKind::MembershipGoal(_) => self.member_depth -= 1,
-            ScopeKind::SubtypeRoot | ScopeKind::Selection => {}
+            ScopeKind::SubtypeRoot | ScopeKind::Selection | ScopeKind::Verdict => {}
         }
         if let Some(parent) = self.scopes.last_mut() {
             parent.member_extent = parent.member_extent.max(scope.member_extent);
@@ -410,6 +417,36 @@ impl<'s> SolverSession<'s> {
         self.steps -= cost.steps;
         if let Some(top) = self.scopes.last_mut() {
             top.member_extent = top.member_extent.max(self.member_depth + cost.member_depth);
+        }
+    }
+
+    // ── the three-valued surface ───────────────────────────────────────────
+
+    /// Whether a completed derivation was untouched by any limit, judged from
+    /// its scope's support plus the sticky step-refusal flag. Only then is a
+    /// fail-closed `false` a fact about the types, and only then is a
+    /// canonicalization result the full canonical form.
+    fn refusal_free(&self, support: Support) -> bool {
+        match (support, self.exhausted) {
+            (Support::Refused, _) | (_, true) => false,
+            // A cycle support cannot outlive its head's scope (heads normalize it
+            // on pop), so at an entry point it is defensive; grounded either way.
+            (Support::Grounded | Support::Cycle(_), false) => true,
+        }
+    }
+
+    /// Map an interior fail-closed verdict onto the three-valued surface: `true`
+    /// is `Yes` unconditionally — a refusal can only *hide* proofs (absorption
+    /// keeps members, and every positive rule consumes positives), never
+    /// manufacture one — while `false` is a definite `No` only when
+    /// [refusal-free](Self::refusal_free).
+    fn truth_of(&self, proven: bool, support: Support) -> Truth {
+        if proven {
+            Truth::Yes
+        } else if self.refusal_free(support) {
+            Truth::No
+        } else {
+            Truth::Unknown(Indeterminacy::BudgetExhausted)
         }
     }
 
@@ -465,6 +502,125 @@ impl<'s> SolverSession<'s> {
         proven
     }
 
+    // ── the algebra entry points ───────────────────────────────────────────
+
+    /// Decide `sub <: sup` on the three-valued surface — the body of
+    /// [`TypeContext::is_subtype`].
+    ///
+    /// There is no relational fallback here: the walk *is* the relational
+    /// procedure, so an `Unknown` from it is genuine — nothing cheaper is left
+    /// to try.
+    pub(super) fn decide_subtype(&mut self, sub: &Ty, sup: &Ty) -> Truth {
+        self.begin_phase();
+        let (proven, scope) = self.in_scope(ScopeKind::Verdict, self.steps, |s| {
+            let sub = NormalTy::canonical(sub, s);
+            let sup = NormalTy::canonical(sup, s);
+            s.prove_subtype(&sub, &sup)
+        });
+        self.truth_of(proven, scope.support)
+    }
+
+    /// Decide `a ≡ b` on the three-valued surface — the body of
+    /// [`TypeContext::equivalent`].
+    ///
+    /// Canonical identity first; when a limit cut the identity phase, fall back
+    /// to the relation itself: mutual inclusion over the partial forms, under a
+    /// fresh pool (the root's second and last — see [`Self::begin_phase`]).
+    pub(super) fn decide_equivalent(&mut self, a: &Ty, b: &Ty) -> Truth {
+        let (identity, ca, cb) = self.equivalent_by_identity(a, b);
+        match identity {
+            Truth::Unknown(_) => {}
+            definite => return definite,
+        }
+        // The fallback is sound over partial forms because they denote the same
+        // sets as the inputs (every rewrite a partial form *did* apply is
+        // fact-justified; a refusal only skips rewrites) and are ε-closed
+        // contractive as the walk requires (the structural stages never charge,
+        // so no refusal can interrupt them). A definite `No` in either
+        // direction refutes equivalence outright — Kleene `and`.
+        self.begin_phase();
+        let forward = self.subtype_verdict(&ca, &cb);
+        let backward = self.subtype_verdict(&cb, &ca);
+        forward.and(backward)
+    }
+
+    /// The identity phase of [`Self::decide_equivalent`]: canonicalize both
+    /// operands and compare. Equal forms are `Yes` even when a limit left them
+    /// partial — positive identity is sound, since both forms denote their
+    /// inputs' sets. Unequal forms are `No` only when nothing was cut (partial
+    /// forms under-absorb, so their inequality proves nothing); otherwise
+    /// `Unknown`, handing the caller the partial forms for the fallback walk.
+    pub(super) fn equivalent_by_identity(&mut self, a: &Ty, b: &Ty) -> (Truth, NormalTy, NormalTy) {
+        self.begin_phase();
+        let ((ca, cb), scope) = self.in_scope(ScopeKind::Verdict, self.steps, |s| {
+            (NormalTy::canonical(a, s), NormalTy::canonical(b, s))
+        });
+        let identity = if ca == cb {
+            Truth::Yes
+        } else {
+            self.truth_of(false, scope.support)
+        };
+        (identity, ca, cb)
+    }
+
+    /// Canonicalize and render `ty`, with its identity token when the walk earned
+    /// one — the identity-carrying form of [`TypeContext::normalize`].
+    ///
+    /// The token is minted only for canonical-tier forms (no limit touched the
+    /// walk): a partial form is still a faithful, equivalent rendering, but it is
+    /// never an identity — [`Normalized::identity`] stays `None`, and relations
+    /// over the type are decided by goals rather than token comparison.
+    #[cfg_attr(
+        not(test),
+        expect(
+            dead_code,
+            reason = "the runtime delegation is this entry point's first \
+                                    production caller"
+        )
+    )]
+    pub(super) fn normalize(&mut self, ty: &Ty) -> Normalized {
+        self.begin_phase();
+        let ((form, mu_render), scope) = self.in_scope(ScopeKind::Verdict, self.steps, |s| {
+            NormalTy::canonical_and_render(ty, s)
+        });
+        let identity = self
+            .refusal_free(scope.support)
+            .then(|| self.store.intern(&form));
+        let ty = match mu_render {
+            Some(rendered) => rendered,
+            None => form.into_ty(),
+        };
+        Normalized { ty, identity }
+    }
+
+    /// The canonical form of `ty`, or `None` if a limit touched the walk.
+    ///
+    /// This is the gate for the definite-conclusion collapses
+    /// ([`TypeContext::definitely_disjoint`] and friends): they conclude from
+    /// structural comparison of forms, which is meaningful only on the canonical
+    /// tier, so they uniformly decline to conclude from a partial form — even
+    /// where a particular conclusion (positive identity) would happen to be
+    /// sound. A `None` is not a failure to normalize; it is the signal that this
+    /// caller's conclusion style must not consume the result.
+    pub(super) fn canonical_definite(&mut self, ty: &Ty) -> Option<NormalTy> {
+        let (form, scope) = self.in_scope(ScopeKind::Verdict, self.steps, |s| {
+            NormalTy::canonical(ty, s)
+        });
+        self.refusal_free(scope.support).then_some(form)
+    }
+
+    /// One direction of [`Self::decide_equivalent`]'s relational fallback, with
+    /// its own observation scope so each direction's verdict carries its own
+    /// support (the shared pool makes a starved first direction taint the
+    /// second through the sticky refusal flag, which is the conservative
+    /// direction).
+    fn subtype_verdict(&mut self, sub: &NormalTy, sup: &NormalTy) -> Truth {
+        let (proven, scope) = self.in_scope(ScopeKind::Verdict, self.steps, |s| {
+            s.prove_subtype(sub, sup)
+        });
+        self.truth_of(proven, scope.support)
+    }
+
     // ── the membership sort ────────────────────────────────────────────────
 
     /// Whether `subject` implements the interface at exactly this instantiation.
@@ -491,15 +647,9 @@ impl<'s> SolverSession<'s> {
         args: &[RealizedTy],
         assoc: &[(Name, RealizedTy)],
     ) -> Truth {
-        self.begin_root();
+        self.begin_phase();
         let (proven, outward) = self.solve_member(subject, interface, args, assoc);
-        if proven {
-            return Truth::Yes;
-        }
-        match (outward, self.exhausted) {
-            (Support::Refused, _) | (_, true) => Truth::Unknown(Indeterminacy::BudgetExhausted),
-            (Support::Grounded | Support::Cycle(_), false) => Truth::No,
-        }
+        self.truth_of(proven, outward)
     }
 
     /// Select the single applicable clause for `(subject, interface, args)` —
@@ -525,7 +675,7 @@ impl<'s> SolverSession<'s> {
         interface: &QualifiedTypeName,
         args: &[RealizedTy],
     ) -> Option<(ClauseId, Vec<RealizedTy>)> {
-        self.begin_root();
+        self.begin_phase();
         let base = dispatch_base(subject);
         let facts = self.facts;
         let (selected, scope) = self.in_scope(ScopeKind::Selection, self.steps, |session| {
@@ -569,20 +719,24 @@ impl<'s> SolverSession<'s> {
         clause: &ImplClause<'_>,
         subject: &RealizedTy,
     ) -> Option<Vec<RealizedTy>> {
-        self.begin_root();
+        self.begin_phase();
         self.clause_applies(clause, &dispatch_base(subject))
     }
 
-    /// Begin a fresh root goal: refill the step pool and clear the refusal flag.
-    /// The store deliberately survives — its entries are budget-qualified, so reuse
-    /// across roots is safe by admission, not by luck.
-    fn begin_root(&mut self) {
+    /// Begin a fresh pool phase: refill the step pool and clear the refusal flag.
+    /// Every public entry point opens one, so the pool is per root; the one root
+    /// with a second phase is [`Self::decide_equivalent`], whose relational
+    /// fallback re-pools after a starved identity phase — a hard ≤2× ceiling per
+    /// root, reachable only on inputs that exhausted the first pool. The store
+    /// deliberately survives across phases — its entries are budget-qualified, so
+    /// reuse is safe by admission, not by luck.
+    fn begin_phase(&mut self) {
         debug_assert!(
             self.scopes.is_empty()
                 && self.assumptions.is_empty()
                 && self.floors.is_empty()
                 && self.member_depth == 0,
-            "a root began inside a live derivation"
+            "a pool phase began inside a live derivation"
         );
         self.steps = self.limits.step_budget;
         self.exhausted = false;

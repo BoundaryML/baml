@@ -501,7 +501,7 @@ fn unify_into_at(
 
     // Structurally-equal (or alias-equal) subjects unify with no new bindings;
     // this also resolves ground unions order-insensitively via the normalizer.
-    if AliasEquivCtx(aliases).equivalent(&x, &y) {
+    if AliasEquivCtx(aliases).equivalent(&x, &y).holds() {
         return Overlap::Yes;
     }
 
@@ -857,9 +857,10 @@ fn unions_set_equal(
     aliases: &std::collections::HashMap<TypeName, Ty>,
 ) -> bool {
     xs.len() == ys.len()
-        && xs
-            .iter()
-            .all(|x| ys.iter().any(|y| AliasEquivCtx(aliases).equivalent(x, y)))
+        && xs.iter().all(|x| {
+            ys.iter()
+                .any(|y| AliasEquivCtx(aliases).equivalent(x, y).holds())
+        })
 }
 
 /// Whether `member` can be a *subtype* of `candidate` under some substitution

@@ -365,9 +365,11 @@ impl<'vm> ImplResolver<'vm> {
     /// the resolver (see [`StructuralEquivCtx`]).
     pub(super) fn ty_args_equivalent(self, a: &[RealizedTy], b: &[RealizedTy]) -> bool {
         a.len() == b.len()
-            && a.iter()
-                .zip(b.iter())
-                .all(|(x, y)| StructuralEquivCtx(self.vm).equivalent(x.as_ty(), y.as_ty()))
+            && a.iter().zip(b.iter()).all(|(x, y)| {
+                StructuralEquivCtx(self.vm)
+                    .equivalent(x.as_ty(), y.as_ty())
+                    .holds()
+            })
     }
 
     pub(super) fn associated_bindings_equivalent(
@@ -383,6 +385,7 @@ impl<'vm> ImplResolver<'vm> {
                         impl_name == requested_name
                             && StructuralEquivCtx(self.vm)
                                 .equivalent(impl_ty.as_ty(), requested_ty.as_ty())
+                                .holds()
                     })
                 })
     }

@@ -119,6 +119,7 @@ fn inbound_annotation_satisfies_ty(actual: &RuntimeTy, expected: &RuntimeTy) -> 
         expected.as_ty(),
         &baml_type::normalize::NoFacts,
     )
+    .holds()
 }
 
 /// Strict, recursive shape match of a `BexExternalValue` against a `RuntimeTy`.
