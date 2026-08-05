@@ -103,7 +103,7 @@ fn baml_package_export_cross_links() {
         .find(|m| m["name"] == "compare")
         .expect("Comparable::compare is required");
     assert_eq!(
-        compare["signature"]["throws"]["effective"]["display"],
+        compare["signature"]["throws"]["display"],
         "(Self as baml.Comparable).CompareError"
     );
 

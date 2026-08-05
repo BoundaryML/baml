@@ -126,20 +126,6 @@ fn generic_export(param: &ParamTy, bounds: &[InterfaceBound]) -> GenericExport {
     }
 }
 
-/// The panics/errors-split throws surface.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-pub struct ThrowsExport {
-    /// The written clause; absent when inferred.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub declared: Option<TyRef>,
-    /// The effective contract (declared-or-inferred).
-    pub effective: TyRef,
-    /// Leaves of the effective set in `baml.panics`.
-    pub panics: Vec<TyRef>,
-    /// Every other leaf.
-    pub errors: Vec<TyRef>,
-}
-
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct ParamExport {
     pub name: String,
@@ -155,7 +141,11 @@ pub struct SignatureExport {
     pub generics: Vec<GenericExport>,
     pub params: Vec<ParamExport>,
     pub returns: TyRef,
-    pub throws: ThrowsExport,
+    /// The effective contract — declared when written, inferred otherwise.
+    /// Only the effective set is exported: a consumer cares what a call can
+    /// raise, not whether the author wrote it down. The panics/errors split
+    /// stays on the handle layer, where `Throws` still carries it.
+    pub throws: TyRef,
 }
 
 /// Where a declaration lives: file plus byte span.
@@ -414,20 +404,6 @@ fn source_export(
     }
 }
 
-fn throws_export(throws: &crate::Throws<'_>) -> ThrowsExport {
-    let refs = |tys: &[Ty]| {
-        let mut out: Vec<TyRef> = tys.iter().map(TyRef::of).collect();
-        out.sort_by(|a, b| a.display.cmp(&b.display));
-        out
-    };
-    ThrowsExport {
-        declared: throws.declared.map(TyRef::of),
-        effective: TyRef::of(throws.effective),
-        panics: refs(&throws.panics),
-        errors: refs(&throws.errors),
-    }
-}
-
 fn function_export(db: &dyn Db, function: Function<'_>, from_default: bool) -> FunctionExport {
     let sig = function.signature(db);
     let name = function.name(db);
@@ -461,7 +437,7 @@ fn function_export(db: &dyn Db, function: Function<'_>, from_default: bool) -> F
                 })
                 .collect(),
             returns: TyRef::of(&sig.return_type),
-            throws: throws_export(&function.throws(db)),
+            throws: TyRef::of(function.throws(db).effective),
         },
         source: source_export(db, function.file(db), function.span(db)),
     }
@@ -495,14 +471,6 @@ fn required_method_export(
         // A malformed required signature still exports, as unresolved.
         other => (&[][..], other, other),
     };
-    let (panics, errors): (Vec<Ty>, Vec<Ty>) = crate::facts::throws_leaves(throws)
-        .into_iter()
-        .partition(crate::handles::is_panic_type);
-    let refs = |tys: &[Ty]| {
-        let mut out: Vec<TyRef> = tys.iter().map(TyRef::of).collect();
-        out.sort_by(|a, b| a.display.cmp(&b.display));
-        out
-    };
     RequiredMethodExport {
         id: SymbolId::of_member(db, owner, crate::Member::RequiredMethod(method))
             .map(|id| id.to_string())
@@ -527,12 +495,7 @@ fn required_method_export(
                 })
                 .collect(),
             returns: TyRef::of(returns),
-            throws: ThrowsExport {
-                declared: Some(TyRef::of(throws)),
-                effective: TyRef::of(throws),
-                panics: refs(&panics),
-                errors: refs(&errors),
-            },
+            throws: TyRef::of(throws),
         },
     }
 }

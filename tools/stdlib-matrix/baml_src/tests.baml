@@ -21,12 +21,7 @@ function fixture_export_text() -> string {
           "signature": {
             "params": [{"name": "self", "ty": {"display": "baml.Foo"}}],
             "returns": {"display": "int"},
-            "throws": {
-              "declared": {"display": "never"},
-              "effective": {"display": "baml.panics.IndexOutOfBounds"},
-              "panics": [{"display": "baml.panics.IndexOutOfBounds"}],
-              "errors": []
-            }
+            "throws": {"display": "baml.panics.IndexOutOfBounds"}
           }
         },
         {
@@ -59,11 +54,7 @@ function fixture_export_text() -> string {
           "signature": {
             "params": [{"name": "self", "ty": {"display": "baml.Foo"}}],
             "returns": {"display": "int"},
-            "throws": {
-              "effective": {"display": "CompareError"},
-              "panics": [],
-              "errors": [{"display": "CompareError"}]
-            }
+            "throws": {"display": "CompareError"}
           }
         },
         {"name": "index_of", "signature": {"params": [{"name": "self", "ty": {"display": "baml.Foo"}}]}}
@@ -124,9 +115,8 @@ test "the FromJson override decodes throws and leaves string values intact" {
         let methods: ExportMethod[] = foo.methods ?? [];
         if let method: ExportMethod = methods.at(0) {
             if let sig: ExportSignature = method.signature {
-                if let spec: ExportThrows = sig.throws_spec {
-                    assert.equal(spec.panics.length(), 1);
-                    assert.equal(spec.panics.at(0)?.display ?? "", "baml.panics.IndexOutOfBounds");
+                if let spec: TyRef = sig.throws_spec {
+                    assert.equal(spec.display, "baml.panics.IndexOutOfBounds");
                 } else {
                     baml.sys.panic("throws_spec missing — the FromJson override did not run");
                 }
@@ -161,7 +151,7 @@ test "container report matches, applies synonyms, and keeps impl provenance" {
         if (member_row.key == "compare") {
             if let member: PooledMember = member_row.baml {
                 assert.equal(member.via ?? "", "baml.Comparable");
-                assert.equal(member.errors.length(), 1);
+                assert.equal(member.errors ?? "", "CompareError");
             } else {
                 baml.sys.panic("compare row lost its BAML member");
             }
@@ -172,7 +162,7 @@ test "container report matches, applies synonyms, and keeps impl provenance" {
             // not pooled as an alternate.
             assert.equal(member_row.baml_alternates.length(), 0);
             if let member: PooledMember = member_row.baml {
-                assert.equal(member.panics.at(0) ?? "", "baml.panics.IndexOutOfBounds");
+                assert.equal(member.errors ?? "", "baml.panics.IndexOutOfBounds");
             }
         }
         if (member_row.key == "sortstuff") {

@@ -33,16 +33,7 @@ function member_cell(member: PooledMember?, alternates: string[]) -> string {
 }
 
 function throws_cell(member: PooledMember?) -> string {
-    let parts: string[] = [];
-    if let m: PooledMember = member {
-        if (m.errors.length() > 0) {
-            parts.push(`errors: ${m.errors.join(", ")}`);
-        }
-        if (m.panics.length() > 0) {
-            parts.push(`panics: ${m.panics.join(", ")}`);
-        }
-    }
-    escape_cell(parts.join("; "))
+    escape_cell(member?.errors ?? "")
 }
 
 function signature_cell(member: PooledMember?) -> string {

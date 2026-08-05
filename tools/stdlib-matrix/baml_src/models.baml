@@ -26,15 +26,8 @@ class ExportGeneric {
 class ExportParam {
     name: string,
     ty: TyRef,
-}
-
-/// The declared/effective throws facet of a signature. Decoded from the
-/// `throws_spec` key that ingest synthesizes (the on-disk key is `throws`).
-class ExportThrows {
-    declared: TyRef?,
-    effective: TyRef?,
-    panics: TyRef[],
-    errors: TyRef[],
+    /// A default-valued parameter, which BAML makes named-only.
+    optional: bool?,
 }
 
 /// The export format spells this record's throws facet `throws`, which cannot
@@ -45,7 +38,7 @@ class ExportSignature {
     generics: ExportGeneric[]?,
     params: ExportParam[],
     returns: TyRef?,
-    throws_spec: ExportThrows?,
+    throws_spec: TyRef?,
 
     implements baml.FromJson {
         function from_json(j: baml.json.json) -> Self throws baml.json.JsonDecodeError {
@@ -53,7 +46,7 @@ class ExportSignature {
                 generics: baml.json.to<ExportGeneric[]?>(baml.json.field(j, "generics")),
                 params: baml.json.to<ExportParam[]>(baml.json.field(j, "params")),
                 returns: baml.json.to<TyRef?>(baml.json.field(j, "returns")),
-                throws_spec: baml.json.to<ExportThrows?>(baml.json.field(j, "throws")),
+                throws_spec: baml.json.to<TyRef?>(baml.json.field(j, "throws")),
             }
         }
     }
@@ -150,8 +143,10 @@ class PooledMember {
     signature: string?,
     doc: string?,
     via: string?,
-    panics: string[],
-    errors: string[],
+    /// The effective error contract, absent when the call cannot fail.
+    /// (Named `errors`, not `throws`: `throws` is a keyword and cannot be a
+    /// field name.)
+    errors: string?,
 }
 
 /// One member row of a container comparison. `status` is "matched",

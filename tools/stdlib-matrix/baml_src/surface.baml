@@ -59,18 +59,18 @@ function last_segment(path: string) -> string {
     path.substring(cut + 1, path.length())
 }
 
-/// How a BAML type is spelled in source, given its companion class's
-/// qualified name.
+/// Rewrites a companion class's name to the type it backs, leaving every other
+/// type alone.
 ///
 /// The stdlib backs each primitive with a companion class (`class baml.String`
 /// carries `string`'s methods, `class Array<T>` carries `T[]`'s) — an
 /// implementation detail of where methods live, not a type users write. The
-/// matrix compares languages as written, so members are attributed to the
-/// spelling: `string.to_upper_case`, not `String.to_upper_case`. The table
-/// mirrors `PrimitiveType::builtin_class_path` and `head.rs`'s container
-/// normalization; anything not backing a primitive keeps its own name.
-function type_display_name(qualified: string) -> string {
-    match (qualified) {
+/// matrix compares languages as written, so `baml.Uint8Array` normalizes to
+/// `uint8array` wherever it appears, including a `self` parameter's type. The
+/// table mirrors `PrimitiveType::builtin_class_path` and `head.rs`'s container
+/// normalization.
+function normalize_ty_display(display: string) -> string {
+    match (display) {
         "baml.Int" => "int",
         "baml.Bigint" => "bigint",
         "baml.Float" => "float",
@@ -84,7 +84,19 @@ function type_display_name(qualified: string) -> string {
         "baml.media.Pdf" => "pdf",
         "baml.Array" => "T[]",
         "baml.Map" => "map<K, V>",
-        _ => last_segment(qualified),
+        _ => display,
+    }
+}
+
+/// How a type is written in source, given its declaring name. Companion
+/// classes normalize to the type they back; everything else keeps its own
+/// short name.
+function type_display_name(qualified: string) -> string {
+    let normalized = normalize_ty_display(qualified);
+    if (normalized != qualified) {
+        normalized
+    } else {
+        last_segment(qualified)
     }
 }
 
@@ -133,35 +145,22 @@ function render_signature(sig: ExportSignature) -> string {
         ret = ` -> ${r.display}`;
     }
     let throws_suffix = "";
-    if let spec: ExportThrows = sig.throws_spec {
-        if let effective: TyRef = spec.effective {
-            if (effective.display != "never") {
-                throws_suffix = ` throws ${effective.display}`;
-            }
-        }
+    let effective = sig.throws_spec?.display ?? "never";
+    if (effective != "never") {
+        throws_suffix = ` throws ${effective}`;
     }
     `${render_generics(sig.generics)}(${params})${ret}${throws_suffix}`
 }
 
-function throws_panics(sig: ExportSignature?) -> string[] {
-    let out: string[] = [];
+/// The effective throws contract, or an empty list when a call cannot fail.
+/// The export no longer splits panics from errors — that distinction lives on
+/// the handle layer, and is not something a cross-language reader can act on.
+function throws_effective(sig: ExportSignature?) -> string? {
+    let out: string? = null;
     if let s: ExportSignature = sig {
-        if let spec: ExportThrows = s.throws_spec {
-            for (let ty in spec.panics) {
-                out.push(ty.display);
-            }
-        }
-    }
-    out
-}
-
-function throws_errors(sig: ExportSignature?) -> string[] {
-    let out: string[] = [];
-    if let s: ExportSignature = sig {
-        if let spec: ExportThrows = s.throws_spec {
-            for (let ty in spec.errors) {
-                out.push(ty.display);
-            }
+        let effective = s.throws_spec?.display ?? "never";
+        if (effective != "never") {
+            out = effective;
         }
     }
     out
@@ -235,8 +234,7 @@ function push_method(
             signature: rendered_signature(method.signature),
             doc: first_doc_line(method.docstring),
             via: via,
-            panics: throws_panics(method.signature),
-            errors: throws_errors(method.signature),
+            errors: throws_effective(method.signature),
         });
     }
 }
@@ -271,8 +269,7 @@ function pool_item_members(
                 signature: field_ty,
                 doc: first_doc_line(field.docstring),
                 via: null,
-                panics: [],
-                errors: [],
+                errors: null,
             });
             let _ = own_names.set(field.name, true);
         }
@@ -315,8 +312,7 @@ function pool_item_members(
                             signature: rendered_signature(impl_method.signature),
                             doc: first_doc_line(impl_method.docstring),
                             via: impl_record.interface,
-                            panics: throws_panics(impl_method.signature),
-                            errors: throws_errors(impl_method.signature),
+                            errors: throws_effective(impl_method.signature),
                         });
                     }
                 }
@@ -371,8 +367,7 @@ function pool_baml_namespace(
                 signature: rendered_signature(item.signature),
                 doc: first_doc_line(item.docstring),
                 via: null,
-                panics: throws_panics(item.signature),
-                errors: throws_errors(item.signature),
+            errors: throws_effective(item.signature),
             });
         } else if (item.kind == "class" || item.kind == "interface") {
             pool_item_members(index, item, row, ns, acc);
@@ -407,8 +402,7 @@ function pool_ts_side(doc: TsSurfaceDoc, row: ContainerPair) -> PooledMember[] {
                         signature: member.signatures.join("\n"),
                         doc: member.doc,
                         via: null,
-                        panics: [],
-                        errors: [],
+            errors: null,
                     });
                 }
             }
