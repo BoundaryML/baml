@@ -12,7 +12,8 @@ use baml_base::Name;
 use baml_compiler2_hir::package::PackageId;
 use baml_compiler2_tir::{
     package_interface::{
-        ExportedAssociatedType, ExportedFunction, ExportedType, PackageInterface, package_interface,
+        ExportedAssociatedType, ExportedFunction, ExportedImpl, ExportedImplMethod,
+        ExportedImplOrigin, ExportedType, PackageInterface, package_interface,
     },
     ty::Ty,
 };
@@ -66,6 +67,62 @@ class Box<T extends Anchor> {
 function pick<T extends Anchor>(a: T, b: T) -> T throws never {
     a
 }
+
+interface Mergeable {
+    function merge(self, other: Self) -> Self throws never
+}
+
+enum Tone {
+    Soft
+    Loud
+}
+
+implement Mergeable for Tone {
+    function merge(self, other: Self) -> Self throws never {
+        self
+    }
+}
+
+interface Labeled {
+    tag string
+}
+
+class Sticker {
+    kind string
+
+    implements Labeled {
+        tag as kind
+    }
+}
+
+implement<T extends Anchor> Pair<T, T> for Box<T> {
+    function first(self) -> T throws never {
+        self.item
+    }
+}
+
+class Deck {
+    label string
+    top Card
+
+    implements Source {
+        type Item = Card
+
+        function next(self) -> Card throws never {
+            self.top
+        }
+    }
+}
+
+interface Tagged {
+    function tag(self) -> string throws never
+}
+
+implement<T> Tagged for T {
+    function tag(self) -> string throws never {
+        "any"
+    }
+}
 "#;
 
 fn fixture_db() -> ProjectDatabase {
@@ -107,6 +164,40 @@ fn method<'a>(methods: &'a [ExportedFunction], name: &str) -> &'a ExportedFuncti
         .iter()
         .find(|m| m.name.as_str() == name)
         .unwrap_or_else(|| panic!("method {name} is exported"))
+}
+
+/// The unique exported impl of `interface_name` whose for-type satisfies
+/// `for_ty` — panics on zero or several (the fixtures are written so each
+/// lookup is unambiguous).
+#[track_caller]
+fn impl_row<'a>(
+    iface: &'a PackageInterface,
+    interface_name: &str,
+    for_ty: impl Fn(&Ty) -> bool,
+) -> &'a ExportedImpl {
+    let mut rows = iface.impls.iter().filter(|row| {
+        row.interface.name.name().as_str() == interface_name && for_ty(&row.for_ty_pattern)
+    });
+    let found = rows
+        .next()
+        .unwrap_or_else(|| panic!("an impl of {interface_name} is exported"));
+    assert!(
+        rows.next().is_none(),
+        "impl of {interface_name} matched more than one exported row"
+    );
+    found
+}
+
+#[track_caller]
+fn impl_method<'a>(methods: &'a [ExportedImplMethod], name: &str) -> &'a ExportedImplMethod {
+    methods
+        .iter()
+        .find(|m| m.name.as_str() == name)
+        .unwrap_or_else(|| panic!("impl method {name} is exported"))
+}
+
+fn is_class_named(name: &'static str) -> impl Fn(&Ty) -> bool {
+    move |ty| matches!(ty, Ty::Class(qtn, ..) if qtn.name().as_str() == name)
 }
 
 #[test]
@@ -365,6 +456,10 @@ fn enriched_interface_borsh_round_trips() {
     let db = fixture_db();
     let iface = user_interface(&db);
 
+    assert!(
+        !iface.impls.is_empty(),
+        "the fixture's impls participate in the round-trip"
+    );
     let bytes = borsh::to_vec(iface).expect("serialize enriched interface");
     let decoded: PackageInterface = borsh::from_slice(&bytes).expect("deserialize");
     assert_eq!(iface, &decoded);
@@ -557,6 +652,176 @@ interface M {
     );
 }
 
+// ── The impls table (PR 2) ─────────────────────────────────────────────────
+
+#[test]
+fn in_body_impl_exports_with_field_links() {
+    let db = fixture_db();
+    assert_no_diagnostic_errors(&db);
+    let iface = user_interface(&db);
+
+    // `class Sticker { implements Labeled { tag as kind } }` — the in-body
+    // shape with an explicit field link and no overrides.
+    let row = impl_row(iface, "Labeled", is_class_named("Sticker"));
+    assert_eq!(row.interface.name.name().as_str(), "Labeled");
+    assert_eq!(row.interface.name.package().as_str(), "user");
+    assert!(row.interface.generics.is_empty());
+    assert!(row.interface.associated_types.is_empty());
+    assert!(
+        matches!(&row.for_ty_pattern, Ty::Class(qtn, args, _)
+            if qtn.name().as_str() == "Sticker" && args.is_empty()),
+        "in-body impl of a non-generic class normalizes to the bare class, got {:?}",
+        row.for_ty_pattern
+    );
+    assert!(row.generic_params.is_empty());
+    assert!(row.param_bounds.is_empty());
+    assert!(row.associated_types.is_empty());
+    assert_eq!(
+        row.field_links
+            .iter()
+            .map(|(i, c)| (i.as_str(), c.as_str()))
+            .collect::<Vec<_>>(),
+        [("tag", "kind")],
+        "the explicit `tag as kind` link is exported"
+    );
+    let ExportedImplOrigin::InBodyClass { class_qtn } = &row.origin else {
+        panic!(
+            "in-body impl must export InBodyClass origin, got {:?}",
+            row.origin
+        );
+    };
+    assert_eq!(class_qtn.name().as_str(), "Sticker");
+    assert!(row.methods.is_empty(), "no overrides were written");
+
+    // `class Card { implements Anchor { … } }` — in-body with an override:
+    // the method row carries the class-qualified fqn and the interface target.
+    let card = impl_row(iface, "Anchor", is_class_named("Card"));
+    assert!(
+        matches!(&card.origin, ExportedImplOrigin::InBodyClass { class_qtn }
+        if class_qtn.name().as_str() == "Card")
+    );
+    let id = impl_method(&card.methods, "id");
+    assert_eq!(id.sig.name.as_str(), "id");
+    assert_eq!(id.sig.callable_fqn, "user.Card.id");
+    assert_eq!(
+        id.sig
+            .interface_target
+            .as_ref()
+            .expect("impl methods always carry their interface target")
+            .name()
+            .as_str(),
+        "Anchor"
+    );
+    assert!(
+        matches!(&id.sig.params[0].ty, Ty::Class(qtn, ..) if qtn.name().as_str() == "Card"),
+        "the receiver realizes to the for-type, got {:?}",
+        id.sig.params[0].ty
+    );
+    assert!(matches!(&id.sig.return_type, Ty::String { .. }));
+}
+
+#[test]
+fn out_of_body_impl_realizes_self_to_the_for_type() {
+    let db = fixture_db();
+    let iface = user_interface(&db);
+
+    // `implement Mergeable for Tone` — a free impl on an enum; `Self` in the
+    // override's signature (receiver, parameter, AND return position) must
+    // realize to the for-type, never leak as `Ty::Error`/`Ty::Unknown` (the
+    // `function_signature_ty` free-impl deficiency this export bypasses).
+    let row = impl_row(
+        iface,
+        "Mergeable",
+        |ty| matches!(ty, Ty::Enum(qtn, _) if qtn.name().as_str() == "Tone"),
+    );
+    assert!(matches!(row.origin, ExportedImplOrigin::OutOfBody));
+    assert!(row.generic_params.is_empty());
+    assert!(row.associated_types.is_empty());
+    assert!(row.field_links.is_empty());
+
+    let merge = impl_method(&row.methods, "merge");
+    let is_tone = |ty: &Ty| matches!(ty, Ty::Enum(qtn, _) if qtn.name().as_str() == "Tone");
+    assert_eq!(merge.sig.params.len(), 2);
+    assert!(
+        is_tone(&merge.sig.params[0].ty),
+        "self: {:?}",
+        merge.sig.params[0].ty
+    );
+    assert!(
+        is_tone(&merge.sig.params[1].ty),
+        "other: Self: {:?}",
+        merge.sig.params[1].ty
+    );
+    assert!(
+        is_tone(&merge.sig.return_type),
+        "-> Self: {:?}",
+        merge.sig.return_type
+    );
+    assert!(matches!(&merge.sig.declared_throws, Some(Ty::Never { .. })));
+    assert!(matches!(&merge.sig.callable_throws, Ty::Never { .. }));
+    assert!(merge.sig.generic_params.is_empty());
+    // A free-impl method's fqn renders owner-less — identity is the structural
+    // (impl, name) pair, and MIR's scoped symbol is reconstructed downstream.
+    assert_eq!(merge.sig.callable_fqn, "user.merge");
+}
+
+#[test]
+fn generic_impl_exports_params_bounds_and_patterns() {
+    let db = fixture_db();
+    let iface = user_interface(&db);
+
+    // `implement<T extends Anchor> Pair<T, T> for Box<T>`.
+    let row = impl_row(iface, "Pair", is_class_named("Box"));
+    assert!(matches!(row.origin, ExportedImplOrigin::OutOfBody));
+    assert_eq!(
+        row.generic_params
+            .iter()
+            .map(|p| p.as_str().to_owned())
+            .collect::<Vec<_>>(),
+        ["T"]
+    );
+    assert_eq!(
+        row.param_bounds.len(),
+        1,
+        "bounds are parallel to generic_params"
+    );
+    assert_eq!(row.param_bounds[0].len(), 1);
+    assert_eq!(row.param_bounds[0][0].name.name().as_str(), "Anchor");
+
+    // The interface head carries the impl's args over its own params.
+    assert_eq!(row.interface.generics.len(), 2);
+    for arg in &row.interface.generics {
+        assert!(
+            matches!(arg, Ty::TypeVar(p, _) if p.as_str() == "T"),
+            "interface arg stays the impl's param, got {arg:?}"
+        );
+    }
+    let Ty::Class(qtn, args, _) = &row.for_ty_pattern else {
+        panic!(
+            "for-ty must be the Box pattern, got {:?}",
+            row.for_ty_pattern
+        );
+    };
+    assert_eq!(qtn.name().as_str(), "Box");
+    assert_eq!(args.len(), 1);
+    assert!(matches!(&args[0], Ty::TypeVar(p, _) if p.as_str() == "T"));
+
+    // The override's signature stays parametric over the impl's `T`.
+    let first = impl_method(&row.methods, "first");
+    assert!(
+        matches!(&first.sig.params[0].ty, Ty::Class(qtn, args, _)
+            if qtn.name().as_str() == "Box"
+                && matches!(&args[0], Ty::TypeVar(p, _) if p.as_str() == "T")),
+        "receiver realizes to Box<T>, got {:?}",
+        first.sig.params[0].ty
+    );
+    assert!(matches!(&first.sig.return_type, Ty::TypeVar(p, _) if p.as_str() == "T"));
+    assert!(
+        first.sig.generic_params.is_empty(),
+        "the impl's params live on the row, not the method"
+    );
+}
+
 #[test]
 fn dep_interface_rows_stay_invisible_to_resolution() {
     // BEP-066 slice 6a exports dependency interface rows but nothing may
@@ -613,4 +878,132 @@ fn dep_interface_rows_stay_invisible_to_resolution() {
         .resolve_type(&db, &path(&["iter", "Range"]), &[])
         .expect("dep class resolves via the own-then-deps walk");
     assert!(matches!(ty, Ty::Class(ref qtn, _, _) if qtn.name().as_str() == "Range"));
+}
+
+#[test]
+fn impl_assoc_bindings_export_pins_and_filled_defaults() {
+    let db = fixture_db();
+    let iface = user_interface(&db);
+
+    // `class Deck { implements Source { type Item = Card … } }` — the explicit
+    // pin plus the interface's `type Items = Self.Item[]` default, filled at
+    // this impl's receiver.
+    let row = impl_row(iface, "Source", is_class_named("Deck"));
+    assert!(
+        matches!(&row.origin, ExportedImplOrigin::InBodyClass { class_qtn }
+        if class_qtn.name().as_str() == "Deck")
+    );
+
+    // Rows in interface declaration order: Item (pinned), Items (defaulted).
+    assert_eq!(
+        row.associated_types
+            .iter()
+            .map(|(name, _)| name.as_str())
+            .collect::<Vec<_>>(),
+        ["Item", "Items"]
+    );
+    let (_, item) = &row.associated_types[0];
+    assert!(matches!(item, Ty::Class(qtn, ..) if qtn.name().as_str() == "Card"));
+    // The default keeps its `Self.Item` projection symbolic over the receiver
+    // (the runtime/consumer reduces it back through this same impl).
+    let (_, items) = &row.associated_types[1];
+    let Ty::List(inner, _) = items else {
+        panic!("Items must fill as a list, got {items:?}");
+    };
+    assert!(
+        matches!(inner.as_ref(), Ty::AssociatedTypeProjection { base, member, .. }
+            if member.as_str() == "Item"
+                && matches!(base.as_ref(), Ty::Class(qtn, ..) if qtn.name().as_str() == "Deck")),
+        "Items default stays a projection on the receiver, got {inner:?}"
+    );
+
+    // The interface head carries the same bindings, sorted by name.
+    assert_eq!(row.interface.associated_types.len(), 2);
+    assert_eq!(
+        row.interface
+            .associated_types
+            .iter()
+            .map(|(name, _)| name.as_str())
+            .collect::<Vec<_>>(),
+        ["Item", "Items"]
+    );
+
+    // The override types against the pinned assoc.
+    let next = impl_method(&row.methods, "next");
+    assert!(matches!(&next.sig.return_type, Ty::Class(qtn, ..)
+        if qtn.name().as_str() == "Card"));
+    assert_eq!(next.sig.callable_fqn, "user.Deck.next");
+}
+
+#[test]
+fn blanket_impl_exports_the_bare_typevar_pattern() {
+    let db = fixture_db();
+    let iface = user_interface(&db);
+
+    // `implement<T> Tagged for T`.
+    let row = impl_row(iface, "Tagged", |ty| matches!(ty, Ty::TypeVar(..)));
+    assert!(matches!(row.origin, ExportedImplOrigin::OutOfBody));
+    assert_eq!(row.generic_params.len(), 1);
+    assert_eq!(row.generic_params[0].as_str(), "T");
+    assert_eq!(
+        row.param_bounds,
+        [Vec::new()],
+        "unbounded param exports an empty conjunction"
+    );
+    assert!(
+        matches!(&row.for_ty_pattern, Ty::TypeVar(p, _) if p.as_str() == "T"),
+        "a blanket impl's for-ty is the bare param, got {:?}",
+        row.for_ty_pattern
+    );
+    let tag = impl_method(&row.methods, "tag");
+    assert!(
+        matches!(&tag.sig.params[0].ty, Ty::TypeVar(p, _) if p.as_str() == "T"),
+        "the blanket receiver stays the impl's param, got {:?}",
+        tag.sig.params[0].ty
+    );
+    assert!(matches!(&tag.sig.return_type, Ty::String { .. }));
+}
+
+#[test]
+fn stdlib_impls_export_and_int_equals_is_complete() {
+    let db = make_db();
+
+    // Every stdlib package derives its impls table without panicking.
+    for name in baml_builtins2::stdlib_package_names().iter().copied() {
+        let _ = &package_interface(&db, PackageId::new(&db, Name::new(name))).impls;
+    }
+
+    // Spot-check `implement Equals for int` (baml.ops).
+    let baml = package_interface(&db, PackageId::new(&db, Name::new("baml")));
+    assert!(!baml.impls.is_empty(), "the stdlib exports impl rows");
+    let row = baml
+        .impls
+        .iter()
+        .find(|row| {
+            row.interface.name.name().as_str() == "Equals"
+                && *row.interface.name.namespace() == [Name::new("ops")]
+                && matches!(row.for_ty_pattern, Ty::Int { .. })
+        })
+        .expect("baml.ops's `implement Equals for int` is exported");
+    assert!(matches!(row.origin, ExportedImplOrigin::OutOfBody));
+    assert!(row.generic_params.is_empty());
+    assert!(row.interface.generics.is_empty());
+
+    let eq = impl_method(&row.methods, "eq");
+    assert!(
+        matches!(&eq.sig.params[0].ty, Ty::Int { .. }),
+        "self realizes to int"
+    );
+    assert!(
+        matches!(&eq.sig.params[1].ty, Ty::Int { .. }),
+        "`other: Self` realizes to int, got {:?}",
+        eq.sig.params[1].ty
+    );
+    assert!(matches!(&eq.sig.return_type, Ty::Bool { .. }));
+    assert!(matches!(&eq.sig.callable_throws, Ty::Never { .. }));
+    assert_eq!(
+        eq.sig.builtin_kind,
+        Some(baml_compiler2_ast::BuiltinKind::Vm),
+        "`$rust_function` bodies keep their builtin kind"
+    );
 }

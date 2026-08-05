@@ -988,7 +988,7 @@ fn orphan_check(
 /// declare `member` made the projection ambiguous — a spurious `Ty::Error` that failed
 /// conformance even for a valid impl.
 #[expect(clippy::too_many_arguments)]
-fn realize_with_symbolic_self<'db>(
+pub(crate) fn realize_with_symbolic_self<'db>(
     db: &'db dyn crate::Db,
     package_items: &baml_compiler2_hir::package::PackageItems<'db>,
     ns_context: &[Name],

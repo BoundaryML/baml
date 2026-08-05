@@ -69,6 +69,17 @@ pub struct PackageInterface {
     /// namespace with nothing visible" from "no such namespace" (BEP-066 slice
     /// 6a; nothing reads it yet).
     pub namespaces: BTreeSet<Vec<Name>>,
+    /// Every `implements` block the package declares, exported loc-free (BEP-066
+    /// slice 6a) — the blob-side twin of the `impl_data` substrate, so a
+    /// source-less dependency still contributes its impls to matching,
+    /// membership, and coherence (the R2 "fails-open" hole). Derived but not yet
+    /// consumed: the impl enumerators still walk `ImplLoc`s until the
+    /// seed-or-source `package_impls` reroute lands in a follow-up PR.
+    ///
+    /// Sorted by each row's borsh encoding — a canonical total order over the
+    /// row's full content, independent of file enumeration order (ties are
+    /// byte-identical rows, so their relative order is unobservable).
+    pub impls: Vec<ExportedImpl>,
 }
 
 /// A type exported from a package.
@@ -193,6 +204,90 @@ pub struct ExportedFunction {
     /// implements-scoped symbol naming is reconstructed from the pair by the
     /// consumer (impls-table PR).
     pub callable_fqn: String,
+}
+
+/// One `implements` block exported loc-free (BEP-066 slice 6a) — the blob-side
+/// mirror of [`crate::interfaces::ImplData`], carrying everything a source-less
+/// consumer needs to run impl matching (`match_impl_head`-shaped unification),
+/// bound discharge, membership, and coherence without `ImplLoc`s. Derived but
+/// not yet consumed; the enumerator reroutes land in follow-up PRs.
+///
+/// Like `ImplData`, every impl — in-body or out-of-body — is normalized to the
+/// same *free* shape: an in-body `implements I {…}` inside `class C<T>` exports
+/// exactly as `implement<T> I for C<T>`. Patterns are `Ty` values over
+/// [`generic_params`](Self::generic_params)' rigid `Ty::TypeVar`s (the same
+/// currency `match_ty_patterns` keys on — deliberately NOT `TyTemplate`);
+/// a consumer realizes a match by binding those params.
+#[derive(Debug, Clone, PartialEq, borsh::BorshSerialize, borsh::BorshDeserialize)]
+pub struct ExportedImpl {
+    /// The implemented interface head at this impl's declared instantiation:
+    /// qualified name, generic input args, and the impl's *realized*
+    /// associated-type bindings (explicit pins plus filled declared defaults —
+    /// the same rows [`associated_types`](Self::associated_types) carries,
+    /// binding order canonicalized by `Interface::new`'s by-name sort). Args
+    /// and bindings may mention `generic_params` as `Ty::TypeVar`s.
+    pub interface: baml_type::Interface,
+    /// The resolved implementor pattern (may carry `Ty::TypeVar`s over
+    /// `generic_params` — a bare `TypeVar` is a blanket impl).
+    pub for_ty_pattern: Ty,
+    /// The impl's generic parameters (a class's own params for an in-body
+    /// impl), in declaration order.
+    pub generic_params: Vec<ParamTy>,
+    /// Per-parameter interface-bound conjunctions, parallel to
+    /// `generic_params` (`T extends A & B` yields two entries in `T`'s `Vec`;
+    /// an unbounded parameter yields an empty one).
+    pub param_bounds: Vec<Vec<baml_type::Interface>>,
+    /// The impl's associated-type bindings in the interface's declaration
+    /// order: explicit `type Item = …` pins plus declared defaults filled at
+    /// this impl's receiver — exactly `ImplData::associated_types`.
+    pub associated_types: Vec<(Name, Ty)>,
+    /// Interface-field → class-field links declared in the block (in-body
+    /// `implements` blocks only; same-named default coverage is not spelled
+    /// out here, mirroring `ImplData::field_links`).
+    pub field_links: Vec<(Name, Name)>,
+    /// In-body vs out-of-body provenance. Diagnostic metadata ONLY — it MUST
+    /// NOT drive resolution/dispatch/coherence (see
+    /// [`crate::interfaces::InterfaceImplOrigin`], which this mirrors).
+    pub origin: ExportedImplOrigin,
+    /// The impl body's own method overrides, in declaration order. Inherited
+    /// interface defaults are NOT merged in — the consumer merges them from
+    /// the interface's own exported row, mirroring `ImplData::methods`.
+    pub methods: Vec<ExportedImplMethod>,
+}
+
+/// Loc-free mirror of [`crate::interfaces::InterfaceImplOrigin`]: where an
+/// impl was written. Diagnostic metadata ONLY — it MUST NOT drive
+/// resolution/dispatch/coherence (a concrete class's out-of-body
+/// `implement I for C` is merged onto `C` for resolution but keeps
+/// `OutOfBody`, so out-of-body-only rules like E0126 still fire).
+#[derive(Debug, Clone, PartialEq, borsh::BorshSerialize, borsh::BorshDeserialize)]
+pub enum ExportedImplOrigin {
+    /// `implements I { … }` written in the class body.
+    InBodyClass { class_qtn: QualifiedTypeName },
+    /// `implement<…> I for <for_target>` — any out-of-body impl.
+    OutOfBody,
+}
+
+/// One impl-body method override, exported with a *structural* identity: the
+/// owner is the enclosing [`ExportedImpl`] itself (interface head + for-type),
+/// and `name` picks the interface member it overrides. Deliberately NOT MIR's
+/// `{iface-display}$for${target-display}` source-text naming — the consumer PR
+/// reconstructs MIR's symbol from this structural pair. `sig.callable_fqn`
+/// alone is NOT unique for a free-impl method (it renders owner-less,
+/// `pkg.ns….name`); identity is `(enclosing impl, name)`.
+#[derive(Debug, Clone, PartialEq, borsh::BorshSerialize, borsh::BorshDeserialize)]
+pub struct ExportedImplMethod {
+    /// The overridden interface member's name (also `sig.name`).
+    pub name: Name,
+    /// The override's signature with `Self` realized to
+    /// [`ExportedImpl::for_ty_pattern`]: lowered with `Self` as a rigid type
+    /// variable bounded by the implemented interface (so `Self.member`
+    /// projections resolve their declaring interface through that bound), then
+    /// `Self → for_ty_pattern` substituted last — the exact
+    /// `realize_with_symbolic_self` shape the conformance checker
+    /// (`validate_impl_signatures`) lowers the override through.
+    /// `interface_target` is always the implemented interface's qtn.
+    pub sig: ExportedFunction,
 }
 
 /// The typed export surface a single file contributes to its package.
@@ -438,8 +533,11 @@ fn callable_fqn_of<'db>(
                 .name
                 .clone(),
         ),
-        // Free-impl methods are not exported through the fragments; if one
-        // reaches here it renders unqualified (the impls-table PR owns them).
+        // A free-impl method renders owner-less (`pkg.ns….name`) — NOT unique
+        // on its own. Its export identity is structural: the enclosing
+        // `ExportedImpl` (interface head + for-type) plus the method name; the
+        // consumer reconstructs MIR's `{iface}$for${target}`-scoped symbol
+        // from that pair, never from this string.
         Some(MethodOwner::FreeImpl(_)) | None => None,
     };
     dotted_fqn(
@@ -891,11 +989,202 @@ pub fn package_interface<'db>(db: &'db dyn crate::Db, pkg_id: PackageId<'db>) ->
     fold_package_interface(db, pkg_id)
 }
 
+/// Lower every resolvable `implements` block of `pkg_id` into its
+/// [`ExportedImpl`] row (BEP-066 slice 6a).
+///
+/// Enumeration rides [`crate::interfaces::package_impl_locs`] (the canonical
+/// substrate); per-impl facts come from [`crate::interfaces::impl_data`]
+/// verbatim. A malformed impl (`Err(ImplDataError)`) is skipped exactly as
+/// every resolution consumer skips it (`impls_for_type`,
+/// `get_implements_block`, coherence all filter with `let Ok(data) = …`);
+/// its diagnostics stay owned by `impl_data` and surfaced by check.rs, so
+/// skipping here loses no signal — an unresolvable impl has no resolved facts
+/// to export.
+///
+/// Rows sort by their borsh encoding: a canonical total order over the full
+/// row content, independent of `compiler2_all_files` enumeration order (the
+/// two-database determinism requirement); ties are byte-identical rows.
+fn exported_impls<'db>(db: &'db dyn crate::Db, pkg_id: PackageId<'db>) -> Vec<ExportedImpl> {
+    let pkg_items = baml_compiler2_ppir::package_items(db, pkg_id);
+    let mut rows: Vec<ExportedImpl> = Vec::new();
+    for &impl_loc in crate::interfaces::package_impl_locs(db, pkg_id) {
+        let Ok(data) = crate::interfaces::impl_data(db, impl_loc).as_ref() else {
+            continue;
+        };
+        let Some(iface_qtn) = crate::interfaces::interface_loc_qtn(db, data.interface) else {
+            continue;
+        };
+        // The impl's own file namespace — the scope its block lowered in
+        // (matches `impl_data`'s `ns`); `package_impl_locs` already filtered
+        // the file to this package.
+        let ns = file_package::file_package(db, impl_loc.file(db)).namespace_path;
+
+        let (generic_params, param_bounds): (Vec<ParamTy>, Vec<Vec<baml_type::Interface>>) =
+            data.generic_params.iter().cloned().unzip();
+        let methods = data
+            .methods
+            .iter()
+            .filter_map(|&method_loc| {
+                exported_impl_method(db, pkg_items, &ns, data, &iface_qtn, method_loc)
+            })
+            .collect();
+
+        rows.push(ExportedImpl {
+            interface: baml_type::Interface::new(
+                iface_qtn,
+                data.interface_args.clone(),
+                data.associated_types.clone(),
+            ),
+            for_ty_pattern: data.for_ty_pattern.clone(),
+            generic_params,
+            param_bounds,
+            associated_types: data.associated_types.clone(),
+            field_links: data.field_links.clone(),
+            origin: match &data.origin {
+                crate::interfaces::InterfaceImplOrigin::InBodyClass { class_qtn } => {
+                    ExportedImplOrigin::InBodyClass {
+                        class_qtn: class_qtn.clone(),
+                    }
+                }
+                crate::interfaces::InterfaceImplOrigin::OutOfBody => ExportedImplOrigin::OutOfBody,
+            },
+            methods,
+        });
+    }
+    rows.sort_by_cached_key(|row| borsh::to_vec(row).expect("ExportedImpl serializes with borsh"));
+    rows
+}
+
+/// Lower one impl-body method override into its [`ExportedImplMethod`].
+///
+/// The signature is lowered exactly as the conformance checker lowers the
+/// override's side (`validate_impl_signatures`): the impl's generics plus the
+/// method's own join the scope, the method's own bounds lower through
+/// [`lower_generic_param_interface_bounds`] (joining the bounds map so a
+/// `T.member` projection in the signature resolves through `T`'s bound), and
+/// `Self` is realized through
+/// [`realize_with_symbolic_self`] — a rigid type
+/// variable bounded by the implemented interface at the impl's args, with
+/// `Self → for_ty_pattern` substituted last. This deliberately does NOT reuse
+/// [`crate::callable::function_signature_ty`], which lowers a free-impl method
+/// *without* a `Self` binding (its `Self` mentions become `Ty::Error` — see
+/// that query's doc); the throws contract still pairs with the same
+/// [`crate::callable::callable_throws`] oracle every exported function
+/// carries. `None` only if the lowered surface is not a `Ty::Function` (an
+/// internal invariant break — the row is dropped rather than fabricated).
+///
+/// [`lower_generic_param_interface_bounds`]: crate::interfaces::lower_generic_param_interface_bounds
+/// [`realize_with_symbolic_self`]: crate::interfaces::realize_with_symbolic_self
+fn exported_impl_method<'db>(
+    db: &'db dyn crate::Db,
+    pkg_items: &PackageItems<'db>,
+    ns: &[Name],
+    data: &crate::interfaces::ImplData<'db>,
+    iface_qtn: &QualifiedTypeName,
+    method_loc: baml_compiler2_hir::loc::FunctionLoc<'db>,
+) -> Option<ExportedImplMethod> {
+    use crate::builder::interface_resolution::InterfaceMethodSpec;
+
+    let name = baml_compiler2_ppir::item_data::function_data(db, method_loc)
+        .name
+        .clone();
+    let spec = InterfaceMethodSpec::from_default(db, method_loc);
+
+    // The impl's generics plus the method's own, with the method's bounds
+    // joining the map before the signature lowers (the
+    // `resolve_interface_method_spec` shape).
+    let impl_param_names: Vec<ParamTy> = data
+        .generic_params
+        .iter()
+        .map(|(param, _)| param.clone())
+        .collect();
+    let scope_generics =
+        crate::generic_env::append_params(&impl_param_names, &spec.generic_param_names());
+    let own_params = &scope_generics[impl_param_names.len()..];
+    let mut bounds: crate::lower_type_expr::TypeVarBoundsMap =
+        data.generic_params.iter().cloned().collect();
+    // Lowering diagnostics are dropped, matching every export path: the
+    // checked diagnostics for an impl are owned by `impl_data` +
+    // `validate_impl_signatures`.
+    let mut diags = Vec::new();
+    let mut generic_params = Vec::new();
+    let mut generic_param_bounds = Vec::new();
+    for (param, declared) in own_params.iter().zip(spec.generic_bounds()) {
+        let ifaces = crate::interfaces::lower_generic_param_interface_bounds(
+            db,
+            spec.bound_store(),
+            &declared.bounds,
+            pkg_items,
+            ns,
+            &scope_generics,
+            &mut diags,
+        );
+        bounds.insert(param.clone(), ifaces.clone());
+        generic_params.push(param.clone());
+        generic_param_bounds.push(ifaces);
+    }
+
+    let iface_env = crate::generic_env::interface_generic_env(db, data.interface);
+    let (iface_self_param, _) = iface_env.interface_param_parts();
+    let self_bound =
+        baml_type::Interface::new(iface_qtn.clone(), data.interface_args.clone(), Vec::new());
+    let realized = crate::interfaces::realize_with_symbolic_self(
+        db,
+        pkg_items,
+        ns,
+        &scope_generics,
+        iface_self_param,
+        &bounds,
+        &self_bound,
+        &data.for_ty_pattern,
+        &crate::unify::TypeBindings::default(),
+        |scope| spec.to_function_ty(scope, &mut diags),
+    );
+    let Ty::Function {
+        params,
+        ret,
+        throws,
+        ..
+    } = realized
+    else {
+        return None;
+    };
+
+    let declared_throws_written =
+        baml_compiler2_ppir::item_data::elaborated_function_data(db, method_loc)
+            .throws
+            .is_some();
+    let builtin_kind = match baml_compiler2_ppir::function_body(db, method_loc).as_ref() {
+        baml_compiler2_hir::body::FunctionBody::Builtin(kind) => Some(*kind),
+        _ => None,
+    };
+    Some(ExportedImplMethod {
+        name: name.clone(),
+        sig: ExportedFunction {
+            name,
+            params,
+            return_type: (*ret).clone(),
+            // The lowered throws slot is the declared clause (`unknown` when
+            // unwritten — `lower_signature`'s `Missing` convention); the
+            // effective contract is the body-inferred oracle, as everywhere.
+            declared_throws: declared_throws_written.then(|| (*throws).clone()),
+            callable_throws: crate::callable::callable_throws(db, method_loc).clone(),
+            generic_params,
+            generic_param_bounds,
+            builtin_kind,
+            interface_target: Some(iface_qtn.clone()),
+            callable_fqn: callable_fqn_of(db, method_loc),
+        },
+    })
+}
+
 /// Fold each file's `file_interface_fragment` into the whole-package interface.
 ///
 /// Winner selection is driven by the resolved `pkg_items.namespaces` (the
 /// deterministic `contribs[0]` pick); per-item *lowering* lives in
-/// `file_interface_fragment`.
+/// `file_interface_fragment`. The impls table is package-level (impls have no
+/// export name, so the name-keyed fragment fold doesn't fit them) and derives
+/// from the `package_impl_locs` substrate directly.
 fn fold_package_interface<'db>(db: &'db dyn crate::Db, pkg_id: PackageId<'db>) -> PackageInterface {
     let pkg_items = baml_compiler2_ppir::package_items(db, pkg_id);
 
@@ -939,6 +1228,7 @@ fn fold_package_interface<'db>(db: &'db dyn crate::Db, pkg_id: PackageId<'db>) -
         functions,
         throw_sets: throw_sets.clone(),
         namespaces,
+        impls: exported_impls(db, pkg_id),
     }
 }
 
