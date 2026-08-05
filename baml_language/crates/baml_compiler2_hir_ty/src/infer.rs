@@ -1639,20 +1639,33 @@ impl<'db> InferenceContext<'db> {
         // `T extends Index<..>` bounds). The structural tier is what lets
         // a rigid-element `T[]` index without `root.Concrete` evidence.
         let resolved_subject = self.table.resolve_completely(&subject);
+        // `?.[]` short-circuits on a null INDEX too (`arr?.[i]` with
+        // `i: int?` is null), so the optional form's key check admits
+        // null; the plain form stays strict.
+        let key_expectation = |this: &mut Self, key: Ty| {
+            if optional {
+                this.union_of(&[key, Ty::null()])
+            } else {
+                key
+            }
+        };
         let element = match resolved_subject.kind() {
             TyKind::List(element, _) => {
                 let element = element.clone();
-                self.check_expr(body, index, &Ty::int());
+                let expectation = key_expectation(self, Ty::int());
+                self.check_expr(body, index, &expectation);
                 element
             }
             TyKind::Map { key, value, .. } => {
                 let key = key.clone();
                 let value = value.clone();
-                self.check_expr(body, index, &key);
+                let expectation = key_expectation(self, key);
+                self.check_expr(body, index, &expectation);
                 value
             }
             TyKind::Uint8Array { .. } => {
-                self.check_expr(body, index, &Ty::int());
+                let expectation = key_expectation(self, Ty::int());
+                self.check_expr(body, index, &expectation);
                 Ty::int()
             }
             _ => {
