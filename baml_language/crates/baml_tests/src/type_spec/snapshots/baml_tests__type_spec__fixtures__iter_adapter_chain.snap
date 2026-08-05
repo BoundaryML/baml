@@ -1,0 +1,51 @@
+---
+source: crates/baml_tests/src/type_spec/fixtures.rs
+expression: outcome.dump
+---
+428..437 'iac_chain': throws never
+462..663 '{\n   ...ped\n}': int[]
+468..478 'let mapped': int[]
+481..508 'baml.i...or.new': hir_ty=[(arr: int[]) -> baml.iter.ArrayIterator<int> throws never] tir=[(arr: T[]) -> baml.iter.ArrayIterator<T> throws never]
+481..522 'baml.i...3, 4])': baml.iter.ArrayIterator<int>
+481..529 'baml.i...filter': hir_ty=[(self: baml.iter.ArrayIterator<int>, predicate: (int) -> bool throws never) -> baml.iter.Iterator<Error = never, Item = int> throws never] tir=[(predicate: (int) -> bool throws E2) -> baml.iter.Iterator<Item = int, Error = E2> throws never]
+481..595 'baml.i...    })': hir_ty=[baml.iter.Iterator<Error = never, Item = int>] tir=[baml.iter.Iterator<Item = int, Error = never>]
+481..599 'baml.i...}).map': hir_ty=[(self: baml.iter.Iterator<Error = never, Item = int>, fn: (int) -> int throws never) -> baml.iter.Iterator<Error = never, Item = int> throws never] tir=[(fn: (int) -> R throws E2) -> baml.iter.Iterator<Item = R, Error = E2> throws never]
+481..639 'baml.i...    })': hir_ty=[baml.iter.Iterator<Error = never, Item = int>] tir=[baml.iter.Iterator<Item = int, Error = never>]
+481..647 'baml.i...ollect': hir_ty=[(self: baml.iter.Iterator<Error = never, Item = int>) -> int[] throws never] tir=[() -> int[] throws never]
+481..649 'baml.i...lect()': int[]
+509..521 '[1, 2, 3, 4]': int[]
+510..511 '1': 1
+513..514 '2': 2
+516..517 '3': 3
+519..520 '4': 4
+530..594 '(x: in...n    }': hir_ty=[(x: int) -> bool throws never] tir=[(x: int) -> bool throws E2]
+547..594 '{\n   ...n    }': bool
+578..579 'x': int
+578..583 'x % 2': int
+578..588 'x % 2 == 0': bool
+582..583 '2': 2
+587..588 '0': 0
+600..638 '(x: in...n    }': hir_ty=[(x: int) -> int throws never] tir=[(x: int) -> int throws E2]
+616..638 '{\n   ...n    }': int
+626..627 'x': int
+626..632 'x * 10': int
+630..632 '10': 10
+655..661 'mapped': int[]
+674..684 'iac_reduce': throws never
+707..851 '{\n   ...tal\n}': int
+713..722 'let total': int
+725..752 'baml.i...or.new': hir_ty=[(arr: int[]) -> baml.iter.ArrayIterator<int> throws never] tir=[(arr: T[]) -> baml.iter.ArrayIterator<T> throws never]
+725..763 'baml.i...2, 3])': baml.iter.ArrayIterator<int>
+725..770 'baml.i...reduce': hir_ty=[(self: baml.iter.ArrayIterator<int>, fn: (int, int) -> int throws never, initial: int) -> int throws never] tir=[(fn: (A, int) -> A throws E2, initial: A) -> A throws E2]
+725..838 'baml.i... }, 0)': hir_ty=[int] tir=[0 | int]
+753..762 '[1, 2, 3]': int[]
+754..755 '1': 1
+757..758 '2': 2
+760..761 '3': 3
+771..834 '(a: in...n    }': hir_ty=[(a: int, x: int) -> int throws never] tir=[(a: int, x: int) -> int throws E2]
+795..834 '{\n   ...n    }': int
+823..824 'a': int
+823..828 'a + x': int
+827..828 'x': int
+836..837 '0': 0
+844..849 'total': int
