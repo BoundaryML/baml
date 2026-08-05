@@ -128,10 +128,25 @@ fn receiver_class<'db>(
 
 /// A resolved INTERFACE member (I3): the member's type, fully
 /// instantiated for the receiver.
-pub struct InterfaceMember {
+pub struct InterfaceMember<'db> {
     pub ty: Ty,
     /// Methods bind their receiver; fields do not take one.
     pub is_method: bool,
+    /// Set when the member is a default method with OWN generic params:
+    /// `ty` has the interface frame substituted but the own suffix still
+    /// rigid, and the CALL SITE finishes the instantiation (turbofish or
+    /// fresh vars) - rust-analyzer's `subst_for_def(parent_subst)` +
+    /// `fill_with_inference_vars` split, the same discipline the
+    /// class-method path applies through `MethodCandidate`.
+    pub pending_own: Option<PendingOwnGenerics<'db>>,
+}
+
+/// The pieces the call site needs to finish a default method's
+/// instantiation: the method and the interface-frame prefix
+/// (`[Self, args.., assoc..]`) already pinned by the receiver.
+pub struct PendingOwnGenerics<'db> {
+    pub method: baml_compiler2_hir::loc::FunctionLoc<'db>,
+    pub prefix: Vec<Ty>,
 }
 
 /// Resolves `name` as an interface member of `receiver` - an interface
@@ -146,7 +161,7 @@ pub fn lookup_interface_member<'db>(
     facts: &Facts<'db>,
     receiver: &Ty,
     name: &Name,
-) -> Option<InterfaceMember> {
+) -> Option<InterfaceMember<'db>> {
     let (roots, existential): (Vec<InterfaceTarget>, bool) = match receiver.kind() {
         TyKind::Interface(qtn, args, pins, _) => (
             vec![InterfaceTarget {
@@ -174,7 +189,7 @@ pub fn lookup_interface_member<'db>(
         }
         // Then the requires closure, deduped by realized identity;
         // distinct declarers are ambiguous.
-        let mut found: Option<(InterfaceTarget, InterfaceMember)> = None;
+        let mut found: Option<(InterfaceTarget, InterfaceMember<'db>)> = None;
         for required in crate::impls::direct_requires_closure(db, root, receiver, 8) {
             if let Some(member) =
                 member_on_interface(db, facts, &required, receiver, name, existential)
@@ -210,8 +225,8 @@ fn lookup_impl_member<'db>(
     facts: &Facts<'db>,
     receiver: &Ty,
     name: &Name,
-) -> Option<InterfaceMember> {
-    let mut providers: Vec<(InterfaceTarget, InterfaceMember)> = Vec::new();
+) -> Option<InterfaceMember<'db>> {
+    let mut providers: Vec<(InterfaceTarget, InterfaceMember<'db>)> = Vec::new();
     for resolved in crate::impls::impls_for_type(db, receiver) {
         let implemented = resolved.implemented();
         if let Some(member) = member_on_interface(db, facts, &implemented, receiver, name, false)
@@ -243,7 +258,7 @@ fn member_on_interface<'db>(
     receiver: &Ty,
     name: &Name,
     existential: bool,
-) -> Option<InterfaceMember> {
+) -> Option<InterfaceMember<'db>> {
     let Some(Definition::Interface(interface)) = facts.definition_of(&target.name) else {
         return None;
     };
@@ -260,6 +275,7 @@ fn member_on_interface<'db>(
         return Some(InterfaceMember {
             ty: crate::lower::substitute_params(&field_ty, &instantiation),
             is_method: false,
+            pending_own: None,
         });
     }
 
@@ -271,9 +287,18 @@ fn member_on_interface<'db>(
         if existential && signature_breaks_one_self(signature) {
             return None;
         }
+        // The interface frame is the receiver's business; the method's
+        // OWN generics (frame suffix, `map<R, E2>`) are the call
+        // site's - hand them back for turbofish/fresh-var filling.
+        let pending_own = (signature.generic_params.len() > instantiation.len())
+            .then(|| PendingOwnGenerics {
+                method,
+                prefix: instantiation.clone(),
+            });
         return Some(InterfaceMember {
             ty: instantiate_signature(signature, &instantiation),
             is_method: true,
+            pending_own,
         });
     }
 
@@ -332,6 +357,7 @@ fn member_on_interface<'db>(
         return Some(InterfaceMember {
             ty: crate::lower::substitute_params(&fn_ty, &instantiation),
             is_method: true,
+            pending_own: None,
         });
     }
     None

@@ -1170,8 +1170,22 @@ impl<'db> InferenceContext<'db> {
     /// oracle; the irreducible residue defers to finish. Returns `false` on
     /// a DEFINITE mismatch (callers record it); undecided is `true`.
     fn sub(&mut self, actual: &Ty, expected: &Ty) -> bool {
-        let actual = self.table.shallow_resolve(actual);
-        let expected = self.table.shallow_resolve(expected);
+        let mut actual = self.table.shallow_resolve(actual);
+        let mut expected = self.table.shallow_resolve(expected);
+        // Normalize-then-relate (rustc's FnCtxt normalize-before-unify;
+        // r-a's `normalize_projection_ty` during unification): a GROUND
+        // projection the oracle can already determine reduces before the
+        // pair is related, so `(Iterator<Item = int> as Iterable).Item[]`
+        // meets `int[]`. VAR-CARRYING projections must not enter the
+        // reduction (the oracle speaks the plain algebra, whose
+        // conversion erases inference vars); they relate as lazy
+        // predicates through the deferred residue (`eq_piece`).
+        if actual.has_projection() && !actual.has_infer() {
+            actual = self.reduce_projections(&actual, PROJECTION_FINALIZE_FUEL);
+        }
+        if expected.has_projection() && !expected.has_infer() {
+            expected = self.reduce_projections(&expected, PROJECTION_FINALIZE_FUEL);
+        }
         if actual == expected || actual.has_error() || expected.has_error() {
             return true;
         }
@@ -1315,6 +1329,16 @@ impl<'db> InferenceContext<'db> {
         }
         if !a.has_infer() && !b.has_infer() {
             return equivalent_interned(&a, &b, &self.facts);
+        }
+        // A projection whose base still carries variables cannot relate
+        // structurally - rustc keeps the pair as a lazy `Projection`
+        // predicate and discharges it once inference progresses. The
+        // deferred `Sub` residue is that ledger here: both directions
+        // (this is Eq), re-examined at finish after resolution.
+        if a.has_projection() || b.has_projection() {
+            self.deferred_subs.push((a.clone(), b.clone()));
+            self.deferred_subs.push((b, a));
+            return true;
         }
         self.table.unify(&a, &b).is_ok()
     }
@@ -2048,6 +2072,20 @@ impl<'db> InferenceContext<'db> {
                 &resolved,
                 member,
             ) {
+                // A default method's OWN generics fill from THIS call
+                // site (turbofish or fresh vars) on top of the
+                // receiver-pinned interface prefix - the same
+                // owner-prefix + own-suffix instantiation the
+                // class-method path below performs.
+                if let Some(pending) = interface_member.pending_own {
+                    let signature = function_signature(self.db, pending.method);
+                    let own_params = signature.generic_params[pending.prefix.len()..].to_vec();
+                    let mut instantiation = pending.prefix;
+                    instantiation.extend(self.instantiation_args(call, &own_params));
+                    self.register_call_bounds(pending.method, &instantiation, call);
+                    let fn_ty = function_value_ty(signature, &instantiation);
+                    return (fn_ty, interface_member.is_method);
+                }
                 return (interface_member.ty, interface_member.is_method);
             }
             let field = self.field_access(&resolved, member);
@@ -2527,6 +2565,19 @@ impl<'db> InferenceContext<'db> {
         if let Some(interface_member) =
             crate::method_resolution::lookup_interface_member(self.db, &self.facts, &resolved, member)
         {
+            // Value position has no turbofish: a default method's own
+            // generics instantiate fresh, mirroring the class branch
+            // above.
+            if let Some(pending) = interface_member.pending_own {
+                let signature = function_signature(self.db, pending.method);
+                let own: Vec<Ty> = signature.generic_params[pending.prefix.len()..]
+                    .iter()
+                    .map(|param| self.fresh_generic_arg(param))
+                    .collect();
+                let mut instantiation = pending.prefix;
+                instantiation.extend(own);
+                return function_value_ty(signature, &instantiation);
+            }
             return interface_member.ty;
         }
         Ty::error()
