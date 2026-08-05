@@ -1,0 +1,47 @@
+{
+  "name": "@boundaryml/baml-bridge-tooling",
+  "version": "0.15.0",
+  "description": "Native compiler bridge for BAML TypeScript tooling",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/BoundaryML/baml.git",
+    "directory": "baml_language/sdks/typescript/bridge_tooling"
+  },
+  "publishConfig": { "access": "public" },
+  "main": "./baml-tooling-node.js",
+  "types": "./baml-tooling-node.d.ts",
+  "files": ["baml-tooling-node.js", "baml-tooling-node.d.ts", "*.node"],
+  "engines": { "node": ">=18" },
+  "napi": {
+    "binaryName": "baml_tooling_node",
+    "npmClient": "pnpm",
+    "targets": [
+      "x86_64-apple-darwin",
+      "aarch64-apple-darwin",
+      "x86_64-unknown-linux-gnu",
+      "x86_64-unknown-linux-musl",
+      "aarch64-unknown-linux-gnu",
+      "aarch64-unknown-linux-musl",
+      "x86_64-pc-windows-msvc",
+      "aarch64-pc-windows-msvc"
+    ]
+  },
+  "scripts": {
+    "build:debug": "napi build --js baml-tooling-node.js --dts baml-tooling-node.d.ts --platform",
+    "build:release": "napi build --js baml-tooling-node.js --dts baml-tooling-node.d.ts --platform --release"
+  },
+  "devDependencies": {
+    "@napi-rs/cli": "3.7.0"
+  },
+  "optionalDependencies": {
+    "@boundaryml/baml-bridge-tooling-darwin-arm64": "0.15.0",
+    "@boundaryml/baml-bridge-tooling-darwin-x64": "0.15.0",
+    "@boundaryml/baml-bridge-tooling-linux-arm64-gnu": "0.15.0",
+    "@boundaryml/baml-bridge-tooling-linux-arm64-musl": "0.15.0",
+    "@boundaryml/baml-bridge-tooling-linux-x64-gnu": "0.15.0",
+    "@boundaryml/baml-bridge-tooling-linux-x64-musl": "0.15.0",
+    "@boundaryml/baml-bridge-tooling-win32-arm64-msvc": "0.15.0",
+    "@boundaryml/baml-bridge-tooling-win32-x64-msvc": "0.15.0"
+  }
+}

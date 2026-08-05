@@ -48,6 +48,8 @@ pub struct Artifacts {
     #[serde(default)]
     pub nodejs: Option<SdkArtifact>,
     #[serde(default)]
+    pub tooling: Option<SdkArtifact>,
+    #[serde(default)]
     pub java: Option<JavaArtifact>,
     #[serde(default)]
     pub cffi: Option<CffiArtifact>,
