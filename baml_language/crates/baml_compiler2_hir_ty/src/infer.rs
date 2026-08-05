@@ -1472,11 +1472,21 @@ impl<'db> InferenceContext<'db> {
                             args.to_vec().into_boxed_slice(),
                             pins.to_vec(),
                         );
-                        self.register_obligation(obligations::Obligation::Implements {
-                            ty: actual,
-                            interface,
-                            at: anchor,
-                        });
+                        // A union is a subtype of an existential iff ALL
+                        // members are (spec: Variance rule 2.1) - and
+                        // only concrete types implement, so the goal
+                        // decomposes per member before registration.
+                        let goals: Vec<Ty> = match actual.kind() {
+                            TyKind::Union(members, _) => members.to_vec(),
+                            _ => vec![actual],
+                        };
+                        for goal in goals {
+                            self.register_obligation(obligations::Obligation::Implements {
+                                ty: goal,
+                                interface: interface.clone(),
+                                at: anchor,
+                            });
+                        }
                         return true;
                     }
                     self.deferred_subs.push((actual, expected));
