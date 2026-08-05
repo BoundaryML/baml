@@ -470,3 +470,147 @@ fn stdlib_interfaces_derive_enriched() {
     );
     assert_eq!(map.generic_param_bounds.len(), map.generic_params.len());
 }
+
+#[test]
+fn self_in_requirement_generic_args_and_bounds_stays_symbolic() {
+    // `Self` written inside a `requires` clause's generic ARGUMENTS (not an
+    // associated-type binding) must export as the symbolic rigid `Self` — the
+    // closure walker previously lowered these argument positions with no
+    // `Self` in scope, silently producing `Ty::Error`. The bound positions
+    // (interface-level `T extends Parent<Self>` and method-level
+    // `f<U extends Parent<Self>>`) already resolved symbolically — pinned
+    // here so they cannot regress.
+    let mut db = make_db();
+    db.add_file(
+        "self_shapes.baml",
+        r#"
+interface Parent<P> {
+}
+
+interface Crtp requires Parent<Self> {
+}
+
+interface Projected requires Parent<Self.Item> {
+    type Item
+}
+
+interface Recur<T extends Parent<Self>> {
+}
+
+interface M {
+    function f<U extends Parent<Self>>(self, u: U) -> int throws never
+}
+"#,
+    );
+    assert_no_diagnostic_errors(&db);
+    let iface = user_interface(&db);
+
+    // `requires Parent<Self>` — the CRTP shape: the argument is the symbolic
+    // rigid `Self` type variable.
+    let ExportedType::Interface { requires, .. } = lookup(iface, &[], "Crtp") else {
+        panic!("Crtp must export as ExportedType::Interface");
+    };
+    assert_eq!(requires.len(), 1);
+    assert_eq!(requires[0].name.name().as_str(), "Parent");
+    assert!(
+        matches!(&requires[0].generics[0], Ty::TypeVar(p, _) if p.as_str() == "Self"),
+        "requirement generic arg `Self` must stay the symbolic Self, got {:?}",
+        requires[0].generics[0]
+    );
+
+    // `requires Parent<Self.Item>` — the argument is a symbolic projection
+    // onto the REQUIRING interface's `Self` (unpinned at the declaration, so
+    // it must not collapse).
+    let ExportedType::Interface { requires, .. } = lookup(iface, &[], "Projected") else {
+        panic!("Projected must export as ExportedType::Interface");
+    };
+    assert_eq!(requires.len(), 1);
+    assert_eq!(requires[0].name.name().as_str(), "Parent");
+    let arg = &requires[0].generics[0];
+    assert!(
+        matches!(arg, Ty::AssociatedTypeProjection { base, interface, member, .. }
+            if member.as_str() == "Item"
+                && interface.name.name().as_str() == "Projected"
+                && matches!(base.as_ref(), Ty::TypeVar(p, _) if p.as_str() == "Self")),
+        "requirement generic arg `Self.Item` must stay a symbolic projection, got {arg:?}"
+    );
+
+    // Interface-level param bound using `Self` (already symbolic — pinned).
+    let ExportedType::Interface { param_bounds, .. } = lookup(iface, &[], "Recur") else {
+        panic!("Recur must export as ExportedType::Interface");
+    };
+    assert!(
+        matches!(&param_bounds[0][0].generics[0], Ty::TypeVar(p, _) if p.as_str() == "Self"),
+        "param-bound `Self` must stay symbolic, got {:?}",
+        param_bounds[0][0].generics[0]
+    );
+
+    // Method-level generic bound using `Self` (already symbolic — pinned).
+    let ExportedType::Interface { methods, .. } = lookup(iface, &[], "M") else {
+        panic!("M must export as ExportedType::Interface");
+    };
+    let f = method(methods, "f");
+    assert!(
+        matches!(&f.generic_param_bounds[0][0].generics[0], Ty::TypeVar(p, _) if p.as_str() == "Self"),
+        "method-bound `Self` must stay symbolic, got {:?}",
+        f.generic_param_bounds[0][0].generics[0]
+    );
+}
+
+#[test]
+fn dep_interface_rows_stay_invisible_to_resolution() {
+    // BEP-066 slice 6a exports dependency interface rows but nothing may
+    // consume them yet: both `PackageResolutionContext::resolve_type` paths
+    // (the namespace-qualified `resolve_type_in_own_then_deps` walk and the
+    // package-prefixed dep search) carry explicit guards that treat an
+    // `ExportedType::Interface` row as absent, preserving pre-export
+    // resolution byte-for-byte until the dualized resolution context lands.
+    use baml_compiler2_tir::package_interface::package_resolution_context;
+
+    let mut db = make_db();
+    db.add_file(
+        "main.baml",
+        "function f() -> int throws never {\n    1\n}\n",
+    );
+    let res_ctx = package_resolution_context(&db, PackageId::new(&db, Name::new("user")));
+
+    let path = |parts: &[&str]| -> Vec<Name> { parts.iter().map(|p| Name::new(*p)).collect() };
+
+    // The row IS exported…
+    let baml = package_interface(&db, PackageId::new(&db, Name::new("baml")));
+    assert!(
+        matches!(
+            baml.lookup_type(&[Name::new("iter")], &Name::new("Iterator")),
+            Some(ExportedType::Interface { .. })
+        ),
+        "baml.iter.Iterator is exported as an interface row"
+    );
+
+    // …but the package-prefixed dep search must not resolve through it.
+    assert!(
+        res_ctx
+            .resolve_type(&db, &path(&["baml", "iter", "Iterator"]), &[])
+            .is_none(),
+        "dep interface row must be invisible to package-prefixed resolution"
+    );
+
+    // The namespace-qualified own-then-deps walk hits the same row via the
+    // dep's namespace and must skip it too.
+    assert!(
+        res_ctx
+            .resolve_type(&db, &path(&["iter", "Iterator"]), &[])
+            .is_none(),
+        "dep interface row must be invisible to the own-then-deps walk"
+    );
+
+    // Contrast: a dep CLASS in the same namespace still resolves through the
+    // interface rows on both paths — the guard is interface-specific.
+    let (_, ty) = res_ctx
+        .resolve_type(&db, &path(&["baml", "iter", "Range"]), &[])
+        .expect("dep class resolves via the package-prefixed path");
+    assert!(matches!(ty, Ty::Class(ref qtn, _, _) if qtn.name().as_str() == "Range"));
+    let (_, ty) = res_ctx
+        .resolve_type(&db, &path(&["iter", "Range"]), &[])
+        .expect("dep class resolves via the own-then-deps walk");
+    assert!(matches!(ty, Ty::Class(ref qtn, _, _) if qtn.name().as_str() == "Range"));
+}

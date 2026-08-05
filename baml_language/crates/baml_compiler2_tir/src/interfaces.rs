@@ -1282,7 +1282,8 @@ pub fn interface_closure_locs_with_args_and_assoc<'db>(
         child_ancestors.insert(loc);
 
         let iface_env = crate::generic_env::interface_generic_env(db, loc);
-        let (_, iface_params) = iface_env.interface_param_parts();
+        let (self_param, iface_params) = iface_env.interface_param_parts();
+        let self_param = self_param.clone();
         let mut bindings = generics::bind_type_vars(iface_params, &args);
         for (name, ty) in &associated_bindings {
             let param = iface_env
@@ -1314,10 +1315,27 @@ pub fn interface_closure_locs_with_args_and_assoc<'db>(
             let parent_args = match &iface.type_refs[parent].kind {
                 baml_compiler2_hir::type_ref::TypeRefKind::Path { generic_args, .. } => {
                     let mut diags = Vec::new();
+                    // `Self` in a requirement's generic *argument* refers to the
+                    // requiring interface's implementor, exactly as in an
+                    // associated-type binding value (`Item = Self.Item`): lower it
+                    // through a scope that resolves `Self` as the requiring
+                    // interface's rigid `Self` bounded by its realized constraint
+                    // (`self_bound`), so a member pinned there collapses to its
+                    // witness and an unpinned one stays a symbolic projection.
+                    // (Previously this scope carried no `Self` at all, silently
+                    // lowering `requires P<Self>` / `requires P<Self.X>` arguments
+                    // to `Ty::Error`.)
+                    let mut generic_params: Vec<ParamTy> = bindings.keys().cloned().collect();
+                    if !generic_params.contains(&self_param) {
+                        generic_params.push(self_param.clone());
+                    }
+                    let mut arg_bounds = iface_bounds.clone();
+                    if let Some(self_bound) = &self_bound {
+                        arg_bounds.insert(self_param.clone(), vec![self_bound.clone()]);
+                    }
                     generic_args
                         .iter()
                         .map(|&arg| {
-                            let generic_params: Vec<_> = bindings.keys().cloned().collect();
                             crate::generics::substitute_ty(
                                 &crate::lower_type_expr::lower_type_ref(
                                     &iface.type_refs,
@@ -1327,8 +1345,11 @@ pub fn interface_closure_locs_with_args_and_assoc<'db>(
                                         package_items: parent_pkg_items,
                                         ns_context: &pkg_info.namespace_path,
                                         generic_params: &generic_params,
-                                        bounds: iface_bounds,
-                                        self_ty: None,
+                                        bounds: &arg_bounds,
+                                        self_ty: Some(Ty::TypeVar(
+                                            self_param.clone(),
+                                            TyAttr::default(),
+                                        )),
                                     },
                                     &mut diags,
                                 ),
