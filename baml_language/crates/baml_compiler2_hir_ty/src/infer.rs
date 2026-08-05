@@ -3127,7 +3127,7 @@ impl<'db> InferenceContext<'db> {
         loop {
             let mut progressed = false;
             for (var, bounds) in self.table.unsolved_bounded_vars() {
-                if self.try_solve_bounded_var(var, &bounds, true) {
+                if self.try_solve_bounded_var(var, &bounds) {
                     progressed = true;
                 }
             }
@@ -3149,7 +3149,6 @@ impl<'db> InferenceContext<'db> {
         &mut self,
         var: baml_type::interned::InferVar,
         bounds: &unify::VarBounds,
-        alias_tier: bool,
     ) -> bool {
         let (lowers, deferred_lowers): (Vec<Ty>, Vec<Ty>) = bounds
             .lowers
@@ -3171,11 +3170,12 @@ impl<'db> InferenceContext<'db> {
             // see the concrete head behind a call argument
             // (B-898: `?D` alias `Generate<?F>`). DISTINCT
             // var-carrying lowers stay deferred - that is the
-            // operator-deadlock rule, untouched. Runs only in
-            // the finish fixpoint (`alias_tier`), so no later bound
-            // can arrive after the alias commits.
-            if alias_tier
-                && deferred_uppers.is_empty()
+            // operator-deadlock rule, untouched. Runs in the
+            // finish fixpoint and at STRUCTURE points: rustc unifies
+            // the pair the moment the argument checks, so a structure
+            // demand commits the alias the same way - a later
+            // conflicting bound is a mismatch, not a join.
+            if deferred_uppers.is_empty()
                 && let Some((first, rest)) = deferred_lowers.split_first()
                 && rest.iter().all(|lower| lower == first)
             {
@@ -3238,11 +3238,12 @@ impl<'db> InferenceContext<'db> {
     /// fixpoint applies, mirroring rustc's resolve-vars-then-demand-
     /// structure order. Committing early is rustc's semantics: the
     /// structure point fixes the type, and a later conflicting bound
-    /// becomes a mismatch rather than a wider join. The generalization
-    /// alias tier stays finish-only (its soundness argument is that no
-    /// later bound can arrive). A class with no ground evidence yet
-    /// stays a var; the caller's lookup then misses as before (the
-    /// "type annotations needed" family, S17's diagnostic).
+    /// becomes a mismatch rather than a wider join - the occurs-guarded
+    /// ALIAS tier included (rustc unifies `?T := Vec<?w>` the moment the
+    /// argument checks; the structure demand commits the same way). A
+    /// class with no evidence yet stays a var; the caller's lookup then
+    /// misses as before (the "type annotations needed" family, S17's
+    /// diagnostic).
     fn structurally_resolve(&mut self, ty: &Ty) -> Ty {
         let resolved = self.table.resolve_completely(ty);
         let TyKind::Infer { var: Some(var), .. } = resolved.kind() else {
@@ -3250,7 +3251,7 @@ impl<'db> InferenceContext<'db> {
         };
         let var = *var;
         let bounds = self.table.var_bounds(var);
-        if self.try_solve_bounded_var(var, &bounds, false) {
+        if self.try_solve_bounded_var(var, &bounds) {
             self.table.resolve_completely(&resolved)
         } else {
             resolved

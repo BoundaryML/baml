@@ -4,9 +4,9 @@ expression: report
 ---
 files: 116
 nodes compared: 60529
-agreements: 51946
+agreements: 51948
 one-sided (coverage): 88
-conflicts: 8495 across 1516 distinct pairs
+conflicts: 8493 across 1515 distinct pairs
 hir_ty error-channel entries: 45
 tir diagnostics: 0
 panics: 0
@@ -92,9 +92,9 @@ ns_to_json_interface/to_json_interface.baml:1125..1207 `{\n       ...\n        }
 [83x] hir_ty=[int] tir=[int | 0]
     at ns_array_rest_binding/array_rest_binding.baml:4058..4172 `{\n    mat...0\n    }\n}`
     at ns_array_rest_binding/array_rest_binding.baml:4064..4170 `match (v) ...=> 0\n    }`
-[68x] hir_ty=[!error] tir=[int]
-    at ns_arrays/arrays.baml:36002..36018 `grid[0].push(99)`
+[67x] hir_ty=[!error] tir=[int]
     at ns_arrays/sort_comparable.baml:3712..3724 `other.points`
+    at ns_arrays/sort_comparable.baml:8513..8523 `other.rank`
 [67x] hir_ty=[() -> void throws baml.errors.ParseError / null] tir=[() -> void throws unknown / null]
     at ns_bigints/bigints.baml:6953..7024 `{\n    ass...12345n))\n}`
     at ns_bigints/bigints.baml:7052..7153 `{\n    ass...99999n))\n}`
@@ -2195,8 +2195,6 @@ ns_to_json_interface/to_json_interface.baml:1125..1207 `{\n       ...\n        }
     at ns_interfaces_associated_types/interfaces_associated_types.baml:8940..8955 `item.same_label`
 [1x] hir_ty=[!error] tir=[(predicate: (int) -> bool throws E2) -> user.iter_impl_generics_only.core.Iterator<int, E2> throws never]
     at ns_iter_impl_generics_only/iter.baml:3969..4041 `user.iter_... 4]).filter`
-[1x] hir_ty=[!error] tir=[(self: int[], item: int) -> int throws never]
-    at ns_arrays/arrays.baml:36002..36014 `grid[0].push`
 [1x] hir_ty=[!error] tir=[(value: U) -> U throws never]
     at ns_interfaces/interfaces.baml:32411..32417 `e.echo`
 [1x] hir_ty=[!error] tir=[(value: V) -> U throws never]
