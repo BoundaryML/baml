@@ -4,10 +4,10 @@ expression: report
 ---
 files: 116
 nodes compared: 60529
-agreements: 51953
+agreements: 51962
 one-sided (coverage): 88
-conflicts: 8488 across 1513 distinct pairs
-hir_ty error-channel entries: 10
+conflicts: 8479 across 1508 distinct pairs
+hir_ty error-channel entries: 6
 tir diagnostics: 0
 panics: 0
 
@@ -18,10 +18,6 @@ ns_bigints/bigints.baml:5064..5075 `{ 1n < 2n }`: expected true, got bool
 ns_defer/defer.baml:3849..3957 `{\n  defer...("body")\n}`: expected void, got int
 ns_exceptions/exceptions.baml:35238..35402 `{\n    {\n...l\n    }\n}`: expected void, got "one" | null
 ns_interfaces/interfaces.baml:56918..56919 `1`: expected user.interfaces.GrptChild<int>, got 1
-ns_json_alias/json_alias.baml:2103..2112 `[1, 2, 3]`: expected baml.json.json, got int[]
-ns_json_alias/json_alias.baml:2665..2681 `{"key": "value"}`: expected baml.json.json, got map<string, string>
-ns_provider_stdlib/provider_stdlib.baml:815..864 `{\n    "ke...    },\n  }`: expected baml.json.json, got map<string, map<string, int>>
-ns_to_json_interface/to_json_interface.baml:1125..1207 `{\n       ...\n        }`: expected baml.json.json, got map<string, (int | float | string | bool | (int | float | string | bool | null | (int | float | string | bool | null | (int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>)[] | map<string, int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>>)[] | map<string, int | float | string | bool | null | (int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>)[] | map<string, int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>>>)[] | map<string, int | float | string | bool | null | (int | float | string | bool | null | (int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>)[] | map<string, int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>>)[] | map<string, int | float | string | bool | null | (int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>)[] | map<string, int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>>>> | null)[]>
 
 == conflicts by (hir_ty, tir) pair ==
 [2023x] hir_ty=[() -> void throws never / null] tir=[() -> void throws unknown / null]
@@ -831,9 +827,6 @@ ns_to_json_interface/to_json_interface.baml:1125..1207 `{\n       ...\n        }
 [4x] hir_ty=[int | user.generic_match_rigid.RigidBox<int>] tir=[user.generic_match_rigid.RigidBox<int> | int]
     at ns_generic_match_rigid/generic_match_rigid.baml:1082..1087 `other`
     at ns_generic_match_rigid/generic_match_rigid.baml:1144..1145 `_`
-[4x] hir_ty=[map<string, int | float | string | bool | (int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>)[] | map<string, int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>> | null>] tir=[map<string, baml.json.json>]
-    at ns_json_alias/json_alias.baml:3379..3405 `let obj: m...ring, json>`
-    at ns_json_alias/json_alias.baml:3388..3405 `map<string, json>`
 [4x] hir_ty=[map<string, int | float | string | bool | (int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>)[] | map<string, int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>> | null>] tir=[map<string, int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>>]
     at ns_json_alias/json_alias.baml:2707..2733 `let obj: m...ring, json>`
     at ns_json_alias/json_alias.baml:2716..2733 `map<string, json>`
@@ -924,9 +917,6 @@ ns_to_json_interface/to_json_interface.baml:1125..1207 `{\n       ...\n        }
 [3x] hir_ty=[(i: int) -> int throws never] tir=[(i: int) -> int throws E]
     at ns_arrays/arrays.baml:34299..34320 `(i: int) -> int { i }`
     at ns_arrays/arrays.baml:34562..34587 `(i: int) -...t { i * i }`
-[3x] hir_ty=[(int | float | string | bool | (int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>)[] | map<string, int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>> | null)[]] tir=[baml.json.json[]]
-    at ns_json_alias/json_alias.baml:3343..3358 `let arr: json[]`
-    at ns_json_alias/json_alias.baml:3352..3358 `json[]`
 [3x] hir_ty=[(int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>)[] | null] tir=[null | (int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>)[]]
     at ns_generic_union_returns/generic_union_returns.baml:1652..1675 `let empty_json: json[]?`
     at ns_generic_union_returns/generic_union_returns.baml:1668..1675 `json[]?`
@@ -1479,6 +1469,9 @@ ns_to_json_interface/to_json_interface.baml:1125..1207 `{\n       ...\n        }
 [2x] hir_ty=[(h: user.projection_patterns.StrHolder, v: unknown) -> string throws never] tir=[(h: T, v: unknown) -> string throws never]
     at ns_projection_patterns/projection_patterns.baml:3362..3374 `classify_for`
     at ns_projection_patterns/projection_patterns.baml:3567..3579 `classify_for`
+[2x] hir_ty=[(int | float | string | bool | (int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>)[] | map<string, int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>> | null)[]] tir=[baml.json.json[]]
+    at ns_json_alias/json_alias.baml:3343..3358 `let arr: json[]`
+    at ns_json_alias/json_alias.baml:3352..3358 `json[]`
 [2x] hir_ty=[(items: (user.control_flow.Err | user.control_flow.Ok)[]) -> string throws never] tir=[(items: (user.control_flow.Ok | user.control_flow.Err)[]) -> string throws never]
     at ns_control_flow/control_flow.baml:8208..8221 `pick_first_ok`
     at ns_control_flow/control_flow.baml:8414..8424 `concat_oks`
@@ -1965,9 +1958,9 @@ ns_to_json_interface/to_json_interface.baml:1125..1207 `{\n       ...\n        }
 [2x] hir_ty=[int[] | (int | string)[]] tir=[(int | string)[] | int[]]
     at ns_match_container_types/match_container_types.baml:4906..4907 `u`
     at ns_match_container_types/match_container_types.baml:5425..5426 `u`
-[2x] hir_ty=[map<string, (int | float | string | bool | (int | float | string | bool | null | (int | float | string | bool | null | (int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>)[] | map<string, int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>>)[] | map<string, int | float | string | bool | null | (int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>)[] | map<string, int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>>>)[] | map<string, int | float | string | bool | null | (int | float | string | bool | null | (int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>)[] | map<string, int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>>)[] | map<string, int | float | string | bool | null | (int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>)[] | map<string, int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>>>> | null)[]>] tir=[map<string, baml.json.json>]
-    at ns_to_json_interface/to_json_interface.baml:1125..1207 `{\n       ...\n        }`
-    at ns_to_json_interface/to_json_interface.baml:1139..1197 `{ "pt": [b...(self.y)] }`
+[2x] hir_ty=[map<string, int | float | string | bool | (int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>)[] | map<string, int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>> | null>] tir=[map<string, baml.json.json>]
+    at ns_json_alias/json_alias.baml:3379..3405 `let obj: m...ring, json>`
+    at ns_json_alias/json_alias.baml:3388..3405 `map<string, json>`
 [2x] hir_ty=[never] tir=[baml.panics.AllocFailure | baml.panics.AssertionFailed | baml.panics.Cancelled | baml.panics.DivisionByZero | baml.panics.Exit | baml.panics.HostContractViolation | baml.panics.HostUnavailable | baml.panics.IndexOutOfBounds | baml.panics.IntegerOverflow | baml.panics.InvalidFieldAccess | baml.panics.MapKeyNotFound | baml.panics.NegativeBitShift | baml.panics.SdkPanic | baml.panics.StackOverflow | baml.panics.Unreachable | baml.panics.UserPanic]
     at ns_exceptions/exceptions.baml:13851..13868 `baml.panics.Panic`
     at ns_exceptions/exceptions.baml:32608..32625 `baml.panics.Panic`
@@ -3607,20 +3600,12 @@ ns_to_json_interface/to_json_interface.baml:1125..1207 `{\n       ...\n        }
     at ns_patterns_new_runtime/patterns_new_runtime.baml:11496..11497 `v`
 [1x] hir_ty=[int[]] tir=[0[]]
     at ns_arrays/arrays.baml:35931..35954 `baml.Array.filled(2, 0)`
-[1x] hir_ty=[int[]] tir=[baml.json.json[]]
-    at ns_json_alias/json_alias.baml:2103..2112 `[1, 2, 3]`
 [1x] hir_ty=[int[] | int[] | !error[]] tir=[int[] | never[]]
     at ns_patterns_new_runtime/patterns_new_runtime.baml:25400..25404 `[..]`
 [1x] hir_ty=[int[] | unknown[]] tir=[unknown[] | int[]]
     at ns_match_container_types/match_container_types.baml:8553..8554 `u`
 [1x] hir_ty=[map<string, int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>> | null] tir=[map<string, baml.json.json> | null]
     at ns_generic_union_returns/generic_union_returns.baml:1734..1749 `parsed.metadata`
-[1x] hir_ty=[map<string, int>] tir=[map<string, baml.json.json>]
-    at ns_provider_stdlib/provider_stdlib.baml:834..859 `{\n      "...: 7,\n    }`
-[1x] hir_ty=[map<string, map<string, int>>] tir=[map<string, baml.json.json>]
-    at ns_provider_stdlib/provider_stdlib.baml:815..864 `{\n    "ke...    },\n  }`
-[1x] hir_ty=[map<string, string>] tir=[map<string, baml.json.json>]
-    at ns_json_alias/json_alias.baml:2665..2681 `{"key": "value"}`
 [1x] hir_ty=[map<string, string> | map<string, T>] tir=[map<string, T> | map<string, string>]
     at ns_generic_match_typevar/generic_match_typevar.baml:3566..3567 `x`
 [1x] hir_ty=[never] tir=["boom"]

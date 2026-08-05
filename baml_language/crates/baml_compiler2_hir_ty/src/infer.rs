@@ -743,12 +743,7 @@ impl<'db> InferenceContext<'db> {
                 // With an expected element type, elements are CHECKED against
                 // it; otherwise they synthesize and JOIN (fresh literals
                 // widening at the join, per ruling 1's generation-site rule).
-                let expected_element = expected.only_has_type().and_then(|ty| {
-                    match self.table.shallow_resolve(ty).kind() {
-                        TyKind::List(element, _) => Some(element.clone()),
-                        _ => None,
-                    }
-                });
+                let expected_element = self.expected_list_element(expected);
                 match expected_element {
                     Some(element_ty) => {
                         for element in elements {
@@ -779,12 +774,7 @@ impl<'db> InferenceContext<'db> {
                 // expectation-driven literal typing) - `{"input": s}` in
                 // a `map<string, unknown>` position IS that map, not a
                 // synthesized `map<string, string>` tripping invariance.
-                let expected_entry = expected.only_has_type().and_then(|ty| {
-                    match self.table.shallow_resolve(ty).kind() {
-                        TyKind::Map { key, value, .. } => Some((key.clone(), value.clone())),
-                        _ => None,
-                    }
-                });
+                let expected_entry = self.expected_map_entry(expected);
                 if let Some((key_ty, value_ty)) = expected_entry {
                     for (key, value) in entries {
                         self.check_expr(body, *key, &key_ty);
@@ -2706,6 +2696,66 @@ impl<'db> InferenceContext<'db> {
             return interface_member.ty;
         }
         Ty::error()
+    }
+
+    /// The expectation's SHAPE for aggregate-literal adoption: nominal
+    /// aliases expanded through the oracle (fuel-bounded), so the
+    /// recursive `baml.json.json` union answers structurally.
+    fn expectation_shape(&mut self, expected: &Expectation) -> Option<Ty> {
+        let ty = expected.only_has_type()?;
+        let mut resolved = self.table.shallow_resolve(ty);
+        let mut fuel = 8u32;
+        while let TyKind::TypeAlias(qtn, _) = resolved.kind() {
+            if fuel == 0 {
+                break;
+            }
+            fuel -= 1;
+            match baml_type::normalize::TypeContext::alias_def(&self.facts, qtn) {
+                Some(expanded) => resolved = Ty::from_plain(&expanded),
+                None => break,
+            }
+        }
+        Some(resolved)
+    }
+
+    /// The element an ARRAY literal adopts from its expectation: the
+    /// expected list itself, or the UNIQUE list member of an expected
+    /// union - expected-type propagation into aggregates (r-a's
+    /// coercion to the expectation). Arrays are INVARIANT (spec:
+    /// Variance), so this adoption is what makes `[1, 2, 3]` a
+    /// `json[]` against the recursive `json` union; an ambiguous
+    /// multi-list union adopts nothing and the literal synthesizes.
+    fn expected_list_element(&mut self, expected: &Expectation) -> Option<Ty> {
+        let shape = self.expectation_shape(expected)?;
+        match shape.kind() {
+            TyKind::List(element, _) => Some(element.clone()),
+            TyKind::Union(members, _) => {
+                let mut lists = members.iter().filter_map(|member| match member.kind() {
+                    TyKind::List(element, _) => Some(element.clone()),
+                    _ => None,
+                });
+                let first = lists.next()?;
+                lists.next().is_none().then_some(first)
+            }
+            _ => None,
+        }
+    }
+
+    /// The MAP literal's counterpart of `expected_list_element`.
+    fn expected_map_entry(&mut self, expected: &Expectation) -> Option<(Ty, Ty)> {
+        let shape = self.expectation_shape(expected)?;
+        match shape.kind() {
+            TyKind::Map { key, value, .. } => Some((key.clone(), value.clone())),
+            TyKind::Union(members, _) => {
+                let mut maps = members.iter().filter_map(|member| match member.kind() {
+                    TyKind::Map { key, value, .. } => Some((key.clone(), value.clone())),
+                    _ => None,
+                });
+                let first = maps.next()?;
+                maps.next().is_none().then_some(first)
+            }
+            _ => None,
+        }
     }
 
     /// The type of a tagged-template body param in scope, innermost frame
