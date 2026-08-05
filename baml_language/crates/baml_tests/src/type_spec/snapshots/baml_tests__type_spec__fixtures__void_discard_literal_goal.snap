@@ -2,6 +2,7 @@
 source: crates/baml_tests/src/type_spec/fixtures.rs
 expression: outcome.dump
 ---
+341..344 'tag': hir_ty=[<missing>] tir=[throws never]
 423..426 'tag': throws never
 456..477 '{\n   ...n    }': "int"
 466..471 '"int"': "int"

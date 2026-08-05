@@ -16,3 +16,4 @@ function user.dead_bounded(x: string | int) -> string  [expr] {
 function user.dead_inconsistent(x: user.DeadPair<int, string>) -> string  [expr] {
   {  } match (x) { p: user.DeadPair<T, T> => "pair", _ => "other" }
 }
+function user.tag(self: ?) -> string  [missing]

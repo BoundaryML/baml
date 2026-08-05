@@ -567,6 +567,12 @@ pub fn file_callable_throws_fragment(
 ) -> CallableThrowsFragment {
     let by_id = baml_compiler2_ppir::item_data::file_functions(db, file)
         .iter()
+        // Required interface methods are signature-only items: their
+        // throws is the declared clause read at the DECLARATION scope
+        // (the interface driver), never a callable fixpoint entry.
+        .filter(|&&func_loc| {
+            !baml_compiler2_ppir::item_data::is_required_interface_method(db, func_loc)
+        })
         .map(|&func_loc| {
             (
                 func_loc.id(db).as_u32(),

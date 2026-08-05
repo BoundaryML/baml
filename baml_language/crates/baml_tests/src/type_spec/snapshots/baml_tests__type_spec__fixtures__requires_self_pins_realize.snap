@@ -2,6 +2,8 @@
 source: crates/baml_tests/src/type_spec/fixtures.rs
 expression: outcome.dump
 ---
+725..729 'pull': hir_ty=[<missing>] tir=[throws never]
+844..848 'push': hir_ty=[<missing>] tir=[throws never]
 905..914 'roundtrip': throws never
 968..1067 '{\n   ...e }\n}': hir_ty=[bool] tir=[bool | false]
 974..979 'let v': hir_ty=[(T as user.Sink).Item] tir=[(Self as user.Sink).Item]

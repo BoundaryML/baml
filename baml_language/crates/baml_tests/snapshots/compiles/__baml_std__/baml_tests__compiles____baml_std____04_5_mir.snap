@@ -22,6 +22,17 @@ fn baml.Bigint.parse = builtin(vm)
 
 fn baml.Bigint.random = builtin(vm)
 
+fn baml.Comparable.compare(_1: void, _2: void) -> void {
+    // Locals:
+    let _0: void // return
+    let _1: void // param
+    let _2: void // param
+
+    bb0: {
+        unreachable;
+    }
+}
+
 fn baml.Comparable$for$int.compare(self: int, other: Self) -> int {
     // Locals:
     let _0: int // _0 // return
@@ -133,6 +144,16 @@ fn baml.Comparable$for$string.compare(self: string, other: Self) -> int {
 
     bb5: {
         return;
+    }
+}
+
+fn baml.Sortable.sort(_1: void) -> void {
+    // Locals:
+    let _0: void // return
+    let _1: void // param
+
+    bb0: {
+        unreachable;
     }
 }
 
@@ -736,6 +757,16 @@ fn baml.Map.get_or_insert = builtin(vm)
 
 fn baml.Map.clear = builtin(vm)
 
+fn baml.Summable.sum(_1: void) -> void {
+    // Locals:
+    let _0: void // return
+    let _1: void // param
+
+    bb0: {
+        unreachable;
+    }
+}
+
 fn baml.Summable$for$int[].sum(self: int[]) -> int {
     // Locals:
     let _0: int // _0 // return
@@ -761,6 +792,26 @@ fn baml.Summable$for$float[].sum(self: float[]) -> float {
 
     bb1: {
         return;
+    }
+}
+
+fn baml.FloatStats.mean(_1: void) -> void {
+    // Locals:
+    let _0: void // return
+    let _1: void // param
+
+    bb0: {
+        unreachable;
+    }
+}
+
+fn baml.FloatStats.median(_1: void) -> void {
+    // Locals:
+    let _0: void // return
+    let _1: void // param
+
+    bb0: {
+        unreachable;
     }
 }
 
@@ -841,6 +892,16 @@ fn baml.ToJson.to_json(self: baml.ToJson) -> int | float | string | bool | null 
 fn baml._to_json_default = builtin(vm)
 
 fn baml._to_json_shim = builtin(vm)
+
+fn baml.FromJson.from_json(_1: void) -> void {
+    // Locals:
+    let _0: void // return
+    let _1: void // param
+
+    bb0: {
+        unreachable;
+    }
+}
 
 fn baml._from_json_shim = builtin(vm)
 
@@ -3753,6 +3814,26 @@ fn baml.io.println = builtin(io)
 fn baml.io.eprint = builtin(io)
 
 fn baml.io.eprintln = builtin(io)
+
+fn baml.iter.Iterable.iter(_1: void) -> void {
+    // Locals:
+    let _0: void // return
+    let _1: void // param
+
+    bb0: {
+        unreachable;
+    }
+}
+
+fn baml.iter.Iterator.next(_1: void) -> void {
+    // Locals:
+    let _0: void // return
+    let _1: void // param
+
+    bb0: {
+        unreachable;
+    }
+}
 
 fn baml.iter.Iterator.map(self: baml.iter.Iterator, fn: (Item) -> R throws E2) -> baml.iter.Iterator<Error = Error | E2, Item = R> {
     // Locals:
@@ -8560,6 +8641,61 @@ fn baml.net.UdpSocket._recv_from = builtin(io)
 
 fn baml.net.UdpSocket.close = builtin(io)
 
+fn baml.ops.BitAnd.bit_and(_1: void, _2: void) -> void {
+    // Locals:
+    let _0: void // return
+    let _1: void // param
+    let _2: void // param
+
+    bb0: {
+        unreachable;
+    }
+}
+
+fn baml.ops.BitOr.bit_or(_1: void, _2: void) -> void {
+    // Locals:
+    let _0: void // return
+    let _1: void // param
+    let _2: void // param
+
+    bb0: {
+        unreachable;
+    }
+}
+
+fn baml.ops.BitXor.bit_xor(_1: void, _2: void) -> void {
+    // Locals:
+    let _0: void // return
+    let _1: void // param
+    let _2: void // param
+
+    bb0: {
+        unreachable;
+    }
+}
+
+fn baml.ops.ShiftLeft.shl(_1: void, _2: void) -> void {
+    // Locals:
+    let _0: void // return
+    let _1: void // param
+    let _2: void // param
+
+    bb0: {
+        unreachable;
+    }
+}
+
+fn baml.ops.ShiftRight.shr(_1: void, _2: void) -> void {
+    // Locals:
+    let _0: void // return
+    let _1: void // param
+    let _2: void // param
+
+    bb0: {
+        unreachable;
+    }
+}
+
 fn baml.ops.BitAnd<int>$for$int.bit_and = builtin(vm)
 
 fn baml.ops.BitOr<int>$for$int.bit_or = builtin(vm)
@@ -8600,6 +8736,17 @@ fn baml.ops.ShiftLeft<bigint>$for$bigint.shl = builtin(vm)
 
 fn baml.ops.ShiftRight<bigint>$for$bigint.shr = builtin(vm)
 
+fn baml.ops.Equals.eq(_1: void, _2: void) -> void {
+    // Locals:
+    let _0: void // return
+    let _1: void // param
+    let _2: void // param
+
+    bb0: {
+        unreachable;
+    }
+}
+
 fn baml.ops.Equals.neq(self: baml.ops.Equals, other: Self) -> bool {
     // Locals:
     let _0: bool // _0 // return
@@ -8618,6 +8765,17 @@ fn baml.ops.Equals.neq(self: baml.ops.Equals, other: Self) -> bool {
 
     bb2: {
         return;
+    }
+}
+
+fn baml.ops.Compare.lt(_1: void, _2: void) -> void {
+    // Locals:
+    let _0: void // return
+    let _1: void // param
+    let _2: void // param
+
+    bb0: {
+        unreachable;
     }
 }
 
@@ -8825,6 +8983,17 @@ fn baml.ops.Equals$for$map<string, V>.eq(self: map<string, V>, other: Self) -> b
     }
 }
 
+fn baml.ops.Index.index(_1: void, _2: void) -> void {
+    // Locals:
+    let _0: void // return
+    let _1: void // param
+    let _2: void // param
+
+    bb0: {
+        unreachable;
+    }
+}
+
 fn baml.ops.Index<int>$for$T[].index(self: T[], idx: int) -> T {
     // Locals:
     let _0: T // _0 // return
@@ -8882,6 +9051,71 @@ fn baml.ops.Index<int>$for$uint8array.index(self: uint8array, idx: int) -> int {
 
     bb1: {
         return;
+    }
+}
+
+fn baml.ops.Add.add(_1: void, _2: void) -> void {
+    // Locals:
+    let _0: void // return
+    let _1: void // param
+    let _2: void // param
+
+    bb0: {
+        unreachable;
+    }
+}
+
+fn baml.ops.Subtract.sub(_1: void, _2: void) -> void {
+    // Locals:
+    let _0: void // return
+    let _1: void // param
+    let _2: void // param
+
+    bb0: {
+        unreachable;
+    }
+}
+
+fn baml.ops.Multiply.mul(_1: void, _2: void) -> void {
+    // Locals:
+    let _0: void // return
+    let _1: void // param
+    let _2: void // param
+
+    bb0: {
+        unreachable;
+    }
+}
+
+fn baml.ops.Divide.div(_1: void, _2: void) -> void {
+    // Locals:
+    let _0: void // return
+    let _1: void // param
+    let _2: void // param
+
+    bb0: {
+        unreachable;
+    }
+}
+
+fn baml.ops.Remainder.rem(_1: void, _2: void) -> void {
+    // Locals:
+    let _0: void // return
+    let _1: void // param
+    let _2: void // param
+
+    bb0: {
+        unreachable;
+    }
+}
+
+fn baml.ops.Negate.neg(_1: void) -> void {
+    // Locals:
+    let _0: void // return
+    let _1: void // param
+
+    bb0: {
+        unreachable;
     }
 }
 
@@ -8974,6 +9208,17 @@ fn baml.ops.__union_div = builtin(vm)
 fn baml.ops.__union_rem = builtin(vm)
 
 fn baml.ops.__union_neg = builtin(vm)
+
+fn baml.random.Rng.random(_1: void, _2: void) -> void {
+    // Locals:
+    let _0: void // return
+    let _1: void // param
+    let _2: void // param
+
+    bb0: {
+        unreachable;
+    }
+}
 
 fn baml.random.Rng.random_int(self: baml.random.Rng) -> int {
     // Locals:

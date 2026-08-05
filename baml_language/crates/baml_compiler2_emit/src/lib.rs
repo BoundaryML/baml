@@ -1589,6 +1589,11 @@ pub fn decompose_units(
             iface_owner.push(fi);
         }
         for &func_loc in file_functions(db, *file) {
+            // Required interface methods are signature-only items: nothing
+            // to compile or index (mirrors their pre-item invisibility here).
+            if baml_compiler2_ppir::item_data::is_required_interface_method(db, func_loc) {
+                continue;
+            }
             let fq = def_to_item_ref(db, Definition::Function(func_loc)).to_string();
             func_name_to_file.insert(fq, fi);
         }
@@ -2485,6 +2490,11 @@ fn inject_clean_slots(
             continue;
         }
         for &func_loc in file_functions(db, *file) {
+            // Required interface methods are signature-only items: nothing
+            // to compile or index (mirrors their pre-item invisibility here).
+            if baml_compiler2_ppir::item_data::is_required_interface_method(db, func_loc) {
+                continue;
+            }
             let fq = def_to_item_ref(db, Definition::Function(func_loc)).to_string();
             // Intrinsic / await-any functions own no slot (Pass 1 skips them);
             // the `globals` guard drops them here too.
@@ -2521,6 +2531,11 @@ fn inject_clean_object_placeholders(
             continue;
         }
         for &func_loc in file_functions(db, *file) {
+            // Required interface methods are signature-only items: nothing
+            // to compile or index (mirrors their pre-item invisibility here).
+            if baml_compiler2_ppir::item_data::is_required_interface_method(db, func_loc) {
+                continue;
+            }
             let fq = def_to_item_ref(db, Definition::Function(func_loc)).to_string();
             if globals.get(&fq).is_some() {
                 program.function_indices.entry(fq).or_insert_with(|| {
@@ -2796,6 +2811,11 @@ fn spliced_throws_match(
     cache: &ResolvedAliases,
 ) -> Result<(), String> {
     for &func_loc in file_functions(db, file) {
+            // Required interface methods are signature-only items: nothing
+            // to compile or index (mirrors their pre-item invisibility here).
+            if baml_compiler2_ppir::item_data::is_required_interface_method(db, func_loc) {
+                continue;
+            }
         // Mirror Pass 4's skip set: these never become callable objects.
         if matches!(
             function_body(db, func_loc).as_ref(),
@@ -2870,6 +2890,11 @@ fn emit_file_group(
     // actual program.globals array built in Pass 4 (which also skips intrinsics).
     for file in files {
         for &func_loc in file_functions(db, *file) {
+            // Required interface methods are signature-only items: nothing
+            // to compile or index (mirrors their pre-item invisibility here).
+            if baml_compiler2_ppir::item_data::is_required_interface_method(db, func_loc) {
+                continue;
+            }
             // Skip intrinsic and await-any functions — they are never called via
             // a Call instruction (intrinsics lower to StatementKind::Intrinsic;
             // `__await_any` lowers to a Terminator::AwaitAny). Pass 4 skips them
@@ -3391,6 +3416,11 @@ fn emit_file_group(
         for file in files {
             let pkg_info = file_package(db, *file);
             for &func_loc in file_functions(db, *file) {
+            // Required interface methods are signature-only items: nothing
+            // to compile or index (mirrors their pre-item invisibility here).
+            if baml_compiler2_ppir::item_data::is_required_interface_method(db, func_loc) {
+                continue;
+            }
                 let fq_name = def_to_item_ref(db, Definition::Function(func_loc)).to_string();
                 // Match per-file $init_test_<path> functions synthesized by
                 // `synthesize_init_test_function`. The trailing underscore in the
@@ -4506,6 +4536,11 @@ fn emit_functions_serial(
         let is_builtin_file = file.path(db).to_string_lossy().starts_with("<builtin>/");
         let cache_pass4 = &alias_caches[&pkg_info_pass4.package];
         for &func_loc in file_functions(db, *file) {
+            // Required interface methods are signature-only items: nothing
+            // to compile or index (mirrors their pre-item invisibility here).
+            if baml_compiler2_ppir::item_data::is_required_interface_method(db, func_loc) {
+                continue;
+            }
             let mir = lower_function(db, func_loc, opt);
             let fq_name = mir.item_ref.to_string();
 
@@ -4771,6 +4806,11 @@ fn emit_functions_parallel(
         let line_starts: std::sync::Arc<[u32]> = build_line_starts(file.text(db)).into();
         let is_builtin_file = file.path(db).to_string_lossy().starts_with("<builtin>/");
         for &func_loc in file_functions(db, *file) {
+            // Required interface methods are signature-only items: nothing
+            // to compile or index (mirrors their pre-item invisibility here).
+            if baml_compiler2_ppir::item_data::is_required_interface_method(db, func_loc) {
+                continue;
+            }
             seeds.push(FnSeed {
                 file: *file,
                 local_id: func_loc.id(db),

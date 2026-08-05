@@ -2,6 +2,8 @@
 source: crates/baml_tests/src/type_spec/fixtures.rs
 expression: outcome.dump
 ---
+355..360 'pname': hir_ty=[<missing>] tir=[throws never]
+425..431 'pfirst': hir_ty=[<missing>] tir=[throws never]
 523..529 'pfirst': throws never
 546..618 '{\n   ...n    }': string
 556..561 'let x': T

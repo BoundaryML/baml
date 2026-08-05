@@ -2,6 +2,7 @@
 source: crates/baml_tests/src/type_spec/fixtures.rs
 expression: outcome.dump
 ---
+443..446 'get': hir_ty=[<missing>] tir=[throws never]
 493..497 'pair': throws never
 532..631 '{\n   ...n    }': (Self as user.Store).Item[]
 542..547 'let a': (Self as user.Store).Item

@@ -279,8 +279,10 @@ pub(crate) fn member_on_interface<'db>(
         });
     }
 
-    // Default methods carry bodies (ordinary FunctionLocs).
-    if let Some(&method) = data.default_methods.iter().find(|&&method| {
+    // Methods - default and required alike: ONE item kind, one
+    // signature road (r-a's shape; `body: None` is body lowering's
+    // business, never resolution's).
+    if let Some(&method) = data.methods.iter().find(|&&method| {
         baml_compiler2_ppir::item_data::function_data(db, method).name == *name
     }) {
         let signature = crate::lower::function_signature(db, method);
@@ -288,8 +290,8 @@ pub(crate) fn member_on_interface<'db>(
             return None;
         }
         // The interface frame is the receiver's business; the method's
-        // OWN generics (frame suffix, `map<R, E2>`) are the call
-        // site's - hand them back for turbofish/fresh-var filling.
+        // OWN generics (frame suffix, `map<R, E2>`, `seen<U>`) are the
+        // call site's - hand them back for turbofish/fresh-var filling.
         let pending_own = (signature.generic_params.len() > instantiation.len())
             .then(|| PendingOwnGenerics {
                 method,
@@ -302,64 +304,6 @@ pub(crate) fn member_on_interface<'db>(
         });
     }
 
-    // Required methods are signatures only.
-    if let Some(sig) = data.required_methods.iter().find(|sig| sig.name == *name) {
-        if !sig.generic_params.is_empty() {
-            // Method-own generics on required signatures: rare; joins
-            // with the obligations work.
-            return None;
-        }
-        let frame = interface_frame(interface, db);
-        let ctx = crate::lower::lower_ctx_for_file(db, interface.file(db))
-            .with_frame(frame)
-            .with_bounds(crate::lower::interface_scope_bounds(db, interface));
-        let self_var = Ty::intern(TyKind::TypeVar(
-            ParamTy::new(0, Name::new("Self")),
-            TyAttr::default(),
-        ));
-        let params: Box<[baml_type::interned::FunctionParam]> = sig
-            .params
-            .iter()
-            .map(|param| baml_type::interned::FunctionParam {
-                name: Some(param.name.clone()),
-                ty: match param.type_ref {
-                    Some(type_ref) if param.name.as_str() != "self" => {
-                        ctx.lower_type_ref(&data.type_refs, type_ref)
-                    }
-                    _ => self_var.clone(),
-                },
-                mode: if param.has_default {
-                    baml_type::FunctionParamMode::Optional
-                } else {
-                    baml_type::FunctionParamMode::Required
-                },
-            })
-            .collect();
-        let ret = sig
-            .return_type
-            .map(|type_ref| ctx.lower_type_ref(&data.type_refs, type_ref))
-            .unwrap_or_else(Ty::error);
-        // Interface signatures MUST declare throws (spec rule 1).
-        let throws = sig
-            .throws
-            .map(|type_ref| ctx.lower_type_ref(&data.type_refs, type_ref))
-            .unwrap_or_else(Ty::error);
-        let fn_ty = Ty::intern(TyKind::Function {
-            params,
-            ret,
-            throws,
-            attr: TyAttr::default(),
-        });
-        let signature_view = fn_ty.clone();
-        if existential && fn_breaks_one_self(&signature_view) {
-            return None;
-        }
-        return Some(InterfaceMember {
-            ty: crate::lower::substitute_params(&fn_ty, &instantiation),
-            is_method: true,
-            pending_own: None,
-        });
-    }
     None
 }
 
@@ -448,18 +392,6 @@ fn signature_breaks_one_self(signature: &crate::lower::FunctionSignature) -> boo
         .any(|param| self_in(&param.ty, false))
         || self_in(&signature.ret, true)
         || self_in(&signature.throws, true)
-}
-
-fn fn_breaks_one_self(fn_ty: &Ty) -> bool {
-    let TyKind::Function {
-        params, ret, throws, ..
-    } = fn_ty.kind()
-    else {
-        return false;
-    };
-    params.iter().skip(1).any(|param| self_occurs(&param.ty, false))
-        || self_occurs(ret, true)
-        || self_occurs(throws, true)
 }
 
 /// Whether frame slot 0 (`Self`) occurs illegally: any occurrence in a

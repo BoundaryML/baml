@@ -136,6 +136,12 @@ pub fn file_throw_facts(db: &dyn crate::Db, file: baml_base::SourceFile) -> File
     let mut out = Vec::new();
 
     for func_loc in baml_compiler2_ppir::item_data::file_functions(db, file) {
+        // Required interface methods are signature-only items; the throw
+        // fixpoint saw no such functions before they were items, and their
+        // conformance-checked implementors carry the real bodies.
+        if baml_compiler2_ppir::item_data::is_required_interface_method(db, *func_loc) {
+            continue;
+        }
         if member_ids.contains(func_loc) {
             continue;
         }

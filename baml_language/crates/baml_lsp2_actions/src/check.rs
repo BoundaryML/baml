@@ -233,6 +233,13 @@ pub fn check_file(db: &dyn Db, file: SourceFile) -> Vec<Diagnostic> {
         ) {
             continue;
         }
+        // Required interface methods are signature-only items whose
+        // signatures are checked by the interface-scope driver (with
+        // `Self` and the associated slots in scope) - this frame-less
+        // pass would misreport their `Self.*` references.
+        if baml_compiler2_ppir::item_data::is_required_interface_method(db, func_loc) {
+            continue;
+        }
 
         let func_source_map = baml_compiler2_ppir::item_data::function_source_map(db, func_loc);
         let mut type_errors = Vec::new();

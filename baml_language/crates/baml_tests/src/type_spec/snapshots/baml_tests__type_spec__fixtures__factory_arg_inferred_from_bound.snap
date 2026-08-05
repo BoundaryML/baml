@@ -2,6 +2,7 @@
 source: crates/baml_tests/src/type_spec/fixtures.rs
 expression: outcome.dump
 ---
+820..825 'drive': hir_ty=[<missing>] tir=[throws (Self as user.Driver<Input>).Error]
 924..929 'drive': throws E
 1040..1074 '{\n   ...n    }': O
 1050..1062 'driver.drive': hir_ty=[(self: D, input: user.Task<T>) -> O throws E] tir=[(input: user.Task<T>) -> O throws E]

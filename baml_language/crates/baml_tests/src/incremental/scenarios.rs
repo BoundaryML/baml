@@ -811,7 +811,7 @@ function free_standing(x: int) -> int throws never {
             .copied()
             .find(|&iface_loc| {
                 baml_compiler2_ppir::item_data::interface_data(db, iface_loc)
-                    .default_methods
+                    .methods
                     .contains(&loc)
             });
         let by_free_impl = baml_compiler2_ppir::item_data::file_free_impls(db, file)

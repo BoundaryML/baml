@@ -2588,10 +2588,12 @@ impl<'db> InferenceContext<'db> {
             return None;
         };
         let has_default = baml_compiler2_ppir::item_data::interface_data(self.db, interface)
-            .default_methods
+            .methods
             .iter()
             .any(|&method| {
-                baml_compiler2_ppir::item_data::function_data(self.db, method).name == *member
+                baml_compiler2_ppir::item_data::function_has_body(self.db, method)
+                    && baml_compiler2_ppir::item_data::function_data(self.db, method).name
+                        == *member
             });
         if !has_default {
             return None;

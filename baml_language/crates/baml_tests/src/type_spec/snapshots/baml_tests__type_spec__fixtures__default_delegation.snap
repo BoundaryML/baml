@@ -5,6 +5,7 @@ expression: outcome.dump
 368..373 'label': throws never
 403..426 '{\n   ...n    }': "shape"
 413..420 '"shape"': "shape"
+441..449 'describe': hir_ty=[<missing>] tir=[throws never]
 549..557 'describe': throws never
 587..689 '{\n   ...     }': string
 601..609 'let base': string

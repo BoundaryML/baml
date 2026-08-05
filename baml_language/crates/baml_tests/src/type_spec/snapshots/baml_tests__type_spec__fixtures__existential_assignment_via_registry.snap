@@ -2,6 +2,7 @@
 source: crates/baml_tests/src/type_spec/fixtures.rs
 expression: outcome.dump
 ---
+439..444 'hello': hir_ty=[<missing>] tir=[throws never]
 545..550 'hello': throws never
 580..608 '{\n   ...     }': "hi"
 594..598 '"hi"': "hi"

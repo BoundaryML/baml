@@ -1516,14 +1516,21 @@ impl<'db> SemanticIndexBuilder<'db> {
         // back to the interface and field/method dispatch inside a default
         // body falls through to dynamic map lookup.
         self.class_depth += 1;
-        let default_method_ids: Vec<_> = i
+        let mut method_ids: Vec<_> = i
             .default_methods
             .iter()
             .map(|m| self.lower_function(m))
             .collect();
         self.class_depth -= 1;
+        // Required signatures are the SAME item kind, just bodyless
+        // (r-a's shape); no body walk, so no scope coverage needed.
+        method_ids.extend(
+            i.required_methods
+                .iter()
+                .map(|m| self.item_tree.alloc_function_signature(m)),
+        );
 
-        let local_id = self.item_tree.alloc_interface(i, default_method_ids);
+        let local_id = self.item_tree.alloc_interface(i, method_ids);
         self.record_scope_owner(interface_scope, ItemScopeOwner::Interface(local_id));
         let loc = InterfaceLoc::new(self.db, self.file, local_id);
         self.type_contributions.push((
