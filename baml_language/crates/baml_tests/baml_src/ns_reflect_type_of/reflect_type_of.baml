@@ -10,8 +10,12 @@
 // "reflect_type_of.RgbColor", etc.  Primitive types (int, string, bool) and
 // map/array/optional wrappers around them remain unqualified.
 //
-// Each test body goes into a top-level helper function so that locals are
-// not subject to the test-block boxing bug.
+// Test bodies live directly in the `test` blocks. They were originally
+// lifted into top-level helper functions to dodge the "test-block
+// local-boxing VM bug" (test-body `let` locals never resolved and lowered
+// to `const null` — fixed by #3782, see
+// thoughts/antonio/s1-vm-bug-diagnosis.md). Inlined bodies now double as
+// the regression net for that fix.
 
 class User { name string }
 class Container<T> { value T }
@@ -21,12 +25,9 @@ enum RgbColor { Red, Green, Blue }
 
 // ─── Basic to_string tests ───────────────────────────────────────────────────
 
-function type_of_class_to_string_fn() -> string {
-    reflect.type_of<User>().to_string()
-}
-
 test "type_of_class_to_string" {
-    assert.is_true(baml.deep_equals(type_of_class_to_string_fn(), "reflect_type_of.User"))
+    let s = reflect.type_of<User>().to_string();
+    assert.is_true(baml.deep_equals(s, "reflect_type_of.User"))
 }
 
 test "type_of_int_to_string" {
@@ -41,44 +42,29 @@ test "type_of_bool_to_string" {
     assert.is_true(baml.deep_equals(reflect.type_of<bool>().to_string(), "bool"))
 }
 
-function type_of_array_to_string_fn() -> string {
-    reflect.type_of<User[]>().to_string()
-}
-
 test "type_of_array_to_string" {
-    assert.is_true(baml.deep_equals(type_of_array_to_string_fn(), "reflect_type_of.User[]"))
-}
-
-function type_of_optional_to_string_fn() -> string {
-    reflect.type_of<User?>().to_string()
+    let s = reflect.type_of<User[]>().to_string();
+    assert.is_true(baml.deep_equals(s, "reflect_type_of.User[]"))
 }
 
 test "type_of_optional_to_string" {
-    assert.is_true(baml.deep_equals(type_of_optional_to_string_fn(), "reflect_type_of.User | null"))
-}
-
-function type_of_map_to_string_fn() -> string {
-    reflect.type_of<map<string, User>>().to_string()
+    let s = reflect.type_of<User?>().to_string();
+    assert.is_true(baml.deep_equals(s, "reflect_type_of.User | null"))
 }
 
 test "type_of_map_to_string" {
-    assert.is_true(baml.deep_equals(type_of_map_to_string_fn(), "map<string, reflect_type_of.User>"))
-}
-
-function type_of_generic_class_runs_without_crash_fn() -> string {
-    reflect.type_of<Container<User>>().to_string()
+    let s = reflect.type_of<map<string, User>>().to_string();
+    assert.is_true(baml.deep_equals(s, "map<string, reflect_type_of.User>"))
 }
 
 test "type_of_generic_class_runs_without_crash" {
-    assert.is_true(baml.deep_equals(type_of_generic_class_runs_without_crash_fn(), "reflect_type_of.Container<reflect_type_of.User>"))
-}
-
-function type_of_generic_class_to_string_matches_source_fn() -> bool {
-    reflect.type_of<Container<User>>().to_string() == "reflect_type_of.Container<reflect_type_of.User>"
+    let s = reflect.type_of<Container<User>>().to_string();
+    assert.is_true(baml.deep_equals(s, "reflect_type_of.Container<reflect_type_of.User>"))
 }
 
 test "type_of_generic_class_to_string_matches_source" {
-    assert.is_true(baml.deep_equals(type_of_generic_class_to_string_matches_source_fn(), true))
+    let matches = reflect.type_of<Container<User>>().to_string() == "reflect_type_of.Container<reflect_type_of.User>";
+    assert.is_true(baml.deep_equals(matches, true))
 }
 
 // ─── Structural equality ─────────────────────────────────────────────────────
@@ -106,16 +92,15 @@ test "type_of_generic_class_neq_different_arg" {
 
 // ─── Phase 7: parametric class forwarding via generic bodies ─────────────────
 
+// Kept as a top-level generic function: forwarding a type parameter through a
+// generic body into `reflect.type_of` is itself the feature under test here.
 function wrap_in_container<T>() -> type {
     reflect.type_of<Container<T>>()
 }
 
-function wrap_in_container_to_string_fn() -> string {
-    wrap_in_container<int>().to_string()
-}
-
 test "wrap_in_container_to_string" {
-    assert.is_true(baml.deep_equals(wrap_in_container_to_string_fn(), "reflect_type_of.Container<int>"))
+    let s = wrap_in_container<int>().to_string();
+    assert.is_true(baml.deep_equals(s, "reflect_type_of.Container<int>"))
 }
 
 // ─── Structural equality ─────────────────────────────────────────────────────
@@ -134,24 +119,20 @@ test "type_of_different_class_neq" {
     ))
 }
 
-function type_of_assign_and_compare_fn() -> bool {
+test "type_of_assign_and_compare" {
+    // Locals holding `type` values, compared inside a test block: the exact
+    // shape the pre-#3782 lowering bug broke (locals lowered to `const null`,
+    // making this compare `null == null`).
     let a: type = reflect.type_of<User>();
     let b: type = reflect.type_of<User>();
-    a == b
-}
-
-test "type_of_assign_and_compare" {
-    assert.is_true(baml.deep_equals(type_of_assign_and_compare_fn(), true))
+    assert.is_true(baml.deep_equals(a == b, true))
 }
 
 // ─── Enum and union coverage ─────────────────────────────────────────────────
 
-function type_of_enum_to_string_fn() -> string {
-    reflect.type_of<RgbColor>().to_string()
-}
-
 test "type_of_enum_to_string" {
-    assert.is_true(baml.deep_equals(type_of_enum_to_string_fn(), "reflect_type_of.RgbColor"))
+    let s = reflect.type_of<RgbColor>().to_string();
+    assert.is_true(baml.deep_equals(s, "reflect_type_of.RgbColor"))
 }
 
 test "type_of_enum_eq" {
@@ -184,13 +165,9 @@ test "type_of_union_neq_different_member" {
 
 // ─── Stable identity via .to_string() ───────────────────────────────────────
 
-function type_of_to_string_works_as_map_key_fn() -> int {
+test "type_of_to_string_works_as_map_key" {
     let m: map<string, int> = {};
     m[reflect.type_of<User>().to_string()] = 1;
     m[reflect.type_of<int>().to_string()] = 2;
-    m[reflect.type_of<User>().to_string()]
-}
-
-test "type_of_to_string_works_as_map_key" {
-    assert.is_true(baml.deep_equals(type_of_to_string_works_as_map_key_fn(), 1))
+    assert.is_true(baml.deep_equals(m[reflect.type_of<User>().to_string()], 1))
 }

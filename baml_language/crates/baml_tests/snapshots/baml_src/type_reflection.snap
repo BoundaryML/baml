@@ -44,6 +44,34 @@ function type_reflection.$init_test_ns_type_reflection_type_reflection(registry:
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
+    load_var registry
+    load_const "root.type_reflection"
+    load_const "union_order_eq_canonical_in_function"
+    make_closure .<lambda($init_test_ns_type_reflection_type_reflection, 6)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.type_reflection"
+    load_const "union_order_eq_canonical_in_test_block"
+    make_closure .<lambda($init_test_ns_type_reflection_type_reflection, 7)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.type_reflection"
+    load_const "union_order_deep_equals_syntactic_in_function"
+    make_closure .<lambda($init_test_ns_type_reflection_type_reflection, 8)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.type_reflection"
+    load_const "union_order_deep_equals_syntactic_in_test_block"
+    make_closure .<lambda($init_test_ns_type_reflection_type_reflection, 9)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
     load_const null
     return
 }
@@ -337,78 +365,17 @@ function type_reflection.TestClient$new(lenient: bool) -> null {
     return
 }
 
-function type_reflection.deep_equals_type_values_different_fn() -> bool {
-    load_const "GetFoo"
-    sys_op baml.llm.get_return_type
-    store_var a
-    load_const "GetBar"
-    sys_op baml.llm.get_return_type
-    store_var b
+function type_reflection.union_order_deep_equals_fn() -> bool {
     load_type type
-    load_var2 1 2
+    load_type int | string
+    load_type string | int
     call baml.deep_equals
     return
 }
 
-function type_reflection.deep_equals_type_values_same_fn() -> bool {
-    load_const "GetFoo"
-    sys_op baml.llm.get_return_type
-    store_var a
-    load_const "GetFoo"
-    sys_op baml.llm.get_return_type
-    store_var b
-    load_type type
-    load_var2 1 2
-    call baml.deep_equals
-    return
-}
-
-function type_reflection.eq_type_values_different_fn() -> bool {
-    load_const "GetFoo"
-    sys_op baml.llm.get_return_type
-    store_var a
-    load_const "GetBar"
-    sys_op baml.llm.get_return_type
-    store_var b
-    load_var2 1 2
+function type_reflection.union_order_eq_fn() -> bool {
+    load_type int | string
+    load_type string | int
     call baml.ops.equals_equals
-    return
-}
-
-function type_reflection.eq_type_values_same_fn() -> bool {
-    load_const "GetFoo"
-    sys_op baml.llm.get_return_type
-    store_var a
-    load_const "GetFoo"
-    sys_op baml.llm.get_return_type
-    store_var b
-    load_var2 1 2
-    call baml.ops.equals_equals
-    return
-}
-
-function type_reflection.neq_type_values_different_fn() -> bool {
-    load_const "GetFoo"
-    sys_op baml.llm.get_return_type
-    store_var a
-    load_const "GetBar"
-    sys_op baml.llm.get_return_type
-    store_var b
-    load_var2 1 2
-    call baml.ops.equals_equals
-    unary_op !
-    return
-}
-
-function type_reflection.neq_type_values_same_fn() -> bool {
-    load_const "GetFoo"
-    sys_op baml.llm.get_return_type
-    store_var a
-    load_const "GetFoo"
-    sys_op baml.llm.get_return_type
-    store_var b
-    load_var2 1 2
-    call baml.ops.equals_equals
-    unary_op !
     return
 }

@@ -6,9 +6,12 @@
 // make an actual LLM network call. The client block is required by the
 // compiler (LLM functions must declare a client) but no request is sent.
 //
-// Each test body is lifted into a top-level helper function to avoid the
-// test-block local-boxing VM bug (locals holding `type` values misbehave
-// when compared inside a test block).
+// The test bodies below deliberately keep their locals INSIDE the `test`
+// blocks. They were originally lifted into top-level helper functions to
+// dodge the "test-block local-boxing VM bug" (test-body `let` locals never
+// resolved and lowered to `const null` — fixed by #3782, see
+// thoughts/antonio/s1-vm-bug-diagnosis.md). Inlined bodies now double as
+// the regression net for that fix.
 
 client<llm> TestClient {
     provider openai
@@ -34,62 +37,92 @@ function GetBar() -> Bar {
 
 // ─── Equality / inequality tests ─────────────────────────────────────────────
 
-function eq_type_values_same_fn() -> bool {
+test "eq_type_values_same" {
     let a = baml.llm.get_return_type("GetFoo");
     let b = baml.llm.get_return_type("GetFoo");
-    a == b
-}
-
-test "eq_type_values_same" {
-    assert.is_true(baml.deep_equals(eq_type_values_same_fn(), true))
-}
-
-function eq_type_values_different_fn() -> bool {
-    let a = baml.llm.get_return_type("GetFoo");
-    let b = baml.llm.get_return_type("GetBar");
-    a == b
+    assert.is_true(baml.deep_equals(a == b, true))
 }
 
 test "eq_type_values_different" {
-    assert.is_true(baml.deep_equals(eq_type_values_different_fn(), false))
-}
-
-function neq_type_values_same_fn() -> bool {
     let a = baml.llm.get_return_type("GetFoo");
-    let b = baml.llm.get_return_type("GetFoo");
-    a != b
+    let b = baml.llm.get_return_type("GetBar");
+    assert.is_true(baml.deep_equals(a == b, false))
 }
 
 test "neq_type_values_same" {
-    assert.is_true(baml.deep_equals(neq_type_values_same_fn(), false))
-}
-
-function neq_type_values_different_fn() -> bool {
     let a = baml.llm.get_return_type("GetFoo");
-    let b = baml.llm.get_return_type("GetBar");
-    a != b
+    let b = baml.llm.get_return_type("GetFoo");
+    assert.is_true(baml.deep_equals(a != b, false))
 }
 
 test "neq_type_values_different" {
-    assert.is_true(baml.deep_equals(neq_type_values_different_fn(), true))
-}
-
-function deep_equals_type_values_same_fn() -> bool {
     let a = baml.llm.get_return_type("GetFoo");
-    let b = baml.llm.get_return_type("GetFoo");
-    baml.deep_equals(a, b)
+    let b = baml.llm.get_return_type("GetBar");
+    assert.is_true(baml.deep_equals(a != b, true))
 }
 
 test "deep_equals_type_values_same" {
-    assert.is_true(baml.deep_equals(deep_equals_type_values_same_fn(), true))
-}
-
-function deep_equals_type_values_different_fn() -> bool {
     let a = baml.llm.get_return_type("GetFoo");
-    let b = baml.llm.get_return_type("GetBar");
-    baml.deep_equals(a, b)
+    let b = baml.llm.get_return_type("GetFoo");
+    assert.is_true(baml.deep_equals(baml.deep_equals(a, b), true))
 }
 
 test "deep_equals_type_values_different" {
-    assert.is_true(baml.deep_equals(deep_equals_type_values_different_fn(), false))
+    let a = baml.llm.get_return_type("GetFoo");
+    let b = baml.llm.get_return_type("GetBar");
+    assert.is_true(baml.deep_equals(baml.deep_equals(a, b), false))
+}
+
+// ─── CHARACTERIZATION: `==` vs `baml.deep_equals` on permuted unions ────────
+//
+// These tests PIN A KNOWN INCONSISTENCY — they are not an endorsement of it.
+// BAML currently has divergent equality implementations for `type` values:
+//
+//   * `==` lowers through the `baml.ops.equals_equals` driver, which compares
+//     type values with `vm.equivalent(..)` — CANONICAL equivalence, so union
+//     member order does not matter (bex_vm/src/package_baml/ops.rs).
+//   * `baml.deep_equals` compares with the derived `PartialEq` on `RealizedTy`
+//     — SYNTACTIC equality, so union member order DOES matter
+//     (bex_vm/src/package_baml/root.rs).
+//
+// Both behave identically in test-block and function contexts (the historical
+// context divergence was #3782's lowering bug, now fixed). The follow-up
+// s1-mint-identity PR replaces all equality sites with a single mint-identity
+// comparison; when it lands these pins must be updated together with it.
+// Full diagnosis: thoughts/antonio/s1-vm-bug-diagnosis.md.
+
+function union_order_eq_fn() -> bool {
+    // Same comparison as "union_order_eq_canonical_in_test_block", function context.
+    reflect.type_of<int | string>() == reflect.type_of<string | int>()
+}
+
+test "union_order_eq_canonical_in_function" {
+    // `==` : permuted unions compare EQUAL (canonical path).
+    assert.is_true(baml.deep_equals(union_order_eq_fn(), true))
+}
+
+test "union_order_eq_canonical_in_test_block" {
+    // Same comparison inline in a test block — must agree with the function
+    // context (regression for the pre-#3782 context divergence).
+    let a = reflect.type_of<int | string>();
+    let b = reflect.type_of<string | int>();
+    assert.is_true(baml.deep_equals(a == b, true))
+}
+
+function union_order_deep_equals_fn() -> bool {
+    let a = reflect.type_of<int | string>();
+    let b = reflect.type_of<string | int>();
+    baml.deep_equals(a, b)
+}
+
+test "union_order_deep_equals_syntactic_in_function" {
+    // `baml.deep_equals` : permuted unions compare UNEQUAL (syntactic path),
+    // disagreeing with `==` above. Known bug, resolved by s1-mint-identity.
+    assert.is_true(baml.deep_equals(union_order_deep_equals_fn(), false))
+}
+
+test "union_order_deep_equals_syntactic_in_test_block" {
+    let a = reflect.type_of<int | string>();
+    let b = reflect.type_of<string | int>();
+    assert.is_true(baml.deep_equals(baml.deep_equals(a, b), false))
 }
