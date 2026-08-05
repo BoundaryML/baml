@@ -4,9 +4,9 @@ expression: report
 ---
 files: 116
 nodes compared: 60529
-agreements: 51630
+agreements: 51648
 one-sided (coverage): 88
-conflicts: 8811 across 1570 distinct pairs
+conflicts: 8793 across 1566 distinct pairs
 hir_ty error-channel entries: 96
 tir diagnostics: 0
 panics: 0
@@ -131,12 +131,12 @@ ns_to_json_interface/to_json_interface.baml:1125..1207 `{\n       ...\n        }
 [129x] hir_ty=[baml.json.json] tir=[int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>]
     at ns_from_json_interface/from_json_interface.baml:4211..4232 `let j: baml.json.json`
     at ns_from_json_interface/from_json_interface.baml:4218..4232 `baml.json.json`
-[97x] hir_ty=[!error] tir=[int]
-    at ns_arrays/arrays.baml:35482..35498 `grid[0].push(99)`
-    at ns_arrays/arrays.baml:36002..36018 `grid[0].push(99)`
 [97x] hir_ty=[(a: bigint, b: bigint) -> bool throws never] tir=[(a: T, b: T) -> bool throws never]
     at ns_bigints/bigints.baml:2659..2675 `baml.deep_equals`
     at ns_bigints/bigints.baml:2879..2895 `baml.deep_equals`
+[89x] hir_ty=[!error] tir=[int]
+    at ns_arrays/arrays.baml:35482..35498 `grid[0].push(99)`
+    at ns_arrays/arrays.baml:36002..36018 `grid[0].push(99)`
 [89x] hir_ty=[() -> void throws baml.errors.InvalidArgument / null] tir=[() -> void throws unknown / null]
     at ns_arrays/arrays.baml:17100..17328 `{\n    let...pected))\n}`
     at ns_arrays/arrays.baml:17358..17580 `{\n    let...pected))\n}`
@@ -209,9 +209,9 @@ ns_to_json_interface/to_json_interface.baml:1125..1207 `{\n       ...\n        }
 [28x] hir_ty=[(path: string, mode: "a" | "a+" | "r" | "r+" | "w" | "w+") -> baml.fs.File throws baml.errors.InvalidArgument | baml.errors.Io] tir=[(path: string, mode: "r" | "r+" | "w" | "w+" | "a" | "a+") -> baml.fs.File throws baml.errors.Io | baml.errors.InvalidArgument]
     at ns_csv/csv.baml:50273..50285 `baml.fs.open`
     at ns_fs/fs.baml:2421..2433 `baml.fs.open`
-[27x] hir_ty=[!error] tir=[int | null]
+[26x] hir_ty=[!error] tir=[int | null]
     at ns_arrays/sort_comparable.baml:4507..4518 `other.value`
-    at ns_csv/csv_smoke.baml:3038..3055 `rec.get<int>("n")`
+    at ns_generic_union_returns/generic_union_returns.baml:1870..1890 `empty_json?.length()`
 [25x] hir_ty=[never] tir=[baml.panics.IndexOutOfBounds]
     at ns_arrays/arrays.baml:31174..31202 `baml.panic...OutOfBounds`
     at ns_arrays/arrays.baml:31462..31490 `baml.panic...OutOfBounds`
@@ -572,9 +572,6 @@ ns_to_json_interface/to_json_interface.baml:1125..1207 `{\n       ...\n        }
 [6x] hir_ty=[!error] tir=[(predicate: (int) -> bool throws E2) -> baml.iter.Iterator<Item = int, Error = E2> throws never]
     at ns_iter/iter.baml:6362..6410 `baml.iter.... 4]).filter`
     at ns_iter/iter.baml:6518..6563 `baml.iter.... 3]).filter`
-[6x] hir_ty=[!error] tir=[baml.csv.CsvRecord]
-    at ns_csv/csv.baml:24027..24034 `let rec`
-    at ns_csv/csv.baml:24936..24943 `let rec`
 [6x] hir_ty=["no" | "yes"] tir=["yes" | "no"]
     at ns_match_basics/match_basics.baml:3017..3105 `{\n    let..."\n    }\n}`
     at ns_match_basics/match_basics.baml:3041..3103 `match (b) ..."no"\n    }`
@@ -875,6 +872,9 @@ ns_to_json_interface/to_json_interface.baml:1125..1207 `{\n       ...\n        }
 [4x] hir_ty=[(self: baml.csv.CsvReader) -> int throws never] tir=[() -> int throws never]
     at ns_csv/csv.baml:24278..24293 `r.skipped_count`
     at ns_csv/csv.baml:25499..25514 `r.skipped_count`
+[4x] hir_ty=[(self: baml.csv.CsvRecord, column: string) -> int | null throws baml.csv.CsvError] tir=[(column: string) -> T | null throws baml.csv.CsvError]
+    at ns_csv/csv.baml:27859..27866 `rec.get`
+    at ns_csv/csv.baml:28485..28492 `rec.get`
 [4x] hir_ty=[(self: baml.csv.CsvWriter) -> int throws never] tir=[() -> int throws never]
     at ns_csv/csv.baml:34890..34907 `w.records_written`
     at ns_csv/csv.baml:39853..39870 `w.records_written`
@@ -1091,9 +1091,6 @@ ns_to_json_interface/to_json_interface.baml:1125..1207 `{\n       ...\n        }
 [3x] hir_ty=[(self: baml.csv.CsvReader) -> null throws baml.errors.Io] tir=[() -> null throws baml.errors.Io]
     at ns_csv/csv.baml:31937..31944 `r.close`
     at ns_csv/csv.baml:31952..31959 `r.close`
-[3x] hir_ty=[(self: baml.csv.CsvRecord, column: string) -> int | null throws baml.csv.CsvError] tir=[(column: string) -> T | null throws baml.csv.CsvError]
-    at ns_csv/csv.baml:27859..27866 `rec.get`
-    at ns_csv/csv.baml:28485..28492 `rec.get`
 [3x] hir_ty=[(self: baml.csv.CsvRecord, column: string) -> string | null throws baml.csv.CsvError] tir=[(column: string) -> T | null throws baml.csv.CsvError]
     at ns_csv/csv.baml:27791..27798 `rec.get`
     at ns_csv/csv.baml:27917..27924 `rec.get`
@@ -1340,9 +1337,6 @@ ns_to_json_interface/to_json_interface.baml:1125..1207 `{\n       ...\n        }
 [2x] hir_ty=[!error] tir=[unknown | null]
     at ns_tostring_sugar/tostring_sugar.baml:5642..5653 `x.to_string`
     at ns_tostring_sugar/tostring_sugar.baml:5737..5748 `x.to_string`
-[2x] hir_ty=[!error] tir=[user.csv.IntRow]
-    at ns_csv/csv.baml:25379..25386 `let row`
-    at ns_csv/csv.baml:41462..41469 `let row`
 [2x] hir_ty=[!error] tir=[user.deep_copy.DeepInner]
     at ns_deep_copy/deep_copy.baml:4020..4039 `copy.middle.list[0]`
     at ns_deep_copy/deep_copy.baml:4048..4066 `copy.data["first"]`
@@ -2331,8 +2325,6 @@ ns_to_json_interface/to_json_interface.baml:1125..1207 `{\n       ...\n        }
     at ns_iter_impl_generics_only/iter.baml:6485..6553 `user.iter_...]).peekable`
 [1x] hir_ty=[!error] tir=[(body: string) -> string throws never]
     at ns_interfaces/interfaces.baml:49720..49736 `default.decorate`
-[1x] hir_ty=[!error] tir=[(column: string) -> T | null throws baml.csv.CsvError]
-    at ns_csv/csv_smoke.baml:3038..3045 `rec.get`
 [1x] hir_ty=[!error] tir=[(fn: (A, int) -> A throws E2, initial: A) -> A throws E2]
     at ns_iter/iter.baml:6716..6806 `baml.iter....  }).reduce`
 [1x] hir_ty=[!error] tir=[(fn: (int) -> R throws E2) -> user.iter_impl_generics_only.core.Iterator<R, E2> throws never]
@@ -2373,8 +2365,6 @@ ns_to_json_interface/to_json_interface.baml:1125..1207 `{\n       ...\n        }
     at ns_deep_copy/deep_copy.baml:4048..4057 `copy.data`
 [1x] hir_ty=[!error] tir=[user.comparable_sort.Kaboom]
     at ns_comparable_sort/comparable_sort.baml:4171..4172 `e`
-[1x] hir_ty=[!error] tir=[user.csv.CsvSmokeIntRow]
-    at ns_csv/csv_smoke.baml:6793..6800 `let row`
 [1x] hir_ty=[!error] tir=[user.deep_copy.DeepInner[]]
     at ns_deep_copy/deep_copy.baml:4020..4036 `copy.middle.list`
 [1x] hir_ty=[!error] tir=[user.deep_copy.Node]

@@ -892,11 +892,11 @@ impl<'db> InferenceContext<'db> {
                 let collection_ty = self.infer_expr(body, *collection, &Expectation::None);
                 let resolved = self.table.resolve_completely(&collection_ty);
                 let collection_ty = self.matrix_scrut(&resolved);
-                // List elements directly; the Iterator protocol (assoc
-                // `Item` through interfaces) joins with the I cluster.
+                // List elements directly; everything else through the
+                // Iterator protocol (the `iter.Iterable` Item projection).
                 let element = match collection_ty.kind() {
                     TyKind::List(element, _) => element.clone(),
-                    _ => Ty::error(),
+                    _ => self.iteration_item(&collection_ty),
                 };
                 self.lower_pattern(body, *binding, &element);
                 let entry_flow = self.flow.clone();
@@ -2758,6 +2758,37 @@ impl<'db> InferenceContext<'db> {
             }
         }
         rebuilt
+    }
+
+    /// The element a `for (let x in coll)` loop yields for a non-list
+    /// collection: the projection `(coll as baml.iter.Iterable).Item`,
+    /// reduced through the oracle - r-a's for-loop shape (the element IS
+    /// `<C as IntoIterator>::Item`, resolved by trait solving; here the
+    /// I5 projection candidate order, so param-env bounds on a rigid `T`
+    /// and `implements` blocks on classes both answer). A projection the
+    /// oracle cannot determine stays the error sentinel: iteration over
+    /// a type with no `Iterable` evidence has no element type.
+    fn iteration_item(&self, collection: &Ty) -> Ty {
+        let iterable = baml_type::interned::InterfaceRef::new(
+            baml_type::TypeName::new(
+                baml_type::Name::new("baml"),
+                vec![baml_type::Name::new("iter")],
+                baml_type::Name::new("Iterable"),
+            ),
+            Box::new([]),
+            Vec::new(),
+        );
+        let projection = Ty::intern(TyKind::AssociatedTypeProjection {
+            base: collection.clone(),
+            interface: iterable,
+            member: baml_type::Name::new("Item"),
+            attr: baml_type::TyAttr::default(),
+        });
+        let reduced = self.reduce_projections(&projection, PROJECTION_FINALIZE_FUEL);
+        if reduced.has_projection() {
+            return Ty::error();
+        }
+        reduced
     }
 
     /// Rebuilds `ty` with every union node in canonical form, bottom-up.
