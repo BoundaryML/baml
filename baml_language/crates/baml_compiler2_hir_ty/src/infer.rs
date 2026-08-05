@@ -1001,6 +1001,16 @@ impl<'db> InferenceContext<'db> {
         initializer: Option<ExprId>,
         else_branch: Option<ExprId>,
     ) {
+        if else_branch.is_some() {
+            // let-else is REFUTABLE (Rust's let-else): every pattern -
+            // the ascribed-bind form (`let o: Ok = r else ..`) included
+            // - is a pattern TEST against the synthesized initializer,
+            // narrowing to the matched type; the else arm covers the
+            // residual, so the initializer is never CHECKED against the
+            // written type.
+            self.infer_let_destructure(body, pattern, initializer);
+            return self.finish_let_else(body, else_branch);
+        }
         let binding_ty = match &body.patterns[pattern] {
             Pattern::Bind { subpat, .. } => {
                 let annotation = subpat.and_then(|sub| self.pattern_ascription_ty(body, sub));

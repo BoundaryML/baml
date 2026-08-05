@@ -7,7 +7,7 @@ nodes compared: 60529
 agreements: 51948
 one-sided (coverage): 88
 conflicts: 8493 across 1515 distinct pairs
-hir_ty error-channel entries: 45
+hir_ty error-channel entries: 38
 tir diagnostics: 0
 panics: 0
 
@@ -15,13 +15,6 @@ panics: 0
 ns_bigints/bigints.baml:4708..4719 `{ 1n + 2n }`: expected 3n, got bigint
 ns_bigints/bigints.baml:4894..4905 `{ 3n * 4n }`: expected 12n, got bigint
 ns_bigints/bigints.baml:5064..5075 `{ 1n < 2n }`: expected true, got bool
-ns_control_flow/control_flow.baml:6296..6297 `r`: expected user.control_flow.Ok, got user.control_flow.Err | user.control_flow.Ok
-ns_control_flow/control_flow.baml:6542..6543 `r`: expected user.control_flow.Ok | user.control_flow.Warn, got user.control_flow.Err | user.control_flow.Ok | user.control_flow.Warn
-ns_control_flow/control_flow.baml:6749..6753 `item`: expected user.control_flow.Ok, got user.control_flow.Err | user.control_flow.Ok
-ns_control_flow/control_flow.baml:7004..7008 `item`: expected user.control_flow.Ok, got user.control_flow.Err | user.control_flow.Ok
-ns_control_flow/control_flow.baml:7149..7150 `a`: expected user.control_flow.Ok, got user.control_flow.Err | user.control_flow.Ok
-ns_control_flow/control_flow.baml:7197..7198 `b`: expected user.control_flow.Ok, got user.control_flow.Err | user.control_flow.Ok
-ns_control_flow/control_flow.baml:7339..7340 `r`: expected user.control_flow.Ok, got user.control_flow.Err | user.control_flow.Ok
 ns_defer/defer.baml:3849..3957 `{\n  defer...("body")\n}`: expected void, got int
 ns_exceptions/exceptions.baml:35238..35402 `{\n    {\n...l\n    }\n}`: expected void, got "one" | null
 ns_google_llm_env/google_llm_env.baml:1540..1684 `function G...input}"#\n}`: expected map<string, unknown>, got map<string, string>
