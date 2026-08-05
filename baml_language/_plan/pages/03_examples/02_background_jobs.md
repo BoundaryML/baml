@@ -21,12 +21,11 @@ function PlanTrip(trip_request: string) -> Itinerary {
 //# one Background runner per application — it owns the store and worker pool
 let jobs = baml.session.Background { store: pg_store, workers: baml.spawn.TaskGroup.new(8) };
 
-let job = PlanTrip@session(
+let job: Job<Itinerary> = PlanTrip@session(
     trip_request = "3 weeks across South America",
     $runner = jobs,
     $id = "trip-9421",
-);
-// returns immediately; job : Job<Itinerary>
+);   // returns immediately
 ```
 
 The `$runner` parameter selects the kind of run and changes the handle

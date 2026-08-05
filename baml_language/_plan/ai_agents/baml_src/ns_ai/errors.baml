@@ -12,6 +12,11 @@ class CostBudgetExceeded {
     spent_usd: float,
 }
 
+// Thrown by the async runner when a run() blocked on cancelled work is
+// torn down (`baml.session.Interrupted` in the BEP's error catalog). The
+// synchronous reference never throws it: an interrupt is recorded as an
+// Interrupted event and the default policy lets the model react
+// (04_steering.md); CancelAll only fires cancel tokens.
 class SessionInterrupted {
     reason: string,
 }

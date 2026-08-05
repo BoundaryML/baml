@@ -24,9 +24,10 @@ s.send("budget is $3000 total");   // queues behind the first
 // both are injected before the next model call
 ```
 
-The journal records the injection, not the queueing: `UserMessage` events
-appear at the point the model actually saw them. What the model saw and
-when is always reconstructible.
+A message is journaled when it reaches the session; the entry is the
+admission record. The policy controls when the model is next called, so
+what the model saw and when stays reconstructible: a message is first
+seen by the first model call after its entry.
 
 Injection timing is policy behavior. The default is turn-boundary
 injection; a custom policy can hold messages longer (finish the current

@@ -75,18 +75,25 @@ opted in (see `Promptable` below).
 
 ## Custom events
 
-A custom event is a class. Define events at module level, widen the
-built-in union, and bind the union on your policy — the session infers it
-from there:
+A custom event is a class. Define events at module level, name the
+*extension* — the union of your own events — and widen the built-in union
+with it for your policy:
 
 ```baml
 class PermissionRequested { call_id: string, tool: string, why: string }
 class PermissionGranted   { call_id: string }
 class TodoUpdated         { items: string[] }
 
-type ReleaseEvent = baml.session.Event
-                  | PermissionRequested | PermissionGranted | TodoUpdated
+type ReleaseExt   = PermissionRequested | PermissionGranted | TodoUpdated
+type ReleaseEvent = baml.session.Event | ReleaseExt
 ```
+
+The session's second type parameter is the extension, not the full
+union: `Session<Report, ReleaseExt>`. The runtime runs on
+`baml.session.Event | ReleaseExt`, so built-in events are members by
+construction; a session with no custom events is `Session<Report>`
+(extension `never`). The policy binds the full union, and the session
+infers the extension from the policy.
 
 ```baml
 class ReleasePolicy {
@@ -103,7 +110,7 @@ function ReleaseAgent(goal: string) -> Report {
     prompt: `You are a release agent. ${goal} ${ctx.transcript} ${ctx.output_format}`
 }
 
-let s = ReleaseAgent@session(goal = g, $policy = ReleasePolicy { inner: baml.session.ToolLoop { max_steps: 50 } });
+let s: Session<Report, ReleaseExt> = ReleaseAgent@session(goal = g, $policy = ReleasePolicy { inner: baml.session.ToolLoop { max_steps: 50 } });
 s.send(PermissionGranted { call_id: "t7" });   // typed by the union
 ```
 
@@ -111,9 +118,13 @@ Three producers can append custom events:
 
 ```baml
 s.send(PermissionGranted { call_id: id });                    // 1. the application
-j.append(PermissionRequested { call_id: c, tool: t, why: w }); // 2. the policy, in update
+j.record(PermissionRequested { call_id: c, tool: t, why: w }); // 2. the policy, in update
 baml.session.emit(TodoUpdated { items: items });               // 3. a tool, ambient — no extra params
 ```
+
+A policy's `record` writes a journal-only decision record: the entry is
+never folded through the policy, and the refold skips and suppresses it
+(`10_policies.md`).
 
 Clients never produce custom events; the runner treats them opaquely.
 Custom events are invisible to the model unless the class implements

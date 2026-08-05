@@ -28,7 +28,7 @@ function TriageAgent(repo: string) -> Triage {
     `
 }
 
-let s = TriageAgent@session(repo = "boundaryml/baml",
+let s: Session<Triage> = TriageAgent@session(repo = "boundaryml/baml",
     $tools = [read_file, run_bash].concat(gh.tools()));
 ```
 

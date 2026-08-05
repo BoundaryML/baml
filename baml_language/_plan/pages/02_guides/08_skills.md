@@ -69,6 +69,8 @@ class SkillLoaded {
         function to_prompt(self) -> string? { `## Skill: ${self.name}\n${self.body}` }
     }
 }
+
+type SkillEvent = baml.session.Event | SkillLoaded
 ```
 
 **2. The tool.** A closure over the skill list; the catalog lives in its
@@ -101,7 +103,7 @@ class WithSkills {
     skills: Skill[],
 
     implements baml.session.Policy {
-        type Ev = baml.session.Event | SkillLoaded
+        type Ev = SkillEvent
         function update(self, st: SessionState, j: Journal<Self.Ev>, e: Self.Ev) -> Command[] {
             match (e) {
                 let s: SkillLoaded => {
@@ -137,7 +139,7 @@ let skills = [
     skill_from_file("skills/release-process.md"),
 ];
 
-let s = CodeAgent@session(
+let s: Session<Report, SkillLoaded> = CodeAgent@session(
     goal = t,
     $tools = [read_file, run_bash, skill_loader(skills)],
     $policy = WithSkills { skills: skills, inner: baml.session.ToolLoop { max_steps: 100 } },

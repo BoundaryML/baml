@@ -1,7 +1,7 @@
 // Scenario 06 — Policies: pure folds; middleware wraps middleware.
 // An approval gate built end to end with TYPED custom events: the event
 // union is widened on the policy (type Ev = ApprovalEvent), the session
-// carries the extension as a type parameter, and send_event is
+// carries the extension as a type parameter, and send(event) is
 // compile-checked. Mirrors pages/02_guides/09_policies.md.
 
 class PermissionRequested {
@@ -43,8 +43,10 @@ class ApprovalGate {
                     return [];
                 },
                 let d: PermissionDenied => {
-                    j.append(root.ai.ToolFailed { call_id: d.call_id, error: "denied by operator" });
-                    return [root.ai.CallModel {  }];
+                    // a command, not an append: the runner journals ToolFailed
+                    // and folds it, so the inner loop clears the call and
+                    // recalls the model — identically live and on refold
+                    return [root.ai.FailTool { call_id: d.call_id, error: "denied by operator" }];
                 },
                 _ => {
                     self.inner.update(st, j, e).map((cmd) -> {
@@ -52,7 +54,9 @@ class ApprovalGate {
                             let r: root.ai.RunTool => {
                                 if (self.needs_ok.includes(r.tool)) {
                                     let _ = self.held.set(r.call_id, r);
-                                    j.append(
+                                    // record, not append: journal-only history,
+                                    // suppressed on refold so replay can't dup it
+                                    j.record(
                                         PermissionRequested { call_id: r.call_id, tool: r.tool },
                                     );
                                     root.ai.AwaitInput { note: `approve ${r.tool}?` }
@@ -125,7 +129,7 @@ testset "s06 policies" {
                 }),
             );
         //# approval arrives on the data lane — a TYPED event, compile-checked
-        s.send_event(PermissionGranted { call_id: "t1" });
+        s.send(PermissionGranted { call_id: "t1" });
         match (s.run()) {
             let d: root.ai.Done<Itinerary> => assert.equal(d.result.destination, "Japan"),
             _ => assert.is_true(false),
@@ -160,7 +164,7 @@ testset "s06 policies" {
         };
         let s = gated_session(fake);
         let _ = s.run();
-        s.send_event(PermissionDenied { call_id: "t1" });
+        s.send(PermissionDenied { call_id: "t1" });
         match (s.run()) {
             let d: root.ai.Done<Itinerary> => {
                 assert.equal(d.result.daily_plan.at(0) ?? "", "no hotel booked")
@@ -171,6 +175,69 @@ testset "s06 policies" {
             .is_true(
                 s.journal.entries.some((en) -> {
                     en.event is root.ai.ToolFailed
+                }),
+            )
+    }
+
+    test "kill the process mid-approval: resume, the request is still pending" {
+        let fake = root.ai.ScriptedClient<ApprovalExt> {
+            i: 0,
+            turns: [
+                [
+                    root.ai
+                        .tool_requested(
+                            "t1",
+                            "search_hotels",
+                            `{"city":"Kyoto","max_nightly":150.0}`,
+                        ),
+                ],
+            ],
+        };
+        let s = gated_session(fake);
+        let _ = s.run(); // gate holds t1, run yields
+        let snap = s.snapshot(); // "the process dies here"
+        //# a fresh process: new client, new (blank) gate policy — the refold
+        //# rebuilds the held call by replaying ToolRequested through the gate,
+        //# skips the recorded PermissionRequested, and re-appends nothing
+        let fake2 = root.ai.ScriptedClient<ApprovalExt> {
+            i: 0,
+            turns: [
+                [
+                    root.ai
+                        .final_produced(
+                            `{"destination":"Japan","days":5,"flights":[],"hotel":null,"daily_plan":[]}`,
+                        ),
+                ],
+            ],
+        };
+        let tb = root.ai.Toolbox { entries: [root.ai.tool(search_flights), root.ai.tool(search_hotels)] };
+        let s2: root.ai.Session<Itinerary, ApprovalExt> = root
+            .ai
+            .resume_session<Itinerary, ApprovalExt>(
+                snap,
+                client = fake2,
+                toolbox = tb,
+                policy = ApprovalGate {
+                    inner: root.ai.ToolLoop<ApprovalExt> { max_steps: 12, task_mode: false },
+                    needs_ok: ["search_hotels"],
+                    held: {},
+                },
+            );
+        //# exactly one PermissionRequested — replay did not duplicate it
+        let requests = s2.journal.entries.filter((en) -> {
+            en.event is PermissionRequested
+        });
+        assert.equal(requests.length(), 1);
+        //# the grant releases the rebuilt held call and the run completes
+        s2.send(PermissionGranted { call_id: "t1" });
+        match (s2.run()) {
+            let d: root.ai.Done<Itinerary> => assert.equal(d.result.destination, "Japan"),
+            _ => assert.is_true(false),
+        };
+        assert
+            .is_true(
+                s2.journal.entries.some((en) -> {
+                    en.event is root.ai.ToolCompleted
                 }),
             )
     }

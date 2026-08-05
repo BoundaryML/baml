@@ -16,8 +16,7 @@ function PlanTrip(trip_request: string) -> Itinerary {
     `
 }
 
-let s = PlanTrip@session(trip_request = "2 weeks in Japan, mid-range");
-// s : Session<Itinerary>
+let s: Session<Itinerary> = PlanTrip@session(trip_request = "2 weeks in Japan, mid-range");
 ```
 
 ## Arguments are session constants
@@ -37,8 +36,9 @@ Conversation arrives through `send`, not through arguments:
 s.send("actually, skip Tokyo");
 ```
 
-`send` appends a `UserMessage` event to the journal. It never blocks and
-never calls the model. The string form is shorthand for
+`send` delivers a `UserMessage` event; the policy decides when it is
+injected into the journal (`04_steering.md`). It never blocks and never
+calls the model. The string form is shorthand for
 `s.send(baml.session.user("..."))`; the `Message` type exists for richer
 content.
 
@@ -51,7 +51,7 @@ template; messages are events rendered by `${ctx.transcript}`.
 for input:
 
 ```baml
-let s = PlanTrip@session(trip_request = "2 weeks in Japan");
+let s: Session<Itinerary> = PlanTrip@session(trip_request = "2 weeks in Japan");
 match (s.run()) {
     let d: baml.session.Done<Itinerary> => print(d.result),
     let r: baml.session.Replied => print(r.message),
@@ -84,7 +84,7 @@ arguments, and behavior settings remain changeable mid-run through
 setters:
 
 ```baml
-let s = PlanTrip@session(trip_request = "2 weeks in Japan", $policy = my_policy);
+let s: Session<Itinerary> = PlanTrip@session(trip_request = "2 weeks in Japan", $policy = my_policy);
 s.set_client(cheap_client);        // takes effect on the next model call; journaled
 ```
 
@@ -105,14 +105,14 @@ to continue on any machine with any provider. Resuming passes no function
 arguments — they come from the snapshot:
 
 ```baml
-let s = PlanTrip@session($resume = snap);
+let s: Session<Itinerary> = PlanTrip@session($resume = snap);
 ```
 
 The stateless server pattern branches once, on the first turn:
 
 ```baml
 function handle_turn(snap: string?, msg: string) -> string {
-    let s = if let x: string = snap {
+    let s: Session<Itinerary> = if let x: string = snap {
         PlanTrip@session($resume = x)
     } else {
         PlanTrip@session(trip_request = msg)          // first turn: args, no snapshot
@@ -136,10 +136,10 @@ per ticket, per user, per order:
 
 ```baml
 // get or create: args are used on create, checked against the journal on attach
-let s = PlanTrip@session(trip_request = brief, $id = `issue-${n}`);
+let s: Session<Itinerary> = PlanTrip@session(trip_request = brief, $id = `issue-${n}`);
 
 // create only: throws InstanceExists if the ID is taken
-let s = PlanTrip@session(trip_request = brief, $id = `issue-${n}`, $new = true);
+let s: Session<Itinerary> = PlanTrip@session(trip_request = brief, $id = `issue-${n}`, $new = true);
 ```
 
 With `id`, the runtime loads the session from the configured journal store

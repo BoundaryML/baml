@@ -46,9 +46,12 @@ class PermissionRequested { call_id: string, tool: string, why: string }
 class PermissionGranted   { call_id: string }
 class PermissionDenied    { call_id: string }
 
-type CCEvent = baml.session.Event
-             | PermissionRequested | PermissionGranted | PermissionDenied
+type CCExt   = PermissionRequested | PermissionGranted | PermissionDenied
+type CCEvent = baml.session.Event | CCExt
 ```
+
+The extension `CCExt` is the session's type parameter; the full union
+`CCEvent` is what the policy binds (`../02_guides/11_journal.md`).
 
 ## The policy stack
 
@@ -64,12 +67,11 @@ class WithSteering {
             match (e) {
                 //# buffer messages instead of firing the model immediately
                 let m: UserMessage => { st.queued_msgs.push(m.content); [] },
-                //# turn boundary: flush the buffer, then continue
+                //# turn boundary: the buffered messages are already journaled
+                //# (arrival is the admission record) — just recall the model
                 let a: AssistantMessage => {
                     if (st.queued_msgs.length() > 0) {
-                        while let q: string = st.queued_msgs.shift() {
-                            j.append(UserMessage { content: q });
-                        }
+                        st.queued_msgs = [];
                         [CallModel {}]
                     } else { self.inner.update(st, j, e) }
                 },
@@ -96,7 +98,7 @@ green thread.
 
 ```baml
 function main() -> null {
-    let s = CodeAgent@session(goal = "fix the failing tests", $policy = policy);
+    let s: Session<Report, CCExt> = CodeAgent@session(goal = "fix the failing tests", $policy = policy);
 
     //# UI lane: tail the journal, render events as they land
     spawn {
@@ -132,7 +134,7 @@ function main() -> null {
 
 //# a fold over the journal: the most recent unanswered permission request.
 //# Two passes — an answer can land after its request in the log.
-function pending_permission(s: Session<Report, CCEvent>) -> string {
+function pending_permission(s: Session<Report, CCExt>) -> string {
     let answered: string[] = [];
     for (let en in s.journal().read_from(0)) {
         match (en.event) {

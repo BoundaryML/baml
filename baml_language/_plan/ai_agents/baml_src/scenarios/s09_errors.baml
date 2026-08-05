@@ -48,9 +48,10 @@ testset "s09 errors" {
             [root.ai.final_produced(`{"destination":"Japan","days":1,"flights":[],"hotel":null,"daily_plan":[]}`)],
         ] }, task_mode = true);
         let _ = s.run();
+        //# validation failures are ToolFailed events, readable by the model
         let error_result = s.journal.entries.some((en) -> {
             match (en.event) {
-                let t: root.ai.ToolCompleted => t.result_json.includes("bad arguments"),
+                let t: root.ai.ToolFailed => t.error.includes("bad arguments"),
                 _ => false,
             }
         });
@@ -75,6 +76,72 @@ testset "s09 errors" {
         };
         assert.contains(outcome, "step budget exhausted");
         assert.contains(outcome, "(2 steps)")
+    }
+
+    test "an exhausted session revives: refold swallows the old throw, a message resets the budget" {
+        let fake = root.ai.ScriptedClient<never> { i: 0, turns: [
+            [root.ai.tool_requested("t1", "search_flights", `{"origin":"A","dest":"B"}`)],
+            [root.ai.tool_requested("t2", "search_flights", `{"origin":"A","dest":"B"}`)],
+            [root.ai.tool_requested("t3", "search_flights", `{"origin":"A","dest":"B"}`)],
+        ] };
+        let s = plan_trip_session("Japan", fake, task_mode = true);
+        s.set_policy(root.ai.ToolLoop<never> { max_steps: 2, task_mode: true });
+        let _ = (match (s.run()) {
+            let d: root.ai.Done<Itinerary> => "done",
+            let r: root.ai.Replied => "replied",
+        }) catch_all (e) { _ => "budget" };
+
+        //# resuming replays a journal whose live run ABORTED on the budget;
+        //# the refold swallows that throw instead of failing the resume
+        let fake2 = root.ai.ScriptedClient<never> { i: 0, turns: [
+            [root.ai.final_produced(`{"destination":"Japan","days":3,"flights":[],"hotel":null,"daily_plan":[]}`)],
+        ] };
+        let tb = root.ai.Toolbox { entries: [root.ai.tool(search_flights), root.ai.tool(search_hotels)] };
+        let s2: root.ai.Session<Itinerary, never> = root.ai.resume_session<Itinerary, never>(
+            s.snapshot(),
+            client = fake2,
+            toolbox = tb,
+            policy = root.ai.ToolLoop<never> { max_steps: 2, task_mode: true },
+            output_schema = itinerary_schema(),
+        );
+        //# a new message resets the per-turn budget and the run completes
+        s2.send("try again, just pick something");
+        match (s2.run()) {
+            let d: root.ai.Done<Itinerary> => assert.equal(d.result.days, 3),
+            _ => assert.is_true(false),
+        }
+    }
+
+    test "with_retry re-runs a transient tool failure, then gives up to the model" {
+        //# a tool that always fails; only "flaky" is listed as retryable
+        let tb = root.ai.Toolbox { entries: [
+            root.ai.tool((city: string) -> { throw baml.errors.Io { message: `weather api down (${city})` } }, name = "flaky"),
+        ] };
+        let fake = root.ai.ScriptedClient<never> { i: 0, turns: [
+            [root.ai.tool_requested("t1", "flaky", `{"city":"Kyoto"}`)],
+            [root.ai.final_produced(`{"destination":"Japan","days":2,"flights":[],"hotel":null,"daily_plan":["indoor day"]}`)],
+        ] };
+        let s = root.ai.new_session<Itinerary, never>(
+            function_name = "PlanTrip",
+            args_json = `{"request":"Japan"}`,
+            client = fake,
+            toolbox = tb,
+            policy = root.ai.WithRetry<never> {
+                inner: root.ai.ToolLoop<never> { max_steps: 8, task_mode: true },
+                max_attempts: 2,
+                tools: ["flaky"],
+            },
+            output_schema = itinerary_schema(),
+        );
+        match (s.run()) {
+            let d: root.ai.Done<Itinerary> => assert.equal(d.result.days, 2),
+            _ => assert.is_true(false),
+        };
+        //# both attempts are in the journal; then the model saw the failure
+        let failures = s.journal.entries.filter((en) -> {
+            en.event is root.ai.ToolFailed
+        });
+        assert.equal(failures.length(), 2)
     }
 
     test "impossible tasks return a typed refusal, not a timeout" {

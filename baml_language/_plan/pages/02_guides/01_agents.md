@@ -67,6 +67,26 @@ reply is recorded and the loop continues. When the agent needs to talk to
 a user, use a session (`02_sessions.md`). When it should run detached,
 use a job (`../03_examples/02_background_jobs.md`).
 
+## Functions without tools
+
+A function without `tools:` runs the same loop; it completes on the
+first model turn, when the model produces the return type. Extraction,
+classification, and image description are one-turn tasks, not a
+separate kind of function.
+
+The uniformity is what makes the rest of the system apply to them: a
+one-turn task records the same journal shape (`SessionStarted`,
+`AssistantMessage`, `FinalProduced`, `Usage`), can be opened as a
+session — sending a correction to an extraction is an ordinary
+conversation — and accepts the same `$` parameters.
+
+`$max_steps` counts model turns, so it is inert on a toolless call: the
+loop needs one turn. It is accepted anyway, because two things can make
+a one-turn function multi-turn: a policy can mount tools mid-run, and
+session mode continues the conversation. Malformed output is not a
+turn — parse repair and feedback retries happen within a turn, under
+their own attempt budget (`../04_advanced/01_errors_and_retries.md`).
+
 ## Configuring a run
 
 Configuration parameters share the call parentheses with the function's
@@ -74,11 +94,11 @@ arguments, distinguished by a `$` prefix. Bare names go to the function;
 `$` names go to the runtime:
 
 ```baml
-let trip = PlanTrip("2 weeks in Japan", $max_steps = 20);
+let trip = PlanTrip("2 weeks in Japan", $client = fast_client);
 ```
 
 Function parameters cannot start with `$`, so a function with its own
-`max_steps` parameter works unchanged. `03_configuration.md` covers the
+`client` parameter works unchanged. `03_configuration.md` covers the
 full set of `$` parameters, mid-run setters, and precedence.
 
 ## Step budgets

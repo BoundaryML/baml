@@ -62,7 +62,7 @@ test "agent completes after one tool round-trip" {
         [ToolRequested { call_id: "t1", tool: "search_flights", args_json: `{"origin":"SFO","dest":"NRT"}` }],
         [FinalProduced { result_json: `{"destination":"Japan","days":14,"flights":[],"hotel":null,"daily_plan":[]}` }],
     ] };
-    let s = PlanTrip@session(trip_request = "2 weeks in Japan", $client = fake);
+    let s: Session<Itinerary> = PlanTrip@session(trip_request = "2 weeks in Japan", $client = fake);
     match (s.run()) {
         let d: baml.session.Done<Itinerary> => assert.equal(d.result.days, 14),
         _ => assert.is_true(false),
@@ -93,7 +93,7 @@ function eval_suite(cases: EvalCase[]) -> float {
     let g = baml.spawn.TaskGroup.new(8);
     let scores = await baml.future.all(cases.map((c) -> {
         spawn with baml.spawn.options(group = g) {
-            let s = PlanTrip@session(trip_request = c.input);
+            let s: Session<Itinerary> = PlanTrip@session(trip_request = c.input);
             let _ = s.run();
             JudgeRun(render_for_judge(s.journal()), c.rubric).score   // an LLM function
         }

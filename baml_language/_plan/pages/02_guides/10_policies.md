@@ -41,10 +41,11 @@ class MountTools  { names: string[] }
 class UnmountTools{ names: string[] }
 class SpawnChild  { child_id: string, goal: string }
 class RetryTool   { call_id: string, after_ms: int }   // runner owns the clock
+class FailTool    { call_id: string, error: string }   // fail a held call without running it
 class AwaitInput  { note: string? }              // end the turn as Replied / wait
 class FinishTurn  { result_json: string }        // end the turn as Done
 class CancelAll   { reason: string }
-type Command = CallModel | RunTool | RetryTool | MountTools | UnmountTools
+type Command = CallModel | RunTool | RetryTool | FailTool | MountTools | UnmountTools
              | SpawnChild | AwaitInput | FinishTurn | CancelAll
 ```
 
@@ -56,9 +57,11 @@ nothing; it has decided something.
 The runner executes commands and is the only component that performs IO:
 `CallModel` → render/invoke/ingest on the client and append the events;
 `RunTool` → dispatch with validation, append `ToolCompleted` or
-`ToolFailed`; `MountTools`/`UnmountTools` → update the toolbox, append
-`ToolsChanged`; `CancelAll` → fire cancel tokens; `AwaitInput` /
-`FinishTurn` → end the current `run()` as `Replied` or `Done`.
+`ToolFailed`; `FailTool` → append `ToolFailed` without running the tool,
+folded like any tool outcome; `MountTools`/`UnmountTools` → update the
+toolbox, append `ToolsChanged`; `CancelAll` → fire cancel tokens;
+`AwaitInput` / `FinishTurn` → end the current `run()` as `Replied` or
+`Done`.
 
 You do not implement or call the runner. It is documented so the policy
 contract is precise: events in, commands out, effects elsewhere.
@@ -67,12 +70,35 @@ Rules for `update`:
 
 - No IO. No model calls, no HTTP, no clocks, no randomness.
 - Reading the journal is fine; it is immutable history.
-- Appending custom events that record a decision is allowed. Appending
-  built-in events is the runner's job.
-- `SessionState` is scratch space and must be derivable from the journal:
-  on resume, the runtime rebuilds it by re-folding the journal through
-  `update`. State that cannot be rebuilt that way will differ after a
-  resume — that is a bug in the policy.
+- `update` does not write the journal, with one sanctioned exception:
+  `j.record(e)` appends a custom event as a journal-only decision record
+  (for example `PermissionRequested`). Built-in events are produced by
+  the runner alone, on command — to fail a held tool call, return
+  `FailTool { call_id, error }` instead of appending `ToolFailed`.
+- `update` may throw to abort the live run; the budget middleware does.
+- `SessionState` is scratch space and must be derivable from the
+  journal. The refold, below, is how the runtime rebuilds it.
+
+## The refold
+
+On resume, and whenever `set_policy` installs a policy mid-run, the
+runtime rebuilds `SessionState` by replaying the journal through
+`update` from the first entry. This replay is the refold. Three rules
+make the rebuilt state equal the live state:
+
+1. Commands returned during the refold are discarded. Their effects
+   already happened; the results are later entries in the journal.
+2. Entries written by `record` are skipped, and `record` itself is
+   suppressed during the refold. Recorded entries were never folded
+   live, and replay must not append them a second time.
+3. A throw during the refold is swallowed, per event. The abort already
+   happened live; rebuilding the state of an exhausted session is not
+   itself an error, and the entries after the throw still fold.
+
+State that cannot be rebuilt this way — anything derived from a clock,
+randomness, or an external read — differs after a resume. That is a bug
+in the policy, and the rules above exist to make it impossible to write
+by accident.
 
 ## Middleware
 
@@ -83,7 +109,7 @@ does not handle. The stdlib ships the common ones:
 |---|---|
 | `with_steering` | Buffer incoming messages; inject at turn boundaries. |
 | `with_approval` | Hold selected tool calls until an approval event. |
-| `with_budget` | Track `Usage`; stop the session at a cost cap. |
+| `with_budget` | Track `Usage`; throw `CostBudgetExceeded` at a cost cap. |
 | `with_compaction` | Summarize old entries when context grows past a budget. |
 | `with_retry` | Retry failed tool calls with backoff. |
 
@@ -101,8 +127,9 @@ class WithBudget {
                 let u: Usage => {
                     self.spent += cost_of(u);
                     if (self.spent > self.cap_usd) {
-                        [CancelAll { reason: `budget exceeded: $${self.spent}` }]
-                    } else { [] }
+                        throw baml.session.CostBudgetExceeded { message: "cost budget exceeded", spent_usd: self.spent };
+                    }
+                    []
                 },
                 _ => self.inner.update(st, j, e),
             }
@@ -127,15 +154,13 @@ class WithApproval {
             match (e) {
                 let g: PermissionGranted =>
                     if let held: RunTool = self.held.get(g.call_id) { [held] } else { [] },
-                let d: PermissionDenied => {
-                    j.append(ToolFailed { call_id: d.call_id, error: "denied by operator" });
-                    [CallModel {}]
-                },
+                let d: PermissionDenied =>
+                    [FailTool { call_id: d.call_id, error: "denied by operator" }],
                 _ => self.inner.update(st, j, e).map((cmd) -> {
                     match (cmd) {
                         let r: RunTool if self.needs_ok.includes(r.tool) => {
                             let _ = self.held.set(r.call_id, r);
-                            j.append(PermissionRequested { call_id: r.call_id, tool: r.tool, why: r.args_json });
+                            j.record(PermissionRequested { call_id: r.call_id, tool: r.tool, why: r.args_json });
                             AwaitInput { note: `approve ${r.tool}?` }
                         },
                         _ => cmd,
@@ -178,7 +203,7 @@ let policy = WithSteering { inner:
              WithBudget   { cap_usd: 2.0, spent: 0.0, inner:
              baml.session.ToolLoop { max_steps: 12 } } } };
 
-let s = PlanTrip@session(trip_request = r, $policy = policy);
+let s: Session<Itinerary> = PlanTrip@session(trip_request = r, $policy = policy);
 ```
 
 Events flow outside-in; commands flow inside-out. Put steering outermost
@@ -194,7 +219,7 @@ clock. Tests are literal events in, command assertions out:
 test "tool loop waits for all parallel tools before recalling the model" {
     let eng = baml.session.ToolLoop { max_steps: 8 };
     let st = eng.init();
-    let j = Journal { entries: [] };
+    let j = baml.session.new_journal();
 
     let _ = eng.update(st, j, ToolRequested { call_id: "a", tool: "search_flights", args_json: "{}" });
     let _ = eng.update(st, j, ToolRequested { call_id: "b", tool: "search_hotels", args_json: "{}" });

@@ -24,25 +24,35 @@ class Session<T, X> {
     policy: Policy<Ev = Event | X>,
     st: SessionState,
     queued: string[],            // data lane: user messages
-    queued_events: (Event | X)[],// data lane: custom events
+    queued_events: X[],          // data lane: custom events
+    interrupts: string[],        // control lane: never waits behind data
     cancel: baml.spawn.CancelToken,
     output_schema: string,
 
-    // ---- data lane ----
-    function send(self, msg: string) -> void { self.queued.push(msg); }
-    function send_event(self, e: Event | X) -> void { self.queued_events.push(e); }
+    // ---- data lane: strings and CUSTOM events only. Built-in events are
+    // produced by the runner alone — a caller cannot forge model history.
+    function send(self, m: string | X) -> void {
+        match (m) {
+            let s: string => { self.queued.push(s); },
+            _ => { self.queued_events.push(m); },
+        }
+    }
 
     // ---- control lane ----
     function interrupt(self, reason: string) -> void {
         self.cancel.cancel();
-        self.queued_events.push(Interrupted { reason: reason });
+        self.interrupts.push(reason);
     }
 
-    // ---- configuration (the alternative to a `with` clause) ----
-    function set_client(self, c: Client<Ev = Event | X>) -> void { self.client = c; }
+    // ---- configuration; every setter is journaled (03_configuration.md) ----
+    function set_client(self, c: Client<Ev = Event | X>) -> void {
+        self.client = c;
+        self.journal.append(ClientChanged { client_id: c.id() });
+    }
     function set_policy(self, p: Policy<Ev = Event | X>) -> void {
         self.policy = p;
-        self.st = p.init();
+        self.journal.append(PolicyChanged { kind: "policy_changed" });
+        self.st = refold(p, self.journal);
     }
     function register(self, t: Tool) -> void { self.registry.push(t); }
 
@@ -67,11 +77,15 @@ class Session<T, X> {
         let inbox: (Event | X)[] = [];
         let cmds: Command[] = [];
 
-        //# turn boundary: drain both queues
+        //# control first — an interrupt never waits behind queued data
+        while let r: string = self.interrupts.shift() {
+            inbox.push(Interrupted { reason: r });
+        }
+        //# then the data lane
         while let m: string = self.queued.shift() {
             inbox.push(UserMessage { content: m });
         }
-        while let qe: Event | X = self.queued_events.shift() {
+        while let qe: X = self.queued_events.shift() {
             inbox.push(qe);
         }
         if (inbox.length() == 0) {
@@ -98,20 +112,33 @@ class Session<T, X> {
                         for (let e2 in self.client.ingest(resp)) { inbox.push(e2); }
                     },
                     let c: RunTool => {
-                        let args = parse_args(c.args_json);
-                        inbox.push(ToolCompleted {
+                        //# a tool error becomes a ToolFailed event, not a crash —
+                        //# the model sees it and adapts (01_errors_and_retries.md)
+                        let ev: Event = ToolCompleted {
                             call_id: c.call_id,
-                            result_json: self.toolbox.call(c.tool, args),
-                        });
+                            result_json: self.toolbox.call(c.tool, parse_args(c.args_json)),
+                        } catch_all (e) {
+                            _ => ToolFailed { call_id: c.call_id, error: e.to_string() },
+                        };
+                        inbox.push(ev);
                     },
                     let c: RetryTool => {
-                        // sketch: no timer; re-run from the journaled request
+                        // re-run from the journaled request. The runner owns the
+                        // clock; this sync sketch ignores after_ms rather than sleep.
                         if let orig: ToolRequested = find_request(self.journal, c.call_id) {
-                            inbox.push(ToolCompleted {
+                            let ev: Event = ToolCompleted {
                                 call_id: orig.call_id,
                                 result_json: self.toolbox.call(orig.tool, parse_args(orig.args_json)),
-                            });
+                            } catch_all (e) {
+                                _ => ToolFailed { call_id: orig.call_id, error: e.to_string() },
+                            };
+                            inbox.push(ev);
                         }
+                    },
+                    let c: FailTool => {
+                        // fail without running: appended AND folded like any
+                        // tool outcome, so the inner loop sees it (live + refold)
+                        inbox.push(ToolFailed { call_id: c.call_id, error: c.error });
                     },
                     let c: MountTools => { self.mount(c.names); },
                     let c: UnmountTools => { self.unmount(c.names); },
@@ -127,8 +154,10 @@ class Session<T, X> {
                         return Done { result: baml.json.from_string<T>(c.result_json) };
                     },
                     let c: CancelAll => {
+                        //# fire cancel tokens; NOT a turn-ender — only AwaitInput
+                        //# and FinishTurn end a run (10_policies.md, runner spec)
                         self.cancel.cancel();
-                        throw SessionInterrupted { reason: c.reason };
+                        self.cancel = baml.spawn.CancelToken.new();
                     },
                 }
                 continue;
@@ -188,9 +217,28 @@ function new_session<T, X>(
         st: policy.init(),
         queued: [],
         queued_events: [],
+        interrupts: [],
         cancel: baml.spawn.CancelToken.new(),
         output_schema: output_schema,
     }
+}
+
+//# The refold: rebuild policy state by replaying the journal through
+//# update. Three rules make replay equal the live run:
+//#   1. commands are discarded — their effects already happened;
+//#   2. recorded entries are skipped — they were never folded live
+//#      (and record() is suppressed, so replay cannot re-append them);
+//#   3. throws are swallowed per event — the abort already happened live.
+function refold<X>(p: Policy<Ev = Event | X>, j: Journal<Event | X>) -> SessionState {
+    let st = p.init();
+    j.replaying = true;
+    defer { j.replaying = false; }
+    for (let en in j.entries) {
+        if (!en.recorded) {
+            let _ = (p.update(st, j, en.event) catch_all (e) { _ => [] });
+        }
+    }
+    st
 }
 
 //# Resume: the journal is the state. Policy state is rebuilt by re-folding.
@@ -202,11 +250,7 @@ function resume_session<T, X>(
     output_schema: string = "",
 ) -> Session<T, X> {
     let j = resume_journal<Event | X>(snap);
-    let st = policy.init();
-    //# rebuild the derived cache from history (commands are discarded)
-    for (let en in j.entries) {
-        let _ = policy.update(st, j, en.event);
-    }
+    let st = refold(policy, j);
     Session {
         journal: j,
         toolbox: toolbox,
@@ -216,6 +260,7 @@ function resume_session<T, X>(
         st: st,
         queued: [],
         queued_events: [],
+        interrupts: [],
         cancel: baml.spawn.CancelToken.new(),
         output_schema: output_schema,
     }

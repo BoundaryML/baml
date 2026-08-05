@@ -19,11 +19,11 @@ function; `$` names go to the runtime. Function parameters cannot start
 with `$`, so the two namespaces never collide.
 
 ```baml
-//# a plain call with a budget
-let trip = PlanTrip("2 weeks in Japan", $max_steps = 20);
+//# a plain call on a different client than the function declares
+let trip: Itinerary = PlanTrip("2 weeks in Japan", $client = fast_client);
 
 //# a session with a policy and a specific client
-let s = PlanTrip@session(
+let s: Session<Itinerary> = PlanTrip@session(
     trip_request = "2 weeks in Japan",     // PlanTrip's own parameter
     $policy = approval_policy,
     $client = fallback_client,
@@ -37,7 +37,7 @@ let job: Job<Itinerary> = PlanTrip@session(
 );
 
 //# resume: arguments come from the snapshot, so only $resume appears
-let s2 = PlanTrip@session($resume = snap);
+let s2: Session<Itinerary> = PlanTrip@session($resume = snap);
 ```
 
 `$` parameters are always passed by name.
@@ -63,7 +63,7 @@ Behavior settings have setters, usable before the first `run()` or
 between runs:
 
 ```baml
-let s = PlanTrip@session(trip_request = "2 weeks in Japan");
+let s: Session<Itinerary> = PlanTrip@session(trip_request = "2 weeks in Japan");
 s.set_client(cheap_client);        // takes effect on the next model call
 s.set_policy(approval_policy);     // policy state is rebuilt from the journal
 let t1 = s.run();
@@ -74,8 +74,11 @@ let t2 = s.run();
 
 Every setter appends an event: `ClientChanged` or `PolicyChanged`
 (`11_journal.md`). Configuration history is part of the record, so
-"which client produced turn 3" is a journal query, and a resumed session
-reconstructs the same configuration by folding the same events.
+"which client produced turn 3" is a journal query. The events are audit
+history, not stored values: a client is re-resolvable by its recorded ID,
+but a policy is a runtime value, so a resumed session takes its policy
+from the caller (`$policy`) and rebuilds the policy's state by folding
+the journal.
 
 Tool changes are not a setter. Tools change through policy commands
 (`MountTools`, `UnmountTools`), which record cause as well as effect

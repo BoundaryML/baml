@@ -17,6 +17,7 @@ Errors thrown to the caller:
 |---|---|---|
 | `baml.errors.ParseError` | The model's final output failed schema parsing after repair and feedback retries. | Fallback value, or re-run with a different client. |
 | `baml.session.StepBudgetExceeded` | The loop hit `max_steps` without producing the return type. | Raise the budget, tighten the prompt, or fall back. |
+| `baml.session.CostBudgetExceeded` | `with_budget` middleware crossed its cost cap. | Raise the cap, or fall back. |
 | `baml.errors.RateLimited` | Provider 429 after the client's retry policy is exhausted. | Backoff at the application level, or fallback client. |
 | `baml.errors.AuthFailed` | Provider rejected credentials. Not retried. | Configuration fix; nothing programmatic. |
 | `baml.errors.ProviderDown` | Network failures / 5xx after retries. | Fallback client. |

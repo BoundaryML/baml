@@ -68,7 +68,7 @@ produces an `Itinerary`. This is a task: one call, one typed result.
 Open the same function as a session:
 
 ```baml
-let s = PlanTrip@session(trip_request = "2 weeks in Japan");
+let s: Session<Itinerary> = PlanTrip@session(trip_request = "2 weeks in Japan");
 
 match (s.run()) {
     let d: baml.session.Done<Itinerary> => print(d.result),

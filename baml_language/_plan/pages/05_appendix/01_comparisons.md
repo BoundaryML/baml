@@ -103,7 +103,7 @@ await session.prompt("What files are in the current directory?");
 
 ```baml
 // BAML
-let s = CodeAgent@session(
+let s: Session<Report> = CodeAgent@session(
     goal = "list the files in the current directory",
     $store = file_store,
     $id = most_recent_id(),

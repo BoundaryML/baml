@@ -66,6 +66,7 @@ _plan/
 - An LLM function is a typed function
 - An agent is a function with tools
 - Task mode
+- Functions without tools
 - Configuring a run
 - Step budgets
 - Errors
@@ -134,6 +135,7 @@ _plan/
 - What a policy is
 - Commands
 - The runner
+- The refold
 - Middleware
 - Composing a stack
 - Testing policies

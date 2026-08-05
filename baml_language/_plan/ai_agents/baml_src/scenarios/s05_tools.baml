@@ -15,12 +15,21 @@ testset "s05 tools" {
         let tb = root.ai.Toolbox { entries: [root.ai.tool(search_flights)] };
         let good: map<string, unknown> = { "origin": "SFO", "dest": "NRT" };
         assert.contains(tb.call("search_flights", good), "ANA");
-        //# hallucinated parameter: the tool never runs; the error goes back
+        //# hallucinated parameter: the tool never runs; the throw becomes the
+        //# ToolFailed event the model reads (see s09 for the loop-level view)
         let bad: map<string, unknown> = { "origin": "SFO", "wrong_param": "NRT" };
-        assert.contains(tb.call("search_flights", bad), "bad arguments");
+        let bad_err = tb.call("search_flights", bad) catch_all (e) {
+            _ => e.to_string()
+        };
+        assert.contains(bad_err, "bad arguments");
 
         let none: map<string, unknown> = {};
-        assert.contains(tb.call("no_such_tool", none), "no such tool")
+        let missing = tb.call("no_such_tool", none) catch_all (e) {
+            _ => e.to_string()
+        };
+        assert.contains(missing, "no such tool");
+        //# the error names the available tools, so the model can correct
+        assert.contains(missing, "search_flights")
     }
 
     test "closures are tools: session-bound state without globals" {

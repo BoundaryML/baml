@@ -60,6 +60,22 @@ class Interrupted {
     reason: string,
 }
 
+// A setter changed the session's client (03_configuration.md). Journal-only.
+class ClientChanged {
+    client_id: string,
+}
+
+// A setter changed the session's policy. Journal-only. Records that the
+// change happened, not the value: a policy is a runtime value (often
+// closing over state), so resume takes the policy from the caller and
+// this event is audit history (see reference notes, spec issues).
+// The literal field is a wire discriminant: an EMPTY class in a journaled
+// union structurally matches any JSON object on resume and swallows every
+// variant after it (see reference notes).
+class PolicyChanged {
+    kind: "policy_changed",
+}
+
 class Usage {
     input_tokens: int,
     output_tokens: int,
@@ -78,6 +94,8 @@ type Event = SessionStarted
     | ToolFailed
     | FinalProduced
     | ToolsChanged
+    | ClientChanged
+    | PolicyChanged
     | StepCompleted
     | ChildSpawned
     | ChildFinished
@@ -85,16 +103,36 @@ type Event = SessionStarted
     | Usage
     | Compacted;
 
+// Custom events are invisible to the model unless they implement this.
+// Mirrors `baml.session.Promptable` in 11_journal.md.
+interface Promptable {
+    function to_prompt(self) -> string? throws never
+}
+
 class Entry<E> {
     seq: int,
     event: E,
+    // true = written by a policy via record(): journal-only history that was
+    // never folded live, so refold skips it too (see refold in session.baml)
+    recorded: bool,
 }
 
 class Journal<E> {
     entries: Entry<E>[],
+    replaying: bool, // set by refold; suppresses record()
 
+    // runner-side: append an event that IS folded through the policy
     function append(self, e: E) -> void {
-        self.entries.push(Entry { seq: self.entries.length(), event: e });
+        self.entries.push(Entry { seq: self.entries.length(), event: e, recorded: false });
+    }
+
+    // policy-side: record a journal-only decision (e.g. PermissionRequested).
+    // Never folded; suppressed during refold, so replay cannot duplicate it.
+    // This is the ONLY journal write allowed inside Policy.update.
+    function record(self, e: E) -> void {
+        if (!self.replaying) {
+            self.entries.push(Entry { seq: self.entries.length(), event: e, recorded: true });
+        }
     }
 
     function read_from(self, seq: int) -> Entry<E>[] {
@@ -118,7 +156,7 @@ class Journal<E> {
 }
 
 function new_journal<E>() -> Journal<E> {
-    Journal<E> { entries: [] }
+    Journal<E> { entries: [], replaying: false }
 }
 
 function resume_journal<E>(snap: string) -> Journal<E> {
@@ -140,6 +178,7 @@ function render_transcript<E>(j: Journal<E>) -> string {
                 let t: ToolCompleted => `[result] ${t.result_json}`,
                 let t: ToolFailed => `[tool error] ${t.error}`,
                 let c: Compacted => `[earlier, summarized] ${c.summary}`,
+                let p: Promptable => p.to_prompt() ?? "", // custom events opt in
                 _ => "",
             }
         })

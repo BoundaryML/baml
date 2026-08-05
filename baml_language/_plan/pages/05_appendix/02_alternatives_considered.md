@@ -81,7 +81,7 @@ have setters, usable mid-run; every setter appends a journal event.
 
 ```baml
 let trip = PlanTrip("2 weeks in Japan", $max_steps = 20);
-let s = PlanTrip@session(trip_request = r, $policy = approval_policy);
+let s: Session<Itinerary> = PlanTrip@session(trip_request = r, $policy = approval_policy);
 s.set_client(cheap_client);        // journaled as ClientChanged
 ```
 
@@ -246,12 +246,22 @@ Custom events widen the built-in union at module level. The policy binds
 the union (`type Ev = CCEvent`), and the session infers it from the
 policy, which types `send` and `journal()`.
 
+The session's type parameter is the *extension* — the union of custom
+events only — and the machinery runs on `Event | X`. Parameterizing by
+the full union is unsound: the runtime must upcast built-in events into
+the parameter, which requires a lower bound on the type variable, and
+type bounds are upper bounds (`extends`). With the extension form,
+built-ins are members by construction; `never` is the empty extension,
+and `Event | never` collapses so plain sessions need no annotation
+machinery.
+
 Rejected: declaring the union at the `@session` call site, which creates
 a second source of truth that can disagree with the policy; and
 declaring events inside the LLM function, which couples the policy layer
-to the prompt layer and prevents middleware reuse. The untyped
-`Custom { kind, data_json }` variant is kept so journals written by
-other systems always parse.
+to the prompt layer and prevents middleware reuse. An untyped
+`Custom { kind, data_json }` fallback variant was also rejected: the
+typed extension covers every use the reference implementation found, and
+an escape hatch would let unvalidated events into typed journals.
 
 ## 11. Durability is tiered; tier 3 is out of scope
 

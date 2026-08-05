@@ -6,7 +6,19 @@ class TodoUpdated {
     items: string[],
 }
 
-type S7Ext = TodoUpdated | ApprovalExt;
+//# a custom event that OPTS IN to transcript rendering (11_journal.md)
+
+class Milestone {
+    note: string,
+
+    implements root.ai.Promptable {
+        function to_prompt(self) -> string? {
+            `(milestone: ${self.note})`
+        }
+    }
+}
+
+type S7Ext = TodoUpdated | Milestone | ApprovalExt;
 
 //# the pending_permission idiom: session state is a fold over the journal.
 
@@ -33,7 +45,7 @@ function pending_permission(j: root.ai.Journal<root.ai.Event | ApprovalExt>) -> 
 }
 
 testset "s07 custom events" {
-    test "send_event journals a typed custom event; snapshots carry it" {
+    test "send journals a typed custom event; snapshots carry it" {
         let fake = root.ai.ScriptedClient<S7Ext> { i: 0, turns: [[root.ai.assistant("ok")]] };
         let tb = root.ai.Toolbox { entries: [root.ai.tool(search_flights)] };
         let s = root
@@ -46,7 +58,7 @@ testset "s07 custom events" {
                 policy = root.ai.ToolLoop<S7Ext> { max_steps: 12, task_mode: false },
                 output_schema = itinerary_schema(),
             );
-        s.send_event(TodoUpdated { items: ["book flights", "pick hotel"] });
+        s.send(TodoUpdated { items: ["book flights", "pick hotel"] });
         let _ = s.run();
         //# custom events round-trip through snapshots, typed
         let j2 = root.ai.resume_journal<root.ai.Event | S7Ext>(s.snapshot());
@@ -69,6 +81,16 @@ testset "s07 custom events" {
         let transcript = root.ai.render_transcript(j);
         assert.contains(transcript, "hello");
         assert.is_true(!transcript.includes("Todo"))
+    }
+
+    test "a Promptable custom event renders into the transcript" {
+        let j = root.ai.new_journal<root.ai.Event | S7Ext>();
+        j.append(root.ai.user("hello"));
+        j.append(Milestone { note: "flights booked" });
+        j.append(TodoUpdated { items: ["hotel"] }); // still invisible
+        let transcript = root.ai.render_transcript(j);
+        assert.contains(transcript, "(milestone: flights booked)");
+        assert.is_true(!transcript.includes("hotel"))
     }
 
     test "reading session state is a typed journal fold" {

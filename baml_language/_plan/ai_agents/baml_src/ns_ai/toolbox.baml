@@ -48,20 +48,21 @@ class Toolbox {
         })
     }
 
-    // call-side: reflect.call_any validates args against the real signature;
-    // failures come back as an error result the model can read.
+    // call-side: reflect.call_any validates args against the real signature.
+    // Failures THROW; the runner turns them into ToolFailed events, which is
+    // how the model sees them (01_errors_and_retries.md).
     function call(self, name: string, args: map<string, unknown>) -> string {
         if let t: Tool = self.find(name) {
             // to_json (not to_string): the only serializer that walks the
             // dynamic type of an `unknown` — see _plan/reference_notes.md
-            baml.json.stringify(baml.json.to_json(reflect.call_any(t.f, args))) catch_all (e) {
+            baml.json.stringify(baml.json.to_json(reflect.call_any(t.f, args))) catch (e) {
                 let bad: reflect.InvalidArgumentError => {
-                    `{"error": "bad arguments: ${bad.to_string()}"}`
+                    throw baml.errors.InvalidArgument { message: `bad arguments for ${name}: ${bad.to_string()}` }
                 },
-                _ => `{"error": "${e.to_string()}"}`,
             }
         } else {
-            `{"error": "no such tool: ${name}"}`
+            //# unknown name: the error names the available tools for the model
+            throw baml.errors.InvalidArgument { message: `no such tool: ${name}; available: ${self.names().join(", ")}` }
         }
     }
 }
