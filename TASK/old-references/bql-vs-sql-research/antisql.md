@@ -1,0 +1,79 @@
+# Attack on the pro-SQL case — ranked objections
+
+**Verification note:** I independently verified 8 factual claims against repo files (see Evidence). One citation correction to the research: the size gate lives at `baml_language/.cargo/size-gate.toml` (not repo-root `.cargo/`), baseline at `baml_language/.ci/size-gate/wasm32-unknown-unknown.toml`. The figures themselves check out exactly.
+
+---
+
+## O1. The wasm gate is a physical wall with ~100 KiB of headroom, and every SQL mitigation either rebuilds BQL or forks the data plane
+
+**Claim attacked:** steelman Part 4.5 — "Wasm size... gates only the one host that could degrade gracefully."
+
+**Evidence:** `bridge_wasm` gates on **gzip** with `max_gzip_bytes = "4.5 MiB"` (`baml_language/.cargo/size-gate.toml:78-88`) against a committed baseline of `gzip_bytes = "4.4 MiB"` (`baml_language/.ci/size-gate/wasm32-unknown-unknown.toml:7`) plus a 3% delta guard (size-gate.toml:85). That is ~100 KiB total headroom for *all future features*, not just a query engine. DataFusion is "~2-4 MB compressed alone" (design.md:750). DuckDB-wasm and chDB are worse or nonexistent. The wasm host is not marginal: the playground/VSCode extension is a primary surface, and the engine's sans-io design exists *because* of it — "the only model that works identically for native mmap, wasm linear memory... and HTTP Range requests, without an async runtime in wasm" (design.md:876; `Poll::NeedData` at bex_query/src/source.rs:23-28). No off-the-shelf SQL engine implements a sans-io "return the byte ranges you still need" model; DataFusion's scan is async, SQLite's VFS is sync, DuckDB owns its I/O.
+
+The steelman's two escapes each concede the argument: (a) "proxy wasm queries to the native server" creates a second data plane — the exact thing principle 7 forbids ("One engine, one wire... There are not two data planes", design.md:109) and reintroduces a server dependency into a surface that today opens a boundary dir from a URL with zero backend; (b) "a small interpreted SQL subset for the browser" **is a hand-rolled query language** — you have re-agreed to build BQL, just with SQL's syntax and SQL's semantic expectations you then can't meet (see O2), which is strictly worse than a syntax with no prior to violate.
+
+**Refuted by:** a demonstrated SQL-subset parser+planner over the existing `CctFold` that fits in ≤100 KiB gzip in `bridge_wasm`, plus explicit product sign-off that playground/VSCode may require a native sidecar. Neither exists.
+
+## O2. Under SQL's own contract, the honest answer to missing capture is the wrong answer — silent-empty is not a fixable bug, it is SQL semantics
+
+**Claim attacked:** steelman Part 4.2 — "mandatory-footer-wrapping a SQL executor is equally possible."
+
+**Evidence:** The capture contract is asymmetric by design: aggregates always exist; exact instances exist only where an exact source covers the scope (design.md:780). BQL encodes this in set kinds and fails closed at three verified sites: bql.rs:1298-1302 (non-values `instances` source), bql.rs:2329-2334 (`values(fn=…)` with no exact call→fn join, remedy: "re-run with BAML_PROFILE_RAW=1 ... or drop the fn= filter"), bql.rs:2390-2394 (`instances()` with zero captures, remedy: "opt calls in with $id = boundary.id().capture(...), arm the flight recorder, or request a bounded full trace"). In SQL, a scan of an uncovered exact-calls table **correctly returns zero rows** — the relational contract requires it. The failure mode is not that SQL engines are buggy; it's that the domain's honest behavior ("this table's emptiness is unknowable, here are three remedies") *violates* the semantics of a table scan. A `coverage` table + mandatory-join convention is enforceable only by convention; the moment you make the parser *reject* queries that skip the coverage join, you have a restricted non-SQL dialect (the SnQL move) and you've forfeited the prior-match advantage that was SQL's whole case (see O5). Note the steelman's own Q4 rating concedes this: "NATURAL as a query, IMPOSSIBLE-WITHOUT-ENGINE-HELP as a contract."
+
+**Refuted by:** a SQL-dialect design where uncovered-scope scans are structurally inexpressible *and* evidence that agents' SQL priors still transfer to that restricted dialect (they demonstrably don't transfer to SnQL — Sentry ships docs and builders precisely because priors mislead there).
+
+## O3. The steelman's premise paragraph smuggles in the entire cost: the tables it queries don't exist, and materializing them re-creates the measured disease
+
+**Claim attacked:** the "Assumed materialization" premise and every NATURAL rating downstream of it.
+
+**Evidence:** Every §8.5 SQL rendering presupposes `cct_nodes(path, root_fn, ...)` and a per-call `calls` table. But: (a) node ids are dense, session-epoch-scoped, "meaningless outside" their session dir; current totals = last `node_total` checkpoint + deltas since it; paths resolve via `node_birth` parent-chase at fold time (design.md §4.6, §6.3) — so `path`/`root_fn` columns require a continuous ETL running the fold anyway; (b) the design's core thesis is that per-call disk events are the disease (1.69 GB local / 38.5 TB/day measured, design.md §1) — the `calls` table the SQL premise assumes was *deliberately abolished* except for the 4096-slot ring, flight dumps, and opt-in traces. A continuous materialization pipeline means: a second copy of every run's data (vs zero-copy mmap + a 256 MiB byte-budgeted fold cache), freshness lag behind the 1s/1MiB group commit (the live mirror reads the consumer's **in-RAM** active delta blocks — steelman Q2's `live()` is rated IMPOSSIBLE by the steelman itself), compaction/consistency machinery for torn tails, and **provenance loss**: the footer is "computed from the blocks the query actually touched" (bql.rs:127-128, comment verified verbatim), with sealed/torn coming from the scan's `ScanEnd`. A materialized table has no per-query record of which blocks fed which rows — the footer's raw material is destroyed by ETL. Studio's §3 rows 7-8 (enum-variant / email-suffix predicates) hit the same wall: value bodies are CAS DAG packs; shredding them to JSON columns "defeats the dedup design" (steelman's own admission).
+
+**Refuted by:** a materialization design that (i) is incremental off the WAL with bounded lag, (ii) carries block-level provenance into every derived row, and (iii) costs less than the fold cache it replaces. Nobody has sketched one; the burden is on SQL's proponents.
+
+## O4. "Everything hard is engine-help under both surfaces" inverts the conclusion it's offered for
+
+**Claim attacked:** steelman Part 4.2/tally — ~25% ENGINE-HELP "equally engine-help under BQL."
+
+**Evidence:** True, and it's the case *against* SQL. Under BQL, the engine is the product and the language is a ~2.5 KLOC skin over the same planner the UI fast paths use (engine.rs named methods and BQL share the cached `CctFold`). Under SQL, you keep 100% of that Rust (fold, CAS hydration with budget-elision returning child-CID descent handles, epoch merge, live mirror), then *add* megabytes of engine, an FFI/UDF impedance layer, and a second semantics to document — while the trust behaviors live inside UDFs where SQL cannot see them: a `read_value(cid, 65536)` UDF returning elided-subtree JSON is opaque to the optimizer (no predicate pushdown into a DAG descent), and its budget/degradation semantics (bql.rs:1949-1952 footer notes; hist mean-fallback counting at bql.rs:1443-1467) have no SQL-level representation. SQL contributes syntax for the ~55% that was already easy; it contributes *nothing* to the 45% that justifies the product, at a cost measured in megabytes and a second I/O model. Note also `hydrate` is `#[cfg(not(target_arch = "wasm32"))]` today (values.rs:299) — the wasm surface is already so tight that even the *native* engine's value plane hasn't fit yet.
+
+**Refuted by:** showing the UDF boundary is cheap in practice — e.g., a working DuckDB extension over the fold with acceptable perf vs the 2.62 ms open+first-frame / 304-byte-frame numbers in the ledger, and a story for footer propagation through arbitrary SQL composition (a view over a UDF over a fold: whose footer?).
+
+## O5. "Agents know SQL" measures syntax priors; here the schema is the hard part, and SQL priors actively generate confident wrong answers
+
+**Claim attacked:** steelman Part 2.1 — "agent fluency is the single largest forfeit."
+
+**Evidence:** The agent-lens 8.5 for SQL came *with* the concession "that the DSL's trust machinery, made mandatory, resolves SQL's worst agent hazards (silent-empty results, opt-in completeness)" (design.md:750, verified verbatim) — the score is for SQL-with-the-hazards-assumed-away. What a SQL-fluent agent must additionally know about THIS schema: node ids don't survive epochs or sessions; totals require checkpoint-anchored folds; `function_id` is meaningful only within `(revision_id, ·)` — a cross-revision `GROUP BY function_id` silently compares disjoint id spaces (BQL makes this a plan-time `E_REVISION_MISMATCH`; SQL returns plausible rows); NULL-in-WHERE collapses `unknown` → `false`, converting coverage gaps into confident negatives — the exact hazard studio's three-valued `include_unknown` mode exists to prevent; raw CIDs must not be used as equality tokens in the multitenant tier (studio:2767). Each of these is a query that *runs, returns rows, and is wrong*. The failure signature of prior-mismatch is worse for agents than no-prior: BQL's unknown syntax fails loudly at parse with a typed remedy (bql.rs:38-44 "a stable code, a human message, and a ready-to-act remedy"); SQL's known syntax over an alien schema fails silently at the semantic layer. Bootstrap cost is symmetric (information_schema vs `--schema`); the asymmetry is 15 stages with plan-time arg validation vs dozens of tables whose misuse is undetectable. The industry corroborates: Honeycomb (bounded JSON spec), Sentry SnQL (restricted, SQL-shaped, bounded), TraceQL/LogQL/PromQL (DSLs), pprof/Parca (no language) — every product with tree-shaped or coverage-honest data interposed a semantic layer; the raw-SQL vendors (SigNoz) have flat span attributes, server-only deployment, and accept silent-empty.
+
+**Refuted by:** an actual eval — frontier agents given DDL for the materialized tables vs agents given `--schema`+BQL, scored on the §8.5/studio-§3 catalog *including* the trap cases (cross-revision, uncovered scope, unknown-vs-false). If SQL agents win including traps, this objection falls. No such eval exists; both sides are asserting.
+
+## O6. SQL-first doesn't collapse the dialect count — it raises it to three
+
+**Claim attacked:** steelman Part 2.5 — "SQL-first collapses this to one dialect + one semantics."
+
+**Evidence:** The cloud contract cannot be physical SQL regardless of the local choice — studio-design:424-432 (verified verbatim): local/hosted storage differ; projection generations churn physical tables; tenant scope and budgets must be mandatory; three-valued coverage needs domain semantics; agents shouldn't learn private layouts. §23.8 bans arbitrary raw SQL in multitenant v1 (studio:2805). So SQL-first-local yields: DuckDB/DataFusion dialect (local) + ClickHouse dialect (cloud, they differ materially: recursive CTEs, quantile states, array unnest) + the StudioQueryV1-shaped semantic layer the cloud needs anyway = **three surfaces plus an equivalence obligation**. BQL-first yields one semantic surface compiled to ClickHouse (design.md:849), with the golden corpus policing exactly one seam. The "you're building the SQL layer anyway" jab (Part 4.3) cuts backwards: yes — as a *compile target behind the contract*, which is precisely where both independent design efforts concluded SQL belongs.
+
+**Refuted by:** committing the product to ClickHouse dialect everywhere including the laptop (chDB-class binary, no wasm story — dead on arrival per O1) or to DuckDB everywhere including the multitenant cloud (forfeits ClickHouse's aggregate-state machinery and the studio tenancy design). Neither is on offer.
+
+## O7. The trust envelope has no carrier in the SQL result model — and two independent teams proved it by both inventing non-SQL envelopes
+
+**Evidence:** SQL result sets have no metadata side channel; completeness becomes a second query or a view-join convention — opt-in by construction, which is the named agent hazard (design.md:750). As-built, the footer is structurally unskippable: `Completeness` is "mandatory on every result" (bql.rs:127-141) and the BQF1 wire format reserves the meta column's row 0 so "an EMPTY result is a 1-row frame that still carries its footer" (bqf1.rs:58-68, verified verbatim). The local footer (sealed/torn/degraded from scan facts) and studio's coverage envelope (eligible/examined/matched/unknownByReason/watermarks, modes strict_complete/best_effort/include_unknown) were invented independently, on different data models, by teams that never cite each other's query language — and *neither* is expressible as a SQL result set. When two uncoordinated designs against the same domain both conclude the surface must carry mandatory non-relational trust metadata, that is evidence about the domain, not about taste.
+
+**Refuted by:** a production example of a SQL surface with a mandatory, per-query, scan-derived completeness channel that survives arbitrary composition (views, subqueries, CTEs). I know of none; the closest (Snuba) restricted the language to get it.
+
+## O8. The escape-hatch indictment inverts: the hatch is scoped to exactly the data where the trust contract is vacuous
+
+**Claim attacked:** steelman Part 4.4 — "the escape hatch is strictly less safe than in-product SQL would have been."
+
+**Evidence:** Parquet export covers **sealed segments only** (design.md:752) — immutable, sealed=true, no torn tails, no live lag, no open windows: the regime where the footer has nothing to warn about, exported to power users who explicitly step outside the contract. In-product SQL would instead put the unguarded surface in front of every user and agent over *live, torn, partially-captured* data — where the contract does its work. The honest hit the steelman lands is narrower: the hatch is unimplemented (no `export` in STAGE_LIST, bql.rs:805 verified) and the export carries no coverage sidecar. Both are schedule/design-completion facts, not architecture refutations.
+
+**Refuted by:** evidence that users' hardest questions predominantly target live/unsealed data (then the hatch genuinely fails them and the expressiveness gap bites in-product — see concession below).
+
+---
+
+## Conceded ground (what the attack does NOT rebut)
+
+Honesty the decision doc must keep: (1) BQL v1's algebra is genuinely below SQL — single-comparison `where`, no boolean composition, no joins, no cross-run aggregation; "error rate per fn across the last 20 runs" is inexpressible today, and the closing gap is unbuilt design. (2) The trust machinery that answers the agent-lens concession is itself partially unbuilt (no `--schema`, no snapshot pinning, no MCP tool, thin footer vs designed meta). (3) The judge transcripts are not in the repo; the 8.5/8 scores are self-reported and unverifiable. (4) Q7/Q8/Q9 (CID join, CID dedup, CSV-join spend) really are more fluent in SQL; the CAS design manufactures SQL's favorite join key. None of these rescue SQL from O1-O3, which are physical and semantic, not stylistic.
+
+## Bottom line
+
+The pro-SQL case survives only on the ~55% of the catalog that was never in dispute, by assuming into existence tables the architecture deliberately abolished, and by proposing mitigations (restricted dialect, mandatory wrappers, native-only proxy) that each reconstruct the DSL decision under a different name. Its strongest genuine hits are the expressiveness backlog and the unbuilt trust machinery — schedule risks of BQL, not arguments for SQL.

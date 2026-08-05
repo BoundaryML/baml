@@ -6,36 +6,36 @@
 
 ### The data structures
 
-| Structure | Key / identity | Fields carried | Written | Dedup / growth law |
-|---|---|---|---|---|
-| **CCT node** (`node_birth`, 24 B) | `(parent_node, function_id)` interned → dense `node_id` (session-epoch scope) | parent, function_id, thread, partition, flags, depth — **no strings**; name/source resolve via the revision dictionary | once, at first sight of a new calling context | one row per **unique context ever** (corpus p99: 3,537) — never per call |
-| **Counter deltas** (`cct_delta`, 48 B) | node_id | enters, ends_ok/err/cancel/exit, total_ns, self_ns, await_ns | per **dirty node per 250 ms window** | grows with active-nodes × windows; a window of 9.5 M calls to one node = one row |
-| **Duration histogram** (`cct_hist`, 68 B) | node_id | 16 × u32 buckets, ×4 stride (1 µs → ≥ ~18 min) — the source of p50/p95/p99; no mean/median stored | per node **with ≥1 close** per window | same law as deltas; idle node = zero rows |
-| **LLM counters** (`llm_delta`) | (node_id, model_id) | llm_calls, tokens_in/out, provider_errs, parse_errs | per dirty LLM node per window | model names interned once (`model_birth`) |
-| **Spawn edges** (`spawn_edge`) | (parent_node, child_entry_fn) | spawn/live/completed/errored/cancelled, running/awaiting ns | per dirty edge per window | 10k equivalent workers = **one** edge + one shared child subtree; instances kept only first 64 + 256 exceptional |
-| **Checkpoints** (`node_total`) | node_id | same 48 B, absolute values | when delta bytes since last ≥ checkpoint size | bounds read cost; ≤2× write amplification |
-| **Watermarks** | — | drained-through ts, durable kind | at D1 syncs after new blocks; ≥10 s heartbeat when idle | the completeness anchor; idle ≈ 7 B/s |
-| **Recent-call ring** (RAM only) | (thread_idx, call_id) | last 4096 exact calls + all open calls, 56 B slots | never (feeds live UI) | fixed; eviction counted, never silent |
-| **Flight recorder** (RAM → dump) | raw drained bytes | exact events, 16 MiB / 4 MiB window | `.bamlprof` dump **on trigger only** | bounded window; dumps pin their values via `.bamlcids` |
-| **Values** (capture roots + DAG) | root: `value_N` (never renumbered); content: BLAKE3-256 **CID** | role, call key, timestamps + canonical value DAG chunks in packs | roots per capture; chunks **only if CID unseen** | identical prompts/transcript prefixes stored once project-wide; growth ∝ distinct content |
-| **Revision dictionary** (`.bamldict`) | revision_id (BLAKE3-256 of source×toolchain) | per function: fqn, source span, definition_key, def_content_hash, capture flags | **once per revision** (~180 KB) | replaces the 129 KB table per file; idempotent write |
-| **Meta** (`boundary/session.bamlmeta`) | boundary_id (ULID) / session dir | begin/bound/complete records, counts, diagnostics | at milestones (D2) | O(1) run listing; crash = begin without complete |
+| Structure                                 | Key / identity                                                                | Fields carried                                                                                                         | Written                                                 | Dedup / growth law                                                                                               |
+| ----------------------------------------- | ----------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| **CCT node** (`node_birth`, 24 B)         | `(parent_node, function_id)` interned → dense `node_id` (session-epoch scope) | parent, function_id, thread, partition, flags, depth — **no strings**; name/source resolve via the revision dictionary | once, at first sight of a new calling context           | one row per **unique context ever** (corpus p99: 3,537) — never per call                                         |
+| **Counter deltas** (`cct_delta`, 48 B)    | node_id                                                                       | enters, ends_ok/err/cancel/exit, total_ns, self_ns, await_ns                                                           | per **dirty node per 250 ms window**                    | grows with active-nodes × windows; a window of 9.5 M calls to one node = one row                                 |
+| **Duration histogram** (`cct_hist`, 68 B) | node_id                                                                       | 16 × u32 buckets, ×4 stride (1 µs → ≥ ~18 min) — the source of p50/p95/p99; no mean/median stored                      | per node **with ≥1 close** per window                   | same law as deltas; idle node = zero rows                                                                        |
+| **LLM counters** (`llm_delta`)            | (node_id, model_id)                                                           | llm_calls, tokens_in/out, provider_errs, parse_errs                                                                    | per dirty LLM node per window                           | model names interned once (`model_birth`)                                                                        |
+| **Spawn edges** (`spawn_edge`)            | (parent_node, child_entry_fn)                                                 | spawn/live/completed/errored/cancelled, running/awaiting ns                                                            | per dirty edge per window                               | 10k equivalent workers = **one** edge + one shared child subtree; instances kept only first 64 + 256 exceptional |
+| **Checkpoints** (`node_total`)            | node_id                                                                       | same 48 B, absolute values                                                                                             | when delta bytes since last ≥ checkpoint size           | bounds read cost; ≤2× write amplification                                                                        |
+| **Watermarks**                            | —                                                                             | drained-through ts, durable kind                                                                                       | at D1 syncs after new blocks; ≥10 s heartbeat when idle | the completeness anchor; idle ≈ 7 B/s                                                                            |
+| **Recent-call ring** (RAM only)           | (thread_idx, call_id)                                                         | last 4096 exact calls + all open calls, 56 B slots                                                                     | never (feeds live UI)                                   | fixed; eviction counted, never silent                                                                            |
+| **Flight recorder** (RAM → dump)          | raw drained bytes                                                             | exact events, 16 MiB / 4 MiB window                                                                                    | `.bamlprof` dump **on trigger only**                    | bounded window; dumps pin their values via `.bamlcids`                                                           |
+| **Values** (capture roots + DAG)          | root: `value_N` (never renumbered); content: BLAKE3-256 **CID**               | role, call key, timestamps + canonical value DAG chunks in packs                                                       | roots per capture; chunks **only if CID unseen**        | identical prompts/transcript prefixes stored once project-wide; growth ∝ distinct content                        |
+| **Revision dictionary** (`.bamldict`)     | revision_id (BLAKE3-256 of source×toolchain)                                  | per function: fqn, source span, definition_key, def_content_hash, capture flags                                        | **once per revision** (~180 KB)                         | replaces the 129 KB table per file; idempotent write                                                             |
+| **Meta** (`boundary/session.bamlmeta`)    | boundary_id (ULID) / session dir                                              | begin/bound/complete records, counts, diagnostics                                                                      | at milestones (D2)                                      | O(1) run listing; crash = begin without complete                                                                 |
 
 ### What each event changes
 
-| Event | RAM effect | Disk effect |
-|---|---|---|
-| `CallFunction` | charge parent's self-time up to ts; intern child node (new context → birth queued); push stack; enters++; dirty-mark | none per call — everything reaches disk via window flush |
-| `EndFunction` | charge self-time; ends_status++; total_ns += duration; hist bucket++; recent-ring slot | none per call |
-| `SuspendThread` / `ResumeThread` | thread marked parked / awaiting duration credited to innermost node's await_ns (resume is self-contained) | none per event |
-| `StartThread` / `EndThread` | new thread state inherits partition; spawn edge interned at first root call / final charge + edge completion counters | none per event |
-| `LlmCallMeta` | (node, model) counters bumped; new model interned | `model_birth` row at next flush |
-| `SetFunctionId` (`$id`) | recent-ring annotation | durable only in dumps/full trace (OQ7) |
-| **Error / latency trigger** | flight recorder transcodes → dump; staged values promoted; boundary capture flags raised | `flight/<ts>-<trigger>.bamlprof` + `.bamlcids`; promoted value records |
-| **Window close (250 ms)** | dirty set swept, `last_flushed` reset | delta + hist + llm + spawn rows for dirty nodes only |
-| **D1 commit (1 s / 1 MiB)** | watermark advances (fsync off-thread) | watermark row |
-| **Boundary complete** | partition folded then **freed** (server memory stays O(live)) | `cct.bamlcct` snapshot + complete record |
-| **Value capture** | TraceHeap copy → canonicalize → CID | pack append only for unseen CIDs + one root record |
+| Event                            | RAM effect                                                                                                            | Disk effect                                                            |
+| -------------------------------- | --------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
+| `CallFunction`                   | charge parent's self-time up to ts; intern child node (new context → birth queued); push stack; enters++; dirty-mark  | none per call — everything reaches disk via window flush               |
+| `EndFunction`                    | charge self-time; ends_status++; total_ns += duration; hist bucket++; recent-ring slot                                | none per call                                                          |
+| `SuspendThread` / `ResumeThread` | thread marked parked / awaiting duration credited to innermost node's await_ns (resume is self-contained)             | none per event                                                         |
+| `StartThread` / `EndThread`      | new thread state inherits partition; spawn edge interned at first root call / final charge + edge completion counters | none per event                                                         |
+| `LlmCallMeta`                    | (node, model) counters bumped; new model interned                                                                     | `model_birth` row at next flush                                        |
+| `SetFunctionId` (`$id`)          | recent-ring annotation                                                                                                | durable only in dumps/full trace (OQ7)                                 |
+| **Error / latency trigger**      | flight recorder transcodes → dump; staged values promoted; boundary capture flags raised                              | `flight/<ts>-<trigger>.bamlprof` + `.bamlcids`; promoted value records |
+| **Window close (250 ms)**        | dirty set swept, `last_flushed` reset                                                                                 | delta + hist + llm + spawn rows for dirty nodes only                   |
+| **D1 commit (1 s / 1 MiB)**      | watermark advances (fsync off-thread)                                                                                 | watermark row                                                          |
+| **Boundary complete**            | partition folded then **freed** (server memory stays O(live))                                                         | `cct.bamlcct` snapshot + complete record                               |
+| **Value capture**                | TraceHeap copy → canonicalize → CID                                                                                   | pack append only for unseen CIDs + one root record                     |
 
 **Growth law:** bytes ∝ unique contexts × active windows + distinct content + triggers — never ∝ call count or repeated-capture count.
 
@@ -44,7 +44,7 @@
 Every bound below has a counter or marker; **bounded never means silent** (principle #2).
 
 > **"The node table grows forever in a long-running server."**
-> Nodes grow with *unique calling contexts*, not calls — measured p99 is 3,537 nodes. Pathological recursion is capped by the depth-512 fold (§5.6), and the whole table is rotated by session epochs at 256 MiB / 24 h (§6.1).
+> Nodes grow with _unique calling contexts_, not calls — measured p99 is 3,537 nodes. Pathological recursion is capped by the depth-512 fold (§5.6), and the whole table is rotated by session epochs at 256 MiB / 24 h (§6.1).
 
 > **"Per-boundary state (recent-call ring, instance tables, defer buffers) accumulates."**
 > Partitions are sealed and **freed at boundary completion**, not engine close — server memory is O(live boundaries), enforced by the C11 RSS gate on a 10k-boundary workload (§5.7).
@@ -53,10 +53,10 @@ Every bound below has a counter or marker; **bounded never means silent** (princ
 > Dev keeps abort (loud, debuggable). Servers default to the shed ladder: recorder → full trace → value encoding → structural ranges, each step counted, CCT aggregation never disabled, no abort in `shed` mode (§5.10, gated by C12).
 
 > **"The CCT stream on disk grows forever."**
-> It grows with *time*, not call rate (one row per dirty node per 250 ms window — the 36 M-call hot loop writes ~3.5 KB/s, §6.3). Checkpoints bound read cost (§6.3), epochs rotate the stream (§6.1), and retention ages sessions out at 7 d / 1 GiB — after materializing the folded snapshot for any crashed boundary first (§6.8, §6.1).
+> It grows with _time_, not call rate (one row per dirty node per 250 ms window — the 36 M-call hot loop writes ~3.5 KB/s, §6.3). Checkpoints bound read cost (§6.3), epochs rotate the stream (§6.1), and retention ages sessions out at 7 d / 1 GiB — after materializing the folded snapshot for any crashed boundary first (§6.8, §6.1).
 
 > **"Histograms every 250 ms is a lot of rows."**
-> Only nodes that *closed a call* that window emit one; idle costs ~7 B/s (heartbeat watermarks only). When segments age out, the permanent record collapses to one folded histogram per node in `cct.bamlcct` (§6.3, §6.8).
+> Only nodes that _closed a call_ that window emit one; idle costs ~7 B/s (heartbeat watermarks only). When segments age out, the permanent record collapses to one folded histogram per node in `cct.bamlcct` (§6.3, §6.8).
 
 > **"Value capture will eat the disk."**
 > Content addressing makes repeated content free (transcripts: quadratic → linear, C5 gate ≥20× at N=64); the staging ring is byte-capped with evictions reported (§7.2); drain budgets degrade to explicit `CaptureLoss`, never blocking (§7.3); and the store has a 4 GiB soft budget backed by boundary eviction + GC (§6.8, §6.7).
@@ -71,7 +71,7 @@ Every bound below has a counter or marker; **bounded never means silent** (princ
 > The query engine is sans-io with byte-budgeted caches (256 MiB native / 32 MiB wasm) and every response ≤ `max_bytes` with visible LOD degradation — viewport cost is O(pixels), proven by the C7 invariance gate (±10% bytes between a 1 M-call and 36 M-call run) (§9.2, §9.3).
 
 > **"What about full trace / the raw firehose?"**
-> Both are opt-in and bounded: full trace ends in an explicit `TraceBudgetExhausted` marker (§3), the raw sink hides behind `BAML_PROFILE_RAW` with rotation, and both are the *first* casualties of the retention degradation order (§6.8).
+> Both are opt-in and bounded: full trace ends in an explicit `TraceBudgetExhausted` marker (§3), the raw sink hides behind `BAML_PROFILE_RAW` with rotation, and both are the _first_ casualties of the retention degradation order (§6.8).
 
 ## Contents
 
@@ -116,67 +116,67 @@ Stories were generated from four personas and pressure-tested against the captur
 
 ### 2.1 The app developer (local dev loop)
 
-| P | Story | Served by |
-|---|---|---|
-| P0 | See the exact LLM input/output for a wrong answer -- click any LLM call, see the rendered prompt and raw response | values (default: LLM functions) |
-| P0 | Compare two runs after a prompt edit -- prompt diff, output diff, per-function counts/latency/errors | values + CCT + revision dictionaries |
-| P0 | Find an accidental hot loop in seconds -- the 36M-call run collapses to a 3-node CCT naming the runaway path | CCT |
-| P0 | Diagnose a failed run: error payload, the failing helper's actual args, exact events just before the failure | error trigger -> value promotion + flight-recorder dump |
-| P0 | Open yesterday's run I forgot to save -- browse history, inspect call tree + prompts + outputs | durable history + retention window |
-| P1 | Is it my code or the model? -- running vs awaiting breakdown per calling context | CCT (self/await accounting) |
-| P1 | Count every LLM call including hidden retries; detect byte-identical duplicate prompts | CCT + value CIDs |
-| P1 | Find the straggler in a parallel fan-out | CCT spawn-edge aggregates |
-| P1 | Set a latency trigger to capture the rare slow call | trigger config + flight recorder |
-| P1 | Promote a helper function's values to debug wrong-but-not-erroring behavior | `@capture` opt-in |
-| P2 | Bounded full trace for an exact-ordering bug | full trace (opt-in) |
-| P2 | Iterate on a long agent transcript without drowning my disk | value DAG dedupe |
+| P   | Story                                                                                                             | Served by                                               |
+| --- | ----------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------- |
+| P0  | See the exact LLM input/output for a wrong answer -- click any LLM call, see the rendered prompt and raw response | values (default: LLM functions)                         |
+| P0  | Compare two runs after a prompt edit -- prompt diff, output diff, per-function counts/latency/errors              | values + CCT + revision dictionaries                    |
+| P0  | Find an accidental hot loop in seconds -- the 36M-call run collapses to a 3-node CCT naming the runaway path      | CCT                                                     |
+| P0  | Diagnose a failed run: error payload, the failing helper's actual args, exact events just before the failure      | error trigger -> value promotion + flight-recorder dump |
+| P0  | Open yesterday's run I forgot to save -- browse history, inspect call tree + prompts + outputs                    | durable history + retention window                      |
+| P1  | Is it my code or the model? -- running vs awaiting breakdown per calling context                                  | CCT (self/await accounting)                             |
+| P1  | Count every LLM call including hidden retries; detect byte-identical duplicate prompts                            | CCT + value CIDs                                        |
+| P1  | Find the straggler in a parallel fan-out                                                                          | CCT spawn-edge aggregates                               |
+| P1  | Set a latency trigger to capture the rare slow call                                                               | trigger config + flight recorder                        |
+| P1  | Promote a helper function's values to debug wrong-but-not-erroring behavior                                       | `@capture` opt-in                                       |
+| P2  | Bounded full trace for an exact-ordering bug                                                                      | full trace (opt-in)                                     |
+| P2  | Iterate on a long agent transcript without drowning my disk                                                       | value DAG dedupe                                        |
 
 ### 2.2 The production operator
 
-| P | Story | Served by |
-|---|---|---|
-| P0 | Reconstruct what the service was doing at 03:04 | CCT time series + flight recorder |
-| P0 | Attribute a production error to the exact failing inputs | error-trigger value promotion |
-| P0 | Find a latency regression by calling context, not just function name | CCT (context-keyed, dur_hist) |
-| P0 | Correlate a deploy with a behavior change -- one continuous timeline across a revision boundary | CCT + cross-revision alignment |
-| P0 | Trust the data: explicit loss markers, never silent truncation | watermarks + CaptureLoss + `health()` |
-| P0 | Detect a runaway loop / retry storm before it detonates the bill | CCT live deltas |
-| P1 | Track LLM token spend and retry cost by calling context | CCT LLM counters |
-| P1 | Enforce retention and honor deletion for captured values | retention + CAS GC + `audit()` |
-| P1 | Distinguish "stuck on provider" from "burning CPU" | self vs await counters |
-| P1 | Exact event dump when a request breaches SLO | latency trigger -> flight recorder |
-| P1 | Keep telemetry itself within budget and observable | self-accounting (`health()`, `storage()`) |
-| P2 | Bounded full trace against one production instance | full trace (opt-in, bounded) |
+| P   | Story                                                                                           | Served by                                 |
+| --- | ----------------------------------------------------------------------------------------------- | ----------------------------------------- |
+| P0  | Reconstruct what the service was doing at 03:04                                                 | CCT time series + flight recorder         |
+| P0  | Attribute a production error to the exact failing inputs                                        | error-trigger value promotion             |
+| P0  | Find a latency regression by calling context, not just function name                            | CCT (context-keyed, dur_hist)             |
+| P0  | Correlate a deploy with a behavior change -- one continuous timeline across a revision boundary | CCT + cross-revision alignment            |
+| P0  | Trust the data: explicit loss markers, never silent truncation                                  | watermarks + CaptureLoss + `health()`     |
+| P0  | Detect a runaway loop / retry storm before it detonates the bill                                | CCT live deltas                           |
+| P1  | Track LLM token spend and retry cost by calling context                                         | CCT LLM counters                          |
+| P1  | Enforce retention and honor deletion for captured values                                        | retention + CAS GC + `audit()`            |
+| P1  | Distinguish "stuck on provider" from "burning CPU"                                              | self vs await counters                    |
+| P1  | Exact event dump when a request breaches SLO                                                    | latency trigger -> flight recorder        |
+| P1  | Keep telemetry itself within budget and observable                                              | self-accounting (`health()`, `storage()`) |
+| P2  | Bounded full trace against one production instance                                              | full trace (opt-in, bounded)              |
 
 ### 2.3 The AI agent (autonomous debugging and optimization)
 
-The agent persona sharpens requirements humans tolerate: results must be structured and bounded (an agent cannot skim a million rows), IDs stable across queries, completeness machine-checkable before the agent commits to a conclusion, and the highest-stakes workflow -- *verify my own fix* -- a first-class operation.
+The agent persona sharpens requirements humans tolerate: results must be structured and bounded (an agent cannot skim a million rows), IDs stable across queries, completeness machine-checkable before the agent commits to a conclusion, and the highest-stakes workflow -- _verify my own fix_ -- a first-class operation.
 
-| P | Story | Served by |
-|---|---|---|
-| P0 | Enumerate recent runs as a bounded, paginated index with stable IDs | run index (bamlmeta scan; ULID boundary ids) |
-| P0 | Fetch the exact input that caused an error within a byte budget, with child CIDs for selective descent | value DAG + bounded hydration |
-| P0 | Find the hottest calling context (top-k CCT nodes with full paths) | CCT |
-| P0 | Diff a function's outputs across runs with Merkle short-circuit | value DAG (CID equality) |
-| P0 | Verify my own fix: before/after revision comparison with matched inputs and an explicit completeness verdict | `diff` + `compare(match_io)` |
-| P1 | Bisect when a regression appeared across time and revisions | CCT series + revision alignment |
-| P1 | Pull the exact-event window around a failure | flight-recorder dumps |
-| P1 | Check capture completeness before trusting any conclusion | mandatory result meta footer |
-| P2 | Request an explicit bounded full trace for exact-ordering questions | full trace |
+| P   | Story                                                                                                        | Served by                                    |
+| --- | ------------------------------------------------------------------------------------------------------------ | -------------------------------------------- |
+| P0  | Enumerate recent runs as a bounded, paginated index with stable IDs                                          | run index (bamlmeta scan; ULID boundary ids) |
+| P0  | Fetch the exact input that caused an error within a byte budget, with child CIDs for selective descent       | value DAG + bounded hydration                |
+| P0  | Find the hottest calling context (top-k CCT nodes with full paths)                                           | CCT                                          |
+| P0  | Diff a function's outputs across runs with Merkle short-circuit                                              | value DAG (CID equality)                     |
+| P0  | Verify my own fix: before/after revision comparison with matched inputs and an explicit completeness verdict | `diff` + `compare(match_io)`                 |
+| P1  | Bisect when a regression appeared across time and revisions                                                  | CCT series + revision alignment              |
+| P1  | Pull the exact-event window around a failure                                                                 | flight-recorder dumps                        |
+| P1  | Check capture completeness before trusting any conclusion                                                    | mandatory result meta footer                 |
+| P2  | Request an explicit bounded full trace for exact-ordering questions                                          | full trace                                   |
 
 ### 2.4 The engineering lead
 
-| P | Story | Served by |
-|---|---|---|
-| P0 | LLM spend by feature and model over a month; count-driven vs token-driven | CCT LLM counters + `lookup()` |
-| P0 | Error and retry rates by function across revisions | CCT + revision alignment |
-| P0 | Parse-failure hotspots by prompt/schema, with raw output on failures | CCT + value capture join |
-| P0 | Privacy/consent audit: what was captured, by role/trigger/scope; promotions lacking redaction | audit records |
-| P1 | Output drift review after a prompt change | value CIDs across runs |
-| P1 | Which agent tools are actually called | CCT |
-| P1 | Latency regression: ours vs the provider's | self vs await split |
-| P1 | Forecast telemetry cost at 10x traffic | self-accounting |
-| P2 | Concurrency/spawn-fanout capacity review | spawn aggregates + flight recorder |
+| P   | Story                                                                                         | Served by                          |
+| --- | --------------------------------------------------------------------------------------------- | ---------------------------------- |
+| P0  | LLM spend by feature and model over a month; count-driven vs token-driven                     | CCT LLM counters + `lookup()`      |
+| P0  | Error and retry rates by function across revisions                                            | CCT + revision alignment           |
+| P0  | Parse-failure hotspots by prompt/schema, with raw output on failures                          | CCT + value capture join           |
+| P0  | Privacy/consent audit: what was captured, by role/trigger/scope; promotions lacking redaction | audit records                      |
+| P1  | Output drift review after a prompt change                                                     | value CIDs across runs             |
+| P1  | Which agent tools are actually called                                                         | CCT                                |
+| P1  | Latency regression: ours vs the provider's                                                    | self vs await split                |
+| P1  | Forecast telemetry cost at 10x traffic                                                        | self-accounting                    |
+| P2  | Concurrency/spawn-fanout capacity review                                                      | spawn aggregates + flight recorder |
 
 ### 2.5 Requirements the stories force into the data model
 
@@ -188,7 +188,7 @@ Walking the stories back through the capture contracts yields requirements a pur
 4. **Completeness is part of every answer.** Every query result carries what was and wasn't covered (Section 8.4). "No data" is always distinguishable from "no events".
 5. **Cross-revision identity is a join, not an accident.** Dense function ids are per-revision; every "across deploys" story goes through dictionary alignment (`definition_key` + `def_content_hash`, Section 4.4).
 6. **Value identity (CIDs) is a query primitive**, not just a storage optimization: duplicate-prompt detection, drift review, and Merkle-short-circuit diffs group and compare by CID.
-7. **Run ids sort by time.** `BoundaryId` is minted as a ULID (48-bit ms timestamp + 80 random bits) in the same 16-byte, `baml_id_1_...`-encoded shape. The **raw 16-byte payload** sorts chronologically; the base64url string form does *not* (the URL_SAFE alphabet's value order differs from ASCII order), so keyset pagination decodes cursors and compares payloads (or uses the run index's `created_ms`) rather than comparing strings. No format change; old random ids remain valid and merely sort arbitrarily among themselves.
+7. **Run ids sort by time.** `BoundaryId` is minted as a ULID (48-bit ms timestamp + 80 random bits) in the same 16-byte, `baml_id_1_...`-encoded shape. The **raw 16-byte payload** sorts chronologically; the base64url string form does _not_ (the URL_SAFE alphabet's value order differs from ASCII order), so keyset pagination decodes cursors and compares payloads (or uses the run index's `created_ms`) rather than comparing strings. No format change; old random ids remain valid and merely sort arbitrarily among themselves.
 
 ---
 
@@ -196,12 +196,12 @@ Walking the stories back through the capture contracts yields requirements a pur
 
 Four explicit capture modes. "Lossless" is defined per contract; silent truncation is not an implementation of any of them.
 
-| Contract | Default | Promises (complete information) | Intentionally not promised |
-|---|---|---|---|
-| **Aggregate CCT** | ON, everywhere, every function | Counts, total/self/awaiting ns, status counts, duration histograms, LLM counters, spawn aggregates -- per calling context per time window, with completeness watermarks | Exact invocation order; exact per-call timestamps; per-call values; per-call `$id` override records (durable only in dumps/full trace -- see Section 12 OQ7) |
-| **Values** | ON for root function + LLM functions; trigger-promoted for others | Every selected value, or an explicit `CaptureLoss` record; content-addressed, deduplicated | Values of unselected calls |
-| **Flight recorder** | ON, bounded (16 MiB native / 4 MiB wasm) | Exact events within the retained window; dumps bound to triggers | Events older than the declared window |
-| **Full trace** | OFF; explicit opt-in, bounded | Exact events for the bounded session, or an explicit `TraceBudgetExhausted` terminal marker | Anything past the declared bound; wrap-around is deliberately not offered in v1 |
+| Contract            | Default                                                           | Promises (complete information)                                                                                                                                         | Intentionally not promised                                                                                                                                   |
+| ------------------- | ----------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Aggregate CCT**   | ON, everywhere, every function                                    | Counts, total/self/awaiting ns, status counts, duration histograms, LLM counters, spawn aggregates -- per calling context per time window, with completeness watermarks | Exact invocation order; exact per-call timestamps; per-call values; per-call `$id` override records (durable only in dumps/full trace -- see Section 12 OQ7) |
+| **Values**          | ON for root function + LLM functions; trigger-promoted for others | Every selected value, or an explicit `CaptureLoss` record; content-addressed, deduplicated                                                                              | Values of unselected calls                                                                                                                                   |
+| **Flight recorder** | ON, bounded (16 MiB native / 4 MiB wasm)                          | Exact events within the retained window; dumps bound to triggers                                                                                                        | Events older than the declared window                                                                                                                        |
+| **Full trace**      | OFF; explicit opt-in, bounded                                     | Exact events for the bounded session, or an explicit `TraceBudgetExhausted` terminal marker                                                                             | Anything past the declared bound; wrap-around is deliberately not offered in v1                                                                              |
 
 ### 3.1 Triggers and promotion
 
@@ -216,22 +216,21 @@ Rate limits: >=5 s between dumps per boundary, <=16 dumps per boundary, with a `
 
 ### 3.2 Defaults by host
 
-| Host | CCT | Values | Flight recorder | Full trace |
-|---|---|---|---|---|
-| `baml run` / `baml test` (CLI) | on | root io + LLM Auto + error promotion | on | off |
-| SDK (cffi) / pack host | on | root io + LLM Auto + error promotion | on | off |
-| Playground / `baml studio` | on | same + logs | on | off (one-click arm per run) |
-| wasm (VSCode/browser) | on (in-memory) | same, inline-only | on (4 MiB) | off |
-| CI (`BAML_HISTORY=0`) | on, session-only | off | on | off |
+| Host                           | CCT              | Values                               | Flight recorder | Full trace                  |
+| ------------------------------ | ---------------- | ------------------------------------ | --------------- | --------------------------- |
+| `baml run` / `baml test` (CLI) | on               | root io + LLM Auto + error promotion | on              | off                         |
+| SDK (cffi) / pack host         | on               | root io + LLM Auto + error promotion | on              | off                         |
+| Playground / `baml studio`     | on               | same + logs                          | on              | off (one-click arm per run) |
+| wasm (VSCode/browser)          | on (in-memory)   | same, inline-only                    | on (4 MiB)      | off                         |
+| CI (`BAML_HISTORY=0`)          | on, session-only | off                                  | on              | off                         |
 
 This table is a **product change with a privacy consequence**: CLI and SDK runs, which today persist nothing, will persist captured root/LLM inputs and outputs under `.baml/`. That change is named, documented, and controlled by `BAML_HISTORY=0` plus per-function capture attributes; Section 7.5 covers redaction and audit.
 
-The wiring that makes this real on CLI/SDK/pack hosts -- minting a `BoundaryId`, binding it to the consumer, writing `boundary.bamlmeta`, enabling capture defaults, and draining values continuously -- does not exist today and is a named implementation phase (Section 11, Phase H). Without it, "on by default" would be vacuous: today only the playground and wasm hosts mint boundaries or enable capture.
----
+## The wiring that makes this real on CLI/SDK/pack hosts -- minting a `BoundaryId`, binding it to the consumer, writing `boundary.bamlmeta`, enabling capture defaults, and draining values continuously -- does not exist today and is a named implementation phase (Section 11, Phase H). Without it, "on by default" would be vacuous: today only the playground and wasm hosts mint boundaries or enable capture.
 
 ## 4. Compile-time identity
 
-Everything in this section makes integer-keyed identity a *compiler output*, leaves the VM hot path byte-for-byte unchanged, and turns the 129 KB-per-file metadata table into a once-per-revision dictionary.
+Everything in this section makes integer-keyed identity a _compiler output_, leaves the VM hot path byte-for-byte unchanged, and turns the 129 KB-per-file metadata table into a once-per-revision dictionary.
 
 ### 4.1 `function_id` is assigned by the compiler
 
@@ -255,7 +254,7 @@ The finalizer (`finalize_program_identity` = `assign_function_ids` + revision ha
 
 1. Full / stdlib-seeded compile -- tail of the public entries in `baml_compiler2_emit`.
 2. Incremental reuse compile -- on the **linked** program (partial dirty-only programs are never finalized).
-3. **Pack load -- after the `PackEnvelope` borsh deserialization in `baml_pack_host`** (and any future `Program` deserialization site). Note: the envelope is loaded directly via borsh, not through `link::link` -- the finalizer hooks the load site. *Prerequisite PR:* `PackEnvelope` today is a bare versionless borsh struct; it gains a magic + version prefix first. Because packed binaries embed the envelope next to their own matching host (libsui), cross-version envelope reads essentially cannot occur, so no legacy `FunctionV1` decoder is built -- the version prefix exists to fail loudly, and identity-less programs fall back to the content hash of Section 4.3.
+3. **Pack load -- after the `PackEnvelope` borsh deserialization in `baml_pack_host`** (and any future `Program` deserialization site). Note: the envelope is loaded directly via borsh, not through `link::link` -- the finalizer hooks the load site. _Prerequisite PR:_ `PackEnvelope` today is a bare versionless borsh struct; it gains a magic + version prefix first. Because packed binaries embed the envelope next to their own matching host (libsui), cross-version envelope reads essentially cannot occur, so no legacy `FunctionV1` decoder is built -- the version prefix exists to fail loudly, and identity-less programs fall back to the content hash of Section 4.3.
 
 The engine walk keeps only `lower_to_compact` and asserts ids are stamped (`debug_assert` full check; release checks last id only). The five `function_id: 0 // assigned at engine init (interim provider)` construction sites keep `0` with an updated comment. `Function.function_id` **stays `#[borsh(skip)]`** -- units cannot carry final ids (a unit doesn't know its pool position until link), re-derivation is one walk, and the B-693 byte-identity oracle continues to hold unchanged.
 
@@ -322,7 +321,7 @@ Identity precedence for boundary artifacts (absorbing N3's ladder): `boundary.ba
 
 ### 4.3 Revision identity: exactly what is hashed
 
-Neither TIR nor the emitted program. Revision identity = *source x toolchain x options*:
+Neither TIR nor the emitted program. Revision identity = _source x toolchain x options_:
 
 ```
 source_snapshot_id = BLAKE3("baml.snapshot.v1\0"
@@ -348,13 +347,13 @@ def_content_hash = BLAKE3("baml.def.v1\0"
     || borsh(HashProjection(bytecode)))
 ```
 
-`HashProjection` excludes line tables, spans, local names, debug locals, docstrings, and display strings -- **and canonicalizes inter-object references**: `ConstValue::Object(pool_index)` operands are replaced by the referent's `definition_key` string before hashing. This is a review-mandated fix: pool indices are whole-program layout, so hashing them raw would churn every unchanged function's hash on any unrelated add/remove. The pinned golden test includes the case *"edit an unrelated file => all other def_content_hashes byte-identical"*.
+`HashProjection` excludes line tables, spans, local names, debug locals, docstrings, and display strings -- **and canonicalizes inter-object references**: `ConstValue::Object(pool_index)` operands are replaced by the referent's `definition_key` string before hashing. This is a review-mandated fix: pool indices are whole-program layout, so hashing them raw would churn every unchanged function's hash on any unrelated add/remove. The pinned golden test includes the case _"edit an unrelated file => all other def_content_hashes byte-identical"_.
 
 The join contract for "latency of `user.Extract` across the last 10 revisions":
 
 - **Join key:** `definition_key` (compiler-emitted from HIR ItemRefs; the engine's capital-letter FQN sniffing dies).
 - Per revision: open its dictionary, resolve `definition_key -> function_id`, query segments by `(revision_id, function_id)`, group by `definition_key`, annotate each revision slice with `def_content_hash` so UIs and agents can mark "code changed here" boundaries.
-- **Renames break the join by design.** `def_content_hash` equality across a rename is a *hint* ("possibly renamed from X"), never silent identity.
+- **Renames break the join by design.** `def_content_hash` equality across a rename is a _hint_ ("possibly renamed from X"), never silent identity.
 - No local alignment-table artifact -- alignment is computed on read (10 dicts x 1000 rows is trivial). The cloud materializes the definitions table at ingest.
 - `(revision_id, function_id)` is the only scope in which `function_id` means anything.
 
@@ -566,7 +565,7 @@ What disappears from today's ~123 ns/call: protobuf encode + 285 MB/s buffered w
 
 **Ruling -- where CCT data lives (the central placement conflict):** CCT delta rows are written **once, into the per-session stream**. A session is one engine's lifetime in one process -- key `(process_euid, engine_id)`, exactly the file-header half of the quad. A long-running server serving ten thousand boundaries has one session whose CCT stream is the continuous truth (this is what makes fleet-level `ctx()` queries and always-on production telemetry possible); a CLI run has a short-lived session containing one boundary. Boundary attribution is structural, not per-row: `node_birth` rows carry `partition_id`, and a `partition_bind` block (written when the host binds a boundary) maps `partition_id -> boundary_local_id -> BoundaryId`. Delta rows stay 4-byte-node-keyed with no boundary column.
 
-At **boundary completion** the consumer folds that boundary's rows and writes a sealed `cct.bamlcct` snapshot into the boundary dir (same container, `node_total` blocks, node ids re-densified; KBs -- corpus p99 ~ 226 KB, p50 ~ trivial). The boundary dir is therefore self-contained for share/export/delete *after completion*; live and crashed boundaries are served by filter+fold over session segments. **Retention rule (review fix):** before deleting session segments, retention materializes the folded snapshot for every begin-without-complete boundary that lacks one (recording `cct_loss` if the fold fails) -- the "crashed boundary is a readable partial run" contract cannot silently expire.
+At **boundary completion** the consumer folds that boundary's rows and writes a sealed `cct.bamlcct` snapshot into the boundary dir (same container, `node_total` blocks, node ids re-densified; KBs -- corpus p99 ~ 226 KB, p50 ~ trivial). The boundary dir is therefore self-contained for share/export/delete _after completion_; live and crashed boundaries are served by filter+fold over session segments. **Retention rule (review fix):** before deleting session segments, retention materializes the folded snapshot for every begin-without-complete boundary that lacks one (recording `cct_loss` if the fold fails) -- the "crashed boundary is a readable partial run" contract cannot silently expire.
 
 **Session epochs:** sessions rotate (new session dir, fresh node table, carry-over checkpoint written at epoch close) at 256 MiB of CCT bytes or 24 h, bounding the node table and `node_birth` growth of months-long processes. **The session directory is the epoch unit and the node-id scope:** node ids are unique within one session dir (`(process_euid, engine_id, started_secs)`), restart with each epoch, and are meaningless outside it -- every consumer of a node id resolves it against that directory's `node_birth` chain. Queries fold across epochs exactly as across sessions (logical CCT identity is the function-id path, Section 4.6).
 
@@ -584,20 +583,20 @@ Seal: flush + D1 -> append `footer_index` block (per-block {kind, offset, row_co
 
 Adding a column set = new block kind; readers skip unknown kinds (forward compat).
 
-| kind | name | row layout | when |
-|---|---|---|---|
-| 1 | `cct_delta` | node_id u32, enters u32, ends_ok u32, ends_err u32, ends_cancel u32, ends_exit u32, total_ns u64, self_ns u64, await_ns u64 -- **48 B** | per 250 ms window, dirty nodes only |
-| 2 | `node_birth` | node_id u32, parent_node_id u32, function_id u32, logical_thread_id u64, partition_id u32 -- 24 B | once per new node, before first referencing delta |
-| 3 | `spawn_edge` | edge_id u32, parent_node u32, entry_fn u32, child_root_node u32, spawn_delta u32, completed_delta u32, errored_delta u32, cancelled_delta u32, running_ns delta u64, awaiting_ns delta u64 | per window, dirty edges |
-| 4 | `watermark` | wall_epoch_ns u64, drained_through_ts_ns u64, events_drained u64, durable_kind u8, reason u8 | at each D1 sync **that follows new blocks**; when idle, a heartbeat watermark at >=10 s cadence only (keeps idle cost single-digit B/s) |
-| 5 | `partition_bind` | partition_id u32, boundary_local_id u32, boundary_id [16], created_ms u64 | at host bind |
-| 6 | `footer_index` | -- | seal only (kind 7 reserved; the 48 B seal trailer of Section 6.2 is an out-of-band fixed structure, not a framed block) |
-| 8 | `node_total` (checkpoint) | same 48 B as kind 1, ABSOLUTE values | see cadence below |
-| 9 | `cct_hist` | node_id u32, 16 x u32 duration buckets on a x4 stride (1 us, 4 us, ..., >= ~17.9 min) -- 68 B | per window, nodes with >=1 close |
-| 10 | `llm_delta` | node_id u32, llm_calls_delta u32, tokens_in_delta u64, tokens_out_delta u64, provider_errs_delta u32, parse_errs_delta u32, model_id u32 | per window, dirty LLM nodes |
-| 11 | `model_birth` | model_id u32, name (len-prefixed utf8) | once per interned model |
-| 12 | `marker` | loss / degraded / shed / budget-exhausted / epoch-close diagnostics | as needed |
-| 13 | `instance` | thread_id u64, edge_id u32, status u8, name_len u16, start/end_ns u64, dump_seq u32, name | bounded instance rows |
+| kind | name                      | row layout                                                                                                                                                                                 | when                                                                                                                                    |
+| ---- | ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------- |
+| 1    | `cct_delta`               | node_id u32, enters u32, ends_ok u32, ends_err u32, ends_cancel u32, ends_exit u32, total_ns u64, self_ns u64, await_ns u64 -- **48 B**                                                    | per 250 ms window, dirty nodes only                                                                                                     |
+| 2    | `node_birth`              | node_id u32, parent_node_id u32, function_id u32, logical_thread_id u64, partition_id u32 -- 24 B                                                                                          | once per new node, before first referencing delta                                                                                       |
+| 3    | `spawn_edge`              | edge_id u32, parent_node u32, entry_fn u32, child_root_node u32, spawn_delta u32, completed_delta u32, errored_delta u32, cancelled_delta u32, running_ns delta u64, awaiting_ns delta u64 | per window, dirty edges                                                                                                                 |
+| 4    | `watermark`               | wall_epoch_ns u64, drained_through_ts_ns u64, events_drained u64, durable_kind u8, reason u8                                                                                               | at each D1 sync **that follows new blocks**; when idle, a heartbeat watermark at >=10 s cadence only (keeps idle cost single-digit B/s) |
+| 5    | `partition_bind`          | partition_id u32, boundary_local_id u32, boundary_id [16], created_ms u64                                                                                                                  | at host bind                                                                                                                            |
+| 6    | `footer_index`            | --                                                                                                                                                                                         | seal only (kind 7 reserved; the 48 B seal trailer of Section 6.2 is an out-of-band fixed structure, not a framed block)                 |
+| 8    | `node_total` (checkpoint) | same 48 B as kind 1, ABSOLUTE values                                                                                                                                                       | see cadence below                                                                                                                       |
+| 9    | `cct_hist`                | node_id u32, 16 x u32 duration buckets on a x4 stride (1 us, 4 us, ..., >= ~17.9 min) -- 68 B                                                                                              | per window, nodes with >=1 close                                                                                                        |
+| 10   | `llm_delta`               | node_id u32, llm_calls_delta u32, tokens_in_delta u64, tokens_out_delta u64, provider_errs_delta u32, parse_errs_delta u32, model_id u32                                                   | per window, dirty LLM nodes                                                                                                             |
+| 11   | `model_birth`             | model_id u32, name (len-prefixed utf8)                                                                                                                                                     | once per interned model                                                                                                                 |
+| 12   | `marker`                  | loss / degraded / shed / budget-exhausted / epoch-close diagnostics                                                                                                                        | as needed                                                                                                                               |
+| 13   | `instance`                | thread_id u64, edge_id u32, status u8, name_len u16, start/end_ns u64, dump_seq u32, name                                                                                                  | bounded instance rows                                                                                                                   |
 
 Kind 9 exists because tail-latency queries (p95/p99 per context) are unanswerable retroactively from sums -- this was a launch requirement from the query-surface judging, and it is cheap: 68 B x nodes-with-closes per window, and the hot loop touches 3 nodes.
 
@@ -623,14 +622,14 @@ Same BCCT container, always sealed: `node_total` blocks (final folded counters, 
 - **D1 synced** -- `sync_data` on the file; survives power loss for content.
 - **D2 anchored** -- D1 + parent-dir fsync (create/rename visibility); survives power loss.
 
-| Class | Steady state | Milestones | Declared loss window |
-|---|---|---|---|
-| session/boundary meta | heartbeats D0 | begin/bound/complete/end D2 | none for milestones |
-| CCT active segment | D0 per 250 ms window | **D1 group commit every 1 s or 1 MiB** + watermark block; D1 at boundary completion and engine close | **<=1.25 s** of aggregate deltas (power loss: one group-commit interval + one flush window); <= current window (process crash) |
-| sealed segments, snapshots, dicts, pack idx | -- | D2 at seal | none |
-| value packs | D0 on append | D1 before any root referencing the chunks commits; D2 at seal | orphan chunks only |
-| `.bamlvalue`, full-trace `.bamlprof` | D0 cadence | D1 on flush/close | tail records, reader-tolerated |
-| `manifest.bamlcids` | D0 | grouped with pack D1 (Section 6.7); sealed at completion | none for committed roots |
+| Class                                       | Steady state         | Milestones                                                                                           | Declared loss window                                                                                                           |
+| ------------------------------------------- | -------------------- | ---------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| session/boundary meta                       | heartbeats D0        | begin/bound/complete/end D2                                                                          | none for milestones                                                                                                            |
+| CCT active segment                          | D0 per 250 ms window | **D1 group commit every 1 s or 1 MiB** + watermark block; D1 at boundary completion and engine close | **<=1.25 s** of aggregate deltas (power loss: one group-commit interval + one flush window); <= current window (process crash) |
+| sealed segments, snapshots, dicts, pack idx | --                   | D2 at seal                                                                                           | none                                                                                                                           |
+| value packs                                 | D0 on append         | D1 before any root referencing the chunks commits; D2 at seal                                        | orphan chunks only                                                                                                             |
+| `.bamlvalue`, full-trace `.bamlprof`        | D0 cadence           | D1 on flush/close                                                                                    | tail records, reader-tolerated                                                                                                 |
+| `manifest.bamlcids`                         | D0                   | grouped with pack D1 (Section 6.7); sealed at completion                                             | none for committed roots                                                                                                       |
 
 **fsync never runs on the drain path** (review fix): a helper thread performs syncs; the durable watermark advances on completion. Consumer stall p99 under the durability matrix is benchmark-gated (C12).
 
@@ -654,7 +653,7 @@ Index (`.bamlpack.idx`, at seal, tmp+rename): `BPKI` + 256-way fanout + sorted `
 - Every open `PackWriter` holds a **shared** flock on `store/writers.lock`.
 - `baml gc` / `baml clean` takes it **exclusive** -- GC never runs concurrently with writers. If writers are live, GC skips the store with a notice (retention tiers that don't touch the CAS still run). Active packs are additionally protected by their `.lease` heartbeat. `store/gc.lock` serializes concurrent GC invocations against each other (held exclusive for the duration of a pass).
 - Mark = union of `manifest.bamlcids` in live boundary dirs + `flight/*.bamlcids` pins + `uploads.pin` closure + derived roots from unsealed boundaries. Sweep = unmarked idx entries older than the 24 h grace; packs with live chunks are compacted (rewrite live records to a fresh pack, delete old pack whole), fully-dead packs unlinked. Every deletion tombstoned in `retention.log`.
-- The adversarial interleaving (delete boundary -> new writer dedupes against a now-unreferenced old chunk -> GC) is a **required test**; under the exclusive lock it reduces to "GC waits", and the crashfuzz suite asserts *no readable root ever references a sweepable CID*.
+- The adversarial interleaving (delete boundary -> new writer dedupes against a now-unreferenced old chunk -> GC) is a **required test**; under the exclusive lock it reduces to "GC waits", and the crashfuzz suite asserts _no readable root ever references a sweepable CID_.
 - An epoch/lease protocol that lets GC run concurrently with writers is future work, explicitly out of v1 (Section 12).
 
 Delete = `rm -rf` the boundary dir (chunks become unreferenced; next GC reclaims). Export = copy dir + write `export/pack-*.bamlpack(.idx)` containing the closure of `manifest.bamlcids` + the referenced dictionaries -- the exported dir opens anywhere with zero project state (reader search path: `[boundary/export/, project store/]`).
@@ -663,27 +662,27 @@ Delete = `rm -rf` the boundary dir (chunks become unreferenced; next GC reclaims
 
 Defaults (overridable in `baml.toml [observability]` and env):
 
-| Root | Age | Size | Floor |
-|---|---|---|---|
-| `history/` | 30 d | 2 GiB | newest 20 boundaries |
-| `sessions/` | 7 d | 1 GiB (raw/ <=512 MiB per session) | sessions referenced by kept boundaries; snapshot-materialize before delete (Section 6.1) |
-| `store/` | reachability (GC) | soft 4 GiB -> boundary eviction then GC | closure of kept boundaries |
-| `dict/` | while referenced | -- | -- |
-| `profiles/` (legacy) | 7 d | -- | -- |
+| Root                 | Age               | Size                                    | Floor                                                                                    |
+| -------------------- | ----------------- | --------------------------------------- | ---------------------------------------------------------------------------------------- |
+| `history/`           | 30 d              | 2 GiB                                   | newest 20 boundaries                                                                     |
+| `sessions/`          | 7 d               | 1 GiB (raw/ <=512 MiB per session)      | sessions referenced by kept boundaries; snapshot-materialize before delete (Section 6.1) |
+| `store/`             | reachability (GC) | soft 4 GiB -> boundary eviction then GC | closure of kept boundaries                                                               |
+| `dict/`              | while referenced  | --                                      | --                                                                                       |
+| `profiles/` (legacy) | 7 d               | --                                      | --                                                                                       |
 
 Degradation order when a budget binds: raw full-trace segments -> flight dumps -> per-boundary full-trace segments (boundary stays readable via snapshot + values) -> whole oldest boundaries (releasing their CAS closure) -> sealed session CCT segments last (aggregates are smallest and are the always-on contract). Value packs are never deleted directly -- only via reachability. Every deletion is tombstoned; readers surface "removed by retention on <date>" instead of silent absence. `baml clean [--dry-run|--all]` is the CLI entry; a cheap budget check runs at session start (consumer thread).
 
 ### 6.9 Versioning and fixtures
 
-| File | Magic | Ext |
-|---|---|---|
-| CCT segment / snapshot | `BCCT` / `BCCTFOOT` | `.bamlseg` / `.bamlcct` |
-| Revision dictionary | protobuf `RevisionDictionaryV1` | `.bamldict` |
-| Value pack / index | `BPK1` / `BPKI` | `.bamlpack` / `.bamlpack.idx` |
-| Meta streams | `BMET` | `.bamlmeta` |
-| CID manifests | `BCID` | `.bamlcids` |
-| Exact-event index | `BIX1` | `.bamlidx` (Section 9.5) |
-| Event/value streams | protobuf headers (existing) | `.bamlprof` / `.bamlvalue` |
+| File                   | Magic                           | Ext                           |
+| ---------------------- | ------------------------------- | ----------------------------- |
+| CCT segment / snapshot | `BCCT` / `BCCTFOOT`             | `.bamlseg` / `.bamlcct`       |
+| Revision dictionary    | protobuf `RevisionDictionaryV1` | `.bamldict`                   |
+| Value pack / index     | `BPK1` / `BPKI`                 | `.bamlpack` / `.bamlpack.idx` |
+| Meta streams           | `BMET`                          | `.bamlmeta`                   |
+| CID manifests          | `BCID`                          | `.bamlcids`                   |
+| Exact-event index      | `BIX1`                          | `.bamlidx` (Section 9.5)      |
+| Event/value streams    | protobuf headers (existing)     | `.bamlprof` / `.bamlvalue`    |
 
 Additive change = new block kind / proto field / record variant, skipped by old readers. Breaking change = version bump; readers support N and N-1; a reader hitting N+1 fails explicitly. Value identity versions are separate knobs (`node_codec_version` inside the CID domain; physical pack version never affects CIDs). Golden fixtures (`crates/bex_events/testdata/golden/v1/`): byte-exact examples of every file class + canonical-value corpus with asserted CIDs + torn-tail fixtures truncated at every interesting offset. `v1/` is frozen forever; codec changes mint `v2/`.
 
@@ -701,11 +700,11 @@ Rollout flag: `BAML_OBS_LAYOUT = v1 | dual | v2` -- Release A defaults `dual` (v
 
 `FunctionCaptureProps` gains a fourth option and the compiled-in defaults become:
 
-| Function class | inputs | output | error | promote_on_error |
-|---|---|---|---|---|
-| LLM | Auto | Auto | Auto | Auto |
-| UserDefined / Companion / AutoDerive | Disabled | Disabled | Auto | Auto |
-| Builtin / Internal | Disabled | Disabled | Disabled | Disabled |
+| Function class                       | inputs   | output   | error    | promote_on_error |
+| ------------------------------------ | -------- | -------- | -------- | ---------------- |
+| LLM                                  | Auto     | Auto     | Auto     | Auto             |
+| UserDefined / Companion / AutoDerive | Disabled | Disabled | Auto     | Auto             |
+| Builtin / Internal                   | Disabled | Disabled | Disabled | Disabled         |
 
 Root capture stays host policy (`BoundaryContext.capture_defaults`), not per-function data. The dictionary exposes `capture_flags` per function (inputs/output/error/promote 2 bits each + `is_llm` + `captures_any`), so tooling knows "this function captures values" without scanning artifacts, upload planners build manifests per revision, and the CCT UI badges captured nodes. `capture_policy_version` in the dictionary header names the default table that produced the flags.
 
@@ -716,7 +715,7 @@ The retroactive story -- "when a helper errors, I want the args it actually rece
 - Functions whose resolved mask includes `promote_on_error` capture into the TraceHeap as today, but the drafts land in a **staging ring** (bounded bytes, default 32 MiB native / 8 MiB wasm) tagged speculative, instead of the durable drain queue.
 - Staged drafts are released at frame close (normal completion) under LRU/byte pressure -- cheap, no serialization, no hashing, no I/O (the reserve-before-copy invariant holds; a failed reservation still does zero work).
 - When a trigger fires (Section 3.1), staged drafts belonging to the failing subtree (matched by `TraceCallKey` prefix) are **promoted**: moved to the durable drain queue, canonicalized, and written with `role: promoted` + the trigger id. Everything else about them is a normal capture.
-- The cost model is honest: staging pays the deep copy on every staged call. The default therefore stages only `error: Auto` origin captures (the error value, already captured at throw) plus `promote_on_error` functions' inputs; staging inputs of *every* user function is a per-function or per-boundary opt-in, not the default. The flight recorder remains the universal retroactive evidence (exact events need no copies).
+- The cost model is honest: staging pays the deep copy on every staged call. The default therefore stages only `error: Auto` origin captures (the error value, already captured at throw) plus `promote_on_error` functions' inputs; staging inputs of _every_ user function is a per-function or per-boundary opt-in, not the default. The flight recorder remains the universal retroactive evidence (exact events need no copies).
 - `CaptureLoss` records cover staging-ring evictions that a later trigger would have wanted: the trigger's promotion report includes `staged_evicted: N` so "we would have had it but the buffer was too small" is visible and tunable.
 
 ### 7.3 Continuous drain (absorbs N7)
@@ -743,13 +742,14 @@ Expected effect on the measured corpus: transcript-append workloads go from N(N+
 - Redaction is represented in the capture pipeline (redaction descriptors on capture props), applied before hashing -- redacted values get CIDs of the redacted content.
 - New audit records in `.bamlvalue` (absorbing the deferred `CapturePolicyChanged` work): `CapturePolicyChanged`, `PromotionOccurred {trigger, scope, records, staged_evicted}`, feeding the `audit()` query source (Section 8). The eng-lead privacy-audit P0 story reads these.
 - Content-addressed storage is project-scoped locally and tenant-scoped in the cloud; digest existence must never leak across tenants.
+
 ---
 
 ## 8. The query surface: BQL
 
 Three candidate surfaces were designed competitively (SQL over DataFusion virtual tables; a purpose-built pipeline DSL; a BAML-native stdlib API) and scored by three judges under agent-user, human-dev, and implementer lenses. The pipeline DSL won the human (8.5) and implementer (8) lenses; the agent lens preferred SQL (8.5) but conceded that the DSL's trust machinery, made mandatory, resolves SQL's worst agent hazards (silent-empty results, opt-in completeness). The decisive implementer argument is structural: `bridge_wasm` ships under an enforced gzip size gate (absolute ceiling 4.5 MiB in `.cargo/size-gate.toml`, plus a 3% delta guard over the committed 4.4 MiB baseline), and embedding DataFusion (~2-4 MB compressed alone) is disqualifying, while the pipeline engine is small hand-rolled Rust over deps already in the lockfile.
 
-**Decision: one query engine (`bex_query`), one primary surface (BQL -- "BAML Query Language"), everything else a wrapper or an export.** The web app, CLI, LSP, playground, MCP tool, and future cloud API all call the same engine; sealed segments export to Parquet so DuckDB/DataFusion work *outside* the product as the unbounded-expressiveness escape hatch.
+**Decision: one query engine (`bex_query`), one primary surface (BQL -- "BAML Query Language"), everything else a wrapper or an export.** The web app, CLI, LSP, playground, MCP tool, and future cloud API all call the same engine; sealed segments export to Parquet so DuckDB/DataFusion work _outside_ the product as the unbounded-expressiveness escape hatch.
 
 ### 8.1 Shape
 
@@ -765,17 +765,17 @@ CLI: `baml q '<query>' [--format table|json|ndjson] [--explain] [--schema] [--cu
 
 Every stage has a declared signature checked at plan time. Nine kinds:
 
-| Kind | Keyed by | Backing store |
-|---|---|---|
-| RunSet | run_id (ULID BoundaryId) | run index (bamlmeta scan) |
-| CtxSet | logically (revision_id, canonical function-id path); session-epoch-local node ids are the physical row keys, resolved at fold time via `node_birth` parent-chase | CCT delta segments |
-| CallSet | (run_id, thread_id, call_id) -- exact instances | recent-call ring, value join keys, flight dumps, full traces ONLY |
-| ValueSet | capture_id -> {call key, role, cid, bytes, status}; lazy | capture roots + value DAG |
-| EventSet | ordered exact events with declared window bounds | flight dumps / full traces |
-| SpawnSet | (parent_cct_node, child_entry_fn) | spawn-edge aggregates |
-| SeriesSet | CtxSet x time bucket, each bucket carrying `complete` | delta blocks + watermarks |
-| DiffSet | aligned pairs (cross-revision via `align=fqn`) | dictionary alignment |
-| Table | terminal: ordered, bounded rows + mandatory meta footer | -- |
+| Kind      | Keyed by                                                                                                                                                         | Backing store                                                     |
+| --------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------- |
+| RunSet    | run_id (ULID BoundaryId)                                                                                                                                         | run index (bamlmeta scan)                                         |
+| CtxSet    | logically (revision_id, canonical function-id path); session-epoch-local node ids are the physical row keys, resolved at fold time via `node_birth` parent-chase | CCT delta segments                                                |
+| CallSet   | (run_id, thread_id, call_id) -- exact instances                                                                                                                  | recent-call ring, value join keys, flight dumps, full traces ONLY |
+| ValueSet  | capture_id -> {call key, role, cid, bytes, status}; lazy                                                                                                         | capture roots + value DAG                                         |
+| EventSet  | ordered exact events with declared window bounds                                                                                                                 | flight dumps / full traces                                        |
+| SpawnSet  | (parent_cct_node, child_entry_fn)                                                                                                                                | spawn-edge aggregates                                             |
+| SeriesSet | CtxSet x time bucket, each bucket carrying `complete`                                                                                                            | delta blocks + watermarks                                         |
+| DiffSet   | aligned pairs (cross-revision via `align=fqn`)                                                                                                                   | dictionary alignment                                              |
+| Table     | terminal: ordered, bounded rows + mandatory meta footer                                                                                                          | --                                                                |
 
 Two implicit coercions only: RunSet->CtxSet (implicit run-scoped `ctx()`) and X->Table at pipeline end. The CtxSet/CallSet split encodes the capture contracts in the type system: aggregates are always available; exact instances exist only where an exact source covers the scope, and `instances(source=...)` is the honest gate -- it raises `E_NO_EXACT_SOURCE` naming remedies (arm flight recorder / `@capture` / bounded trace) instead of returning zero rows.
 
@@ -863,6 +863,7 @@ Agents consume BQL through an MCP tool with identical semantics to the CLI (`que
 ## 9. The local web app
 
 Still thinking through if it is two UIs or not. Probably not but wanted thoughts.
+
 ### 9.1 Product shape: one server, two UIs
 
 - **`baml studio [PATH]`** -- new CLI subcommand; resolves the project like the playground does and starts the same `baml_lsp_server` axum server with the runs list as the landing page. Studio opens any directory containing `.baml/` even with no compilable sources -- it is a trace viewer first.
@@ -921,7 +922,7 @@ Sidecar indexes exist **only for exact-event artifacts** (flight dumps and full-
 
 - **Runs list** -- bamlmeta scan (O(#runs), ~200 B each); crashed = begin-without-complete + dead session heartbeat; filters engine-side; revision picker fed from meta `revision_id`.
 - **Run detail** -- timeline (Section 9.4) + tabbed CCT flame / Left Heavy / Sandwich + value inspector; selecting a timeline region scopes the CCT tabs.
-- **Left Heavy** -- preorder SoA emission of nodes with extent >= 1/(2*pixel_width), one synthetic "smaller" node per truncated parent (visible aggregation).
+- **Left Heavy** -- preorder SoA emission of nodes with extent >= 1/(2\*pixel_width), one synthetic "smaller" node per truncated parent (visible aggregation).
 - **Sandwich** -- callers above / callees below a selected FunctionKey; launched from the top-functions table.
 - **Value inspector** -- capture list with availability (`pending|available|missing|omitted| lost|promoted`); skeleton hydration with per-level budgets and child-CID drill; blob bodies stream over `/api/obs/blob` with Range (image/PDF preview).
 - **Diff** -- two runs or two revisions over aligned dictionaries (`definition_key` join, `def_content_hash` change badges); differential flame (red/green by delta) + functions table by |delta|.
@@ -943,21 +944,21 @@ The suite proves the new pipeline better and prevents regression forever. Every 
 
 ### 10.1 Claims
 
-| ID | Claim | Gate (summary) | Cadence |
-|---|---|---|---|
-| C1 | Producer hot path unchanged (~10 ns/call) | ring-push <=15 ns/pair median; end-to-end slope delta <=12 ns/call trivial callee, <=3% wall realistic callee | PR ratio, nightly abs |
-| C2 | Consumer CPU >=2x better | paired ratio <=0.50x legacy; nightly absolute <=50 ns/call (target 45, never-exceed 60 -- one number set, Section 5.11); self-reported consumer CPU cross-checked against differential method within 25% | PR 2M-call ratio, nightly 15M |
-| C3 | Bytes by workload shape | hot loop <=6 KB/s (vs 446 MB/s; Section 6.3 computes ~3.5 KB/s); agent paired ratio >=10x; idle <=44 B/s (achievable via idle watermark suppression, Section 6.3 kind 4 -- computed ~7 B/s); **formulas include block framing and checkpoint volume** | nightly; PR hot-loop ratio >=50x |
-| C4 | Sublinearity | bytes/s flat +/-25% across a 100x call-rate sweep; bytes/path stable for P in {64..4096}; flat over duration | PR smoke, nightly full |
-| C5 | Transcript values quadratic -> linear | growth exponent <=1.2; >=20x reduction at N=64/64 KiB; incremental bytes <= new-message + 8 KiB | PR exponent smoke, nightly |
-| C6 | Ingest/open path replaces the quadratic run store | **candidate = `bex_query` open + fold + live frame** (the run-store path is deleted): open 4,096-event artifact <=250 ms; wire <=10 MB; linear scaling to 100k events <=2 s, RSS <=256 MB | PR + nightly |
-| C7 | Query latency O(pixels) on multi-GB history | cold open <=500 ms; warm top-functions <=100 ms; viewport <=200 KB always, p95 <=100 ms native / 250 ms wasm; viewport bytes invariant +/-10% between 1M-call and 36M-call runs; **peak RSS <= decoded-cache budget + fixed slack** (native and wasm budgets separately, Section 9.2); **corpus includes a CCT-only artifact and a deep-zoom-on-hot-loop row** | nightly, release |
-| C8 | Crash recovery | kill -9 fuzz x1000: every boundary opens or is a legitimate "killed-before-begin" pass; 0 corrupted sealed segments; torn tails truncate to last commit; missing CIDs reported, never silently decoded; **recovered-gap gates per durability class**: process-crash -> last committed block; power-loss model -> last watermark, gate <=2 s = the declared 1.25 s window (Section 6.6) + 0.75 s measurement slack; **no readable root references a sweepable CID** | PR subset, nightly 1000-iter |
-| C9 | CID/canonical stability | golden fixtures byte-exact across macOS arm64 + Linux x86_64; round-trip proptests; v1 fixtures frozen forever | every PR |
-| C10 | Value-plane CPU | throughput >=300 MB/s/core; **latency gate is a per-size curve: <= max(2 ms, size/250 MB/s)** (the flat 5 ms gate was arithmetically impossible at 8 MiB); transcript hash-CPU curve is a permanent tracked row (the quadratic-rescan trigger for incremental hashing) | PR throughput, nightly curve |
-| C11 | Index plane + partition lifecycle | `.bamlidx` bytes <=25% of segment; seal/build CPU per shape; **consumer RSS flat on a 10k-boundary server workload** (partition seal-and-drop proof) | nightly |
-| C12 | Consumer stall + saturation | consumer stall p99 under the durability matrix (fsync off-thread proof); N-hot-producer saturation: shed ladder engages, CCT never disabled, no abort in `shed` mode, ring high-water bounded | nightly |
-| C13 | Live wire bound | per-subscription bytes/s <= max_bytes x rate cap, independent of event rate; measured on hot-loop live tail | nightly |
+| ID  | Claim                                             | Gate (summary)                                                                                                                                                                                                                                                                                                                                                                                                                                                     | Cadence                          |
+| --- | ------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------- |
+| C1  | Producer hot path unchanged (~10 ns/call)         | ring-push <=15 ns/pair median; end-to-end slope delta <=12 ns/call trivial callee, <=3% wall realistic callee                                                                                                                                                                                                                                                                                                                                                      | PR ratio, nightly abs            |
+| C2  | Consumer CPU >=2x better                          | paired ratio <=0.50x legacy; nightly absolute <=50 ns/call (target 45, never-exceed 60 -- one number set, Section 5.11); self-reported consumer CPU cross-checked against differential method within 25%                                                                                                                                                                                                                                                           | PR 2M-call ratio, nightly 15M    |
+| C3  | Bytes by workload shape                           | hot loop <=6 KB/s (vs 446 MB/s; Section 6.3 computes ~3.5 KB/s); agent paired ratio >=10x; idle <=44 B/s (achievable via idle watermark suppression, Section 6.3 kind 4 -- computed ~7 B/s); **formulas include block framing and checkpoint volume**                                                                                                                                                                                                              | nightly; PR hot-loop ratio >=50x |
+| C4  | Sublinearity                                      | bytes/s flat +/-25% across a 100x call-rate sweep; bytes/path stable for P in {64..4096}; flat over duration                                                                                                                                                                                                                                                                                                                                                       | PR smoke, nightly full           |
+| C5  | Transcript values quadratic -> linear             | growth exponent <=1.2; >=20x reduction at N=64/64 KiB; incremental bytes <= new-message + 8 KiB                                                                                                                                                                                                                                                                                                                                                                    | PR exponent smoke, nightly       |
+| C6  | Ingest/open path replaces the quadratic run store | **candidate = `bex_query` open + fold + live frame** (the run-store path is deleted): open 4,096-event artifact <=250 ms; wire <=10 MB; linear scaling to 100k events <=2 s, RSS <=256 MB                                                                                                                                                                                                                                                                          | PR + nightly                     |
+| C7  | Query latency O(pixels) on multi-GB history       | cold open <=500 ms; warm top-functions <=100 ms; viewport <=200 KB always, p95 <=100 ms native / 250 ms wasm; viewport bytes invariant +/-10% between 1M-call and 36M-call runs; **peak RSS <= decoded-cache budget + fixed slack** (native and wasm budgets separately, Section 9.2); **corpus includes a CCT-only artifact and a deep-zoom-on-hot-loop row**                                                                                                     | nightly, release                 |
+| C8  | Crash recovery                                    | kill -9 fuzz x1000: every boundary opens or is a legitimate "killed-before-begin" pass; 0 corrupted sealed segments; torn tails truncate to last commit; missing CIDs reported, never silently decoded; **recovered-gap gates per durability class**: process-crash -> last committed block; power-loss model -> last watermark, gate <=2 s = the declared 1.25 s window (Section 6.6) + 0.75 s measurement slack; **no readable root references a sweepable CID** | PR subset, nightly 1000-iter     |
+| C9  | CID/canonical stability                           | golden fixtures byte-exact across macOS arm64 + Linux x86_64; round-trip proptests; v1 fixtures frozen forever                                                                                                                                                                                                                                                                                                                                                     | every PR                         |
+| C10 | Value-plane CPU                                   | throughput >=300 MB/s/core; **latency gate is a per-size curve: <= max(2 ms, size/250 MB/s)** (the flat 5 ms gate was arithmetically impossible at 8 MiB); transcript hash-CPU curve is a permanent tracked row (the quadratic-rescan trigger for incremental hashing)                                                                                                                                                                                             | PR throughput, nightly curve     |
+| C11 | Index plane + partition lifecycle                 | `.bamlidx` bytes <=25% of segment; seal/build CPU per shape; **consumer RSS flat on a 10k-boundary server workload** (partition seal-and-drop proof)                                                                                                                                                                                                                                                                                                               | nightly                          |
+| C12 | Consumer stall + saturation                       | consumer stall p99 under the durability matrix (fsync off-thread proof); N-hot-producer saturation: shed ladder engages, CCT never disabled, no abort in `shed` mode, ring high-water bounded                                                                                                                                                                                                                                                                      | nightly                          |
+| C13 | Live wire bound                                   | per-subscription bytes/s <= max_bytes x rate cap, independent of event rate; measured on hot-loop live tail                                                                                                                                                                                                                                                                                                                                                        | nightly                          |
 
 ### 10.2 Workloads
 
@@ -983,18 +984,18 @@ Retained from the original benchmark: paired on/off, same binary/machine/session
 
 ### 10.5 Acceptance criteria (concretized Section 17)
 
-| Criterion | Number | Basis |
-|---|---|---|
-| Producer-thread ns/call | <=15 median (measured ~10 today) | C1 |
-| Consumer CPU per M calls | <=50 ms integrated; target 45; never-exceed 60 | C2 |
-| Aggregate bytes per continuously-dirty node per minute | <=32 KB (48 B delta + 68 B hist per 250 ms window + framing share + <=2x checkpoint; typical nodes are dirty in few windows and land far below) | C3/C4 |
-| Hot-loop run (36.2 M calls, 3.8 s; `bench_36m`) | boundary snapshot `cct.bamlcct` <=10 KB; attributable session CCT bytes <= C3 rate x duration ~ 23 KB (vs 1.69 GB measured) | C3 |
-| Time-to-query top functions | <=100 ms warm, <=500 ms cold on 10 GiB | C7 |
-| Viewport response | <=200 KB; p95 <=100 ms native / 250 ms wasm | C7 |
-| Completeness-detection latency | <= flush cadence + 5 s | C8 |
-| Loss window by mode | aggregate <=1.25 s power-loss (Section 6.6) / <= window process-crash; values: explicit CaptureLoss only; full trace: explicit bound | C8 |
-| Max normal local disk; disk-exhaustion behavior; upload backlog; value retention | **TBD product** (suite reports the inputs; qualitative gates already binding) | -- |
-| Qualitative (binding now) | no silent truncation; every file versioned; crash tests per claimed durability class; full trace never default; UI never materializes all calls; awaiting != running; spawn != stack depth | inspected rows -> named tests |
+| Criterion                                                                        | Number                                                                                                                                                                                     | Basis                         |
+| -------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------- |
+| Producer-thread ns/call                                                          | <=15 median (measured ~10 today)                                                                                                                                                           | C1                            |
+| Consumer CPU per M calls                                                         | <=50 ms integrated; target 45; never-exceed 60                                                                                                                                             | C2                            |
+| Aggregate bytes per continuously-dirty node per minute                           | <=32 KB (48 B delta + 68 B hist per 250 ms window + framing share + <=2x checkpoint; typical nodes are dirty in few windows and land far below)                                            | C3/C4                         |
+| Hot-loop run (36.2 M calls, 3.8 s; `bench_36m`)                                  | boundary snapshot `cct.bamlcct` <=10 KB; attributable session CCT bytes <= C3 rate x duration ~ 23 KB (vs 1.69 GB measured)                                                                | C3                            |
+| Time-to-query top functions                                                      | <=100 ms warm, <=500 ms cold on 10 GiB                                                                                                                                                     | C7                            |
+| Viewport response                                                                | <=200 KB; p95 <=100 ms native / 250 ms wasm                                                                                                                                                | C7                            |
+| Completeness-detection latency                                                   | <= flush cadence + 5 s                                                                                                                                                                     | C8                            |
+| Loss window by mode                                                              | aggregate <=1.25 s power-loss (Section 6.6) / <= window process-crash; values: explicit CaptureLoss only; full trace: explicit bound                                                       | C8                            |
+| Max normal local disk; disk-exhaustion behavior; upload backlog; value retention | **TBD product** (suite reports the inputs; qualitative gates already binding)                                                                                                              | --                            |
+| Qualitative (binding now)                                                        | no silent truncation; every file versioned; crash tests per claimed durability class; full trace never default; UI never materializes all calls; awaiting != running; spawn != stack depth | inspected rows -> named tests |
 
 ---
 
@@ -1002,21 +1003,21 @@ Retained from the original benchmark: paired on/off, same binary/machine/session
 
 One ledger across all five subsystems (review fix: the designs' individual plans had circular dependencies; deletions now land last). Phases are independently valuable and sequential except where marked parallel.
 
-| Phase | Contents | Depends on |
-|---|---|---|
-| **P0 -- Truth & tooling** | Commit `obs-bench` skeleton + prof-stats/value-stats/replay; committed CCT microbench; `ConsumerStats` self-reporting; golden-fixture scaffolding; `BAML_PROFILE_PIPELINE` flag forked at the consumer fan-out (all modes = legacy behavior initially); fix the 1.5% width floor (UI Stage 1 can start in parallel) | -- |
-| **P1 -- Compile-time identity** | `identity.rs` finalizer + emit/link/pack-load call sites (pack-envelope version-prefix prerequisite PR first); revision/source hashing (salsa); `RevisionDictionaryV1` + `.bamldict` writer; `DefinitionMeta`/lambda identity (borsh bump + cache FORMAT_VERSION bump); capture_flags; delete ProgramId; populate header fields 10/11; engine walk becomes verify-only | P0 |
-| **P2 -- CCT engine (RAM)** | `prof/cct/` modules; causal defer + thread-lifecycle deferral + resync; charge-to-current with per-thread watermarks; Suspend/Resume (0x06/0x07) + LlmCallMeta (0x08) records + reader skip-tolerance (same PR); spawn edges + instances; recursion fold; recent-call ring (56 B slots); integrated bench lands here -- **measured <=50 ns/call is the exit gate**, with the recorder-ring memcpy included as an equal-cost stub (the real recorder lands in P6; the ledger re-affirms the gate under C2 when it does, before P9) | P1 (dense ids) |
-| **P3 -- Session storage** | BCCT segment writer/reader (all 13 block kinds incl. `cct_hist`/`llm_delta`); sessions/ layout + session.bamlmeta; checkpoint-by-bytes cadence; watermark + off-thread fsync; seal + footer; `boundary.bamlmeta` (host begin + consumer bound/complete via `ControlMsg::BindBoundary`); boundary snapshot fold; `dual` mode writes v2 alongside v1 (`BAML_OBS_LAYOUT=dual`) | P2 |
-| **P4 -- Query engine + web app core** | `bex_query` (sans-io, MmapSource + LiveMirrorSource); BQF1; `/api/obs`; runs list; Left Heavy; default-mode timeline (three tiers); live tail; playground Runs tab; C6/C7 gates | P3 |
-| **P5 -- Values: CAS + staging + continuous drain** | canonical encoder + CID + golden fixtures (C9); packs/index/writers.lock; drain service threading; continuous drain (N7); staging ring + trigger promotion; audit records; `manifest.bamlcids` + root-commit ordering; GC under exclusive lock; retention (`baml clean`) | P3 (layout), parallel with P4 |
-| **P6 -- Flight recorder + triggers + full trace** | recorder ring + dump path + `.bamlcids` pins; OnError/OnLatency/Manual triggers wired to promotion (P5) and dumps; full-trace mode with `TraceBudgetExhausted`; exact-event `.bamlidx` (right-sized) + timeline exact tiers | P3; overlays land after P4 |
-| **P H -- Host wiring (the "on by default" milestone)** | CLI `run`/`test`, cffi SDK, pack_host: mint ULID BoundaryId, `BindBoundary`, begin/complete meta, CaptureDefaults, completion barrier before exit (`drain -> complete -> flush_and_join -> exit`); `BAML_HISTORY` + baml.toml knobs; shed-mode default for SDK hosts; privacy change documented | P3 minimum; full value with P5/P6 |
-| **P7 -- BQL surface** | parser/planner/stage catalog over `bex_query`; CLI `baml q`; `--schema`; completeness footers everywhere; snapshot pinning; MCP tool; studio query box + language service; `failure()`, diff/compare, vdiff | P4, P5 |
-| **P8 -- Studio + wasm + diff** | `baml studio`; value inspector; Sandwich; search; `ObserveEngine` wasm feature; HTTP-Range source; diff view; ClickHouse compilation prototype + golden corpus ([launch] before any cloud API freeze) | P4-P7 |
-| **P9 -- Deletions** | Legacy run-store profile projection, `PROFILE_EVENTS_CAP`, `recompute_record_profile`, router per-event duty, JSON profile wire, v1 layout writers -- **only after**: paired baselines recorded for one release cycle, CCT-equivalence oracle green, C2/C3/C6/C7 gates green | everything |
+| Phase                                                  | Contents                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          | Depends on                        |
+| ------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------- |
+| **P0 -- Truth & tooling**                              | Commit `obs-bench` skeleton + prof-stats/value-stats/replay; committed CCT microbench; `ConsumerStats` self-reporting; golden-fixture scaffolding; `BAML_PROFILE_PIPELINE` flag forked at the consumer fan-out (all modes = legacy behavior initially); fix the 1.5% width floor (UI Stage 1 can start in parallel)                                                                                                                                                                                                               | --                                |
+| **P1 -- Compile-time identity**                        | `identity.rs` finalizer + emit/link/pack-load call sites (pack-envelope version-prefix prerequisite PR first); revision/source hashing (salsa); `RevisionDictionaryV1` + `.bamldict` writer; `DefinitionMeta`/lambda identity (borsh bump + cache FORMAT_VERSION bump); capture_flags; delete ProgramId; populate header fields 10/11; engine walk becomes verify-only                                                                                                                                                            | P0                                |
+| **P2 -- CCT engine (RAM)**                             | `prof/cct/` modules; causal defer + thread-lifecycle deferral + resync; charge-to-current with per-thread watermarks; Suspend/Resume (0x06/0x07) + LlmCallMeta (0x08) records + reader skip-tolerance (same PR); spawn edges + instances; recursion fold; recent-call ring (56 B slots); integrated bench lands here -- **measured <=50 ns/call is the exit gate**, with the recorder-ring memcpy included as an equal-cost stub (the real recorder lands in P6; the ledger re-affirms the gate under C2 when it does, before P9) | P1 (dense ids)                    |
+| **P3 -- Session storage**                              | BCCT segment writer/reader (all 13 block kinds incl. `cct_hist`/`llm_delta`); sessions/ layout + session.bamlmeta; checkpoint-by-bytes cadence; watermark + off-thread fsync; seal + footer; `boundary.bamlmeta` (host begin + consumer bound/complete via `ControlMsg::BindBoundary`); boundary snapshot fold; `dual` mode writes v2 alongside v1 (`BAML_OBS_LAYOUT=dual`)                                                                                                                                                       | P2                                |
+| **P4 -- Query engine + web app core**                  | `bex_query` (sans-io, MmapSource + LiveMirrorSource); BQF1; `/api/obs`; runs list; Left Heavy; default-mode timeline (three tiers); live tail; playground Runs tab; C6/C7 gates                                                                                                                                                                                                                                                                                                                                                   | P3                                |
+| **P5 -- Values: CAS + staging + continuous drain**     | canonical encoder + CID + golden fixtures (C9); packs/index/writers.lock; drain service threading; continuous drain (N7); staging ring + trigger promotion; audit records; `manifest.bamlcids` + root-commit ordering; GC under exclusive lock; retention (`baml clean`)                                                                                                                                                                                                                                                          | P3 (layout), parallel with P4     |
+| **P6 -- Flight recorder + triggers + full trace**      | recorder ring + dump path + `.bamlcids` pins; OnError/OnLatency/Manual triggers wired to promotion (P5) and dumps; full-trace mode with `TraceBudgetExhausted`; exact-event `.bamlidx` (right-sized) + timeline exact tiers                                                                                                                                                                                                                                                                                                       | P3; overlays land after P4        |
+| **P H -- Host wiring (the "on by default" milestone)** | CLI `run`/`test`, cffi SDK, pack_host: mint ULID BoundaryId, `BindBoundary`, begin/complete meta, CaptureDefaults, completion barrier before exit (`drain -> complete -> flush_and_join -> exit`); `BAML_HISTORY` + baml.toml knobs; shed-mode default for SDK hosts; privacy change documented                                                                                                                                                                                                                                   | P3 minimum; full value with P5/P6 |
+| **P7 -- BQL surface**                                  | parser/planner/stage catalog over `bex_query`; CLI `baml q`; `--schema`; completeness footers everywhere; snapshot pinning; MCP tool; studio query box + language service; `failure()`, diff/compare, vdiff                                                                                                                                                                                                                                                                                                                       | P4, P5                            |
+| **P8 -- Studio + wasm + diff**                         | `baml studio`; value inspector; Sandwich; search; `ObserveEngine` wasm feature; HTTP-Range source; diff view; ClickHouse compilation prototype + golden corpus ([launch] before any cloud API freeze)                                                                                                                                                                                                                                                                                                                             | P4-P7                             |
+| **P9 -- Deletions**                                    | Legacy run-store profile projection, `PROFILE_EVENTS_CAP`, `recompute_record_profile`, router per-event duty, JSON profile wire, v1 layout writers -- **only after**: paired baselines recorded for one release cycle, CCT-equivalence oracle green, C2/C3/C6/C7 gates green                                                                                                                                                                                                                                                      | everything                        |
 
-Prior-plan absorption: N1 (boundary dir atomic unit) [x] kept; N2 (bamlmeta) -> P3; N3 (boundary_id in headers) -> P3; N4 (SetFunctionId routed) -> P2 (consumed by CCT; carried in full-trace/dumps); N5 (raw demotion) -> P3 (`BAML_PROFILE_RAW`); N6 (self-attaching router) -> P3 `BindBoundary` + partition binding (the router's job is subsumed); N7 (continuous drain) -> P5. The TASK/2 id rulings ride P1/P3 as mechanical PRs: quad collapse to one struct/proto/string; SpanId + Collector shim deletion; `bamlv_1_...` public ValueRef encoding; **exact-call identity serializes as `baml_call_1_...` on every public surface** (BQL CallSet/EventSet rows, MCP results, blob routes, playground wire -- fulfilling the TASK/2 requirement that the playground wire and the query surface agree on one public call identity); and PayloadId's instability is **mooted by the Section 9.3 wire slimming** -- the JSON profile-patch protocol that exposed it is deleted, and the surviving fetch-log payloads on `/api/ws` derive their ids stably from `(call quad, kind, seq)`.
+Prior-plan absorption: N1 (boundary dir atomic unit) [x] kept; N2 (bamlmeta) -> P3; N3 (boundary*id in headers) -> P3; N4 (SetFunctionId routed) -> P2 (consumed by CCT; carried in full-trace/dumps); N5 (raw demotion) -> P3 (`BAML_PROFILE_RAW`); N6 (self-attaching router) -> P3 `BindBoundary` + partition binding (the router's job is subsumed); N7 (continuous drain) -> P5. The TASK/2 id rulings ride P1/P3 as mechanical PRs: quad collapse to one struct/proto/string; SpanId + Collector shim deletion; `bamlv_1*...`public ValueRef encoding; **exact-call identity serializes as`baml*call_1*...`on every public surface** (BQL CallSet/EventSet rows, MCP results, blob routes, playground wire -- fulfilling the TASK/2 requirement that the playground wire and the query surface agree on one public call identity); and PayloadId's instability is **mooted by the Section 9.3 wire slimming** -- the JSON profile-patch protocol that exposed it is deleted, and the surviving fetch-log payloads on`/api/ws`derive their ids stably from`(call quad, kind, seq)`.
 
 ---
 
@@ -1048,28 +1049,28 @@ Prior-plan absorption: N1 (boundary dir atomic unit) [x] kept; N2 (bamlmeta) -> 
 
 Rulings on every cross-design conflict the adversarial review surfaced:
 
-| # | Conflict | Ruling |
-|---|---|---|
-| R1 | CCT placement: per-boundary vs per-session vs both | **Per-session stream** + folded per-boundary snapshot at completion + retention-time snapshot materialization for crashed boundaries (Section 6.1) |
-| R2 | Two segment byte formats (BAMLCCT1/72 B/48 B rows vs BCCT/96 B/56 B rows) | **One BCCT container** (Section 6.2) with the 48 B delta row (no `running_ns` column -- running is derivable; self/await are the stored split) + new hist/llm kinds |
-| R3 | Revision id 16 vs 32 bytes; three dictionary specs | **32-byte BLAKE3-256**; one dictionary: `.baml/dict/baml_rev_1_....bamldict` protobuf (Section 4.2); per-boundary function tables rejected |
-| R4 | Node-id scoping: per-boundary vs session-wide | **Session-epoch-scoped ids** (one session dir), partition-disjoint sets; `partition_bind` maps to boundaries; snapshots re-densify; logical cross-session identity is the function-id path (Section 6.1, Section 5.1, Section 8.2) |
-| R5 | Three durability ladders / cadences | **D0/D1/D2 naming; 250 ms windows; 1 s / 1 MiB group commit; off-thread fsync**; per-class crash gates (Section 6.6, C8) |
-| R6 | bamlmeta append-only vs rewrite-per-heartbeat | **Append-only BMET records**; crash detection via session heartbeat + pid; consumer writes the seg-range fields via `BindBoundary` handshake (Section 6.4) |
-| R7 | Two UI live planes (CctPatch->run-store vs bex_query/BQF1) | **bex_query/BQF1 only**; run store exits the profile business; LiveMirrorSource serves same-process live (Section 9.3) |
-| R8 | Flight-recorder placement + missing GC pins | **Session `flight/` dir + `.bamlcids` pins** (mechanism from the CCT design, placement + pins from storage) (Section 5.9, Section 6.7) |
-| R9 | Full-trace default on (playground) vs off | **Off everywhere**; playground gets one-click arm; dual-mode transition only (Section 3.2) |
-| R10 | Timeline designed against full-trace data the default won't produce | **Three-tier default timeline** (recent ring / aggregate bands / exact overlays); `.bamlidx` only for exact-event artifacts, right-sized with offsets, off-thread, byte-capped (Section 9.4, Section 9.5) |
-| R11 | Recent-call slots missing thread half of the call key | 56 B slots with partition-local thread index (Section 5.8) |
-| R12 | Window-close wall-clock charging; missing EndThread/StartThread defer; defer-timeout wedge | Per-thread drained watermarks; lifecycle deferral; synthesized-parent resync + degraded markers (Section 5.2, Section 5.3) |
-| R13 | `def_content_hash` churns on pool-index constants | HashProjection canonicalizes object refs to definition_keys; "unrelated edit => unchanged hashes" golden test (Section 4.4) |
-| R14 | CAS GC dedupe-vs-sweep race; two-file root ordering | Exclusive `writers.lock` GC; manifest-before-root inside the pack group commit; `.bamlvalue`-derived roots for unsealed manifests (Section 6.7) |
-| R15 | Benchmarks need the legacy pipeline the CCT design deletes; C6 target vanishes under the webapp design | `BAML_PROFILE_PIPELINE` forked at the consumer fan-out; deletions in P9 only; C6 re-targeted to `bex_query` (Section 10.3, Section 11) |
-| R16 | prof_gate.rs orphaned by raw demotion; Suspend/Resume breaks reconstruction asserts | Raw-oracle mode + CCT-equivalence gate; reader skip-tolerance in the same PR (Section 10.3, P2) |
-| R17 | "On by default" has no host owner (CLI mints no boundary) | **Phase H** host wiring; unbound spill demoted to orphan-only (Section 3.2, Section 11) |
-| R18 | Pack-load finalizer targets a seam that doesn't exist; envelope has no version field | Finalize at borsh-load site; version-prefix prerequisite PR; no legacy decoder (libsui pairing) (Section 4.1) |
-| R19 | C10 gates arithmetically incompatible; value threading unassigned | Per-size latency curve; dedicated value drain service, never the prof consumer (Section 7.3, C10) |
-| R20 | Checkpoint write amplification; consumer saturation; byte-claims omitting framing | Checkpoint-by-bytes cadence; shed ladder + C12; framing-inclusive formulas in C3 (Section 6.3, Section 5.10) |
+| #   | Conflict                                                                                               | Ruling                                                                                                                                                                                                                             |
+| --- | ------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| R1  | CCT placement: per-boundary vs per-session vs both                                                     | **Per-session stream** + folded per-boundary snapshot at completion + retention-time snapshot materialization for crashed boundaries (Section 6.1)                                                                                 |
+| R2  | Two segment byte formats (BAMLCCT1/72 B/48 B rows vs BCCT/96 B/56 B rows)                              | **One BCCT container** (Section 6.2) with the 48 B delta row (no `running_ns` column -- running is derivable; self/await are the stored split) + new hist/llm kinds                                                                |
+| R3  | Revision id 16 vs 32 bytes; three dictionary specs                                                     | **32-byte BLAKE3-256**; one dictionary: `.baml/dict/baml_rev_1_....bamldict` protobuf (Section 4.2); per-boundary function tables rejected                                                                                         |
+| R4  | Node-id scoping: per-boundary vs session-wide                                                          | **Session-epoch-scoped ids** (one session dir), partition-disjoint sets; `partition_bind` maps to boundaries; snapshots re-densify; logical cross-session identity is the function-id path (Section 6.1, Section 5.1, Section 8.2) |
+| R5  | Three durability ladders / cadences                                                                    | **D0/D1/D2 naming; 250 ms windows; 1 s / 1 MiB group commit; off-thread fsync**; per-class crash gates (Section 6.6, C8)                                                                                                           |
+| R6  | bamlmeta append-only vs rewrite-per-heartbeat                                                          | **Append-only BMET records**; crash detection via session heartbeat + pid; consumer writes the seg-range fields via `BindBoundary` handshake (Section 6.4)                                                                         |
+| R7  | Two UI live planes (CctPatch->run-store vs bex_query/BQF1)                                             | **bex_query/BQF1 only**; run store exits the profile business; LiveMirrorSource serves same-process live (Section 9.3)                                                                                                             |
+| R8  | Flight-recorder placement + missing GC pins                                                            | **Session `flight/` dir + `.bamlcids` pins** (mechanism from the CCT design, placement + pins from storage) (Section 5.9, Section 6.7)                                                                                             |
+| R9  | Full-trace default on (playground) vs off                                                              | **Off everywhere**; playground gets one-click arm; dual-mode transition only (Section 3.2)                                                                                                                                         |
+| R10 | Timeline designed against full-trace data the default won't produce                                    | **Three-tier default timeline** (recent ring / aggregate bands / exact overlays); `.bamlidx` only for exact-event artifacts, right-sized with offsets, off-thread, byte-capped (Section 9.4, Section 9.5)                          |
+| R11 | Recent-call slots missing thread half of the call key                                                  | 56 B slots with partition-local thread index (Section 5.8)                                                                                                                                                                         |
+| R12 | Window-close wall-clock charging; missing EndThread/StartThread defer; defer-timeout wedge             | Per-thread drained watermarks; lifecycle deferral; synthesized-parent resync + degraded markers (Section 5.2, Section 5.3)                                                                                                         |
+| R13 | `def_content_hash` churns on pool-index constants                                                      | HashProjection canonicalizes object refs to definition_keys; "unrelated edit => unchanged hashes" golden test (Section 4.4)                                                                                                        |
+| R14 | CAS GC dedupe-vs-sweep race; two-file root ordering                                                    | Exclusive `writers.lock` GC; manifest-before-root inside the pack group commit; `.bamlvalue`-derived roots for unsealed manifests (Section 6.7)                                                                                    |
+| R15 | Benchmarks need the legacy pipeline the CCT design deletes; C6 target vanishes under the webapp design | `BAML_PROFILE_PIPELINE` forked at the consumer fan-out; deletions in P9 only; C6 re-targeted to `bex_query` (Section 10.3, Section 11)                                                                                             |
+| R16 | prof_gate.rs orphaned by raw demotion; Suspend/Resume breaks reconstruction asserts                    | Raw-oracle mode + CCT-equivalence gate; reader skip-tolerance in the same PR (Section 10.3, P2)                                                                                                                                    |
+| R17 | "On by default" has no host owner (CLI mints no boundary)                                              | **Phase H** host wiring; unbound spill demoted to orphan-only (Section 3.2, Section 11)                                                                                                                                            |
+| R18 | Pack-load finalizer targets a seam that doesn't exist; envelope has no version field                   | Finalize at borsh-load site; version-prefix prerequisite PR; no legacy decoder (libsui pairing) (Section 4.1)                                                                                                                      |
+| R19 | C10 gates arithmetically incompatible; value threading unassigned                                      | Per-size latency curve; dedicated value drain service, never the prof consumer (Section 7.3, C10)                                                                                                                                  |
+| R20 | Checkpoint write amplification; consumer saturation; byte-claims omitting framing                      | Checkpoint-by-bytes cadence; shed ladder + C12; framing-inclusive formulas in C3 (Section 6.3, Section 5.10)                                                                                                                       |
 
 ## 14. Appendix B: Relationship to prior documents
 
