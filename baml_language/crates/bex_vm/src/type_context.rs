@@ -33,13 +33,33 @@ use std::ops::ControlFlow;
 
 use baml_type::{
     ClauseId, ImplClause, Interface, Name, ParamTy, QualifiedTypeName, RealizedTy, Ty, TypeName,
-    normalize::TypeContext,
+    normalize::{Limits, TypeContext},
 };
 use bex_vm_types::types::Object;
 
 use crate::BexVm;
 
+/// Overflow backstop for membership-goal recursion. Cycle detection (the
+/// solver's canonical-keyed repeat scan) already rejects goals that *repeat*;
+/// this guards the other non-terminating
+/// shape — goals that *grow* without ever repeating (`T: I` ⇒ `Container<T>: I`
+/// ⇒ `Container<Container<T>>: I` ⇒ …), which a cycle check cannot see. rustc
+/// keeps a fixed `recursion_limit` for exactly this reason. Realistic chains
+/// are 1–3 deep (each normal step shrinks the type), so only pathological
+/// bounds ever reach this.
+pub(crate) const MAX_OBLIGATION_DEPTH: usize = 128;
+
 impl TypeContext for BexVm {
+    fn limits(&self) -> Limits {
+        // The one configuration source for every derivation over this program;
+        // the profiles below forward here so a session runs under the same
+        // limits whichever fact profile it was built over.
+        Limits {
+            recursion_limit: MAX_OBLIGATION_DEPTH,
+            ..Limits::DEFAULT
+        }
+    }
+
     fn alias_def(&self, name: &QualifiedTypeName) -> Option<Ty> {
         // Only recursive aliases survive to runtime; non-recursive ones were
         // expanded inline at lowering. Widen the stored `RuntimeTy` up to `Ty`.
@@ -104,10 +124,9 @@ impl TypeContext for BexVm {
 
     fn interface_requires(&self, _sub: &Interface, _sup: &Interface) -> bool {
         // TODO(runtime-requires): no `requires`-closure entry exists at runtime
-        // yet (the resolver proves `concrete: I`, not `I_a requires I_b`). Fail
+        // yet (the solver proves `concrete: I`, not `I_a requires I_b`). Fail
         // safe — claim no proper requirement; interface-to-interface subtyping
-        // degrades to identity until a baked `requires` fact (or the resolver's
-        // `interface_existential_satisfies_bound`) is exposed.
+        // degrades to identity until a baked `requires` fact is exposed.
         false
     }
 
@@ -230,77 +249,52 @@ impl TypeContext for BexVm {
     }
 }
 
-/// A [`TypeContext`] for order-insensitive *structural* equivalence over realized
-/// runtime types: **aliases are expanded** — so recursive aliases are
-/// equirecursively correct (`type A = int | A[]` and `type B = int | B[]` denote
-/// the same type at any unfolding depth, via the canonicalizer's
-/// μ-canonicalization: α-invariant de Bruijn binders plus automaton
-/// minimization; `TYPE_SYSTEM.md` §Type Aliases and Recursive Types) — while every
-/// *re-entrant* nominal fact stays an opaque leaf. It runs the canonical
-/// set-theoretic algebra (union flatten/sort/dedup, `never` removal,
-/// literal-into-base collapse), and interface bindings compare
-/// order-insensitively because the canonicalizer sorts them.
+/// The **dispatch clause profile**: the world a runtime impl-selection session
+/// ([`baml_type::normalize::SolverSession`]) reasons under, expressed as data —
+/// which facts of this VM's program are live and which stay severed.
 ///
-/// This is the runtime twin of the compiler matcher's `AliasEquivCtx` and shares
-/// its exact fact profile — alias-real, nominal-opaque — which keeps runtime
-/// dispatch in agreement with compile-time coherence. `alias_def` is safe to
-/// answer because it is non-re-entrant (a map lookup; the expanded body normalizes
-/// under this same opaque context). `implements_interface` and `project` MUST stay
-/// opaque: the resolver is a link in the membership chain
-/// ([`BexVm::implements_interface`](TypeContext::implements_interface) →
-/// `type_implements` → `rule_applies` → the equivalence check → here), so
-/// answering them would re-enter it — `implements_interface` unboundedly (via the
-/// canonicalizer's `absorb_subtypes`), `project` fuel-bounded but wastefully.
+/// Live:
+/// - **Aliases** ([`TypeContext::alias_def`]) — non-re-entrant map lookups,
+///   required for equirecursive folding in pattern comparisons.
+/// - **Clauses** ([`TypeContext::for_each_clause`]) — the baked impl table; the
+///   session's own clause search consumes them, which is exactly what makes the
+///   severed membership fact below safe to sever.
+/// - **Projection reduction** ([`TypeContext::project`]) — clause-template
+///   *realization* (`TyTemplate::substitute` against this profile) must reduce
+///   associated-type projections for real, as today's substitution path does
+///   with the full context; its re-entry into selection is fuel-bounded.
+///   Verdict-safe for comparisons because realized runtime operands structurally
+///   exclude projections (the `RealizedTy` axis), so a *comparison* never
+///   consults this — only realization does.
 ///
-/// Two conservative *misses* remain, documented and shared with the compiler
-/// matcher (so the two sides agree): interface-membership absorption
-/// (`Shape | Sq` ≡ `Shape` when `Sq <: Shape`) and enum completeness
-/// (`E.A | E.B | …` ≡ `E`). Bool completeness (`true | false ≡ bool`) is *not*
-/// among them: its variant family is closed, so the collapse is context-free
-/// and applies here too. Membership is *forced* opaque by re-entry; enum is
-/// non-re-entrant and could be made real, but only in lockstep with
-/// `AliasEquivCtx`. Their soundness rests on the compiler emitting dispatch
-/// requests already in absorbed form. The general fix is a unified goal solver
-/// whose in-progress table spans the equivalence↔membership boundary (so
-/// membership can be answered as a *goal* with per-sort cycle semantics instead
-/// of severed here); until then, opacity is the termination guarantee.
-pub(crate) struct StructuralEquivCtx<'a>(pub(crate) &'a BexVm);
-
-/// Impl selection's answer to "is this pattern position the same type as the value's?"
+/// Severed (each a fail-safe `false`/`None`/empty, never an over-claim):
+/// - **Membership** (`implements_interface`): membership is the session's own
+///   goal, decided by its clause search — a fact that answered it here would be
+///   a second, severed search re-entered from inside the first (unboundedly,
+///   via the canonicalizer's `absorb_subtypes`). Flips when the shared profile
+///   turns fact-driven absorption on for compiler and runtime in lockstep.
+/// - **`interface_requires`**: no requires-closure exists at runtime yet.
+/// - **Enum completeness** (`enum_variants`): non-re-entrant and could be made
+///   real, but only in lockstep with the compiler matcher's `AliasEquivCtx` —
+///   the documented conservative miss both sides share.
+/// - **Type-variable / associated bounds**: realized operands never reach the
+///   arms that consult them.
 ///
-/// Selection runs *inside* the resolver, so the relation it consults must be one that
-/// cannot come back around to ask the resolver — hence [`StructuralEquivCtx`] rather than
-/// the VM's full fact set. Naming the strategy keeps that constraint attached to the
-/// decision instead of implicit in which context happened to be in scope at the call.
-pub(crate) struct DispatchCompare<'a>(pub(crate) &'a BexVm);
+/// Limits forward to the VM's ([`TypeContext::limits`] on [`BexVm`]), so every
+/// derivation over this program runs under one configuration.
+pub(crate) struct DispatchProfile<'a>(pub(crate) &'a BexVm);
 
-impl baml_type::TemplateCompare for DispatchCompare<'_> {
-    fn same_type(&mut self, pattern: &Ty, concrete: &Ty) -> bool {
-        StructuralEquivCtx(self.0)
-            .equivalent(pattern, concrete)
-            .holds()
-    }
-}
-
-impl TypeContext for StructuralEquivCtx<'_> {
-    fn for_each_clause<'a>(
-        &'a self,
-        _interface: &TypeName,
-        _visit: &mut dyn FnMut(ImplClause<'a>) -> ControlFlow<()>,
-    ) {
-        // The empty world, explicitly: this profile compares types, it does not
-        // search clauses — membership stays severed here until the resolver
-        // delegates to the unified session, which wires the real supplier.
+impl TypeContext for DispatchProfile<'_> {
+    fn limits(&self) -> Limits {
+        self.0.limits()
     }
 
     fn alias_def(&self, name: &QualifiedTypeName) -> Option<Ty> {
-        // Same alias facts as the full context — non-re-entrant, and required
-        // for recursive-alias folding.
         self.0.alias_def(name)
     }
 
     fn implements_interface(&self, _concrete: &Ty, _interface: &Interface) -> bool {
-        false // Opaque: re-entrant (→ the resolver), unboundedly.
+        false // Severed: membership is the session's own clause search.
     }
 
     fn type_var_bound(&self, _param: &ParamTy) -> Vec<Interface> {
@@ -308,11 +302,11 @@ impl TypeContext for StructuralEquivCtx<'_> {
     }
 
     fn interface_requires(&self, _sub: &Interface, _sup: &Interface) -> bool {
-        false // Opaque.
+        false // Severed: no runtime requires-closure yet.
     }
 
     fn enum_variants(&self, _name: &QualifiedTypeName) -> Option<Vec<Name>> {
-        None // Opaque.
+        None // Severed: lockstep miss with the compiler matcher.
     }
 
     fn associated_type_bound(&self, _interface: &Interface, _assoc: Name) -> Vec<Interface> {
@@ -321,11 +315,22 @@ impl TypeContext for StructuralEquivCtx<'_> {
 
     fn project(
         &self,
-        _base: &Ty,
-        _interface: &Interface,
-        _member: &Name,
-        _fuel: u32,
+        base: &Ty,
+        interface: &Interface,
+        member: &Name,
+        fuel: u32,
     ) -> baml_type::normalize::ProjectionStep {
-        baml_type::normalize::ProjectionStep::Opaque // Opaque: re-entrant (→ the resolver).
+        // Real: realization needs actual reductions (fuel-bounded re-entry into
+        // selection, the same re-entrancy today's substitution path pays).
+        self.0.project(base, interface, member, fuel)
+    }
+
+    fn for_each_clause<'a>(
+        &'a self,
+        interface: &TypeName,
+        visit: &mut dyn FnMut(ImplClause<'a>) -> ControlFlow<()>,
+    ) {
+        // Real: the session's clause search runs over the baked impl table.
+        self.0.for_each_clause(interface, visit);
     }
 }

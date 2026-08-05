@@ -8,31 +8,30 @@
 //! impl applies (the caller decides the fallback).
 //!
 //! This mirrors the compiler's selection (`match_ty_pattern` + bound validation
-//! in `baml_compiler2_tir::interfaces`), run on `baml_type::RealizedTy`: unify the rule's
+//! in `baml_compiler2_tir::interfaces`), decided by the shared goal solver
+//! ([`SolverSession`]) over the VM's baked clauses: match a rule's
 //! `for_ty_pattern` against the concrete type (binding the impl's generic
-//! params), then discharge each param's declared bound as a nested obligation.
+//! params), then discharge each param's declared bound as a nested goal.
 
-use std::borrow::Cow;
+use std::ops::ControlFlow;
 
 use baml_type::{
-    Literal, MediaKind, Name, RealizedTy, TyAttr, TyTemplate, TypeName, normalize::TypeContext,
+    ClauseId, ImplClause, MediaKind, Name, RealizedTy, TyAttr, TyTemplate, TypeName,
+    normalize::{SolverSession, TypeContext},
 };
 use bex_vm_types::{
     errors::VmInternalError,
     types::{Object, RuntimeImplRule},
 };
 
-use crate::{
-    BexVm,
-    type_context::{DispatchCompare, StructuralEquivCtx},
-};
+use crate::{BexVm, type_context::DispatchProfile};
 
 /// The runtime impl resolver over a running VM. Holding the `&BexVm` here —
 /// rather than threading it through every helper — keeps the whole selection
-/// machinery able to reach VM facts at any depth: candidate collection reads the
-/// package tables, and every leaf type comparison builds the alias-expanding
-/// [`StructuralEquivCtx`], so recursive aliases fold correctly (see its docs for
-/// the fact profile and why the re-entrant facts stay opaque).
+/// machinery able to reach VM facts at any depth: each resolution's session runs
+/// over the [`DispatchProfile`], so recursive aliases fold correctly in pattern
+/// comparisons while the re-entrant facts stay severed (see its docs for the
+/// fact profile as data).
 #[derive(Clone, Copy)]
 pub(crate) struct ImplResolver<'vm> {
     vm: &'vm BexVm,
@@ -42,71 +41,6 @@ impl<'vm> ImplResolver<'vm> {
     pub(crate) fn new(vm: &'vm BexVm) -> Self {
         Self { vm }
     }
-
-    /// Every impl rule of `iface` in the program, in package-load order.
-    ///
-    /// The program-wide [`PackageIndex`](crate::package_load::PackageIndex) is
-    /// keyed by the interface's canonical `Object::Interface` pointer, so this is
-    /// one O(1) lookup over a table that already spans every package — see that
-    /// type's docs for why a per-package search cannot be narrowed correctly. An
-    /// unknown interface (not loaded) has no impls anywhere.
-    fn rules_for(self, iface: &TypeName) -> impl Iterator<Item = &'vm RuntimeImplRule> {
-        let iface_ptr = self.vm.lookup_interface(iface);
-        iface_ptr
-            .into_iter()
-            .flat_map(move |ptr| self.vm.packages.impl_rules_of(ptr))
-            .filter_map(move |&rule_ptr| self.vm.get_object(rule_ptr).as_impl_rule())
-    }
-}
-
-/// Overflow backstop for the obligation stack. Cycle detection (in
-/// [`ImplResolver::prove`]) already rejects goals that *repeat*; this guards the
-/// other non-terminating
-/// shape — goals that *grow* without ever repeating (`T: I` ⇒ `Container<T>: I`
-/// ⇒ `Container<Container<T>>: I` ⇒ …), which a cycle check cannot see. rustc
-/// keeps a fixed `recursion_limit` for exactly this reason. Realistic chains are
-/// 1–3 deep (each normal step shrinks the type), so only pathological bounds ever
-/// reach this.
-const MAX_OBLIGATION_DEPTH: usize = 128;
-
-/// An in-progress membership goal — does `RealizedTy` implement the interface `TypeName`
-/// at these args / associated bindings? Tracked on a stack so a goal that
-/// recurses back to itself (an inductive cycle, with no concrete-impl base case)
-/// is detected and rejected rather than spun on until the depth backstop.
-type Obligation = (
-    RealizedTy,
-    TypeName,
-    Vec<RealizedTy>,
-    Vec<(Name, RealizedTy)>,
-);
-
-/// A literal or enum-variant type behaves as its underlying concrete type for
-/// impl resolution: `1` uses `int`'s impls and `Color.Red` uses `Color`'s (a
-/// literal "uses its concrete type's methods"). Normalize the *top-level* type
-/// to that base before consulting the registry, which is keyed by concrete
-/// types; every other type passes through untouched. Only the top level is
-/// normalized — nested type args keep their literal form so invariance holds
-/// (`Box<1>` is not `Box<int>`).
-fn concrete_base(ty: &RealizedTy) -> Cow<'_, RealizedTy> {
-    match ty {
-        // Persist the type's attr onto the base (consistent with the enum-variant
-        // arm below), so a literal carrying a non-default attr normalizes to its
-        // base with that attr intact rather than silently dropping it.
-        RealizedTy::Literal(lit, _, attr) => Cow::Owned(match lit {
-            Literal::Int(_) => RealizedTy::Int { attr: attr.clone() },
-            Literal::Bigint(_) => RealizedTy::Bigint { attr: attr.clone() },
-            Literal::Float(_) => RealizedTy::Float { attr: attr.clone() },
-            Literal::String(_) => RealizedTy::String { attr: attr.clone() },
-            Literal::Bool(_) => RealizedTy::Bool { attr: attr.clone() },
-        }),
-        RealizedTy::EnumVariant(name, _, attr) => {
-            Cow::Owned(RealizedTy::Enum(name.clone(), attr.clone()))
-        }
-        _ => Cow::Borrowed(ty),
-    }
-}
-
-impl<'vm> ImplResolver<'vm> {
     /// Resolve `(Self, Iface<Args>)` to the single applicable `implements` rule, plus
     /// the impl's bound type args — its generics realized by matching `concrete_ty`
     /// against the rule's `for` pattern. That rule is the canonical handle: read the
@@ -138,21 +72,21 @@ impl<'vm> ImplResolver<'vm> {
         iface: &TypeName,
         iface_args: &[RealizedTy],
     ) -> Option<(&'vm RuntimeImplRule, Vec<RealizedTy>)> {
-        for rule in self.rules_for(iface) {
-            let Some(type_args) = self.rule_applies(rule, concrete_ty, &mut Vec::new()) else {
-                continue;
-            };
-            // Select on the interface's input args only (associated types are outputs).
-            let rule_args: Vec<RealizedTy> = rule
-                .interface_args
-                .iter()
-                .map(|t| self.substitute_checked(t, &type_args))
-                .collect();
-            if iface_args.is_empty() || self.ty_args_equivalent(&rule_args, iface_args) {
-                return Some((rule, type_args));
-            }
-        }
-        None
+        let profile = DispatchProfile(self.vm);
+        let (clause, bindings) =
+            SolverSession::new(&profile).select(concrete_ty, iface, iface_args)?;
+        // The clause id is the rule's heap *object* pointer (what the supplier
+        // minted it from), so recovery walks the same index and compares the same
+        // pointer — never the address of the `RuntimeImplRule` borrowed out of
+        // the object, which is a different address entirely.
+        let rule = self
+            .vm
+            .lookup_interface(iface)
+            .into_iter()
+            .flat_map(|ptr| self.vm.packages.impl_rules_of(ptr))
+            .find(|&&rule_ptr| ClauseId(rule_ptr.as_ptr() as u64) == clause)
+            .and_then(|&rule_ptr| self.vm.get_object(rule_ptr).as_impl_rule())?;
+        Some((rule, bindings))
     }
 
     /// Realize a [`MethodImpl`](bex_vm_types::types::MethodImpl) frame template (De
@@ -194,184 +128,35 @@ impl<'vm> ImplResolver<'vm> {
         requested_args: &[RealizedTy],
         requested_assoc: &[(Name, RealizedTy)],
     ) -> bool {
-        self.prove(
-            concrete_ty,
-            iface,
-            requested_args,
-            requested_assoc,
-            &mut Vec::new(),
-        )
-    }
-
-    /// Discharge one membership goal against the in-progress obligation `stack`.
-    /// A goal already on the stack is an inductive cycle — a BAML interface is only
-    /// satisfied by a concrete impl, so a goal that depends on itself has no base
-    /// case and is unprovable. An over-budget stack (a goal that grows without
-    /// repeating) is likewise rejected.
-    fn prove(
-        self,
-        concrete_ty: &RealizedTy,
-        iface: &TypeName,
-        requested_args: &[RealizedTy],
-        requested_assoc: &[(Name, RealizedTy)],
-        stack: &mut Vec<Obligation>,
-    ) -> bool {
-        // Key on the normalized (literal/enum-variant → base) type so `1` and `int`
-        // are the same goal for cycle purposes.
-        let goal: Obligation = (
-            concrete_base(concrete_ty).into_owned(),
-            iface.clone(),
-            requested_args.to_vec(),
-            requested_assoc.to_vec(),
-        );
-        if stack.contains(&goal) || stack.len() >= MAX_OBLIGATION_DEPTH {
-            return false;
-        }
-        stack.push(goal);
-        // `rules_for` borrows `self.vm` immutably while `stack` is borrowed
-        // mutably inside the predicate, so the candidates are collected first.
-        let candidates: Vec<&RuntimeImplRule> = self.rules_for(iface).collect();
-        let proven = candidates.into_iter().any(|rule| {
-            self.rule_applies(rule, concrete_ty, stack)
-                .is_some_and(|bindings| {
-                    self.interface_request_matches(rule, &bindings, requested_args, requested_assoc)
-                })
-        });
-        stack.pop();
-        proven
-    }
-
-    /// Match a rule's `for_ty_pattern` against `concrete_ty`, then discharge its
-    /// bounds. On success returns the bound generic args in de Bruijn order.
-    fn rule_applies(
-        self,
-        rule: &RuntimeImplRule,
-        concrete_ty: &RealizedTy,
-        stack: &mut Vec<Obligation>,
-    ) -> Option<Vec<RealizedTy>> {
-        let base = concrete_base(concrete_ty);
-        let concrete_ty = &*base;
-        let mut bindings: Vec<Option<RealizedTy>> = vec![None; rule.generic_param_bounds.len()];
-        if !rule.for_ty_pattern.match_against(
-            concrete_ty,
-            &mut bindings,
-            &mut DispatchCompare(self.vm),
-        ) {
-            return None;
-        }
-        // The for-type pattern must constrain every generic param — a param the
-        // pattern never mentions could not be inferred from the receiver.
-        let type_args: Vec<RealizedTy> = bindings.into_iter().collect::<Option<_>>()?;
-
-        // Bounds as nested obligations (rustc winnowing): every interface in a param's
-        // bound set must be implemented by that param's bound type arg, at the bound's
-        // substituted args/assoc. `prove` guards against cycles and runaway depth.
-        for (param, bounds) in rule.generic_param_bounds.iter().enumerate() {
-            for bound in bounds {
-                // The bound's args/assoc may reference the impl's params (`T extends
-                // Container<U>`), so substitute them with the bindings, then require
-                // the arg to implement the interface at that exact instantiation.
-                let req_args: Vec<RealizedTy> = bound
-                    .generics
-                    .iter()
-                    .map(|t| self.substitute_checked(t, &type_args))
-                    .collect();
-                let req_assoc: Vec<(Name, RealizedTy)> = bound
-                    .associated_types
-                    .iter()
-                    .map(|(n, t)| (n.clone(), self.substitute_checked(t, &type_args)))
-                    .collect();
-                // An interface-existential type arg satisfies a bound that names the
-                // same interface directly: the type checker only forms `Iterable<Item
-                // = int>` for a value that already implements `Iterable`, and there is
-                // no concrete impl rule to find for an interface *type*. This is the
-                // only way `T extends Iterable` is discharged when `T` is realized to
-                // an interface-existential (e.g. `Flatten<I extends Iterable>`
-                // instantiated with `I = Iterable<int>`). It is bound-discharge only,
-                // *not* general membership — an interface type does not *implement* the
-                // interface (reflection's "does X implement I"), so it stays out of
-                // `prove`/`type_implements`. (Super-interface bounds — an `Iterator`
-                // existential under an `Iterable` bound — would additionally consult
-                // the interface's `requires` closure; not handled here.)
-                if self.interface_existential_satisfies_bound(
-                    &type_args[param],
-                    &bound.name,
-                    &req_args,
-                    &req_assoc,
-                ) {
-                    continue;
-                }
-                if !self.prove(&type_args[param], &bound.name, &req_args, &req_assoc, stack) {
-                    return None;
-                }
-            }
-        }
-        Some(type_args)
-    }
-
-    /// Whether `concrete_ty` is an interface-existential that discharges a bound
-    /// naming `iface` directly (same interface, equivalent args, matching assoc).
-    ///
-    /// This is *bound discharge*, not membership: an interface type does not
-    /// *implement* an interface, so this must not be folded into `prove` /
-    /// `type_implements` (reflection relies on `Iterable` not implementing itself).
-    fn interface_existential_satisfies_bound(
-        self,
-        concrete_ty: &RealizedTy,
-        iface: &TypeName,
-        requested_args: &[RealizedTy],
-        requested_assoc: &[(Name, RealizedTy)],
-    ) -> bool {
-        let base = concrete_base(concrete_ty);
-        let RealizedTy::Interface(ex_qtn, ex_args, ex_assoc, _) = base.as_ref() else {
-            return false;
-        };
-        ex_qtn == iface
-            && (requested_args.is_empty() || self.ty_args_equivalent(ex_args, requested_args))
-            && self.associated_bindings_equivalent(ex_assoc, requested_assoc)
-    }
-
-    /// Whether a matched impl's implemented-interface instantiation satisfies the
-    /// request. The rule's interface args / bindings are concretised with the
-    /// `for_ty_pattern` bindings, then compared; an empty request matches any.
-    fn interface_request_matches(
-        self,
-        rule: &RuntimeImplRule,
-        bindings: &[RealizedTy],
-        requested_args: &[RealizedTy],
-        requested_assoc: &[(Name, RealizedTy)],
-    ) -> bool {
-        let rule_args: Vec<RealizedTy> = rule
-            .interface_args
-            .iter()
-            .map(|t| self.substitute_checked(t, bindings))
-            .collect();
-        let rule_assoc: Vec<(Name, RealizedTy)> = rule
-            .interface_assoc
-            .iter()
-            .map(|(n, t)| (n.clone(), self.substitute_checked(t, bindings)))
-            .collect();
-        (requested_args.is_empty() || self.ty_args_equivalent(&rule_args, requested_args))
-            && self.associated_bindings_equivalent(&rule_assoc, requested_assoc)
+        // The runtime has no channel for an open verdict: dispatch either finds
+        // an impl or it does not, so a limit-cut search collapses fail-closed
+        // (no membership claimed) — the sanctioned `holds` direction here.
+        let profile = DispatchProfile(self.vm);
+        SolverSession::new(&profile)
+            .implements(concrete_ty, iface, requested_args, requested_assoc)
+            .holds()
     }
 
     /// Compare two generic-argument lists for *semantic* equivalence, position-wise.
-    /// Each pair is related by the canonical set-theoretic algebra through the
-    /// fact-opaque [`StructuralEquivCtx`]: union order is normalized away (`Box<int |
-    /// string>` ≡ `Box<string | int>`), `never` and literal members collapse
+    /// Each pair is related by the canonical set-theoretic algebra under the
+    /// [`DispatchProfile`]: union order is normalized away (`Box<int | string>` ≡
+    /// `Box<string | int>`), `never` and literal members collapse
     /// (`int | never == int`), recursive aliases fold (`type A = int | A[]` ≡
-    /// `type B = int | B[]`), and interface bindings compare as an order-insensitive
-    /// set — while the re-entrant nominal facts stay opaque, so this never re-enters
-    /// the resolver (see [`StructuralEquivCtx`]).
+    /// `type B = int | B[]`), and interface bindings compare as an
+    /// order-insensitive set — while the re-entrant nominal facts stay severed,
+    /// so this never re-enters the resolver.
     pub(super) fn ty_args_equivalent(self, a: &[RealizedTy], b: &[RealizedTy]) -> bool {
         a.len() == b.len()
             && a.iter().zip(b.iter()).all(|(x, y)| {
-                StructuralEquivCtx(self.vm)
+                DispatchProfile(self.vm)
                     .equivalent(x.as_ty(), y.as_ty())
                     .holds()
             })
     }
 
+    /// Name-keyed and asymmetric: every *requested* binding must be provided, and
+    /// the provider may be wider (bindings are outputs; asking about fewer is
+    /// asking less). Trivially satisfied by an empty request.
     pub(super) fn associated_bindings_equivalent(
         self,
         impl_bindings: &[(Name, RealizedTy)],
@@ -383,7 +168,7 @@ impl<'vm> ImplResolver<'vm> {
                 .all(|(requested_name, requested_ty)| {
                     impl_bindings.iter().any(|(impl_name, impl_ty)| {
                         impl_name == requested_name
-                            && StructuralEquivCtx(self.vm)
+                            && DispatchProfile(self.vm)
                                 .equivalent(impl_ty.as_ty(), requested_ty.as_ty())
                                 .holds()
                     })
@@ -402,28 +187,38 @@ impl ImplResolver<'_> {
     /// [`Self::type_implements`]. Reflection (`type.implementors()`) filters these by
     /// the requested args/assoc.
     ///
-    /// Every impl of `iface` in the program is considered — the same
-    /// [`Self::rules_for`] view membership selection uses, so the two can never
-    /// disagree about which impls exist. A non-generic impl contributes its
-    /// concrete for-type; a generic class contributes its base (instantiations
-    /// can't be enumerated, so typevar-bearing interface args are erased to "match
-    /// any"); a blanket `for T` contributes every loaded concrete class whose
-    /// bounds it satisfies. Container/union for-types have no nominal implementor
-    /// to list.
+    /// Every impl of `iface` in the program is considered — the same clause view
+    /// membership selection consumes ([`TypeContext::for_each_clause`] on
+    /// [`BexVm`]), so the two can never disagree about which impls exist. A
+    /// non-generic impl contributes its concrete for-type; a generic class
+    /// contributes its base (instantiations can't be enumerated, so
+    /// typevar-bearing interface args are erased to "match any"); a blanket
+    /// `for T` contributes every loaded concrete class whose bounds it
+    /// satisfies. Container/union for-types have no nominal implementor to list.
     pub(super) fn implementor_entries(self, iface: &TypeName) -> Vec<ImplementorEntry> {
+        // The walk borrows the clause list out of the heap while `concrete_types`
+        // and the session also read the VM, so collect the clauses first (shared
+        // borrows throughout; the clause lifetime is tied to the VM, not the walk).
+        let mut clauses: Vec<ImplClause<'_>> = Vec::new();
+        self.vm.for_each_clause(iface, &mut |clause| {
+            clauses.push(clause);
+            ControlFlow::Continue(())
+        });
+        // One session spans the whole enumeration, so a blanket impl's bound
+        // proofs memoize across the candidate types instead of recomputing per
+        // candidate (each `applies` is its own root; the store persists).
+        let profile = DispatchProfile(self.vm);
+        let mut session = SolverSession::new(&profile);
         let mut out: Vec<ImplementorEntry> = Vec::new();
-        // `rules_for` borrows the VM for the iteration; the blanket arm below
-        // re-enters it via `concrete_types`, so collect the candidates first.
-        let candidates: Vec<&RuntimeImplRule> = self.rules_for(iface).collect();
-        for rule in candidates {
-            match &rule.for_ty_pattern {
+        for clause in &clauses {
+            match clause.self_pattern {
                 TyTemplate::TypeArgRef(_) => {
                     // Blanket impl: its bounds decide membership; every concrete
                     // type satisfying them is an implementor, at the interface
                     // instantiation the blanket pins (typevar dimensions erased).
-                    let (args, assoc) = self.pinned_interface_instantiation(rule);
+                    let (args, assoc) = self.pinned_interface_instantiation(clause);
                     for ty in self.concrete_types() {
-                        if self.rule_applies(rule, &ty, &mut Vec::new()).is_some() {
+                        if session.applies(clause, &ty).is_some() {
                             push_unique(&mut out, (ty, args.clone(), assoc.clone()));
                         }
                     }
@@ -433,12 +228,12 @@ impl ImplResolver<'_> {
                 other if <&RealizedTy>::try_from(other).is_ok() => {
                     let realized = <&RealizedTy>::try_from(other)
                         .unwrap_or_else(|_| unreachable!("guarded by the `is_ok` above"));
-                    let (args, assoc) = self.pinned_interface_instantiation(rule);
+                    let (args, assoc) = self.pinned_interface_instantiation(clause);
                     push_unique(&mut out, (realized.clone(), args, assoc));
                 }
                 // A generic class for-type (`Foo<T>`) is reported by its base.
                 TyTemplate::Class(name, _, _) => {
-                    let (args, assoc) = self.pinned_interface_instantiation(rule);
+                    let (args, assoc) = self.pinned_interface_instantiation(clause);
                     let base = RealizedTy::Class(name.clone(), Vec::new(), TyAttr::default());
                     push_unique(&mut out, (base, args, assoc));
                 }
@@ -455,24 +250,26 @@ impl ImplResolver<'_> {
     /// named — empty then matches any requested instantiation).
     fn pinned_interface_instantiation(
         self,
-        rule: &RuntimeImplRule,
+        clause: &ImplClause<'_>,
     ) -> (Vec<RealizedTy>, Vec<(Name, RealizedTy)>) {
-        let args = if rule.interface_args.iter().any(template_has_type_arg_ref) {
+        let args = if clause.iface_args.iter().any(template_has_type_arg_ref) {
             Vec::new()
         } else {
-            rule.interface_args
+            clause
+                .iface_args
                 .iter()
                 .map(|t| self.substitute_checked(t, &[]))
                 .collect()
         };
-        let assoc = if rule
-            .interface_assoc
+        let assoc = if clause
+            .iface_assoc
             .iter()
             .any(|(_, t)| template_has_type_arg_ref(t))
         {
             Vec::new()
         } else {
-            rule.interface_assoc
+            clause
+                .iface_assoc
                 .iter()
                 .map(|(n, t)| (n.clone(), self.substitute_checked(t, &[])))
                 .collect()
@@ -480,14 +277,13 @@ impl ImplResolver<'_> {
         (args, assoc)
     }
 
-    /// Realize an impl rule's interface-arg [`TyTemplate`] against a *complete* env
-    /// (one binding per impl generic param) for the resolver's own arg *comparison* —
-    /// not value materialization. An out-of-range `TypeArgRef` (a malformed rule) is
-    /// reported by `substitute` itself and asserted here in debug; in release, any
-    /// substitution failure — including a projection a non-matching candidate's
-    /// bindings legitimately cannot reduce — falls back to the top type, keeping
-    /// selection conservative without aborting the query. (Value materialization
-    /// uses [`Self::realize_frame`], which is strict.)
+    /// Realize an impl clause's interface-arg [`TyTemplate`] against a *complete*
+    /// env (one binding per impl generic param) for reflection's
+    /// pinned-instantiation view — not value materialization. An out-of-range
+    /// `TypeArgRef` (a malformed rule) is reported by `substitute` itself and
+    /// asserted here in debug; in release, any substitution failure falls back to
+    /// the top type, keeping the view conservative without aborting the query.
+    /// (Value materialization uses [`Self::realize_frame`], which is strict.)
     fn substitute_checked(self, template: &TyTemplate, env: &[RealizedTy]) -> RealizedTy {
         template.substitute(env, self.vm).unwrap_or_else(|e| {
             debug_assert!(
@@ -639,13 +435,24 @@ mod tests {
 
     use super::*;
 
+    /// The session's pattern-comparison strategy (its private compare over the
+    /// dispatch profile), reconstructed for driving the matcher directly.
+    struct ProfileCompare<'a>(DispatchProfile<'a>);
+
+    impl baml_type::TemplateCompare for ProfileCompare<'_> {
+        fn same_type(&mut self, pattern: &baml_type::Ty, concrete: &baml_type::Ty) -> bool {
+            self.0.equivalent(pattern, concrete).holds()
+        }
+    }
+
     // Pins matcher invariance: a `Concrete` literal pattern matches only that exact
     // literal type, never its base primitive. The compiler applies `1 <: int` only at
     // the *top* of an overlap check (`cover`); under a constructor (`Box<1>` vs
     // `Box<int>`) both sides stay invariant, and this runtime matcher agrees — so a
     // `Box<1>` value does not dispatch an `implement … for Box<int>`. (Reached via
-    // reflection today; this pins the behavior before the `==` dispatch wires the
-    // resolver, where the literal-/attr-sensitivity would otherwise be untested.)
+    // reflection today; this pins the behavior at the dispatch comparison the
+    // session's clause matching uses, where the literal-/attr-sensitivity would
+    // otherwise be untested.)
     #[test]
     fn concrete_literal_pattern_matches_only_the_literal() {
         let vm = crate::vm::tests::test_vm(Vec::new());
@@ -656,7 +463,7 @@ mod tests {
             TyAttr::default(),
         ));
         let mut binds: Vec<Option<RealizedTy>> = Vec::new();
-        let cmp = &mut DispatchCompare(&vm);
+        let cmp = &mut ProfileCompare(DispatchProfile(&vm));
         assert!(pattern.match_against(&one, &mut binds, cmp));
         assert!(!pattern.match_against(&RealizedTy::int(), &mut binds, cmp));
     }

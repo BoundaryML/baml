@@ -200,11 +200,18 @@ struct Scope {
     member_extent: usize,
 }
 
-/// The state a single type-relation derivation carries.
+/// The state a single type-relation derivation carries — and the public handle
+/// an embedder drives the solver through.
 ///
-/// Constructed at the algebra's public entry points and threaded by `&mut` from there
-/// down; see the module docs for the invariants it exists to enforce.
-pub(super) struct SolverSession<'s> {
+/// The algebra's [`TypeContext`] entry points construct one per call and thread
+/// it by `&mut` from there down. An embedder that owns a resolution (the
+/// runtime's per-dispatch impl selection) constructs one over its fact profile
+/// with [`Self::new`] and poses goals through the public entry points
+/// ([`Self::implements`], [`Self::select`], [`Self::applies`],
+/// [`Self::normalize`]); the session then spans that whole resolution, so its
+/// subgoals share one answer store, one interleaved scope stack, and one step
+/// pool per root. See the module docs for the invariants it exists to enforce.
+pub struct SolverSession<'s> {
     facts: &'s dyn TypeContext,
     limits: Limits,
     /// Co-inductive hypotheses on the current path, innermost last.
@@ -235,7 +242,7 @@ pub(super) struct SolverSession<'s> {
 
 impl<'s> SolverSession<'s> {
     /// A session with its own fresh store, dropped when the session is.
-    pub(super) fn new(facts: &'s dyn TypeContext) -> Self {
+    pub fn new(facts: &'s dyn TypeContext) -> Self {
         Self::over(facts, Store::Owned(Answers::default()))
     }
 
@@ -246,7 +253,8 @@ impl<'s> SolverSession<'s> {
         not(test),
         expect(
             dead_code,
-            reason = "first non-test caller arrives with the public session surface"
+            reason = "cross-session stores arrive with the first persistent cache \
+                      tier; until then only tests exercise the seam"
         )
     )]
     pub(super) fn with_store(facts: &'s dyn TypeContext, store: &'s mut Answers) -> Self {
@@ -570,15 +578,7 @@ impl<'s> SolverSession<'s> {
     /// walk): a partial form is still a faithful, equivalent rendering, but it is
     /// never an identity — [`Normalized::identity`] stays `None`, and relations
     /// over the type are decided by goals rather than token comparison.
-    #[cfg_attr(
-        not(test),
-        expect(
-            dead_code,
-            reason = "the runtime delegation is this entry point's first \
-                                    production caller"
-        )
-    )]
-    pub(super) fn normalize(&mut self, ty: &Ty) -> Normalized {
+    pub fn normalize(&mut self, ty: &Ty) -> Normalized {
         self.begin_phase();
         let ((form, mu_render), scope) = self.in_scope(ScopeKind::Verdict, self.steps, |s| {
             NormalTy::canonical_and_render(ty, s)
@@ -632,15 +632,7 @@ impl<'s> SolverSession<'s> {
     ///
     /// `No` is definite — a refutation over this world's clauses, including a cycle
     /// closed inductively. `Unknown` means a limit cut the search.
-    #[cfg_attr(
-        not(test),
-        expect(
-            dead_code,
-            reason = "the runtime delegation is this entry point's first \
-                                    production caller"
-        )
-    )]
-    pub(super) fn implements(
+    pub fn implements(
         &mut self,
         subject: &RealizedTy,
         interface: &QualifiedTypeName,
@@ -661,15 +653,7 @@ impl<'s> SolverSession<'s> {
     /// any limit interfered with yields no selection at all (fail-closed `None`, by
     /// ruling): a refused candidate might have applied, so selecting a *later* one
     /// would let the budget pick which implementation runs.
-    #[cfg_attr(
-        not(test),
-        expect(
-            dead_code,
-            reason = "the runtime delegation is this entry point's first \
-                                    production caller"
-        )
-    )]
-    pub(super) fn select(
+    pub fn select(
         &mut self,
         subject: &RealizedTy,
         interface: &QualifiedTypeName,
@@ -706,15 +690,7 @@ impl<'s> SolverSession<'s> {
     /// per-clause view an enumeration consumer needs, where *which* clause admitted
     /// a subject is the answer itself. A refusal fails the clause — fail-closed
     /// `None`, with no ordering hazard since only one clause is in question.
-    #[cfg_attr(
-        not(test),
-        expect(
-            dead_code,
-            reason = "the runtime delegation is this entry point's first \
-                                    production caller"
-        )
-    )]
-    pub(super) fn applies(
+    pub fn applies(
         &mut self,
         clause: &ImplClause<'_>,
         subject: &RealizedTy,

@@ -43,7 +43,7 @@
 
 use std::{collections::HashSet, ops::ControlFlow};
 
-use self::solve::SolverSession;
+pub use self::solve::SolverSession;
 use crate::{
     FunctionParamMode, FunctionParamTy, ImplClause, Interface, Literal, MediaKind, Name, ParamTy,
     QualifiedTypeName, Ty, TyAttr,

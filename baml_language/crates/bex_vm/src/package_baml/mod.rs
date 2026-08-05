@@ -37,6 +37,8 @@ mod ops;
 mod ops_math;
 mod random;
 mod resolve;
+#[doc(hidden)]
+pub mod testing;
 pub(crate) use resolve::ImplResolver;
 mod root;
 mod spawn;
