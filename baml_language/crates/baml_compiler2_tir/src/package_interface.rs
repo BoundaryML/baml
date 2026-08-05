@@ -119,8 +119,8 @@ pub enum ExportedType {
         /// The transitive `requires` closure, pre-flattened and pre-realized
         /// with argument/associated-type substitutions (symbolic `Self`,
         /// identity generic arguments; defaults left unfilled) — see
-        /// [`crate::interfaces::interface_requires_closure_symbolic`], the
-        /// single derivation shared with the checker's closure walk.
+        /// `crate::interfaces::interface_requires_closure_symbolic` (private),
+        /// the single derivation shared with the checker's closure walk.
         requires: Vec<baml_type::Interface>,
         /// Associated types in declaration order.
         associated_types: Vec<ExportedAssociatedType>,
