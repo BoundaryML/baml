@@ -684,6 +684,17 @@ impl<'db> InferenceContext<'db> {
                     }
                 }
             }
+            Expr::GenericApply { base, .. } => {
+                // Value-position turbofish (rustc's `let f =
+                // identity::<i32>`; r-a's `substs_from_path`): the SAME
+                // resolution ladder a call's callee takes, reading the
+                // written type args keyed at THIS expression (the
+                // `instantiation_args` channel), minus the call. A
+                // resolved METHOD binds its receiver like any
+                // instance-accessed method value.
+                let (fn_ty, bound) = self.infer_callee(body, expr, *base);
+                if bound { bind_receiver(fn_ty) } else { fn_ty }
+            }
             Expr::Template { tag, .. } => match tag {
                 baml_compiler2_ast::TemplateTag::Default { elaborated } => {
                     // Untagged backtick (BEP-049 §11): the value IS the
