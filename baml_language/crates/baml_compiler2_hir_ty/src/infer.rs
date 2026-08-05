@@ -3262,26 +3262,45 @@ impl<'db> InferenceContext<'db> {
         self.throws_channels.push(Vec::new());
         let base_ty = self.infer_expr(body, base, &branch_expectation);
         let channel = self.throws_channels.pop().expect("pushed above");
-        let caught: Vec<Ty> = channel
-            .iter()
-            .map(|ty| self.finalize_incoming_effect(ty))
-            .collect();
-        let caught = if caught.is_empty() {
-            Ty::never()
-        } else {
-            self.union_of(&caught)
-        };
-        let caught = {
-            let resolved = self.table.resolve_completely(&caught);
-            self.matrix_scrut(&resolved)
-        };
+        // catch discharges a SET of throw FACTS, never a value of a
+        // union type (match scrutinizes values; catch removes facts):
+        // each contribution finalizes and top-level unions split into
+        // their member facts, so per-arm matching and subtraction work
+        // at fact grain - which is what "rethrow the rest" means.
+        let mut facts: Vec<Ty> = Vec::new();
+        for contribution in &channel {
+            let finalized = self.finalize_incoming_effect(contribution);
+            if matches!(finalized.kind(), TyKind::Never { .. }) {
+                continue;
+            }
+            let resolved = self.table.resolve_completely(&finalized);
+            let canonical = self.matrix_scrut(&resolved);
+            match canonical.kind() {
+                TyKind::Union(members, _) => {
+                    for member in members.iter() {
+                        if !facts.contains(member) {
+                            facts.push(member.clone());
+                        }
+                    }
+                }
+                _ => {
+                    if !facts.contains(&canonical) {
+                        facts.push(canonical);
+                    }
+                }
+            }
+        }
 
         let mut arm_tys = vec![base_ty];
-        let mut residual = caught.clone();
         for clause in clauses {
+            let clause_binding_ty = if facts.is_empty() {
+                Ty::never()
+            } else {
+                self.union_of(&facts)
+            };
             self.result
                 .type_of_binding
-                .insert(clause.binding, caught.clone());
+                .insert(clause.binding, clause_binding_ty);
             if let Some(context) = clause.stack_trace_binding {
                 // The second binding (`catch (e, ctx)`) is the full error
                 // CONTEXT - `baml.errors.ErrorContext` (the AST field's
@@ -3309,30 +3328,98 @@ impl<'db> InferenceContext<'db> {
             }
             for &arm_id in &clause.arms {
                 let arm = &body.catch_arms[arm_id];
-                let outcome = self.lower_pattern(body, arm.pattern, &caught);
-                let consumes = outcome.consumes_matched;
-                let matched = outcome.matched_ty.clone();
+                // The arm's CLAIM: its pattern's own denotation, probed
+                // against `unknown` (TIR's probe; a wildcard or bare
+                // bind denotes `unknown` and so definitely-matches every
+                // fact below). Bindings recorded here are overwritten by
+                // the real walk against the arm's scrutinee.
+                let claim = self
+                    .lower_pattern(
+                        body,
+                        arm.pattern,
+                        &Ty::intern(TyKind::Unknown {
+                            attr: TyAttr::default(),
+                        }),
+                    )
+                    .matched_ty;
+                // Fact-by-fact matching: a fact INSIDE the claim is
+                // definitely handled (and subtracts); a claim inside a
+                // fact MAY receive it (narrowing view, no subtraction).
+                let mut may: Vec<Ty> = Vec::new();
+                let mut definite: Vec<Ty> = Vec::new();
+                for fact in &facts {
+                    if pat::provable_subtype(fact, &claim, &self.facts) {
+                        may.push(fact.clone());
+                        definite.push(fact.clone());
+                    } else if pat::provable_subtype(&claim, fact, &self.facts) {
+                        may.push(fact.clone());
+                    }
+                }
+                // The panic side-rule: a claim naming `baml.panics.*`
+                // types is ALWAYS live - panics are catchable at runtime
+                // but never part of a `throws` contract, so they fold in
+                // beside the facts without consulting them.
+                if let Some(panic) = self.panic_subset(&claim) {
+                    may.push(panic);
+                }
+                // The arm's scrutinee: its may-set; else the WRITTEN
+                // claim (ruling 3's fallback - an arm no fact reaches
+                // still types by what the user wrote; unreachability is
+                // S17's warning). A wildcard/bare bind WROTE nothing -
+                // its claim probed as `unknown` - so with no facts left
+                // its world is `never`, not the top type.
+                let arm_scrut = if may.is_empty() {
+                    if matches!(claim.kind(), TyKind::Unknown { .. }) {
+                        Ty::never()
+                    } else {
+                        claim.clone()
+                    }
+                } else {
+                    self.union_of(&may)
+                };
+                let outcome = self.lower_pattern(body, arm.pattern, &arm_scrut);
                 // The clause binding NARROWS to the arm's matched type
                 // inside the arm body - the match-arm discipline applied
-                // to `e` (`Boom => e.m` sees `Boom`, not the caught
-                // union).
+                // to `e` (`Boom => e.m` sees `Boom`, not the whole set).
                 let entry_flow = self.flow.clone();
                 if let Some(binding) = self.binding_for_pattern(clause.binding) {
-                    self.flow.insert(binding, matched.clone());
+                    self.flow.insert(binding, outcome.matched_ty.clone());
                 }
                 self.diverges = Diverges::Maybe;
                 let arm_ty = self.infer_expr(body, arm.body, &branch_expectation);
                 self.flow = entry_flow;
                 arm_tys.push(arm_ty);
-                if consumes {
-                    residual = self.subtract_narrow(&residual, &matched);
-                }
+                // Definitely-handled facts leave the set; the survivors
+                // are the next arm's world and, at the end, the rethrow.
+                facts.retain(|fact| !definite.contains(fact));
             }
         }
-        if !matches!(residual.kind(), TyKind::Never { .. }) {
-            self.record_throw(base, &residual);
+        for fact in &facts {
+            self.record_throw(base, fact);
         }
         self.join(&arm_tys)
+    }
+
+    /// The `baml.panics.*` component of a catch claim (alias-aware,
+    /// union members collected) - the types an arm may always trap.
+    fn panic_subset(&mut self, claim: &Ty) -> Option<Ty> {
+        let expanded = self.expand_alias_ty(claim);
+        match expanded.kind() {
+            TyKind::Class(qtn, _, _) if qtn.is_panic_type() => Some(expanded.clone()),
+            TyKind::Union(members, _) => {
+                let members = members.to_vec();
+                let panics: Vec<Ty> = members
+                    .iter()
+                    .filter_map(|member| self.panic_subset(member))
+                    .collect();
+                if panics.is_empty() {
+                    None
+                } else {
+                    Some(self.union_of(&panics))
+                }
+            }
+            _ => None,
+        }
     }
 
     /// A caught effect contribution, resolved for the error channel: still

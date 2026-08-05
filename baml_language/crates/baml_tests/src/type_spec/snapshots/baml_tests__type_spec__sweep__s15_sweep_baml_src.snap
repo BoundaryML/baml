@@ -4,9 +4,9 @@ expression: report
 ---
 files: 116
 nodes compared: 60529
-agreements: 52130
+agreements: 52240
 one-sided (coverage): 88
-conflicts: 8311 across 1465 distinct pairs
+conflicts: 8201 across 1446 distinct pairs
 hir_ty error-channel entries: 3
 tir diagnostics: 0
 panics: 0
@@ -35,9 +35,9 @@ ns_bigints/bigints.baml:5064..5075 `{ 1n < 2n }`: expected true, got bool
 [129x] hir_ty=[baml.json.json] tir=[int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>]
     at ns_from_json_interface/from_json_interface.baml:4211..4232 `let j: baml.json.json`
     at ns_from_json_interface/from_json_interface.baml:4218..4232 `baml.json.json`
-[115x] hir_ty=[!error] tir=[string]
-    at ns_exceptions/exceptions.baml:16872..16883 `err.message`
-    at ns_exceptions/exceptions.baml:18008..18015 `err.key`
+[111x] hir_ty=[!error] tir=[string]
+    at ns_inferred_generic_type_args/inferred_generic_type_args.baml:9518..9540 `default.element_type()`
+    at ns_inferred_generic_type_args/inferred_generic_type_args.baml:16662..16735 `{\n    let....seen(x)\n}`
 [99x] hir_ty=[(a: bigint, b: bigint) -> bool throws never] tir=[(a: T, b: T) -> bool throws never]
     at ns_bigints/bigints.baml:2659..2675 `baml.deep_equals`
     at ns_bigints/bigints.baml:2879..2895 `baml.deep_equals`
@@ -59,7 +59,7 @@ ns_bigints/bigints.baml:5064..5075 `{ 1n < 2n }`: expected true, got bool
 [57x] hir_ty=[baml.iter.Iterator<Error = never, Item = int>] tir=[baml.iter.Iterator<Item = int, Error = never>]
     at ns_iter/iter.baml:222..275 `let it: ba...or = never>`
     at ns_iter/iter.baml:230..275 `baml.iter....or = never>`
-[56x] hir_ty=[!error] tir=[int]
+[51x] hir_ty=[!error] tir=[int]
     at ns_arrays/sort_comparable.baml:3712..3724 `other.points`
     at ns_arrays/sort_comparable.baml:8513..8523 `other.rank`
 [45x] hir_ty=[1] tir=[int]
@@ -110,9 +110,6 @@ ns_bigints/bigints.baml:5064..5075 `{ 1n < 2n }`: expected true, got bool
 [27x] hir_ty=[(a: float, b: float) -> bool throws never] tir=[(a: T, b: T) -> bool throws never]
     at ns_arrays/reductions.baml:797..813 `baml.deep_equals`
     at ns_arrays/reductions.baml:896..912 `baml.deep_equals`
-[25x] hir_ty=[never] tir=[baml.panics.IndexOutOfBounds]
-    at ns_arrays/arrays.baml:31174..31202 `baml.panic...OutOfBounds`
-    at ns_arrays/arrays.baml:31462..31490 `baml.panic...OutOfBounds`
 [24x] hir_ty=[() -> never throws baml.errors.Io / never] tir=[() -> never throws unknown / never]
     at ns_http_server/http_server.baml:880..1074 `{\n       ...  })\n    }`
     at ns_http_server/http_server.baml:1576..1727 `{\n       ...  })\n    }`
@@ -128,24 +125,24 @@ ns_bigints/bigints.baml:5064..5075 `{ 1n < 2n }`: expected true, got bool
 [23x] hir_ty=[(x: int) -> bool throws never] tir=[(x: int) -> bool throws E]
     at ns_arrays/arrays.baml:11395..11426 `(x: int) -... % 2 == 0 }`
     at ns_arrays/arrays.baml:11885..11911 `(x: int) -...l { x > 2 }`
-[23x] hir_ty=[never] tir=[string]
-    at ns_arrays/arrays.baml:5228..5229 `e`
-    at ns_arrays/arrays.baml:5241..5247 `string`
 [23x] hir_ty=[string] tir=["done" | string]
     at ns_csv/csv.baml:22280..22450 `{\n       ...\n        }`
     at ns_csv/csv.baml:22280..22594 `{\n       ...\n        }`
 [22x] hir_ty=[(self: baml.iter.Iterator<Error = never, Item = int>) -> int[] throws never] tir=[() -> int[] throws never]
     at ns_iter/iter.baml:320..330 `it.collect`
     at ns_iter/iter.baml:4217..4227 `it.collect`
-[21x] hir_ty=["boom"] tir=[string]
-    at ns_defer/defer.baml:2773..2774 `e`
-    at ns_defer/defer.baml:2782..2783 `_`
 [21x] hir_ty=[(self: baml.csv.CsvReader) -> baml.csv.CsvRecord | baml.iter.Done throws baml.csv.CsvError | baml.errors.Io] tir=[() -> baml.csv.CsvRecord | baml.iter.Done throws baml.csv.CsvError | baml.errors.Io]
     at ns_csv/csv.baml:11245..11251 `r.next`
     at ns_csv/csv.baml:18813..18819 `r.next`
+[20x] hir_ty=["boom"] tir=[string]
+    at ns_defer/defer.baml:2773..2774 `e`
+    at ns_defer/defer.baml:2782..2783 `_`
 [20x] hir_ty=[() -> void throws baml.errors.InvalidArgument | baml.errors.Io | baml.errors.ParseError / null] tir=[() -> void throws unknown / null]
     at ns_fs/fs.baml:2540..2603 `{\n    ass... BAML!")\n}`
     at ns_fs/fs.baml:3746..3790 `{\n    ass...ng_fn())\n}`
+[20x] hir_ty=[never] tir=[string]
+    at ns_arrays/arrays.baml:5228..5229 `e`
+    at ns_arrays/arrays.baml:7498..7499 `e`
 [19x] hir_ty=[() -> void throws baml.errors.Io / null] tir=[() -> void throws unknown / null]
     at ns_cancel_cascade/cancel_cascade.baml:1409..1477 `{\n    ass...nt_fn())\n}`
     at ns_cancel_cascade/cancel_cascade.baml:1981..2075 `{\n    ass...d(), 0))\n}`
@@ -161,9 +158,6 @@ ns_bigints/bigints.baml:5064..5075 `{ 1n < 2n }`: expected true, got bool
 [18x] hir_ty=[int] tir=[int | 1]
     at ns_exceptions/exceptions.baml:3513..3571 `{\n    s2_...1\n    }\n}`
     at ns_exceptions/exceptions.baml:3519..3569 `s2_fails_5...=> 1\n    }`
-[18x] hir_ty=[never] tir=[baml.panics.DivisionByZero]
-    at ns_bigints/bigints.baml:15922..15948 `baml.panic...isionByZero`
-    at ns_bigints/bigints.baml:16172..16198 `baml.panic...isionByZero`
 [17x] hir_ty=[() -> void throws baml.errors.InvalidArgument | baml.errors.Io | baml.errors.Timeout / null] tir=[() -> void throws unknown / null]
     at ns_glob/glob.baml:5148..5224 `{\n    ass...h(), 2))\n}`
     at ns_glob/glob.baml:5265..5353 `{\n    ass..., true))\n}`
@@ -188,6 +182,9 @@ ns_bigints/bigints.baml:5064..5075 `{ 1n < 2n }`: expected true, got bool
 [16x] hir_ty=[int / int | null] tir=[int | null]
     at ns_generic_union_returns/generic_union_returns.baml:1870..1890 `empty_json?.length()`
     at ns_generic_union_returns/generic_union_returns.baml:1920..1938 `metadata?.length()`
+[15x] hir_ty=["fallback"] tir=[string]
+    at ns_exceptions/exceptions.baml:21125..21126 `_`
+    at ns_exceptions/exceptions.baml:21628..21629 `_`
 [15x] hir_ty=[() -> string throws baml.json.JsonParseError | baml.json.JsonSerializationError] tir=[() -> string throws baml.json.JsonSerializationError | baml.json.JsonParseError]
     at ns_json_auto_derive/json_auto_derive.baml:3353..3377 `array_of_int_to_json_str`
     at ns_json_auto_derive/json_auto_derive.baml:3943..3969 `array_of_c...to_json_str`
@@ -232,16 +229,13 @@ ns_bigints/bigints.baml:5064..5075 `{ 1n < 2n }`: expected true, got bool
     at ns_streaming_sse_primitives/streaming_sse_primitives.baml:2491..2499 `sse.next`
 [12x] hir_ty=[42] tir=[int]
     at ns_exceptions/exceptions.baml:2651..2652 `e`
-    at ns_exceptions/exceptions.baml:2681..2682 `_`
+    at ns_exceptions/exceptions.baml:3786..3787 `e`
 [12x] hir_ty=[baml.future.FutureState] tir=[!error]
     at ns_cancel_cascade/cancel_cascade.baml:4438..4675 `{\n    let...observed\n}`
     at ns_cancel_cascade/cancel_cascade.baml:4603..4615 `let observed`
 [12x] hir_ty=[int] tir=[int | 1 | 2 | 3 | 4]
     at ns_exceptions/exceptions.baml:7958..8081 `{\n    s3_...4\n    }\n}`
     at ns_exceptions/exceptions.baml:7964..8079 `s3_api_1(2...=> 4\n    }`
-[12x] hir_ty=[never] tir=[baml.panics.IntegerOverflow]
-    at ns_arrays/sum.baml:1787..1814 `baml.panic...gerOverflow`
-    at ns_exceptions/exceptions.baml:12681..12708 `baml.panic...gerOverflow`
 [11x] hir_ty=[(self: baml.fs.File, data: string) -> int throws baml.errors.InvalidArgument | baml.errors.Io] tir=[(data: string) -> int throws baml.errors.Io | baml.errors.InvalidArgument]
     at ns_csv/csv.baml:50501..50509 `wf.write`
     at ns_fs/fs.baml:7526..7536 `file.write`
@@ -317,15 +311,12 @@ ns_bigints/bigints.baml:5064..5075 `{ 1n < 2n }`: expected true, got bool
 [9x] hir_ty=[(self: baml.time.Instant) -> bigint throws never] tir=[() -> bigint throws never]
     at ns_time/time.baml:973..1045 `baml.time....nanoseconds`
     at ns_time/time.baml:1150..1222 `baml.time....nanoseconds`
-[9x] hir_ty=[int | !error] tir=[int]
-    at ns_exceptions/exceptions.baml:16105..16206 `{\n    s5b...d\n    }\n}`
-    at ns_exceptions/exceptions.baml:16111..16204 `s5b_divide...dend\n    }`
 [9x] hir_ty=[throws "boom"] tir=[throws string]
     at ns_defer/defer.baml:2491..2513 `defer_call_throws_boom`
     at ns_defer/defer.baml:2551..2574 `defer_call_throws_risky`
-[8x] hir_ty=["fallback"] tir=[string]
-    at ns_exceptions/exceptions.baml:24004..24005 `e`
-    at ns_exceptions/exceptions.baml:24077..24078 `_`
+[8x] hir_ty=["unknown"] tir=[string]
+    at ns_exceptions/exceptions.baml:8067..8068 `_`
+    at ns_exceptions/exceptions.baml:28670..28671 `_`
 [8x] hir_ty=["wrap"] tir=[string]
     at ns_errorcontext/errorcontext.baml:8838..8839 `e`
     at ns_errorcontext/errorcontext.baml:8852..8853 `_`
@@ -392,15 +383,9 @@ ns_bigints/bigints.baml:5064..5075 `{ 1n < 2n }`: expected true, got bool
 [7x] hir_ty=[!error[]] tir=[int[]]
     at ns_arrays/arrays.baml:9326..9328 `[]`
     at ns_arrays/arrays.baml:28982..28984 `[]`
-[7x] hir_ty=["fallback" | user.exceptions.AppError] tir=[string]
-    at ns_exceptions/exceptions.baml:21125..21126 `_`
-    at ns_exceptions/exceptions.baml:21628..21629 `_`
 [7x] hir_ty=["fallback" | user.exceptions.AppError] tir=[string | user.exceptions.AppError]
     at ns_exceptions/exceptions.baml:21048..21049 `e`
     at ns_exceptions/exceptions.baml:21551..21552 `e`
-[7x] hir_ty=["oops"] tir=[string]
-    at ns_exceptions/exceptions.baml:36098..36099 `e`
-    at ns_exceptions/exceptions.baml:36111..36117 `string`
 [7x] hir_ty=[() -> int throws never / int] tir=[() -> int throws unknown / int]
     at ns_defer/defer.baml:7389..7418 `{ defer_aw...de_work() }`
     at ns_future_types/future_types.baml:2464..2469 `{ v }`
@@ -449,6 +434,9 @@ ns_bigints/bigints.baml:5064..5075 `{ 1n < 2n }`: expected true, got bool
 [6x] hir_ty=["no" | "yes"] tir=["yes" | "no"]
     at ns_match_basics/match_basics.baml:3017..3105 `{\n    let..."\n    }\n}`
     at ns_match_basics/match_basics.baml:3041..3103 `match (b) ..."no"\n    }`
+[6x] hir_ty=["oops"] tir=[string]
+    at ns_exceptions/exceptions.baml:36098..36099 `e`
+    at ns_exceptions/exceptions.baml:36111..36117 `string`
 [6x] hir_ty=[() -> int throws never / 42] tir=[() -> 42 throws unknown / 42]
     at ns_cancel_token/cancel_token.baml:1291..1297 `{ 42 }`
     at ns_cancel_token/cancel_token.baml:2254..2260 `{ 42 }`
@@ -533,9 +521,6 @@ ns_bigints/bigints.baml:5064..5075 `{ 1n < 2n }`: expected true, got bool
 [5x] hir_ty=["B"] tir=[string]
     at ns_errorcontext/errorcontext.baml:1902..1904 `e2`
     at ns_errorcontext/errorcontext.baml:1922..1923 `_`
-[5x] hir_ty=["unknown" | user.exceptions.AppError] tir=[string]
-    at ns_exceptions/exceptions.baml:28670..28671 `_`
-    at ns_exceptions/exceptions.baml:29023..29024 `_`
 [5x] hir_ty=["unknown" | user.exceptions.AppError] tir=[string | user.exceptions.AppError]
     at ns_exceptions/exceptions.baml:28550..28551 `e`
     at ns_exceptions/exceptions.baml:28903..28904 `e`
@@ -803,12 +788,6 @@ ns_bigints/bigints.baml:5064..5075 `{ 1n < 2n }`: expected true, got bool
 [4x] hir_ty=[map<string, int | float | string | bool | (int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>)[] | map<string, int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>> | null>] tir=[map<string, int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>>]
     at ns_json_alias/json_alias.baml:2707..2733 `let obj: m...ring, json>`
     at ns_json_alias/json_alias.baml:2716..2733 `map<string, json>`
-[4x] hir_ty=[never] tir=[baml.panics.MapKeyNotFound]
-    at ns_exceptions/exceptions.baml:15134..15160 `baml.panic...KeyNotFound`
-    at ns_exceptions/exceptions.baml:17969..18004 `let err: b...KeyNotFound`
-[4x] hir_ty=[never] tir=[baml.panics.NegativeBitShift]
-    at ns_bigints/bigints.baml:5573..5601 `baml.panic...iveBitShift`
-    at ns_bigints/bigints.baml:18747..18775 `baml.panic...iveBitShift`
 [4x] hir_ty=[string] tir=["no throw" | string]
     at ns_arrays/sort_comparable.baml:5190..5365 `{\n       ...sage\n    }`
     at ns_arrays/sort_comparable.baml:10192..10304 `{\n       ...sage\n    }`
@@ -830,9 +809,6 @@ ns_bigints/bigints.baml:5064..5075 `{ 1n < 2n }`: expected true, got bool
 [4x] hir_ty=[string] tir=[string | "unexpected non-string error"]
     at ns_errorcontext/errorcontext.baml:1036..1213 `{\n  ec_si...  }\n  }\n}`
     at ns_errorcontext/errorcontext.baml:1040..1211 `ec_single_...n    }\n  }`
-[4x] hir_ty=[string | !error] tir=[string]
-    at ns_exceptions/exceptions.baml:16761..16891 `{\n    s5b...e\n    }\n}`
-    at ns_exceptions/exceptions.baml:16767..16889 `s5b_overfl...sage\n    }`
 [4x] hir_ty=[string | T] tir=[T | string]
     at ns_generic_match_rigid/generic_match_rigid.baml:4952..4969 `let p: T | string`
     at ns_generic_match_rigid/generic_match_rigid.baml:4959..4969 `T | string`
@@ -1019,6 +995,9 @@ ns_bigints/bigints.baml:5064..5075 `{ 1n < 2n }`: expected true, got bool
 [3x] hir_ty=[baml.iter.Iterator<Error = never, Item = baml.iter.ArrayIterator<int>>] tir=[baml.iter.Iterator<Item = baml.iter.ArrayIterator<int>, Error = never>]
     at ns_iter/iter.baml:14041..14122 `let outer:...or = never>`
     at ns_iter/iter.baml:14052..14122 `baml.iter....or = never>`
+[3x] hir_ty=[baml.panics.DivisionByZero | user.exceptions.AppError] tir=[baml.panics.DivisionByZero]
+    at ns_exceptions/exceptions.baml:24021..24058 `AppError |...isionByZero`
+    at ns_exceptions/exceptions.baml:26038..26075 `AppError |...isionByZero`
 [3x] hir_ty=[int] tir=[-1]
     at ns_exceptions/exceptions.baml:14563..14568 `0 - 1`
     at ns_operators/operators.baml:920..925 `1 - 2`
@@ -1049,21 +1028,15 @@ ns_bigints/bigints.baml:5064..5075 `{ 1n < 2n }`: expected true, got bool
 [3x] hir_ty=[map<string, int>] tir=[map<user.type_error_repro.TypeErrReproStrKey | user.type_error_repro.TypeErrReproStrKey, int>]
     at ns_type_error_repro/type_error_repro.baml:20746..20807 `let counts...trKey, int>`
     at ns_type_error_repro/type_error_repro.baml:20758..20807 `map<TypeEr...trKey, int>`
-[3x] hir_ty=[never] tir=[baml.panics.AllocFailure]
-    at ns_bigints/bigints.baml:18159..18183 `baml.panics.AllocFailure`
-    at ns_bigints/bigints.baml:18454..18478 `baml.panics.AllocFailure`
-[3x] hir_ty=[never] tir=[user.interfaces_associated_types.CaeKaboom]
-    at ns_interfaces_associated_types/interfaces_associated_types.baml:2359..2360 `e`
-    at ns_interfaces_associated_types/interfaces_associated_types.baml:2372..2392 `let error: CaeKaboom`
 [3x] hir_ty=[string] tir=[string | "empty"]
     at ns_control_flow/control_flow.baml:3279..3405 `{\n    if ..."\n    }\n}`
     at ns_control_flow/control_flow.baml:3285..3403 `if let o: ...pty"\n    }`
 [3x] hir_ty=[throws "fallback"] tir=[throws string]
     at ns_exceptions/exceptions.baml:23805..23816 `s9_risky_12`
     at ns_exceptions/exceptions.baml:26661..26673 `s9c_risky_19`
-[3x] hir_ty=[true] tir=[bool]
-    at ns_exceptions/exceptions.baml:37532..37533 `e`
-    at ns_exceptions/exceptions.baml:37584..37588 `bool`
+[3x] hir_ty=[user.exceptions.AppError] tir=[never]
+    at ns_exceptions/exceptions.baml:24021..24029 `AppError`
+    at ns_exceptions/exceptions.baml:26038..26046 `AppError`
 [3x] hir_ty=[user.generic_union_returns.ParsedChild[] | null] tir=[null | user.generic_union_returns.ParsedChild[]]
     at ns_generic_union_returns/generic_union_returns.baml:1753..1781 `let childr...sedChild[]?`
     at ns_generic_union_returns/generic_union_returns.baml:1767..1781 `ParsedChild[]?`
@@ -1142,15 +1115,9 @@ ns_bigints/bigints.baml:5064..5075 `{ 1n < 2n }`: expected true, got bool
 [2x] hir_ty=["all zero" | "x nonzero" | "y nonzero" | "z nonzero"] tir=["all zero" | "z nonzero" | "y nonzero" | "x nonzero"]
     at ns_match_basics/match_basics.baml:12277..12502 `{\n    mat..."\n    }\n}`
     at ns_match_basics/match_basics.baml:12283..12500 `match (x) ...ero"\n    }`
-[2x] hir_ty=["alpha" | "beta" | "gamma"] tir=[string]
-    at ns_exceptions/exceptions.baml:3018..3019 `e`
-    at ns_exceptions/exceptions.baml:3074..3075 `_`
 [2x] hir_ty=["array" | "bool" | "float" | "int" | "map" | "null" | "string"] tir=["null" | "bool" | "int" | "float" | "string" | "array" | "map"]
     at ns_json_alias/json_alias.baml:3165..3422 `{\n    mat..."\n    }\n}`
     at ns_json_alias/json_alias.baml:3171..3420 `match (j) ...map"\n    }`
-[2x] hir_ty=["bang" | "boom" | "crash" | "other"] tir=[string]
-    at ns_exceptions/exceptions.baml:38771..38772 `e`
-    at ns_exceptions/exceptions.baml:38874..38875 `_`
 [2x] hir_ty=["bool" | "class" | "int" | "string"] tir=["class" | "int" | "string" | "bool"]
     at ns_match_types/match_types.baml:12552..12714 `{\n    mat..."\n    }\n}`
     at ns_match_types/match_types.baml:12558..12712 `match (x) ...ool"\n    }`
@@ -1268,7 +1235,7 @@ ns_bigints/bigints.baml:5064..5075 `{ 1n < 2n }`: expected true, got bool
 [2x] hir_ty=["other" | "shape"] tir=["shape" | "other"]
     at ns_match_self_workaround/match_self_workaround.baml:955..1059 `{\n       ...   }\n    }`
     at ns_match_self_workaround/match_self_workaround.baml:965..1053 `match (oth...\n        }`
-[2x] hir_ty=["plain string" | user.exceptions.NetworkError] tir=[string]
+[2x] hir_ty=["plain string"] tir=[string]
     at ns_exceptions/exceptions.baml:10765..10766 `_`
     at ns_exceptions/exceptions.baml:11019..11020 `_`
 [2x] hir_ty=["plain string" | user.exceptions.NetworkError] tir=[string | user.exceptions.NetworkError]
@@ -1700,6 +1667,9 @@ ns_bigints/bigints.baml:5064..5075 `{ 1n < 2n }`: expected true, got bool
 [2x] hir_ty=[(value: int | null) -> string throws never] tir=[unknown | null]
     at ns_tostring_sugar/tostring_sugar.baml:5642..5653 `x.to_string`
     at ns_tostring_sugar/tostring_sugar.baml:5737..5748 `x.to_string`
+[2x] hir_ty=[(value: int | string) -> string throws never] tir=[unknown]
+    at ns_interfaces_associated_types/interfaces_associated_types.baml:1418..1442 `default_result.to_string`
+    at ns_interfaces_associated_types/interfaces_associated_types.baml:1453..1477 `generic_result.to_string`
 [2x] hir_ty=[(value: int) -> string throws never] tir=[unknown]
     at ns_patterns_new_runtime/patterns_new_runtime.baml:16895..16909 `f(2).to_string`
     at ns_patterns_new_runtime/patterns_new_runtime.baml:18303..18317 `f(3).to_string`
@@ -1790,9 +1760,6 @@ ns_bigints/bigints.baml:5064..5075 `{ 1n < 2n }`: expected true, got bool
 [2x] hir_ty=[3.14] tir=[float]
     at ns_exceptions/exceptions.baml:37112..37113 `e`
     at ns_exceptions/exceptions.baml:37202..37203 `_`
-[2x] hir_ty=[baml.panics.DivisionByZero | user.exceptions.AppError] tir=[baml.panics.DivisionByZero]
-    at ns_exceptions/exceptions.baml:24021..24058 `AppError |...isionByZero`
-    at ns_exceptions/exceptions.baml:26038..26075 `AppError |...isionByZero`
 [2x] hir_ty=[bigint] tir=[12n]
     at ns_bigints/bigints.baml:4894..4905 `{ 3n * 4n }`
     at ns_bigints/bigints.baml:4896..4903 `3n * 4n`
@@ -1862,9 +1829,6 @@ ns_bigints/bigints.baml:5064..5075 `{ 1n < 2n }`: expected true, got bool
 [2x] hir_ty=[int] tir=[int | 42]
     at ns_exceptions/exceptions.baml:33406..33449 `{\n    s13... => 42 }\n}`
     at ns_exceptions/exceptions.baml:33412..33447 `s13_inner_...{ _ => 42 }`
-[2x] hir_ty=[int | !error] tir=[int | string]
-    at ns_interfaces_associated_types/interfaces_associated_types.baml:1136..1154 `let generic_result`
-    at ns_interfaces_associated_types/interfaces_associated_types.baml:1157..1240 `call_value...sage\n    }`
 [2x] hir_ty=[int | ((int) -> int throws never)] tir=[((int) -> int throws never) | int]
     at ns_patterns_new_runtime/patterns_new_runtime.baml:18245..18247 `cb`
     at ns_patterns_new_runtime/patterns_new_runtime.baml:18329..18330 `_`
@@ -1892,24 +1856,6 @@ ns_bigints/bigints.baml:5064..5075 `{ 1n < 2n }`: expected true, got bool
 [2x] hir_ty=[map<string, int | float | string | bool | (int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>)[] | map<string, int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>> | null>] tir=[map<string, baml.json.json>]
     at ns_json_alias/json_alias.baml:3379..3405 `let obj: m...ring, json>`
     at ns_json_alias/json_alias.baml:3388..3405 `map<string, json>`
-[2x] hir_ty=[never] tir=[baml.panics.AllocFailure | baml.panics.AssertionFailed | baml.panics.Cancelled | baml.panics.DivisionByZero | baml.panics.Exit | baml.panics.HostContractViolation | baml.panics.HostUnavailable | baml.panics.IndexOutOfBounds | baml.panics.IntegerOverflow | baml.panics.InvalidFieldAccess | baml.panics.MapKeyNotFound | baml.panics.NegativeBitShift | baml.panics.SdkPanic | baml.panics.StackOverflow | baml.panics.Unreachable | baml.panics.UserPanic]
-    at ns_exceptions/exceptions.baml:13851..13868 `baml.panics.Panic`
-    at ns_exceptions/exceptions.baml:32608..32625 `baml.panics.Panic`
-[2x] hir_ty=[never] tir=[user.exceptions.ErrA]
-    at ns_exceptions/exceptions.baml:36651..36655 `ErrA`
-    at ns_exceptions/exceptions.baml:44434..44438 `ErrA`
-[2x] hir_ty=[never] tir=[user.exceptions.ErrB]
-    at ns_exceptions/exceptions.baml:36675..36679 `ErrB`
-    at ns_exceptions/exceptions.baml:44458..44462 `ErrB`
-[2x] hir_ty=[never] tir=[user.exceptions.ErrC]
-    at ns_exceptions/exceptions.baml:36699..36703 `ErrC`
-    at ns_exceptions/exceptions.baml:44482..44486 `ErrC`
-[2x] hir_ty=[never] tir=[user.exceptions.ErrD]
-    at ns_exceptions/exceptions.baml:36723..36727 `ErrD`
-    at ns_exceptions/exceptions.baml:44506..44510 `ErrD`
-[2x] hir_ty=[never] tir=[user.interfaces_associated_types.Boom]
-    at ns_interfaces_associated_types/interfaces_associated_types.baml:1191..1192 `e`
-    at ns_interfaces_associated_types/interfaces_associated_types.baml:1204..1208 `Boom`
 [2x] hir_ty=[string] tir=["?" | string]
     at ns_csv/csv.baml:24090..24201 `match (r.s...?"),\n    }`
     at ns_csv/csv_smoke.baml:4801..4867 `match (lin...ingify(l) }`
@@ -1976,18 +1922,15 @@ ns_bigints/bigints.baml:5064..5075 `{ 1n < 2n }`: expected true, got bool
 [2x] hir_ty=[throws never] tir=[throws unknown]
     at ns_tostring_sugar/tostring_sugar.baml:5573..5602 `optional_p...o_string_fn`
     at ns_tostring_sugar/tostring_sugar.baml:5668..5694 `optional_n...o_string_fn`
+[2x] hir_ty=[true] tir=[bool]
+    at ns_exceptions/exceptions.baml:37532..37533 `e`
+    at ns_exceptions/exceptions.baml:37584..37588 `bool`
 [2x] hir_ty=[user.control_flow.Admin | user.control_flow.User] tir=[user.control_flow.User | user.control_flow.Admin]
     at ns_control_flow/control_flow.baml:3166..3167 `u`
     at ns_control_flow/control_flow.baml:6424..6425 `u`
 [2x] hir_ty=[user.control_flow.Err | user.control_flow.Ok | user.control_flow.Warn] tir=[user.control_flow.Ok | user.control_flow.Warn | user.control_flow.Err]
     at ns_control_flow/control_flow.baml:3494..3495 `r`
     at ns_control_flow/control_flow.baml:6542..6543 `r`
-[2x] hir_ty=[user.exceptions.AppError] tir=[baml.panics.DivisionByZero | user.exceptions.AppError]
-    at ns_exceptions/exceptions.baml:24555..24560 `Mixed`
-    at ns_exceptions/exceptions.baml:24966..24971 `Mixed`
-[2x] hir_ty=[user.exceptions.AppError] tir=[never]
-    at ns_exceptions/exceptions.baml:24021..24029 `AppError`
-    at ns_exceptions/exceptions.baml:26038..26046 `AppError`
 [2x] hir_ty=[user.generic_match_subtype.Non | user.generic_match_subtype.Opt<T>] tir=[user.generic_match_subtype.Opt<T> | user.generic_match_subtype.Non]
     at ns_generic_match_subtype/generic_match_subtype.baml:1842..1843 `o`
     at ns_generic_match_subtype/generic_match_subtype.baml:1889..1890 `_`
@@ -2172,32 +2115,30 @@ ns_bigints/bigints.baml:5064..5075 `{ 1n < 2n }`: expected true, got bool
     at ns_type_reflection/type_reflection.baml:561..723 `client<llm..."\n    }\n}`
 [1x] hir_ty=["all zero" | "y nonzero" | "z nonzero"] tir=["all zero" | "z nonzero" | "y nonzero"]
     at ns_match_basics/match_basics.baml:12308..12468 `match (y) ...\n        }`
-[1x] hir_ty=["boom" | user.exceptions.AppError2] tir=[string]
-    at ns_exceptions/exceptions.baml:42330..42331 `_`
+[1x] hir_ty=["alpha" | "beta" | "gamma"] tir=[string]
+    at ns_exceptions/exceptions.baml:3018..3019 `e`
+[1x] hir_ty=["bang" | "boom" | "crash" | "other"] tir=[string]
+    at ns_exceptions/exceptions.baml:38771..38772 `e`
 [1x] hir_ty=["boom" | user.exceptions.AppError2] tir=[string | user.exceptions.AppError2]
     at ns_exceptions/exceptions.baml:42272..42273 `e`
 [1x] hir_ty=["false" | "true"] tir=["true" | "false"]
     at ns_interfaces_associated_types/interfaces_associated_types.baml:9083..9147 `if apd_hol...{ "false" }`
+[1x] hir_ty=["gamma"] tir=[string]
+    at ns_exceptions/exceptions.baml:3074..3075 `_`
 [1x] hir_ty=["hello from spawn" / () -> string throws never] tir=["hello from spawn" / () -> "hello from spawn" throws unknown]
     at ns_spawn_basic/spawn_basic.baml:570..592 `{ "hello from spawn" }`
 [1x] hir_ty=["off" | "on"] tir=["on" | "off"]
     at ns_interfaces/interfaces.baml:20138..20245 `match (s) ...off"\n    }`
 [1x] hir_ty=["one" | null / () -> void throws never] tir=["one" | null / () -> void throws unknown]
     at ns_exceptions/exceptions.baml:35238..35402 `{\n    {\n...l\n    }\n}`
-[1x] hir_ty=["plain string error" | user.exceptions.NetworkError] tir=[string]
+[1x] hir_ty=["plain string error"] tir=[string]
     at ns_exceptions/exceptions.baml:7424..7425 `_`
 [1x] hir_ty=["plain string error" | user.exceptions.NetworkError] tir=[string | user.exceptions.NetworkError]
     at ns_exceptions/exceptions.baml:7384..7385 `e`
-[1x] hir_ty=["unknown" | user.exceptions.AuthError | user.exceptions.NotFound | user.exceptions.RateLimit] tir=[string]
-    at ns_exceptions/exceptions.baml:8067..8068 `_`
 [1x] hir_ty=["unknown" | user.exceptions.AuthError | user.exceptions.NotFound | user.exceptions.RateLimit] tir=[string | user.exceptions.AuthError | user.exceptions.NotFound | user.exceptions.RateLimit]
     at ns_exceptions/exceptions.baml:7983..7984 `e`
-[1x] hir_ty=["unknown" | user.exceptions.AuthError | user.exceptions.NotFound | user.exceptions.RateLimit | user.exceptions.Timeout] tir=[string]
-    at ns_exceptions/exceptions.baml:38314..38315 `_`
 [1x] hir_ty=["unknown" | user.exceptions.AuthError | user.exceptions.NotFound | user.exceptions.RateLimit | user.exceptions.Timeout] tir=[string | user.exceptions.AuthError | user.exceptions.NotFound | user.exceptions.RateLimit | user.exceptions.Timeout]
     at ns_exceptions/exceptions.baml:38208..38209 `e`
-[1x] hir_ty=["unknown" | user.exceptions.ErrA | user.exceptions.ErrB | user.exceptions.ErrC | user.exceptions.ErrD] tir=[string]
-    at ns_exceptions/exceptions.baml:41173..41174 `_`
 [1x] hir_ty=["unknown" | user.exceptions.ErrA | user.exceptions.ErrB | user.exceptions.ErrC | user.exceptions.ErrD] tir=[string | user.exceptions.ErrA | user.exceptions.ErrB | user.exceptions.ErrC | user.exceptions.ErrD]
     at ns_exceptions/exceptions.baml:41080..41081 `e`
 [1x] hir_ty=[(() -> void throws never)[]] tir=[(() -> void throws never)[] (evolving)]
@@ -3124,10 +3065,6 @@ ns_bigints/bigints.baml:5064..5075 `{ 1n < 2n }`: expected true, got bool
     at ns_json_auto_derive/json_auto_derive.baml:2182..2191 `f.to_json`
 [1x] hir_ty=[(value: float) -> string throws never] tir=[unknown]
     at ns_floats/floats.baml:32018..32040 `(-0.0).abs().to_string`
-[1x] hir_ty=[(value: int | !error) -> string throws never] tir=[unknown]
-    at ns_interfaces_associated_types/interfaces_associated_types.baml:1453..1477 `generic_result.to_string`
-[1x] hir_ty=[(value: int | string) -> string throws never] tir=[unknown]
-    at ns_interfaces_associated_types/interfaces_associated_types.baml:1418..1442 `default_result.to_string`
 [1x] hir_ty=[(value: int) -> baml.json.json throws baml.json.JsonSerializationError] tir=[unknown]
     at ns_json_auto_derive/json_auto_derive.baml:1905..1914 `n.to_json`
 [1x] hir_ty=[(value: int) -> user.iter_impl_generics_only.core.OutOfBodyBox<int> throws never] tir=[(value: T) -> user.iter_impl_generics_only.core.OutOfBodyBox<T> throws never]
@@ -3376,8 +3313,6 @@ ns_bigints/bigints.baml:5064..5075 `{ 1n < 2n }`: expected true, got bool
     at ns_soundness/soundness.baml:1126..1153 `if (2 > 1)... else { 3 }`
 [1x] hir_ty=[32] tir=[int]
     at ns_assignments/assignments.baml:5524..5526 `32`
-[1x] hir_ty=[42 | "boom"] tir=[int]
-    at ns_exceptions/exceptions.baml:4743..4744 `_`
 [1x] hir_ty=[8] tir=[int]
     at ns_assignments/assignments.baml:3879..3880 `8`
 [1x] hir_ty=[999] tir=[never]
@@ -3400,8 +3335,6 @@ ns_bigints/bigints.baml:5064..5075 `{ 1n < 2n }`: expected true, got bool
     at ns_csv/csv.baml:32906..32922 `r.rows<Nested>()`
 [1x] hir_ty=[baml.iter.Iterator<Error = never, Item = int | null>] tir=[baml.iter.Iterator<Item = int | null, Error = never>]
     at ns_iter/iter.baml:5804..5813 `xs.iter()`
-[1x] hir_ty=[baml.panics.Panic] tir=[baml.panics.AllocFailure | baml.panics.AssertionFailed | baml.panics.Cancelled | baml.panics.DivisionByZero | baml.panics.Exit | baml.panics.HostContractViolation | baml.panics.HostUnavailable | baml.panics.IndexOutOfBounds | baml.panics.IntegerOverflow | baml.panics.InvalidFieldAccess | baml.panics.MapKeyNotFound | baml.panics.NegativeBitShift | baml.panics.SdkPanic | baml.panics.StackOverflow | baml.panics.Unreachable | baml.panics.UserPanic]
-    at ns_exceptions/exceptions.baml:32943..32960 `baml.panics.Panic`
 [1x] hir_ty=[bigint] tir=[(bigint as baml.ops.BitAnd<int>).Output]
     at ns_ops_bitwise/ops_bitwise.baml:1873..1892 `band<bigint>(6n, 3)`
 [1x] hir_ty=[bigint] tir=[(bigint as baml.ops.ShiftLeft<int>).Output]
@@ -3498,10 +3431,20 @@ ns_bigints/bigints.baml:5064..5075 `{ 1n < 2n }`: expected true, got bool
     at ns_generic_union_returns/generic_union_returns.baml:1734..1749 `parsed.metadata`
 [1x] hir_ty=[map<string, string> | map<string, T>] tir=[map<string, T> | map<string, string>]
     at ns_generic_match_typevar/generic_match_typevar.baml:3566..3567 `x`
-[1x] hir_ty=[never] tir=["boom"]
-    at ns_exceptions/exceptions.baml:43611..43617 `"boom"`
-[1x] hir_ty=[never] tir=[baml.panics.UserPanic]
-    at ns_soundness/soundness.baml:4816..4837 `baml.panics.UserPanic`
+[1x] hir_ty=[never] tir=[bool]
+    at ns_exceptions/exceptions.baml:37603..37604 `_`
+[1x] hir_ty=[never] tir=[int]
+    at ns_exceptions/exceptions.baml:2681..2682 `_`
+[1x] hir_ty=[never] tir=[user.exceptions.AppError]
+    at ns_exceptions/exceptions.baml:24986..24987 `_`
+[1x] hir_ty=[never] tir=[user.exceptions.NetErr]
+    at ns_exceptions/exceptions.baml:39657..39658 `_`
+[1x] hir_ty=[never] tir=[user.interfaces.Fz39IError]
+    at ns_interfaces/interfaces_2.baml:28216..28217 `_`
+[1x] hir_ty=[never] tir=[user.interfaces_associated_types.Boom]
+    at ns_interfaces_associated_types/interfaces_associated_types.baml:1191..1192 `e`
+[1x] hir_ty=[never] tir=[user.interfaces_associated_types.CaeKaboom]
+    at ns_interfaces_associated_types/interfaces_associated_types.baml:2359..2360 `e`
 [1x] hir_ty=[string] tir=["" | string]
     at ns_arrays/arrays.baml:28383..28457 `["a", "b",... + x }, "")`
 [1x] hir_ty=[string] tir=["hello world"]
