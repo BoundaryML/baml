@@ -77,6 +77,31 @@ describe('workspace path model', () => {
     ).toBeNull();
   });
 
+  it('recognizes decorated aliases of the workspace root', () => {
+    const paths = createWorkspacePathModel(URI, '/workspace');
+
+    for (const decoratedRoot of [
+      paths.rootUri.with({ query: 'query' }),
+      paths.rootUri.with({ fragment: 'fragment' }),
+      paths.rootUri.with({ fragment: 'fragment', query: 'query' }),
+    ]) {
+      expect(paths.isAllowedUri(decoratedRoot)).toBe(true);
+      expect(paths.isRootUri(decoratedRoot)).toBe(true);
+      for (const operation of ['delete', 'rename', 'rename to']) {
+        expect(() => paths.assertNotRootUri(decoratedRoot, operation)).toThrow(
+          `cannot ${operation} the workspace root directory`,
+        );
+      }
+    }
+
+    const decoratedChild = paths.fileUri('main.baml').with({ query: 'query' });
+    expect(paths.isAllowedUri(decoratedChild)).toBe(true);
+    expect(paths.isRootUri(decoratedChild)).toBe(false);
+    expect(() =>
+      paths.assertNotRootUri(decoratedChild, 'delete'),
+    ).not.toThrow();
+  });
+
   it('normalizes portable relative keys and rejects ambiguous or escaping keys', () => {
     const paths = createWorkspacePathModel(URI, '/workspace');
 

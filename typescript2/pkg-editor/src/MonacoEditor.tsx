@@ -325,7 +325,6 @@ export const MonacoEditor: FC<MonacoEditorProps> = ({ files, onFilesChange, back
       // Convert the host-native root once. Everything inside Monaco uses the
       // resulting URI identity, never the raw path spelling.
       const workspacePaths = createWorkspacePathModel(vscode.Uri, workspaceRoot);
-      const workspaceFolderUri = workspacePaths.rootUri;
       const workspaceFileUri = workspacePaths.configUri;
 
       const { InMemoryFileSystemProvider, registerFileSystemOverlay, FileChangeType } = filesOverride;
@@ -339,13 +338,6 @@ export const MonacoEditor: FC<MonacoEditorProps> = ({ files, onFilesChange, back
       const assertAllowed = (uri: import('vscode').Uri, op: string): void => {
         if (!workspacePaths.isAllowedUri(uri)) {
           throw new Error(`Sandbox violation: ${op} not allowed outside ${workspacePaths.rootPath} (got ${uri.path})`);
-        }
-      };
-
-      /** Throws if trying to delete/rename the workspace root itself. */
-      const assertNotRoot = (uri: import('vscode').Uri, op: string): void => {
-        if (uri.toString() === workspaceFolderUri.toString()) {
-          throw new Error(`Sandbox violation: cannot ${op} the workspace root directory`);
         }
       };
 
@@ -366,13 +358,14 @@ export const MonacoEditor: FC<MonacoEditorProps> = ({ files, onFilesChange, back
             };
             case 'delete': return (uri: any, opts: any) => {
               assertAllowed(uri, 'delete');
-              assertNotRoot(uri, 'delete');
+              workspacePaths.assertNotRootUri(uri, 'delete');
               return target.delete(uri, opts);
             };
             case 'rename': return (from: any, to: any, opts: any) => {
               assertAllowed(from, 'rename (source)');
-              assertNotRoot(from, 'rename');
+              workspacePaths.assertNotRootUri(from, 'rename');
               assertAllowed(to, 'rename (target)');
+              workspacePaths.assertNotRootUri(to, 'rename to');
               return target.rename(from, to, opts);
             };
             default:

@@ -59,9 +59,20 @@ export function createWorkspacePathModel<U extends UriLike<U>>(
     candidate.scheme.toLowerCase() === rootScheme &&
     candidate.authority.toLowerCase() === rootAuthority;
 
+  const isRootUri = (candidate: U): boolean =>
+    hasWorkspaceIdentity(candidate) && candidate.path === rootPath;
+
+  const assertNotRootUri = (candidate: U, operation: string): void => {
+    if (isRootUri(candidate)) {
+      throw new Error(
+        `Sandbox violation: cannot ${operation} the workspace root directory`,
+      );
+    }
+  };
+
   const isWorkspaceUri = (candidate: U): boolean =>
-    hasWorkspaceIdentity(candidate) &&
-    (candidate.path === rootPath || candidate.path.startsWith(rootPrefix));
+    isRootUri(candidate) ||
+    (hasWorkspaceIdentity(candidate) && candidate.path.startsWith(rootPrefix));
 
   const isAllowedUri = (candidate: U): boolean =>
     isWorkspaceUri(candidate) ||
@@ -113,9 +124,11 @@ export function createWorkspacePathModel<U extends UriLike<U>>(
   };
 
   return {
+    assertNotRootUri,
     configUri,
     fileUri,
     isAllowedUri,
+    isRootUri,
     normalizeFilename,
     parentDirectoryUris,
     relativeFilename,
