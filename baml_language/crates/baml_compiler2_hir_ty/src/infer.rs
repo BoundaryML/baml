@@ -495,6 +495,13 @@ impl<'db> InferenceContext<'db> {
     fn infer_expr_body(&mut self, body: &ExprBody) {
         if let Some(root) = body.root_expr {
             match self.return_ty.clone() {
+                // A void function DISCARDS its body's tail value (TIR's
+                // statement semantics; `defer { .. }; log.push(..)` as
+                // the last line of a `-> void` fn is fine) - the body
+                // still walks fully, it just isn't checked against unit.
+                Some(return_ty) if is_unit(&return_ty) => {
+                    self.infer_expr(body, root, &Expectation::None);
+                }
                 Some(return_ty) if !return_ty.has_error() => {
                     self.check_expr(body, root, &return_ty);
                 }
@@ -2460,6 +2467,13 @@ impl<'db> InferenceContext<'db> {
                 }
                 let saved_diverges = std::mem::replace(&mut self.diverges, Diverges::Maybe);
                 let ret_ty = match &ret_expectation {
+                    // A void lambda DISCARDS its body's tail value, the
+                    // same statement semantics void functions get (test
+                    // bodies are synthesized `() -> void` lambdas).
+                    Some(ret) if is_unit(ret) => {
+                        self.infer_expr(body, lambda_body, &Expectation::None);
+                        ret.clone()
+                    }
                     Some(ret) if !ret.has_error() => {
                         self.check_expr(body, lambda_body, ret);
                         ret.clone()
@@ -3433,7 +3447,7 @@ fn widen_fresh_literal(ty: &Ty) -> Ty {
 }
 
 /// The base primitive a literal type belongs to.
-fn literal_base(literal: &Literal, attr: TyAttr) -> TyKind {
+pub(crate) fn literal_base(literal: &Literal, attr: TyAttr) -> TyKind {
     match literal {
         Literal::Int(_) => TyKind::Int { attr },
         Literal::Bigint(_) => TyKind::Bigint { attr },

@@ -551,6 +551,13 @@ pub fn resolve_impl<'db>(
     if !admissible(concrete) || !interface.args.iter().all(admissible) {
         return None;
     }
+    // A literal-typed value implements what its base primitive does
+    // (the receiver-class rule applied to impl goals): `1` proves
+    // `GrptChild<int>` through `implements GrptChild<int> for int`.
+    if let TyKind::Literal(literal, _, attr) = concrete.kind() {
+        let widened = Ty::intern(crate::infer::literal_base(literal, attr.clone()));
+        return resolve_impl(db, &widened, interface);
+    }
     resolve_within_depth(
         db,
         concrete,

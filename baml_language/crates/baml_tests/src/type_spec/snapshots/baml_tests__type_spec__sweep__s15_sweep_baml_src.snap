@@ -4,10 +4,10 @@ expression: report
 ---
 files: 116
 nodes compared: 60529
-agreements: 51962
+agreements: 51966
 one-sided (coverage): 88
-conflicts: 8479 across 1508 distinct pairs
-hir_ty error-channel entries: 6
+conflicts: 8475 across 1508 distinct pairs
+hir_ty error-channel entries: 3
 tir diagnostics: 0
 panics: 0
 
@@ -15,9 +15,6 @@ panics: 0
 ns_bigints/bigints.baml:4708..4719 `{ 1n + 2n }`: expected 3n, got bigint
 ns_bigints/bigints.baml:4894..4905 `{ 3n * 4n }`: expected 12n, got bigint
 ns_bigints/bigints.baml:5064..5075 `{ 1n < 2n }`: expected true, got bool
-ns_defer/defer.baml:3849..3957 `{\n  defer...("body")\n}`: expected void, got int
-ns_exceptions/exceptions.baml:35238..35402 `{\n    {\n...l\n    }\n}`: expected void, got "one" | null
-ns_interfaces/interfaces.baml:56918..56919 `1`: expected user.interfaces.GrptChild<int>, got 1
 
 == conflicts by (hir_ty, tir) pair ==
 [2023x] hir_ty=[() -> void throws never / null] tir=[() -> void throws unknown / null]
@@ -32,7 +29,7 @@ ns_interfaces/interfaces.baml:56918..56919 `1`: expected user.interfaces.GrptChi
 [240x] hir_ty=[(a: string, b: string) -> bool throws never] tir=[(a: T, b: T) -> bool throws never]
     at ns_arrays/arrays.baml:10142..10158 `baml.deep_equals`
     at ns_arrays/arrays.baml:28366..28382 `baml.deep_equals`
-[137x] hir_ty=[!error] tir=[string]
+[133x] hir_ty=[!error] tir=[string]
     at ns_control_flow/control_flow.baml:3496..3519 `{\n       ...alue\n    }`
     at ns_control_flow/control_flow.baml:3506..3513 `s.value`
 [133x] hir_ty=[(a: int[], b: int[]) -> bool throws never] tir=[(a: T, b: T) -> bool throws never]
