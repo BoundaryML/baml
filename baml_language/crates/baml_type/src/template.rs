@@ -168,7 +168,7 @@ impl TyTemplate {
     /// A projection reduces because its qualifier is always known (the interface is
     /// non-optional) and its base realizes here, so `ctx.project` — the same impl
     /// consultation the canonical algebra uses — determines the concrete witness.
-    pub fn substitute<C: TypeContext>(
+    pub fn substitute<C: TypeContext + ?Sized>(
         &self,
         type_args: &[RealizedTy],
         ctx: &C,
@@ -187,7 +187,7 @@ impl TyTemplate {
     /// `normalize`'s `from_ty` walk. The public [`Self::substitute`] seeds the full
     /// `PROJECTION_REDUCTION_FUEL` budget; `ctx.project` threads the remainder back
     /// in for the binding it realizes.
-    pub fn substitute_with_fuel<C: TypeContext>(
+    pub fn substitute_with_fuel<C: TypeContext + ?Sized>(
         &self,
         type_args: &[RealizedTy],
         ctx: &C,
@@ -443,7 +443,7 @@ impl TyTemplateInterface {
     /// constraint used to reduce the enclosing projection (see
     /// [`TyTemplate::substitute`]). Each realized position widens into `Ty` for the
     /// [`Interface`] the projection query consumes.
-    fn substitute<C: TypeContext>(
+    fn substitute<C: TypeContext + ?Sized>(
         &self,
         type_args: &[RealizedTy],
         ctx: &C,

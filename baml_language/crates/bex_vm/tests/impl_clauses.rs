@@ -13,7 +13,7 @@ use std::{
 };
 
 use baml_project::testing::compile_source;
-use baml_type::{ClauseId, TyTemplate, TypeName, normalize::TypeContext};
+use baml_type::{ImplClause, TyTemplate, TypeName, normalize::TypeContext};
 use bex_vm::BexVm;
 
 const SOURCE: &str = r#"
@@ -56,14 +56,6 @@ fn vm() -> BexVm {
     BexVm::from_program(program, Arc::new(AtomicBool::new(false))).expect("from_program")
 }
 
-/// An owned snapshot of one supplied clause, for inspection after the walk.
-struct ClauseShape {
-    id: ClauseId,
-    num_vars: usize,
-    self_pattern: TyTemplate,
-    bound_names: Vec<Vec<String>>,
-}
-
 /// The head name of a for-pattern, which is what identifies a clause here.
 fn head_name(pattern: &TyTemplate) -> Option<String> {
     match pattern {
@@ -76,26 +68,15 @@ fn head_name(pattern: &TyTemplate) -> Option<String> {
 
 /// The source above declares its interfaces at the root, so their qualified names are
 /// local ones. Collected here because these tests inspect the whole candidate set; real
-/// consumers short-circuit instead, which is what `ControlFlow` is for.
-fn clauses_of(vm: &BexVm, interface: &str) -> Vec<ClauseShape> {
+/// consumers short-circuit instead, which is what `ControlFlow` is for. Collecting the
+/// borrowed clauses directly — no owned snapshot — is itself part of the contract under
+/// test: the clause lifetime is tied to the supplier, not to the walk.
+fn clauses_of<'vm>(vm: &'vm BexVm, interface: &str) -> Vec<ImplClause<'vm>> {
     let mut out = Vec::new();
     vm.for_each_clause(
         &TypeName::local(baml_type::Name::new(interface)),
         &mut |clause| {
-            out.push(ClauseShape {
-                id: clause.id,
-                num_vars: clause.num_vars,
-                self_pattern: clause.self_pattern.clone(),
-                bound_names: clause
-                    .bounds
-                    .iter()
-                    .map(|set| {
-                        set.iter()
-                            .map(|bound| bound.name.name().as_str().to_owned())
-                            .collect()
-                    })
-                    .collect(),
-            });
+            out.push(clause);
             ControlFlow::Continue(())
         },
     );
@@ -109,14 +90,12 @@ fn every_implementation_of_an_interface_is_supplied() {
 
     let mut heads: Vec<String> = clauses
         .iter()
-        .filter_map(|clause| head_name(&clause.self_pattern))
+        .filter_map(|clause| head_name(clause.self_pattern))
         .collect();
     heads.sort();
     heads.dedup();
-    assert!(
-        heads.iter().any(|h| h == "Square") && heads.iter().any(|h| h == "Circle"),
-        "expected both implementors among {heads:?}"
-    );
+    // Exactly the two declared implementors: nothing missing, nothing spurious.
+    assert_eq!(heads, ["Circle", "Square"]);
 }
 
 #[test]
@@ -126,24 +105,27 @@ fn a_generic_clause_carries_its_arity_and_its_bounds() {
 
     let wrap = clauses
         .iter()
-        .find(|clause| head_name(&clause.self_pattern).as_deref() == Some("Wrap"))
+        .find(|clause| head_name(clause.self_pattern).as_deref() == Some("Wrap"))
         .expect("the `Wrap<T>` clause");
 
     // One parameter, so a match against this clause needs a one-slot frame…
     assert_eq!(wrap.num_vars, 1);
-    assert_eq!(wrap.bound_names.len(), 1);
+    assert_eq!(wrap.bounds.len(), 1);
     // …and that parameter is bounded, which is the half of the clause that has to be
     // discharged as an obligation rather than matched.
-    assert_eq!(
-        wrap.bound_names[0].as_slice(),
-        ["Shape"],
-        "`T extends Shape` should be recorded"
-    );
+    let [bound] = wrap.bounds[0].as_slice() else {
+        panic!(
+            "`T extends Shape` should be recorded, got {:?}",
+            wrap.bounds[0].len()
+        );
+    };
+    assert_eq!(bound.name.name().as_str(), "Shape");
+    assert!(bound.generics.is_empty() && bound.associated_types.is_empty());
 
     // The pattern addresses the parameter positionally, which is what makes the clause
     // form independent of how the impl spelled its generics.
     assert!(
-        matches!(&wrap.self_pattern, TyTemplate::Class(_, args, _)
+        matches!(wrap.self_pattern, TyTemplate::Class(_, args, _)
             if matches!(args.as_slice(), [TyTemplate::TypeArgRef(0)])),
         "expected `Wrap<#0>`, got {:?}",
         wrap.self_pattern
@@ -162,7 +144,7 @@ fn an_unimplemented_interface_supplies_nothing() {
 fn enumeration_order_is_stable() {
     let vm = vm();
     let (first, second) = (clauses_of(&vm, "Shape"), clauses_of(&vm, "Shape"));
-    let ids = |clauses: &[ClauseShape]| clauses.iter().map(|c| c.id).collect::<Vec<_>>();
+    let ids = |clauses: &[ImplClause<'_>]| clauses.iter().map(|c| c.id).collect::<Vec<_>>();
     assert_eq!(ids(&first), ids(&second));
 }
 

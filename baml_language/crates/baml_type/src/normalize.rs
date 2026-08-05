@@ -35,7 +35,7 @@ use std::{collections::HashSet, ops::ControlFlow};
 use self::solve::SolverSession;
 use crate::{
     FunctionParamMode, FunctionParamTy, ImplClause, Interface, Literal, MediaKind, Name, ParamTy,
-    QualifiedTypeName, Ty, TyAttr, TypeName,
+    QualifiedTypeName, Ty, TyAttr,
 };
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -67,9 +67,9 @@ pub enum ProjectionStep {
 }
 
 /// Search limits for the type-relation machinery, supplied per embedding through
-/// [`TypeContext::limits`] rather than baked in as constants, so the runtime keeps
-/// its historical obligation depth and tests can pin tiny values to exercise the
-/// exhaustion paths.
+/// [`TypeContext::limits`] rather than baked in as constants, so an embedding can
+/// keep its historical obligation depth and tests can pin tiny values to exercise
+/// the exhaustion paths.
 ///
 /// Exhaustion of either limit **fails closed**: the derivation that tripped it
 /// answers "not proven", and — the invariant that keeps budgets sound alongside
@@ -80,11 +80,12 @@ pub enum ProjectionStep {
 /// never depend on query order or cache state, only on the configured limits.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Limits {
-    /// Bound on the membership goal-stack depth. Cycle detection already stops
-    /// *repeating* goals; this stops goals that grow without repeating
-    /// (`T: I` ⇒ `Container<T>: I` ⇒ …), which no table can see coming. Unbounded
-    /// by default: the canonical algebra's own termination rests on the assumption
-    /// set plus regular-tree finiteness, not on a depth cap.
+    /// The maximum number of simultaneously in-progress membership goals (a goal
+    /// is refused, fail-closed, when this many are already live). Cycle detection
+    /// already stops *repeating* goals; this stops goals that grow without
+    /// repeating (`T: I` ⇒ `Container<T>: I` ⇒ …), which no table can see coming.
+    /// Unbounded by default: the canonical algebra's own termination rests on the
+    /// assumption set plus regular-tree finiteness, not on a depth cap.
     pub recursion_limit: usize,
     /// Per-root step pool, the backstop against *exponential* work that no depth
     /// cap can bound (a memo-defeating DAG replayed as a tree stays shallow while
@@ -112,6 +113,42 @@ impl Limits {
 impl Default for Limits {
     fn default() -> Self {
         Self::DEFAULT
+    }
+}
+
+/// A three-valued relation verdict: the algebra distinguishes "disproved" from
+/// "could not decide", and consumers collapse the distinction explicitly where
+/// their fail-closed direction allows it.
+///
+/// `No` is a *definite* refutation — no refusal touched the derivation, so the
+/// answer is a pure function of the goal and the world (this includes a cycle
+/// closed inductively: a membership goal leaning only on itself has no grounding,
+/// and that is a real `No`, not a give-up). `Unknown` carries why the question
+/// was left open; its cause determines whether re-asking can ever help.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Truth {
+    Yes,
+    No,
+    Unknown(Indeterminacy),
+}
+
+/// Why a verdict was left open.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Indeterminacy {
+    /// A search limit cut the derivation ([`Limits`]): the answer reflects where
+    /// the budget ran out, not what the types are. Final for the given limits;
+    /// a larger budget may decide it.
+    BudgetExhausted,
+}
+
+impl Truth {
+    /// The one sanctioned collapse: `Yes` is proven, everything else is treated
+    /// as "not proven" — fail-closed. Correct wherever the consumer's
+    /// conservative direction is to claim nothing (keep the union member, refuse
+    /// the dispatch, report no membership); consumers that must distinguish a
+    /// refutation from an open question match on the variants instead.
+    pub fn holds(self) -> bool {
+        matches!(self, Truth::Yes)
     }
 }
 
@@ -264,7 +301,7 @@ pub trait TypeContext {
     /// collect clauses that outlive the walk.
     fn for_each_clause<'a>(
         &'a self,
-        interface: &TypeName,
+        interface: &QualifiedTypeName,
         visit: &mut dyn FnMut(ImplClause<'a>) -> ControlFlow<()>,
     ) {
         let _ = (interface, visit);
@@ -277,8 +314,10 @@ pub trait TypeContext {
     // methods carry the logic; the free functions below are thin wrappers over
     // them (kept for callers that hold a context by value — deletable once those
     // migrate to the method form). Each body passes `self` as the context, hence
-    // `where Self: Sized`: there are no `dyn TypeContext` callers, so the bound
-    // costs nothing. Do not override them — a context supplies only the facts.
+    // `where Self: Sized`: the solver session holds a `&dyn TypeContext` but
+    // consults only the fact methods (it implements the algebra itself), so
+    // keeping these off the vtable costs nothing. Do not override them — a
+    // context supplies only the facts.
 
     /// Normalize `ty` to its canonical form and render it back as a [`Ty`].
     ///
@@ -555,20 +594,6 @@ impl TypeContext for NoFacts {
         ProjectionStep::Opaque
     }
 }
-
-/// [`TypeContext`] must stay usable behind a trait object: the fact methods are the
-/// dynamic half of the algebra, and a solver session holds one `&dyn TypeContext` rather
-/// than monomorphizing every walk per context. The `where Self: Sized` bounds on the
-/// defaulted algebra methods are what keeps them out of the vtable — dropping one would
-/// silently break this.
-#[cfg(test)]
-const _: fn() = || {
-    #[expect(
-        deprecated,
-        reason = "type-level assertion only; no facts are consulted"
-    )]
-    let _: &dyn TypeContext = &NoFacts;
-};
 
 /// Free-function form of [`TypeContext::normalize`], for a context held by value.
 /// Pending removal once every caller uses the method form.
@@ -1861,10 +1886,9 @@ impl NormalTy {
         if !s.charge() {
             return false;
         }
-        s.push_assumption(self.clone(), sup.clone());
-        let result = self.is_subtype_of_inner(sup, s);
-        s.pop_assumption();
-        result
+        s.with_assumption(self.clone(), sup.clone(), |s| {
+            self.is_subtype_of_inner(sup, s)
+        })
     }
 
     /// The structural rules of [`Self::is_subtype_of`]. Callers MUST go through

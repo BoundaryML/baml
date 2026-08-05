@@ -4,7 +4,10 @@
 use std::collections::HashMap;
 
 use super::*;
-use crate::{Freshness, FunctionParamTy, Literal, Name, QualifiedTypeName, Ty, TyAttr};
+use crate::{
+    ClauseId, Freshness, FunctionParamTy, Literal, Name, QualifiedTypeName, RealizedTy, Ty, TyAttr,
+    TyTemplate, TyTemplateInterface,
+};
 
 // ── stub context ───────────────────────────────────────────────────────────
 
@@ -27,6 +30,30 @@ struct Ctx {
     projections: Vec<(Ty, QualifiedTypeName, Name, Ty)>,
     /// Overridden search limits, for the budget tests; `None` = [`Limits::DEFAULT`].
     limits: Option<Limits>,
+    /// Clauses this world supplies, in declaration order: `(interface, clause)`.
+    clauses: Vec<(QualifiedTypeName, OwnedClause)>,
+}
+
+/// One owned clause the stub context lends out in [`ImplClause`] form.
+struct OwnedClause {
+    num_vars: usize,
+    self_pattern: TyTemplate,
+    iface_args: Vec<TyTemplate>,
+    iface_assoc: Vec<(Name, TyTemplate)>,
+    bounds: Vec<Vec<TyTemplateInterface>>,
+}
+
+impl OwnedClause {
+    /// A monomorphic clause with no bounds and no instantiation to pin.
+    fn plain(self_pattern: TyTemplate) -> Self {
+        OwnedClause {
+            num_vars: 0,
+            self_pattern,
+            iface_args: Vec::new(),
+            iface_assoc: Vec::new(),
+            bounds: Vec::new(),
+        }
+    }
 }
 
 fn nominal_head(ty: &Ty) -> Option<QualifiedTypeName> {
@@ -52,6 +79,29 @@ fn primitive_name(ty: &Ty) -> Option<&'static str> {
 impl TypeContext for Ctx {
     fn limits(&self) -> Limits {
         self.limits.unwrap_or(Limits::DEFAULT)
+    }
+
+    fn for_each_clause<'a>(
+        &'a self,
+        interface: &QualifiedTypeName,
+        visit: &mut dyn FnMut(ImplClause<'a>) -> ControlFlow<()>,
+    ) {
+        for (index, (iface, clause)) in self.clauses.iter().enumerate() {
+            if iface != interface {
+                continue;
+            }
+            let lent = ImplClause {
+                id: ClauseId(index as u64),
+                num_vars: clause.num_vars,
+                self_pattern: &clause.self_pattern,
+                iface_args: &clause.iface_args,
+                iface_assoc: &clause.iface_assoc,
+                bounds: &clause.bounds,
+            };
+            if visit(lent).is_break() {
+                return;
+            }
+        }
     }
 
     fn alias_def(&self, name: &QualifiedTypeName) -> Option<Ty> {
@@ -1724,7 +1774,7 @@ fn cache_corpus() -> (Ctx, Vec<Ty>) {
 }
 
 #[test]
-fn answer_cache_is_verdict_invisible() {
+fn the_store_is_verdict_invisible() {
     // The cache is an optimization; a cached session and a recomputing one must
     // agree on every judgment, for every ordered pair. Cross-pair contamination
     // (an answer recorded under one goal's hypotheses being served to another)
@@ -1751,7 +1801,7 @@ fn answer_cache_is_verdict_invisible() {
 }
 
 #[test]
-fn answer_cache_survives_reuse_within_one_session() {
+fn repeated_goals_are_stable_within_one_session() {
     // Posing the same goal repeatedly in one session — the shape the automaton's
     // fixpoint rounds produce — must be stable, not just fast.
     let (ctx, corpus) = cache_corpus();
@@ -1782,7 +1832,7 @@ fn the_default_clause_world_is_empty() {
     let mut visited = false;
     ctx.for_each_clause(&qtn("Anything"), &mut |_| {
         visited = true;
-        std::ops::ControlFlow::Continue(())
+        ControlFlow::Continue(())
     });
     assert!(!visited);
 }
@@ -1819,7 +1869,7 @@ fn step_budget_exhaustion_fails_closed_and_recovers() {
 }
 
 #[test]
-fn budgeted_answer_cache_is_verdict_invisible() {
+fn the_store_is_verdict_invisible_at_every_budget() {
     // The budget dimension of store admission: a hit re-charges exactly what the
     // recompute would spend, so recording and recomputing sessions agree at EVERY
     // pool size — including pools small enough that derivations are refused
@@ -1902,6 +1952,9 @@ fn eviction_is_verdict_invisible() {
     let mut store = store::Answers::default();
     for (round, a) in corpus.iter().enumerate() {
         for b in &corpus {
+            // Which ids land on which parity depends on the store's (unseeded,
+            // deterministic) hash order — any subset works; parity just mixes
+            // full and partial eviction across rounds.
             let live: Vec<_> = store.live_ids().collect();
             for (index, id) in live.into_iter().enumerate() {
                 if round % 2 == 0 || index % 2 == 0 {
@@ -1956,6 +2009,515 @@ fn a_store_never_carries_refusal_tainted_answers() {
         assert!(
             s.prove_subtype(&x, &y),
             "the starved session's refusal leaked into the shared store"
+        );
+    }
+}
+
+// ── the membership sort ────────────────────────────────────────────────────
+
+fn wrap_rt(inner: RealizedTy) -> RealizedTy {
+    RealizedTy::Class(qtn("Wrap"), vec![inner], TyAttr::default())
+}
+
+/// `Wrap<…<Wrap<core>>…>`, `depth` layers.
+fn nested_wrap(depth: usize, core: RealizedTy) -> RealizedTy {
+    (0..depth).fold(core, |ty, _| wrap_rt(ty))
+}
+
+/// The `Wrap<T> where T: Deep` clause.
+fn wrap_deep_clause() -> OwnedClause {
+    OwnedClause {
+        num_vars: 1,
+        self_pattern: TyTemplate::Class(
+            qtn("Wrap"),
+            vec![TyTemplate::TypeArgRef(0)],
+            TyAttr::default(),
+        ),
+        iface_args: Vec::new(),
+        iface_assoc: Vec::new(),
+        bounds: vec![vec![TyTemplateInterface::new(
+            qtn("Deep"),
+            Vec::new(),
+            Vec::new(),
+        )]],
+    }
+}
+
+/// `implements Deep for int` + `implements<T extends Deep> Deep for Wrap<T>` —
+/// a bound-recursion chain with a base case.
+fn deep_chain_ctx() -> Ctx {
+    Ctx {
+        clauses: vec![
+            (
+                qtn("Deep"),
+                OwnedClause::plain(TyTemplate::Int {
+                    attr: TyAttr::default(),
+                }),
+            ),
+            (qtn("Deep"), wrap_deep_clause()),
+        ],
+        ..Ctx::default()
+    }
+}
+
+#[test]
+fn membership_over_the_empty_world_is_a_definite_no() {
+    // The empty clause world is a value, not an absence: nothing implements
+    // anything there, and that is a real refutation — `No`, not `Unknown`.
+    let ctx = Ctx::default();
+    let s = &mut SolverSession::new(&ctx);
+    assert_eq!(
+        s.implements(&RealizedTy::int(), &qtn("Anything"), &[], &[]),
+        Truth::No
+    );
+}
+
+#[test]
+fn a_bound_chain_resolves_and_grounds_out() {
+    let ctx = deep_chain_ctx();
+    let s = &mut SolverSession::new(&ctx);
+    assert_eq!(
+        s.implements(&nested_wrap(5, RealizedTy::int()), &qtn("Deep"), &[], &[]),
+        Truth::Yes
+    );
+    assert_eq!(
+        s.implements(&RealizedTy::int(), &qtn("Deep"), &[], &[]),
+        Truth::Yes
+    );
+    // A chain whose core has no impl fails at the bottom, all the way up — and
+    // that is a definite refutation.
+    assert_eq!(
+        s.implements(
+            &nested_wrap(3, RealizedTy::string()),
+            &qtn("Deep"),
+            &[],
+            &[]
+        ),
+        Truth::No
+    );
+}
+
+#[test]
+fn a_repeating_goal_is_inductively_false_and_definite() {
+    // `T: Deep ⇒ T: Deep` with no base case: the cycle has no grounding, so the
+    // head answers `No` — the least-fixpoint reading, a real refutation rather
+    // than a give-up. Asking again must agree (whether recomputed or served from
+    // the table; the assertions cannot tell, and need not).
+    let ctx = Ctx {
+        clauses: vec![(
+            qtn("Deep"),
+            OwnedClause {
+                num_vars: 1,
+                self_pattern: TyTemplate::TypeArgRef(0),
+                iface_args: Vec::new(),
+                iface_assoc: Vec::new(),
+                bounds: vec![vec![TyTemplateInterface::new(
+                    qtn("Deep"),
+                    Vec::new(),
+                    Vec::new(),
+                )]],
+            },
+        )],
+        ..Ctx::default()
+    };
+    let s = &mut SolverSession::new(&ctx);
+    assert_eq!(
+        s.implements(&RealizedTy::int(), &qtn("Deep"), &[], &[]),
+        Truth::No
+    );
+    assert_eq!(
+        s.implements(&RealizedTy::int(), &qtn("Deep"), &[], &[]),
+        Truth::No
+    );
+}
+
+#[test]
+fn depth_refusals_are_never_recorded() {
+    // With the cap at 4, proving `Wrap⁵` explores `Wrap⁵‥Wrap²` and refuses the
+    // fifth goal; every goal on that path was cut, so none may be recorded —
+    // `Wrap²` asked fresh at the root (needing only 3 goals) must still prove.
+    // And the refusal surfaces as `Unknown`, not `No`: the search was cut, not
+    // refuted.
+    let ctx = Ctx {
+        limits: Some(Limits {
+            recursion_limit: 4,
+            ..Limits::DEFAULT
+        }),
+        ..deep_chain_ctx()
+    };
+    let s = &mut SolverSession::new(&ctx);
+    assert_eq!(
+        s.implements(&nested_wrap(5, RealizedTy::int()), &qtn("Deep"), &[], &[]),
+        Truth::Unknown(Indeterminacy::BudgetExhausted)
+    );
+    assert_eq!(
+        s.implements(&nested_wrap(2, RealizedTy::int()), &qtn("Deep"), &[], &[]),
+        Truth::Yes
+    );
+}
+
+#[test]
+fn admission_reverifies_depth_headroom() {
+    // A *clean* answer recorded shallow must not be served deep. `Wrap²` proved at
+    // the root records its depth headroom; re-encountered inside the `Wrap⁵` proof
+    // where the remaining headroom cannot cover it, the entry is inadmissible and
+    // the recompute refuses — so `Wrap⁵` fails exactly as it would in a fresh
+    // solver (verdicts are query-order-independent), while the shallow answer
+    // keeps serving at the root.
+    let ctx = Ctx {
+        limits: Some(Limits {
+            recursion_limit: 4,
+            ..Limits::DEFAULT
+        }),
+        ..deep_chain_ctx()
+    };
+    let s = &mut SolverSession::new(&ctx);
+    assert_eq!(
+        s.implements(&nested_wrap(2, RealizedTy::int()), &qtn("Deep"), &[], &[]),
+        Truth::Yes
+    );
+    assert_eq!(
+        s.implements(&nested_wrap(5, RealizedTy::int()), &qtn("Deep"), &[], &[]),
+        Truth::Unknown(Indeterminacy::BudgetExhausted)
+    );
+    assert_eq!(
+        s.implements(&nested_wrap(2, RealizedTy::int()), &qtn("Deep"), &[], &[]),
+        Truth::Yes
+    );
+}
+
+#[test]
+fn an_admitted_hit_still_counts_its_depth() {
+    // The compositional twin of the admission test: a hit stands in for its
+    // recompute, so the goal *above* it must record a depth cost covering the
+    // excursion the hit skipped. Warm the store shallow-first: `Wrap¹`, then
+    // `Wrap³` (whose `Wrap¹` sub-goal is served from the store). If the hit's
+    // depth were not folded into `Wrap²`/`Wrap³`'s recorded costs, those entries
+    // would understate their headroom and `Wrap⁵` would wrongly prove through
+    // them; a fresh solver refuses it at this cap.
+    let ctx = Ctx {
+        limits: Some(Limits {
+            recursion_limit: 4,
+            ..Limits::DEFAULT
+        }),
+        ..deep_chain_ctx()
+    };
+    let s = &mut SolverSession::new(&ctx);
+    assert_eq!(
+        s.implements(&nested_wrap(1, RealizedTy::int()), &qtn("Deep"), &[], &[]),
+        Truth::Yes
+    );
+    assert_eq!(
+        s.implements(&nested_wrap(3, RealizedTy::int()), &qtn("Deep"), &[], &[]),
+        Truth::Yes
+    );
+    assert_eq!(
+        s.implements(&nested_wrap(5, RealizedTy::int()), &qtn("Deep"), &[], &[]),
+        Truth::Unknown(Indeterminacy::BudgetExhausted)
+    );
+}
+
+#[test]
+fn the_step_pool_refills_per_root() {
+    // A pool too small for the chain refuses it (`Unknown`); the next public entry
+    // is a fresh root, so the same session still proves a goal its pool covers;
+    // and the default pool covers the whole chain.
+    let ctx = Ctx {
+        limits: Some(Limits {
+            step_budget: 3,
+            ..Limits::DEFAULT
+        }),
+        ..deep_chain_ctx()
+    };
+    let s = &mut SolverSession::new(&ctx);
+    assert_eq!(
+        s.implements(&nested_wrap(5, RealizedTy::int()), &qtn("Deep"), &[], &[]),
+        Truth::Unknown(Indeterminacy::BudgetExhausted)
+    );
+    assert_eq!(
+        s.implements(&RealizedTy::int(), &qtn("Deep"), &[], &[]),
+        Truth::Yes
+    );
+
+    let with_default_budget = deep_chain_ctx();
+    let s = &mut SolverSession::new(&with_default_budget);
+    assert_eq!(
+        s.implements(&nested_wrap(5, RealizedTy::int()), &qtn("Deep"), &[], &[]),
+        Truth::Yes
+    );
+}
+
+#[test]
+fn selection_returns_the_first_applicable_clause_with_its_bindings() {
+    let ctx = deep_chain_ctx();
+    let s = &mut SolverSession::new(&ctx);
+    let (id, bindings) = s
+        .select(&nested_wrap(1, RealizedTy::int()), &qtn("Deep"), &[])
+        .expect("the Wrap clause applies");
+    assert_eq!(id, ClauseId(1));
+    assert_eq!(bindings, vec![RealizedTy::int()]);
+
+    let (id, bindings) = s
+        .select(&RealizedTy::int(), &qtn("Deep"), &[])
+        .expect("the int clause applies");
+    assert_eq!(id, ClauseId(0));
+    assert!(bindings.is_empty());
+
+    assert!(
+        s.select(&nested_wrap(1, RealizedTy::string()), &qtn("Deep"), &[])
+            .is_none()
+    );
+}
+
+#[test]
+fn a_starved_selection_yields_nothing_not_a_different_clause() {
+    // Candidate order: the bounded `Wrap<T> where T: Deep` clause first, a
+    // blanket second. Well-funded, the bounded clause proves its bound and wins.
+    // Starved, its bound discharge is *refused* — not refuted — so the blanket
+    // must not be selected in its place: the budget would be picking which
+    // implementation runs. No selection at all is the only sound answer.
+    let mut ctx = deep_chain_ctx();
+    ctx.clauses
+        .push((qtn("Deep"), OwnedClause::plain(TyTemplate::TypeArgRef(0))));
+    // A bare `TypeArgRef` pattern binds anything without a comparison; give the
+    // blanket one parameter so the binding slot exists.
+    ctx.clauses.last_mut().expect("just pushed").1.num_vars = 1;
+
+    let subject = nested_wrap(3, RealizedTy::int());
+    let s = &mut SolverSession::new(&ctx);
+    let (id, _) = s
+        .select(&subject, &qtn("Deep"), &[])
+        .expect("the bounded clause proves its bound");
+    assert_eq!(id, ClauseId(1), "the bounded clause wins when funded");
+
+    ctx.limits = Some(Limits {
+        step_budget: 2,
+        ..Limits::DEFAULT
+    });
+    let s = &mut SolverSession::new(&ctx);
+    assert!(
+        s.select(&subject, &qtn("Deep"), &[]).is_none(),
+        "a starved selection must fail closed, not fall through to the blanket"
+    );
+}
+
+#[test]
+fn per_clause_applicability_reports_bindings() {
+    let ctx = deep_chain_ctx();
+    let s = &mut SolverSession::new(&ctx);
+    let mut applied = Vec::new();
+    ctx.for_each_clause(&qtn("Deep"), &mut |clause| {
+        applied.push(s.applies(&clause, &nested_wrap(1, RealizedTy::int())));
+        ControlFlow::Continue(())
+    });
+    // The `int` clause does not admit `Wrap<int>`; the bounded `Wrap<T>` clause
+    // does, binding `T` to the core it discharged `T: Deep` for.
+    assert_eq!(applied, [None, Some(vec![RealizedTy::int()])]);
+}
+
+#[test]
+fn instantiation_keys_membership_and_selection() {
+    // Two clauses implement `Convert` for `int` at different instantiations; the
+    // request's args decide which (an empty request matches any), and selection
+    // picks the first satisfying clause in supplier order.
+    let convert_for_int = |arg: TyTemplate| OwnedClause {
+        iface_args: vec![arg],
+        ..OwnedClause::plain(TyTemplate::Int {
+            attr: TyAttr::default(),
+        })
+    };
+    let ctx = Ctx {
+        clauses: vec![
+            (
+                qtn("Convert"),
+                convert_for_int(TyTemplate::Int {
+                    attr: TyAttr::default(),
+                }),
+            ),
+            (
+                qtn("Convert"),
+                convert_for_int(TyTemplate::String {
+                    attr: TyAttr::default(),
+                }),
+            ),
+        ],
+        ..Ctx::default()
+    };
+    let s = &mut SolverSession::new(&ctx);
+    assert_eq!(
+        s.implements(
+            &RealizedTy::int(),
+            &qtn("Convert"),
+            &[RealizedTy::int()],
+            &[]
+        ),
+        Truth::Yes
+    );
+    assert_eq!(
+        s.implements(
+            &RealizedTy::int(),
+            &qtn("Convert"),
+            &[RealizedTy::string()],
+            &[]
+        ),
+        Truth::Yes
+    );
+    assert_eq!(
+        s.implements(
+            &RealizedTy::int(),
+            &qtn("Convert"),
+            &[RealizedTy::Bool {
+                attr: TyAttr::default()
+            }],
+            &[]
+        ),
+        Truth::No
+    );
+    assert_eq!(
+        s.select(&RealizedTy::int(), &qtn("Convert"), &[])
+            .expect("any")
+            .0,
+        ClauseId(0)
+    );
+    assert_eq!(
+        s.select(&RealizedTy::int(), &qtn("Convert"), &[RealizedTy::string()])
+            .expect("keyed")
+            .0,
+        ClauseId(1)
+    );
+}
+
+#[test]
+fn associated_requests_may_be_narrower_never_different() {
+    // The clause provides `Item = int, Error = string`; a request may ask about a
+    // subset of those bindings (outputs — asking less is asking less), but a
+    // mismatched or unknown name refuses.
+    let ctx = Ctx {
+        clauses: vec![(
+            qtn("Iter"),
+            OwnedClause {
+                iface_assoc: vec![
+                    (
+                        Name::new("Item"),
+                        TyTemplate::Int {
+                            attr: TyAttr::default(),
+                        },
+                    ),
+                    (
+                        Name::new("Error"),
+                        TyTemplate::String {
+                            attr: TyAttr::default(),
+                        },
+                    ),
+                ],
+                ..OwnedClause::plain(TyTemplate::Int {
+                    attr: TyAttr::default(),
+                })
+            },
+        )],
+        ..Ctx::default()
+    };
+    let s = &mut SolverSession::new(&ctx);
+    let ask = |s: &mut SolverSession<'_>, assoc: Vec<(&str, RealizedTy)>| {
+        let assoc: Vec<(Name, RealizedTy)> = assoc
+            .into_iter()
+            .map(|(name, ty)| (Name::new(name), ty))
+            .collect();
+        s.implements(&RealizedTy::int(), &qtn("Iter"), &[], &assoc)
+    };
+    assert_eq!(ask(s, vec![]), Truth::Yes);
+    assert_eq!(ask(s, vec![("Item", RealizedTy::int())]), Truth::Yes);
+    assert_eq!(
+        ask(
+            s,
+            vec![("Item", RealizedTy::int()), ("Error", RealizedTy::string())]
+        ),
+        Truth::Yes
+    );
+    assert_eq!(ask(s, vec![("Item", RealizedTy::string())]), Truth::No);
+    assert_eq!(ask(s, vec![("Missing", RealizedTy::int())]), Truth::No);
+}
+
+#[test]
+fn an_existential_binding_discharges_its_own_bound() {
+    // The single-`Self` dispatchability arm: a bound `T extends Shape` is satisfied
+    // by the `Shape` existential itself — while the existential still *implements*
+    // nothing, even with a concrete `Shape` impl present for other types
+    // (dispatchability is bound discharge, not membership).
+    let ctx = Ctx {
+        clauses: vec![
+            (
+                qtn("Shape"),
+                OwnedClause::plain(TyTemplate::Int {
+                    attr: TyAttr::default(),
+                }),
+            ),
+            (
+                qtn("Viewable"),
+                OwnedClause {
+                    num_vars: 1,
+                    self_pattern: TyTemplate::Class(
+                        qtn("Holder"),
+                        vec![TyTemplate::TypeArgRef(0)],
+                        TyAttr::default(),
+                    ),
+                    iface_args: Vec::new(),
+                    iface_assoc: Vec::new(),
+                    bounds: vec![vec![TyTemplateInterface::new(
+                        qtn("Shape"),
+                        Vec::new(),
+                        Vec::new(),
+                    )]],
+                },
+            ),
+        ],
+        ..Ctx::default()
+    };
+    let shape = RealizedTy::Interface(qtn("Shape"), Vec::new(), Vec::new(), TyAttr::default());
+    let holder = RealizedTy::Class(qtn("Holder"), vec![shape.clone()], TyAttr::default());
+    let s = &mut SolverSession::new(&ctx);
+    assert_eq!(
+        s.implements(&holder, &qtn("Viewable"), &[], &[]),
+        Truth::Yes
+    );
+    // `int: Shape` holds, so the world is not vacuously Shape-free…
+    assert_eq!(
+        s.implements(&RealizedTy::int(), &qtn("Shape"), &[], &[]),
+        Truth::Yes
+    );
+    // …and the existential still does not implement its own interface.
+    assert_eq!(s.implements(&shape, &qtn("Shape"), &[], &[]), Truth::No);
+}
+
+#[test]
+fn membership_answers_are_store_and_eviction_invisible() {
+    // The membership table's analog of the subtype differentials: a store warmed
+    // and partially evicted across queries must never change a verdict, including
+    // across re-minted ids for the same canonical forms.
+    let ctx = deep_chain_ctx();
+    let subjects: Vec<RealizedTy> = (0..6)
+        .map(|depth| nested_wrap(depth, RealizedTy::int()))
+        .chain((0..3).map(|depth| nested_wrap(depth, RealizedTy::string())))
+        .collect();
+    let mut store = store::Answers::default();
+    for (round, subject) in subjects.iter().cycle().take(subjects.len() * 2).enumerate() {
+        let live: Vec<_> = store.live_ids().collect();
+        for (index, id) in live.into_iter().enumerate() {
+            if round % 2 == 0 || index % 2 == 0 {
+                store.evict(id);
+            }
+        }
+        let fresh = {
+            let s = &mut SolverSession::new(&ctx);
+            s.implements(subject, &qtn("Deep"), &[], &[])
+        };
+        let shared = {
+            let s = &mut SolverSession::with_store(&ctx, &mut store);
+            s.implements(subject, &qtn("Deep"), &[], &[])
+        };
+        assert_eq!(
+            fresh, shared,
+            "the shared store changed the verdict for `{subject}`"
         );
     }
 }

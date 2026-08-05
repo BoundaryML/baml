@@ -281,6 +281,16 @@ impl baml_type::TemplateCompare for DispatchCompare<'_> {
 }
 
 impl TypeContext for StructuralEquivCtx<'_> {
+    fn for_each_clause<'a>(
+        &'a self,
+        _interface: &TypeName,
+        _visit: &mut dyn FnMut(ImplClause<'a>) -> ControlFlow<()>,
+    ) {
+        // The empty world, explicitly: this profile compares types, it does not
+        // search clauses — membership stays severed here until the resolver
+        // delegates to the unified session, which wires the real supplier.
+    }
+
     fn alias_def(&self, name: &QualifiedTypeName) -> Option<Ty> {
         // Same alias facts as the full context — non-re-entrant, and required
         // for recursive-alias folding.
