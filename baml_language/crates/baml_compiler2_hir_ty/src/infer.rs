@@ -304,6 +304,10 @@ fn infer_body_impl(db: &dyn baml_compiler2_ppir::Db, owner: BodyOwnerId<'_>) -> 
     );
     ctx.declared_throws = declared_throws;
     ctx.declared_throws_open = declared_throws_open;
+    ctx.body_owner = match owner {
+        BodyOwnerId::Function(function) => Some(function),
+        BodyOwnerId::Let(_) => None,
+    };
     if let Some(expr_body) = body.expr_body() {
         ctx.infer_expr_body(expr_body);
     }
@@ -456,6 +460,10 @@ struct InferenceContext<'db> {
     /// `ObligationCause`: obligations born inside a structural `sub`
     /// recursion anchor their eventual diagnostic here.
     obligation_anchor: Option<ExprId>,
+    /// The function whose body this run infers, when the owner IS a
+    /// function - the resolver for owner-scoped receivers (`default`
+    /// inside an `implements` block, like `self`).
+    body_owner: Option<baml_compiler2_hir::loc::FunctionLoc<'db>>,
     /// One frame per enclosing `OptionalChain` (chains nest through
     /// arguments): a `?.` link whose base was nullable sets the top
     /// frame, and the chain BOUNDARY unions `null` back into its
@@ -498,6 +506,7 @@ impl<'db> InferenceContext<'db> {
             deferred_subs: Vec::new(),
             obligations: Vec::new(),
             obligation_anchor: None,
+            body_owner: None,
             chain_nullable: Vec::new(),
             diverges: Diverges::Maybe,
             result: InferenceResult::default(),
@@ -2269,6 +2278,22 @@ impl<'db> InferenceContext<'db> {
     /// `method_resolution`; everything else is whatever the expression
     /// infers to.
     fn infer_callee(&mut self, body: &ExprBody, call: ExprId, callee: ExprId) -> (Ty, bool) {
+        // `default.m(..)` inside an `implements` block: delegation to
+        // the interface's DEFAULT implementation - a scoped receiver
+        // like `self`, resolved from the body owner, never the value
+        // namespace. A local named `default` shadows it.
+        if let Expr::Path(segments) = &body.exprs[callee]
+            && let [root, member] = segments.as_slice()
+            && root.as_str() == "default"
+            && !self.path_resolves_locally(callee)
+        {
+            let member = member.clone();
+            if let Some(interface_member) = self.default_member(&member) {
+                let (ty, bound) = self.interface_member_callee(interface_member, call);
+                self.result.type_of_expr.insert(callee, ty.clone());
+                return (ty, bound);
+            }
+        }
         if let Expr::Path(segments) = &body.exprs[callee]
             && !self.path_resolves_locally(callee)
             && !segments
@@ -2503,6 +2528,84 @@ impl<'db> InferenceContext<'db> {
         Some((fn_ty, first_bound))
     }
 
+    /// The `default` receiver's meaning inside an `implements` block:
+    /// the block's target interface (its written args and associated
+    /// bindings lowered in the owner's frame) plus the IMPLEMENTOR as
+    /// `Self` - the class's self type, or a free impl's for-target.
+    /// `None` anywhere else; the caller falls back to ordinary
+    /// resolution.
+    fn default_receiver_target(&mut self) -> Option<(crate::impls::InterfaceTarget, Ty)> {
+        let function = self.body_owner?;
+        let target =
+            baml_compiler2_ppir::item_data::method_interface_target(self.db, function)
+                .as_ref()?;
+        let target_ty = self
+            .lower
+            .lower_type_ref(&target.type_refs, target.target);
+        let TyKind::Interface(name, args, pins, _) = target_ty.kind() else {
+            return None;
+        };
+        let self_ty = match baml_compiler2_ppir::item_data::method_owner(self.db, function) {
+            Some(baml_compiler2_ppir::item_data::MethodOwner::Class(class)) => {
+                crate::lower::class_self_ty(self.db, class)
+            }
+            Some(baml_compiler2_ppir::item_data::MethodOwner::FreeImpl(impl_loc)) => {
+                let data = baml_compiler2_ppir::item_data::impl_block_data(self.db, impl_loc);
+                match &data.subject {
+                    baml_compiler2_ppir::item_data::ImplSubjectData::Free {
+                        for_target, ..
+                    } => self.lower.lower_type_ref(&data.type_refs, *for_target),
+                    baml_compiler2_ppir::item_data::ImplSubjectData::InClass {
+                        class, ..
+                    } => crate::lower::class_self_ty(self.db, *class),
+                }
+            }
+            _ => return None,
+        };
+        Some((
+            crate::impls::InterfaceTarget {
+                name: name.clone(),
+                args: args.to_vec(),
+                pins: pins.to_vec(),
+            },
+            self_ty,
+        ))
+    }
+
+    /// `default.member` - delegation to the interface's DEFAULT
+    /// implementation (Java's `I.super.m()`): resolved on the enclosing
+    /// implements block's interface with `Self` = the implementor,
+    /// restricted to DEFAULT-BODIED members (a required signature has
+    /// no body to delegate to).
+    fn default_member(
+        &mut self,
+        member: &baml_type::Name,
+    ) -> Option<crate::method_resolution::InterfaceMember<'db>> {
+        let (target, self_ty) = self.default_receiver_target()?;
+        let Some(baml_compiler2_hir::contributions::Definition::Interface(interface)) =
+            self.facts.definition_of(&target.name)
+        else {
+            return None;
+        };
+        let has_default = baml_compiler2_ppir::item_data::interface_data(self.db, interface)
+            .default_methods
+            .iter()
+            .any(|&method| {
+                baml_compiler2_ppir::item_data::function_data(self.db, method).name == *member
+            });
+        if !has_default {
+            return None;
+        }
+        crate::method_resolution::member_on_interface(
+            self.db,
+            &self.facts,
+            &target,
+            &self_ty,
+            member,
+            false,
+        )
+    }
+
     /// An interface member in CALLEE position: a default method's OWN
     /// generics fill from the call site (turbofish or fresh vars) on
     /// top of the receiver-pinned interface prefix - the same
@@ -2638,6 +2741,14 @@ impl<'db> InferenceContext<'db> {
                 .map(|param| self.fresh_generic_arg(param))
                 .collect();
             return function_value_ty(signature, &instantiation);
+        }
+        // `default.m` as a VALUE: the delegation target as a bound
+        // method value (same scoped-receiver rule as the callee road).
+        if let [root, member] = segments
+            && root.as_str() == "default"
+            && let Some(interface_member) = self.default_member(&member.clone())
+        {
+            return self.interface_member_value(interface_member);
         }
         // Enum VARIANT values (`Shape.Rectangle`): the variant's singleton
         // literal type - the same product the type-position path gives
@@ -3032,25 +3143,32 @@ impl<'db> InferenceContext<'db> {
         if let Some(interface_member) =
             crate::method_resolution::lookup_interface_member(self.db, &self.facts, &resolved, member)
         {
-            // Value position has no turbofish: a default method's own
-            // generics instantiate fresh, mirroring the class branch
-            // above.
-            if let Some(pending) = interface_member.pending_own {
-                let signature = function_signature(self.db, pending.method);
-                let own: Vec<Ty> = signature.generic_params[pending.prefix.len()..]
-                    .iter()
-                    .map(|param| self.fresh_generic_arg(param))
-                    .collect();
-                let mut instantiation = pending.prefix;
-                instantiation.extend(own);
-                return bind_receiver(function_value_ty(signature, &instantiation));
-            }
-            if interface_member.is_method {
-                return bind_receiver(interface_member.ty);
-            }
-            return interface_member.ty;
+            return self.interface_member_value(interface_member);
         }
         Ty::error()
+    }
+
+    /// An interface member in VALUE position: no turbofish, so a default
+    /// method's own generics instantiate fresh; methods bind their
+    /// receiver. Shared by field access and the `default.` value road.
+    fn interface_member_value(
+        &mut self,
+        interface_member: crate::method_resolution::InterfaceMember<'db>,
+    ) -> Ty {
+        if let Some(pending) = interface_member.pending_own {
+            let signature = function_signature(self.db, pending.method);
+            let own: Vec<Ty> = signature.generic_params[pending.prefix.len()..]
+                .iter()
+                .map(|param| self.fresh_generic_arg(param))
+                .collect();
+            let mut instantiation = pending.prefix;
+            instantiation.extend(own);
+            return bind_receiver(function_value_ty(signature, &instantiation));
+        }
+        if interface_member.is_method {
+            return bind_receiver(interface_member.ty);
+        }
+        interface_member.ty
     }
 
     /// The expectation's SHAPE for aggregate-literal adoption: nominal

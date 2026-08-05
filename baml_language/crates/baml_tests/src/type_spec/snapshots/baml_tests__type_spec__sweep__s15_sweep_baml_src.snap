@@ -4,9 +4,9 @@ expression: report
 ---
 files: 116
 nodes compared: 60529
-agreements: 52240
+agreements: 52258
 one-sided (coverage): 88
-conflicts: 8201 across 1446 distinct pairs
+conflicts: 8183 across 1448 distinct pairs
 hir_ty error-channel entries: 3
 tir diagnostics: 0
 panics: 0
@@ -35,12 +35,12 @@ ns_bigints/bigints.baml:5064..5075 `{ 1n < 2n }`: expected true, got bool
 [129x] hir_ty=[baml.json.json] tir=[int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>]
     at ns_from_json_interface/from_json_interface.baml:4211..4232 `let j: baml.json.json`
     at ns_from_json_interface/from_json_interface.baml:4218..4232 `baml.json.json`
-[111x] hir_ty=[!error] tir=[string]
-    at ns_inferred_generic_type_args/inferred_generic_type_args.baml:9518..9540 `default.element_type()`
-    at ns_inferred_generic_type_args/inferred_generic_type_args.baml:16662..16735 `{\n    let....seen(x)\n}`
 [99x] hir_ty=[(a: bigint, b: bigint) -> bool throws never] tir=[(a: T, b: T) -> bool throws never]
     at ns_bigints/bigints.baml:2659..2675 `baml.deep_equals`
     at ns_bigints/bigints.baml:2879..2895 `baml.deep_equals`
+[93x] hir_ty=[!error] tir=[string]
+    at ns_inferred_generic_type_args/inferred_generic_type_args.baml:16662..16735 `{\n    let....seen(x)\n}`
+    at ns_inferred_generic_type_args/inferred_generic_type_args.baml:16724..16733 `p.seen(x)`
 [89x] hir_ty=[() -> void throws baml.errors.InvalidArgument / null] tir=[() -> void throws unknown / null]
     at ns_arrays/arrays.baml:17100..17328 `{\n    let...pected))\n}`
     at ns_arrays/arrays.baml:17358..17580 `{\n    let...pected))\n}`
@@ -173,9 +173,6 @@ ns_bigints/bigints.baml:5064..5075 `{ 1n < 2n }`: expected true, got bool
 [17x] hir_ty=[int] tir=[int | 1 | 99]
     at ns_exceptions/exceptions.baml:22728..22835 `{\n    s9_...9\n    }\n}`
     at ns_exceptions/exceptions.baml:22734..22833 `s9_risky_9...> 99\n    }`
-[16x] hir_ty=[!error] tir=[() -> string throws never]
-    at ns_inferred_generic_type_args/inferred_generic_type_args.baml:9518..9538 `default.element_type`
-    at ns_interfaces/interfaces.baml:8775..8786 `default.tag`
 [16x] hir_ty=[() -> int throws baml.json.JsonDecodeError | baml.json.JsonParseError] tir=[() -> int throws baml.json.JsonParseError | baml.json.JsonDecodeError]
     at ns_from_json_interface/from_json_interface.baml:5419..5454 `nested_fie..._honored_fn`
     at ns_from_json_interface/from_json_interface.baml:7709..7753 `static_fro...type_arg_fn`
@@ -200,6 +197,9 @@ ns_bigints/bigints.baml:5064..5075 `{ 1n < 2n }`: expected true, got bool
 [14x] hir_ty=[user.control_flow.Err | user.control_flow.Ok] tir=[user.control_flow.Ok | user.control_flow.Err]
     at ns_control_flow/control_flow.baml:2887..2888 `r`
     at ns_control_flow/control_flow.baml:3023..3024 `r`
+[13x] hir_ty=[!error] tir=[() -> string throws never]
+    at ns_interfaces/interfaces.baml:8894..8909 `x.as<DrtcA>.tag`
+    at ns_interfaces/interfaces.baml:9666..9693 `h.as<ApssS...zer>.encode`
 [13x] hir_ty=[() -> string throws never] tir=[() -> string throws __effect_param_0]
     at ns_tagged_template_runtime/tagged_template_runtime.baml:1324..1352 `tt_parts_b..._order_main`
     at ns_tagged_template_runtime/tagged_template_runtime.baml:1852..1884 `tt_capture..._local_main`
@@ -515,9 +515,6 @@ ns_bigints/bigints.baml:5064..5075 `{ 1n < 2n }`: expected true, got bool
 [6x] hir_ty=[string] tir=[string | "none"]
     at ns_control_flow/control_flow.baml:3625..3801 `{\n    if ..."\n    }\n}`
     at ns_control_flow/control_flow.baml:3631..3799 `if let w: ...one"\n    }`
-[5x] hir_ty=[!error] tir=[(msg: string) -> string throws never]
-    at ns_interfaces/interfaces.baml:8248..8259 `default.log`
-    at ns_interfaces/interfaces.baml:49119..49130 `default.log`
 [5x] hir_ty=["B"] tir=[string]
     at ns_errorcontext/errorcontext.baml:1902..1904 `e2`
     at ns_errorcontext/errorcontext.baml:1922..1923 `_`
@@ -944,6 +941,9 @@ ns_bigints/bigints.baml:5064..5075 `{ 1n < 2n }`: expected true, got bool
 [3x] hir_ty=[(self: user.interfaces.DcmrAnimal) -> user.interfaces.DcmrAnimal throws never] tir=[() -> user.interfaces.DcmrAnimal throws never]
     at ns_interfaces/interfaces.baml:41571..41577 `a.next`
     at ns_interfaces/interfaces.baml:41571..41584 `a.next().next`
+[3x] hir_ty=[(self: user.interfaces.DctioDoubleLogger, msg: string) -> string throws never] tir=[(msg: string) -> string throws never]
+    at ns_interfaces/interfaces.baml:49119..49130 `default.log`
+    at ns_interfaces/interfaces.baml:49144..49155 `default.log`
 [3x] hir_ty=[(self: user.match_self_workaround.BoxG<int>, other: unknown) -> bool throws never] tir=[(other: unknown) -> bool throws never]
     at ns_match_self_workaround/match_self_workaround.baml:2934..2956 `b.is_own_instantiation`
     at ns_match_self_workaround/match_self_workaround.baml:3183..3205 `b.is_own_instantiation`
@@ -1547,6 +1547,12 @@ ns_bigints/bigints.baml:5064..5075 `{ 1n < 2n }`: expected true, got bool
 [2x] hir_ty=[(self: user.interfaces.ComcServer) -> string throws never] tir=[() -> string throws never]
     at ns_interfaces/interfaces.baml:29267..29279 `self.address`
     at ns_interfaces/interfaces.baml:29389..29400 `s.configure`
+[2x] hir_ty=[(self: user.interfaces.DcfoTimestampLogger, msg: string) -> string throws never] tir=[(msg: string) -> string throws never]
+    at ns_interfaces/interfaces.baml:8248..8259 `default.log`
+    at ns_interfaces/interfaces.baml:8376..8382 `tl.log`
+[2x] hir_ty=[(self: user.interfaces.DcwcStamp, body: string) -> string throws never] tir=[(body: string) -> string throws never]
+    at ns_interfaces/interfaces.baml:49720..49736 `default.decorate`
+    at ns_interfaces/interfaces.baml:49860..49870 `s.decorate`
 [2x] hir_ty=[(self: user.interfaces.DtbaAnimal) -> string throws never] tir=[() -> string throws never]
     at ns_interfaces/interfaces.baml:44799..44820 `dtba_pick(true).speak`
     at ns_interfaces/interfaces.baml:44831..44853 `dtba_pick(false).speak`
@@ -1607,6 +1613,9 @@ ns_bigints/bigints.baml:5064..5075 `{ 1n < 2n }`: expected true, got bool
 [2x] hir_ty=[(self: user.self_frame_slot.Dog, other: user.self_frame_slot.Kinded) -> bool throws never] tir=[(other: user.self_frame_slot.Kinded) -> bool throws never]
     at ns_self_frame_slot/self_frame_slot.baml:3118..3132 `d.same_kind_of`
     at ns_self_frame_slot/self_frame_slot.baml:3342..3356 `d.same_kind_of`
+[2x] hir_ty=[(self: user.self_frame_slot.IntShelf) -> string throws never] tir=[() -> string throws never]
+    at ns_self_frame_slot/self_frame_slot.baml:6684..6700 `default.describe`
+    at ns_self_frame_slot/self_frame_slot.baml:6877..6891 `shelf.describe`
 [2x] hir_ty=[(source: string | uint8array, options?: baml.csv.ReaderOptions | null) -> user.csv.DatedRow[] throws baml.csv.CsvError] tir=[(source: string | uint8array, options?: baml.csv.ReaderOptions | null) -> T[] throws baml.csv.CsvError]
     at ns_csv/csv.baml:51032..51047 `baml.csv.decode`
     at ns_csv/csv.baml:51323..51338 `baml.csv.decode`
@@ -1987,8 +1996,6 @@ ns_bigints/bigints.baml:5064..5075 `{ 1n < 2n }`: expected true, got bool
     at ns_interfaces/interfaces.baml:23511..23545 `m.as<SgidC...t>>.convert`
 [1x] hir_ty=[!error] tir=[() -> int throws (U as user.comparable_sort.HasErr).E]
     at ns_comparable_sort/comparable_sort.baml:4622..4626 `us.g`
-[1x] hir_ty=[!error] tir=[(body: string) -> string throws never]
-    at ns_interfaces/interfaces.baml:49720..49736 `default.decorate`
 [1x] hir_ty=[!error] tir=[(other: (H as user.interfaces_associated_types.ApdHolder).Item) -> bool throws never]
     at ns_interfaces_associated_types/interfaces_associated_types.baml:8940..8955 `item.same_label`
 [1x] hir_ty=[!error] tir=[(value: U) -> U throws never]
@@ -2651,6 +2658,8 @@ ns_bigints/bigints.baml:5064..5075 `{ 1n < 2n }`: expected true, got bool
     at ns_inferred_generic_type_args/inferred_generic_type_args.baml:4266..4281 `cursor.take_one`
 [1x] hir_ty=[(self: user.inferred_generic_type_args.Describable) -> string throws never] tir=[() -> string throws never]
     at ns_inferred_generic_type_args/inferred_generic_type_args.baml:10875..10885 `d.describe`
+[1x] hir_ty=[(self: user.inferred_generic_type_args.IntCounter<T>) -> string throws never] tir=[() -> string throws never]
+    at ns_inferred_generic_type_args/inferred_generic_type_args.baml:9518..9538 `default.element_type`
 [1x] hir_ty=[(self: user.inferred_generic_type_args.Named<int>) -> string throws never] tir=[() -> string throws never]
     at ns_inferred_generic_type_args/inferred_generic_type_args.baml:7605..7612 `s.tname`
 [1x] hir_ty=[(self: user.inferred_generic_type_args.NextIter<int, never>) -> int[] throws never] tir=[() -> int[] throws never]
@@ -2667,30 +2676,30 @@ ns_bigints/bigints.baml:5064..5075 `{ 1n < 2n }`: expected true, got bool
     at ns_interfaces/interfaces.baml:29936..29949 `greeter.greet`
 [1x] hir_ty=[(self: user.interfaces.CridNum, other: user.interfaces.CridNum) -> bool throws never] tir=[(other: user.interfaces.CridNum) -> bool throws never]
     at ns_interfaces/interfaces.baml:35284..35304 `CridNum { v: 1 }.neq`
-[1x] hir_ty=[(self: user.interfaces.DcfoTimestampLogger, msg: string) -> string throws never] tir=[(msg: string) -> string throws never]
-    at ns_interfaces/interfaces.baml:8376..8382 `tl.log`
+[1x] hir_ty=[(self: user.interfaces.DcgoBox<T>, msg: string) -> string throws never] tir=[(msg: string) -> string throws never]
+    at ns_interfaces/interfaces.baml:54058..54069 `default.log`
 [1x] hir_ty=[(self: user.interfaces.DcgoLogger, msg: string) -> string throws never] tir=[(msg: string) -> string throws never]
     at ns_interfaces/interfaces.baml:54196..54206 `logger.log`
 [1x] hir_ty=[(self: user.interfaces.DcmrAnimal) -> string throws never] tir=[() -> string throws never]
     at ns_interfaces/interfaces.baml:41571..41599 `a.next().n...ext().speak`
 [1x] hir_ty=[(self: user.interfaces.DcobLogger, msg: string) -> string throws never] tir=[(msg: string) -> string throws never]
     at ns_interfaces/interfaces.baml:53588..53598 `logger.log`
+[1x] hir_ty=[(self: user.interfaces.DcobPrefixLogger, msg: string) -> string throws never] tir=[(msg: string) -> string throws never]
+    at ns_interfaces/interfaces.baml:53456..53467 `default.log`
 [1x] hir_ty=[(self: user.interfaces.DctfAnimal) -> string throws never] tir=[() -> string throws never]
     at ns_interfaces/interfaces.baml:41012..41054 `dctf_rebox...h())).speak`
 [1x] hir_ty=[(self: user.interfaces.DctiLeft) -> string throws never] tir=[() -> string throws never]
     at ns_interfaces/interfaces.baml:40334..40339 `l.foo`
 [1x] hir_ty=[(self: user.interfaces.DctiRight) -> string throws never] tir=[() -> string throws never]
     at ns_interfaces/interfaces.baml:40350..40355 `r.foo`
-[1x] hir_ty=[(self: user.interfaces.DctioDoubleLogger, msg: string) -> string throws never] tir=[(msg: string) -> string throws never]
-    at ns_interfaces/interfaces.baml:49276..49282 `dl.log`
-[1x] hir_ty=[(self: user.interfaces.DcwcStamp, body: string) -> string throws never] tir=[(body: string) -> string throws never]
-    at ns_interfaces/interfaces.baml:49860..49870 `s.decorate`
 [1x] hir_ty=[(self: user.interfaces.DfloAnimal) -> string throws never] tir=[() -> string throws never]
     at ns_interfaces/interfaces.baml:45615..45622 `a.speak`
 [1x] hir_ty=[(self: user.interfaces.DkslL, msg: string) -> string throws never] tir=[(msg: string) -> string throws never]
     at ns_interfaces/interfaces.baml:50389..50394 `l.log`
 [1x] hir_ty=[(self: user.interfaces.DmdtAnimal) -> string throws never] tir=[() -> string throws never]
     at ns_interfaces/interfaces.baml:13740..13750 `a.describe`
+[1x] hir_ty=[(self: user.interfaces.DrtcX) -> string throws never] tir=[() -> string throws never]
+    at ns_interfaces/interfaces.baml:8775..8786 `default.tag`
 [1x] hir_ty=[(self: user.interfaces.DslrA) -> string throws never] tir=[() -> string throws never]
     at ns_interfaces/interfaces.baml:46644..46649 `a.tag`
 [1x] hir_ty=[(self: user.interfaces.DslrB) -> string throws never] tir=[() -> string throws never]
@@ -2915,8 +2924,6 @@ ns_bigints/bigints.baml:5064..5075 `{ 1n < 2n }`: expected true, got bool
     at ns_self_frame_slot/self_frame_slot.baml:3923..3934 `d.kind_name`
 [1x] hir_ty=[(self: user.self_frame_slot.FloatBin) -> string throws never] tir=[() -> string throws never]
     at ns_self_frame_slot/self_frame_slot.baml:7110..7122 `bin.describe`
-[1x] hir_ty=[(self: user.self_frame_slot.IntShelf) -> string throws never] tir=[() -> string throws never]
-    at ns_self_frame_slot/self_frame_slot.baml:6877..6891 `shelf.describe`
 [1x] hir_ty=[(self: user.self_frame_slot.Kinded) -> string throws never] tir=[() -> string throws never]
     at ns_self_frame_slot/self_frame_slot.baml:5098..5109 `k.kind_name`
 [1x] hir_ty=[(self: user.to_json_interface.Point) -> baml.json.json throws baml.json.JsonSerializationError] tir=[() -> baml.json.json throws baml.json.JsonSerializationError]
