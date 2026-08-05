@@ -25,6 +25,8 @@ struct Ctx {
     /// `(base, interface head, member) → reduced type` projection facts, for the
     /// `project` oracle. A `Vec` (not a map) because `Ty` is not `Hash`.
     projections: Vec<(Ty, QualifiedTypeName, Name, Ty)>,
+    /// Overridden search limits, for the budget tests; `None` = [`Limits::DEFAULT`].
+    limits: Option<Limits>,
 }
 
 fn nominal_head(ty: &Ty) -> Option<QualifiedTypeName> {
@@ -48,6 +50,10 @@ fn primitive_name(ty: &Ty) -> Option<&'static str> {
 }
 
 impl TypeContext for Ctx {
+    fn limits(&self) -> Limits {
+        self.limits.unwrap_or(Limits::DEFAULT)
+    }
+
     fn alias_def(&self, name: &QualifiedTypeName) -> Option<Ty> {
         self.aliases.get(name).cloned()
     }
@@ -1779,4 +1785,177 @@ fn the_default_clause_world_is_empty() {
         std::ops::ControlFlow::Continue(())
     });
     assert!(!visited);
+}
+
+// ── step budget ────────────────────────────────────────────────────────────
+
+#[test]
+fn step_budget_exhaustion_fails_closed_and_recovers() {
+    // `A[] <: A` for `type A = int | A[]` needs at least one co-inductive
+    // hypothesis, so a zero pool must refuse it — answering `false`, never
+    // panicking or over-claiming — while any pool that covers the derivation
+    // proves it again.
+    let mut ctx = Ctx::default();
+    int_list_alias(&mut ctx, "A");
+    let (sub, sup) = (list(alias("A")), alias("A"));
+    assert!(is_subtype(&sub, &sup, &ctx));
+
+    ctx.limits = Some(Limits {
+        step_budget: 0,
+        ..Limits::DEFAULT
+    });
+    assert!(!is_subtype(&sub, &sup, &ctx));
+    // Fail-closed is still total and still reflexive: the structural fast path
+    // spends nothing, and normalization keeps producing a term.
+    assert!(equivalent(&sup, &sup, &ctx));
+    let rendered = normalize(&sup, &ctx);
+    assert!(equivalent(&rendered, &sup, &ctx));
+
+    ctx.limits = Some(Limits {
+        step_budget: 1_000,
+        ..Limits::DEFAULT
+    });
+    assert!(is_subtype(&sub, &sup, &ctx));
+}
+
+#[test]
+fn budgeted_answer_cache_is_verdict_invisible() {
+    // The budget dimension of store admission: a hit re-charges exactly what the
+    // recompute would spend, so recording and recomputing sessions agree at EVERY
+    // pool size — including pools small enough that derivations are refused
+    // partway through. Without charge-on-hit, an answer recorded early in a
+    // session would keep answering past the frontier where a recomputing session
+    // starts failing closed, and the third probe below would diverge.
+    let (mut ctx, corpus) = cache_corpus();
+    for budget in [0, 1, 2, 3, 5, 8, 13, 100] {
+        ctx.limits = Some(Limits {
+            step_budget: budget,
+            ..Limits::DEFAULT
+        });
+        for a in &corpus {
+            for b in &corpus {
+                let recorded = {
+                    let s = &mut SolverSession::new(&ctx);
+                    let (x, y) = (NormalTy::canonical(a, s), NormalTy::canonical(b, s));
+                    // The middle probe is a guaranteed store hit; the last one then
+                    // runs under whatever pool the hit left behind.
+                    (
+                        s.prove_subtype(&x, &y),
+                        s.prove_subtype(&x, &y),
+                        s.prove_subtype(&y, &x),
+                    )
+                };
+                let recomputed = {
+                    let s = &mut SolverSession::new_uncached(&ctx);
+                    let (x, y) = (NormalTy::canonical(a, s), NormalTy::canonical(b, s));
+                    (
+                        s.prove_subtype(&x, &y),
+                        s.prove_subtype(&x, &y),
+                        s.prove_subtype(&y, &x),
+                    )
+                };
+                assert_eq!(
+                    recorded, recomputed,
+                    "budget {budget}: the store changed a verdict for `{a}` vs `{b}`"
+                );
+            }
+        }
+    }
+}
+
+// ── the answer store ───────────────────────────────────────────────────────
+
+#[test]
+fn a_shared_store_is_verdict_invisible() {
+    // Knowledge outliving a session must not change what any session concludes: a
+    // store warmed by every earlier query serves later ones answers that are
+    // observationally identical to recomputing them.
+    let (ctx, corpus) = cache_corpus();
+    let mut store = store::Answers::default();
+    for a in &corpus {
+        for b in &corpus {
+            let fresh = {
+                let s = &mut SolverSession::new(&ctx);
+                let (x, y) = (NormalTy::canonical(a, s), NormalTy::canonical(b, s));
+                s.prove_subtype(&x, &y)
+            };
+            let shared = {
+                let s = &mut SolverSession::with_store(&ctx, &mut store);
+                let (x, y) = (NormalTy::canonical(a, s), NormalTy::canonical(b, s));
+                s.prove_subtype(&x, &y)
+            };
+            assert_eq!(
+                fresh, shared,
+                "the shared store changed the verdict for `{a}` vs `{b}`"
+            );
+        }
+    }
+}
+
+#[test]
+fn eviction_is_verdict_invisible() {
+    // Eviction is always legal: dropping identities (and stranding the answers
+    // keyed by them) may only cost recomputation, never change a verdict. Between
+    // queries, alternate between evicting everything and evicting every other
+    // live identity, so re-minted ids and dead-keyed answers both occur.
+    let (ctx, corpus) = cache_corpus();
+    let mut store = store::Answers::default();
+    for (round, a) in corpus.iter().enumerate() {
+        for b in &corpus {
+            let live: Vec<_> = store.live_ids().collect();
+            for (index, id) in live.into_iter().enumerate() {
+                if round % 2 == 0 || index % 2 == 0 {
+                    store.evict(id);
+                }
+            }
+            let fresh = {
+                let s = &mut SolverSession::new(&ctx);
+                let (x, y) = (NormalTy::canonical(a, s), NormalTy::canonical(b, s));
+                s.prove_subtype(&x, &y)
+            };
+            let evicted = {
+                let s = &mut SolverSession::with_store(&ctx, &mut store);
+                let (x, y) = (NormalTy::canonical(a, s), NormalTy::canonical(b, s));
+                s.prove_subtype(&x, &y)
+            };
+            assert_eq!(
+                fresh, evicted,
+                "eviction changed the verdict for `{a}` vs `{b}`"
+            );
+        }
+    }
+}
+
+#[test]
+fn a_store_never_carries_refusal_tainted_answers() {
+    // An answer cut by the budget says where the pool ran out, not what the types
+    // are; recording it would let a starved session poison a well-funded one
+    // through a shared store.
+    let mut ctx = Ctx::default();
+    int_list_alias(&mut ctx, "A");
+    let mut store = store::Answers::default();
+    let (sub, sup) = (list(alias("A")), alias("A"));
+
+    ctx.limits = Some(Limits {
+        step_budget: 0,
+        ..Limits::DEFAULT
+    });
+    {
+        let s = &mut SolverSession::with_store(&ctx, &mut store);
+        let (x, y) = (NormalTy::canonical(&sub, s), NormalTy::canonical(&sup, s));
+        assert!(
+            !s.prove_subtype(&x, &y),
+            "a zero pool must refuse the proof"
+        );
+    }
+
+    ctx.limits = None;
+    {
+        let s = &mut SolverSession::with_store(&ctx, &mut store);
+        let (x, y) = (NormalTy::canonical(&sub, s), NormalTy::canonical(&sup, s));
+        assert!(
+            s.prove_subtype(&x, &y),
+            "the starved session's refusal leaked into the shared store"
+        );
+    }
 }

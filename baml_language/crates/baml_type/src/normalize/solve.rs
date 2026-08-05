@@ -29,7 +29,7 @@
 //! one. This is the structural form of what per-call `&mut HashSet::new()` used to do by
 //! construction.
 //!
-//! # Why answers to barriered goals are cacheable, and interior ones are not
+//! # Why answers to barriered goals are recordable, and interior ones are not
 //!
 //! Tabled solvers normally have to track which answers were derived under a hypothesis
 //! about a goal still in progress — such answers are *provisional* and must not outlive
@@ -37,23 +37,62 @@
 //! the points where answers are recorded: a barriered goal cannot observe any hypothesis
 //! from an enclosing derivation, and every hypothesis it raises itself is discharged
 //! before it returns. Its verdict is therefore a pure function of its two operands and the
-//! fact source — the same everywhere it is posed — so it can be cached without qualifying
-//! it by the path that produced it.
+//! fact source — the same everywhere it is posed — so it can be recorded in the
+//! [store](super::store) without qualifying it by the path that produced it.
 //!
 //! Interior steps have no such guarantee: they run *under* the enclosing goal's
 //! hypotheses, so their verdicts are conditional and are deliberately not recorded.
-//! Restricting the cache this way is also what keeps it cheap — probing costs a hash of
-//! both operands, which is affordable per absorption probe and would not be affordable on
-//! the structural steps the expanding-arm restriction exists to keep free.
+//! Restricting recording this way is also what keeps it cheap — probing costs one hash
+//! of each operand, which is affordable per absorption probe and would not be affordable
+//! on the structural steps the expanding-arm restriction exists to keep free.
+//!
+//! # Budget discipline
+//!
+//! The session carries the per-root step pool ([`Limits`](super::Limits)); the two
+//! invariants that keep it sound alongside the store are enforced here. A verdict
+//! derived after any charge was *refused* is budget-relative — it says where the pool
+//! ran out, not what the types are — so recording stops at the first refusal. And a
+//! store hit is admitted only by re-charging the recorded cost, so cached and
+//! recomputed runs spend identically and verdicts never depend on cache state.
 
-use rustc_hash::FxHashMap;
+use super::{
+    NormalTy, TypeContext,
+    store::{Answer, Answers, Cost},
+};
 
-use super::{NormalTy, TypeContext};
+/// Where a session keeps established knowledge: its own store, a caller's shared one,
+/// or — for differential tests only — none, so every goal recomputes.
+enum Store<'s> {
+    Owned(Answers),
+    Shared(&'s mut Answers),
+    #[cfg(test)]
+    Disabled,
+}
+
+impl Store<'_> {
+    fn get(&self) -> Option<&Answers> {
+        match self {
+            Store::Owned(store) => Some(store),
+            Store::Shared(store) => Some(store),
+            #[cfg(test)]
+            Store::Disabled => None,
+        }
+    }
+
+    fn get_mut(&mut self) -> Option<&mut Answers> {
+        match self {
+            Store::Owned(store) => Some(store),
+            Store::Shared(store) => Some(store),
+            #[cfg(test)]
+            Store::Disabled => None,
+        }
+    }
+}
 
 /// The state a single type-relation derivation carries.
 ///
 /// Constructed at the algebra's public entry points and threaded by `&mut` from there
-/// down; see the module docs for the two invariants it exists to enforce.
+/// down; see the module docs for the invariants it exists to enforce.
 pub(super) struct SolverSession<'s> {
     facts: &'s dyn TypeContext,
     /// Co-inductive hypotheses on the current path, innermost last.
@@ -62,40 +101,73 @@ pub(super) struct SolverSession<'s> {
     /// belong to enclosing goals and are invisible here. A floor rather than a marker
     /// entry keeps `assumptions` a flat `Vec` of the pairs actually being scanned.
     floors: Vec<usize>,
-    /// Verdicts of barriered goals already decided in this session, keyed subtype-first,
-    /// or `None` in a session that recomputes every goal.
-    ///
-    /// Nested rather than keyed by a `(NormalTy, NormalTy)` tuple so a probe can be made
-    /// from two `&NormalTy`s: a tuple key would force a deep clone of both operands just
-    /// to ask the question, which is most of what the cache is meant to save. `Option`
-    /// rather than a separate enable flag so "caching disabled" and "cache holds entries"
-    /// cannot both be true — there is no map to record into when it is off.
-    answers: Option<FxHashMap<NormalTy, FxHashMap<NormalTy, bool>>>,
+    /// The remaining step pool ([`Limits::step_budget`](super::Limits::step_budget)),
+    /// charged at the subtype expanding arms. One pool per session = one pool per
+    /// algebra root, the granularity the design names "per root goal".
+    steps: u64,
+    /// Whether a [`Self::charge`] was ever *refused*. From that point every verdict
+    /// in this session is budget-relative (fail-closed), so recording stops — see
+    /// [`Self::prove_subtype`]. Distinct from "the pool reached zero": a derivation
+    /// that spent its last step but never asked for another is still exact.
+    exhausted: bool,
+    store: Store<'s>,
 }
 
 impl<'s> SolverSession<'s> {
+    /// A session with its own fresh store, dropped when the session is.
     pub(super) fn new(facts: &'s dyn TypeContext) -> Self {
+        Self::over(facts, Store::Owned(Answers::default()))
+    }
+
+    /// A session recording into (and admitting from) a caller-owned store, so
+    /// knowledge survives the session. The caller owns the store↔world association:
+    /// a store must never be shared across fact sources.
+    #[cfg_attr(
+        not(test),
+        expect(
+            dead_code,
+            reason = "first non-test caller arrives with the public \
+                                    session surface"
+        )
+    )]
+    pub(super) fn with_store(facts: &'s dyn TypeContext, store: &'s mut Answers) -> Self {
+        Self::over(facts, Store::Shared(store))
+    }
+
+    /// A session that recomputes every goal, for differential tests: the store is an
+    /// optimization and must never be observable in a verdict.
+    #[cfg(test)]
+    pub(super) fn new_uncached(facts: &'s dyn TypeContext) -> Self {
+        Self::over(facts, Store::Disabled)
+    }
+
+    fn over(facts: &'s dyn TypeContext, store: Store<'s>) -> Self {
         Self {
             facts,
             assumptions: Vec::new(),
             floors: Vec::new(),
-            answers: Some(FxHashMap::default()),
-        }
-    }
-
-    /// A session that recomputes every goal, for differential tests: the cache is an
-    /// optimization and must never be observable in a verdict.
-    #[cfg(test)]
-    pub(super) fn new_uncached(facts: &'s dyn TypeContext) -> Self {
-        Self {
-            answers: None,
-            ..Self::new(facts)
+            steps: facts.limits().step_budget,
+            exhausted: false,
+            store,
         }
     }
 
     /// The nominal facts this derivation reasons against.
     pub(super) fn facts(&self) -> &'s dyn TypeContext {
         self.facts
+    }
+
+    /// Spend one step, or refuse: `false` means the pool is exhausted and the
+    /// caller must fail closed. A refusal marks the whole session
+    /// [exhausted](Self::exhausted), which stops answer recording — every verdict
+    /// from here on is an artifact of where the budget ran out, not of the types.
+    pub(super) fn charge(&mut self) -> bool {
+        if self.steps == 0 {
+            self.exhausted = true;
+            return false;
+        }
+        self.steps -= 1;
+        true
     }
 
     /// Whether `sub <: sup` is already assumed on the current path.
@@ -143,22 +215,42 @@ impl<'s> SolverSession<'s> {
     /// This is the entry point for every probe that is not a continuation of the current
     /// derivation — union-member absorption and the automaton's per-state algebra. Those
     /// callers re-pose the same pairs across the automaton's fixpoint rounds and across
-    /// structurally identical unions elsewhere in a term, which is what the cache serves;
+    /// structurally identical unions elsewhere in a term, which is what the store serves;
     /// see the module docs for why a verdict recorded here is unconditional.
+    ///
+    /// Budget discipline in both directions: a hit is admitted only by re-charging the
+    /// recorded cost (an insufficient pool falls through to recompute, which fails
+    /// closed exactly where a first computation would — never earlier, never later),
+    /// and a verdict derived after any refusal is not recorded. Together these make
+    /// stored and recomputed runs verdict-identical at every budget.
     pub(super) fn prove_subtype(&mut self, sub: &NormalTy, sup: &NormalTy) -> bool {
-        if let Some(answers) = &self.answers
-            && let Some(&proven) = answers.get(sub).and_then(|sups| sups.get(sup))
+        if let Some(store) = self.store.get()
+            && let Some(a) = store.lookup(sub)
+            && let Some(b) = store.lookup(sup)
+            && let Some(Answer { proven, cost }) = store.subtype_answer(a, b)
+            && self.steps >= cost.steps
         {
+            self.steps -= cost.steps;
             return proven;
         }
+        let steps_before = self.steps;
         self.push_barrier();
         let proven = sub.is_subtype_of(sup, self);
         self.pop_barrier();
-        if let Some(answers) = &mut self.answers {
-            answers
-                .entry(sub.clone())
-                .or_default()
-                .insert(sup.clone(), proven);
+        if !self.exhausted
+            && let Some(store) = self.store.get_mut()
+        {
+            let (a, b) = (store.intern(sub), store.intern(sup));
+            store.record_subtype(
+                a,
+                b,
+                Answer {
+                    proven,
+                    cost: Cost {
+                        steps: steps_before - self.steps,
+                    },
+                },
+            );
         }
         proven
     }

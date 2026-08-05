@@ -66,6 +66,55 @@ pub enum ProjectionStep {
     Opaque,
 }
 
+/// Search limits for the type-relation machinery, supplied per embedding through
+/// [`TypeContext::limits`] rather than baked in as constants, so the runtime keeps
+/// its historical obligation depth and tests can pin tiny values to exercise the
+/// exhaustion paths.
+///
+/// Exhaustion of either limit **fails closed**: the derivation that tripped it
+/// answers "not proven", and — the invariant that keeps budgets sound alongside
+/// memoization — an answer whose derivation was cut by a limit is *budget-relative*
+/// and is never recorded in any answer table, while a recorded answer is admitted
+/// on a later probe only when the remaining budget covers what its derivation
+/// consumed (a hit charges exactly what the recompute would). Verdicts therefore
+/// never depend on query order or cache state, only on the configured limits.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Limits {
+    /// Bound on the membership goal-stack depth. Cycle detection already stops
+    /// *repeating* goals; this stops goals that grow without repeating
+    /// (`T: I` ⇒ `Container<T>: I` ⇒ …), which no table can see coming. Unbounded
+    /// by default: the canonical algebra's own termination rests on the assumption
+    /// set plus regular-tree finiteness, not on a depth cap.
+    pub recursion_limit: usize,
+    /// Per-root step pool, the backstop against *exponential* work that no depth
+    /// cap can bound (a memo-defeating DAG replayed as a tree stays shallow while
+    /// its node count explodes; a backtracking union match is factorial at fixed
+    /// depth). A step is one unit of search growth: a co-inductive hypothesis
+    /// recorded at a subtype expanding arm, a membership goal frame pushed, or one
+    /// pattern comparison inside clause matching. Purely structural work is not
+    /// charged — each uncharged stretch is bounded by the operands' size — so the
+    /// pool bounds total work at `budget × term size`.
+    pub step_budget: u64,
+}
+
+impl Limits {
+    /// Defaults chosen as backstops, not tuning knobs: depth unbounded (see the
+    /// field docs), and a step pool two orders of magnitude above what real
+    /// workloads need — every suite in the repository, the full end-to-end corpus
+    /// included, passes untouched with the pool pinned to 10 000 — so only runaway
+    /// search can exhaust it.
+    pub const DEFAULT: Limits = Limits {
+        recursion_limit: usize::MAX,
+        step_budget: 1_000_000,
+    };
+}
+
+impl Default for Limits {
+    fn default() -> Self {
+        Self::DEFAULT
+    }
+}
+
 /// Semantic lookups the type algebra needs, supplied by the caller over its own
 /// registries.
 ///
@@ -175,6 +224,19 @@ pub trait TypeContext {
     /// `from_ty` walk, which decrements its own fuel) ignores it.
     fn project(&self, base: &Ty, interface: &Interface, member: &Name, fuel: u32)
     -> ProjectionStep;
+
+    /// The search limits every derivation over this context runs under — sessions
+    /// constructed inside the defaulted algebra methods read their budgets from
+    /// here, so one override configures an embedding end to end (there is no
+    /// parameter path through `equivalent(&self, a, b)` and its call sites,
+    /// deliberately).
+    ///
+    /// Defaulted and object-safe: a session over `&dyn TypeContext` consults it
+    /// through the vtable. Tests pin tiny budgets by overriding this one method on
+    /// a stub context.
+    fn limits(&self) -> Limits {
+        Limits::DEFAULT
+    }
 
     /// Visit every clause implementing `interface`, in this context's contractual
     /// order, stopping early on [`ControlFlow::Break`].
@@ -1792,6 +1854,13 @@ impl NormalTy {
         if s.assumes(self, sup) {
             return true;
         }
+        // The expanding arm is the step-budget charge point: every non-terminating
+        // derivation passes through here infinitely often (the termination argument
+        // above), and every exponential one passes through in proportion to its
+        // blowup, while the structural arms stay free. Exhaustion fails closed.
+        if !s.charge() {
+            return false;
+        }
         s.push_assumption(self.clone(), sup.clone());
         let result = self.is_subtype_of_inner(sup, s);
         s.pop_assumption();
@@ -2609,6 +2678,7 @@ impl NormalParam {
 
 mod mu;
 mod solve;
+mod store;
 
 #[cfg(test)]
 mod tests;
