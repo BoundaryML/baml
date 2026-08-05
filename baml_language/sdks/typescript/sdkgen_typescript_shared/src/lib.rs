@@ -45,6 +45,39 @@ pub struct GeneratorConfig {
     runtime_package: &'static str,
 }
 
+/// Host-neutral in-memory output used by generators and editor tooling.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct GeneratedFile {
+    pub path: PathBuf,
+    pub contents: String,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct EmitOptions {
+    pub naming_convention: NamingConvention,
+    pub runtime_package: &'static str,
+}
+
+/// Pure deterministic emitter. It performs no filesystem access; callers may
+/// write these files, cache them, or project them as virtual modules.
+pub fn emit_modules(
+    pool: &SymbolPool,
+    baml_bytecode: &[u8],
+    options: EmitOptions,
+) -> Vec<GeneratedFile> {
+    let mut files: Vec<_> = to_source_code(
+        pool,
+        baml_bytecode,
+        options.naming_convention,
+        GeneratorConfig::new(options.runtime_package),
+    )
+    .into_iter()
+    .map(|(path, contents)| GeneratedFile { path, contents })
+    .collect();
+    files.sort_by(|left, right| left.path.cmp(&right.path));
+    files
+}
+
 impl GeneratorConfig {
     pub const fn new(runtime_package: &'static str) -> Self {
         Self { runtime_package }
@@ -246,6 +279,29 @@ mod tests {
     use super::*;
 
     const HEADER_LEN_MARKER: &str = "/* eslint-disable */";
+
+    #[test]
+    fn emit_modules_is_byte_identical_to_legacy_map_api() {
+        let pool = SymbolPool::new();
+        let legacy = to_source_code(
+            &pool,
+            &[1, 2, 3],
+            NamingConvention::PreserveCase,
+            GeneratorConfig::new("@boundaryml/baml-bridge"),
+        );
+        let emitted = emit_modules(
+            &pool,
+            &[1, 2, 3],
+            EmitOptions {
+                naming_convention: NamingConvention::PreserveCase,
+                runtime_package: "@boundaryml/baml-bridge",
+            },
+        );
+        assert_eq!(legacy.len(), emitted.len());
+        for file in emitted {
+            assert_eq!(legacy.get(&file.path), Some(&file.contents));
+        }
+    }
 
     fn name(pkg: &str, ns: &[&str], n: &str) -> Name {
         Name::new(

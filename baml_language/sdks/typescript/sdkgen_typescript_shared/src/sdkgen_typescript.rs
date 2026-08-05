@@ -12,12 +12,17 @@ pub fn to_source_code(
     baml_bytecode: &[u8],
     naming_convention: NamingConvention,
 ) -> HashMap<PathBuf, String> {
-    crate::to_source_code(
+    crate::emit_modules(
         pool,
         baml_bytecode,
-        naming_convention,
-        crate::GeneratorConfig::new(RUNTIME_PACKAGE),
+        crate::EmitOptions {
+            naming_convention,
+            runtime_package: RUNTIME_PACKAGE,
+        },
     )
+    .into_iter()
+    .map(|file| (file.path, file.contents))
+    .collect()
 }
 
 pub fn to_source_code_with_bytecode(

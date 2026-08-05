@@ -1,0 +1,31 @@
+[package]
+name = "baml_tooling_api"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[lints]
+workspace = true
+
+[dependencies]
+baml_base = { workspace = true }
+baml_db = { workspace = true }
+baml_lsp2_actions = { workspace = true }
+baml_project = { workspace = true }
+baml_surface = { workspace = true }
+baml_version = { workspace = true }
+bridge_ctypes = { workspace = true }
+borsh = { workspace = true }
+hex = { workspace = true }
+prost = { workspace = true }
+serde = { workspace = true, features = [ "derive" ] }
+sha2 = { workspace = true }
+text-size = { workspace = true }
+thiserror = { workspace = true }
+walkdir = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }
