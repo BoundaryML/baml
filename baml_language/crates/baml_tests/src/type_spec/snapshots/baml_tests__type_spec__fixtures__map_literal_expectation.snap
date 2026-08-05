@@ -1,0 +1,12 @@
+---
+source: crates/baml_tests/src/type_spec/fixtures.rs
+expression: outcome.dump
+---
+376..383 'ml_args': throws never
+436..528 '{\n   ...  m\n}': map<string, unknown>
+442..469 'let m:...known>': map<string, unknown>
+449..469 'map<st...known>': map<string, unknown>
+472..488 '{"inpu...input}': map<string, unknown>
+473..480 '"input"': "input"
+482..487 'input': string
+525..526 'm': map<string, unknown>

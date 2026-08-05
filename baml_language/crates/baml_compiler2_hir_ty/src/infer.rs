@@ -774,7 +774,28 @@ impl<'db> InferenceContext<'db> {
                 }
             }
             Expr::Map { entries } => {
-                if entries.is_empty() {
+                // With an expected map type, entries are CHECKED against
+                // its key/value (the Array arm's rule; r-a's
+                // expectation-driven literal typing) - `{"input": s}` in
+                // a `map<string, unknown>` position IS that map, not a
+                // synthesized `map<string, string>` tripping invariance.
+                let expected_entry = expected.only_has_type().and_then(|ty| {
+                    match self.table.shallow_resolve(ty).kind() {
+                        TyKind::Map { key, value, .. } => Some((key.clone(), value.clone())),
+                        _ => None,
+                    }
+                });
+                if let Some((key_ty, value_ty)) = expected_entry {
+                    for (key, value) in entries {
+                        self.check_expr(body, *key, &key_ty);
+                        self.check_expr(body, *value, &value_ty);
+                    }
+                    Ty::intern(TyKind::Map {
+                        key: key_ty,
+                        value: value_ty,
+                        attr: TyAttr::default(),
+                    })
+                } else if entries.is_empty() {
                     Ty::intern(TyKind::Map {
                         key: self.table.new_var_ty(),
                         value: self.table.new_var_ty(),
