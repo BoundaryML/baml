@@ -1638,7 +1638,7 @@ impl<'db> InferenceContext<'db> {
         // TIR shares), the `baml.ops.Index` interface otherwise (generic
         // `T extends Index<..>` bounds). The structural tier is what lets
         // a rigid-element `T[]` index without `root.Concrete` evidence.
-        let resolved_subject = self.table.resolve_completely(&subject);
+        let resolved_subject = self.structurally_resolve(&subject);
         // `?.[]` short-circuits on a null INDEX too (`arr?.[i]` with
         // `i: int?` is null), so the optional form's key check admits
         // null; the plain form stays strict.
@@ -2036,7 +2036,7 @@ impl<'db> InferenceContext<'db> {
     /// fresh variables fill the method's own; bound iff it takes `self`),
     /// or a field holding a function value.
     fn member_callee(&mut self, call: ExprId, receiver: &Ty, member: &baml_type::Name) -> (Ty, bool) {
-        let resolved = self.table.resolve_completely(receiver);
+        let resolved = self.structurally_resolve(receiver);
         let candidate =
             crate::method_resolution::lookup_method(self.db, &self.facts, &resolved, member);
         let Some(candidate) = candidate else {
@@ -2502,7 +2502,7 @@ impl<'db> InferenceContext<'db> {
     /// class generics and fresh variables for the method's own - value
     /// position has no turbofish.
     fn field_access(&mut self, base_ty: &Ty, member: &baml_type::Name) -> Ty {
-        let resolved = self.table.resolve_completely(base_ty);
+        let resolved = self.structurally_resolve(base_ty);
         if let TyKind::Class(qtn, args, _) = resolved.kind()
             && let Some(baml_compiler2_hir::contributions::Definition::Class(class)) =
                 self.facts.definition_of(qtn)
@@ -2982,97 +2982,133 @@ impl<'db> InferenceContext<'db> {
         loop {
             let mut progressed = false;
             for (var, bounds) in self.table.unsolved_bounded_vars() {
-                // Bounds must be ground to decide; classes whose bounds
-                // still mention other unsolved vars wait for a later round
-                // (a cycle that never grounds is erased at finalize).
-                // The GROUND SUBSET decides (the obligation-deadlock
-                // rule): bounds still carrying variables move to the
-                // deferred residue for post-hoc verification instead of
-                // blocking the class forever - an operator obligation's
-                // output may bound the very variable its operand waits
-                // on.
-                let (lowers, deferred_lowers): (Vec<Ty>, Vec<Ty>) = bounds
-                    .lowers
-                    .iter()
-                    .map(|ty| self.table.resolve_completely(ty))
-                    .partition(|ty| !ty.has_infer());
-                let (uppers, deferred_uppers): (Vec<Ty>, Vec<Ty>) = bounds
-                    .uppers
-                    .iter()
-                    .map(|ty| self.table.resolve_completely(ty))
-                    .partition(|ty| !ty.has_infer());
-                if lowers.is_empty() && uppers.is_empty() {
-                    // GENERALIZATION (rustc's combine/generalize shape):
-                    // a var whose only information is one var-carrying
-                    // lower (or several identical ones) and no uppers is
-                    // an ALIAS of that lower - solving it is
-                    // occurs-guarded union-find aliasing, not a
-                    // premature meet, and it is what lets impl SELECTION
-                    // see the concrete head behind a call argument
-                    // (B-898: `?D` alias `Generate<?F>`). DISTINCT
-                    // var-carrying lowers stay deferred - that is the
-                    // operator-deadlock rule, untouched. Runs only in
-                    // the finish fixpoint, so no later bound can arrive
-                    // after the alias commits.
-                    if deferred_uppers.is_empty()
-                        && let Some((first, rest)) = deferred_lowers.split_first()
-                        && rest.iter().all(|lower| lower == first)
-                    {
-                        let widened = self.widen_fresh(first);
-                        if self.table.unify(&Ty::infer_var(var), &widened).is_ok() {
-                            progressed = true;
-                        }
-                    }
-                    continue;
+                if self.try_solve_bounded_var(var, &bounds, true) {
+                    progressed = true;
                 }
-                let var_ty = Ty::infer_var(var);
-                for deferred in deferred_lowers {
-                    self.deferred_subs.push((deferred, var_ty.clone()));
-                }
-                for deferred in deferred_uppers {
-                    self.deferred_subs.push((var_ty.clone(), deferred));
-                }
-                let solution = if lowers.is_empty() {
-                    // No values flowed in: the MINIMUM upper is the meet
-                    // when one exists (BAML has no intersections, so
-                    // incomparable uppers have no representable meet -
-                    // unresolved, erased at finalize).
-                    let minimum = uppers.iter().find(|candidate| {
-                        uppers
-                            .iter()
-                            .all(|upper| is_subtype_interned(candidate, upper, &self.facts))
-                    });
-                    match minimum {
-                        Some(minimum) => minimum.clone(),
-                        None => continue,
-                    }
-                } else {
-                    // Ruling 1: widen fresh literals, then all lowers must
-                    // AGREE (equality, not adjacency-dedup); disagreement
-                    // is a mismatch (Error until the S17 diagnostic), and
-                    // the choice is checked against every upper.
-                    let widened: Vec<Ty> =
-                        lowers.iter().map(|ty| self.widen_fresh(ty)).collect();
-                    let first = widened.first().expect("non-empty lowers").clone();
-                    if widened.iter().all(|lower| *lower == first) {
-                        if uppers
-                            .iter()
-                            .all(|upper| is_subtype_interned(&first, upper, &self.facts))
-                        {
-                            first
-                        } else {
-                            Ty::error()
-                        }
-                    } else {
-                        Ty::error()
-                    }
-                };
-                self.table.solve(var, solution);
-                progressed = true;
             }
             if !progressed {
                 break;
             }
+        }
+    }
+
+    /// One bounded class's resolution step - the shared core of the
+    /// finish fixpoint and [`InferenceContext::structurally_resolve`].
+    /// Bounds must be ground to decide; the GROUND SUBSET decides (the
+    /// obligation-deadlock rule): bounds still carrying variables move
+    /// to the deferred residue for post-hoc verification instead of
+    /// blocking the class forever - an operator obligation's output may
+    /// bound the very variable its operand waits on. Returns whether
+    /// the class was solved (or aliased).
+    fn try_solve_bounded_var(
+        &mut self,
+        var: baml_type::interned::InferVar,
+        bounds: &unify::VarBounds,
+        alias_tier: bool,
+    ) -> bool {
+        let (lowers, deferred_lowers): (Vec<Ty>, Vec<Ty>) = bounds
+            .lowers
+            .iter()
+            .map(|ty| self.table.resolve_completely(ty))
+            .partition(|ty| !ty.has_infer());
+        let (uppers, deferred_uppers): (Vec<Ty>, Vec<Ty>) = bounds
+            .uppers
+            .iter()
+            .map(|ty| self.table.resolve_completely(ty))
+            .partition(|ty| !ty.has_infer());
+        if lowers.is_empty() && uppers.is_empty() {
+            // GENERALIZATION (rustc's combine/generalize shape):
+            // a var whose only information is one var-carrying
+            // lower (or several identical ones) and no uppers is
+            // an ALIAS of that lower - solving it is
+            // occurs-guarded union-find aliasing, not a
+            // premature meet, and it is what lets impl SELECTION
+            // see the concrete head behind a call argument
+            // (B-898: `?D` alias `Generate<?F>`). DISTINCT
+            // var-carrying lowers stay deferred - that is the
+            // operator-deadlock rule, untouched. Runs only in
+            // the finish fixpoint (`alias_tier`), so no later bound
+            // can arrive after the alias commits.
+            if alias_tier
+                && deferred_uppers.is_empty()
+                && let Some((first, rest)) = deferred_lowers.split_first()
+                && rest.iter().all(|lower| lower == first)
+            {
+                let widened = self.widen_fresh(first);
+                if self.table.unify(&Ty::infer_var(var), &widened).is_ok() {
+                    return true;
+                }
+            }
+            return false;
+        }
+        let var_ty = Ty::infer_var(var);
+        for deferred in deferred_lowers {
+            self.deferred_subs.push((deferred, var_ty.clone()));
+        }
+        for deferred in deferred_uppers {
+            self.deferred_subs.push((var_ty.clone(), deferred));
+        }
+        let solution = if lowers.is_empty() {
+            // No values flowed in: the MINIMUM upper is the meet
+            // when one exists (BAML has no intersections, so
+            // incomparable uppers have no representable meet -
+            // unresolved, erased at finalize).
+            let minimum = uppers.iter().find(|candidate| {
+                uppers
+                    .iter()
+                    .all(|upper| is_subtype_interned(candidate, upper, &self.facts))
+            });
+            match minimum {
+                Some(minimum) => minimum.clone(),
+                None => return false,
+            }
+        } else {
+            // Ruling 1: widen fresh literals, then all lowers must
+            // AGREE (equality, not adjacency-dedup); disagreement
+            // is a mismatch (Error until the S17 diagnostic), and
+            // the choice is checked against every upper.
+            let widened: Vec<Ty> = lowers.iter().map(|ty| self.widen_fresh(ty)).collect();
+            let first = widened.first().expect("non-empty lowers").clone();
+            if widened.iter().all(|lower| *lower == first) {
+                if uppers
+                    .iter()
+                    .all(|upper| is_subtype_interned(&first, upper, &self.facts))
+                {
+                    first
+                } else {
+                    Ty::error()
+                }
+            } else {
+                Ty::error()
+            }
+        };
+        self.table.solve(var, solution);
+        true
+    }
+
+    /// rustc's `structurally_resolve_type`: where the walk needs a
+    /// type's STRUCTURE now (method receivers, field bases, index
+    /// subjects), a still-unsolved head var is forced from the bounds
+    /// it has accumulated SO FAR - the same ground decision the finish
+    /// fixpoint applies, mirroring rustc's resolve-vars-then-demand-
+    /// structure order. Committing early is rustc's semantics: the
+    /// structure point fixes the type, and a later conflicting bound
+    /// becomes a mismatch rather than a wider join. The generalization
+    /// alias tier stays finish-only (its soundness argument is that no
+    /// later bound can arrive). A class with no ground evidence yet
+    /// stays a var; the caller's lookup then misses as before (the
+    /// "type annotations needed" family, S17's diagnostic).
+    fn structurally_resolve(&mut self, ty: &Ty) -> Ty {
+        let resolved = self.table.resolve_completely(ty);
+        let TyKind::Infer { var: Some(var), .. } = resolved.kind() else {
+            return resolved;
+        };
+        let var = *var;
+        let bounds = self.table.var_bounds(var);
+        if self.try_solve_bounded_var(var, &bounds, false) {
+            self.table.resolve_completely(&resolved)
+        } else {
+            resolved
         }
     }
 

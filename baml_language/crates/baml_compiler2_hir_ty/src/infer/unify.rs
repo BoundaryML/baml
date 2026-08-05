@@ -255,6 +255,13 @@ impl InferenceTable {
         self.bounds.entry(root).or_default().uppers.push(ty);
     }
 
+    /// The accumulated bounds of `var`'s equivalence class (empty when
+    /// none). Structural-resolution input.
+    pub fn var_bounds(&mut self, var: InferVar) -> VarBounds {
+        let root = self.vars.find(VarKey(var)).0.index();
+        self.bounds.get(&root).cloned().unwrap_or_default()
+    }
+
     /// Every still-unsolved class that has accumulated bounds, as
     /// `(representative var, bounds)`. Resolution input.
     pub fn unsolved_bounded_vars(&mut self) -> Vec<(InferVar, VarBounds)> {
