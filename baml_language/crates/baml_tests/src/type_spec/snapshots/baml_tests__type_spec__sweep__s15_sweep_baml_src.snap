@@ -7,7 +7,7 @@ nodes compared: 60529
 agreements: 51946
 one-sided (coverage): 88
 conflicts: 8495 across 1516 distinct pairs
-hir_ty error-channel entries: 66
+hir_ty error-channel entries: 45
 tir diagnostics: 0
 panics: 0
 
@@ -15,12 +15,6 @@ panics: 0
 ns_bigints/bigints.baml:4708..4719 `{ 1n + 2n }`: expected 3n, got bigint
 ns_bigints/bigints.baml:4894..4905 `{ 3n * 4n }`: expected 12n, got bigint
 ns_bigints/bigints.baml:5064..5075 `{ 1n < 2n }`: expected true, got bool
-ns_cancel_token/cancel_token.baml:711..743 `baml.spawn...ncel = tok)`: expected (baml.spawn.SpawnParams<int, baml.errors.Io>) -> baml.spawn.SpawnParams<unknown, unknown> throws unknown, got (baml.spawn.SpawnParams<int, baml.errors.Io>) -> baml.spawn.SpawnParams<int, baml.errors.Io> throws never
-ns_cancel_token/cancel_token.baml:739..742 `tok`: expected baml.spawn.TaskGroup | null, got baml.spawn.CancelToken
-ns_cancel_token/cancel_token.baml:1258..1290 `baml.spawn...ncel = tok)`: expected (baml.spawn.SpawnParams<int, never>) -> baml.spawn.SpawnParams<unknown, unknown> throws unknown, got (baml.spawn.SpawnParams<int, never>) -> baml.spawn.SpawnParams<int, never> throws never
-ns_cancel_token/cancel_token.baml:1286..1289 `tok`: expected baml.spawn.TaskGroup | null, got baml.spawn.CancelToken
-ns_cancel_token/cancel_token.baml:2220..2253 `baml.spawn...ach = true)`: expected (baml.spawn.SpawnParams<int, never>) -> baml.spawn.SpawnParams<unknown, unknown> throws unknown, got (baml.spawn.SpawnParams<int, never>) -> baml.spawn.SpawnParams<int, never> throws never
-ns_cancel_token/cancel_token.baml:2248..2252 `true`: expected baml.spawn.TaskGroup | null, got true
 ns_control_flow/control_flow.baml:6296..6297 `r`: expected user.control_flow.Ok, got user.control_flow.Err | user.control_flow.Ok
 ns_control_flow/control_flow.baml:6542..6543 `r`: expected user.control_flow.Ok | user.control_flow.Warn, got user.control_flow.Err | user.control_flow.Ok | user.control_flow.Warn
 ns_control_flow/control_flow.baml:6749..6753 `item`: expected user.control_flow.Ok, got user.control_flow.Err | user.control_flow.Ok
@@ -32,10 +26,6 @@ ns_defer/defer.baml:3849..3957 `{\n  defer...("body")\n}`: expected void, got in
 ns_exceptions/exceptions.baml:35238..35402 `{\n    {\n...l\n    }\n}`: expected void, got "one" | null
 ns_google_llm_env/google_llm_env.baml:1540..1684 `function G...input}"#\n}`: expected map<string, unknown>, got map<string, string>
 ns_google_llm_env/google_llm_env.baml:1600..1684 `{\n    cli...input}"#\n}`: expected map<string, unknown>, got map<string, string>
-ns_http_server/http_server.baml:3975..3976 `8`: expected baml.http.TlsConfig | null, got 8
-ns_http_server/http_server.baml:8871..8872 `4`: expected baml.http.TlsConfig | null, got 4
-ns_http_server/http_server.baml:8908..8943 `baml.time....seconds(5n)`: expected bool, got baml.time.Duration
-ns_http_server/http_server.baml:9591..9626 `baml.time....seconds(3n)`: expected bool, got baml.time.Duration
 ns_inferred_generic_type_args/inferred_generic_type_args.baml:3230..3268 `SingleCurs...lf.head() }`: expected user.inferred_generic_type_args.Cursor<T>, got user.inferred_generic_type_args.SingleCursor<T>
 ns_inferred_generic_type_args/inferred_generic_type_args.baml:8137..8166 `Boxed<T> {...lf.arr[0] }`: expected user.inferred_generic_type_args.Wrap<T>, got user.inferred_generic_type_args.Boxed<T>
 ns_interfaces/interfaces.baml:43974..43996 `{ "luna": DtmvCat {} }`: expected map<string, user.interfaces.DtmvAnimal>, got map<string, user.interfaces.DtmvCat>
@@ -61,22 +51,11 @@ ns_json_alias/json_alias.baml:2103..2112 `[1, 2, 3]`: expected baml.json.json, g
 ns_json_alias/json_alias.baml:2665..2681 `{"key": "value"}`: expected baml.json.json, got map<string, string>
 ns_patterns_new_runtime/patterns_new_runtime.baml:13750..13891 `match (box...th()\n    }`: non-exhaustive
 ns_patterns_new_runtime/patterns_new_runtime.baml:14453..14516 `match (box...=> 7\n    }`: non-exhaustive
-ns_prompt_tag_runtime/prompt_tag_runtime.baml:9188..9192 `true`: expected string | null, got true
 ns_provider_stdlib/provider_stdlib.baml:815..864 `{\n    "ke...    },\n  }`: expected baml.json.json, got map<string, map<string, int>>
 ns_streaming_parsing/streaming_parsing.baml:1852..1966 `function E...put }}"#\n}`: expected map<string, unknown>, got map<string, string>
 ns_streaming_parsing/streaming_parsing.baml:1894..1966 `{\n    cli...put }}"#\n}`: expected map<string, unknown>, got map<string, string>
 ns_streaming_parsing/streaming_parsing.baml:1968..2083 `function S...put }}"#\n}`: expected map<string, unknown>, got map<string, string>
 ns_streaming_parsing/streaming_parsing.baml:2011..2083 `{\n    cli...put }}"#\n}`: expected map<string, unknown>, got map<string, string>
-ns_task_group/task_group.baml:644..673 `baml.spawn...(group = g)`: expected (baml.spawn.SpawnParams<int, baml.errors.Io>) -> baml.spawn.SpawnParams<unknown, unknown> throws unknown, got (baml.spawn.SpawnParams<int, baml.errors.Io>) -> baml.spawn.SpawnParams<int, baml.errors.Io> throws never
-ns_task_group/task_group.baml:765..794 `baml.spawn...(group = g)`: expected (baml.spawn.SpawnParams<int, baml.errors.Io>) -> baml.spawn.SpawnParams<unknown, unknown> throws unknown, got (baml.spawn.SpawnParams<int, baml.errors.Io>) -> baml.spawn.SpawnParams<int, baml.errors.Io> throws never
-ns_task_group/task_group.baml:886..915 `baml.spawn...(group = g)`: expected (baml.spawn.SpawnParams<int, baml.errors.Io>) -> baml.spawn.SpawnParams<unknown, unknown> throws unknown, got (baml.spawn.SpawnParams<int, baml.errors.Io>) -> baml.spawn.SpawnParams<int, baml.errors.Io> throws never
-ns_task_group/task_group.baml:1007..1036 `baml.spawn...(group = g)`: expected (baml.spawn.SpawnParams<int, baml.errors.Io>) -> baml.spawn.SpawnParams<unknown, unknown> throws unknown, got (baml.spawn.SpawnParams<int, baml.errors.Io>) -> baml.spawn.SpawnParams<int, baml.errors.Io> throws never
-ns_task_group/task_group.baml:1519..1548 `baml.spawn...(group = g)`: expected (baml.spawn.SpawnParams<int, never>) -> baml.spawn.SpawnParams<unknown, unknown> throws unknown, got (baml.spawn.SpawnParams<int, never>) -> baml.spawn.SpawnParams<int, never> throws never
-ns_task_group/task_group.baml:1579..1608 `baml.spawn...(group = g)`: expected (baml.spawn.SpawnParams<int, never>) -> baml.spawn.SpawnParams<unknown, unknown> throws unknown, got (baml.spawn.SpawnParams<int, never>) -> baml.spawn.SpawnParams<int, never> throws never
-ns_task_group/task_group.baml:1639..1668 `baml.spawn...(group = g)`: expected (baml.spawn.SpawnParams<int, never>) -> baml.spawn.SpawnParams<unknown, unknown> throws unknown, got (baml.spawn.SpawnParams<int, never>) -> baml.spawn.SpawnParams<int, never> throws never
-ns_task_group/task_group.baml:1699..1728 `baml.spawn...(group = g)`: expected (baml.spawn.SpawnParams<int, never>) -> baml.spawn.SpawnParams<unknown, unknown> throws unknown, got (baml.spawn.SpawnParams<int, never>) -> baml.spawn.SpawnParams<int, never> throws never
-ns_task_group/task_group.baml:1759..1788 `baml.spawn...(group = g)`: expected (baml.spawn.SpawnParams<int, never>) -> baml.spawn.SpawnParams<unknown, unknown> throws unknown, got (baml.spawn.SpawnParams<int, never>) -> baml.spawn.SpawnParams<int, never> throws never
-ns_task_group/task_group.baml:2211..2240 `baml.spawn...(group = g)`: expected (baml.spawn.SpawnParams<int, baml.errors.Io>) -> baml.spawn.SpawnParams<unknown, unknown> throws unknown, got (baml.spawn.SpawnParams<int, baml.errors.Io>) -> baml.spawn.SpawnParams<int, baml.errors.Io> throws never
 ns_to_json_interface/to_json_interface.baml:1125..1207 `{\n       ...\n        }`: expected baml.json.json, got map<string, (int | float | string | bool | (int | float | string | bool | null | (int | float | string | bool | null | (int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>)[] | map<string, int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>>)[] | map<string, int | float | string | bool | null | (int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>)[] | map<string, int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>>>)[] | map<string, int | float | string | bool | null | (int | float | string | bool | null | (int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>)[] | map<string, int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>>)[] | map<string, int | float | string | bool | null | (int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>)[] | map<string, int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>>>> | null)[]>
 
 == conflicts by (hir_ty, tir) pair ==

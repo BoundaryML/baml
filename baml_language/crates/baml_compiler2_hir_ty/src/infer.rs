@@ -1522,9 +1522,13 @@ impl<'db> InferenceContext<'db> {
             let unknown = || Ty::intern(TyKind::Unknown {
                 attr: TyAttr::default(),
             });
-            // The expected RETURN is `SpawnParams<unknown, unknown>`, not
-            // bare `unknown`: a non-transformer fails the check with a
-            // readable mismatch instead of coercing into the open slot.
+            // A with-modifier is DEMANDED structurally (the infer_await
+            // discipline for language constructs): the expectation below
+            // flows into lambdas and generic calls (`options(group = g)`
+            // solves its `T`/`E` from the chain via the param
+            // unification), but the verdict is the shape check - a full
+            // subtype check against open `unknown` slots would trip the
+            // class-invariance rule on perfectly good modifiers.
             let expected = Ty::intern(TyKind::Function {
                 params: Box::new([baml_type::interned::FunctionParam {
                     name: None,
@@ -1535,20 +1539,52 @@ impl<'db> InferenceContext<'db> {
                 throws: unknown(),
                 attr: TyAttr::default(),
             });
-            let got = self.check_expr(body, with_id, &expected);
+            let got = self.infer_expr(body, with_id, &Expectation::has_type(expected.clone()));
             let got = self.table.resolve_completely(&got);
-            if let TyKind::Function { ret, .. } = got.kind() {
-                let ret = self.table.resolve_completely(ret);
-                if let TyKind::Class(qn, args, _) = ret.kind()
-                    && is_spawn_params_qtn(qn)
-                    && args.len() == 2
-                {
-                    cur_value = args[0].clone();
-                    cur_error = args[1].clone();
+            let link = match got.kind() {
+                TyKind::Function { params, ret, .. } => {
+                    let ret = self.table.resolve_completely(ret);
+                    match ret.kind() {
+                        TyKind::Class(qn, args, _)
+                            if is_spawn_params_qtn(qn) && args.len() == 2 =>
+                        {
+                            // The modifier must accept the chain's
+                            // current link (solving its generics when
+                            // still open).
+                            if let Some(param) = params.first() {
+                                let chain =
+                                    spawn_params_ty(cur_value.clone(), cur_error.clone());
+                                let param_ty = param.ty.clone();
+                                if !self.sub(&chain, &param_ty) {
+                                    self.result
+                                        .type_mismatches
+                                        .insert(with_id, (param_ty, chain));
+                                }
+                            }
+                            let ret = self.table.resolve_completely(&ret);
+                            match ret.kind() {
+                                TyKind::Class(_, args, _) => {
+                                    Some((args[0].clone(), args[1].clone()))
+                                }
+                                _ => None,
+                            }
+                        }
+                        _ => None,
+                    }
+                }
+                _ => None,
+            };
+            match link {
+                Some((value, error)) => {
+                    cur_value = self.table.resolve_completely(&value);
+                    cur_error = self.table.resolve_completely(&error);
+                }
+                None => {
+                    // Not a transformer at all: the readable mismatch
+                    // against the expected shape.
+                    self.result.type_mismatches.insert(with_id, (expected, got));
                 }
             }
-            // Anything else already recorded its mismatch through the
-            // check; the current link carries forward.
         }
         Ty::intern(TyKind::Future(cur_value, cur_error, TyAttr::default()))
     }
@@ -1927,10 +1963,10 @@ impl<'db> InferenceContext<'db> {
         self.record_throw(callee, &callee_throws);
         // A bound method call: the receiver already fills the `self` slot,
         // so written arguments match against the remaining parameters.
-        let params: Vec<Ty> = params
+        let params: Vec<baml_type::interned::FunctionParam> = params
             .iter()
             .skip(usize::from(bound_receiver))
-            .map(|param| param.ty.clone())
+            .cloned()
             .collect();
         let ret = ret.clone();
         let is_lambda_arg =
@@ -1940,9 +1976,21 @@ impl<'db> InferenceContext<'db> {
                 if (pass == 0) == is_lambda_arg(arg) {
                     continue;
                 }
-                match params.get(index) {
+                // A LABELED argument selects its parameter by NAME
+                // (`options(cancel = tok)` checks against `cancel`, not
+                // whatever sits at its position); unlabeled arguments
+                // fill positionally. An unmatched label falls back to
+                // position - the label/arity diagnostic is S17's.
+                let param_ty = match &arg.label {
+                    Some(label) => params
+                        .iter()
+                        .find(|param| param.name.as_ref() == Some(label))
+                        .or_else(|| params.get(index))
+                        .map(|param| param.ty.clone()),
+                    None => params.get(index).map(|param| param.ty.clone()),
+                };
+                match param_ty {
                     Some(param_ty) => {
-                        let param_ty = param_ty.clone();
                         self.check_expr(body, arg.expr, &param_ty);
                     }
                     None => {
